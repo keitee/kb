@@ -1,6 +1,6 @@
 *kt_dev_01*		tw=100
 
-aFri 20 Dec 2013 15:10:21 GMT
+aTue 31 Dec 2013 11:06:42 GMT
 
 Keywords:
 {Q} for questions to find out more
@@ -29,6 +29,7 @@ ISSUES and CODES
 
 GCC
 
+|kt_dev_gcc_000|	gcc compile script
 |kt_dev_gcc_001|	error: two or more data types in declaration specifiers {preprocessor} 
 |kt_dev_gcc_002|	error: ISO C++ forbids declaration of 'UseStatic' with no type [-fpermissive]
 |kt_dev_gcc_003|	error: invalid conversion from 'Singleton*' to 'MySingleton*' [-fpermissive]
@@ -43,7 +44,7 @@ GCC
 
 C and C++
 
-|kt_dev_lang_001|	global, file and local static		{singleton-pattern}
+|kt_dev_lang_001|	global, file and local static	{singleton-pattern} {file-scope}
 |kt_dev_lang_002|	func pointer
 |kt_dev_lang_003|	#error and #warning
 |kt_dev_lang_004|	post and pre inc {post-inc} {post-inc-overload} {tip}
@@ -1457,6 +1458,13 @@ produces a garbage value.
 
 # ============================================================================
 #{
+
+==============================================================================
+*kt_dev_gcc_000*	gcc compile script
+
+#!/bin/bash
+g++ -g -std=c++0x $1
+
 
 ==============================================================================
 *kt_dev_gcc_001*	error: two or more data types in declaration specifiers
@@ -3038,6 +3046,60 @@ The differences are:
 
 The name is only accessible within the function, and has no linkage.(?) It is initialised the first
 time execution reaches the definition, not necessarily during the program's initialisation phases.
+
+<file-static-mean>
+
+// file one
+#include < iostream>
+
+static int gfs_count;
+// extern static int gfs_count; 
+// this causes an compile error: conflicting specifiers in declaration of 'gfs_count'
+
+void print_gfs()
+{
+   std::cout << "{ "; 
+   
+   for(int idx = 0; idx < 5; idx++)
+		gfs_count++;
+
+   std::cout << gfs_count << std::endl;
+
+   std::cout << "}" << std::endl; 
+}
+
+// file two
+#include < iostream>
+
+extern int gfs_count;
+extern void print_gfs();
+
+int main()
+{
+   std::cout << "{ "; 
+   
+   std::cout << gfs_count << std::endl;
+	print_gfs();
+
+   std::cout << "}" << std::endl; 
+}
+
+No error in building and in using function from file one but failed to link:
+
+kit@kit-vb:~/work$ make
+echo '>> build use-main.cpp'
+>> build use-main.cpp
+g++ -std=c++0x -o main.o -c use-main.cpp
+echo '>> build file-static.cpp'
+>> build file-static.cpp
+g++ -std=c++0x -o file.o -c file-static.cpp
+echo '>> bulid main'
+>> bulid main
+g++ -std=c++0x -o out main.o file.o
+main.o: In function `main':
+use-main.cpp:(.text+0x1e): undefined reference to `gfs_count'
+collect2: ld returned 1 exit status
+make: *** [main] Error 1
 
 
 {static-init-order-problem}
@@ -5762,15 +5824,21 @@ Tried with GCC and got an error:
 {global-const-scope}
 
 The const object must be inited when defined and it's local to file by default. so want to use in
-multiple files, must use <extern-keyword>. The important principle is that shouldn't change const
-object.
+multiple files, must use <extern-keyword> on [both] definition and declaration. This is different
+from <file-staic-mean>. The important principle is that shouldn't change const object.
+
+// fine one
+extern const int gc_max = 100;
+
+// file two
+extern const int gc_max;
 
 
 {top-low-level-const}
 
 The top level const is for object itself. So there are <top-level-const> and <low-level-const> for a
-reference and pointer. Top-level-const of for reference and pointer itself and lov-level-const is
-for underlying object. Top can be ignored but low level NOT because top-level-const do not say
+reference and pointer. Top-level-const is for reference and pointer itself and lov-level-const is
+for underlying object. Top can be ignored but low level 'NOT' because top-level-const do not say
 anything about underlying object. const-pointer can point either const or non-const. Hence can
 be ignored. 
 
@@ -5785,18 +5853,30 @@ original object.
 
 {reference-to-const}
 
-But <reference-to-const> is different. There's no const-reference. For pointer, there are
-<pointer-to-const> and <const-pointer>. The following initialsation is error because should NOT be
-able to use a reference to change ci. Remember a reference is another name.
+But <reference-to-const> is different. There's no const-reference since reference is not object. The
+reference-to-const restrics only what we can do through that reference and says nothing about
+whether the underlying object itself. 
 
+For pointer, there are <pointer-to-const> and <const-pointer>. The following initialsation is error
+because should NOT be able to use a reference to change ci. Remember a reference is another name.
 
-int& ri = ci;				// error because NO const to non-const.
+int &ri = i;
+const int &r2 = i;
+r1 = 0;
+r2 = 0;						// error since r2 is reference-to-const
+
+int &ri = ci;				// error because NO 'const to non-const'.
 
 For ordinary reference, must match type and must bind to a object.
 
-int& ri = 10;				// error
-int& ri = double_val; 	// error
+int &ri = 10;				// error
+int &ri = double_val; 	// error
 
+For pointer examples, see and remember that read from right to left; that is from modifiers to base
+type.
+
+const double *cptr = &pi;
+int *const curErr = &errNumb;
 
 {type-match-exceptions}
 
@@ -5804,10 +5884,10 @@ Two exceptions to type match: <reference-to-const> and <derived-to-base-referenc
 bind <reference-to-const> to non-const, a literal, a temp, or other expression that evaluate to an
 type.
 
-const int& ri = 42;		// ok
+const int &ri = 42;		// ok
 
 double dval = 3.14;
-const int& ri = dval;	// ok becuase will bind to <temp-object> and cannot change it via ri
+const int &ri = dval;	// ok becuase will bind to <temp-object> and cannot change it via ri
 
 note: KT. This is [to-maintain-constness] by creating [temp-object]. See {{case-one-in-conversion}}
  
@@ -9623,7 +9703,10 @@ struct PersonInfo {
 ifstream input(argv[1]);
 vector< PersonInfo> people;
 
-while( getline(input, line) )
+string line;
+
+// std::getline(std::basic_istrem, std::basic_string); not include a new line
+while( getline(input, line) ) 	
 {
 	 PersonInfo info;
 	 istringstream record(line);
