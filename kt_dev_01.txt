@@ -70,8 +70,8 @@ C and C++
 |kt_dev_cpp_009|	undefined result and a temp-object {temp-object-in-return} {cost-of-temp-object}
 |kt_dev_cpp_010|	def args
 |kt_dev_cpp_011|	inline {empty-ctor-represenstaion}
-|kt_dev_cpp_012|	const member func			{bitwise-const} {mutable}
-|kt_dev_cpp_013|	when use reference
+|kt_dev_cpp_012|	const member func	{bitwise-const} {mutable}
+|kt_dev_cpp_013|	when use reference {called-by-reference} 
 |kt_dev_cpp_014|	decltype, typedef, and using 
 |kt_dev_cpp_015|	declaration and definition
 |kt_dev_cpp_016|	<empty>
@@ -97,7 +97,7 @@ STL
 |kt_dev_stl_001|	seq-containers {trade-offs}
 |kt_dev_stl_005|	assoc-containers {insert-erase} {requirement-on-key-type}
 |kt_dev_stl_002|	vector
-|kt_dev_stl_003|	subscript and access
+|kt_dev_stl_003|	map: subscript and access
 |kt_dev_stl_004|	adaptors {stack} {queue}
 |kt_dev_stl_006|	iterator	{category} {insert-method} {invalidated-iterators}	{estl-009}
 |kt_dev_stl_007|	iterator: inserter {algo-copy} {stream-iterator}
@@ -112,7 +112,7 @@ STL
 |kt_dev_stl_016|	<empty>
 |kt_dev_stl_017|	emplace_* member
 |kt_dev_stl_018|	smart pointer, RAII {factory-func} {auto-lock}
-|kt_dev_stl_019|	new and delete {default-and-value-int} {placement-new} {allocator}
+|kt_dev_stl_019|	new and delete {default-and-value-init} {placement-new} {allocator}
 |kt_dev_stl_020|	gcc stl impl files
 |kt_dev_stl_021|	algorithm: erase-remove idiom
 
@@ -1709,7 +1709,7 @@ Explicit virtual overrides from GCC 4.7
 
 {range-for}
 
-VC 2012 supports but g++ (GCC) 4.4.5 don't.
+VC 2012 supports but g++ (GCC) 4.4.5 don't. This 'range based for' is supported from 4.6
 
 vector< int > v = { ... };
 
@@ -4019,6 +4019,17 @@ if(val) or if(!val) is okay to use.
 Note: any problem case when think true is 1?
 
 
+{not-use-in-computation}
+
+Do not use bool and char for computation since there is conversion. For example:
+
+bool b1 = true;
+bool b2 = -b1;
+
+b2 is true since b1 promoted to 1, negates to -1, and convert back to bool but it is not a zeor
+hence true.
+
+
 ==============================================================================
 *kt_dev_lang_008*	char type
 
@@ -4385,7 +4396,7 @@ padding required to place such object in an array.
 When applied to an empty class type, always returns 1. 
 
 
-{size-of-operator-caveat}
+{sizeof-operator-caveat}
 
 int func()
 {
@@ -4421,6 +4432,31 @@ The strlen() function calculates the length of the string s, [excluding] the ter
 ('\0').
 
  [KT] sizeof is better since it is not a func call and done in compile.
+
+
+{array-subscript}
+
+For library types such as string and vector, subscript type is size_type which is unsigned. So if
+use negative value, then will be converted to the unsigned. However, for built-in array, it is not
+so can have negative subscript.
+
+int *p = &ia[2];
+int j = p[1];
+int k = p[-2];
+
+
+{array-init}
+
+int a3[5] = { 0, 1, 2 }; 	// { 0, 1, 2, 0, 0 } since value-init the rest
+int a4[11] = {};				// { 0,...0 } since value-init all
+
+
+{array-typedef}
+
+int (*parray) [10] = &arr;	// pointer to an array of ten int.
+int (&rarray) [10] = arr;
+
+For this case, subscript is the part of type and like func pointer, read from inside to outside. 
 
 
 ==============================================================================
@@ -4551,7 +4587,7 @@ need to}.
 
 Refer to *kt_dev_cpp_013* for example uses.
 
-From C++ Primer, p50:
+In {ref-005}, p50:
 
 Reference is not an object. object does not mean only object of class. Reference defines an
 alternative name for an object. This is called <binding> and <must-be-initialized>
@@ -4631,7 +4667,7 @@ in VC, they are the same.
 It seems that a ref is a complete alias to a actual object.
 
 <5>
-No array of ref
+No array and vector of reference.
 
 int* ptrs[10];
 int& refs[10];		// error. no arrays of ref
@@ -4723,7 +4759,7 @@ From {temp-object-in-return} in *kt_dev_cpp_009*
 
 return pair<string, int>();   // T()
 
-From {default-and-value-int} in *kt_dev_stl_019*
+From {default-and-value-init} in *kt_dev_stl_019*
 
 int* pi = new int;				// def init
 int* pi = new int();				// value init. new T()
@@ -6555,15 +6591,120 @@ See {lazy-fetching} in *kt_dev_mecpp_002*
 
 
 ==============================================================================
-*kt_dev_cpp_013*	when use reference
+*kt_dev_cpp_013*	when use reference {called-by-reference}
 
 {no-address-when-use}
+
+There is a difference between called-by-reference(passed-by-reference) and called-by-value. For
+example:
+
+void reset( int i )
+{ i = 0; }
+
+int j = 42;
+void reset (j); 	
+
+what's the value of j here?
+
+
+void reset( int* pi )
+{ *pi = 100; pi = 100; }
+
+int j = 42;
+void reset( &j );
+
+what's the value of j here?
+
+Here reference i will be bounded to whatever int object we pass and say "pass an object" directly.
+So no need to pass its address.
 
 void reset(int &i)
 { i = 0; }
 
 int j = 42;
-reset(j);		// no need to pass its address
+reset(j);		// [KT] no need to pass its address
+
+what's the value of j here?
+
+For called-by-reference, C uses pointers and C++ uses reference. Use C++ way of doing it.
+
+
+<code-example>
+
+From list and tree from kt_dev_01.txt. The list example using pointer is:
+
+typedef struct {
+   int   count;
+	Node*	header;
+} List;
+
+void CreatList( List* list )
+{ 
+   list->count = 0;
+   list->header = NULL; 
+}	
+
+bool ListAdd( List* list, EntryType entry )
+{
+	list->header = pnode;
+	...
+}
+
+int main()
+{
+	List list;
+	CreatList(&list);
+
+	for(int i=0; i < 5; i++)
+	{
+		std::cin >> item;
+		ListAdd(&list, item );
+	}		
+	...
+}
+
+
+This is tree example:
+
+typedef struct treenode {
+	TreeEntry entry; // application dependant
+	treenode  *left;
+	treenode  *right;
+} TreeNode;
+
+TreeNode* TreeInsert( TreeNode* root, TreeNode* newnode )
+{
+	if(!root)
+	{
+		root = newnode;
+		root->left = root->right = NULL;
+		std::cout << "inserted: " << root->entry.key << std::endl;
+	}
+	else if( LT(newnode->entry.key, root->entry.key) )
+		root->left = TreeInsert( root->left, newnode);
+	else
+		root->right = TreeInsert( root->right, newnode);
+	
+	return root;
+}
+
+int main()
+{
+	TreeNode *proot, *pnode;
+	CreateTree( &proot );
+
+   for(int idx = 0; idx < size; idx++)
+	{
+		pnode = MakeTreeNode( arr[idx] );
+		proot = TreeInsert( proot, pnode );
+		// TreeInsert( proot, pnode );	// This is an error case
+	}
+	...
+}
+
+If not use return from TreeInsert then changes to proot remains in local. Whether or not use
+called-by-reference or value, uses a local copy but its content and how to use it makes diffeence.
+This shows how easy and clear it is to use reference than one of pointers.
 
 
 {to-change}
@@ -9051,7 +9192,7 @@ cout << vi1.size() << ":" << vi2.size() << endl;
 
 applies to the whole container.
 
-vector<int> ivec = { 1, 2, 3, 4, 5, 6 };
+vector< int> ivec = { 1, 2, 3, 4, 5, 6 };
 ivec.size();	// 7
 
 ivec = { 1, 2, 5 };
@@ -9080,14 +9221,20 @@ int absdistinct_vec(int A[], int n)
 }
 
 
+{vector-operator}
+
+v1 == v2
+v1 != v2
+
+
 ==============================================================================
-*kt_dev_stl_003*	subscript and access
+*kt_dev_stl_003*	map: subscript and access
 
 {subscript-in-map}
 
-When use [], index should be <in-range>. [] <DOSE-ADD> element only for a map if there is no key
-already. see *kt_dev_stl_005* When index is out-of-range, <undefined-result> and to be safe, use
-c.at[index], can get a exception.
+See {string-subscript}.  When use [], index should be <in-range>. [] <DOSE-ADD> element only for a
+map if there is no key already. see *kt_dev_stl_005* When index is out-of-range, <undefined-result>
+and to be safe, use c.at[index], can get a exception.
 
 map<string, size_t> word_count;
 ++word_count[word];
@@ -9677,11 +9824,20 @@ typedef int EntryType;
 Turned out that there is no multiple typedef errors as shown as EntryType example.
 
 
-{subscript}
+{string-subscript}
+
+string s("string");
+
+This s does not include NULL and size() returns 6 not 7.
 
 s[n]	
 
-returns a ref to the char at pos n in s. pos starts at 0.
+returns a ref to the char at pos n in s. pos starts from 0 to size()-1.
+
+For negavite subscript, see {array-subscript}
+
+How to ensure that subscript is in range? A good way is to aviod subscripting altogether by using a
+range for whenever possible. However not all compiler supports and see {range-for}
 
 
 {stringstream}
@@ -10327,7 +10483,7 @@ Because template create new classes. If need more, see further.
 *kt_dev_stl_019*	new and delete
 
 
-{default-and-value-int}
+{default-and-value-init}
 
 #include <new>
 
@@ -14735,6 +14891,10 @@ ftp://ftp.prenhall.com/pub/esm/computer_science.s-041/kruse/cpp/
 http://www.mindviewinc.com/Books/
 
 {ref-003} design patterns, Erich Gamma and et el. Addison Wesley
+
+{ref-004} cracking the coding interview, 5th Ed.
+
+{ref-005} C++ primer, 5th Ed.
 
 ==============================================================================
 Copyright: see |ktkb|  vim:tw=100:ts=3:ft=help:norl:
