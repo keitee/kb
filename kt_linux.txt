@@ -39,17 +39,22 @@ KT KB. Linux
 |kt_linux_core_003|	change shed policy after a boot
 |kt_linux_core_004|	prio inversion
 |kt_linux_core_005|	posix 
-|kt_linux_core_006|	sync: thread vs. process
-|kt_linux_core_007|	sync: pthread {nptl}
-|kt_linux_core_008|	errno
-|kt_linux_core_009|	sync: how to run three threads sequencially
-|kt_linux_core_010|	sync: mutex and cond-var 
-|kt_linux_core_011|	case: own semaphore and mutex class using pthread cond-var {CQueue}
-|kt_linux_core_012|	case: use of mutex and thread class
-|kt_linux_core_013|	case: analysis of 011 and 012 case
-|kt_linux_core_014|	case: msg q between threads
+|kt_linux_core_006|	errno
 
-|kt_linux_core_021|	ipc: pipe and fifo	
+|kt_linux_core_100|	sync: thread vs. process
+|kt_linux_core_101|	sync: pthread {nptl}
+|kt_linux_core_102|	sync: how to run three threads sequencially
+|kt_linux_core_103|	sync: mutex and cond-var 
+|kt_linux_core_104|	sync: read-write lock
+
+|kt_linux_core_200|	case: own semaphore and mutex class using pthread cond-var {CQueue}
+|kt_linux_core_201|	case: use of mutex and thread class
+|kt_linux_core_202|	case: analysis of 200 and 201 case
+|kt_linux_core_203|	case: msg q between threads
+
+|kt_linux_core_300|	ipc
+|kt_linux_core_301|	ipc: pipe and fifo	
+|kt_linux_core_310|	ipc: dbus
 |kt_linux_core_031|	time
 
 
@@ -2009,7 +2014,77 @@ http://pubs.opengroup.org/onlinepubs/9699919799/
 
 
 ==============================================================================
-*kt_linux_core_006* thread vs. process	
+*kt_linux_core_006* errno
+
+{errno-use}
+
+This is global var which is set to positive values and function returns -1 to indicate errors.
+Usually defiend in <sys/errno.h>. With multiple threads, provides per-thread errno and done by
+having hash define in compile such as -D_REENTRANT. See {pthread-compile-link}
+
+
+{errno-values}
+
+For BRCM case, errno.h includes following file and starts numbering after following range.
+
+./include/asm-generic/errno-base.h:28:#define   ENOTTY          25      /* Not a typewriter */
+
+#define	EPERM		 1	/* Operation not permitted */
+#define	ENOENT		 2	/* No such file or directory */
+#define	ESRCH		 3	/* No such process */
+#define	EINTR		 4	/* Interrupted system call */
+#define	EIO		 5	/* I/O error */
+#define	ENXIO		 6	/* No such device or address */
+#define	E2BIG		 7	/* Argument list too long */
+#define	ENOEXEC		 8	/* Exec format error */
+#define	EBADF		 9	/* Bad file number */
+#define	ECHILD		10	/* No child processes */
+#define	EAGAIN		11	/* Try again */
+#define	ENOMEM		12	/* Out of memory */
+#define	EACCES		13	/* Permission denied */
+#define	EFAULT		14	/* Bad address */
+#define	ENOTBLK		15	/* Block device required */
+#define	EBUSY		16	/* Device or resource busy */
+#define	EEXIST		17	/* File exists */
+#define	EXDEV		18	/* Cross-device link */
+#define	ENODEV		19	/* No such device */
+#define	ENOTDIR		20	/* Not a directory */
+#define	EISDIR		21	/* Is a directory */
+#define	EINVAL		22	/* Invalid argument */
+#define	ENFILE		23	/* File table overflow */
+#define	EMFILE		24	/* Too many open files */
+#define	ENOTTY		25	/* Not a typewriter */
+#define	ETXTBSY		26	/* Text file busy */
+#define	EFBIG		27	/* File too large */
+#define	ENOSPC		28	/* No space left on device */
+#define	ESPIPE		29	/* Illegal seek */
+#define	EROFS		30	/* Read-only file system */
+#define	EMLINK		31	/* Too many links */
+#define	EPIPE		32	/* Broken pipe */
+#define	EDOM		33	/* Math argument out of domain of func */
+#define	ERANGE		34	/* Math result not representable */
+
+
+{error-funcs}
+
+From Apdix C in {ref-001}. The reason for our own error funcs is to handle error case with a single
+line. See {pthread-util-func} for the use.
+
+if( error condition )
+	 err_sys( printf format with any number of args );
+
+instead of
+
+if( error condition ) {
+	 char buff[200];
+	 snprintf( buff, sizeof(buff), printf format with any number of args );
+	 perror(buff);
+	 exit(1);
+}
+
+
+==============================================================================
+*kt_linux_core_100* thread vs. process	
 
 {multithreaded-vs-singlethreaded}
 
@@ -2072,7 +2147,7 @@ Thread help with these problems as it is <lightweight-process> in terms of creat
 
 
 ==============================================================================
-*kt_linux_core_007* pthread
+*kt_linux_core_101* pthread
 
 POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard defines an API for
 creating and manipulating threads. So there is one posix standard but there are two implementation
@@ -2213,6 +2288,20 @@ int pthread_detach(pthread_t tid);
  *  immediately.
  */
 void pthread_exit(void *status);
+
+// A thread may be canceled by any other thread in the same process. For example, if multiple
+// threads are started to work on a given task (say finding a record in a database) adn the first
+// thread completes the task then cancels the other threds.
+//
+// To handle the possibility of being canceled, can install(push) and remove(pop) cleanup handlers.
+// These handlers are called:
+// a) when the thread is canceled by pthread_cancel
+// b) when the thread voluntarily terminates (either by calling pthread_exit or returning from its
+// thread)
+
+int   pthread_cancel(pthread_t);
+void  pthread_cleanup_push(void*), void *);
+void  pthread_cleanup_pop(int);
 
 
 {pthread-attribute} 
@@ -2408,77 +2497,7 @@ gcc -pthread sample.c
 
 
 ==============================================================================
-*kt_linux_core_008* errno
-
-{errno-use}
-
-This is global var which is set to positive values and function returns -1 to indicate errors.
-Usually defiend in <sys/errno.h>. With multiple threads, provides per-thread errno and done by
-having hash define in compile such as -D_REENTRANT. See {pthread-compile-link}
-
-
-{errno-values}
-
-For BRCM case, errno.h includes following file and starts numbering after following range.
-
-./include/asm-generic/errno-base.h:28:#define   ENOTTY          25      /* Not a typewriter */
-
-#define	EPERM		 1	/* Operation not permitted */
-#define	ENOENT		 2	/* No such file or directory */
-#define	ESRCH		 3	/* No such process */
-#define	EINTR		 4	/* Interrupted system call */
-#define	EIO		 5	/* I/O error */
-#define	ENXIO		 6	/* No such device or address */
-#define	E2BIG		 7	/* Argument list too long */
-#define	ENOEXEC		 8	/* Exec format error */
-#define	EBADF		 9	/* Bad file number */
-#define	ECHILD		10	/* No child processes */
-#define	EAGAIN		11	/* Try again */
-#define	ENOMEM		12	/* Out of memory */
-#define	EACCES		13	/* Permission denied */
-#define	EFAULT		14	/* Bad address */
-#define	ENOTBLK		15	/* Block device required */
-#define	EBUSY		16	/* Device or resource busy */
-#define	EEXIST		17	/* File exists */
-#define	EXDEV		18	/* Cross-device link */
-#define	ENODEV		19	/* No such device */
-#define	ENOTDIR		20	/* Not a directory */
-#define	EISDIR		21	/* Is a directory */
-#define	EINVAL		22	/* Invalid argument */
-#define	ENFILE		23	/* File table overflow */
-#define	EMFILE		24	/* Too many open files */
-#define	ENOTTY		25	/* Not a typewriter */
-#define	ETXTBSY		26	/* Text file busy */
-#define	EFBIG		27	/* File too large */
-#define	ENOSPC		28	/* No space left on device */
-#define	ESPIPE		29	/* Illegal seek */
-#define	EROFS		30	/* Read-only file system */
-#define	EMLINK		31	/* Too many links */
-#define	EPIPE		32	/* Broken pipe */
-#define	EDOM		33	/* Math argument out of domain of func */
-#define	ERANGE		34	/* Math result not representable */
-
-
-{error-funcs}
-
-From Apdix C in {ref-001}. The reason for our own error funcs is to handle error case with a single
-line. See {pthread-util-func} for the use.
-
-if( error condition )
-	 err_sys( printf format with any number of args );
-
-instead of
-
-if( error condition ) {
-	 char buff[200];
-	 snprintf( buff, sizeof(buff), printf format with any number of args );
-	 perror(buff);
-	 exit(1);
-}
-
-
-==============================================================================
-*kt_linux_core_009*	sync: how to run three threads sequencially
+*kt_linux_core_102*	sync: how to run three threads sequencially
 
 From Cracking the coding interview, p425, 16.5:
 
@@ -2542,7 +2561,7 @@ thread. The method will return immediately if the current thread already owns th
 
 
 ==============================================================================
-*kt_linux_core_010*	sync: mutex and cond var
+*kt_linux_core_103*	sync: mutex and cond var
 
 From CH07 in {ref-001}. 
 
@@ -3091,7 +3110,423 @@ while( nready.ready == 0 )
 
 
 ==============================================================================
-*kt_linux_core_011*	case: own semaphore and mutex class using pthred cond var
+*kt_linux_core_104*	sync: read-write lock
+
+From {ref-001} but no such a thing in {ref-002}, so may be old way but surely in posix but may be
+different to this since this lock is before posix standard. See {ref-001} note.
+
+To distinguish between obtaining the read-write lock for reading and for writing. The rules:
+
+1. Any number of threads can hold a given read-write lock for reading as long as no threads holds
+the the lock for writing.
+
+2. A read-write lock can be allocated for writing only if no thread hold the lock for reading or
+writing.
+
+Stated another way, any threads can have read access to a data as long as no thread is modifying
+that. A data can be modified only if no other thread is reading or modifying the data.
+
+In application, the data is read more often than the data is modified, and these can benefit from
+using read-write locks instead of mutex locks. 
+
+can provide more concurrency than a plain mutex lock when the data is read more than it is written
+and known as shared-exclusive locking since shared lock for reading and exclusive lock for writing.
+Multiple readers and one writer problem or readers-writer locks.
+
+
+{apis}
+
+// to get read lock. blocks the calling if there are writers
+int   pthread_rwlock_rdlock(pthread_rwlock_t *);
+
+// to get write lock. blocks the calling if there are readers or writers
+int   pthread_rwlock_wrlock(pthread_rwlock_t *);
+
+int   pthread_rwlock_unlock(pthread_rwlock_t *);
+int   pthread_rwlock_tryrdlock(pthread_rwlock_t *);
+int   pthread_rwlock_trywrlock(pthread_rwlock_t *);
+
+int   pthread_rwlock_init(pthread_rwlock_t *, const pthread_rwlockattr_t *);
+int   pthread_rwlock_destroy(pthread_rwlock_t *);
+int   pthread_rwlockattr_destroy(pthread_rwlockattr_t *);
+int   pthread_rwlockattr_init(pthread_rwlockattr_t *);
+
+// to share the lock between different processes
+int   pthread_rwlockattr_setpshared(pthread_rwlockattr_t *, int); pthread_t
+int   pthread_rwlockattr_getpshared(const pthread_rwlockattr_t *, int *);
+
+
+{example-implementation}
+\unpv22e.tar\unpv22e\my_rwlock_cancel\
+
+Can be implemented using mutexes and condition variables. This is an implementation which gives
+preference to waiting writers but there are other alternatives.
+
+typedef struct {
+	pthread_mutex_t 	rw_mutex;			// lock on this struct
+	pthread_cond_t 	rw_condreaders;	// for reader threads waiting
+	pthread_cond_t 	rw_condwriters;	// for writer threads waiting
+
+	// [KT]
+	// when struct is inited, set to RW_MAGIC and used by all functions to check that the caller is
+	// passing a pointer to an initialized lock and set to 0 when the lock is destroyed.
+	int 					rw_magic;
+	int 					rw_nwaitreaders;
+	int 					rw_nwaitwriters;
+
+	// the current status of the read-write lock. only one of these can exist at a time: -1 indicates
+	// a write lock, 0 is lock available, and an value greater than 0 menas that many read locks are
+	// held.
+	int 					rw_refcount; 
+} pthread_rwlock_t;
+
+
+#define RW_MAGIC 0x19283746
+
+/* init and destroy */
+int
+pthread_rwlock_init(pthread_rwlock_t *rw, pthread_rwlockattr_t *attr)
+{
+	int		result;
+
+	if (attr != NULL)
+		return(EINVAL);		/* not supported */
+
+	if ( (result = pthread_mutex_init(&rw->rw_mutex, NULL)) != 0)
+		goto err1;
+	if ( (result = pthread_cond_init(&rw->rw_condreaders, NULL)) != 0)
+		goto err2;
+	if ( (result = pthread_cond_init(&rw->rw_condwriters, NULL)) != 0)
+		goto err3;
+	rw->rw_nwaitreaders = 0;
+	rw->rw_nwaitwriters = 0;
+	rw->rw_refcount = 0;
+	rw->rw_magic = RW_MAGIC;
+
+	return(0);
+
+err3:
+	pthread_cond_destroy(&rw->rw_condreaders);
+err2:
+	pthread_mutex_destroy(&rw->rw_mutex);
+err1:
+	return(result);			/* an errno value */
+}
+
+void
+Pthread_rwlock_init(pthread_rwlock_t *rw, pthread_rwlockattr_t *attr)
+{
+	int		n;
+
+	if ( (n = pthread_rwlock_init(rw, attr)) == 0)
+		return;
+	errno = n;
+	err_sys("pthread_rwlock_init error");
+}
+
+int
+pthread_rwlock_destroy(pthread_rwlock_t *rw)
+{
+	if (rw->rw_magic != RW_MAGIC)
+		return(EINVAL);
+	if (rw->rw_refcount != 0 ||
+		rw->rw_nwaitreaders != 0 || rw->rw_nwaitwriters != 0)
+		return(EBUSY);
+
+	pthread_mutex_destroy(&rw->rw_mutex);
+	pthread_cond_destroy(&rw->rw_condreaders);
+	pthread_cond_destroy(&rw->rw_condwriters);
+	rw->rw_magic = 0;
+
+	return(0);
+}
+
+void
+Pthread_rwlock_destroy(pthread_rwlock_t *rw)
+{
+	int		n;
+
+	if ( (n = pthread_rwlock_destroy(rw)) == 0)
+		return;
+	errno = n;
+	err_sys("pthread_rwlock_destroy error");
+}
+
+
+// rdlock
+// A problem exists in this function: if the calling thread blocks in the call to pthread_cond_wait
+// and the thread is then canceled, the thread terminates while it holds the mutex lock, and the
+// counter rw_nwaitreaders is wrong. The same problem exists in our implentation of
+// pthred_rwlock_wrlock. Can correct these problem in {}
+
+int
+pthread_rwlock_rdlock(pthread_rwlock_t *rw)
+{
+	int		result;
+
+	if (rw->rw_magic != RW_MAGIC)
+		return(EINVAL);
+
+	if ( (result = pthread_mutex_lock(&rw->rw_mutex)) != 0)
+		return(result);
+
+	// 4give preference to waiting writers. cannot get a read lock if a) rw_refcount < 0 (meaning
+	// there is a writer holding the lock and b) if threads are waiting to get a write lock.
+	// [KT] if. case that there are writers
+	while (rw->rw_refcount < 0 || rw->rw_nwaitwriters > 0) {
+		rw->rw_nwaitreaders++;
+		result = pthread_cond_wait(&rw->rw_condreaders, &rw->rw_mutex);
+		rw->rw_nwaitreaders--;
+		if (result != 0)
+			break;
+	}
+
+	// [KT] else. case that there are no writers
+	if (result == 0)
+		rw->rw_refcount++;		/* another reader has a read lock */
+
+	pthread_mutex_unlock(&rw->rw_mutex);
+	return (result);
+}
+
+/* tryrdlock */
+int
+pthread_rwlock_tryrdlock(pthread_rwlock_t *rw)
+{
+	int		result;
+
+	if (rw->rw_magic != RW_MAGIC)
+		return(EINVAL);
+
+	if ( (result = pthread_mutex_lock(&rw->rw_mutex)) != 0)
+		return(result);
+
+	if (rw->rw_refcount < 0 || rw->rw_nwaitwriters > 0)
+		result = EBUSY;			/* held by a writer or waiting writers */
+	else
+		rw->rw_refcount++;		/* increment count of reader locks */
+
+	pthread_mutex_unlock(&rw->rw_mutex);
+	return(result);
+}
+
+
+/* wrlock */
+int
+pthread_rwlock_wrlock(pthread_rwlock_t *rw)
+{
+	int		result;
+
+	if (rw->rw_magic != RW_MAGIC)
+		return(EINVAL);
+
+	if ( (result = pthread_mutex_lock(&rw->rw_mutex)) != 0)
+		return(result);
+
+	// [KT] if there are other readers or writers
+	while (rw->rw_refcount != 0) {
+		rw->rw_nwaitwriters++;
+		result = pthread_cond_wait(&rw->rw_condwriters, &rw->rw_mutex);
+		rw->rw_nwaitwriters--;
+		if (result != 0)
+			break;
+	}
+
+	// [KT] else there are no readers and writers
+	if (result == 0)
+		rw->rw_refcount = -1;
+
+	pthread_mutex_unlock(&rw->rw_mutex);
+	return(result);
+}
+
+
+// unlock. used by both reader and writer
+int
+pthread_rwlock_unlock(pthread_rwlock_t *rw)
+{
+	int		result;
+
+	if (rw->rw_magic != RW_MAGIC)
+		return(EINVAL);
+
+	if ( (result = pthread_mutex_lock(&rw->rw_mutex)) != 0)
+		return(result);
+
+	if (rw->rw_refcount > 0)
+		rw->rw_refcount--;			// releasing a reader
+	else if (rw->rw_refcount == -1)
+		rw->rw_refcount = 0;			// releasing a writer
+	else
+		err_dump("rw_refcount = %d", rw->rw_refcount); // cannot be since it is to unlock
+
+	// 4give preference to waiting writers over waiting readers
+	//
+	// {Q} The ref-001 says: notice that we do not grant any additional read locks as soon as a
+	// writer is waiting; otherwise, a stream of continual read requests could block a waiting writer
+	// forever. For this reason, we need two separate if tests and cannot write
+	//
+	// if( rw->rw_nwaitwriters > 0 && rw->rw_refcount == 0 )
+	// ...
+	// 
+	// could also omit the test of rw->rw_refcount, but that can result in calls to
+	// pthread_cond_signal when read locks are still allocated, which is less efficient.
+	//
+	if (rw->rw_nwaitwriters > 0) {
+		if (rw->rw_refcount == 0)
+			result = pthread_cond_signal(&rw->rw_condwriters);		// signal single writer
+	} else if (rw->rw_nwaitreaders > 0)
+		result = pthread_cond_broadcast(&rw->rw_condreaders);		// signal all readers
+
+	pthread_mutex_unlock(&rw->rw_mutex);
+	return(result);
+}
+
+
+{example}
+
+#include	"unpipc.h"
+#include	"pthread_rwlock.h"
+
+pthread_rwlock_t	rwlock = PTHREAD_RWLOCK_INITIALIZER;
+
+void	 *thread1(void *), *thread2(void *);
+pthread_t	tid1, tid2;
+
+int
+main(int argc, char **argv)
+{
+	void	*status;
+	Pthread_rwlock_init(&rwlock, NULL);
+
+	Set_concurrency(2);
+	Pthread_create(&tid1, NULL, thread1, NULL);
+	sleep(1);		/* let thread1() get the lock */
+	Pthread_create(&tid2, NULL, thread2, NULL);
+
+	Pthread_join(tid2, &status);
+	if (status != PTHREAD_CANCELED)
+		printf("thread2 status = %p\n", status);
+
+	Pthread_join(tid1, &status);
+	if (status != NULL)
+		printf("thread1 status = %p\n", status);
+
+	printf("rw_refcount = %d, rw_nwaitreaders = %d, rw_nwaitwriters = %d\n",
+		   rwlock.rw_refcount, rwlock.rw_nwaitreaders,
+		   rwlock.rw_nwaitwriters);
+	Pthread_rwlock_destroy(&rwlock);
+	/* 4returns EBUSY error if cancelled thread does not cleanup */
+
+	exit(0);
+}
+
+void *
+thread1(void *arg)
+{
+	Pthread_rwlock_rdlock(&rwlock);
+	printf("thread1() got a read lock\n");
+	sleep(3);		/* let thread2 block in pthread_rwlock_wrlock() */
+	pthread_cancel(tid2);
+	sleep(3);
+	Pthread_rwlock_unlock(&rwlock);
+	return(NULL);
+}
+
+void *
+thread2(void *arg)
+{
+	printf("thread2() trying to obtain a write lock\n");
+	Pthread_rwlock_wrlock(&rwlock);
+
+	// followings are never get executed since it gets canceled.
+	printf("thread2() got a write lock\n");
+	sleep(1);
+	Pthread_rwlock_unlock(&rwlock);
+	return(NULL);
+}
+
+When run this, the program is hung. The occurred steps are:
+
+1. the second trys to get write lock and blocks on pthread_cond_wait.
+2. the first returns from slepp(3) and cancel the second.
+
+3. when the second is canceled while it is blocked in a condition variable wait, the mutex is
+reacquired before calling the first cleanup hander (even if not installed any handers, but the mutex
+is still reacquired before the thread is canceled.) Therefore, when the secondis canceled, it holds
+the mutex lock for the read-write lock.
+
+4. the first calls pthread_rwlock_unlock, but it blocks forever in its call to pthread_mutex_lock
+because the mutex is still locked by the first thread that was canceled. [KT] this means cancel
+terminates a thread immediately and do not continue the rest in pthread_rwlock_wrlock. Hence still
+locked. 
+
+If remove the call to pthread_rwlock_unlock in the thread1 func, the main will print:
+
+rw_refcount = 1, rw_nwaitreaders = 0, rw_nwaitwriters = 1
+pthread_rwlock_destroy error: Device busy
+
+The correctio is simple and this is addition to pthread_rwlock_rdlock:
+
+int
+pthread_rwlock_rdlock(pthread_rwlock_t *rw)
+{
+	...
+	while (rw->rw_refcount < 0 || rw->rw_nwaitwriters > 0) {
+		rw->rw_nwaitreaders++;
+		pthread_cleanup_push( rwlock_cancelrdwait, (void*)rw); ~
+		result = pthread_cond_wait(&rw->rw_condreaders, &rw->rw_mutex);
+		pthread_cleanup_pop(0); ~
+		rw->rw_nwaitreaders--;
+		if (result != 0)
+			break;
+	}
+	...
+}
+
+/* include rwlock_cancelrdwait */
+static void
+rwlock_cancelrdwait(void *arg)
+{
+	pthread_rwlock_t	*rw;
+
+	rw = arg;
+	rw->rw_nwaitreaders--;
+	pthread_mutex_unlock(&rw->rw_mutex);
+}
+/* end rwlock_cancelrdwait */ 
+
+int
+pthread_rwlock_wrlock(pthread_rwlock_t *rw)
+{
+	...
+	while (rw->rw_refcount != 0) {
+		rw->rw_nwaitwriters++;
+		pthread_cleanup_push(rwlock_cancelwrwait, (void *) rw); ~
+		result = pthread_cond_wait(&rw->rw_condwriters, &rw->rw_mutex);
+		pthread_cleanup_pop(0); ~
+		rw->rw_nwaitwriters--;
+		if (result != 0)
+			break;
+	}
+	...
+}
+
+/* include rwlock_cancelwrwait */
+static void
+rwlock_cancelwrwait(void *arg)
+{
+	pthread_rwlock_t	*rw;
+
+	rw = arg;
+	rw->rw_nwaitwriters--;
+	pthread_mutex_unlock(&rw->rw_mutex);
+}
+/* end rwlock_cancelwrwait */
+
+
+==============================================================================
+*kt_linux_core_200*	case: own semaphore and mutex class using pthred cond var
 
 POSIX semaphore are system calls which means expensive. Is it possible to implement semaphore without it?
 
@@ -3641,7 +4076,7 @@ See *kt_linux_core_014* for msg q between threads
 
 
 ==============================================================================
-*kt_linux_core_012*  case: use of mutex and thread class
+*kt_linux_core_201*  case: use of mutex and thread class
 
 This is case study using Mutex, Queue and Thread classes.
 
@@ -3919,7 +4354,7 @@ most derived class object. Therefore, dreived version will be used for virtuals 
 
 
 ==============================================================================
-*kt_linux_core_013*  case: analysis of 011 and 012 case
+*kt_linux_core_202*  case: analysis of 200 and 201 case
 
 {how-this-work}
 
@@ -3961,7 +4396,7 @@ about performance? Is it better solution?
 
 
 ==============================================================================
-*kt_linux_core_014*  case: msg q between threads
+*kt_linux_core_203*  case: msg q between threads
 
 This uses stl q and sems to read, write and count(length) lock:
 
@@ -4310,7 +4745,28 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 
 
 ==============================================================================
-*kt_linux_core_021*  ipc: pipe and fifo	
+*kt_linux_core_301*  ipc
+
+CH51, Fig 43-1 in {ref-002}.
+
+communication - data transfer - byte stream 	- pipe
+															- fifo
+															- stream socket
+
+										- message 		- sys v message q
+															- posix message q
+															- datagram socket
+
+										- pseudoterminal
+
+					- shared memory 	- sys v shm
+											- posix shm
+											- memory mapping 	- anonymous mapping
+																	- mapped file
+
+
+==============================================================================
+*kt_linux_core_301*  ipc: pipe and fifo	
 
 {nonnetworked-ipc}
 From {ref-001}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
@@ -4440,6 +4896,110 @@ was designed as described below. This protocol is used in both FIFO and TCP/IP I
 {summary}
 
 If there is no reading process, broken-pipe. If there is no writing process, blocked.
+
+
+==============================================================================
+*kt_linux_core_310*  ipc: dbus and kbus	
+
+{dbus}
+
+http://www.freedesktop.org/wiki/Software/dbus/
+
+What is D-Bus?
+
+D-Bus is a message bus system, a simple way for applications to talk to one another. In addition to
+interprocess communication, D-Bus helps coordinate process lifecycle; it makes it simple and
+reliable to code a "single instance" application or daemon, and to launch applications and daemons
+on demand when their services are needed.
+
+D-Bus supplies both a system daemon (for events such as "new hardware device added" or "printer
+queue changed") and a per-user-login-session daemon (for general IPC needs among user
+applications). Also, the message bus is built on top of a general one-to-one message passing
+framework, which can be used by any two apps to communicate directly (without going through the
+message bus daemon). Currently the communicating applications are on one computer, or through
+unencrypted TCP/IP suitable for use behind a firewall with shared NFS home directories. (Help wanted
+with better remote transports - the transport mechanism is well-abstracted and extensible.)
+
+The D-Bus low-level API reference implementation and protocol have been heavily tested in the real
+world over several years, and are now "set in stone." Future changes will either be compatible or
+versioned appropriately.
+
+The low-level libdbus reference implementation has no required dependencies; the bus daemon's only
+required dependency is an XML parser (expat). Higher-level bindings specific to particular
+frameworks (Qt, GLib, Java, C#, Python, etc.) add more dependencies, but can make more assumptions
+and are thus much simpler to use. The bindings evolve separately from the low-level libdbus, so some
+are more mature and ABI-stable than others; check the docs for the binding you plan to use.
+
+There are also some reimplementations of the D-Bus protocol for languages such as C#, Java, and
+Ruby. These do not use the libdbus reference implementation.
+
+It should be noted that the low-level implementation is not primarily designed for application
+authors to use. Rather, it is a basis for binding authors and a reference for reimplementations. If
+you are able to do so it is recommended that you use one of the higher level bindings or
+implementations. A list of these can be found on the bindings page.
+
+The list of projects using D-Bus is growing and they provide a wealth of examples of using the
+various APIs to learn from.
+
+D-Bus is very portable to any Linux or UNIX flavor, and a port to Windows is in progress.
+
+D-Bus applications
+
+There are many, many technologies in the world that have "Inter-process communication" or
+"networking" in their stated purpose: CORBA, DCE, DCOM, DCOP, XML-RPC, SOAP, MBUS, Internet
+Communications Engine (ICE), and probably hundreds more. Each of these is tailored for particular
+kinds of application. 
+
+D-Bus is designed for two specific cases:
+
+Communication between desktop applications in the same desktop session; to allow integration of the
+desktop session as a whole, and address issues of process lifecycle (when do desktop components
+start and stop running).
+
+Communication between the desktop session and the operating system, where the operating system would
+typically include the kernel and any system daemons or processes. 
+
+For the within-desktop-session use case, the GNOME and KDE desktops have significant previous
+experience with different IPC solutions such as CORBA and DCOP. D-Bus is built on that experience
+and carefully tailored to meet the needs of these desktop projects in particular. D-Bus may or may
+not be appropriate for other applications; the FAQ has some comparisons to other IPC systems.
+
+The problem solved by the systemwide or communication-with-the-OS case is explained well by the
+following text from the Linux Hotplug project:
+
+A gap in current Linux support is that policies with any sort of dynamic "interact with user"
+component aren't currently supported. For example, that's often needed the first time a network
+adapter or printer is connected, and to determine appropriate places to mount disk drives. It would
+seem that such actions could be supported for any case where a responsible human can be identified:
+single user workstations, or any system which is remotely administered.
+
+This is a classic "remote sysadmin" problem, where in this case hotplugging needs to deliver an
+event from one security domain (operating system kernel, in this case) to another (desktop for
+logged-in user, or remote sysadmin). Any effective response must go the other way: the remote
+domain taking some action that lets the kernel expose the desired device capabilities. (The action
+can often be taken asynchronously, for example letting new hardware be idle until a meeting
+finishes.) At this writing, Linux doesn't have widely adopted solutions to such problems.
+However, the new D-Bus work may begin to solve that problem. 
+
+D-Bus may happen to be useful for purposes other than the one it was designed for. Its general
+properties that distinguish it from other forms of IPC are:
+
+Binary protocol designed to be used asynchronously (similar in spirit to the X Window System protocol).
+
+Stateful, reliable connections held open over time.
+
+The message bus is a daemon, not a "swarm" or distributed architecture.
+
+Many implementation and deployment issues are specified rather than left ambiguous/configurable/pluggable.
+
+Semantics are similar to the existing DCOP system, allowing KDE to adopt it more easily.
+
+Security features to support the systemwide mode of the message bus. 
+
+
+{kdbus}
+https://github.com/gregkh/presentation-kdbus
+https://github.com/gregkh/kdbus
 
 
 ==============================================================================
