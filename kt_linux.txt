@@ -27,6 +27,8 @@ KT KB. Linux
 |kt_linux_tool_021|	cmd: sort
 |kt_linux_tool_022|	cmd: grep
 |kt_linux_tool_023|	cmd: wc
+|kt_linux_tool_024|	cmd: du
+|kt_linux_tool_025|	cmd: ln
 
 |kt_linux_tool_140|	cmake
 |kt_linux_tool_141|	cmake: mix of c and cpp build
@@ -46,6 +48,8 @@ KT KB. Linux
 |kt_linux_core_102|	sync: how to run three threads sequencially
 |kt_linux_core_103|	sync: mutex and cond-var 
 |kt_linux_core_104|	sync: read-write lock
+|kt_linux_core_105|	sync: semaphore
+
 
 |kt_linux_core_200|	case: own semaphore and mutex class using pthread cond-var {CQueue}
 |kt_linux_core_201|	case: use of mutex and thread class
@@ -497,6 +501,710 @@ Reads and executes the commands from init file (if any) in the current working d
 This is only done if the current directory is different from your home directory.  Thus,
 you can have more than one init file, one generic in your home directory, and another,
 specific to the program you are debugging, in the directory where you invoke gdb.
+
+{gdbinit-for-c++}
+
+#
+#   STL GDB evaluators/views/utilities - 1.03
+#
+#   The new GDB commands:
+#       are entirely non instrumental
+#       do not depend on any "inline"(s) - e.g. size(), [], etc
+#       are extremely tolerant to debugger settings
+#
+#   This file should be "included" in .gdbinit as following:
+#   source stl-views.gdb or just paste it into your .gdbinit file
+#
+#   The following STL containers are currently supported:
+#
+#       std::vector<T> -- via pvector command
+#       std::list<T> -- via plist or plist_member command
+#       std::map<T,T> -- via pmap or pmap_member command
+#       std::multimap<T,T> -- via pmap or pmap_member command
+#       std::set<T> -- via pset command
+#       std::multiset<T> -- via pset command
+#       std::deque<T> -- via pdequeue command
+#       std::stack<T> -- via pstack command
+#       std::queue<T> -- via pqueue command
+#       std::priority_queue<T> -- via ppqueue command
+#       std::bitset<n> -- via pbitset command
+#       std::string -- via pstring command
+#       std::widestring -- via pwstring command
+#
+#   The end of this file contains (optional) C++ beautifiers
+#   Make sure your debugger supports $argc
+#
+#   Simple GDB Macros writen by Dan Marinescu (H-PhD) - License GPL
+#   Inspired by intial work of Tom Malnar,
+#     Tony Novac (PhD) / Cornell / Stanford,
+#     Gilad Mishne (PhD) and Many Many Others.
+#   Contact: dan_c_marinescu@yahoo.com (Subject: STL)
+#
+#   Modified to work with g++ 4.3 by Anders Elton
+#   Also added _member functions, that instead of printing the entire class in map, prints a member.
+
+# support for pending breakpoints - you can now set a breakpoint into a shared library before the it was loaded.
+set breakpoint pending on
+
+#
+# std::vector<>
+#
+
+define pvector
+    if $argc == 0
+        help pvector
+    else
+        set $size = $arg0._M_impl._M_finish - $arg0._M_impl._M_start
+        set $capacity = $arg0._M_impl._M_end_of_storage - $arg0._M_impl._M_start
+        set $size_max = $size - 1
+    end
+    if $argc == 1
+        set $i = 0
+        while $i < $size
+            printf "elem[%u]: ", $i
+            p *($arg0._M_impl._M_start + $i)
+            set $i++
+        end
+    end
+    if $argc == 2
+        set $idx = $arg1
+        if $idx < 0 || $idx > $size_max
+            printf "idx1, idx2 are not in acceptable range: [0..%u].\n", $size_max
+        else
+            printf "elem[%u]: ", $idx
+            p *($arg0._M_impl._M_start + $idx)
+        end
+    end
+    if $argc == 3
+      set $start_idx = $arg1
+      set $stop_idx = $arg2
+      if $start_idx > $stop_idx
+        set $tmp_idx = $start_idx
+        set $start_idx = $stop_idx
+        set $stop_idx = $tmp_idx
+      end
+      if $start_idx < 0 || $stop_idx < 0 || $start_idx > $size_max || $stop_idx > $size_max
+        printf "idx1, idx2 are not in acceptable range: [0..%u].\n", $size_max
+      else
+        set $i = $start_idx
+        while $i <= $stop_idx
+            printf "elem[%u]: ", $i
+            p *($arg0._M_impl._M_start + $i)
+            set $i++
+        end
+      end
+    end
+    if $argc > 0
+        printf "Vector size = %u\n", $size
+        printf "Vector capacity = %u\n", $capacity
+        printf "Element "
+        whatis $arg0._M_impl._M_start
+    end
+end
+
+document pvector
+    Prints std::vector<T> information.
+    Syntax: pvector <vector> <idx1> <idx2>
+    Note: idx, idx1 and idx2 must be in acceptable range [0..<vector>.size()-1].
+    Examples:
+    pvector v - Prints vector content, size, capacity and T typedef
+    pvector v 0 - Prints element[idx] from vector
+    pvector v 1 2 - Prints elements in range [idx1..idx2] from vector
+end
+
+#
+# std::list<>
+#
+
+define plist
+    if $argc == 0
+        help plist
+    else
+        set $head = &$arg0._M_impl._M_node
+        set $current = $arg0._M_impl._M_node._M_next
+        set $size = 0
+        while $current != $head
+            if $argc == 2
+                printf "elem[%u]: ", $size
+                p *($arg1*)($current + 1)
+            end
+            if $argc == 3
+                if $size == $arg2
+                    printf "elem[%u]: ", $size
+                    p *($arg1*)($current + 1)
+                end
+            end
+            set $current = $current._M_next
+            set $size++
+        end
+        printf "List size = %u \n", $size
+        if $argc == 1
+            printf "List "
+            whatis $arg0
+            printf "Use plist <variable_name> <element_type> to see the elements in the list.\n"
+        end
+    end
+end
+
+document plist
+    Prints std::list<T> information.
+    Syntax: plist <list> <T> <idx>: Prints list size, if T defined all elements or just element at idx
+    Examples:
+    plist l - prints list size and definition
+    plist l int - prints all elements and list size
+    plist l int 2 - prints the third element in the list (if exists) and list size
+end
+
+define plist_member
+    if $argc == 0
+        help plist_member
+    else
+        set $head = &$arg0._M_impl._M_node
+        set $current = $arg0._M_impl._M_node._M_next
+        set $size = 0
+        while $current != $head
+            if $argc == 3
+                printf "elem[%u]: ", $size
+                p (*($arg1*)($current + 1)).$arg2
+            end
+            if $argc == 4
+                if $size == $arg3
+                    printf "elem[%u]: ", $size
+                    p (*($arg1*)($current + 1)).$arg2
+                end
+            end
+            set $current = $current._M_next
+            set $size++
+        end
+        printf "List size = %u \n", $size
+        if $argc == 1
+            printf "List "
+            whatis $arg0
+            printf "Use plist_member <variable_name> <element_type> <member> to see the elements in the list.\n"
+        end
+    end
+end
+
+document plist_member
+    Prints std::list<T> information.
+    Syntax: plist <list> <T> <idx>: Prints list size, if T defined all elements or just element at idx
+    Examples:
+    plist_member l int member - prints all elements and list size
+    plist_member l int member 2 - prints the third element in the list (if exists) and list size
+end
+
+
+#
+# std::map and std::multimap
+#
+
+define pmap
+    if $argc == 0
+        help pmap
+    else
+        set $tree = $arg0
+        set $i = 0
+        set $node = $tree._M_t._M_impl._M_header._M_left
+        set $end = $tree._M_t._M_impl._M_header
+        set $tree_size = $tree._M_t._M_impl._M_node_count
+        if $argc == 1
+            printf "Map "
+            whatis $tree
+            printf "Use pmap <variable_name> <left_element_type> <right_element_type> to see the elements in the map.\n"
+        end
+        if $argc == 3
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                printf "elem[%u].left: ", $i
+                p *($arg1*)$value
+                set $value = $value + sizeof($arg1)
+                printf "elem[%u].right: ", $i
+                p *($arg2*)$value
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+        end
+        if $argc == 4
+            set $idx = $arg3
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                if *($arg1*)$value == $idx
+                    printf "elem[%u].left: ", $i
+                    p *($arg1*)$value
+                    set $value = $value + sizeof($arg1)
+                    printf "elem[%u].right: ", $i
+                    p *($arg2*)$value
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        if $argc == 5
+            set $idx1 = $arg3
+            set $idx2 = $arg4
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                set $valueLeft = *($arg1*)$value
+                set $valueRight = *($arg2*)($value + sizeof($arg1))
+                if $valueLeft == $idx1 && $valueRight == $idx2
+                    printf "elem[%u].left: ", $i
+                    p $valueLeft
+                    printf "elem[%u].right: ", $i
+                    p $valueRight
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        printf "Map size = %u\n", $tree_size
+    end
+end
+
+document pmap
+    Prints std::map<TLeft and TRight> or std::multimap<TLeft and TRight> information. Works for std::multimap as well.
+    Syntax: pmap <map> <TtypeLeft> <TypeRight> <valLeft> <valRight>: Prints map size, if T defined all elements or just element(s) with val(s)
+    Examples:
+    pmap m - prints map size and definition
+    pmap m int int - prints all elements and map size
+    pmap m int int 20 - prints the element(s) with left-value = 20 (if any) and map size
+    pmap m int int 20 200 - prints the element(s) with left-value = 20 and right-value = 200 (if any) and map size
+end
+
+
+define pmap_member
+    if $argc == 0
+        help pmap_member
+    else
+        set $tree = $arg0
+        set $i = 0
+        set $node = $tree._M_t._M_impl._M_header._M_left
+        set $end = $tree._M_t._M_impl._M_header
+        set $tree_size = $tree._M_t._M_impl._M_node_count
+        if $argc == 1
+            printf "Map "
+            whatis $tree
+            printf "Use pmap <variable_name> <left_element_type> <right_element_type> to see the elements in the map.\n"
+        end
+        if $argc == 5
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                printf "elem[%u].left: ", $i
+                p (*($arg1*)$value).$arg2
+                set $value = $value + sizeof($arg1)
+                printf "elem[%u].right: ", $i
+                p (*($arg3*)$value).$arg4
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+        end
+        if $argc == 6
+            set $idx = $arg5
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                if *($arg1*)$value == $idx
+                    printf "elem[%u].left: ", $i
+                    p (*($arg1*)$value).$arg2
+                    set $value = $value + sizeof($arg1)
+                    printf "elem[%u].right: ", $i
+                    p (*($arg3*)$value).$arg4
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        printf "Map size = %u\n", $tree_size
+    end
+end
+
+document pmap_member
+    Prints std::map<TLeft and TRight> or std::multimap<TLeft and TRight> information. Works for std::multimap as well.
+    Syntax: pmap <map> <TtypeLeft> <TypeRight> <valLeft> <valRight>: Prints map size, if T defined all elements or just element(s) with val(s)
+    Examples:
+    pmap_member m class1 member1 class2 member2 - prints class1.member1 : class2.member2
+    pmap_member m class1 member1 class2 member2 lvalue - prints class1.member1 : class2.member2 where class1 == lvalue
+end
+
+
+#
+# std::set and std::multiset
+#
+
+define pset
+    if $argc == 0
+        help pset
+    else
+        set $tree = $arg0
+        set $i = 0
+        set $node = $tree._M_t._M_impl._M_header._M_left
+        set $end = $tree._M_t._M_impl._M_header
+        set $tree_size = $tree._M_t._M_impl._M_node_count
+        if $argc == 1
+            printf "Set "
+            whatis $tree
+            printf "Use pset <variable_name> <element_type> to see the elements in the set.\n"
+        end
+        if $argc == 2
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                printf "elem[%u]: ", $i
+                p *($arg1*)$value
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+        end
+        if $argc == 3
+            set $idx = $arg2
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                if *($arg1*)$value == $idx
+                    printf "elem[%u]: ", $i
+                    p *($arg1*)$value
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        printf "Set size = %u\n", $tree_size
+    end
+end
+
+document pset
+    Prints std::set<T> or std::multiset<T> information. Works for std::multiset as well.
+    Syntax: pset <set> <T> <val>: Prints set size, if T defined all elements or just element(s) having val
+    Examples:
+    pset s - prints set size and definition
+    pset s int - prints all elements and the size of s
+    pset s int 20 - prints the element(s) with value = 20 (if any) and the size of s
+end
+
+
+
+#
+# std::dequeue
+#
+
+define pdequeue
+    if $argc == 0
+        help pdequeue
+    else
+        set $size = 0
+        set $start_cur = $arg0._M_impl._M_start._M_cur
+        set $start_last = $arg0._M_impl._M_start._M_last
+        set $start_stop = $start_last
+        while $start_cur != $start_stop
+            p *$start_cur
+            set $start_cur++
+            set $size++
+        end
+        set $finish_first = $arg0._M_impl._M_finish._M_first
+        set $finish_cur = $arg0._M_impl._M_finish._M_cur
+        set $finish_last = $arg0._M_impl._M_finish._M_last
+        if $finish_cur < $finish_last
+            set $finish_stop = $finish_cur
+        else
+            set $finish_stop = $finish_last
+        end
+        while $finish_first != $finish_stop
+            p *$finish_first
+            set $finish_first++
+            set $size++
+        end
+        printf "Dequeue size = %u\n", $size
+    end
+end
+
+document pdequeue
+    Prints std::dequeue<T> information.
+    Syntax: pdequeue <dequeue>: Prints dequeue size, if T defined all elements
+    Deque elements are listed "left to right" (left-most stands for front and right-most stands for back)
+    Example:
+    pdequeue d - prints all elements and size of d
+end
+
+
+
+#
+# std::stack
+#
+
+define pstack
+    if $argc == 0
+        help pstack
+    else
+        set $start_cur = $arg0.c._M_impl._M_start._M_cur
+        set $finish_cur = $arg0.c._M_impl._M_finish._M_cur
+        set $size = $finish_cur - $start_cur
+        set $i = $size - 1
+        while $i >= 0
+            p *($start_cur + $i)
+            set $i--
+        end
+        printf "Stack size = %u\n", $size
+    end
+end
+
+document pstack
+    Prints std::stack<T> information.
+    Syntax: pstack <stack>: Prints all elements and size of the stack
+    Stack elements are listed "top to buttom" (top-most element is the first to come on pop)
+    Example:
+    pstack s - prints all elements and the size of s
+end
+
+
+
+#
+# std::queue
+#
+
+define pqueue
+    if $argc == 0
+        help pqueue
+    else
+        set $start_cur = $arg0.c._M_impl._M_start._M_cur
+        set $finish_cur = $arg0.c._M_impl._M_finish._M_cur
+        set $size = $finish_cur - $start_cur
+        set $i = 0
+        while $i < $size
+            p *($start_cur + $i)
+            set $i++
+        end
+        printf "Queue size = %u\n", $size
+    end
+end
+
+document pqueue
+    Prints std::queue<T> information.
+    Syntax: pqueue <queue>: Prints all elements and the size of the queue
+    Queue elements are listed "top to bottom" (top-most element is the first to come on pop)
+    Example:
+    pqueue q - prints all elements and the size of q
+end
+
+
+
+#
+# std::priority_queue
+#
+
+define ppqueue
+    if $argc == 0
+        help ppqueue
+    else
+        set $size = $arg0.c._M_impl._M_finish - $arg0.c._M_impl._M_start
+        set $capacity = $arg0.c._M_impl._M_end_of_storage - $arg0.c._M_impl._M_start
+        set $i = $size - 1
+        while $i >= 0
+            p *($arg0.c._M_impl._M_start + $i)
+            set $i--
+        end
+        printf "Priority queue size = %u\n", $size
+        printf "Priority queue capacity = %u\n", $capacity
+    end
+end
+
+document ppqueue
+    Prints std::priority_queue<T> information.
+    Syntax: ppqueue <priority_queue>: Prints all elements, size and capacity of the priority_queue
+    Priority_queue elements are listed "top to buttom" (top-most element is the first to come on pop)
+    Example:
+    ppqueue pq - prints all elements, size and capacity of pq
+end
+
+
+
+#
+# std::bitset
+#
+
+define pbitset
+    if $argc == 0
+        help pbitset
+    else
+        p /t $arg0._M_w
+    end
+end
+
+document pbitset
+    Prints std::bitset<n> information.
+    Syntax: pbitset <bitset>: Prints all bits in bitset
+    Example:
+    pbitset b - prints all bits in b
+end
+
+
+
+#
+# std::string
+#
+
+define pstring
+    if $argc == 0
+        help pstring
+    else
+        printf "String \t\t\t= \"%s\"\n", $arg0._M_data()
+        printf "String size/length \t= %u\n", $arg0._M_rep()._M_length
+        printf "String capacity \t= %u\n", $arg0._M_rep()._M_capacity
+        printf "String ref-count \t= %d\n", $arg0._M_rep()._M_refcount
+    end
+end
+
+document pstring
+    Prints std::string information.
+    Syntax: pstring <string>
+    Example:
+    pstring s - Prints content, size/length, capacity and ref-count of string s
+end
+
+#
+# std::wstring
+#
+
+define pwstring
+    if $argc == 0
+        help pwstring
+    else
+        call printf("WString \t\t= \"%ls\"\n", $arg0._M_data())
+        printf "WString size/length \t= %u\n", $arg0._M_rep()._M_length
+        printf "WString capacity \t= %u\n", $arg0._M_rep()._M_capacity
+        printf "WString ref-count \t= %d\n", $arg0._M_rep()._M_refcount
+    end
+end
+
+document pwstring
+    Prints std::wstring information.
+    Syntax: pwstring <wstring>
+    Example:
+    pwstring s - Prints content, size/length, capacity and ref-count of wstring s
+end
+
+#
+# C++ related beautifiers (optional)
+#
+
+set print pretty on
+set print object on
+set print static-members on
+set print vtbl on
+set print demangle on
+set demangle-style gnu-v3
+set print sevenbit-strings off
+
+set history filename ~/.gdb_history
+set history save
+
+# finally stop the silly "A debugging session is active." - question ... just quit both.
+set confirm off
 
 
 ==============================================================================
@@ -1466,6 +2174,32 @@ echo "pfm"
 find pfm -name '*.[ch]' -o -name '*.[ch]pp' | xargs wc -l
 
 
+==============================================================================
+*kt_linux_tool_024*	cmd: du
+
+' to print one level
+du -h --max-depth=1
+
+-h, --human-readable
+              print sizes in human readable format (e.g., 1K 234M 2G)
+
+' to show all and total
+du -ach
+du -sh
+
+
+==============================================================================
+*kt_linux_tool_025*	cmd: ln
+
+       -f, --force
+              remove existing destination files
+
+       -s, --symbolic
+              make symbolic links instead of hard links
+
+ln -sf input output. E.g., ln -sf linux-2.4.25-2.8 linux
+
+
 # ============================================================================
 #{
 
@@ -2022,6 +2756,11 @@ This is global var which is set to positive values and function returns -1 to in
 Usually defiend in <sys/errno.h>. With multiple threads, provides per-thread errno and done by
 having hash define in compile such as -D_REENTRANT. See {pthread-compile-link}
 
+This global errno can cause race condition. Therefore, in threaded programs, each thread has its own
+errno value. On Linux, a thread-specific errno is achieved in a similar manner to most other UNIX
+implementations: errno is defined as a macro that expands into a function call returning a
+modifiable lvalue that is distinct for each thread.
+
 
 {errno-values}
 
@@ -2065,24 +2804,6 @@ For BRCM case, errno.h includes following file and starts numbering after follow
 #define	ERANGE		34	/* Math result not representable */
 
 
-{error-funcs}
-
-From Apdix C in {ref-001}. The reason for our own error funcs is to handle error case with a single
-line. See {pthread-util-func} for the use.
-
-if( error condition )
-	 err_sys( printf format with any number of args );
-
-instead of
-
-if( error condition ) {
-	 char buff[200];
-	 snprintf( buff, sizeof(buff), printf format with any number of args );
-	 perror(buff);
-	 exit(1);
-}
-
-
 ==============================================================================
 *kt_linux_core_100* thread vs. process	
 
@@ -2091,6 +2812,33 @@ if( error condition ) {
 The mutiltithreaded means that a single process has multi threads, <lightweight-process>. The
 singlethreaed means that a single process has a single thread. Mutl has less IPC but prone to error
 because shares resources; less protection. Single has more IPC but more protection.
+
+<why-thread>
+
+From {ref-002}. Problems with fork:
+
+1) The fork call is expensive because memory is copied from the parent to the child. Although
+<copy-on-write> is used to avoid this, but still expensive.
+
+2) Need ipc after fork between parent and child.
+
+
+Thread help with these problems as it is <lightweight-process> in terms of creation cost:
+
+Thread creation is faster because many of the attributes that must be duplicated in a child created
+by fork() are instead shared between threads.
+
+Sharing information between threads is easy and fast. It is just a matter of copying
+data into shared (global or heap) variables.
+
+However, has disadvantages:
+
+1) more efforts to ensure thread-safe
+2) buggy thread can damage all of the threads in the process. less protection.
+3) each thread is competing for use of the finite virtual address space of a host process.
+4) usually desirable to avoid the use of signals in multi-threaded programs since requires careful
+designs.
+5) should run the same program.
 
 
 {sharing-within-process}
@@ -2110,10 +2858,12 @@ From {ref-001}
 {how-about-linux}
 
 A process is a program in action and Linux kernel scheduler schedules based on 'thread'. {Q} KT.
-This is a perspective from scheduler but not from sharing resources. Two virtualisation in Linux:
-processer and memory.
+This is a perspective from scheduler but not from sharing resources. In Linux, kernel has a double
+linked list which has thread_info element. (have task_struct* in this struct) 
+	
+Two virtualisation in Linux: processer and memory.
 
-Linus don't distinguish a process(task) with a thread. thread is just a special process.  Linux
+Linux don't distinguish a process(task) with a thread. thread is just a special process. Linux
 kernel has a double-linked list which has <thread_info> struct element(link to thread_struct).
 
 why a thread is special is that it shares resource( open files, pending signals, internal kernel
@@ -2128,22 +2878,34 @@ to create a process:
 clone(SIGCHLD, 0);
 
 
-Two steps to create a process:
+Two usual steps to create a process:
 
 fork();	# copy a child from a parent and actually use clone() call
 exec*()	# load a new program text.
 
+<shared-and-not-shared-between-threads>
+From CH29 in {ref-002}.
 
-{fork-is-expensive}
-
-From {ref-001}. Problems with fork:
-
-<1> This is expensive because memory is copied from the parent to the child. Although
-<copy-on-write> is used to avoid this, but still expensive.
-
-<2> Need ipc after fork between parent and child.
+The attributes that are shared; in other words, global attributes to a process
  
-Thread help with these problems as it is <lightweight-process> in terms of creation cost.
+The shared atrributes:
+process ID and parent process ID;
+process group ID and session ID;
+process credentials (user and group IDs);
+open file descriptors;
+signal dispositions;
+file system-related information: umask, current working directory, and root directory;
+resource limits;
+
+The attributes for each thread:
+thread ID (Section 29.5);
+signal mask;
+thread-specific data (Section 31.3);
+alternate signal stack (sigaltstack());
+the errno variable;
+realtime scheduling policy and priority (Sections 35.2 and 35.3);
+capabilities (Linux-specific, described in Chapter 39); and
+stack (local variables and function call linkage information).
 
 
 ==============================================================================
@@ -2176,28 +2938,97 @@ uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\bits\pth
 (_pthread_rwlock_t)
 
 
+{pthread-errno}
+
+The traditional method of returning status from system calls and some library functions is to return
+0 on success and -1 on error, with errno being set to indicate the error. The functions in the
+Pthreads API do things differently. All Pthreads functions return 0 on success or a positive value
+on failure. The failure value is one of the same values that can be placed in errno by traditional
+UNIX system calls. Two approaches:
+
+<one>
+
+From {ref-001}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
+This means that set manually errno before calling err_sys() for example. This util funcs handles
+this:
+
+To avoid cluttering the code with braces, use {comma-operator} to combine assignment and the call:
+
+int n;
+if(( n = pthread_mutex_lock( &ndone_mutex )) != 0 )
+	 errno = n, err_sys("pthread_mutex_lock error");
+
+Or
+
+void Pthread_mutex_lock(pthread_mutex_t* mptr)
+{
+	int n;
+
+	if(( n = pthread_mutex_lock( mptr )) == 0 )
+		 return;
+
+	errno = n;
+	err_sys("pthread_mutex_lock error");
+} 
+
+From Appdix C in {ref-001}. The reason for our own error funcs is to handle error case with a single
+line. See {pthread-util-func} for the use.
+
+if( error condition )
+	 err_sys( printf format with any number of args );
+
+instead of
+
+if( error condition ) {
+	 char buff[200];
+	 snprintf( buff, sizeof(buff), printf format with any number of args );
+	 perror(buff);
+	 exit(1);
+}
+
+<two>
+
+Because each reference to errno in a threaded program carries the overhead of a function call, our
+example programs don't directly assign the return value of a Pthreads function to errno. note: KT so
+no need to care about errno in pthread.
+
+From CH03 in {ref-002}
+
+(lib/tlpi_hdr.h)
+
+#ifndef TLPI_HDR_H
+#define TLPI_HDR_H /* Prevent accidental double inclusion */
+#include <sys/types.h> /* Type definitions used by many programs */
+#include <stdio.h> /* Standard I/O functions */
+#include <stdlib.h> /* Prototypes of commonly used library functions,
+plus EXIT_SUCCESS and EXIT_FAILURE constants */
+#include <unistd.h> /* Prototypes for many system calls */
+#include <errno.h> /* Declares errno and defines error constants */
+#include <string.h> /* Commonly used string-handling functions */
+#include "get_num.h" /* Declares our functions for handling numeric
+arguments (getInt(), getLong()) */
+#include "error_functions.h" /* Declares our error-handling functions */
+typedef enum { FALSE, TRUE } Boolean;
+#define min(m,n) ((m) < (n) ? (m) : (n))
+#define max(m,n) ((m) > (n) ? (m) : (n))
+#endif
+
+TODO: need to summarize:
+
+
 {pthread.h}
 
 #include <pthread.h>
 
-/*  return 0 if okay, positive Exxx on error which is different from most system calls. See
- *  {errno-use}
- *
- * The traditional method of returning status from system calls and some library functions is to
- * return 0 on success and -1 on error, with errno being set to indicate the error. The functions in
- * the Pthreads API do things differently. All Pthreads functions return 0 on success or a positive
- * value on failure. The failure value is one of the same values that can be placed in errno by
- * traditional UNIX system calls.  Because each reference to errno in a threaded program carries the
- * overhead of a function call, our example programs don't directly assign the return value of a
- * Pthreads function to errno. note: KT so no need to care about errno in pthread.
- *
- *  If need multiple arguments to the function, must package them into a structure and then pass the
- *  address of this as the single argument to the start function.
- *
- *  arg should be in global or heap.
- *
- *  EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
- */
+//  return 0 if okay, positive Exxx on error which is different from most system calls. 
+//
+//  If need multiple arguments to the function, must package them into a structure and then pass the
+//  address of this as the single argument to the start function.
+//
+//  arg should be in global or heap.
+//
+//  EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
+//
 int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
 
 
@@ -2240,21 +3071,25 @@ int pthread_join( pthread_t tid, void **status);
 void pthread_exit(void *retval);
 
 
-/*  return tid of calling thread. note: pthread_t is structure and need more to print out and also
- *  implementation dependant. Treat it as opaque data and hence need pthread_equal(). 
- *
- *  {ref-001} POSIX thread IDs are not the same as the thread IDs returned by the Linuxspecific
- *  gettid() system call. POSIX thread IDs are assigned and maintained by the threading
- *  implementation. The thread ID returned by gettid() is a number (similar to a process ID) that is
- *  assigned by the kernel.  Although each POSIX thread has a unique kernel thread ID in the Linux
- *  NPTL threading implementation, an application generally doesn't need to know about the kernel
- *  IDs (and won't be portable if it depends on knowing them).
- */
-pthread_t pthread_self(void);
-
-/*  return 0 if they are equal
- */
+// {threadid}
+// return tid of calling thread. note: pthread_t is structure and need more to print out and also
+// implementation dependant. In NPTL, pthread_t is a pointer so treat it as opaque data and hence
+// need pthread_equal(). 
+//
+// if (pthread_equal(tid, pthread_self()) 
+// 	printf("tid matches self\n");
+//
+// In 29.5 of {ref-002}, POSIX thread IDs are not the same as the thread IDs returned by the Linux
+// specific gettid() system call. POSIX thread IDs are assigned and maintained by the threading
+// implementation. The thread ID returned by gettid() is a number (similar to a process ID) that is
+// assigned by the kernel.  Although each POSIX thread has a unique kernel thread ID in the Linux
+// NPTL threading implementation, an application generally doesn't need to know about the kernel IDs
+// (and won't be portable if it depends on knowing them).
+//
+//  return 0 if they are equal
+//
 int pthread_equeal( pthread_t tid, pthread_t tid );
+pthread_t pthread_self(void);
 
 
 /*  Thread is either [joinable](the default) or [detached]. The detached thread is like a daemon
@@ -2437,6 +3272,32 @@ HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
 resPOSIX = pthread_create(&(ptThreadInfo->idThread), &threadAttrs, pfThreadMain, pvParam);
     
 
+{pthread-stack}
+
+From CH33 in {ref-002}.
+
+Each thread has its own stack whose size is fixed when the thread is created. On Linux/x86-32, for
+all threads other than the main thread, the default size of the per-thread stack is 2 MB. The main
+thread has a much larger space for stack growth. Occasionally, it is useful to change the size of a
+thread's stack. 
+
+The pthread_attr_setstacksize() function sets a thread attribute (Section 29.8) that determines the
+size of the stack in threads created using the thread attributes object. The related
+pthread_attr_setstack() function can be used to control both the size and the location of the stack,
+but setting the location of a stack can decrease application portability.
+
+One reason to change the size of per-thread stacks is to allow for larger stacks for threads that
+allocate large automatic variables or make nested function calls of great depth (perhaps because of
+recursion).
+
+Alternatively, an application may want to reduce the size of per-thread stacks to allow for a
+greater number of threads within a process.
+
+The minimum stack that can be employed on a particular architecture can be determined by calling
+sysconf(_SC_THREAD_STACK_MIN). For the NPTL implementation on Linux/x86-32, this call returns the
+value 16,384.
+
+
 {nptl}
 
 Linux threading models compared: LinuxThreads and NPTL
@@ -2458,31 +3319,6 @@ note: Q. In Linux, every thread has a PID and can see when use ps command but in
 group has one PID. is it true?
 
 
-{pthread-util-func}
-
-From {ref-001}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
-This means that set manually errno before calling err_sys() for example. This util funcs handles
-this:
-
-To avoid cluttering the code with braces, use {comma-operator} to combine assignment and the call:
-
-int n;
-if(( n = pthread_mutex_lock( &ndone_mutex )) != 0 )
-	 errno = n, err_sys("pthread_mutex_lock error");
-
-Or
-
-void Pthread_mutex_lock(pthread_mutex_t* mptr)
-{
-	int n;
-
-	if(( n = pthread_mutex_lock( mptr )) == 0 )
-		 return;
-
-	errno = n;
-	err_sys("pthread_mutex_lock error");
-} 
-
 {pthread-compile-link}
 
 It is on GCC 4.6.3 and not -lpthread. This is said when run 'man' on pthread funcs. On Linux,
@@ -2491,7 +3327,7 @@ option. The effects of this option include the following:
 o The _REENTRANT preprocessor macro is defined. This causes the declarations of a few reentrant
 functions to be exposed.
 
-o The program is linked with the libpthread library (the equivalent of –lpthread).
+o The program is linked with the libpthread library (the equivalent of -lpthread).
 
 gcc -pthread sample.c
 
@@ -2569,6 +3405,9 @@ This is to sync for data or critial region. Although talking of critial region, 
 protected is [the-data] being manipulated within the critical region. This is posix.1 standard. mutex
 and cond-var uses global structure so if these are shared in a shared memory, these can be used
 between processes. If not, for threads within a process.
+
+In {ref-002} p881, process-shared mutexes and condition variables.  They are not available on all
+UNIX systems, and so are not commonly employed for process synchronization.
 
 {Q} The phrase "no difference between process and thread." If so why is there limitation on IPC and
 sync? Think that meant from kernel scheduler point of view but not sharing.
@@ -3523,6 +4362,43 @@ rwlock_cancelwrwait(void *arg)
 	pthread_mutex_unlock(&rw->rw_mutex);
 }
 /* end rwlock_cancelwrwait */
+
+
+==============================================================================
+*kt_linux_core_105*	sync: semaphore
+
+Semaphores: A semaphore is a kernel-maintained integer whose value is never permitted to fall below
+0. A process can decrease or increase the value of a semaphore. If an attempt is made to decrease
+the value of the semaphore below 0, then the kernel blocks the operation until the semaphore's value
+increases to a level that permits the operation to be performed. 
+
+The meaning of a semaphore is determined by the application. A process decrements a semaphore (from,
+say, 1 to 0) in order to reserve exclusive access to some shared resource, and after
+completing work on the resource, increments the semaphore so that the shared resource is released
+for use by some other process. The use of a binary semaphore-a semaphore whose value is limited to 0
+or 1-is common. However, an application that deals with multiple instances of a shared resource
+would employ a semaphore whose maximum value equals the number of shared resources. Linux provides
+both System V semaphores and POSIX semaphores, which have essentially similar functionality.
+
+Unlike mutex, semaphore does not get lost when there is no waiting one.
+
+File locks: File locks are a synchronization method explicitly designed to coordinate the actions of
+multiple processes operating [on-the-same-file]. They can also be used to coordinate access to other
+shared resources. File locks come in two flavors: read (shared) locks and write (exclusive) locks.
+Any number of processes can hold a read lock on the same file (or region of a file). However, when
+one process holds a write lock on a file (or file region), other processes are prevented from
+holding either read or write locks on that file (or file region). Linux provides file-locking
+facilities via the flock() and fcntl() system calls. The flock() system call provides a simple
+locking mechanism, allowing processes to place a shared or an exclusive lock on an entire file.
+Because of its limited functionality, flock() locking facility is rarely used nowadays. The fcntl()
+system call provides record locking, allowing processes to place multiple read and write locks on
+different regions of the same file.
+
+
+When performing interprocess synchronization, our choice of facility is typically determined by the
+functional requirements. When coordinating access to a file, file record locking is usually the best
+choice. Semaphores are often the better choice for coordinating access to other types of shared
+resource.
 
 
 ==============================================================================
@@ -4745,9 +5621,10 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 
 
 ==============================================================================
-*kt_linux_core_301*  ipc
+*kt_linux_core_300*  ipc
 
-CH51, Fig 43-1 in {ref-002}.
+CH43, Fig 43-1 in {ref-002} which says that the general term IPC is often used to describe them all;
+communication, signal, and synchronization.
 
 communication - data transfer - byte stream 	- pipe
 															- fifo
@@ -4764,6 +5641,23 @@ communication - data transfer - byte stream 	- pipe
 											- memory mapping 	- anonymous mapping
 																	- mapped file
 
+signal 			- standard signal
+					- realtime signal
+
+synchronization- semaphore 	- sys v
+										- posix 	- named
+													- unnamed
+					- file lock 	- record lock
+										- file lock
+
+					- mutex	
+					- condition variable
+
+Signals: Although signals are intended primarily for other purposes, they can be used as a
+synchronization technique in certain circumstances. More rarely, signals can be used as a
+communication technique: the signal number itself is a form of information, and realtime signals can
+be accompanied by associated data (an integer or a pointer).
+
 
 ==============================================================================
 *kt_linux_core_301*  ipc: pipe and fifo	
@@ -4772,9 +5666,11 @@ communication - data transfer - byte stream 	- pipe
 From {ref-001}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
 such as socket.
 
+{categories-of-ipc}
 
-{three-ways-to-share-between-processes}
-From {ref-001}.
+From {ref-001}:
+
+three-ways-to-share-between-processes
 
 (1) Process Process       (2) Process Process          (3) Process <- shm -> Process
       |        |                 |       |      
@@ -4783,21 +5679,139 @@ Kernel                          shared info in kernel
 Filesystem
 
 
-{process-and-kernel-persistence}
+<persistence> which is lifetime of an objects
+
+Define the persistence of any type of IPC as how long an object of that type remains in existence.
+Process-persistence exists until last process with IPC open closes the object and kernel one exists
+until kernel reboots or IPC objects is explicitly deleted.
 
 process-persistence: pipe, fifo, mutex, condition-var, read-write-lock, ...
-kernel-presistence: shm, named-semaphore, ...
+kernel-presistence : shm, named-semaphore, ...
 
-Be careful when defining the presistence of ipc becauseitis not always as it seems. For example, the
-date within a pipe is maintained within the kernel, but pipes have process-persistence because after
-the last process that has the pipe open for reading closes the pipe, the kernel discard all data and
+Be careful when defining the presistence of ipc because it is not always as it seems: the date
+within a pipe is maintained within the kernel, but pipes have process-persistence because after the
+last process that has the pipe open for reading closes the pipe, the kernel discard all data and
 remove the pipe.
+
+From {ref-002}:
+
+Data-transfer which 
+1) requires two data transfers between user and kenel memory
+2) synchronization between the reader and writer processes is automatic by kernel. if a reader
+attempts to fetch data from data-transfer facility that has no data, then read will bock until some
+write data to it.  
+3) available to one which done read operation since read consumes data.
+
+byte stream: read and write is independent meaning read may read an arbitrary bytes. This models
+"file as a sequence of bytes".
+
+An application can also impose a message-oriented model on a byte-stream facility, by using
+delimiter characters, fixed-length messages, or message headers that encode the length of the total
+message message: each read reads a whole message. not possible to read part of a message and to read
+multiple messages.
+
+
+shared memory which 
+1) don't require system calls or data transfer between user and kenel. Hence shared memory
+provide very fast communication. 
+2) However it can be offset by the need to sync and semaphore is the usual method used with shared
+memory.
+3) avaible to all of the processes that share that memory
+
+facility using file descriptors like pipe, fifo, and sockets
+
+The primary benefit of these techniques is that they allow an application to simultaneously monitor
+multiple file descriptors to see whether I/O is possible on any of them.
 
 
 {name-space}
 
 Use name or identifier so that one process can create ipc object and other processes can specify
 that same ipc object.
+
+type 								name used to identify 		handle used to refer to object
+------------------------------------------------------------------------------------
+pipe 								no name 							file descriptor
+fifo 								pathname 						ditto
+
+UNIX domain socket 			pathname 						ditto
+Internet domain socket 		IP and port 					ditto
+
+posix message q 				posix ipc pathname 			mqd_t
+posix named semaphore 		ditto								sem_t* (sem pointer)
+posix unnamed semaphore 	no name 							sem_t*
+posix shared memory 			posix ipc pathname 			file descriptor 
+
+anonymous mapping 			no name 							none
+memory mapped file 			pathname 						file descriptor 
+
+
+{accessibility-and-persistence}
+
+type 								accessibility 					persistence
+------------------------------------------------------------------------------------
+pipe 								only by related processes 	process
+fifo 								permission mask 				ditto
+
+UNIX domain socket 			permission mask 				ditto
+Internet domain socket 		by any processe 				ditto
+
+posix message q 				ppermission mask 				kernel
+posix named semaphore 		dpermission mask 				kernel
+posix unnamed semaphore 	permission of underlying mem depends
+posix shared memory 			permission mask 				kernel
+
+anonymous mapping 			only by releated				process 
+memory mapped file 			permission mask 				file system 
+
+unix and network domain:
+
+Of all of the IPC methods shown in Figure 43-1, only sockets permit processes to communicate over a
+network. Sockets are generally used in one of two domains: the UNIX domain, which allows
+communication between processes on the same system, and the Internet domain, which allows
+communication between processes on different hosts connected via a TCP/IP network. Often, only minor
+changes are required to convert a program that uses UNIX domain sockets into one that uses Internet
+domain sockets, so an application that is built using UNIX domain sockets can be made
+network-capable with relatively little effort.
+
+<portability>
+
+However, the POSIX IPC facilities (message queues, semaphores, and shared memory) are not quite as
+widely available as their System V IPC counterparts, especially on older UNIX systems. An
+implementation of POSIX message queues and full support for POSIX semaphores have appeared on Linux
+only in the 2.6.x kernel series. Therefore, from a portability point of view, System V IPC may be
+preferable to POSIX IPC.
+
+As of 06 Jan 2014, the latest stable kernel release is 3.12.6
+
+releated:
+
+Here, related means related via fork(). In order for two processes to access the object, one of them
+must create the object and then call fork(). As a consequence of the fork(), the child process
+inherits a handle referring to the object, allowing both processes to share the object.
+
+<performance>
+
+In some circumstances, different IPC facilities may show notable differences in performance.
+However, in later chapters, we generally refrain from making performance comparisons, for the
+following reasons:
+
+1) The performance of an IPC facility may not be a significant factor in the overall performance of
+an application, and it may not be the only factor in determining the choice of an IPC facility.
+
+2) The relative performance of the various IPC facilities may vary across UNIX implementations or
+between different versions of the Linux kernel.
+
+3) Most importantly, the performance of an IPC facility will vary depending on the precise manner
+and environment in which it is used. Relevant factors include the size of the data units exchanged
+in each IPC operation, the amount of unread data that may be outstanding on the IPC facility,
+whether or not a process context switch is required for each unit of data exchanged, and other
+load on the system.
+
+If IPC performance is crucial, there is no substitute for application-specific benchmarks run under
+an environment that matches the target system. To this end, it may be worth writing an [abstract]
+software layer that hides details of the IPC facility from the application and then testing
+performance when different IPC facilities are substituted underneath the abstract layer.
 
 
 {pipe}
