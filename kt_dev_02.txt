@@ -1,6 +1,6 @@
 *kt_dev_02*		tw=100
 
-aSat 28 Dec 2013 06:44:08 GMT
+aTue 07 Jan 2014 05:07:39 GMT
 
 Keywords:
 {Q} for questions to find out more
@@ -37,6 +37,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_algo_009|	sort {mergesort} {quicksort}
 |kt_dev_algo_010|	search: table and hash {radixsort}
 |kt_dev_algo_011|	binary tree {binary-search-tree} {treesort}
+|kt_dev_algo_012|	avl tree 
 
 
 # ============================================================================
@@ -6283,7 +6284,7 @@ pre 12345, in 14352 and post 45321
 A binary tree has a natural implementation in linked strorage. The root variable enable us to find
 the tree and it will point to the root of the tree.
 
-{Q} is this typedef okay?
+{Q} is this typedef okay? Yes, it is.
 
 typedef struct treenode TreeNode;
 typedef struct treenode {
@@ -6423,10 +6424,10 @@ smaller the number of comparisons.
 The worst case is the case when input is ordered. Think a comparison tree of binary search. The
 worst case it unlikely in practice so TreeSearch performs nearly as well as binary search. For
 random order, it is 39% slower than the optimum of log n comparisons. Still better than sequential
-search. {Q} is it average?
+search. {Q} is it average? Yes, it is.
 
 
-<tree-insert>
+<tree-insert> which supports the random input
 >
  The worst of a random binary search tree is when the keys are inserted into an initially empty tree
  in their natural order, sorted. This will produce a chain, a tree with a single line. The same
@@ -6437,7 +6438,7 @@ If the keys are equal, we shall adpot the convention of inserting the duplicate 
 subtree. It inserts a new key that duplicates a previous key on the right side of the old entry.
 TreeSearch, the searching function will always find the first entry of duplicated keys.
 
-// See how return valuse is used; used to set left or right of the previous node.
+// See how return value is used; used to set left or right of the previous node.
 //
 TreeNode* TreeInsert( TreeNode* root, TreeNode* newnode )
 {
@@ -6669,13 +6670,11 @@ examples:
 The second example increases its height. Thus the time required for a later search can substantially
 increase, even though the total size of the tree has decreased. Hence to optimise the use of binary
 search tree, need methods to make the left and right subtree more nearly balanced. To reduce height,
-nedd to make it balanced.
-
-When the input is already in order but do not know in advance how many nodes will be built in to the
-tree then can make a nearly complete binary tree as shown 9.3 in {ref-001}
+need to make it balanced.
 
 Is it worthwhile, on average, to keep a binary search tree balanced or rebalance it? The average
-cost of not balancing a binary search tree is approximately 39% more comparisons.
+cost of not balancing a binary search tree is approximately 39% more comparisons because not
+balanced tree becomes random binary search tree. See 9.3.6 in {ref-001}
 
 <ref-example>
 		 
@@ -6731,6 +6730,8 @@ int Power2(int x)
 	return level;
 }
 
+<tree-insert> which assumes the ordered input
+
 void Insert( TreeNode *newnode, int count, TreeNode *lastnode[] )
 {
 	int level = Power2(count)+1;
@@ -6741,6 +6742,59 @@ void Insert( TreeNode *newnode, int count, TreeNode *lastnode[] )
 	// for example, when n=6
 	if(lastnode[level+1] && !lastnode[level+1]->right )	// parent level
 		lastnode[level+1]->right = newnode;
+}
+
+// If there is information available, GetNode creates a TreeNode, copies the information into the
+// node, and returns a pointer to this TreeNode. Otherwise, returns NULL. This is to obtain each new
+// node.
+TreeNode *GetNode();
+
+// the root is the highest node in the tree; hence its pointer is the highest entry not equal to
+// NULL in the lastnode array.
+TreeNode *FindRoot(TreeNode *lastnode[])
+{
+	int level;
+
+	for( level = MAXHEIGHT-1; level > 0 && !lastnode[level]; level--)
+		;
+
+	if( level <= 0 )
+		return NULL;
+	else
+		return lastnode[level];
+}
+
+// The nearly completed BST has been initialized. must tie in any subtrees that may not yet be
+// connected properly after all the nodes have been received. The difficulty is that some nodes in
+// the upper part of tree may still have their right links set to null, even though further nodes
+// have come in that belong in their right subtrees. Any node for which the right child is still
+// null will be one of the nodes in lastnode. Its right child should be set to the highest node in
+// lastnode that is not already in its left subtree.
+void ConnectSubtree( TreeNode *lastnode[] )
+{
+	TreeNode *p;
+	int level, templevel;
+
+	// find the root
+	for( level = MAXHEIGHT-1; level > 2 && !lastnode[level]; level--)
+		;
+
+	while( level > 2 )	// level 1 and 2 are already okay
+	{
+		if( lastnode[level]->right )
+			level--;		// search for highest dangling node
+		else 				// right subtree is undefined
+		{
+			p = lastnode[level]->left;
+			templevel = level-1;
+			do {			// find highest entry not in left subtree
+				p = p->right;
+			} while( p && p == lastnode[--templevel]);
+
+			lastnode[level]->right = lastnode[templevel];
+			level = templevel;
+		}
+	}
 }
 
 TreeNode *BuildTree(void)
@@ -6757,11 +6811,26 @@ TreeNode *BuildTree(void)
 	while((newnode = GetNode()) != NULL )
 		Insert( newnode, ++count, lastnode );
 
+	// after all the nodes have been inserted into the new tree, find the root of the tree and then
+	// connect any right subtrees that may be dangling. For example, n=5 and 21 node.
 	newnode = FindRoot(lastnode);
 	ConnectSubtree( lastnode );
+
 	return newnode;
 }
 
+This algorithm produces a binary tree that is not always completed balanced. For n=32, it will
+become the root of the tree and all 31 node will be in its left. 5 steps from the root to leaf.
+Hence one comparison more than necessary will usually be done and it is not really a high price.
+
+This algorithm is never more than one level away from optimality. There are sophisticated methods
+for building a binary tree that is as balanced as possible but recommend a simpler method, one that
+does not need to know in advance how many nodes are in the tree. For many practical purposes, this
+should prove sufficient.
+
+
+==============================================================================
+*kt_dev_algo_012*	avl tree
 
 {avl-tree}
 
