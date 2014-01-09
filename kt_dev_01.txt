@@ -88,7 +88,7 @@ C and C++
 |kt_dev_cpp_027|	volatile
 |kt_dev_cpp_028|	namespace  {unnamed-namespace}
 |kt_dev_cpp_029|	nested class
-|kt_dev_cpp_030|	case study: framework
+|kt_dev_cpp_030|	case study: framework {tizen-case}
 |kt_dev_cpp_031|	wrapper
 
 STL 
@@ -8516,9 +8516,9 @@ enclosing scope {
 
 
 ==============================================================================
-*kt_dev_cpp_030*	case study: framework
+*kt_dev_cpp_030*	case study: framework {tizen-case}
 
-From Tizen and points are:
+From Tizen and points to see are:
 
 o used factory-func to create a self and not to decide what to create. used to have separation and
 single point of acess to create whole instances.
@@ -8526,7 +8526,8 @@ single point of acess to create whole instances.
 o not used singleton but only single point of creation so used some of singleton idea. private ctor
 and dtor
 
-o used pimpl-idiom but do not have the same interface between them. not necessary.
+o used pimpl-idiom but do not have the same interface between them. not necessary to have the same
+interface 
 
 o the way to pass cpp func addresses to c
 
@@ -8550,7 +8551,7 @@ ServiceApp:                               _ServiceAppImpl: public interface clas
  | User
  |----------------------------------
  |                                 | ...
-AppService:                       SampleService:
+AppService:                       XXXService:
  static CreateInstance();
 
 
@@ -8964,9 +8965,22 @@ as push_front and push_back.
 
 <in-map>
 
-See {string-subscript}. When use [], index should be <in-range>. [] <DOSE-ADD> element only for a
-map if there is no key already. see *kt_dev_stl_005* When index is out-of-range, <undefined-result>
-and to be safe, use c.at[index], since can get a exception.
+See {string-subscript}. When use [], index should be [in-range]. For fetching, only works for map
+but not multimaps since there are multiple matches. Unlike other containers, [] op on map returns
+mapped_type but dereferencing of iterator returns value_type. 
+
+The [] <DOSE-ADD> element only for a map if there is no key already but can be costly since:
+
+word_count[word] = 1; 
+
+happens 3 setps but 3) could be extra
+
+1) serch key and it is not found
+2) insert element using temp pair{ word,0}. value-init
+3) assign it with 1
+
+See *kt_dev_stl_005* When index is out-of-range, <undefined-result> and to be safe, use c.at[index],
+since can get a exception.
 
 string word;
 map<string, size_t> word_count;
@@ -9053,7 +9067,9 @@ string word;
 
 word_count.erase( removal_word );
 
-c.erase(k)			// remove all with k(key) and returns size_t for the num of elements removed 
+// remove all with k(key) and returns size_t for the num of elements removed. For multiple, return
+// number deleted and for single 1 or 0. 
+c.erase(k)			
 c.erase(iter)     // remove element by iter and return [after] iter
 c.erase(b, e)     // remove range [b, e) and return e
 
@@ -9102,9 +9118,11 @@ if( exclude.find(word) == exclude.end() )
 
 set< int> iset = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 iset.find(1);     // return iterator that refers to '1'
-iset.count(1);		// return 1.
+iset.count(1);		// return the number of elements. 1.
 
-??? If don't need the count, it's best to use find.
+For containers with single key, find and count do the same but for containers with multiple key,
+count has to do more work since still has to count how many elements have the same key. So if
+don't need the count, it's best to use find.
 
 <in-map>
 
@@ -9112,9 +9130,11 @@ For map, *iter is a reference of value_type, pair{key, ele} and it's the return 
 
 
 <find-in-multi> {map-uses-rbtree}
+There are three ways:
 
-Three ways. multiple elements of a given key will be 'adjacent' within the container. {ref-005}
-Primer p487.
+// <one>
+// the way using count and the fact that. multiple elements of a given key will be 'adjacent' within
+// the container. {ref-005} Primer p487.
 
 // when misuse brace-init, got gcc crash, gcc 4.6 and errors: See _Rb_tree in errors
 
@@ -9229,16 +9249,21 @@ title: How to get through
 See that sorted by key but was ordered as inserted in the same key. So the first is the one inserted
 first.
 
-
-{{example-two}} {lower-upper-bound}
-
-Use iter range. multimap. the same author but muti books.
+// <two> use lower and upper_bound which return each iter of begin and end. If it is not in the map
+// then both will return the same iterator which refer to the point at which the key can be
+// inserted.
 
 for(auto beg = authors.lower_bound( search_item ),
 	      end = authors.upper_bound( search_item );
 			beg != end;
 			++beg )
 	 cout << beg->second << endl;
+
+// <three> use equal_range which is most direct and return pair of iter in [range] {first,
+// off-the-end}. Like above, if not found return the same.
+
+for( auto pos = authors.equal_range( search_item ); pos.first != pos.second; ++pos.first)
+	 cout << pos.first->second << endl;
 
 
 {{example-three}} {shared-ptr-as-a-key}
@@ -9283,14 +9308,6 @@ bsk.add_item( make_shared< Bulk_quote >("123", 45, 3, .15) );
 User still have to deal with dynamic memory. to hide it into a class, see p633.
 
 
-{{example-four}}
-
-Primus p439. The most direct. return pair of iter in range {first, off-the-end}
-
-for( auto pos = authors.equal_range( search_item );
-		pos.first != pos.second;
-		++pos.first)
-	 cout << pos.first->second << endl;
 
 
 ==============================================================================
@@ -12490,8 +12507,8 @@ o class interface changes. means header file changes.
 o no separation between interface and implementation in class definition. means header file changes.
 
  [KT] The implementation separation can be achieved when use func tables which has a set of fixed
- interfaces and this is often done registration. Such as OS abstraction or driver abstraction which
- happens when porting.
+ interfaces and this is often done via registration. Such as OS abstraction or driver abstraction
+ which happens when porting.
  
  But, how to handle when interface changes? For example, when replace graphic library which has
  different interfaces. Usually talk about how to design interfaces for user but if user uses it
@@ -12501,8 +12518,8 @@ o no separation between interface and implementation in class definition. means 
 This item is about separating interface from implementation and this happens because C++ isn't very
 good at separating interface from implementation.
 
-/* person.h
-*/
+// person.h
+//
 class Person {
 	 public:
 		  Preson( const Date& birthDay, const Address& addr );
@@ -12518,8 +12535,8 @@ class Person {
 This member data is implementaion details and need class definition such as Date to compile. Hence
 headers of these class are needed:
 
-/* person.cpp
-*/
+// person.cpp
+//
 #include < string>
 #include "date.h"
 #include "address.h"
@@ -12579,38 +12596,37 @@ No Date definition is needed. This removes dependency on unnecessary but not mov
 clients.
 
 
-/* person.h, interface class
-*/
-
-class PersonImpl;
+// person.h, interface class
+//
+class PersonImpl;											// forward-declaration
 class Date;
 class Address;
 
 class Person {
 	 ...
 	 private:
-		  std::shared_ptr< PersonImpl > pImpl;             # <set-pimpl>
+		  std::shared_ptr< PersonImpl > pImpl;		// <set-pimpl>
 };
 
 
-/* personimpl.h, implementation class
-*/
+// personimpl.h, implementation class
+//
 
 Both class must have the <same-interface>. If add or remove member data; changes implementation, no
 need to compile clients.
 
 
-/* person.cpp, implementation class
-*/
+// person.cpp, implementation class
+//
 #include "person.h"
 #include "personimpl.h"
 
-Person::Person(...) : pImpl( new PersonImpl (...) ) {}   # <create-and-set-impl>
+Person::Person(...) : pImpl( new PersonImpl (...) ) {}   // <create-and-set-impl>
 
-std::string Person::name() const                         # <forwarding>
+std::string Person::name() const                         // <forwarding>
 { return pImpl->name(); }
 
-{{summary}}
+<summary>
 
 (client)  (interface class)               (impl. class)
            interface: no virtuals          interface
@@ -12621,7 +12637,7 @@ note:
 o How about <subclassing> impl. class to have other impls? Seems okay.
 
 
-{{stl-example}}
+<stl-case-example>
 
 STL uses this approach: Two header files.
 
@@ -12635,7 +12651,8 @@ o What is the relation between person and personimpl? implemented-in-terms-of?
 
 {interface-class} 
 
-Similar to JAVA's interface but C++ one can have data or func implementation. Use ABC.
+Similar to JAVA's interface but C++ one can have data or func implementation. Use ABC and interface
+class can hanly only interfaces or interface and default implementation.
 
 class Person {                     # class IPerson
 	public:
@@ -12656,8 +12673,8 @@ std::shared_ptr< Person > Person::create(...)
 }
 
 
-/* implementation
- */
+// implementation
+//
 class RealPerson: public Person {  # public IPerson
 	 private:
 	 std::string theName;                            # <has-implementation-details>
@@ -12671,13 +12688,11 @@ class RealPerson: public Person {  # public IPerson
 };
 
 
-/* client
- */
-Client use pointer or reference because ABC cannot create an object.
+Then client use pointer or reference because ABC cannot create an object.
 
 std::shared_ptr< Person > pp ( Person::create(...) );
 
-{{summary}}
+<summary>
 
 In his words, factory-function plays the role of the ctor for the derived classes that are actually
 created. Hence {virtual-constructor}
@@ -12689,10 +12704,10 @@ to compile clients. But re-link.
 
 IPerson::create( RealPersonX )
  |
- |-RealPersonX
- |-RealPersonY
+ |-return new RealPersonX
+ |-return new RealPersonY
  |-...
- |-RealPersonZ
+ |-return new RealPersonZ
 
 Client has the pointer to RealPreson but not to Preson. This is different to pimpl-idiom.
 
