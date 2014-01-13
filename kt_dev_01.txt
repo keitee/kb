@@ -1,6 +1,6 @@
 *kt_dev_01*		tw=100
 
-aTue 31 Dec 2013 11:06:42 GMT
+aMon 13 Jan 2014 15:34:27 GMT
 
 Keywords:
 {Q} for questions to find out more
@@ -108,7 +108,7 @@ STL
 |kt_dev_stl_011|	containers: restrictions on element type
 |kt_dev_stl_012|	containers: copy init
 |kt_dev_stl_013|	algorithm: copy
-|kt_dev_stl_014|	algorithm: copying version: replace
+|kt_dev_stl_014|	<empty>
 |kt_dev_stl_015|	string: stringstream and IO class {inefficient-concatnation}
 |kt_dev_stl_016|	<empty>
 |kt_dev_stl_017|	emplace_* member
@@ -8525,22 +8525,21 @@ enclosing scope {
 
 From Tizen and points to see are:
 
-o used factory-func to create a self and not to decide what to create. used to have separation and
+o used factory-method to create a self and not to decide what to create. used to have separation and
 single point of acess to create whole instances.
 
-o not used singleton but only single point of creation so used some of singleton idea. private ctor
-and dtor
+o used singleton. see procted and private ctor or/and dtor in a tree. protected is used like
+singleton to allow derived to create base part.
 
 o used pimpl-idiom but do not have the same interface between them. not necessary to have the same
 interface 
 
 o the way to pass cpp func addresses to c
 
-o 
  
 App: ABC                                  _AppImpl: public interface classes
 															friend class App
- protected: ctor(); new _AppImpl           	private: ctor and dtor (only App can create AppImpl)
+ 'protected': ctor(); new _AppImpl           	'private': ctor and dtor (only App can create AppImpl)
  static App* GetInstance(); calls -> 			static _AppImpl* GetInstance()
                                            	Construct()
                                            	Execute()
@@ -8551,7 +8550,8 @@ ServiceApp:                               _ServiceAppImpl: public interface clas
  protected: ctor(); new _ServiceAppImpl    	private: ctor and dtor
  static ServiceApp* GetInstance(); ->      	static _ServiceAppImpl* GetInstance()
  static Execute(); 
- 	: use factory-func to create user class
+ 	: use user provided factory-method to create user class and creates all instances
+	: register a event listener and run efl_main
 
  | 
  | Framework 
@@ -8561,6 +8561,7 @@ ServiceApp:                               _ServiceAppImpl: public interface clas
  |                                 | ...
 AppService:                       XXXService:
  static CreateInstance();
+ 	: factory-method. create AppService.
 
 OspMain():
    result r = Tizen::App::Service::Execute( AppService::CreateInstance, &args);
@@ -8634,7 +8635,7 @@ public:
 		state_handler.language_changed = &OnLanguageChanged;
 		state_handler.region_format_changed = &OnRegionFormatChanged;
 
-		// see how to pass data from cpp to c
+		// see how to pass data from cpp to c and efl_main should copy since it is local
 		// 
 		eflResult = app_efl_main(&argc, &pArgv, &state_handler, this);
 	}
@@ -8691,18 +8692,19 @@ public:
 		_AppImpl* pAppImpl = null;
 
 		// call AppService::CreateInstance. create <AppService> instance
-		// use pServiceApp only when exception happens to delete. It is a just a point to create.
+		// use pServiceApp only when exception happens to delete. Here done all creations of objects. 
 		pServiceApp = pServiceAppFactory();
 
+		// free to use all instances
 		pAppImpl = _AppImpl::GetInstance();
 
 		_ServiceAppImpl* 'pServiceAppImpl' = _ServiceAppImpl::GetInstance();
 
-		// set event listner and set app state to initializing
+		// add it as event listner and set app state to initializing
 		r = pAppImpl->Construct(pArguments);
 
 		// derive-to-base conversion as _ServiceAppImpl to _IAppImpl
-		// pass cpp Onxx funcs to c efl
+		// pass cpp Onxx funcs to c efl and run app_efl_main
 		r = pAppImpl->Execute(pServiceAppImpl); 
 	}
 
@@ -8740,6 +8742,12 @@ private:
 	, __pauseLifeDurationTimer(false)
 	{
 		__pServiceAppImpl = this;
+	}
+
+	ServiceApp*
+	_ServiceAppImpl::GetServiceAppInstance(void)
+	{
+		return __pServiceApp;
 	}
 
 	virtual ~_ServiceAppImpl(void);
@@ -8952,7 +8960,7 @@ class CApplitePortingLayer : public IApplitePortingLayer
 	has all getXXX funcs for each functionality which returns member pointer for each.
 	ctor creates all interface classes and set member pointers.
 
-	///This function creates the porting layer interfaces.
+	///This function creates the porting layer interfaces. factory-method
 	static CApplitePortingLayer* Instance(CReceiverAppBase* receiver);
 	{
 		 if (m_singleton == NULL)
@@ -8967,6 +8975,29 @@ class CApplitePortingLayer : public IApplitePortingLayer
 	{
 		return m_singleton;
 	}
+}
+
+Creates all concrete classes which implments interfaces.
+
+CApplitePortingLayer::CApplitePortingLayer(CReceiverAppBase* receiver)
+:m_receiver(receiver)
+{
+	m_graphics =  new CAPLGraphics((IReceiverAppPorting*)receiver, receiver->GetViewIndex());
+	m_debug = new CAPLDebug((PCTask*)receiver, receiver->GetTCTv());
+	m_mediaManager = new CAPLMediaManager((IReceiverAppPorting*)receiver, receiver->GetTCWindowByAutoSelect(), (PCTask*)receiver);	m_OSAbstraction = new CAPLOSAbstraction((IReceiverAppPorting*)receiver, receiver->GetTCTv(), (PCTask*)receiver);
+	m_persistentStorage = new CAPLPersistentStorage();
+	m_sectionFilter = new CAPLSectionFilter(receiver->GetTCWindowByAutoSelect(), (PCTask*)receiver);
+	m_serviceInformation = CAPLServiceInformation::Instance((IReceiverAppPorting*)receiver, 
+			receiver->GetTCTv(), receiver->GetTCWindowByAutoSelect());
+	m_systemProperties = new CAPLSystemProperties((IReceiverAppPorting*)receiver, 
+			receiver->GetTCTv(), receiver->GetTCWindowByAutoSelect());
+	m_security = new CAPLSecurity();
+	m_serial = new CAPLSerial();
+	m_typeface = CAPLTypeface::getInstance();
+	m_appLaunch = new CAPLAppLaunch((IReceiverAppPorting*)receiver);
+
+    //initialise curl here, needed for both network and X509 operations
+    CAPLCurl::InitCurl();
 }
 
 
@@ -9043,6 +9074,14 @@ The associative containers do not support the sequential container position-spec
 as push_front and push_back.
 
 
+{use-typedef}
+
+To simplify the declaration of containers, define a type alias:
+
+using SD_multiset = unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*>;
+SD_multiset bookstore(42, hasher, eqOp);
+
+
 {subscript}
 
 <in-map>
@@ -9058,7 +9097,7 @@ word_count[word] = 1;
 happens 3 setps but 3) could be extra
 
 1) serch key and it is not found
-2) insert element using temp pair{ word,0}. value-init
+2) insert element using temp pair{ word, 0 }. value-init
 3) assign it with 1
 
 See *kt_dev_stl_005* When index is out-of-range, <undefined-result> and to be safe, use c.at[index],
@@ -9159,7 +9198,7 @@ c.erase(b, e)     // remove range [b, e) and return e
 {insert-return-pair}
 
 insert() return pair{iter, bool} to indicate whether insertion happened so can use to count the
-repeated key. This is for map and set. For multi containers, retures iterator to newly added element
+repeated key. This is for map and set. For multi containers, returns iterator to newly added element
 since allows multiple keys and always inserts.
 
 The previous:
@@ -9869,32 +9908,72 @@ see use *kt_dev_quiz_005*
 *kt_dev_stl_008*	algorithm
 
 Do not work directly on a container. Instead, they operate by traversing a range of elements bounded
-by two iterators. container independent but element type dependent. means that do not use
-container's operations (don't add/remove items but write/move items) but use operations on element
-such as '==', '<', or '+'. 
+by two iterators; operates in terms of iterators. container independent but element type dependent.
+means that do not use container's operations (don't add/remove items but write/move items) but use
+operations on element such as '==', '<', or '+'. 
 
 {assumptions}
 
-has
+There is architecture or the unifying principles that categorise 100+ algorithms: according to what
+do on container or required arguments. Be careful since algorithms have assumtions: 
 
-1) the second sequence is at least as big as the first.
-
-equal( one.cbegin(), one.cend(), two.cbegin() );	// assumes two >= one
-
-2) the destination is large enough to hold itmes being written.
-
-fill_n( vec.begin(), 10, 0 );	// assumes that vec is 10 size at least
 
 3) use right iter for a algo according to iter category.
 
+<read-only> use single sequence(input range)
 
-{three-category}
+The third argument determines which addition operator is used and the type of return. Seems clever.
 
-read-only, write, re-arrange
+int sum = accumulate( vec.cbegin(), vec.cend(), 0 );
+string sum = accumulate( vec.cbegin(), vec.cend(), string(""));
+
+<read-only> use two sequences
+
+This assumes that the second sequence is at least as big as the first.
+
+equal( one.cbegin(), one.cend(), two.cbegin() );	// assumes two >= one
+
+
+<write>
+
+The destination is large enough to hold itmes being written.
+
+fill(vec.begin(), vec.end(), 0);
+
+This is fill_n( dest, size, value ); and assumes that vec is 10 size at least.
+
+fill_n( vec.begin(), 10, 0 );	
+
+vector< int > vec;
+fill_n( vec.begin(), 10, 0 );	
+
+This is an error and to make sure it works:
+
+vector< int > vec;
+auto it = back_inserter(vec); // *kt_dev_stl_009*
+fill_n( vec.begin(), 10, 0 );	
+
+
+{independent-between-sequences}
+
+The element types need not be the exactly same as long as can use element operators or compatible
+between them. This is also an example of copying version in algorithm.
+
+replace( ilst.begin(), ilst.end(), 0, 42 );
+// replace any element with 0 with 42
+
+replace_copy( ilst.begin(), ilst.end(), back_inserter(ivec), 0, 42 );
+// to leave the original sequence unchanged. in this case, move list to vector.
+
+
+<reorder>
+
+The sort and unique is an example of this.
 
 
 ==============================================================================
 *kt_dev_stl_009*	algorithm: sort, unique
+
 
 void elimDups( vector< string >& words )
 {
@@ -9905,6 +9984,7 @@ void elimDups( vector< string >& words )
 	// starts. [unique set, not unique set, end)
 	auto end_unique = unique( words.begin(), words.end() );
 
+	// actually use container operation to delete
 	words.erase( end_unique, words.end() );
 }
 
@@ -9949,6 +10029,17 @@ int absDistinct(int A[], int N)
 
 	return count;
 }
+
+
+{stl-find}
+
+If there is a match, returns an iterator to the first element and if not, return end iterator.
+
+auto result = find( vec.cbegin(), vec.cend(), val);
+
+int ia[] = { 27, 210, 12, 47, 109, 83 };
+int* result = find( begin(ia), end(ia), val);
+
 
 ==============================================================================
 *kt_dev_stl_010*	algorithm: predicate and lambda
@@ -10016,14 +10107,8 @@ auto ret = copy( begin(a1), end(a1), a2 );
 
 
 ==============================================================================
-*kt_dev_stl_014*	algorithm: copying version: replace
+*kt_dev_stl_014*	<empty>
 
-replace( ilst.begin(), ilst.end(), 0, 42 );
-// replace any element with 0 with 42
-
-replace_copy( ilst.begin(), ilst.end(), back_inserter(ivec), 0, 42 );
-// to leave the original sequence unchanged.
-// in this case, move list to vector.
 
 
 ==============================================================================
@@ -12824,7 +12909,8 @@ o Client should subclass to use specific product class.
 <static-vs-virtual-factory-func>
 
 The static-factory-func has efficient code because no virtual cost and has single point to access
-but hard-wired to choose classes to create. Have to change it when the choice to create changes.
+but hard-wired to choose classes to create. Have to change it when the choice to create changes. As
+shown in *kt_dev_cpp_030* static-factory-func is in the user class in a tree.
 
 The virtual-factory-func has bigger code but subclassing can change class to create. So useful for
 framework that cannot be changed.
