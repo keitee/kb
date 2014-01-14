@@ -39,6 +39,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_algo_011|	binary tree {binary-search-tree} {treesort}
 |kt_dev_algo_012|	avl tree 
 
+|kt_dev_algo_100|	discussion: C++ map insertion and lookup performance and storage overhead
+
 
 # ============================================================================
 #{
@@ -6855,6 +6857,87 @@ close to the root, while records that are inactive may be placed far off, near o
 
 Also cannot shut down the hospital for an hour to rebuild the tree into the desired shape, so do
 self-adjusting data that automatically changes its shape to meet the above.
+
+
+# ============================================================================
+#{
+
+==============================================================================
+*kt_dev_algo_100*	discussion: C++ map insertion and lookup performance and storage overhead
+
+http://stackoverflow.com/questions/1822114/c-map-insertion-and-lookup-performance-and-storage-overhead
+
+The question is:
+
+I would like to store a mapping of an integer key to a float value in-memory.  I have roughly 130
+million keys (and, accordingly, 130 million values). My focus is on lookup performance -- I have to
+do many, many millions of lookups.  The C++ STL library has a map class for associative arrays of
+	this sort. I have several questions about map.  What is the storage overhead of map for a dataset
+		of the size mentioned above? How does storage overhead scale, in general, with map? It looks
+		like the underlying data structure for map is a red-black, balanced binary tree. It sounds
+		like the real-world performance for this is O(log n) for insertion and retrieval. It mentions
+		O(1) for a hinted insertion. My input is pre-sorted, so I believe I should be able to provide
+		a hint for insertion events. How would I provide this hint, using the methods listed here? Is
+		there an STL container that provides better lookup performance?  Are there other
+		publicly-available, open-source frameworks with an associate array class that uses an
+		underlying data structure that would perform better than STL map? If writing my own container
+		class would provide better lookup performance, what data structures might I research? I am
+		using GCC 4 for this task, running under either Linux or Mac OS X. I apologize in advance if
+		these are dumb questions. Thank you for your advice.
+
+
+Given what you've said, I'd think very hard about using an std::vector<pair<int, float> >, and using
+std::lower_bound, std::upper_bound, and/or std::equal_range to look up values.
+
+While the exact overhead of std::map can (and does) vary, there's little or no room for question
+that it will normally consume extra memory and look up values more slowly than a binary search in a
+vector. As you've noted, it's normally (and almost unavoidably) implemented as some sort of balanced
+tree, which imposes overhead for the pointers and the balancing information, and typically means
+each node is allocated separately as well. Since your nodes are pretty small (typically 8 bytes)
+that extra data is likely to be at least as much as what you're actually storing (i.e. at least 100%
+		overhead). Separate allocations often mean poor locality of reference, which leads to poor
+cache usage.
+
+Edit: Looking just at implementations of std::map, it's probably worth noting that most use a
+red-black tree. If you were going to use an std::map, an implementation that uses an AVL tree would
+probably suit your purposes better -- an AVL tree has slightly tighter constraints on balancing.
+This gives slightly faster lookup at the expense of slightly slower insertion and deletion (since it
+		has to re-balance more often to maintain its stricter interpretation of "balanced"). As long
+as your data remains constant during use, however, an std::vector is still almost certainly better.
+
+One other possibility worth noting: if your keys are at least fairly even distributed, you might
+want to try looking up using interpolation instead of bisection. i.e. instead of always starting at
+the middle of the vector, you do a linear interpolation to guess at the most likely starting point
+for the lookup. Of course, if your keys follow some known non-linear distribution, you can use a
+	matching interpolation instead.
+
+Edit 2: Assuming the keys are reasonably even distributed, the interpolation search has a complexity
+of O(log log N). For 130 million keys, that works out to around 4 probes to find an item. To do
+significantly better than that with (normal/non-perfect) hashing, you need a good algorithm, and you
+need to keep the load factor in the table around 75% or so -- i.e. you need to allow for something
+like 32 million extra (empty) spots in your table to improve the expected complexity from four
+probes to three. I may just be old fashioned, but that strikes me as a lot of extra storage to use
+for such a small speed improvement.
+
+OTOH, it's true that this is nearly the ideal situation for perfect hashing -- the set is known
+	ahead of time, and the key is quite small (important, since hashing is normally linear on the key
+			size). Even so, unless the keys are distributed pretty unevenly, I wouldn't expect any huge
+	improvement -- a perfect hash function is often (usually?) fairly complex.  share|improve this
+	answer
+	
+definitely just use a binary search in the vector. Least memory, fastest too. –  Will Nov 30 '09 at
+20:33
+	
+What about insertions? To use binary search, you'll have to keep the array sorted. Random
+insertions in a vector are not particularly efficient. –  Raphaël Saint-Pierre Nov 30 '09 at 20:36
+	
+@RaphealSP: yes, if the data were dynamic (i.e. you need to support insertions/deletions during
+		use), a sorted vector isn't a good choice. He notes, however, that the data starts out sorted,
+	which I took as indicating that he's just reading in data, but not modifying it afterwards. –
+		Jerry Coffin Nov 30 '09 at 20:41
+	 
+I am only inserting once. I do not need to modify my input set afterwards. –  Alex Reynolds Nov 30
+'09 at 20:45 
 
 
 # ============================================================================
