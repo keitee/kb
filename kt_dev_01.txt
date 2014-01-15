@@ -96,7 +96,7 @@ STL
 
 |kt_dev_stl_000|	useful links {stl-design-rationale}
 |kt_dev_stl_001|	seq-containers {trade-offs}
-|kt_dev_stl_005|	assoc-containers {insert-erase} {key-type-requirement}
+|kt_dev_stl_005|	assoc-containers {insert-erase} {key-type-requirement} {use-typedef} 
 |kt_dev_stl_002|	vector
 |kt_dev_stl_003|	<empty>
 |kt_dev_stl_004|	adaptors {stack} {queue}
@@ -109,7 +109,7 @@ STL
 |kt_dev_stl_012|	containers: copy init
 |kt_dev_stl_013|	algorithm: copy
 |kt_dev_stl_014|	<empty>
-|kt_dev_stl_015|	string: stringstream and IO class {inefficient-concatnation}
+|kt_dev_stl_015|	string: stringstream and io stream {inefficient-concatnation}
 |kt_dev_stl_016|	<empty>
 |kt_dev_stl_017|	emplace_* member
 |kt_dev_stl_018|	smart pointer, RAII {factory-func} {auto-lock}
@@ -9111,6 +9111,10 @@ To simplify the declaration of containers, define a type alias:
 using SD_multiset = unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*>;
 SD_multiset bookstore(42, hasher, eqOp);
 
+This is not supported in GCC 4.6 and use typedef instead.
+
+typedef unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*> SD_multiset;
+
 
 {subscript}
 
@@ -9667,7 +9671,8 @@ input is done and you have entered.
 *kt_dev_stl_006*	iterator
 
 Iterator is a generalization of pointers. Pointers themselves are iterators. Each T has its own
-iterator; each STL container has its own. so should use T's member func to get a iterator.
+iterator; each STL container defines its own iterators. so should use T's member func to get a
+iterator.
 
 {iterator-notation}
 
@@ -9723,10 +9728,42 @@ random access iter: r/w				multiple-pass	full
 
 {insert-method}
 
-insert(iter, t) 
-Insert <before> iter and return iter of the inserted.
+The insert() insert value at place denoted by iter and return the same. In other words, shift items
+from iter position and add an item. So iter do not change and remember iter is like a pointer.
+
+insert(iter, val);
 
 {{one}}
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main()
+{
+	std::vector<int> veci = {1,2,3,4};
+	std::vector<int>::iterator it;
+
+	it = find(veci.begin(), veci.end(), 2);
+	if( it != veci.end())
+	{
+		it = veci.insert( it, 7 );
+		it = veci.insert( it, 6 );
+		it = veci.insert( it, 5 );
+	}
+
+	it = veci.begin();
+	while( it != veci.end() )
+	{
+		std::cout << *it << ":";
+		it++;
+	}
+	std::cout << std::endl;
+}
+
+Output:
+1:5:6:7:2:3:4:
+
 
 vec< int > veci;
 veci.push_back(1); .. to (3); // [1,2,3,E)
@@ -9828,25 +9865,26 @@ for( auto beg = vec.begin(), end = vec.end(); beg != end; ++beg )
 ==============================================================================
 *kt_dev_stl_007*	iterator: inserter
 
-Additional iterators (iterator adaptors): insert, stream, reverse, and move iterators
+These are additional iterators and actually iterator adaptors: insert, stream, reverse, and move iterators
 
-{inserter}
+{insert-iterator}
 
-back_inserter, front_inserter, inserter
+The insert iterator calls a container operation to add and it means that must use front_inserter
+only if the container has push_front and use back_inserter only if it has push_back. These are
+back_inserter, front_inserter, inserter which bind iterator to container operations.
 
-Use front_inserter only if the container has push_front and use back_inserter only if it has
-push_back.
+Why are these useful? There is no need to increase or decrease iter but still need to think about
+underlying container.
 
-{{example-one}}
+// example-one
 
 *it = val;	// it from inserter
 
-behave as
+behave as the following and hence it still denotes the same element as before.
 
 it = c.insert(it, val); ++it;
 
-
-{{example-two}}
+// example-two
 
 #include < iterator>
 
@@ -9857,10 +9895,8 @@ auto it = back_inserter(vec);
 
 [42, 48, E)
 
-Note: there's no iter inc.
-
-
-{{example-three}} {algo-copy}
+// example-three {algo-copy} 
+// See the difference between inserter and front_inserter. 
 
 list< int> lst = { 1, 2, 3, 4 }, lst2, lst3;
 
@@ -9875,16 +9911,16 @@ copy( lst.cbegin(), lst.cend(), inserter(lst3, lst3.begin()) );
 {stream-iterator}
 
 Treat stream as a sequence of elements of a specified type that should have input/output op
-defined(>>/<<).
+defined(>>/<<) and bind iterator to a stream.
 
-{{example-one}}
+// example which read the stdin into a vector
 
 string word;
 while( cin >> word )
 	 // cout << word << endl;
 	 vec.push_back(word);
 
-or
+or here postfix advances the stream by reading the next value but returns old value
 
 istream_iterator< string > in_iter(cin), eof;
 while( in_iter != eof )
@@ -10150,7 +10186,7 @@ auto ret = copy( begin(a1), end(a1), a2 );
 
 
 ==============================================================================
-*kt_dev_stl_015*	string: stringstream and IO class
+*kt_dev_stl_015*	string: stringstream and io stream
 
 {string-is-typedef}
 
@@ -10223,7 +10259,7 @@ while( getline(input, line) )
 }
 
 
-{IO-class}
+{io-stream}
 
 from above example, if omit header include, error from gcc is:
 
