@@ -1808,6 +1808,86 @@ EXAMPLE
 input: find 5 in {15, 16, 19, 20, 25, 1, 3, 4, 5, 7, 10, 14}
 output: 8 (the index of 5 in the array)
 
+The complication is that the array is rotated and may have an inflection point and consider
+following examples:
+
+A1{10, 15, 20,  0,  5}
+A2{50,  5, 20, 30, 40}
+
+See that 5 appears on different side so comparing x with the midpoint is insufficient. However, if
+you look a bit DEEPER, one half of the array must be ordered (regardless of how much it is rotated.) 
+This is key observation which allows us to determine whether should search the left or right half.
+
+For example of searching 5 in A1, look at the left element, 10, and middle, 20. Since 10 < 20, the
+left half must be ordered and since 5 is not in left half, must search the right half.
+
+So determine the ordered half and see if a key is in the the ordered half. If so, do binary search
+or sequential if n is small. If not, do sequential on the opposite half.
+
+The tricky is if the left and the middle are identical, as in the example array
+
+{2, 2, 2, 3, 4, 2}
+       m
+
+In this case, check if the rightmost element is different. If it is, can search just the right side.
+Otherwise, we have no choice but to search both halves.
+
+public int search( int a[], int left, int right, int x ) {
+	int mid = ( left + right )/2;
+
+	if( x == a[mid] )
+		return mid;
+
+	if( right < left )
+		return -1;
+
+	// left is ordered
+	if( a[left] < a[mid] )
+	{
+		if( x >= a[left] && x <= a[mid] ) 		// is in the left and search it
+			return search( a, left, mid-1, x );
+		else
+			return search( a, mid+1, right,x );	// is not in the left and search the right
+	}
+	// right is ordered
+	else if( a[mid] < a[left] )
+	{
+		if( x >= a[mid] && x <= a[right] )		// search right
+			return search(a, mid+1, right, x );
+		elser
+			return search(a, left, mid-1, x );	// search left
+	}
+	// left is all repeats
+	else if( a[left] == a[mid] )
+	{
+		if( a[mid] != a[right])
+			return search(a, mid+1, right, x);			// search right
+		else
+		{
+			int result = search(a, left, mid-1, x );	// search left
+			if( result == -1 )
+				return search(a, mid+1, right, x );		// search right
+			else
+				return result;
+		}
+	}
+
+	return -1;
+}
+
+This will run in O(logn) if all the elements are unique. However, with many duplicates is actually
+O(n). This is because with many duplicates, will often have to search both.
+
+
+4. Imagine you have a 20GB file with one string per line. Explain how you would sort the file.
+
+In this case, it suggests that they don't want you to bring all the data into memory. We'll divide
+the fine into chunks which are x MB each where x is the amount of memory we have available. Each
+chunk is sorted separately and then saved back to the file system.
+
+Once all the chunks are sorted, we then merge the chunks, one by one. At the end, we have a fully
+sorted file. This is known as external sort.
+
 
 # ============================================================================
 #{
@@ -4606,9 +4686,9 @@ comparisions of keys is [measure] of analysis.
 Use average behavior and means to take each possibility once and average the results. Limit our
 attention to where all the possibilities are equally likely.
 
-{binary-search}
+{binary-search} 
 
-The keys in the list are already sorted into order. In only twenty steps, will locate any requested
+The keys in the list are already [sorted] into order. In only twenty steps, will locate any requested
 key in a list containing more than a millions keys. This requires [random-access] so shall limit only
 for [contiguous-implementation].
 
@@ -4640,7 +4720,8 @@ correctly, even after working on it for a full hour.
 <one-the-forgetful-version>
 
 <do>
-Write a binary search to return a postion in [bot...top] array
+Write a binary search to return a postion in [bot...top] array(contig. list) when found and -1 when
+not found.
 
 int RecBinary1( List list, KeyType target, int bottom, int top );
 
@@ -4650,7 +4731,6 @@ count is 1. Then see either hit the target or not found. In other words, it make
 iterations because fails to recognize that it can found the target before continuing to iterate to
 when count is 1.
 
-This will find the first occurance of the target if it appears more than once in the list.
 
 #define EQ(a,b) (!strcmp((a),(b)))
 #define LT(a,b) (strcmp((a),(b)) < 0)
@@ -4674,31 +4754,41 @@ For convenience,
 1 2 3 4 5 6 7 8 9 10 array index
 1 2 3 4 5 6 7 8 9 10 keys
 
-// return -1 when not found and pos when found
-int RecBinary1( List list, KeyType target, int bottom, int top )
-{
-	 int middle = -1;
+// return -1 when not found and pos when found. See how comparison used in a function:
+//
+// [ <= | > ] but not [ < | => ], that is
+// if( GT ) ditch lower    vs. if( LE ) ditch higher
+// else ditch higher           else ditch lower
+//
+// The first means that it will find the [first] occurance of the target if it appears more than once
+// in the list since think when middle picks up any of the same sequence, for example, the second in 
+// ..2222...
+//    ^
 
-	 if( bottom < top )
-	 {
-		  middle = (top + bottom)/2;
+int RecBinary1( List list, KeyType target, int bottom, int top ) 
+{ 
+	int middle = -1;
 
-      // used >; means not include the middle for next interation
-		  if( GT( target, list.entry[ middle ].key ))
-				middle = RecBinary1( list, target, middle+1, top ); // remove lower half
+	if( bottom < top )
+	{
+		middle = (top + bottom)/2;
 
-      // used =<; means include the middle for next iteration so not middle-1 because should have a
-      // middle in the search range
-		  else
-				middle = RecBinary1( list, target, bottom, middle ); // remove upper half
-	 }
-	 else if( bottom == top )	// the list has only one entry
-	 {
-		  if( EQ( target, list.entry[ top ].key ))
-				middle = top;		// to pass up
-	 }
+		// used >; means not include the middle for next interation
+		if( GT( target, list.entry[ middle ].key ))
+			middle = RecBinary1( list, target, middle+1, top ); // remove lower half
 
-	 return middle;
+		// used =<; means include the middle for next iteration so not middle-1 because should have a
+		// middle in the search range
+		else
+			middle = RecBinary1( list, target, bottom, middle ); // remove upper half
+	}
+	else if( bottom == top )	// the list has only one entry
+	{
+		if( EQ( target, list.entry[ top ].key ))
+			middle = top;		// to pass up
+	}
+
+	return middle;
 }
 
 To adjust the params to standard conventions:
