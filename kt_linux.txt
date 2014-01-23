@@ -4429,6 +4429,338 @@ happens to be atomic if it is 64-bit word aligned. That won't be true of a "larg
 you'll need some standard lock.
 
 
+{atomic-non-atomic-operations}
+http://preshing.com/20130618/atomic-vs-non-atomic-operations/
+
+Much has already been written about atomic operations on the web, usually with a focus on atomic
+read-modify-write (RMW) operations. However, those aren’t the only kinds of atomic operations. There
+are also atomic loads and stores, which are equally important. In this post, I’ll compare atomic
+loads and stores to their non-atomic counterparts at both the processor level and the C/C++ language
+level. Along the way, we’ll clarify the C++11 concept of a “data race”.
+
+Automic operations: automic loads and stores + automic read-modify-write operations
+
+An operation acting on shared memory is atomic if it completes in a single step relative to other
+threads. When an atomic store is performed on a shared variable, no other thread can observe the
+modification half-complete. When an atomic load is performed on a shared variable, it reads the
+entire value as it appeared at a single moment in time. Non-atomic loads and stores do not make
+those guarantees.
+
+Without those guarantees, lock-free programming would be impossible, since you could never let
+different threads manipulate a shared variable at the same time. We can formulate it as a rule:
+
+Any time two threads operate on a shared variable concurrently, and one of those operations performs
+a write, both threads must use atomic operations.
+
+If you violate this rule, and either thread uses a non-atomic operation, you’ll have what the C++11
+standard refers to as a [data-race] (not to be confused with Java’s concept of a data race, which is
+different, or the more general race condition). [Q] what is the general race condition?
+
+The C++11 standard doesn’t tell you why data races are bad; only that if you have one, “undefined
+behavior” will result (section 1.10.21). The real reason why such data races are bad is actually
+quite simple: They result in [torn-reads] and [torn-writes].
+
+A memory operation can be non-atomic because it uses multiple CPU instructions, non-atomic even when
+using a single CPU instruction, or non-atomic because you’re writing portable code and you simply
+can’t make the assumption. Let’s look at a few examples.
+
+
+<Non-Atomic Due to Multiple CPU Instructions>
+
+Suppose you have a 64-bit global variable, initially zero.
+
+uint64_t sharedValue = 0;
+
+At some point, you assign a 64-bit value to this variable.
+
+void storeValue()
+{
+    sharedValue = 0x100000002;
+}
+
+When you compile this function for 32-bit x86 using GCC, it generates the following machine code.
+
+$ gcc -O2 -S -masm=intel test.c
+$ cat test.s
+        ...
+        mov	DWORD PTR sharedValue, 2
+        mov	DWORD PTR sharedValue+4, 1
+        ret
+        ...
+
+As you can see, the compiler implemented the 64-bit assignment using two separate machine
+instructions. The first instruction sets the lower 32 bits to 0x00000002, and the second sets the
+upper 32 bits to 0x00000001. Clearly, this assignment operation is not atomic. If sharedValue is
+accessed concurrently by different threads, several things can now go wrong:
+
+- If a thread calling storeValue is preempted between the two machine instructions, it will leave
+the value of 0x0000000000000002 in memory – a torn write. At this point, if another thread reads
+sharedValue, it will receive this completely bogus value which nobody intended to store.
+
+- Even worse, if a thread is preempted between the two instructions, and another thread modifies
+sharedValue before the first thread resumes, it will result in a permanently torn write: the upper
+32 bits from one thread, the lower 32 bits from another.
+
+- On multicore devices, it isn’t even necessary to preempt one of the threads to have a torn write.
+When a thread calls storeValue, any thread executing on a different core could read sharedValue at a
+moment when only half the change is visible.
+
+Reading concurrently from sharedValue brings its own set of problems:
+
+uint64_t loadValue()
+{
+    return sharedValue;
+}
+
+$ gcc -O2 -S -masm=intel test.c
+$ cat test.s
+        ...
+        mov	eax, DWORD PTR sharedValue
+        mov	edx, DWORD PTR sharedValue+4
+        ret
+        ...
+
+Here too, the compiler has implemented the load operation using two machine instructions: The first
+reads the lower 32 bits into eax, and the second reads the upper 32 bits into edx. In this case, if
+a concurrent store to sharedValue becomes visible between the two instructions, it will result in a
+torn read – even if the concurrent store was atomic.
+
+These problems are not just theoretical. Mintomic’s test suite includes a test case called
+test_load_store_64_fail, in which one thread stores a bunch of 64-bit values to a single variable
+using a plain assignment operator, while another thread repeatedly performs a plain load from the
+same variable, validating each result. On a multicore x86, this test fails consistently, as
+expected.
+
+
+<Non-Atomic in a single CPU Instructions>
+
+A memory operation can be non-atomic even when performed by a single CPU instruction. For example,
+  the ARMv7 instruction set includes the strd instruction, which stores the contents of two 32-bit
+  source registers to a single 64-bit value in memory.
+
+strd r0, r1, [r2]
+
+On some ARMv7 processors, this instruction is not atomic. When the processor sees this instruction,
+	it actually performs [two-separate-32-bit-stores] under the hood (section A3.5.3). Once again,
+	another thread running on a separate core has the possibility of observing a torn write.
+	Interestingly, a torn write is even possible on a single-core device: A system interrupt – say,
+	for a scheduled thread context switch – can actually occur between the two internal 32-bit
+	stores! In this case, when the thread resumes from the interrupt, it will restart the strd
+	instruction all over again.
+
+As another example, it’s well-known that on x86, a 32-bit mov instruction is atomic if the memory
+operand is naturally aligned, but non-atomic otherwise. In other words, atomicity is [only]
+guaranteed when the 32-bit integer is located at an address which is an exact multiple of 4.
+
+
+<All C/C++ Operations Are Presumed Non-Atomic>
+
+In C and C++, every operation is presumed non-atomic unless otherwise specified by the compiler or
+hardware vendor – even plain 32-bit integer assignment.
+
+uint32_t foo = 0;
+
+void storeFoo()
+{
+    foo = 0x80286;
+}
+
+The language standards have nothing to say about atomicity in this case. Maybe integer assignment is
+atomic, maybe it isn’t. Since non-atomic operations don’t make any guarantees, plain integer
+assignment in C is non-atomic by definition.
+
+In practice, we usually know more about our target platforms than that. For example, it’s common
+knowledge that on all modern x86, x64, Itanium, SPARC, ARM and PowerPC processors, plain 32-bit
+integer assignment is atomic [as-long-as] the target variable is naturally aligned. You can verify it
+by consulting your processor manual and/or compiler documentation. In the games industry, I can tell
+you that a lot of 32-bit integer assignments rely on this particular guarantee.
+
+Nonetheless, when writing truly portable C and C++, there’s a long-standing tradition of pretending
+that we don’t know anything more than what the language standards tell us. Portable C and C++ is
+designed to run on every possible computing device past, present and imaginary. Personally, I like
+to imagine a machine where memory can only be changed by mixing it up first:
+
+On such a machine, you definitely wouldn’t want to perform a concurrent read at the same time as a
+plain assignment; you could end up reading a completely random value.
+
+In C++11, there is finally a way to perform truly portable atomic loads and stores: the C++11 atomic
+library. Atomic loads and stores performed using the C++11 atomic library would even work on the
+imaginary computer above – even if it means the C++11 atomic library must secretly [lock] a mutex to
+make each operation atomic. There’s also the Mintomic library which I released last month, which
+doesn’t support as many platforms, but works on several older compilers, is hand-optimized and is
+guaranteed to be lock-free.
+
+
+Relaxed Atomic Operations
+
+Let’s return to the original sharedValue example from earlier in this post. We’ll rewrite it using
+Mintomic so that all operations are performed atomically on every platform Mintomic supports. First,
+we must declare sharedValue as one of Mintomic’s atomic data types.
+
+#include <mintomic/mintomic.h>
+
+mint_atomic64_t sharedValue = { 0 };
+
+The mint_atomic64_t type guarantees correct memory alignment for atomic access on each platform.
+This is important because, for example, the GCC 4.2 compiler for ARM bundled with Xcode 3.2.5
+doesn’t guarantee that plain uint64_t will be 8-byte aligned.
+
+In storeValue, instead of performing a plain, non-atomic assignment, we must call
+mint_store_64_relaxed.
+
+void storeValue()
+{
+    mint_store_64_relaxed(&sharedValue, 0x100000002);
+}
+
+Similarly, in loadValue, we call mint_load_64_relaxed.
+
+uint64_t loadValue()
+{
+    return mint_load_64_relaxed(&sharedValue);
+}
+
+Using C++11’s terminology, these functions are now data race-free. When executing concurrently,
+		there is absolutely no possibility of a torn read or write, whether the code runs on
+		ARMv6/ARMv7 (Thumb or ARM mode), x86, x64 or PowerPC. If you’re curious how
+		mint_load_64_relaxed and mint_store_64_relaxed actually work, both functions expand to an
+		inline cmpxchg8b instruction on x86; for other platforms, consult Mintomic’s implementation.
+
+Here’s the exact same thing written in C++11 instead:
+
+#include <atomic>
+
+std::atomic<uint64_t> sharedValue(0);
+
+void storeValue()
+{
+    sharedValue.store(0x100000002, std::memory_order_relaxed);
+}
+
+uint64_t loadValue()
+{
+    return sharedValue.load(std::memory_order_relaxed);
+}
+
+You’ll notice that both the Mintomic and C++11 examples use relaxed atomics, as evidenced by the
+_relaxed suffix on various identifiers. The _relaxed suffix is a reminder that, just as with plain
+loads and stores, no guarantees are made about memory ordering.
+
+The only difference between a relaxed atomic load (or store) and a non-atomic load (or store) is
+that relaxed atomics guarantee atomicity. No other difference is guaranteed.
+
+In particular, it is still legal for the memory effects of a relaxed atomic operation to be
+reordered with respect to instructions which follow or precede it in program order, either due to
+compiler reordering or memory reordering on the processor itself. The compiler could even perform
+optimizations on redundant relaxed atomic operations, just as with non-atomic operations. In all
+cases, the operation remains atomic.
+
+When manipulating shared memory concurrently, I think it’s good practice to always use Mintomic or
+C++11 atomic library functions, even in cases where you know that a plain load or store would
+already be atomic on your target platform. An atomic library function serves as a reminder that
+elsewhere, the variable is the target of concurrent data access.
+
+Hopefully, it’s now a bit more clear why the World’s Simplest Lock-Free Hash Table uses Mintomic
+library functions to manipulate shared memory concurrently from different threads.
+
+
+{lock-free-programming}
+http://preshing.com/20120612/an-introduction-to-lock-free-programming/
+
+An Introduction to Lock-Free Programming
+
+Lock-free programming is a challenge, not just because of the complexity of the task itself, but
+because of how difficult it can be to penetrate the subject in the first place.
+
+I was fortunate in that my first introduction to lock-free (also known as lockless) programming was
+Bruce Dawson’s excellent and comprehensive white paper, Lockless Programming Considerations. And
+like many, I’ve had the occasion to put Bruce’s advice into practice developing and debugging
+lock-free code on platforms such as the Xbox 360.
+
+Since then, a lot of good material has been written, ranging from abstract theory and proofs of
+correctness to practical examples and hardware details. I’ll leave a list of references in the
+footnotes. At times, the information in one source may appear orthogonal to other sources: For
+instance, some material assumes sequential consistency, and thus sidesteps the memory ordering
+issues which typically plague lock-free C/C++ code. The new C++11 atomic library standard throws
+another wrench into the works, challenging the way many of us express lock-free algorithms.
+
+In this post, I’d like to re-introduce lock-free programming, first by defining it, then by
+distilling most of the information down to a few key concepts. I’ll show how those concepts relate
+to one another using flowcharts, then we’ll dip our toes into the details a little bit. At a
+minimum, any programmer who dives into lock-free programming should already understand how to write
+correct multithreaded code using mutexes, and other high-level synchronization objects such as
+semaphores and events.  
+
+What Is It?
+
+People often describe lock-free programming as programming without mutexes, which are also referred
+to as locks. That’s true, but it’s only part of the story. The generally accepted definition, based
+on academic literature, is a bit more broad. At its essence, lock-free is a property used to
+describe some code, without saying too much about how that code was actually written.
+
+Basically, if some part of your program satisfies the following conditions, then that part can
+rightfully be considered lock-free. Conversely, if a given part of your code doesn’t satisfy these
+conditions, then that part is not lock-free.
+
+<definition>
+
+(This was a flow chart)
+
+Are you programming with multiple threads? or interrupt, signal handlers, etc?
+-> Yes
+
+Do the threads access shared memeory?
+-> Yes
+
+Can the threads block each other? ie. is there some way to schedule the threads which would
+'lock-up' indefinitely?
+-> No
+
+It is lock-free programming.
+
+In this sense, the lock in lock-free does not refer directly to mutexes, but rather to the
+possibility of “locking up” the entire application in some way, whether it’s deadlock, livelock – or
+even due to hypothetical thread scheduling decisions made by your worst enemy. That last point
+sounds funny, but it’s key. Shared mutexes are ruled out trivially, because as soon as one thread
+obtains the mutex, your worst enemy could simply never schedule that thread again. Of course, real
+operating systems don’t work that way – we’re merely defining terms.
+
+Here’s a simple example of an operation which contains no mutexes, but is still not lock-free.
+Initially, X = 0. As an exercise for the reader, consider how two threads could be scheduled in a
+way such that neither thread exits the loop.
+
+while (X == 0)
+{
+    X = 1 - X;
+}
+
+Nobody expects a large application to be entirely lock-free. Typically, we identify a specific set
+of lock-free operations out of the whole codebase. For example, in a lock-free queue, there might be
+a handful of lock-free operations such as push, pop, perhaps isEmpty, and so on.
+
+Herlihy & Shavit, authors of The Art of Multiprocessor Programming, tend to express such operations
+as class methods, and offer the following succinct definition of lock-free (see slide 150): 
+	
+"In an infinite execution, infinitely often some method call finishes." In other words, as long as
+the program is able to keep calling those lock-free operations, the number of completed calls keeps
+increasing, no matter what.  It is algorithmically impossible for the system to lock up during those
+operations.
+
+<why-use>
+
+One important consequence of lock-free programming is that if you suspend a single thread, it will
+never prevent other threads from making progress, as a group, through their own lock-free
+operations. This hints at the value of lock-free programming when writing interrupt handlers and
+real-time systems, where certain tasks must complete within a certain time limit, no matter what
+state the rest of the program is in.
+
+A final precision: Operations that are designed to block do not disqualify the algorithm. For
+example, a queue’s pop operation may intentionally block when the queue is empty. The remaining
+codepaths can still be considered lock-free.
+
+<TODO> there is more in this page.
+
+
 ==============================================================================
 *kt_linux_core_200*	case: own semaphore and mutex class using pthred cond var
 
