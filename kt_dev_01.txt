@@ -77,7 +77,7 @@ C and C++
 |kt_dev_cpp_016|	<empty>
 |kt_dev_cpp_017|	static-members and class const	{class-method} {class-const}
 |kt_dev_cpp_018|	dtor					{non-virtual-destruction-problem} {how-virtual-works}
-|kt_dev_cpp_019|	exception					{exception-in-dtor} {exception-safe}
+|kt_dev_cpp_019|	exception {problem-of-exception-in-dtor} {exception-safe}
 |kt_dev_cpp_020|	<empty>
 |kt_dev_cpp_021|	op overload				{member-or-non-member} {function-object}
 |kt_dev_cpp_022|	inheritance			{subobject-and-derived-to-base-conversion} {base-class-pointer-container}
@@ -116,6 +116,8 @@ STL
 |kt_dev_stl_019|	new and delete {default-and-value-init} {placement-new} {allocator}
 |kt_dev_stl_020|	gcc stl impl files
 |kt_dev_stl_021|	algorithm: erase-remove idiom
+|kt_dev_stl_022|	iterator: external and internal
+
 
 SYSTEM 
 
@@ -138,7 +140,7 @@ EFFECTIVE C++ 3RD
 
 |kt_dev_ecpp_001|	01: federation of language
 |kt_dev_ecpp_002|	02: no to preprocessor
-|kt_dev_ecpp_003|	09: no virtual call in ctor or dtor 		{pass-log-to-base-class} {static-member-example}
+|kt_dev_ecpp_003|	09: no virtual call in ctor or dtor {pass-log-to-base-class} {static-member-example}
 |kt_dev_ecpp_004|	18: hard to use incorrectly 
 |kt_dev_ecpp_005|	23: prefer non-member non-friend func
 |kt_dev_ecpp_006|	26: postpone variable definitions
@@ -4057,17 +4059,17 @@ Primers p159. Happens when used in expression, func call and func matching
 
 int ival = 3.541 + 3;
 
-Promotion to double first and convert to int next.
+Causes promotion to double first and conversion to int next.
 
 cases:
 
 1. promote smaller types to int. when mixed, promote to a bigger type.
-2. convert to bool in condition.
-3. 'left = right' in init. promote right to left. can be truncated.
+2. convert to bool in condition but not always possible. see below.
+3. 'left = right' in init. promote right to left or can be truncated.
 4. convert to signed to unsigned.
 
 
-{bool-conversion}
+{bool-conversion} {equal-misspell}
 
 <one>
 
@@ -4075,9 +4077,9 @@ The fact that we can use assignment in a condition can have surprising effects:
 
 if (i = j)
 
-The condition in this if assigns the value of j to i and then tests the result of the assignment. If
-j is nonzero, the condition will be true. The author of this code almost surely intended to test
-whether i and j have the same value:
+The condition like this which assigns the value of j to i and then tests the result of the
+assignment. If j is nonzero, the condition will be true. The author of this code almost surely
+intended to test whether i and j have the same value:
 
 if (i == j)
 
@@ -4085,7 +4087,7 @@ Bugs of this sort are notoriously difficult to find. Some, but not all, compiler
 warn about code such as this example.
 
 
-<two> {equal-misspell}
+<two> 
 
 auto loc = wordmap.find( sought );
 
@@ -4128,14 +4130,14 @@ cout << ui + i << endl;
 unsigned int u1 = 42, u2 = 10;
 cout << u2 - u1 << endl;
 
-01 and 02 shows the same result. 4294967264.
+These two cases shows the same result. 4294967264. why? because converted to unsigned.
 
 <three>
 
 for( unsigned u = 10; u >= 0; --u )
 	 cout << n << endl;
 
-Causes <infinite-loop>
+Causes <infinite-loop> because u = -1 and means big number.
 
 
 ==============================================================================
@@ -4150,8 +4152,8 @@ element occurs 112 times
 	(line 158) operator creates a new element
 	...
 
-Requirements are that show line number, ascending order, no duplicates, and line text. Also support
-multi pass until user quit.
+Requirements are that show line number, ascending order, no duplicates, and line text which contains
+the word. Also support multi pass until user quit.
 
 
 <more-abstract-solution>
@@ -7105,8 +7107,8 @@ ABCAnimal::~ABCAnimal() {}
 
 {intention}
 
-The exception is intended for events that prevent the program from continuing normally. so found no
-matching catch and stop execution of the program; call the library 'terminate' function.
+The exception is intended for events that prevent the program from continuing normally. so when
+found no matching catch and stop execution of the program; call the library 'terminate' function.
 
 From MEC++09. What's different to the approach of returning error code? Exception cannot be ignored
 and if do, it is terminated. From MEC++12. The execution return to call site for func call but never
@@ -7286,16 +7288,17 @@ swallowing.
 
 {problem-of-exception-in-dtor}
 
-Why exception in dtor is the problem? Two reason not to raise exception in dtor:
+Why exception in dtor is the problem? because as said, func call tree can exit prematurely during
+stack-unwinding and this means local objects are destroyed. If dtor can raise an execption, ends up
+having two exception which is not allowed so terminate will be called. EC++08 says that terminate is
+called or undefined. Hence 
 
-o The <permature-program-termination> which can means no clean-up. (EC++08 says that terminate is
-called or undefined) If dtor can raise an execption, must be handled in the same dtor. Otherwise
-terminate() will be called because don't allow two exection at the same time.
+o The <permature-program-termination> which can means no chance to do useful things to handle
+exception such as clean-up and to do what is useful before terminating or swallowing. For example,
+make a log entry.
 
-o By preventing <premature-program-termination>, can have a chance to do what is useful before
-terminating or swallowing. For example, make a log entry.
-
-So usually no exception in dtor and STL guarantee thar dtor will not raise an execption.
+So usually no exception in dtor and if do, should handle in the same dtor. STL guarantee thar dtor
+will not raise an execption.
 
 
 {exception-object} {user-defined-exception-object}
@@ -11160,6 +11163,30 @@ When runs remove(), it will reorder like:
 c.erase( remove( c.begin(), c.end(), 1963 ), c.end() );
 
 For list and assoc containers, use member func as c.remove(1963)
+
+
+==============================================================================
+*kt_dev_stl_022*	iterator: external and internal
+
+Was asked in phone screening. 
+
+http://gafter.blogspot.co.uk/2007/07/internal-versus-external-iterators.html
+
+In the "Gang Of Four" Patterns book's discussion of the Iterator pattern, we read (page 260):
+
+Who controls the iteration? A fundamental issue is deciding which party controls the iteration, the
+iterator or the client that uses the iterator. When the client controls the iteration, the iterator
+is called an external iterator (C++ and Java), and when the iterator controls it, the iterator is an
+internal iterator (Lisp and functional languages). Clients that use an external iterator must
+advance the traversal and request the next element explicitly from the iterator. In contrast, the
+client hands an internal iterator an operation to perform, and the iterator applies that operation
+to every element in the aggregate.
+
+External iterators are more flexible than internal iterators. It's easy to compare two collections
+for equality with an external iterator, for example, but it's practically impossible with internal
+iterators. Internal iterators are especially weak in a language like C++ that does not provide
+anonymous functions, closures, or continuations like Smalltalk and CLOS. But on the other hand,
+internal iterators are easier to use, because they define the iteration logic for you.
 
 
 # ============================================================================

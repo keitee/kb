@@ -5468,24 +5468,26 @@ class CSIVoiceEngine : public CSIEngineBase
 class CSIEngineManager
 
 
-{{run}}
+<run>
 
 CThread:
 	CThreadRun: 
       thread->t_Main();	[pure-virtual] [main-start]
 
 CTask:
-              t_Main()                 [main-end] {template-method} in kt_dev_txt
-				     t_Create();                      [virtual] [create-start]
-                 while (ExecuteEvent() == true)   [thread-loop]
-							ExecuteEvent
-							{
-								 PTEvent event;
-								 Get(&event, m_msec); [copy-in-event]
-								 event.receiver->OnEvent(&event);
-							}
+              	t_Main()                 [main-end] {template-method} in kt_dev_txt
+					{
+				   	t_Create();                      [virtual] [create-start]
+                 	while (ExecuteEvent() == true)   [thread-loop]
+						//	virtual bool ExecuteEvent
+						//	{
+						//		 PTEvent event;
+						//		 Get(&event, m_msec); [copy-in-event]
+						//		 event.receiver->OnEvent(&event);
+						//	}
 
-					  t_Destory();
+					  	t_Destory();
+					}
 
 CSIEngineBase:
                                                  
@@ -5493,7 +5495,7 @@ CSIVoiceEngine:
                                                   t_Create() [create-end]
 																     SendSelfEvent( OWN_EVENT_TYPE );
 
-{{event}}
+<event>
 
 CHandler:
    OnEvent:
@@ -5543,24 +5545,32 @@ CSIVoiceEngine:
 	   handle OWN_EVENT_TYPE;
    }
 
-{{create}}
+
+<create>
 
 CThread:
    Create:
 	  pthread_create
 
 CTask:
+	public:
    Create()
 	  PCQueue::Create();
 	  PCHandler::Create(this);
 	  CThread::Create(stackSize);
 
-CSIEngineBase:
+CSIEngineBase: public CTask
+	public:
    Create(const char* name)
-      return PCTask::Create(name);
+      return CTask::Create(name);					[create]
 
-CSIVoiceEngine:
+CSIVoiceEngine: public CSIEngineBase
    no Create:
+
+// {design-note}
+// This can be a application manager which creates all applications and call Create() on them. This
+// is platform wide and each application can override t_Create and init their own thing without
+// knowing Create() calls made from outside.
 
 class CSIEngineManager:
 {
@@ -5580,7 +5590,7 @@ class CSIEngineManager:
 	 CSIEngineManager::GetEngineInstance
 	 {
 		  m_pVoiceEngine =  'new' CSIVoiceEngine;
-		  m_pVoiceEngine->Create("SIVoiceEngine"); [create]
+		  m_pVoiceEngine->Create("SIVoiceEngine"); // [create] and use inherited implementation
 	 }
 }
 
@@ -5604,9 +5614,10 @@ CUserClass {
       }
 }
   
-staic _Process(this) : will run the derived class t_Main which has a message loop. So this _Process is a
-template code for all threads. 
-Get(&event); 
+static _Process(this) will run the derived class CTask t_Main which has a message loop. So this
+_Process is a template code for all threads. 
+
+Get(&event); in which all threads use the same code for thread routine
 
 CUserB instance:
                                        
