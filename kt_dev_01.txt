@@ -4802,8 +4802,8 @@ Why use ctor initializers?
 
 1) Avoid default-init.
 2) Efficient than {assignment-and-initialisation}
-3) By the time the body of ctor begins excuting, init is completed so there are <three> cases that
-must use ctor-init:
+3) By the time the body of ctor begins excuting, init is completed so there are <three> cases that~
+must use ctor-init: {QUIZ}
 
 const, reference, and class member that do not have a def-ctor.
 
@@ -4868,12 +4868,13 @@ use dyn allocated resource. *kt_dev_cpp_004*
 
 When init object from the other of the same type.
 
-The first arg is a reference to a class and the rest args can be defaults. Used for <four> context:
+The first arg is a reference to a class and the rest args can be defaults. Used for <four> context:~
 copy init, <argument-pass>, <return>, and implicit coversion using temp object. For arg pass and
 return that are <non-reference-type>, they are copy-inited; copy-ctor.
 
 class Foo {
-	Foo(const &Foo);
+	Foo(const &Foo);	// wrong
+	Foo(const Foo&);
 };
 
 Note: cannot be 'explicit' since used implicitly such as arg passing. 
@@ -5107,10 +5108,10 @@ there are const and reference members because compiler will not create syn versi
 rebind const and reference. But how to define user copy controls for these cases?
 
 
-{copy-all-parts-of-an-object}
+{copy-control-in-inheritance} {construct-and-copy-all-parts-of-an-object}
 
-EC++12. When having own copy functions(copy-ctor and copy-assign), careful to copy all but not
-parts because having own copy controls means to have full responsibilities of doing it.
+EC++12. When having own copy functions(copy-ctor and copy-assign) for [derived class], be careful to
+handle base part because having own copy controls means to have [full responsibilities] of doing it.
 
 // when add new member data
 
@@ -5157,7 +5158,7 @@ class PriorityCustomer: public Customer {
 	}
 };
 
-If not:
+If not, do nothing about base part and that means:
 For construction, PriorityCustomer-ctor will use a default-ctor of Customer and Customer part will ~
 be default-init. For copy, PriorityCustomer-copy-ctor will do nothing on Customer part and it will ~
 remain unchanged. ~
@@ -5255,7 +5256,7 @@ access control.
 <delete-keyword> {C++11}
 
 Signal to the compiler that intentionally not defining these members; do not make these
-automatically and lead to compile error when try to use it. 
+automatically and lead to <compile error> when try to use it. 
 
 struct NoCopy {
 	 NoCopy() = default;
@@ -5285,6 +5286,8 @@ this, can cause link errors when there are attempts to use.
 
 EC++06. To move the link-time error up to the compile-time error:
 
+#include <iostream>
+
 class Uncopyable {
 	 protected:
 		  Uncopyable() {}
@@ -5295,12 +5298,35 @@ class Uncopyable {
 		  Uncopyable& operator=(const Uncopyable&);
 };
 
-class Foo : private Uncopyable {
-	 ...
+class Foo : private Uncopyable {		// line 13
+	public:
+		void WhoAmI() { std::cout << "foo" << std::endl; }
 };
 
+int main()
+{
+   std::cout << "{ "; 
+   
+	Foo f;
+	f.WhoAmI();
+
+	// errors only when add followings
+	Foo o;
+	o = f;	// line 26
+
+	std::cout << "size :" << sizeof(f) << std::endl;
+   std::cout << "}" << std::endl; 
+}
 
 By moving private up the inheritence, change link error to compile error:
+
+kit@kit-vb:~/work$ ./comp.sh use-noncopy.cpp 
+use-noncopy.cpp: In function ‘int main()’:
+use-noncopy.cpp:26:6: error: use of deleted function ‘Foo& Foo::operator=(const Foo&)’
+use-noncopy.cpp:13:7: error: ‘Foo& Foo::operator=(const Foo&)’ is implicitly deleted 
+								because the default definition would be ill-formed:
+use-noncopy.cpp:10:17: error: ‘Uncopyable& Uncopyable::operator=(const Uncopyable&)’ is private
+use-noncopy.cpp:13:7: error: within this context
 
 syn copy and assign op for derived classes are supposed to handle base class parts but they can't
 invoke member funcs since the derived class has no right to call. Again, the point is that derived
@@ -5314,12 +5340,12 @@ When implement copy-assign, must think about self-assign and exception-safe. See
 
 Why? because ther are <less-obvious-assignments> to self cases:
 
-{{one}} aliasing: having more than one way to refer to an object
+<one> aliasing: having more than one way to refer to an object
 
 a[i] = a[j];		// potential assign to self when i==j
 *px = *py;			// potential assign to self when point to the same
 
-{{two}} same class hierarchy
+<two> same class hierarchy. TODO: more detail.
 
 void doSomething( const Base& rb, Derived& pd );
 
@@ -5331,7 +5357,8 @@ See *kt_dev_lang_009* for built-in conversion. converting-ctor and conversion-op
 {class-type-conversion}. Two things.
 
 
-In sum, Ref. this is a coversion {to class; inwards} and conversion op is a conversion {from
+In sum, converting-ctor is a coversion {to class; inwards} and conversion op is a conversion {from
+others}
 
 class T {       <- from other type to T. converting-ctor
 	 ...         -> from T to other types. conversion-op
@@ -5358,7 +5385,7 @@ Here, combine() expect Sales_date type but is given string type. this equates to
 
 item.combine(Sales_data(str));
 
-So implicit conversion happens and creates a temp Sales_data object. because a temp-object is used,
+So implicit conversion happens and creates a temp Sales_data object. Because a temp-object is used,
 this implicit conversion is not always useful.
 
 class Sale_data {
@@ -5387,11 +5414,12 @@ item.combine( static_cast< Sales_data>(str) );
 note: Whether or not use explicit-keyword, temp-object will be create. It is about making it
 explicit.
 
-{{stl-example-of-explicit}}
 
-The vector<T> v(number) is explicit so the following is in error.
+<stl-example-of-explicit>
 
-// x.member(vector<string>& vec);
+The vector< T > v(number) is explicit so the following is in error.
+
+// x.member(vector< string >& vec);
 x.member(10);	// error
 
 
@@ -5399,15 +5427,13 @@ x.member(10);	// error
 
 This is conversion from class type to other type. Use overloading and the form is:
 
-operator type() const;
+operator T() const;
 
 class SamallInt {
 	 public:
-
 	 'explicit' operator int() const { return val;}
 
 	 private:
-
 	 std::size_t val;
 };
 
@@ -5417,14 +5443,15 @@ To avoid following problem, use explicit keyword:
 int i = 42;
 cin << 42;
 
-There is no << operator in cin but there is conversion to bool. so works as if:
+There is no << operator in cin but there is conversion to bool. So works as if depending on the cin
+state; 0 or 1.
 
 0 or 1 << 42;
 
 
-{{bool-conversion-in-condition}} {tip}
+<bool-conversion-in-condition> {tip}
 
-However, even if uses explicit, this explict has no effect when used in condition such as
+However, even if uses explicit, this explict has no effect when used in condition such as:
 
 if, while, for and do statements. logical operators. conditional operators.
  
@@ -5432,17 +5459,18 @@ This make its use useful in condition like:
 
 while( std::cin >> value )
 
-It reads into value and return cin. cin converted to bool depending on cin state. this bool
-conversion is the typical use of conversion op.
+It reads into value and return cin. cin converted to bool depending on cin state. This bool
+conversion is the typical use of conversion-op.
 
-note. Like cin, seems useful to have bool conversion when class has 'state'.
+<class-state>
+note. Like cin, seems useful to have bool conversion when class has 'state'.~
 
 
 {avoid-impicit-conversion}
 
 From MEC++05. Recommend to use a member func to do the same.
 
-{{problem-case}}
+<problem-case>
 
 template< typename T>
 class Array {
