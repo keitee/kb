@@ -65,7 +65,7 @@ C and C++
 |kt_dev_cpp_001|	virtual inheritance (interview) {virtual-base-class}
 |kt_dev_cpp_002|	pointer vs. reference (interview)
 |kt_dev_cpp_003|	ctor and copy controls {pass-by-reference-to-const} {default-arg} {constructor-initializers}
-|kt_dev_cpp_004|	copy, assign, and dtor when use dyn resource	{the-rule-of-three} {value-like} {preventing-copies} {self-assign}
+|kt_dev_cpp_004|	copy-controls when use dyn resource	{the-rule-of-three} {value-like} {preventing-copies} {self-assign}
 |kt_dev_cpp_005|	converting ctor 			{class-type-conversion}
 |kt_dev_cpp_006|	swap							{copy-and-swap-idiom} {pimpl-idiom}
 |kt_dev_cpp_007|	function matching and overload 	{scope-in-inheritance}
@@ -4912,15 +4912,60 @@ class Student: public Person {
 // when call this, it costs 6 ctor and dtor
 bool validateStudent(Student s);
 
+Student plato;
+validateStudent(plato);
+
+// to bypass these cost
 bool validateStudent(const Student& s);
 
-Two plus points: 1) less expensive 2) avoid <slice-off> problem.
+The points: 
+
+1) Less expensive since no new object are being created. Typically, references are implemented as
+pointers. So recommendation is that use pass-by-value for built-in, STL iterator, and function
+objects types and use pass-by-reference for class types.
+
+2) The const is necessary since otherwise caller would have to worry about a function making changes
+to the object they passed in.
+
+3) Avoid <slice-off> problem. For example:
+
+class Window {
+	public:
+		...
+		std::string name() const;
+		virtual void display() const;
+};
+
+class WindowWithScrollBars: public Window {
+	public:
+		...
+		virtual void display() const;
+};
+
+void printNameAndDisplay(Window w)
+{
+	std::out << w.name();
+	w.display();
+}
+
+WindowWithScrollBars wwsb; printNameAndDisplay(wwsb);
+
+This will [ALWAYS] call Window::display since it is pass-by-value using Window ctor and is sliced-off.
+Hence Window object.
+
+To fix this, should change it to and it work for whatever kind of windows.
+
+void printNameAndDisplay(const Window& w)
+{
+	std::out << w.name();
+	w.display();
+}
 
 
 (EC++21)
-However, there are cases that must return a copy not a reference such as operator*(). This is
-product operator not dereferene operator. See {smart-pointer-internal}. Q: How distinguish between
-two?
+Then always use reference? However, there are cases that must return a copy not a reference such as
+operator*(). This is product operator not dereferene operator. See {smart-pointer-internal}. Q: How
+distinguish between two?
 
 Do not pass reference to object that do not exist.
 
@@ -4943,15 +4988,16 @@ When returning from operator*(), reference is no longer valid. Must return a cop
 
 {copy-assign}
 
-Cannot use syn version when there are ref and const member. why? because syn copy assign is defined
-as <deleted> if the class has a const or reference member. (Primes p508). For <delete-keyword>, see
-*kt_dev_cpp_004* It uses op overloading and must be a member because <lhs> is this pointer.
+Cannot use syn version when there are reference and const member data. why? because syn copy assign
+is defined as <deleted> if the class has a const or reference member. (Primes p508). For
+<delete-keyword>, see *kt_dev_cpp_004* It uses op overloading and must be a member because <lhs> is
+this pointer.
 
 class Foo {
 	Foo& operator=(const Foo&);
 };
 
-It controls how objects of its class are assigned
+The copy-assign controls how objects of its class are assigned
 
 Sales_data trans, accum;
 trans = accum;
@@ -4966,17 +5012,16 @@ assignment and should behave the same as built-in types.
 
 x = y = z = 15;		// right associative
 
+Widget wx, wy, wz;
+wx = wy = wz = DefaultWidget;
+
 class Widget {
 	 public:
-
 	 Widget& operator=( const Widget& rhs )
 	 {
 		  ...
-		  >
-		  return *this;
-<
+		  return *this; ~
 	 }
-	 ...
 };
 
 
@@ -4984,9 +5029,11 @@ class Widget {
 
 From MEC++04. There are two categories:
 
-o class can be inited meaningfully without inputs from outside. Do use default-ctor.
-o calss cannot be inited meaningfully without inputs from outside. Recommend not to use
+o For class that can be inited meaningfully without inputs from outside, do use default-ctor.
+o For calss cannot be inited meaningfully without inputs from outside, recommend not to use
 default-ctor.
+
+TODO: more on problems and example
 
 For example, think a class which has ID info and use default-ctor. This causes
 
@@ -4999,7 +5046,7 @@ implementation.
 
 
 ==============================================================================
-*kt_dev_cpp_004* copy, assign, and dtor when use dyn resource.
+*kt_dev_cpp_004* copy-controls when use dyn resource.
 
 {when-use-resource-has-dyn-lifetime}
 
@@ -5016,11 +5063,11 @@ if a class defines one of the following it should probably explicitly define all
 dtor, copy-ctor, and copy-assign operator
 
 
-{{example}} C++ Primer p505
+<case-example> C++ Primer p505
 
-The syn version does not operate well for a class using dyn resource. here if there's no dtor
-defined, the syn dtor will not run delete on ps. so must define own dtor but use syn versions for
-copy and assign. this pose a problem. 
+The syn version does not operate well for a class using dyn resource. The case is that if there's no
+dtor defined, the syn dtor will not run delete on ps so must define own dtor but use syn versions
+for copy and assign. 
 
 class HasPtr {
 	public:
@@ -5033,13 +5080,13 @@ class HasPtr {
 };
 
 
-Problem?
+What problem?
 
 HasPtr func(HasPtr hp)	// value and memberwise copy using a syn copy ctor.
 {
 	HasPtr ret = hp;		// a syn copy assign. ret and hp points the same.
 	...
-	return ret;				// <double-free>, ret and hp, when exit a call
+	return ret;				// <double-free> on ret and hp, when exit a call
 }
 
 Even if there is no return:
@@ -5051,12 +5098,13 @@ void func(p);		// p and func's arg points the same.
 HasPrt q(p);		// p and q have invalid pointer.
 
 
-So, need to define copy and assign op as well. two methods on what copying an object will mean:
-value or pointer like (what we do when copy pointer member determines)
+So, need to define copy-ctor and copy-assign op as well. Two methods on what copying an object will
+mean: value or pointer like (what we do when copy pointer member)
 
 
 For the same reason in {constructor-initializers} in *kt_dev_cpp_003* must define copy controls when
-there are const and reference members because cannot rebind const and reference. How?
+there are const and reference members because compiler will not create syn versions since cannot
+rebind const and reference. But how to define user copy controls for these cases?
 
 
 {copy-all-parts-of-an-object}
@@ -5064,7 +5112,7 @@ there are const and reference members because cannot rebind const and reference.
 EC++12. When having own copy functions(copy-ctor and copy-assign), careful to copy all but not
 parts because having own copy controls means to have full responsibilities of doing it.
 
-{{one}} when add new member data
+// when add new member data
 
 Customer& Customer::operator=( const Customer& rhs )
 {
@@ -5075,7 +5123,7 @@ Customer& Customer::operator=( const Customer& rhs )
 If add new member data, then must update all copy functions and ctors too. Otherwise, have copy
 functions to copy parts of object.
 
-{{two}} class inheritence
+// class inheritence
 
 class PriorityCustomer: public Customer {
 	 ...
@@ -5094,34 +5142,33 @@ class PriorityCustomer: public Customer {
 must be:
 
 class PriorityCustomer: public Customer {
-	 ...
-	 PriorityCustomer::PriorityCustomer( const PriorityCustomer& rhs ) >
-	 :Customer(rhs), 
-<	 priority( rhs.priority )
-	 {
-	 }
+	...
+	PriorityCustomer::PriorityCustomer( const PriorityCustomer& rhs ) 
+	:Customer(rhs),~
+	priority( rhs.priority )
+	{
+	}
 
-	 PriorityCustomer& PriorityCustomer::operator=( const PriorityCustomer& rhs )
-	 { 
-		  >
-		  Customer::operator=(rhs); 
-<		  priority = rhs.priority;
-		  return *this;
-	 }
+	PriorityCustomer& PriorityCustomer::operator=( const PriorityCustomer& rhs )
+	{ 
+	    Customer::operator=(rhs); ~
+	    priority = rhs.priority;
+	    return *this;
+	}
 };
 
 If not:
-
-<PriorityCustomer-ctor> will use a default-ctor of Customer and Customer part will be default-init.
-<PriorityCustomer-copy-ctor> will do nothing on Customer part and it will remain unchanged.
+For construction, PriorityCustomer-ctor will use a default-ctor of Customer and Customer part will ~
+be default-init. For copy, PriorityCustomer-copy-ctor will do nothing on Customer part and it will ~
+remain unchanged. ~
 
 
 {value-like} {deep-copy} {self-contained-object}
 
 See {own-resource-managing-class} in *kt_dev_stl_018* for full discussion.	
 
-The copy and the original are independent. Copy underlying object as well. note: library containers
-and string are value-like.
+The copy and the original are independent since copy underlying object as well. note: library containers
+and string use value-like copy
 
 class HasPtr {
 	public:
@@ -5138,8 +5185,8 @@ class HasPtr {
 		std::string* ps;
 };
 
-Combine dtor and copy. handle self-assign and exception-safe see *kt_dev_cpp_019* for self-assign
-and exception
+The below combine dtor and copy and handle self-assign and exception-safe see *kt_dev_cpp_019* for
+self-assign and exception
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
@@ -5168,8 +5215,7 @@ class HasPtr {
 <
 	private:
 		std::string* ps;
->
-		std::size_t* use;
+		std::size_t* use; ~
 };
 
 
@@ -5202,28 +5248,28 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 
 {preventing-copies} {delete-keywords}
 
-Primus p507. Can define a class to prevent copy or assign. For example, iostream class. not defining
-copy controls? this do not work as syn version will be made. Two ways: delete keyword and private
+Primus p507. How can define a class to prevent copy or assign like iostream class? Do not defining
+copy controls? This do not work as syn version will be made. Two ways: delete keyword and private
 access control.
 
-{{delete-keyword}} {C++11}
+<delete-keyword> {C++11}
 
 Signal to the compiler that intentionally not defining these members; do not make these
 automatically and lead to compile error when try to use it. 
 
 struct NoCopy {
 	 NoCopy() = default;
-	 NoCopy(const NoCopy&) = delete;                 # NO copy 
-	 NoCopy& operator=(const NoCopy&) = delete;      # NO assign
+	 NoCopy(const NoCopy&) = delete;                 # NO copy-ctor 
+	 NoCopy& operator=(const NoCopy&) = delete;      # NO copy-assign
 	 ~NoCopy() = default;
 	 ...
 };
 
 
-{{private-copy-control}} prior C++11
+<private-copy-control> prior C++11
 
 class PrivateCopy {
-	 // declare but not define.
+	 // declare but not define ~
 	 PrivateCopy(const PrivateCopy&);
 	 PrivateCopy &operator=(const PrivateCopy&);
 
@@ -5231,11 +5277,11 @@ class PrivateCopy {
 	 ...
 };
 
-However, friends and members still make copies so declare copy controls but not define. by doing
+However, friends and members still make copies so declare copy controls but not define. By doing
 this, can cause link errors when there are attempts to use.
 
 
-{{boost-noncopyable}}
+<boost-noncopyable>
 
 EC++06. To move the link-time error up to the compile-time error:
 
@@ -5257,8 +5303,8 @@ class Foo : private Uncopyable {
 By moving private up the inheritence, change link error to compile error:
 
 syn copy and assign op for derived classes are supposed to handle base class parts but they can't
-invoke member funcs the derived class has no right to call. Again, the point is that derived class
-part can't call the base class part as it's private. In boost, it's 'noncopyable'.
+invoke member funcs since the derived class has no right to call. Again, the point is that derived
+class part can't call the base class part as it's private. In boost, it's 'noncopyable'.
 
 
 {self-assign-and-exception-safe}
