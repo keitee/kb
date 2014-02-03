@@ -69,7 +69,7 @@ C and C++
 |kt_dev_cpp_005|	converting ctor 			{class-type-conversion}
 |kt_dev_cpp_006|	swap							{copy-and-swap-idiom} {pimpl-idiom}
 |kt_dev_cpp_007|	function matching and overload 	{scope-in-inheritance}
-|kt_dev_cpp_008|	const and conversion		{const-on-iterators}
+|kt_dev_cpp_008|	const and conversion		{const-on-iterators} {equal-misspell} 
 |kt_dev_cpp_009|	undefined result and a temp-object {temp-object-in-return} {cost-of-temp-object}
 |kt_dev_cpp_010|	def args
 |kt_dev_cpp_011|	inline {empty-ctor-represenstaion}
@@ -77,7 +77,7 @@ C and C++
 |kt_dev_cpp_013|	when use reference {called-by-reference} 
 |kt_dev_cpp_014|	decltype, typedef, and using 
 |kt_dev_cpp_015|	declaration and definition
-|kt_dev_cpp_016|	<empty>
+|kt_dev_cpp_016|	statement {division-and-modulus}
 |kt_dev_cpp_017|	static-members and class const	{class-method} {class-const}
 |kt_dev_cpp_018|	dtor					{non-virtual-destruction-problem} {how-virtual-works}
 |kt_dev_cpp_019|	exception {problem-of-exception-in-dtor} {exception-safe}
@@ -154,7 +154,7 @@ EFFECTIVE C++ 3RD
 |kt_dev_ecpp_011|	35: alternatives to virtual func {template-pattern} {strategy-pattern}
 |kt_dev_ecpp_012|	38: composition. has-a model {private-inheritance} {is-implemented-in-terms-of}
 |kt_dev_ecpp_013|	22: data member must be private
-|kt_dev_ecpp_014|	27: minimize casting {casts-in-cpp}
+|kt_dev_ecpp_014|	27: minimize casting {named-cast}
 |kt_dev_ecpp_015|	30: ins and outs of inlining 
 
 
@@ -5514,7 +5514,6 @@ vector< string> svec2(24);
 
 swap( svec1, svec2 );	
 
-
 Is it a std::swap()? NO. This is non-member func in vector. This is not a element swap but a swap of
 internal structure. Constant-time operation. 
 
@@ -5526,18 +5525,18 @@ Primers p339. In C++, container provides member and non-member swap and previous
 only. Recommands non-member swap. {why}? for generic programming? 
 
 If there's no type specific swap, use swap from the library, std::swap. is it a template or
-function?  Yes, this is template and memberwise operation.
+function? Yes, this is template and memberwise operation.
 
 
 {why-swap}
 
-o For value-like class, use swap to optimise when used by algorithm such as reorder
+o It is for value-like class and use swap when used by algorithm such as reorder
 elements. For pointer-like class, no need as it naturally swaps pointers. stl containers
 are value-like. see {value-like} in *kt_dev_cpp_004*
 
-So it's to omptimise only for resource managing class which is value-like.
-
-o Using swap is safe to self-assign and exception.
+Since value-like swap is expensive such as resource managing class which is value-like, need to have
+better way and provide type specific swap which has efficient way to do it. So sounds like a topic
+for container design?
 
 
 {standard-swap}
@@ -5559,9 +5558,9 @@ really necessary. How to avoid these cost?
 
 {define-swap-friend}
 
-What we want is to use swap for a type when there is and otherwise, use std::swap.
+What we want is to use type speficic swap when there is and otherwise, fall back to use std::swap.
 
-Primer p516. non-member swap and friend. From {value-like} in *kt_dev_cpp_004*
+Primer p516. non-member swap and friend approach and example from {value-like} in *kt_dev_cpp_004*
 
 class HasPtr {
 >
@@ -5579,7 +5578,7 @@ class HasPtr {
 };
 
 
-To override the defaut behaviour of swap by class-specific swap. note: used unqualified swap.
+To override the defaut behaviour of swap by class-specific swap. 
 
 inline void swap( HasPtr& lhs, HasPtr& rhs )
 {
@@ -5588,14 +5587,13 @@ inline void swap( HasPtr& lhs, HasPtr& rhs )
 }
 
 
+The following will use swap(HasPtr&, HasPtr&) through {arg-dependent-lookup} in *kt_dev_cpp_007*
+
 HasPtr A, B;
-
-This is to use swap(HasPtr&, HasPtr&) through {arg-dependent-lookup} in *kt_dev_cpp_007*
-
 swap(A,B);		
 
-In this example, the following is the same as used on built-in memeber data. But this can be mistake
-for class member data.
+In this example, the following is the same as used on built-in memeber data, pointer in this case
+but this can be mistake for class member data because it will always use std::swap.
 
 inline void swap( HasPtr& lhs, HasPtr& rhs )
 {
@@ -5603,7 +5601,7 @@ inline void swap( HasPtr& lhs, HasPtr& rhs )
 }
 
 
-One important subtlety in swapping class member:
+The one important subtlety in swapping class member which uses function matching:
 
 1) use unqualified swap to search for class-specific swap version
 2) use using std::swap to make it visiable in current scope so fall back on std::swap when there is
@@ -5716,7 +5714,7 @@ and b, and they are <private> so other ways might be:
 o could declare our specialization a friend, but the convention is different: so not
 consider. 
 
-o have a public swap member and specialized std::swap calls this member swap. 'okay' note: do not
+o have a public swap member and specialized std::swap calls this member swap. 'okay' since do not
 use friend here.
 
 
@@ -5844,32 +5842,39 @@ note TO DO Primers p518. summarise after studying template.
 ==============================================================================
 *kt_dev_cpp_007* function matching and overload
 
+{function-matching}
+
 The name has 'scope' and object has 'lifetime'. three possible outcomes: best match, no match, and
 ambiguous call. For overload condition, see {const-on-overload} 
 
 note: step 0 and 1 is called <normal-scope-or-name-lookup>?
 
-<step-0> <search>
-Look in members, classes up the chain of inheritance, and enclosing(surrounding) scopes(namespace,
-searched upwards that means declared before use). Plus use {arg-dependant-lookup}. For non-class,
-enclosing scope that is before the point of use and is still open. See Primers p797. Using
-declaration or directive add funcs to the candidate set.
+step-0: <search>
+For lookup of names inside a namespace, look in members, and if not found, continue looking in
+enclosing scope; which is a scope having a name to look up. This can be block, class, or namespace.
+So continue looking in classes up the chain of inheritance or namespaces. This search goes upwards
+that means declared before use and before in reading order. For example, int A::C1::f3() in
+qualified name. Plus use {arg-dependant-lookup}. For non-class, enclosing scope that is before the
+point of use and is still open. See Primers p797. 'using' declaration or directive add funcs to the
+candidate set.
 
-<step-1> <build-candidate>
-Candidate functions(overload set). should be the same name and visible. <name-lookup>. Include any
-function-template instantiation for which template arg deduction succeeds.
+step-1: <build-candidate>
+Use name only hence called name-lookup. Build candidate functions which is the set of overloaded
+functions and should be the same name and visible. Include any function-template instantiation for
+which template arg deduction succeeds.
 
-<step-2> <build-viables>
-Get viable functions. num of arguments and conversion. <type-check>
+step-2: <build-viables>
+Use the number of arguments to get viable functions and use conversion and type-match.
 
-<step-3> <best-match>
-Get closer to the exact match. non-template func is selected if there's only one in the set. if not,
-more specialed func template is called. otherwise, the call is ambiguous.
+step-3: <best-match>
+The exact match is better than a match that requires a conversion. non-template func is selected if
+there's only one in the set. if not, more specialed func template is called. otherwise, the call is
+ambiguous.
 
-<step-4> <check-access>
+step-4: <check-access>
 See accessibilty in case of inheritance. From EC++40
 
-<step-5> <virtual-or-not>
+step-5: <virtual-or-not>
 If it is virtual, generate a code for run-time binding. otherwise, generate a normal call.
 
 
@@ -5892,16 +5897,14 @@ this is equi to:
 
 operator>>(std::cin, s); 
 
-this operator>>() func is defined by the 'string' and in 'std'. why is it okay without using either
-'std::' or 'using'?
- 
-when func has class type arg(object, pointer and ref), the compiler searches
-<namespace-in-which-arg-defined> in addition to the normal scope lookup.
+This operator>>() func is defined in the 'string' and in 'std'. Why is it okay without using either
+'std::' or 'using'? When func has class type argument which is calss object, pointer or ref, the
+compiler searches <namespace-in-which-arg-defined> in addition to the normal scope lookup.
 
-so in this case, searches the namespace, 'std', where cin and s(string) is defined and
-found this func from 'string'. note: it is namespace, not else.
+In this case, searches the namespace, 'std', where cin and s(string) is defined and found this func
+from 'string'. note: it is namespace, not else.
 
-Why? This makes it easy to use non-member func which is conceptually part of class interface.
+Why this? This makes it easy to use non-member func which is conceptually part of class interface.
 otherwise, should use
 
 using std::operator>>; or std::operator>>(std::cin, s);
@@ -5910,7 +5913,7 @@ using std::operator>>; or std::operator>>(std::cin, s);
 {scope-in-inheritance}
 
 Primus p617. Hierarchical nesting of class scope: the derived is nested in the base and it 'hide'
-names in the derived. It is for non-virtual funcs. If the base has overloads and 'is-a' relationship
+names declared in the base. It is for non-virtual funcs. If the base has overloads and 'is-a' relationship
 then see EC++33 for more. See {override-keyword} *kt_dev_cpp_023*
 
 note: seems need more clearer statement for the above.
@@ -5978,7 +5981,7 @@ original object.
 {reference-to-const}
 
 But <reference-to-const> is different. There's no const-reference since reference is not object. The
-reference-to-const restrics only what we can do through that reference and says nothing about
+reference-to-const restrics only what we can do [through] that reference and says nothing about
 whether the underlying object itself. 
 
 For pointer, there are <pointer-to-const> and <const-pointer>. The following initialsation is error
@@ -6002,6 +6005,7 @@ type.
 const double *cptr = &pi;
 int *const curErr = &errNumb;
 
+
 {type-match-exceptions}
 
 Two exceptions to type match: <reference-to-const> and <derived-to-base-reference> conversion. Can
@@ -6018,7 +6022,7 @@ note: KT. This is [to-maintain-constness] by creating [temp-object]. See {{case-
 
 {convert-to-const}
 
-Implicit {convert-to-const} for ref and pointer.
+Implicit {convert-to-const} conversion for reference and pointer.
 
 const  -- NO --> non-const
 const <-- OK --  non-const
@@ -6034,6 +6038,14 @@ int i = ci;				// ignored
 const int& r = ci;	// is 'always' low-level
 
 
+If this is allowed, const object can be changed via non-const pointer and reference. So not allowed.
+
+int i;
+const int &j = i;		// conversion from non-const to const
+const int *p = &i;
+int &r = j, *q = p;	// error since conversion from const to non-const
+
+
 {const-param-args}
 
 The const matters when copying vars and do func params. That is why copy-ctor is usded here.
@@ -6045,7 +6057,7 @@ fcn(cj);	// const int i = cj;
 
 void fcn( int i );
 
-note: This is error because it redefines the same. Why? See {const-on-overload} for more cases.
+This is error because it redefines the same. Why? See {const-on-overload} for more cases.
 These are all explained by the fact that fcn(const init i) can be used both fcn( const-pararm ) and
 fcn( non-const-param ) and in other words, top-level-const can be ignored.
 
@@ -6055,7 +6067,7 @@ fcn(cj);	// int i = cj;
 
 {const-reference-param}
 
-Two implications when use plain ref param in func:
+Two implications when use plain reference param in func:
 
 o A func that don't change a ref param, mislead its user to think it is.
 o More importantly, it limit its use only to non-const param.
@@ -6065,7 +6077,10 @@ example
 find_char(const string& s, char c);
 find_char("Hello", 'o');	// OK because const-to-ref can match to literal.
 
-So recommend const-reference-param over reference-param.
+find_char(string& s, char c);
+find_char("Hello", 'o');	// compile error because temp object is const
+
+So recommend const-reference-param over reference-param for flexibility. 
 
 
 {const-on-iterators}
@@ -6080,9 +6095,9 @@ const std::vector< int >::iterator iter = vec.begin();
 std::vector< int >::const_iterator iter = vec.begin();
 
 
-{const-return}
+{const-return} {equal-misspell}
 
-EC++03. When use value as a return, use const:
+EC++03. When use return by value as a return, use const to raise error when mistake happens:
 
 const Rational operator*( const Rational& lhs, const Rational& rhs );
 
@@ -6090,8 +6105,8 @@ const Rational operator*( const Rational& lhs, const Rational& rhs );
 //
 if( a*b = c )
 
-If these are built-in tyeps, this is flat-out error but don't class type. so better to be prepared
-for this kind of mistakes.
+If these are built-in tyeps, this is flat-out error but don't for class type. so better to be prepared
+for this kind of mistakes. Also this is an example of returning a copy than reference.
 
 
 ==============================================================================
@@ -6911,9 +6926,49 @@ For class, see {class-definition} in *kt_dev_lang_010*
 
 
 ==============================================================================
-*kt_dev_cpp_016*	<empty>
+*kt_dev_cpp_016*	statement {division-and-modulus}
+
+{side-effect}
+
+An expression, such as 'ival+5' becomes an expression statement when it is followed by a semicolon.
+An expression statement contains an expression that has a side-effect-such as assigning a new value
+or printing a result-when it is evaluated.
 
 
+{division-and-modulus}
+
+The division truncate the remainder and modulus(%) operator.
+
+// plus to grade ending in 8 0r 9 and minus to grade ending in 0, 1, or 2.
+const vector< string > scores = { "F", "D", "C", "B", "A", "A++" };
+
+string lettergrade;
+
+if( grade < 60 )
+	lettergrade = score[0];
+else
+{
+	lettergrade = score[ (grade-50)/10 ];
+	if( grade % 10 > 7 )
+		lettergrade += '+';
+	else if( grade%10 < 3 )
+		lettergrade += '+';
+}
+
+
+{switch}
+
+To emphasize that the cases represent a range of values:
+
+switch(ch)
+{
+	case 'a': case 'e': case 'i': case 'o': case 'u':
+		...
+	break;
+}
+
+It can be useful to define a default label even if there is no work for the case to indicate that
+the case was considered.
 
 
 ==============================================================================
@@ -7190,6 +7245,11 @@ found no matching catch and stop execution of the program; call the library 'ter
 From MEC++09. What's different to the approach of returning error code? Exception cannot be ignored
 and if do, it is terminated. From MEC++12. The execution return to call site for func call but never
 for exception.
+
+{standard-exception}
+
+The stdexcept header defines several general purpose exception classes and the type_info header
+defines the bad_cast exception type.
 
 
 {stack-unwinding}
@@ -14123,18 +14183,27 @@ class SpecialWindow : public Window {
 };
 
 
-{casts-in-cpp}
+{named-cast}
 
 From MEC++02. Casts in CPP provides:
 
-o easier-to-recognise style
+o easier-to-recognise style. There is no error or warning from the compiler because we explicitly
+said the conversion was okay.
 o precision of meaning
 
 Four types:
 
 o const_cast        # const away
 o static_cast       # like C
-o reinterpret_cast  # ?? difference to static_cast? took func pointer example. 
+
+{reinterpret_cast}
+
+Peforms a low-level reinterpretation of the bit pattern of its operands.
+
+int *p;
+char *pc = reinterpret_cast<char*>(ip);
+
+# ?? difference to static_cast? took func pointer example. 
 
 o dynamic_cast      # RTTI
 
