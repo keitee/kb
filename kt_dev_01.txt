@@ -7,7 +7,8 @@ TODO:
 
 Keywords:
 {Q} for questions to find out more
-{design-note} for design considerations
+{DN} for design considerations
+{BP} for best practice
 
 KT KB. DEVELOPMENT.
 
@@ -4263,7 +4264,7 @@ class QueryResult {
 };
 
 >
- {design-note} When design a class, can be helpful to write programs using the class before
+ {DN} When design a class, can be helpful to write programs using the class before
  implementing the members. That way, can see whether the class has the operation we need. WHAT
  OPERATION WE NEED hels us see WHAT DATA STRUCTURE we will need.
 
@@ -6217,12 +6218,12 @@ default constructed and value-init.
 
 {temp-object-in-converison} {cost-of-temp-object}
 
-From MEC++19. The cost of temp-object which is called <unnamed-object>. When is it used?
+From MEC++19. The cost of temp-object which is called unnamed or temp object. When is it used?
 
 <case-one-in-conversion>
 
-Used in implicit type conversion in func call and return. Can have an impact on the performance in
-construction and destruction. 
+Used in implicit type conversion, nonconst-to-const, in func call and return. Can have an impact on
+the performance in construction and destruction. 
 
 size_t countChar( const string& str, char ch );
 
@@ -6286,7 +6287,7 @@ so consider ordering: those least likely to use a def value {appear-first} in {d
 
 o can avoid function call overhead
 o a request to the compiler and the compiler may choose to ignore this request.
-o EC++30. Can have compiler optimisation on inlined code area.
+o EC++30 says that can have compiler optimisation on inlined code area.
 
 Inline has cost:
 
@@ -6297,6 +6298,8 @@ o) ctor and dtor may be worse candiate for inline. Why? There are codes written 
 inserted into program during compilation for construction, destruction, exception handling during
 those, new and delete, and so forth. These are up to compiler implementation. So empty ctor can have
 followings:
+o) A compiler refuse to inline funcs that has calls to virtual funcs because cannot know it at
+compile time.
 
 
 {empty-ctor-represenstaion}
@@ -6338,10 +6341,7 @@ Derived::Derived()
 This is unrepresentative of what real compiler emit but do what ctor must offer. When think ctors of
 base class, class members, not attractive for inlining. 
 
-Compiler refuse to inline funcs that has calls to virtual funcs because cannot know it at compile
-time.
-
-Think about 80-20 rule and may use profiler to find out 20% as a candidate for inlining.
+{BP} Think about 80-20 rule and may use profiler to find out 20% as a candidate for inlining.
 
 
 ==============================================================================
@@ -6351,7 +6351,7 @@ Think about 80-20 rule and may use profiler to find out 20% as a candidate for i
 
 EC++03.
 
-o Clearer interface which member func can change state
+o Clearer interface to show which member func can change state
 o Interface only for const objects. Useful cases?
 
 
@@ -6359,14 +6359,14 @@ o Interface only for const objects. Useful cases?
 
 total.isbn();
 
-When call a member func, pseudo-code for actuall call looks:
+When call a member func, pseudo-code for actual call should looks:
 
 Sales_data::isbn(&total); where Sales_data::isbn(Sales_data *const this);
 
 That is "this = &total" because this is a <const-pointer> by default; pointer itself is const. This
-means cannot call usual member function which is non-const member func on const class object because
-when it is called, this pointer will be set but cannot. Why? since it meants 'this=&const object'
-but there's no {const-to-non-const} conversion.  *kt_dev_cpp_008*
+means cannot call usual member function which is non-const member on const class object because when
+it is called, this pointer will be set but cannot. Why? since it meants 'this=&const object' but
+there's no {const-to-non-const} conversion.  *kt_dev_cpp_008*
 
 this = &const_total; // ERROR
 
@@ -6405,15 +6405,15 @@ Record lookup( const account &);	// const version
 
 May need to have overloads of non-const and const version.
 
-If display is const member func, then following is a comile error. Assume display() is const member
-func and set_set is non-const member func.
+If there is only a const version and display is const member func, then following is a comile error.
+Assume display() is const member func and set_set is non-const member func.
 
 screen myscreen;
 myscreen.display().set_set(10);
 
 Solution?
 
-{{approach-one}} Use overloads for non const and const
+<approach-one> Use overloads for non const and const
 
 class screen{
 	 public:
@@ -6431,8 +6431,7 @@ class screen{
 };
 
 
-{{{gcc-eample}}}
-
+// gcc-eample
 
 class Screen {
 	public:
@@ -6461,35 +6460,53 @@ int main(int argc, char** argv)
 	const Screen cscreen;
 
 	cscreen.display();
-	cscreen.display().set();
+	cscreen.display().set();	// error for note-02
 }
 
-note: when omit const return for const version. Screen& display() const
+note: 
+
+Screen& display() const
+{ cout << "dis: this is const member" << endl; return *this; }		// error line
 
 test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&' from expression of type
 'const Screen'
 
-note: when have const return for const version. const Screen& display() const
+note-02: 
+
+const Screen& display() const
+{ cout << "dis: this is const member" << endl; return *this; }
 
 test.cpp: In function 'int main(int, char**)':
 test.cpp:32:24: error: passing 'const Screen' as 'this' argument of 'void Screen::set()' discards
 qualifiers [-fpermissive]
 
-note: when omit return statement for all display func. Seems that returns as defined in func
-because: when Screen& display() const, no comiple error and works.  when const Screen& display()
-const, get the same error as the the second case.
+note: case
+	
+Screen& display() const
+{ cout << "dis: this is const member" << endl; }
 
-note: this means that const member func has always a form. See {const-member-func} for the same.
+dis: this is non-const member
+dis: this is non-const member
+set: this is non-const member
+dis: this is const member
+dis: this is const member
+set: this is non-const member
+
+Seems that returns as defined in func because no comiple error and works but 'const Screen&
+display() const', get the same error as the note-02.
+
+This means that const member func has always this form when use return. This matters only when
+returns reference but not a copy.
 
 const T func( ... ) const // OK
 T func( ... ) const       // NO 
 
 
-{{approach-two}} Have one implementation for both const and non-const
+<approach-two> Have one implementation for both const and non-const
 
 From EC++03, have non-const that calls const version and have only one implementation. Used
-const_cast to cast away const and static_cast to do opposite. 
+static_cast to call const version and const_cast to cast away const and return.
 
 class TextBlock {
 	 const char& operator[]( std::szie_t position ) const 
@@ -6505,43 +6522,13 @@ class TextBlock {
 };
 
 
-{{approach-three}} Change the order
+<approach-three> Change the order
 
 myscreen.set_set(10).display();
 const_screen.display();
 
 
-{const-member-func}
-
-class Sample {
-public:
-	Sample(const char* str) : text(str) {}
-	'const' char& operator[] (std::size_t pos) const
-	{ return text[pos]; }
-private:
-	std::string text;
-};
-
-int _tmain(int argc, _TCHAR* argv[])
-{
-	Sample sam("CONSTMEMEBER");
-
-	std::cout << sam[1] << endl;
-
-	// Error	1	error C3892: 'sam' : you cannot assign to a variable that is const	
-	sam[1] = 'X'; 
-
-	return 0;
-}
-
-If remove 'const' from return type, then got:
-
-Error	1	error C2440: 'return' : cannot convert from 'const char' to 'char &'
-
-const member change this from 'T* this' to 'const T* this' and that means it see this object as a
-const one and all member data as well. so explains above errors. 
-
-<caution>
+{const-in-func-definition}
 
 class Stack {
 	...
@@ -6555,7 +6542,7 @@ bool Stack::empty() const
 }
 
 
-If miss const in the func definition then:
+If miss out 'const' in the func definition then:
 
 usedeskcalc.cpp:28:6: error: prototype for 'bool Stack::empty()' does not match any in class 'Stack'
 usedeskcalc.cpp:13:7: error: candidate is: bool Stack::empty() const
@@ -6563,10 +6550,10 @@ usedeskcalc.cpp:13:7: error: candidate is: bool Stack::empty() const
 
 {bitwise-const}
 
-From EC++03. Bitwise-const(physical const) is C++'s definition and compiler look for assignment to
-member data. Issue an error like:
+From EC++03. Bitwise-const(physical const) is C++'s definition and compiler only catches assignment to
+member data which is read-only. Issues errors like:
 
-{{example-one}}
+// example-one
 
 Error_code Stack::top(Stack_entry &item) const
 {
@@ -6581,7 +6568,7 @@ Error_code Stack::top(Stack_entry &item) const
 usedeskcalc.cpp:53:21: error: decrement of member 'Stack::count' in read-only object
 
 
-{{example-two}}
+// example-two
 
 int cube(const int& num)
 {
@@ -6591,12 +6578,51 @@ int cube(const int& num)
 
 test.cpp:22:14: error: assignment of read-only reference 'num'
 
-In the above example, if we change it like:
+// example
+
+#include < iostream>
+
+using namespace std;
+
+class Sample {
+public:
+	Sample(const char* str) : text(str) {}
+
+	// cannot remove const return as return used
+	const char& operator[] (std::size_t pos) const
+	{ return text[pos]; }
+
+private:
+	std::string text;
+};
+
+int main(int argc, char** argv)
+{
+
+	Sample sam("CONSTMEMEBER");
+
+	std::cout << sam[1] << endl;
+
+	sam[1] = 'X';	// error
+}
+
+use-const-second.cpp: In function ‘int main(int, char**)’:
+use-const-second.cpp:25:11: error: assignment of read-only location ‘sam.Sample::operator[](1u)’
+
+if change to:
 
 class Sample {
 public:
 	Sample(const char* str) : ptext(new std::string(str)) {}
-	char& operator[] (std::size_t pos) const		// [no-error]
+
+	// [no-error] but see no const return and if so, get the same error as above.
+	//
+	// also the below works as well only this case meaning bit-wise.
+	//
+	// char& operator[] (std::size_t pos) const
+	// { (*ptext)[pos] = 'k'; reurn (*ptext)[pos]; }
+	//
+	char& operator[] (std::size_t pos) const
 	{ return (*ptext)[pos]; }
 
 	~Sample() { delete ptext; }
@@ -6619,8 +6645,8 @@ int _tmain(int argc, _TCHAR* argv[])
 }
 
 No compile errors because 'indirect' use of an object (outside of an object) can avoid C++'s const
-check called bitwise-const. ( operator[] do not change object so compiler do not complain) This
-means const member func can change object state. Break encapsulation.
+check called bitwise-const. ( operator[] do not change member, pointer in this case, so compiler do
+not complain) This means const member func can change object state. Break encapsulation.
 
 
 <fix-to-this-hole>
@@ -6629,9 +6655,8 @@ From EC++28. Can fix this problem as below,
 
 const char& operator[] (std::size_t pos) const		// NO error
 
-However, <dangling-handles> problem still remains.
-
-note: Therefore, recommend to use const T(...) const form as a default.
+However, <dangling-handles> problem still remains since it returns reference to internal member.
+Therefore, recommend to use const T(...) const form as a default.
 
 
 {logical-const}
@@ -6679,17 +6704,10 @@ class T {
 
 <when-useful>
 
-<01>
-in debug, to count the number of calls for a member func.
-
-<02>
-to use logical constness
-
-<03>
-to use lock as a mutable member
-
-<04>
-See {lazy-fetching} in *kt_dev_mecpp_002* 
+- in debug, to count the number of calls for a member func.
+- to use logical constness
+- to use lock as a mutable member. seems useful.
+- see {lazy-fetching} in *kt_dev_mecpp_002* 
 
 
 ==============================================================================
