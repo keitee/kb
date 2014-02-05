@@ -7113,7 +7113,7 @@ base dtor
 
 KT: This is staic binding so compiler knows that this is derived object. Regardless of binding type
 derived dtor has a call to base dtors. This {non-virtual-destruction-problem} only mean to fail to
-pick up derived dtor.
+pick up derived dtor since it goes through vtable.
 
 
 {syn-version-is-non-virtual} {dtor-in-derived-classes}
@@ -7122,12 +7122,7 @@ dtor is one of copy controls in *kt_dev_cpp_003* and means if not defined, the c
 one which is non-virtual. 
 
 virtual is only used in class definition and for other functions, if it's virtual in base then all
-deriveds are virtual. How about dtor? KT: not for dtor because can create derived object when base
-has a pure virtual dtor as {pure-virtual-dtor}
-
-class Foo {
-	 virtual ~Foo() {}
-};
+deriveds are virtual. How about dtor? That's the same. 
 
 
 {non-virtual-destruction-problem}
@@ -7137,6 +7132,71 @@ class don't have virtual dtor.
 
 In GCC spec, it will have 'undefined' result but in reality, destroy only the base part; partially
 destroyed. In GCC, no runtime error in simple test. 
+
+<example-code>
+
+#include < iostream>
+
+using std::cout; using std::endl;
+
+class Base {
+    private:
+		 int m_iDataABCAnimal;
+    public:
+		 Base() { cout << "ctor: base" << endl; }
+		 ~Base() { cout << "dtor: base" << endl; }				// [case-01]
+		 virtual ~Base() { cout << "dtor: base" << endl; }		// [case-02]
+};
+
+class Derived: public Base {
+    private:
+		int m_iDataAnimal;
+    public:
+		Derived() { cout << "ctor: derived" << endl; }
+		~Derived() { cout << "dtor: derived" << endl; }
+};
+
+class DDerived: public Derived {
+    private:
+		int m_iDataDAnimal;
+    public:
+		DDerived() { cout << "ctor: derived derived" << endl; }
+		~DDerived() { cout << "dtor: derived derived" << endl; }
+};
+
+int main()
+{
+	std::cout << "--{ main " << std::endl;
+
+	Base* pbase = new DDerived;
+
+	delete pbase;
+
+	std::cout << "--} main " << std::endl;
+}
+
+For case-01:
+
+$ ./a.out 
+--{ main 
+ctor: base
+ctor: derived
+ctor: derived derived
+dtor: base
+--} main 
+
+For case-02:
+
+$ ./a.out 
+--{ main 
+ctor: base
+ctor: derived
+ctor: derived derived
+dtor: derived derived
+dtor: derived
+dtor: base
+--} main 
+
 
 <explanation-one>
 
@@ -7197,8 +7257,8 @@ designed for no inheritance like STL. See {preventing-inheritance}
 
 {pure-virtual-dtor}
 
-EC++07. This explains that dtor should be virtual and have implementation in case pure virtual dtor
-and ABC. 
+EC++07. Why use this? This explains that dtor should be virtual and have implementation in case pure
+virtual dtor and ABC. 
 
 class AWOW {
 	 public:
@@ -8483,12 +8543,14 @@ class Disc_quote : public Quote {
 };
 
 
-<Q> Why define ctors although cannot define objects of this type directly? because of constuction
-chain. If user do not provide ctors, compiler will provides so ther always is construction chain but
-not initialisation chain.
+<QQ> Why define ctors although cannot define objects of this type directly? because of constuction
+and destruction chain. See {non-virtual-destruction-problem} If user do not provide ctors, compiler
+will provides so ther always is construction chain but not initialisation chain.
 
 When deriving a class from the ABC, don't override a pure virtual func then the derived also becomes
 ABC.
+
+Also, ABC can have implementations and see interface-class and tizen case.
 
 
 ==============================================================================
