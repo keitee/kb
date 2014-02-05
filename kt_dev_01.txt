@@ -6,9 +6,10 @@ TODO:
 - move controls in C++11.
 
 Keywords:
-{Q} for questions to find out more
+{QQ} for questions to find out more
 {DN} for design considerations
 {BP} for best practice
+{IF} for interesting
 
 KT KB. DEVELOPMENT.
 
@@ -1753,6 +1754,13 @@ GCC 4.4.5 do.
 
 From GCC 45. See *kt_dev_cpp_005* for more.
 
+
+{class-initializers}
+
+For GCC 463 it emit error:
+usecomma.cpp:5:19: sorry, unimplemented: non-static data member initialisers
+
+
 {c++11}
 
 http://gcc.gnu.org/projects/cxx0x.html
@@ -3056,6 +3064,8 @@ time execution reaches the definition, not necessarily during the program's init
 
 <file-static-mean>
 
+This applies to a function so if define static function, it has file scope. 
+
 // file one
 #include < iostream>
 
@@ -3109,9 +3119,9 @@ collect2: ld returned 1 exit status
 make: *** [main] Error 1
 
 
-{static-init-order-problem}
+{init-order-problem}
 
-The second difference can be useful to avoid the static intialisation order fiasco, where global
+The second difference can be useful to avoid the intialisation order fiasco, where global
 variables(non-local static) can be accessed before they are initialised. By replacing the global
 variable with a function that returns a reference to a local static variable, you can guarantee that
 it is initialised before anything accesses it. 
@@ -3377,7 +3387,7 @@ o no creation if no func call. An object that is static in a class is, for all i
 always constructed (and destructed), even if it is never used. KT: This has nothing to do with
 static because class member object will be created regardless of static.
 
-o prevent {static-init-order-problem} since this could happen anything but function-static.
+o prevent {init-order-problem} since this could happen anything but function-static.
 
 KT. This method do lazy-initialisation automatically and seems to be a good alternative to
 singletone?
@@ -4819,7 +4829,7 @@ VC shows:
 Error	1	error C2512: 'NoDefCtor' : no appropriate default constructor available
 
 
-<syntax>
+<syntax> It seems that it must be done in class definition.
 
 class Derived: public Base {
 	 public:
@@ -5285,9 +5295,10 @@ this, can cause link errors when there are attempts to use.
 
 <boost-noncopyable>
 
-EC++06. To move the link-time error up to the compile-time error:
+EC++06. To move the link-time error up to the compile-time error. {QQ} This still do not have
+definitions but why compile error this time?
 
-#include <iostream>
+#include < iostream>
 
 class Uncopyable {
 	 protected:
@@ -6215,6 +6226,9 @@ pair<string, int> process(vector< string> &v)
 Here explicitly constructed return pair [temp-object]. 'pair<string, int>' is T. That is T() and so is
 default constructed and value-init.
 
+See {return-reference-vs-copy} for interesting case. So whether or not there is a temp object
+created in called site, there is a copy to call site when a func is defined to return a copy.
+
 
 {temp-object-in-converison} {cost-of-temp-object}
 
@@ -7012,7 +7026,10 @@ double Foo::interest = initRate();			// define and init
 
 {class-const}
 
-EC++02. If it's const, it limit the scope of a constant to a class and can use in-class-init.
+EC++02. If it's const, it limit the scope of a constant to a class and can use in-class-init. Must
+be static const and otherwise got error:
+
+usecomma.cpp:8:13: error: invalid use of non-static data member ‘Foo::MAX’
 
 <in-h>
 class Foo {
@@ -7032,7 +7049,7 @@ double Foo::interest;							// define and 'must' not init
 {what-class-method-can-access}
 
 The static member func, class-method, do not have [this-pointer] because no need to distinguish
-objects and this means static member func can only use static data member.
+objects and this means static member func can only use static member data.
 
 
 {summary}
@@ -7041,7 +7058,9 @@ After all, class-method and class-variable is to provide safer way to golbal obj
 
 o easy access as global, no need to create an object to use, but in the class scope.
 o created only when it is used. It is true for <function-static> in {limit-the-number-of-object}.
-o to solve {static-init-order-problem}
+o to solve {init-order-problem}
+
+The bottom line is that static is global but we can limit its scope to file, class, or function.
 
 
 ==============================================================================
@@ -7049,8 +7068,8 @@ o to solve {static-init-order-problem}
 
 {running-order}
 
-It is opposite to ctor in destruction order; body first and implicit member destruction after. under
-inheritence, 
+It is opposite to ctor in destruction order; dtor body first and then implicit member destruction
+under inheritence, 
 
 ------------> ctor
 base 	derived
@@ -7085,24 +7104,26 @@ int main(int argc, char** argv)
     cout << "end of main" << endl;
 }
 
-kt@kt-ub-vb:~/c++$ ./a.out 
+$ ./a.out 
 base ctor
 derived ctor
 end of main
 derived dtor
 base dtor
 
-KT: This is staic binding so compiler knows that this is derived object and do dtor phase from
-derived to base. compare with {non-virtual-destruction-problem}
+KT: This is staic binding so compiler knows that this is derived object. Regardless of binding type
+derived dtor has a call to base dtors. This {non-virtual-destruction-problem} only mean to fail to
+pick up derived dtor.
 
 
-{syn-version}
+{syn-version-is-non-virtual} {dtor-in-derived-classes}
 
 dtor is one of copy controls in *kt_dev_cpp_003* and means if not defined, the compiler will make
 one which is non-virtual. 
 
-virtual is only used in class definition and it's virtual in base then all deriveds are virtual. KT:
-not for dtor because can create derived object when base has a pure virtual dtor as {pure-virtual-dtor}
+virtual is only used in class definition and for other functions, if it's virtual in base then all
+deriveds are virtual. How about dtor? KT: not for dtor because can create derived object when base
+has a pure virtual dtor as {pure-virtual-dtor}
 
 class Foo {
 	 virtual ~Foo() {}
@@ -7119,7 +7140,7 @@ destroyed. In GCC, no runtime error in simple test.
 
 <explanation-one>
 
-KT. Why only base part when no virtual? Use [static-type]. The static-type is base class but no
+KT. Why only base part when no virtual dtor? Use [static-type]. The static-type is base class but no
 virtual. So do not run down virtual to derived. Hence runs base dtor only. 
 
 If base dtor was virtual, will run down virtual path and start from derived dtor which calls chains
@@ -7127,8 +7148,8 @@ up to base. This means that every base shall have virtual dtor.
 
 <explanation-two> {how-virtual-works}
 
-KT. Why only base part when no virtual? Simply derived class's vtable is not updated and still have
-base one. Hence base dtor calls. 
+KT. Why only base part when no virtual dtor? Simply derived class's vtable is not updated and still
+have base one. Hence base dtor calls. 
 
 Class1 (base)  <- Class2 (derived)
 
@@ -7167,13 +7188,8 @@ and <2>
 designed for inheritance and defined virtual funcs. 'must' use virtual dtor.
 
 <2> base class to extend 
-designed for inheritance but no virtual funcs. means no overrides and add more funcs. If no virtual
-dtor, this causes virtual-destruction-problem. 
-
-note: the follwing is not clear.
-(thought that base can have virtuals in this case because leave chances of overrides open despite of
-size increase. Think Uncopyable example and less likely to use point of base to use
-derived(manipulation of derived object via base class interface))
+designed for inheritance but no virtual funcs. means no overrides and add more funcs. However, if no
+virtual dtor, this causes virtual-destruction-problem. 
 
 <3> base class not to be inherited
 designed for no inheritance like STL. See {preventing-inheritance} 
@@ -7181,7 +7197,8 @@ designed for no inheritance like STL. See {preventing-inheritance}
 
 {pure-virtual-dtor}
 
-EC++07. To address non-virtual-destruction-problem and to have abstract base class,
+EC++07. This explains that dtor should be virtual and have implementation in case pure virtual dtor
+and ABC. 
 
 class AWOW {
 	 public:
@@ -7192,7 +7209,6 @@ AWOW::~AWOW() {}
 
 The pure-virtual-dtor [must] have a definition(implementation) and [must] be implemeted outside
 class definitions.
-
 
 MEC++33. Pure virtual do not mean it has no implementation and means that the class is abstract and
 the derived func must be nomal virtual. True, most pure virtual functions are never implemented, but
