@@ -4939,7 +4939,7 @@ objects types and use pass-by-reference for class types.
 2) The const is necessary since otherwise caller would have to worry about a function making changes
 to the object they passed in.
 
-3) Avoid <slice-off> problem. For example:
+3) Avoid <sliced-off> problem. For example:
 
 class Window {
 	public:
@@ -4974,10 +4974,9 @@ void printNameAndDisplay(const Window& w)
 }
 
 
-(EC++21)
-Then always use reference? However, there are cases that must return a copy not a reference such as
-operator*(). This is product operator not dereferene operator. See {smart-pointer-internal}. Q: How
-distinguish between two?
+EC++21. Then always use reference? However, there are cases that must return a copy not a reference
+such as operator*(). This is product operator not dereferene operator. See {smart-pointer-internal}.
+Q: How distinguish between two?
 
 Do not pass reference to object that do not exist.
 
@@ -7396,30 +7395,34 @@ Blob< T>::Blob( std::initialzer_list< T>il) try : data( std::make_shared< std::v
 catch ( const std::bad_alloc& e) { handle_out_of_memory(e); }
 
 
-{exception-in-dtor} {swallow-exception} {resource-managing-class}
+{problem-of-exception-in-dtor}
 
-void f()
-{
-	 // createInvestment() is factory-func that returns a pointer to dyn created resource or derived
-	 // class. client must delete it after use
+Why exception in dtor is the problem? because as said, func call tree can exit prematurely during
+stack-unwinding and this means local objects are destroyed. If dtor can raise an execption, ends up
+having two exception which is not allowed so terminate will be called. EC++08 says that terminate is
+called or undefined. Hence 
 
-	 Investment* pInv = createInvestment();
+o The <permature-program-termination> which can means no chance to do useful things to handle
+exception such as clean-up and to do what is useful before terminating or swallowing. For example,
+make a log entry.
 
-	 // [problem] code that throws an exception that is not caught inside f. may not reach to delete
-	 // statement
+So usually no exception in dtor and if do, should handle in the same dtor. STL guarantee thar dtor
+will not raise an execption.
 
-	 delete pInv;
-}
 
-To solve this, use resource-managing-class and the fact that dtor is called automatically when
-object is destroyed. See {resource-managing-class} in *kt_dev_stl_018* for various solutions and for
-cases dtors which execption happens.
+{exception-and-resource-managing-class}
+
+To handle exception, shall use resource-managing-class, ie., RAII and see {resource-managing-class}
+in *kt_dev_stl_018* for various solutions.
 
 
 {how-to-handle-exeception-in-dtor}
 
-See {raii-for-resource-using-own-interface} for examples. From EC++08: This shows how to handle when
-exception happens in own resource create and destory func.
+See {raii-for-resource-using-own-interface} for other examples. From EC++08. General recommendation
+is not to raise exception in dtor. If own interface comes from external source then it could raise
+an exception. What to do? These are how to handle when exception happens in dtor.
+
+TODO: check code example
 
 class DBConnection {
 	 public:
@@ -7428,9 +7431,10 @@ class DBConnection {
 	 void close();                    // can throw exception
 };
 
+// resource managing class
 class DBConn {
 	 public:
-	 ~DBConn() { db.close(); }        // resource managing class
+	 ~DBConn() { db.close(); }        
 
 	 private:
 	 DBConnection db;
@@ -7440,6 +7444,7 @@ class DBConn {
 //
 {
 	 DBConn dbc( DBConnection::create() );
+	 ...
 }
 
 Two approach to address exception in dtor:
@@ -7458,7 +7463,6 @@ DBConn::~DBConn()
 note: or can use {noexcept} at below? seems not as no chance to do useful thing such as making a log
 entry.
 
-
 <2> swallow the exception
 
 DBConn::~DBConn()
@@ -7469,9 +7473,7 @@ DBConn::~DBConn()
 	 }
 }
 
-<3>
-
-However, said that the better way is:
+<3> However, said that the better way is:
 
 class DBConn {
 	 public:
@@ -7499,11 +7501,11 @@ class DBConn {
 	 bool closed;
 };
 
-The client have an opportunity to handle the problem and if not handle, back to terminating or
-swallowing.
 
-/* client use
- */
+The client have an opportunity to handle the problem and if not handle, back to terminating or
+swallowing. However, this need client to do more.
+
+// client use
 {
 	 DBConn dbc( DBConnection::create() );
 
@@ -7513,21 +7515,6 @@ swallowing.
 		  // try to address exception and if successful, set closed to true.
 	 }
 }
-
-
-{problem-of-exception-in-dtor}
-
-Why exception in dtor is the problem? because as said, func call tree can exit prematurely during
-stack-unwinding and this means local objects are destroyed. If dtor can raise an execption, ends up
-having two exception which is not allowed so terminate will be called. EC++08 says that terminate is
-called or undefined. Hence 
-
-o The <permature-program-termination> which can means no chance to do useful things to handle
-exception such as clean-up and to do what is useful before terminating or swallowing. For example,
-make a log entry.
-
-So usually no exception in dtor and if do, should handle in the same dtor. STL guarantee thar dtor
-will not raise an execption.
 
 
 {exception-object} {user-defined-exception-object}
@@ -7542,32 +7529,32 @@ try {
 	 ...
 }
 
-When use one other than standard exception, #include <stdexcept>.
-
 Use throw-expression [to-copy-init-special-object], exception object. if it's a class type, must
-have dtor and copy or move op. if it's array or func type, it's converted to its pointer type. 
+have dtor and copy or move op. If it's array or func type, it's converted to its pointer type. {QQ}
+If it is array, must be in heap since there is no connection between call and called site?
 
-Because there's a stack-unwinding, must not to throw a pointer to a local object. copied to
-exception object that is manintained by compiler and remains vaild <until> catched.
+Because there's a stack-unwinding, must not to throw a pointer to a local object. Hence exception
+object is copied that is manintained by compiler and remains vaild <until> catched.
 
-If thrown object comes from class inheritance and deferences a pointer of base class that points
-derived, it will be sliced down; only base-class part is thrown. static and compile-time type.
-{sliced-down} in *kt_dev_cpp_022* Note: WHEN THROW
+If thrown object comes from class inheritance and then deferences a pointer of base class that
+points derived, a copy will be made but it will be sliced-off because used dereference to copy. See
+{sliced-off} in *kt_dev_cpp_022* 
 
-Exception declaration like a parm list with one param:
+Exception is like a functin call and exception declaration is like a function with one param. Like
+function call, [catch] param can be non-refernce or reference. if it's class type and non-reference
+then {sliced-off} How can use reference in catch since there is separation between throw and catch
+site? Because exception object is held in global space by a compiler.
 
 throw arg -> (copy init) -> exception object -> (copy init) -> catch (param)
-         
-Like func, catch param can be non-ref or ref. if it's class and non-ref, {sliced-down}
 
 
-{{exception-object-always-copied}}
+<exception-object-always-copied>
 
 From MEC++12. The execution return to call site for func call but never for exception. This means
 that when throw, a copy is <always> made regardless of catch type whether it is value or reference
 because throw leaves a call site.
 
-<example-one>
+// example-one
 
 catch( Widget& w )
 {
@@ -7576,10 +7563,9 @@ catch( Widget& w )
 }
 
 Use 'current' exception and throw it again. 'rethrow'. So there is no addtional copy made and w can
-be a derived class in Widget inheritance.
+be a derived class in Widget inheritance. KT if throwed a derived.
 
-
-<example-two>
+// example-two
 
 catch( Widget& w )
 {
@@ -7587,23 +7573,23 @@ catch( Widget& w )
 	 throw w;
 }
 
-Create a new Widget type exception and cost create and copy operation. Also, always throw Widget
-type. Therefore, <example-one> is recommended.
+This create a new Widget type exception and cost create and copy operation. Also, always throw
+Widget type. Therefore, <example-one> is recommended.
 
 
-{{exception-object-type-conversion}}
+<exception-object-type-conversion>
 
-Limited type conversion for exception. Support <inheritance-based-conversion> that means catch(base
-class type) can catch exception object of derived class. Also catch uses the order of appearance,
-called <first-fit> strategy. ( compared to <best-fit> in virtual func )
+Limited type conversion for exception. Support <inheritance-based-conversion> that means catch using
+base class type can catch exception object of derived class. Also catch uses the order of appearance
+in code, called <first-fit> strategy compared to <best-fit> in function-matching.
 
-In STL exception tree, logic_error <- invalid_argument
+In STL exception tree, logic_error is up than invalid_argument
 
 try {
 	 ...
-} catch ( logic_error& ex ) {
+	} catch ( logic_error& ex ) {
 	 ...
-} catch ( invalid_argument& ex ) {
+	} catch ( invalid_argument& ex ) {
 	 ...
 }
 
@@ -7611,22 +7597,25 @@ Should be:
 
 try {
 	 ...
-} catch ( invalid_argument& ex ) {
+	} catch ( invalid_argument& ex ) {
 	 ...
-} catch ( logic_error& ex ) {
+	} catch ( logic_error& ex ) {
 	 ...
 }
 
-Because if first-match is found then look no further. Menas that the second catch never gets run.
+Because if first-match is found then look no further. Menas that the second catch never gets run
+regardless of throw type since conversion happens in the first catch.
 
 
-{{exception-object-catch-by-reference}}
+<exception-catch-by-reference>
 
-o catch by pointer   : do not know if it should call delete on it because do not know if it is
-created by new or not.
+1. catch by pointer, do not know if it should call delete on it because do not know if it is created
+by new or not.
 
-o catch by value     : sliced-down can happen.
-o catch by reference : okay for both problems above.
+2. catch by value, sliced-off can happen.
+3. catch by reference, okay for both problems above.
+
+These means catch by referecne is recommendation.
 
 
 {when-exception-spec-mismatch}
@@ -7635,7 +7624,7 @@ From MEC++14. If there is a mismatch of 'spec' between throw and catch,
 <permature-program-termination> happens: unexpected() -> terminated() -> abort(). This means no
 clean-up so should be avoided.
 
-{{example}}
+// example
 
 extern void f1();       // may throw anything
 void f2() throw (int);  // says it will throw only int type exception
@@ -7648,7 +7637,7 @@ void f2() throw (int)
 }
 
 By this, can wrap old code with new code that handles exception. But if f1() raise exception other
-than int, 'violate' f2's exception specification.
+than int type, 'violate' f2's exception specification.
 
 How to minimise these?
 
@@ -7657,7 +7646,7 @@ How to minimise these?
 raise unexpected exception:
 
 
-{default-exception-handler}
+<default-exception-handler>
 
 class UnexpectedException { };
 
@@ -7679,10 +7668,10 @@ set_unexpected( convertUnexpected );
 This convert all to <bad_exception> but no detail about why. Q: why bad_exec?
 
 
-{another-permature-program-termination}
+<another-permature-program-termination>
 
 This can block a exception handling of higher level. If logDestruction is declared that raise no
-exception but raise it, then terminated and do not reach to ~Session.
+exception but raise it, then terminated and do not reach to ~Session().
 
 Session::~Session()
 {
@@ -7696,7 +7685,7 @@ Session::~Session()
 {exception-safe}
 
 See {self-assign-and-exception-safe} for reasons why need to handle self-assign. If new raise
-exception, lhs state don't change but the below don't. so the below isn't exception safe.
+exception, lhs state don't change but the below don't. So the below isn't exception safe.
 
 // NO self-assign and exception-safe in value-like case
 // 
@@ -7718,8 +7707,7 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 	 return *this;
 }
 
-
-EC++11. Making operator= exception-safe typically renders it self-assign-safe too. so think about
+EC++11. Making operator= exception-safe typically renders it self-assign-safe too. So think about
 exception-safe only. See {copy-and-swap-idiom} in *kt_dev_cpp_006*
 
 
@@ -7727,16 +7715,16 @@ exception-safe only. See {copy-and-swap-idiom} in *kt_dev_cpp_006*
 
 EC++29. Two requirements for exception safety when exception happens:
 
-No resource leak and No change of object state.
+NO resource leak and NO change of object state.
 
-The funcs can offer one of four gurantees:
+Therfore, a function can offer one of four gurantees:
 
-<1> None. not exception-safe.
-<2> basic. valid object state.
-<3> strong. unchaned object state.
-<4> noexcept 
+1. None. not exception-safe.
+2. basic. valid object state.
+3. strong. unchaned object state.
+4. noexcept. never.
  
-The following offer 'almost' strong guarantee when param Image ctor can emit exception in ctor :
+The following offers 'almost' strong guarantee when param Image ctor can emit exception in ctor :
 
 // from the bad exaple
 //
@@ -7761,9 +7749,8 @@ void PrettyMenu::changeBackGround( std::istream& imgSrc )
 	 ++imageChanges;
 };
 
-The deletion takes place only if the new image is successfully created because reset will be called
-only if the parameter is successfully created.
-
+The deletion of old image takes place only if the new image is successfully created because reset
+will be called only if the parameter is successfully created.
 
 General design to lead to the strong guarantee: use {copy-and-swap-idiom} and {pimpl-idiom} in
 *kt_dev_cpp_006* 
@@ -7785,7 +7772,7 @@ with the original in non-throwing op.
 <pimpl-idiom-case>
 
 The object has a pointer to the implementation that has all object data. This can be rewritten as
-general design although offer no better gurarantee than the previous for this particular exam.
+general design although offer no better gurarantee than the previous for this particular example.
 
 struct PMImpl {
 	 std::shard_ptr< Image > bgImage;
@@ -7851,14 +7838,14 @@ amount if you use try blocks. So try to minimise the use.
 
 But think 80-20 rule and that exception is rare. Recommendation is that think if it is feasible not
 to use exception, if can minimise, if can use other compiler showing better exception
-implementation, and if use profiler to find out 20%.
+implementation, and if use profiler to find out 20% to use exception.
 
 
-{{exception-to-disable}}
+<exception-to-disable>
 
 From stackoverflow and said G++ specific.
 
-Option #1: Simply never catch exceptions.
+Option #1: Simply never catch exceptions. {QQ} really?
 
 Exceptions don't have much overhead when they're not thrown or caught; if you're throwing and not
 prepared to catch, well, you're doing to die anyway, so the performance impact at that point is
@@ -8057,13 +8044,14 @@ Quote& r = bulk;
 
 If do followings with p or r:
 
-<1> calls non-virtual funcs of base then get base version.
-<2> calls virtual funcs of base then get derived version. 
-<3> calls any func of derived then compile error.
-<4> deference and copy then sliced-down.
+1: calls non-virtual funcs of base then get base version. static
+2: calls virtual funcs of base then get derived version. dynamic
+3: calls any func of derived then compile error.
+4: deference and copy then sliced-off. static
 
+{QQ} How compiler know whether it is normal function or virtual function call?
 
-{example-reference}
+// example-reference
 
 class Bulk_quote : public Quote {
 	 public:
@@ -8084,36 +8072,29 @@ print_total( item );          // Quote version
 print_total( bulk_item );     // Bulk version. dynamic-binding.
 
 
-{sliced-down} {static-binding}
+{sliced-off} {static-binding} {dynamic-binding}
 
-Staic binding at compile time. 
-
-<copy-ctor> and <copy-assign> are func calls and derived-to-base-conversion happens when base's
-copy-int and copy-assign is called. But knows only about base and derived part is ignored because do
-copying and hence only know about <static-type>. 
+The staic binding is done at compile time. <copy-ctor> and <copy-assign> are func calls and
+derived-to-base-conversion happens when base's copy-int and copy-assign is called. But knows only
+about base and derived part is ignored because do copying and hence only know about <static-type>. 
 
 class Foo {
-	Foo(const &Foo);
+	Foo(const Foo&);
 	Foo& operator=(const Foo&);
 };
 
 
-{summary-dynamic-binding}
+KT: The above explanation is a bit vague. In summary, compiler always use <static-type> but use
+dynamic-type only if it is virtual function call. 
 
-KT: In sum, compiler always use <static-type> but if it is virtual calls then looks up vtable and
-get derived version.
+// example-one
 
+Quote item(bulk);         # sliced-off
+item = bulk;              # sliced-off
 
-{{example-one}}
+// example-two
 
-Quote item(bulk);         # slice-down
-item = bulk;              # slice-down
-
-{{example-two}}
-
-From MEC++33:
-
-When there are concrete classes like this:
+From MEC++33. When there are concrete classes like this:
 
 base <- derived1
      <- derived2
@@ -8121,7 +8102,7 @@ base <- derived1
 The problem case is:
 
 o obj = obj;               # the same class. fine
-o baseobj = derivedobj;    # slice-off
+o baseobj = derivedobj;    # sliced-off
 o derivedobj = baseobj;    # compile error
 
 From GCC:
@@ -8134,17 +8115,16 @@ Note: this is a syn coy-ctor that a compiler created.
 
 
 o *baseptr = *baseptr;     # the same class. fine
-o *baseptr = *baseptr;     # diff. base = derived. slice-off. <1>
-o *baseptr = *baseptr;     # diff. derived = base. slice-off. <2> [no-compile-error] 
+o *baseptr = *baseptr;     # diff. base = derived. sliced-off. <1>
+o *baseptr = *baseptr;     # diff. derived = base. sliced-off. <2> [no-compile-error] 
 
 Why different in result? Because a compiler use <static-type> and only base part will be copied for
 <1> and <2>.
 
 So two problem here:
 
-o slice-off with no comiple error when use pointer
+o sliced-off with no comiple error when use pointer
 o real programmers write code like this.
-
 
 How can we make it compile error to flag up two cases, <1> and <2>, in compile time? That is to make
 it difficult to use incorrectly. <Q> So what's the solution? need to summarise the followings again.
@@ -8190,7 +8170,7 @@ So not a solution.
 
 <approach-to-make-abstract-class>
 
-To remove slice-off cases, make the base abstract and all derived on the same level. MEC++ says it
+To remove sliced-off cases, make the base abstract and all derived on the same level. MEC++ says it
 as make non-leaf classes abstract.
 
 This only enables copys between objects in the same class whether it is via object or pointer.
@@ -10686,8 +10666,25 @@ emplace construct a object directly in a container. no copy.
 
 {resource-acquisition-is-initialization} {resource-managing-class}
 
-EC++13. See {exception-in-dtor} in *kt_dev_cpp_019* in that the factory-func returns raw pointer so
-client is reponsible to free after use.
+EC++13. Why RAII? When use dynamic resource, client is fully resposible for releasing it after use.
+However, when exception happens, the usual path is interrupted and may cannot release it as
+expected.
+
+void f()
+{
+	 // createInvestment() is factory-func that returns a pointer to dyn created resource or derived
+	 // class. client must delete it after use
+
+	 Investment* pInv = createInvestment();
+
+	 // [problem] code that throws an exception that is not caught inside f. may not reach to delete
+	 // statement
+
+	 delete pInv;
+}
+
+To solve this, use resource-managing-class and the fact that dtor is called automatically when
+object is destroyed. Hence called RAII and solutions are: 
 
 <try-block-approach>
 
@@ -10894,34 +10891,33 @@ shared_ptr<list<int >> plist;
 
 {make-shared}
 
-alloc and init T and return a shared_ptr< T>
+It will alloc and init T and return a shared_ptr< T>
 
 shard_prt< string > p4 = make_shared< string>(10, '9');
 auto p6 = make_shared<vector< sting>>();	// create empty vector< string>
 
-it's recommeneded because do alloc and bind at the same time. (it's possible to do 'alloc'
-and 'bind shared_ptr with ptr' later.)
+This is recommeneded because do alloc and bind at the same time. By the way, it's possible to do
+'alloc' and 'bind shared_ptr with ptr' later.
 
 
-{when-use-reset}
+{when-use-reset-to-assign-new-pointer} {unique-and-reset}
 
-Why not assignment instead of using reset? To assign a new pointer to a shared_ptr:
+Why not assignment instead of using reset? [KT] Think that = operator is to decrease a reference
+counter of right and to do the opposite for left and cannot do it on new objects. To assign a new
+pointer to a shared_ptr. Like assignment, reset updates reference count of left. If sp is the only
+shared_ptr pointing at its object, reset frees sp's existing object. If q is passed, makes sp points
+to q, otherwise makes sp null.
+
+sp.reset(); or sp.reset(q);
 
 shared_ptr< int> p (new int(42));
 p = new int(1024);						// [error]
 p.reset( new int(1024));
 
 
-{unique-and-reset}
+To check how many users are. Return bool on whether there is the only user of this sp.
 
 sp.unique();
-
-Return bool on whether it's the only user of this sp.
-
-sp.reset(); or sp.reset(q);
-
-Like assignment, reset updates reference count. If sp is the only shared_ptr pointing at its object,
-reset frees sp's existing object. If q is passed, makes sp points to q, otherwise makes sp null.
 
 Often to check whether we are the only user before changing the underlying object:
 
@@ -10962,9 +10958,7 @@ class StrBlob {
 	 ...
 
 	 private:
-
 	 std::shared_ptr<std::vector<std::string>> data;
-
 	 ...
 };
 
@@ -10986,8 +10980,8 @@ string& StrBlob::back()
 }
 
 
-This case don't define 'copy-controls' and use syn versions but not a problem as it uses
-shared_ptr. that's why shared_ptr is useful.
+This case don't define 'copy-controls' and use syn versions but not a problem as it uses shared_ptr.
+that's why shared_ptr is useful. ~
 
 
 {use-example}
@@ -11031,23 +11025,22 @@ void f()
 
 {unique-ptr} {auto-ptr}
 
-it was auto_ptr before and it has only one user because no copy and assign are supported.
-so limit ptr's use and transfer ownerships.
+This was auto_ptr before and it has only one user because no copy and assign are supported. so limit
+the use and it transfer ownerships.
 
-release() return the pointer it held and make it null so reset/release pair transfer
-ownerships.
-
+The release() return the pointer it held and make it null so reset/release pair transfer ownerships.
 
 unique_ptr< int > p2( new int(42) );
-unique_ptr< int > p1( new string("Primus") );
-unique_ptr< int > p2( p1.release() );				// p1 becomes null. transfer ownership.
-unique_ptr< int > p3( new string("Fred") );
+unique_ptr< string > p1( new string("Primus") );
 
-// reset delete a mem p2 points and set it with pointer p3 points. transfer ownership.
+unique_ptr< int > p2( p1.release() );				// p1 becomes null. transfer ownership.
+unique_ptr< string > p3( new string("Fred") );
+
+// reset delete a mem that p2 points and set it with pointer p3 points. transfer ownership.
 p2.reset( p3.release() );								
 
-as with shared_ptr, can set 'deleter' but use different form. refer to {member-template}
-in *kt_dev_cpp_025*
+As with shared_ptr, can set 'deleter' but use different form. refer to {member-template} in
+*kt_dev_cpp_025*
 
 
 {weak-ptr}
@@ -11056,9 +11049,9 @@ not sure when it's useful although p474 shows an example that's not appealing.
 
 
 {get-func}
-(EC++ #15)
-Returns raw resource (underlying pointer). said it converts an RAII object into the raw
-resource. explicit conversion.
+
+EC++15. Returns raw resource (underlying pointer). said it converts an RAII object into the raw
+resource. Explicit conversion.
 
 >
  Is this contrary to encapsulation? true but RAII donesn't exist to encapsulate something.
@@ -11138,7 +11131,7 @@ T& SmartPtr< T>::operator*() const
 
 See return as reference because:
 
-o *pointee can be derived class in inheritance. Avoid slice-off.
+o *pointee can be derived class in inheritance. Avoid sliced-off.
 o More efficient. No temp object.
 
 

@@ -5,6 +5,7 @@ aTue 07 Jan 2014 05:07:39 GMT
 Keywords:
 {Q} for questions to find out more
 {design-note} for design considerations
+{LL} for lessons learned
 
 KT KB. DEVELOPMENT.
 
@@ -2654,6 +2655,7 @@ by node, carrying over any excess to the next node.
 +5 -> 9 -> 2
 ------------
  2 -> 1 -> 9
+ ----------> pass carry forward
 
 Be careful to handle the condition when one list is shorter than another.
 
@@ -2687,6 +2689,191 @@ LinkedListNode addLists( LinkedListNode lone, LinkedListNode ltwo, int carry )
 	return result;
 }
 
+<code-example>
+
+#include <iostream>
+#include <cstdlib>
+
+typedef int ListEntry;
+
+typedef struct node
+{
+	ListEntry 	entry;
+	node*			pnext;
+} ListNode;
+
+typedef struct {
+   int   count;
+	ListNode*	header;
+} List;
+
+ListNode* MakeListNode( ListEntry entry )
+{
+	ListNode* pnode = NULL;
+
+	if( (pnode = (ListNode*) malloc( sizeof(ListNode))) == NULL )
+	{
+		std::cout << "no more memory" << std::endl;
+		return NULL;
+	}
+
+	pnode->entry = entry;
+	pnode->pnext = NULL;
+
+	return pnode;
+}
+
+void CreatList( List* list )
+{ 
+   list->count = 0;
+   list->header = NULL; 
+}	
+
+bool ListEmpty( List* list )
+{ return ( list->header == NULL ); }
+
+// add only at the end
+bool ListAdd( List* list, ListEntry entry )
+{
+	ListNode* pnode, *pend;
+
+	if( (pnode = MakeListNode(entry)) == NULL )
+	{
+		std::cout << "add: mem is full" << std::endl;
+		return false;
+	}
+
+   if( ListEmpty( list ) )
+   {
+      list->header = pnode;
+   }
+   else
+   {
+      for( pend = list->header; pend->pnext; pend = pend->pnext )
+         ;
+
+      pend->pnext = pnode;
+   }
+
+   list->count++;
+
+   std::cout << "add: added " << entry << ", count " << list->count << std::endl;
+
+	return true;
+}
+
+typedef void(*TRAVERSEFUNC)(ListEntry);	
+
+void ListTraverse( List* list, TRAVERSEFUNC func)
+{
+	ListNode* pnode;
+
+	if( ListEmpty(list) )
+	{
+		std::cout << "list is empty" << std::endl;
+		return;
+	}
+	
+	pnode = list->header;
+
+	while(pnode)
+	{
+		func(pnode->entry);
+		pnode = pnode->pnext;
+	}
+}
+
+void EntryPrint(ListEntry item)
+{
+   std::cout << "item is: " << item << std::endl;
+}
+
+ListNode* sumLists( ListNode *one, ListNode *two, ListEntry carry )
+{
+	if( one == NULL && two == NULL )
+		return NULL;
+
+	ListNode* pnode = MakeListNode( carry );
+	if(!pnode)
+	{
+		std::cout << "sumLists: mem is full" << std::endl;
+		return NULL;
+	}
+
+	if( one != NULL )
+		carry += one->entry;
+
+	if( two != NULL )
+		carry += two->entry;
+
+	pnode->entry = carry % 10;
+
+// This was an attempt to reduce one recursive call because the book's approach make a one last call
+// when both input node is null. For example
+//
+// 1->2->X
+// 3->4->5->X // here a call made to X on this list
+//
+// However, this cause a crash because when one of both is null, cannot use one->pnext or
+// two->pnext.
+//
+// {LL} When use recursive, must careful about NULL and accessing data from NULL.
+//
+//	if( one->pnext != NULL || two->pnext != NULL )
+//		pnode->pnext = sumLists( one->pnext, two->pnext, carry >= 10 ? 1 : 0 );
+//
+
+	if( one != NULL || two != NULL )
+		pnode->pnext = sumLists( one == NULL ? NULL : one->pnext, two == NULL ? NULL : two->pnext, 
+				carry >= 10 ? 1 : 0 );
+
+	return pnode;
+}
+
+int main()
+{
+	int item = 0;
+
+	// first
+	List first;
+	CreatList(&first);
+
+	std::cout << "type in 2 numbers." << std::endl;
+
+	for(int i=0; i < 2; i++)
+	{
+		std::cin >> item;
+		ListAdd(&first, item );
+	}		
+
+	// second
+	List second;
+	CreatList(&second);
+
+	std::cout << "type in 3 numbers." << std::endl;
+
+	for(int i=0; i < 3; i++)
+	{
+		std::cin >> item;
+		ListAdd(&second, item );
+	}		
+
+	std::cout << "first:" << std::endl;
+	ListTraverse(&first, EntryPrint);
+
+	std::cout << "=======" << std::endl;
+	std::cout << "second:" << std::endl;
+	ListTraverse(&second, EntryPrint);
+
+	// sum
+	List sum;
+	CreatList(&sum);
+
+	sum.header = sumLists( first.header, second.header, 0 );
+
+	ListTraverse(&sum, EntryPrint);
+}
+
 
 [KT] If there is no need to build a list for a result, simply follow a list and build number and do
 integer addition.
@@ -2704,9 +2891,9 @@ Two complications:
 5 should be matched with the 2, not the 1. How? Compare the length of the lists and pad the shorter
 list with zeros.
 
-- In the previois, the successive results were added to the tail, ie., passed forward. In this case
-results are added to the head, ie., passed backward. This time recursive call must return the carry
-as well.
+- In the previois, the successive results were added to the tail, ie., passed carry forward. In this
+case results are added to the head, ie., passed backward. This time recursive call must return the
+carry as well.
 
 public class PartialSum {
 	public LinkedListNode sum = null;
