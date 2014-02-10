@@ -30,7 +30,7 @@ ISSUES and CODES
 |kt_dev_prob_006|	print ansi color 
 |kt_dev_prob_007|	random number {time}
 |kt_dev_prob_008|	elapsed time {clock}
-|kt_dev_prob_009|	debug printf {stdarg} {macro} {why-ellipses-dangerous}
+|kt_dev_prob_009|	debug printf {stdarg} {macro} {why-ellipses-dangerous} {ndebug}
 
 GCC
 
@@ -525,6 +525,11 @@ void Usuage()
 
 ==============================================================================
 *kt_dev_prob_009*	debug printf 
+
+{ndebug}
+The assert macro is defined in cassert header. It depends on a preprocessor varaible named NDEBUG.
+If NDEBUG is defined, assert do nothing. By default, it's not defined.
+
 
 {useful-macros}
 
@@ -4839,6 +4844,19 @@ class Derived: public Base {
 
 {default-arg}
 
+The default argument in function. If a parameter has a default argument, all the parameters that
+follow it must also have default arguments. The default arguments are used from right-most
+arguments.
+
+typedef string::size_type sz;
+string screen( sz ht = 24, sz wid = 80, char background = ' ' );
+
+string window = screen();				// == screen( 24, 80, ' ');
+string window = screen(66);			// == screen( 66, 80, ' ');
+string window = screen(66,256);		// == screen( 66, 256, ' ');
+
+So consider ordering the parameters so that those lesat likely to use a default value appear first.
+
 class T {
 	 T() = default;
 	 T(const string s) : bookNo(s) {}
@@ -4855,7 +4873,7 @@ class T {
 };
 
 
-note Two points:
+Two points:
 
 o Use carefully as there are logical cases where need to have args from the same source. For
 example, it's logical error when one arg is from def init and the other is from the user.
@@ -5855,8 +5873,8 @@ note TO DO Primers p518. summarise after studying template.
 
 {function-matching}
 
-The name has 'scope' and object has 'lifetime'. three possible outcomes: best match, no match, and
-ambiguous call. For overload condition, see {const-on-overload} 
+Also known as overload resolution. The name has 'scope' and object has 'lifetime'. three possible
+outcomes: best match, no match, and ambiguous call. For overload condition, see {const-on-overload} 
 
 note: step 0 and 1 is called <normal-scope-or-name-lookup>?
 
@@ -6028,7 +6046,7 @@ const int &ri = 42;		// ok
 double dval = 3.14;
 const int &ri = dval;	// ok becuase will bind to <temp-object> and cannot change it via ri
 
-note: KT. This is [to-maintain-constness] by creating [temp-object]. See {{case-one-in-conversion}}
+note: KT. This is [to-maintain-constness] by creating [temp-object]. See <case-one-in-conversion>
  
 
 {convert-to-const}
@@ -6244,9 +6262,9 @@ char buffer[MAX_STRING_LEN];
 
 countChar( buffer, c ); // string str = string temp-object(buffer);
 
-When it is called, there is a type mismatch so string [unmaned-object] will be created, buffer is
-copied, and binding to str arg happens. Destruction happens when return. If buffer size is big, then
-it is costly. It is for compiler to make a func call succeed.
+When it is called, there is a type mismatch so string [temp-object-or-unmaned-object] will be
+created, buffer is copied, and binding to str arg happens. Destruction happens when return. If
+buffer size is big, then it is costly. It is for compiler to make a func call succeed.
 
 How to eliminate this?
 
@@ -6533,6 +6551,24 @@ class TextBlock {
 		  return const_cast<char&> ( static_cast<const TextBlock&>(*this)[position] );
 	 }
 };
+
+From {ref-005} p233, const_cast is most useful in the conext of overloaded functions.
+
+const string &shorterString( const string &s1, const string &s2 )
+{
+	return s1.size() <= s2.size() ? s1 : s2;
+}
+
+string &shorterString( string &s1, string &s2 )
+{
+	auto &r = shorterString( const_cast< const string& >(s1),
+			const_cast< const string& >(s2) );
+
+	return const_cast< string& >(r);
+}
+
+This is safe to cast that string back to a plain string& in the return because it is bound to one of
+original nonconst arguments. See that const_cast is used to give it const and const away.
 
 
 <approach-three> Change the order
@@ -14280,10 +14316,13 @@ o precision of meaning
 
 Four types:
 
-o const_cast        # const away
-o static_cast       # like C
+<const_cast>
+This is not just about const away and see {const-non-const-version} for more.
 
-{reinterpret_cast}
+<static_cast> 
+like C
+
+<reinterpret_cast>
 
 Peforms a low-level reinterpretation of the bit pattern of its operands.
 
@@ -14292,7 +14331,7 @@ char *pc = reinterpret_cast<char*>(ip);
 
 # ?? difference to static_cast? took func pointer example. 
 
-o dynamic_cast      # RTTI
+<dynamic_cast>      # RTTI
 
 Can check the result of cast; nullprt for pointer and bad_cast for reference. Used in inheritance;
 derived-to-base by compiler and base-to-derived by dynamic_cast. Cast down and accross.
