@@ -68,7 +68,7 @@ C and C++
 |kt_dev_cpp_002|	pointer vs. reference (interview)
 |kt_dev_cpp_003|	ctor and copy controls {pass-by-reference-to-const} {default-arg} {constructor-initializers}
 |kt_dev_cpp_004|	copy-controls when use dyn resource	{the-rule-of-three} {value-like} {preventing-copies} {self-assign}
-|kt_dev_cpp_005|	converting ctor 			{class-type-conversion}
+|kt_dev_cpp_005|	converting ctor 			{class-type-conversion} {explicit-keyword}
 |kt_dev_cpp_006|	swap							{copy-and-swap-idiom} {pimpl-idiom}
 |kt_dev_cpp_007|	function matching and overload 	{scope-in-inheritance}
 |kt_dev_cpp_008|	const and conversion		{const-on-iterators} {equal-misspell} 
@@ -79,13 +79,13 @@ C and C++
 |kt_dev_cpp_013|	when use reference {called-by-reference} 
 |kt_dev_cpp_014|	decltype, typedef, and using 
 |kt_dev_cpp_015|	declaration and definition
-|kt_dev_cpp_016|	statement {division-and-modulus}
+|kt_dev_cpp_016|	statement {division-and-modulus} {switch-under-the-hood}
 |kt_dev_cpp_017|	static-members and class const	{class-method} {class-const}
 |kt_dev_cpp_018|	dtor					{non-virtual-destruction-problem} {how-virtual-works}
 |kt_dev_cpp_019|	exception {problem-of-exception-in-dtor} {exception-safe}
 |kt_dev_cpp_020|	<empty>
 |kt_dev_cpp_021|	op overload				{member-or-non-member} {function-object}
-|kt_dev_cpp_022|	inheritance			{subobject-and-derived-to-base-conversion} {base-class-pointer-container}
+|kt_dev_cpp_022|	inheritance {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
 |kt_dev_cpp_023|	override		{override-keyword} {dynamic-binding} {default-arg-in-virtual}
 |kt_dev_cpp_024|	ABC
 |kt_dev_cpp_025|	template
@@ -5307,7 +5307,38 @@ class PrivateCopy {
 };
 
 However, friends and members still make copies so declare copy controls but not define. By doing
-this, can cause link errors when there are attempts to use.
+this, can cause link errors when there are attempts to use. {QQ} This causes compile error then why
+link error?
+
+#include <iostream>
+
+using std::cout; using std::endl;
+
+class Base {
+	public:
+		Base() = default;
+		~Base() = default;
+    private:
+		 int m_iDataABCAnimal;
+		 Base(const Base& base) { cout << "copy-ctor: base" << endl; }		// 11
+		 Base& operator=(const Base& base) { cout << "copy-assign: base" << endl; }
+};
+
+int main()
+{
+	std::cout << "--{ main " << std::endl;
+
+	Base b1, b2;
+
+	Base b3(b1);		// 21
+
+	std::cout << "--} main " << std::endl;
+}
+
+kit@kit-vb:~/work$ ./comp.sh use-prevent-copy.cpp 
+use-prevent-copy.cpp: In function ‘int main()’:
+use-prevent-copy.cpp:11:4: error: ‘Base::Base(const Base&)’ is private
+use-prevent-copy.cpp:21:12: error: within this context
 
 
 <boost-noncopyable>
@@ -5410,7 +5441,7 @@ class Sale_data {
 string str;
 item.combine(str);
 
-Here, combine() expect Sales_date type but is given string type. this equates to:
+Here, combine() expect Sales_date type but it is given a string type. This equates to:
 
 item.combine(Sales_data(str));
 
@@ -5426,7 +5457,7 @@ class Sale_data {
 
 item.combine(cin);
 
-When combine finishes, temp-object is gone and lost input. to avoid this, can use
+When combine finishes, temp-object is gone and lost input. To avoid this, can use
 <explicit-keyword>:
 
 class Sales_data {
@@ -5440,8 +5471,8 @@ Then this force user to speify it and means they know what they are doing:
 item.combine( Sales_data(str) );
 item.combine( static_cast< Sales_data>(str) );
 
-note: Whether or not use explicit-keyword, temp-object will be create. It is about making it
-explicit.
+note: Whether or not use explicit-keyword, temp-object will be create so the point is about making
+it explicit.
 
 
 <stl-example-of-explicit>
@@ -6312,6 +6343,8 @@ window = screen(66, 256);	// screen(66, 256, ' ');
 
 so consider ordering: those least likely to use a def value {appear-first} in {declaration}.
 
+See {default-arg-in-virtual} for use inheritance.
+
 
 ==============================================================================
 *kt_dev_cpp_011*	inline
@@ -7034,6 +7067,140 @@ switch(ch)
 
 It can be useful to define a default label even if there is no work for the case to indicate that
 the case was considered.
+
+<switch-under-the-hood>
+
+http://stackoverflow.com/questions/3012011/switch-case-assembly-level-code
+
+Here is the C source:
+
+switch(i)
+{
+    case 1:
+    {
+        printf("Case 1\n");
+        break;
+    }
+    case 2:
+    {           printf("Case 2\n");
+        break;
+    }
+    case 3:
+    {
+        printf("Case 3\n");
+        break;
+    }
+    case 4:
+    {
+        printf("Case 4\n");
+        break;
+    }
+	 // omitted to 10:
+    default:
+    {
+        printf("Nothing\n");
+        break;
+    }
+}  
+
+Now the resultant assembly for the same is:
+
+movl    $5, -4(%ebp)
+cmpl    $10, -4(%ebp)
+ja  L13
+movl    -4(%ebp), %eax
+sall    $2, %eax
+movl    L14(%eax), %eax
+jmp *%eax
+.section .rdata,"dr"
+.align 4
+L14:
+.long   L13
+.long   L3
+.long   L4
+.long   L5
+.long   L6
+.long   L7
+.long   L8
+.long   L9
+.long   L10
+.long   L11
+.long   L12
+.text
+L3:
+movl    $LC0, (%esp)
+call    _printf
+jmp L2
+L4:
+movl    $LC1, (%esp)
+call    _printf
+jmp L2
+L5:
+movl    $LC2, (%esp)
+call    _printf
+jmp L2
+L6:
+movl    $LC3, (%esp)
+call    _printf
+jmp L2
+L7:
+movl    $LC4, (%esp)
+call    _printf
+jmp L2
+L8:
+movl    $LC5, (%esp)
+call    _printf
+jmp L2
+L9:
+movl    $LC6, (%esp)
+call    _printf
+jmp L2
+L10:
+movl    $LC7, (%esp)
+call    _printf
+jmp L2
+L11:
+movl    $LC8, (%esp)
+call    _printf
+jmp L2
+L12:
+movl    $LC9, (%esp)
+call    _printf
+jmp L2
+L13:
+movl    $LC10, (%esp)
+call    _printf
+L2:  
+
+
+
+First the code is comparing the i to 10 and jumping to the default case when the value is greater
+then 10 (cmpl $10, -4(%ebp) followed by ja L13). The next bit of code is shifting the input to the
+left by two (sall $2, %eax) which is the same as multiple by four (it multiplies by 4 because each
+entry in the jump table is 4 bytes long). So what is had done here is generated an offset into
+the jump table. It then loads an address from the jump table (movl L14(%eax), %eax) and jumps to it
+(jmp *%eax).
+
+The jump table is simply a list of addresses (represented in assembly code by labels):
+
+L14:
+.long   L13
+.long   L3
+.long   L4
+...
+
+One thing to notice is that L13 represents the default case. It is both the first entry in the jump
+table (for when i is 0) and is handled specially at the beginning (when i > 10).
+
+<01>
+@puffadder: most modern compilers use heuristics to determine when it's more efficient to use
+branches versus a jump table. E.g. if your case levels were say 1, 100 and 1000 you might expect
+branches to be used. –  Paul R Jun 10 '10 at 7:07 
+
+<02>
+You have a switch statement with 5 case statements and the cases all have numbers that are spread
+far apart so a jump table will not be used, 'if type' will. {Q} May choose not to use a jump table
+because there will be entries which are not used? Up to a compiler?
 
 
 ==============================================================================
@@ -7940,18 +8107,16 @@ For class type because cannot overload operations for built-in types.
 
 Whether to implement op overloads as either a member or non-member?
 
-{{assign-op}} 
+<assign-op> 
 assign("=") should be member.
 
-{{symmetric-op}}
+<symmetric-op>
 arith, equality, relational or mixed-type arith that is commutative should be non-member.  
 
-Why? think string u = "hi" + s;
+Why? think string u = "hi" + s; since a literal do not have member operations.
 
-{{io-op}}
-IO ops(<<, >>) should be non-member and usually a friend.
-
-If these are member op the should use like:
+<io-op>
+IO ops(<<, >>) should be non-member and usually a friend. If these are member op then can use like:
 
 Sales_data data;
 data << cout;
@@ -7963,8 +8128,8 @@ class Sales_data {
 	 ostream& operator<<( ostream& str ) const;
 };
 
-If want to use usual syntax like cout << data then use change STL ostream class but cannot.
-Therfore, these ops should be non-member.
+If want to use usual syntax like cout << data then means to change STL ostream class but cannot.
+Therfore, these ops should be non-member. TODO: more explanation.
 
 ostream& operator<<( ostream& os, const Sales_data& item )
 {
@@ -7972,7 +8137,7 @@ ostream& operator<<( ostream& os, const Sales_data& item )
 	 return os;
 }
 
-note: no const for ostream& since it writes to stream anc change its status and const and reference
+note: no const for ostream& since it writes to stream and change its status and const and reference
 for Sales_data
 
 
@@ -7986,13 +8151,13 @@ is 'always' equi to:
 
 data1.operator+=(data2);
 
-why not 'data2.operator+=(data1);' as these are the same type? because 'data2 =
-data1+data2' is different.
+why not 'data2.operator+=(data1);' as these are the same type? because 'data2 = data1+data2' is
+different.
 
 
 {function-object}
 
-If oveload operator() then can use a object as if it's a func call and 'call' a object. hence
+If oveload operator() then can use a object as if it's a func call and 'call' a object. Hence
 function object. must be a member and can have 'state' so it's flexible than usual func.
 
 struct absInt {
@@ -8011,7 +8176,7 @@ class PrintString {
 
 	 PrintString( ostream& o = cout, char c = ' ') : os(o), sep(c) {}
 
-	 # const member func. works well. wondered why const as os may change its state?
+	 # const member func. works well. {QQ} wondered why const as os may change its state?
 	 #
 	 void operator() (const string &s) const { os << s << sep; }
 
@@ -8046,16 +8211,16 @@ See predicate in *kt_dev_stl_010*
 
 {subobject-and-derived-to-base-conversion}
 
-<dynamic-binding> at run-time so called run-time binding because <static-type> is different from
+The <dynamic-binding> at run-time so called run-time binding because <static-type> is different from
 <dynamic-type> and it is from inheritance. This is:
 
 pointer or reference of base class = the one of derived class;
 <static-type>                        <dynamic-type>
 
-<1> this is an exception to normal conversion as this is a conversion between different types. See
+1> this is an exception to normal type-match as this is a conversion between different types. See
 {type-match-exceptions}
 
-<2> do not know which object to bind until runtime. 
+2> do not know which object to bind until runtime. 
 
 Subobject is key to how inheritance and dynamic-binding works. From MEC++. Inheritance give rise to
 pointer and reference with two different types: static and dynamic type.
@@ -8082,7 +8247,7 @@ If do followings with p or r:
 
 1: calls non-virtual funcs of base then get base version. static
 2: calls virtual funcs of base then get derived version. dynamic
-3: calls any func of derived then compile error.
+3: calls any func of derived then compile error. static
 4: deference and copy then sliced-off. static
 
 {QQ} How compiler know whether it is normal function or virtual function call?
@@ -8157,13 +8322,13 @@ o *baseptr = *baseptr;     # diff. derived = base. sliced-off. <2> [no-compile-e
 Why different in result? Because a compiler use <static-type> and only base part will be copied for
 <1> and <2>.
 
-So two problem here:
+So two problems here:
 
 o sliced-off with no comiple error when use pointer
 o real programmers write code like this.
 
 How can we make it compile error to flag up two cases, <1> and <2>, in compile time? That is to make
-it difficult to use incorrectly. <Q> So what's the solution? need to summarise the followings again.
+it difficult to use incorrectly. <Q> TODO: So what's the solution? need to summarise the followings again.
 
 
 <approach-one> 
@@ -8228,7 +8393,7 @@ Use private ctor. See {{control-the-number-of-object}}
 
 Unless we say otherwise, the base part of a derived is default-init.
 
-usual way:
+The usual way is:
 
 class Disc_quote : public Quote {
 	 public:
@@ -8250,7 +8415,7 @@ class Disc_quote : public Quote {
 
 As for ctor, copy controls must explicitly call base part and otherwise has 'oddly configured'
 object such as the derived part copied as expected but the base part default-init. In other words,
-dtor is the only exception where do only for its part.
+dtor is the only exception where do only for its part. ~
 
 
 class Base {
@@ -8267,10 +8432,10 @@ class Left: public Base {
 sam_slice.cpp: In constructor 'Left::Left(int)':
 sam_slice.cpp:27:32: error: no matching function for call to 'Base::Base()'
 
-Because Base has another ctor so default-ctor will not made and shows this error.
+Because Base has another ctor so default-ctor will not be made and shows this error.
 
 
-{call-base-in-virual-of-derived}
+{call-base-in-virtual-of-derived}
 
 class Window {
 	 public:
@@ -8290,7 +8455,7 @@ class SpecialWindow: public Window {
 
 {base-class-pointer-container} {RTTI}
 
-<example-problem>
+// problem-one
 
 MEC++03: In inheritance, base pointer can point to derived class and when passes a array of derived
 instead of base, <undefined-result> can happen.
@@ -8310,7 +8475,7 @@ deleting arrays like: delete [] array;
 {Q} what is the real problem here? how does it relate to base class pointer? 
 
 
-<example-one>
+// problem-two
 
 EC++27: Problem:
 
@@ -8340,6 +8505,8 @@ Undesirable because dynamic_cast is slow and also need to know to which type the
 cast. Means already you know what it is.
 
 
+<dynamic_cast-vs-virtual>
+
 From Primus C++ 19.2 RTTI:
 
 The dynamic_cast operator is the part of RTTI(run-time type identification). These operators are
@@ -8348,7 +8515,7 @@ base-class object and it is not possible to make that operation a virtual functi
 should use virtual functions if we can.
 
 
-<example-two>
+// problem-three
 
 From MEC++33: when showing virtual operator= to support mixed type assign in inheritance.
 
@@ -8356,7 +8523,7 @@ Derived& Derived::operator=(const Base& rhs)      # virtual member op
 {
 	 const Derived& rhs_derived = dynamic_cast<const Derived&>(rhs);
 
-	 // proceed with a normal assignment of rhs_derived to *this
+	 // proceed with a normal assignment of rhs_derived to left *this
 }
 
 
@@ -8385,10 +8552,10 @@ for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
 	 (*iter)->blink();
 }
 
-Remove dynamic_cast BUT limited to SpecialWindow only. Not other possible derived.
+Remove dynamic_cast BUT limited to SpecialWindow only. Not other possible derived class.
 
 
-<solution-two> moving up virtual func in the hierarchy
+<solution-two> use virtual func in the hierarchy
 
 class Window { 
 	 public: >
@@ -8442,9 +8609,9 @@ the choice.
 
 {override-keyword} {return-type-in-override}
 
-To override, name and args should be the same. 'return' is an exception to this. If arg is different
-by mistake, it defines new function and cause 'hiding'. 
-
+To override, name and args should be the same but 'return' type is an exception to this. Not
+entirely ture and see below. If arg is different by mistake, it defines new function and cause
+'hiding' since it is overloading not overriding. 
 
 class CInterface 
 {
@@ -8490,7 +8657,7 @@ For [case-three], errors
 error: conflicting return type specified for 'virtual bool CMyInterface::getName()'
 error:   overriding 'virtual void CInterface::getName()'
 
-However, tried pointer return type, no errors and return type in overrides can be different only
+However, tried pointer return type, no errors so return type in overrides can be different only
 that is pointer.
 
 
@@ -8515,7 +8682,7 @@ class D : public B {
 Error	1	error C3668: 'Derived::sample' : method with override specifier 'override' did not override
 any base class methods	
 
-'final' used to end override. see final in inheritance.
+The final-keyword is used to end override. See final-keyword in inheritance.
 
 
 {default-arg-in-virtual}
