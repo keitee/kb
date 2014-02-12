@@ -4620,7 +4620,7 @@ unless you need to}.
 
 Refer to *kt_dev_cpp_013* for example uses.
 
-In {ref-005}, p50:
+In {ref-CPR}, p50:
 
 Reference is not an object. object does not mean only object of class. Reference defines an
 alternative name for an object. This is called <binding> hence <must-be-initialized>
@@ -6585,7 +6585,7 @@ class TextBlock {
 	 }
 };
 
-From {ref-005} p233, const_cast is most useful in the conext of overloaded functions.
+From {ref-CPR} p233, const_cast is most useful in the conext of overloaded functions.
 
 const string &shorterString( const string &s1, const string &s2 )
 {
@@ -9551,7 +9551,7 @@ objects that are all in the same hierarchy. As long as a type has the needed pro
 with STL containers or algorithms, no matter what class hierarchies it is or isn't part of.
 
 STL provides a collection of such things that are recognized as both useful and reasonable design.
-(The picky could point out std::string as a counter-example to good design, here.) 
+The picky could point out std::string as a counter-example to good design, here. 
 
 
 ==============================================================================
@@ -9559,39 +9559,43 @@ STL provides a collection of such things that are recognized as both useful and 
 
 {trade-offs}
 
-Think different performance trade-offs in {insert/delete} and {nonsequential-access}.
+Think different performance trade-offs in {insert/delete} and {random-access}.
 
-vector      : <random> access	fast insert/delete at the back	contig. mem
-string      : <random> access	fast insert/delete at the back	contig. mem
+vector      : random-access, fast insert/delete at the back, contig. mem
+string      : random-access, fast insert/delete at the back, contig. mem
 
 ESTL09: string, vector and deque has {contiguous-memory} Hence, insert/delete in the middle can be
 expensive since have to move elements.
 
-list        : double llist	   bi-directional	fast insert/delete at any point
-forward list: single llist	   forward			support push_front only
+list        : double llist, bi-directional, fast insert/delete at any point
+forward list: single llist, forward, support push_front only. [KT] See push_front
 
 But don't support random access and can also have memory overhead.
 
 deque       : double-ended q		<random> access		fast insert/delete at front/back	
 
-moves elements other than front/back
+moves elements other than front/back {QQ} what is it?
 
 array       : C++11. fixed size. possible to copy and assign.
 
 note:
-forward_list don't support size() but others do. fast and constant time op. (different from ESTL so
-seems it's true for C++11? Primus says C++ library has improved significantly in recent.)
+The forward_list don't support size() but others do. The size() has fast and constant time op which
+is different from ESTL so seems it's true for C++11? Primus says C++ library has improved
+significantly in recent.
 
-list and flist don't support <iterator-arith> and means this is for containers that supports random
-access; string, vector, deque and array.
+The list and forward_list don't support <iterator-arith> and means this is for containers that
+supports random access; string, vector, deque and array.
+
+The random-access is different from contig. mem since there are containers which supports
+random-access but not contig. mem.
 
 
 ==============================================================================
 *kt_dev_stl_005*	assoc containers
 
-These are node-based containers and use balanced tree (from ESTL). GCC is implemented using
+These are node-based containers and use balanced tree as ESTL said. GCC is implemented using
 red-black tree see {map-uses-rbtree} Provides bidirectional iterator. Three dimensions: set or map,
-unique or multiple keys, and in order or not.
+unique or multiple keys, and ordered or not.
 
 ordered by key	: map, set, multiset/map
 unordered		: unordered_set/map/multiset/multimap	
@@ -9614,6 +9618,50 @@ SD_multiset bookstore(42, hasher, eqOp);
 This is not supported in GCC 4.6 and use typedef instead.
 
 typedef unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*> SD_multiset;
+
+
+{key-value-pair} 
+
+Thing to remember is the value_type is pair<const key_type, mapped_type> so implies key cannot be
+changed. This affects the use with algorithms because key is const, only be used with algo that is
+read-only and the use is limited to search but assoc is better in searching so little use of map
+with algo. In practice, assoc can be used as a source or dest in algo.
+
+map<string, int>::value_type v3;		// pair< const string, int>
+map<string, int>::key_type v4;		// string
+map<string, int>::mapped_type v5;	// int
+
+See how return pair object explicitly and implicitly as a temp object. Here back() returns reference
+to the last element.
+
+pair<string, int>
+process( vector< string > v )
+{
+	if( !v.empty())
+		return {v.back(), v.back().size() };
+	else
+		return pair<string, int>();
+}
+
+The pair is defined in #include < utility > and the default pair ctor do value inits. see *kt_dev_cpp_009*
+
+To make a new pair,
+make_pair( v.back(), v.back().size() );
+
+
+<key-type-requirement>
+
+For ordered map, to compare the key, use '<' op of element so if use own type, must provide
+comparison function and this is a part of type defintion. Rightly, map is ordered on key but not
+mapped type. The example shows that use of key and comparison type which is func pointer type:
+
+bool compareIsbn(const Sales_data &lhs, const Sales_data &rhs)
+{ return lhs.isbn() < rhs.isbn(); }
+ 
+// to initialise bookstore with func pointer as the ctor arg:
+multiset< Sales_data, decltype( compareIsbn )* > bootstore(compareIsbn);
+
+For unordered, use '==' op and hash func.
 
 
 {subscript}
@@ -9648,51 +9696,8 @@ for( const auto &w : word_count )
 
 <in-set>
 
-[] is only for <random-access> sequencial containers such as sting, vector, deque, and array and
-map. NOT for set becuase set has only key. 
-
-
-{key-value-pair} 
-
-Thing to remember is The value_type is pair<const key_type, mapped_type> so implies key cannot be
-changed. This affects the use with algorithms: Because key is const, only be used with algo that is
-read-only and the use is limited to search but assoc is better in searching so little use of map
-with algo. In practice, assoc can be used as a source or dest in algo.
-
-map<string, int>::value_type v3;		// pair< const string, int>
-map<string, int>::key_type v4;		// string
-map<string, int>::mapped_type v5;	// int
-
-See how return pair object explicitly and implicitly as a temp object.
-
-pair<string, int>
-process( vector< string > v )
-{
-	if( !v.empty())
-		return {v.back(), v.back().size() };
-	else
-		return pair<string, int>();
-}
-
-This is defined in #include < utility> and the default pair ctor do value inits. see *kt_dev_cpp_009*
-
-To make a new pair,
-make_pair( v.back(), v.back().size() );
-
-
-<key-type-requirement>
-
-For ordered map, to compare the key, use '<' op of element so if use own type, must provide
-comparison function and this is a part of type defintion. The example shows that use of key and
-comparison type which is func pointer type:
-
-bool compareIsbn(const Sales_data &lhs, const Sales_data &rhs)
-{ return lhs.isbn() < rhs.isbn(); }
- 
-// to initialise bookstore with func pointer as the ctor arg:
-multiset< Sales_data, decltype( compareIsbn )* > bootstore(compareIsbn);
-
-For unordered, use '==' op and hash func.
+[] is only for containers such as sting, vector, deque, and array and map which suppors
+<random-access>. NOT for set becuase set has only key. 
 
 
 {multi-vs-single}
@@ -9789,7 +9794,7 @@ There are three ways:
 
 // <one>
 // the way using count and the fact that. multiple elements of a given key will be 'adjacent' within
-// the container. {ref-005} Primer p487.
+// the container. {ref-CPR} Primer p487.
 
 // when misuse brace-init, got gcc crash, gcc 4.6 and errors: See _Rb_tree in errors
 
@@ -9921,13 +9926,31 @@ for( auto pos = authors.equal_range( search_item ); pos.first != pos.second; ++p
 	 cout << pos.first->second << endl;
 
 
-{{example-three}} {shared-ptr-as-a-key}
+{brace-init}
 
-Multiset. mutiple same key. Primers p631
+#include <iostream>
+#include <string>
+#include <map>
+
+int main()
+{
+	std::map< std::string, std::string > authors = {{"brabo", "yanky"}, { "alpha", "zulu"}, {"charle", "xiera"}};
+
+	std::cout << "===========================" << std::endl;
+
+	auto iter = authors.begin();
+	for( iter; iter != authors.end(); ++iter )
+		std::cout << "key: " << iter->first << ", title: " << iter->second << std::endl;
+}
+
+
+{examples} {shared-ptr-as-a-key}
+
+Multiset. mutiple same key from {ref-CPR} p631
 
 class Basket {
 	public:
-		  void add_item( const std::shared_ptr< Quote >& sale)
+		  void add_item( const std::shared_ptr< Quote >& sale)	// see referece. 
 			 { items.insert(sale); }
 
 	private:
@@ -9944,9 +9967,8 @@ double Basket::total_receipt( ostream& os ) const
 	 ...
 	 // skip over all the elements that match the current key by calling upper_bound()
 	 //
-	 for( auto iter = items.cbegin(); iter != items.cend();
-			 iter = items.upper_bound( *iter ) ) {
-
+	 for( auto iter = items.cbegin(); iter != items.cend(); iter = items.upper_bound( *iter ) ) 
+	 {
 		  // double print_total(ostream& os, const Quote& item, size_t n);
 		  // *iter is a key; shared_ptr and **iter is a object that shared_ptr points
 
@@ -9960,9 +9982,7 @@ Basket bsk;
 bsk.add_item( make_shared< Quote >("123", 45) );
 bsk.add_item( make_shared< Bulk_quote >("123", 45, 3, .15) );
 
-User still have to deal with dynamic memory. to hide it into a class, see p633.
-
-
+{QQ} User still have to deal with dynamic memory. to hide it into a class, see p633.
 
 
 ==============================================================================
@@ -15621,7 +15641,7 @@ o easier to create a single LogEntry object than to add separate calls to start 
 ==============================================================================
 *kt_dev_mecpp_007* 34: combine C and C++
 
-Things to know when use both together in a program.
+There are things to know when use both together in a program.
 
 {name-mangling}
 
@@ -15629,10 +15649,11 @@ This is the process which C++ compiler give each function a unique name because 
 overloading. There is a directive to tell compiler not to mangle func name. This is called linkage
 directive.
 
-{{export-c-to-cpp}}
 
-Suppose that cpp files use c funcs from a library. This call is also mangled in cpp compilation and
-ends up with link error because cannot find symbol. 
+{extern-keyword}
+
+The GCC compiles files based on extension. When compiles cpp files meaning cpp mane mangling you can
+make sure that functions are c functions:
 
 extern "C" void drawLine(int x1, int y1, int x2, int y2);
 
@@ -15644,17 +15665,14 @@ extern "C" {
 	 #include <string.h>
 }
 
-{{export-cpp-to-c}}
-
-Used on defintion to make cpp function available to a program written in another language. For a
-single func:
+If you want to build a function as a c function, then can do: 
 
 extern "C" double calc( double dparam )
 {
 	 ...
 }
 
-To allow the source to be compiled under either C or C++:
+To allow source or header to be compiled under either C or C++.
 
 #ifdef __cplusplus
 extern "C"
@@ -15669,25 +15687,26 @@ int strcmp( const char*, const char* );
 #endif
 
 
-{{case-example}} {wrapper}
+<case-example> <wrapper-from-cpp-to-c>
 
-This case is that main is in c and is to use some features written cpp.
+This case is that main is in c and is to use some features written in cpp.
 
 C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++)
 
 #include "wrapper.h"                                  #include "wrapper.h" 
                             extern "C"                extern "C"
                             {   typdefs               {
-										  int wraaper_func();       int wrapper_func()
+										  int wrapper_func();       int wrapper_func()
 										  ...                       {
 									 }                                ....
                                                           }
 																			 ...
 																		}
 
-Note that why extern C is needed in the wrapper.h is because cpp file uses typedefs from it. So if
-there isn't then when compile cpp, compiler thinks func defs are C++ linkage from wrapper header and
-see C linkage from cpp file. Emits errors:
+Note This is a problem when use the same header in both c and cpp compile. Why extern C is needed in
+the wrapper.h is because cpp file uses typedefs from it. So when compile cpp compiler thinks func
+defs are C++ linkage from wrapper header when there is no extern guard and then see wrapper_func in
+C linkage from cpp file. So conflict and emits errors:
 
 [   15s] /home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/pfm/pfmosa.h:170:1: error: previous
 declaration of 'pfmerr_t pfmThreadCreate(SPfmThreadParams*, void (*)(void*), void*)' with 'C++'
@@ -15695,10 +15714,36 @@ linkage
 [   15s] /home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/pfm/pfmthread.cpp:80:80: error:
 conflicts with new declaration with 'C' linkage
 
-This can be avoided if design header and source files.
 
-Here wrapper is used to bridge between cpp and c:
+C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++)
+#include "wrapper.h"                                 	extern "C"
+                               typdefs                {
+                                                          #include "wrapper.h" 
+										  int wrapper_func();       int wrapper_func()
+										  ...                       {
+									                                 ....
+                                                          }
+																			 ...
+																		}
 
+This can be avoided if design header and source files carefully. For example, if need some c
+functions that can be used in c file and this function creates cpp objects and use it then simply
+create a header which has normal declarations and no externs and only have externs in cpp.
+
+// ususal c
+#include "wrapper.h"
+{
+	wrapper_func();
+}
+
+// usual.h or wrapper.h
+int wrapper_func();
+
+
+// usual cpp or wrapper.cpp
+
+extern "C"
+{
 int wrapper_func()
 {
 	ClassX* pclass = new Class( params );
@@ -15706,7 +15751,11 @@ int wrapper_func()
 	pclass->func();
 	...
 }
+}
 
+If usual cpp header or wrapper.h have other cpp headers, will work cpp compiles such as usual cpp
+and others but when used in c compile, emits loads of errors since these cpp files have cpp things.
+So better to have single header file which have all c functions from cpp land. 
 
 {{example-from-code}}
 
@@ -15956,7 +16005,7 @@ http://www.mindviewinc.com/Books/
 
 {ref-004} cracking the coding interview, 5th Ed.
 
-{ref-005} C++ primer, 5th Ed.
+{ref-CPR} C++ primer, 5th Ed.
 
 ==============================================================================
 Copyright: see |ktkb|  vim:tw=100:ts=3:ft=help:norl:
