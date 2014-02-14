@@ -3729,31 +3729,25 @@ void strcpy( char *s, char *t )
 
 Here <right-to-left> for '=' op and <post-inc> are involved. "the value of *t++ is the char that t
 pointed to 'before' t was incremented; the postfix does not change t until after this char has been
-fetched." 
+fetched." This is a bit confusing.
 
-NOTE: KT, in summary,
+The before and after explanation says that ++n inc n 'before' its value is used and n++ inc n
+'after'. Or some says that post-inc returns the previous copy. 
 
-Two explanation which seemingly are a bit different:
+For *pbeg++, <post-inc> is high than dereference(*) so it's the same as *(pbeg++). but how this
+behave as *(pbeg); pbeg++; ? because it returns the previous copy. This is how Primus explains. THIS
+is answer and this matches to asm result.
 
-o returns the previous copy. THIS is answer and this matches to asm result.
-
-<post-inc> is high than deref(*) so it's the same as *(pbeg++). but how this behave as *(pbeg);
-pbeg++; ?  because it returns the previous copy. This is how Primus explains.
-
-o before and after.
-
-that ++n inc n 'before' its value is used and n++ inc n 'after'. 
+Here there are three operations; fetch, increase and dereference. post-inc do fetch and increase but
+return the value before increase and dereference it.
 
 
 {post-inc-overload}
 
 MEC++06. <post-inc> can be ineffective when used on user-type; overloads. 
 
->
  The prefix form of the increment operator is sometimes called - increment and fetch, while the
  postfix form is often known as fetch and increment.
-<
-
 
 class UPInt {                             // "unlimited precision int"
 public:
@@ -3798,7 +3792,7 @@ they apply, and this can be annoying. To avoid such warnings, a common strategy 
 parameters you don't plan to use; that is what is been done above.
 
 
-{{why-const-in-post-inc}} {const-return}
+<why-const-in-post-inc> {const-return}
 
 If you have ever wondered if it makes sense to have functions return const objects, now you know:
 sometimes it does, and postfix increment and decrement are examples.
@@ -3809,8 +3803,7 @@ i++++;
 
 So to make it behave like premitive type, return const.
 
-
-{{should-prefer-post-inc-when-use-none-premitive}}
+<should-prefer-post-inc-when-use-none-premitive>
 
 The prefix increment function has no such temporaries. This leads to the possibly startling
 conclusion that, for efficiency reasons alone, clients of UPInt should prefer prefix increment to
@@ -3824,11 +3817,11 @@ counterparts. You then need only maintain the prefix versions, because the postf
 automatically behave in a consistent fashion.
 
 
-{{in-particular}}
+<in-particular>
 
-Primus(p148) recommends prefix version than postfix because post version inc first and return(yield)
-the previous copy and it cost extra. it may have no effect for built-in types due to optimization
-but may be expensive for <iterators>. See *kt_dev_stl_007* for iter++ example.
+Primus(p148) recommends prefix version than postfix because post-inc increase first and
+return(yield) the previous copy and it cost extra. it may have no effect for built-in types due to
+optimization but may be expensive for <iterators>. See *kt_dev_stl_007* for iter++ example.
 
 auto pbeg = v.begin();
 
@@ -10344,14 +10337,15 @@ for( ; iter != mapT.end(); ++iter )
 For this simple iteration, for( ; itr != HighLows.end() ; ++itr) is useful. You would never need to
 worry about not increasing the iterator with it.
 
+
 {insert-method}
 
 The insert() insert value at place denoted by iter and return the same. In other words, shift items
-from iter position and add an item. So iter do not change and remember iter is like a pointer.
+from iter position and add an item. 
 
 insert(iter, val);
 
-{{one}}
+// example
 
 #include <iostream>
 #include <vector>
@@ -10382,6 +10376,7 @@ int main()
 Output:
 1:5:6:7:2:3:4:
 
+// example
 
 vec< int > veci;
 veci.push_back(1); .. to (3); // [1,2,3,E)
@@ -10389,7 +10384,7 @@ veci.insert( veci.end(), 4 ); // is it [1,2,3,4] or [1,2,4] ?
 it's [1,2,3,4]
 
 
-{{two}}
+// example
 
 list< string > lst;
 auto iter = lst.begin();
@@ -10405,8 +10400,8 @@ while(...)
 
 [one, two, three]                       # no iter update. see difference in order
 
-Since iter remains the same(off-the-end) in list but this approach creates <core-dump> in case of
-vector because this invalidate iterator of vector because of invalidated iters.
+Since iter remains the same(off-the-end) in list and works fine. However, this approach will creates
+<core-dump> in case of vector because addition and deletion will invalidate iterator of vector.
 
 
 {invalidated-iterators} {estl-009}
@@ -10422,7 +10417,8 @@ void removeOddNumbers( vector< int > numbers )
 	 }
 }
 
-From ESTL09. note that here is about assoc-container
+From ESTL09. See that here is about assoc-container but this applies only for containers which uses
+contig. mem.
 
 AssocContainer< int > ac;
 
@@ -10432,7 +10428,7 @@ for( AssocContainer< int >::iterator iter = ac.begin(); iter != ac.end(); ++iter
 }
 
 
-{{fix-one}}
+// fix-one
 
 for( AssocContainer< int >::iterator iter = ac.begin(); iter != ac.end(); /* [none] */ ) {
 	 if( badValue(*iter) )
@@ -10442,16 +10438,16 @@ for( AssocContainer< int >::iterator iter = ac.begin(); iter != ac.end(); /* [no
 Using post-inc, increase iter before being invalidated and use the previous.
 
 
-{{fix-two}} {recommanded}
+// fix-two {recommanded}
 
 for( SeqContainer< int >::iterator iter = ac.begin(); iter != ac.end(); /* <none> */ ) {
 	 if( badValue(*iter) )
 		  iter = ac.erase(iter);
 }
 
-For seq-container; vector, string and deque. In ESTL, {{fix-two}} is only for seq-containers because
-erase() returns void for assoc-containers. But from C++11, erase() returns after iterator for both
-container type and can use it both type. Note: From C++11? Which gcc version?
+For vector, string and deque. In ESTL, <fix-two> is only for seq-containers because erase() returns
+void for assoc-containers. But from C++11, erase() returns after iterator for both container type
+and can use it both type. Note: From C++11? Which gcc version?
 
 From Primus p353.
 
