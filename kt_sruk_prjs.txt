@@ -431,26 +431,160 @@ DecodeApplicationObject
     }
 #endif
 
-{mahstart}
+{mheg-start}
 
 right, normally this would be something like dsm://a but in your case it might be fil://test1/app
 fil://test1/ automatically becomes the root of the app in the MHEG file system 'session'
 
-CMHEGApp::t_OnEvent(const PTEvent* pEvent)
-   case TCTv::EVENT_APP_MMI_START_APP:
-      mahStart((char*)initialObject, initialObjectLength);
+{
+  case eStartMheg:    // from IF to MW and other places. 
+  case TCTv::EVENT_DS_TUNE_SUCCESS:
+    CMHEGApp::NewService(void)
+
+  case eRebootMheg:   // from processMHEGKey when EXIT is pressed. send it to itself
+    CMHEGApp::NewService(void)
+      // do some with si such as remove and set si monitor. and call:
+      mhegBootStart(unsigned char slr)
+}
+
+OR
 
 CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
-   case eDoBoot:
-      mahStart(app_obj_ref.c_str(),app_obj_ref.size());
-   case eSiAppSearch:
-   	mahStart("DSM://startup",13);
+{
+  case eBootReboot: // from mhegbootreboot();
+    mhegBootStart(unsigned char slr)
+}
+
+CMHEGApp::mhegBootStart(unsigned char slr)  // arg is not used.
+{
+    PTEvent evt;
+    evt.receiver = this;
+    evt.type = eBootStart;
+    evt.param.l[0] = slr;
+    PCTask::Send(&evt);
+}
+
+CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
+{
+  case eBootStart:
+    PTEvent ev;
+    ev.receiver = this;
+    ev.type = ePMTRecieved;
+    ev.param.l[1] = m_boot_id;
+
+    // expect to have a event back from si?
+    m_SIManager->AddMonitor(on_id,ts_id,sv_id,&ev, &m_PMTHandle);
+
+    // signal to mah?
+    mahSetActive(eMhegFlagTaskActive);
+}
+
+CMHEGApp::t_OnEvent(const PTEvent* pEvent)
+{
+  case TCTv::EVENT_APP_MMI_START_APP: mahStart((char*)initialObject, initialObjectLength);
+
+  case ePMTRecieved:
+    CMhegSvc // from mheg si.
+    if( okay to get svc from mheg si ) then 
+      onAcquire(loc,svc,pEvent->param.l[1]);
+}
+
+CMHEGApp::onAcquire(SMhegSvcLocation loc, CMhegSvc service, MhegSvcTransId tid)
+{
+    PTEvent evt;
+    evt.receiver = this;
+    evt.type = eSiAppSearch;
+    evt.param.l[0] = (long) new CMhegSvc(service); //service.getCarouselId();
+    evt.param.l[1] = (long) tid;
+    PCTask::Send(&evt);
+}
+
+CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
+{
+  case eSiAppSearch:
+    // do lots of thing to do search
+#ifdef DSM_SUPPORT
+    if (dsmSessionCreate(m_dsm_ctx, mhegSessionCB)
+        // mheg regiester its callback with dsm. 
+        // mhegCtxCB send evt.type = eSiCarouselMounted or evt.type = eSiCarouselFailed;
+#else
+        mahStart();
+#end
+
+  case eSiCarouselMounted:
+  {
+    dsmContextListCreate(srg, mhegCtxCB)
+      // mheg regiester its callback with dsm. 
+      // mhegCtxCB send evt.type = <eCtxListAcquired> or evt.type = eCtxListFailed;
+      
+    dsmDirectoryListCreate(srg, mhegDirCB)
+      // mhegDirCB send evt.type = <eDirListAcquired> or evt.type = eDirListFailed;
+
+    case eCtxListAcquired:
+      destory ctx;
+      if path is empty
+        if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
+        else if no root app(m_bNoRootApp) then mhegbootreboot();
+        else set no init app. {set-no-init-app}
+      else
+        dsmObjectCreate(m_dsm_session, mhegInitialCb,
+        // mhegInitialCb send evt.type = <eInitialAcquired> or eInitialFailed;
+
+    case eCtxListFailed:
+      if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
+      else if no root app(m_bNoRootApp) then mhegbootreboot();
+      else set no init app. {set-no-init-app}
+
+    case eDirListAcquired: 
+      if no init app(m_bNoInitialApp) then send::eDoBoot(eBootSRG,boot_id);
+      else set root app. {this-is-only-place-to-set-root-app}
+
+    case eDirListAcquired: 
+      mhegbootreset();
+  }
+
+  case eSiCarouselFailed:
+    // abort search
+    mhegbootreboot();
+
+
+  case eInitialFailed:
+    if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
+    else if no root app(m_bNoRootApp) then mhegbootreboot();
+    else set no init app. {set-no-init-app}
+
+  case eInitialAcquired:
+    if found a file then send::eDoBoot(eBootCL, boot_id); <BOOT-CL>
+
+    if
+      if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
+      else if no root app(m_bNoRootApp) then mhegbootreboot();
+      else set no init app. {set-no-init-app}
+    else
+      dsmDirectoryListCreate(obj, mhegInitialListedCb)
+      // evt.type = <eInitialListedAcquired> or evt.type = eInitialListedFailed; <- from dsm
+    
+    case eInitialListedFailed:
+    send::eDoBoot;
+
+  case eInitialListedAcquired:
+    if okay from mhegBootStartObject(pList, m_cl_app_object);
+    send::eDoBoot( eBootCL, boot_id );  <BOOT-CL>
+
+  case eDoBoot:
+    mahStart(app_obj_ref.c_str(),app_obj_ref.size());
+}
+
 
 mahStart()
 {
 	mh5SendMAHMessage(eMhegMsgAppInit, (uint32_t)appname, 0, 0);
 }
 
+{to-search-mw-apis}
+
+if( g_pAppWindow->GetIndirectChannel(&tChannel) )
+if ( !g_pAppTV->SetAppState(TCTv::STATE_APP_MHEG, 1) )
 
 {key-handles}
 
