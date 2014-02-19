@@ -11171,7 +11171,7 @@ c.emplace_back( "978-3403", 25, 15.99 );
 
 c.push_back( Sales_data("978-3403", 25, 15.99) );	// use temp object
 
-emplace construct a object directly in a container. no copy.
+Here c means container and the emplace_* construct a object directly in a container. no copy.
 
 
 ==============================================================================
@@ -11345,9 +11345,17 @@ void displayInfo(const Information& info)
 	 // destoryWindow(w);
 }
 
+
+{raii-and-exception-in-dtor}
+
+The raii is great but when use raii for own interface, it can raise exception in destructor. This
+problem is described in {problem-of-exception-in-dtor}. 
+
+
+{raii-and-copy-support}
+
 OK but what should happen if a Lock object is copied? Generally RAII object is copied? Many
 approaches depending on the type of resource.
-
 
 <1> prohibit copying
 Likely to be true for Lock. See {preventing-copies} in *kt_dev_cpp_004* So,
@@ -11399,12 +11407,13 @@ This is unique_ptr.
 
 #include <memory> and def init has a nullptr:
 
+shared_ptr< T > plist;
 shared_ptr<list<int >> plist;
 
 
 {make-shared}
 
-It will alloc and init T and return a shared_ptr< T>
+This will alloc and init T and return a shared_ptr< T>
 
 shard_prt< string > p4 = make_shared< string>(10, '9');
 auto p6 = make_shared<vector< sting>>();	// create empty vector< string>
@@ -11492,7 +11501,6 @@ string& StrBlob::back()
 	 return data->back();
 }
 
-
 This case don't define 'copy-controls' and use syn versions but not a problem as it uses shared_ptr.
 that's why shared_ptr is useful. ~
 
@@ -11513,8 +11521,7 @@ void f()
 	 // exception and no catch
 }
 
-it's exception safe
-
+This is exception safe. However, it is not for using resources which have own interfacces.
 
 void f()
 {
@@ -11563,7 +11570,7 @@ not sure when it's useful although p474 shows an example that's not appealing.
 
 {get-func}
 
-EC++15. Returns raw resource (underlying pointer). said it converts an RAII object into the raw
+EC++15. Returns raw resource (underlying pointer). Said it converts an RAII object into the raw
 resource. Explicit conversion.
 
 >
@@ -11733,7 +11740,6 @@ Because template create new classes. If need more, see further.
 ==============================================================================
 *kt_dev_stl_019*	new and delete
 
-
 {default-and-value-init}
 
 #include <new>
@@ -11744,32 +11750,27 @@ string* ps = new string();		// value init
 int* pi = new int;				// def init
 int* pi = new int();				// value init
 
-Only for built-in types, value init makes difference. <new-operator> combines allocation and
-construction. it creates 'unnamed' and 'def-inited'. calls ctor for class object.
-
-Raise 'bad_alloc' exception when there no memory.
-
+Only for built-in types, value init makes difference and this means that default-init for built-in
+types has uninitialized values. For class types, both will use default ctors and so no difference.
+<new-operator> combines allocation and construction. it creates 'unnamed' and then 'default-init'
+objects e.g. calls ctor for class object.
 
 {new-operator}
 
-MEC++08:
+MEC++08: This operator is built into the language and, like sizeof, you can't change its meaning: it
+always does the same thing. What it does is twofold: allocation and construction.
 
-This operator is built into the language and, like sizeof, you can't change its meaning: it always
-does the same thing. What it does is twofold: allocation and construction.
-
-For new, operator new (or operator new[])	to allocate raw memory and runs ctor to construct returns
-pointer to constructed memory.
+For new operator, use operator new (or operator new[])	to allocate raw memory, runs ctor to
+construct, and returns pointer to constructed memory. Raise 'bad_alloc' exception when there no
+memory.
 
 For delete, runs dtor and operator delete( or delete[]) to free memory.
 	 
-
 {operator-new-and-delete}
 
-This is the C++ equivalent of calling malloc and free.
-
-What you can change is how the memory for an object is allocated. The name of the function the new
-operator calls to allocate memory is operator new. you can rewrite or overload that function to
-change its behavior.
+This is the C++ equivalent of calling malloc and free. What you can change is how the memory for an
+object is allocated. The name of the function the new operator calls to allocate memory is
+operator-new. you can rewrite or overload that function to change its behavior.
 
 The operator new function is usually declared like this:
 
@@ -11781,27 +11782,24 @@ void *rawMemory = operator new(sizeof(string));
 
 Like malloc, operator new's only responsibility is to allocate memory.
 
-NOTE:
-Can define own operator new and delete but careful because it takes over responsibility for <ALL>
-dynamic memory allocation. 
-
-<BECAUSE>
-Write your own version of operator new and use the new operator; it will automatically invoke your
-custom version of operator new.
+NOTE: Can define own operator new and delete but careful because it takes over responsibility for
+<ALL> dynamic memory allocation. <BECAUSE> write your own version of operator new and then use the
+new operator; it will automatically invoke your custom version of operator new.
 
 
 {placement-new}
 
-A special version of operator new called placement new which gives it more options.
+A [special] version of operator new called placement new which gives it more options. The placement
+new is part of the standard C++ library. To use placement new, all you have to do is #include <new>
+(or, if your compilers don't yet support the new-style header names, <new.h>).
 
-{{usuage-one}}
+<example-one>
 
 One example is to tell not to raise exception. No exception and return nullptr instead.
 
 int* pi = new (nothrow) int;
 
-
-{{usuage-two}}
+<example-two>
 
 new (place_address) type 
 new (place_address) type (initializers)
@@ -11814,13 +11812,10 @@ Widget * constructWidgetInBuffer(void *buffer, int widgetSize)
 This function returns a pointer to a Widget object that's constructed within the buffer passed to
 the function.
 
-<USEFUL-CASE>
+<useful-case>
 Such a function might be useful for applications using shared memory or memory-mapped I/O, because
 objects in such applications must be placed at specific addresses or in memory allocated by special
 routines.
-
-Placement new is part of the standard C++ library. To use placement new, all you have to do is
-#include <new> (or, if your compilers don't yet support the new-style header names, <new.h>).
 
 
 {must-match-between-operator-new-and-delete}
@@ -11862,24 +11857,24 @@ must use memory allocated by the 'same' allocator but need not point to memory b
 new and refer to dynamic memory.
 
 
-
 {overloading-new-and-delete-as-a-member-func}
 
 note: useful case? can implement memory allocation specific to class?
 
-when see new/delete expr, looks for corresponding operator function to call. For class
-type, arg-dependant lookup applies. If class has a member new or delete operator, this
-will be used. while can use library version via ::new or ::delete.
+When see new/delete expr, looks for corresponding operator function to call. For class type
+arg-dependant lookup applies. If class has a member new or delete operator, this will be used. while
+can use library version via ::new or ::delete.
 
 
 {allocator}
 
 #include <memory>
 
-Provides a way to decouple alloc/dealloc and construction/destruction and allows finer control. for
+Provides a way to decouple alloc/dealloc and construction/destruction and allows finer control. For
 example, alloc big memory and construct objects and pay the overhead of construction when needed.
 
-allocator provides 'type-aware' allocation and returns 'unconstructed' memory.
+The allocator provides 'type-aware' allocation and returns 'unconstructed' memory while operator-new
+uses only size.
 
 allocator< string > alloc;
 auto const p = alloc.allocator(n);
