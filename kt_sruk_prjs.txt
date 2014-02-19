@@ -436,15 +436,26 @@ DecodeApplicationObject
 right, normally this would be something like dsm://a but in your case it might be fil://test1/app
 fil://test1/ automatically becomes the root of the app in the MHEG file system 'session'
 
+Events which are not used:
+    eAppObjFound,
+    eAppObjMissing,
+
+Events which are used in mhv but not in mhep app:
+    eMHVAudioComponentChange,
+    eMHVVideoComponentChange,
+
+CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
 {
   case eStartMheg:    // from IF to MW and other places. 
   case TCTv::EVENT_DS_TUNE_SUCCESS:
     CMHEGApp::NewService(void)
 
-  case eRebootMheg:   // from processMHEGKey when EXIT is pressed. send it to itself
+  case <eRebootMheg>:   // from processMHEGKey when EXIT is pressed. send it to itself
     CMHEGApp::NewService(void)
+    {
       // do some with si such as remove and set si monitor. and call:
       mhegBootStart(unsigned char slr)
+    }
 }
 
 OR
@@ -452,6 +463,7 @@ OR
 CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
 {
   case eBootReboot: // from mhegbootreboot();
+    // do some work
     mhegBootStart(unsigned char slr)
 }
 
@@ -464,9 +476,11 @@ CMHEGApp::mhegBootStart(unsigned char slr)  // arg is not used.
     PCTask::Send(&evt);
 }
 
-CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
+CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent) <request-to-si-for-pmt>
 {
   case eBootStart:
+
+    <mhegboot-reset> mhegBootReset();
     PTEvent ev;
     ev.receiver = this;
     ev.type = ePMTRecieved;
@@ -481,7 +495,8 @@ CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
 
 CMHEGApp::t_OnEvent(const PTEvent* pEvent)
 {
-  case TCTv::EVENT_APP_MMI_START_APP: mahStart((char*)initialObject, initialObjectLength);
+  case TCTv::EVENT_APP_MMI_START_APP: 
+    mahStart((char*)initialObject, initialObjectLength);
 
   case ePMTRecieved:
     CMhegSvc // from mheg si.
@@ -503,13 +518,17 @@ CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
 {
   case eSiAppSearch:
     // do lots of thing to do search
+    // once service locked, see if it has mheg and request MW to get mheg section. MW later send it back. evt.type = eServiceBootAcquired;
 #ifdef DSM_SUPPORT
-    if (dsmSessionCreate(m_dsm_ctx, mhegSessionCB)
+    if (dsmSessionCreate(m_dsm_ctx, mhegSessionCB) <dsm-session-create>
         // mheg regiester its callback with dsm. 
-        // mhegCtxCB send evt.type = eSiCarouselMounted or evt.type = eSiCarouselFailed;
+        // mhegCtxCB send evt.type = <eSiCarouselMounted> or evt.type = <eSiCarouselFailed>
 #else
         mahStart();
 #end
+
+  case eServiceBootAcquired:
+    if got the different one, cancel the section subscription.
 
   case eSiCarouselMounted:
   {
@@ -524,7 +543,7 @@ CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
       destory ctx;
       if path is empty
         if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
-        else if no root app(m_bNoRootApp) then mhegbootreboot();
+        else if no root app(m_bNoRootApp) then <mhegboot-reboot>
         else set no init app. {set-no-init-app}
       else
         dsmObjectCreate(m_dsm_session, mhegInitialCb,
@@ -532,21 +551,26 @@ CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
 
     case eCtxListFailed:
       if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
-      else if no root app(m_bNoRootApp) then mhegbootreboot();
+      else if no root app(m_bNoRootApp) then <mhegboot-reboot>
       else set no init app. {set-no-init-app}
 
     case eDirListAcquired: 
+      found =  <mhegBootStartObject>(pList, app_file);
       if no init app(m_bNoInitialApp) then send::eDoBoot(eBootSRG,boot_id);
-      else set root app. {this-is-only-place-to-set-root-app}
+      else set root app. {this-is-only-place-to-set-root-app} // start object from dsmcc file?
 
     case eDirListAcquired: 
-      mhegbootreset();
+      <mhegboot-reset>
   }
+
+  case eDirListFailed:
+    <mhegboot-reset>
 
   case eSiCarouselFailed:
     // abort search
-    mhegbootreboot();
+    <mhegboot-reboot>
 
+  case eSiCarouselRemount:
 
   case eInitialFailed:
     if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
@@ -568,11 +592,61 @@ CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
     send::eDoBoot;
 
   case eInitialListedAcquired:
-    if okay from mhegBootStartObject(pList, m_cl_app_object);
-    send::eDoBoot( eBootCL, boot_id );  <BOOT-CL>
+    if okay from <mhegBootStartObject>(pList, m_cl_app_object);
+      send::eDoBoot( eBootCL, boot_id );  <BOOT-CL>
 
   case eDoBoot:
-    mahStart(app_obj_ref.c_str(),app_obj_ref.size());
+
+    // can start from either dsm or fs
+    
+    switch (pEvent->param.l[0])
+    {
+    case eBootSRG:
+        app_obj_ref = std::string("DSM:/") + m_app_object;
+        break;
+    case eBootCL:
+        app_obj_ref = std::string("DSM:/") + m_cl_app_object;
+        break;
+            default:
+        ASSERT(0);
+    }
+
+    if (t_CheckAndEnableFsa() == false) // send eFSAStoreNotification frm dsm fsa.
+      mahStart(app_obj_ref.c_str(),app_obj_ref.size());
+    else
+      
+
+  case eFSAStoreNotification:
+    t_ProcessFsaEvent(pEvent);
+      mahStart()
+
+  case eServiceChanged:
+  case eServiceDead:
+  case eServiceBootAcquired:
+
+  case eStopMheg:  // Kill MHEG for some external reason
+  case TCTv::EVENT_SOURCE_CHANGED:    // may lead to EVENT_DS_TUNE_START
+  case TCTv::EVENT_NO_SIGNAL:  // Equiv to EVENT_DS_TUNE_START
+  case TCTv::EVENT_SERVICE_NOT_AVAILABLE: // Equiv to EVENT_DS_TUNE_START
+
+  // from a callback from mah
+  case eMhegAppRunning:
+  case eMhegAppStopped:
+
+  case TCTv::EVENT_APP_MMI_CLOSE:
+  case eAppMMIExit: // there is no place to send this
+
+  // related pvr and reminder from interface for sub components
+  case eEventConflictWndClose:
+
+  // related pin from interface for sub components
+  case eDisplayPINDialog:
+
+  // from interface for sub components. mah
+  case eLaunchWidget:
+
+  // from mheg si from meh
+  case eUserSelectChannel,
 }
 
 
@@ -739,7 +813,7 @@ CMHEGApp::t_Create(void)
    }
 }
 
-{app-apis}
+{mheg-app-apis}
 
 // register this with mw. state checker
 CMHEGApp::NoSignalBannerEnableChecker(PTEvent* param)
