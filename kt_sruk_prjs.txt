@@ -462,7 +462,7 @@ OR
 
 CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
 {
-  case eBootReboot: // from mhegbootreboot();
+  case eBootReboot: // from <mhegboot-reboot>
     // do some work
     mhegBootStart(unsigned char slr)
 }
@@ -532,32 +532,39 @@ CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
 
   case eSiCarouselMounted:
   {
-    dsmContextListCreate(srg, mhegCtxCB)
-      // mheg regiester its callback with dsm. 
-      // mhegCtxCB send evt.type = <eCtxListAcquired> or evt.type = eCtxListFailed;
-      
-    dsmDirectoryListCreate(srg, mhegDirCB)
-      // mhegDirCB send evt.type = <eDirListAcquired> or evt.type = eDirListFailed;
+    if got the same boot-id and dsm session
+      dsmContextListCreate(srg, mhegCtxCB)
+        // mheg regiester its callback with dsm. 
+        // mhegCtxCB send evt.type = <eCtxListAcquired> or evt.type = eCtxListFailed;
+        
+      dsmDirectoryListCreate(srg, mhegDirCB)
+        // mhegDirCB send evt.type = <eDirListAcquired> or evt.type = eDirListFailed;
 
     case eCtxListAcquired:
-      destory ctx;
+      // to get app based on language setting. browse context list and locate path and destroy
+      // context.
       if path is empty
         if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
         else if no root app(m_bNoRootApp) then <mhegboot-reboot>
         else set no init app. {set-no-init-app}
       else
-        dsmObjectCreate(m_dsm_session, mhegInitialCb,
+        dsmObjectCreate(m_dsm_session, mhegInitialCb) on found path
         // mhegInitialCb send evt.type = <eInitialAcquired> or eInitialFailed;
 
     case eCtxListFailed:
-      if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
+      if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id); <to-boot>
       else if no root app(m_bNoRootApp) then <mhegboot-reboot>
-      else set no init app. {set-no-init-app}
+      else set no init app. <set-no-init-app>
 
     case eDirListAcquired: 
+      // browse a directory and try to find a file
       found =  <mhegBootStartObject>(pList, app_file);
-      if no init app(m_bNoInitialApp) then send::eDoBoot(eBootSRG,boot_id);
-      else set root app. {this-is-only-place-to-set-root-app} // start object from dsmcc file?
+      if found
+        if no init app(m_bNoInitialApp) then send::eDoBoot(eBootSRG,boot_id);   <to-boot>
+        else set root app. {this-is-only-place-to-set-root-app} // start object from dsmcc file?
+      else
+        if no init app then <mhegboot-reboot>
+        else set no root app.
 
     case eDirListAcquired: 
       <mhegboot-reset>
@@ -578,15 +585,19 @@ CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
     else set no init app. {set-no-init-app}
 
   case eInitialAcquired:
-    if found a file then send::eDoBoot(eBootCL, boot_id); <BOOT-CL>
-
-    if
-      if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id);
-      else if no root app(m_bNoRootApp) then mhegbootreboot();
+    if it is a file then send::eDoBoot(eBootCL, boot_id); <to-boot>
+    else it is not a file or directory then
+      if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id); <to-boot>
+      else if no root app(m_bNoRootApp) then <mhegboot-reboot>;
       else set no init app. {set-no-init-app}
-    else
+      destory dsm object;
+    else ( it is a directory )
       dsmDirectoryListCreate(obj, mhegInitialListedCb)
       // evt.type = <eInitialListedAcquired> or evt.type = eInitialListedFailed; <- from dsm
+      if found root app(m_bFoundRootApp) then send::eDoBoot(eBootSRG,boot_id); <to-boot>
+      else if no root app(m_bNoRootApp) then <mhegboot-reboot>;
+      else set no init app. {set-no-init-app}
+      destory dsm object;
     
     case eInitialListedFailed:
     send::eDoBoot;
