@@ -7,7 +7,7 @@ Last change:
 |kt_sruk_prjs_mheg_001| 	mheg srcs
 |kt_sruk_prjs_mheg_002| 	mheg spec: text render
 |kt_sruk_prjs_mheg_003| 	stream player
-|kt_sruk_prjs_mheg_004| 	mheg app
+|kt_sruk_prjs_mheg_004| 	<empty>
 
 |kt_sruk_prjs_tizen_001| 	Tizen spec {tizen-architecture}
 
@@ -327,6 +327,7 @@ Src/pfm/Src/pfmdoassert.cpp|7| /// @file    DvbApp\MHEG\Src\pfm\Src\pfmdoprint.c
 Src/pfm/Src/pfmtim.cpp|7| /// @file    pfmtim.cpp
 Src/pfm/Src/tim.c|34| //#include "pfmosa.h"
 
+
 {mheg-app} {running-flow}
 
 // depending on flag, add ftables
@@ -335,10 +336,73 @@ m_mhvDrivers[] = { _mhvFsDriver, _mhvDsmDrivers, ... };
 
 ./BP_AppCM/Src/AppManagement/TaskManager.cpp:65:TCFactory* g_pAppFactory;
 ./BP_APP/BP_AppConf/2013/FOXP_DVB/Config/AppCMTV/Src/TaskManagerConfig.cpp
+
+<mw>
+
 void CTaskManager::t_InitApplications()                                                         
     REGISTER_APP(DELAYED_GROUP, DTV_APP_MHEG, CMHEGApp, "MHEG");                                
 
 \\106.1.8.6\keitee.park\mheg2013\BP_APP\BP_AppDVB\MHEG\Src\app\Src\
+
+(./BP_GFX/BP_ShadowMW/4.0/Inc/CAppBase.h)
+class CAppBase : public PCTask
+
+(./BP_APP/BP_AppCM/Inc/CApp.h)
+class CApp : public CAppBase , public CKeyRegister
+
+class CMHEGApp : public CApp               
+
+// do not have Create()
+CMHEGApp::t_Create(void)
+{
+   pfmInitialise
+	mhvInitialise // mhv.cpp
+   {
+      _mhvDriverInit();
+      {
+			// depends on global array m_mhvDrivers
+         m_mhvDrivers[ii]->init(); // here use dsmcc drivers
+      }
+   }
+	mahInitialise
+	{
+      pfmQueueCreate("mhgQ", 1500);
+      pfmQueueCreate("mhgSecQ", 1024); // secondary q?
+
+      mhegMemRegionCreate()
+
+      threadParams.priority = threadPriorityHigh;
+      threadParams.stack = 256 * 1024;
+      threadParams.name = "MHEG mah";
+      pfmResult = pfmThreadCreate(&threadParams, mahTask, 0);
+
+         mahTask
+         {
+            MH5C_Init();   // mh5core.c
+            {
+               MH5B_Init();
+            }
+            mahProcessEvents();
+            {
+               for(;;)
+               {
+                  pfmQueueReceive(_gMhegQueueID, PFM_WAIT_FOREVER, &msg);
+                  switch(msg.id)
+							case eMhegMsgAppInit:
+								MH5A_Launch();
+									mhvSessionLaunch(const char* appname..);
+										_mhvSessionOpen(name..);
+											_mhvSessionResolveName
+
+               }
+            }
+         }
+	}
+
+   dsmInitialise()
+   {
+   }
+}
 
 
 // [KT] object types
@@ -431,7 +495,14 @@ DecodeApplicationObject
     }
 #endif
 
-{mheg-start}
+{meng-init}
+
+1> all mutex are for external mw interfaces. keep it?
+2> s_mheg_init is not used. 
+3> init mw and mheg components
+4> send event.type = TCTv::EVENT_DS_TUNE_SUCCESS; event.param.s[3] = TCTv::TUNE_SUCCESS_NORMAL; to self
+
+{mheg-boot}
 
 right, normally this would be something like dsm://a but in your case it might be fil://test1/app
 fil://test1/ automatically becomes the root of the app in the MHEG file system 'session'
@@ -666,295 +737,7 @@ mahStart()
 	mh5SendMAHMessage(eMhegMsgAppInit, (uint32_t)appname, 0, 0);
 }
 
-{to-search-mw-apis}
-
-if( g_pAppWindow->GetIndirectChannel(&tChannel) )
-if ( !g_pAppTV->SetAppState(TCTv::STATE_APP_MHEG, 1) )
-
-{key-handles}
-
-kit@kit-vb:~/tizen/apps$ egrep -nr key .
-./src/view_main.c:217:static void _ledge_key_pressed(void *data, Evas *e,
-./src/view_main.c:232:	if (!strcmp(ev->keyname, "Left"))
-./src/view_main.c:236:static void _redge_key_pressed(void *data, Evas *e,
-./src/view_main.c:251:	if (!strcmp(ev->keyname, "Right"))
-./src/view_main.c:279:				_ledge_key_pressed, ai);
-./src/view_main.c:282:				_redge_key_pressed, ai);
-./src/view_main.c:360:				_redge_key_pressed, ai);
-./src/view_main.c:570:static void _download_btn_key_pressed(void *data, Evas *e,
-./src/view_main.c:585:	if (!strcmp(ev->keyname, "Left"))
-./src/view_main.c:587:	else if (!strcmp(ev->keyname, "Right"))
-./src/view_main.c:619:			_download_btn_key_pressed, priv);
-
-
-==============================================================================
-*kt_sruk_prjs_mheg_002* 	mheg spec: text render
-
-ETSI ES 202 184 V1.1.1 (2004-11), MHEG-5 Broadcast Profile
-S:\references\etsi\ES202184v010101p-MHEG.pdf
-
-13.5 text rendering
-
-{rendering-process}
-
-STEP01
-
-using <text-object> and font, calc:	note: ??
-
-1) max num of line
-2) width available on each line
-
-STEP02
-
-determine a series of lines using:
-
-1) <logical-rule> note: ??
-2) available line width from step01-2.
-3) <breaking-text-rule> note: ??
-
-STEP03
-
-check if each line is fit <vertically> within the text-object. <vertical-truncation> is needed if
-required line exceeds the max line. affected by <vertical-jutification> of the text-object.
-
-note: is it defined in text-object?
-
-STEP04
-
-determine the place of each char in a line using:
-
-1) even applied all rules so far, there are extreme cases that line length exceeds the available
-width from step01-2. Then, <horizontal-truncation> may be requred: discard some chars. 
-
-2) affected by <horizontal-jutification> of the text-object.
-
-note: is it defined in text-object?
- 
-3) placement of chars should have sensible and consistent spacing. note: sensible?
-
-
-{language}
-
-http://www.cs.cf.ac.uk/Dave/Multimedia/node297.html
-
-The key elements of the scene are its :Links. Links are where most processing happens in MHEG
-applications. MHEG links could have been called action listeners. You write links to listen for
-particular events, when this event occours your procedural code in the :LinkEffect section is
-executed by the MHEG engine.
-
-
-{runtime}
-
-It is the responsibility of the client to have a runtime that interprets the application parts,
-presents the application to the user, and handles the local interaction with the user. 
-
-
-{dtg-test-spec}
-
-Z:\cannon\ftp\test_suite\UK_DTG_MHEG\archive\DTG-MHEG106-V4.1.1\docs\DTG_MHEG_Test_Suite_Specification.pdf
-
-
-==============================================================================
-*kt_sruk_prjs_mheg_003* 	stream player
-
-\\106.1.8.195\avshare\Dektec\StreamXpres3.11
-
-
-==============================================================================
-*kt_sruk_prjs_mheg_004* 	mheg app
-
-
-(./BP_GFX/BP_ShadowMW/4.0/Inc/CAppBase.h)
-class CAppBase : public PCTask
-
-(./BP_APP/BP_AppCM/Inc/CApp.h)
-class CApp : public CAppBase , public CKeyRegister
-
-class CMHEGApp : public CApp               
-
-// do not have Create()
-CMHEGApp::t_Create(void)
-{
-   pfmInitialise
-	mhvInitialise // mhv.cpp
-   {
-      _mhvDriverInit();
-      {
-			// depends on global array m_mhvDrivers
-         m_mhvDrivers[ii]->init(); // here use dsmcc drivers
-      }
-   }
-	mahInitialise
-	{
-      pfmQueueCreate("mhgQ", 1500);
-      pfmQueueCreate("mhgSecQ", 1024); // secondary q?
-
-      mhegMemRegionCreate()
-
-      threadParams.priority = threadPriorityHigh;
-      threadParams.stack = 256 * 1024;
-      threadParams.name = "MHEG mah";
-      pfmResult = pfmThreadCreate(&threadParams, mahTask, 0);
-
-         mahTask
-         {
-            MH5C_Init();   // mh5core.c
-            {
-               MH5B_Init();
-            }
-            mahProcessEvents();
-            {
-               for(;;)
-               {
-                  pfmQueueReceive(_gMhegQueueID, PFM_WAIT_FOREVER, &msg);
-                  switch(msg.id)
-							case eMhegMsgAppInit:
-								MH5A_Launch();
-									mhvSessionLaunch(const char* appname..);
-										_mhvSessionOpen(name..);
-											_mhvSessionResolveName
-
-               }
-            }
-         }
-	}
-
-   dsmInitialise()
-   {
-   }
-}
-
-{mheg-app-apis}
-
-// register this with mw. state checker
-CMHEGApp::NoSignalBannerEnableChecker(PTEvent* param)
-tvModeMhegStopCompleteWrapper(PTEvent* pParam)
-viewerMhegSourceStopCompleteWrapper(PTEvent* pParam)
-viewerMhegStopCompleteWrapper(PTEvent* pParam)
-	CMHEGApp::viewerMhegStopCB(PTEvent* pParam, bool AVRestart)
-
-// only by mheg sifun to get member data
-CMHEGApp::getDefaultServiceInfo( uint16_t* onid, uint16_t* tsid, uint16_t* sid,
-CMHEGApp::getFreesatServiceId(uint16_t* sid )
-
-// only by app
-CMHEGApp::storeDefaultServiceInfo(void)
-CMHEGApp::initGraphics()
-bool isMHEGappRunnable()
-CMHEGApp::CheckKey(int shadow_key)
-CMHEGApp::onAcquire(SMhegSvcLocation loc, CMhegSvc service, MhegSvcTransId tid)
-CMHEGApp::onChange(SMhegSvcLocation loc, CMhegSvc service, MhegSvcTransId tid)
-CMHEGApp::onExpire(SMhegSvcLocation loc, MhegSvcTransId tid)
-CMHEGApp::NewService(void)
-CMHEGApp::canBoot(void)
-CMHEGApp::StateChanged(void)
-SendEvent2MHEGApp(unsigned long event_type)
-CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
-static bool mhegBootStartObject(SMHEGDsmDirectoryList *pList, std::string &app_file)
-CMHEGApp::mhegBootStart(unsigned char slr)
-CMHEGApp::mhegBootReset(void)
-CMHEGApp::mhegBootReboot(REBOOT_REASON rr, unsigned char slr, bool resetdsm)
-CMHEGApp::MemoryCleardown()
-CMHEGApp::MemoryResume()
-initNbInfo(void)
-setNbInfo(int len, uint8_t* buf)
-getNbInfo(uint8_t** oinfo, uint32_t* olen)
-static void getLangCode(int lang, char code[3])
-CMHEGApp::unblockKeyInput(int clickid)
-CMHEGApp::isSuspended(void)
-bool CMHEGApp::isServiceChildRatingLocked(void)
-bool CMHEGApp::appMMIGetOption(const uint8_t* options,
-CMHEGApp::appMMISetState(AppMMIState state)
-CMHEGApp::appMMIGetState(void)
-CMHEGApp::setSDBMhegEPGStatus( bool is_avail )
-CMHEGApp::resetSDBMhegEPGStatus( void )
-CMHEGApp::reInjectEPGKey( bool mhegStarted )
-uint32_t CMHEGApp::getNonDestructiveTuneCarouselId(void)
-void CMHEGApp::suspendSession(void)
-void CMHEGApp::resumeSession(void)
-void CMHEGApp::abortNonDestructiveTune(void)
-void CMHEGApp::startNonDestructiveTune(void)
-bool CMHEGApp::NonDestructiveTune(void)
-bool CMHEGApp::NonDestructiveTuneNewServiceSeen(void)
-void CMHEGApp::resetAVstreams(void)
-bool CMHEGApp::getContentProtectPinSupport(int& pinRequirement)
-bool CMHEGApp::validateContentProtectPin(const char* pin, int& validationResult)
-static void checkPrefs()
-void CMHEGApp::SuppressDataService()
-void CMHEGApp::BringBackDataService()
-CMHEGApp::execPromptForGuidance( pfgRpCBFN cbfn, void * cbargs, char *reason, int reasonLen)
-CMHEGApp::RunPvrConflictResolution(const CMhegPvrConflictResState::TEvents& events,
-bool CMHEGApp::SetTruePersistentStorageFlag(bool value)
-bool CMHEGApp::GetTruePersistentStorageFlag(bool& value)
-bool CMHEGApp::m_CheckConflictionApp( void )
-bool CMHEGApp::checkMHEGGraphicsLocked()
-void CMHEGApp::suppressSubtitles(bool CIP)
-void CMHEGApp::resumeSubtitles()
-
-// used by mah to send message
-mhegAppRunning(void)
-mhegAppStopped(void)
-
-// used by mah
-mhegInputRegisterTransistion(int oldRegister, int newRegister)
-void mhegWidgetLaunch(const char* uri, const char* params)
-
-// used by eng. why is it here since it is not member func!
-mhegPromptForGuidance( PromptForGuidanceCBFN cbfn, void * cbargs, char *reason, int reasonLen)
-mhegGetContentProtectPinRequirement(int* pinRequirement)
-mhegGetContentProtectPinSupport(int* pinRequirement)
-mhegValidateContentProtectPin(char* pin, int* validationResult)
-bool mhegIsVideoDecoderUsed(void)
-
-extern "C"
-{
-// MHEG engine requires those functions to operate properly
-// as MHEG engine is a pure C component it also referencesk
-// functions with C linkage
-
-    void MHEGAppKeyDoneCB( void )
-    bool MHEGAppSuspended()
-    void MHEGAppSubtitleSuspended(bool resume)
-    bool mhegGraphicsLock()
-    void mahBoot_Reboot(void)
-    bool mahGetBootInfo(char **octs, uint32_t *len)
-    {
-    return getNbInfo((uint8_t**)octs,len);
-    }
-    void mahReInjectEPGKey( bool mhegStarted )
-    bool IsMhegScreenUsedByApp(void)
-} // extern "C"
-
-
-// used by app, mhv
-bool mhegIsDataServicePresent(void)
-
-// register this with mah
-mahStoppedCb(void* cbArg)
-
-// register this with dsm
-mhegSessionCB(void *cbArg, HDsmSession hSession, pfmerr_t status )
-mhegSessionCBCarouselPIDChanged(void *cbArg, HDsmSession hSession, pfmerr_t status )
-mhegDirCB(void *cbArg, SMHEGDsmDirectoryList *pList, pfmerr_t status)
-mhegCtxCB(void *cbArg, SMHEGDsmContextList *pCtxList, pfmerr_t status )
-mhegInitialCb(void *cbArg, HDsmObject obj,pfmerr_t status)
-mhegInitialListedCb(void *cbArg, SMHEGDsmDirectoryList *plist, pfmerr_t status)
-
-// only app so can be removed since check member vars
-CMHEGApp::isMhegAppRunning(void)
-
-// not used
-CMHEGApp::isMhegInit(void)
-CMHEGApp::isMhegEnabled(void)
-static void rebootTimeout(timExpireData data)
-CMHEGApp::checkEPGKey( void )
-CMHEGApp::processEPGKey( void )
-void CMHEGApp::PrintAppDebug(void)
-
-// used by gpi.. will be kept???
-static bool exposeEvent(const PTEvent* eventData, const void* pParam)
-
-{events}
+{mheg-events}
 
 { control messages from mw?
 	// hide mheg from mw so lifecycle from mw
@@ -1140,7 +923,137 @@ static bool exposeEvent(const PTEvent* eventData, const void* pParam)
 }
 
 
-{sifun.cpp}
+{mheg-app-apis}
+
+// register this with mw. state checker
+CMHEGApp::NoSignalBannerEnableChecker(PTEvent* param)
+tvModeMhegStopCompleteWrapper(PTEvent* pParam)
+viewerMhegSourceStopCompleteWrapper(PTEvent* pParam)
+viewerMhegStopCompleteWrapper(PTEvent* pParam)
+	CMHEGApp::viewerMhegStopCB(PTEvent* pParam, bool AVRestart)
+
+// only by mheg sifun to get member data
+CMHEGApp::getDefaultServiceInfo( uint16_t* onid, uint16_t* tsid, uint16_t* sid,
+CMHEGApp::getFreesatServiceId(uint16_t* sid )
+
+// only by app
+CMHEGApp::storeDefaultServiceInfo(void)
+CMHEGApp::initGraphics()
+bool isMHEGappRunnable()
+CMHEGApp::CheckKey(int shadow_key)
+CMHEGApp::onAcquire(SMhegSvcLocation loc, CMhegSvc service, MhegSvcTransId tid)
+CMHEGApp::onChange(SMhegSvcLocation loc, CMhegSvc service, MhegSvcTransId tid)
+CMHEGApp::onExpire(SMhegSvcLocation loc, MhegSvcTransId tid)
+CMHEGApp::NewService(void)
+CMHEGApp::canBoot(void)
+CMHEGApp::StateChanged(void)
+SendEvent2MHEGApp(unsigned long event_type)
+CMHEGApp::mhegBootEventProcess(const PTEvent* pEvent)
+static bool mhegBootStartObject(SMHEGDsmDirectoryList *pList, std::string &app_file)
+CMHEGApp::mhegBootStart(unsigned char slr)
+CMHEGApp::mhegBootReset(void)
+CMHEGApp::mhegBootReboot(REBOOT_REASON rr, unsigned char slr, bool resetdsm)
+CMHEGApp::MemoryCleardown()
+CMHEGApp::MemoryResume()
+initNbInfo(void)
+setNbInfo(int len, uint8_t* buf)
+getNbInfo(uint8_t** oinfo, uint32_t* olen)
+static void getLangCode(int lang, char code[3])
+CMHEGApp::unblockKeyInput(int clickid)
+CMHEGApp::isSuspended(void)
+bool CMHEGApp::isServiceChildRatingLocked(void)
+bool CMHEGApp::appMMIGetOption(const uint8_t* options,
+CMHEGApp::appMMISetState(AppMMIState state)
+CMHEGApp::appMMIGetState(void)
+CMHEGApp::setSDBMhegEPGStatus( bool is_avail )
+CMHEGApp::resetSDBMhegEPGStatus( void )
+CMHEGApp::reInjectEPGKey( bool mhegStarted )
+uint32_t CMHEGApp::getNonDestructiveTuneCarouselId(void)
+void CMHEGApp::suspendSession(void)
+void CMHEGApp::resumeSession(void)
+void CMHEGApp::abortNonDestructiveTune(void)
+void CMHEGApp::startNonDestructiveTune(void)
+bool CMHEGApp::NonDestructiveTune(void)
+bool CMHEGApp::NonDestructiveTuneNewServiceSeen(void)
+void CMHEGApp::resetAVstreams(void)
+bool CMHEGApp::getContentProtectPinSupport(int& pinRequirement)
+bool CMHEGApp::validateContentProtectPin(const char* pin, int& validationResult)
+static void checkPrefs()
+void CMHEGApp::SuppressDataService()
+void CMHEGApp::BringBackDataService()
+CMHEGApp::execPromptForGuidance( pfgRpCBFN cbfn, void * cbargs, char *reason, int reasonLen)
+CMHEGApp::RunPvrConflictResolution(const CMhegPvrConflictResState::TEvents& events,
+bool CMHEGApp::SetTruePersistentStorageFlag(bool value)
+bool CMHEGApp::GetTruePersistentStorageFlag(bool& value)
+bool CMHEGApp::m_CheckConflictionApp( void )
+bool CMHEGApp::checkMHEGGraphicsLocked()
+void CMHEGApp::suppressSubtitles(bool CIP)
+void CMHEGApp::resumeSubtitles()
+
+// used by mah to send message
+mhegAppRunning(void)
+mhegAppStopped(void)
+
+// used by mah
+mhegInputRegisterTransistion(int oldRegister, int newRegister)
+void mhegWidgetLaunch(const char* uri, const char* params)
+
+// used by eng. why is it here since it is not member func!
+mhegPromptForGuidance( PromptForGuidanceCBFN cbfn, void * cbargs, char *reason, int reasonLen)
+mhegGetContentProtectPinRequirement(int* pinRequirement)
+mhegGetContentProtectPinSupport(int* pinRequirement)
+mhegValidateContentProtectPin(char* pin, int* validationResult)
+bool mhegIsVideoDecoderUsed(void)
+
+extern "C"
+{
+// MHEG engine requires those functions to operate properly
+// as MHEG engine is a pure C component it also referencesk
+// functions with C linkage
+
+    void MHEGAppKeyDoneCB( void )
+    bool MHEGAppSuspended()
+    void MHEGAppSubtitleSuspended(bool resume)
+    bool mhegGraphicsLock()
+    void mahBoot_Reboot(void)
+    bool mahGetBootInfo(char **octs, uint32_t *len)
+    {
+    return getNbInfo((uint8_t**)octs,len);
+    }
+    void mahReInjectEPGKey( bool mhegStarted )
+    bool IsMhegScreenUsedByApp(void)
+} // extern "C"
+
+
+// used by app, mhv
+bool mhegIsDataServicePresent(void)
+
+// register this with mah
+mahStoppedCb(void* cbArg)
+
+// register this with dsm
+mhegSessionCB(void *cbArg, HDsmSession hSession, pfmerr_t status )
+mhegSessionCBCarouselPIDChanged(void *cbArg, HDsmSession hSession, pfmerr_t status )
+mhegDirCB(void *cbArg, SMHEGDsmDirectoryList *pList, pfmerr_t status)
+mhegCtxCB(void *cbArg, SMHEGDsmContextList *pCtxList, pfmerr_t status )
+mhegInitialCb(void *cbArg, HDsmObject obj,pfmerr_t status)
+mhegInitialListedCb(void *cbArg, SMHEGDsmDirectoryList *plist, pfmerr_t status)
+
+// only app so can be removed since check member vars
+CMHEGApp::isMhegAppRunning(void)
+
+// not used
+CMHEGApp::isMhegInit(void)
+CMHEGApp::isMhegEnabled(void)
+static void rebootTimeout(timExpireData data)
+CMHEGApp::checkEPGKey( void )
+CMHEGApp::processEPGKey( void )
+void CMHEGApp::PrintAppDebug(void)
+
+// used by gpi.. will be kept???
+static bool exposeEvent(const PTEvent* eventData, const void* pParam)
+
+{mheg-sifun.cpp}
 
 // only for internal use in this file.
 static bool mhegGetChannelType( TCChannel::EChannelType &chType);
@@ -1191,13 +1104,206 @@ mhegGetLocalTime(SPfmTime* outtime)
 // used by mhv
 mhegServiceValidateOnid(uint16_t onid)
 
+{mheg-mw-apis}
 
-{key-process}
+g_pAppWindow->GetIndirectChannel(&tChannel) )
+g_pAppTV->SetAppState(TCTv::STATE_APP_MHEG, 1) )
+g_pCustomProc->AddBeforeSourceChangeProc((FPCustomProc)&viewerMhegSourceStopCompleteWrapper);
+CAppEventManager::SubscribeEvent(MESSAGE_REMIND_LIST_CHANGED, this);
+StorageManager->SubscribeEvent(StorageManager::MESSAGE_MSC_CONNECTED, (PCHandler*) this);
+g_pStateChecker->SetNoSignalBannerEnableCheckHandler(NoSignalBannerEnableChecker, DTV_APP_MHEG);
+CApplicationManager* pApplicationManager = g_pTaskManager->GetApplicationManager();
+g_pAppCI->SendAppMMIPendingMSG();
+CAppStateMachine m_stateMachine;
+
+
+These are functions which are defined in the middleware interface for Tizen MHEG application.
+
+/// Function processed recieved events from viewer
+/// \param [in] Pointer to key event
+/// \return TRUE-Key processed by MHEG. FALSE-Key not used by MHEG.
+static bool processMHEGKey(PTEvent* pEvent);
+
+/// Function Sets DigitalText flag (Enabled/Disable) to NVRAM
+/// \param [in] Value to be set, TRUE=Enabled, FALSE=Disabled
+/// \return Status of the operation. TRUE=OK, FALSE=Failure
+static bool setDigitalTextValue(bool value);
+
+/// Function Retrieves DigitalText flag (Enabled/Disable) from NVRAM
+/// \param [out] Value of the flag, TRUE=Enabled, FALSE=Disabled
+/// \return Status of the operation. TRUE=OK, FALSE=Failure
+static bool getDigitalTextValue(bool &value);
+
+/// Function Sets DigitalTextControl flag (Enabled/Disable)
+/// \param [in] Value to be set, TRUE=Enabled, FALSE=Disabled
+/// \return Status of the operation. TRUE=OK, FALSE=Failure
+static bool getDigitalTextControlValue( bool &value );
+
+/// Function Retrieves DigitalText flag (Enabled/Disable)
+/// \param [out] Value of the flag, TRUE=Enabled, FALSE=Disabled
+/// \return Status of the operation. TRUE=OK, FALSE=Failure
+static void setDigitalTextControlValue(bool value);
+
+/// Function "Enables" MHEG operation
+/// \param None
+/// \return None
+static void EnableMHEG(void);
+
+/// Function "Disables" MHEG. Once disabled, must be re-enabled
+/// with EnableMHEG()
+/// \param bool. Flag indicating synchronous or asynchronous shutdown
+/// \return None
+static void DisableMHEG(bool sync_shutdown=false);
+
+/// Shutdown MHEG app & update country config enable flag
+/// \param None
+/// \return None
+static void ResetMHEG(void);
+
+/// Gets Dsiable/Enable flag. Used during MHEG startup
+/// to determine startup mode
+/// \param None
+/// \return bool
+static bool IsMHEGDisabled(void);
+
+/// Returns MHEG EPG status as signalled by EPG Key register.
+/// Returned vale is for "current service" as known by MHEG.
+/// Value returned is based on internal volatile DB.
+/// \param None
+/// \return Bool -  True - MHEG EPG is signalled or "unknown"
+///                 False - MHEG EPG is not signalled.
+static bool IsMHEGEPGAvailable( void );
+
+static bool IsMHEGGraphicsDrawn( void );
+
+static bool IsMHEGICStreaming(void);
+
+static bool IsMHEGAppRunning(void);
+
+static bool CheckMHEGKey( int key );
+
+/// Retrieves current value of Digital Text steaming content protect setting
+/// \param pinRequirement Will hold retrieved value (0 = no PIN protection,
+/// 1 = PIN required for "Guidance" content only, 2 = PIN required for all
+/// streamed content)
+/// \return Call success
+static bool GetContentProtectPinRequirement(int& pinRequirement);
+
+/// Stores new value of Digital Text steaming content protect setting
+/// @param pinRequirement New setting value (0 = no PIN protection,
+/// 1 = PIN required for "Guidance" content only, 2 = PIN required for all
+/// streamed content)
+/// @return Call success
+static bool SetContentProtectPinRequirement(int pinRequirement);
+
+static bool IsAppMmiRunning(void);
+static void StopMHEG(void);
+
+
+{mheg-key-handles}
+
+This is how tizen handle keys:
+
+kit@kit-vb:~/tizen/apps$ egrep -nr key .
+./src/view_main.c:217:static void _ledge_key_pressed(void *data, Evas *e,
+./src/view_main.c:232:	if (!strcmp(ev->keyname, "Left"))
+./src/view_main.c:236:static void _redge_key_pressed(void *data, Evas *e,
+./src/view_main.c:251:	if (!strcmp(ev->keyname, "Right"))
+./src/view_main.c:279:				_ledge_key_pressed, ai);
+./src/view_main.c:282:				_redge_key_pressed, ai);
+./src/view_main.c:360:				_redge_key_pressed, ai);
+./src/view_main.c:570:static void _download_btn_key_pressed(void *data, Evas *e,
+./src/view_main.c:585:	if (!strcmp(ev->keyname, "Left"))
+./src/view_main.c:587:	else if (!strcmp(ev->keyname, "Right"))
+./src/view_main.c:619:			_download_btn_key_pressed, priv);
+
+
+This is for MHEG:
 
 MW-> CMHEGApp::processMHEGKey( PTEvent* pEvent ) -> msg send to MHEGApp
 
 CMHEGApp::t_OnEvent: case SCWindow::EVENT_KEY_PRESS:
 	mahKeyProcess( static_cast<MhegKey_t>(pEvent->param.l[1]) );
+
+
+==============================================================================
+*kt_sruk_prjs_mheg_002* 	mheg spec: text render
+
+ETSI ES 202 184 V1.1.1 (2004-11), MHEG-5 Broadcast Profile
+S:\references\etsi\ES202184v010101p-MHEG.pdf
+
+13.5 text rendering
+
+{rendering-process}
+
+STEP01
+
+using <text-object> and font, calc:	note: ??
+
+1) max num of line
+2) width available on each line
+
+STEP02
+
+determine a series of lines using:
+
+1) <logical-rule> note: ??
+2) available line width from step01-2.
+3) <breaking-text-rule> note: ??
+
+STEP03
+
+check if each line is fit <vertically> within the text-object. <vertical-truncation> is needed if
+required line exceeds the max line. affected by <vertical-jutification> of the text-object.
+
+note: is it defined in text-object?
+
+STEP04
+
+determine the place of each char in a line using:
+
+1) even applied all rules so far, there are extreme cases that line length exceeds the available
+width from step01-2. Then, <horizontal-truncation> may be requred: discard some chars. 
+
+2) affected by <horizontal-jutification> of the text-object.
+
+note: is it defined in text-object?
+ 
+3) placement of chars should have sensible and consistent spacing. note: sensible?
+
+
+{language}
+
+http://www.cs.cf.ac.uk/Dave/Multimedia/node297.html
+
+The key elements of the scene are its :Links. Links are where most processing happens in MHEG
+applications. MHEG links could have been called action listeners. You write links to listen for
+particular events, when this event occours your procedural code in the :LinkEffect section is
+executed by the MHEG engine.
+
+
+{runtime}
+
+It is the responsibility of the client to have a runtime that interprets the application parts,
+presents the application to the user, and handles the local interaction with the user. 
+
+
+{dtg-test-spec}
+
+Z:\cannon\ftp\test_suite\UK_DTG_MHEG\archive\DTG-MHEG106-V4.1.1\docs\DTG_MHEG_Test_Suite_Specification.pdf
+
+
+==============================================================================
+*kt_sruk_prjs_mheg_003* 	stream player
+
+\\106.1.8.195\avshare\Dektec\StreamXpres3.11
+
+
+==============================================================================
+*kt_sruk_prjs_mheg_004* 	<empty>
+
+
+
 
 
 # ============================================================================
