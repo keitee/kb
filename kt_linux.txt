@@ -43,15 +43,14 @@ KT KB. Linux
 |kt_linux_core_005|	posix 
 |kt_linux_core_006|	errno
 
-|kt_linux_core_100|	sync: thread vs. process
+|kt_linux_core_100|	sync: thread vs. process {zombie-process}
 |kt_linux_core_101|	sync: pthread {nptl}
 |kt_linux_core_102|	sync: how to run three threads sequencially
-|kt_linux_core_103|	sync: mutex and cond-var 
+|kt_linux_core_103|	sync: mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
 |kt_linux_core_104|	sync: read-write lock
 |kt_linux_core_105|	sync: semaphore
-|kt_linux_core_106|	sync: common problems when use threads
-|kt_linux_core_107|	sync: atomic operations
-
+|kt_linux_core_106|	sync: common problems when use threads {race-condition}
+|kt_linux_core_107|	sync: atomic operations 
 
 |kt_linux_core_200|	case: own semaphore and mutex class using pthread cond-var {cqueue}
 |kt_linux_core_201|	case: use of mutex and thread class
@@ -2822,8 +2821,8 @@ For BRCM case, errno.h includes following file and starts numbering after follow
 {multithreaded-vs-singlethreaded}
 
 The mutiltithreaded means that a single process has multi threads, <lightweight-process>. The
-singlethreaed means that a single process has a single thread. Mutl has less IPC but prone to error
-because shares resources; less protection. Single has more IPC but more protection.
+singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
+because shares resources; less protection. ST has more IPC but more protection.
 
 <why-thread>
 
@@ -2832,16 +2831,15 @@ From {ref-002}. Problems with fork:
 1) The fork call is expensive because memory is copied from the parent to the child. Although
 <copy-on-write> is used to avoid this, but still expensive.
 
-2) Need ipc after fork between parent and child.
-
+2) Need IPC after fork between parent and child.
 
 Thread help with these problems as it is <lightweight-process> in terms of creation cost:
 
 Thread creation is faster because many of the attributes that must be duplicated in a child created
 by fork() are instead shared between threads.
 
-Sharing information between threads is easy and fast. It is just a matter of copying
-data into shared (global or heap) variables.
+Sharing information between threads is easy and fast. It is just a matter of copying data into
+shared (global or heap) variables.
 
 However, has disadvantages:
 
@@ -2852,21 +2850,6 @@ However, has disadvantages:
 designs.
 5) should run the same program.
 6) more threads, more memory and context switching.
-
-
-{sharing-within-process}
-
-Threads within a process shares:
-
-the same global memory, process code and most data, open file descriptors, signal handlers and
-dispositions, current working directory, user and group id.
-
-Each thread has:
-
-tid, registers including PC and SP, stack, errno, signal mask and priority.
-
-From {ref-001}
-
 
 {how-about-linux}
 
@@ -2890,18 +2873,20 @@ to create a process:
 
 clone(SIGCHLD, 0);
 
-
 Two usual steps to create a process:
 
 fork();	# copy a child from a parent and actually use clone() call
 exec*()	# load a new program text.
 
-<shared-and-not-shared-between-threads>
-From CH29 in {ref-002}.
 
-The attributes that are shared; in other words, global attributes to a process
+{shared-and-not-shared-between-threads}
+
+Threads do not shares:
+From CH29 in {ref-002} and {ref-001}
+
+The attributes that are shared; in other words, global attributes to a process:
  
-The shared atrributes:
+the same global memory, process code and most data;
 process ID and parent process ID;
 process group ID and session ID;
 process credentials (user and group IDs);
@@ -2919,6 +2904,12 @@ the errno variable;
 realtime scheduling policy and priority (Sections 35.2 and 35.3);
 capabilities (Linux-specific, described in Chapter 39); and
 stack (local variables and function call linkage information).
+registers including PC and SP
+
+
+{zombie-process}
+
+2014.02 from google phone interview:
 
 
 ==============================================================================
@@ -3419,7 +3410,7 @@ protected is [the-data] being manipulated within the critical region. This is po
 and cond-var uses global structure so if these are shared in a shared memory, these can be used
 between processes. If not, for threads within a process.
 
-In {ref-002} p881, process-shared mutexes and condition variables.  They are not available on all
+In {ref-002} p881, process-shared mutexes and condition variables. They are not available on all
 UNIX systems, and so are not commonly employed for process synchronization.
 
 {Q} The phrase "no difference between process and thread." If so why is there limitation on IPC and
@@ -3469,7 +3460,8 @@ threadFunc()
 }
 
 NO because this single inc operator may result in multiple machine code which are equivalent to the
-before.
+before. See *kt_linux_core_107* for more about atomic and race-condition.
+
 
 {mutex-apis} {explicit-sync}
 
@@ -3512,7 +3504,7 @@ int pthread_mutex_trylock( pthread_mutex_t *mptr);
 int pthread_mutex_timedlock( pthread_mutex_t *mptr);
 
 
-{mutex-deadlock}
+{deadlock-condition}
 
 From {ref-002}, deadlock happens:
 
@@ -3522,10 +3514,11 @@ lock(mutex2)        lock(mutex1)
 
 Two approach to avoid:
 
-o mutex-hierarchy. lock the same set of mutexs in [the same order].
+o <mutex-hierarchy-or-order> and less flexible. Use locks in the same set of mutexs in [the same
+order].
 
-o try, and then back off. If try_lock fails, release all and try again later. This is less efficient
-than hierarchy approach but can be more [flexible] since no need rigid hierarchy.
+o <try-and-back-off> and flexible. If try_lock fails, release all and try again later. This is less
+efficient than hierarchy approach but can be more [flexible] since no need rigid hierarchy.
 
 
 {mutex-types}
@@ -3535,16 +3528,19 @@ From {ref-002}:
 // no deadlock detection. On Linux, this is PTHREAD_MUTEX_DEFAULT
 PTHREAD_MUTEX_NORMAL
 
-// supports error checking but slower than a normal.
+// supports error checking for <mutex-deadlock> locking case but slower than a normal.
 PTHREAD_MUTEX_ERRORCHECK
 
 // A recursive mutex maintains the concept of a [lock-count]. When a thread first acquires the mutex,
 // the lock count is set to 1. Each subsequent lock operation by the same thread increments the lock
 // count, and each unlock operation decrements the count. The mutex is released (i.e., made
-// available for other threads to acquire) only when the lock count falls to 0.  Unlocking an
-// unlocked mutex fails, as does unlocking a mutex that is currently locked by another thread.
+// available for other threads to acquire) only when the lock count falls to 0. 
 //
 // {Q} when is it useful?
+//
+// Unlocking an unlocked mutex fails, as does unlocking a mutex that is currently locked by another
+// thread. In other words, there is no <mutex-deadlock> for unlocking case but personally prefer
+// normal lock with careful design than using recursive lock.
 //
 PTHREAD_MUTEX_RECURSIVE
 
@@ -3717,15 +3713,19 @@ int main()
 	...
 }
 
+Uses shared mutex between producers and consumer. If items to read are ready then call returns.
+Otherwise, do loops. 
+
 void consume_wait(int i)
 {
-	for(;;) {
-	pthread_mutex_lock(&shared.mutex);
-	if( i < shared.nput ) {
-		pthread_mutex_unlock(&shared.mutex);
-		return; /* item is ready */
-	}
-	pthread_mutex_unlock(&shared.mutex);
+  for(;;) {
+    pthread_mutex_lock(&shared.mutex);
+    if( i < shared.nput ) {
+      pthread_mutex_unlock(&shared.mutex);
+      return; /* item is ready */
+    }
+    pthread_mutex_unlock(&shared.mutex);
+  }
 }
 
 void* consume(void* arg)
@@ -3753,7 +3753,7 @@ void* consume(void* arg)
 The polling is a waste of cpu time. How to solve? A mutex is for locking and a cond-var is for
 waiting.
 
-// This is blocking and on condition and ALWAYS has an associated mutex. Why? because both producer
+// This is blocking on condition and ALWAYS has an associated mutex. Why? because both producer
 // and consumer accesses to the shared state variable so should be synced. In other words, there is
 // a natural association of a muext with a condition varaible.
 //
@@ -3775,6 +3775,8 @@ _broadcast is for case where waiting threads do different task. Real examples?
 
 
 <code-example>
+
+{Q} Is it possible to implement this using two mutex than using a muext and a cond-var?
 
 //
 int nitems;
@@ -3835,11 +3837,11 @@ void* consume(void* arg)
 	// see use of global vars; nitems and shared.buff
 	for( i=0; i < nitems; i++ )
 	{ >
-		// receive cond-var
+		// receieve cond-var
 		pthread_mutex_lock( &nready.mutex );
 
-		// always test the condition again when wakes up because spurious wakeups can occur.
-		// unlock and when returns from pthread_cond_wait, lock in.
+		// Always test the condition again when wakes up because spurious wakeups can occur.
+		// Unlock and wait. When returns from pthread_cond_wait, lock in again.
 		while( nready.ready == 0 )
 			pthread_cond_wait( &nready.cond, &nready.mutex );
 
@@ -4340,7 +4342,6 @@ Because of its limited functionality, flock() locking facility is rarely used no
 system call provides record locking, allowing processes to place multiple read and write locks on
 different regions of the same file.
 
-
 When performing interprocess synchronization, our choice of facility is typically determined by the
 functional requirements. When coordinating access to a file, file record locking is usually the best
 choice. Semaphores are often the better choice for coordinating access to other types of shared
@@ -4382,12 +4383,15 @@ An atomic operation is a sequence of one or more machine instructions that are e
 sequentially, without interruption. By default, any sequence of two or more machine instructions
 isn't atomic since the operating system may suspend the execution of the current sequence of
 operations in favor of another task. If you want to ensure that a sequence of operations is atomic
-you must use some form of locking or other types of synchronization. Without that, the only
-guarantee you have is that a single machine instruction is always atomic -- the CPU will not
-interrupt a single instruction in the middle. We can conclude from that minimal guarantee that if
-you can prove that your compiler translates a certain C++ statement into a single machine
-instruction, that C++ statement is naturally atomic meaning, the programmer doesn't have to use
-explicit locking to enforce the atomic execution of that statement.  
+you must use some form of locking or other types of synchronization. 
+
+Without that, the only guarantee you have is that a single machine instruction is always atomic. the
+CPU will not interrupt a single instruction in the middle. [KT] Not entirely true. 
+
+We can conclude from that minimal guarantee that if you can prove that your compiler translates a
+certain C++ statement into a single machine instruction, that C++ statement is naturally atomic
+meaning, the programmer doesn't have to use explicit locking to enforce the atomic execution of that
+statement.  
 
 Which C++ Statements are Naturally Atomic?
 
