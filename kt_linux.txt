@@ -2818,15 +2818,150 @@ For BRCM case, errno.h includes following file and starts numbering after follow
 ==============================================================================
 *kt_linux_core_100* thread vs. process	
 
+A process is an instance of an executing program and a thread is an instance of an executing a task.
+In other words, a process is processor abstract, an abstract entity defined by kernel and with
+allocated resources in order to execute a program.  
+
+
 {multithreaded-vs-singlethreaded}
 
 The mutiltithreaded means that a single process has multi threads, <lightweight-process>. The
 singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
 because shares resources; less protection. ST has more IPC but more protection.
 
-<why-thread>
 
-From {ref-002}. Problems with fork:
+{process-id}
+
+From {ref-LPI} PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, 
+the process ID counter is reset to 300, rather than 1.  This is done because many low-numbered
+process IDs are in permanent use by system processes and daemons, and thus time would be wasted
+searching for an unused process ID in this range. 
+
+In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
+With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
+limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
+greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
+32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
+million), making it possible to accommodate very large numbers of processes.
+
+
+{orphan-process} {process-init}
+
+Each process has a parent-the process that created it. If a child process becomes orphaned because
+its "birth" parent terminates, then the child is adopted by the init process, and subsequent calls
+to getppid() in the child return 1 (see Section 26.2). The process 1, init, the ancestor of all processes.
+
+
+{process-memory-layout}
+
+<text-segment> 
+The text segment contains the machine-language instructions of the program run by the process. The
+text segment is made read-only so that a process doesn’t accidentally modify its own instructions
+via a bad pointer value. Since many processes may be running the same program, the text segment is
+made sharable so that a single copy of the program code can be mapped into the virtual address space
+of all of the processes.
+
+<initialized-data-segment>
+The initialized data segment contains global and static variables that are explicitly initialized.
+The values of these variables are read from the executable file when the program is loaded into
+memory.
+
+<uninitialized-data-segment> <bss>
+The uninitialized data segment contains global and static variables that are not explicitly
+initialized. Before starting the program, the system initializes all memory in this segment to 0.
+For historical reasons, this is often called the bss segment, a name derived from an old assembler
+mnemonic for “block started by symbol.” The main reason for placing global and static variables that
+are initialized into a separate segment from those that are uninitialized is that, when a program is
+stored on disk, it is not necessary to allocate space for the uninitialized data. Instead, the
+executable merely needs to record the location and size required for the uninitialized data segment,
+and this space is allocated by the program loader at run time.
+
+<stack>
+The stack is a dynamically growing and shrinking segment containing stack frames. One stack frame is
+allocated for each currently called function. A frame stores the function’s local variables
+(so-called automatic variables), arguments, and return value. Stack frames are discussed in more
+detail in Section 6.5.
+
+<heap>
+The heap is an area from which memory (for variables) can be dynamically allocated at run time. The
+top end of the heap is called the program break.
+
+<process-virtual-memory-address>
+
+High           +----------------+
+                  kernel. mapped into process virtual memory but not accessible to program.
+               +----------------+
+                  argv, environ
+               +----------------+
+                  stack (grows down)
+top of stack   +----------------+
+                  unallocated
+               +----------------+
+                  heap (grows up)
+               +----------------+ < &end
+                  bss
+               +----------------+ < &edata
+                  inited data
+               +----------------+ < &etext
+                  text
+               +----------------+
+
+Low            +----------------+
+
+               
+{virtual-memory} {locality-of-reference}
+
+RAM   <-> page table <-> VMEM 
+      <-> HDD
+
+The aim of this virtual memory is to make efficient use of both the CPU and RAM (physical memory) by
+exploiting a property that is typical of most programs: locality of reference. Most programs
+demonstrate two kinds of locality:
+
+1> Spatial locality is the tendency of a program to reference memory addresses that are near those
+that were recently accessed (because of sequential processing of instructions, and, sometimes,
+sequential processing of data structures).
+
+2> Temporal locality is the tendency of a program to access the same memory addresses in the near
+future that it accessed in the recent past (because of loops).
+
+The upshot of locality of reference is that it is possible to execute a program while maintaining
+only part of its address space in RAM.
+
+A virtual memory scheme splits the memory used by each program into small, fixed-size units called
+pages. Correspondingly, RAM is divided into a series of page frames of the same size. At any one
+time, only some of the pages of a program need to be resident in physical memory page frames; these
+pages form the so-called resident set. Copies of the unused pages of a program are maintained in the
+swap area—a reserved area of disk space used to supplement the computer’s RAM—and loaded into
+physical memory only as required. When a process references a page that is not currently resident in
+physical memory, a page fault occurs, at which point the kernel suspends execution of the process
+while the page is loaded from disk into memory.
+
+The kernel maintains a page table for [each-process] (Figure 6-2). The page table describes the
+location of each page in the process’s virtual address space (the set of all virtual memory pages
+available to the process). Each entry in the page table either indicates the location of a
+virtual page in RAM or indicates that it currently resides on disk.
+
+Not all address ranges in the process’s virtual address space require page-table entries. Typically,
+    large ranges of the potential virtual address space are unused, so that it isn’t necessary to
+    maintain corresponding page-table entries. If a process tries to access an address for which
+    there is no corresponding page-table entry, it receives a SIGSEGV signal.
+
+
+{user-stack}
+
+The kernel stack is a per-process memory region maintained in kernel memory that is used as the
+stack for execution of the functions called internally during the execution of a system call.
+
+Each (user) stack frame contains the following information:
+
+1> Function arguments and local variables
+2> Some registers. RA.
+
+
+{why-thread}
+
+From {ref-LPI}. Problems with fork:
 
 1) The fork call is expensive because memory is copied from the parent to the child. Although
 <copy-on-write> is used to avoid this, but still expensive.
@@ -2882,7 +3017,7 @@ exec*()	# load a new program text.
 {shared-and-not-shared-between-threads}
 
 Threads do not shares:
-From CH29 in {ref-002} and {ref-001}
+From CH29 in {ref-LPI} and {ref-001}
 
 The attributes that are shared; in other words, global attributes to a process:
  
@@ -2996,7 +3131,7 @@ Because each reference to errno in a threaded program carries the overhead of a 
 example programs don't directly assign the return value of a Pthreads function to errno. note: KT so
 no need to care about errno in pthread.
 
-From CH03 in {ref-002}
+From CH03 in {ref-LPI}
 
 (lib/tlpi_hdr.h)
 
@@ -3083,7 +3218,7 @@ void pthread_exit(void *retval);
 // if (pthread_equal(tid, pthread_self()) 
 // 	printf("tid matches self\n");
 //
-// In 29.5 of {ref-002}, POSIX thread IDs are not the same as the thread IDs returned by the Linux
+// In 29.5 of {ref-LPI}, POSIX thread IDs are not the same as the thread IDs returned by the Linux
 // specific gettid() system call. POSIX thread IDs are assigned and maintained by the threading
 // implementation. The thread ID returned by gettid() is a number (similar to a process ID) that is
 // assigned by the kernel.  Although each POSIX thread has a unique kernel thread ID in the Linux
@@ -3278,7 +3413,7 @@ resPOSIX = pthread_create(&(ptThreadInfo->idThread), &threadAttrs, pfThreadMain,
 
 {pthread-stack}
 
-From CH33 in {ref-002}.
+From CH33 in {ref-LPI}.
 
 Each thread has its own stack whose size is fixed when the thread is created. On Linux/x86-32, for
 all threads other than the main thread, the default size of the per-thread stack is 2 MB. The main
@@ -3410,7 +3545,7 @@ protected is [the-data] being manipulated within the critical region. This is po
 and cond-var uses global structure so if these are shared in a shared memory, these can be used
 between processes. If not, for threads within a process.
 
-In {ref-002} p881, process-shared mutexes and condition variables. They are not available on all
+In {ref-LPI} p881, process-shared mutexes and condition variables. They are not available on all
 UNIX systems, and so are not commonly employed for process synchronization.
 
 {Q} The phrase "no difference between process and thread." If so why is there limitation on IPC and
@@ -3436,7 +3571,7 @@ runs at the same time? not one after one.
 
 {why-need-sync}
 
-Because of <race-condition>. Like {ref-002}, when run two threads without sync, task-switching
+Because of <race-condition>. Like {ref-LPI}, when run two threads without sync, task-switching
 happens based on time-slot given and yield <non-determistic> result.
 
 threadFunc()
@@ -3467,7 +3602,7 @@ before. See *kt_linux_core_107* for more about atomic and race-condition.
 
 Unlike semaphore and file locks, mutex only requires system call for lock contention. So not that
 expensive. On Linux, mutex is implemented by futex which is not intended for direct use in user
-space applicaion. From ch30 in {ref-002}
+space applicaion. From ch30 in {ref-LPI}
 
 // If it is [statically] allocated for default attributes, should use:
 
@@ -3484,7 +3619,7 @@ int pthread_mutex_destory(pthread_mutex_t* mutex);
 // {mutex-ownership} mutex has ownership means the only owner can unlock the mutex. 
 //
 // 1) Locking. If try to lock what is already locked, two may happen for default type of mutex:
-// {mutex-deadlock} or EDEADLK. On Linux, deadlock by default from {ref-002}.
+// {mutex-deadlock} or EDEADLK. On Linux, deadlock by default from {ref-LPI}.
 //
 // 2) Unlocking. Unlocking a mutex that is not locked or that is locked by another thread,
 // {undefined-result}
@@ -3506,7 +3641,7 @@ int pthread_mutex_timedlock( pthread_mutex_t *mptr);
 
 {deadlock-condition}
 
-From {ref-002}, deadlock happens:
+From {ref-LPI}, deadlock happens:
 
 Thead A             Thread B
 lock(mutex1)        lock(mutex2)
@@ -3523,7 +3658,7 @@ efficient than hierarchy approach but can be more [flexible] since no need rigid
 
 {mutex-types}
 
-From {ref-002}:
+From {ref-LPI}:
 
 // no deadlock detection. On Linux, this is PTHREAD_MUTEX_DEFAULT
 PTHREAD_MUTEX_NORMAL
@@ -3770,7 +3905,7 @@ int pthread_cond_signal( pthread_cond_t *cptr );
 int pthread_cond_broadcast( pthread_cond_t *cptr );
 int pthread_cond_timedwait( ... );
 
-{Q} {ref-002} said that _signal is for the case where all waiting threads do the same task and
+{Q} {ref-LPI} said that _signal is for the case where all waiting threads do the same task and
 _broadcast is for case where waiting threads do different task. Real examples?
 
 
@@ -3861,9 +3996,9 @@ void* consume(void* arg)
 
 {when-to-call-signal}
 
-{ref-002} uses different order for producer as below because {ref-001} said that use _signal before
+{ref-LPI} uses different order for producer as below because {ref-001} said that use _signal before
 unlock can cause {mutex-deadlock} or {lock-conflict}. Therefore, POSIX recommends the followings and
-{ref-002} said this may yieid better performance:
+{ref-LPI} said this may yieid better performance:
 
 pthread_mutex_lock( &nready.mutex );
 
@@ -3899,7 +4034,7 @@ while( nready.ready == 0 )
 ==============================================================================
 *kt_linux_core_104*	sync: read-write lock
 
-From {ref-001} but no such a thing in {ref-002}, so may be old way but surely in posix but may be
+From {ref-001} but no such a thing in {ref-LPI}, so may be old way but surely in posix but may be
 different to this since this lock is before posix standard. See {ref-001} note.
 
 To distinguish between obtaining the read-write lock for reading and for writing. The rules:
@@ -6048,7 +6183,7 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 ==============================================================================
 *kt_linux_core_300*  ipc
 
-CH43, Fig 43-1 in {ref-002} which says that the general term IPC is often used to describe them all;
+CH43, Fig 43-1 in {ref-LPI} which says that the general term IPC is often used to describe them all;
 communication, signal, and synchronization.
 
 communication - data transfer - byte stream 	- pipe
@@ -6118,7 +6253,7 @@ within a pipe is maintained within the kernel, but pipes have process-persistenc
 last process that has the pipe open for reading closes the pipe, the kernel discard all data and
 remove the pipe.
 
-From {ref-002}:
+From {ref-LPI}:
 
 Data-transfer which 
 1) requires two data transfers between user and kenel memory
@@ -6735,7 +6870,7 @@ Then run windows remote desktop and connect using ip or hostname. That's it.
 Richard Stevens. Unix Network Programming Vol 2 Addision Wesley. 2nd Ed.
 http://www.kohala.com/start/unpv22e/unpv22e.html
 
-{ref-002}
+{ref-LPI}
 The Linux Programming Interface: A Linux and UNIX System Programming Handbook 
 Michael Kerrisk (Author) 
 
