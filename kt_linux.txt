@@ -60,6 +60,7 @@ KT KB. Linux
 
 |kt_linux_core_300|  ipc
 |kt_linux_core_301|  ipc: pipe and fifo	
+|kt_linux_core_302|  ipc: semaphore {process-synchronization} {semaphores-versus-pthreads-mutexes}
 |kt_linux_core_310|  ipc: dbus
 |kt_linux_core_031|  time
 
@@ -2753,12 +2754,26 @@ beteen RR and OTHER threads.
 
 
 ==============================================================================
-*kt_linux_core_005* posix	
+*kt_linux_core_005* posix and SUS
 
-not an interface bwt OS and a driver. this is c programming interface(system call),
-commands and IPC that OS provides to APP.
+POSIX.1 documents an API for a set of services that should be made available to a program by a
+conforming operating system. An operating system that does this can be certified as POSIX.1
+conformant. POSIX.1 is based on the UNIX system call and the C library function API, but it doesn’t
+require any particular implementation to be associated with this interface.
+
+Not an interface bwt OS and a driver. this is c programming interface(system call), commands and IPC
+that OS provides to APP.
+
+A related standard, POSIX.2 (1992, ISO/IEC 9945-2:1993), standardized the shell and various UNIX
+utilities, including the command-line interface of the C compiler.
 
 http://pubs.opengroup.org/onlinepubs/9699919799/
+
+{SUSv3}
+
+POSIX 1003.1-2001 replaces SUSv2, POSIX.1, POSIX.2, and a raft of other earlier POSIX standards.
+This standard is also known as the Single UNIX Specification Version 3, and we’ll generally refer to
+it in the remainder of this book as SUSv3.
 
 
 ==============================================================================
@@ -2825,12 +2840,16 @@ A process is an instance of an executing program and a thread is an instance of 
 In other words, a process is processor abstract, an abstract entity defined by kernel and with
 allocated resources in order to execute a program.  
 
+UNIX programs have a single thread of execution: the CPU processes instructions for a single logical
+flow of execution through the program. In a multithreaded program, there are multiple, independent,
+concurrent logical flows of execution within the same process.
+
+In short, a process is an abstract of a processor and a thread is an abstract of flow of execution.
 
 {multithreaded-vs-singlethreaded}
 The mutiltithreaded means that a single process has multi threads, <lightweight-process>. The
 singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
 because shares resources; less protection. ST has more IPC but more protection.
-
 
 {process-id}
 From {ref-LPI} PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, 
@@ -2844,9 +2863,6 @@ limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max
 greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
 32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
 million), making it possible to accommodate very large numbers of processes.
-
-
-
 
 {process-memory-layout}
 
@@ -2944,7 +2960,7 @@ Not all address ranges in the process’s virtual address space require page-tab
     there is no corresponding page-table entry, it receives a SIGSEGV signal.
 
 
-{user-stack}
+{user-and-kernel-stack}
 
 The kernel stack is a per-process memory region maintained in kernel memory that is used as the
 stack for execution of the functions called internally during the execution of a system call.
@@ -3033,10 +3049,59 @@ while ((childPid = wait(NULL)) != -1)
 if (errno != ECHILD) /* An unexpected error... */
   errExit("wait");
 
-<orphan-process> {process-init}
-Each process has a parent-the process that created it. If a child process becomes orphaned because
-its "birth" parent terminates, then the child is adopted by the init process, and subsequent calls
-to getppid() in the child return 1 (see Section 26.2). The process 1, init, the ancestor of all processes.
+<waitpid-system-call>
+The wait() system call has a number of limitations, which waitpid() was designed to address. See the
+reference for more details.
+
+#include <sys/wait.h>
+pid_t waitpid(pid_t pid, int *status, int options);
+
+
+{orphan-process} {process-init} {zombie-process}
+2014.02 from google phone interview. The lifetimes of parent and child processes are usually not the
+same-either the parent outlives the child or vice versa. This raises two questions: 
+
+1> Who becomes the parent of an orphaned child? Each process has a parent-the process that created
+it. If a child process becomes orphaned because its "birth" parent terminates, then the child is
+adopted by the init process, and subsequent calls to getppid() in the child return 1. See Section
+26.2. The process 1, init, the ancestor of all processes. The init process adopts the child and
+automatically performs a wait(), thus removing the zombie process from the system.
+
+2> What happens to a child that terminates before its parent has had a chance to perform a wait()?
+The point here is that, although the child has finished its work, the parent should still be
+permitted to perform a wait() at some later time to determine how the child terminated. The kernel
+deals with this situation by turning the child into a <zombie>. This means that most of the
+resources held by the child are released back to the system to be reused by other processes. The
+only part of the process that remains is an entry in the kernel’s process table recording; among
+other things the child’s process ID, termination status, and resource usage statistics. Section
+36.1.
+
+A zombie process can't be killed by a signal, not even the (silver bullet) SIGKILL. This ensures
+that the parent can always eventually perform a wait(). When the parent does perform a wait(), the
+kernel removes the zombie, since the last remaining information about the child is no longer
+required.
+
+<why-zombie-can-be-a-problem>
+If a parent creates a child, but fails to perform a wait(), then an entry for the zombie child will
+be maintained indefinitely in the kernel’s process table. If a large number of such zombie children
+are created, they will eventually fill the kernel process table, preventing the creation of new
+processes. Since the zombies can’t be killed by a signal, the only way to remove them from the
+system is to kill their parent (or wait for it to exit), at which time the zombies are adopted and
+waited on by init, and consequently removed from the system.
+
+$ ./make_zombie
+Parent PID=1013
+Child (PID=1014) exiting
+  1013 pts/4 00:00:00 make_zombie Output from ps(1)
+  1014 pts/4 00:00:00 make_zombie <defunct>
+After sending SIGKILL to make_zombie (PID=1014):
+  1013 pts/4 00:00:00 make_zombie Output from ps(1)
+  1014 pts/4 00:00:00 make_zombie <defunct>
+
+In the above output, we see that ps(1) displays the string <defunct> to indicate a process in the
+zombie state.
+
+A common way of reaping dead child processes is to establish a handler for the SIGCHLD signal.
 
 
 {why-thread}
@@ -3122,9 +3187,6 @@ stack (local variables and function call linkage information).
 registers including PC and SP
 
 
-{zombie-process}
-
-2014.02 from google phone interview:
 
 
 ==============================================================================
@@ -6553,6 +6615,124 @@ If there is no reading process, broken-pipe. If there is no writing process, blo
 
 
 ==============================================================================
+*kt_linux_core_302*  ipc: semaphore
+
+KT. This can be used for process or thread but it is expensive for thread.
+
+System V semaphores are not used to transfer data between processes. Instead, they allow processes
+to synchronize their actions. A semaphore is a kernel-maintained integer whose value is restricted
+to being greater than or equal to 0.
+
+1> Setting the semaphore to an absolute value;
+2> Adding a number to the current value of the semaphore;            // give
+3> Subtracting a number from the current value of the semaphore; and // take
+4> Waiting for the semaphore value to be equal to 0.
+
+The last two of these operations may cause the calling process to block. A semaphore has no meaning
+in and of itself. Its meaning is determined only by the associations given to it by the processes
+using the semaphore.
+
+However, System V semaphores are rendered unusually complex by the fact that they are allocated in
+groups called semaphore sets. [KT] So move to POSIX semaphore.
+
+{posix-semaphore}
+
+SUSv3 specifies two types of POSIX semaphores:
+
+1> Named semaphores: This type of semaphore has a name. By calling sem_open() with the same name
+<unrelated> processes can access the same semaphore.
+
+2> Unnamed semaphores: This type of semaphore doesn't have a name; instead, it resides at an
+agreed-upon location in memory. Unnamed semaphores can be shared between processes or between a
+group of threads. When shared between processes, the semaphore must reside in a region of (System V,
+POSIX, or mmap()) shared memory. When shared between threads, the semaphore may reside in an
+area of memory shared by the threads (e.g., on the heap or in a global variable).
+
+POSIX semaphores operate in a manner similar to System V semaphores; that is, a POSIX semaphore is
+an integer whose value is not permitted to fall below 0. If a process attempts to decrease the value
+of a semaphore below 0, then, depending on the function used, the call either blocks or fails with
+an error indicating that the operation was not currently possible.
+
+Some systems don’t provide a full implementation of POSIX semaphores. A typical restriction is that
+only unnamed thread-shared semaphores are supported. That was the situation on Linux 2.4; 
+
+<linux-2-6-support>
+With Linux 2.6 and a glibc that provides NPTL, a full implementation of POSIX semaphores is
+available.
+
+<named-semaphore>
+To work with a named semaphore, we employ the following functions:
+
+1> The sem_open() function opens or creates a semaphore, initializes the semaphore if it is created
+by the call, and returns a handle for use in later calls.
+
+2> The sem_post(sem) and sem_wait(sem) functions respectively increment and decrement a semaphore’s
+value.
+
+3> The sem_getvalue() function retrieves a semaphore’s current value.
+
+4> The sem_close() function removes the calling process’s association with a semaphore that it
+previously opened.
+
+5> The sem_unlink() function removes a semaphore name and marks the semaphore for deletion when all
+processes have closed it.
+
+SUSv3 doesn't specify how named semaphores are to be implemented. On Linux, they are created as
+small POSIX shared memory objects with names of the form sem.name, in a dedicated tmpfs file system
+(Section 14.10) mounted under the directory /dev/shm. This file system has [kernel-persistence]-the
+semaphore objects that it contains will persist, even if no process currently has them open, but
+they will be lost if the system is shut down.
+
+<unnamed-semaphore>
+The semaphore is made available to the processes or threads that use it by placing it in an area of
+memory that they share.  Operations on unnamed semaphores use the same functions; sem_wait(),
+sem_post(), sem_getvalue(), and so on that are used to operate on named semaphores.
+
+In addition, two further functions are required:
+
+The sem_init() function initializes a semaphore and informs the system of whether the semaphore will
+be shared between processes or between the threads of a single process.
+
+The sem_destroy(sem) function destroys a semaphore.  These functions should not be used with named
+semaphores.
+
+<when-useful-to-use-unnamed>
+
+1> A semaphore that is shared between threads doesn't need a name. Making an unnamed semaphore a
+shared (global or heap) variable automatically makes it accessible to all threads.
+
+2> A semaphore that is being shared between [related] processes doesn't need a name. If a parent
+process allocates an unnamed semaphore in a region of shared memory (e.g., a shared anonymous
+mapping), then a child automatically inherits the mapping and thus the semaphore as part of the
+operation of fork().
+
+3> If we are building a dynamic data structure (e.g., a binary tree), each of whose items requires
+an associated semaphore, then the simplest approach is to allocate an unnamed semaphore within each
+item. Opening a named semaphore for each item would require us to design a convention for generating
+a (unique) semaphore name for each item and to manage those names (e.g., unlinking them when they
+are no longer required).
+
+{semaphores-versus-pthreads-mutexes}
+
+POSIX semaphores and Pthreads mutexes can both be used to synchronize the actions of threads within
+the same process, and their performance is [similar]. However, mutexes are usually preferable,
+because the [ownership] property of mutexes enforces good structuring of code; only the thread that
+locks a mutex can unlock it. By contrast, one thread can increment a semaphore that was decremented
+by another thread. This flexibility can lead to poorly structured synchronization designs. For this
+reason, semaphores are sometimes referred to as the "gotos" of concurrent programming.
+
+There is one circumstance in which mutexes can’t be used in a multithreaded
+application and semaphores may therefore be preferable. Because it is async-signalsafe
+(see Table 21-1, on page 426), the sem_post() function can be used from within
+a signal handler to synchronize with another thread. This is not possible with
+mutexes, because the Pthreads functions for operating on mutexes are not asyncsignal-
+safe. However, because it is usually preferable to deal with asynchronous signals
+by accepting them using sigwaitinfo() (or similar), rather than using signal handlers
+(see Section 33.2.4), this advantage of semaphores over mutexes is seldom
+required.
+
+
+==============================================================================
 *kt_linux_core_310*  ipc: dbus and kbus	
 
 {dbus}
@@ -6694,15 +6874,19 @@ and the time it is delivered, a signal is said to be pending.
 
 {signal-mask-per-process} {signal-block}
 Sometimes, however, we need to ensure that a segment of code is not interrupted by the delivery of a
-signal. To do this, we can add a signal to the process’s signal mask—a set of signals whose delivery
+signal. To do this, we can add a signal to the process's signal mask-a set of signals whose delivery
 is currently blocked. If a signal is generated while it is blocked, it remains pending until it is
 later unblocked (removed from the signal mask).
 
 If a process receives a signal that it is currently blocking, that signal is added to the process’s
 set of pending signals.
 
+That delivery of a signal is blocked during the execution of its handler (unless we specify the
+SA_NODEFER flag to sigaction()). If the signal is (again) generated while the handler is
+executing, then it is marked as pending and later delivered when the handler returns.
+
 <signal-is-queued-or-not>
-Standard signals can’t be queued; delivered only once. The set of pending signals is only a mask; it
+Standard signals can't be queued; delivered only once. The set of pending signals is only a mask; it
 indicates whether or not a signal has occurred, but not how many times it has occurred. In other
 words, if the same signal is generated multiple times while it is blocked, then it is recorded in
 the set of pending signals, and later delivered, just once. One of the differences between standard
@@ -6714,6 +6898,25 @@ occurs when the signal is delivered. Can be used to ignore signals or to change 
 change a default is usually referred to as installing or establishing a signal handler. When a
 signal handler is invoked in response to the delivery of a signal, we say that the signal has been
 handled or, synonymously, caught.
+
+{signal-reentrant}
+Because a signal handler may asynchronously interrupt the execution of a program at any point in
+time, the main program and the signal handler in effect form two independent (although not
+concurrent) threads of execution within the same process.
+
+A function is said to be reentrant if it can safely be simultaneously executed by multiple threads
+of execution in the same process. In this context, "safe" means that the function achieves its
+expected result, regardless of the state of execution of any other thread of execution.
+
+A function may be nonreentrant if it updates global or static data structures. A function that
+employs only local variables is guaranteed to be reentrant because of race-condition.
+
+Such possibilities are in fact rife within the standard C library. For example, we already noted in
+Section 7.1.3 that malloc() and free() maintain a linked list of freed memory blocks available for
+reallocation from the heap. If a call to malloc() in the main program is interrupted by a signal
+handler that also calls malloc(), then this linked list can be corrupted. For this reason, the
+malloc() family of functions, and other library functions that use them, are nonreentrant.
+
 
 {signal-and-proc}
 The Linux-specific /proc/PID/status file contains various bit-mask fields that can be inspected to
@@ -6869,8 +7072,8 @@ main(int argc, char *argv[])
       _exit(EXIT_SUCCESS);
 
     default: /* Parent */
-      /* Parent may do some work here, and then waits for child to
-         complete the required action */
+
+      /* Parent may do some work here, and then waits for child to complete the required action */
       printf("[%s %ld] Parent about to wait for signal\n", currTime("%T"), (long) getpid());
 
       sigemptyset(&emptyMask);
