@@ -88,7 +88,7 @@ C and C++
 |kt_dev_cpp_021|	op overload				{member-or-non-member} {function-object}
 |kt_dev_cpp_022|	inheritance {static-type} {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
 |kt_dev_cpp_023|	override		{override-keyword} {dynamic-binding} {default-arg-in-virtual}
-|kt_dev_cpp_024|	ABC
+|kt_dev_cpp_024|	ABC {refactoring}
 |kt_dev_cpp_025|	template {debug-delete}
 |kt_dev_cpp_026|	enum	{enum-hack}
 |kt_dev_cpp_027|	volatile
@@ -7192,9 +7192,9 @@ FSM_T			   new_fsm = 0;
 {typedef-multiple}
 Is it error to have multiple typedefs? See {string-is-typedef} in *kt_dev_stl_015*
 
-
 {class-vs-struct}
-The only difference between struct and class is the default access level.
+The only difference between struct and class is the default access specifier for members and
+derivation; struct is public and class is private. p616 in ref-CPR.
 
 {typedef-vs-struct}
 
@@ -8623,6 +8623,14 @@ This only enables copys between objects in the same class whether it is via obje
 But MEC++ says it is more about uncovering the design need to have abstract class out of derived
 classes.
 
+{virtual-and-definition}
+Ordinarily if we do not use a function, do not need to supply a definition for that function.
+However must define every virtual function regardless of whether it is used because do not know
+which version of a function is called until run time.
+
+{virtual-and-resolution}
+The compiler generates code to decide at run time which function to call when a virtual function is
+called through a reference or pointer. This is run time binding and polymorphism in C++.
 
 {preventing-inheritance}
 
@@ -8678,24 +8686,25 @@ sam_slice.cpp:27:32: error: no matching function for call to 'Base::Base()'
 
 Because Base has another ctor so default-ctor will not be made and shows this error.
 
-
 {call-base-in-virtual-of-derived}
 
+Use scope operator. This is called circumventing the virtual mechanism; base version do work common
+to all types and the derived version do whatever additional work.
+
 class Window {
-	 public:
-	 virtual void onResize() { ... }
-	 ...
+  public:
+    virtual void onResize() { ... }
+    ...
 };
 
 class SpecialWindow: public Window {
-	 public:
-	 virtual void onResize()
-	 {
-		  Window::onResize();
-		  ...
-	 }
+  public:
+    virtual void onResize()
+    {
+      Window::onResize();
+      ...
+    }
 };
-
 
 {base-class-pointer-container} {RTTI}
 
@@ -8822,6 +8831,15 @@ for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
 	 (*iter)->blink();
 }
 
+{derivation-access-specifier}
+
+class X : publuc/private/protected B {
+  ...
+};
+
+This has no effect on whether members of a derived class may access the members of its direct base
+class. The purpose is to control the access that users of the derived class.
+
 
 ==============================================================================
 *kt_dev_cpp_023*	override
@@ -8901,8 +8919,7 @@ error: conflicting return type specified for 'virtual bool CMyInterface::getName
 error:   overriding 'virtual void CInterface::getName()'
 
 However, tried pointer return type, no errors so return type in overrides can be different only
-that is pointer.
-
+that is pointer. See p606 in ref-CPR.
 
 As shown in {scope-in-inheritance} *kt_dev_cpp_007* this is to hide func in the derived and that is
 derived version is not called as expected. It's surprisingly hard to find because there is no
@@ -8952,20 +8969,64 @@ class Rectangle : public Shape {
 ==============================================================================
 *kt_dev_cpp_024*	ABC
 
+This is the previous approach to support several discounts:
+
+class Quote {
+  public:
+    ...
+    std::string isbn() const { return bookNo; }
+    virtual double net_price( std::size_t n ) const
+    { return n*price; }
+
+  private:
+    std::string bookNo;
+  protected:
+    double price = 0.0;
+};
+
+class Bulk_quote : public Quote {
+  public:
+    Bulk_quote() = default;
+    double net_price( std::sizet_t ) const override;
+
+  private:
+    std::size_t min_qty = 0;
+    double discount = 0.0;
+};
+
 The abstract base class to represent the general concept and to prevent users creating a object of
 this type.
 
+Imagine that want to support several discount strategies by defining a new class named Disc_quote to
+store the quantity and the discount amount. Each strategy is the same in that it requires a quantity
+and a discount amount but implement its discount strategy by defining its own version of net_price.
+Each discount class will inherit from Disc_quote. This raises a question: the Disc_quote do not
+correspond to any particular discount strategy but user can create object of this type and can use
+print_total. The result is the same when use Quote object since it inherits Quote version and no
+discount even if user provided values. How can we prevent this nonsensical code?
+
+This Disc_quote represent the general concept of a discounted book, not a concrete discount policy.~
+
+To prevent users from creating Disc_quote objects, use pure-virtual and unlike usual virtuals,
+pure-virtual do not have to be defined.
+
 class Disc_quote : public Quote {
-	 public:
+  public:
+    Disc_quote() = default;
+    Disc_quote(const std::string& book, double price, std::size_t qty, double disc):
+      Quote(book, price), quantity(qty), discount(disc) {}
 
-	 Disc_quote() = default;
-	 Disc_quote(const std::string& book, double price, std::size_t qty, double disc):
-	 	Quote(book, price), quantity(qty), discount(disc) {}
+    # pure virtual function
+    double net_price(std::sizt_t) const = 0;
 
-	# pure virtual function
-	#
-	double net_price(std::sizt_t) const = 0;
-	...
+  protected:
+    std::size_t quantity = 0;
+    double discount = 0.0;
+};
+
+
+class Bulk_quote : public Disc_quote {
+  ...
 };
 
 
@@ -8975,6 +9036,13 @@ will provides so ther always is construction chain but not initialisation chain.
 
 When deriving a class from the ABC, if don't override a pure virtual func then the derived also
 becomes ABC. Also, ABC can have implementations and see interface-class and tizen case.
+
+
+{refactoring}
+
+This is refactoring-example. Refactoring involves redesigning a class hierarchy to move operations
+and/or data from one class to another. It is that even though we changed the inheritance hierarchy
+code that uses Bulk_quote or Quote would not need to change but need to recompile.
 
 
 ==============================================================================
