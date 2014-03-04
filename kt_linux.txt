@@ -43,31 +43,38 @@ KT KB. Linux
 |kt_linux_core_005|  posix 
 |kt_linux_core_006|  errno
 
-|kt_linux_core_100|  sync: thread vs. process {zombie-process}
-|kt_linux_core_101|  sync: pthread {nptl}
-|kt_linux_core_102|  sync: how to run three threads sequencially
-|kt_linux_core_103|  sync: pthread mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
-|kt_linux_core_104|  sync: read-write lock
-|kt_linux_core_105|  sync: semaphore
-|kt_linux_core_106|  sync: common problems when use threads {race-condition}
-|kt_linux_core_107|  sync: atomic operations 
-|kt_linux_core_108|  sync: thread and process synchronization
+|kt_linux_core_100|  ipc
+|kt_linux_core_101|  ipc: pipe and fifo	
+|kt_linux_core_102|  ipc: semaphore {semaphores-versus-pthreads-mutexes}
 
-|kt_linux_core_200|  case: own semaphore and mutex class using pthread cond-var {cqueue}
-|kt_linux_core_201|  case: use of mutex and thread class
-|kt_linux_core_202|  case: analysis of 200 and 201 case
-|kt_linux_core_203|  case: msg q between threads
+|kt_linux_core_110|  ipc: dbus
 
-|kt_linux_core_300|  ipc
-|kt_linux_core_301|  ipc: pipe and fifo	
-|kt_linux_core_302|  ipc: semaphore {process-synchronization} {semaphores-versus-pthreads-mutexes}
-|kt_linux_core_310|  ipc: dbus
-|kt_linux_core_031|  time
+|kt_linux_core_150|  sync: thread vs. process {zombie-process}
+
+|kt_linux_core_200|  sync: pthread {nptl}
+|kt_linux_core_201|  sync: how to run three threads sequencially
+
+|kt_linux_core_210|  sync: pthread mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
+|kt_linux_core_220|  sync: read-write lock
+
+|kt_linux_core_230|  sync: file-lock
+
+|kt_linux_core_240|  sync: common problems when use threads {race-condition}
+
+|kt_linux_core_250|  sync: atomic operations 
+
+|kt_linux_core_260|  sync: thread and process synchronization
+
+|kt_linux_core_300|  case: own semaphore and mutex class using pthread cond-var {cqueue}
+|kt_linux_core_301|  case: use of mutex and thread class
+|kt_linux_core_302|  case: analysis of 200 and 201 case
+|kt_linux_core_303|  case: msg q between threads
 
 |kt_linux_core_400|  signal
 |kt_linux_core_401|  signal example: use signal as synchronization
 
 |kt_linux_core_500|  file io
+|kt_linux_core_510|  time
 
 |kt_linux_sete_001|  ubuntu: virtualbox
 |kt_linux_sete_002|  ubuntu: workspace
@@ -2834,7 +2841,538 @@ For BRCM case, errno.h includes following file and starts numbering after follow
 
 
 ==============================================================================
-*kt_linux_core_100* thread vs. process	
+*kt_linux_core_100*  ipc
+
+CH43, Fig 43-1 in {ref-LPI} which says that the general term IPC is often used to describe them all;
+communication, signal, and synchronization.
+
+communication - data transfer - byte stream 	- pipe
+															- fifo
+															- stream socket
+
+										- message 		- sys v message q
+															- posix message q
+															- datagram socket
+
+										- pseudoterminal
+
+					- shared memory 	- sys v shm
+											- posix shm
+											- memory mapping 	- anonymous mapping
+																	- mapped file
+
+signal 			- standard signal
+					- realtime signal
+
+synchronization- semaphore 	- sys v
+										- posix 	- named
+													- unnamed
+					- file lock 	- record lock
+										- file lock
+
+					- mutex	
+					- condition variable
+
+Signals: Although signals are intended primarily for other purposes, they can be used as a
+synchronization technique in certain circumstances. More rarely, signals can be used as a
+communication technique: the signal number itself is a form of information, and realtime signals can
+be accompanied by associated data (an integer or a pointer).
+
+
+==============================================================================
+*kt_linux_core_101*  ipc: pipe and fifo	
+
+{nonnetworked-ipc}
+From {ref-001}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
+such as socket.
+
+{categories-of-ipc}
+
+From {ref-001}:
+
+three-ways-to-share-between-processes
+
+(1) Process Process       (2) Process Process          (3) Process <- shm -> Process
+      |        |                 |       |      
+Kernel                          shared info in kernel
+      |        |
+Filesystem
+
+
+<persistence> which is lifetime of an objects
+
+Define the persistence of any type of IPC as how long an object of that type remains in existence.
+Process-persistence exists until last process with IPC open closes the object and kernel one exists
+until kernel reboots or IPC objects is explicitly deleted.
+
+process-persistence: pipe, fifo, mutex, condition-var, read-write-lock, ...
+kernel-presistence : shm, named-semaphore, ...
+
+Be careful when defining the presistence of ipc because it is not always as it seems: the date
+within a pipe is maintained within the kernel, but pipes have process-persistence because after the
+last process that has the pipe open for reading closes the pipe, the kernel discard all data and
+remove the pipe.
+
+From {ref-LPI}:
+
+Data-transfer which 
+1) requires two data transfers between user and kenel memory
+2) synchronization between the reader and writer processes is automatic by kernel. if a reader
+attempts to fetch data from data-transfer facility that has no data, then read will bock until some
+write data to it.  
+3) available to one which done read operation since read consumes data.
+
+byte stream: read and write is independent meaning read may read an arbitrary bytes. This models
+"file as a sequence of bytes".
+
+An application can also impose a message-oriented model on a byte-stream facility, by using
+delimiter characters, fixed-length messages, or message headers that encode the length of the total
+message message: each read reads a whole message. not possible to read part of a message and to read
+multiple messages.
+
+
+shared memory which 
+1) don't require system calls or data transfer between user and kenel. Hence shared memory
+provide very fast communication. 
+2) However it can be offset by the need to sync and semaphore is the usual method used with shared
+memory.
+3) avaible to all of the processes that share that memory
+
+facility using file descriptors like pipe, fifo, and sockets
+
+The primary benefit of these techniques is that they allow an application to simultaneously monitor
+multiple file descriptors to see whether I/O is possible on any of them.
+
+
+{name-space}
+
+Use name or identifier so that one process can create ipc object and other processes can specify
+that same ipc object.
+
+type 								name used to identify 		handle used to refer to object
+------------------------------------------------------------------------------------
+pipe 								no name 							file descriptor
+fifo 								pathname 						ditto
+
+UNIX domain socket 			pathname 						ditto
+Internet domain socket 		IP and port 					ditto
+
+posix message q 				posix ipc pathname 			mqd_t
+posix named semaphore 		ditto								sem_t* (sem pointer)
+posix unnamed semaphore 	no name 							sem_t*
+posix shared memory 			posix ipc pathname 			file descriptor 
+
+anonymous mapping 			no name 							none
+memory mapped file 			pathname 						file descriptor 
+
+
+{accessibility-and-persistence}
+
+type 								accessibility 					persistence
+------------------------------------------------------------------------------------
+pipe 								only by related processes 	process
+fifo 								permission mask 				ditto
+
+UNIX domain socket 			permission mask 				ditto
+Internet domain socket 		by any processe 				ditto
+
+posix message q 				ppermission mask 				kernel
+posix named semaphore 		dpermission mask 				kernel
+posix unnamed semaphore 	permission of underlying mem depends
+posix shared memory 			permission mask 				kernel
+
+anonymous mapping 			only by releated				process 
+memory mapped file 			permission mask 				file system 
+
+unix and network domain:
+
+Of all of the IPC methods shown in Figure 43-1, only sockets permit processes to communicate over a
+network. Sockets are generally used in one of two domains: the UNIX domain, which allows
+communication between processes on the same system, and the Internet domain, which allows
+communication between processes on different hosts connected via a TCP/IP network. Often, only minor
+changes are required to convert a program that uses UNIX domain sockets into one that uses Internet
+domain sockets, so an application that is built using UNIX domain sockets can be made
+network-capable with relatively little effort.
+
+<portability>
+
+However, the POSIX IPC facilities (message queues, semaphores, and shared memory) are not quite as
+widely available as their System V IPC counterparts, especially on older UNIX systems. An
+implementation of POSIX message queues and full support for POSIX semaphores have appeared on Linux
+only in the 2.6.x kernel series. Therefore, from a portability point of view, System V IPC may be
+preferable to POSIX IPC.
+
+As of 06 Jan 2014, the latest stable kernel release is 3.12.6
+
+releated:
+
+Here, related means related via fork(). In order for two processes to access the object, one of them
+must create the object and then call fork(). As a consequence of the fork(), the child process
+inherits a handle referring to the object, allowing both processes to share the object.
+
+<performance>
+
+In some circumstances, different IPC facilities may show notable differences in performance.
+However, in later chapters, we generally refrain from making performance comparisons, for the
+following reasons:
+
+1) The performance of an IPC facility may not be a significant factor in the overall performance of
+an application, and it may not be the only factor in determining the choice of an IPC facility.
+
+2) The relative performance of the various IPC facilities may vary across UNIX implementations or
+between different versions of the Linux kernel.
+
+3) Most importantly, the performance of an IPC facility will vary depending on the precise manner
+and environment in which it is used. Relevant factors include the size of the data units exchanged
+in each IPC operation, the amount of unread data that may be outstanding on the IPC facility,
+whether or not a process context switch is required for each unit of data exchanged, and other
+load on the system.
+
+If IPC performance is crucial, there is no substitute for application-specific benchmarks run under
+an environment that matches the target system. To this end, it may be worth writing an [abstract]
+software layer that hides details of the IPC facility from the application and then testing
+performance when different IPC facilities are substituted underneath the abstract layer.
+
+
+{pipe}
+
+The pipe is unnamed fifo and is an early form that can be used [related-processes] such as parent
+and child. In other words, created using fork() call.
+
+Linux supports uni-directional pipe or half-duplex so need two pipes for read and write.
+
+
+{first-way::to-create-pipe}
+
+Get two fds from a pipe() call. fd[0] for read and fd[1] for write. Create a child via fork(). Then
+there is read-write channel between parent and child.
+
+parent                      child
+fd[1] write   pipe ->       fd[0] read
+fd[2] read    pipe <-       fd[1] write
+
+When close fd[1] in parent and fd[0] in child, only have one-way pipe. 
+
+note: Pipe is kernel resource meaning that there is copy between kernel and process. Also there is
+<no-open-call>.
+
+
+{second-way::to-create-pipe}
+
+popen() call which simplfies pipe creation, fork, reading/writing setting. However, need to set
+problem to fork in the command line.
+
+The C standard I/O library popen(3) makes it easy for the application programmer to open a pipe to
+an external process.
+
+#include <stdio.h>
+FILE *popen(const char *command, const char *mode);
+int pclose(FILE *stream);
+
+The argument command must be a command that is acceptable to the UNIX shell. The second argument
+mode must be the C string "r" for reading or "w" for writing.  No other combination, such as "w+",
+is acceptable. 
+
+(reading example)
+FILE *p;
+char cmd[1000];
+/* argv[2] is fname */
+sprintf(cmd,"grep 'Time has been updated to (Year:Month' %s | head -1",argv[2]);
+p=popen(cmd,"r");
+fgets(tmp,sizeof(tmp),p);
+pclose(p);
+
+note: After all, the reason that can use pipe between parent/child is that fds are shared.
+
+
+{broken-pipe}
+
+When write to fifo that is not opened to read. menas there is no reading process or reading process is
+killed because reading fd of pipe or file gets closed. SIGPIPE. Instead, there is no date to read,
+empty, reading thread or process is blocked.
+
+
+{fifo}
+
+To solve this, fifo was introduced and is called named pipe since has path name. means that it
+is created in the filesystem as a file. Use usual read and write call. Fifo is either read-only or
+write-only. mkfifo() call.
+
+note: caution. When open a fifo to read which is not opend to write, calling process is blocked.
+meaning there is no writing process. Therfore, if parent and child opens different fifos to read,
+deadlock happens.
+
+
+{from-nds-fusion-ipc}
+
+FIFOs have certain natural limitations, they are unidirectional, and fragment large message sizes
+with no built in support for reassembling the fragments. Furthermore FIFOs are limited in number due
+to system resources. <fragment> and <limit-in-number>
+
+Due to the limited number of FIFOs it was determined that there would be one
+control FIFO per server (to establish communication from clients) and one pair of unidirectional
+FIFOs for every pair of server and client instances (note that there is one instance of a client in
+every process that uses that client). This is illustrated below.
+
+server                  client a
+- control pipe          -> and <-
+
+								client b
+							   -> and <-
+
+note: KT. do not match with this pic?
+
+To cope with fragmentation and the fact that there may be several interfaces being used on a single
+client instance (and multiple components using that client instance in a single process) a protocol
+was designed as described below. This protocol is used in both FIFO and TCP/IP IPC communication.
+
+
+{summary}
+
+If there is no reading process, broken-pipe. If there is no writing process, blocked.
+
+
+==============================================================================
+*kt_linux_core_102*  ipc: semaphore
+
+{what-is-semaphore}
+
+KT. This can be used for process or thread but it is expensive for thread.
+
+System V semaphores are not used to transfer data between processes. Instead, they allow processes
+to synchronize their actions. A semaphore is a kernel-maintained integer whose value is never
+permitted to fall below 0. A process can decrease or increase the value of a semaphore. If an
+attempt is made to decrease the value of the semaphore below 0, then the kernel blocks the operation
+until the semaphore's value increases to a level that permits the operation to be performed. 
+
+The meaning of a semaphore is determined by the application. A process decrements a semaphore from
+say, 1 to 0 in order to reserve exclusive access to some shared resource, and after completing work
+on the resource, increments the semaphore so that the shared resource is released for use by some
+other process. The use of a binary semaphore-a semaphore whose value is limited to 0 or 1-is common.
+
+However, an application that deals with multiple instances of a shared resource would employ a
+semaphore whose maximum value equals the number of shared resources. Linux provides both System V
+semaphores and POSIX semaphores, which have essentially similar functionality.
+
+1> Setting the semaphore to an absolute value;
+2> Adding a number to the current value of the semaphore;            // give
+3> Subtracting a number from the current value of the semaphore; and // take
+4> Waiting for the semaphore value to be equal to 0.
+
+The last two of these operations may cause the calling process to block. A semaphore has no meaning
+in and of itself. Its meaning is determined only by the associations given to it by the processes
+using the semaphore.
+
+However, System V semaphores are rendered unusually complex by the fact that they are allocated in
+groups called semaphore sets. [KT] So move to POSIX semaphore.
+
+{posix-semaphore}
+
+SUSv3 specifies two types of POSIX semaphores:
+
+1> Named semaphores: This type of semaphore has a name. By calling sem_open() with the same name
+<unrelated> processes can access the same semaphore.
+
+2> Unnamed semaphores: This type of semaphore doesn't have a name; instead, it resides at an
+agreed-upon location in memory. Unnamed semaphores can be shared between processes or between a
+group of threads. When shared between processes, the semaphore must reside in a region of (System V,
+POSIX, or mmap()) shared memory. When shared between threads, the semaphore may reside in an
+area of memory shared by the threads (e.g., on the heap or in a global variable).
+
+POSIX semaphores operate in a manner similar to System V semaphores; that is, a POSIX semaphore is
+an integer whose value is not permitted to fall below 0. If a process attempts to decrease the value
+of a semaphore below 0, then, depending on the function used, the call either blocks or fails with
+an error indicating that the operation was not currently possible.
+
+Some systems don’t provide a full implementation of POSIX semaphores. A typical restriction is that
+only unnamed thread-shared semaphores are supported. That was the situation on Linux 2.4; 
+
+<linux-2-6-support>
+With Linux 2.6 and a glibc that provides NPTL, a full implementation of POSIX semaphores is
+available.
+
+<named-semaphore>
+To work with a named semaphore, we employ the following functions:
+
+1> The sem_open() function opens or creates a semaphore, initializes the semaphore if it is created
+by the call, and returns a handle for use in later calls.
+
+2> The sem_post(sem) and sem_wait(sem) functions respectively increment and decrement a semaphore’s
+value.
+
+3> The sem_getvalue() function retrieves a semaphore’s current value.
+
+4> The sem_close() function removes the calling process’s association with a semaphore that it
+previously opened.
+
+5> The sem_unlink() function removes a semaphore name and marks the semaphore for deletion when all
+processes have closed it.
+
+SUSv3 doesn't specify how named semaphores are to be implemented. On Linux, they are created as
+small POSIX shared memory objects with names of the form sem.name, in a dedicated tmpfs file system
+(Section 14.10) mounted under the directory /dev/shm. This file system has [kernel-persistence]-the
+semaphore objects that it contains will persist, even if no process currently has them open, but
+they will be lost if the system is shut down.
+
+<unnamed-semaphore>
+The semaphore is made available to the processes or threads that use it by placing it in an area of
+memory that they share.  Operations on unnamed semaphores use the same functions; sem_wait(),
+sem_post(), sem_getvalue(), and so on that are used to operate on named semaphores.
+
+In addition, two further functions are required:
+
+The sem_init() function initializes a semaphore and informs the system of whether the semaphore will
+be shared between processes or between the threads of a single process.
+
+The sem_destroy(sem) function destroys a semaphore.  These functions should not be used with named
+semaphores.
+
+<when-useful-to-use-unnamed>
+
+1> A semaphore that is shared between threads doesn't need a name. Making an unnamed semaphore a
+shared (global or heap) variable automatically makes it accessible to all threads.
+
+2> A semaphore that is being shared between [related] processes doesn't need a name. If a parent
+process allocates an unnamed semaphore in a region of shared memory (e.g., a shared anonymous
+mapping), then a child automatically inherits the mapping and thus the semaphore as part of the
+operation of fork().
+
+3> If we are building a dynamic data structure (e.g., a binary tree), each of whose items requires
+an associated semaphore, then the simplest approach is to allocate an unnamed semaphore within each
+item. Opening a named semaphore for each item would require us to design a convention for generating
+a (unique) semaphore name for each item and to manage those names (e.g., unlinking them when they
+are no longer required).
+
+{semaphores-versus-pthreads-mutexes}
+
+<1>
+Unlike mutex, semaphore does not get lost when there is no waiting one.
+
+<2>
+POSIX semaphores and Pthreads mutexes can both be used to synchronize the actions of threads within
+the same process, and their performance is [similar]. 
+
+However, mutexes are usually preferable, because the [ownership] property of mutexes enforces good
+structuring of code; only the thread that locks a mutex can unlock it. By contrast, one thread can
+increment a semaphore that was decremented by another thread. This flexibility can lead to poorly
+structured synchronization designs. For this reason, semaphores are sometimes referred to as the
+"gotos" of concurrent programming.
+
+There is one circumstance in which mutexes can't be used in a multithreaded application and
+semaphores may therefore be preferable. Because it is async-signalsafe. See
+{async-signal-safe-function}. The sem_post() function can be used from within a signal handler to
+synchronize with another thread. This is not possible with mutexes, because the Pthreads functions
+for operating on mutexes are not asyncsignal-safe. 
+
+However, because it is usually preferable to deal with asynchronous signals by accepting them using
+sigwaitinfo() (or similar), rather than using signal handlers (see Section 33.2.4), this advantage
+of semaphores over mutexes is seldom required.
+
+
+==============================================================================
+*kt_linux_core_110*  ipc: dbus and kbus	
+
+{dbus}
+
+http://www.freedesktop.org/wiki/Software/dbus/
+
+What is D-Bus?
+
+D-Bus is a message bus system, a simple way for applications to talk to one another. In addition to
+interprocess communication, D-Bus helps coordinate process lifecycle; it makes it simple and
+reliable to code a "single instance" application or daemon, and to launch applications and daemons
+on demand when their services are needed.
+
+D-Bus supplies both a system daemon (for events such as "new hardware device added" or "printer
+queue changed") and a per-user-login-session daemon (for general IPC needs among user
+applications). Also, the message bus is built on top of a general one-to-one message passing
+framework, which can be used by any two apps to communicate directly (without going through the
+message bus daemon). Currently the communicating applications are on one computer, or through
+unencrypted TCP/IP suitable for use behind a firewall with shared NFS home directories. (Help wanted
+with better remote transports - the transport mechanism is well-abstracted and extensible.)
+
+The D-Bus low-level API reference implementation and protocol have been heavily tested in the real
+world over several years, and are now "set in stone." Future changes will either be compatible or
+versioned appropriately.
+
+The low-level libdbus reference implementation has no required dependencies; the bus daemon's only
+required dependency is an XML parser (expat). Higher-level bindings specific to particular
+frameworks (Qt, GLib, Java, C#, Python, etc.) add more dependencies, but can make more assumptions
+and are thus much simpler to use. The bindings evolve separately from the low-level libdbus, so some
+are more mature and ABI-stable than others; check the docs for the binding you plan to use.
+
+There are also some reimplementations of the D-Bus protocol for languages such as C#, Java, and
+Ruby. These do not use the libdbus reference implementation.
+
+It should be noted that the low-level implementation is not primarily designed for application
+authors to use. Rather, it is a basis for binding authors and a reference for reimplementations. If
+you are able to do so it is recommended that you use one of the higher level bindings or
+implementations. A list of these can be found on the bindings page.
+
+The list of projects using D-Bus is growing and they provide a wealth of examples of using the
+various APIs to learn from.
+
+D-Bus is very portable to any Linux or UNIX flavor, and a port to Windows is in progress.
+
+D-Bus applications
+
+There are many, many technologies in the world that have "Inter-process communication" or
+"networking" in their stated purpose: CORBA, DCE, DCOM, DCOP, XML-RPC, SOAP, MBUS, Internet
+Communications Engine (ICE), and probably hundreds more. Each of these is tailored for particular
+kinds of application. 
+
+D-Bus is designed for two specific cases:
+
+Communication between desktop applications in the same desktop session; to allow integration of the
+desktop session as a whole, and address issues of process lifecycle (when do desktop components
+start and stop running).
+
+Communication between the desktop session and the operating system, where the operating system would
+typically include the kernel and any system daemons or processes. 
+
+For the within-desktop-session use case, the GNOME and KDE desktops have significant previous
+experience with different IPC solutions such as CORBA and DCOP. D-Bus is built on that experience
+and carefully tailored to meet the needs of these desktop projects in particular. D-Bus may or may
+not be appropriate for other applications; the FAQ has some comparisons to other IPC systems.
+
+The problem solved by the systemwide or communication-with-the-OS case is explained well by the
+following text from the Linux Hotplug project:
+
+A gap in current Linux support is that policies with any sort of dynamic "interact with user"
+component aren't currently supported. For example, that's often needed the first time a network
+adapter or printer is connected, and to determine appropriate places to mount disk drives. It would
+seem that such actions could be supported for any case where a responsible human can be identified:
+single user workstations, or any system which is remotely administered.
+
+This is a classic "remote sysadmin" problem, where in this case hotplugging needs to deliver an
+event from one security domain (operating system kernel, in this case) to another (desktop for
+logged-in user, or remote sysadmin). Any effective response must go the other way: the remote
+domain taking some action that lets the kernel expose the desired device capabilities. (The action
+can often be taken asynchronously, for example letting new hardware be idle until a meeting
+finishes.) At this writing, Linux doesn't have widely adopted solutions to such problems.
+However, the new D-Bus work may begin to solve that problem. 
+
+D-Bus may happen to be useful for purposes other than the one it was designed for. Its general
+properties that distinguish it from other forms of IPC are:
+
+Binary protocol designed to be used asynchronously (similar in spirit to the X Window System protocol).
+
+Stateful, reliable connections held open over time.
+
+The message bus is a daemon, not a "swarm" or distributed architecture.
+
+Many implementation and deployment issues are specified rather than left ambiguous/configurable/pluggable.
+
+Semantics are similar to the existing DCOP system, allowing KDE to adopt it more easily.
+
+Security features to support the systemwide mode of the message bus. 
+
+
+{kdbus}
+https://github.com/gregkh/presentation-kdbus
+https://github.com/gregkh/kdbus
+==============================================================================
+*kt_linux_core_150* thread vs. process	
 
 A process is an instance of an executing program and a thread is an instance of an executing a task.
 In other words, a process is processor abstract, an abstract entity defined by kernel and with
@@ -3187,10 +3725,8 @@ stack (local variables and function call linkage information).
 registers including PC and SP
 
 
-
-
 ==============================================================================
-*kt_linux_core_101* pthread
+*kt_linux_core_200* pthread
 
 POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard defines an API for
 creating and manipulating threads. So there is one posix standard but there are two implementation
@@ -3614,7 +4150,7 @@ gcc -pthread sample.c
 
 
 ==============================================================================
-*kt_linux_core_102*	sync: how to run three threads sequencially
+*kt_linux_core_201*	sync: how to run three threads sequencially
 
 From Cracking the coding interview, p425, 16.5:
 
@@ -3678,7 +4214,7 @@ thread. The method will return immediately if the current thread already owns th
 
 
 ==============================================================================
-*kt_linux_core_103*	sync: pthread mutex and cond var
+*kt_linux_core_210*	sync: pthread mutex and cond var
 
 From CH07 in {ref-001}. 
 
@@ -4174,7 +4710,7 @@ while( nready.ready == 0 )
 
 
 ==============================================================================
-*kt_linux_core_104*	sync: read-write lock
+*kt_linux_core_220*	sync: read-write lock
 
 From {ref-001} but no such a thing in {ref-LPI}, so may be old way but surely in posix but may be
 different to this since this lock is before posix standard. See {ref-001} note.
@@ -4590,22 +5126,7 @@ rwlock_cancelwrwait(void *arg)
 
 
 ==============================================================================
-*kt_linux_core_105*	sync: semaphore
-
-Semaphores: A semaphore is a kernel-maintained integer whose value is never permitted to fall below
-0. A process can decrease or increase the value of a semaphore. If an attempt is made to decrease
-the value of the semaphore below 0, then the kernel blocks the operation until the semaphore's value
-increases to a level that permits the operation to be performed. 
-
-The meaning of a semaphore is determined by the application. A process decrements a semaphore (from,
-say, 1 to 0) in order to reserve exclusive access to some shared resource, and after
-completing work on the resource, increments the semaphore so that the shared resource is released
-for use by some other process. The use of a binary semaphore-a semaphore whose value is limited to 0
-or 1-is common. However, an application that deals with multiple instances of a shared resource
-would employ a semaphore whose maximum value equals the number of shared resources. Linux provides
-both System V semaphores and POSIX semaphores, which have essentially similar functionality.
-
-Unlike mutex, semaphore does not get lost when there is no waiting one.
+*kt_linux_core_230*	sync: file-lock
 
 File locks: File locks are a synchronization method explicitly designed to coordinate the actions of
 multiple processes operating [on-the-same-file]. They can also be used to coordinate access to other
@@ -4616,8 +5137,8 @@ holding either read or write locks on that file (or file region). Linux provides
 facilities via the flock() and fcntl() system calls. The flock() system call provides a simple
 locking mechanism, allowing processes to place a shared or an exclusive lock on an entire file.
 Because of its limited functionality, flock() locking facility is rarely used nowadays. The fcntl()
-system call provides record locking, allowing processes to place multiple read and write locks on
-different regions of the same file.
+  system call provides record locking, allowing processes to place multiple read and write locks on
+  different regions of the same file.
 
 When performing interprocess synchronization, our choice of facility is typically determined by the
 functional requirements. When coordinating access to a file, file record locking is usually the best
@@ -4626,7 +5147,7 @@ resource.
 
 
 ==============================================================================
-*kt_linux_core_106* 	sync: common problems when use threads
+*kt_linux_core_240* 	sync: common problems when use threads
 
 the big three of threading problems are deadlock, races and starvation.
 
@@ -4647,7 +5168,7 @@ is the problem when this happens. Look at algorithms that assure access.
 
 
 ==============================================================================
-*kt_linux_core_107*	sync: atomic operations
+*kt_linux_core_250*	sync: atomic operations
 
 {atomic-operations}
 
@@ -5052,7 +5573,7 @@ codepaths can still be considered lock-free.
 
 
 ==============================================================================
-*kt_linux_core_200*	case: own semaphore and mutex class using pthred cond var
+*kt_linux_core_300*	case: own semaphore and mutex class using pthred cond var
 
 POSIX semaphore are system calls which means expensive. Is it possible to implement semaphore without it?
 
@@ -5629,7 +6150,7 @@ See *kt_linux_core_014* for msg q between threads
 
 
 ==============================================================================
-*kt_linux_core_201*  case: use of mutex and thread class
+*kt_linux_core_301*  case: use of mutex and thread class
 
 This is case study using Mutex, Queue and Thread classes.
 
@@ -5931,7 +6452,7 @@ most derived class object. Therefore, dreived version will be used for virtuals 
 
 
 ==============================================================================
-*kt_linux_core_202*  case: analysis of 200 and 201 case
+*kt_linux_core_302*  case: analysis of 200 and 201 case
 
 {how-this-work}
 
@@ -5974,7 +6495,7 @@ about performance? Is it better solution?
 
 
 ==============================================================================
-*kt_linux_core_203*  case: msg q between threads
+*kt_linux_core_303*  case: msg q between threads
 
 This uses stl q and sems to read, write and count(length) lock:
 
@@ -6323,531 +6844,6 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 
 
 ==============================================================================
-*kt_linux_core_300*  ipc
-
-CH43, Fig 43-1 in {ref-LPI} which says that the general term IPC is often used to describe them all;
-communication, signal, and synchronization.
-
-communication - data transfer - byte stream 	- pipe
-															- fifo
-															- stream socket
-
-										- message 		- sys v message q
-															- posix message q
-															- datagram socket
-
-										- pseudoterminal
-
-					- shared memory 	- sys v shm
-											- posix shm
-											- memory mapping 	- anonymous mapping
-																	- mapped file
-
-signal 			- standard signal
-					- realtime signal
-
-synchronization- semaphore 	- sys v
-										- posix 	- named
-													- unnamed
-					- file lock 	- record lock
-										- file lock
-
-					- mutex	
-					- condition variable
-
-Signals: Although signals are intended primarily for other purposes, they can be used as a
-synchronization technique in certain circumstances. More rarely, signals can be used as a
-communication technique: the signal number itself is a form of information, and realtime signals can
-be accompanied by associated data (an integer or a pointer).
-
-
-==============================================================================
-*kt_linux_core_301*  ipc: pipe and fifo	
-
-{nonnetworked-ipc}
-From {ref-001}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
-such as socket.
-
-{categories-of-ipc}
-
-From {ref-001}:
-
-three-ways-to-share-between-processes
-
-(1) Process Process       (2) Process Process          (3) Process <- shm -> Process
-      |        |                 |       |      
-Kernel                          shared info in kernel
-      |        |
-Filesystem
-
-
-<persistence> which is lifetime of an objects
-
-Define the persistence of any type of IPC as how long an object of that type remains in existence.
-Process-persistence exists until last process with IPC open closes the object and kernel one exists
-until kernel reboots or IPC objects is explicitly deleted.
-
-process-persistence: pipe, fifo, mutex, condition-var, read-write-lock, ...
-kernel-presistence : shm, named-semaphore, ...
-
-Be careful when defining the presistence of ipc because it is not always as it seems: the date
-within a pipe is maintained within the kernel, but pipes have process-persistence because after the
-last process that has the pipe open for reading closes the pipe, the kernel discard all data and
-remove the pipe.
-
-From {ref-LPI}:
-
-Data-transfer which 
-1) requires two data transfers between user and kenel memory
-2) synchronization between the reader and writer processes is automatic by kernel. if a reader
-attempts to fetch data from data-transfer facility that has no data, then read will bock until some
-write data to it.  
-3) available to one which done read operation since read consumes data.
-
-byte stream: read and write is independent meaning read may read an arbitrary bytes. This models
-"file as a sequence of bytes".
-
-An application can also impose a message-oriented model on a byte-stream facility, by using
-delimiter characters, fixed-length messages, or message headers that encode the length of the total
-message message: each read reads a whole message. not possible to read part of a message and to read
-multiple messages.
-
-
-shared memory which 
-1) don't require system calls or data transfer between user and kenel. Hence shared memory
-provide very fast communication. 
-2) However it can be offset by the need to sync and semaphore is the usual method used with shared
-memory.
-3) avaible to all of the processes that share that memory
-
-facility using file descriptors like pipe, fifo, and sockets
-
-The primary benefit of these techniques is that they allow an application to simultaneously monitor
-multiple file descriptors to see whether I/O is possible on any of them.
-
-
-{name-space}
-
-Use name or identifier so that one process can create ipc object and other processes can specify
-that same ipc object.
-
-type 								name used to identify 		handle used to refer to object
-------------------------------------------------------------------------------------
-pipe 								no name 							file descriptor
-fifo 								pathname 						ditto
-
-UNIX domain socket 			pathname 						ditto
-Internet domain socket 		IP and port 					ditto
-
-posix message q 				posix ipc pathname 			mqd_t
-posix named semaphore 		ditto								sem_t* (sem pointer)
-posix unnamed semaphore 	no name 							sem_t*
-posix shared memory 			posix ipc pathname 			file descriptor 
-
-anonymous mapping 			no name 							none
-memory mapped file 			pathname 						file descriptor 
-
-
-{accessibility-and-persistence}
-
-type 								accessibility 					persistence
-------------------------------------------------------------------------------------
-pipe 								only by related processes 	process
-fifo 								permission mask 				ditto
-
-UNIX domain socket 			permission mask 				ditto
-Internet domain socket 		by any processe 				ditto
-
-posix message q 				ppermission mask 				kernel
-posix named semaphore 		dpermission mask 				kernel
-posix unnamed semaphore 	permission of underlying mem depends
-posix shared memory 			permission mask 				kernel
-
-anonymous mapping 			only by releated				process 
-memory mapped file 			permission mask 				file system 
-
-unix and network domain:
-
-Of all of the IPC methods shown in Figure 43-1, only sockets permit processes to communicate over a
-network. Sockets are generally used in one of two domains: the UNIX domain, which allows
-communication between processes on the same system, and the Internet domain, which allows
-communication between processes on different hosts connected via a TCP/IP network. Often, only minor
-changes are required to convert a program that uses UNIX domain sockets into one that uses Internet
-domain sockets, so an application that is built using UNIX domain sockets can be made
-network-capable with relatively little effort.
-
-<portability>
-
-However, the POSIX IPC facilities (message queues, semaphores, and shared memory) are not quite as
-widely available as their System V IPC counterparts, especially on older UNIX systems. An
-implementation of POSIX message queues and full support for POSIX semaphores have appeared on Linux
-only in the 2.6.x kernel series. Therefore, from a portability point of view, System V IPC may be
-preferable to POSIX IPC.
-
-As of 06 Jan 2014, the latest stable kernel release is 3.12.6
-
-releated:
-
-Here, related means related via fork(). In order for two processes to access the object, one of them
-must create the object and then call fork(). As a consequence of the fork(), the child process
-inherits a handle referring to the object, allowing both processes to share the object.
-
-<performance>
-
-In some circumstances, different IPC facilities may show notable differences in performance.
-However, in later chapters, we generally refrain from making performance comparisons, for the
-following reasons:
-
-1) The performance of an IPC facility may not be a significant factor in the overall performance of
-an application, and it may not be the only factor in determining the choice of an IPC facility.
-
-2) The relative performance of the various IPC facilities may vary across UNIX implementations or
-between different versions of the Linux kernel.
-
-3) Most importantly, the performance of an IPC facility will vary depending on the precise manner
-and environment in which it is used. Relevant factors include the size of the data units exchanged
-in each IPC operation, the amount of unread data that may be outstanding on the IPC facility,
-whether or not a process context switch is required for each unit of data exchanged, and other
-load on the system.
-
-If IPC performance is crucial, there is no substitute for application-specific benchmarks run under
-an environment that matches the target system. To this end, it may be worth writing an [abstract]
-software layer that hides details of the IPC facility from the application and then testing
-performance when different IPC facilities are substituted underneath the abstract layer.
-
-
-{pipe}
-
-The pipe is unnamed fifo and is an early form that can be used [related-processes] such as parent
-and child. In other words, created using fork() call.
-
-Linux supports uni-directional pipe or half-duplex so need two pipes for read and write.
-
-
-{first-way::to-create-pipe}
-
-Get two fds from a pipe() call. fd[0] for read and fd[1] for write. Create a child via fork(). Then
-there is read-write channel between parent and child.
-
-parent                      child
-fd[1] write   pipe ->       fd[0] read
-fd[2] read    pipe <-       fd[1] write
-
-When close fd[1] in parent and fd[0] in child, only have one-way pipe. 
-
-note: Pipe is kernel resource meaning that there is copy between kernel and process. Also there is
-<no-open-call>.
-
-
-{second-way::to-create-pipe}
-
-popen() call which simplfies pipe creation, fork, reading/writing setting. However, need to set
-problem to fork in the command line.
-
-The C standard I/O library popen(3) makes it easy for the application programmer to open a pipe to
-an external process.
-
-#include <stdio.h>
-FILE *popen(const char *command, const char *mode);
-int pclose(FILE *stream);
-
-The argument command must be a command that is acceptable to the UNIX shell. The second argument
-mode must be the C string "r" for reading or "w" for writing.  No other combination, such as "w+",
-is acceptable. 
-
-(reading example)
-FILE *p;
-char cmd[1000];
-/* argv[2] is fname */
-sprintf(cmd,"grep 'Time has been updated to (Year:Month' %s | head -1",argv[2]);
-p=popen(cmd,"r");
-fgets(tmp,sizeof(tmp),p);
-pclose(p);
-
-note: After all, the reason that can use pipe between parent/child is that fds are shared.
-
-
-{broken-pipe}
-
-When write to fifo that is not opened to read. menas there is no reading process or reading process is
-killed because reading fd of pipe or file gets closed. SIGPIPE. Instead, there is no date to read,
-empty, reading thread or process is blocked.
-
-
-{fifo}
-
-To solve this, fifo was introduced and is called named pipe since has path name. means that it
-is created in the filesystem as a file. Use usual read and write call. Fifo is either read-only or
-write-only. mkfifo() call.
-
-note: caution. When open a fifo to read which is not opend to write, calling process is blocked.
-meaning there is no writing process. Therfore, if parent and child opens different fifos to read,
-deadlock happens.
-
-
-{from-nds-fusion-ipc}
-
-FIFOs have certain natural limitations, they are unidirectional, and fragment large message sizes
-with no built in support for reassembling the fragments. Furthermore FIFOs are limited in number due
-to system resources. <fragment> and <limit-in-number>
-
-Due to the limited number of FIFOs it was determined that there would be one
-control FIFO per server (to establish communication from clients) and one pair of unidirectional
-FIFOs for every pair of server and client instances (note that there is one instance of a client in
-every process that uses that client). This is illustrated below.
-
-server                  client a
-- control pipe          -> and <-
-
-								client b
-							   -> and <-
-
-note: KT. do not match with this pic?
-
-To cope with fragmentation and the fact that there may be several interfaces being used on a single
-client instance (and multiple components using that client instance in a single process) a protocol
-was designed as described below. This protocol is used in both FIFO and TCP/IP IPC communication.
-
-
-{summary}
-
-If there is no reading process, broken-pipe. If there is no writing process, blocked.
-
-
-==============================================================================
-*kt_linux_core_302*  ipc: semaphore
-
-KT. This can be used for process or thread but it is expensive for thread.
-
-System V semaphores are not used to transfer data between processes. Instead, they allow processes
-to synchronize their actions. A semaphore is a kernel-maintained integer whose value is restricted
-to being greater than or equal to 0.
-
-1> Setting the semaphore to an absolute value;
-2> Adding a number to the current value of the semaphore;            // give
-3> Subtracting a number from the current value of the semaphore; and // take
-4> Waiting for the semaphore value to be equal to 0.
-
-The last two of these operations may cause the calling process to block. A semaphore has no meaning
-in and of itself. Its meaning is determined only by the associations given to it by the processes
-using the semaphore.
-
-However, System V semaphores are rendered unusually complex by the fact that they are allocated in
-groups called semaphore sets. [KT] So move to POSIX semaphore.
-
-{posix-semaphore}
-
-SUSv3 specifies two types of POSIX semaphores:
-
-1> Named semaphores: This type of semaphore has a name. By calling sem_open() with the same name
-<unrelated> processes can access the same semaphore.
-
-2> Unnamed semaphores: This type of semaphore doesn't have a name; instead, it resides at an
-agreed-upon location in memory. Unnamed semaphores can be shared between processes or between a
-group of threads. When shared between processes, the semaphore must reside in a region of (System V,
-POSIX, or mmap()) shared memory. When shared between threads, the semaphore may reside in an
-area of memory shared by the threads (e.g., on the heap or in a global variable).
-
-POSIX semaphores operate in a manner similar to System V semaphores; that is, a POSIX semaphore is
-an integer whose value is not permitted to fall below 0. If a process attempts to decrease the value
-of a semaphore below 0, then, depending on the function used, the call either blocks or fails with
-an error indicating that the operation was not currently possible.
-
-Some systems don’t provide a full implementation of POSIX semaphores. A typical restriction is that
-only unnamed thread-shared semaphores are supported. That was the situation on Linux 2.4; 
-
-<linux-2-6-support>
-With Linux 2.6 and a glibc that provides NPTL, a full implementation of POSIX semaphores is
-available.
-
-<named-semaphore>
-To work with a named semaphore, we employ the following functions:
-
-1> The sem_open() function opens or creates a semaphore, initializes the semaphore if it is created
-by the call, and returns a handle for use in later calls.
-
-2> The sem_post(sem) and sem_wait(sem) functions respectively increment and decrement a semaphore’s
-value.
-
-3> The sem_getvalue() function retrieves a semaphore’s current value.
-
-4> The sem_close() function removes the calling process’s association with a semaphore that it
-previously opened.
-
-5> The sem_unlink() function removes a semaphore name and marks the semaphore for deletion when all
-processes have closed it.
-
-SUSv3 doesn't specify how named semaphores are to be implemented. On Linux, they are created as
-small POSIX shared memory objects with names of the form sem.name, in a dedicated tmpfs file system
-(Section 14.10) mounted under the directory /dev/shm. This file system has [kernel-persistence]-the
-semaphore objects that it contains will persist, even if no process currently has them open, but
-they will be lost if the system is shut down.
-
-<unnamed-semaphore>
-The semaphore is made available to the processes or threads that use it by placing it in an area of
-memory that they share.  Operations on unnamed semaphores use the same functions; sem_wait(),
-sem_post(), sem_getvalue(), and so on that are used to operate on named semaphores.
-
-In addition, two further functions are required:
-
-The sem_init() function initializes a semaphore and informs the system of whether the semaphore will
-be shared between processes or between the threads of a single process.
-
-The sem_destroy(sem) function destroys a semaphore.  These functions should not be used with named
-semaphores.
-
-<when-useful-to-use-unnamed>
-
-1> A semaphore that is shared between threads doesn't need a name. Making an unnamed semaphore a
-shared (global or heap) variable automatically makes it accessible to all threads.
-
-2> A semaphore that is being shared between [related] processes doesn't need a name. If a parent
-process allocates an unnamed semaphore in a region of shared memory (e.g., a shared anonymous
-mapping), then a child automatically inherits the mapping and thus the semaphore as part of the
-operation of fork().
-
-3> If we are building a dynamic data structure (e.g., a binary tree), each of whose items requires
-an associated semaphore, then the simplest approach is to allocate an unnamed semaphore within each
-item. Opening a named semaphore for each item would require us to design a convention for generating
-a (unique) semaphore name for each item and to manage those names (e.g., unlinking them when they
-are no longer required).
-
-{semaphores-versus-pthreads-mutexes}
-
-POSIX semaphores and Pthreads mutexes can both be used to synchronize the actions of threads within
-the same process, and their performance is [similar]. However, mutexes are usually preferable,
-because the [ownership] property of mutexes enforces good structuring of code; only the thread that
-locks a mutex can unlock it. By contrast, one thread can increment a semaphore that was decremented
-by another thread. This flexibility can lead to poorly structured synchronization designs. For this
-reason, semaphores are sometimes referred to as the "gotos" of concurrent programming.
-
-There is one circumstance in which mutexes can’t be used in a multithreaded
-application and semaphores may therefore be preferable. Because it is async-signalsafe
-(see Table 21-1, on page 426), the sem_post() function can be used from within
-a signal handler to synchronize with another thread. This is not possible with
-mutexes, because the Pthreads functions for operating on mutexes are not asyncsignal-
-safe. However, because it is usually preferable to deal with asynchronous signals
-by accepting them using sigwaitinfo() (or similar), rather than using signal handlers
-(see Section 33.2.4), this advantage of semaphores over mutexes is seldom
-required.
-
-
-==============================================================================
-*kt_linux_core_310*  ipc: dbus and kbus	
-
-{dbus}
-
-http://www.freedesktop.org/wiki/Software/dbus/
-
-What is D-Bus?
-
-D-Bus is a message bus system, a simple way for applications to talk to one another. In addition to
-interprocess communication, D-Bus helps coordinate process lifecycle; it makes it simple and
-reliable to code a "single instance" application or daemon, and to launch applications and daemons
-on demand when their services are needed.
-
-D-Bus supplies both a system daemon (for events such as "new hardware device added" or "printer
-queue changed") and a per-user-login-session daemon (for general IPC needs among user
-applications). Also, the message bus is built on top of a general one-to-one message passing
-framework, which can be used by any two apps to communicate directly (without going through the
-message bus daemon). Currently the communicating applications are on one computer, or through
-unencrypted TCP/IP suitable for use behind a firewall with shared NFS home directories. (Help wanted
-with better remote transports - the transport mechanism is well-abstracted and extensible.)
-
-The D-Bus low-level API reference implementation and protocol have been heavily tested in the real
-world over several years, and are now "set in stone." Future changes will either be compatible or
-versioned appropriately.
-
-The low-level libdbus reference implementation has no required dependencies; the bus daemon's only
-required dependency is an XML parser (expat). Higher-level bindings specific to particular
-frameworks (Qt, GLib, Java, C#, Python, etc.) add more dependencies, but can make more assumptions
-and are thus much simpler to use. The bindings evolve separately from the low-level libdbus, so some
-are more mature and ABI-stable than others; check the docs for the binding you plan to use.
-
-There are also some reimplementations of the D-Bus protocol for languages such as C#, Java, and
-Ruby. These do not use the libdbus reference implementation.
-
-It should be noted that the low-level implementation is not primarily designed for application
-authors to use. Rather, it is a basis for binding authors and a reference for reimplementations. If
-you are able to do so it is recommended that you use one of the higher level bindings or
-implementations. A list of these can be found on the bindings page.
-
-The list of projects using D-Bus is growing and they provide a wealth of examples of using the
-various APIs to learn from.
-
-D-Bus is very portable to any Linux or UNIX flavor, and a port to Windows is in progress.
-
-D-Bus applications
-
-There are many, many technologies in the world that have "Inter-process communication" or
-"networking" in their stated purpose: CORBA, DCE, DCOM, DCOP, XML-RPC, SOAP, MBUS, Internet
-Communications Engine (ICE), and probably hundreds more. Each of these is tailored for particular
-kinds of application. 
-
-D-Bus is designed for two specific cases:
-
-Communication between desktop applications in the same desktop session; to allow integration of the
-desktop session as a whole, and address issues of process lifecycle (when do desktop components
-start and stop running).
-
-Communication between the desktop session and the operating system, where the operating system would
-typically include the kernel and any system daemons or processes. 
-
-For the within-desktop-session use case, the GNOME and KDE desktops have significant previous
-experience with different IPC solutions such as CORBA and DCOP. D-Bus is built on that experience
-and carefully tailored to meet the needs of these desktop projects in particular. D-Bus may or may
-not be appropriate for other applications; the FAQ has some comparisons to other IPC systems.
-
-The problem solved by the systemwide or communication-with-the-OS case is explained well by the
-following text from the Linux Hotplug project:
-
-A gap in current Linux support is that policies with any sort of dynamic "interact with user"
-component aren't currently supported. For example, that's often needed the first time a network
-adapter or printer is connected, and to determine appropriate places to mount disk drives. It would
-seem that such actions could be supported for any case where a responsible human can be identified:
-single user workstations, or any system which is remotely administered.
-
-This is a classic "remote sysadmin" problem, where in this case hotplugging needs to deliver an
-event from one security domain (operating system kernel, in this case) to another (desktop for
-logged-in user, or remote sysadmin). Any effective response must go the other way: the remote
-domain taking some action that lets the kernel expose the desired device capabilities. (The action
-can often be taken asynchronously, for example letting new hardware be idle until a meeting
-finishes.) At this writing, Linux doesn't have widely adopted solutions to such problems.
-However, the new D-Bus work may begin to solve that problem. 
-
-D-Bus may happen to be useful for purposes other than the one it was designed for. Its general
-properties that distinguish it from other forms of IPC are:
-
-Binary protocol designed to be used asynchronously (similar in spirit to the X Window System protocol).
-
-Stateful, reliable connections held open over time.
-
-The message bus is a daemon, not a "swarm" or distributed architecture.
-
-Many implementation and deployment issues are specified rather than left ambiguous/configurable/pluggable.
-
-Semantics are similar to the existing DCOP system, allowing KDE to adopt it more easily.
-
-Security features to support the systemwide mode of the message bus. 
-
-
-{kdbus}
-https://github.com/gregkh/presentation-kdbus
-https://github.com/gregkh/kdbus
-
-
-==============================================================================
-*kt_linux_core_031*  time
-
-{abstime}
-
-The abstime is the system time - the number of seconds and nanoseconds past Jan. 1, 1970, UTC. The
-advantage in using the abstime, instead of a delta, is if the function prematurely returns ( perhaps
-because of a caught signal ): the function can be called again without having to change the timespec
-structure. 
-
-
-==============================================================================
 *kt_linux_core_400*  signal
 
 {signal-is-notification}
@@ -6899,7 +6895,7 @@ change a default is usually referred to as installing or establishing a signal h
 signal handler is invoked in response to the delivery of a signal, we say that the signal has been
 handled or, synonymously, caught.
 
-{signal-reentrant}
+{signal-reentrant} {async-signal-safe-function}
 Because a signal handler may asynchronously interrupt the execution of a program at any point in
 time, the main program and the signal handler in effect form two independent (although not
 concurrent) threads of execution within the same process.
@@ -6909,7 +6905,12 @@ of execution in the same process. In this context, "safe" means that the functio
 expected result, regardless of the state of execution of any other thread of execution.
 
 A function may be nonreentrant if it updates global or static data structures. A function that
-employs only local variables is guaranteed to be reentrant because of race-condition.
+employs only local variables is guaranteed to be reentrant because of race-condition. This book
+shows an example using crypt() in both main and signal handler. This corrupts internal buffer which
+is statically allocated and crypt uses when calls it with differnt parameter.
+
+{Q} In short, it is reentrant if it do not cause race-condition. Even if it uses only local
+variables, it can still cause race-condition. Doesn't it?
 
 Such possibilities are in fact rife within the standard C library. For example, we already noted in
 Section 7.1.3 that malloc() and free() maintain a linked list of freed memory blocks available for
@@ -6917,6 +6918,23 @@ reallocation from the heap. If a call to malloc() in the main program is interru
 handler that also calls malloc(), then this linked list can be corrupted. For this reason, the
 malloc() family of functions, and other library functions that use them, are nonreentrant.
 
+Even if we are not using nonreentrant library functions, reentrancy issues can still be relevant. If
+a signal handler updates programmer-defined global data structures that are also updated within the
+main program, then we can say that the signal handler is nonreentrant with respect to the main
+program.
+
+If a function is nonreentrant, then its manual page will normally provide an explicit or implicit
+indication of this fact. In particular, watch out for statements that the function uses or returns
+information in statically allocated variables.
+
+{async-signal-safe-function}
+An async-signal-safe function is one that the implementation guarantees to be safe when called from
+a signal handler. A function is async-signal-safe either because it is reentrant or because it is
+not interruptible by a signal handler.
+
+Table 21-1: Functions required to be async-signal-safe by POSIX.1-1990, SUSv2, and SUSv3
+
+Real-world applications should avoid calling non-async-signal-safe functions from signal handlers.
 
 {signal-and-proc}
 The Linux-specific /proc/PID/status file contains various bit-mask fields that can be inspected to
@@ -7159,6 +7177,16 @@ main(int argc, char *argv[])
 For an explanation of why we cast the return value from lseek() to long long in Listing 24-2, see
 Section 5.10.
 
+
+==============================================================================
+*kt_linux_core_510*  time
+
+{abstime}
+
+The abstime is the system time - the number of seconds and nanoseconds past Jan. 1, 1970, UTC. The
+advantage in using the abstime, instead of a delta, is if the function prematurely returns ( perhaps
+because of a caught signal ): the function can be called again without having to change the timespec
+structure. 
 
 # ============================================================================
 #{
