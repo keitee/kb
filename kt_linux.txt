@@ -45,7 +45,9 @@ KT KB. Linux
 
 |kt_linux_core_100|  ipc
 |kt_linux_core_101|  ipc: pipe and fifo	
-|kt_linux_core_102|  ipc: semaphore {semaphores-versus-pthreads-mutexes}
+|kt_linux_core_102|  ipc: semaphore 
+|kt_linux_core_103|  ipc: which one to use {semaphores-versus-pthreads-mutexes}
+|kt_linux_core_104|  ipc: thread and process synchronization
 
 |kt_linux_core_110|  ipc: dbus
 
@@ -61,9 +63,8 @@ KT KB. Linux
 
 |kt_linux_core_240|  sync: common problems when use threads {race-condition}
 
-|kt_linux_core_250|  sync: atomic operations 
-
-|kt_linux_core_260|  sync: thread and process synchronization
+|kt_linux_core_250|  sync: reentrant and thread-safe
+|kt_linux_core_260|  sync: atomic operations 
 
 |kt_linux_core_300|  case: own semaphore and mutex class using pthread cond-var {cqueue}
 |kt_linux_core_301|  case: use of mutex and thread class
@@ -2883,12 +2884,12 @@ be accompanied by associated data (an integer or a pointer).
 *kt_linux_core_101*  ipc: pipe and fifo	
 
 {nonnetworked-ipc}
-From {ref-001}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
+From {ref-UNP}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
 such as socket.
 
 {categories-of-ipc}
 
-From {ref-001}:
+From {ref-UNP}:
 
 three-ways-to-share-between-processes
 
@@ -3243,10 +3244,19 @@ item. Opening a named semaphore for each item would require us to design a conve
 a (unique) semaphore name for each item and to manage those names (e.g., unlinking them when they
 are no longer required).
 
+
+==============================================================================
+*kt_linux_core_103* ipc: which one to use
+
+When performing interprocess synchronization, our choice of facility is typically determined by the
+functional requirements. When coordinating access to a file, file record locking is usually the best
+choice. Semaphores are often the better choice for coordinating access to other types of shared
+resource.
+
 {semaphores-versus-pthreads-mutexes}
 
 <1>
-Unlike mutex, semaphore does not get lost when there is no waiting one.
+Unlike mutex (this mean condition?), semaphore does not get lost when there is no waiting one.
 
 <2>
 POSIX semaphores and Pthreads mutexes can both be used to synchronize the actions of threads within
@@ -3267,6 +3277,25 @@ for operating on mutexes are not asyncsignal-safe.
 However, because it is usually preferable to deal with asynchronous signals by accepting them using
 sigwaitinfo() (or similar), rather than using signal handlers (see Section 33.2.4), this advantage
 of semaphores over mutexes is seldom required.
+
+<3>
+From 30.1.3. Peformance of mutex in ref-LPI. The problem with file locks and semaphores is that they
+always require a system call for the lock and unlock operations, and each system call has a small
+but appreciable, cost (Section 3.1). By contrast, mutexes are implemented using atomic
+machine-language operations; performed on memory locations visible to all threads and require system
+calls only in case of lock contention.
+
+
+On Linux, mutexes are implemented using futexes (an acronym derived from fast user space mutexes),
+   and lock contentions are dealt with using the futex() system call. We don’t describe futexes in
+   this book (they are not intended for direct use in user-space applications), but details can be
+   found in [Drepper, 2004 (a)], which also describes how mutexes are implemented using futexes.
+   [Franke et al., 2002] is a (now outdated) paper written by the developers of futexes, which
+   describes the early futex implementation and looks at the performance gains derived from futexes.
+
+
+==============================================================================
+*kt_linux_core_104*	ipc: thread and process synchronization 
 
 
 ==============================================================================
@@ -3700,7 +3729,7 @@ exec*()	# load a new program text.
 {shared-and-not-shared-between-threads}
 
 Threads do not shares:
-From CH29 in {ref-LPI} and {ref-001}
+From CH29 in {ref-LPI} and {ref-UNP}
 
 The attributes that are shared; in other words, global attributes to a process:
  
@@ -3765,7 +3794,7 @@ UNIX system calls. Two approaches:
 
 <one>
 
-From {ref-001}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
+From {ref-UNP}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
 This means that set manually errno before calling err_sys() for example. This util funcs handles
 this:
 
@@ -3788,7 +3817,7 @@ void Pthread_mutex_lock(pthread_mutex_t* mptr)
 	err_sys("pthread_mutex_lock error");
 } 
 
-From Appdix C in {ref-001}. The reason for our own error funcs is to handle error case with a single
+From Appdix C in {ref-UNP}. The reason for our own error funcs is to handle error case with a single
 line. See {pthread-util-func} for the use.
 
 if( error condition )
@@ -3848,15 +3877,20 @@ TODO: need to summarize:
 //
 int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
 
+<join> <pthread-error-use>
+// return 0 if okay, positive Exxx on error which is different from most system calls. See
+// {errno-use}
+//
+// To wait for a given thread to terminate but no way to wait for any other threads. If that thread
+// has already terminated, pthread_join() returns immediately.
+//
+// If status is nonnull, the return value from the thread(a pointer to some object) is stored.
+//
+// <circumbent-join-restriction>
+// We noted earlier that pthread_join() can be used to join with only a specific thread. It
+// provides no mechanism for joining with any terminated thread. We now show how a condition
+// variable can be used to circumvent this restriction. The ref-LPI 30.2.4 shows code.
 
-/*  return 0 if okay, positive Exxx on error which is different from most system calls. See
- *  {errno-use}
- *
- *  To wait for a given thread to terminate but no way to wait for any other threads. If that
- *  thread has already terminated, pthread_join() returns immediately.
- *
- *  If status is nonnull, the return value from the thread(a pointer to some object) is stored.
- */
 int pthread_join( pthread_t tid, void **status);
 
 
@@ -3915,7 +3949,7 @@ pthread_t pthread_self(void);
  *  resources when not joined? If a joinable thread termintes without pthread_join, it became a
  *  zombie process. Leak resources and may not able to create additional threads. 
  *
- *  {ref-001} Detaching a thread doesn't make it immune to a call to exit() in another thread or a
+ *  {ref-UNP} Detaching a thread doesn't make it immune to a call to exit() in another thread or a
  *  return in the main thread. In such an event, all threads in the process are immediately
  *  terminated, regardless of whether they are joinable or detached. To put things another way,
  *  pthread_detach() simply controls what happens after a thread terminates, not how or when it
@@ -4216,36 +4250,18 @@ thread. The method will return immediately if the current thread already owns th
 ==============================================================================
 *kt_linux_core_210*	sync: pthread mutex and cond var
 
-From CH07 in {ref-001}. 
+From #07 in {ref-UNP} and #30 in {ref-LPI} 
 
 This is to sync for data or critial region. Although talking of critial region, what is really
-protected is [the-data] being manipulated within the critical region. This is posix.1 standard. mutex
-and cond-var uses global structure so if these are shared in a shared memory, these can be used
-between processes. If not, for threads within a process.
+protected is [the-data] being manipulated within the critical region. This is posix.1 standard.
+mutex and cond-var uses global structure so if these are shared in a shared memory, these can be
+used between processes. If not, it is for threads in a process.
+
+More generally, mutexes can be used to ensure atomic access to any shared resource, but protecting
+shared variables is the most common use.
 
 In {ref-LPI} p881, process-shared mutexes and condition variables. They are not available on all
 UNIX systems, and so are not commonly employed for process synchronization.
-
-{Q} The phrase "no difference between process and thread." If so why is there limitation on IPC and
-sync? Think that meant from kernel scheduler point of view but not sharing.
-
-
-{cooperative-lock}
-
-This means that nothing can prevent one thread from manipulating the data without first obtaining
-the mutex. For example, thread not participating a mutex circle.
-
-
-{implicit-sync}
-
-This is synchronization handled by kernel not by applicaion. Such as pipe and message-q. For
-example,
-
-grep pattern chapters.* | wc -l
-
-Writing by producer and reading by consumer are handled by kernel. Does it mean that grep and wc
-runs at the same time? not one after one.
-
 
 {why-need-sync}
 
@@ -4275,6 +4291,43 @@ threadFunc()
 NO because this single inc operator may result in multiple machine code which are equivalent to the
 before. See *kt_linux_core_107* for more about atomic and race-condition.
 
+{two-state-and-ownership} {mutex-deadlock}
+
+A mutex has two states: locked and unlocked. At any moment, at most one thread may hold the lock on
+a mutex. Attempting to lock a mutex that is already locked either blocks or fails with an error
+depending on the method used to place the lock.
+
+When a thread locks a mutex, it becomes the owner of that mutex. Only the mutex owner can unlock the
+mutex. This property [improves the structure of code] that uses mutexes and also allows for some
+optimizations in the implementation of mutexes.
+
+1> Locking. If try to lock what is already locked, two may happen for [default type] of mutex:
+[mutex-deadlock] or EDEADLK. On Linux, deadlock by default from {ref-LPI}. Why deadlock? Because
+blocked trying to lock a mutex that it already owns.
+
+2> Unlocking. Unlocking a mutex that is not locked or that is locked by another thread
+[undefined-result]
+
+{cooperative-lock}
+
+This means that mutex locking is advisory, rather then mandatory; nothing can prevent one thread
+from manipulating the data without first obtaining the mutex. For example, threads not participating
+a mutex circle.
+
+Each thread employs the following [protocol] for accessing a resource:
+1> lock the mutex for the shared resource;
+2> access the shared resource; and
+3> unlock the mutex.
+
+{implicit-sync}
+
+This is synchronization handled by kernel not by applicaion. Such as pipe and message-q. For
+example,
+
+grep pattern chapters.* | wc -l
+
+Writing by producer and reading by consumer are handled by kernel. Does it mean that grep and wc
+runs at the same time? not one after one.
 
 {mutex-apis} {explicit-sync}
 
@@ -4282,40 +4335,42 @@ Unlike semaphore and file locks, mutex only requires system call for lock conten
 expensive. On Linux, mutex is implemented by futex which is not intended for direct use in user
 space applicaion. From ch30 in {ref-LPI}
 
-// If it is [statically] allocated for default attributes, should use:
+If it is [statically] allocated for default attributes, should use:
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
-// If it is dymamically allocated such as malloc or shared-mem, should use. When? mutex can be part
-// of structure or object on the heap.
+If it is dymamically allocated such as malloc or shared-mem, should use. When? mutex can be part of
+structure or object on the heap.
+
+1> The mutex was dynamically allocated on the heap. For example, suppose that we create a
+dynamically allocated linked list of structures, and each structure in the list includes a
+pthread_mutex_t field that holds a mutex that is used to protect access to that structure.
+
+2> The mutex is an automatic variable allocated on the stack.
+
+3> We want to initialize a statically allocated mutex with attributes other than the defaults.
 
 int pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t* attr);
 int pthread_mutex_destory(pthread_mutex_t* mutex);
 
 
-// {mutex-ownership} mutex has ownership means the only owner can unlock the mutex. 
-//
-// 1) Locking. If try to lock what is already locked, two may happen for default type of mutex:
-// {mutex-deadlock} or EDEADLK. On Linux, deadlock by default from {ref-LPI}.
-//
-// 2) Unlocking. Unlocking a mutex that is not locked or that is locked by another thread,
-// {undefined-result}
-//
-// This is blocking.
+This is blocking call.
 
 int pthread_mutex_lock( pthread_mutex_t *mptr); 
 int pthread_mutex_unlock( pthread_mutex_t *mptr);
 
 
-// This is non-blocking and EBUSY if the mutex is already locked.
-//
-// These are less used because need to poll and risks being starved. Well designed one can avoid
-// this.
+This is non-blocking and returns EBUSY if the mutex is already locked. If the time interval
+specified by its abstime argument expires without the caller becoming the owner of the mutex
+pthread_mutex_timedlock() returns the error ETIMEDOUT.
+
+These are less used because need to poll and risks being starved. Well designed one can avoid this.
+In most well-designed applications, a thread should hold a mutex for only a short time, so that
+other threads are not prevented from executing in parallel.
 
 int pthread_mutex_trylock( pthread_mutex_t *mptr);
 int pthread_mutex_timedlock( pthread_mutex_t *mptr);
-
 
 {deadlock-condition}
 
@@ -4324,6 +4379,9 @@ From {ref-LPI}, deadlock happens:
 Thead A             Thread B
 lock(mutex1)        lock(mutex2)
 lock(mutex2)        lock(mutex1)
+
+In other words, both tries to lock the mutex that the other thread has already locked. Both threads
+will remain blocked indefinitely.
 
 Two approach to avoid:
 
@@ -4360,7 +4418,7 @@ PTHREAD_MUTEX_RECURSIVE
 
 {consumer-producer-example-one}
 
-From {ref-001}. Multiple producer(writing) and one consumer(reading). Once writing finishs, consumer
+From {ref-UNP}. Multiple producer(writing) and one consumer(reading). Once writing finishs, consumer
 get started. No need to sync between producer and consumer. Only sync between producers. So use
 mutex and no cond var. 
 
@@ -4564,18 +4622,25 @@ void* consume(void* arg)
 {consumer-producer-example-three} {cond-var}
 
 The polling is a waste of cpu time. How to solve? A mutex is for locking and a cond-var is for
-waiting.
+waiting. The mutex provides mutual exclusion for accessing the shared variable, while the condition
+variable is used to signal changes in the variable’s state.
 
-// This is blocking on condition and ALWAYS has an associated mutex. Why? because both producer
-// and consumer accesses to the shared state variable so should be synced. In other words, there is
-// a natural association of a muext with a condition varaible.
+<cond-wait>
+// This is blocking on condition and ALWAYS has an associated mutex. Why? because both producer and
+// consumer accesses to the shared state variable which is linked to that condition so should be
+// synced. In other words, there is a natural association of a muext with a condition varaible.
+//
+// pthread_cond_wait( &nready.cond, &nready.mutex );
 //
 // Do three things: unlock a mutex, block a calling thread until signaled, and relock mutex when
-// signaled.
+// signaled. 
+//
+// A condition variable holds no state information. It is simply a mechanism for communicating
+// information about the application's state.
 
 int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
 
-
+<cond-can-be-lost>
 // Guaranteede that at least one of the blocked thread is woken up. If no thread is waiting, the
 // signal is lost since condition variable holds no state information.
 
@@ -4583,9 +4648,9 @@ int pthread_cond_signal( pthread_cond_t *cptr );
 int pthread_cond_broadcast( pthread_cond_t *cptr );
 int pthread_cond_timedwait( ... );
 
-{Q} {ref-LPI} said that _signal is for the case where all waiting threads do the same task and
-_broadcast is for case where waiting threads do different task. Real examples?
-
+The {ref-LPI} said that _signal is for the case where all waiting threads do the same task since it
+do not care which should woken up and _broadcast is for case where waiting threads do different task.
+Real examples?
 
 <code-example>
 
@@ -4653,7 +4718,7 @@ void* consume(void* arg)
 		// receieve cond-var
 		pthread_mutex_lock( &nready.mutex );
 
-		// Always test the condition again when wakes up because spurious wakeups can occur.
+		// Always test the condition again when wakes up because [spurious-wakeups] can occur.
 		// Unlock and wait. When returns from pthread_cond_wait, lock in again.
 		while( nready.ready == 0 )
 			pthread_cond_wait( &nready.cond, &nready.mutex );
@@ -4672,12 +4737,22 @@ void* consume(void* arg)
 }
 
 
-{when-to-call-signal}
+{the-order-of-call}
 
-{ref-LPI} uses different order for producer as below because {ref-001} said that use _signal before
-unlock can cause {mutex-deadlock} or {lock-conflict}. Therefore, POSIX recommends the followings and
-{ref-LPI} said this may yieid better performance:
+{ref-LPI} uses different call order for producer as below because {ref-UNP} said that use _signal
+before unlock can cause {mutex-deadlock} or {lock-conflict}. Therefore, POSIX recommends the
+followings and {ref-LPI} said this may yieid better performance in 30.2.2:
 
+<approach-one>
+pthread_mutex_lock( &nready.mutex );
+if( nready.ready == 0 )
+   pthread_cond_signal( &nready.cond );
+
+nready.ready++;
+
+pthread_mutex_unlock( &nready.mutex );
+
+<approach-two>
 pthread_mutex_lock( &nready.mutex );
 
 nready.ready++;
@@ -4688,32 +4763,46 @@ if( nready.ready == 0 )
  pthread_cond_signal( &nready.cond );
 
 
-{more-on-cond-wait}
-
-The cond-var has associated with mutex and shared var which do dynamically binds both:
-
-pthread_cond_wait( &nready.cond, &nready.mutex );
-
-This func do: unlock mutex, block the calling thread, and when signaled, lock mutex.
-
-
 {check-on-predicate}
 
-Must use while on checks as:
+Each condition variable has an associated predicate involving one or more shared variables. In this
+example, nready.ready == 0 is the predicate.
 
-o may multiple consumers
-o spurious wakeups
+This demonstrates a general design principle: a pthread_cond_wait() call must be governed by a while
+loop rather than an if statement. This is so because, on return from pthread_cond_wait(), there are
+no guarantees about the state of the predicate; therefore, we should immediately recheck the
+predicate and resume sleeping if it is not in the desired state. [KT] When calls cond_wait, the
+associated lock is released so no gurantee that this predicate is the same when wakes up.
 
-// always test the condition again when wakes up because spurious wakeups can occur.
+So use [while-loop] always to test the condition again when wakes up because spurious wakeups can
+occur for following reasons:
+
 while( nready.ready == 0 )
 	pthread_cond_wait( &nready.cond, &nready.mutex );
+
+1> Other threads may be woken up first. Perhaps several threads were waiting to acquire the mutex
+associated with the condition variable. Even if the thread that signaled the mutex set the predicate
+to the desired state, it is still possible that another thread might acquire the mutex first and
+change the state of the associated shared variable(s), and thus the state of the predicate.
+
+2> Designing for "loose" predicates may be simpler. Sometimes, it is easier to design applications
+based on condition variables that indicate possibility rather than certainty. In other words,
+signaling a condition variable would mean "there may be something" for the signaled thread to do
+rather than "there is something" to do. Using this approach, the condition variable can be signaled
+based on approximations of the predicate’s state, and the signaled thread can ascertain if there
+really is something to do by rechecking the predicate.
+
+3> Spurious wake-ups can occur. On some implementations, a thread waiting on a condition variable
+may be woken up even though no other thread actually signaled the condition variable. Such spurious
+wake-ups are a (rare) consequence of the techniques required for efficient implementation on some
+multiprocessor systems, and are explicitly permitted by SUSv3.
 
 
 ==============================================================================
 *kt_linux_core_220*	sync: read-write lock
 
-From {ref-001} but no such a thing in {ref-LPI}, so may be old way but surely in posix but may be
-different to this since this lock is before posix standard. See {ref-001} note.
+From {ref-UNP} but no such a thing in {ref-LPI}, so may be old way but surely in posix but may be
+different to this since this lock is before posix standard. See {ref-UNP} note.
 
 To distinguish between obtaining the read-write lock for reading and for writing. The rules:
 
@@ -4962,7 +5051,7 @@ pthread_rwlock_unlock(pthread_rwlock_t *rw)
 
 	// 4give preference to waiting writers over waiting readers
 	//
-	// {Q} The ref-001 says: notice that we do not grant any additional read locks as soon as a
+	// {Q} The ref-UNP says: notice that we do not grant any additional read locks as soon as a
 	// writer is waiting; otherwise, a stream of continual read requests could block a waiting writer
 	// forever. For this reason, we need two separate if tests and cannot write
 	//
@@ -5140,10 +5229,6 @@ Because of its limited functionality, flock() locking facility is rarely used no
   system call provides record locking, allowing processes to place multiple read and write locks on
   different regions of the same file.
 
-When performing interprocess synchronization, our choice of facility is typically determined by the
-functional requirements. When coordinating access to a file, file record locking is usually the best
-choice. Semaphores are often the better choice for coordinating access to other types of shared
-resource.
 
 
 ==============================================================================
@@ -5168,7 +5253,67 @@ is the problem when this happens. Look at algorithms that assure access.
 
 
 ==============================================================================
-*kt_linux_core_250*	sync: atomic operations
+*kt_linux_core_250*	sync: reentrant and thread-safe
+
+{thread-safe}
+A function is said to be thread-safe if it can safely be invoked by multiple threads at the same
+time; put conversely, if a function is not thread-safe, then we can’t call it from one thread while
+it is being executed in another thread. The same example in {why-need-sync}.
+
+<solution-one> serialization
+There are various methods of rendering a function thread-safe. One way is to associate a mutex with
+the function or perhaps with all of the functions in a library, if they all share the same global
+variables, lock that mutex when the function is called, and unlock it when the mutex returns. This
+approach has the virtue of simplicity. On the other hand, it means that only one thread at a time
+can execute the function-we say that access to the function is [serialized]. 
+
+The downside is that if the threads spend a significant amount of time executing this function, then
+this serialization results in a [loss of concurrency], because the threads of a program can no
+longer execute in parallel.
+
+<solution-two> critial-section
+A more sophisticated solution is to associate the mutex with a shared variable. We then determine
+which parts of the function are critical sections that access the shared variable, and acquire and
+release the mutex only during the execution of these critical sections. This allows multiple threads
+to execute the function at the same time and to operate in parallel, except when more than one
+thread needs to execute a critical section.
+
+
+{non-thread-safe-functions}
+To facilitate the development of threaded applications, all of the functions specified in SUSv3 are
+required to be implemented in a thread-safe manner, except those listed in Table 31-1.
+
+In ref-LPI, Table 31-1: Functions that SUSv3 does not require to be thread-safe
+
+
+{reentrant-functions}
+Although the use of critical sections to implement thread safety is a significant improvement over
+the use of per-function mutexes, it is still somewhat inefficient because there is a cost to locking
+and unlocking a mutex. A reentrant function achieves thread safety without the use of mutexes.
+
+<how>
+It does this by avoiding the use of global and static variables. Any information that must be
+returned to the caller, or maintained between calls to the function, is stored in buffers allocated
+by the caller.
+
+However, not all functions can be made reentrant. The usual reasons are the following:
+
+o By their nature, some functions must access global data structures. The functions in the malloc
+library provide a good example. These functions maintain a global linked list of free blocks on the
+heap. The functions of the malloc library are made thread-safe through the use of mutexes.
+
+o Some functions (defined before the invention of threads) have an interface that by definition is
+nonreentrant, because they return pointers to storage statically allocated by the function, or they
+employ static storage to maintain information between successive calls to the same (or a related)
+function.
+
+See {signal-reentrant} for more about reentrant.
+
+[KT] In sum, reentrant is bigger notion than thread-safe.
+
+
+==============================================================================
+*kt_linux_core_260*	sync: atomic operations
 
 {atomic-operations}
 
@@ -7347,7 +7492,7 @@ Then run windows remote desktop and connect using ip or hostname. That's it.
 ==============================================================================
 *kt_linux_ref_001* references
 
-{ref-001}
+{ref-UNP}
 Richard Stevens. Unix Network Programming Vol 2 Addision Wesley. 2nd Ed.
 http://www.kohala.com/start/unpv22e/unpv22e.html
 
