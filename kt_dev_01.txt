@@ -6123,7 +6123,7 @@ namespaces. This search goes upwards that means declared before use and before i
 order. For example, int A::C1::f3() in qualified name. Plus use {arg-dependant-lookup} for
 class type, reference, and pointer. For non-class, enclosing scope that is before the point
 of use and is still open. See Primers p797. 'using' declaration or directive add names to
-the candidate set.
+the candidate set. If found the name, the compiler looks no further.
 
 step-1: <build-candidate>
 Use name only hence called name-lookup. Build candidate functions which is the set of overloaded
@@ -6180,13 +6180,10 @@ using std::operator>>; or std::operator>>(std::cin, s);
 
 {scope-in-inheritance}
 
-Primus p617. Hierarchical nesting of class scope: the derived is nested in the base and it 'hide'
-names declared in the base. It is for non-virtual funcs. If the base has overloads and 'is-a' relationship
-then see EC++33 for more. See {override-keyword} *kt_dev_cpp_023*
-
-note: seems need more clearer statement for the above.
-
-The name-lookup happens at compile time and means it uses static-type.
+Primus p617. Hierarchical nesting of class scope; this means that the derived is nested in the base
+scope and names in the derived can hide names declared in the base. See {override-keyword}
+*kt_dev_cpp_023* The point is that the name-lookup happens at compile time and uses static-type. The
+below shows that point.
 
 class Disc_quote : public Quote {
 	 public:
@@ -6205,14 +6202,16 @@ Quote* itemP = &bulk;        # static and dynamic type differ
 bulkP->discount_policy();
 itemP->discount_policy();    # error
 
-What if discount_policy is virtual func? Doesn't matter in this case and it's still error as name
-lookup use static type and consider virtual later in the last step. That is because this is not
-found in Quote class.
+What if discount_policy is virtual func? Doesn't matter in this case and it's still error because
+this is not found in Quote class.
 
 Tried with GCC and got an error:
 .cpp:139:10: error: 'class Quote' has no member named 'discount_policy'
 
- 
+It is for non-virtual funcs. If the base has overloads and 'is-a' relationship then see EC++33 for more. 
+note: seems need more clearer statement for the above.
+
+
 ==============================================================================
 *kt_dev_cpp_008* const and conversion
 
@@ -8567,6 +8566,10 @@ class Foo {
 KT: The above explanation is a bit vague. In summary, compiler always use <static-type> but use ~
 dynamic-type only if it is virtual function call. ~
 
+This should be revised as: The compiler always use static-type and if it is a virtual call then will
+generate a code for run-time binding and could calls derived version. However, this could be broken
+if fails to override in the derived.
+
 // example-one
 
 Quote item(bulk);         # sliced-off
@@ -8906,9 +8909,9 @@ the choice.
 
 {override-keyword} {return-type-in-override}
 
-To override, name and args should be the same but 'return' type is an exception to this. Not
-entirely ture and see below. If arg is different by mistake, it defines new function and cause
-'hiding' since it is overloading not overriding. 
+To override, name and args should be the same but 'return' type is an exception to this. This is not
+ture and see below. 
+
 
 class CInterface 
 {
@@ -8943,8 +8946,26 @@ int main()
 	std::cout << "-----} main " << std::endl;
 }
 
-This is [case-two] because was not overrided due to different arg.
-this is CInterface
+This is [case-two] when arguments are different by mistake and there are two cases:
+
+1> Like this example, the output is "this is CInterface" because starts from base class, and found
+the name there but overriding does not happen. So got the base version.
+
+2> This defines a new function in the derived and hide the name in the base. Like example in p619,
+when uses example here, following error happens.
+
+int main()
+{
+  ...
+  CMyInterface cmy;
+  cmy.getName();
+}
+
+override.cpp: In function ‘int main()’:
+override.cpp:34:15: error: no matching function for call to ‘CMyInterface::getName()’
+override.cpp:34:15: note: candidate is:
+override.cpp:15:16: note: virtual void CMyInterface::getName(int)
+override.cpp:15:16: note:   candidate expects 1 argument, 0 provided
 
 This is [case-one] because was overrided.
 this is CMyInterface
