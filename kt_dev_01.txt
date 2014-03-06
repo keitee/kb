@@ -83,7 +83,7 @@ C and C++
 |kt_dev_cpp_015|	declaration and definition
 |kt_dev_cpp_016|	statement {division-and-modulus} {switch-under-the-hood}
 |kt_dev_cpp_017|	static-members and class const	{class-method} {class-const}
-|kt_dev_cpp_018|	dtor					{non-virtual-destruction-problem} {how-virtual-works}
+|kt_dev_cpp_018|	dtor {non-virtual-destruction-problem} {how-virtual-works}
 |kt_dev_cpp_019|	exception {problem-of-exception-in-dtor} {exception-safe}
 |kt_dev_cpp_020|	<empty>
 |kt_dev_cpp_021|	op overload				{member-or-non-member} {function-object}
@@ -7542,7 +7542,6 @@ The bottom line is that static is global but we can limit its scope to file, cla
 *kt_dev_cpp_018*	dtor			{non-virtual-destruction-problem}
 
 {running-order}
-
 It is opposite to ctor in destruction order; dtor body first and then implicit member destruction
 under inheritence, 
 
@@ -7551,7 +7550,6 @@ base 	derived
 <------------ dtor
 
 <example>
-
 #include < iostream>
 
 using std::cout; using std::endl;
@@ -7592,16 +7590,17 @@ pick up derived dtor since it goes through vtable.
 
 
 {syn-version-is-non-virtual} {dtor-in-derived-classes}
-
 dtor is one of copy controls in *kt_dev_cpp_003* and means if not defined, the compiler will make
 one which is non-virtual. 
 
 virtual is only used in class definition and for other functions, if it's virtual in base then all
 deriveds are virtual. How about dtor? That's the same. 
 
+Unlike the constructors and assignment operators, the destructor is reponsible only for destroying
+the resources allocated by the derived class. From user or programmer POV.
+
 
 {non-virtual-destruction-problem}
-
 EC++07. Problem case: when dtor phase is run and derived-to-base(pointer) is used where the base
 class don't have virtual dtor. 
 
@@ -7614,7 +7613,6 @@ override do not happen; one when argument is different and see {override-keyword
 out virtual keyword in a base as shown here.
 
 <example-code>
-
 #include <iostream>
 
 using std::cout; using std::endl;
@@ -7719,7 +7717,6 @@ same. That explains how override and virtual works.
 
 
 {when-use-virtual-dtor}
-
 Because there are costs of virtuals and virtual-destruction-problem, have <virtual-dtor> only for
 <1> case as advised in EC++07. note: KT. All base class must have virtual-dtor and these are for <1>
 and <2>
@@ -7736,7 +7733,6 @@ designed for no inheritance like STL. See {preventing-inheritance}
 
 
 {pure-virtual-dtor}
-
 EC++07. Why use this? Sometimes you have a class that you'd like to be abstract but you don't have
 any pure virtual functions. This explains that dtor should be virtual and have implementation in
 case pure virtual dtor and ABC. 
@@ -7758,7 +7754,6 @@ derived class destructor is invoked.
 
 
 <example-error>
-
 class ABCAnimal {
     public:
     ...
@@ -8529,8 +8524,6 @@ If do followings with p or r:
 4: deference and copy then sliced-off. static
 
 {QQ} How compiler know whether it is normal function or virtual function call?
-
-// example-reference
 
 class Bulk_quote : public Quote {
 	 public:
@@ -10417,10 +10410,53 @@ int main()
 
 Multiset. mutiple same key from {ref-CPR} p631
 
+One of the ironies of OOP in C++ is that we cannot use objects directly to support it. Instead must
+use pointers and references. So often define auxiliary class to help manage complexity that pointer
+use impose.
+
+Here Quote class hierarchy represents book purchase or transaction which supports several discount
+strategy and each book has isbn number. The same book has the same isbn. The basket is not in the
+hierarchy and has multiset to manage multiple purchase for the same book or isbn number. The
+multiset has shared_ptr key but equality is decided by compare function. Therefore, the key is the
+isbn but not shared_ptr itself. 
+
+class Quote {
+  public:
+    ...
+    std::string isbn() const { return bookNo; }
+    virtual double net_price( std::size_t n ) const
+    { return n*price; }
+
+  private:
+    std::string bookNo;
+  protected:
+    double price = 0.0;
+};
+
+class Bulk_quote : public Quote {
+  public:
+    Bulk_quote() = default;
+    double net_price( std::sizet_t ) const override;
+
+  private:
+    std::size_t min_qty = 0;
+    double discount = 0.0;
+};
+
+double print_total( ostream &os, const Quote &item, size_t n )
+{
+  double ret = item.net_price(n);
+  os << "ISBN: " << item.isbn()   // calls Quote::isbn
+    << " # sold: " << n << " total due: " << ret << endl;
+  return ret;
+}
+
 class Basket {
 	public:
-		  void add_item( const std::shared_ptr< Quote >& sale)	// see referece. 
+		  void add_item( const std::shared_ptr< Quote >& sale)	// see reference. 
 			 { items.insert(sale); }
+
+      double total_receipt( std::ostream& ) const;
 
 	private:
 		 static bool compare( const std::shared_ptr< Quote >& lhs,
@@ -10433,16 +10469,19 @@ class Basket {
 
 double Basket::total_receipt( ostream& os ) const 
 {
-	 ...
-	 // skip over all the elements that match the current key by calling upper_bound()
-	 //
-	 for( auto iter = items.cbegin(); iter != items.cend(); iter = items.upper_bound( *iter ) ) 
-	 {
-		  // double print_total(ostream& os, const Quote& item, size_t n);
-		  // *iter is a key; shared_ptr and **iter is a object that shared_ptr points
+  double sum = 0.0;
 
-		  sum += print_total( os, **iter, items.count( *iter ));
-	 }
+  // skip over all the elements that match the current key by calling upper_bound()
+  //
+  for( auto iter = items.cbegin(); iter != items.cend(); iter = items.upper_bound( *iter ) ) 
+  {
+    // double print_total(ostream& os, const Quote& item, size_t n);
+    // *iter is a key which is shared_ptr and **iter is a object that shared_ptr points
+    sum += print_total( os, **iter, items.count( *iter ));
+  }
+
+  os << "Total sale: " << sum << endl;
+  return sum;
 }
 
 User will:
@@ -10451,7 +10490,34 @@ Basket bsk;
 bsk.add_item( make_shared< Quote >("123", 45) );
 bsk.add_item( make_shared< Bulk_quote >("123", 45, 3, .15) );
 
-{QQ} User still have to deal with dynamic memory. to hide it into a class, see p633.
+
+{simulating-virtual-copy}
+The basket class user still have to deal with dynamic memory and that means have to call
+make_shared. So want to have add_item member like: 
+
+<TODO> Here it is only about copy and in p633 in ref-CPR has move version as well.
+
+void add_item( const Quote &sale );
+
+Then this add_item member will use new in it but know only Quote type. If use this for derived
+objects then sliced-down will happen. How to solve?
+
+class Quote {
+  public:
+    // need to study further for reference qualifiers. p546.
+    virtual Quote* clone() const & {return new Quote(*this); }
+};
+
+class Bulk_quote : public Quote {
+  public:
+    Bulk_quote* clone() const & { return new Bulk_quote(*this); }
+};
+
+class Basket {
+  public:
+    void add_item( const Quote& sale )
+    { items.insert( std::shard_ptr<Quote>( sale.clone() )); }
+};
 
 
 ==============================================================================
