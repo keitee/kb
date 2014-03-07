@@ -63,8 +63,9 @@ KT KB. Linux
 
 |kt_linux_core_240|  sync: common problems when use threads {race-condition}
 
-|kt_linux_core_250|  sync: reentrant and thread-safe
-|kt_linux_core_260|  sync: atomic operations 
+|kt_linux_core_250|  sync: reentrant and thread-safe {thread-specific-data} {thread-local-storage}
+|kt_linux_core_260|  sync: atomic operations {lock-free-programming}
+|kt_linux_core_261|  sync: ref: locks aren't slow; lock contention is
 
 |kt_linux_core_300|  case: own semaphore and mutex class using pthread cond-var {cqueue}
 |kt_linux_core_301|  case: use of mutex and thread class
@@ -5268,8 +5269,8 @@ approach has the virtue of simplicity. On the other hand, it means that only one
 can execute the function-we say that access to the function is [serialized]. 
 
 The downside is that if the threads spend a significant amount of time executing this function, then
-this serialization results in a [loss of concurrency], because the threads of a program can no
-longer execute in parallel.
+this serialization results in a [reduce-or-loss-of-concurrency], because the threads of a program
+can no longer execute in parallel.
 
 <solution-two> critial-section
 A more sophisticated solution is to associate the mutex with a shared variable. We then determine
@@ -5311,7 +5312,7 @@ See {signal-reentrant} for more about reentrant.
 
 [KT] In sum, reentrant is bigger notion than thread-safe.
 
-<example>
+<r_prefix>
 For several of the functions that have nonreentrant interfaces, SUSv3 specifies reentrant
 equivalents with names ending with the suffix _r. These functions require the caller to allocate a
 buffer whose address is then passed to the function and used to return the result. This allows the
@@ -5320,22 +5321,21 @@ calling thread to use a local (stack) variable for the function result buffer.
 For example, glibc provides crypt_r(), gethostbyname_r(), getservbyname_r(), getutent_r(),
 getutid_r(), getutline_r(), and ptsname_r(). 
 
-However, a portable application can’t rely on these functions being present on other
+However, a portable application can't rely on these functions being present on other
 implementations.
-
-TODO: compare gethostbyname_r and gethostbyname
 
 
 {code-reentrant-function}
-The most efficient way of making a function thread-safe is to make it reentrant. All
-new library functions should be implemented in this way. However, for an existing
-nonreentrant library function (one that was perhaps designed before the use of
-threads became common), this approach usually requires changing the function’s
-interface, which means modifying all of the programs that use the function.
-Thread-specific data is a technique for making an existing function thread-safe
-without changing its interface. A function that uses thread-specific data may be
-slightly less efficient than a reentrant function, but allows us to leave the programs
-that call the function unchanged.
+The most efficient way of making a function thread-safe is to make it [reentrant]. All new library
+functions should be implemented in this way. However, for an existing nonreentrant library function
+(one that was perhaps designed before the use of threads became common), this approach usually
+requires changing the function’s interface, which means modifying all of the programs that use the
+function. 
+
+<why-thread-specific-data>
+Thread-specific data is a technique for making an existing function thread-safe without
+changing its interface. A function that uses thread-specific data may be slightly less efficient
+than a reentrant function, but allows us to leave the programs that call the function unchanged.
 
 <strerror-manpage>
 STRERROR(3)               Linux Programmer's Manual              STRERROR(3)
@@ -5439,6 +5439,249 @@ collaborated in the Austin Common Standards Revision Group with the aim of revis
 consolidating the POSIX standards and the Single UNIX Specification. This resulted in the
 ratification of POSIX 1003.1-2001, sometimes just called POSIX.1-2001, in December 2001
 (subsequently approved as an ISO standard, ISO/IEC 9945:2002).
+
+<thread-specific-data>
+1. The function creates a key, which is the means of differentiating the thread-specific data item
+used by this function from the thread-specific data items used by other functions. The key is
+created by calling the pthread_key_create() function. Creating a key needs to be done only once,
+when the first thread calls the function. For this purpose, pthread_once() is employed.
+Creating a key doesn’t allocate any blocks of thread-specific data.
+
+2. The call to pthread_key_create() serves a second purpose: it allows the caller to specify the
+address of the programmer-defined destructor function that is used to deallocate each of the storage
+blocks allocated for this key (see the next step). When a thread that has thread-specific data
+terminates, the Pthreads API automatically invokes the destructor, passing it a pointer to the data
+block for this thread.
+
+<typical-thread-specific-data-implementation>
+This is a typical implementation (NPTL is typical). In this implementation, the pthread_key_t value
+returned by pthread_key_create() is simply an index into the global array, which we label
+pthread_keys
+
+                  -----------------
+pthread_keys[0]   | 'in use' flag |
+                  | dest pointer  |
+                  -----------------
+pthread_keys[1]   | 'in use' flag |
+                  | dest pointer  |
+                  -----------------
+pthread_keys[2]   | 'in use' flag |
+                  | dest pointer  |
+                  -----------------
+                  ...
+
+int pthread_setspecific(pthread_key_t key, const void *value);
+
+So key is allocated for each client which is a library function, strerror, in this case and assumes
+that this is keys[1]. The data structure for value or buffer for each thread is:
+
+All correspond to                   thread A
+pthread_keys[1]    value of key1    tsd[0] | pointer |
+                   for thread A  -> tsd[1] | pointer |  -> TSD buffer for strerror in thread A
+                                    tsd[2] | pointer |                                         
+
+                                    thread B
+                   value of key1    tsd[0] | pointer |
+                   for thread B  -> tsd[1] | pointer |  -> TSD buffer for strerror in thread B
+                                    tsd[2] | pointer |                                        
+
+                   ...
+
+The TDS buffer is allocated in strerror for each thread and when each thread calls 
+
+void *pthread_getspecific(pthread_key_t key);
+
+The pthread library know the thread and use the key to pick up the entry and the buffer pointer.
+When a thread is first created, all of its thread-specific data pointers are initialized to NULL.
+This means that when our library function is called by a thread for the first time, it must begin by
+using pthread_getspecific() to check whether the thread already has an associated value for key.
+
+[KT] This means that when pthread_key_create is called, it allocates a entry in keys array and also
+TSD array for each thread even if some thread is not using strerror.
+
+<strerror-non-thread-safe-version>
+#define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist'
+                       declarations from <stdio.h> */
+#include <stdio.h>
+#include <string.h> /* Get declaration of strerror() */
+#define MAX_ERROR_LEN 256 /* Maximum length of string
+                             returned by strerror() */
+static char buf[MAX_ERROR_LEN]; /* Statically allocated return buffer */
+  char *
+strerror(int err)
+{
+  if (err < 0 || err >= _sys_nerr || _sys_errlist[err] == NULL) {
+    snprintf(buf, MAX_ERROR_LEN, "Unknown error %d", err);
+  } else {
+    strncpy(buf, _sys_errlist[err], MAX_ERROR_LEN - 1);
+    buf[MAX_ERROR_LEN - 1] = '\0'; /* Ensure null termination */
+  }
+  return buf;
+}
+
+<user-code>
+#include <stdio.h>
+#include <string.h> /* Get declaration of strerror() */
+#include <pthread.h>
+#include "tlpi_hdr.h"
+
+static void *
+threadFunc(void *arg)
+{
+  char *str;
+  printf("Other thread about to call strerror()\n");
+  str = strerror(EPERM);
+  printf("Other thread: str (%p) = %s\n", str, str);
+  return NULL;
+}
+
+int
+main(int argc, char *argv[])
+{
+  pthread_t t;
+  int s;
+  char *str;
+  str = strerror(EINVAL);
+  printf("Main thread has called strerror()\n");
+
+  s = pthread_create(&t, NULL, threadFunc, NULL);
+  if (s != 0)
+    errExitEN(s, "pthread_create");
+
+  s = pthread_join(t, NULL);
+  if (s != 0)
+    errExitEN(s, "pthread_join");
+
+  printf("Main thread: str (%p) = %s\n", str, str);
+
+  exit(EXIT_SUCCESS);
+}
+
+<strerror-thread-safe-version>
+#define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist'
+                       declarations from <stdio.h> */
+#include <stdio.h>
+#include <string.h> /* Get declaration of strerror() */
+#include <pthread.h>
+#include "tlpi_hdr.h"
+
+static pthread_once_t once = PTHREAD_ONCE_INIT;
+static pthread_key_t strerrorKey;
+
+#define MAX_ERROR_LEN 256 /* Maximum length of string in per-thread
+                             buffer returned by strerror() */
+
+static void /* Free thread-specific data buffer */
+q destructor(void *buf)
+{
+  free(buf);
+}
+
+static void /* One-time key creation function */
+createKey(void) <2>
+{
+  int s;
+  /* Allocate a unique thread-specific data key and save the address
+     of the destructor for thread-specific data buffers */
+  s = pthread_key_create(&strerrorKey, destructor); <1>
+  if (s != 0)
+    errExitEN(s, "pthread_key_create");
+}
+
+char *
+strerror(int err)
+{
+  int s;
+  char *buf;
+
+  /* Make first caller allocate key for thread-specific data */
+  s = pthread_once(&once, createKey); <2>
+  if (s != 0)
+    errExitEN(s, "pthread_once");
+
+  buf = pthread_getspecific(strerrorKey); <3>
+  if (buf == NULL) { /* If first call from this thread, allocate
+                        buffer for thread, and save its location */
+    buf = malloc(MAX_ERROR_LEN);
+    if (buf == NULL)
+      errExit("malloc");
+
+    s = pthread_setspecific(strerrorKey, buf); <4>
+    if (s != 0)
+      errExitEN(s, "pthread_setspecific");
+  }
+
+  if (err < 0 || err >= _sys_nerr || _sys_errlist[err] == NULL) {
+    snprintf(buf, MAX_ERROR_LEN, "Unknown error %d", err);
+  } else {
+    strncpy(buf, _sys_errlist[err], MAX_ERROR_LEN - 1); <4>
+    buf[MAX_ERROR_LEN - 1] = '\0'; /* Ensure null termination */
+  }
+
+  return buf;
+}
+
+<limitation>
+SUSv3 requires that an implementation support at least 128 (_POSIX_THREAD_KEYS_MAX) keys. An
+application can determine how many keys an implementation actually supports either via the
+definition of PTHREAD_KEYS_MAX (defined in <limits.h>) or by calling sysconf(_SC_THREAD_KEYS_MAX).
+Linux supports up to 1024 keys.
+
+Even 128 keys should be more than sufficient for most applications. This is because each library
+function should employ only a small number of keys—often just one. If a function requires multiple
+thread-specific data values, these can usually be placed in a single structure that has just one
+associated thread-specific data key.
+
+
+{thread-local-storage}
+Like thread-specific data, thread-local storage provides persistent per-thread storage. This
+feature is [nonstandard], but it is provided in the same or a similar form on many other UNIX
+implementations.
+
+Thread-local storage requires support from the kernel (provided in Linux 2.6), the Pthreads
+implementation (provided in NPTL), and the C compiler (provided on x86-32 with gcc 3.3 and later).
+
+The main advantage of thread-local storage is that it is much simpler to use than thread-specific
+data. To create a thread-local variable, we simply include the __thread specifier in the declaration
+of a global or static variable:
+
+static __thread buf[MAX_ERROR_LEN];
+
+Each thread has its own copy of the variables declared with this specifier. The variables
+in a thread’s thread-local storage persist until the thread terminates, at which
+time the storage is automatically deallocated.
+
+The following points about the declaration and use of thread-local variables:
+
+o The __thread keyword must immediately follow the static or extern keyword, if either of these is
+specified in the variable’s declaration.
+
+o The declaration of a thread-local variable can include an initializer, in the same manner as a
+normal global or static variable declaration.
+
+o The C address (&) operator can be used to obtain the address of a thread-local variable.
+
+<revised-strerror-using-tls>
+#define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist'
+                       declarations from <stdio.h> */
+#include <stdio.h>
+#include <string.h> /* Get declaration of strerror() */
+#include <pthread.h>
+#define MAX_ERROR_LEN 256 /* Maximum length of string in per-thread
+                             buffer returned by strerror() */
+static __thread char buf[MAX_ERROR_LEN];
+/* Thread-local return buffer */
+char *
+strerror(int err)
+{
+  if (err < 0 || err >= _sys_nerr || _sys_errlist[err] == NULL) {
+    snprintf(buf, MAX_ERROR_LEN, "Unknown error %d", err);
+  } else {
+    strncpy(buf, _sys_errlist[err], MAX_ERROR_LEN - 1);
+    buf[MAX_ERROR_LEN - 1] = '\0'; /* Ensure null termination */
+  }
+  return buf;
+}
 
 
 ==============================================================================
@@ -5779,7 +6022,7 @@ semaphores and events.
 What Is It?
 
 People often describe lock-free programming as programming without mutexes, which are also referred
-to as locks. That’s true, but it’s only part of the story. The generally accepted definition, based
+to as [locks]. That’s true, but it’s only [part] of the story. The generally accepted definition, based
 on academic literature, is a bit more broad. At its essence, lock-free is a property used to
 describe some code, without saying too much about how that code was actually written.
 
@@ -5788,7 +6031,6 @@ rightfully be considered lock-free. Conversely, if a given part of your code doe
 conditions, then that part is not lock-free.
 
 <definition>
-
 (This was a flow chart)
 
 Are you programming with multiple threads? or interrupt, signal handlers, etc?
@@ -5803,12 +6045,12 @@ Can the threads block each other? ie. is there some way to schedule the threads 
 
 It is lock-free programming.
 
-In this sense, the lock in lock-free does not refer directly to mutexes, but rather to the
+In this sense, the lock in lock-free [does not refer directly to mutexes], but rather to the
 possibility of “locking up” the entire application in some way, whether it’s deadlock, livelock – or
 even due to hypothetical thread scheduling decisions made by your worst enemy. That last point
 sounds funny, but it’s key. Shared mutexes are ruled out trivially, because as soon as one thread
 obtains the mutex, your worst enemy could simply never schedule that thread again. Of course, real
-operating systems don’t work that way – we’re merely defining terms.
+operating systems don’t work that way - we’re merely defining terms.
 
 Here’s a simple example of an operation which contains no mutexes, but is still not lock-free.
 Initially, X = 0. As an exercise for the reader, consider how two threads could be scheduled in a
@@ -5819,7 +6061,7 @@ while (X == 0)
     X = 1 - X;
 }
 
-Nobody expects a large application to be entirely lock-free. Typically, we identify a specific set
+Nobody expects a large application to be entirely lock-free. Typically, we identify a [specific-set]
 of lock-free operations out of the whole codebase. For example, in a lock-free queue, there might be
 a handful of lock-free operations such as push, pop, perhaps isEmpty, and so on.
 
@@ -5828,11 +6070,10 @@ as class methods, and offer the following succinct definition of lock-free (see 
 	
 "In an infinite execution, infinitely often some method call finishes." In other words, as long as
 the program is able to keep calling those lock-free operations, the number of completed calls keeps
-increasing, no matter what.  It is algorithmically impossible for the system to lock up during those
-operations.
+increasing, no matter what. It is algorithmically impossible for the system to lock up during those
+operations. {Q} Didn't get that.
 
 <why-use>
-
 One important consequence of lock-free programming is that if you suspend a single thread, it will
 never prevent other threads from making progress, as a group, through their own lock-free
 operations. This hints at the value of lock-free programming when writing interrupt handlers and
