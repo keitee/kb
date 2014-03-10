@@ -4267,10 +4267,10 @@ the word. Also support multi pass until user quit.
 
 
 <more-abstract-solution>
-Used class instead of using set, map, and vector directly. How to design what this query func
-return without cost of copying? shared_ptr
+Used class instead of using set, map, and vector directly. [DN] How to design what this query func
+return without cost of copying? Yes, shared_ptr.
 
-TextQuery:                         shared:            QueryResult:
+TextQuery:                         shared:dyn creted   QueryResult:
  shared_ptr vector : file           vector              shared_ptr
   line 0
   line 1
@@ -4285,111 +4285,111 @@ TextQuery:                         shared:            QueryResult:
 class QueryResult;	// forward declaration
 
 class TextQuery {
-	 public:
-	 	using line_no = std::vector<std::string>::size_type; // [type-member]
+  public:
+    using line_no = std::vector<std::string>::size_type; // [type-member]
 
-		TextQuery( std::ifstream& );
-		QueryResult query( const std::string& ) const;
+    TextQuery( std::ifstream& );
+    QueryResult query( const std::string& ) const;
 
-	 private:
-	 	std::shared_ptr<std::vector<std::string>> file; // input file
-		std::map<std::string, std::shared_ptr< std::set< line_no >>> wm;
+  private:
+    std::shared_ptr<std::vector<std::string>> file; // input file
+    std::map<std::string, std::shared_ptr< std::set< line_no >>> wm;
 };
 
 // TextQuery member definitions
 
 TextQuery::TextQuery( ifstream& is ) : file( new vector< string >) // new vector
 {
-	 string text;
+  string text;
 
-	 while( getline( is, text )) {			// for each line. std::getline
-		  file->push_back(text);				// save line
-		  int n = file->size() -1;				// get line num. -1 to make line num the same as vector index
+  while( getline( is, text )) {     // for each line. std::getline
+    file->push_back(text);          // save line
+    int n = file->size() -1;        // get line num. -1 to make line num the same as vector index
 
-		  istringstream line(text);
-		  string word;
+    istringstream line(text);
+    string word;
 
-		  while( line >> word ) {								// for each word of a line
-																		// note lines is reference
-				auto& lines = wm[word];							// add new entry if word is not in wm
-																		// value-init and lines will be null
-				if( !lines )										// lines is shared_ptr
-					 lines.reset( new set< line_no > );		// new set
+    while( line >> word ) {                  // for each word of a line
+      // see that lines is reference
+      auto& lines = wm[word];                // add new entry if word is not in wm
+      // value-init and lines will be null
+      if( !lines )                           // lines is shared_ptr
+        lines.reset( new set< line_no > );   // new set
 
-				lines->insert(n);									// save line num which shown this word
-				// word occurs more than once in the same line, do nothing.
-		  }
-	 }
+      lines->insert(n);                      // save line num which shown this word
+      // word occurs more than once in the same line, do nothing.
+    }
+  }
 }
 
 Think what should return if the given string is not found because there is no set for this? Used
-local static, empty set.
+a empty set which is local static, function-static.
 
 QueryResult TextQuery::query( const string& sought ) const
 {
-	static shared_ptr< set< line_no >> nodata( new set< line_no > );
+  static shared_ptr< set< line_no >> nodata( new set< line_no > );
 
-	auto loc = wordmap.find( sought ); // [why-find] instead of subscript?
+  auto loc = wordmap.find( sought ); // [Quiz] why find instead of subscript?
 
-	if( loc == wordmap.end() )
-		return QueryResult( sought, nodata, file );
-	else
-		return QueryResult( sought, loc->second, file );		
+  if( loc == wordmap.end() )
+    return QueryResult( sought, nodata, file );
+  else
+    return QueryResult( sought, loc->second, file );		
 }
 
 class QueryResult {
-	 friend std::ostream& print( std::ostream&, const QueryResult& );
+  friend std::ostream& print( std::ostream&, const QueryResult& );
 
-	 public:
-		// this is missed in the book.
-	 	using line_no = std::vector<std::string>::size_type; // [type-member]
+  public:
+  // this is missed in the book.
+  using line_no = std::vector<std::string>::size_type; // [type-member]
 
-	 	QueryResult( std::string s,
-						 std::shared_ptr< std::set<line_no>> p,
-						 std::shared_ptr< std::vector< std::string >> f ): sought(s), lines(p), file(f) {}
-	 private:
-	 	std::string sought;
-		std::shared_ptr< std::set<line_no>> lines;
-		std::shared_ptr< std::vector< std::string >> file;
+  QueryResult( std::string s,
+      std::shared_ptr< std::set<line_no>> p,
+      std::shared_ptr< std::vector< std::string >> f ): sought(s), lines(p), file(f) {}
+  private:
+  std::string sought;
+  std::shared_ptr< std::set<line_no>> lines;
+  std::shared_ptr< std::vector< std::string >> file;
 };
 
->
- {DN} When design a class, can be helpful to write programs using the class before
- implementing the members. That way, can see whether the class has the operation we need. WHAT
- OPERATION WE NEED hels us see WHAT DATA STRUCTURE we will need.
+
+{BP} When design a class, can be helpful to write programs using the class before implementing the
+members. That way, can see whether the class has the operation we need. WHAT OPERATION WE NEED hels
+us see WHAT DATA STRUCTURE we will need.
 
 void runQueries(ifstream& infile)
 {
-	 TextQuery tq(infile);
+  TextQuery tq(infile);
 
-	 while(true) {
-		  cout << "enter the word to look for, or q to quit: ";
-		  string s;
+  while(true) {
+    cout << "enter the word to look for, or q to quit: ";
+    string s;
 
-		  // stop if hit eof or q
-		  if( !(cin >> s) || s == "q" ) break;
+    // stop if hit eof or q
+    if( !(cin >> s) || s == "q" ) break;
 
-		  print( cout, tq.query(s)) << endl;
-	 }
+    print( cout, tq.query(s)) << endl;
+  }
 }
 
 ostream &print( ostream& os, const QueryResult& qr)
 {
-	 os << qr.sought << " occurs " << qr.lines->size() << " " << make_plural( qr.lines->size(),
-	 "time", "s") << endl;
-	
-	 // when *qr.lines is empty, the loop will not be executed.
-	 for( auto num : *qr.lines )
-		  os << "\t(line " << num + 1 << ") " << *(qr.file->begin() + num) << endl;
-	
-	 return os;
+  os << qr.sought << " occurs " << qr.lines->size() << " " << make_plural( qr.lines->size(),
+      "time", "s") << endl;
+
+  // when *qr.lines is empty, the loop will not be executed.
+  for( auto num : *qr.lines )
+    os << "\t(line " << num + 1 << ") " << *(qr.file->begin() + num) << endl;
+
+  return os;
 }
 
 Got following errors:
 
 tquery.cpp: In member function 'QueryResult TextQuery::query(const std::string&) const':
-tquery.cpp:58: error: return type 'struct QueryResult' is incomplete
-tquery.cpp:65: error: invalid use of incomplete type 'struct QueryResult'
+tquery.cpp:58: error: return type 'struct QueryResult' is incomplete ~
+tquery.cpp:65: error: invalid use of incomplete type 'struct QueryResult' 
 tquery.cpp:12: error: forward declaration of 'struct QueryResult'
 tquery.cpp:67: error: invalid use of incomplete type 'struct QueryResult'
 tquery.cpp:12: error: forward declaration of 'struct QueryResult'
@@ -4397,9 +4397,81 @@ tquery.cpp:12: error: forward declaration of 'struct QueryResult'
 When move query func after class QueryResult then these errors go away. Why?
 
 
-Primers p279.
+{extented-text-query-example}
+How to support these queries? ~(str), str, (str|str), (str&str), ((str&str)|str)
+
+After all, the question is how to build "Query". For example,
+
+   Query q = Query("str") & Query("str") | Query("str");
+   Query q = ~Query("str");
+
+The solution is to have four classes which has the same interface and use ABC.
+
+User     Query class             Query Base
+         - interface class       - ABC
+         - hide QB from user        |           |           | 
+                                 WordQuery   NotQuery    BinaryQuery
+                                                            |           |
+                                                         AndQuery    ORQuery
+
+// private ctor which prevent a user from creating derived class directly and due to this, make
+// operator overloads friend to use ctor.
+//
+class Query {
+  friend Query operator~( const Query& );
+  friend Query operator|( const Query&, const Query& );
+  friend Query operator&( const Query&, const Query& );
+
+  public:
+    Query( const std::string& );
+    QueryResult eval(const TextQuery &t) const { return q->eval(t); }
+    std::string rep() const { return q->rep(); }
+
+  private:
+    Query( std::shared_ptr<Query_base> query ): q(query) {}
+    std::shared_ptr<Query_base> q;
+};
+
+
+// ABC and no public interface. Query friend since it use Query_base's virtual call.
+//
+class Query_base {
+  friend class Query;
+
+  protected:
+    using line_no = TextQuery::line_no;
+    virtual ~Query_base() = default;
+
+  private:
+    virtual QueryResult eval( const TextQuery& ) const = 0;
+    virtual std::string rep() const = 0;
+};
+
+// no public interface.
+//
+class WordQuery: public Query_base {
+  friend class Query;
+
+  WordQuery( const std::string &s ): query_word(s) {}
+
+  QueryResult eval( const TextQuery &t ) const { return t.query(query_word); }
+  std::string rep() const { return query_word; }
+  std::string query_word;
+};
+
+class NotQuery: public Query_base {
+  friend class Query operator~(const Query &);
+
+  WordQuery( const std::string &s ): query_word(s) {}
+
+  QueryResult eval( const TextQuery &t ) const;
+  std::string rep() const { return "~(" + query.rep() + ")"; }
+  Query query;
+};
+
 
 {class-definition} {forward-declaration}
+Primers p279.
 
 struct Sales_data { /* ... */ };
 Sales_data accum, trans, *salesptr;
@@ -4412,11 +4484,10 @@ the program and indicates that Screen refers to a class type. After a declaratio
 definition is seen, the type Screen is an <incomplete-type>-it is known that Screen is a class type
 but not known what members that type contains.
 
->
- We can use an incomplete type in only limited ways: We can define pointers or references
- to such types, and we can declare (but not define) functions that use an incomplete type
- as a parameter or return type.
->
+<limited-use>
+We can use an incomplete type in only limited ways: We can define pointers or references to such
+types, and we can declare (but not define) functions that use an incomplete type as a parameter or
+return type.
 
 A class must be defined-not just declared-before we can write code that creates objects of that
 type. Otherwise, the compiler does not know how much storage such objects need. Similarly, the
