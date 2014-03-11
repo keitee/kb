@@ -4398,19 +4398,56 @@ When move query func after class QueryResult then these errors go away. Why?
 
 
 {extented-text-query-example}
-How to support these queries? ~(str), str, (str|str), (str&str), ((str&str)|str)
+How to support these queries? ~(str), str, (str|str), (str&str), (str&str|str) which use normal C++
+precedence rules.
 
-After all, the question is how to build "Query". For example,
+<OOP-solution>
+Can use TextQuery? No. To see why, consider a Not query and we would have to able to find the word
+for which the Not query was searching. There is no such word. Instead a Not query has a query whose
+value it negates. Similarly, And and Or query have two queries whose results it combines. This
+suggests that we model our different kinds of queries as independent classes that share a common
+base class. The solution is to have four classes which has the same interface and use ABC.
 
-   Query q = Query("str") & Query("str") | Query("str");
-   Query q = ~Query("str");
+o These four query types are not related to one another by inheritance. They are conceptually
+siblings and shares the same interface. This suggest that will need to define ABC to represent that
+interface.
 
-The solution is to have four classes which has the same interface and use ABC.
+o The AndQuery and OrQuery share one property that the other classes do not. Each has two operands.
+To model this, define another ABC to represent queries with two operands.
+
+o We need to able to build queries. The simplest way is to write C++ expressions to create the
+compounded queries:
+
+   Query q = Query("fiery") & Query("bird") | Query("wind");
+
+This suggests that user code won't use the inherited class directly. Instead, will define an
+<interface> class named Query which hide the hierarchy and has the same operations as Query_base. It
+will have three overloaded operators and ctor.
+   - & operator will create a Query bound to a new AndQuery.
+   - | operator will create a Query bound to a new OrQuery.
+   - ~ operator will create a Query bound to a new NotQuery.
+   - Query ctor that takes a string will create a Query bound to a new WordQuery.
+
+o In each of these classes, the operand(s) can be an object of any of the concrete classes derived
+from Query_base: NotQuery can be applied to an AndQuery. To allow this flexibility, the operands
+must be stored as pointers to Query_base so that can bind the pointer to whichever concrete class we
+need. However, rather than storing a Query_base pointer, will themselves use a Query object as user
+code is simplified by using the interface.
+
+So objects created by the expression are:
+      q = Query      OrQuery        AndQuery          WordQuery
+            [ ] ->   [ ]      ->    [ ]      ->       [fiery] 
+                                                      WordQuery
+                                    [ ]      ->       [bird]
+
+                     [ ]      ->    WordQuery
+                                    [wind]
 
 User     Query class             Query Base
          - interface class       - ABC
          - hide QB from user        |           |           | 
                                  WordQuery   NotQuery    BinaryQuery
+                                                         - ABC
                                                             |           |
                                                          AndQuery    ORQuery
 
@@ -4424,16 +4461,22 @@ class Query {
 
   public:
     Query( const std::string& );
+
+    // [interface]
     QueryResult eval(const TextQuery &t) const { return q->eval(t); }
     std::string rep() const { return q->rep(); }
 
   private:
     Query( std::shared_ptr<Query_base> query ): q(query) {}
+
     std::shared_ptr<Query_base> q;
 };
 
+inline Query::Query( const std::string &s ): q(new WordQuery(s)) {}
 
-// ABC and no public interface. Query friend since it use Query_base's virtual call.
+
+// ABC and no public interface since do not intend users or the derived class to use it directly.
+// Query friend since it use Query_base's virtual call. See protected dtor.
 //
 class Query_base {
   friend class Query;
@@ -4442,7 +4485,7 @@ class Query_base {
     using line_no = TextQuery::line_no;
     virtual ~Query_base() = default;
 
-  private:
+  private:  // [interface]
     virtual QueryResult eval( const TextQuery& ) const = 0;
     virtual std::string rep() const = 0;
 };
@@ -4459,15 +4502,74 @@ class WordQuery: public Query_base {
   std::string query_word;
 };
 
+<not>
+//
 class NotQuery: public Query_base {
-  friend class Query operator~(const Query &);
+  // make a function friend
+  friend Query operator~(const Query &);
 
-  WordQuery( const std::string &s ): query_word(s) {}
+  NotQuery( const Query &q ): query(q) {}
 
+  // concrete class
   QueryResult eval( const TextQuery &t ) const;
+  
+  // [DN] This ultimately makes a virtual call to rep.
   std::string rep() const { return "~(" + query.rep() + ")"; }
+
   Query query;
 };
+
+o [DN] The return [implicitly] uses Query ctor that takes the shared_ptr so this is equivalent to:
+shared_ptr<Query_base> tmp(new NotQuery(expr));
+return Query(tmp);
+
+inline Query operator~(const Query &operand)
+{ return std::shared_ptr<Query_base>( new NotQuery(operand)); }
+
+<binary-query>
+
+// ABC and do not define eval().
+//
+class BinaryQuery : public Query_base {
+  protected:
+    BinaryQuery( const Query &l, const Query &r, std::string s ):
+      lhs(l), rhs(r), opSym(s) {}
+
+    // [DN] This ultimately makes a virtual call to rep.
+    std::string rep() const { return "(" + lhs.rep() + " "
+      + opSym + " " + rhs.rep() + ")"; }
+
+    Query lhs, rhs;
+    std::string opSym;
+};
+
+<and>
+//
+class AndQuery : public BinaryQuery {
+  friend Query operator&( const Query&, const Query& );
+
+  AndQuery( const Query &left, const Query &right ):
+    BinaryQuery( left, right, "&") {}
+
+  QueryResult eval(const TextQuery&) const;
+};
+
+inline Query operator&( const Query &lhs, const Query &rhs )
+{ return std::shared_ptr<Query_base>( new AndQuery(lhs, rhs) ); }
+
+<or>
+//
+class OrQuery : public BinaryQuery {
+  friend Query operator|( const Query&, const Query& );
+
+  OrQuery( const Query &left, const Query &right ):
+    BinaryQuery( left, right, "|") {}
+
+  QueryResult eval(const TextQuery&) const;
+};
+
+inline Query operator|( const Query &lhs, const Query &rhs )
+{ return std::shared_ptr<Query_base>( new OrQuery(lhs, rhs) ); }
 
 
 {class-definition} {forward-declaration}
