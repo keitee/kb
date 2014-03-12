@@ -4412,9 +4412,9 @@ value it negates. Similarly, And and Or query have two queries whose results it 
 suggests that we model our different kinds of queries as independent classes that share a common
 base class. The solution is to have four classes which has the same interface and use ABC.
 
-o These four query types are not related to one another by inheritance. They are conceptually
-siblings and shares the same interface. This suggest that will need to define ABC to represent that
-interface.
+o These four query types are not related to one another by inheritance; not related in vertically
+and they are conceptually siblings and shares the same interface. This suggest that will need to
+define ABC to represent that interface.
 
 o The AndQuery and OrQuery share one property that the other classes do not. Each has two operands.
 To model this, define another ABC to represent queries with two operands.
@@ -4427,25 +4427,48 @@ compounded queries:
 This suggests that user code won't use the inherited class directly. Instead, will define an
 <interface> class named Query which hide the hierarchy and has the same operations as Query_base. It
 will have three overloaded operators and ctor.
-   - & operator will create a Query bound to a new AndQuery.
-   - | operator will create a Query bound to a new OrQuery.
-   - ~ operator will create a Query bound to a new NotQuery.
+   - & operator will [create] a Query bound to a new AndQuery.
+   - | operator will [create] a Query bound to a new OrQuery.
+   - ~ operator will [create] a Query bound to a new NotQuery.
    - Query ctor that takes a string will create a Query bound to a new WordQuery.
 
 o In each of these classes, the operand(s) can be an object of any of the concrete classes derived
 from Query_base: NotQuery can be applied to an AndQuery. To allow this flexibility, the operands
 must be stored as pointers to Query_base so that can bind the pointer to whichever concrete class we
-need. However, rather than storing a Query_base pointer, will themselves use a Query object as user
-code is simplified by using the interface.
+need. 
+
+However, rather than storing a Query_base pointer, will themselves use a Query object as [user] code
+is simplified by using the interface. [KT] This is why BinaryQuery has Query members.
 
 So objects created by the expression are:
-      q = Query      OrQuery        AndQuery          WordQuery
-            [ ] ->   [ ]      ->    [ ]      ->       [fiery] 
-                                                      WordQuery
-                                    [ ]      ->       [bird]
 
-                     [ ]      ->    WordQuery
-                                    [wind]
+   Query q = Query("fiery") & Query("bird") | Query("wind");
+
+   q = Query      OrQuery        AndQuery          WordQuery
+         [ ] ->   [ ]      ->    [ ]      ->       [fiery] 
+                                                   WordQuery
+                                 [ ]      ->       [bird]
+
+                  [ ]      ->    WordQuery
+                                 [wind]
+
+[ ] means Query and ( ) means Query_base
+
+    q            Or            And           Word 
+   [ ]  = [ ] -> ( ) -> [ ] -> ( ) -> [ ] -> ( )
+                               ( ) -> [ ] -> ( )
+
+                               Word
+                 ( ) -> [ ] -> ( )
+
+Once the [tree-of-objects] is built up, evaluating(or generating the representation of) a query is
+basically a process of following these links, asking each object to evaluate itself. Call eval on q
+which is the root of the tree, that call asks the OrQuery to which q points to eval itself.
+Evaluating this OrQuery calls eval on its two operands- on the AndQuery and the WordQuery that looks
+for the word bind. Evaluating the AndQuery evaluates its two WordQuerys, generating the results for
+the words fiery and bird.
+
+Inheritance hierarchy is:                                    
 
 User     Query class             Query Base
          - interface class       - ABC
@@ -4466,7 +4489,7 @@ class Query {
   public:
     Query( const std::string& );
 
-    // [interface]
+    // [interface] for Query_base
     QueryResult eval(const TextQuery &t) const { return q->eval(t); }
     std::string rep() const { return q->rep(); }
 
@@ -4480,7 +4503,8 @@ inline Query::Query( const std::string &s ): q(new WordQuery(s)) {}
 
 
 // ABC and no public interface since do not intend users or the derived class to use it directly.
-// Query friend since it use Query_base's virtual call. See protected dtor.
+// Query friend since it use Query_base's virtual call. See protected dtor since it is used
+// implicitly by the dtor in the derived class.
 //
 class Query_base {
   friend class Query;
@@ -4507,7 +4531,6 @@ class WordQuery: public Query_base {
 };
 
 <not>
-//
 class NotQuery: public Query_base {
   // make a function friend
   friend Query operator~(const Query &);
@@ -4517,13 +4540,18 @@ class NotQuery: public Query_base {
   // concrete class
   QueryResult eval( const TextQuery &t ) const;
   
-  // [DN] This ultimately makes a virtual call to rep.
+  // [DN] This ultimately makes a virtual call to rep because query.rep() is nonvirtual call but
+  // Query::rep in turn calls q->rep, which is virtual call through its Query_base pointer.
   std::string rep() const { return "~(" + query.rep() + ")"; }
 
-  Query query;
+  Query query; // [DN]
 };
 
-o [DN] The return [implicitly] uses Query ctor that takes the shared_ptr so this is equivalent to:
+o [DN] The return Query type and [implicitly] uses Query ctor that takes the shared_ptr so this is
+equivalent to:
+
+o Here used Query( std::shared_ptr<Query_base> query )
+
 shared_ptr<Query_base> tmp(new NotQuery(expr));
 return Query(tmp);
 
@@ -4543,14 +4571,13 @@ class BinaryQuery : public Query_base {
     std::string rep() const { return "(" + lhs.rep() + " "
       + opSym + " " + rhs.rep() + ")"; }
 
-    Query lhs, rhs;
+    Query lhs, rhs;  // [DN]
     std::string opSym;
 };
 
 <and>
-//
 class AndQuery : public BinaryQuery {
-  friend Query operator&( const Query&, const Query& );
+  friend Query operator&( const Query&, const Query& );     // to use ctor
 
   AndQuery( const Query &left, const Query &right ):
     BinaryQuery( left, right, "&") {}
@@ -4562,9 +4589,8 @@ inline Query operator&( const Query &lhs, const Query &rhs )
 { return std::shared_ptr<Query_base>( new AndQuery(lhs, rhs) ); }
 
 <or>
-//
 class OrQuery : public BinaryQuery {
-  friend Query operator|( const Query&, const Query& );
+  friend Query operator|( const Query&, const Query& );     // to use ctor
 
   OrQuery( const Query &left, const Query &right ):
     BinaryQuery( left, right, "|") {}
