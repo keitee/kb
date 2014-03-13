@@ -3046,15 +3046,12 @@ performance when different IPC facilities are substituted underneath the abstrac
 
 
 {pipe}
-
 The pipe is unnamed fifo and is an early form that can be used [related-processes] such as parent
-and child. In other words, created using fork() call.
-
-Linux supports uni-directional pipe or half-duplex so need two pipes for read and write.
+and child. In other words, created using fork() call. Linux supports uni-directional pipe or
+half-duplex so need two pipes for read and write.
 
 
 {first-way::to-create-pipe}
-
 Get two fds from a pipe() call. fd[0] for read and fd[1] for write. Create a child via fork(). Then
 there is read-write channel between parent and child.
 
@@ -3069,7 +3066,6 @@ note: Pipe is kernel resource meaning that there is copy between kernel and proc
 
 
 {second-way::to-create-pipe}
-
 popen() call which simplfies pipe creation, fork, reading/writing setting. However, need to set
 problem to fork in the command line.
 
@@ -3093,25 +3089,23 @@ p=popen(cmd,"r");
 fgets(tmp,sizeof(tmp),p);
 pclose(p);
 
-note: After all, the reason that can use pipe between parent/child is that fds are shared.
+After all, the reason that can use pipe between parent/child is that fds are shared.
 
 
 {broken-pipe}
-
-When write to fifo that is not opened to read. menas there is no reading process or reading process is
-killed because reading fd of pipe or file gets closed. SIGPIPE. Instead, there is no date to read,
-empty, reading thread or process is blocked.
+When write to fifo that is not opened to read. Menas there is no reading process or reading process
+is killed because reading fd of pipe or file gets closed. SIGPIPE. Instead, there is no data to
+read, empty, reading thread or process is blocked.
 
 
 {fifo}
-
-To solve this, fifo was introduced and is called named pipe since has path name. means that it
+To solve this, fifo was introduced and is called [named-pipe] since has path name. Means that it
 is created in the filesystem as a file. Use usual read and write call. Fifo is either read-only or
-write-only. mkfifo() call.
+write-only. mkfifo() call. {Q} what is 'this'?
 
-note: caution. When open a fifo to read which is not opend to write, calling process is blocked.
-meaning there is no writing process. Therfore, if parent and child opens different fifos to read,
-deadlock happens.
+Caution. When open a fifo to read which is not opend to write, calling process is blocked.  meaning
+there is no writing process. Therfore, if parent and child opens different fifos to read, deadlock
+happens. {Q} child to read and parent to write?
 
 
 {from-nds-fusion-ipc}
@@ -4395,8 +4389,25 @@ int pthread_mutex_trylock( pthread_mutex_t *mptr);
 int pthread_mutex_timedlock( pthread_mutex_t *mptr);
 
 {deadlock-condition}
+In short, this is a condition waiting for something never happens. Unrequited love?
 
-From {ref-LPI}, deadlock happens:
+<case-01> from fifo.
+Caution. When open a fifo to read which is not opend to write, calling process is blocked.  meaning
+there is no writing process. Therfore, if parent and child opens different fifos to read, deadlock
+happens. {Q} child to read and parent to write?
+
+<case-02> from {mutex-deadlock}. 
+1> Locking. If try to lock what is already locked, two may happen for [default type] of mutex:
+[mutex-deadlock] or EDEADLK. On Linux, deadlock by default from {ref-LPI}. Why deadlock? Because
+blocked trying to lock a mutex that it already owns.
+
+<case-03> from lock-free-queue
+I used the timed_wait() instead of the simpler wait() to solve a possible deadlock when Produce() is
+called between line A and line B in Listing One. Then wait() will miss the notify_one() call and
+have to wait for the next produced element to wake up. <If> this element never comes (no more produced
+elements or if the Produce() call actually waits for Consume() to return), there's a deadlock.
+
+<case-04> from {ref-LPI}, deadlock happens:
 
 Thead A             Thread B
 lock(mutex1)        lock(mutex2)
@@ -4405,7 +4416,8 @@ lock(mutex2)        lock(mutex1)
 In other words, both tries to lock the mutex that the other thread has already locked. Both threads
 will remain blocked indefinitely.
 
-Two approach to avoid:
+
+{to-avoid-deadklock}
 
 o <mutex-hierarchy-or-order> and less flexible. Use locks in the same set of mutexs in [the same
 order].
@@ -6721,9 +6733,7 @@ int main()
 {one}
 http://www.drdobbs.com/cpp/lock-free-code-a-false-sense-of-security/210600279
 
-Lock-Free Code: A False Sense of Security
-
-By Herb Sutter, September 08, 2008
+Lock-Free Code: A False Sense of Security By Herb Sutter, September 08, 2008
 
 Writing lock-free code can confound anyone—even expert programmers, as Herb shows this month.
 
@@ -6752,6 +6762,7 @@ two months ago [2]. The author, Petru Marginean, has graciously allowed me to di
 that we can see what's wrong and why, what lessons we should learn, and how to write the code
 correctly. That someone as knowledgable as Petru, who has published many good and solid articles,
 can get this stuff wrong should be warning enough that lock-free coding requires great care.
+<KT> See Lock-Free Queues in below.
 
 A Limited Lock-Free Queue
 
@@ -6777,13 +6788,15 @@ producer won't clean up the most recently consumed item (the one referred to by 
 
 <KT> The consumer only changes iterator and do not modify list itself.
 
-Q     ...
+Q     ...   <- begin()
+      ...
+      ...
       [ ]   <- head, -> consumer, dummy. uses tail to check empty, publish head and consume.
       [ ]   <- first unconsumed item
       ...
       [ ]   <- last unconsumed item
-      [ ]   <- tail, <- producer, end(). add, publish tail and uses head to trim unused.
-      ...
+      [ ]   <- tail, <- producer, end(). add, publish tail and uses head to trim unused. 
+               end() and push_back()
 
 The idea is reasonable; only the implementation is fatally flawed. Here's the original code, written
 in C++ and using an STL doubly linked list<T> as the underlying data structure. I've reformatted the
@@ -6811,8 +6824,6 @@ struct LockFreeQueue {
       iTail = list.end();              // <publish> it
       list.erase(list.begin(), iHead); // trim unused nodes
     }
-
-    {Q} This list is ever growing? not circular?
 
     // Consume is called on the consumer thread only:
 
@@ -6865,11 +6876,11 @@ fall off the end of the queue. Marginean does note this requirement:
 "Reading/writing list<T>::iterator is atomic on the machine upon which you run the application." [2]
 
 Alas, atomicity is necessary but not sufficient (see next section), and not supported by
-list<T>::iterator. First, in practice, many list<T>::iterator implementations I examined are larger
+list<T>::iterator. First, in practice, many list<T>::iterator implementations I examined are [larger]
 than the native machine/pointer size, which means that they can't be read or written with atomic
 loads and stores on most architectures. Second, in practice, even if they were of an appropriate
 size, you'd have to add other decorations to the variable to ensure atomicity, for example to
-require that the variable be properly aligned in memory.
+require that the variable be properly [aligned] in memory.
 
 Finally, the code isn't valid ISO C++. The 1998 C++ Standard said nothing about concurrency, and so
 provided no such guarantees at all. The upcoming second C++ standard that is now being finalized
@@ -6886,11 +6897,15 @@ Ordering Problems in Produce
 Second, reads and writes of a lock-free variable must occur in an expected order, which is nearly
 always the exact order they appear in the program source code. But compilers, processors, and caches
 love to optimize reads and writes, and will helpfully reorder, invent, and remove memory reads and
-writes unless you prevent it from happening. The right prevention happens implicitly when you use
-mutex locks or ordered atomic variables; C++0x std::atomic, Java/.NET volatile; you can also do it
-explicitly, but with considerably more effort, using ordered API calls e.g., Win32
-InterlockedExchange or memory fences/barriers e.g., Linux mb. Trying to write lock-free code without
-using any of these tools can't possibly work.
+writes unless you prevent it from happening. 
+
+<to-prevent-reordering>
+The right prevention happens implicitly when you use mutex locks or ordered atomic variables; {Q}
+why mutex prevent this? 
+
+C++0x std::atomic, Java/.NET volatile; you can also do it explicitly, but with considerably more
+effort, using ordered API calls e.g., Win32 InterlockedExchange or memory fences/barriers e.g.,
+Linux mb.  Trying to write lock-free code without using any of these tools can't possibly work.
 
 Consider again this code from Produce, and ignore that the assignment iTail isn't atomic as we look
 for other problems:
@@ -6915,10 +6930,13 @@ Before reading on, think about it and see if you're convinced that this is (or i
 
 Have you thought about it? As a starter, here's one issue: Although list.end is probably unlikely to
 perform writes, it's possible that it might, and those are side effects that need to be complete
-before we publish iTail. The general issue is that you can't make assumptions about the side effects
-of library functions you call, and you have to make sure they're fully performed before you publish
-the new state. So a slightly improved version might try to store the result of list.end into a local
-unshared variable and assign it after the barrier:
+before we publish iTail. 
+
+The general issue is that you can't make assumptions about the side effects of library functions you
+call, and you have to make sure they're fully performed before you publish the new state. 
+
+So a slightly improved version might try to store the result of list.end into a local unshared
+variable and assign it after the barrier:
 
 // Better, but is it enough?
 list.push_back(t);
@@ -6935,6 +6953,7 @@ Ordering Problems in Consume
 
 Here's another reordering problem, this time from Consume:
 
+++iNext;
 if (iNext != iTail) {
   iHead = iNext;        // C
   t = *iHead;           // D
@@ -6949,8 +6968,9 @@ compiler or processor or cache can reorder either version in unfortunate ways. C
 if the consumer thread performs a consecutive two calls to Consume: The memory reads and writes
 performed by those two calls could be reordered so that iHead is incremented twice before we copy
 the two list nodes' values, and then we have a problem because the producer may try to remove
-nodes the consumer is still using. 
-    
+nodes the consumer is still using. [KT] Think that this is a problem besides odering and lock-free
+variable.
+
 Note: This doesn't mean the compiler or processor transformations are broken; they're not. Rather
 the code is racy and has insufficient synchronization, and so it breaks the memory model guarantees
 and makes such transformations possible and visible.
@@ -6964,7 +6984,8 @@ if (iNext != iTail) {
   iHead = iNext;
   t = *iHead;
 
-Clearly, that would break the producer thread, which would read a bad value for iHead. More likely, the compiler or processor might speculate that most of the time iNext != iTail:
+Clearly, that would break the producer thread, which would read a bad value for iHead. More likely,
+the compiler or processor might speculate that most of the time iNext != iTail:
 
 // Another problematic transformation
 //
@@ -6976,6 +6997,7 @@ if (iNext == iTail) {   // note: inverted test!
 } else {
   t = *iHead;
 
+<invariant>
 But now iHead could equal iTail, which breaks the essential invariant that iHead must never equal
 iTail, on which the whole design depends.
 
@@ -7003,10 +7025,10 @@ Notes
 
 
 {two}
-Lock-Free Queues
-By Petru Marginean, July 01, 2008
+http://www.drdobbs.com/parallel/lock-free-queues/208801974?pgno=1
+Lock-Free Queues By Petru Marginean, July 01, 2008
 
-Note:
+<note-begin>
 This article as written assumes a sequentially consistent model. In particular, the code relies on
 specific order of instructions in both Consumer and Producer methods. However, without inserting
 proper memory barrier instructions, these instructions can be reordered with unpredictable results
@@ -7017,11 +7039,11 @@ developer responsibility to check that the reading/writing std::list<T>::iterato
 turns out to be too restrictive. While gcc/MSVC++2003 has 4-byte iterators, the MSVC++2005 has
 8-byte iterators in Release Mode and 12-byte iterators in the Debug Mode.
 
-The solution to prevent this is to use memory barriers/volatile variables. The downloadable code
-featured at the top of this article has fixed that issue.
+The solution to prevent this is to use memory barriers/volatile variables. 
+The downloadable code featured at the top of this article has fixed that issue. ~
 
 Many thanks to Herb Sutter who signaled the issue and helped me fix the code. --P.M.
-
+<note-end>
 
 Queues can be useful in a variety of systems involving data-stream processing. Typically, you have a
 data source producing data—requests coming to a web server, market feeds, or digital telephony
@@ -7038,10 +7060,11 @@ as little overhead as possible.
 
 In this article, I present a lock-free queue (the source code for the lockfreequeue class is
 available online; see www.ddj.com/code/) in which one thread can write to the queue and another
-read from it—at the same time without any locking.
+read from it—at the same time without any locking. /0807/lockfreequeue/
 
 To do this, the code implements these requirements:
 
+<conditions>
 o There is a single writer (Producer) and single reader (Consumer). When you have multiple producers
 and consumers, you can still use this queue with some external locking. You cannot have multiple
 producers writing at the same time (or multiple consumers consuming the data simultaneously), but
@@ -7051,17 +7074,20 @@ you can have one producer and one consumer (2x threads) accessing the queue at t
 o When inserting/erasing to/from an std::list<T>, the iterators for the existing elements must
 remain valid (Responsibility: library implementor).
 
-o Only one thread modifies the queue; the producer thread both adds/erases elements in the queue
+o <Only> one thread modifies the queue; the producer thread both adds/erases elements in the queue
 (Responsibility: library implementor).
 
 o Beside the underlying std::list<T> used as the container, the lock-free queue class also holds two
 iterators pointing to the not-yet-consumed range of elements; each is modified by one thread and
 read by the other (Responsibility: library implementor).
 
-o Reading/writing list<T>::iterator is atomic on the machine upon which you run the application. If
+o Reading/writing list<T>::iterator is <atomic> on the machine upon which you run the application. If
 they are not on your implementation of STL, you should check whether the raw pointer's operations
 are atomic. You could easily replace the iterators to be mentioned shortly with raw pointers in the
 code (Responsibility: machine). <KT> ?
+
+<KT> Here big condition is that one producer and consumer model, only producer modify a list, and
+updating iterators between threads are atomic.
 
 Because I use Standard C++, the code is portable under the aforementioned "machine" assumption: 
 
@@ -7075,7 +7101,7 @@ struct LockFreeQueue
   private:
     typedef std::list<T> TList;
     TList list;
-    typename TList::iterator iHead, iTail;
+    typename TList::iterator iHead, iTail;   <KT> why not 'TList::iterator iHead'?
 };
 
 Considering how simple this code is, you might wonder how can it be threadsafe. The magic is due to
@@ -7094,12 +7120,14 @@ To understand how this works, mentally separate the data from LockFreeQueue<T> i
 o The list and the iTail iterator, modified by the Produce() method (Producer thread).
 o The iHead iterator, modified by the Consume() method (Consumer thread). 
 
-Produce() is the only method that changes the list (adding new elements and erasing the consumed
-elements), and it is essential that only one thread ever calls Produce()—it's the Producer
+<o>
+Produce() is the [only] method that changes the list (adding new elements and erasing the consumed
+elements), and it is essential that [only] one thread ever calls Produce()—it's the Producer
 thread! The iterator (iTail) (only manipulated by the Producer thread) changes it only after a new
 element is added to the list. This way, when the Consumer thread is reading the iTail element, the
 new added element is ready to be used. The Consume() method tries to read all the elements between
 iHead and iTail (excluding both ends). 
+<o>
 
 bool Consume(T& t)
 {
@@ -7128,6 +7156,381 @@ LockFreeQueue()
   iHead = list.begin();
   iTail = list.end();
 }
+
+<discussion-when-queue-is-empty>
+Consume() may fail to read an element (and return false). Unlike traditional lock-based queues, this
+queue works fast when the queue is not empty, but needs an external locking or polling method to
+wait for data. Sometimes you want to wait if there is no element available in the queue, and avoid
+returning false. A naive approach to waiting is: 
+
+T Consume()
+{
+  T tmp;
+  while (!Consume(tmp))
+    ;
+  return tmp;
+}
+
+This Consume() method will likely heat up one of your CPUs red-hot to 100-percent use if there are
+no elements in the queue. Nevertheless, this should have good performance when the queue is not
+empty. However, if you think of it, a queue that's almost never empty is a sign of systemic trouble:
+It means the consumer is unable to keep pace with the producer, and sooner or later, the system is
+doomed to die of memory exhaustion. Call this approach NAIVE_POLLING. 
+
+A friendlier Consume() function does some pooling and calls some sort of sleep() or yield() function
+available on your system: 
+
+T Consume(int wait_time = 1/*milliseconds*/)
+{
+  T tmp;
+  while (!Consume(tmp))
+  {
+    Sleep(wait_time/*milliseconds*/);
+  }
+  return tmp;
+}
+
+The DoSleep() can be implemented using nanosleep() (POSIX) or Sleep() (Windows), or even better,
+using boost::thread::sleep(), which abstracts away system-dependent nomenclature. Call this
+approach SLEEP. Instead of simple polling, you can use more advanced techniques to signal the
+Consumer thread that a new element is available. I illustrate this in Listing One using a
+boost::condition variable.
+
+#include <boost/thread.hpp>
+#include <boost/thread/condition.hpp>
+#include <boost/thread/xtime.hpp>
+    
+template <typename T>
+struct WaitFreeQueue
+{
+    void Produce(const T& t)
+    {
+        queue.Produce(t);
+        cond.notify_one();
+    }
+    bool Consume(T& t)
+    {
+        return queue.Consume(t);
+    }
+    T Consume(int wait_time = 1/*milliseconds*/)
+    {
+        T tmp;
+        if (Consume(tmp))
+            return tmp;
+
+        // the queue is empty, try again (possible waiting...)
+        boost::mutex::scoped_lock lock(mtx);
+        while (!Consume(tmp))          // line A
+        {
+            boost::xtime t;
+            boost::xtime_get(&t, boost::TIME_UTC);
+            AddMilliseconds(t, wait_time);
+            cond.timed_wait(lock, t);  // line B
+        }
+        return tmp;
+    }
+private:
+    LockFreeQueue<T> queue;
+    boost::condition cond;
+    boost::mutex mtx;
+};
+
+I used the timed_wait() instead of the simpler wait() to solve a possible deadlock when Produce() is
+called between line A and line B in Listing One. Then wait() will miss the notify_one() call and
+have to wait for the next produced element to wake up. <If> this element never comes (no more produced
+elements or if the Produce() call actually waits for Consume() to return), there's a deadlock.
+Call this approach TIME_WAIT.
+
+The lock is still wait-free as long as there are elements in the queue. In this case, the Consumer()
+thread does no waiting and reads data as fast as possible (even with the Producer() that is
+inserting new elements). Only when the queue is exhausted does locking occur. 
+<KT> claims that it is lock-free as long as queue is not empty.
+
+The Ping-Pong Test
+
+To compare the three approaches (NAIVE_POLLING, SLEEP, and TIME_WAIT), I implemented a test called
+"Ping-Pong" that is similar to the game of table tennis (the source code is available online). In
+Figure 2, there are two identical queues between the threads T1 and T2. 
+
+      queue 1
+T1 ------------> T2
+   <------------
+      queue 2
+
+You first load one of the queues with a number of "balls," then ask each thread to read from one
+queue and write to the other. The result is a controlled infinite loop. By limiting the game to a
+fixed number of reads/writes ("shots"), you get an understanding of how the queue behaves when
+varying the waiting/sleep time and strategy and the number of "balls." The faster the game, the
+better the performance. You should also check CPU usage to see how much of it is used for real work.
+
+o "No ball" means "do nothing" (like two players waiting for the other to start). This gives you an
+idea of how good the queues are when there is no data—how nervous the players are. Ideally, CPU
+usage should be zero.
+ 
+o "One ball" is like the real ping-pong game: Each player shoots and waits for the other to shoot.
+
+o "Two (or more) balls" means both players could shoot at the same time, modulo collision and
+waiting issues.
+
+
+In a wait-free system, the more balls in the game, the better the performance gain compared to the
+classic locking strategy. This is because wait-free is an optimistic concurrency control method
+(works best when there is no contention), while classical lock-based concurrency control is
+pessimistic (assumes contention happens and preemptively inserts locking).
+
+Ready to play? Here is the Ping-Pong test command line:
+
+$> ./pingpong [strategy] [timeout] [balls] [shots]
+
+When you run the program, the tests show the results in the table shown in Figure 3:
+
+o The best combination is the timed_wait() with a small wait time (1ms in the test for TIMED_WAIT).
+It has a very fast response time and almost 0 percent CPU usage when the queue is empty.
+
+o Even when the sleep time is 0 (usleep(0)), the worst seems to be the sleep() method, especially
+when the queue is likely to be empty. (The number of shots in this case is 100-times smaller than
+the other cases because of the long duration of the game.)
+
+o The NO_WAIT strategy is [fast] but behaves worst when there are no balls (100-percent CPU usage to
+do nothing). It has the best performance when there is a single ball.
+
+Figure 4 presents a table with the results for a classic approach (see SafeQueue). These results
+show that this queue is, on average, more than four-times slower than the LockFreeQueue. The
+slowdown comes from the synchronization between threads. Both Produce() and Consume() have to wait
+for each other to finish. CPU usage is almost 100 percent for this test (similar to the NO_WAIT
+strategy, but not even close to its performance).
+
+Final Considerations
+
+The single-threaded code below shows the value of the list.size() when Producing/ Consuming
+elements: 
+
+LockFreeQueue<int> q;   // list.size() == 1
+q.Produce(1);           // list.size() == 2
+int i;
+q.Consume(i);           // list.size() == still 2!;
+                        // Consume() doesn't modify the list
+q.Produce(i);           // list.size() == 2 again;
+
+The size of the queue is 1 if Produce() was never called and greater than 1 if any element was
+produced.
+
+No matter how many times Consume() is called, the list's size will stay constant. It is Produce()
+that is increasing the size (by 1); and if there were consumed elements, it will also delete them
+from the queue. In a way, Produce() acts as a simple garbage collector. <o> The whole thread safety
+comes from the fact that specific data is modified from single threads only. The synchronization
+between threads is done using iterators (or pointers, whichever has atomic read/write operation on
+your machine). <o> Also consider this code: 
+
+usleep(1000);    // sleep 1 microsecond
+
+On the face of it, this line of code makes a thread sleep for 1 microsecond, and then continue. In
+reality, 1 microsecond is just a lower bound to the duration of the call.
+
+The man page for usleep() says, "The usleep() function suspends execution of the calling process for
+(at least) usec microseconds. The sleep may be lengthened slightly by any system activity or by the
+time spent processing the call or by the granularity of system timers," or if you use the
+nanosleep() function. "Therefore, nanosleep() always pauses for at least the specified time;
+however, it can take up to 10 ms longer than specified until the process becomes runnable again."
+
+So if the process is not scheduled under a real-time policy, there's no guarantee when your thread
+will be running again. I've done some tests and (to my surprise) there are situations when code such
+as: 
+
+cond.timed_wait(lock, x);    // x = e.g. 1 millisecond
+
+will actually wait for more than 1 second.
+
+
+{three}
+http://www.drdobbs.com/cpp/the-trouble-with-locks/184401930
+The Trouble with Locks
+
+By Herb Sutter, March 01, 2005
+
+References
+
+[1] Sutter, H. "The Free Lunch Is Over: A Fundamental Turn Toward Concurrency in Software," Dr.
+Dobb's Journal, March 2005. Available online at http://www.gotw.ca/publications/concurrency-ddj.htm.
+
+[2] Sutter, H. "The Concurrency Revolution," C/C++ Users Journal, February 2005. This is an
+abbreviated version of [1].
+
+[3] Alexandrescu, A. "Lock-Free Data Structures," C/C++ Users Journal, October 2004.
+
+[4] Alexandrescu, A. and M. Michael. "Lock-Free Data Structures with Hazard Pointers," C/C++ Users
+Journal, December 2004.
+
+[5] http://blogs.msdn.com/cbrumme. 
+
+Lock-based programming may not be the best approach to building large concurrent programs.
+
+In my most recent articles [1, 2], I presented reasons why concurrency (for example, multithreading)
+will be the next revolution in the way we develop software — a sea change of the same order as the
+object-oriented revolution. I also stated that "the vast majority of programmers today don't grok
+concurrency, just as the vast majority of programmers 15 years ago didn't yet grok objects."
+
+In this column, I'd like to consider just one question that several people wrote to ask, namely: "Is
+concurrency really that hard?" In particular, a few readers felt that lock-based programming is well
+understood; it is, after all, the status quo mainstream solution to concurrency control.
+
+So, "is concurrency really that hard?" My short answer is this:
+
+o Lock-based programming, our status quo, is difficult for experts to get right. Worse, it is also
+fundamentally flawed for building large programs. This article focuses exclusively on lock-based
+programming just because there's so much to say in even a 50,000-foot overview that I ran out of
+room.
+
+o Lock-free programming is difficult for gurus to get right. I'll save this for another time, but if
+you're interested, you should check out Andrei Alexandrescu's recent articles for a sampling of the
+issues in lock-free programming and hazard pointers [3, 4]. (Aside: Yes, I'm implying Andrei is a
+guru. I hope he doesn't mind my outing him in public like this. I don't think it was much of a
+secret.) (More aside: The hazard pointer work shows in particular why, if you're writing
+lock-free data structures, you really really want garbage collection. You can do it yourself
+without garbage collection, but it's like working with knives that are sharp on both edges and
+don't have handles. But that's another article. Specifically, it's Andrei's other article.)
+
+Unfortunately, today's reality is that only thoughtful experts can write explicitly concurrent
+programs that are correct and efficient. This is because today's programming models for concurrency
+are subtle, intricate, and fraught with pitfalls that easily (and frequently) result in unforeseen
+races (i.e., program corruption) deadlocks (i.e., program lockup) and performance cliffs (e.g.,
+priority inversion, convoying, and sometimes complete loss of parallelism and/or even worse
+performance than a single-threaded program). And even when a correct and efficient concurrent
+program is written, it takes great care to maintain — it's usually brittle and difficult to maintain
+correctly because current programming models set a very high bar of expertise required to reason
+reliably about the operation of concurrent programs, so that apparently innocuous changes to a
+working concurrent program can (and commonly do, in practice) render it entirely or intermittently
+nonworking in unintended and unexpected ways. Because getting it right and keeping it right is so
+difficult, at many major software companies there is a veritable priesthood of gurus who write and
+maintain the core concurrent code.
+
+Some people think I'm overstating this, so let me amplify. In this article, I'll focus on just the
+narrow question of how to write a lock-based program correctly, meaning that it works (avoids data
+corruption) and doesn't hang (avoids deadlock and livelock). That's pretty much the minimum
+requirement to write a program that runs at all.
+
+Question: Is the following code thread-safe? If it is, why is it safe? If it isn't always, under
+what conditions is it thread-safe?
+
+T Add( T& a, T& b ) {
+  T result;
+  // ... read a and b and set result to
+  // proper values ...
+  return result;
+}
+
+There are a lot of possibilities here. Let's consider some of the major ones.
+
+Lock-Based Solutions?
+
+Assume that reading a T object isn't an atomic operation. Then, if a and/or b are accessible from
+another thread, we have a classic race condition: While we are reading the values of a and/or b,
+some other thread might be changing those objects, resulting in blowing up the program; if you're
+lucky, say, by causing the object to follow an internal pointer some other thread just deleted; or
+reading corrupt values.
+
+How would you solve that? Please stop and think about it before reading on...
+
+Ready? Okay: Now please stop a little longer and think about your solution some more, and consider
+whether it might have any further holes, before reading on...
+
+Now that you've thought about it deeply, let's consider some alternatives.
+
+Today's typical lock-based approach is to acquire locks so that uses of a and b on one thread won't
+interleave. Typically, this is done by acquiring a lock on an explicit synchronization object [a
+mutex, for instance] that covers both objects, or by acquiring locks on an implicit mutex associated
+with the objects themselves. To acquire a lock that covers both objects, Add has to know what that
+lock is, either because a and b and their lock are globals [but then why pass a and b as
+parameters?] or because the caller acquires the lock outside of Add [which is usually preferable].
+To acquire a lock on each object individually, we could write:
+
+T SharedAdd( T& a, T& b ) {
+  T result;
+  lock locka( a );  // lock is a helper
+  // whose constructor acquires a lock
+  lock lockb( b );  // and whose
+  // destructor releases the lock
+  // ... read a and b and set result to
+  //  proper values ...
+  return result;
+} // release the locks 
+
+
+{four}
+http://www.drdobbs.com/parallel/writing-lock-free-code-a-corrected-queue/210604448?pgno=1
+Writing Lock-Free Code: A Corrected Queue
+
+By Herb Sutter, September 29, 2008
+
+Notes
+
+[1] H. Sutter. “Lock-Free Code: A False Sense of Security” (DDJ, September 2008).
+(www.ddj.com/cpp/210600279).
+
+[2] P. Marginean. "Lock-Free Queues" (DDJ, July 2008). (www.ddj.com/208801974).
+
+[3] This is just like a canonical exception safety pattern—do all the work off to the side, then
+commit to accept the new state using nonthrowing operations only. "Think in transactions" applies
+everywhere, and should be ubiquitous in the way we write our code.
+
+[4] Compare-and-swap (CAS) is the most widely available fundamental lock-free operation and so I'll
+focus on it here. However, some systems instead provide the equivalently powerful
+load-linked/store-conditional (LL/SC) instead.
+
+
+As we saw last month [1], lock-free coding is hard even for experts. There, I dissected a published
+lock-free queue implementation [2] and examined why the code was quite broken. This month, let's see
+how to do it right.
+
+Lock-Free Fundamentals
+
+When writing lock-free code, always keep these essentials well in mind:
+
+Key concepts. Think in transactions. Know who owns what data. Key tool. The ordered atomic variable. 
+
+When writing a lock-free data structure, "to think in transactions" means to make sure that each
+operation on the data structure is atomic, all-or-nothing with respect to other concurrent
+operations on that same data. The typical coding pattern to use is to do work off to the side, then
+"publish" each change to the shared data with a single atomic write or compare-and-swap. [3] Be sure
+that concurrent writers don't interfere with each other or with concurrent readers, and pay special
+attention to any operations that delete or remove data that a concurrent operation might still be
+using.
+
+Be highly aware of who owns what data at any given time; mistakes mean races where two threads think
+they can proceed with conflicting work. You know who owns a given piece of shared data right now by
+looking at the value of the ordered atomic variable that says who it is. To hand off ownership of
+some data to another thread, do it at the end of a transaction with a single atomic operation that
+means "now it's your's."
+
+An ordered atomic variable is a "lock-free-safe" variable with the following properties that make it
+safe to read and write across threads without any explicit locking:
+
+Atomicity. Each individual read and write is guaranteed to be atomic with respect to all other reads
+and writes of that variable. The variables typically fit into the machine's native word size, and so
+are usually pointers (C++), object references (Java, .NET), or integers. Order. Each read and write
+is guaranteed to be executed in source code order. Compilers, CPUs, and caches will respect it and
+not try to optimize these operations the way they routinely distort reads and writes of ordinary
+variables. Compare-and-swap (CAS) [4]. There is a special operation you can call using a syntax like
+variable.compare_exchange( expectedValue, newValue ) that does the following as an atomic operation:
+If variable currently has the value expectedValue, it sets the value to newValue and returns true;
+else returns false. A common use is if(variable.compare_exchange(x,y)), which you should get in the
+habit of reading as, "if I'm the one who gets to change variable from x to y." 
+
+Ordered atomic variables are spelled in different ways on popular platforms and environments. For
+example:
+
+volatile in C#/.NET, as in volatile int. volatile or * Atomic* in Java, as in volatile int,
+AtomicInteger. atomic<T> in C++0x, the forthcoming ISO C++ Standard, as in atomic<int>. 
+
+In the code that follows, I'm going to highlight the key reads and writes of such a variable; these
+variables should leap out of the screen at you, and you should get used to being very aware of every
+time you touch one.
+
+If you don't yet have ordered atomic variables yet on your language and platform, you can emulate
+them by using ordinary but aligned variables whose reads and writes are guaranteed to be naturally
+atomic, and enforce ordering by using either platform-specific ordered API calls (such as Win32's
+InterlockedCompareExchange for compare-and-swap) or platform-specific explicit memory
+fences/barriers (for example, Linux mb).
 
 
 ==============================================================================
