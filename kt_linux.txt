@@ -67,6 +67,7 @@ KT KB. Linux
 |kt_linux_core_260|  sync: atomic operations {lock-free-programming}
 |kt_linux_core_261|  sync: ref: locks aren't slow; lock contention is
 |kt_linux_core_262|  sync: ref: always use a lightweight mutex {mutex-vs-semaphore}
+|kt_linux_core_263|  sync: ref: lock-free code: a false sense of security
 
 |kt_linux_core_300|  case: own semaphore and mutex class using pthread cond-var {cqueue}
 |kt_linux_core_301|  case: use of mutex and thread class
@@ -87,6 +88,7 @@ KT KB. Linux
 |kt_linux_sete_004|  ubuntu: nfs
 |kt_linux_sete_005|  ubuntu: check running services
 |kt_linux_sete_006|  ubuntu: connect from windows remote desktop
+|kt_linux_sete_007|  ubuntu: cpuinfo
 
 |kt_linux_refe_001|  references
 
@@ -3884,14 +3886,16 @@ TODO: need to summarize:
 
 #include <pthread.h>
 
-//  return 0 if okay, positive Exxx on error which is different from most system calls. 
+// return 0 if okay, positive Exxx on error which is different from most system calls. 
 //
-//  If need multiple arguments to the function, must package them into a structure and then pass the
-//  address of this as the single argument to the start function.
+// If need multiple arguments to the function, must package them into a structure and then pass the
+// address of this as the single argument to the start function.
 //
-//  arg should be in global or heap.
+// The tid argument points to a buffer of type pthread_t into which the unique identifier for
+// this thread is copied before pthread_create() returns. This identifier can be used in later
+// Pthreads calls to refer to the thread. The arg should be in global or heap.
 //
-//  EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
+// EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
 //
 int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
 
@@ -3902,7 +3906,7 @@ int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(vo
 // To wait for a given thread to terminate but no way to wait for any other threads. If that thread
 // has already terminated, pthread_join() returns immediately.
 //
-// If status is nonnull, the return value from the thread(a pointer to some object) is stored.
+// If status is not null, the return value from the thread(a pointer to some object) is stored.
 //
 // <circumbent-join-restriction>
 // We noted earlier that pthread_join() can be used to join with only a specific thread. It
@@ -5773,6 +5777,15 @@ Note that you need to worry about atomic reads, too. On the x86, reading a 32 or
 happens to be atomic if it is 64-bit word aligned. That won't be true of a "large value"; again
 you'll need some standard lock.
 
+{rmw-operations}
+The RMW(read-modify-write) is:
+
+<from-wikipedia>
+A class of atomic operations such as test-and-set, fetch-and-add, and compare-and-swap which both
+read a memory location and write a new value into it simultaneously, either with a completely new
+value or some function of the previous value. These operations prevent race conditions in
+multi-threaded applications. Typically they are used to implement mutexes or semaphores. These
+atomic operations are also heavily used in non-blocking synchronization.
 
 {atomic-non-atomic-operations}
 http://preshing.com/20130618/atomic-vs-non-atomic-operations/
@@ -5928,9 +5941,10 @@ to imagine a machine where memory can only be changed by mixing it up first:
 On such a machine, you definitely wouldn’t want to perform a concurrent read at the same time as a
 plain assignment; you could end up reading a completely random value.
 
+<CPP11>
 In C++11, there is finally a way to perform truly portable atomic loads and stores: the C++11 atomic
 library. Atomic loads and stores performed using the C++11 atomic library would even work on the
-imaginary computer above – even if it means the C++11 atomic library must secretly [lock] a mutex to
+imaginary computer above - even if it means the C++11 atomic library must secretly [lock] a mutex to
 make each operation atomic. There’s also the Mintomic library which I released last month, which
 doesn’t support as many platforms, but works on several older compilers, is hand-optimized and is
 guaranteed to be lock-free.
@@ -6102,6 +6116,1018 @@ example, a queue’s pop operation may intentionally block when the queue is emp
 codepaths can still be considered lock-free.
 
 <TODO> there is more in this page.
+
+
+==============================================================================
+*kt_linux_core_261*	sync: ref: locks aren't slow; lock contention is
+
+<contention-and-frequency>
+For example, this post measures the performance of a lock under heavy conditions: each thread must
+hold the lock to do any work (high contention), and the lock is held for an extremely short interval
+of time (high frequency)
+
+But don’t disregard locks yet. One good example of a place where locks perform admirably, in real
+software, is when protecting the memory allocator. Doug Lea’s Malloc is a popular memory allocator
+in video game development, but it’s single threaded, so we need to protect it using a lock. During
+gameplay, it’s not uncommon to see multiple threads hammering the memory allocator, say around 15000
+times per second. While loading, this figure can climb to 100000 times per second or more. It’s not
+a big problem, though. As you’ll see, locks handle the workload like a champ.
+{Q} what's this memory allocator?
+
+Lock Contention Benchmark
+
+In this test, we spawn a thread which generates random numbers, using a custom Mersenne Twister
+implementation. For example, suppose we want to acquire the lock 15000 times per second, and keep it
+held 50% of the time. (whole working time) 
+
+This is code example to show 50% lock:
+
+QueryPerformanceCounter(&start);
+for (;;)
+{
+  // Do some work without holding the lock
+  workunits = (int) (random.poissonInterval(averageUnlockedCount) + 0.5f);
+  for (int i = 1; i < workunits; i++)
+    random.integer();       // Do one work unit
+  workDone += workunits;
+
+  QueryPerformanceCounter(&end);
+  elapsedTime = (end.QuadPart - start.QuadPart) * ooFreq;
+  if (elapsedTime >= timeLimit)
+    break;
+
+  // Do some work while holding the lock
+  EnterCriticalSection(&criticalSection);
+  workunits = (int) (random.poissonInterval(averageLockedCount) + 0.5f);
+  for (int i = 1; i < workunits; i++)
+    random.integer();       // Do one work unit
+  workDone += workunits;
+  LeaveCriticalSection(&criticalSection);
+
+  QueryPerformanceCounter(&end);
+  elapsedTime = (end.QuadPart - start.QuadPart) * ooFreq;
+  if (elapsedTime >= timeLimit)
+    break;
+}
+
+Now suppose we launch two such threads, each running on a different core. Each thread will hold the
+lock during 50% of the time when it can perform work, but if one thread tries to acquire the lock
+while the other thread is holding it, it will be forced to wait. This is known as lock contention.
+
+(Tested on dual core) When we run the above scenario, we find that each thread spends roughly 25% of
+its time waiting, and 75% of its time doing actual work. Together, both threads achieve a net
+performance of 1.5x compared to the single-threaded case.
+
+I ran several variations of the test on a 2.66 GHz quad-core Xeon, from 1 thread, 2 threads, all the
+way up to 4 threads, each running on its own core. I also varied the duration of the lock, from the
+trivial case where the the lock is never held, all the way up to the maximum where each thread must
+hold the lock for 100% of its workload. In all cases, the lock frequency remained constant – threads
+acquired the lock 15000 times for each second of work performed.
+
+<KT>
+The graph shows that go up to 4x when 0% lock duration and down below 1x when 100% lock duration. 0%
+means that there is no sharing between threads hence no lock is needed.
+
+The results were interesting. For short lock durations, up to say 10%, the system achieved very high
+parallelism. Not perfect parallelism, but close. Locks are fast!
+
+To put the results in perspective, I analyzed the memory allocator lock in a multithreaded game
+engine using this profiler. During gameplay, with 15000 locks per second coming from 3 threads, the
+lock duration was in the neighborhood of just 2%. That’s well within the comfort zone on the left
+side of the diagram.
+
+These results also show that once the lock duration passes 90%, there’s no point using multiple
+threads anymore. A single thread performs better. Most surprising is the way the performance of 4
+threads drops off a cliff around the 60% mark! This looked like an anomaly, so I re-ran the tests
+several additional times, even trying a different testing order. The same behavior happened
+consistently. My best hypothesis is that the experiment hits some kind of snag in the Windows
+scheduler, but I didn’t investigate further.
+
+Lock Frequency Benchmark
+
+Even a lightweight mutex has overhead. As my next post shows, a pair of lock/unlock operations on a
+Windows Critical Section takes about 23.5 ns on the CPU used in these tests. Therefore, 15000 locks
+per second is low enough that lock overhead does not significantly impact the results. But what
+happens as we turn up the dial on lock frequency?
+
+The algorithm offers very fine control over the amount of work performed between one lock and the
+next, so I performed a new batch of tests using smaller amounts: from a very fine-grained 10 ns
+between locks, all the way up to 31 μs, which corresponds to roughly 32000 acquires per second. Each
+test used exactly two threads:
+
+As you might expect, for very high lock frequencies, the overhead of the lock itself begins to dwarf
+the actual work being done. Several benchmarks you’ll find online, including the one linked earlier
+fall into the bottom-right corner of this chart. At such frequencies, you’re talking about some
+seriously short lock times – on the scale of a few CPU instructions. The good news is that, when the
+work between locks is that simple, a lock-free implementation is more likely to be feasible.
+
+At the same time, the results show that locking up to 320000 times per second (3.1 μs between
+    successive locks) is not unreasonable. In game development, the memory allocator may flirt with
+this frequency during load times. You can still achieve more than 1.5x parallelism if the lock
+duration is short.
+
+We’ve now seen a wide spectrum of lock performance: cases where it performs great, and cases where
+the application slows to a crawl. I’ve argued that the lock around the memory allocator in a game
+engine will often achieve excellent performance. Given this example from the real world, it cannot
+be said that all locks are slow. Admittedly, it’s very easy to abuse locks, but one shouldn’t live
+in too much fear – any resulting bottlenecks will show up during careful profiling. When you
+consider how reliable locks are, and the relative ease of understanding them (compared to lock-free
+    techniques), locks are actually pretty awesome sometimes.
+
+The goal of this post was to give locks a little respect where deserved - corrections are welcome. I
+also realize that locks are used in a wide variety of industries and applications, and it may not
+always be so easy to strike a good balance in lock performance. If you’ve found that to be the case
+in your own experience, I would love to hear from you in the comments.
+
+{DN}
+Then the bottomlien is that try to minimize the lock contention rather than try to find out which
+one is fast. Of course, should use better one but the lock contention is far more important.
+
+
+==============================================================================
+*kt_linux_core_262*	sync: ref: always use a lightweight mutex {mutex-vs-semaphore}
+
+http://preshing.com/20111124/always-use-a-lightweight-mutex/
+Always Use a Lightweight Mutex
+
+Have started wondering since seen this article which says that critical section is faster than mutex
+in windows. This critical section is called as lightweight mutex which is equivalent to pthread
+mutex in Linux. Does it mean that pthread mutex is faster than posix semaphore? Tried the same
+approach that this article had and it seems not. Like ref-LPI, there is no big difference.
+
+This is the result ran on the real Linux server machine which has multiple processors and as can
+see, semaphore is slightly slower than using a mutex but not significant. This seems different from
+what this article said.
+
+<snippet>
+Now, suppose you have a thread which acquires a Critical Section 100000 times per second, and there
+are no other threads competing for the lock. Based on the above figures, you can expect to pay
+between 0.2% and 0.6% in lock overhead. Not too bad! At lower frequencies, the overhead becomes
+negligible.
+
+<KT> Here shows the result in the graphic which is 58.7ns on Core 2 Duo and 23.5ns on Xeon for
+windows critical section. Think that Core 2 means dual core and Xeon is single so means that there
+are lock contention for Core 2 and not for Xeon. That's why he mean that there is 0.6% overhead for
+locking. Then it's more about experimenting of mutl-core.
+
+Naturally, Ubuntu 11.10 provides a lock implementation using the POSIX Threads API as well. It’s
+another lightweight mutex, based on a Linux-specific construct known as a futex. A pair of
+pthread_mutex_lock/pthread_mutex_unlock calls takes about 66 ns on my Core 2 Duo. You can even share
+this implementation between processes, but I didn’t test that.
+
+In my previous post, I argued against the misconception that locks are slow and provided some data
+to support the argument. At this point, it should be clear that if you aren’t using a lightweight
+mutex, the entire argument goes out the window. I’m fairly sure that the existence of heavy lock
+implementations has only added to this misconception over the years.
+
+Some of you old-timers may point out ancient platforms where a heavy lock was the only
+implementation available, or when a semaphore had to be used for the job. But it seems all modern
+platforms offer a lightweight mutex. And even if they didn’t, you could write your own lightweight
+mutex at the application level, even sharing it between processes, provided you’re willing to live
+with certain caveats. You’ll find one example in my followup post, Roll Your Own Lightweight Mutex.
+
+
+{when-with-no-threads}
+keitee.park@magnum ~
+$ ./sem
+sem run
+56:645
+56:702   [57]
+keitee.park@magnum ~
+$ ./mtx
+mtx run
+3:710
+3:773    [63]
+
+keitee.park@magnum ~
+$ ./sem
+sem run
+5:663
+5:719    [56]
+keitee.park@magnum ~
+$ ./mtx
+mtx run
+6:894
+6:957    [63]
+
+keitee.park@magnum ~
+$ ./sem
+sem run
+8:103
+8:160    [57]
+keitee.park@magnum ~
+$ ./mtx
+mtx run
+9:294
+9:356    [62]
+
+<for-semaphore-example>
+#include <stdio.h>
+#include <time.h>
+#include <fcntl.h>
+#include <semaphore.h>
+
+static unsigned int get_time_ms()
+{
+  struct timespec time = {0, 0};
+  unsigned int today = 0U;
+
+  unsigned int hour = 0, minute = 0, sec = 0, msec = 0;
+
+  clock_gettime(CLOCK_REALTIME, &time);
+
+  // 86400 is secs for a day. so care only about secs but not day and hours and convert to ms
+
+  today = (time.tv_sec % 86400) * 1000;
+
+  // get ms from nano
+  today += time.tv_nsec / 1000000;
+
+  //
+  hour = (today)/3600000; 				// hour in ms
+  msec = (today - (hour*3600000));	// ms remains 
+  minute = msec / 60000; 				// mins 
+  msec = msec - (minute * 60000);	// ms remains
+  sec = msec / 1000; 					// secs
+  msec = msec - (sec * 1000); 		// ms remains
+
+  fprintf(stderr, "%d:%d\n", sec, msec ); 
+
+  return msec;
+}
+
+#define MAXLOOP 1000000
+
+int main()
+{
+  int s = 0, loop = 0;
+  int flags, opt;
+  mode_t perms;
+  unsigned int value;
+  sem_t *sem;
+
+  flags = O_CREAT | O_EXCL;
+  perms = S_IRUSR | S_IWUSR;
+
+  fprintf( stderr, "sem run\n");
+
+  // will create /dev/shm/sem.demo
+  sem = sem_open("/demo", flags, perms, 1 );
+  if(sem == SEM_FAILED)
+    fprintf( stderr, "fail on sem_open");
+
+  get_time_ms();
+
+  for(loop = 0; loop < MAXLOOP; loop++)
+  {
+    s = sem_wait(sem);
+    if (s != 0)
+    fprintf( stderr, "fail on sem_wait");
+
+    s = sem_post(sem);
+    if (s != 0)
+    fprintf(stderr, "fail on sem_post");
+  }
+
+  get_time_ms();
+
+  s = sem_unlink("/demo");
+  if(s != 0)
+    fprintf(stderr, "fail on sem_unlink\n" );
+
+}
+
+<for-mutex-example>
+#include <stdio.h>
+#include <time.h>
+#include <pthread.h>
+
+static unsigned int get_time_ms()
+{
+  struct timespec time = {0, 0};
+  unsigned int today = 0U;
+
+  unsigned int hour = 0, minute = 0, sec = 0, msec = 0;
+
+  clock_gettime(CLOCK_REALTIME, &time);
+
+  // 86400 is secs for a day. so care only about secs but not day and hours and convert to ms
+
+  today = (time.tv_sec % 86400) * 1000;
+
+  // get ms from nano
+  today += time.tv_nsec / 1000000;
+
+  //
+  hour = (today)/3600000; 				// hour in ms
+  msec = (today - (hour*3600000));	// ms remains 
+  minute = msec / 60000; 				// mins 
+  msec = msec - (minute * 60000);	// ms remains
+  sec = msec / 1000; 					// secs
+  msec = msec - (sec * 1000); 		// ms remains
+
+  fprintf(stderr, "%d:%d\n", sec, msec ); 
+
+  return msec;
+}
+
+#define MAXLOOP 1000000
+
+static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+
+int main()
+{
+  int s = 0, loop = 0;
+
+  fprintf( stderr, "mtx run\n");
+
+  get_time_ms();
+
+  for(loop = 0; loop < MAXLOOP; loop++)
+  {
+    s = pthread_mutex_lock(&mtx);
+    if (s != 0)
+    fprintf( stderr, "pthread_mutex_lock");
+
+    s = pthread_mutex_unlock(&mtx);
+    if (s != 0)
+    fprintf(stderr, "pthread_mutex_unlock");
+  }
+
+  get_time_ms();
+}
+
+
+{when-with-two-threads}
+keitee.park@magnum ~
+$ ./sem_two 
+main: this is the second sem run
+14:946
+15:370      [424]
+main: this is the end
+keitee.park@magnum ~
+$ ./mtx_two 
+main: this is the second mtx run
+24:498
+24:829      [331]
+main: this is the end
+
+keitee.park@magnum ~
+$ ./sem_two 
+main: this is the second sem run
+33:705
+34:207      [502]
+main: this is the end
+keitee.park@magnum ~
+$ ./mtx_two 
+main: this is the second mtx run
+35:993
+36:460      [467]
+main: this is the end
+
+keitee.park@magnum ~
+$ ./sem_two 
+main: this is the second sem run
+2:673
+3:125       [452]
+main: this is the end
+keitee.park@magnum ~
+$ ./mtx_two 
+main: this is the second mtx run
+4:792
+5:224       [432]
+main: this is the end
+
+<for-semaphore-example>
+#include <stdio.h>
+#include <time.h>
+#include <fcntl.h>
+#include <semaphore.h>
+#include <pthread.h>
+
+static unsigned int get_time_ms()
+{
+  struct timespec time = {0, 0};
+  unsigned int today = 0U;
+
+	unsigned int hour = 0, minute = 0, sec = 0, msec = 0;
+
+  clock_gettime(CLOCK_REALTIME, &time);
+
+  // 86400 is secs for a day. so care only about secs but not day and hours and convert to ms
+
+  today = (time.tv_sec % 86400) * 1000;
+
+  // get ms from nano
+  today += time.tv_nsec / 1000000;
+
+  //
+  hour = (today)/3600000; 				// hour in ms
+  msec = (today - (hour*3600000));	// ms remains 
+  minute = msec / 60000; 				// mins 
+  msec = msec - (minute * 60000);	// ms remains
+  sec = msec / 1000; 					// secs
+  msec = msec - (sec * 1000); 		// ms remains
+
+  fprintf(stderr, "%d:%d\n", sec, msec ); 
+
+  return msec;
+}
+
+#define MAXLOOP 1000000
+
+static sem_t *sem;
+static unsigned int loopA;
+static unsigned int loopB;
+
+static void* threadFuncA( void *arg )
+{
+  int s = 0;
+
+  for(loopA = 0; loopA < MAXLOOP; loopA++)
+  {
+    s = sem_wait(sem);
+    if (s != 0)
+    fprintf( stderr, "TA: fail on sem_wait\n");
+
+    s = sem_post(sem);
+    if (s != 0)
+    fprintf( stderr, "TA: fail on sem_post\n");
+  }
+}
+
+static void* threadFuncB( void *arg )
+{
+  int s = 0;
+
+  for(loopB = 0; loopB < MAXLOOP; loopB++)
+  {
+    s = sem_wait(sem);
+    if (s != 0)
+    fprintf( stderr, "TB: fail on sem_wait\n");
+
+    s = sem_post(sem);
+    if (s != 0)
+    fprintf( stderr, "TB: fail on sem_post\n");
+  }
+}
+
+int main()
+{
+  int flags, opt;
+  mode_t perms;
+  pthread_t tA, tB;
+  int s;
+
+  flags = O_CREAT | O_EXCL;
+  perms = S_IRUSR | S_IWUSR;
+
+  // will create /dev/shm/sem.demo
+  sem = sem_open("/demo", flags, perms, 1 );
+  if(sem == SEM_FAILED)
+    fprintf( stderr, "main: fail on sem_open\n");
+
+  fprintf( stderr, "main: this is the second sem run\n");
+  get_time_ms();
+
+  s = pthread_create( &tA, NULL, threadFuncA, NULL );
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_create(A)\n");
+
+  s = pthread_create( &tB, NULL, threadFuncB, NULL );
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_create(B)\n");
+
+  s = pthread_join( tA, NULL);
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_join(A)\n");
+
+  s = pthread_join( tB, NULL);
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_join(B)\n");
+
+  get_time_ms();
+  fprintf( stderr, "main: this is the end\n");
+
+  s = sem_unlink("/demo");
+  if(s != 0)
+    fprintf(stderr, "main: fail on sem_unlink\n" );
+}
+
+<for-mutex-example>
+#include <stdio.h>
+#include <time.h>
+#include <pthread.h>
+
+static unsigned int get_time_ms()
+{
+  struct timespec time = {0, 0};
+  unsigned int today = 0U;
+
+	unsigned int hour = 0, minute = 0, sec = 0, msec = 0;
+
+  clock_gettime(CLOCK_REALTIME, &time);
+
+  // 86400 is secs for a day. so care only about secs but not day and hours and convert to ms
+
+  today = (time.tv_sec % 86400) * 1000;
+
+  // get ms from nano
+  today += time.tv_nsec / 1000000;
+
+  //
+  hour = (today)/3600000; 				// hour in ms
+  msec = (today - (hour*3600000));	// ms remains 
+  minute = msec / 60000; 				// mins 
+  msec = msec - (minute * 60000);	// ms remains
+  sec = msec / 1000; 					// secs
+  msec = msec - (sec * 1000); 		// ms remains
+
+  fprintf(stderr, "%d:%d\n", sec, msec ); 
+
+  return msec;
+}
+
+#define MAXLOOP 1000000
+
+static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+static unsigned int loopA;
+static unsigned int loopB;
+
+static void* threadFuncA( void *arg )
+{
+  int s = 0;
+
+  for(loopA = 0; loopA < MAXLOOP; loopA++)
+  {
+    s = pthread_mutex_lock(&mtx);
+    if (s != 0)
+    fprintf( stderr, "TA: pthread_mutex_lock");
+
+    s = pthread_mutex_unlock(&mtx);
+    if (s != 0)
+    fprintf(stderr, "TA: pthread_mutex_unlock");
+  }
+}
+
+static void* threadFuncB( void *arg )
+{
+  int s = 0;
+
+  for(loopB = 0; loopB < MAXLOOP; loopB++)
+  {
+    s = pthread_mutex_lock(&mtx);
+    if (s != 0)
+    fprintf( stderr, "TB: pthread_mutex_lock");
+
+    s = pthread_mutex_unlock(&mtx);
+    if (s != 0)
+    fprintf(stderr, "TB: pthread_mutex_unlock");
+  }
+}
+
+int main()
+{
+  pthread_t tA, tB;
+  int s;
+
+  fprintf( stderr, "main: this is the second mtx run\n");
+  get_time_ms();
+
+  s = pthread_create( &tA, NULL, threadFuncA, NULL );
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_create(A)\n");
+
+  s = pthread_create( &tB, NULL, threadFuncB, NULL );
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_create(B)\n");
+
+  s = pthread_join( tA, NULL);
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_join(A)\n");
+
+  s = pthread_join( tB, NULL);
+  if (s != 0)
+  fprintf( stderr, "main: fail on pthread_join(B)\n");
+
+  get_time_ms();
+  fprintf( stderr, "main: this is the end\n");
+}
+
+
+==============================================================================
+*kt_linux_core_263*	sync: ref: lock-free code: a false sense of security
+
+{one}
+http://www.drdobbs.com/cpp/lock-free-code-a-false-sense-of-security/210600279
+
+Lock-Free Code: A False Sense of Security
+
+By Herb Sutter, September 08, 2008
+
+Writing lock-free code can confound anyone—even expert programmers, as Herb shows this month.
+
+Given that lock-based synchronization has serious problems [1], it can be tempting to think
+lock-free code must be the answer. Sometimes that is true. In particular, it's useful to have
+libraries provide hash tables and other handy types whose implementations are internally
+synchronized using lock-free techniques, such as Java's ConcurrentHashMap, so that we can use those
+types safely from multiple threads without external synchronization and without having to understand
+the subtle lock-free implementation details.
+{Q} Java's ConcurrentHashMap
+
+<two-drawbacks-for-lock-free-code>
+But replacing locks wholesale by writing your own lock-free code is not the answer. Lock-free code
+has two major drawbacks. First, it's not broadly useful for solving typical problems-lots of basic
+data structures, even doubly linked lists, still have no known lock-free implementations. Coming up
+with a new or improved lock-free data structure will still earn you at least a published paper in a
+refereed journal, and sometimes a degree.
+
+Second, it's hard even for experts. It's easy to write lock-free code that appears to work, but it's
+very difficult to write lock-free code that is correct and performs well. Even good magazines and
+refereed journals have published a substantial amount of lock-free code that was actually broken in
+subtle ways and needed correction.
+
+To illustrate, let's dissect some peer-reviewed lock-free code that was published here in DDJ just
+two months ago [2]. The author, Petru Marginean, has graciously allowed me to dissect it here so
+that we can see what's wrong and why, what lessons we should learn, and how to write the code
+correctly. That someone as knowledgable as Petru, who has published many good and solid articles,
+can get this stuff wrong should be warning enough that lock-free coding requires great care.
+
+A Limited Lock-Free Queue
+
+<limitation-or-assumption-of-q>
+Marginean's goal was to write a limited lock-free queue that can be used safely without internal or
+external locking. To simplify the problem, the article imposed some significant restrictions,
+including that the queue must only be used from two threads with specific roles: one Producer thread
+that inserts into the queue, and one Consumer thread that removes items from the queue.
+
+Marginean uses a nice technique that is designed to prevent conflicts between the writer and reader:
+
+o The producer and consumer always work in separate parts of the underlying list, so that their work
+won't conflict. At any given time, the first "unconsumed" item is the one after the one iHead refers
+to, and the last (most recently added) "unconsumed" item is the one before the one iTail refers to.
+
+o The consumer increments iHead to tell the producer that it has consumed another item in the queue.
+
+o The producer increments iTail to tell the consumer that another item is now available in the
+queue. <o> Only the producer thread ever actually modifies the queue.<o> That means the producer is
+responsible, not only for adding into the queue, but also for removing consumed items. To maintain
+separation between the producer and consumer and prevent them from doing work in adjacent nodes, the
+producer won't clean up the most recently consumed item (the one referred to by iHead).
+
+<KT> The consumer only changes iterator and do not modify list itself.
+
+Q     ...
+      [ ]   <- head, -> consumer, dummy. uses tail to check empty, publish head and consume.
+      [ ]   <- first unconsumed item
+      ...
+      [ ]   <- last unconsumed item
+      [ ]   <- tail, <- producer, end(). add, publish tail and uses head to trim unused.
+      ...
+
+The idea is reasonable; only the implementation is fatally flawed. Here's the original code, written
+in C++ and using an STL doubly linked list<T> as the underlying data structure. I've reformatted the
+code slightly for presentation, and added a few comments for readability: 
+
+// Original code from [1] (broken without external locking)
+//
+template <typename T>
+struct LockFreeQueue {
+  private:
+    std::list<T> list;
+    typename std::list<T>::iterator iHead, iTail;
+
+  public:
+    LockFreeQueue() {
+      list.push_back(T());        // add dummy separator
+      iHead = list.begin();
+      iTail = list.end();
+    }
+
+    // Produce is called on the producer thread only:
+
+    void Produce(const T& t) {
+      list.push_back(t);               // add the new item
+      iTail = list.end();              // <publish> it
+      list.erase(list.begin(), iHead); // trim unused nodes
+    }
+
+    {Q} This list is ever growing? not circular?
+
+    // Consume is called on the consumer thread only:
+
+    bool Consume(T& t) {
+      typename std::list<T>::iterator iNext = iHead;
+      ++iNext;
+      if (iNext != iTail) {         // if queue is nonempty
+        iHead = iNext;              // <publish> that we took an item
+        t = *iHead;                 // copy it back to the caller
+        return true;                // and report success
+      }
+      return false;                 // else report queue was empty
+    }
+};
+
+<lock-free-variable> <two-key-property>
+The fundamental reason that the code is broken is that it has race conditions on both would-be
+lock-free variables, iHead and iTail. To avoid a race, a lock-free variable must have two key
+properties that we need to watch for and guarantee: atomicity and ordering. These variables are
+neither.
+
+Atomicity
+
+First, reads and writes of a lock-free variable must be atomic. For this reason, lock-free variables
+are typically no larger than the machine's native word size, and are usually pointers (C++), object
+references (Java, .NET), or integers. Trying to use an ordinary list<T>::iterator variable as a
+lock-free shared variable isn't a good idea and can't reliably meet the atomicity requirement, as we
+will see.
+
+Let's consider the races on iHead and iTail in these lines from Produce and Consume:
+
+void Produce(const T& t) {
+  ...
+  iTail = list.end();
+  list.erase(list.begin(), iHead);
+}
+ 
+bool Consume(T& t) {
+  ...
+  if (iNext != iTail) {
+    iHead = iNext;
+  ...   
+  }
+}
+
+If reads and writes of iHead and iTail are not atomic, then Produce could read a partly updated (and
+therefore corrupt) iHead and try to dereference it, and Consume could read a corrupt iTail and
+fall off the end of the queue. Marginean does note this requirement:
+
+"Reading/writing list<T>::iterator is atomic on the machine upon which you run the application." [2]
+
+Alas, atomicity is necessary but not sufficient (see next section), and not supported by
+list<T>::iterator. First, in practice, many list<T>::iterator implementations I examined are larger
+than the native machine/pointer size, which means that they can't be read or written with atomic
+loads and stores on most architectures. Second, in practice, even if they were of an appropriate
+size, you'd have to add other decorations to the variable to ensure atomicity, for example to
+require that the variable be properly aligned in memory.
+
+Finally, the code isn't valid ISO C++. The 1998 C++ Standard said nothing about concurrency, and so
+provided no such guarantees at all. The upcoming second C++ standard that is now being finalized
+C++0x, does include a memory model and thread support, and explicitly forbids it. In brief, C++0x
+says that the answer to questions such as, "What do I need to do to use a list<T> mylist
+thread-safely?" is "Same as any other object"—if you know that an object like mylist is shared, you
+must externally synchronize access to it, including via iterators, by protecting all such uses with
+locks, else you've written a race [3]. Note: Using C++0x's std::atomic<> is not an option for
+list<T>::iterator, because atomic<T> requires T to be a bit-copyable type, and STL types and their
+iterators aren't guaranteed to be that.
+
+Ordering Problems in Produce
+
+Second, reads and writes of a lock-free variable must occur in an expected order, which is nearly
+always the exact order they appear in the program source code. But compilers, processors, and caches
+love to optimize reads and writes, and will helpfully reorder, invent, and remove memory reads and
+writes unless you prevent it from happening. The right prevention happens implicitly when you use
+mutex locks or ordered atomic variables; C++0x std::atomic, Java/.NET volatile; you can also do it
+explicitly, but with considerably more effort, using ordered API calls e.g., Win32
+InterlockedExchange or memory fences/barriers e.g., Linux mb. Trying to write lock-free code without
+using any of these tools can't possibly work.
+
+Consider again this code from Produce, and ignore that the assignment iTail isn't atomic as we look
+for other problems:
+
+list.push_back(t);  // A: add the new item
+iTail = list.end(); // B: publish it
+
+This is a classic publication race because lines A and B can be (partly or entirely) reordered. For
+example, let's say that some of the writes to the T object's members are delayed until after the
+write to iTail, which publishes that the new object is available; then the consumer thread can see a
+partly assigned T object.
+
+What is the minimum necessary fix? We might be tempted to write a memory barrier between the two
+lines:
+
+// Is this change enough?
+list.push_back(t);  // A: add the new item
+mb();               // full fence
+iTail = list.end(); // B: publish it
+
+Before reading on, think about it and see if you're convinced that this is (or isn't) right.
+
+Have you thought about it? As a starter, here's one issue: Although list.end is probably unlikely to
+perform writes, it's possible that it might, and those are side effects that need to be complete
+before we publish iTail. The general issue is that you can't make assumptions about the side effects
+of library functions you call, and you have to make sure they're fully performed before you publish
+the new state. So a slightly improved version might try to store the result of list.end into a local
+unshared variable and assign it after the barrier:
+
+// Better, but is it enough?
+list.push_back(t);
+tmp = list.end();
+mb();                // full fence
+iTail = tmp;
+
+Unfortunately, this still isn't enough. Besides the fact that assigning to iTail isn't atomic and
+that we still have a race on iTail in general, compilers and processors can also invent writes to
+iTail that break this code. Let's consider write invention in the context of another problem area:
+Consume.
+
+Ordering Problems in Consume
+
+Here's another reordering problem, this time from Consume:
+
+if (iNext != iTail) {
+  iHead = iNext;        // C
+  t = *iHead;           // D
+
+Note that Consume updates iHead to advertise that it has consumed another item before it actually
+  reads the item's value. Is that a problem? We might think it's innocuous, because the producer
+  always leaves the iHead item alone to stay at least one item away from the part of the list the
+  consumer is using.
+
+It turns out this code is broken regardless of which order we write lines C and D, because the
+compiler or processor or cache can reorder either version in unfortunate ways. Consider what happens
+if the consumer thread performs a consecutive two calls to Consume: The memory reads and writes
+performed by those two calls could be reordered so that iHead is incremented twice before we copy
+the two list nodes' values, and then we have a problem because the producer may try to remove
+nodes the consumer is still using. 
+    
+Note: This doesn't mean the compiler or processor transformations are broken; they're not. Rather
+the code is racy and has insufficient synchronization, and so it breaks the memory model guarantees
+and makes such transformations possible and visible.
+
+Reordering isn't the only issue. Another problem is that compilers and processors can invent writes,
+so they could inject a transient value:
+
+// Problematic compiler/processor transformation
+if (iNext != iTail) {
+  iHead = 0xDEADBEEF;
+  iHead = iNext;
+  t = *iHead;
+
+Clearly, that would break the producer thread, which would read a bad value for iHead. More likely, the compiler or processor might speculate that most of the time iNext != iTail:
+
+// Another problematic transformation
+//
+__temp = iHead;
+iHead = iNext;  // speculatively set to iNext
+
+if (iNext == iTail) {   // note: inverted test!
+  iHead = __temp;   // undo if we guessed wrong
+} else {
+  t = *iHead;
+
+But now iHead could equal iTail, which breaks the essential invariant that iHead must never equal
+iTail, on which the whole design depends.
+
+Can we solve these problems by writing line D before C, then separating them with a full fence? Not
+entirely: That will prevent most of the aforementioned optimizations, but it will not eliminate all
+of the problematic invented writes. More is needed.
+
+Next Steps
+
+These are a sample of the concurrency problems in the original code. Marginean showed a good
+algorithm, but the implementation is broken because it uses an inappropriate type and performs
+insufficient synchronization/ordering. Fixing the code will require a rewrite, because we need to
+change the data structure and the code to let us use proper ordered atomic lock-free variables. But
+how? Next month, we'll consider a fixed version. Stay tuned.
+
+Notes
+
+[1] H. Sutter, "The Trouble With Locks," C/C++ Users Journal, March 2005.
+(www.ddj.com/cpp/184401930).
+
+[2] P. Marginean, "Lock-Free Queues," Dr. Dobb's Journal, July 2008. (www.ddj.com/208801974).
+
+[3] B. Dawes, et al., "Thread-Safety in the Standard Library," ISO/IEC JTC1/SC22/WG21 N2669, June
+2008. (www.open-std.org/jtc1/sc22/wg21/docs/papers/2008/n2669.htm).
+
+
+{two}
+Lock-Free Queues
+By Petru Marginean, July 01, 2008
+
+Note:
+This article as written assumes a sequentially consistent model. In particular, the code relies on
+specific order of instructions in both Consumer and Producer methods. However, without inserting
+proper memory barrier instructions, these instructions can be reordered with unpredictable results
+(see, for example, the classic Double-Checked Locking problem).
+
+Another issue is using the standard std::list<T>. While the article mentions that it is the
+developer responsibility to check that the reading/writing std::list<T>::iterator is atomic, this
+turns out to be too restrictive. While gcc/MSVC++2003 has 4-byte iterators, the MSVC++2005 has
+8-byte iterators in Release Mode and 12-byte iterators in the Debug Mode.
+
+The solution to prevent this is to use memory barriers/volatile variables. The downloadable code
+featured at the top of this article has fixed that issue.
+
+Many thanks to Herb Sutter who signaled the issue and helped me fix the code. --P.M.
+
+
+Queues can be useful in a variety of systems involving data-stream processing. Typically, you have a
+data source producing data—requests coming to a web server, market feeds, or digital telephony
+packets—at a variable pace, and you need to process the data as fast as possible so there are no
+losses. To do this, you can push data into a queue using one thread and process it using a different
+thread—a good utilization of resources on multicore processors. One thread inserts data into the
+queue, and the other reads/deletes elements from the queue. Your main requirement is that a
+high-rate data burst does not last longer than the system's ability to accumulate data while the
+consumer thread handles it. [KT] This means no overlow? 
+
+The queue you use has to be threadsafe to prevent race conditions when inserting/removing data from
+multiple threads. For obvious reasons, it is necessary that the queue mutual exclusion mechanism add
+as little overhead as possible.
+
+In this article, I present a lock-free queue (the source code for the lockfreequeue class is
+available online; see www.ddj.com/code/) in which one thread can write to the queue and another
+read from it—at the same time without any locking.
+
+To do this, the code implements these requirements:
+
+o There is a single writer (Producer) and single reader (Consumer). When you have multiple producers
+and consumers, you can still use this queue with some external locking. You cannot have multiple
+producers writing at the same time (or multiple consumers consuming the data simultaneously), but
+you can have one producer and one consumer (2x threads) accessing the queue at the same time
+(Responsibility: developer).
+
+o When inserting/erasing to/from an std::list<T>, the iterators for the existing elements must
+remain valid (Responsibility: library implementor).
+
+o Only one thread modifies the queue; the producer thread both adds/erases elements in the queue
+(Responsibility: library implementor).
+
+o Beside the underlying std::list<T> used as the container, the lock-free queue class also holds two
+iterators pointing to the not-yet-consumed range of elements; each is modified by one thread and
+read by the other (Responsibility: library implementor).
+
+o Reading/writing list<T>::iterator is atomic on the machine upon which you run the application. If
+they are not on your implementation of STL, you should check whether the raw pointer's operations
+are atomic. You could easily replace the iterators to be mentioned shortly with raw pointers in the
+code (Responsibility: machine). <KT> ?
+
+Because I use Standard C++, the code is portable under the aforementioned "machine" assumption: 
+
+template <typename T>
+struct LockFreeQueue
+{
+    LockFreeQueue();
+    void Produce(const T& t);
+    bool Consume(T& t);
+
+  private:
+    typedef std::list<T> TList;
+    TList list;
+    typename TList::iterator iHead, iTail;
+};
+
+Considering how simple this code is, you might wonder how can it be threadsafe. The magic is due to
+design, not implementation. Take a look at the implementation of the Produce() and Consume()
+methods. The Produce() method looks like this: 
+
+void Produce(const T& t)
+{
+  list.push_back(t);
+  iTail = list.end();
+  list.erase(list.begin(), iHead);
+}
+
+To understand how this works, mentally separate the data from LockFreeQueue<T> into two groups:
+
+o The list and the iTail iterator, modified by the Produce() method (Producer thread).
+o The iHead iterator, modified by the Consume() method (Consumer thread). 
+
+Produce() is the only method that changes the list (adding new elements and erasing the consumed
+elements), and it is essential that only one thread ever calls Produce()—it's the Producer
+thread! The iterator (iTail) (only manipulated by the Producer thread) changes it only after a new
+element is added to the list. This way, when the Consumer thread is reading the iTail element, the
+new added element is ready to be used. The Consume() method tries to read all the elements between
+iHead and iTail (excluding both ends). 
+
+bool Consume(T& t)
+{
+  typename TList::iterator iNext = iHead;
+  ++iNext;
+  if (iNext != iTail)
+  {
+    iHead = iNext;
+    t = *iHead;
+    return true;
+  }
+  return false;
+}
+
+This method reads the elements, but doesn't remove them from the list. Nor does it access the list
+directly, but through the iterators. They are guaranteed to be valid after std::list<T> is modified,
+so no matter what the Producer thread does to the list, you are safe to use them.
+
+The std::list<T> maintains an element (pointed to by iHead) that is considered already read. For
+this algorithm to work even when the queue was just created, I add an empty T() element in the
+constructor of the LockFreeQueue<T> (see Figure 1): 
+
+LockFreeQueue()
+{
+  list.push_back(T());
+  iHead = list.begin();
+  iTail = list.end();
+}
 
 
 ==============================================================================
@@ -8047,10 +9073,9 @@ mktime(&mytime)
 #{
 
 ==============================================================================
-*kt_linux_set_001* ubuntu: virtualbox
+*kt_linux_sete_001* ubuntu: virtualbox
 
 {graphic-issue}
-
 When see a problem with NVIDIA, need to install a driver for ubuntu manually:
 
 http://askubuntu.com/questions/141606/how-to-fix-the-system-is-running-in-low-graphics-mode-error
@@ -8065,7 +9090,6 @@ Click on Install Guest Additions from the Devices menu and all will be done auto
 
 
 {sharing-between-os}
-
 http://www.virtualbox.org/manual/ch04.html#sharedfolders
 
 # set sharing folder on the host using virtual box menu and reboot
@@ -8087,7 +9111,6 @@ sudo usermod -a -G vboxsf {username}
 
 
 {sharing-using-samba}
-
 <1> Have samba installation, setting, and user. This is simple and general and see as an example.
 http://www.sitepoint.com/ubuntu-12-04-lts-precise-pangolin-file-sharing-with-samba/
 
@@ -8116,30 +9139,26 @@ but not sharing as host only net gives private net ip.
 
 
 ==============================================================================
-*kt_linux_set_002*	ubuntu: workspace {shortcuts}
+*kt_linux_sete_002*	ubuntu: workspace {shortcuts}
 
 https://help.ubuntu.com/community/KeyboardShortcuts
 
 {workspaces}
-
 Known as virtual desktops. You can switch between workspaces with hotkeys by pressing Ctrl-Alt-arrow
 key. 
 
 To move apps to other workspaces, press Ctrl-Alt-Shift-arrow key.
 
 {shortcuts}
-
 C-A-T		" open a terminal
 
 {compiz}
-
 To have window like win management: win arrow keys
-
 http://www.howtoforge.com/install-compiz-on-the-unity-desktop-on-ubuntu-12.04-precise-pangolin
 
 
 ==============================================================================
-*kt_linux_set_003*	ubuntu: samba
+*kt_linux_sete_003*	ubuntu: samba
 
 sudo service smbd start
 sudo service smbd stop
@@ -8167,7 +9186,7 @@ Domain=[SERILOCAL] OS=[Unix] Server=[Samba 3.6.3]
 
 
 ==============================================================================
-*kt_linux_set_004*	ubuntu: nfs
+*kt_linux_sete_004*	ubuntu: nfs
 
 sudo apt-get install nfs-kernel-server
 
@@ -8183,17 +9202,25 @@ possible so unwanted systems cannot access the NFS mount.
 To start the NFS server, you can run the following command at a terminal prompt:
 sudo /etc/init.d/nfs-kernel-server start
 
+
 ==============================================================================
-*kt_linux_set_005*	ubuntu: check running services
+*kt_linux_sete_005*	ubuntu: check running services
 
 sudo service --status-all
 
+
 ==============================================================================
-*kt_linux_set_006*	ubuntu: connect from windows remote desktop
+*kt_linux_sete_006*	ubuntu: connect from windows remote desktop
 
 sudo apt-get install xrdp
 
 Then run windows remote desktop and connect using ip or hostname. That's it.
+
+
+==============================================================================
+*kt_linux_sete_007*	ubuntu: cpuinfo
+
+cat /proc/cpuinfo 
 
 
 # ============================================================================
