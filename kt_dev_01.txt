@@ -34,6 +34,9 @@ ISSUES and CODES
 GLIBC
 |kt_dev_glib_000| glib sites
 
+GNU CORE UTILS
+|kt_dev_guti_000| gnu core util sites
+
 GCC
 |kt_dev_gcc_000|  gcc compile script
 |kt_dev_gcc_001|  error: two or more data types in declaration specifiers {preprocessor} 
@@ -1487,6 +1490,23 @@ https://sourceware.org/glibc/wiki/GlibcGit
 
 git clone git://sourceware.org/git/glibc.git
 
+
+# ============================================================================
+#{ GNU CORE UTILS
+==============================================================================
+*kt_dev_guti_000*   gnu core util sites
+
+http://www.gnu.org/software/coreutils/
+git clone git://git.sv.gnu.org/coreutils coreutils
+
+
+==============================================================================
+*kt_dev_glib_000*   glib sites
+
+http://www.gnu.org/software/libc/libc.html
+https://sourceware.org/glibc/wiki/GlibcGit
+
+git clone git://sourceware.org/git/glibc.git
 
 # ============================================================================
 #{ GCC
@@ -4412,6 +4432,7 @@ value it negates. Similarly, And and Or query have two queries whose results it 
 suggests that we model our different kinds of queries as independent classes that share a common
 base class. The solution is to have four classes which has the same interface and use ABC.
 
+<DN-ABC>
 o These four query types are not related to one another by inheritance; not related in vertically
 and they are conceptually siblings and shares the same interface. This suggest that will need to
 define ABC to represent that interface.
@@ -4419,30 +4440,41 @@ define ABC to represent that interface.
 o The AndQuery and OrQuery share one property that the other classes do not. Each has two operands.
 To model this, define another ABC to represent queries with two operands.
 
+<DN-interface>
 o We need to able to build queries. The simplest way is to write C++ expressions to create the
 compounded queries:
 
    Query q = Query("fiery") & Query("bird") | Query("wind");
 
 This suggests that user code won't use the inherited class directly. Instead, will define an
-<interface> class named Query which hide the hierarchy and has the same operations as Query_base. It
+interface class named Query which hide the hierarchy and has the same operations as Query_base. It
 will have three overloaded operators and ctor.
+
    - & operator will [create] a Query bound to a new AndQuery.
    - | operator will [create] a Query bound to a new OrQuery.
    - ~ operator will [create] a Query bound to a new NotQuery.
    - Query ctor that takes a string will create a Query bound to a new WordQuery.
 
+<DN-SP>
 o In each of these classes, the operand(s) can be an object of any of the concrete classes derived
-from Query_base: NotQuery can be applied to an AndQuery. To allow this flexibility, the operands
-must be stored as pointers to Query_base so that can bind the pointer to whichever concrete class we
-need. 
+from Query_base: NotQuery can be applied to an AndQuery. To allow this flexibility i.e., compound
+query, the operands must be stored as pointers to Query_base so that can bind the pointer to
+whichever concrete class we need. However, rather than storing a Query_base pointer, will themselves
+use a Query object as [user] code is simplified by using the interface. [KT] This is why BinaryQuery
+has Query members.
 
-However, rather than storing a Query_base pointer, will themselves use a Query object as [user] code
-is simplified by using the interface. [KT] This is why BinaryQuery has Query members.
+<DN-no-public-interface-in-implementation>
+There is no public interface in Query_base hierarchy.
 
+<creation>
 So objects created by the expression are:
 
    Query q = Query("fiery") & Query("bird") | Query("wind");
+             - new WQ         - new WQ                    // temp Queries
+                       - new ANDQ             - new WQ    // temp Queries, copied Queries and copyed SPs
+                                           - new ORQ
+                                           
+                                           Query q        // All temp Queries will be destoried
 
    q = Query      OrQuery        AndQuery          WordQuery
          [ ] ->   [ ]      ->    [ ]      ->       [fiery] 
@@ -4452,15 +4484,6 @@ So objects created by the expression are:
                   [ ]      ->    WordQuery
                                  [wind]
 
-[ ] means Query and ( ) means Query_base
-
-    q            Or            And           Word 
-   [ ]  = [ ] -> ( ) -> [ ] -> ( ) -> [ ] -> ( )
-                               ( ) -> [ ] -> ( )
-
-                               Word
-                 ( ) -> [ ] -> ( )
-
 Once the [tree-of-objects] is built up, evaluating(or generating the representation of) a query is
 basically a process of following these links, asking each object to evaluate itself. Call eval on q
 which is the root of the tree, that call asks the OrQuery to which q points to eval itself.
@@ -4468,6 +4491,7 @@ Evaluating this OrQuery calls eval on its two operands- on the AndQuery and the 
 for the word bind. Evaluating the AndQuery evaluates its two WordQuerys, generating the results for
 the words fiery and bird.
 
+<class-hierarchy>
 Inheritance hierarchy is:                                    
 
 User     Query class             Query Base
@@ -4477,6 +4501,9 @@ User     Query class             Query Base
                                                          - ABC
                                                             |           |
                                                          AndQuery    ORQuery
+
+Q        NOTQ     AND or ORQ
+-sp<QB>  - Q      - Q lhs, rls
 
 // private ctor which prevent a user from creating derived class directly and due to this, make
 // operator overloads friend to use ctor.
@@ -4501,7 +4528,6 @@ class Query {
 
 inline Query::Query( const std::string &s ): q(new WordQuery(s)) {}
 
-
 // ABC and no public interface since do not intend users or the derived class to use it directly.
 // Query friend since it use Query_base's virtual call. See protected dtor since it is used
 // implicitly by the dtor in the derived class.
@@ -4518,8 +4544,6 @@ class Query_base {
     virtual std::string rep() const = 0;
 };
 
-// no public interface.
-//
 class WordQuery: public Query_base {
   friend class Query;
 
@@ -4541,7 +4565,20 @@ class NotQuery: public Query_base {
   QueryResult eval( const TextQuery &t ) const;
   
   // [DN] This ultimately makes a virtual call to rep because query.rep() is nonvirtual call but
-  // Query::rep in turn calls q->rep, which is virtual call through its Query_base pointer.
+  // Query::rep in turn calls q->rep, which is virtual call through its Query_base pointer. However,
+  // see that there is NO public interface in implementation class hierarchy and virtual funcs does
+  // work for this case even if this is private.
+  //
+  // Query::rep()
+  //  -> q->rep()
+  //     ORQ::rep()
+  //        -> lhs.rep(); Query::rep()
+  //                       -> q->rep()
+  //                          ANDQ::rep()
+  //                             -> lhs.rep(); Query::rep()
+  //                                            -> q->rep()
+  //                                               WQ::rep()
+  //
   std::string rep() const { return "~(" + query.rep() + ")"; }
 
   Query query; // [DN]
@@ -4559,7 +4596,6 @@ inline Query operator~(const Query &operand)
 { return std::shared_ptr<Query_base>( new NotQuery(operand)); }
 
 <binary-query>
-
 // ABC and do not define eval().
 //
 class BinaryQuery : public Query_base {
@@ -4568,8 +4604,8 @@ class BinaryQuery : public Query_base {
       lhs(l), rhs(r), opSym(s) {}
 
     // [DN] This ultimately makes a virtual call to rep.
-    std::string rep() const { return "(" + lhs.rep() + " "
-      + opSym + " " + rhs.rep() + ")"; }
+    std::string rep() const 
+      { return "(" + lhs.rep() + " " + opSym + " " + rhs.rep() + ")"; }
 
     Query lhs, rhs;  // [DN]
     std::string opSym;
@@ -4635,7 +4671,6 @@ In this example, cannot create temp return object.
 
 
 {missing-declaration}
-
 For this cases, similar errors happens:
 
 /src/main.c: In function '_terminate':
@@ -4646,7 +4681,6 @@ For this cases, similar errors happens:
 {typedef-errors}
 
 <error-case>
-
 struct List;         // 7
 
 typedef struct node
@@ -14620,21 +14654,21 @@ KT. This suggests the less use of simple virtual?
 *kt_dev_ecpp_011*	35: alternatives to virtual func
 
 {template-pattern} 
-
-From {ref-003}, it is called {template-method} and define skeleton of an algorithm in an operation,
+From {ref-003}, it is called [template-method] and define skeleton of an algorithm in an operation,
 
 o deferring [some] steps to subclass ( without default implementation of some steps ). must be
 overridden.
+
 o letting subclass redefine certain steps ( with default implementation ). may be overridden.
 {hook-operation}
 
-without chaning the algorithm's structure. The template-method defines steps in terms of abstract
+Without chaning the algorithm's structure. The template-method defines steps in terms of abstract
 operations that subclass override to provide concrete behavior. Or it is to define {invariant-parts}
 once and leave {variant-part} to subclass.
 
-What is different from that when common behavior among subclasses should be factored and localized
-in a common class to avoid code duplication? This is also about core resuse but difference is steps,
-that is template.
+What is different from when common behavior among subclasses should be factored and localized in a
+common class to avoid code duplication? This is also about code resuse but difference is steps, that
+is template.
 
 void Application::OpenDocument( const char* name ) {
 	 if( !CanOpenDocument(name)) {
@@ -14674,34 +14708,32 @@ There are how and when: how is to redefine virtual funcs and when is the time to
 template-method means that base controls when and derived control how.
 
 class GameCharacter {
-	 public:
-	 int healthValue() const
-	 {
-		  // do 'before' stuff >
-		  int retVal = doHealthValue();
-<		  // do 'after' stuff
-	 }
+  public:
+    int healthValue() const
+    {
+      // do 'before' stuff 
+      int retVal = doHealthValue();
+      // do 'after' stuff
+    }
 
-	 private:
-	 virtual int doHealthValue() const
-	 {
-		  // default calc code
-	 }
+  private:     // [DN] See this is private and {text-query-example}
+    virtual int doHealthValue() const
+    {
+      // default calc code
+    }
 };
 
 In the base, set before and after stuff and when to call the derived part that is the derived
-dependent. Before and affer can be lock/unlock, logging, pre/post condition.
+dependent. Before and after can be lock/unlock, logging, pre/post condition.
 
 
 {name-and-related}
-
 For a naming convention of primitive operation which should be overridden, prefix names with Do:
 DoRead. Often used with {factory-func} as DoCreateDocument shown above. KT: Do prefix seems to
 mean a func to be overridden.
 
 
 {access-specifier}
-
 #include < iostream>
 
 using std::cout;
@@ -14784,8 +14816,9 @@ der: doMorePro
 bas: called doMore
 kit@kit-vb:~/work$ 
 
-Primitive operation should be protected or private? Here, access-specifier do not work in derived
-class but when speified like [error], will get
+As {text-query-example}, the Do operation which to be overrided, should be protected or private?
+Here, access-specifier do not work in derived class since virtuals get called even if these are
+private in derived calss but when speified like [error], will get
 
 usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
 usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
@@ -14802,7 +14835,6 @@ vtable
 
 
 {hook-operation}
-
 The template-method can be used to extend parent class operation but not a class. 
 
 class Window {
@@ -14821,7 +14853,7 @@ class SpecialWindow : public Window {
 };
 
 But it is esay to forget to call the inherited function and can use template-method to give the
-parent control over how subclasses extend it.
+parent class a control over how subclasses extend it. {Q}
 
 void ParentClass::Operation() {
 	 // parent class behavior
@@ -14836,7 +14868,6 @@ void DerivedClass::HookOperation() {
 
 
 {strategy-pattern}
-
 Use no virtual. take the real calc func out of the class.
 
 # 01 : use func pointer
