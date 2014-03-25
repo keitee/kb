@@ -49,6 +49,7 @@ GCC
 |kt_dev_gcc_102|  gcc binutil
 |kt_dev_gcc_103|  gcc link and ld {cyclic-dependencies}
 |kt_dev_gcc_104|  gcc comma-operator {C99}
+|kt_dev_gcc_105|  gcc likely and unlikely 
 |kt_dev_gcc_200|  gcc preprocessor
 |kt_dev_gcc_300|  gcc gprof
 
@@ -1086,7 +1087,7 @@ __pServiceAppImpl is pointer from creating objcets.
 SysTryReturnResult(NID_APP, __pServiceAppImpl, E_OUT_OF_MEMORY, "[E_OUT_OF_MEMORY] Insufficient memory.");
 
 #ifndef unlikely
-#define unlikely(x)  __builtin_expect(!!(x), 0)    // see {gcc-builtins}
+#define unlikely(x)  __builtin_expect(!!(x), 0)    // see {likey-and-unlikely}
 #endif
 
 #define SysTryReturnVoidResult(NID, condition, r, ...)	\
@@ -1906,218 +1907,7 @@ note: when use gcc, got link errors that cannot find STLs. must use g++.
 $ g++ -std=c++0x sample.cpp
 
 {the-gnu-c++-library}
- 
 http://gcc.gnu.org/onlinedocs/libstdc++/index.html
-
-{likey-and-unlikely}
-
-- Built-in Function: long __builtin_expect (long exp, long c)
-
-You may use __builtin_expect to provide the compiler with branch prediction information. In general,
-you should prefer to use actual profile feedback for this (-fprofile-arcs), as programmers are
-notoriously bad at predicting how their programs actually perform. However, there are applications
-in which this data is hard to collect.
-
-The return value is the value of exp, which should be an integral [expression]. 
-
-The semantics of the built-in are that it is expected that exp == c. For example:
-
-              if (__builtin_expect (x, 0))
-                foo ();
-
-indicates that we do not expect to call foo, since we expect x to be zero. 
-
-Since you are limited to integral expressions for exp, you should use constructions such as
-
-              if (__builtin_expect (ptr != NULL, 1))
-                foo (*ptr);
-
-when testing pointer or floating-point values.
-
-<reading-one>
-
-This is about branch-prediction and optimisation in a compiler. 
-
-[kedar@ashwamedha ~]$ cat abc.c
-int testfun(int x)
-{
-    if(__builtin_expect(x, 0)) // We instruct the compiler, "else" block is more probable
-    {
-        x = 5;
-        x = x * x;
-    }
-    else
-    {
-        x = 6;
-    }
-
-    return x;
-}
- 
-[kedar@ashwamedha ~]$ gcc -O2 -c abc.c
-[kedar@ashwamedha ~]$ objdump  -d abc.o
- 
-abc.o:     file format elf32-i386
- 
-Disassembly of section .text:
- 
-00000000 :
-   0:   55                      push   %ebp
-   1:   89 e5                   mov    %esp,%ebp
-   3:   8b 45 08                mov    0x8(%ebp),%eax
-   6:   85 c0                   test   %eax,%eax
-   8:   75 07                   jne    11 < testfun+0x11 >
-   The compiler branches the "if" block and keeps "else" sequential
-   a:   b8 06 00 00 00          mov    $0x6,%eax
-   f:   c9                      leave
-  10:   c3                      ret
-  11:   b8 19 00 00 00          mov    $0x19,%eax
-  16:   eb f7                   jmp    f < testfun+0xf > 
-
-[kedar@ashwamedha ~]$ cat abc.c
-int testfun(int x)
-{
-    if(__builtin_expect(x, 1)) // We instruct the compiler, "if" block is more probable
-    {
-        x = 5;
-        x = x * x;
-    }
-    else
-    {
-        x = 6;
-    }
-
-    return x;
-}
-                                                                                                   
-[kedar@ashwamedha ~]$ gcc -O2 -c abc.c
-[kedar@ashwamedha ~]$ objdump  -d abc.o
-                                                                                                   
-abc.o:     file format elf32-i386
-                                                                                                   
-Disassembly of section .text:
-                                                                                                   
-00000000 :
-   0:   55                      push   %ebp
-   1:   89 e5                   mov    %esp,%ebp
-   3:   8b 45 08                mov    0x8(%ebp),%eax
-   6:   85 c0                   test   %eax,%eax
-   8:   74 07                   je     11 < testfun+0x11 >
-   The compiler branches the "else" block and keeps "if" sequential
-   a:   b8 19 00 00 00          mov    $0x19,%eax
-   f:   c9                      leave
-  10:   c3                      ret
-  11:   b8 06 00 00 00          mov    $0x6,%eax
-  16:   eb f7                   jmp    f < testfun+0xf >
-<
-
- [KT] As shown, the probable cases are placed in sequencial and menas in the pipe line. So most of
- case there is no jump.
-
-
-{reading-two}
-
-http://blog.man7.org/2012/10/how-much-do-builtinexpect-likely-and.html
-
-As the gcc documentation says, you can use this compiler built-in function to give the optimizer a
-clue about the likely result of an integer (or Boolean) expression. In the context of an if
-statement, this enables the optimizer to reorder the code in a way that gives best performance, by
-ensuring that the code that is most likely to execute after the conditional immediately follows the
-conditional when the instruction stream is fed to the CPU pipeline.
-
-The __builtin_expect() function takes two arguments: a value to be tested, and the expected result.
-Both of these are integral values. The interface is a little clumsy for most uses, since the common
-case is that we want to test for "true" (non-zero) or "false" (zero). Thus, the Linux kernel defines
-two simpler interfaces: likely() and unlikely() (in include/linux/compiler.h):
-
-    #define likely(x)      __builtin_expect(!!(x), 1)
-    #define unlikely(x)    __builtin_expect(!!(x), 0)
-
-In other words, likely(x) means "I expect x is true", and and unlikely(x) means "I expect x is
-false".
-
-Here's my test program. The comments should be enough to help you understand some of the more
-obscure pieces. Below, I'll just skip to looking at the test results.
-
-The program essentially repeatedly scans a one-million-element integer array whose contents are zero
-(in the default case). Using the program, we can time the results of the checks that are performed
-either with or without using __builtin_expect().
-
-For example, here we scan the array without  __builtin_expect():
-
-    $ cc -DDONT_EXPECT -O3 builtin_expect_test.c -o bn
-    $ time -f "%E real, %U user, %S sys" ./bn 1000
-    0, 1000000000
-    0:02.68 real,  2.67 user, 0.00 sys
-
-In this case, the program looped one thousand times through the array, to perform a total of one
-billion checks, and the real time for execution was 2.68 seconds. (The test machine is an Intel Core
-Duo 2.53GHz, and the gcc version is 4.6.3.)
-
-Here's what happens if we employ  __builtin_expect(), telling the compiler that the expected result
-of the test is 0.
-
-    [KT] expects 0 and best case
-    $ cc -DEXPECT_RESULT=0 -O3 builtin_expect_test.c -o b0
-    $ time -f "%E real, %U user, %S sys" ./b0 1000
-    0, 1000000000
-    0:02.28 real,  2.28 user, 0.00 sys
-
-The execution time fell to 2.28 seconds. In other words (for this particular CPU, compiler version,
-and program), __builtin_expect() improved the execution time of each check by 0.4 nanoseconds (0.4
-seconds for one billion checks).
-
-Well and good. What if we tell __builtin_expect() to expect the wrong value?
-
-    [KT] expects 1 when all elements are 0 so worst case
-    $ cc -DEXPECT_RESULT=1 -O3 builtin_expect_test.c -o b1
-    $ time -f "%E real, %U user, %S sys" ./b1 1000
-    0, 1000000000
-    0:04.19 real,  4.18 user, 0.00 sys
-
-In this case, unsurprisingly, we made each check run slower, by about 1.5 (i.e., 4.19 - 2.68)
-nanoseconds.  So, should you use __builtin_expect()?  
-
-You should only use __builtin_expect()-or the Linux kernel's likely() and unlikely()-if it's "very
-likely" that your code will follow the predicted branch. How much is "very likely"? If you're
-looking for actual numbers, the answer will depend on your compiler version, CPU, and code. But to
-illustrate that you should generally avoid these optimizations unless your code is very likely to
-follow one branch, here's some further tests using the above code.
-
-
-In this test, the program first injects some nonzero values into the array before doing tests for
-zero using __builtin_expect(). Nonzero values are placed at every tenth element in the array:
-
-    $ cc -DEXPECT_RESULT=0 -DBREAK_STEP=10 -O3 builtin_expect_test.c -o b0
-    $ time -f "%E real, %U user, %S sys" ./b0 1000
-    100000000, 900000000
-    0:02.79 real,  2.76 user, 0.01 sys
-
-Note what happened. Even though most array elements contained the expected zero value, execution
-speed was actually worse (2.79 seconds versus 2.69 seconds) than not using __builtin_expect() at
-all! In fact, even when only one in ten thousand values is nonzero, we're still at only roughly the
-break-even point:
-
-    $ cc -DEXPECT_RESULT=0 -DBREAK_STEP=10000 -O3 builtin_expect_test.c -o b0
-    $ time -f "%E real, %U user, %S sys" ./b0 1000
-    100000, 999900000
-    0:02.66 real,  2.64 user, 0.00 sys
-
-The point where using these optimizations becomes worthwhile will depend on the factors mention
-above, but the point is that you should really only use them when your predicted path is very
-likely, and if your predicted path is not very likely, then you're better off avoiding them, as
-you'll actually slow your code down a little.  Compiler-assisted run-time profiling The gcc
-documentation contains the following advice regarding the use of __builtin_expect():
-
-    In general, you should prefer to use actual profile feedback for this (-fprofile-arcs), as
-    programmers are notoriously bad at predicting how their programs actually perform. However,
-    there are applications in which this data is hard to collect. 
-
-That's good concise advice. To put things another way, the only time you should use
-__builtin_expect() is when you can't use compiler-assisted runtime optimization (perhaps because
-your program has no easily repeatable pattern of execution-the Linux kernel is an obvious example)
-and you are certain that your predicted code path is very (very) likely to be the one that will be
-taken.
 
 
 {how-to-use-gcc-optimisation} {gcc-profiling}
@@ -2773,8 +2563,6 @@ internal subroutine is '__main', used to ensure C++ constructors are called; see
 ==============================================================================
 *kt_dev_gcc_104*	gcc comma-operator {C99}
 
-{GCC-and-C99}
-
 Preface
 
 This is a reference manual for the C programming language as implemented by the GNU Compiler
@@ -2803,7 +2591,6 @@ included here.
 
 
 {C90-C99}
-
 After ANSI produced the official standard for the C programming language in 1989, which became an
 international standard in 1990, the C language specification remained relatively static for some
 time, while C++ continued to evolve, largely during its own standardization effort. Normative
@@ -2815,7 +2602,6 @@ commonly referred to as "C99".
 
 
 {comma-operator}
-
 The following causes error:
 usecomma.cpp:70:42: error: invalid conversion from 'Node* {aka node*}' to 'int' [-fpermissive]
 usecomma.cpp:72:22: error: base operand of '->' is not a pointer
@@ -2947,6 +2733,217 @@ func( ( ++a, f(a) ) );
 A function call to func() in which a is incremented, the resulting value is passed to a function
 f(), and the return value of f() is passed to func(). The function func() is passed only a single
 argument, because the comma expression is enclosed in parentheses within the function argument list.
+
+
+==============================================================================
+*kt_dev_gcc_105*	gcc likely and unlikely 
+
+{likey-and-unlikely}
+This is built-in function: long __builtin_expect (long exp, long c)
+
+You may use __builtin_expect to provide the compiler with branch prediction information. In general,
+you should prefer to use actual profile feedback for this (-fprofile-arcs), as programmers are
+notoriously bad at predicting how their programs actually perform. However, there are applications
+in which this data is hard to collect.
+
+
+{reading-two}
+http://blog.man7.org/2012/10/how-much-do-builtinexpect-likely-and.html
+As the gcc documentation says, you can use this compiler built-in function to give the optimizer a
+clue about the likely result of an integer (or Boolean) expression. In the context of an if
+statement, this enables the optimizer to reorder the code in a way that gives best performance, by
+ensuring that the code that is most likely to execute after the conditional immediately follows the
+conditional when the instruction stream is fed to the CPU pipeline.
+
+The __builtin_expect() function takes two arguments: a value to be tested, and the expected result.
+Both of these are integral values. The interface is a little clumsy for most uses, since the common
+case is that we want to test for "true" (non-zero) or "false" (zero). Thus, the Linux kernel defines
+two simpler interfaces: likely() and unlikely() (in include/linux/compiler.h):
+
+    #define likely(x)      __builtin_expect(!!(x), 1)
+    #define unlikely(x)    __builtin_expect(!!(x), 0)
+
+In other words, likely(x) means "I expect x is true", and and unlikely(x) means "I expect x is
+false".
+
+Here's my test program. The comments should be enough to help you understand some of the more
+obscure pieces. Below, I'll just skip to looking at the test results.
+
+The program essentially repeatedly scans a one-million-element integer array whose contents are zero
+(in the default case). Using the program, we can time the results of the checks that are performed
+either with or without using __builtin_expect().
+
+For example, here we scan the array without  __builtin_expect():
+
+    $ cc -DDONT_EXPECT -O3 builtin_expect_test.c -o bn
+    $ time -f "%E real, %U user, %S sys" ./bn 1000
+    0, 1000000000
+    0:02.68 real,  2.67 user, 0.00 sys
+
+In this case, the program looped one thousand times through the array, to perform a total of one
+billion checks, and the real time for execution was 2.68 seconds. (The test machine is an Intel Core
+Duo 2.53GHz, and the gcc version is 4.6.3.)
+
+Here's what happens if we employ  __builtin_expect(), telling the compiler that the expected result
+of the test is 0.
+
+    [KT] expects 0 and best case
+    $ cc -DEXPECT_RESULT=0 -O3 builtin_expect_test.c -o b0
+    $ time -f "%E real, %U user, %S sys" ./b0 1000
+    0, 1000000000
+    0:02.28 real,  2.28 user, 0.00 sys
+
+The execution time fell to 2.28 seconds. In other words (for this particular CPU, compiler version,
+and program), __builtin_expect() improved the execution time of each check by 0.4 nanoseconds (0.4
+seconds for one billion checks).
+
+Well and good. What if we tell __builtin_expect() to expect the wrong value?
+
+    [KT] expects 1 when all elements are 0 so worst case
+    $ cc -DEXPECT_RESULT=1 -O3 builtin_expect_test.c -o b1
+    $ time -f "%E real, %U user, %S sys" ./b1 1000
+    0, 1000000000
+    0:04.19 real,  4.18 user, 0.00 sys
+
+In this case, unsurprisingly, we made each check run slower, by about 1.5 (i.e., 4.19 - 2.68)
+nanoseconds. So, should you use __builtin_expect()?  
+
+You should only use __builtin_expect()-or the Linux kernel's likely() and unlikely()-if it's "very
+likely" that your code will follow the predicted branch. How much is "very likely"? If you're
+looking for actual numbers, the answer will depend on your compiler version, CPU, and code. But to
+illustrate that you should generally [avoid] these optimizations unless your code is very likely to
+follow one branch, here's some further tests using the above code.
+
+In this test, the program first injects some nonzero values into the array before doing tests for
+zero using __builtin_expect(). Nonzero values are placed at every tenth element in the array:
+
+    $ cc -DEXPECT_RESULT=0 -DBREAK_STEP=10 -O3 builtin_expect_test.c -o b0
+    $ time -f "%E real, %U user, %S sys" ./b0 1000
+    100000000, 900000000
+    0:02.79 real,  2.76 user, 0.01 sys
+
+Note what happened. Even though most array elements contained the expected zero value, execution
+speed was actually worse (2.79 seconds versus 2.69 seconds) than not using __builtin_expect() at
+all! In fact, even when only one in ten thousand values is nonzero, we're still at only roughly the
+break-even point:
+
+    $ cc -DEXPECT_RESULT=0 -DBREAK_STEP=10000 -O3 builtin_expect_test.c -o b0
+    $ time -f "%E real, %U user, %S sys" ./b0 1000
+    100000, 999900000
+    0:02.66 real,  2.64 user, 0.00 sys
+
+The point where using these optimizations becomes worthwhile will depend on the factors mention
+above, but the point is that you should really only use them when your predicted path is very
+likely, and if your predicted path is not very likely, then you're better off avoiding them, as
+you'll actually slow your code down a little. Compiler-assisted run-time profiling The gcc
+documentation contains the following advice regarding the use of __builtin_expect():
+
+    In general, you should prefer to use actual profile feedback for this (-fprofile-arcs), as
+    programmers are notoriously bad at predicting how their programs actually perform. However,
+    there are applications in which this data is hard to collect. 
+
+That's good concise advice. To put things another way, the only time you should use
+__builtin_expect() is when you can't use compiler-assisted runtime optimization (perhaps because
+your program has no easily repeatable pattern of execution-the Linux kernel is an obvious example)
+and you are certain that your predicted code path is very (very) likely to be the one that will be
+taken.
+
+
+{reading-one}
+This is about branch-prediction and optimisation in a compiler. 
+
+[kedar@ashwamedha ~]$ cat abc.c
+int testfun(int x)
+{
+  // we instruct the compiler, "else" block is more probable by saying that x is more likely to be
+  // false(0)
+  if(__builtin_expect(x, 0)) 
+  {
+    x = 5;
+    x = x * x;
+  }
+  else
+  {
+    x = 6;
+  }
+
+  return x;
+}
+ 
+[kedar@ashwamedha ~]$ gcc -O2 -c abc.c
+[kedar@ashwamedha ~]$ objdump  -d abc.o
+ 
+abc.o:     file format elf32-i386
+ 
+Disassembly of section .text:
+ 
+00000000 :
+   0:   55                      push   %ebp
+   1:   89 e5                   mov    %esp,%ebp
+   3:   8b 45 08                mov    0x8(%ebp),%eax
+   6:   85 c0                   test   %eax,%eax
+   8:   75 07                   jne    11 < testfun+0x11 >
+   The compiler branches the "if" block and keeps "else" sequential
+   a:   b8 06 00 00 00          mov    $0x6,%eax
+   f:   c9                      leave
+  10:   c3                      ret
+  11:   b8 19 00 00 00          mov    $0x19,%eax
+  16:   eb f7                   jmp    f < testfun+0xf > 
+
+[kedar@ashwamedha ~]$ cat abc.c
+int testfun(int x)
+{
+  // we instruct the compiler, "if" block is more probable by saying that x is more likely to be
+  // true(1), non-zero.
+  if(__builtin_expect(x, 1))
+  {
+    x = 5;
+    x = x * x;
+  }
+  else
+  {
+    x = 6;
+  }
+
+  return x;
+}
+                                                                                                   
+[kedar@ashwamedha ~]$ gcc -O2 -c abc.c
+[kedar@ashwamedha ~]$ objdump  -d abc.o
+                                                                                                   
+abc.o:     file format elf32-i386
+                                                                                                   
+Disassembly of section .text:
+                                                                                                   
+00000000 :
+   0:   55                      push   %ebp
+   1:   89 e5                   mov    %esp,%ebp
+   3:   8b 45 08                mov    0x8(%ebp),%eax
+   6:   85 c0                   test   %eax,%eax
+   8:   74 07                   je     11 < testfun+0x11 >
+   The compiler branches the "else" block and keeps "if" sequential
+   a:   b8 19 00 00 00          mov    $0x19,%eax
+   f:   c9                      leave
+  10:   c3                      ret
+  11:   b8 06 00 00 00          mov    $0x6,%eax
+  16:   eb f7                   jmp    f < testfun+0xf >
+<
+
+ [KT] As shown, the probable cases are placed in sequencial and menas in the pipe line. So most of
+ case there is no jump.
+
+{example-from-glibc}
+
+#if __GNUC__ >= 3
+# define __glibc_unlikely(cond)	__builtin_expect ((cond), 0)
+# define __glibc_likely(cond)	__builtin_expect ((cond), 1)
+#else
+# define __glibc_unlikely(cond)	(cond)
+# define __glibc_likely(cond)	(cond)
+#endif
+
+  if (__glibc_unlikely (*s == L_('\0')))
+    goto noconv;
 
 
 ==============================================================================
