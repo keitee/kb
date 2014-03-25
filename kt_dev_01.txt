@@ -9302,7 +9302,7 @@ class Quote {
 class Bulk_quote : public Quote {
   public:
     Bulk_quote() = default;
-    double net_price( std::sizet_t ) const override;
+    double net_price( std::size_t ) const override;
 
   private:
     std::size_t min_qty = 0;
@@ -9332,7 +9332,7 @@ class Disc_quote : public Quote {
       Quote(book, price), quantity(qty), discount(disc) {}
 
     # pure virtual function
-    double net_price(std::sizt_t) const = 0;
+    double net_price(std::size_t) const = 0;
 
   protected:
     std::size_t quantity = 0;
@@ -9360,13 +9360,76 @@ and/or data from one class to another. It is that even though we changed the inh
 code that uses Bulk_quote or Quote would not need to change but need to recompile.
 
 
+{error-when-create-abc}
+This happens when tries to create an implementation class which is derived from ABC class; that is
+interface class. Why? because implementation class did not override some of members.
+
+/port/CPort.cpp: In static member function 'static CPort* CPort::getInstance()':
+/port/CPort.cpp:36:27: error: cannot allocate an object of abstract type 'CPort'
+/port/CPort.h:29:1: note:   because the following virtual functions are pure within 'CPort':
+/interface/port/IPort.h:48:22: note: 	virtual IIframe* IPortingLayer::getIframe()
+/interface/port/IPort.h:56:23: note: 	virtual ISession* IPortingLayer::getSession()
+/port/CPort.cpp: In constructor 'CPort::CPort()':
+/port/CPort.cpp:46:25: error: cannot allocate an object of abstract type 'CIframe'
+/port/CIframe.h:27:1: note:   because the following virtual functions are pure within 'CIframe':
+/interface/port/IIframe.h:73:18: note: 	virtual void IIframe::destory(uint32_t)
+/interface/port/IIframe.h:80:18: note: 	virtual bool IIframe::isDisplayed()
+/interface/port/IIframe.h:86:18: note: 	virtual bool IIframe::setDisplayFlag()
+/interface/port/IIframe.h:94:18: note: 	virtual bool IIframe::isMHEG2(void*, uint32_t)
+/interface/port/IIframe.h:102:18: note: 	virtual bool IIframe::isMHEG4(void*, uint32_t)
+
+This may be a way to check whether it's overrieded or not?
+
+
 ==============================================================================
 *kt_dev_cpp_025*	template
 
-{specialisation}
+The types become known during complilation in generic programming whereas OOP deals with types that
+are not known until run times.
 
-Generic programming. 'instantiation' is a process that create a concrete func or class from a
-template when compiling. Must be defined in the same namespace that contains the original template.
+
+{function-template}
+For function template, the compiler uses the template argument to deduce the template parameter
+type.
+
+compare( 1, 0 );
+compare( vec1, vec2 );
+
+template <typename T>		# '<typename T>' is template param list
+int compare( const T& v1, const T& v2 )
+{
+	 if( v1 < v2 ) return v1;
+	 if( v2 < v2 ) return v2;
+	 return 0;
+}
+
+Here see that it uses only '<' operator and this means that class can only support '<' operator but
+surely not for built-in types.
+
+# error case as should be 'typename U'
+template <typename T, U> inline T calc( const T&, const U& );
+
+# can use typename or class but recommands typename
+template <typename T, class U> inline T calc( const T&, const U& );
+
+
+{class-template}
+Unlike function-template, compiler cannot deduce the type of parameter so user must provide
+additional information to instantiate it. That is an element type.
+
+
+{instantiation}
+Ordinarily, when call a function, the compiler needs to see only a declaration. Similarly, when use
+objects of class type, the class definition must be available but the definition of the member
+functions need not be present. As a result, put class definition and function declaration in header
+file and definition of ordinary and class member function is source files.
+
+For template member functions, it is instantiated only if it is used and if not, it is not
+instantiated.
+
+Generic programming. 'instantiation' is a process that create a concrete independant function or
+class from a template when compiling. Must be defined in the same namespace that contains the
+original template.
 
 Template specialization must be defined in the same namespace that contains the original template.
 
@@ -9386,28 +9449,143 @@ template <> struct hash < Sales_data >
 }
 
 
-{function-template}
+{example}
+<original-version>
 
-template <typename T>		# '<typename T>' is template param list
-int compare( const T& v1, const T& v2 )
+<- new container class ->  <- companion class like iterator ->
+   StrBlob                    StrBlobPtr
+   - shared_ptr               - weak_ptr
+                     vector[]
+                     - underlying container
+
+The weak_ptr do not participate in the reference count of shared_ptr and won't affect the lifetime
+of the vector. However, can prevent the user from attempting to access a vector that no longer
+exist.
+
+class StrBlob {
+  friend class StrBlobPtr;
+
+  public:
+    typedef std::vector< std::string >::size_type size_type;
+
+    StrBlob();
+    StrBlob( std::initializer_list<std::string> il );
+
+    size_type size() const { return data->size(); }
+    bool empty() const { return data->empty(); }
+
+    void push_back( const std::string &t ) { data->push_back(t); }
+    void pop_back();
+
+    std::string& front();
+    std::string& back();
+
+    // return a copy object like iterator
+    StrBlobPtr begin() { return StrBlobPtr(*this); }
+    StrBlobPtr end() { reutn StrBlobPtr(*this, data->size(); }
+
+  private:
+    std::shared_ptr< std::vector<std::string>> data;
+    void check( size_type i, const std::string &msg ) const;
+};
+
+StrBlob::StrBlob: data( make_shared<vector<string>> ()) {}
+StrBlob::StrBlob(initializer_list<string> il): data( make_shared<vector<string>> (il)) {}
+
+void StrBlob::check( size_type i, const string &msg ) const
 {
-	 if( v1 < v2 ) return v1;
-	 if( v2 < v2 ) return v2;
-	 return 0;
+  if( i >= data->size() )
+    throw out_of_range(msg);
 }
 
+string& StrBlob::front()
+{
+  check( 0, "front on empty StrBlob" );
+  return data->front();
+};
 
-# error case as should be 'typename U'
-template <typename T, U> inline T calc( const T&, const U& );
+string& StrBlob::back()
+{
+  check( 0, "front on empty StrBlob" );
+  return data->back();
+};
 
-# can use typename or class but recommands typename
-template <typename T, class U> inline T calc( const T&, const U& );
+string& StrBlob::pop_back()
+{
+  check( 0, "front on empty StrBlob" );
+  return data->pop_back();
+};
+
+{Q} are these all operation on vector? what will happen when calls on empty vector?
 
 
-{class-template}
+class StrBlobPtr {
+  public:
+    StrBlobPtr(): curr(0) {}
+    StrBlobPtr( StrBlob &a, size_t sz=0 ): wptr( a.data ), curr(sz) {}
 
-Unlike function-template, compiler cannot deduce the type of param so user must provide it when
-instantiating. that's element type.
+    StrBlobPtr& incr();
+    StrBlobPtr& deref() const;
+
+  private:
+    std::shared_ptr< std::vector<std::string>> check( std::size_t, const std::string& ) const;
+    std::weak_ptr<std::vector<std::string>> wptr;
+    std::size_t curr;
+};
+
+std::shared_ptr< std::vector<std::string>> 
+StrBlobPtr::check( std::size_t, const std::string& ) const
+{
+  // ret is shared_ptr and is the vector still around?
+  auto ret = wptr.lock();
+  if(!ret)
+    throw std::runtime_error("unbounded StrBlobPtr");
+
+  if( i >= ret->size() )
+    throw std::out_of_range(msg);
+
+  return ret;
+}
+
+std::string& StrBlobPtr::deref() const
+{
+  auto p = check( curr, "dereference past end");
+  return (*p)[curr];    // must since [] is higher than *
+}
+
+StrBlobPtr& StrBlobPtr::incr() const
+{
+  auto p = check( curr, "increment past end");
+  curr++;
+  return *this;
+}
+
+<template-version>
+template<typename T>
+class Blob {
+  public:
+    typedef T value_type;
+    typedef typename std::vector<T>::size_type size_type;
+
+    Blob();
+    Blob( std::initializer_list<T> il );
+
+    size_type size() const { return data->size(); }
+    bool empty() const { return data->empty(); }
+
+    void push_back( const T &t ) { data->push_back(t); }
+    void pop_back();
+
+    T& front();
+    T& operator[](size_type i);
+
+  private:
+    std::shared_ptr< std::vector<T>> data;
+    void check( size_type i, const std::string &msg ) const;
+};
+
+Blob<int> ia;
+Blob<int> ia2 = { 0, 1, 2, 3, 4 };
 
 
 {member-template} {IE}
@@ -10251,6 +10429,12 @@ CApplitePortingLayer::CApplitePortingLayer(CReceiverAppBase* receiver)
 The good thing is that make CApplitePortingLayer singleton and manage other interfaces via it rather
 than making every interface a singleton class.
 
+This approach means that each concrete implementation calss, Cxx, implements interfaces and users
+will use it directly. If the client is CPP file, that's fine and each Cxx can have typedefs, enums
+and so on but if C file then do not work. For C files, each Cxx class provide C function and there
+should be a way to share typedefs between CPP and C files. So should be a single header which has
+common typedefs for C and CPP land.
+
 Also can use that make all interface concrete class to have private interfaces and make a friend
 between CApplitePortingLayer and otheres. That makes only CApplitePortingLayer can create and use
 those.
@@ -10480,7 +10664,7 @@ while( cin >> word ) {
 	 auto ret = word_count.insert( {word, 1} );
 
 	 // word was already in word_count then second is false. ret.first is an value_type, {string,
-	 // sizet_t}
+	 // size_t}
 	 if( !ret.second )
 		  ++ret.first->second;
 }
@@ -10697,7 +10881,7 @@ class Quote {
 class Bulk_quote : public Quote {
   public:
     Bulk_quote() = default;
-    double net_price( std::sizet_t ) const override;
+    double net_price( std::size_t ) const override;
 
   private:
     std::size_t min_qty = 0;
