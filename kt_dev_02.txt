@@ -52,6 +52,9 @@ KT KB. DEVELOPMENT.
 GLIBC
 |kt_dev_glib_000| glib sites
 |kt_dev_glib_001| atoi
+|kt_dev_glib_002| atof
+|kt_dev_glib_003| itoa
+|kt_dev_glib_004| printf
 
 
 # ============================================================================
@@ -9223,15 +9226,20 @@ EXAMPLE
 
            $ ./a.out 123
            strtol() returned 123
+
            $ ./a.out '    123'
            strtol() returned 123
+
            $ ./a.out 123abc
            strtol() returned 123
            Further characters after number: abc
+
            $ ./a.out 123abc 55
            strtol: Invalid argument
+
            $ ./a.out ''
            No digits were found
+
            $ ./a.out 4000000000
            strtol: Numerical result out of range
 
@@ -9281,8 +9289,11 @@ EXAMPLE
            exit(EXIT_SUCCESS);
        }
 
-{code}
-Here only consider usual char type which is not wide char and 10 base.
+{code-glibc}
+Here only consider usual char type which is not wide char and 10 base. So disregard followings:
+
+#ifdef USE_NUMBER_GROUPING
+# ifdef USE_WIDE_CHAR
 
 // stdlib/atio.c
 int
@@ -9302,6 +9313,8 @@ strtol (nptr, endptr, base)
 }
 
 // stdlib/strtol_l.c
+// The interesting bit are: base handling, overflow handling,
+//
 INT
 INTERNAL (__strtol_l) (nptr, endptr, base, group, loc)
      const STRING_TYPE *nptr;
@@ -9313,6 +9326,9 @@ INTERNAL (__strtol_l) (nptr, endptr, base, group, loc)
   const STRING_TYPE *s;
   UCHAR_TYPE c;
   const STRING_TYPE *save, *end;
+
+  unsigned LONG int i;
+  int overflow;
 
   save = s = nptr;
 
@@ -9336,7 +9352,102 @@ INTERNAL (__strtol_l) (nptr, endptr, base, group, loc)
   /* Save the pointer so we can check later if anything happened.  */
   // so handled the sign from s
   save = s;
+
+  end = NULL;
+
+  /* Avoid runtime division; lookup cutoff and limit.  */
+  cutoff = cutoff_tab[base - 2];
+  cutlim = cutlim_tab[base - 2];
+
+  overflow = 0;
+  i = 0;
+  c = *s;
+
+  // this is for QUAD
+  if (sizeof (long int) != sizeof (LONG int))
+  {
+    unsigned long int j = 0;
+    // same as cutoff_tab
+    unsigned long int jmax = jmax_tab[base - 2];
+
+    // scan through each char
+    for (;c != L_('\0'); c = *++s)
+    {
+      // is it possible case?
+      if (s == end)
+        break;
+
+      // convert to digit
+      if (c >= L_('0') && c <= L_('9'))
+        c -= L_('0');
+      else if (ISALPHA (c))
+        c = TOUPPER (c) - L_('A') + 10;
+      else
+        break;
+
+      // cannot bigger than base
+      if ((int) c >= base)
+        break;
+      /* Note that we never can have an overflow.  */
+      else if (j >= jmax)
+      {
+        /* We have an overflow.  Now use the long representation.  */
+        i = (unsigned LONG int) j;
+        goto use_long;
+      }
+      // make a digit in corresponding unit
+      else
+        j = j * (unsigned long int) base + c;
+    } // for end
+
+    i = (unsigned LONG int) j;
+  }
+  // this is usual case
+  else
+    for (;c != L_('\0'); c = *++s)
+    {
+      if (s == end)
+        break;
+
+      if (c >= L_('0') && c <= L_('9'))
+        c -= L_('0');
+      else if (ISALPHA (c))
+        c = TOUPPER (c) - L_('A') + 10;
+      else
+        break;
+
+      // when c is alphabet
+      if ((int) c >= base)
+        break;
+
+      /* Check for overflow.  */
+      if (i > cutoff || (i == cutoff && c > cutlim))
+        overflow = 1;
+      else
+      {
+use_long:
+        i *= (unsigned LONG int) base;
+        i += c;
+      }
+    }
+
+  /* Check if anything actually happened.  */
+  // nothing converted
+  if (s == save)
+    goto noconv;
+
+  /* Store in ENDPTR the address of one character
+     past the last character we converted.  */
+  if (endptr != NULL)
+    *endptr = (STRING_TYPE *) s;
+
+  /* Return the result of the appropriate sign.  */
+  return negative ? -i : i;
 }
+
+// the bellow is the pre-calculated table for each base and the value are the
+// max value for division and remainder. for example, cutoff = cutoff_tab[base
+// - 2]; get the value for base 10.
 
 /* Define tables of maximum values and remainders in order to detect
    overflow.  Do this at compile-time in order to avoid the runtime
@@ -9373,11 +9484,281 @@ extern const unsigned char __strtol_ul_rem_tab[] attribute_hidden;
 # define cutlim_tab	__strtol_ul_rem_tab
 #endif
 
+#ifdef QUAD
+...
+#else
+# define LONG long
+
+{code-online}
+// A utility function to check whether x is numeric
+bool isNumericChar(char x)
+{
+  return (x >= '0' && x <= '9')? true: false;
+}
+
+// A simple atoi() function. If the given string contains
+// any invalid character, then this function returns 0
+int myAtoi(char *str)
+{
+  if (*str == NULL)
+    return 0;
+
+  int res = 0;  // Initialize result
+  int sign = 1;  // Initialize sign as positive
+  int i = 0;  // Initialize index of first digit
+
+  // If number is negative, then update sign
+  if (str[0] == '-')
+  {
+    sign = -1;
+    i++;  // Also update index of first digit
+  }
+
+  // Iterate through all digits of input string and update result
+  for (; str[i] != '\0'; ++i)
+  {
+    if (isNumericChar(str[i]) == false)
+      return 0; // You may add some lines to write error message
+    // to error stream
+    res = res*10 + str[i] - '0';
+  }
+
+  // Return result with sign
+  return sign*res;
+}
+
+
+==============================================================================
+*kt_dev_glib_002* atof
+
+{man-page}
+<atof>
+NAME
+       atof - convert a string to a double
+
+SYNOPSIS
+       #include <stdlib.h>
+
+       double atof(const char *nptr);
+
+DESCRIPTION
+       The  atof() function converts the initial portion of the string pointed
+       to by nptr to double.  The behavior is the same as
+
+           strtod(nptr, (char **) NULL);
+
+       except that atof() does not detect errors.
+
+RETURN VALUE
+       The converted value.
+
+<strtod>       
+NAME
+       strtod, strtof, strtold - convert ASCII string to floating-point number
+
+SYNOPSIS
+       #include <stdlib.h>
+
+       double strtod(const char *nptr, char **endptr);
+       float strtof(const char *nptr, char **endptr);
+       long double strtold(const char *nptr, char **endptr);
+
+DESCRIPTION
+       The strtod(), strtof(), and strtold() functions convert the initial
+       portion of the string pointed to by nptr to double, float, and long
+       double representation, respectively.
+
+{code-glibc}
+Here only consider usual char type which is not wide char and 10 base. So disregard followings:
+
+// stdlib/atof.c
+/* Convert a string to a double.  */
+double
+atof (const char *nptr)
+{
+  return strtod (nptr, (char **) NULL);
+}
+
+// stdlib/strtod.c
+FLOAT
+STRTOF (nptr, endptr)
+     const STRING_TYPE *nptr;
+     STRING_TYPE **endptr;
+{
+  return INTERNAL(STRTOF_L) (nptr, endptr, 0, _NL_CURRENT_LOCALE);
+}
+
+# ifdef USE_WIDE_CHAR
+#  define STRTOF wcstod
+#  define STRTOF_L __wcstod_l
+# else
+#  define STRTOF strtod
+#  define STRTOF_L __strtod_l <use>
+# endif
+
+// stdlib/strtod_l.c
+
+/* Return a floating point number with the value of the given string NPTR.
+   Set *ENDPTR to the character after the last used one.  If the number is
+   smaller than the smallest representable number, set `errno' to ERANGE and
+   return 0.0.  If the number is too big to be represented, set `errno' to
+   ERANGE and return HUGE_VAL with the appropriate sign.  */
+FLOAT
+____STRTOF_INTERNAL (nptr, endptr, group, loc)
+     const STRING_TYPE *nptr;
+     STRING_TYPE **endptr;
+     int group;
+     __locale_t loc;
+{
+  // more than 1000 lines
+}
+
+
+==============================================================================
+*kt_dev_glib_003* itoa
+
+{man-page}
+<itoa>
+NONE since it is not part of glibc and should use sprintf instead.
+
+{code-example}
+This only handles 10 base.
+
+char* itoa(int n)
+{
+  char* ret = NULL;
+  int nchar = 0;
+  bool negative = false;
+
+  if( n < 0 )
+  {
+    n = -n;
+    negative = true;
+    nchar++;
+  }
+
+  // how many spaces are needed?
+  int temp = n;
+  do {
+    nchar++;
+    temp /= 10;
+  } while(temp);
+
+  ret = new char[nchar+1];
+  ret[nchar] = 0;
+
+  // convert number to string
+  if(negative)
+    ret[0] = '-';
+
+  int i = nchar-1;
+
+  do {
+    ret[i--] = n%10 + '0';
+    n /= 10;
+  } while(n);
+
+  return ret;
+}
+
+{code-example}
+From internet.
+https://android.googlesource.com/kernel/lk/+/qcom-dima-8x74-fixes/lib/libc
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ * * Redistributions of source code must retain the above copyright
+ *  notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following
+ * disclaimer in the documentation and/or other materials provided
+ *  with the distribution.
+ *   * Neither the name of The Linux Foundation nor the names of its
+ * contributors may be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+int
+itoa(int num, unsigned char* str, int len, int base)
+{
+  int sum = num;
+  int i = 0;
+  int digit;
+
+  if (len == 0)
+    return -1;
+
+  do
+  {
+    // sign will remain after %
+    digit = sum % base;
+
+    if (digit < 0xA)
+      str[i++] = '0' + digit;
+    else
+      str[i++] = 'A' + digit - 0xA; // what is it?
+
+    sum /= base;
+
+  }while (sum && (i < (len - 1)));
+
+  if (i == (len - 1) && sum)
+    return -1;
+
+  str[i] = '\0';
+  strrev(str); // reverse a string
+
+  return 0;
+}
+
+
+==============================================================================
+*kt_dev_glib_004* printf
+
+// stdio-common/printf.c
+/* Write formatted output to stdout from the format string FORMAT.  */
+/* VARARGS1 */
+int
+__printf (const char *format, ...)
+{
+  va_list arg;
+  int done;
+
+  va_start (arg, format);
+  done = vfprintf (stdout, format, arg);
+  va_end (arg);
+
+  return done;
+}
+
+#undef _IO_printf
+ldbl_strong_alias (__printf, printf);
+
 
 ==============================================================================
 *kt_dev_glib_101* general tips
 
 o use tabstop=6 to view
+o each function has a single c file so search file than using a tag since tag search do not work for
+some.
 
 <def-wide>
 #ifdef USE_WIDE_CHAR
@@ -9395,7 +9776,7 @@ o use tabstop=6 to view
 # else
 #  define IN_CTYPE_DOMAIN(c) isascii(c)
 # endif
-# define L_(Ch) Ch
+# define L_(Ch) Ch   <use>
 # define UCHAR_TYPE unsigned char
 # define STRING_TYPE char
 # define ISSPACE(Ch) __isspace_l ((Ch), loc)
