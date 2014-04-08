@@ -76,11 +76,11 @@ C and C++
 |kt_dev_cpp_005|	converting ctor 			{class-type-conversion} {explicit-keyword}
 |kt_dev_cpp_006|	swap							{copy-and-swap-idiom} {pimpl-idiom}
 |kt_dev_cpp_007|	function matching and overload 	{scope-in-inheritance}
-|kt_dev_cpp_008|	const and conversion		{const-on-iterators} {equal-misspell} 
+|kt_dev_cpp_008|	const {const-on-iterators} {equal-misspell} {bitwise-const} {mutable}
 |kt_dev_cpp_009|	undefined result and a temp-object {temp-object-in-return} {cost-of-temp-object}
 |kt_dev_cpp_010|	def args
 |kt_dev_cpp_011|	inline {empty-ctor-represenstaion}
-|kt_dev_cpp_012|	const member func	{bitwise-const} {mutable}
+|kt_dev_cpp_012|	<empty>
 |kt_dev_cpp_013|	when use reference {called-by-reference} 
 |kt_dev_cpp_014|	decltype, typedef, and using {class-vs-struct} 
 |kt_dev_cpp_015|	declaration and definition
@@ -5211,12 +5211,17 @@ How to default init an object?
 T object;		// OK
 T object();		// NO. defines a func
 
-From {temp-object-in-return} in *kt_dev_cpp_009*
 
+{constructor-and-conversion}
+The constructor is one of conversion methonds. For example:
+
+void doSomething(B bObject);
+doSomething(B(28));
+
+From {temp-object-in-return} in *kt_dev_cpp_009*
 return pair<string, int>();   // T()
 
 From {default-and-value-init} in *kt_dev_stl_019*
-
 int* pi = new int;				// def init
 int* pi = new int();				// value init. new T()
 
@@ -5331,7 +5336,8 @@ Note: cannot be 'explicit' since used implicitly such as arg passing.
 string dots(10, '.');
 string s(dots);	
 
-// copy init. use <copy-ctor>. see implicit conversion here and see more at *kt_dev_cpp_005*
+// copy init. use <copy-ctor> but not assignment. see implicit conversion here and see more at
+// *kt_dev_cpp_005*
 string null_book = "9-999-99999-9";
 string s1;
 string s2 = s1;
@@ -6443,12 +6449,11 @@ note: seems need more clearer statement for the above.
 *kt_dev_cpp_008* const and conversion
 
 {global-const-scope}
-
 The const object must be inited when defined and it's local to file by default. so want to use in
 multiple files, must use <extern-keyword> on [both] definition and declaration. This is different
 from <file-staic-mean>. The important principle is that shouldn't change const object.
 
-// fine one
+// file one
 extern const int gc_max = 100;
 
 // file two
@@ -6456,7 +6461,6 @@ extern const int gc_max;
 
 
 {top-low-level-const}
-
 The top level const is for object itself. So there are <top-level-const> and <low-level-const> for a
 reference and pointer. Top-level-const is for reference and pointer itself and lov-level-const is
 for underlying object. Top can be ignored but low level 'NOT' because top-level-const do not say
@@ -6473,10 +6477,9 @@ original object.
 
 
 {reference-to-const}
-
-But <reference-to-const> is different. There's no const-reference since reference is not object. The
-reference-to-const restrics only what we can do [through] that reference and says nothing about
-whether the underlying object itself. 
+Unlike pointer, <reference-to-const> is different since there's no const-reference since reference
+is not object. The reference-to-const restrics only what we can do [through] that reference and says
+nothing about whether the underlying object itself. 
 
 For pointer, there are <pointer-to-const> and <const-pointer>. The following initialsation is error
 because should NOT be able to use a reference to change ci. Remember a reference is another name.
@@ -6501,7 +6504,6 @@ int *const curErr = &errNumb;
 
 
 {type-match-exceptions}
-
 Two exceptions to type match: <reference-to-const> and <derived-to-base-reference> conversion. Can
 bind <reference-to-const> to non-const, a literal, a temp, or other expression that evaluate to an
 type.
@@ -6515,8 +6517,7 @@ note: KT. This is [to-maintain-constness] by creating [temp-object]. See <case-o
  
 
 {convert-to-const}
-
-Implicit {convert-to-const} conversion for reference and pointer.
+Implicit {convert-to-const} conversion <for reference and pointer>.
 
 const  -- NO --> non-const
 const <-- OK --  non-const
@@ -6541,7 +6542,6 @@ int &r = j, *q = p;	// error since conversion from const to non-const
 
 
 {const-param-args}
-
 The const matters when copying vars and do func params. That is why copy-ctor is usded here.
 
 void fcn( const int i );		
@@ -6560,7 +6560,6 @@ fcn(cj);	// int i = cj;
 
 
 {const-reference-param}
-
 Two implications when use plain reference param in func:
 
 o A func that don't change a ref param, mislead its user to think it is.
@@ -6578,7 +6577,6 @@ So recommend const-reference-param over reference-param for flexibility.
 
 
 {const-on-iterators}
-
 In iterator, begin() has overloads: const and non-const version because if it has only const
 version, *this is const and any data member is also const. begin() may return its member.
 
@@ -6590,7 +6588,6 @@ std::vector< int >::const_iterator iter = vec.begin();
 
 
 {const-return} {equal-misspell}
-
 EC++03. When use return by value as a return, use const to raise error when mistake happens:
 
 const Rational operator*( const Rational& lhs, const Rational& rhs );
@@ -6599,9 +6596,385 @@ const Rational operator*( const Rational& lhs, const Rational& rhs );
 //
 if( a*b = c )
 
-If these are built-in tyeps, this is flat-out error but don't for class type. so better to be prepared
-for this kind of mistakes. Also this is an example of returning a copy than reference.
+If these are built-in tyeps, this is flat-out error but don't for class type. It is never legal to
+modify the return value of a function that returns a built-in type. Even if it were legal, the fact
+that it returns object by value would mean that a copy would be modified and that's not the behavior
+you want. 
 
+So better to be prepared for this kind of mistakes. Also this is an example of returning a copy than
+reference.
+
+
+{why-const-member-func}
+EC++03. Two points:
+
+o Clearer interface to show which member func can change state
+o Efficient code since make it possible to work with const objects. In EC++20, one of the
+fundamental ways to improve a performance is to pass object by reference-to-const. 
+  
+
+{const-and-this-pointer}
+When call a member func, pseudo-code for actual call should looks:
+
+total.isbn();
+
+Sales_data::isbn(&total); where Sales_data::isbn(Sales_data *const this);
+
+That is "this = &total" because this is a <const-pointer> by default; pointer itself is const. This
+means cannot call usual member function which is non-const member on const class object because when
+it is called, this pointer will be set but cannot. Why? since it meants 'this=&const object' but
+there's no {const-to-non-const} conversion.  *kt_dev_cpp_008*
+
+this = &const_total; // ERROR
+
+So if we make member function const, will make this pointer as a pointer to const then:
+
+o Cannot change object via this member func(i.e. this pointer)
+o Can be used on both const and non-const class object.
+
+string isbn 'const' { return bookNo; }
+
+it makes:
+
+T *const this -> 'const' T *const this
+
+
+{const-on-overload} {overload-condition}
+Conditons for overloading
+
+o Shall be the same name
+o Shall have different param list in the number or the type
+o Shall be in the same scope
+
+So don't see return type. See {virtual-copy-constructor} for override case.
+
+// int *const currErr : const pointer. read from right to left
+
+Record lookup( account * );      // pointer
+Record lookup( account *const );	// const pointer. re-define.
+
+Record lookup( account & );		// non-const version
+Record lookup( const account &);	// const version
+
+
+{const-non-const-version}
+May need to have overloads of non-const and const version.
+
+If there is only a const version and display is const member func, then following is a compile error.
+Assume display() is const member func and set_set is non-const member func.
+
+screen myscreen;
+myscreen.display().set_set(10);
+
+Solution?
+
+<approach-one> Use overloads for non const and const
+
+class screen{
+  public:
+    screen& display( ostream& os ) 
+    { do_display(os); return *this; }
+
+    'const' screen& display( ostream& os ) const 
+    { do_display(os); return *this; }
+
+  private:
+    // {tip} use a utility func for a common duplication
+    void do_display( ostream& os ) const 
+    { os << counts; }
+};
+
+
+// gcc-eample
+
+class Screen {
+  public:
+    Screen& display()
+      //{ cout << "dis: this is non-const member" << endl; }
+    { cout << "dis: this is non-const member" << endl; return *this; }
+
+    const Screen& display() const
+      //const Screen& display() const
+      //{ cout << "dis: this is const member" << endl; }
+    { cout << "dis: this is const member" << endl; return *this; }
+
+    void set()
+    { cout << "set: this is non-const member" << endl; }
+};
+
+
+int main(int argc, char** argv)
+{
+  Screen screen;
+
+  screen.display();
+  screen.display().set();
+
+  const Screen cscreen;
+
+  cscreen.display();
+  cscreen.display().set();	// error for note-02
+}
+
+<case-one>: when return *this from const member function. error on const to non-const conversion. 
+
+Screen& display() const
+{ cout << "dis: this is const member" << endl; return *this; }		// error line
+
+test.cpp: In member function 'Screen& Screen::display() const':
+test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&' from expression of type
+'const Screen'
+
+<case-two>: expected as the problem to solve. 
+
+const Screen& display() const
+{ cout << "dis: this is const member" << endl; return *this; }
+
+test.cpp: In function 'int main(int, char**)':
+test.cpp:32:24: error: passing 'const Screen' as 'this' argument of 'void Screen::set()' discards
+qualifiers [-fpermissive]
+
+<case-three> const member function but do not return.
+	
+Screen& display() const
+{ cout << "dis: this is const member" << endl; }
+
+dis: this is non-const member
+dis: this is non-const member
+set: this is non-const member
+dis: this is const member
+dis: this is const member
+set: this is non-const member
+
+Seems that returns as defined in func because no comiple error and works but 'const Screen&
+display() const', get the same error as the case-two even if there is no return.
+
+The const member func has always this form when use return. why? see bitwise-const for more. This
+matters only when returns reference but not a copy.
+
+const T func( ... ) const // OK
+T func( ... ) const       // NO 
+
+
+<approach-two> Have one implementation for both const and non-const <const_cast>
+
+From EC++03. Why need? If member function is big, code duplication. So implement once and use it
+twice. Have non-const that calls const version and have only one implementation. Why this direction?
+If you were to call a non-const from a const one, you'd run the risk that that object you'd promised
+not to modify would be changed. 
+
+Used static_cast to call const version and const_cast to cast away const and return.
+
+class TextBlock {
+  const char& operator[]( std::szie_t position ) const 
+  {
+    ...
+    return text[position];
+  }
+
+  char& operator[]( std::size_t position )
+  {
+    return const_cast<char&> ( static_cast<const TextBlock&>(*this)[position] );
+  }
+};
+
+From {ref-CPR} p233, const_cast is most useful in the conext of overloaded functions.
+
+const string &shorterString( const string &s1, const string &s2 )
+{
+	return s1.size() <= s2.size() ? s1 : s2;
+}
+
+string &shorterString( string &s1, string &s2 )
+{
+	auto &r = shorterString( const_cast<const string&>(s1), const_cast<const string&>(s2) );
+
+	return const_cast< string& >(r);
+}
+
+This is safe to cast that string back to a plain string& in the return because it is bound to one of
+original nonconst arguments. See that const_cast is used to give it const and const away.
+
+
+<approach-three> Change the order
+
+myscreen.set_set(10).display();
+const_screen.display();
+
+
+{const-in-func-definition}
+If miss out 'const' in the func definition then:
+
+usedeskcalc.cpp:28:6: error: prototype for 'bool Stack::empty()' does not match any in class 'Stack'
+usedeskcalc.cpp:13:7: error: candidate is: bool Stack::empty() const
+
+class Stack {
+	...
+	bool empty() const;
+	...
+};
+
+bool Stack::empty() const
+{
+	 ...
+}
+
+
+{bitwise-const}
+From EC++03. Bitwise-const(physical const) is C++'s definition and compiler only catches assignment to
+member data which is read-only. Issues errors like:
+
+// example-one
+
+Error_code Stack::top(Stack_entry &item) const
+{
+	...
+	else
+		//item = entry[count--];	# count is member
+		item = entry[count-1];
+
+	return outcome;
+}
+
+usedeskcalc.cpp:53:21: error: decrement of member 'Stack::count' in read-only object
+
+
+// example-two
+
+int cube(const int& num)
+{
+	num = num * num;   // [error]
+	return num;
+}
+
+test.cpp:22:14: error: assignment of read-only reference 'num'
+
+// example
+
+#include < iostream>
+
+using namespace std;
+
+class Sample {
+public:
+	Sample(const char* str) : text(str) {}
+
+	// cannot remove const return as return used
+	const char& operator[] (std::size_t pos) const
+	{ return text[pos]; }
+
+private:
+	std::string text;
+};
+
+int main(int argc, char** argv)
+{
+
+	Sample sam("CONSTMEMEBER");
+
+	std::cout << sam[1] << endl;
+
+	sam[1] = 'X';	// error
+}
+
+use-const-second.cpp: In function ‘int main(int, char**)’:
+use-const-second.cpp:25:11: error: assignment of read-only location ‘sam.Sample::operator[](1u)’
+
+if change to:
+
+class Sample {
+public:
+	Sample(const char* str) : ptext(new std::string(str)) {}
+
+	// [no-error] but see no const return and if so, get the same error as above.
+	//
+	// also the below works as well only this case meaning bit-wise.
+	//
+	// char& operator[] (std::size_t pos) const
+	// { (*ptext)[pos] = 'k'; reurn (*ptext)[pos]; }
+	//
+	char& operator[] (std::size_t pos) const
+	{ return (*ptext)[pos]; }
+
+	~Sample() { delete ptext; }
+
+private: >
+	 std::string* ptext;
+};
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+	Sample sam("CONSTMEMEBER"); or const Sample sam("CONSTMEMEBER"); 
+
+	std::cout << sam[1] << endl;
+
+	sam[1] = 'X'; 											// [no-error] and can chage value
+
+	std::cout << sam[1] << endl;
+ 
+	return 0;
+}
+
+No compile errors because 'indirect' use of an object (outside of an object) can avoid C++'s const
+check called bitwise-const. Since do not make changes to *this, member, pointer in this case, so
+compiler do not complain. This means const member func can change object state. Break encapsulation.
+
+<fix-to-this-hole>
+From EC++28. Can fix this problem as below,
+
+const char& operator[] (std::size_t pos) const		// NO error
+
+However, <dangling-handles> problem still remains since it returns reference to internal member.
+Therefore, recommend to use const T(...) const form as a default.
+
+
+{logical-const}
+EC++03. Hence logical-const. This is an example to cache the length whenever it is requested. cache
+textLength. Although it changes its member, it has logical constness as it updates length to cache
+purpose. 
+
+class CTextBlock {
+  public:
+    std::size_t length() const;
+
+  private:
+    char* pText;
+    mutable std::size_t textLength;    // mutable
+    mutable bool lengthIsValid;        // mutable
+};
+
+Last calculated length of textblock
+
+std::size_t CTextBlock::length() const
+{
+  if( !lengthIsValid )
+  {
+    textLength = std::strlen( pText );
+    lengthIsValid = true;
+  }
+
+  return textLength;
+}
+
+
+{mutable}
+To make member data writable from a const member func. A mutable data member is never const even
+when it is a member of a const object.
+
+class T {
+  public:
+    void some_member() const;
+
+  private:
+    'mutable' size_t access_ctr;
+};
+
+
+<when-useful>
+- in debug, to count the number of calls for a member func.
+- to use logical constness
+- to use lock as a mutable member. seems useful.
+- see {lazy-fetching} in *kt_dev_mecpp_002* 
 
 ==============================================================================
 *kt_dev_cpp_009* undefined result and a temp-object
@@ -6839,388 +7212,8 @@ base class, class members, not attractive for inlining.
 
 
 ==============================================================================
-*kt_dev_cpp_012*	const member func	
+*kt_dev_cpp_012* <empty>	
 
-{why-const-member-func}
-
-EC++03.
-
-o Clearer interface to show which member func can change state
-o Interface only for const objects. Useful cases?
-
-
-{const-and-this-pointer}
-
-total.isbn();
-
-When call a member func, pseudo-code for actual call should looks:
-
-Sales_data::isbn(&total); where Sales_data::isbn(Sales_data *const this);
-
-That is "this = &total" because this is a <const-pointer> by default; pointer itself is const. This
-means cannot call usual member function which is non-const member on const class object because when
-it is called, this pointer will be set but cannot. Why? since it meants 'this=&const object' but
-there's no {const-to-non-const} conversion.  *kt_dev_cpp_008*
-
-this = &const_total; // ERROR
-
-So if we make member function const, will make this pointer as a pointer to const then:
-
-o Cannot change object via this member func(i.e. this pointer)
-o Can be used on both const and non-const class object.
-
-string isbn 'const' { return bookNo; }
-
-it makes:
-
-T *const this -> 'const' T *const this
-
-
-{const-on-overload}
-
-Conditons for overloading
-
-o Shall be the same name
-o Shall have different param list in the number or the type
-o Shall be in the same scope
-
-note: So don't see return type. See {virtual-copy-constructor} for override case.
-
-// int *const currErr : const pointer. read from right to left
-
-Record lookup( account * );      // pointer
-Record lookup( account *const );	// const pointer. re-define.
-
-Record lookup( account & );		// non-const version
-Record lookup( const account &);	// const version
-
-
-{const-non-const-version}
-
-May need to have overloads of non-const and const version.
-
-If there is only a const version and display is const member func, then following is a comile error.
-Assume display() is const member func and set_set is non-const member func.
-
-screen myscreen;
-myscreen.display().set_set(10);
-
-Solution?
-
-<approach-one> Use overloads for non const and const
-
-class screen{
-	 public:
-	 	screen& display( ostream& os ) 
-			{ do_display(os); return *this; }
-
-	 	'const' screen& display( ostream& os ) const 
-			{ do_display(os); return *this; }
-
-	 private:
-	 	// {tip}
-		// use a utility func for a common duplication
-	 	void do_display( ostream& os ) const 
-			{ os << counts; }
-};
-
-
-// gcc-eample
-
-class Screen {
-	public:
-		Screen& display()
-		//{ cout << "dis: this is non-const member" << endl; }
-		{ cout << "dis: this is non-const member" << endl; return *this; }
-
-		const Screen& display() const
-		//const Screen& display() const
-		//{ cout << "dis: this is const member" << endl; }
-		{ cout << "dis: this is const member" << endl; return *this; }
-
-		void set()
-		{ cout << "set: this is non-const member" << endl; }
-};
-
-
-int main(int argc, char** argv)
-{
-
-	Screen screen;
-
-	screen.display();
-	screen.display().set();
-
-	const Screen cscreen;
-
-	cscreen.display();
-	cscreen.display().set();	// error for note-02
-}
-
-note: 
-
-Screen& display() const
-{ cout << "dis: this is const member" << endl; return *this; }		// error line
-
-test.cpp: In member function 'Screen& Screen::display() const':
-test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&' from expression of type
-'const Screen'
-
-note-02: 
-
-const Screen& display() const
-{ cout << "dis: this is const member" << endl; return *this; }
-
-test.cpp: In function 'int main(int, char**)':
-test.cpp:32:24: error: passing 'const Screen' as 'this' argument of 'void Screen::set()' discards
-qualifiers [-fpermissive]
-
-note: case
-	
-Screen& display() const
-{ cout << "dis: this is const member" << endl; }
-
-dis: this is non-const member
-dis: this is non-const member
-set: this is non-const member
-dis: this is const member
-dis: this is const member
-set: this is non-const member
-
-Seems that returns as defined in func because no comiple error and works but 'const Screen&
-display() const', get the same error as the note-02.
-
-This means that const member func has always this form when use return. This matters only when
-returns reference but not a copy.
-
-const T func( ... ) const // OK
-T func( ... ) const       // NO 
-
-
-<approach-two> Have one implementation for both const and non-const
-
-From EC++03, have non-const that calls const version and have only one implementation. Used
-static_cast to call const version and const_cast to cast away const and return.
-
-class TextBlock {
-	 const char& operator[]( std::szie_t position ) const 
-	 {
-		  ..
-		  return text[position];
-	 }
-
-	 char& operator[]( std::size_t position )
-	 {
-		  return const_cast<char&> ( static_cast<const TextBlock&>(*this)[position] );
-	 }
-};
-
-From {ref-CPR} p233, const_cast is most useful in the conext of overloaded functions.
-
-const string &shorterString( const string &s1, const string &s2 )
-{
-	return s1.size() <= s2.size() ? s1 : s2;
-}
-
-string &shorterString( string &s1, string &s2 )
-{
-	auto &r = shorterString( const_cast< const string& >(s1),
-			const_cast< const string& >(s2) );
-
-	return const_cast< string& >(r);
-}
-
-This is safe to cast that string back to a plain string& in the return because it is bound to one of
-original nonconst arguments. See that const_cast is used to give it const and const away.
-
-
-<approach-three> Change the order
-
-myscreen.set_set(10).display();
-const_screen.display();
-
-
-{const-in-func-definition}
-
-class Stack {
-	...
-	bool empty() const;
-	...
-};
-
-bool Stack::empty() const
-{
-	 ...
-}
-
-
-If miss out 'const' in the func definition then:
-
-usedeskcalc.cpp:28:6: error: prototype for 'bool Stack::empty()' does not match any in class 'Stack'
-usedeskcalc.cpp:13:7: error: candidate is: bool Stack::empty() const
-
-
-{bitwise-const}
-
-From EC++03. Bitwise-const(physical const) is C++'s definition and compiler only catches assignment to
-member data which is read-only. Issues errors like:
-
-// example-one
-
-Error_code Stack::top(Stack_entry &item) const
-{
-	...
-	else
-		//item = entry[count--];	# count is member
-		item = entry[count-1];
-
-	return outcome;
-}
-
-usedeskcalc.cpp:53:21: error: decrement of member 'Stack::count' in read-only object
-
-
-// example-two
-
-int cube(const int& num)
-{
-	num = num * num;   // [error]
-	return num;
-}
-
-test.cpp:22:14: error: assignment of read-only reference 'num'
-
-// example
-
-#include < iostream>
-
-using namespace std;
-
-class Sample {
-public:
-	Sample(const char* str) : text(str) {}
-
-	// cannot remove const return as return used
-	const char& operator[] (std::size_t pos) const
-	{ return text[pos]; }
-
-private:
-	std::string text;
-};
-
-int main(int argc, char** argv)
-{
-
-	Sample sam("CONSTMEMEBER");
-
-	std::cout << sam[1] << endl;
-
-	sam[1] = 'X';	// error
-}
-
-use-const-second.cpp: In function ‘int main(int, char**)’:
-use-const-second.cpp:25:11: error: assignment of read-only location ‘sam.Sample::operator[](1u)’
-
-if change to:
-
-class Sample {
-public:
-	Sample(const char* str) : ptext(new std::string(str)) {}
-
-	// [no-error] but see no const return and if so, get the same error as above.
-	//
-	// also the below works as well only this case meaning bit-wise.
-	//
-	// char& operator[] (std::size_t pos) const
-	// { (*ptext)[pos] = 'k'; reurn (*ptext)[pos]; }
-	//
-	char& operator[] (std::size_t pos) const
-	{ return (*ptext)[pos]; }
-
-	~Sample() { delete ptext; }
-
-private: >
-	 std::string* ptext;
-};
-
-int _tmain(int argc, _TCHAR* argv[])
-{
-	Sample sam("CONSTMEMEBER"); or const Sample sam("CONSTMEMEBER"); 
-
-	std::cout << sam[1] << endl;
-
-	sam[1] = 'X'; 											// [no-error] and can chage value
-
-	std::cout << sam[1] << endl;
- 
-	return 0;
-}
-
-No compile errors because 'indirect' use of an object (outside of an object) can avoid C++'s const
-check called bitwise-const. ( operator[] do not change member, pointer in this case, so compiler do
-not complain) This means const member func can change object state. Break encapsulation.
-
-
-<fix-to-this-hole>
-
-From EC++28. Can fix this problem as below,
-
-const char& operator[] (std::size_t pos) const		// NO error
-
-However, <dangling-handles> problem still remains since it returns reference to internal member.
-Therefore, recommend to use const T(...) const form as a default.
-
-
-{logical-const}
-
-EC++03. Hence logical-const. This is an example to cache the length whenever it is requested. cache
-textLength. Although it changes its member, it has logical constness as it updates lengh to cache
-purpose. 
-
-class CTextBlock {
-	 public:
-		  std::size_t length() const;
-
-	 private:
-		  char* pText;
-		  mutable std::size_t textLength;	// mutable
-		  mutable bool lengthIsValid;			// mutable
-};
-
-Last calculated length of textblock
-
-std::size_t CTextBlock::length() const
-{
-	 if( !lengthIsValid )
-	 {
-		  textLength = std::strlen( pText );
-		  lengthIsValid = true;
-	 }
-
-	 return textLength;
-}
-
-
-{mutable}
-
-To make member data writable from a const member func. A mutable data member is never const even
-when it is a member of a const object.
-
-class T {
-	 public:
-	 void some_member() const;
-
-	 private:
-	 'mutable' size_t access_ctr;
-};
-
-
-<when-useful>
-
-- in debug, to count the number of calls for a member func.
-- to use logical constness
-- to use lock as a mutable member. seems useful.
-- see {lazy-fetching} in *kt_dev_mecpp_002* 
 
 
 ==============================================================================
@@ -7502,6 +7495,23 @@ static view_class _vclass = {
 ==============================================================================
 *kt_dev_cpp_015*	declaration and definition
 
+A declaration tells compilers about the name and type of something and a
+definition provides compilers with the details a a declartation omits. For an
+object, the definition is where compilers set aside memory for the object. For
+a function or function template, it provides the code body. For a class or
+class template, it list the members of the class or template.
+
+{instantiation}
+Ordinarily, when call a function, the compiler needs to see only a declaration. Similarly, when use
+objects of class type, the class definition must be available but the definition of the member
+functions need not be present. As a result, put class definition and function declaration in header
+file and definition of ordinary and class member function is source files.
+
+{virtual-and-definition}
+Ordinarily if we do not use a function, do not need to supply a definition for that function.
+However must define every virtual function regardless of whether it is used because do not know
+which version of a function is called until run time.
+
 extern int i;		// declare
 int i;				// declare and define
 
@@ -7701,21 +7711,20 @@ The staic-members that are associated with the class rather than objects. So can
 static-member-func as <class-method> or <class-operation> as in smalltalk. Then <class-variable> or
 <class-static> for static member var. See <function-static> for this term.
 
-{static-member-func-and-this}
 
+{static-member-func-and-this}
 The static-member-func don not bound to any object; do not have a this pointer. Aa a result
 static-member-func may not be declared as const. 
 
 
 {init-class-variable}
-
 The objects do not contain data associated with class-static. The class-static
 <must-be-defined-and-inited> outside of class because it's global objects.
 
 <in-h>
 class Foo {
-	 private:
-	 static double interest;					// declare
+  private:
+    static double interest;					// declare
 };
 
 <in-cpp>
@@ -7723,38 +7732,34 @@ double Foo::interest = initRate();			// define and init
 
 
 {class-const}
-
-EC++02. If it's const, it limit the scope of a constant to a class and can use in-class-init. [Must]
-be static const and otherwise got error:
+EC++02. If it's const, it limit the scope of a constant to a class and can use in-class-init. Hence
+it's called class-variable and be static. Otherwise got error:
 
 usecomma.cpp:8:13: error: invalid use of non-static data member ‘Foo::MAX’
 
 <in-h>
 class Foo {
-	 private:
-	 static const double interest = 30;		// declare. in-class-init. <class-const>
-	 double table[ interest ];             // can be used.
+  private:
+    static const double interest = 30;		// declaration. in-class-init. 
+    double table[ interest ];             // can be used.
 };
 
 <in-cpp>
-
 This class-const of integral type can be used in class definition without definition. But used in
 other context such as passing it to func arg, must define.
 
-double Foo::interest;							// define and 'must' not init
+double Foo::interest;							// definition and 'must' not init
 
 
 {what-class-method-can-access}
-
 The static member func, class-method, do not have [this-pointer] because no need to distinguish
 objects and this means static member func can only use static member data.
 
 
 {summary}
-
 After all, class-method and class-variable is to provide safer way to golbal objects.
 
-o easy access as global, no need to create an object to use, but in the class scope.
+o SCOPE. easy access as global, no need to create an object to use, but in the class scope.
 o created only when it is used. It is true for <function-static> in {limit-the-number-of-object}.
 o to solve {init-order-problem}
 
@@ -9607,7 +9612,6 @@ instantiated to correct type when deleter is called.
 The enumerations group together sets of integral 'constants' and defines [new] type.
 
 {scoped-enum}
-
 C++11. note that used class keyword. Defines an object of 'open_modes' type and follows scoping rule
 means type-erorr can happen. Scope means to specify explicitly where it come from
 
@@ -9617,9 +9621,9 @@ enum 'class' open_modes { input, output, append };
 open_modes readfile = open_modes::input;
 open_modes readfile = 2;	// error
 
-{unscoped-enum}
 
-The enumerator is const and need not be unique. By default, start at 0 and inc by 1.
+{unscoped-enum}
+The enumerator is const and [need not be unique]. By default, start at 0 and inc by 1.
 
 enum color { red, yellow, green };				// unscoped
 enum stoplight { red, yellow, green };			// error: redefines enumerators
@@ -9638,18 +9642,24 @@ enum { floatPrec = 6, doublePrec = 10, double_doublePrec = 10 };	// unnamed, uns
 
 
 {conversion} {enum-hack}
-
 The 'unscoped' enumerators are implicitly converted to 'int' but not vice versa. Can be used where
-an integral value is required. called <enum-hack>. By default scoped enums have int as the
+an integral value is required. Called <enum-hack>. By default scoped enums have int as the
 underlying type. There is no default for unscoped enums; all we know is that the underlying type is
 large enough to hold the enumerator values.
 
 int i = color::red;
 int j = peppers::red;	// error
 
+class GamePlayer {
+  private:
+    enum { NumTurns = 5; }
+
+    int scopes[NumTurns];
+    ...
+};
+
 
 {func-with-enum-arg}
-
 Cannot pass an integral value to an enum parameter but can pass an object or enumerator of unscoped
 enumaration to a parameter of integral type; the enum promotes to int or to a larger integral type.
 
@@ -13821,7 +13831,7 @@ Prefer the compiler to the preprocessor because:
 
 const double AspectRatio = 1.653
 
-<2> smaller code (??)
+<2> smaller code (?) since blind substitution could result in multiple copies in your object code.
 
 <3> class-const
 
@@ -13836,7 +13846,7 @@ int a= 5, b = 0;
 CALL_WITH_MAX(++a, b);				// a is increased twice
 CALL_WITH_MAX(++a, b+10);			// a is increased once
 
-Use 'inline' instead.
+If want to avoid function call cost, use 'inline' instead.
 
 
 ==============================================================================
@@ -14086,7 +14096,7 @@ rec.upperLeft().setX(50);
 Two problems:
 
 1) it makes memeber data effectively public as returns reference to it.
-2) the problem of bitwise-const. See {bitwise-const} in *kt_dev_cpp_012*
+2) the problem of bitwise-const. See {bitwise-const} in *kt_dev_cpp_008*
 
 The solution is that it offers read-only access:
 
@@ -14098,7 +14108,7 @@ class Rectangle {
 	 std::shared_ptr< RectData > pData;
 };
 
-Similar to the example of {const-member-func} in *kt_dev_cpp_012*
+Similar to the example of {const-member-func} in *kt_dev_cpp_008*
 
 To see 1) only, see following example:
 
