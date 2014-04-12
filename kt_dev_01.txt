@@ -5817,10 +5817,36 @@ base.cpp:15:7: error: ‘D& D::operator=(const D&)’ is implicitly deleted beca
 base.cpp:12:10: error: ‘Base& Base::operator=(const Base&)’ is private
 base.cpp:15:7: error: within this context
 
+<case-link-error>
+using std::cout; using std::endl;
+
+class Base {
+  public:
+    Base() = default;
+    ~Base() = default;
+  public:
+    int m_iDataABCAnimal;
+    Base(const Base& base);      // NO definition
+    Base& operator=(const Base& base) { cout << "copy-assign: base" << endl; }
+};
+
+int main()
+{
+  Base b1, b2;
+
+  Base b3(b1);
+}
+
+$ ./comp.sh use-prevent-copy.cpp 
+/tmp/ccskAMRR.o: In function `main':
+/home/kit/work/use-prevent-copy.cpp:22: undefined reference to `Base::Base(Base const&)'
+collect2: ld returned 1 exit status
+
 <boost-noncopyable>
-EC++06. To move the link-time error up to the compile-time error. {QQ} This still do not have
-definitions but why compile error this time? By moving private up the inheritence, change link error
-to compile error:. Just compile error.
+EC++06. To move the link-time error up to the compile-time error. This still do not have definitions
+but why compile error this time? By moving private up the inheritence, change link error to compile
+error. [KT] This is not quite true since as shown the above, already get compile errors when use
+private copy controls.
 
 #include <iostream>
 
@@ -5841,17 +5867,12 @@ class Foo : private Uncopyable {		// line 13
 
 int main()
 {
-   std::cout << "{ "; 
-   
-	Foo f;
-	f.WhoAmI();
+  Foo f;
+  f.WhoAmI();
 
-	// errors only when add followings
-	Foo o;
-	o = f;	// line 26
-
-	std::cout << "size :" << sizeof(f) << std::endl;
-   std::cout << "}" << std::endl; 
+  // errors only when add followings
+  Foo o;
+  o = f;	// line 26
 }
 
 kit@kit-vb:~/work$ ./comp.sh use-noncopy.cpp 
@@ -8018,7 +8039,7 @@ instance and make it not portable. See {preventing-inheritance}
 
 {pure-virtual-dtor}
 EC++07. Why use this? Sometimes you have a class that you'd like to be abstract but you don't have
-any pure virtual functions. 
+any pure virtual functions. Like <2> base class to extend. 
 
 class AWOW {
   public:
@@ -8034,6 +8055,42 @@ MEC++33. Pure virtual do not mean it has no implementation and means that the cl
 the derived func must be nomal virtual. True, most pure virtual functions are never implemented, but
 pure-virtual-dtor are a [special-case]. They must be implemented, because they are called whenever a
 derived class destructor is invoked.  
+
+<example-when-pure-virtual-has-implementation>
+#include <iostream>
+
+using std::cout; using std::endl;
+
+class Base {
+  private:
+    int m_iDataABCAnimal;
+
+  public:
+    virtual ~Base() {};
+    virtual void shout(void)=0;
+};
+
+void Base::shout(void)
+{ cout << "base shout" << endl; }
+
+class Derived: public Base {
+  private:
+    int m_iDataAnimal;
+
+  public:
+    void sample() { cout << "sample: derived" << endl; }
+    void shout(void) { Base::shout(); cout << "derived shout" << endl; }
+};
+
+int main()
+{
+  std::cout << "--{ main " << std::endl;
+
+  Derived d;
+  d.shout();
+
+  std::cout << "--} main " << std::endl;
+}
 
 <example-error>
 class ABCAnimal {
@@ -9760,8 +9817,8 @@ The namespace either defines a new namespace or adds to an existing one. Be sure
 appear before opening the namespace. If not, attempt to define all the names in that header as
 members of the enclosing namespace. 
 
-The declaration and definition should be in the same namespace and this means shall use namespace
-block for header and source file.
+The declaration and definition should be in the same namespace and this means shall use namespace ~
+block for header and source file.~
 
 // Sales_data.h
 #include <string>
@@ -9826,8 +9883,20 @@ sam01.cpp:6:6: error:                 int {anonymous}::i
 Unlike static variable which is file-static, when use unnamed namespace cannot try to use it from
 the other file since there is no way to declare it in the other file. For static variable, can try
 use extern keyword even if it fails to link in the end. This is okay since unnamed namespace is
-file-scope. Then how about global variables? Is it possible to group global variables using
-namespace? Seems not since there is no way to declare variables in a namespace.
+file-scope. 
+
+<global-variables>
+Can use namespace for global variables:
+
+// file one
+namespace NG {
+  int gfs_count;
+}
+
+// file two
+namespace NG {
+  extern int gfs_count;
+}
 
 
 {using-declaration-and-directive}
