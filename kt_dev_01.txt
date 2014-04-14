@@ -8145,7 +8145,6 @@ ABCAnimal::~ABCAnimal() {}
 *kt_dev_cpp_019*	exception
 
 {intention}
-
 The exception is intended for events that prevent the program from continuing normally. so when
 found no matching catch and stop execution of the program; call the library 'terminate' function.
 
@@ -8153,14 +8152,13 @@ From MEC++09. What's different to the approach of returning error code? Exceptio
 and if do, it is terminated. From MEC++12. The execution return to call site for func call but never
 for exception.
 
-{standard-exception}
 
+{standard-exception}
 The stdexcept header defines several general purpose exception classes and the type_info header
 defines the bad_cast exception type.
 
 
 {stack-unwinding}
-
 A throw-keyword is like a return; statements following a throw are not executed. If no
 <matching-catch> found, current/calling function is exted until found in the call tree.
 
@@ -8177,11 +8175,11 @@ func3()              func2()                func1()
 }                    }                      }
 
 
-During stack-unwinding, func exits prematurely and means local objects are dstroyed. dtor is called.
+During stack-unwinding, func exits prematurely and means local objects are dstroyed and dtor is
+called.
 
 
 {exception-in-ctor}
-
 Partially constructed. Even if it's partially constructed, guaranteed that the constructed members
 will be properly destroyed. From EC++30 p137 and see {empty-ctor-represenstaion}
 
@@ -8190,7 +8188,6 @@ destroyed. Seems EC++ is the latest.
 
 
 {function-try-block}
-
 Primus p773, 18.1.3 shows function-try to handle exception when do {constructor-initializers} This
 is for ctor and dtor as well and to handle exceptions happens before ctor body get runs because
 exception handling in ctor cannot catch it.
@@ -8211,7 +8208,6 @@ catch ( const std::bad_alloc& e) { handle_out_of_memory(e); }
 
 
 {problem-of-exception-in-dtor}
-
 Why exception in dtor is the problem? because as said, func call tree can exit prematurely during
 stack-unwinding and this means local objects are destroyed. If dtor can raise an execption, ends up
 having two exception which is not allowed so terminate will be called. EC++08 says that terminate is
@@ -8219,40 +8215,37 @@ called or undefined. Hence
 
 o The <permature-program-termination> which can means no chance to do useful things to handle
 exception such as clean-up and to do what is useful before terminating or swallowing. For example,
-make a log entry.
+make a log entry. This is a main problem since premature termination means that it can mean
+undefined state of a system.
 
 So usually no exception in dtor and if do, should handle in the same dtor. STL guarantee thar dtor
 will not raise an execption.
 
 
 {exception-and-resource-managing-class}
-
 To handle exception, shall use resource-managing-class, ie., RAII and see {resource-managing-class}
 in *kt_dev_stl_018* for various solutions.
 
 
 {how-to-handle-exeception-in-dtor}
-
 See {raii-for-resource-using-own-interface} for other examples. From EC++08. General recommendation
-is not to raise exception in dtor. If own interface comes from external source then it could raise
-an exception. What to do? These are how to handle when exception happens in dtor.
-
-TODO: check code example
+is not to raise exception in dtor. If interface to use comes from external source then it could
+raise an exception. What to do? These are how to handle when exception happens in dtor.
 
 class DBConnection {
-	 public:
-	 ...
-	 static DBConnection create();    // fatctory-func
-	 void close();                    // can throw exception
+  public:
+    ...
+    static DBConnection create();    // fatctory-func
+    void close();                    // can throw exception
 };
 
 // resource managing class
 class DBConn {
-	 public:
-	 ~DBConn() { db.close(); }        
+  public:
+    ~DBConn() { db.close(); }        
 
-	 private:
-	 DBConnection db;
+  private:
+    DBConnection db;
 };
 
 // client use
@@ -8265,70 +8258,74 @@ class DBConn {
 Two approach to address exception in dtor:
 
 <1> terminate the program
+By doing this, make a log entry to see and prevent undefined behavior.
 
 DBConn::~DBConn()
 {
-	 try{ db.close() }
-	 catch(...) {
-		  // make log entry
-		  std::abort();
-	 }
+  try{ db.close() }
+  catch(...) {
+    // make log entry
+    std::abort();
+  }
 }
 
-note: or can use {noexcept} at below? seems not as no chance to do useful thing such as making a log
-entry.
+Can use {noexcept} at below? Seems not as it has the same effect when not handling exaction from a
+dtor: no chance to do useful thing such as making a log entry.
 
 <2> swallow the exception
+Can be used when the program must be able to continue execution even after exception is happened and
+ignored.
 
 DBConn::~DBConn()
 {
-	 try{ db.close() }
-	 catch(...) {
-		  // make log entry
-	 }
+  try{ db.close() }
+  catch(...) {
+    // make log entry
+  }
 }
 
 <3> However, said that the better way is:
 
 class DBConn {
-	 public:
-	 >
-	 void close()
-	 {
-		  db.close();							// can exception happen
-		  closed = true;
-	 }
+  public:
+    void close()
+    {
+      db.close();							// can exception happen
+      closed = true;
+    }
 
-	 ~DBConn() 
-	 { 
-		  if(!closed)
-		  {
-				try { db.close(); }			// resource managing class
-				catch(...) {
-					// make log enrtry
-					// terminate or swallow
-				}
-		  }
-	 }
-<
-	 private:
-	 DBConnection db;
-	 bool closed;
+    ~DBConn() 
+    { 
+      if(!closed)
+      {
+        try { db.close(); }			// resource managing class
+        catch(...) {
+          // make log enrtry
+          // terminate or swallow
+        }
+      }
+    }
+
+  private:
+      DBConnection db;
+      bool closed;
 };
 
 
-The client have an opportunity to handle the problem and if not handle, back to terminating or
-swallowing. However, this need client to do more.
+The client have an opportunity to handle the exception and if the client choose not to handle it
+then fall back to default action: terminating or swallowing. It appears that it make raii less
+useful and pass the burden on to the client but it is not since it gives them opportunity to handle.
+it. See {raii-and-exception-in-dtor} for the point to consider when use raii.
 
 // client use
 {
-	 DBConn dbc( DBConnection::create() );
+  DBConn dbc( DBConnection::create() );
 
-	 try{ DBConn dbc.close() }
-	 catch(...)
-	 {
-		  // try to address exception and if successful, set closed to true.
-	 }
+  try{ DBConn dbc.close() }
+  catch(...)
+  {
+    // try to address exception and if successful, set closed to true.
+  }
 }
 
 
@@ -8626,14 +8623,13 @@ catch( myerror& eobj ) {
 
 
 {noexcept}
-
 void recomp(int) noexcept;		// C++11 style
 void recomp(int) throw();		// old style
 
-note: The nothrow-keyword is the same as noexcept but used in new expression. See {placement-new} in
-*kt_dev_stl_019*
+Note: The nothrow-keyword is the same as noexcept but used in new-operator expression. See
+{placement-new} in *kt_dev_stl_019*
 
-To state that a func will not throw an exception and check it at runtime. if an exception happens
+To state that a func will not throw an exception and check it at runtime. If an exception happens
 even if it's declared it will not, 'terminate' is called. See {when-exception-spec-mismatch} So two
 use cases:
 
@@ -12289,9 +12285,9 @@ void displayInfo(const Information& info)
 
 
 {raii-and-exception-in-dtor}
-
-The raii is great but when use raii for own interface, it can raise exception in destructor. This
-problem is described in {problem-of-exception-in-dtor}. 
+The raii is great but when use raii for own interface such as mutex and db connection, it can raise
+exception in destructor. This problem is described in {problem-of-exception-in-dtor}. Therefore raii
+is useful but requires a care when use it.
 
 
 {raii-and-copy-support}
@@ -13974,29 +13970,29 @@ in a log. If it is a derived object, then need to have a log entry for that.
 Solution?:
 
 class Transaction {
-	 public:
-	 Transaction();
+  public:
+    Transaction();
 
-	 virtual void logTransaction() const = 0;		// to make <type-dependent-log-entry>
-	 ...
+    virtual void logTransaction() const = 0;		// to make <type-dependent-log-entry>
+    ...
 };
 
 Transaction::Transaction()
 {
-	 ... >
-	 logTransaction();
+  ... >
+    logTransaction();
 }
 
 class BuyTransaction: public Transaction {
-	 public:
-	 virtual void logTransaction() const;
-	 ...
+  public:
+    virtual void logTransaction() const;
+    ...
 };
 
 class SellTransaction: public Transaction {
-	 public:
-	 virtual void logTransaction() const;
-	 ...
+  public:
+    virtual void logTransaction() const;
+    ...
 };
 
 // use
@@ -14004,55 +14000,58 @@ class SellTransaction: public Transaction {
 	 BuyTransaction buy;
 }
 
-Will it have a log entry of BuyTransaction? NO. base class version if available. 
->
- C++ don't allow because when base ctor runs, only base part is created. hence base version.
-<
-note: KT. That is becuase it is static bining at compile time.
+Will it have a log entry of BuyTransaction as expected? NO. Will have the base class version if
+there is one. 
 
-1) Some compilers issue a warning. Even if there is no warnings, there will be a link error unless
-there is a definition of pure virtual function. Remember pure virtual can have definition. 
+C++ don't allow this because when base ctor runs, only base part is created. hence base version. If
+it was allowed, then derived call would access derived part which is not created or initialized.
+This is undefined so not allowed. KT. Also this can be explained as this is becuase it is static
+bining at compile time.
+
+1) For the example above, some compilers issue a warning. Even if there is no warnings, there will
+be a link error unless there is a definition of pure virtual function. Remember pure virtual can
+have definition. 
 
 2) Can use normal virtual function (not pure) but still get base version.
 
 
 {one-solution}
+Make it non-virtual, move up the implementation to log in the tree and pass up the type-dependant
+info to the base class in the tree.
 
 class Transaction {
-	 public:
-	 explicit Transaction( const std::string& logInfo );
+  public:
+    explicit Transaction( const std::string& logInfo );
 
-	 void logTransaction( const std::string& logInfo) const;		// <non-virtual-func>
-	 ...
+    void logTransaction( const std::string& logInfo) const;		// <non-virtual-func>
+    ...
 };
 
 Transaction::Transaction( const std::string& logInfo )
 {
-	 ...
-	 logTransaction( logInfo );
+  ...
+    logTransaction( logInfo );
 }
 
 class BuyTransaction: public Transaction {
-	 public:
-	 BuyTransaction( parameters ) 
-	 : Transaction( createLogString(parameters) )					// <pass-log-to-base-class>
-	 { ... }
-	 ...
-	 private:
-	 'static' std::string createLogString( parameters );				// <static-member-func>
+  public:
+    BuyTransaction( parameters ) 
+      : Transaction( createLogString(parameters) )                // <pass-log-to-base-class>
+    { ... }
+    ...
+  private:
+      'static' std::string createLogString( parameters );         // <static-member-func>
 };
 
 See the use of func, createLogString, helper func, instead of member init list and it is more
-convenient than member init. Think when there are many parameters.
+convenient than member init. Consider this  when there are many parameters.
 
-
-{static-member-func-example} {reason-one}
-
-Why static? By doing this, there is no danger of accidentally referring to the ByeTransaction
-object's as-yet-uninitialized data members when base part runs.
+<why-static> {static-member-func-example} {reason-one}
+Why static? By doing this, there is no danger of accidentally referring to the BuyTransaction
+object's as-yet-uninitialized data members when base ctor and part runs.
 
 Why logging call in the base class in the first place? that's becauase it's common to all type of
-transactions. so move up as it's abstraction.
+transactions. So move up as it's abstraction.
 
 
 ==============================================================================
