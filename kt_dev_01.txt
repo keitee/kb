@@ -5889,18 +5889,16 @@ class part can't call the base class part as it's private. In boost, it's 'nonco
 
 
 {self-assign-and-exception-safe}
-When implement copy-assign, must think about self-assign and exception-safe. See
+EC++11. When implement copy-assign, must think about self-assign and exception-safe. See
 {self-assign-exception-safe} in *kt_dev_cpp_019*
 
-Why? because ther are <less-obvious-assignments> to self cases:
+Why? because there are less-obvious-assignments to self cases:
 
 <one> aliasing: having more than one way to refer to an object
+a[i] = a[j];   // potential assign to self when i==j
+*px = *py;     // potential assign to self when point to the same
 
-a[i] = a[j];		// potential assign to self when i==j
-*px = *py;			// potential assign to self when point to the same
-
-<two> same class hierarchy. TODO: more detail.
-
+<two> same class hierarchy.
 void doSomething( const Base& rb, Derived& pd );
 
 
@@ -6170,33 +6168,31 @@ note: what will happen if there is no class-specific swap and no using declarati
 
 
 {copy-and-swap-idiom}
-
-Combine dtor and copy. automatically handle self-assign and exception-safe from {value-like} in
+Combine dtor and copy. Automatically handle self-assign and exception-safe from {value-like} in
 *kt_dev_cpp_004*
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
-	 auto newp = new string(*rhs.ps);
-	 delete ps;
-	 ps = newp;
-	 return *this;
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
 }
 
 To rewrite using copy-and-swap-idiom
 
-HasPtr& HasPtr::operator=(const HasPtr rhs)	// note. not ref and it's copy
+HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy
 {
-	 swap(*this, rhs);
-	 reutn *this;				// rhs is destroyed, which deletes the old ps.
+  swap(*this, rhs);
+  return *this;      // rhs is destroyed, which deletes the old ps.
 }
 
->
- SO, have optimization, self and exception safe and neat implementation using swap.
- Also EC++11 says the compiler can generate more efficient code by passing by value.
-<
+SO, have optimization, self and exception safe and neat implementation using swap. Also EC++11 says
+the compiler can generate more efficient code by moving copying from the function body to parameter
+construction. 
+
 
 {define-swap-use-pimpl-idiom}
-
 EC++25. pimpl-idiom. See *kt_dev_ecpp_008* for pimpl-idiom.
 
 class WidgetImpl {                          // class for Widget data;
@@ -7607,14 +7603,12 @@ For class, see {class-definition} in *kt_dev_lang_010*
 *kt_dev_cpp_016*	statement {division-and-modulus}
 
 {side-effect}
-
 An expression, such as 'ival+5' becomes an expression statement when it is followed by a semicolon.
 An expression statement contains an expression that has a side-effect-such as assigning a new value
 or printing a result-when it is evaluated.
 
 
 {division-and-modulus}
-
 The division truncate the remainder and modulus(%) operator.
 
 // plus to grade ending in 8 0r 9 and minus to grade ending in 0, 1, or 2.
@@ -7635,7 +7629,6 @@ else
 
 
 {switch}
-
 To emphasize that the cases represent a range of values:
 
 switch(ch)
@@ -7649,7 +7642,6 @@ It can be useful to define a default label even if there is no work for the case
 the case was considered.
 
 <switch-under-the-hood>
-
 http://stackoverflow.com/questions/3012011/switch-case-assembly-level-code
 
 Here is the C source:
@@ -8495,36 +8487,35 @@ Session::~Session()
 
 
 {exception-safe}
-
-See {self-assign-and-exception-safe} for reasons why need to handle self-assign. If new raise
-exception, lhs state don't change but the below don't. So the below isn't exception safe.
+See {self-assign-and-exception-safe} for reasons why need to handle self-assign. Also if not, then
+it's not exception safe as well. If this is exception safe, then lhs state shouldn't change when new
+raise exception, but the below don't and the below isn't exception safe.
 
 // NO self-assign and exception-safe in value-like case
 // 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
-	 delete ps;
-	 auto newp = new string(*rhs.ps);
-	 ps = newp;
-	 return *this;
+  delete ps;
+  auto newp = new string(*rhs.ps);
+  ps = newp;
+  return *this;
 }
 
 // combine dtor and copy. handle self-assign and exception-safe by moving delete after new.
-// 
+// <careful-statement-ordering>
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
-	 auto newp = new string(*rhs.ps);
-	 delete ps;
-	 ps = newp;
-	 return *this;
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
 }
 
 EC++11. Making operator= exception-safe typically renders it self-assign-safe too. So think about
-exception-safe only. See {copy-and-swap-idiom} in *kt_dev_cpp_006*
+exception-safe only. Alternatively, can use {copy-and-swap-idiom} in *kt_dev_cpp_006*
 
 
 {exception-safe-gurantees}
-
 EC++29. Two requirements for exception safety when exception happens:
 
 NO resource leak and NO change of object state.
@@ -9876,10 +9867,9 @@ sam01.cpp:11:2: error: reference to ‘i’ is ambiguous
 sam01.cpp:3:5: error: candidates are: int i
 sam01.cpp:6:6: error:                 int {anonymous}::i
 
-Unlike static variable which is file-static, when use unnamed namespace cannot try to use it from
-the other file since there is no way to declare it in the other file. For static variable, can try
-use extern keyword even if it fails to link in the end. This is okay since unnamed namespace is
-file-scope. 
+<same-as-static>
+For static variable, try to use extern keyword and fails to link in the end. This is the same when
+use unnamed namespace. If not use extern then have multiple definition error. 
 
 <global-variables>
 Can use namespace for global variables:
@@ -13653,19 +13643,18 @@ int main(int argc, char* argv[])
 ==============================================================================
 *kt_dev_sys_009*	for and while asm (MIPS)
 
-# c source
-#
+<asm-while-loop> in C
 int main()
 {
-	 int i = 0;
+  int i = 0;
 
-	 while( i < 10 )
-	 {
-				printf("w iter %d\n", i );
-				++i;
-	 }
+  while( i < 10 )
+  {
+    printf("w iter %d\n", i );
+    ++i;
+  }
 
-	 return 0;
+  return 0;
 }
 
 #	when use -g (debug)
@@ -13741,18 +13730,18 @@ int main()
   4005d8:       03e00008        jr      ra
   4005dc:       27bd0028        addiu   sp,sp,40
 
-#
-#
+
+<asm-for-loop>
 #include <stdio.h>
 
 int main()
 {
-        int i = 0;
+  int i = 0;
 
-        for(i; i < 10; i++)
-                printf("w iter %d\n", i );
+  for(i; i < 10; i++)
+    printf("w iter %d\n", i );
 
-        return 0;
+  return 0;
 }
 
 # when use -Os. same as while case
