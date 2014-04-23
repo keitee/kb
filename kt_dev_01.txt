@@ -101,6 +101,7 @@ C and C++
 |kt_dev_cpp_030|	case study: framework {tizen-case}
 |kt_dev_cpp_031|	wrapper
 |kt_dev_cpp_032|	case study: porting layer
+|kt_dev_cpp_033|	case study: inheritance
 
 STL 
 |kt_dev_stl_000|	useful links {stl-design-rationale}
@@ -132,7 +133,7 @@ SYSTEM
 |kt_dev_sys_001|	<empty>
 |kt_dev_sys_002|	endianess
 |kt_dev_sys_003|	to check endianess at runtime
-|kt_dev_sys_004|	to check address alignment
+|kt_dev_sys_004|	to check address alignment or boundary
 |kt_dev_sys_005|	two's complement
 |kt_dev_sys_007|	stack (MIPS)
 |kt_dev_sys_008|	stack asm example (MIPS)
@@ -5535,22 +5536,18 @@ implementation.
 *kt_dev_cpp_004* copy-controls when use dyn resource.
 
 {when-use-resource-has-dyn-lifetime}
-
 o don't know how many object is needed
 o don't know the exact type of object
 o share data between objects
 
 
 {the-rule-of-three}
-
 The rule of three (the rule of five in C++11) is a rule of thumb in C++ that claims that
 if a class defines one of the following it should probably explicitly define all three:[1]
 
 dtor, copy-ctor, and copy-assign operator
 
-
 <case-example> C++ Primer p505
-
 The syn version does not operate well for a class using dyn resource. The case is that if there's no
 dtor defined, the syn dtor will not run delete on ps so must define own dtor but use syn versions
 for copy and assign. 
@@ -5583,70 +5580,66 @@ void func(p);		// p and func's arg points the same.
 						// pointer which was already deleted after func().
 HasPrt q(p);		// p and q have invalid pointer.
 
-
 So, need to define copy-ctor and copy-assign op as well. Two methods on what copying an object will
 mean: value or pointer like (what we do when copy pointer member)
-
 
 For the same reason in {constructor-initializers} in *kt_dev_cpp_003* must define copy controls when
 there are const and reference members because compiler will not create syn versions since cannot
 rebind const and reference. But how to define user copy controls for these cases?
 
 
-{copy-control-in-inheritance} {construct-and-copy-all-parts-of-an-object}
+{construct-and-copy-all-parts-of-an-object}
+EC++12. When having own copy functions(copy-ctor and copy-assign), then means that you shall have
+full responsibility for copying. Two cases: 
 
-EC++12. When having own copy functions(copy-ctor and copy-assign) for [derived class], be careful to
-handle base part because having own copy controls means to have [full responsibilities] of doing it.
-
-// when add new member data
+1> when add member variables to a class.
 
 Customer& Customer::operator=( const Customer& rhs )
 {
-	 name = rhs.name;
-	 return *this;
+  name = rhs.name;
+  return *this;
 }
 
 If add new member data, then must update all copy functions and ctors too. Otherwise, have copy
 functions to copy parts of object.
 
-// class inheritence
+2> when defines copy functions for derived class. Be careful to handle base part because having own
+copy controls means to have full responsibilities of doing it.
 
 class PriorityCustomer: public Customer {
-	 ...
-	 PriorityCustomer::PriorityCustomer( const PriorityCustomer& rhs )
-	 :priority( rhs.priority )
-	 {
-	 }
+  ...
+  PriorityCustomer::PriorityCustomer( const PriorityCustomer& rhs )
+  :priority( rhs.priority )
+  {
+  }
 
-	 PriorityCustomer& PriorityCustomer::operator=( const PriorityCustomer& rhs )
-	 {
-		  priority = rhs.priority;
-		  return *this;
-	 }
+  PriorityCustomer& PriorityCustomer::operator=( const PriorityCustomer& rhs )
+  {
+    priority = rhs.priority;
+    return *this;
+  }
 };
 
-must be:
+These do nothing about base part and that means:
+For construction, PriorityCustomer-ctor will use a default-ctor of Customer and Customer part will
+be default-init. For copy, PriorityCustomer-copy-ctor will do nothing on Customer part and it will
+remain unchanged. So shall be:
 
 class PriorityCustomer: public Customer {
-	...
-	PriorityCustomer::PriorityCustomer( const PriorityCustomer& rhs ) 
-	:Customer(rhs),~
-	priority( rhs.priority )
-	{
-	}
+  ...
+  PriorityCustomer::PriorityCustomer( const PriorityCustomer& rhs ) 
+  :Customer(rhs),~
+  priority( rhs.priority )
+  {
+  }
 
-	PriorityCustomer& PriorityCustomer::operator=( const PriorityCustomer& rhs )
-	{ 
-	    Customer::operator=(rhs); ~
-	    priority = rhs.priority;
-	    return *this;
-	}
+  PriorityCustomer& PriorityCustomer::operator=( const PriorityCustomer& rhs )
+  { 
+    Customer::operator=(rhs); ~
+    priority = rhs.priority;
+    return *this;
+  }
 };
-
-If not, do nothing about base part and that means:
-For construction, PriorityCustomer-ctor will use a default-ctor of Customer and Customer part will ~
-be default-init. For copy, PriorityCustomer-copy-ctor will do nothing on Customer part and it will ~
-remain unchanged. ~
 
 
 {value-like} {deep-copy} {self-contained-object}
@@ -7444,21 +7437,18 @@ set_set is called on this temp.
 *kt_dev_cpp_014*	decltype, typedef, and using
 
 {deltype-and-auto}
-
 The 'auto' can use from func() return
 
-sting s("...");
+string s("...");
 decltype( s.size() ) count = 0;
 
 
 {typedef-and-using}
-
 typedef double wages;
 using wages = double;	// C++11
 
 
 {typedef-of-class}
-
 Effectively, make alias to classA. Useful when class name changes. Seen in Tizen code. typedef is
 just a synonym for some type (from ESTL)
 
@@ -7466,7 +7456,6 @@ typedef classA classB;
 
 
 {typedef-example}
-
 typedef struct treenode TreeNode;
 typedef struct treenode {
 	TreeEntry entry; // application dependant
@@ -7503,7 +7492,6 @@ The only difference between struct and class is the default access specifier for
 derivation; struct is public and class is private. p616 in ref-CPR.
 
 {typedef-vs-struct}
-
 struct view_class {
 	const char *title;
 	const char *style;
@@ -8578,7 +8566,7 @@ The object has a pointer to the implementation that has all object data. This ca
 general design although offer no better gurarantee than the previous for this particular example.
 
 struct PMImpl {
-	 std::shard_ptr< Image > bgImage;
+	 std::shared_ptr< Image > bgImage;
 	 int imageChanges;
 };
 
@@ -9422,7 +9410,7 @@ interface class. Why? because implementation class did not override some of memb
 /interface/port/IIframe.h:94:18: note: 	virtual bool IIframe::isMHEG2(void*, uint32_t)
 /interface/port/IIframe.h:102:18: note: 	virtual bool IIframe::isMHEG4(void*, uint32_t)
 
-This may be a way to check whether it's overrieded or not?
+This may be a way to check whether it's overrieded or not? No this is only for ABC.
 
 
 ==============================================================================
@@ -10529,9 +10517,58 @@ those.
 │       ├── ...
 
 
-# ============================================================================
-#{
+==============================================================================
+*kt_dev_cpp_033*	case study: inheritance
 
+In the porting layer design and implementation, have drawn the class hierarchy.
+
+ ISession (ABC) and more...      IEvent 
+
+ IDriver : public ISession, public IEvent
+
+ CDsm : public IDriver and more...
+
+When add more interface classes which are ABC and add more concrete derived classes, shall add the
+same member functions in a header and source of a derived class. Otherwise, will have compile/link
+error since ABC forces derived class to define functions. See {error-when-create-abc} for what
+happens when not overrides pure virtual functions. Tedious. Any other better way?
+
+1> How about having a pure-virtual-dtor to make a ABC and having normal virtual members?
+If have a class definition and the defintion of a pure-virtual-dtor in the header, get a multiple
+defintion error since this is included in every file which use it. Can have a header and source
+file.
+
+2> How about having a virtual members for interface classes? Since it has implementation, that is
+okay for a derived class not to override or implement it. So no tedious work. However, cannot force
+derived to override and can forget to implement it. Here talking about 'interface' class.
+
+3> What will happen when changes pure virtual functions to normal virtual functions but do not have
+implementation? Simply changes a header since it has a header only as a interface class.
+
+Linking CXX executable mhegproto
+port/libmhport.a(CDsm.cpp.o): In function `~ISession':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+port/libmhport.a(CDsm.cpp.o): In function `~IDriver':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x94): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x98): undefined reference to `IEvent::unsubscribeEvent(void*)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x9c): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTI7IDriver[typeinfo for IDriver]+0x28): undefined reference to `typeinfo for IEvent'
+port/libmhport.a(CDsm.cpp.o): In function `.LANCHOR0':
+CDsm.cpp:(.rodata+0x5ac): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
+CDsm.cpp:(.rodata+0x5b0): undefined reference to `IEvent::unsubscribeEvent(void*)'
+CDsm.cpp:(.rodata+0x5b4): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
+port/libmhport.a(CCi.cpp.o): In function `~ISession':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+
+This shows how GCC implements vtables for a class.
+
+
+# ============================================================================
+#{ STL
 ==============================================================================
 *kt_dev_stl_000*	useful links
 
@@ -11039,7 +11076,7 @@ class Bulk_quote : public Quote {
 class Basket {
   public:
     void add_item( const Quote& sale )
-    { items.insert( std::shard_ptr<Quote>( sale.clone() )); }
+    { items.insert( std::shared_ptr<Quote>( sale.clone() )); }
 };
 
 
@@ -12106,73 +12143,70 @@ Here c means container and the emplace_* construct a object directly in a contai
 *kt_dev_stl_018*	smart pointer, RAII
 
 {resource-acquisition-is-initialization} {resource-managing-class}
+EC++13. Why raii? When use dynamic resource, client is fully resposible for releasing it after use
+but it is very difficult to make sure there is no resource leak.
 
-EC++13. Why RAII? When use dynamic resource, client is fully resposible for releasing it after use.
-However, when exception happens, the usual path is interrupted and may cannot release it as
-expected.
+1> when passing dymamic resources between modules or components. 
+2> when exception happens, the usual path is interrupted and may cannot release it as expected.
 
 void f()
 {
-	 // createInvestment() is factory-func that returns a pointer to dyn created resource or derived
-	 // class. client must delete it after use
+  // createInvestment() is factory-func that returns a pointer to dyn created resource or derived
+  // class. client must delete it after use
 
-	 Investment* pInv = createInvestment();
+  Investment* pInv = createInvestment();
 
-	 // [problem] code that throws an exception that is not caught inside f. may not reach to delete
-	 // statement
+  // [problem] code that throws an exception that is not caught inside f. may not reach to delete
+  // statement
 
-	 delete pInv;
+  delete pInv;
 }
 
-To solve this, use resource-managing-class and the fact that dtor is called automatically when
-object is destroyed. Hence called RAII and solutions are: 
-
 <try-block-approach>
-
 void f()
 {
-	try {
-	 Investment* pInv = createInvestment();
-	}
-	catch( ... ) {
-		 delete pInv;
-		 throw;           // propagate exception to caller of f. rethrow.
-	}
+  try {
+    Investment* pInv = createInvestment();
+  }
+  catch( ... ) {
+    delete pInv;
+    throw;           // propagate exception to caller of f. rethrow.
+  }
 
-	delete pInv;
+  delete pInv;
 }
 
 This has duplicated clean-up code. How to improve this? 
 
-
 <raii-auto-ptr-approach> unique_ptr
-
-Approaches to implement RAII.
+Approaches to implement raii.
 
 void f()
 {
-	 // createInvestment() is factory-func that returns a pointer to dyn created resource
-	 // or derived class. client must delete it after use
-	 >
-	 std::auto_ptr< Investment > pInv( createInvestment() );
-<
-	 // code that throws an exception that is not caught inside f.
+  // createInvestment() is factory-func that returns a pointer to dyn created resource
+  // or derived class. client must delete it after use
 
-	 // NO need to concern about free resource regardless of how control leaves a block
-	 // delete pInv;
+  std::auto_ptr< Investment > pInv( createInvestment() );
+
+  // code that throws an exception that is not caught inside f.
+
+  // NO need to concern about free resource regardless of how control leaves a block
+  // delete pInv;
 }
 
-Hence RAII; acquire and initialize a [resource-managing-class] in the same statement. In other
-words, resource should be [encapsulated-in-a-object], resouce-managing-class, but raii do not exist
-to encapsulate resource [but-to-prevent-leak]. 
+To solve this, use resource-managing-class by putting resource inside object and use the fact that
+dtor is called automatically when object is destroyed. lifetime. As soon as get resource, initialize
+a object. How? In a <constructor> and hence called raii. 
+
+Acquire and initialize a [resource-managing-class] in the same statement. In other words, resource
+should be [encapsulated-in-a-object], resouce-managing-class, but raii do not exist to encapsulate
+resource [but-to-prevent-leak]. 
 
 However, auto_ptr is not the best way to manage all dyn resources since it's limitation on copying
 to make sure there's only one ptr to object. So containers of auto_ptr aren't allowed since STL
 requires normal copying, deep-copy.
 
-
 <raii-shared-ptr-approach>
-
 To return shared_ptr from a factory-func which is better way that supports normal copying. 
 
 // use the fixed type, Foo that's the underlying object.
@@ -12190,7 +12224,6 @@ void use_factory(T arg)
 
 
 {raii-for-resource-using-own-interface}
-
 EC++14. There should be [own-raii-class] for resource that uses own interface to create and delete
 it because cannot use delete operator on it as with generic case. 
 
@@ -12274,15 +12307,28 @@ void displayInfo(const Information& info)
 }
 
 
-{raii-and-exception-in-dtor}
-The raii is great but when use raii for own interface such as mutex and db connection, it can raise
-exception in destructor. This problem is described in {problem-of-exception-in-dtor}. Therefore raii
-is useful but requires a care when use it.
+{raii-and-two-cautions}
+The raii is great but there are two cautions when use raii.
+
+<1> When use resources which has own interface such as mutex and db connection, it can raise
+exception in destructor. Since raii uses destructor, it can cause the problem is described in
+{problem-of-exception-in-dtor}. 
+
+<2> Acquire and initialize a raii in the same statement. In other words, use constructor. If not,
+can be a problem as described in EC++17.
+
+processWidget( std::shared_ptr<Widget>( new Widget ), priority() );
+
+The problem is that there is no order in evaluating the arguments between new, shared_ptr
+constructor, and priority() call. So if complier reorder calls as new, priority, and shared_ptr and
+priority raise exception then raii is broken. Means newed pointer will be lost. The better way is:
+
+std::shared_ptr<Widget> pw( new Widget );
+processWidget( pw, priority() );
 
 
 {raii-and-copy-support}
-
-OK but what should happen if a Lock object is copied? Generally RAII object is copied? Many
+EC++14. What should happen when a Lock object, more generally raii object, is copied? There are four
 approaches depending on the type of resource.
 
 <1> prohibit copying
@@ -12295,40 +12341,42 @@ class Lock: private Uncopyable {
 
 <2> reference counting underlying resources
 This is shared_ptr; {pointer-like} in *kt_dev_cpp_004* For this example, use 'deleter' to use unlock
-instead.
+instead of default delete.
 
 class Lock {
-	 public:
-	 explicit Lock( Mutex* pm ) : mutexPtr(pm) 
-	 { lock( mutexPtr ); }
+  public:
+    explicit Lock( Mutex* pm ) : mutexPtr(pm) 
+      { lock( mutexPtr ); }
 
-	 ~Lock() { unlock( mutexPtr ); }
+    ~Lock() { unlock( mutexPtr ); }
 
-	 private:
-	 Mutex* mutexPtr;
+  private:
+    Mutex* mutexPtr;
 };
 
 To:
 
 class Lock {
-	 public:
-	 explicit Lock( Mutex* pm ) >
-	 :mutexPtr( pm, unlock ) 
-<	 {
-		  lock( mutexPtr.get() );		// to get law pointer
-	 }
+  public:
+    explicit Lock( Mutex* pm ) >
+      :mutexPtr( pm, unlock ) 
+      {
+        lock( mutexPtr.get() );  // to get law pointer assuming this is C interface
+      }
 
-	 private:
-	 std::shared_ptr< Mutex > mutexPtr;
+  private:
+    std::shared_ptr< Mutex > mutexPtr;
 };
 
-Set deleter using shared_ptr ctor in ctor init list. No dtor any longer. 
+Set deleter using shared_ptr ctor in ctor init list. No longer declares a destructor.
 
 <3> copy the underlying resource
-This is {value-like} in *kt_dev_cpp_004*
+This is {value-like} in *kt_dev_cpp_004* Such as string class which uses heap for characters.
+Copying the resource managing object should also copy the resource it wraps. deep-copy.
 
 <4> transfer ownership of underlying resource
-This is unique_ptr.
+This is unique_ptr. Only one raii refers to a raw resource and when raii is copied ownership of the
+resource is transfered. 
 
 
 {shared-ptr}
@@ -12497,19 +12545,49 @@ not sure when it's useful although p474 shows an example that's not appealing.
 
 
 {get-func}
+EC++15. Have to provide access to raw underlying resource? There are two ways: implicit and explicit
+conversion and explicit conversion is safer. Said it converts an RAII object into the raw resource.
+Explicit conversion.
 
-EC++15. Returns raw resource (underlying pointer). Said it converts an RAII object into the raw
-resource. Explicit conversion.
+<explicit-conversion>
+Provide get() funtion.
 
->
- Is this contrary to encapsulation? true but RAII donesn't exist to encapsulate something.
- exist to ensure that a particular action - release resource - takes place.
+std::shared_ptr<Investment> pInv( createInvestment());
 
- Encap is not for every classes !
-<
+int daysHeld( const Investment *pi );
+
+int days = daysHeld( pInv.get() );
+
+<implicit-conversion>
+Provide conversion operator. FontHandle is raw resource. This makes calling into C API easy and
+natural but increase the chance of errors.
+
+class Font {
+  public:
+    explicit Font( FontHandle fh) : f(fh) {}
+
+    ~Font() { releaseFont(f); }
+
+    operator FontHandle() const
+    { return f; }
+
+  private:
+    FontHandle f;
+};
+
+Font f( getFont() );
+changeFontSize( f, newFontSize );
+
+Font f1(getFont());
+FontHandle f2 = f1;     // oops. meant Font f2=f1;
+
+<encapsulation>
+Is this contrary to encapsulation? true but raii donesn't exist to encapsulate something. It exist
+to ensure that a particular action - release resource - takes place. Encapsulation is not for every
+classes.
+
 
 {smart-pointer-internal}
-
 MEC++28. The typical implementation is:
 
 template< class T>
@@ -12693,6 +12771,26 @@ memory.
 
 For deletion, runs dtor and operator delete( or delete[]) to free memory.
 	 
+<new-operator-and-delete-operator>
+EC++16. Use the same form in corresponding uses of new and delete since these do two things but
+think what will happen when call destructor(s) less or more than needed. Undefined in both ways. 
+
+std::string *stringPtr1 = new std::string;
+std::string *stringPtr2 = new std::string[100]; 
+
+delete stringPtr1;
+delete[] stringPtr2;
+
+<warning-when-use-typedef>
+typedef std::string AddressLines[4];
+std::string *pal = new AddressLines;
+
+delete pal;    // undefined
+delete[] pal;
+
+If do not know that there is a typedef, for example, it is in a file somewhere in huge source tree
+then may be a problem.
+
 
 {operator-new-and-delete}
 This is the C++ equivalent of calling malloc and free. What you can change is how the memory for an
@@ -12892,8 +12990,7 @@ internal iterators are easier to use, because they define the iteration logic fo
 
 
 # ============================================================================
-#{
-
+#{ SYSTEM
 ==============================================================================
 *kt_dev_sys_001*	<empty>
 
@@ -12946,18 +13043,34 @@ else
 	*p_aligned_size = ((size / SYSTEM_ALIGNMENT) + 1) * SYSTEM_ALIGNMENT;
 }
 
+Why 'alignment byte -1'?
+
 dec : bin
-7      111   
+0     0000
+1     0001
+2     0010
+3     0011  [11]
+----------
+4     0100
+5     0101
+6     0110
+7     0111  [11] or [111] 
+----------
 8     1000
 9   0 1001
 10  0 1010
-11  0 1011
+11  0 1011 [11]
+----------
 12  0 1100
 13  0 1101
 14  0 1110
-15  0 1111  
+15  0 1111 [11] or [111] 
+----------
 16  1 0000
 32 10 0000
+
+For 4 bytes align, 4-1=3 [11] and get the start or boundary by & [11].
+For 8 bytes align, 7-1=3 [111] and get the start or boundary by & [111].
 
 
 ==============================================================================
