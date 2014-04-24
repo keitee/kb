@@ -101,7 +101,7 @@ C and C++
 |kt_dev_cpp_030|	case study: framework {tizen-case}
 |kt_dev_cpp_031|	wrapper
 |kt_dev_cpp_032|	case study: porting layer
-|kt_dev_cpp_033|	case study: inheritance
+|kt_dev_cpp_033|	case study: inheritance {how-gcc-build-vtable}
 
 STL 
 |kt_dev_stl_000|	useful links {stl-design-rationale}
@@ -530,6 +530,11 @@ void Usuage()
 The assert macro is defined in cassert header. It depends on a preprocessor varaible named NDEBUG.
 If NDEBUG is defined, assert do nothing. By default, it's not defined.
 
+If the macro NDEBUG was defined at the moment <assert.h> was last included, the macro assert()
+generates no code, and hence does nothing at all. Otherwise, the macro assert() prints an error
+message to standard error and terminates the program by calling abort(3) if expression is false
+(i.e., compares equal to zero).
+
 
 {useful-macros}
 #define abs(n) ((n) < 0 ? -(n) : (n))
@@ -542,6 +547,25 @@ If NDEBUG is defined, assert do nothing. By default, it's not defined.
 
 // a is array
 #define NELEMENTS(a) (sizeof(a)/sizeof(*(a)))
+
+// build enum and string table
+#define FSM_E(x) {x,#x}
+
+static Fsm::fsm_event_t bootEventList[] = {
+  FSM_E(BOOT_EVENT_CLOSED),
+  FSM_E(BOOT_EVENT_READY),
+  ...
+  FSM_E(BOOT_EVENT_STOP)
+};
+
+enum Events
+{
+  // BOOT_EVENTS
+  BOOT_EVENT_CLOSED = 0x01,
+  BOOT_EVENT_READY,
+  ...
+  BOOT_EVENT_STOP,
+};
 
 
 {variable-arguments}
@@ -5357,7 +5381,8 @@ use dyn allocated resource. *kt_dev_cpp_004*
 
 
 {copy-ctor} {copy-init}
-When init object from the other of the same type.
+When init object from the other of the same type. In other words, defines how pass-by-value is
+implemented for a type.
 
 The first arg is a reference to a class and the rest args can be defaults. Used for <four> context:~
 copy init, <argument-pass>, <return>, and implicit coversion using temp object. For arg pass and
@@ -10533,10 +10558,10 @@ same member functions in a header and source of a derived class. Otherwise, will
 error since ABC forces derived class to define functions. See {error-when-create-abc} for what
 happens when not overrides pure virtual functions. Tedious. Any other better way?
 
-1> How about having a pure-virtual-dtor to make a ABC and having normal virtual members?
-If have a class definition and the defintion of a pure-virtual-dtor in the header, get a multiple
-defintion error since this is included in every file which use it. Can have a header and source
-file.
+1> How about having a pure-virtual-dtor to make a ABC and having normal virtual members?  If have a
+class definition and the defintion of a pure-virtual-dtor in the header, get a multiple defintion
+error since this is included in every file which use it. Can have source file which has a dtor
+definition but still needs definitions for other members. If not, get errors as 3>.
 
 2> How about having a virtual members for interface classes? Since it has implementation, that is
 okay for a derived class not to override or implement it. So no tedious work. However, cannot force
@@ -12228,19 +12253,18 @@ EC++14. There should be [own-raii-class] for resource that uses own interface to
 it because cannot use delete operator on it as with generic case. 
 
 <example-mutex-lock> {auto-lock}
-
 void lock(Mutex* pm);		// int pthread_mutex_lock( pthread_mutex_t *mptr); 
 void unlock(Mutex* pm);
 
 class Lock {
-	 public:
-	 'explicit' Lock( Mutex* pm ) : mutexPtr(pm) 
-	 { lock( mutexPtr ); }
+  public:
+    'explicit' Lock( Mutex* pm ) : mutexPtr(pm) 
+      { lock( mutexPtr ); }
 
-	 ~Lock() { unlock( mutexPtr ); }
+    ~Lock() { unlock( mutexPtr ); }
 
-	 private:
-	 Mutex* mutexPtr;
+  private:
+    Mutex* mutexPtr;
 };
 
 
@@ -12249,33 +12273,41 @@ class Lock {
 Mutex m;		// pthread_mutex_t m;
 ...
 {
-	 Lock ml(&m);
-	 ...
+  Lock ml(&m);
+  ...
 }
 
+<example>
 This is a case example seen in the code:
 
+class CCAutoLock
+{
+  private:
+    PCMutex* m_mutex;
+  public:
+    CCAutoLock(PCMutex* mutex) { m_mutex = mutex; m_mutex->Lock(); };
+    ~CCAutoLock() { m_mutex->Unlock(); };
+};
+
 static PCMutex* g_mhdebug_mutex;
-#define AUTOLOCK() TCAutoLock lock(&g_mhdebug_mutex)
+#define AUTOLOCK() CCAutoLock lock(&g_mhdebug_mutex)
 
 void func()
 { 
-	AUTOLOCK();
-	...
+  AUTOLOCK();
+  ...
 }
 
-
 <example-window-handle>
-
 MEC++09.
 
 void displayInfo(const Information& info)
 {
-	 WINDOW_HANDLE w ( createWindow() );
+  WINDOW_HANDLE w ( createWindow() );
 
-	 ... display info in window w and exception can happen.
+  ... display info in window w and exception can happen.
 
-	 destoryWindow(w);
+  destoryWindow(w);
 }
 
 
@@ -14162,9 +14194,9 @@ transactions. So move up as it's abstraction.
 1) Make compile error for incorrect uses (interface usage errors):
 
 class Date {
-	 public:
-	 Date(int month, int day, int year);
-	 ...
+  public:
+    Date(int month, int day, int year);
+    ...
 };
 
 // client use
@@ -14175,59 +14207,59 @@ Date d(3, 40, 1995);		// invalid
 How to make compile errros? Use <type-system>:
 
 struct Day {
-	 explicit Day(int day) : val(day) {}
-	 int val;
+  explicit Day(int day) : val(day) {}
+  int val;
 };
 
 struct Month {
-	 explicit Month(int month) : val(month) {}
-	 int val;
+  explicit Month(int month) : val(month) {}
+  int val;
 };
 
 struct Year {
-	 explicit Year(int year) : val(year) {}
-	 int val;
+  explicit Year(int year) : val(year) {}
+  int val;
 };
 
 class Date {
-	 public:
-	 Date( const Month& month, const Day& day, const Year& year);
-	 ...
+  public:
+    Date( const Month& month, const Day& day, const Year& year);
+    ...
 };
 
 // client use
 //
-Date d(30, 3, 1995);									// wrong type. wrong order
-Date d( Day(3), Month(40), Year(1995) );		// wrong type. invalid
-Date d( Month(40), Day(3), Year(1995) );		// correct type. invalid but easy to see!
+Date d(30, 3, 1995);                      // wrong type. wrong order
+Date d( Day(3), Month(40), Year(1995) );  // wrong type. invalid
+Date d( Month(40), Day(3), Year(1995) );  // correct type. invalid value but easy to see!
 
 
 2) Make compile error for invalid values: 
 
-enum? not type-safe. Safer solution is to predefine all vaild months.
+Consider enum? NO since not type-safe. Safer solution is to predefine all vaild months.
 
 class Month {
-	 public:
-	 static Month Jan() { return Month(1); }
-	 ...
-	 static Month Dec() { return Month(12); }
+  public:
+    static Month Jan() { return Month(1); }
+    ...
+    static Month Dec() { return Month(12); }
 
-	 private:
-	 explicit Month(int m);		// 'prevent' creation of new values
+  private:
+    explicit Month(int m); // 'prevent' creation of new values
 };
 
 Date d( Month::Mar(), Day(30), Year(1995) );
 
-Used functions to represent months. How about {class-const} in *kt_dev_cpp_017* instead of
-using function?
+Used functions to represent months. How about {class-const} in *kt_dev_cpp_017* instead of using
+function?
 
 
 3) Force client to follow interface rule
 
 Investment* createInvestment();
 
-This means that client remember to use RAII to prevent resource leaks. The better
-interface decision is:
+This means that client remember to use raii to prevent resource leaks. The better interface decision
+is:
 
 std::shated_ptr< Investment > createInvestment();
 
