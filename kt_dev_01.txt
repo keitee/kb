@@ -159,7 +159,7 @@ EFFECTIVE C++ 3RD
 |kt_dev_ecpp_010|	34: interface and implementation inheritance
 |kt_dev_ecpp_011|	35: alternatives to virtual func {template-pattern} {strategy-pattern}
 |kt_dev_ecpp_012|	38: composition. has-a model {private-inheritance} {is-implemented-in-terms-of}
-|kt_dev_ecpp_013|	22: data member must be private
+|kt_dev_ecpp_013|	22: data member must be private {encapsulation}
 |kt_dev_ecpp_014|	27: minimize casting {named-cast}
 |kt_dev_ecpp_015|	30: ins and outs of inlining 
 
@@ -5503,27 +5503,66 @@ void printNameAndDisplay(const Window& w)
 }
 
 
-EC++21. Then always use reference? However, there are cases that must return a copy not a reference
-such as operator*(). This is a operator* not dereferene operator. See {smart-pointer-internal}.
-Q: How distinguish between two?
+EC++21. The pass-by-reference is great. Then always use reference? However, there are cases that
+must return a copy not a reference such as operator*(). This is a operator* not dereferene operator.
+See {smart-pointer-internal}. Q: How distinguish between two?
 
-Do not pass reference to object that do not exist.
+These are tries to save a construction cost by using pass-by-reference but not right:
 
-class Rational {
-	 friend const Rational operator*( const Rational& lhs, const Rational& rhs );
-	 ...
-};
-
-If change it to return reference
-
-class Rational {
-	 friend const Rational& operator*( const Rational& lhs, const Rational& rhs );
-	 ...
-};
+<1> use stack but remember a refenrece is a name for some <existing> object. Here returns a
+reference to object that no longer exist.
 
 Rational c = a*b;
 
-When returning from operator*(), reference is no longer valid. Must return a copy.
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    Rational retult( lhs.n*rhs.n, lhs.d*rhs.d );
+    return result;
+  }
+};
+
+<2> use heap? there is no way to delete in case: 
+Rational w, x, y, z;
+w = x*y*z;
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    Rational *retult = new Rational( lhs.n*rhs.n, lhs.d*rhs.d );
+    return *result;
+  }
+};
+
+<3> use function static? Not right for multi-threaded and even for single-threaded.
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    static Rational retult;
+    ...
+    return result;
+  }
+
+  bool operator==( const Rational& lhs, const Rational& rhs);
+};
+
+Rational a, b, c, d;
+
+if( (a*b) == (c*d) )
+{
+  ...
+}
+
+This will always true since it is evaluated as
+if( operator==( operator*(a,b), operator*(c,d) ) )
+
+Therefore, in summary, should return a copy and pay a small cost for correct behavior.
+
+class Rational {
+  friend const Rational operator*( const Rational& lhs, const Rational& rhs );
+  ...
+};
 
 
 {copy-assign}
@@ -6109,134 +6148,43 @@ o Use <explicit> keyword from GCC 4.5 and if a compiler do not support <explicit
 *kt_dev_cpp_006* swap 
 
 {which-swap}
+In this example, which swap will this call? std::swap()? NO. This is non-member func in vector. This
+is not swap of a element but a swap of internal structure. Constant-time operation. 
 
-vector< string> svec1(10);
-vector< string> svec2(24);
+Except string, iterator remains valid after swap. {really}? What if swapping containers that has
+different size?
+
+vector<string> svec1(10);
+vector<string> svec2(24);
 
 swap( svec1, svec2 );	
-
-Is it a std::swap()? NO. This is non-member func in vector. This is not a element swap but a swap of
-internal structure. Constant-time operation. 
-
-Except string, iterator remains valid after swap. {really}? What if swapping containers that
-has different size?
-
 
 Primers p339. In C++, container provides member and non-member swap and previously supports member
 only. Recommands non-member swap. {why}? for generic programming? 
 
-If there's no type specific swap, use swap from the library, std::swap. is it a template or
-function? Yes, this is template and memberwise operation.
+If there's no type specific swap, use swap from the library, std::swap. This is function template
+and does member-wise operation.
 
 
 {why-swap}
-
-o It is for value-like class and use swap when used by algorithm such as reorder
-elements. For pointer-like class, no need as it naturally swaps pointers. stl containers
-are value-like. see {value-like} in *kt_dev_cpp_004*
+The swap provides two characteritics: efficiency and strong exception-safety.
+ 
+<efficiency>
+It is for value-like class and use swap when used by algorithm such as reorder elements. For
+pointer-like class, no need as it naturally swaps pointers. stl containers are value-like. see
+{value-like} in *kt_dev_cpp_004*
 
 Since value-like swap is expensive such as resource managing class which is value-like, need to have
 better way and provide type specific swap which has efficient way to do it. So sounds like a topic
 for container design?
 
-
-{standard-swap}
-
-namespace std {
-
-  template<typename T>          // typical implementation of std::swap;
-  void swap(T& a, T& b)         // swaps a's and b's values
-  {
-    T temp(a);
-    a = b;
-    b = temp;
-  }
-}
-
-Cost three copies that use 'operator=' of value-like class. For some types, none of these copies are
-really necessary. How to avoid these cost?
+<exception-safety>
+Like STL containers, provide both memeber and non-member swap. To have the member version swap never
+throw exception (because it use swap on built-in types that never throw exception.) This offers the
+strong excepiton-safety gurantee.
 
 
-{define-swap-friend}
-
-What we want is to use type speficic swap when there is and otherwise, fall back to use std::swap.
-
-Primer p516. non-member swap and friend approach and example from {value-like} in *kt_dev_cpp_004*
-
-class HasPtr {
->
-	friend void swap( HasPrt&, HasPtr& );
-<
-	public:
-		HasPtr(const std::string& s = std::string() )	// def arg. 
-			: ps( new std::string(s), i(0) {}
-
-		...
-
-		~HasPtr() { delete ps; }
-	private:
-		std::string* ps;
-};
-
-
-To override the defaut behaviour of swap by class-specific swap. 
-
-inline void swap( HasPtr& lhs, HasPtr& rhs )
-{
-	 using std::swap;
-	 swap( lhs.ps, rhs.ps );	// std::swap as no swap in string
-}
-
-
-The following will use swap(HasPtr&, HasPtr&) through {arg-dependant-lookup} in *kt_dev_cpp_007*
-
-HasPtr A, B;
-swap(A,B);		
-
-In this example, the following is the same as used on built-in memeber data, pointer in this case
-but this can be mistake for class member data because it will always use std::swap.
-
-inline void swap( HasPtr& lhs, HasPtr& rhs )
-{
-	 std::swap( lhs.ps, rhs.ps );	// std::swap as no swap in string
-}
-
-
-The one important subtlety in swapping class member which uses function matching:
-
-1) use unqualified swap to search for class-specific swap version
-2) use using std::swap to make it visiable in current scope so fall back on std::swap when there is
-no class-specific version.
-
-note: what will happen if there is no class-specific swap and no using declaration?
-
-
-{copy-and-swap-idiom}
-Combine dtor and copy. Automatically handle self-assign and exception-safe from {value-like} in
-*kt_dev_cpp_004*
-
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
-{
-  auto newp = new string(*rhs.ps);
-  delete ps;
-  ps = newp;
-  return *this;
-}
-
-To rewrite using copy-and-swap-idiom
-
-HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy
-{
-  swap(*this, rhs);
-  return *this;      // rhs is destroyed, which deletes the old ps.
-}
-
-SO, have optimization, self and exception safe and neat implementation using swap. Also EC++11 says
-the compiler can generate more efficient code by moving copying from the function body to parameter
-construction. 
-
-
-{define-swap-use-pimpl-idiom}
+{define-swap-use-specialisation}
 EC++25. pimpl-idiom. See *kt_dev_ecpp_008* for pimpl-idiom.
 
 class WidgetImpl {                          // class for Widget data;
@@ -6247,7 +6195,6 @@ private:
   int a, b, c;                              
 >
   std::vector< double > v;                  // possibly lots of data expensive to copy!
-<
   ...
 };
 
@@ -6274,10 +6221,11 @@ Widget A, B; swap(A,B);
 
 All we really need to do is swap their pImpl pointers, but the default swap algorithm has no way to
 know that. Instead, it would copy not only three Widgets, but also three WidgetImpl objects. Very
-inefficient. To address this, should provide type specific swap version to be used by clients:
+inefficient. In other words, cost three copies that use 'operator=' of value-like class. For some
+types such as pimpl-idiom, none of these copies are really necessary. How to avoid these cost? To
+address this, should provide type specific swap version to be used by clients:
 
-
-{{use-template-specialization}}
+<attempt-one> use-template-specialization
 
 namespace std {					  
 
@@ -6290,32 +6238,30 @@ namespace std {
   }
 }
 
-There is a way to say exactly that: specialize std::swap for Widget.
+This is a way to say that to specialize std::swap for Widget. This is called 'total' template
+specialization. Why? Since it specify T as Widget so it is from generic to speficic one. 
 
-namespace std {
+namespace std {                        // <DN> see in 'std'
 
-  template<>                            // this is a specialized version
-  void swap< Widget >(Widget& a,        // of std::swap for when T is
-                    Widget& b)          // Widget; this won't compile
+  template<>                           // this is a specialized version
+  void swap< Widget >(Widget& a,       // of std::swap for when T is
+                    Widget& b)         // Widget; this won't compile
   {
-    swap(a.pImpl, b.pImpl);             // to swap Widgets, just swap
-  }                                     // their pImpl pointers
+    swap(a.pImpl, b.pImpl);            // to swap Widgets, just swap
+  }                                    // their pImpl pointers
 }
-
 
 We are not permitted to alter the contents of the std namespace, but we are allowed to totally
 specialize standard templates (like swap) for types of our own creation (such as Widget).
 
 This function will not compile. That is because it is trying to access the pImpl pointers inside a
-and b, and they are <private> so other ways might be:
-
+and b, and they are 'private' so other ways might be:
 
 o could declare our specialization a friend, but the convention is different: so not
 consider. 
 
 o have a public swap member and specialized std::swap calls this member swap. 'okay' since do not
 use friend here.
-
 
 # this is the solution
 
@@ -6342,22 +6288,29 @@ namespace std {
   }                                // swap member function
 }
 
->
- Swap provides two characteritics: efficiency and strong exception-safety.
- 
- Like STL containers, provide both memeber and non-member swap. To have the member version
- swap never throw exception (because it use swap on built-in types that never throw
- exception.) This offers the strong excepiton-safety gurantee.
+<attempt-two> use-template-specialization and for class template
+However, suppose that Widget and WidgetImpl were class templates instead of classes. Needs more
+generic solution but cannot use the same as before since the specialization would look like:
 
-However, suppose that Widget and WidgetImpl were class templates instead of classes. needs more
-generic solution.
+namespace std {
 
-The solution would be: overloading function-template is fine, but std is a special namespace, and
-the rules governing it are special, too. It's okay to totally specialize templates in std, but it's
-not okay to add new templates (or classes or functions or anything else) to std.
+  template<typename T>                       
+  void swap<Widget<T>>(Widget<T>& a, Widget<T>& b)
+  {
+    a.swap(b);                     // to swap Widgets, call their
+  }                                // swap member function
+}
 
-The answer is that works as well for classes as for class templates: we just don't declare the
-non-member to be a specialization or overloading of std::swap.
+This is illegal code since C++ do not allow partial specialization for function template. If this is
+possible, then it means to add a template into std namespace. Not allowed. Why? 
+
+The overloading function-template is fine, but std is a special namespace, and the rules governing
+it are special, too. It's okay to totally specialize templates in std, but it's not okay to add new
+templates (or classes or functions or anything else) to std. Undefined behavior.
+
+<attempt-three> use-namespace but not use specialization
+This works as well for classes as for class templates. Just don't declare the non-member to be a
+specialization or overloading of std::swap.
 
 namespace WidgetStuff {
   ...                                     // templatized WidgetImpl, etc.
@@ -6375,11 +6328,11 @@ namespace WidgetStuff {
   }
 }
 
+This use swap(Widget< T >&, Widget< T >&) through {arg-dependant-lookup}
 
-Use swap(Widget< T >&, Widget< T >&) through {arg-dependant-lookup}
-
-But, what you desire is to call a T-specific version if there is one, but to fall back on the
-general version in std if there's not. Here's how you fulfill your desire:
+<why-use-using-std-in-the-member-function>
+What you desire is to call a T-specific version if there is one, but to fall back on the general
+version in std if there's not. Here's how you fulfill your desire:
 
 template<typename T>
 void doSomething(T& obj1, T& obj2)
@@ -6390,13 +6343,21 @@ void doSomething(T& obj1, T& obj2)
   ...
 }
 
+There are important subtleties:
+1> use unqualified swap to search for class-specific swap version
+2> use using std::swap to make it visiable in current scope so fall back on std::swap when there is
+no class-specific version.
 
-In addition, can have specialized std::swap to make type-specific swap implementations available to
-code written in this misguided fashion.
+<attempt-four> attempt-treee and plus std::swap specialization when write class but not class templeate
+Why? To cover misguided use like:
 
+std::swap(obj1, obj2);
 
-# taken from vector template in gcc
-#
+This force compiler to consider only the swap in std including any template specialization. In
+addition to the type specific swap in a class, have specialized std::swap to call member swap. This
+is to make type-specific swap implementations available to code written in this misguided fashion.
+
+<stl-vector-code> taken from vector template in gcc
 
   template<typename _Tp, typename _Alloc = std::allocator< _Tp >>
     class vector : protected _Vector_base<_Tp, _Alloc>
@@ -6435,7 +6396,80 @@ code written in this misguided fashion.
 	{ __x.swap(__y); }
 
 
-note TO DO Primers p518. summarise after studying template.
+{define-swap-use-friend}
+Primer p516. This is an example which use non-member swap and friend approach and example from
+{value-like} in *kt_dev_cpp_004*
+
+class HasPtr {
+>
+  friend void swap( HasPrt&, HasPtr& );
+<
+  public:
+   HasPtr(const std::string& s = std::string() )	// def arg. 
+    : ps( new std::string(s), i(0) {}
+        
+		...
+
+   ~HasPtr() { delete ps; }
+
+  private:
+   std::string* ps;
+};
+
+inline void swap( HasPtr& lhs, HasPtr& rhs )
+{
+  using std::swap;
+  swap( lhs.ps, rhs.ps );	// std::swap as no swap in string
+  
+  OR 
+
+  std::swap( lhs.ps, rhs.ps );
+}
+
+The following will use swap(HasPtr&, HasPtr&) through {arg-dependant-lookup} in *kt_dev_cpp_007*
+
+HasPtr A, B;
+swap(A,B);		
+
+In this example, the following is the same as used on built-in memeber data, pointer in this case
+but this can be mistake for class member data because it will always use std::swap.
+
+inline void swap( HasPtr& lhs, HasPtr& rhs )
+{
+  std::swap( lhs.ps, rhs.ps );	// std::swap as no swap in string
+}
+
+
+{swap-exception-safety} <copy-and-swap-idiom>
+Combine dtor and copy. Automatically handle self-assign and exception-safe from *kt_dev_cpp_019*
+
+This is exception-safe code:
+
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
+}
+
+To rewrite using copy-and-swap-idiom
+
+HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy
+{
+  swap(*this, rhs);
+  return *this;      // rhs is destroyed, which deletes the old ps.
+}
+
+It this HasPrt has swap implementation, then this operator= will be efficient. SO, have
+optimization, self and exception safe and neat implementation using swap. Also EC++11 says the
+compiler can generate more efficient code by moving copying from the function body to parameter
+construction. 
+
+TODO: Primers p518. summarise after studying template.
+
+{Q} why non-member swap in the first place? because to try type-specific first and if not fall back
+to std one. member swap is the qualified one.
 
 
 ==============================================================================
@@ -14407,45 +14441,158 @@ The same is {factory-func} in *kt_dev_stl_018* This force client to use smart_pt
 
 EC++23. About considering encapsulation in design:
 
-The greater something is encapsulated, then the greater our ability to change it. Roughly,
-when there are more funcs to access data, it's less encapsulated. Assumes that it follows
-the rule that member data must be private and therefore func interface to access data.
+The greater something is encapsulated, then the greater our ability to change it. Roughly, when
+there are more funcs to access data, it's less encapsulated. Assumes that it follows the rule in
+EC++22 that member data must be private and therefore provide only funtional interfaces to access
+data.
 
-Plus points when use non-member non-friend func:
+If use private member data, then only member function and friend can use it. If member function and
+non-member non-friend function provides the same functionality, which is better? non-member
+non-friend function since it doesn't increase the number of functions that can access the private
+part of the class. Hence it's between member and non-member non-friend.
 
-1) Greater encapsulation
-Because only member func access private member data. Access control is a way to do encapsulation.
+For example:
 
-2) Partitioning functionality
-Can have multiple header files that are functionaly separated and consist one namespace.
-Like STL. Cannot do the same with class member.
+class WebBrowser
+{
+  public:
+    ...
+    void clearCache();
+    void clearHistory();
+    void removeCookies();
+    ...
+};
 
-3) Functional extensibility
+<1> approach one. add more interface?
+
+class WebBrowser
+{
+  public:
+    ...
+    void clearCache();
+    void clearHistory();
+    void removeCookies();
+    void clearEverything();
+    ...
+};
+
+<2> approach two. add non-member non-friend function?
+
+void clearBrowser( Webbrowser& wb )
+{
+  wb.clearCache();
+  wb.clearHistory();
+  wb.removeCookies();
+}
+
+How to use the approach two? Use namespace in C++.
+
+namespace WebBrowserStuff {
+  class WebBrowser { ... };
+  void clearBrowser(WebBrowser& wb);
+  ...
+}
+
+
+{partitioning-or-packaging-functionality}
+The namespace can be spread across multiple sources.
+
+<1> partitioning on convenience functions
+The convenience function can't offer any functionality a WebBrowser client couldn't already get in
+some other way. However, can make client to be compliation dependent on only what they uses.
+
+// <webbrowser.h> for class WebBrowser and 'core' WebBrowser-related functionality.
+namespace WebBrowserStuff {
+  class WebBrowser { ... };
+  void clearBrowser(WebBrowser& wb);
+  ...
+}
+
+// <webbrowserbookmarks.h> for bookmark related convenience functions.
+namespace WebBrowserStuff {
+  ...
+}
+
+// <webbrowsercookies.h> for cookies related convenience functions.
+namespace WebBrowserStuff {
+  ...
+}
+
+<2> partitioning on functionality
+Use the same approach but on separated functionality. Like STL, vector, list and etc are in each
+header but in the same namespce. Cannot do the same with class member since a class cannot be split
+into pieces.
+
+
+{functional-extensibility}
 When necessary, can extend functionality in the existing namespace by adding more. This is
-horizental extension compared with vertical. e.g. class inheritence. 
+horizental extension compared with vertical, i.e., class inheritence. 
 
-Note: Looks like these come from STL arch.
+KT. After all, it's all about encapsulation and seperation. The class is closed or tightly coupled
+approach since if it changes, the client will be broken. By having non-member non-friend in the
+middle, can have seperation between classes and client. This is like indirect access or interface
+class approach.
 
 
 ==============================================================================
 *kt_dev_ecpp_006*	26: postpone variable definitions
 
-Postpone variable definitions as long as possible until is needed and have init value. Increases
+{costwise}
+Avoid unused varaibles but see that there are variables which aren't completely unused so to
+postpone variable definitions as long as possible until is needed and have init value. Increases
 clarity and efficiency.
 
-
-{make-variable-available-only-for-some}
-
-if (Derived *dp = dynamic_cast<Derived*>(bp))
+std::string encryptPassword( const std::string& password )
 {
-    // use the Derived object to which dp points
-} else {  // bp points at a Base object
-    // use the Base object to which bp points
+  using namespace std;
+
+  string encrypted;
+
+  if( password.length() < MinimumPasswordLength )
+  {
+    throw logic_error("Password is too short");
+  }
+
+  ...
+
+  return encrypted;
 }
+
+The real meaning of 'as long as possible': postpone a variable's definition until right before you
+have to use the variable, also try to postpone the definition until you have initialsation arguments
+for it. Avoid cost of construction, destruction and default construction.
+
+{what-about-loop}
+
+# approach A                           # approach B
+Widget w;
+for( int i=0; i < n; i++ )             for( int i = 0; i < n; i++ )
+{                                      {
+  w = some value;                         Widget w(some value);
+  ...                                     ...
+}                                      }
+
+1 ctor, 1 dtor, n assign.              n ctor and dtor.
+
+Choose depending on whether ctor/dtor is expensive than assign.
+
+<make-variable-available-only-for-some>
+The approach B makes that the name w is only visible in the loop. This is good for comprehensibility
+and maintainability. So approach B is recommended unless performance analysis shows approach A is
+better.
 
 By defining the variable in a condition, the pointer <dp> is not accessible outside the if. If the
 cast fails, then the unbound pointer is not available for use in subsequent code where we might
 forget to check whether the cast succeeded.
+
+if (Derived *dp = dynamic_cast<Derived*>(bp))
+{
+    // use the Derived object to which dp points
+   
+} else {  // bp points at a Base object
+
+    // use the Base object to which bp points
+}
 
 
 ==============================================================================
@@ -15631,14 +15778,24 @@ CodeComplete(p143) PI violates encapsulation and tends to point to design errors
 ==============================================================================
 *kt_dev_ecpp_013*	22: data member must be private
 
-(EC++#22)
+EC++22. How about using public or protected member data in class?
 
-Interface has only member funcs. The pros:
+If class interface has only member funcs then the good things are:
 
-1) syntactically uniform access(consistency)
+1) syntactically uniform access(consistency) since do not need to remember which one is function or
+member data. Always use function interface.
+
 2) fine-grained access control. read-only. write-only. etc.
-3) encapsulation.
-Public means un-encapsulated, un-changeable.
+
+3) Encapsulation. Hiding data members behind <functional-interface> can offer all kinds of
+implementation flexibility as with benefits from separation between interfacea and implementation.
+For example, change implementation later.
+
+The encapsulation is inversely proportional to the amount of code that might be broken if that
+something changes. 
+
+The point is that do not use public and protected members since this means un-encapsulated and
+un-changeable.
 
 
 ==============================================================================
