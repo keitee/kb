@@ -15801,10 +15801,317 @@ un-changeable.
 ==============================================================================
 *kt_dev_ecpp_014*	27: minimize casting
 
-(EC++#27)
+{type-casting-and-type-conversion}
+http://www.cplusplus.com/doc/tutorial/typecasting/
 
-The need for dynamic cast arises when want to use derived class ops on what you believe to be a
-derived class objects via base pointer or ref. To avoid this, two approaches:
+<implicit-conversions>
+Implicit conversions are automatically performed when a value is copied to a compatible type. For
+example:
+
+short a=2000;
+int b;
+b=a;
+
+Here, the value of a is promoted from short to int without the need of any explicit operator. This
+is known as a standard conversion. Standard conversions affect fundamental data types, and allow the
+conversions between numerical types (short to int, int to float, double to int...), to or from bool,
+and some pointer conversions.
+
+Converting to int from some smaller integer type, or to double from float is known as promotion, and
+is guaranteed to produce the exact same value in the destination type. Other conversions between
+arithmetic types may not always be able to represent the same value exactly:
+
+o If a negative integer value is converted to an unsigned type, the resulting value corresponds to
+its 2's complement bitwise representation (i.e., -1 becomes the largest value representable by the
+type, -2 the second largest, ...).
+
+o The conversions from/to bool consider false equivalent to zero (for numeric types) and to null
+pointer (for pointer types); true is equivalent to all other values and is converted to the
+equivalent of 1.
+
+o If the conversion is from a floating-point type to an integer type, the value is truncated; the
+decimal part is removed. <Q> decimal part? If the result lies outside the range of representable
+values by the type, the conversion causes undefined behavior. <Q> undefined?
+
+o Otherwise, if the conversion is between numeric types of the same kind; integer-to-integer or
+floating-to-floating, the conversion is valid, but the value is implementation-specific (and may not
+be portable).
+
+Some of these conversions may imply a loss of precision, which the compiler can signal with a
+warning. This warning can be avoided with an explicit conversion.
+
+For non-fundamental types, arrays and functions implicitly convert to pointers, and pointers in
+general allow the following conversions:
+
+o Null pointers can be converted to pointers of any type
+o Pointers to any type can be converted to void pointers.
+o Pointer upcast: pointers to a derived class can be converted to a pointer of an accessible and
+unambiguous base class, without modifying its const or volatile qualification.
+ 
+<implicit-conversions-with-classes>
+In the world of classes, implicit conversions can be controlled by means of three member functions:
+
+o Single-argument constructors: allow implicit conversion from a particular type to initialize an
+object.  
+o Assignment operator: allow implicit conversion from a particular type on assignments.  
+o Type-cast operator: allow implicit conversion to a particular type.
+
+// implicit conversion of classes:
+#include <iostream>
+using namespace std;
+
+class A {};
+
+class B {
+  public:
+    // conversion from A (constructor):
+    B (const A& x) {}
+
+    // conversion from A (assignment):
+    B& operator= (const A& x) {return *this;}
+
+    // conversion to A (type-cast operator)
+    operator A() {return A();}
+};
+
+int main ()
+{
+  A foo;
+  B bar = foo;    // calls constructor
+  bar = foo;      // calls assignment
+  foo = bar;      // calls type-cast operator
+  return 0;
+}
+
+The type-cast operator uses a particular syntax: it uses the operator keyword followed by the
+destination type and an empty set of parentheses. Notice that the return type is the destination
+type and thus is not specified before the operator keyword.
+
+<type-casting>
+C++ is a strong-typed language. Many conversions, specially those that imply a different
+interpretation of the value, require an explicit conversion, known in C++ as type-casting. There
+exist two main syntaxes for generic type-casting: functional and c-like:
+
+double x = 10.3;
+int y;
+y = int (x);    // functional notation
+y = (int) x;    // c-like cast notation
+
+The functionality of these generic forms of type-casting is enough for most needs with fundamental
+data types. However, these operators can be applied indiscriminately on classes and pointers to
+classes, which can lead to code that -while being syntactically correct- can cause runtime errors.
+For example, the following code compiles without errors: 
+
+// class type-casting
+#include <iostream>
+using namespace std;
+
+class Dummy {
+  double i,j;
+};
+
+class Addition {
+    int x,y;
+
+  public:
+    Addition (int a, int b) { x=a; y=b; }
+    int result() { return x+y;}
+};
+
+int main () {
+  Dummy d;
+  Addition * padd;
+  padd = (Addition*) &d;
+  cout << padd->result();
+  return 0;
+}
+
+The program declares a pointer to Addition, but then it assigns to it a reference to an object of
+another <unrelated> type using explicit type-casting:
+
+Unrestricted explicit type-casting allows to convert any pointer into any other pointer type,
+independently of the types they point to. The subsequent call to member result will
+produce either a run-time error or some other unexpected results.
+
+In order to control these types of conversions between classes, we have four specific casting
+operators: dynamic_cast, reinterpret_cast, static_cast and const_cast. Their format is to follow the
+new type enclosed between angle-brackets (<>) and immediately after, the expression to be converted
+between parentheses.
+
+dynamic_cast <new_type> (expression)
+reinterpret_cast <new_type> (expression)
+static_cast <new_type> (expression)
+const_cast <new_type> (expression)
+
+The traditional type-casting equivalents to these expressions would be:
+
+(new_type) expression
+new_type (expression)
+
+but each one with its own special characteristics:
+
+<dynamic_cast> 
+dynamic_cast can only be used with <pointers and references> to classes (or with void*). Its purpose
+is to ensure that the result of the type conversion points to a valid complete object of the
+destination pointer type.
+
+This naturally includes pointer <upcast> (converting from pointer-to-derived to pointer-to-base), in
+the same way as allowed as an implicit conversion. DONE BY COMPILER.
+
+But dynamic_cast can also <downcast> (convert from pointer-to-base to pointer-to-derived)
+polymorphic classes (those with virtual members) if-and only if-the pointed object is a valid
+<complete> object of the target type. For example:
+
+// dynamic_cast
+#include <iostream>
+#include <exception>
+using namespace std;
+
+class Base { virtual void dummy() {} };
+class Derived: public Base { int a; };
+
+int main () {
+  try {
+    Base * pba = new Derived;
+    Base * pbb = new Base;
+    Derived * pd;
+
+    pd = dynamic_cast<Derived*>(pba);
+    if (pd==0) cout << "Null pointer on first type-cast.\n";
+
+    pd = dynamic_cast<Derived*>(pbb);
+    if (pd==0) cout << "Null pointer on second type-cast.\n";
+
+  } catch (exception& e) {cout << "Exception: " << e.what();}
+  return 0;
+}
+
+The result: Null pointer on second type-cast.
+
+Compatibility note: This type of dynamic_cast requires Run-Time Type Information (RTTI) to keep
+track of dynamic types. Some compilers support this feature as an option which is disabled by
+default. This needs to be enabled for runtime type checking using dynamic_cast to work properly with
+these types.
+
+The code above tries to perform two dynamic casts from pointer objects of type Base* (pba and pbb)
+to a pointer object of type Derived*, but only the first one is successful. Notice their
+respective initializations:
+
+Even though both are pointers of type Base*, pba actually points to an object of type Derived, while
+pbb points to an object of type Base. Therefore, when their respective type-casts are performed
+using dynamic_cast, pba is pointing to a full object of class Derived, whereas pbb is pointing to an
+object of class Base, which is an incomplete object of class Derived.
+
+<when-pointer>
+When dynamic_cast cannot cast a pointer because it is not a complete object of the required class
+-as in the second conversion in the previous example- it <returns> a null pointer to indicate the
+failure. 
+
+<when-reference>
+If dynamic_cast is used to convert to a reference type and the conversion is not possible, an
+exception of type bad_cast is thrown instead.
+
+dynamic_cast can also perform the other implicit casts allowed on pointers: casting null pointers
+between pointers types (even between unrelated classes), and casting any pointer of any type to a
+void* pointer.
+
+<static_cast>
+static_cast can perform conversions between pointers to <related> classes, not only upcasts but also
+downcasts. <NO CHECKS> are performed during runtime to guarantee that the object being converted is in
+fact a full object of the destination type. Therefore, it is up to the programmer to ensure that the
+conversion is safe. On the other side, it does not incur the overhead of the type-safety checks of
+dynamic_cast.
+
+class Base {};
+class Derived: public Base {};
+Base * a = new Base;
+Derived * b = static_cast<Derived*>(a);
+
+This would be valid code, although b would point to an incomplete object of the class and could lead
+to runtime errors if dereferenced.
+
+static_cast is also able to perform all conversions allowed implicitly; not only those with pointers
+to classes, and is also able to perform the opposite of these. It can:
+
+o Convert from void* to any pointer type. In this case, it guarantees that if the void* value was
+obtained by converting from that same pointer type, the resulting pointer value is the same.
+
+o Convert integers, floating-point values and enum types to enum types.
+
+Additionally, static_cast can also perform the following:
+
+o Explicitly call a single-argument constructor or a conversion operator.
+o Convert to rvalue references.
+o Convert enum class values into integers or floating-point values.
+o Convert any type to void, evaluating and discarding the value.
+
+<reinterpret_cast>
+reinterpret_cast converts any pointer type to any other pointer type, even of <unrelated> classes.
+The operation result is a simple binary copy of the value from one pointer to the other. All pointer
+conversions are allowed: neither the content pointed nor the pointer type itself is checked.
+
+It can also cast pointers to or from integer types. The format in which this integer value
+represents a pointer is platform-specific. The only guarantee is that a pointer cast to an integer
+type large enough to fully contain it (such as intptr_t), is guaranteed to be able to be cast back
+to a valid pointer.
+
+The conversions that can be performed by reinterpret_cast but not by static_cast are low-level
+operations based on reinterpreting the binary representations of the types, which on most cases
+results in code which is system-specific, and thus non-portable. For example:
+
+class A { /* ... */ };
+class B { /* ... */ };
+A * a = new A;
+B * b = reinterpret_cast<B*>(a);
+
+This code compiles, although it does not make much sense, since now b points to an object of a
+totally unrelated and likely incompatible class. Dereferencing b is unsafe.
+
+The other example is that it peforms a low-level reinterpretation of the bit pattern of its
+operands.
+
+int *p;
+char *pc = reinterpret_cast<char*>(ip);
+
+<const_cast>
+This type of casting manipulates the constness of the object pointed by a pointer, either to be set
+or to be removed. For example, in order to pass a const pointer to a function that expects a
+non-const argument:
+
+// const_cast
+#include <iostream>
+using namespace std;
+
+void print (char * str)
+{
+  cout << str << '\n';
+}
+
+int main () {
+  const char * c = "sample text";
+  print ( const_cast<char *> (c) );
+  return 0;
+}
+
+The example above is guaranteed to work because function print does not write to the pointed object.
+Note though, that removing the constness of a pointed object to actually write to it causes
+undefined behavior.
+
+This is not just about const away and see {const-non-const-version} to add const.
+
+
+{named-cast}
+From MEC++02. These casts are called named cast and these provides:
+
+o Easier-to-recognise style. There is no error or warning from the compiler because we explicitly
+said the conversion was okay.
+
+o Precision of meaning
+
+
+{??}
+EC++27. The need for dynamic cast arises when want to use derived class ops on what you believe to
+be a derived class objects via base pointer or ref. To avoid this, two approaches:
 
 Problem:
 
@@ -15846,35 +16153,6 @@ class SpecialWindow : public Window {
 };
 
 
-{named-cast}
-
-From MEC++02. Casts in CPP provides:
-
-o easier-to-recognise style. There is no error or warning from the compiler because we explicitly
-said the conversion was okay.
-o precision of meaning
-
-Four types:
-
-<const_cast>
-This is not just about const away and see {const-non-const-version} for more.
-
-<static_cast> 
-like C
-
-<reinterpret_cast>
-
-Peforms a low-level reinterpretation of the bit pattern of its operands.
-
-int *p;
-char *pc = reinterpret_cast<char*>(ip);
-
-# ?? difference to static_cast? took func pointer example. 
-
-<dynamic_cast>      # RTTI
-
-Can check the result of cast; nullprt for pointer and bad_cast for reference. Used in inheritance;
-derived-to-base by compiler and base-to-derived by dynamic_cast. Cast down and accross.
 
 
 ==============================================================================
