@@ -5502,7 +5502,6 @@ void printNameAndDisplay(const Window& w)
   w.display();
 }
 
-
 EC++21. The pass-by-reference is great. Then always use reference? However, there are cases that
 must return a copy not a reference such as operator*(). This is a operator* not dereferene operator.
 See {smart-pointer-internal}. Q: How distinguish between two?
@@ -8214,12 +8213,64 @@ found no matching catch and stop execution of the program; call the library 'ter
 
 From MEC++09. What's different to the approach of returning error code? Exception cannot be ignored
 and if do, it is terminated. From MEC++12. The execution return to call site for func call but never
-for exception.
+for exception. Think that throw is a function call.
 
 
 {standard-exception}
-The stdexcept header defines several general purpose exception classes and the type_info header
-defines the bad_cast exception type.
+The stdexcept header defines several general purpose exception classes and the typeinfo header
+defines the bad_cast exception type. 
+
+The C++ Standard library provides a base class specifically designed to declare objects to be thrown
+as exceptions. It is called std::exception and is defined in the <exception> header. This class has
+a virtual member function called what that returns a null-terminated character sequence and that can
+be overwritten in derived classes to contain some sort of description of the exception. KT. It seems
+that exception header is older one and both works anyway.
+
+// exceptions
+#include <iostream>
+// #include <stdexcept>
+#include <exception>
+
+using namespace std;
+
+class myexception: public exception
+{
+  virtual const char* what() const throw()
+  {
+    return "My exception happened";
+  }
+} myex;
+
+int main () {
+  try
+  {
+    throw myex;      <DN> See myex but not myex()
+  }
+  catch (exception& e)
+  {
+    cout << e.what() << '\n';
+  }
+  return 0;
+}
+
+kt@kt-ub-vb:~/work$ ./a.out 
+My exception happened
+
+All exceptions thrown by components of the C++ Standard library throw exceptions derived from this
+exception class. These are:
+
+bad_alloc	      thrown by new on allocation failure
+bad_cast	         thrown by dynamic_cast when it fails in a dynamic cast
+bad_exception	   thrown by certain dynamic exception specifiers
+bad_typeid	      thrown by typeid
+bad_function_call	thrown by empty function objects
+bad_weak_ptr	   thrown by shared_ptr when passed a bad weak_ptr
+
+Also deriving from exception, header <exception> defines two generic exception types that can be
+inherited by custom exceptions to report errors:
+
+logic_error	      error related to the internal logic of the program
+runtime_error	   error detected during runtime
 
 
 {stack-unwinding}
@@ -8227,7 +8278,8 @@ A throw-keyword is like a return; statements following a throw are not executed.
 <matching-catch> found, current/calling function is exted until found in the call tree.
 
 o not found. call 'terminate'. 
-o found. run catch and coutinue running from the the end of the try block catched.
+o found. run catch and coutinue running from the the end of the try block catched but not from the
+throw.
 
 When no try-catch block in the chain, 1,2, and 3 runs only.  
 
@@ -8262,11 +8314,11 @@ o Runs constructor-initializers if there are. covered by function-try-block.
 o Runs ctor-body. covered by function-try-block.
 
 template< typename T>
-Blob< T>::Blob( std::initialzer_list< T>il) : data( std::make_shared< std::vector< T>> (il)) 
+Blob<T>::Blob( std::initialzer_list<T>il) : data( std::make_shared< std::vector<T>> (il)) 
 {}
 
 template< typename T>
-Blob< T>::Blob( std::initialzer_list< T>il) try : data( std::make_shared< std::vector< T>> (il)) 
+Blob<T>::Blob( std::initialzer_list<T>il) try : data( std::make_shared< std::vector<T>> (il)) 
 {}
 catch ( const std::bad_alloc& e) { handle_out_of_memory(e); }
 
@@ -8287,7 +8339,7 @@ will not raise an execption.
 
 
 {exception-and-resource-managing-class}
-To handle exception, shall use resource-managing-class, ie., RAII and see {resource-managing-class}
+To handle exception, shall use resource-managing-class, ie., raii and see {resource-managing-class}
 in *kt_dev_stl_018* for various solutions.
 
 
@@ -8315,8 +8367,8 @@ class DBConn {
 // client use
 //
 {
-	 DBConn dbc( DBConnection::create() );
-	 ...
+  DBConn dbc( DBConnection::create() );
+  ...
 }
 
 Two approach to address exception in dtor:
@@ -8394,67 +8446,181 @@ it. See {raii-and-exception-in-dtor} for the point to consider when use raii.
 
 
 {exception-object} {user-defined-exception-object}
-
-try {
-	 ...
-	 throw runtime_error("data must refer to the same");	# throw expression
-
-} catch (runtime_error err) {		                        # exception declaration
-	 ...
-	 cout << err.what();
-	 ...
-}
-
 Use throw-expression [to-copy-init-special-object], exception object. if it's a class type, must
 have dtor and copy or move op. If it's array or func type, it's converted to its pointer type. {QQ}
 If it is array, must be in heap since there is no connection between call and called site?
 
+try {
+  ...
+  throw runtime_error("data must refer to the same");	# throw expression
+
+} catch (runtime_error err) {		                     # exception declaration
+  ...
+  cout << err.what();
+  ...
+}
+
 Because there's a stack-unwinding, must not to throw a pointer to a local object. Hence exception
 object is copied that is manintained by compiler and remains vaild <until> catched.
 
-If thrown object comes from class inheritance and then deferences a pointer of base class that
-points derived, a copy will be made but it will be sliced-off because used dereference to copy. See
-{sliced-off} in *kt_dev_cpp_022* 
-
 Exception is like a functin call and exception declaration is like a function with one param. Like
-function call, [catch] param can be non-refernce or reference. if it's class type and non-reference
-then {sliced-off} How can use reference in catch since there is separation between throw and catch
-site? Because exception object is held in global space by a compiler.
+function call, [catch] param can be non-refernce or reference. If it's class type from inheritance
+and non-reference then {sliced-off} *kt_dev_cpp_022* can happen. How can use reference in catch?
+Since there is separation between throw and catch site. That is the exception object is held in
+global space by a compiler.
 
 throw arg -> (copy init) -> exception object -> (copy init) -> catch (param)
 
+// example
+#include <iostream>
+using namespace std;
 
-<exception-object-always-copied>
-
-From MEC++12. The execution return to call site for func call but never for exception. This means
-that when throw, a copy is <always> made regardless of catch type whether it is value or reference
-because throw leaves a call site.
-
-// example-one
-
-catch( Widget& w )
+class B 
 {
-	 ...
-	 throw;
+  public:
+  B() { cout << "B ctor" << endl; }
+  ~B() { cout << "B dtor" << endl; }
+  virtual string what() { return "i'm B"; }
+};
+
+class CD : public B
+{
+  public:
+  CD() { cout << "CD ctor" << endl; }
+  ~CD() { cout << "CD dtor" << endl; }
+  string what() { return "i'm CD"; }
+};
+
+int main () {
+  try
+  {
+    B b;
+    cout << "going to throw" << endl;
+    throw b;
+  }
+  catch (B e)
+  {
+    cout << "An exception occurred. Exception Nr. " << e.what() << endl;
+  }
+
+  cout << "end" << endl;
+  return 0;
 }
 
-Use 'current' exception and throw it again. 'rethrow'. So there is no addtional copy made and w can
-be a derived class in Widget inheritance. KT if throwed a derived.
+$ ./a.out 
+B ctor
+going to throw
+B dtor
+An exception occurred. Exception Nr. i'm B
+B dtor
+B dtor
+end
 
-// example-two
+See that 2 B dtors after catch. Why? One for the exception object and the other for one in the
+catch.
 
-catch( Widget& w )
-{
-	 ...
-	 throw w;
+<exception-catch-by-reference>
+The catch by referecne is recommendation.
+
+1. catch by pointer, do not know if should call delete on it because do not know if it is created by
+new or not.
+2. catch by value, sliced-off can happen.
+3. catch by reference, okay for both problems above.
+
+// example
+In the above example, if change catch param as catch (B& e) then have only one B dtor after catch.
+
+B ctor
+going to throw
+B dtor
+An exception occurred. Exception Nr. i'm B
+B dtor
+end
+
+// example
+int main () {
+  try
+  {
+    CD b;
+    cout << "going to throw" << endl;
+    throw b;
+  }
+  catch (B e)
+  {
+    cout << "An exception occurred. Exception Nr. " << e.what() << endl;
+  }
+
+  cout << "end" << endl;
+  return 0;
 }
 
-This create a new Widget type exception and cost create and copy operation. Also, always throw
-Widget type. Therefore, <example-one> is recommended.
+B ctor
+CD ctor
+going to throw
+CD dtor
+B dtor
+An exception occurred. Exception Nr. i'm B
+B dtor
+CD dtor
+B dtor      <DN>
+end
 
+// example
+int main () {
+  try
+  {
+    CD b;
+    cout << "going to throw" << endl;
+    throw b;
+  }
+  catch (B& e)
+  {
+    cout << "An exception occurred. Exception Nr. " << e.what() << endl;
+  }
 
-<exception-object-type-conversion>
+  cout << "end" << endl;
+  return 0;
+}
 
+B ctor
+CD ctor
+going to throw
+CD dtor
+B dtor
+An exception occurred. Exception Nr. i'm CD
+CD dtor
+B dtor
+end
+
+See that it's CD and no B dtor after catch.
+
+// example
+int main () {
+  try
+  {
+    B b;
+    cout << "going to throw" << endl;
+    throw b;
+  }
+  catch (CD& e)
+  {
+    cout << "An exception occurred. Exception Nr. " << e.what() << endl;
+  }
+
+  cout << "end" << endl;
+  return 0;
+}
+
+What will happen?
+
+kt@kt-ub-vb:~/work$ ./a.out 
+B ctor
+going to throw
+terminate called after throwing an instance of 'B'
+Aborted (core dumped)
+kt@kt-ub-vb:~/work$ 
+
+<exception-type-conversion-and-order>
 Limited type conversion for exception. Support <inheritance-based-conversion> that means catch using
 base class type can catch exception object of derived class. Also catch uses the order of appearance
 in code, called <first-fit> strategy compared to <best-fit> in function-matching.
@@ -8480,25 +8646,137 @@ try {
 }
 
 Because if first-match is found then look no further. Menas that the second catch never gets run
-regardless of throw type since conversion happens in the first catch.
+regardless of throw type, whether it is logic_error(base) or invalid_argument(derived) since the
+first catch always matches to both cases.
+
+<exception-object-always-copied>
+The execution returns to call site for func call but never for exception. This means that whenever
+throw happens, a copy is <always> made regardless of catch type whether it is value or reference
+because throw leaves a call site.
+
+// example-one
+catch( Widget& w )
+{
+  ...
+  throw;
+}
+
+Use 'current' exception and throw it again. 'rethrow'. So there is no addtional copy made and w can
+be a derived class in Widget inheritance.
+
+// example-two
+catch( Widget& w )
+{
+  ...
+  throw w;
+}
+
+This create a new Widget type exception and cost create and copy operation. Also, always throw
+Widget type. Therefore, <example-one> is recommended.
+
+// example
+int main () {
+  try{
+    try
+    {
+      B b;
+      cout << "going to throw" << endl;
+      throw b;
+    }
+    catch (B& e)
+    {
+      cout << "An exception occurred. Exception Nr. " << e.what() << endl;
+      throw;
+    }
+  }
+  catch (B& e)
+  {
+    cout << "catch rethrow: " << e.what() << endl;
+  }
+
+  cout << "end" << endl;
+  return 0;
+}
+
+kt@kt-ub-vb:~/work$ ./a.out 
+B ctor
+going to throw
+B dtor
+An exception occurred. Exception Nr. i'm B
+catch rethrow: i'm B
+B dtor      <DN>
+end
+
+// example
+int main () {
+  try{
+    try
+    {
+      B b;
+      cout << "going to throw" << endl;
+      throw b;
+    }
+    catch (B& e)
+    {
+      cout << "An exception occurred. Exception Nr. " << e.what() << endl;
+      throw e;
+    }
+  }
+  catch (B& e)
+  {
+    cout << "catch rethrow: " << e.what() << endl;
+  }
+
+  cout << "end" << endl;
+  return 0;
+}
+
+kt@kt-ub-vb:~/work$ ./a.out 
+B ctor
+going to throw
+B dtor
+An exception occurred. Exception Nr. i'm B
+B dtor      <DN>
+catch rethrow: i'm B
+B dtor      <DN>
+end
 
 
-<exception-catch-by-reference>
+{exception-spec}
+Older code may contain dynamic exception specifications. They are now deprecated in C++, but still
+supported. A dynamic exception specification follows the declaration of a function, appending a
+throw specifier to it. For example:
 
-1. catch by pointer, do not know if it should call delete on it because do not know if it is created
-by new or not.
+double myfunction (char param) throw (int);
 
-2. catch by value, sliced-off can happen.
-3. catch by reference, okay for both problems above.
+This declares a function called myfunction, which takes one argument of type char and returns a
+value of type double. If this function throws an exception of some type other than int, the function
+calls std::unexpected instead of looking for a handler or calling std::terminate.
 
-These means catch by referecne is recommendation.
+If this throw specifier is left empty with no type, this means that std::unexpected is called for
+any exception. Functions with no throw specifier (regular functions) never call std::unexpected, but
+follow the normal path of looking for their exception handler.
 
+int myfunction (int param) throw(); // all exceptions call unexpected
+int myfunction (int param);         // normal exception handling 
 
-{when-exception-spec-mismatch}
+<noexcept>
+void recomp(int) noexcept;		// C++11 style
+void recomp(int) throw();		// old style
 
-From MEC++14. If there is a mismatch of 'spec' between throw and catch,
-<permature-program-termination> happens: unexpected() -> terminated() -> abort(). This means no
-clean-up so should be avoided.
+Note: The nothrow-keyword is the same as noexcept but used in new-operator expression. See
+{placement-new} in *kt_dev_stl_019*
+
+It is to state that a func will not throw an exception and is checked at runtime. If an exception
+happens even if it's declared it will not, 'terminate' is called. since it is mismatch as
+<exception-spec-mismatch> So two use cases:
+
+o when absolutly sure that there's no exception.
+o when not possible to handle an exception. exit the program.
+
+<exception-spec-mismatch>
+MEC++14. If there is a mismatch of 'spec' between throw and catch <permature-program-termination>
+happens: unexpected() -> terminated() -> abort(). This means no clean-up so should be avoided.
 
 // example
 
@@ -8521,7 +8799,6 @@ How to minimise these?
 <2> change default handler, unexpected(), to handle those. For example, if we use a library that
 raise unexpected exception:
 
-
 <default-exception-handler>
 
 class UnexpectedException { };
@@ -8543,18 +8820,16 @@ set_unexpected( convertUnexpected );
 
 This convert all to <bad_exception> but no detail about why. Q: why bad_exec?
 
-
 <another-permature-program-termination>
-
 This can block a exception handling of higher level. If logDestruction is declared that raise no
 exception but raise it, then terminated and do not reach to ~Session().
 
 Session::~Session()
 {
-	 try {
-		  logDestruction(this);
-	 }
-	 catch(...) { }
+  try {
+    logDestruction(this);
+  }
+  catch(...) { }
 }
 
 
@@ -8685,38 +8960,20 @@ catch( myerror& eobj ) {
 }
 
 
-{noexcept}
-void recomp(int) noexcept;		// C++11 style
-void recomp(int) throw();		// old style
-
-Note: The nothrow-keyword is the same as noexcept but used in new-operator expression. See
-{placement-new} in *kt_dev_stl_019*
-
-To state that a func will not throw an exception and check it at runtime. If an exception happens
-even if it's declared it will not, 'terminate' is called. See {when-exception-spec-mismatch} So two
-use cases:
-
-o when absolutly sure that there's no exception.
-o when not possible to handle an exception. exit the program.
-
-
 {exception-cost}
-
 MEC++15. Exception has cost:
 
 <1> If not use exception, can save speed and space penalty. There is compiler option to disable it.
 
-<2> the cost of try and exception spec in space and varies from compiler to compiler. As a rough
+<2> the cost of try and exception spec in space varies from compiler to compiler. As a rough
 estimate, expect your overall code size to increase by 5-10% and your runtime to go up by a similar
 amount if you use try blocks. So try to minimise the use.
 
-But think 80-20 rule and that exception is rare. Recommendation is that think if it is feasible not
-to use exception, if can minimise, if can use other compiler showing better exception
+But think 80-20 rule and that exception is rare. The recommendation is that think if it is feasible
+not to use exception, if can minimise, if can use other compiler showing better exception
 implementation, and if use profiler to find out 20% to use exception.
 
-
 <exception-to-disable>
-
 From stackoverflow and said G++ specific.
 
 Option #1: Simply never catch exceptions. {QQ} really?
@@ -8947,8 +9204,8 @@ derived-to-base-conversion happens when base's copy-int and copy-assign is calle
 about base and derived part is ignored because do copying and hence only know about <static-type>. 
 
 class Foo {
-	Foo(const Foo&);
-	Foo& operator=(const Foo&);
+  Foo(const Foo&);
+  Foo& operator=(const Foo&);
 };
 
 
@@ -8959,7 +9216,7 @@ This should be revised as: The compiler always use static-type and if it is a vi
 generate a code for run-time binding and could calls derived version. However, this could be broken
 if fails to override in the derived.
 
-// example-one
+// example-one where item is base and bulk is derived
 
 Quote item(bulk);         # sliced-off
 item = bulk;              # sliced-off
@@ -8984,7 +9241,6 @@ sam_slice.cpp:30:8: note: Derived& Derived::operator=(const Left&)
 sam_slice.cpp:30:8: note:   no known conversion for argument 1 from 'Base' to 'const Derived&'
 
 Note: this is a syn coy-ctor that a compiler created.
-
 
 o *baseptr = *baseptr;     # the same class. fine
 o *baseptr = *baseptr;     # diff. base = derived. sliced-off. <1>
@@ -9253,6 +9509,95 @@ class X : publuc/private/protected B {
 
 This has no effect on whether members of a derived class may access the members of its direct base
 class. The purpose is to control the access that users of the derived class.
+
+
+{typeid-operator}
+typeid allows to check the type of an expression:
+
+typeid (expression)
+
+This operator returns a reference to a constant object of type type_info that is defined in the
+standard header <typeinfo>. A value returned by typeid can be compared with another value returned
+by typeid using operators == and != or can serve to obtain a null-terminated character sequence
+representing the data type or class name by using its name() member.
+
+<example>
+#include <iostream>
+#include <typeinfo>
+using namespace std;
+
+int main () {
+  int * a,b;
+  a=0; b=0;
+  if (typeid(a) != typeid(b))
+  {
+    cout << "a and b are of different types:\n";
+    cout << "a is: " << typeid(a).name() << '\n';
+    cout << "b is: " << typeid(b).name() << '\n';
+  }
+  return 0;
+}
+
+<output> on GCC 4.6.3, VM.
+kt@kt-ub-vb:~/work$ ./a.out 
+a and b are of different types:
+a is: Pi
+b is: i
+
+<output> on the text.
+a and b are of different types:
+a is: int *
+b is: int  
+
+Note: The string returned by member name of type_info depends on the specific implementation of your
+compiler and library. It is not necessarily a simple string with its typical type name, like in the
+compiler used to produce this output. 
+
+When typeid is applied to classes, typeid uses the RTTI to keep track of the type of dynamic
+objects. When typeid is applied to an expression whose type is a polymorphic class, the result is
+the type of the most derived complete object:
+
+<example>
+// typeid, polymorphic class
+#include <iostream>
+#include <typeinfo>
+#include <exception>
+using namespace std;
+
+class Base { virtual void f(){} };
+class Derived : public Base {};
+
+int main () {
+  try {
+    Base* a = new Base;
+    Base* b = new Derived;
+    cout << "a is: " << typeid(a).name() << '\n';
+    cout << "b is: " << typeid(b).name() << '\n';
+    cout << "*a is: " << typeid(*a).name() << '\n';
+    cout << "*b is: " << typeid(*b).name() << '\n';
+  } catch (exception& e) { cout << "Exception: " << e.what() << '\n'; }
+  return 0;
+}
+
+
+<output> on GCC 4.6.3, VM.
+a is: P4Base
+b is: P4Base
+*a is: 4Base
+*b is: 7Derived
+
+<output> on the text.
+a is: class Base *
+b is: class Base *
+*a is: class Base
+*b is: class Derived
+
+Notice how the type that typeid considers for pointers is the pointer type itself (both a and b are
+of type class Base *). However, when typeid is applied to objects (like *a and *b) typeid yields
+their dynamic type (i.e. the type of their most derived complete object).
+
+If the type typeid evaluates is a pointer preceded by the dereference operator (*), and this pointer
+has a null value, typeid throws a bad_typeid exception.
 
 
 ==============================================================================
@@ -16107,7 +16452,6 @@ o Easier-to-recognise style. There is no error or warning from the compiler beca
 said the conversion was okay.
 
 o Precision of meaning
-
 
 {??}
 EC++27. The need for dynamic cast arises when want to use derived class ops on what you believe to
