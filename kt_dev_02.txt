@@ -29,6 +29,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_quiz_017| power of two (interview)
 |kt_dev_quiz_018| linked list questions from {ref-004} {runner-technique} {tortoise-and-hare}
 |kt_dev_quiz_019| array and string questions from {ref-004}
+|kt_dev_quiz_020| coding task
 
 #{ PROBLEM SLOVING
 |kt_dev_quiz_100| codility: equilibrium index of a sequence
@@ -3045,6 +3046,367 @@ int countCompression(String str)
 }
 
 This runs on O(n) space and time. If cannot use StringBuffer then create a char array.
+
+
+==============================================================================
+*kt_dev_quiz_020*	coding task
+
+For Kantar media, second phase after phone call and used via email.
+
+The test is as follow. Please send the code and results to me within 24 hours if you can.
+
+A sample daily viewing file called sample.SWD, which contains the following fields (start position,
+character length).
+
+·         Home ID (0,7)
+·         Individual ID (7,2)
+·         Channel ID (9,4) {the corresponding channel description is in StnDesc.txt}
+·         Start time - hhmmss (13,6)
+·         End time - hhmmss (19,6)
+·         TV set ID (25,1)
+
+- Please extract the viewing distribution (number of viewing statements) by minute and identify any
+unusual patterns.
+
+- Please find out the percentage of unmatched tuning (i.e. Channel ID 49) to the total tuning across
+the whole day.
+
+- Please find out the top 10 channels based on the volume of viewing.
+
+<sample.swd>
+10001340100491938001945591
+10001340100491951002049591
+10001340100492055002108591
+10001340100492124002135591
+10001340100492145002156591
+10001340100492204002205591
+10001340100492211002222591
+10001340100492230002236591
+10001340200491938001945591
+10001340200491951002049591
+10001340200492055002108591
+10001340200492124002135591
+10001340200492145002156591
+...
+
+<stndesc.txt>
+1;BBC1 London
+2;BBC2 London
+3;ITV London
+4;Pick TV
+5;Dave
+6;ITV2
+7;ITV3
+8;ITV4
+9;Challenge TV
+10;ITV2+1
+11;E4
+12;E4+1
+...
+
+<code-submitted>
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <map>
+
+class viewEntry
+{
+  public:
+    viewEntry(): viewCount(0), viewVolume(0), cid(0) {}
+    unsigned int viewCount;
+    unsigned long long viewVolume;
+    unsigned int cid;
+};
+
+class Viewing
+{
+  private:
+    const int MINUTES_A_DAY;
+    unsigned int viewTotal;
+
+    std::vector<int> minutes; 
+
+    typedef std::map<unsigned int, viewEntry> VIEWS;
+    VIEWS views;
+
+    unsigned int _getMinutes(std::string time);
+    void _countViews( unsigned int line, unsigned int start, unsigned int end );
+    unsigned int _getPercent(unsigned int minute, unsigned int max);
+
+  public:
+    Viewing( std::ifstream &ifs );
+
+    void getTop10();
+
+    void getPercent(int channel);
+
+    void getDistribution(unsigned int percent, unsigned int max);
+};
+
+// Note: Used 25 hours since the data have entries such as 25:59:59
+Viewing::Viewing( std::ifstream &ifs ) : viewTotal(0), MINUTES_A_DAY(1560)
+{
+  unsigned int lineno = 0;
+  std::string line, chname, cid, stime, etime;
+  unsigned int icid = 0, istime = 0, ietime = 0;
+
+  for(int i = 0; i <= MINUTES_A_DAY; i++)
+    minutes.push_back(0);
+
+  // build data
+  while(std::getline( ifs, line))
+  {
+    cid = line.substr(9,4);
+    stime = line.substr(13,6);
+    etime = line.substr(19,6);
+
+    icid = std::stoi(cid);
+    istime = _getMinutes(stime);
+    ietime = _getMinutes(etime);
+
+    // handle invalid entries
+    if( icid == 950 )
+      continue;
+
+    // build views map
+    auto& entry = views[icid];
+    entry.viewCount++; 
+    entry.viewVolume += (ietime-istime);
+    entry.cid = icid;
+
+    // build distribution vector
+    _countViews( lineno, _getMinutes(stime), _getMinutes(etime));
+
+    lineno++;
+  }
+}
+
+unsigned int Viewing::_getMinutes(std::string time)
+{
+  return std::stoi(time.substr(0,2))*60 + std::stoi(time.substr(2,2));
+}
+
+void Viewing::_countViews(unsigned int line, unsigned int start, unsigned int end)
+{
+  if(start > MINUTES_A_DAY || end > MINUTES_A_DAY)
+  {
+    std::cout << "countViews: error: time is out of a day limit. line: " << line << std::endl;
+    return;
+  }
+
+  for(int idx = start+1; idx <= end; idx++)
+  {
+    minutes[idx] += 1;
+  }
+  
+  viewTotal++;
+}
+
+unsigned int Viewing::_getPercent(unsigned int minute, unsigned int max)
+{
+  return (minutes[minute]*100 / max);
+}
+
+// Please find out the top 10 channels based on the volume of viewing
+// Note: here assumes that this is rarely used and if not, need to consider having a running
+// structure rather than a temporay.
+void Viewing::getTop10()
+{
+  VIEWS::iterator views_it = views.begin();
+  typedef std::map<int, int> VOLUMES;
+  VOLUMES volumes;
+
+  for(views_it; views_it != views.end(); ++views_it)
+  {
+    volumes[views_it->second.viewVolume] = views_it->second.cid;
+  }
+
+  int i = 0;
+  VOLUMES::iterator volumes_it = volumes.end();
+  for(--volumes_it, i; i < 10; i++)
+  {
+    std::cout << i+1 << "th channel is " << (*volumes_it).second << std::endl;
+    --volumes_it;
+  }
+}
+
+// Please find out the percentage of unmatched tuning (i.e. Channel ID 49) to the total tuning across the whole day.
+void Viewing::getPercent(int channel)
+{
+  auto& entry = views[channel];
+  double result = (entry.viewCount*100/viewTotal);
+  std::cout << "The channel " << channel << " has " << result << " % in total" << std::endl;
+}
+
+
+// Please extract the viewing distribution (number of viewing statements) by minute and identify any unusual patterns.
+// Note: Assumes that viewing distribution means that the number of viewes in a specific minute and
+// that it is unusal when it is over the specified percentage in the scaled down space. Here used
+// 50% and 4000 as a max.
+void Viewing::getDistribution(unsigned int percent, unsigned int max)
+{
+  for(unsigned int i = 1; i <= MINUTES_A_DAY; i++)
+  {
+    unsigned int scaled_percent = 0;
+
+    if( (scaled_percent = _getPercent(i, max)) > percent )
+      std::cout << i << " minutes has " << scaled_percent << " % viewers in the scaled-down space."  << std::endl;
+  }
+}
+
+// Note: Generally no error handling, design, and space/time cosideration since no requirement was given. Aim
+// to get the answer and to run in a rather quick fashion since was told it's about 30 minute task. 
+int main()
+{
+  std::string line;
+  int lnum = 0;
+  std::ifstream ifs("sample.SWD", std::ifstream::in );
+
+  if( ifs.is_open() )
+  {
+    Viewing view(ifs);
+
+    std:: cout << "==================================================" << std::endl;
+    std:: cout << "Q 01" << std::endl;
+    std:: cout << "==================================================" << std::endl;
+    view.getTop10();
+    std:: cout << "==================================================" << std::endl;
+    std:: cout << "Q 02" << std::endl;
+    std:: cout << "==================================================" << std::endl;
+    view.getPercent(49);
+    std:: cout << "==================================================" << std::endl;
+    std:: cout << "Q 03" << std::endl;
+    std:: cout << "==================================================" << std::endl;
+    view.getDistribution(50, 4000);
+
+    ifs.close();
+  }
+  else
+    std:: cout << "file is not opened" << std::endl;
+}
+
+// <The output from a run>
+// ==================================================
+// Q 01
+// ==================================================
+// 1th channel is 49
+// 2th channel is 52
+// 3th channel is 45
+// 4th channel is 3
+// 5th channel is 1
+// 6th channel is 2
+// 7th channel is 96
+// 8th channel is 69
+// 9th channel is 73
+// 10th channel is 67
+// ==================================================
+// Q 02
+// ==================================================
+// The channel 49 has 35 % in total
+// ==================================================
+// Q 03
+// ==================================================
+// 1211 minutes has 51 % viewers in the scaled-down space.
+// 1213 minutes has 51 % viewers in the scaled-down space.
+// 1214 minutes has 51 % viewers in the scaled-down space.
+// 1216 minutes has 51 % viewers in the scaled-down space.
+// 1217 minutes has 51 % viewers in the scaled-down space.
+// 1218 minutes has 51 % viewers in the scaled-down space.
+// 1219 minutes has 52 % viewers in the scaled-down space.
+// 1220 minutes has 51 % viewers in the scaled-down space.
+// 1221 minutes has 51 % viewers in the scaled-down space.
+// 1222 minutes has 52 % viewers in the scaled-down space.
+// 1223 minutes has 51 % viewers in the scaled-down space.
+// 1224 minutes has 52 % viewers in the scaled-down space.
+// 1225 minutes has 51 % viewers in the scaled-down space.
+// 1226 minutes has 51 % viewers in the scaled-down space.
+// 1227 minutes has 51 % viewers in the scaled-down space.
+// 1231 minutes has 51 % viewers in the scaled-down space.
+// 1232 minutes has 52 % viewers in the scaled-down space.
+// 1233 minutes has 52 % viewers in the scaled-down space.
+// 1234 minutes has 53 % viewers in the scaled-down space.
+// 1235 minutes has 53 % viewers in the scaled-down space.
+// 1236 minutes has 52 % viewers in the scaled-down space.
+// 1237 minutes has 52 % viewers in the scaled-down space.
+// 1238 minutes has 52 % viewers in the scaled-down space.
+// 1239 minutes has 53 % viewers in the scaled-down space.
+// 1240 minutes has 52 % viewers in the scaled-down space.
+// 1241 minutes has 53 % viewers in the scaled-down space.
+// 1242 minutes has 53 % viewers in the scaled-down space.
+// 1243 minutes has 53 % viewers in the scaled-down space.
+// 1244 minutes has 53 % viewers in the scaled-down space.
+// 1245 minutes has 53 % viewers in the scaled-down space.
+// 1246 minutes has 53 % viewers in the scaled-down space.
+// 1247 minutes has 53 % viewers in the scaled-down space.
+// 1248 minutes has 53 % viewers in the scaled-down space.
+// 1249 minutes has 53 % viewers in the scaled-down space.
+// 1250 minutes has 54 % viewers in the scaled-down space.
+// 1251 minutes has 53 % viewers in the scaled-down space.
+// 1252 minutes has 53 % viewers in the scaled-down space.
+// 1253 minutes has 53 % viewers in the scaled-down space.
+// 1254 minutes has 54 % viewers in the scaled-down space.
+// 1255 minutes has 52 % viewers in the scaled-down space.
+// 1257 minutes has 52 % viewers in the scaled-down space.
+// 1258 minutes has 52 % viewers in the scaled-down space.
+// 1262 minutes has 51 % viewers in the scaled-down space.
+// 1263 minutes has 51 % viewers in the scaled-down space.
+// 1264 minutes has 53 % viewers in the scaled-down space.
+// 1265 minutes has 52 % viewers in the scaled-down space.
+// 1266 minutes has 53 % viewers in the scaled-down space.
+// 1267 minutes has 53 % viewers in the scaled-down space.
+// 1268 minutes has 53 % viewers in the scaled-down space.
+// 1269 minutes has 54 % viewers in the scaled-down space.
+// 1270 minutes has 54 % viewers in the scaled-down space.
+// 1271 minutes has 54 % viewers in the scaled-down space.
+// 1272 minutes has 54 % viewers in the scaled-down space.
+// 1273 minutes has 54 % viewers in the scaled-down space.
+// 1274 minutes has 54 % viewers in the scaled-down space.
+// 1275 minutes has 55 % viewers in the scaled-down space.
+// 1276 minutes has 54 % viewers in the scaled-down space.
+// 1277 minutes has 54 % viewers in the scaled-down space.
+// 1278 minutes has 54 % viewers in the scaled-down space.
+// 1279 minutes has 54 % viewers in the scaled-down space.
+// 1280 minutes has 54 % viewers in the scaled-down space.
+// 1281 minutes has 54 % viewers in the scaled-down space.
+// 1282 minutes has 55 % viewers in the scaled-down space.
+// 1283 minutes has 55 % viewers in the scaled-down space.
+// 1284 minutes has 54 % viewers in the scaled-down space.
+// 1285 minutes has 54 % viewers in the scaled-down space.
+// 1286 minutes has 54 % viewers in the scaled-down space.
+// 1287 minutes has 54 % viewers in the scaled-down space.
+// 1288 minutes has 55 % viewers in the scaled-down space.
+// 1289 minutes has 54 % viewers in the scaled-down space.
+// 1290 minutes has 54 % viewers in the scaled-down space.
+// 1291 minutes has 53 % viewers in the scaled-down space.
+// 1292 minutes has 53 % viewers in the scaled-down space.
+// 1293 minutes has 54 % viewers in the scaled-down space.
+// 1294 minutes has 54 % viewers in the scaled-down space.
+// 1295 minutes has 54 % viewers in the scaled-down space.
+// 1296 minutes has 54 % viewers in the scaled-down space.
+// 1297 minutes has 54 % viewers in the scaled-down space.
+// 1298 minutes has 52 % viewers in the scaled-down space.
+// 1299 minutes has 53 % viewers in the scaled-down space.
+// 1300 minutes has 53 % viewers in the scaled-down space.
+// 1301 minutes has 53 % viewers in the scaled-down space.
+// 1302 minutes has 53 % viewers in the scaled-down space.
+// 1303 minutes has 53 % viewers in the scaled-down space.
+// 1304 minutes has 53 % viewers in the scaled-down space.
+// 1305 minutes has 53 % viewers in the scaled-down space.
+// 1306 minutes has 53 % viewers in the scaled-down space.
+// 1307 minutes has 53 % viewers in the scaled-down space.
+// 1308 minutes has 53 % viewers in the scaled-down space.
+// 1309 minutes has 52 % viewers in the scaled-down space.
+// 1310 minutes has 53 % viewers in the scaled-down space.
+// 1311 minutes has 52 % viewers in the scaled-down space.
+// 1312 minutes has 52 % viewers in the scaled-down space.
+// 1313 minutes has 52 % viewers in the scaled-down space.
+// 1314 minutes has 53 % viewers in the scaled-down space.
+// 1315 minutes has 52 % viewers in the scaled-down space.
+// 1316 minutes has 52 % viewers in the scaled-down space.
+// 1317 minutes has 52 % viewers in the scaled-down space.
 
 
 # ============================================================================

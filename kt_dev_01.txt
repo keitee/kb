@@ -4317,7 +4317,7 @@ class TextQuery {
 
 // TextQuery member definitions
 
-TextQuery::TextQuery( ifstream& is ) : file( new vector< string >) // new vector
+TextQuery::TextQuery( ifstream& is ) : file( new vector<string>) // new vector
 {
   string text;
 
@@ -6752,16 +6752,16 @@ total.isbn();
 
 Sales_data::isbn(&total); where Sales_data::isbn(Sales_data *const this);
 
-That is "this = &total" because this is a <const-pointer> by default; pointer itself is const. This
-means cannot call usual member function which is non-const member on const class object because when
-it is called, this pointer will be set but cannot. Why? since it meants 'this=&const object' but
+That is "this = &total" because this-pointer is a <const-pointer> by default; pointer itself is
+const. This means that when calls non-const member of const object, cannot call it because when it
+is called, this-pointer will be set but cannot. Why? since it meants 'this=&const object' but
 there's no {const-to-non-const} conversion.  *kt_dev_cpp_008*
 
 this = &const_total; // ERROR
 
-So if we make member function const, will make this pointer as a pointer to const then:
+So if we make member function const, will make this-pointer as a pointer to const then:
 
-o Cannot change object via this member func(i.e. this pointer)
+o Cannot change object via this member func(i.e. this-pointer)
 o Can be used on both const and non-const class object.
 
 string isbn 'const' { return bookNo; }
@@ -16448,21 +16448,81 @@ This is not just about const away and see {const-non-const-version} to add const
 {named-cast}
 From MEC++02. These casts are called named cast and these provides:
 
-o Easier-to-recognise style. There is no error or warning from the compiler because we explicitly
-said the conversion was okay.
+o Easier-to-recognise style in code both for humans and for tools.
 
-o Precision of meaning
+o The more narrowly specified purpose and precision of meaning. Better for a comipler to diagnose
+usuage errors.
 
-{??}
-EC++27. The need for dynamic cast arises when want to use derived class ops on what you believe to
-be a derived class objects via base pointer or ref. To avoid this, two approaches:
+{why-careful-about-cast}
+<function-style-cast>
 
-Problem:
+doSomething(Widget(15);
+doSomething(static_cast<Widget>(15));
+
+The both do exactly the same although doesn't feel like a cast.
+
+<do-not-assume-how-things-are-laid-out>
+C++ can have an object that might have more than one address; that is when pointed by a Base*
+pointer and when pointed by Derived*. This cannot happen in C and other lanauages.
+
+Derived d;
+Base *pb = &d;
+
+Sometimes, a base class pointer and derived class pointer values will not be the same. When that's
+the case, an offset is applied at runtime to the Derived* pointer to get the correct Base* pointer
+value. DO not use "I know how things are laid out" casts.
+
+<cast-means-more-code>
+The cast do nothing but tell compilers to treat one type as another? Mistaken since type conversion
+often lead to additional code that is executed at runtime. 
+
+int x, y;
+...
+double d = static_cast<double>(x)/y;
+
+Use division but use floating point division.
+
+<cast-create-a-temp>
+Assume that a virtual function in derived class call their base class counterparts first.
+
+class Window 
+{
+  virtual void onResize() {...}
+};
+
+class SpecialWindow : public Window 
+{
+  public:
+    virtual void onResize()
+    {
+      static_cast<Window>(*this).onResize();
+      ...
+    }
+    ...
+};
+
+It does call onResize but on the temp object. WHY? The solution is:
+
+class SpecialWindow : public Window 
+{
+  public:
+    virtual void onResize()
+    {
+      Window.onResize();
+      ...
+    }
+    ...
+};
+
+<cast-is-expensive>
+The dymamic cast is expensive and slow since often is implemented using string comparison in the
+hierarchy. The compier supports up-cast that is implicit derived-to-base conversion so a base pointer can point either base object and derived object. How to know which? The need for dynamic cast arises when want to use derived class ops on what you believe to
+be a derived class objects via base pointer or reference. This is down-cast. 
 
 class Window { ... };
 class SpecialWindow: public Window {
-	 public:
-	 void blink();
+  public:
+    void blink();
 };
 
 typedef std::vector< std::shared_ptr<Window>> VPW;
@@ -16470,33 +16530,44 @@ VPW winPtrs;
 
 for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
 {
-	 if( SpecialWindow *psw = dynamic_cast<SpecialWindow*> (iter->get()))
-		  psw->blink();
+  if( SpecialWindow *psw = dynamic_cast<SpecialWindow*> (iter->get()))
+    psw->blink();
 }
 
-{solution-one}
+Here used dymamic_cast to meet the condition which only derived class supports blink(). To avoid
+this dymamic_cast, two approaches:
 
+
+<solution-one>
 typedef std::vector< std::shared_ptr<SpecialWindow>> VPW;
 
 But, do not support all possible window derivatives.
 
-
-{solution-two}
-
+<solution-two>
 Use virtual mechanism. 
 
 class Window {
-	 public:
-	 virtual void blink() {}     
-	 # default impl is no-op. See *kt_dev_ecpp_010* for why it can be a bad idea
+  public:
+    virtual void blink() {}     
+    # default impl is no-op. See *kt_dev_ecpp_010* for why it can be a bad idea
 };
 
 class SpecialWindow : public Window {
-	 public:
-	 virtual void blink() { ... }
+  public:
+    virtual void blink() { ... }
 };
 
+<other-things-to-remember>
+Avoid cascading dynamic cast and try to hide cast inside a function.
 
+for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
+{
+  if( SpecialWindow1 *psw = dynamic_cast<SpecialWindow1*> (iter->get()))
+    psw->blink();
+  else if( SpecialWindow2 *psw = dynamic_cast<SpecialWindow2*> (iter->get()))
+    psw->blink();
+  ...
+}
 
 
 ==============================================================================
