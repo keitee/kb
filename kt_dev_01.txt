@@ -29,7 +29,7 @@ ISSUES and CODES
 |kt_dev_prob_007| random number {time}
 |kt_dev_prob_008| elapsed time {clock}
 |kt_dev_prob_009| debug printf {stdarg} {macro} {why-ellipses-dangerous} {ndebug}
-|kt_dev_prob_010| macro: get max value of type
+|kt_dev_prob_010| macro: get max value of type {bitwise}
 
 
 GNU CORE UTILS
@@ -1501,6 +1501,86 @@ From glibc
 # ifndef LONG_MAX
 #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
 # endif
+
+<problem>
+From "*kt_dev_quiz_001*	bits: how to swap two vars without using a temp"
+
+x = 1010; y = 0011;
+
+x =  1001 =  1010  ^ 0011   (x^y)
+y =  1010 = [1001] ^ 0011   (x^y) # y = x = (x^y)^y = (x^0)
+x = [0011] =  1001 ^ [1010] (x^y) # x = y = (x^y)^x = (y^0)
+
+x = 0011; y = 1010;
+
+Does it mean that x^1 yields ~x since 0 becomes 1 and 1 becomes 0?
+
+int main () {
+  const int ival = 3;
+
+  cout << "ival: " << std::hex << ival << endl;
+  cout << "ival: " << std::hex << (ival^0) << endl;
+  cout << "ival: " << std::hex << (ival^1) << endl;
+  cout << "ival: " << std::hex << (ival^(~0)) << endl;
+  cout << "ival: " << std::hex << ~ival << endl;
+}
+
+ival: 3
+ival: 3
+ival: 2
+ival: fffffffc
+ival: fffffffc
+
+<example>
+cout << "ival: " << std::hex << ((unsigned int) (~(unsigned int)0) )<< endl;
+cout << "ival: " << std::hex << ((int) ((~(unsigned int)0) >> 1))<< endl;
+cout << "ival: " << std::hex << ((int) (~(unsigned int)0) >> 1)<< endl;
+cout << "ival: " << std::hex << ((~(unsigned int)0) >> 1)<< endl;
+// ival: ffffffff
+// ival: 7fffffff
+// ival: ffffffff {Q} why?
+// ival: 7fffffff
+
+Here two things happens. (Type) is higher than shift operator so singed cast happens first. Then
+right shift happens. According to the below article:
+
+shift-expression >> additive-expression
+
+"The right-shift operator causes the bit pattern in shift-expression to be shifted to the right by
+the number of positions specified by additive-expression. For unsigned numbers, the bit positions
+that have been vacated by the shift operation are <zero-filled>. For signed numbers, the sign bit is
+used to fill the vacated bit positions. In other words, if the number is positive, 0 is used, and if
+the number is negative, 1 is used."
+
+Important
+The result of a right-shift of a signed negative number is implementation-dependent. Although Visual
+C++ uses the sign bit to fill vacated bit positions, there is no guarantee that other
+implementations also do so.
+
+Left Shift and Right Shift Operators (>> and <<)
+http://msdn.microsoft.com/en-us/library/336xbhcz.aspx
+<example>
+#include <iostream>
+#include <bitset>
+using namespace std;
+
+int main() {
+  unsigned short short11 = 1024;
+  bitset<16> bitset11{short11};
+  cout << bitset11 << endl;     // 0000010000000000
+
+  unsigned short short12 = short11 >> 1;  // 512
+  bitset<16> bitset12{short12};
+  cout << bitset12 << endl;      // 0000010000000000
+
+  unsigned short short13 = short11 >> 10;  // 1
+  bitset<16> bitset13{short13};
+  cout << bitset13 << endl;      // 0000000000000001
+
+  nsigned short short14 = short11 >> 11;  // 0
+  bitset<16> bitset14{short14};
+  cout << bitset14 << endl;     // 0000000000000000}
+}
 
 
 # ============================================================================
@@ -11077,6 +11157,8 @@ SD_multiset bookstore(42, hasher, eqOp);
 This is not supported in GCC 4.6 and use typedef instead.
 
 typedef unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*> SD_multiset;
+SD_multiset bookstore(42, hasher, eqOp);
+SD_multiset::iterator it;
 
 
 {key-value-pair} 
@@ -12155,6 +12237,34 @@ rcomma.base()   cend()
 
 [crbegin(), rcomma ) which prints 'TSAL' and [rcomma.base(), cend() )
 
+<example>
+
+#include <iostream>
+#include <string>
+
+using std::cout;
+using std::endl;
+using std::string;
+
+void reverse_cpp_two(char* str)
+{
+  if(!str) return;
+  string istr(str);
+
+  string::reverse_iterator it = istr.rbegin();
+  while( it != istr.rend() )
+  {
+    cout << *it << endl;
+    ++it;
+  }
+}
+
+int main () {
+  cout << "=====" << endl;
+  reverse_cpp_two("KEITEE PARK");
+  return 0;
+}
+
 
 ==============================================================================
 *kt_dev_stl_008*	algorithm
@@ -12438,11 +12548,11 @@ b is a copy of the n low-order bits of unsigned long long(ULL) value u.
 If the size of bitset > the number of bits in ULL, the remaining high-order are set to 0.
 If the size of bitset < the number of bits in ULL, the only low-order bits are used. 
 
+<init-from-string>
 bitset<n> b(s, pos, m);
 'b' is a copy of the 'm' characters from the 'string' starting at position 'pos'. s may contain only
 0 and 1 and if contains any other characters, throws invalid_argument.
 
-<init-from-string>
 The characters with the lowest indices in the string correspond to the high-order bits and vice
 versa.
 
@@ -12452,7 +12562,7 @@ same as the above but copies from the character array to which cp points.
 
 {bitset-operations}
 <about-the-state-of-the-entire-bitset>
-b.any();       is any bit in b on?
+b.any();       is any bit in b on?           <DN> Do not use is?? style although returns a bool.
 b.all();       are all the bits on?
 b.none();      are no bits on?
 b.count();     number of bits that are on.
@@ -12518,10 +12628,14 @@ int main()
   bitvec.set();
 
   bitset<16> bitvec2("01011001011");
-  cout << bitvec2 << endl;
+  cout << bitvec2 << endl;             <DN>
 
-	return 0;
+  return 0;
 }
+
+{Q} How can use bitset with dynamic size since the size is constant expression? Options are:
+0> vector<bool>
+1> boost has a dynamic_bitset you can use.
 
 
 ==============================================================================
@@ -12667,6 +12781,33 @@ argument '1' to '__ssize_t getline(char**, size_t*, FILE*)'
 must have #include <fstream>
 
 this suggest that it calls getline from <stdio.h> and <cstdio> for C++ maybe?
+
+<example>
+#include <iostream>
+#include <fstream>
+#include <string>
+
+int main()
+{
+  std::string line;
+  int lnum = 0;
+  std::ifstream ifs("sample.SWD", std::ifstream::in );
+
+  // while( std::getline( ifs, line ))
+  // {
+  //   std::cout << lnum << ":" << line << std::endl;
+  //   lnum++;
+  // }
+
+  std::getline( ifs, line );
+
+  std::string hid = line.substr( 13, 6 );
+
+  int hidi = std::stoi(hid);
+  std:: cout << "hid :" << hid << "hid i: " << hidi << std::endl;
+
+  ifs.close();
+}
 
 
 ==============================================================================
