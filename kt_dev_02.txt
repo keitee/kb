@@ -4370,6 +4370,255 @@ required for input arguments).
 
 Elements of input arrays can be modified.
 
+{code-sample}
+#include <iostream>
+#include <vector>
+
+int solution( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  bool *pbitset = new bool[X];
+  unsigned int idx;
+  unsigned int count=0;
+
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < A.size(); idx++)
+  {
+    if( pbitset[A[idx]-1] == false )
+    {
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      std::cout << "idx: " << idx << ", pbitset[" << A[idx]-1 << "] = " << pbitset[A[idx]-1]
+        << ", count: " << count << std::endl;
+
+      if( count == X )
+      {
+        delete[] pbitset; return idx;
+      }
+    }
+  }
+
+  delete[] pbitset; return -1;
+}
+
+int main()
+{
+  std::vector<int> A2 = { 1,3,1,4,2,3,5,4 };
+  std::cout << solution( 5, A2 ) << std::endl;
+
+  std::vector<int> A3 = { 1,3,1,4,2,3,5,4 };
+  std::cout << solution( 1, A3 ) << std::endl;
+
+  std::vector<int> A4 = { };
+  std::cout << solution( 5, A4 ) << std::endl;
+
+  std::vector<int> A5 = { 1 };
+  std::cout << solution( 5, A4 ) << std::endl;
+}
+
+
+{first-attempt}
+#include <iostream>
+#include <vector>
+
+int solution( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  <DN> this is wrong since it allocate a single bool but not array.
+  bool *pbitset = new bool(X);
+ 
+  <DN> changed since a complier warning saying mismatch between signed and unsigned. No such error when run with GCC 4.6.3.
+  int idx;                        
+  int count=0;
+
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < A.size(); idx++)
+  {
+    if( pbitset[A[idx]-1] == false )
+    {
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      if( count == X )
+      {
+        delete pbitset; return idx;
+      }
+    }
+  }
+
+  delete pbitset; return -1;
+}
+
+Failed on 25%:
+
+simple simple test        0.020 s.     OK
+single single element     0.020 s.     WRONG ANSWER got -1 expected 0
+extreme_frog frog never across the river     0.020 s.     OK
+
+small_random1 3 random permutation, X = 50     0.020 s.     RUNTIME ERROR
+tested program terminated unexpectedly
+
+stdout:
+
+[MONITOR DEBUG] open("/dev/tty", 2306) denied
+[MONITOR] syscall open was blocked!
+*** glibc detected *** ./user.e: free(): invalid next size (fast): 0x09cc9008 ***
+======= Backtrace: =========
+/lib/libc.so.6(+0x6c12a)[0x401c512a]
+/lib/libc.so.6(+0x6d988)[0x401c6988]
+/lib/libc.so.6(cfree+0x6d)[0x401c9afd]
+/usr/lib/libstdc++.so.6(_ZdlPv+0x1f)[0x4007554f]
+./user.e[0x804905c]
+/lib/libc.so.6(__libc_start_main+0xe6)[0x4016fbc6]
+./user.e[0x8048971]
+======= Memory map: ========
+[MONITOR DEBUG] open("/proc/self/maps", 0x0000) - opening /proc/ files is disabled!
+[MONITOR] syscall tgkill was blocked!
+[MONITOR] syscall tgkill was blocked!
+
+Failed on other many test cases with the same error. {Q} Okay since allocation is wrong. But why no
+such error on GCC 4.6.3.
+
+{second-attempt}
+#include <iostream>
+#include <vector>
+
+int solution( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  bool *pbitset = new bool(X);
+ 
+  int idx;                        
+  int count=0;
+
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < A.size(); idx++)
+  {
+    if( pbitset[A[idx]-1] == false )
+    {
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      if( count == X )
+      {
+        delete[] pbitset; return idx;  <DN>
+      }
+    }
+  }
+
+  delete[] pbitset; return -1;
+}
+
+Still failed with the same error. Why? Now I see why.
+
+
+{third-attempt}
+#include <iostream>
+#include <vector>
+
+int solution( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  bool *pbitset = new bool[X];   <DN>
+ 
+  int idx;                        
+  int count=0;
+
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < A.size(); idx++)
+  {
+    if( pbitset[A[idx]-1] == false )
+    {
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      if( count == X )
+      {
+        delete[] pbitset; return idx;
+      }
+    }
+  }
+
+  delete[] pbitset; return -1;
+}
+
+90 out of 100 points. Detected time complexity: O(N). Failed on:
+
+single single element     0.020 s.     WRONG ANSWER got -1 expected 0
+
+{Q} why?
+
+{bitset-attempt}
+#include <iostream>
+#include <vector>
+#include <bitset>
+
+const size_t size = sizeof(unsigned long)*8;
+typedef std::bitset<size> my_bitset;
+
+int solution( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  my_bitset bitvec(X);
+  bitvec.reset();
+
+  int idx;
+  int count=0;
+
+  std::cout << "bitvec size: " << bitvec.size() << std::endl;
+
+  for(idx=0; idx < A.size(); idx++)
+  {
+    if( bitvec[A[idx]-1] == false )
+    {
+      bitvec[A[idx]-1] = true;
+      count++;
+
+      std::cout << "idx: " << idx << ", bitvec[" << A[idx]-1 << "] = " << bitvec[A[idx]-1]
+        << ", count: " << count << std::endl;
+
+      if( count == X )
+        return idx;
+    }
+  }
+
+  return -1;
+}
+
+int main()
+{
+  std::vector<int> A2 = { 1,3,1,4,2,3,5,4 };
+  std::cout << solution( 5, A2 ) << std::endl;
+
+  std::vector<int> A3 = { 1,3,1,4,2,3,5,4 };
+  std::cout << solution( 1, A3 ) << std::endl;
+
+  std::vector<int> A4 = { };
+  std::cout << solution( 5, A4 ) << std::endl;
+
+  std::vector<int> A5 = { 1 };
+  std::cout << solution( 5, A4 ) << std::endl;
+}
+
 
 ==============================================================================
 *kt_dev_quiz_200* codility: train: lesson 01: time complexity

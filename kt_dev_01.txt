@@ -4209,6 +4209,29 @@ int main()
 	 return ?; # any other value, error code, for not okay 
 }
 
+<gcc-case> on ubuntu linux
+#include <iostream>
+#include <bitset>
+
+using std::cout;
+using std::endl;
+
+int main () {
+
+  bool* parr = new bool(20);
+
+  cout << "size: " << sizeof(parr) << endl;
+  cout << "size: " << sizeof(*parr) << endl;
+  cout << "valu: " << *parr << endl;
+
+  return 0;
+}
+
+kt@kt-ub-vb:~/work$ ./a.out 
+size: 4
+size: 1
+valu: 1
+
 
 {non-bool-to-bool}
 When assign non-bool to bool type, type conversion happens and got 0 or 1 depending on the value of
@@ -6673,9 +6696,9 @@ extern const int gc_max = 100;
 extern const int gc_max;
 
 
-{top-low-level-const}
+{top-and-low-level-const}
 The top level const is for object itself. So there are <top-level-const> and <low-level-const> for a
-reference and pointer. Top-level-const is for reference and pointer itself and lov-level-const is
+reference and pointer. Top-level-const is for reference and pointer itself and low-level-const is
 for underlying object. Top can be ignored but low level 'NOT' because top-level-const do not say
 anything about underlying object. const-pointer can point either const or non-const. Hence can
 be ignored. 
@@ -6702,7 +6725,7 @@ const int &r2 = i;
 r1 = 0;
 r2 = 0;						// error since r2 is reference-to-const
 
-int &ri = ci;				// error because NO 'const to non-const'.
+int &ri = ci;				// error because NO 'const to non-const'. Not a copy.
 
 For ordinary reference, must match type and must bind to a object.
 
@@ -6717,7 +6740,7 @@ int *const curErr = &errNumb;
 
 
 {type-match-exceptions}
-Two exceptions to type match: <reference-to-const> and <derived-to-base-reference> conversion. Can
+Two exceptions to type match: <nonconst-to-const> and <derived-to-base-reference> conversion. Can
 bind <reference-to-const> to non-const, a literal, a temp, or other expression that evaluate to an
 type.
 
@@ -6726,11 +6749,10 @@ const int &ri = 42;		// ok
 double dval = 3.14;
 const int &ri = dval;	// ok becuase will bind to <temp-object> and cannot change it via ri
 
-note: KT. This is [to-maintain-constness] by creating [temp-object]. See <case-one-in-conversion>
- 
+KT. This is [to-maintain-constness] by creating [temp-object]. See <case-one-in-conversion>
 
-{convert-to-const}
-Implicit {convert-to-const} conversion <for reference and pointer>.
+<convert-to-const>
+Implicit nonconst-to-const conversion ONLY <for reference and pointer>.
 
 const  -- NO --> non-const
 const <-- OK --  non-const
@@ -6745,31 +6767,28 @@ int i = ci;				// ignored
 
 const int& r = ci;	// is 'always' low-level
 
-
-If this is allowed, const object can be changed via non-const pointer and reference. So not allowed.
-
 int i;
 const int &j = i;		// conversion from non-const to const
 const int *p = &i;
 int &r = j, *q = p;	// error since conversion from const to non-const
+
+If this is allowed, const object can be changed via non-const pointer and reference. So not allowed.
 
 
 {const-param-args}
 The const matters when copying vars and do func params. That is why copy-ctor is usded here.
 
 void fcn( const int i );		
-
 fcn(j);	// const int i = j;
 fcn(cj);	// const int i = cj;
 
 void fcn( int i );
+fcn(j);	// int i = j;
+fcn(cj);	// int i = cj;
 
 This is error because it redefines the same. Why? See {const-on-overload} for more cases.
 These are all explained by the fact that fcn(const init i) can be used both fcn( const-pararm ) and
 fcn( non-const-param ) and in other words, top-level-const can be ignored.
-
-fcn(j);	// int i = j;
-fcn(cj);	// int i = cj;
 
 
 {const-reference-param}
@@ -6794,10 +6813,10 @@ In iterator, begin() has overloads: const and non-const version because if it ha
 version, *this is const and any data member is also const. begin() may return its member.
 
 // like 'T* const' and iter itself is const
-const std::vector< int >::iterator iter = vec.begin();
+const std::vector<T>::iterator iter = vec.begin();
 
 // like 'const T*' and *iter is const
-std::vector< int >::const_iterator iter = vec.begin();
+std::vector<T>::const_iterator iter = vec.begin();
 
 
 {const-return} {equal-misspell}
@@ -6835,15 +6854,16 @@ Sales_data::isbn(&total); where Sales_data::isbn(Sales_data *const this);
 That is "this = &total" because this-pointer is a <const-pointer> by default; pointer itself is
 const. This means that when calls non-const member of const object, cannot call it because when it
 is called, this-pointer will be set but cannot. Why? since it meants 'this=&const object' but
-there's no {const-to-non-const} conversion.  *kt_dev_cpp_008*
+there's no {const-to-non-const} conversion. *kt_dev_cpp_008*
 
 this = &const_total; // ERROR
 
-So if we make member function const, will make this-pointer as a pointer to const then:
+So if we make a member function const, will make this-pointer as a pointer-to-const then:
 
 o Cannot change object via this member func(i.e. this-pointer)
 o Can be used on both const and non-const class object.
 
+<why-const-member-is-okay>
 string isbn 'const' { return bookNo; }
 
 it makes:
@@ -7187,6 +7207,83 @@ class T {
 - to use logical constness
 - to use lock as a mutable member. seems useful.
 - see {lazy-fetching} in *kt_dev_mecpp_002* 
+
+
+{case-example}
+When use the mix of C and C++, face an build error when builds C++ source.
+
+SessionResolveName(const char *in, char *out, int maxLen, int *calculated)
+{
+...
+  source = _determineSource((char*)in, &sourcelen, &inIndex, &usePath);
+}
+
+const char* _determineSource(const char*in, int* sourceLen, int *readPos, bool* usePath)
+{
+  idx = strchr(in, '/');
+  ...
+}
+
+Session.cpp:876:23: error: invalid conversion from 'const char*' to 'char*'
+
+Looked at the strchr man page and it says:
+
+NAME
+       strchr, strrchr, strchrnul - locate character in string
+
+SYNOPSIS
+       #include <string.h>
+
+       char *strchr(const char *s, int c);
+       
+What? What's going on here?!
+
+<answer>
+Found that from glibc string.h
+
+/* Find the first occurrence of C in S.  */
+#ifdef __CORRECT_ISO_CPP_STRING_H_PROTO            // IF
+extern "C++"
+{
+extern char *strchr (char *__s, int __c)
+     __THROW __asm ("strchr") __attribute_pure__ __nonnull ((1));
+extern __const char *strchr (__const char *__s, int __c)
+     __THROW __asm ("strchr") __attribute_pure__ __nonnull ((1));
+
+# ifdef __OPTIMIZE__
+__extern_always_inline char *
+strchr (char *__s, int __c) __THROW
+{
+  return __builtin_strchr (__s, __c);
+}
+
+__extern_always_inline __const char *
+strchr (__const char *__s, int __c) __THROW
+{
+  return __builtin_strchr (__s, __c);
+}
+# endif
+}
+#else                                              // ELSE
+extern char *strchr (__const char *__s, int __c)
+     __THROW __attribute_pure__ __nonnull ((1));
+#endif
+
+That says that will use non-const version for C++ build and const version for C.
+
+<solution>
+SessionResolveName(const char *in, char *out, int maxLen, int *calculated)
+{
+  ...
+  source = _determineSource((char*)in, &sourcelen, &inIndex, &usePath);    <DN>
+}
+
+const char* _determineSource(const char*in, int* sourceLen, int *readPos, bool* usePath)
+{
+  idx = strchr(in, '/');
+  ...
+}
+
 
 ==============================================================================
 *kt_dev_cpp_009* undefined result and a temp-object
@@ -7924,6 +8021,112 @@ branches to be used. –  Paul R Jun 10 '10 at 7:07
 You have a switch statement with 5 case statements and the cases all have numbers that are spread
 far apart so a jump table will not be used, 'if type' will. {Q} May choose not to use a jump table
 because there will be entries which are not used? Up to a compiler?
+
+<switch-grouping>
+
+typedef enum {
+  E_01,    //
+  E_02,
+  E_03,
+  E_11,    //
+  E_12,
+  E_13,
+  E_21,    //
+  E_22,
+  E_23,
+  E_31,    //
+  E_32,
+  E_33
+} EVENTS;
+
+typedef enum {
+  E_G00, E_G01, E_G02, E_G03, E_GNO
+} GROUPS;
+
+int getEventGroup( int events )
+{
+  switch( events )
+  {
+    case E_01: case E_02: case E_03:
+      return E_G00;
+      break;
+      ...
+
+    default:
+        return E_GNO;
+        break;
+        std::cout << "IS IT EXECUTED?? " << events << std::endl;
+  }
+}
+
+int main()
+{
+  int events = E_11;
+
+  while( cin >> events )
+  {
+    switch( getEventGroup(events) )
+    {
+      case E_G00:
+        std::cout << "E_G00" << std::endl;
+        break;
+
+        ...
+
+      case E_GNO:
+          std::cout << "E_GNO" << std::endl;
+          break;
+
+      default:
+          std::cout << "E_?? " << events << std::endl;
+          break;
+    }
+  }
+}
+
+OR
+
+int main()
+{
+  int events = E_11;
+
+  while( cin >> events )
+  {
+    switch( events )
+    {
+      case E_01: case E_02: case E_03:
+        std::cout << "E_G00" << std::endl;
+        break;
+
+        ...
+
+      case E_GNO:
+          std::cout << "E_GNO" << std::endl;
+          break;
+
+      default:
+          std::cout << "E_?? " << events << std::endl;
+          break;
+    }
+  }
+}
+
+The both do the same. The second is a bit clearer at the expense of one function call?
+
+
+<does-it-work>
+Found it in the real code. Does the line after default get executed? NO.
+
+switch( events )
+{
+  case E_01: case E_02: case E_03:
+    ...
+      break;
+  default:
+    return E_GNO;
+    break;
+    std::cout << "IS IT EXECUTED?? " << events << std::endl;
+}
 
 
 ==============================================================================
@@ -16657,8 +16860,10 @@ class SpecialWindow : public Window
 
 <cast-is-expensive>
 The dymamic cast is expensive and slow since often is implemented using string comparison in the
-hierarchy. The compier supports up-cast that is implicit derived-to-base conversion so a base pointer can point either base object and derived object. How to know which? The need for dynamic cast arises when want to use derived class ops on what you believe to
-be a derived class objects via base pointer or reference. This is down-cast. 
+hierarchy. The compier supports up-cast that is implicit derived-to-base conversion so a base
+pointer can point either base object and derived object. How to know which? The need for dynamic
+cast arises when want to use derived class ops on what you believe to be a derived class objects via
+base pointer or reference. This is down-cast. 
 
 class Window { ... };
 class SpecialWindow: public Window {
@@ -17867,6 +18072,67 @@ If usual cpp header or wrapper.h have other cpp headers, will work cpp compiles 
 and others but when used in c compile, emits loads of errors since these cpp files have cpp things.
 So better to have single header file which have all c functions from cpp land. Otherwise, will get
 errors shown in *kt_dev_gcc_007* 
+
+<extern-linkage>
+Using extern to Specify Linkage
+http://msdn.microsoft.com/en-us/library/0603949d.aspx
+
+extern string-literal { declaration-list }
+extern string-literal declaration
+
+The extern keyword declares a variable or function and specifies that it has external linkage (its
+    name is visible from files other than the one in which it's defined). When modifying a variable,
+    extern specifies that the variable has static duration (it is allocated when the program begins
+        and deallocated when the program ends). The variable or function may be defined in another
+    source file, or later in the same file. Declarations of variables and functions at file scope
+    are external by default.
+
+In C++, when used with a string, extern specifies that the linkage conventions of another language
+are being used for the declarator(s). C functions and data can be accessed only if they are
+previously declared as having C linkage. However, they must be defined in a separately compiled
+translation unit.
+
+Microsoft C++ supports the strings "C" and "C++" in the string-literal field. All of the standard
+include files use the extern "C" syntax to allow the run-time library functions to be used in C++
+programs.
+
+The following example shows alternative ways to declare names that have C linkage:
+
+// specifying_linkage2.cpp
+// compile with: /c
+// Declare printf with C linkage.
+extern "C" int printf( const char *fmt, ... );
+
+//  Cause everything in the specified header files
+//   to have C linkage.
+extern "C" {
+   // add your #include statements here
+   #include <stdio.h>
+}
+
+//  Declare the two functions ShowChar and GetChar
+//   with C linkage.
+extern "C" {
+   char ShowChar( char ch );
+   char GetChar( void );
+}
+
+//  Define the two functions ShowChar and GetChar
+//   with C linkage.
+extern "C" char ShowChar( char ch ) {
+   putchar( ch );
+   return ch;
+}
+
+extern "C" char GetChar( void ) {
+   char ch;
+
+   ch = getchar();
+   return ch;
+}
+
+// Declare a global variable, errno, with C linkage.
+extern "C" int errno;
 
 
 {example-from-code}
