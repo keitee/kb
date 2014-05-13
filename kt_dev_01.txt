@@ -81,7 +81,7 @@ GCC
 |kt_dev_cpp_009|	undefined result and a temp-object {temp-object-in-return} {cost-of-temp-object}
 |kt_dev_cpp_010|	def args
 |kt_dev_cpp_011|	inline {empty-ctor-represenstaion}
-|kt_dev_cpp_012|	<empty>
+|kt_dev_cpp_012|	initializer_list
 |kt_dev_cpp_013|	when use reference {called-by-reference} 
 |kt_dev_cpp_014|	decltype, typedef, and using {class-vs-struct} 
 |kt_dev_cpp_015|	declaration and definition
@@ -107,7 +107,8 @@ GCC
 #{ STL 
 |kt_dev_stl_000|	useful links {stl-design-rationale}
 |kt_dev_stl_001|	seq-containers {trade-offs}
-|kt_dev_stl_005|	assoc-containers {insert-erase} {key-type-requirement} {use-typedef} 
+|kt_dev_stl_005|	assoc-containers {insert-erase} {key-type-requirement} {use-typedef}
+{find-in-multi}
 |kt_dev_stl_002|	vector
 |kt_dev_stl_003|	list
 |kt_dev_stl_004|	adaptors {stack} {queue}
@@ -178,8 +179,9 @@ EFFECTIVE STL 3RD
 |kt_dev_estl_001|	design: 02: illusion of container-independent code
 
 
-BLUSHES
-|kt_dev_blush_001|	accessing neighbors in array
+BLUSHES OR BUGS
+|kt_dev_blush_001| accessing neighbors in array
+|kt_dev_blush_002| default return values
 
 
 |kt_dev_uml_001|	   aggragation
@@ -5364,7 +5366,7 @@ From C++ concurrency in action, 2.1.1., if you pass a temporary rather than a na
 syntax can be the same as that of a fuction declaration.
 
 class background_task;
-std::thread my_thread( background_task() );
+std::thread my_thread( background_task() );     // T my_thread(...);
 
 This declars the function my_thread that takes a single parameter which is type pointer to a
 function taking no parameters and returning a background_task object. However, the intention was to
@@ -5378,7 +5380,16 @@ std::thread my_thread{ background_task() };     // brace-init
 How to default init an object?
 
 T object;		// OK
-T object();		// NO. defines a func
+T object();		// NO. defines a func. Do not confuse with T()
+
+<example-three>
+In real work, meant to have null string.
+
+std::string source();
+source = _determineSource((char*)in, &sourcelen, &inIndex, &usePath);
+
+/Session.cpp:257:70: error: assignment of function 'std::string source()'
+/Session.cpp:257:70: error: cannot convert 'std::string' to 'std::string()' in assignment
 
 
 {constructor-and-conversion}
@@ -6725,7 +6736,17 @@ const int &r2 = i;
 r1 = 0;
 r2 = 0;						// error since r2 is reference-to-const
 
+<const-to-nonconst-error>
 int &ri = ci;				// error because NO 'const to non-const'. Not a copy.
+
+int main()
+{
+  const int ci = 100;
+  int &ri = ci;               // 6. 
+  // int &ri = (int&) ci;     // no error.
+}
+
+:6:13: error: invalid initialisation of reference of type ‘int&’ from expression of type ‘const int’
 
 For ordinary reference, must match type and must bind to a object.
 
@@ -7208,6 +7229,14 @@ class T {
 - to use lock as a mutable member. seems useful.
 - see {lazy-fetching} in *kt_dev_mecpp_002* 
 
+All these cases are about logical constness and the snippet from online:
+
+A mutable variable could be used for example for tracking lifetime of an object and regularly prints
+a log of its internal state. In this case, nothing changes for the object from the external point of
+view, but some thing in its internal state changes. This does not contradict to promise to not
+modify the object, because in this case, const can be seen as "I promise to my user that this
+operation will not modify any visible state / information he could access". 
+
 
 {case-example}
 When use the mix of C and C++, face an build error when builds C++ source.
@@ -7521,8 +7550,15 @@ base class, class members, not attractive for inlining.
 
 
 ==============================================================================
-*kt_dev_cpp_012* <empty>	
+*kt_dev_cpp_012* initializer_list 
 
+{gcc-support}
+On 4.5.x:
+
+const std::string hybrid_str{"hybrid:"};
+
+/Session.cpp:56:21: warning: extended initializer lists only available with -std=c++0x or -std=gnu++0x
+/Session.cpp:56:41: error: in C++98 '<unnamed>::hybrid_str' must be initialized by constructor, not by '{...}'
 
 
 ==============================================================================
@@ -15287,24 +15323,20 @@ if (Derived *dp = dynamic_cast<Derived*>(bp))
 ==============================================================================
 *kt_dev_ecpp_007*	28: avoid returning handles to object internals
 
-Here internals means everything except public interface and includes private and protected
-member func. If returns handles (iterator, pointer and reference) to internals, it breaks
-encapsulatation.
+EC++28. Here internals means everything except public interface and includes private and protected
+member func. If returns handles (iterator, pointer and reference) to internals, causes three
+problems: breaks encapsulatation, constness, and dangling-handles.
 
-
-{compromising-encapsulation}
-
-First problem.
-
+{compromising-encapsulation-and-constness}
 Passing by ref is more efficient than passing by value and offer client a way to learn
-what rectangle's points are, not to let clients modify. So:
+what rectangle's points are, not to let clients modify. This is read-only. So:
 
 class Rectangle {
-	 public:
-	 Point& upperLeft() const { return pData->ulhc; }
+  public:
+    Point& upperLeft() const { return pData->ulhc; }
 
-	 private:
-	 std::shared_ptr< RectData > pData;
+  private:
+    std::shared_ptr< RectData > pData;
 };
 
 Is it okay? NO because client can change its value:
@@ -15315,17 +15347,17 @@ rec.upperLeft().setX(50);
 
 Two problems:
 
-1) it makes memeber data effectively public as returns reference to it.
+1) it makes memeber data effectively public as returns reference to it from a public member function.
 2) the problem of bitwise-const. See {bitwise-const} in *kt_dev_cpp_008*
 
 The solution is that it offers read-only access:
 
 class Rectangle {
-	 public: >
-	 const Point& upperLeft() const { return pData->ulhc; }
-<
-	 private:
-	 std::shared_ptr< RectData > pData;
+  public: >
+   const Point& upperLeft() const { return pData->ulhc; }
+
+  private:
+   std::shared_ptr< RectData > pData;
 };
 
 Similar to the example of {const-member-func} in *kt_dev_cpp_008*
@@ -15335,13 +15367,13 @@ To see 1) only, see following example:
 using namespace std;
 
 class Sample {
-private:
-	int val;
+  private:
+    int val;
 
-public:
-	Sample() : val(10) {}
-	int& getx() { return val;}
-	void printx() { cout << val << endl; }
+  public:
+    Sample() : val(10) {}
+    int& getx() { return val;}
+    void printx() { cout << val << endl; }
 };
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -15361,8 +15393,6 @@ This changes private member val to 20.
 
 {dangling-handles}
 
-Second problem. 
-
 class GUIObject { ... }
 const Rectangle boundingBox( const GUIObject& obj );
 
@@ -15371,11 +15401,11 @@ GUIObject* pgo;
 ...
 const Point* pUpperLeft = &( boundingBox(*pgo).upperLeft() );
 
-This creates a temp Rectangle and returns its upper member. The problem is this temp is
-destroyed when end this statement and pUpperLeft will dangle.
+This creates a temp Rectangle and returns its upper member. The problem is this temp is destroyed
+when end this statement and pUpperLeft will dangle.
 
-vector and string's [] operator returns reference but these are exceptions to this rule,
-but not a general rule. Better not use [] operator.
+vector and string's [] operator returns reference but these are exceptions to this rule, but not a
+general rule. Better not use [] operator.
 
 
 ==============================================================================
@@ -18254,11 +18284,9 @@ class CustomerList {
 };
 
 
-# ============================================================================
+={{===========================================================================
 #{
-
 *kt_dev_blush_001*	accessing neighbors in array
-
 
 2013.10. when had a problem solving which is to find a path in a maze, wrote a func like:
 
@@ -18328,10 +18356,67 @@ int NeighborCount( Grid map, int row, int col)
 }
 
 
+={{===========================================================================
+*kt_dev_blush_001* default return values
+
+Have spent a day to find out why a program crashes. Two lessons:
+
+1) It is better to have a core dump rather then narrowing down where a crash happens. Since looked
+like there are other places to be suspicious while doing gdb session until reachs to the real cause
+such as constructors, map insertions, and so on.
+
+2) From the '89 standard as quoted in the new testament: Flowing off the end of a function is
+equivalent to a return with no expression. In either case, the return value is undefined.
+
+This is a debug trace routines and defines enums, strings for enums. It is easy to make a mismatch
+between enum and strings when add more enums. So better to have strings from enums using macro
+stringfication. However, in that case, enum should be sequential.
+
+typedef enum MHEGComponent_
+{
+    eMHEGNull       = 0x00000001,
+    eMHEGeng        = 0x00000002,
+    eMHEGengRuntime = 0x00000004,
+    ...
+} MHEGComponent;
+
+const char* s_names[] =
+{
+    "Null",
+    "MHEGEng",
+    "MHEGEngRun",
+    ...
+};
+
+const uint32_t getIndex(MHEGComponent comp)
+{
+  switch (comp)
+  {
+    case 0x00000001: return 0; break;
+    case 0x00000002: return 1; break;
+    case 0x00000004: return 2; break;
+    case 0x00000008: return 3; break;
+    case 0x00000010: return 4; break;
+    ...
+    case 0x00000040: return 6; break;
+    case 0x00000080: return 7; break;
+    case 0x00000100: return 8; break;
+    case 0x00000200: return 9; break;
+    case 0x00000400: return 10; break;
+  }
+}
+
+This didn't have default case and when there is a enum which don't have a matching case, no return
+statement but this function returns int. Which value will you get? Quick test shows undefined return
+value.
+
+case: 3000
+val: 134520896
+
+
 # ============================================================================
 #{
-
-==============================================================================
+={{===========================================================================
 *kt_dev_uml_001*	aggragation
 
 Two aggregations: weak and strong.
