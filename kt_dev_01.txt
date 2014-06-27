@@ -91,7 +91,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_017|	static-members and class const	{class-method} {class-const}
 |kt_dev_cpp_018|	dtor {non-virtual-destruction-problem} {how-virtual-works}
 |kt_dev_cpp_019|	exception {problem-of-exception-in-dtor} {exception-safe}
-|kt_dev_cpp_020|	<empty>
+|kt_dev_cpp_020|	moving objects
 |kt_dev_cpp_021|	op overload	{member-or-non-member} {function-object}
 |kt_dev_cpp_022|	inheritance {static-type} {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
 |kt_dev_cpp_023|	override		{override-keyword} {dynamic-binding} {default-arg-in-virtual}
@@ -109,8 +109,7 @@ KT KB. DEVELOPMENT.
 #{ STL 
 |kt_dev_stl_000|	useful links {stl-design-rationale}
 |kt_dev_stl_001|	seq-containers {trade-offs}
-|kt_dev_stl_005|	assoc-containers {insert-erase} {key-type-requirement} {use-typedef}
-{find-in-multi}
+|kt_dev_stl_005|	assoc-containers {insert-erase} {key-type-requirement} {use-typedef} {find-in-multi}
 |kt_dev_stl_002|	vector
 |kt_dev_stl_003|	list
 |kt_dev_stl_004|	adaptors {stack} {queue}
@@ -5286,74 +5285,69 @@ int* ptrs[10];
 int& refs[10];		// error. no arrays of ref
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_003* ctor and copy controls
 
 {syn-operations} <behind-the-scene-code>
-The followings are synthesized by compiler if they are not defined and only if ther are needed.
-These are public and inline according to EC++05.
+The following operations are synthesized by compiler if they are not defined and only if ther are
+needed. These are public and inline according to EC++05.
 
-dtor, default ctor, copy controls which are copy ctor, copy assign, move ctor(C++11), move assign(C++11)
+destructor and default constructor. four copy controls which are copy ctor, copy assign, move
+ctor(C++11), move assign(C++11)
 
 However, it is not always possible since there are cases when compiler refuse to create those such as:
-1> when a class has reference or const member.
-2> when base class have private on syn-operations.
+
+1) when a class has reference or const member. why not const?
+2) when base class have private on syn-operations.
 
 
 {default-ctor} {default-init}
-Recommendation: avoid syn version and do it explicitly: in-class init(C++11) or ctor init list. 
+Recommendation on initialization. Avoid syn version and do it explicitly: in-class init(C++11) or
+ctor init list. Why? because to avoid:
 
-Why? because to avoid:
-
-o default-init for built-in types. uninit/undefined.
-
-o compile error when there's a class member that don't have def ctor. compiler cannot syn def ctor
+1) Default-init for built-in types which means uninit/undefined.
+2) Compile error when there's a class member that don't have def ctor. compiler cannot syn def ctor
 for this case.
-
-o if a class requires control to init an object in one case, then the class is likely to require
+3) If a class requires control to init an object in one case, then the class is likely to require
 control in all cases.
 
-Note: cannot be a 'const' member func.
+Note: The ctor cannot be a 'const' member func.
 
-syn ctor will:
+The syn ctor will:
 
 o Use in-class init if there is. otherwise default init its member and use default ctor for its
 class member.
 
+<default-keyword>
 o If there are other ctor, then compiler will not make a syn ctor. so want to force it to create
 then use 'default' keyword.
 
 note: There are cases when syn-operations are useful. See {{make-base-class-for-reference-counting}} 
 
 
-{in-class-init}
-From C++11.
+{in-class-init} <C++11>
 
 <example-one>
 For window_mgr calss to start up with a single, default-inited screen.
 
 class window_mgr {
-	 private:
+  private:
 
-	 vector< Screen> screens{ Screen(24, 80, ' ') };
-
-	 or 
-
-	 vector< Screen> screens = { Screen(24, 80, ' ') };
+   vector<Screen> screens{ Screen(24, 80, ' ') }; or 
+   vector<Screen> screens = { Screen(24, 80, ' ') };
 };
-
 
 <example-two>
 class T {
-	 T() = default;
-	 T(const string &s) : bookNo(s) {}
-	 ...
-	 string bookNo;
-	 unsigned units_sold = 0;
-	 double revenue = 0.0;
+  T() = default;
+  T(const string &s) : bookNo(s) {}
+  ...
+  string bookNo;
+  unsigned units_sold = 0;
+  double revenue = 0.0;
 };
 
-in-class-init do like 'default values' in func args because:
+The in-class-init do like 'default values' in func args because:
 
 T(const string &s) : bookNo(s) {}
 
@@ -5363,6 +5357,7 @@ T(const string &s) : bookNo(s), units_sole(0), revenue(0) {}
 
 
 {vexing-parse}
+
 <example-one>
 From C++ concurrency in action, 2.1.1., if you pass a temporary rather than a named variable the the
 syntax can be the same as that of a fuction declaration.
@@ -5408,22 +5403,21 @@ int* pi = new int;				// def init
 int* pi = new int();				// value init. new T()
 
 
-{assignment-and-initialisation} {constructor-initializers}
+{constructor-initializers} 
+
 ABEntry::ABEntry(...)
 {
-	 theName = name;
-	 theAddress = address;
-	 thePhones = phones;
-	 numTimesConsulted = 0;
+  theName = name;
+  theAddress = address;
+  thePhones = phones;
+  numTimesConsulted = 0;
 }
 
-This is assignment but not init. init happens before ctor runs. Hence use constructor initializer or
-in-class init.
-
-From Primers p289 and EC++04. Why use constructor-initializers? 
+This is initialization and assignment but not init. init happens before ctor runs. Why use
+constructor-initializers? From Primers p289 and EC++04.  
 
 1) Avoid default-init.
-2) Efficient than {assignment-and-initialisation}
+2) Efficient than initialization-and-assignment.
 3) By the time the body of ctor begins excuting, init is completed so there are <three> cases that~
 must use ctor-init: {QUIZ}
 
@@ -5737,7 +5731,7 @@ That means that a user provide a meaningful init value but once inited, can see 
 implementation.
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_004* copy-controls when use dyn resource.
 
 {when-use-resource-has-dyn-lifetime}
@@ -5753,9 +5747,12 @@ if a class defines one of the following it should probably explicitly define all
 dtor, copy-ctor, and copy-assign operator
 
 <case-example> C++ Primer p505
-The syn version does not operate well for a class using dyn resource. The case is that if there's no
-dtor defined, the syn dtor will not run delete on ps so must define own dtor but use syn versions
-for copy and assign. 
+The need of user dtor for a class allocating dynamic resources is obvious. Because if there's no
+dtor defined, the syn dtor will not run delete on ps so must define own dtor. (how possibly the
+compiler can know what pointer member points to?) 
+
+The need of user copy ctor and assign is less clear. See what will happen when use syn versions for
+copy and assign. 
 
 class HasPtr {
 	public:
@@ -5763,14 +5760,15 @@ class HasPtr {
 			: ps( new std::string(s), i(0) {}
 
 		~HasPtr() { delete ps; }
+
 	private:
 		std::string* ps;
 };
 
+<not-a-choice-of-style>
+What are the problems? The syn versions does not operate well for a class using dyn resource.
 
-What problem?
-
-HasPtr func(HasPtr hp)	// value and memberwise copy using a syn copy ctor.
+HasPtr func(HasPtr hp)	// value and member-wise copy using a syn copy ctor.
 {
 	HasPtr ret = hp;		// a syn copy assign. ret and hp points the same.
 	...
@@ -5785,19 +5783,19 @@ void func(p);		// p and func's arg points the same.
 						// pointer which was already deleted after func().
 HasPrt q(p);		// p and q have invalid pointer.
 
-So, need to define copy-ctor and copy-assign op as well. Two methods on what copying an object will
-mean: value or pointer like (what we do when copy pointer member)
+So, need to define copy-ctor and copy-assign as well. Two methods on what copying an object will
+'mean': valuelike or pointerlike (what we do when copy pointer member)
 
 For the same reason in {constructor-initializers} in *kt_dev_cpp_003* must define copy controls when
 there are const and reference members because compiler will not create syn versions since cannot
-rebind const and reference. But how to define user copy controls for these cases?
+'rebind' const and reference. But how to define user copy controls for these cases?
 
 
 {construct-and-copy-all-parts-of-an-object}
 EC++12. When having own copy functions(copy-ctor and copy-assign), then means that you shall have
 full responsibility for copying. Two cases: 
 
-1> when add member variables to a class.
+1) when add member variables to a class.
 
 Customer& Customer::operator=( const Customer& rhs )
 {
@@ -5808,7 +5806,7 @@ Customer& Customer::operator=( const Customer& rhs )
 If add new member data, then must update all copy functions and ctors too. Otherwise, have copy
 functions to copy parts of object.
 
-2> when defines copy functions for derived class. Be careful to handle base part because having own
+2) when defines copy functions for derived class. Be careful to handle base part because having own
 copy controls means to have full responsibilities of doing it.
 
 class PriorityCustomer: public Customer {
@@ -5847,12 +5845,11 @@ class PriorityCustomer: public Customer {
 };
 
 
-{value-like} {deep-copy} {self-contained-object}
-
+{valuelike} # deep-copy, self-contained-object
 See {own-resource-managing-class} in *kt_dev_stl_018* for full discussion.	
 
 The copy and the original are independent since copy underlying object as well. note: library containers
-and string use value-like copy
+and string use valuelike copy
 
 class HasPtr {
 	public:
@@ -5860,17 +5857,18 @@ class HasPtr {
 			: ps( new std::string(s), i(0) {}
 >
 		HasPtr(const HasPtr& p):
-			ps( new std::string( *p.ps );
+			ps( new std::string( *p.ps ));
 
 		HasPtr& operator=(const HasPtr& p);
 <
 		~HasPtr() { delete ps; }
+
 	private:
 		std::string* ps;
 };
 
-The below combine dtor and copy and handle self-assign and exception-safe see *kt_dev_cpp_019* for
-self-assign and exception
+Think about self-assign and exception safe. The below covers handle self-assign and exception-safe.
+See *kt_dev_cpp_019* for self-assign and exception
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
@@ -5881,15 +5879,14 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 }
 
 
-{pointer-like} {shallow-copy} {own-reference-counting} 
-
+{pointerlike} # shallow-copy, own-reference-counting
 The copy and the original share underlying object like shared_ptr. *kt_dev_stl_018* for example.
 Alternatively, use own reference counting as following:
 
 class HasPtr {
 	public:
 		HasPtr(const std::string& s = std::string() )	// def arg. 
-			: ps( new std::string(s), i(0), use(new std::size_t(1)) {}
+			: ps( new std::string(s), i(0), use( new std::size_t(1) ) {}
 >
 		HasPtr(const HasPtr& p):
 			ps( p.ps ), use( p.use ) { ++*use; };
@@ -5905,10 +5902,10 @@ class HasPtr {
 
 HasPtr::~HasPtr()
 {
-	 if( --*use == 0 )
-	 {
-		  delete ps; delete use;
-	 }
+   if( --*use == 0 )
+   {
+      delete ps; delete use;
+   }
 }
 
 // combine dtor and copy. handle self-assign
@@ -5930,21 +5927,20 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 }
 
 
-{preventing-copies} {delete-keywords}
+{preventing-copies} # delete-keywords
 Primus p507 and EC++06. How can define a class to prevent copy or assign like iostream class? Do not
 defining copy controls? This do not work as syn version will be made. Two ways: delete keyword and
 private access control.
 
-<delete-keyword> {C++11}
-Signal to the compiler that intentionally not defining these members; do not make these
-automatically and lead to <compile error> when try to use it. 
+<delete-keyword> <C++11>
+Signal to the compiler not to define these members and lead to <compile error> when try to use it. 
 
 struct NoCopy {
-	 NoCopy() = default;
-	 NoCopy(const NoCopy&) = delete;                 # NO copy-ctor 
-	 NoCopy& operator=(const NoCopy&) = delete;      # NO copy-assign
-	 ~NoCopy() = default;
-	 ...
+  NoCopy() = default;
+  NoCopy(const NoCopy&) = delete;                 # NO copy-ctor 
+  NoCopy& operator=(const NoCopy&) = delete;      # NO copy-assign
+  ~NoCopy() = default;
+  ...
 };
 
 <private-copy-control> prior C++11
@@ -6100,7 +6096,7 @@ a[i] = a[j];   // potential assign to self when i==j
 void doSomething( const Base& rb, Derived& pd );
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_005* converting ctor
 
 See *kt_dev_lang_009* for built-in conversion. converting-ctor and conversion-op are called
@@ -6555,10 +6551,8 @@ inline void swap( HasPtr& lhs, HasPtr& rhs )
 }
 
 
-{swap-exception-safety} <copy-and-swap-idiom>
-Combine dtor and copy. Automatically handle self-assign and exception-safe from *kt_dev_cpp_019*
-
-This is exception-safe code:
+{copy-and-swap-idiom}
+For valuelike, this is exception-safe code which automatically handle self-assign
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
@@ -7563,6 +7557,38 @@ const std::string hybrid_str{"hybrid:"};
 /Session.cpp:56:41: error: in C++98 '<unnamed>::hybrid_str' must be initialized by constructor, not by '{...}'
 
 
+{initializer_list}
+It is a library template type that repersents an array of values of the specified type. The element
+in a list are always const.
+
+#include "initializer_list"
+
+initializer_list<T> lst;
+initializer_list<T> lst{a,b,c};
+lst.begin();
+lst.end();
+
+initializer_list<int> li; 
+initializer_list<string> ls;
+
+Since it supports begin and end, can process elements.
+
+void error_msg( initializer_list<string> ls )
+{
+  for( auto beg = ls.begin(); beg != ls.end(); ++beg )
+    cout << *beg << " ";
+  cout << endl;
+}
+
+void error_msg( ErrorCode e, initializer_list<string> ls )
+{
+  cout << e.msg() << " ";
+  for( const auto &elem : ls )
+    cout << *elem << " ";
+  cout << endl;
+}
+
+
 ={============================================================================
 *kt_dev_cpp_013*	when use reference {called-by-reference}
 
@@ -8181,7 +8207,8 @@ static-member-func may not be declared as const.
 
 
 {init-class-variable}
-The objects do not contain data associated with class-static. The class-static
+The objects do not contain data associated with class-static. When initialized? The default
+constructor 'implicitly' default initialize static-member-variable. The class-static
 <must-be-defined-and-inited> outside of class because it's global objects.
 
 <in-h>
@@ -9342,12 +9369,50 @@ this. Notably, it won't actually improve performance or save code space, as -fno
 However, it will allow the throw syntax, while turning throws into abort()s.
 
 
-==============================================================================
-*kt_dev_cpp_020*	<empty>
+={============================================================================
+*kt_dev_cpp_020* moving objects
 
+{lvalue-and-rvalue}
+In C, lvalue could stand on the left-hand side of an assignment whereas rvalues could not. In C++
+this distinction is less simple. Roughly speaking, when use an object as an rvalue, use the object's
+value(its contents) and when use lvalue, use the object's identity (its location in memory).
 
+Examples are:
 
-==============================================================================
+Assignment requires a (nonconst) lvalue as its left hand operand and yields its left-hand operand as
+an lvalue.
+
+The address-of operator(&) requires an lvalue operand and returns a pointer to its operand as an
+rvalue.
+
+Operators differ as to whether require lvalue or rvalue operands and as to whether return lvalue or
+rvalues. Lvalue and rvalue are properties of an expression. Some yield or require lvalues and others
+yield or require rvalues.
+
+<bindings> <rvalue-reference>
+Binding properties for lvalue reference is that cannot bind regular(lvalue) reference to expression
+that requires a conversion, to literals, or to expression that return an rvalue. Rvalue properties
+have the opposite. The important point is that can use lvalue when an rvalue is required but cannot
+use an rvalue when lvalue is required.
+
+int i = 42;
+int &r = 1;
+int &&rr = i;     // error since cannot bind an rvalue reference to an lvalue
+int &r2 = i*42;   // error since i*42 is rvalue.
+
+<ravlue-is-temporary>
+Functions that return a nonreference type, along with the arithmetic, relational, bitwise, and
+postfix increment/decrement operators, all yield rvalues.
+
+Looking at the list of rvalue and lvalue expressions, lvalue has persitent state, whereas rvalue are
+either literals or temporary objects created in the course of evaluating expressions.
+
+We know that: the referred-to object is about to be destroyed and there can be no other users of
+that object. So the code that uses an rvalue reference is free to take over resources from the
+object to which the reference refers.
+
+   
+={============================================================================
 *kt_dev_cpp_021*	op overload
 
 For class type because cannot overload operations for built-in types.
@@ -12306,17 +12371,34 @@ class Basket {
 };
 
 
-==============================================================================
+={============================================================================
 *kt_dev_stl_002*	vector
 
-{init-from-array}
+{how-a-vector-grows}
+To support fast random access, vector elements are stored 'contiguously'. To maintain contiguous
+memory and to avoid reallocating a container each time an element is added, the allocation strategy
+is: when they have to get new memory, vector and string implementations typically allocate
+'capacity' beyond what is immediately needed. Thus there is no need to 'reallocate' the container
+for each new element. The vector has to move all of its elements each time it reallocates memory.
 
+c.shrink_to_fit();   C++11. request to reduce capacity() to equal size()
+c.capacity();        number of elements c can have before reallocation is necessary.
+c.reserve(n);        allocate space for at least n elements
+
+shrink_to_fit() valid only for vector, string, and deque. capacity and reserve valid only for vector
+and string.
+
+There is no gurantee that shrink_to_fit will return a memory and it's a only 'request'.
+implementation specific. When reallocation is needed, how much memory it will allocate is
+implementation specific.
+
+
+{init-from-array}
 int intarr[] = { 0, 1, ... };
 vector< int > ivec( begin(intarr), end(intarr) );
 
 
 {init-from-list} {brace-init}
-
 List init. Not for VC as it's C++11 but g++ (GCC) 4.4.5 does.
 
 vector< string > articles = { "a", "an", "the" };
