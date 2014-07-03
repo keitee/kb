@@ -10353,8 +10353,8 @@ This makes the function runs faster and also it can be uses with types that cann
 unique_ptr. why? do not need to copy.
 
 2) used only < comparison. More genarally, reduce the requirement on underlying type. Type
-independence and portability.
-Can write it as:
+independence and portability. Can write it as:
+
 template <typename T>
 int compare( const T& v1, const T& v2 )
 {
@@ -10388,6 +10388,7 @@ function. As a result, headers includes definitions as well as declarations.
 Generic programming. 'instantiation' is a process that create a concrete 'independent' function or
 class from a template when compiling. code generation. Must be defined in the same namespace that
 contains the original template. See p675 for C++ feature to control this.
+
 
 {class-template}
 Unlike function-template, compiler cannot deduce the type of parameter so user must provide
@@ -11022,12 +11023,32 @@ of the program and might be changed in ways outside the control of the program.
 It's a directive to the compiler telling that is shoud not perform 'optimisations' on such objects.
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_028*	namespace
 
+{real-problem}
+03/07/2014. At samsung. 
+When moves application which is a process and uses static link to shared library implementation
+which will be used by the different process. The codes which works well before starts to fail. In
+particular, crashes when try to create a thread. Problem of linking? Problem of pthread library when
+used in shared library? Somehow, linker picks up the wrong pthred libaray since a debugger shows odd
+address when thread creation call is made? Various directions and many days spent. Eventually, found
+out that PCThread::Create() is a problem and works fine when changes parameter orders. The problem
+was that the process loads a lot of shared library and one of those has the same PCThread class in
+it but different signature. When our library make a call, it picks it up from the other shared
+library in which has different signature so crashes. Sovled when wraps PCThread class with a
+namespace.
+
+The typical example is to use third party library and name conflict happens when other parties
+develops a libaray seperately. Howerver, in static link, conflict happens in link stage. In dynamic
+loading, this happens at run time and called dynamic binding. So more difficult to find out.
+
+
+{namespace}
 To solve name pollution or collisions, namespace partitions the global namespace and a namespace is
 a scope. It provides a much more controlled mechanism and any declaration can be put into a
 namespace.
+
 
 {global-namespace}
 Names defined at global scope are in the global-namespace which is implicitly declared and exists in
@@ -13471,6 +13492,44 @@ How to ensure that subscript is in range? A good way is to aviod subscripting al
 range for whenever possible. However not all compiler supports and see {range-for}
 
 
+{std::string::npos}
+The size_t is unsigned integral type It is a type able to represent the size of any object in bytes:
+size_t is the type returned by the sizeof operator and is widely used in the standard library to
+represent sizes and counts.
+
+static const size_t npos = -1;
+
+npos is a public static member constant value with the greatest possible value for an element of
+type size_t.
+
+This value, when used as the value for a len (or sublen) parameter in string's member functions,
+means "until the end of the string".
+
+As a return value, it is usually used to indicate no matches. This constant is defined with a value
+of -1, which because size_t is an unsigned integral type, it is the largest possible representable
+value for this type.
+
+
+{std::string::find_first_of}
+Searches the string for the first character that matches <any> of the characters specified in its
+arguments. The position of the first character that matches. [KT] Starting from 0.
+
+If no matches are found, the function returns string::npos. [KT] This means that when no match
+driver will be the same as sResolved in the following example.
+
+std::string sResolved(resolved_name); // "DSM:://xxxx"
+std::string driver = sResolved.substr(0, sResolved.find_first_of(':'));    // DSM
+std::string driver = sResolved.substr(0, sResolved.find_first_of(':')+1);  // DSM:
+
+
+{std::string::substr}
+string substr (size_t pos = 0, size_t len = npos) const;
+
+The substring is the portion of the object that starts at character position pos and spans len
+characters (or until the end of the string, whichever comes first). [KT] Here the second arg is the
+length but not pos.
+
+
 {string-and-c-str}
 const CharT* c_str() const;
 
@@ -13761,7 +13820,7 @@ Mutex m;		// pthread_mutex_t m;
   ...
 }
 
-<example>
+<example> # AUTOLOCK example
 This is a case example seen in the code:
 
 class CCAutoLock
@@ -13781,6 +13840,72 @@ void func()
   AUTOLOCK();
   ...
 }
+
+
+Q. When there is a nested call tree used AUTOLOCK, will the lock be maintained? That is will the
+lock of func1 in the below example BE VALID/LOCKED when func3 gets run?
+
+#include <iostream>
+
+using std::cout; using std::endl;
+
+class ALOCK {
+  private:
+    int m_num;
+  public:
+    ALOCK(int val):m_num(val) { cout << "ctor: ALOCK" << m_num << endl; }
+    ~ALOCK() { cout << "dtor: ALOCK: " << m_num << endl; }
+};
+
+int func3()
+{
+  ALOCK LOCK(3);
+
+  std::cout << "func 3" << std::endl;
+
+  return 1;
+}
+
+int func2()
+{
+  ALOCK LOCK(2);
+
+  std::cout << "func 2" << std::endl;
+
+  return func3();
+}
+
+int func1()
+{
+  ALOCK LOCK(1);
+
+  std::cout << "func 1" << std::endl;
+
+  return func2();
+}
+
+int main()
+{
+  std::cout << "--{ main " << std::endl;
+
+  func1();
+
+  std::cout << "--} main " << std::endl;
+}
+
+Expected output?
+
+--{ main
+ctor: ALOCK1
+func 1
+ctor: ALOCK2
+func 2
+ctor: ALOCK3
+func 3
+dtor: ALOCK: 3
+dtor: ALOCK: 2
+dtor: ALOCK: 1
+--} main 
 
 <example-window-handle>
 MEC++09.
