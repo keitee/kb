@@ -3254,7 +3254,7 @@ http://sourceware.org/binutils/docs/gprof/
 
 # ============================================================================
 #{ C AND C++
-==============================================================================
+={============================================================================
 *kt_dev_lang_001*	global, file and local static
 
 {local-static} {global-static} 
@@ -5303,7 +5303,7 @@ ctor(C++11), move assign(C++11)
 However, it is not always possible since there are cases when compiler refuse to create those such as:
 
 1) when a class has reference or const member. why not const?
-2) when base class have private on syn-operations.
+2) when base class have private on syn-operations. what private?
 
 
 {default-ctor} {default-init}
@@ -5316,11 +5316,13 @@ for this case.
 3) If a class requires control to init an object in one case, then the class is likely to require
 control in all cases.
 
-Note: The ctor cannot be a 'const' member func.
+Note: The ctor cannot be a 'const' member func. why? When create a const object of a class type, the
+object does not assume its 'constness' until after the ctor completes the object's initialisation.
+Thus, ctor can write to const objects during their construction.
 
 The syn ctor will:
 
-o Use in-class init if there is. otherwise default init its member and use default ctor for its
+o Use in-class init if there is. Otherwise default init its member and use default ctor for its
 class member.
 
 <default-keyword>
@@ -5331,7 +5333,6 @@ note: There are cases when syn-operations are useful. See {{make-base-class-for-
 
 
 {in-class-init} <C++11>
-
 <example-one>
 For window_mgr calss to start up with a single, default-inited screen.
 
@@ -5362,7 +5363,6 @@ T(const string &s) : bookNo(s), units_sole(0), revenue(0) {}
 
 
 {vexing-parse}
-
 <example-one>
 From C++ concurrency in action, 2.1.1., if you pass a temporary rather than a named variable the the
 syntax can be the same as that of a fuction declaration.
@@ -5409,7 +5409,6 @@ int* pi = new int();				// value init. new T()
 
 
 {constructor-initializers} 
-
 ABEntry::ABEntry(...)
 {
   theName = name;
@@ -5456,8 +5455,8 @@ ABEntry::ABEntry(...)
 
 The constructor initializer is all about making sure that built-in type do not have undefined values
 since user type has constructors so no undefined value. Is it overkill when use constructor
-initializer for def-ctor values since it will be used when omitted? Use constructor initializer
-always since:
+initializer for all members since default ctor will be used when omitted? Use constructor
+initializer always since:
 
 1> avoid to remember which memebers may go uninitialized if they are omitted.
 2> cover data members which are const or reference.
@@ -5516,7 +5515,7 @@ default arg costs a copy op then?
 {copy-controls}
 copy ctor, copy assign, move ctor(C++11), move assign(C++11)
 
-If not defined, syn version will be created. don't use syn version of copy controls when
+If not defined, syn version will be created. Don't use syn version of copy controls when
 use dyn allocated resource. *kt_dev_cpp_004* 
 
 
@@ -5524,7 +5523,7 @@ use dyn allocated resource. *kt_dev_cpp_004*
 When init object from the other of the same type. In other words, defines how pass-by-value is
 implemented for a type.
 
-The first arg is a reference to a class and the rest args can be defaults. Used for <four> context:~
+The first arg is a reference to a class and the rest args can be defaults. Used in <four> context:~
 copy init, <argument-pass>, <return>, and implicit coversion using temp object. For arg pass and
 return they are <non-reference-type>, they are copy-inited; Hence called copy-ctor.
 
@@ -5682,11 +5681,12 @@ class Rational {
 {copy-assign}
 Cannot use syn version when there are reference and const member data. Why? because syn copy assign
 is defined as <deleted> if the class has a const or reference member. (Primes p508). For
-<delete-keyword>, see *kt_dev_cpp_004* It uses op overloading and must be a member because <lhs> is
-this pointer.
+<delete-keyword>, see *kt_dev_cpp_004* 
+
+It uses op overloading and must be a member because <lhs> is this pointer.
 
 class Foo {
-	Foo& operator=(const Foo&);
+  Foo& operator=(const Foo&);
 };
 
 The copy-assign controls how objects of its class are assigned
@@ -5696,8 +5696,7 @@ trans = accum;
 
 For assign with different types, need additional assign op and see *kt_dev_cpp_021*
 
-
-{assignment-must-return-a-reference-to-this}
+<assignment-must-return-a-reference-to-this>
 EC++10. All assign ops must follow this convention like built-in types because of chain of
 assignment and should behave the same as built-in types.
 
@@ -5707,17 +5706,16 @@ Widget wx, wy, wz;
 wx = wy = wz = DefaultWidget;
 
 class Widget {
-	 public:
-	 Widget& operator=( const Widget& rhs )
-	 {
-		  ...
-		  return *this; ~
-	 }
+  public:
+    Widget& operator=( const Widget& rhs )
+    {
+      ...
+        return *this; ~
+    }
 };
 
 
 {avoid-unnecessary-default-ctor}
-
 From MEC++04. There are two categories:
 
 o For class that can be inited meaningfully without inputs from outside, do use default-ctor.
@@ -9378,6 +9376,62 @@ However, it will allow the throw syntax, while turning throws into abort()s.
 
 ={============================================================================
 *kt_dev_cpp_020* moving objects
+
+{why}
+In some of these circumstances, an object is immediately destroyed after it is copied. In those
+cases, moving rather than copying the object can provide a significant performance boost. 
+
+Or IO or unique_ptr classes which cannot be copied but can be moved.
+
+Note: In previous library, class stored in a container had to be 'copyable'. Under new standard, can
+use container on types that cannot be copied so long as they can be moved.
+
+<problem-example>
+StrVec example which is a simplification of the library vector class. Like vector, supports
+reallocation. If there is not space left, then obtains new space, moves the existing elements into
+that space, free the old space, and adds the new elements.
+
+When copy a string, the new and the old are 'independant' from each other and there are two users.
+However, when reallocates copies, there will be only 'one' user after the copy. As soon as copy is
+done, will immediately destory the old.
+
+Copying the old is unnecessary in this case so StrVec's 'performance' will be much better if can avoid
+the overhead of allocating and deallocating the 'strings' themselves each time we reallocate.
+
+<how-to-avoid-copy>
+Two facilities by C++11. 
+
+First, several library classes, including string, define so called 'move constructor' but the detail
+of implementation are not disclosed. Presumably the string move ctor copies the pointer rather than
+allocating spaces.
+
+Second, the library 'move' which is defined 'utility' header. Two things. must use move to signal it
+want to use the string move ctor and use std::move() not move().
+
+| 0 | 1 | 2 | 3 | 4 | unconstructed elements |
+
+^                     ^                        ^
+elements              first_free               cap
+
+void StrVec::reallocate()
+{
+  auto newcapacity = size() ? 2 * size() : 1;
+
+  auto newdata = alloc.allocate(newcapacity);
+
+  auto dest = newdata;
+  auto elem = elements;
+
+  for( size_t i = 0; i != size(); ++i )
+    alloc.construct( dest++, std::move(*elem++) );    // note. move()
+
+  free();   // member which destroy and deallocate
+
+  elements = newdata;
+  first_free = dest;
+  cap = elements + newcapacity;
+}
+
 
 {lvalue-and-rvalue}
 In C, lvalue could stand on the left-hand side of an assignment whereas rvalues could not. In C++
@@ -14449,7 +14503,7 @@ const CD* pConstCD = pCD;
 Because template create new classes. If need more, see further.
 
 
-==============================================================================
+={============================================================================
 *kt_dev_stl_019*	new and delete
 
 {default-and-value-init}
@@ -14592,6 +14646,10 @@ can use library version via ::new or ::delete.
 
 
 {allocator}
+Some needs to allocate a varying amount of storage at run time and use a library container.
+However, some needs to do their 'own' allocation. Such classes must define own copy controls. As an
+example, see StrVec in Primers p524.
+
 #include <memory>
 
 template<class T>
@@ -14601,20 +14659,19 @@ template<>
 struct allocator<void>;
 
 Provides a way to decouple alloc/dealloc and construction/destruction and allows finer control. For
-example, alloc big memory and construct objects and pay the overhead of construction only when needed.
+example, allocate big memory and pay the overhead of construction 'only' when needed.
 
 The allocator provides 'type-aware' allocation and returns 'unconstructed' memory while operator-new
-uses only size.
+uses only size. Be careful since using unconstructed memory is 'undefined'.
 
-allocator< string > alloc;
+allocator<string> alloc;
 auto const p = alloc.allocator(n);
 
-// calls ctor. From C++11, supports many ctors. 
+// calls ctor. From C++11, supports many ctors of the 'type' The first argument to construct() must be
+// a pointer to unconstructed space allocated by allocate().
 alloc.construct(p++);
 alloc.construct(p++, 10, 'c');
 alloc.construct(p++, "hi");
-
-Should bec careful that using unconstructed memory is 'undefined'.
 
 // calls dtor
 alloc.destory(p);
@@ -14622,8 +14679,24 @@ alloc.destory(p);
 // size must match
 alloc.deallocate(p, n);
 
+<companion-algorithms>
+The library defines two that can 'construct' object in uninitialsed memory.
 
-TODO: study Primers p524 as a case to use allocator.
+uninitialized_copy(b, e, b2);
+copies elements from the input range by iterator b and e into unconstructed memory by iterator b2.
+Like copy, return its incremented destination iterator.
+
+uninitialized_copy_n(b, n, b2);
+copies n elements from b to b2.
+
+uninitialized_fill(b, e, t);
+construct objects in raw memory denoted by b and e as a copy of t.
+
+uninitialized_fill_n(b, n, t);
+
+auto p = alloc.allocate( vi.size()*2 );
+auto q = uninitialized_copy( vi.begin(), vi.end(), p );
+uninitialized_fill_n( q, vi.size(), 42 );
 
 
 {delete-caution}
@@ -14633,7 +14706,7 @@ It's okay delete nullptr but it's undefined when:
 2) delete ptr that was not from new operator.
 
 
-==============================================================================
+={============================================================================
 *kt_dev_stl_020*	gcc stl impl files
 
 /usr/include/c++/4.4.4
