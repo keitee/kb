@@ -33,7 +33,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_prob_009| debug printf {stdarg} {macro} {why-ellipses-dangerous} {ndebug}
 |kt_dev_prob_010| macro: get max value of type <bitwise> <shift-operator>
 
-
 #{ GNU CORE UTILS
 |kt_dev_guti_000| gnu core util sites
 
@@ -46,6 +45,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_005|  error: expected ‘}’ at end of input
 |kt_dev_gcc_006|  error: expected specifier-qualifier-list before 'X' or error: 'X' does not name a type 
 |kt_dev_gcc_007|  error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before
+|kt_dev_gcc_008|  warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]
 |kt_dev_gcc_100|  gcc and c++11 {how-to-use-gcc-optimisation} {gcc-profiling} {gcc-options}
 |kt_dev_gcc_101|  gcc typeof
 |kt_dev_gcc_102|  gcc binutil
@@ -75,9 +75,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_001|	virtual inheritance (interview) {virtual-base-class}
 |kt_dev_cpp_002|	reference-vs-pointer (interview)
 |kt_dev_cpp_003|	ctor and copy controls {pass-by-reference-to-const} {default-arg} {constructor-initializers}
-|kt_dev_cpp_004|	copy-controls when use dyn resource	{the-rule-of-three} {value-like} {preventing-copies} {self-assign}
-|kt_dev_cpp_005|	converting ctor 			{class-type-conversion} {explicit-keyword}
-|kt_dev_cpp_006|	swap							{copy-and-swap-idiom} {pimpl-idiom}
+|kt_dev_cpp_004|	copy-controls when use dyn resource	{the-rule-of-three} {valuelike} {preventing-copies} {self-assign}
+|kt_dev_cpp_005|	converting ctor {class-type-conversion} {explicit-keyword}
+|kt_dev_cpp_006|	swap {copy-and-swap-idiom} {pimpl-idiom}
 |kt_dev_cpp_007|	function matching and overload 	{scope-in-inheritance}
 |kt_dev_cpp_008|	const {const-on-iterators} {equal-misspell} {bitwise-const} {mutable}
 |kt_dev_cpp_009|	undefined result and a temp-object {temp-object-in-return} {cost-of-temp-object}
@@ -1896,7 +1896,7 @@ include necessary header and hence the error.
 #define __MH5W_GPI_H__
 
 
-==============================================================================
+={============================================================================
 *kt_dev_gcc_007*  error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before
 
 <case-01>
@@ -1917,7 +1917,48 @@ In file included from /home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/pfm/OS
 ';', 'asm' or '__attribute__' before 'PCMem'
 
 
-==============================================================================
+={============================================================================
+*kt_dev_gcc_008*  warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]
+
+This happens when use string literal for char* member in GCC(g++) but it was fine before in C.
+
+main.cpp:53:74: warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]
+
+typedef struct fsm_instance {
+   char*              name;
+   ...
+} fsm_instance_t;
+
+fsm_instance_t Foo = { "Fsm", ... };
+
+-Wwrite-strings
+
+When compiling C, give string constants the type "const char[length]" so that copying the address of
+one into a non-const char * pointer produces a warning. These warnings help you find at compile time
+code that can try to 'write' into a string constant, but only if you have been very careful about
+using 'const' in declarations and prototypes. Otherwise, it is just a nuisance. This is why we did not
+make -Wall request these warnings.
+
+When compiling C++, warn about the deprecated conversion from string literals to char *. This
+warning is enabled by default for C++ programs. 
+
+1) Should consider using std::string name; instead?
+Not perferred since need to change other C codes to get c string. .c_str().
+
+2) Should use const in declarations?
+
+typedef struct fsm_instance {
+   const char*              name;
+   ...
+} fsm_instance_t;
+
+But this cause other warnings in other function defs using this strucrue due to const.
+
+3) Should use char* where string literal used.
+This (char*) is the easiest way.
+
+
+={============================================================================
 *kt_dev_gcc_100*	gcc and c++11
 
 {reference}
@@ -5678,9 +5719,9 @@ class Rational {
 };
 
 
-{copy-assign}
+{copy-assign} {deleted-copy-controls}
 Cannot use syn version when there are reference and const member data. Why? because syn copy assign
-is defined as <deleted> if the class has a const or reference member. (Primes p508). For
+is defined as 'deleted' if the class has a const or reference member. (Primes p508). For
 <delete-keyword>, see *kt_dev_cpp_004* 
 
 It uses op overloading and must be a member because <lhs> is this pointer.
@@ -5743,7 +5784,7 @@ o don't know the exact type of object
 o share data between objects
 
 
-{the-rule-of-three}
+{the-rule-of-three-or-five}
 The rule of three (the rule of five in C++11) is a rule of thumb in C++ that claims that
 if a class defines one of the following it should probably explicitly define all three:[1]
 
@@ -5877,10 +5918,10 @@ See *kt_dev_cpp_019* for self-assign and exception
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
-	 auto newp = new string(*rhs.ps);
-	 delete ps;
-	 ps = newp;
-	 return *this;
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
 }
 
 
@@ -5889,21 +5930,19 @@ The copy and the original share underlying object like shared_ptr. *kt_dev_stl_0
 Alternatively, use own reference counting as following:
 
 class HasPtr {
-	public:
-		HasPtr(const std::string& s = std::string() )	// def arg. 
-			: ps( new std::string(s), i(0), use( new std::size_t(1) ) {}
->
-		HasPtr(const HasPtr& p):
-			ps( p.ps ), use( p.use ) { ++*use; };
+  public:
+    // see default arg and new size_t
+    HasPtr(const std::string& s = std::string() ) : ps( new std::string(s), i(0), use( new std::size_t(1) ) {}
 
-		HasPtr& operator=(const HasPtr& p);
-		~HasPtr();
-<
-	private:
-		std::string* ps;
-		std::size_t* use; ~
+    HasPtr(const HasPtr& p): ps( p.ps ), use( p.use ) { ++*use; };
+
+    HasPtr& operator=(const HasPtr& p);
+    ~HasPtr();
+      
+  private:
+    std::string* ps;
+    std::size_t* use; 
 };
-
 
 HasPtr::~HasPtr()
 {
@@ -5913,23 +5952,43 @@ HasPtr::~HasPtr()
    }
 }
 
-// combine dtor and copy. handle self-assign
-//
+Combine dtor and copy ctor. handle self-assign
+
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
-	 ++*rhs.use;
+  ++*rhs.use;
 
-	 // lhs
-	 if( --*use == 0 )
-	 {
-		  delete ps; delete use;
-	 }
+  // lhs
+  if( --*use == 0 )
+  {
+    delete ps; delete use;
+  }
 
-	 ps = rhs.ps;
-	 use = rhs.use;
+  ps = rhs.ps;
+  use = rhs.use;
 
-	 return *this;
+  return *this;
 }
+
+
+{copy-control-example}
+Although copy control is most often needed for classes that allocate resources, some class have
+bookkeeping or other actions that copy control must peform.
+
+
+Folder (set of pointers to message)  Message (set of pointers to folder)
+[ ][ ][ ][ ][ ]: set                 message text
+                                     [ ][ ][ ][ ]
+
+Folder (set of pointers to message)  Message (set of pointers to folder)
+[ ][ ][ ][ ][ ]: set                 message text
+                                     [ ][ ][ ][ ]
+...                                  ...
+
+
+<copy-assign-do-dtor-and-copy-ctor>
+The copy assign often does the same work as is needed in the copy ctor and dtor. In sucn case the
+common work should be put in private utility functions.
 
 
 {preventing-copies} # delete-keywords
@@ -6286,11 +6345,11 @@ and does member-wise operation.
 The swap provides two characteritics: efficiency and strong exception-safety.
  
 <efficiency>
-It is for value-like class and use swap when used by algorithm such as reorder elements. For
-pointer-like class, no need as it naturally swaps pointers. stl containers are value-like. see
-{value-like} in *kt_dev_cpp_004*
+It is for valuelike class and use swap when used by algorithm such as reorder elements. For
+pointerlike class, no need as it naturally swaps pointers. stl containers are valuelike. see
+{valuelike} in *kt_dev_cpp_004*
 
-Since value-like swap is expensive such as resource managing class which is value-like, need to have
+Since valuelike swap is expensive such as resource managing class which is value-like, need to have
 better way and provide type specific swap which has efficient way to do it. So sounds like a topic
 for container design?
 
@@ -6337,7 +6396,7 @@ Widget A, B; swap(A,B);
 
 All we really need to do is swap their pImpl pointers, but the default swap algorithm has no way to
 know that. Instead, it would copy not only three Widgets, but also three WidgetImpl objects. Very
-inefficient. In other words, cost three copies that use 'operator=' of value-like class. For some
+inefficient. In other words, cost three copies that use 'operator=' of valuelike class. For some
 types such as pimpl-idiom, none of these copies are really necessary. How to avoid these cost? To
 address this, should provide type specific swap version to be used by clients:
 
@@ -6514,7 +6573,7 @@ is to make type-specific swap implementations available to code written in this 
 
 {define-swap-use-friend}
 Primer p516. This is an example which use non-member swap and friend approach and example from
-{value-like} in *kt_dev_cpp_004*
+{valuelike} in *kt_dev_cpp_004*
 
 class HasPtr {
 >
@@ -6569,7 +6628,7 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 
 To rewrite using copy-and-swap-idiom
 
-HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy
+HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy so copy ctor used.
 {
   swap(*this, rhs);
   return *this;      // rhs is destroyed, which deletes the old ps.
@@ -9113,9 +9172,23 @@ follow the normal path of looking for their exception handler.
 int myfunction (int param) throw(); // all exceptions call unexpected
 int myfunction (int param);         // normal exception handling 
 
-<noexcept>
+<noexcept-keyword>
 void recomp(int) noexcept;		// C++11 style
 void recomp(int) throw();		// old style
+
+The noexcept on both the declaration in the class header and on the definition if that appears outside
+the class.
+
+class Foo {
+  public:
+    Foo( Foo&& ) noexcept;
+    ...
+};
+
+Foo::Foo( Foo && ) noexcept : /* member initializers */
+{
+  ...
+}
 
 Note: The nothrow-keyword is the same as noexcept but used in new-operator expression. See
 {placement-new} in *kt_dev_stl_019*
@@ -9191,7 +9264,7 @@ See {self-assign-and-exception-safe} for reasons why need to handle self-assign.
 it's not exception safe as well. If this is exception safe, then lhs state shouldn't change when new
 raise exception, but the below don't and the below isn't exception safe.
 
-// NO self-assign and exception-safe in value-like case
+// NO self-assign and exception-safe in valuelike case
 // 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
@@ -9433,24 +9506,29 @@ void StrVec::reallocate()
 }
 
 
-{lvalue-and-rvalue}
-In C, lvalue could stand on the left-hand side of an assignment whereas rvalues could not. In C++
-this distinction is less simple. Roughly speaking, when use an object as an rvalue, use the object's
-value(its contents) and when use lvalue, use the object's identity (its location in memory).
+{rvalue-reference}
+An rvalue reference is obtained by using '&&' rather than '&'. Has important property that be bound
+ONLY to an object that is about to be 'destroyed'. As a result, free to 'move' resource from an
+rvalue reference TO another object.
 
-Examples are:
+<lvalue-and-rvalue>
+In C, lvalue could stand on the left-hand side of an assignment whereas rvalues could not. In C++
+this distinction is less simple. Generally speaking, when use an object as an rvalue, use the
+object's value(its contents) and when use lvalue, use the object's identity (its location in
+memory).
+
+These are 'properties' of an expression. Expressions yield or require rvalue/lvalue. Operators
+differ as to whether require lvalue or rvalue operands and as to whether return lvalue or rvalues.
+Lvalue and rvalue are properties of an expression. Some yield or require lvalues and others yield or
+require rvalues:
 
 Assignment requires a (nonconst) lvalue as its left hand operand and yields its left-hand operand as
 an lvalue.
 
-The address-of operator(&) requires an lvalue operand and returns a pointer to its operand as an
+The address-of operator(&) requires an lvalue operand and returns a 'pointer' to its operand as an
 rvalue.
 
-Operators differ as to whether require lvalue or rvalue operands and as to whether return lvalue or
-rvalues. Lvalue and rvalue are properties of an expression. Some yield or require lvalues and others
-yield or require rvalues.
-
-<bindings> <rvalue-reference>
+<bindings> 
 Binding properties for lvalue reference is that cannot bind regular(lvalue) reference to expression
 that requires a conversion, to literals, or to expression that return an rvalue. Rvalue properties
 have the opposite. The important point is that can use lvalue when an rvalue is required but cannot
@@ -9460,19 +9538,211 @@ int i = 42;
 int &r = 1;
 int &&rr = i;     // error since cannot bind an rvalue reference to an lvalue
 int &r2 = i*42;   // error since i*42 is rvalue.
+const int &r3 = i*42;   // okay
+int &&r2 = i*42;        // okay
 
 <ravlue-is-temporary>
 Functions that return a nonreference type, along with the arithmetic, relational, bitwise, and
-postfix increment/decrement operators, all yield rvalues.
+postfix increment/decrement operators, all yield rvalues. So can bind rvalue to such expressions.
 
-Looking at the list of rvalue and lvalue expressions, lvalue has persitent state, whereas rvalue are
-either literals or temporary objects created in the course of evaluating expressions.
+Looking at the list of rvalue and lvalue expressions, lvalue has 'persitent' state, whereas rvalue
+are either literals or 'temporary' objects created in the course of evaluating expressions.
 
 We know that: the referred-to object is about to be destroyed and there can be no other users of
 that object. So the code that uses an rvalue reference is free to take over resources from the
 object to which the reference refers.
 
+
+{std-move}
+This is defined in <utility> header and to return rvalue reference to its given object.
+
+int &&rr = std::move(rr1);
+moved-to             moved-from
+
+Essentially to tell compiler that we do not intend to use rr1 again 'except' to assign to it ot
+destroy it. After move, cannot make any assumptions about the value of the moved-from object.
+
+<not-move>
+To avoid name collisions, should use std::move, not move. p798.
+
+
+{move-constructor}
+See copy ctor and move ctor in comparison.
+
+void StrVec::free()
+{
+  // may not pass deallocate a 0 pointer
+  if(elements)
+  {
+    for( auto p = first_free; p != elements; /* empty */ )
+      alloc.destroy(--p);
+
+    alloc.deallocate( elements, cap - elements );
+  }
+}
+
+StrVec::~StrVec() { free(); }
+
+StrVec::StrVec( const StrVec& s)
+{
+  // to allocate exactly as many elements as in s
+  auto newdata = alloc_n_copy( s.begin(), s.end());
+  elements = newdata.first;
+  first_free = cap = newdata.second;
+}
+
+See NO const in parameter. noexcept since do not allocate any new memory and take over the memory
+from its argument. Note on noexcept syntax and see <noexcept-keyword> for more.
+
+After move, the moved-from object continues to exist and eventually will be destroyed, meaning that
+the dtor will be run on that. That is why set member ptrs null not to pass deallocate memory in free(). 
+
+StrVec::StrVec( StrVec&& s) noexcept
+// member initializers take over the resources in s
+: elements(s.elements), first_free(s.first_free), cap(s.cap)
+{
+  // leave s in a state in which it is safe to tun the dtor
+  s.elements = s.first_free = s.cap = nullptr;
+}
+
+<why-noexcept-needed>
+The library containers provide guarantees as to what they do if an exception happens. As an example,
+vector guarantees that if an exception happens when call push_back, the vector itself will be left
+unchanged.
+
+Imagine that push_back in StrVec causes reallocation as vector, uses move ctor but exceptions
+happens in the middle of moving. There would be a problem. However, if used copy ctor, not a problem
+when exception happens since the original copy still remains. Like, exception safe condition in
+using dynamic resources.
+
+To avoid this potential problem, vector must use a copy ctor instead move during reallocation
+'unless' it knows that 'element's type move ctor cannot throw an exception. How to do? Do so by
+using noexcept keyword and explicity tell the library that move ctor is safe to use. 
+
+Q: How actually does the library know what to use? 
+
+Note. KT. Whreas copy controls are more of necessary to work properly, move controls are more of
+performace choice since if there are not, copy controls will be used.
+
+
+{move-assign}
+The move assign does the same work as the dtor and the move ctor. If move assign won't throw any
+exceptions, should make it noexcept and must guard against self-assignment.
+
+StrVec &StrVec::operarot=( StrVec&& rhs) noexcept
+{
+  // direct test for self-assignment
+  if( this != &rhs )    // Note see &rhs
+  {
+    // free existing elements
+    free();    
+
+    // member initializers take over the resources from rhs
+    elements = rhs.elements;
+    first_free = rhs.first_free;
+    cap = rhs.cap;
+
+    // leave rhs(moved-from) in a destructible state
+    rhs.elements = rhs.first_free = rhs.cap = nullptr;
+  }
+
+  return *this;
+}
+
+<destructible-state>
+Moving from an object does not destroy that object. Therefore, must ensure that the moved-from
+object is in a state in which the dtor can be run. In this example, memebers are 'pointers' and if
+not set these as null, there shall be a problem when dtor runs and calls free().
+
+In addition to that, move operations guarantee that the object remains 'valid' meaning that can runs
+operations but no guarantees/assumptions about its value.
+
+
+{synthesized-move-operations}
+If class do not define copy ctor and assign then compiler 'always' make these operations; defined
+either as memberwise or deleted.
+
+Move operations are different. The compiler make move operations 'only' if a class does 'not' define
+any copy ctor and assign and 'only' if all data members can be move ctored and assigned. So if class
+has own copy ctor and assign then move will not be synthesized.
+
+// the compiler will synthesize the move operations for X and hasX
+struct X {
+  int i;
+  std::string s;
+};
+
+struct hasX {
+  X mem;
+};
+
+X x, x2 = std::move(x);          // use the synthesized move ctor
+hasX hx, hx2 = std::move(hx);
+
+If class defines either move ctor and/or move assign, the synthesized copy ctor and copy assign will
+de defined 'deleted' So class that define move operations 'must' also define own copy operations.
+Otherwise, those members are deleted by default.
+
+
+{copy-or-move}
+Compiler use ordinary function matching to determine which to use. copy takes const StrVec& and move
+takes StrVec&&.
+
+StrVec v1, v2;
+v1 = v2;                   // <1> copy assign
+StrVec getVec(istream &);  // assume getVec returns an rvalue
+v2 = getVec(cin);          // <2> move assign
    
+<1> move not viable since cannot implicitly bind rvalue to lvalue.
+<2> both are viable but copy assign requires conversion to const. Hence move is used.
+
+<moved-by-copy>
+Using the copy controls in place of move controls is safe and will meet the requirement of move
+controls since objects is moved by copying operations. So copy will be used if no move operations.
+
+If a class has no move operations, copy operations will be used even if attempt to use move by
+calling std::move().
+
+// define copy but no move operations
+class Foo {
+  public:
+    Foo() = default;
+    Foo(const Foo&);
+};
+
+Foo x;
+Foo y(x);                  // copy ctor
+Foo z( std::move(x) );     // copy ctor
+
+Here copy initialization happens but std::move returns Foo&& and can convert a Foo&& to const Foo&.
+So copy ctor is viable and called.
+
+<function-matching>
+If add move ctor to HasPtr class then effectively add move assign as well. The assign operator is
+both the move and copy assign. Note that this is from copy-and-swap-idiom which is for valuelike
+case. Hence move is safe.
+
+class HasPtr {
+  public:
+    HasPtr(HasPtr &&p) noexcept : ps(p.ps), i(p.i), { p.ps = 0; }
+
+    // HasPtr& operator=(const HasPtr rhs)
+    HasPtr& operator=(HasPtr rhs)
+    { swap(*this, rhs); return *this; }
+    ...
+};
+
+Depending on the type of argument, copy initialization uses either the copy ctor or the move ctor.
+
+HadPtr hp, hp2;
+
+hp = hp2;
+hp = std::move(hp2);
+
+In the second assignment, std::move return rvalue and move ctor is the exact match so move ctor used
+and the same assign code used.
+
+
 ={============================================================================
 *kt_dev_cpp_021*	op overload
 
@@ -13980,7 +14250,7 @@ class Lock: private Uncopyable {
 
 
 <2> reference counting underlying resources
-This is shared_ptr; {pointer-like} in *kt_dev_cpp_004* For this example, use 'deleter' to use unlock
+This is shared_ptr; {pointerlike} in *kt_dev_cpp_004* For this example, use 'deleter' to use unlock
 instead of default delete.
 
 class Lock {
@@ -14011,7 +14281,7 @@ class Lock {
 Set deleter using shared_ptr ctor in ctor init list. No longer declares a destructor.
 
 <3> copy the underlying resource
-This is {value-like} in *kt_dev_cpp_004* Such as string class which uses heap for characters.
+This is {valuelike} in *kt_dev_cpp_004* Such as string class which uses heap for characters.
 Copying the resource managing object should also copy the resource it wraps. deep-copy.
 
 <4> transfer ownership of underlying resource
@@ -14202,6 +14472,88 @@ StrBlobPtr& StrBlobPtr::incr() const
   curr++;
   return *this;
 }
+
+<3> Quiz? Expected output?
+#include <iostream>
+#include <string>
+#include <vector>
+#include <memory>
+#include <exception>
+#include <stdexcept>
+
+class StrBlob {
+  public:
+    typedef std::vector<std::string>::size_type size_type;
+
+    StrBlob(std::string n);
+    StrBlob(std::string n, std::initializer_list<std::string> il);
+    ~StrBlob();
+
+    size_type size() const { return data->size(); }
+    bool empty() const { return data->empty(); }
+
+    void push_back( const std::string &t) { data->push_back(t); }
+    // void pop_back();
+    // std::string front();
+    // std::string back();
+
+  private:
+    std::string name;
+    std::shared_ptr<std::vector<std::string>> data;
+    void checks( size_type i, const std::string &msg) const;
+};
+
+StrBlob::StrBlob(std::string n): name(n), data( std::make_shared<std::vector<std::string>>() )
+{
+  std::cout << "ctor for " << name << std::endl;
+}
+
+StrBlob::StrBlob(std::string n, std::initializer_list<std::string> il): name(n), data( std::make_shared<std::vector<std::string>>(il))
+{
+  std::cout << "ctor for " << name << std::endl;
+}
+
+StrBlob::~StrBlob()
+{
+  std::cout << "dtor for " << name << std::endl;
+}
+
+void StrBlob::checks( size_type i, const std::string &msg) const
+{
+  if( i >= data->size() )
+    throw std::out_of_range(msg);
+}
+
+int main()
+{
+  std::cout << "-{ main ---" << std::endl;
+
+  StrBlob b1("b1");
+  {
+    std::cout << "-b1 size: " << b1.size() << "-" << std::endl;
+
+    StrBlob b2("b2", { "this", "is", "second blob" });
+    b1 = b2;
+    b2.push_back(". really?");
+
+    std::cout << "-b2 size: " << b2.size() << "-" << std::endl;
+  }
+
+  std::cout << "-b1 size: " << b1.size() << "-" << std::endl;
+
+  std::cout << "-} main ---" << std::endl;
+}
+
+$ ./a.out
+-{ main ---
+ctor for b1
+-b1 size: 0-
+ctor for b2
+-b2 size: 4-  // pointing to the same underlying vector.
+dtor for b2
+-b1 size: 4-
+-} main ---
+dtor for b2  // why? since it's copied using the syn copy assign in b1=b2.
 
 
 {use-example}
