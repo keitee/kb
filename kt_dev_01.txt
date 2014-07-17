@@ -108,7 +108,7 @@ KT KB. DEVELOPMENT.
 
 #{ STL 
 |kt_dev_stl_000|	useful links {stl-design-rationale}
-|kt_dev_stl_001|	seq-containers {trade-offs}
+|kt_dev_stl_001|	sequential containers {trade-offs}
 |kt_dev_stl_005|	assoc-containers {insert-erase} {key-type-requirement} {use-typedef} {find-in-multi}
 |kt_dev_stl_002|	vector
 |kt_dev_stl_003|	list
@@ -5022,11 +5022,10 @@ int a3[5] = { 0, 1, 2 }; 	// { 0, 1, 2, 0, 0 } since value-init the rest
 int a4[11] = {};				// { 0,...0 } since value-init all
 
 
-==============================================================================
+={============================================================================
 *kt_dev_lang_013*	allman style
 
-<allman-style>
-
+{allman-style}
 The Allman style is named after Eric Allman. It has been incorrectly referred to as "ANSI style"
 supposedly for its use in the documents describing the ANSI C standard; later adopted as the ISO C
 international standard, though in fact those documents use K&R style. It is also sometimes known as
@@ -5086,8 +5085,7 @@ while ((c = getchar()) != EOF)
     do_something(c);
 }
 
-<k-and-r-style>
-
+{k-and-r-style}
 The K&R style, so named because it was used in Kernighan and Ritchie's book The C Programming
 Language, is commonly used in C. It is also used for C++, C#, and other curly brace programming
 languages.
@@ -5119,6 +5117,25 @@ int main(int argc, char *argv[])
  
     finalthing();
     ...
+}
+
+
+{type-declaration}
+
+<1>
+Foo *msg1, *msg2;
+
+Foo& Foo::operator=( Foo &rhs )
+{
+  ...
+}
+
+<2>
+Foo* msg1, *msg2;
+
+Foo& Foo::operator=( Foo& rhs )
+{
+  ...
 }
 
 
@@ -5971,24 +5988,193 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 }
 
 
-{copy-control-example}
-Although copy control is most often needed for classes that allocate resources, some class have
-bookkeeping or other actions that copy control must peform.
+{copy-control-for-bookkeeping}
+p519. Although copy control is most often needed for classes that allocate resources, some class
+have bookkeeping or other actions that copy control must perform.
 
-
-Folder (set of pointers to message)  Message (set of pointers to folder)
+Folder (set of pointers to Message)  Message (set of pointers to Folder)
 [ ][ ][ ][ ][ ]: set                 message text
-                                     [ ][ ][ ][ ]
+                                     [ ][ ][ ][ ]: set
 
-Folder (set of pointers to message)  Message (set of pointers to folder)
+Folder (set of pointers to Message)  Message (set of pointers to Folder)
 [ ][ ][ ][ ][ ]: set                 message text
-                                     [ ][ ][ ][ ]
+                                     [ ][ ][ ][ ]: set
 ...                                  ...
 
+<lits-of-operations-message-class> # how to sketch a class
+To have the same message in multiple folders, each message has a set of pointers to folder and
+requires to update Folders when necessary.
+
+- Message class provide save and remove operations to add or remove a Message from a specified
+folder. To create a new Message, specify the contents of the message but no folder. To put a message
+call save. NOTE. Why? Can have ctor(Folder&) but needs remove() member anyway. So better to have
+save and remove pair?
+
+- To copy a message, the copy and the original will be distinct and be in the same 'set' of Folders.
+Thus will copy the contents and the set of pointers. <copying-set>. To appear in the same Folders as
+the original message, must traverse the set of Folders adding a pointer to the new to eash Folder
+that points to the original. 'traverse' Folders.
+
+- To destroy a message, remove pointers to that from the Folders. 'traverse' Folders.
+
+- To assign a message, will replace the contents and also update the set of Folders by removing lhs
+Message from lhs Folders and adding that Message to rhs Folders. 'traverse' Folders.
+
+Looking at this list of operations, both the dtor and the copy assign have to 'remove' this Message
+from the Folders. Both the copy ctor and the copy assign 'add' a Message to a given list of Folders.
 
 <copy-assign-do-dtor-and-copy-ctor>
-The copy assign often does the same work as is needed in the copy ctor and dtor. In sucn case the
-common work should be put in private utility functions.
+The copy assign often does the same work as is needed in the copy ctor and dtor. In such case the
+'common' work should be put in private utility functions.
+
+class Message {
+  friend class Folder;
+
+  public:
+  // folders is implicitly initialized to the empty set
+  explicit Message( const std::string &str = "" ): contents(str) {}
+
+  // copy controls to manage pointers to this message
+  Message( const Message& );
+  Message& operator=( const Message& );
+  ~Message();
+
+  // add/remove this message from the specified Folder's set
+  void save(Folder&);
+  void remove(Folder&);
+
+  private:
+  std::string contents;
+  std::set<Folder*> folders;
+
+  void add_to_Folders( const Message& );
+  void remove_from_Folders();
+};
+
+void Message::save( Folder& f )
+{
+  folders.insert( &f );    // add the given Folder to our list of Folders. Note: &f is pointer.
+  f.addMsg(this);          // add this Message to Folder's set of Message.
+}
+
+void Message::remove( Folder& f )
+{
+  folders.erase( &f );    // remove the given Folder to our list of Folders. Note: &f is pointer.
+  f.remMsg(this);         // remove this Message to f's set of Message.
+}
+
+void Message::add_to_Folders( const Message &m )   // m is the original
+{
+  for( auto f : m.folders )
+    f->addMsg(this);
+}
+
+// copy ctor. <copying-set>
+Message::Message( const Message &m ) : contents(m.contents), folders(m.folders)
+{
+  add_to_Folders(m);
+}
+
+void Message::remove_from_Folders()
+{
+  for( auto f : folders )
+    f->remMsg(this);
+
+  folders.clear();
+}
+
+// dtor
+Message::~Message()
+{
+  remove_from_Folders();
+}
+
+// copy assign which do copy ctor and dtor. 
+Message& Message::operator=(const Message& rhs)
+{
+  remove_from_Folders();   // for lhs
+
+  contents = rhs.contents;
+  folders = rhs.folders;   // <copying-set>
+
+  add_to_Folders(rhs);
+
+  return *this;
+}
+
+Handle self-assign by removing pointers to this message from lhs before inserting pointers to rhs.
+Really? Isn't folders empty after removing pointers? Seems broken and needs a direct check as done
+in move? 
+
+If do inserting first, adding has no effect since adds the same address(message) to a set in a
+folder. So would have removed this from 'all' of its corresponding Folders.
+
+<swap-function>
+Since the library string and set defines own swap, Message class will benefit from defining own
+version of swap to avoid extraneous copies of 'folder' memder.
+
+However, must manage Folder pointers since after a swap(m1, m2) call, the Folders that had pointed
+to m1 must now point to m2.
+
+void swap( Message &lhs, Message &rhs )
+{
+  // not necessary but good habit.
+  using std::swap;
+
+  // 1 pass. remove pointers to each message from Folders
+  for( auto f: lhs.folders )
+    f->remMsg(&lhs);
+  for( auto f: rhs.folders )
+    f->remMsg(&rhs);
+
+  swap( lhs.folders, rhs.folders );       // swap(set&, set&)
+  swap( lhs.contents, rhs.contents );     // swap(string&, string&)
+
+  // 1 pass. add pointers to each message from Folders
+  for( auto f: lhs.folders )
+    f->addMsg(&lhs);
+  for( auto f: rhs.folders )
+    f->addMsg(&rhs);
+}
+
+<move-operations>
+As with copy and swap, in addition to moving, must update each Folder and both move ctor and assign
+need to update Folder pointers. So make common work as a function.
+
+// move Folder pointers 'from' m 'to' this message
+void Message::move_Folders(Message *m)
+{
+  folders = std::move(m->folders);  // use set move assign than copy, folders = m->folders
+
+  for( auto f : folders )  // use 'folders' for both add and remove but not m.folders
+  {
+    f->remMsg(m);
+    f->addMsg(this);
+  }
+
+  m->folders.clear();      // ensure that destroying m is harmless
+}
+
+NOTE that inserting an element to a set might throw since it requires memory to be allocated. As a
+result, unlike HasPtr and StrVec case, will not mark move operations as noexcept. Q: what this
+actually mean to me?
+
+Message::Message( Message &&m ) : contents(std::move(m.contents))    // string move
+{
+  move_Folders(&m);
+}
+
+Message& Message::operator=( Message &&rhs )
+{
+  if( this != &rhs )    // direct check for self-assign
+  {
+    remove_from_Folders();    // destroy the old state of lhs
+    contents = std::move( rhs.contents );
+    move_Folders(&rhs);
+  }
+
+  return *this;
+}
 
 
 {preventing-copies} # delete-keywords
@@ -6146,18 +6332,22 @@ invoke member funcs since the derived class has no right to call. Again, the poi
 class part can't call the base class part as it's private. In boost, it's 'noncopyable'.
 
 
-{self-assign-and-exception-safe}
+{self-assign}
 EC++11. When implement copy-assign, must think about self-assign and exception-safe. See
 {self-assign-exception-safe} in *kt_dev_cpp_019*
 
-Why? because there are less-obvious-assignments to self cases:
+Why? because there are less-obvious-assignments to self cases and are the result of aliasing: having
+more than one way to refer to an object.
 
-<one> aliasing: having more than one way to refer to an object
+<one> aliasing
+
 a[i] = a[j];   // potential assign to self when i==j
 *px = *py;     // potential assign to self when point to the same
 
-<two> same class hierarchy.
-void doSomething( const Base& rb, Derived& pd );
+<two> aliasing in same class hierarchy since base ptr can point to derived. Here, rb and *pd might
+actually be the same.
+
+void doSomething( const Base& rb, Derived* pd );
 
 
 ={============================================================================
@@ -8616,7 +8806,7 @@ class ABCAnimal {
 ABCAnimal::~ABCAnimal() {}
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_019*	exception
 
 {intention}
@@ -9259,10 +9449,10 @@ Session::~Session()
 }
 
 
-{exception-safe}
-See {self-assign-and-exception-safe} for reasons why need to handle self-assign. Also if not, then
-it's not exception safe as well. If this is exception safe, then lhs state shouldn't change when new
-raise exception, but the below don't and the below isn't exception safe.
+{self-assign-exception-safe}
+See {self-assign} for reasons why need to handle self-assign. Also if not, then it's not exception
+safe as well. If this is exception safe, then lhs state shouldn't change when new raise exception,
+but the below don't and the below isn't exception safe.
 
 // NO self-assign and exception-safe in valuelike case
 // 
@@ -9486,22 +9676,33 @@ want to use the string move ctor and use std::move() not move().
 ^                     ^                        ^
 elements              first_free               cap
 
+class StrVec {
+  public:
+    std::string* begin() const { return elements; }
+    std::string* end() const { return first_free; }
+    ...
+  private:
+    std::string *elements;
+    std::string *first_free;
+    std::string *cap;
+    ...
+};
+
 void StrVec::reallocate()
 {
   auto newcapacity = size() ? 2 * size() : 1;
+  auto first = alloc.allocate(newcapacity);
 
-  auto newdata = alloc.allocate(newcapacity);
-
-  auto dest = newdata;
+  auto last = first;
   auto elem = elements;
 
   for( size_t i = 0; i != size(); ++i )
-    alloc.construct( dest++, std::move(*elem++) );    // note. move()
+    alloc.construct( last++, std::move(*elem++) );    // note. move()
 
-  free();   // member which destroy and deallocate
+  free();   // member which destroy and deallocate old
 
-  elements = newdata;
-  first_free = dest;
+  elements = first;
+  first_free = last;
   cap = elements + newcapacity;
 }
 
@@ -9741,6 +9942,65 @@ hp = std::move(hp2);
 
 In the second assignment, std::move return rvalue and move ctor is the exact match so move ctor used
 and the same assign code used.
+
+
+{move-iterator-adoptor}
+The StrVec::reallocate can be rewritten using move iterator which would be easier.
+
+void StrVec::reallocate()
+{
+  auto newcapacity = size() ? 2 * size() : 1;
+  auto first = alloc.allocate(newcapacity);
+
+  // 'before'
+  // for( size_t i = 0; i != size(); ++i )
+  //  alloc.construct( last++, std::move(*elem++) );    // note. move()
+
+  // 'after'
+  auto last = uninitialized_copy( make_move_iterator( begin()), make_move_iterator( end()), first );
+
+  free();   // member which destroy and deallocate
+
+  elements = first;
+  first_free = last;
+  cap = elements + newcapacity;
+}
+
+
+{move-can-be-dangerous}
+Since moved-from object has 'indeterminate' state, std::move is a dangerous operation. Judiciously
+use class implementation such mover operations for significant performance benefit.
+
+Use it in user code(outsied of class implementation) ONLY when 'certain' that you need to do a move
+and is guaranteeted to be safe.
+
+
+{move-overload}
+
+class StrVec {
+  public:
+    void push_back( const std::string& );
+    void push_back( std::string& );
+    ...
+};
+
+void StrVec::push_back( const std::string& s )
+{
+  chk_n_alloc();
+  alloc.construct( first_free++, s );
+}
+
+void StrVec::push_back( std::string&& s )    // 'must' not const
+{
+  chk_n_alloc();
+  alloc.construct( first_free++, std::move(s) );   // use string move ctor
+}
+
+StrVec vec;
+string s = "some string or another";
+
+vec.push_back(s);          // calls push_back(const string&)
+vec.push_back("done");     // calls push_back(string&&). temporary string.
 
 
 ={============================================================================
@@ -12166,11 +12426,10 @@ For example, less<T> in functional header is
 ...
 
 
-==============================================================================
-*kt_dev_stl_001*	containers
+={============================================================================
+*kt_dev_stl_001* sequential containers
 
 {trade-offs}
-
 Think different performance trade-offs in {insert/delete} and {random-access}.
 
 vector      : random-access, fast insert/delete at the back, contig. mem
@@ -12200,6 +12459,13 @@ supports random access; string, vector, deque and array.
 
 The random-access is different from contig. mem since there are containers which supports
 random-access but not contig. mem.
+
+
+{delete-elements}
+To delete all elements in a container.
+
+slist.clear();
+slist.erase( slist.begin(), slist.end() );
 
 
 ==============================================================================
@@ -15019,8 +15285,9 @@ uses only size. Be careful since using unconstructed memory is 'undefined'.
 allocator<string> alloc;
 auto const p = alloc.allocator(n);
 
-// calls ctor. From C++11, supports many ctors of the 'type' The first argument to construct() must be
-// a pointer to unconstructed space allocated by allocate().
+// calls ctor. From C++11, supports many ctors of the 'type' The first argument to construct() must
+// be a pointer to unconstructed space allocated by allocate(). The second and subsequent argument
+// determine ctor to use.
 alloc.construct(p++);
 alloc.construct(p++, 10, 'c');
 alloc.construct(p++, "hi");
@@ -15032,7 +15299,7 @@ alloc.destory(p);
 alloc.deallocate(p, n);
 
 <companion-algorithms>
-The library defines two that can 'construct' object in uninitialsed memory.
+The library defines two that calls 'construct' on each element in uninitialsed memory.
 
 uninitialized_copy(b, e, b2);
 copies elements from the input range by iterator b and e into unconstructed memory by iterator b2.
