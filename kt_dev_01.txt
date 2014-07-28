@@ -132,8 +132,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_021| algorithm: remove-erase idiom
 |kt_dev_stl_022| iterator: external and internal
 
+#{ STL Q
 |kt_dev_stl_100| ref: can store unique_ptr in a container?
-
 
 #{ SYSTEM 
 |kt_dev_sys_001| <empty>
@@ -6079,6 +6079,32 @@ for ID. This means more error checking, handling and penalty of size and speed.
 
 That means that a user provide a meaningful init value but once inited, can see efficient
 implementation.
+
+
+{example}
+struct SomeLargeData {
+
+  SomeLargeData(int id_)
+    : id(id_)
+  { cout << "Foo[" << this << "] ctor(" << id << ")" << endl; }
+  ~SomeLargeData() { cout << "Foo[" << this << "] dtor(" << id << ")" << endl; }
+  int id;
+  int arr[100];
+};
+
+int main()
+{
+  uint64_t be, af;
+  int n = 400;
+
+  vector<SomeLargeData> vec_byval;
+  vec_byval.push_back( SomeLargeData(100));     // note. this is copy-ctor
+}
+
+$ ./a.out 
+Foo[0xbfc60f4c] ctor(100)
+Foo[0xbfc60f4c] dtor(100)
+Foo[0x9aba008] dtor(100)
 
 
 ={============================================================================
@@ -15812,7 +15838,7 @@ In addition to managing the pointed object’s lifetime, unique_ptr provides the
 capabilities of a smart pointer: it overloads operator* and operator->, provides a means to obtain
 the raw pointer (get), to relinquish control of the pointed object (release), and to replace the
 object it manages (reset). It also lets you customize the way the pointed object is deleted (if you
-don’t want it to be the default delete operator), and has some other niceties - just consult
+don't want it to be the default delete operator), and has some other niceties - just consult
 your favorite C++ reference.
 
 <Q> How does the library make it not copyable?
@@ -15824,20 +15850,19 @@ In this article I want to focus not on the grocery list of unique_ptr‘s featur
 interesting move semantics. Specifically, given that unique_ptr forbids copying and assignment, one
 may wonder how it can fit in the source and sink idiom which is so useful for smart pointers.
 
-In other words, we’d like this to work:
+In other words, we'd like this to work:
 
-// source creates a Foo object, wraps it in a smart pointer for safety
-// and provides the result to the caller, giving it the ownership of the
-// object in the process.
+// source creates a Foo object, wraps it in a smart pointer for safety and provides the result to
+// the caller, giving it the ownership of the object in the process.
 unique_ptr<Foo> source();
 
-// sink gets a Foo object wrapped in a smart pointer for safety. It also
-// assumes ownership of the provided object.
+// sink gets a Foo object wrapped in a smart pointer for safety. It also assumes ownership of the
+// provided object.
 void sink(unique_ptr<Foo> p);
 
 And in C++11, it does! Even though unique_ptr can't be copied, it can be moved. Move semantics are a
 perfect match for unique_ptr - the two concepts reinforce each other. With move semantics,
-unique_ptr is both safe and efficient. Here’s some code to demonstrate this:
+unique_ptr is both safe and efficient. Here's some code to demonstrate this:
 
 #include <iostream>
 #include <cstdlib>
@@ -15873,7 +15898,7 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-Again, there’s a line marked with ERROR! here - it demonstrates once again that a unique_ptr can’t
+Again, there's a line marked with ERROR! here - it demonstrates once again that a unique_ptr can't
 be copied. However, it can be explicitly moved, as the next line shows [2]. When the erroneous line
 is commented out, this code prints:
 
@@ -15900,18 +15925,18 @@ when compared to auto_ptr) is that it can be used in standard containers.
 
 Why is it so important to be able to place smart pointers into containers? Because holding objects
 by value is sometimes very expensive. Containers, especially when coupled with algorithms, tend to
-move objects around. Large objects are expensive to copy, hence we’d like to keep pointers to
+move objects around. Large objects are expensive to copy, hence we'd like to keep pointers to
 objects inside containers instead.
 
 What follows is a very simplistic example that demonstrates this. It shows how much more expensive
-it is to sort a vector of large objects that are stored by value, than it is when they’re stored by
+it is to sort a vector of large objects that are stored by value, than it is when they're stored by
 pointer [3].
 
 Also, I explicitly said to take the container example with a grain of salt as it was synthetically
-built to demonstrate the point. Yes, it is best to avoid huge objects, but that’s not always
+built to demonstrate the point. Yes, it is best to avoid huge objects, but that's not always
 possible.
 
-First, let’s create a synthetic "large" object that has well defined ordering properties by some
+First, let's create a synthetic "large" object that has well defined ordering properties by some
 numeric ID:
 
 struct SomeLargeData {
@@ -15933,7 +15958,7 @@ bool compare_by_ptr(const SomeLargeData* a, const SomeLargeData* b) {
     return a->id < b->id;
 }
 
-Let’s now create two vectors and populate them with random objects:
+Let's now create two vectors and populate them with random objects:
 
 vector<SomeLargeData> vec_byval;
 vector<SomeLargeData*> vec_byptr;
@@ -15944,14 +15969,14 @@ for (int i = 0; i < n; ++i) {
     vec_byptr.push_back(new SomeLargeData(id));
 }
 
-Finally, we’ll sort the two vectors with the standard sort algorithm, and measure the runtime for
+Finally, we'll sort the two vectors with the standard sort algorithm, and measure the runtime for
 some large n:
 
 sort(vec_byval.begin(), vec_byval.end(), compare_by_value);
 sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
 
 The timing results I get are quite consistent - the by-pointer sorting is 2-3x faster than the
-by-value sorting [4]. That’s a very significant difference, and it’s all due to the copying sort has
+by-value sorting [4]. That's a very significant difference, and it's all due to the copying sort has
 to do for moving the objects around inside the container.
 
 [4] The speedup grows as the size of the object grows. Increasing the arr member to hold 1000
@@ -15979,7 +16004,7 @@ bool compare_by_uniqptr(const unique_ptr<SomeLargeData>& a,
     return a->id < b->id;
 }
 
-And then we just need to create the vector, populate it and then sort it, similarly to the way we’ve
+And then we just need to create the vector, populate it and then sort it, similarly to the way we've
 done for the other vectors:
 
 vector<unique_ptr<SomeLargeData>> vec_byuniqptr;
@@ -15989,7 +16014,7 @@ for (int i = 0; i < n; ++i) {
     // ...
     vec_byuniqptr.push_back(
         unique_ptr<SomeLargeData>(new SomeLargeData(id)));  
-    // note shall be this form since no copy supported or use std::move
+    // note temp object. shall be this form since no copy supported or use std::move
 }
 
 sort(vec_byuniqptr.begin(), vec_byuniqptr.end(), compare_by_uniqptr);
@@ -16027,18 +16052,173 @@ I have mentioned how rvalue references and move semantics can make code more eff
 unique_ptr is another great example that makes me want to use a C++11-capable compiler as soon as
 possible.
 
-unique_ptr provides an excellent mix of efficiency and safe memory management. IMHO it’s a great
+unique_ptr provides an excellent mix of efficiency and safe memory management. IMHO it's a great
 example of how several ideas in language design interact to create a whole that is larger than its
 parts.
+
+Replies:
+
+<1>
+fanNo Gravatar Says:
+June 25th, 2012 at 14:48
+
+Can’t we get the best of all worlds, by doing this:
+
+vector<SomeLargeData> vec_byval;
+vector<SomeLargeData*> vec_byptr;
+
+for (int i = 0; i < n; ++i) {
+    int id = rand() % 500000;
+    vec_byval.push_back(SomeLargeData(id));
+    vec_byptr.push_back(&vec_byval.back());
+}
+
+sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
+
+This gives us 'fast' by-pointer sorting AND 'ownership' of the pointed objects. So I don’t get the
+excitement about unique_ptr.
+
+<2>
+westforkNo Gravatar Says:
+November 5th, 2012 at 12:22
+
+Hi
+
+Nice article. But my results are different from what you wrote.  I implemented your code using gcc
+4.7 (g++ (Ubuntu/Linaro 4.7.2-4precise1) 4.7.2) on my desktop (OS xubuntu 12.04, Intel(R) Core(TM)2
+Duo CPU, E8400 @ 3.00GHz).  I build a vector of 2010000 containing SomeLargeData objects, raw
+pointers to SomeLargeData objects and unique-pointers to SomeLargeData objects. The results are that
+raw pointer container is the faster to sort (as expected) but the container with the unique pointers
+is the slower!!!  Here a dump of my tests
+
+By value test
+TIMESTAMP-START 11:18:23:127277 (ms ~ 40703127)
+TIMESTAMP-END 11:18:27:378556 (ms ~ 40707378)
+ELAPSED TIME (ms) 4251
+
+By pointer test
+TIMESTAMP-START 11:18:27:378658 (ms ~ 40707378)
+TIMESTAMP-END 11:18:29:841735 (ms ~ 40709841)
+ELAPSED TIME (ms) 2463
+
+By unique_pointer test
+TIMESTAMP-START 11:18:29:841816 (ms ~ 40709841)
+TIMESTAMP-END 11:18:35:674064 (ms ~ 40715674)
+ELAPSED TIME (ms) 5833
+
+What do you think? The overhead of the unique-ptr over the raw pointer is so heavy?
+
+Regards
+westfork
+
+<3>
+SqeakyNo Gravatar Says:
+March 19th, 2013 at 11:58
+
+@Fan The first time the value vector grows it will invalidate all the pointers in the pointer
+vector. Since it never tells you when this happens, but can happen on any insertion, you have to
+assume that the pointer is invalid after the next insertion.
+
+@Westfork I would guess that the implementation just hasn’t had enough time to mature yet. There
+must be at least as much over with the unique_ptr as raw pointers, but double does seem excessive.
+Did you remember to delete in the raw pointer example?
+
+
+<4>
+This is my result on the VM in a laptop.
+
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <sys/time.h>
+#include <algorithm>
+
+using namespace std;
+
+typedef uint64_t u64;
+
+static u64 nsec() {
+  struct timeval tv;
+  if(gettimeofday(&tv, 0) < 0)
+    return -1;
+  return (u64)tv.tv_sec*1000*1000*1000 + tv.tv_usec*1000;
+}
+
+struct SomeLargeData {
+  SomeLargeData(int id_)
+    : id(id_)
+  {}
+
+  // SomeLargeData(int id_)
+  //   : id(id_)
+  // { cout << "Foo[" << this << "] ctor(" << id << ")" << endl; }
+  // ~SomeLargeData() { cout << "Foo[" << this << "] dtor(" << id << ")" << endl; }
+  int id;
+  int arr[100];
+};
+
+bool compare_by_value(const SomeLargeData& a, const SomeLargeData& b) {
+  return a.id < b.id;
+}
+
+bool compare_by_ptr(const SomeLargeData* a, const SomeLargeData* b) {
+  return a->id < b->id;
+}
+
+bool compare_by_uniqptr(const unique_ptr<SomeLargeData>& a, const unique_ptr<SomeLargeData>& b) {
+  return a->id < b->id;
+}
+
+int main()
+{
+  uint64_t be, af;
+  int n = 400;
+
+  vector<SomeLargeData> vec_byval;
+  vector<SomeLargeData*> vec_byptr;
+  vector<unique_ptr<SomeLargeData>> vec_byuniqptr;
+
+  for (int i = 0; i < n; ++i) {
+    int id = rand() % 500000;
+    vec_byval.push_back(SomeLargeData(id));
+    vec_byptr.push_back(new SomeLargeData(id));
+    vec_byuniqptr.push_back(unique_ptr<SomeLargeData>(new SomeLargeData(id)));
+  }  
+
+  be = nsec();
+  sort(vec_byval.begin(), vec_byval.end(), compare_by_value);
+  af = nsec();
+  cout << "by value: diff(ns): " << af-be << endl;
+  cout << "by value: diff(ms): " << (af-be)/(1000) << endl;
+
+  be = nsec();
+  sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
+  af = nsec();
+  cout << "by ptr: diff(ns): " << af-be << endl;
+  cout << "by ptr: diff(ms): " << (af-be)/(1000) << endl;
+
+  be = nsec();
+  sort(vec_byuniqptr.begin(), vec_byuniqptr.end(), compare_by_uniqptr);
+  af = nsec();
+  cout << "by uptr: diff(ns): " << af-be << endl;
+  cout << "by uptr: diff(ms): " << (af-be)/(1000) << endl;
+}
+
+$ ./a.out 
+by value: diff(ns): 302000
+by value: diff(ms): 302
+by ptr: diff(ns): 127000
+by ptr: diff(ms): 127
+by uptr: diff(ns): 585000
+by uptr: diff(ms): 585
+
 
 # ============================================================================
 #{ SYSTEM
 ={============================================================================
 *kt_dev_sys_001*	<empty>
 
-
-
-==============================================================================
+={============================================================================
 *kt_dev_sys_002*	endianess
 
 representation
