@@ -33,7 +33,7 @@ KT KB. Linux
 |kt_linux_tool_025|  cmd: ln
 |kt_linux_tool_026|  cmd: rsync
 |kt_linux_tool_027|  cmd: awk
-|kt_linux_tool_027|  cmd: sed
+|kt_linux_tool_028|  cmd: sed
 
 |kt_linux_tool_140|  cmake
 |kt_linux_tool_141|  cmake: mix of c and cpp build
@@ -858,6 +858,9 @@ To make a filename from the date:
 date: Fri Jul 25 05:30:12 BST 2014 -> log-Fri-Jul-25-...
 
 script -f /home/kit/log/`date | awk '{print "log-"$1"-"$2"-"$3"-"$4}'`
+
+To make a gateway from the ip address:
+gateway=`echo $ip | awk 'BEGIN { FS="." } ; { print $1"."$2"."$3"."1 }'`
 
 
 ={============================================================================
@@ -3234,10 +3237,12 @@ manually, using the sharedlibrary command. The 'default' value is on.
 
 If your program uses lots of shared libraries with debug info that takes large amounts of memory,
 you can decrease the gdb memory footprint by preventing it from automatically loading the symbols
-from shared libraries. To that end, type set auto-solib-add off before running the inferior, then
-load each library whose debug symbols you do need with sharedlibrary regexp, where regexp is a
-regular expression that matches the libraries whose symbols you want to be loaded. To explicitly
-load shared library symbols, use the 'sharedlibrary' command:
+from shared libraries. 
+
+To that end, type set auto-solib-add off before running the inferior, then load each library whose
+debug symbols you do need with sharedlibrary regexp, where regexp is a regular expression that
+matches the libraries whose symbols you want to be loaded. To explicitly load shared library
+symbols, use the 'sharedlibrary' command:
 
 show auto-solib-add
 
@@ -3253,7 +3258,10 @@ sharedlibrary regex
 share regex
 Load shared object library symbols for files matching a Unix regular expression.  As with files
 loaded automatically, it only loads shared libraries required by your program for a core file or
-after typing run. If regex is omitted all shared libraries required by your program are loaded.
+'after' typing run. If regex is omitted all shared libraries required by your program are loaded.
+
+note. can specify library name which are required by a program but not a filename with a path to
+force a loading of it. That means cannot load a libaray until a program needs it.
 
 <continue-article>
 However, in some cases (e.g. when debugging with gdbserver and having incompatible symbols or using
@@ -3315,6 +3323,141 @@ Breakpoint 2, func () at lib.cpp:5
 5 printf("In func()\n");
 
 
+{real-examples}
+# to see the default setting
+(gdb)  show auto-solib-add
+Autoloading of shared library symbols is on.
+
+# note that shall load file first before setting a breakpoint
+(gdb) file /home/kit/tizen/tv-viewer/tv-viewer
+Reading symbols from /home/kit/tizen/tv-viewer/tv-viewer...done.
+
+(gdb) target remote 106.1.11.219:2345
+Remote debugging using 106.1.11.219:2345
+warning: Unable to find dynamic linker breakpoint function.
+GDB will be unable to debug shared library initialisers
+and track explicitly loaded dynamic code.
+0xb63da7c0 in ?? ()
+
+# to set a breakpoint in the gdbint; otherwise, gdb set no since no input from the user
+(gdb) set breakpoint pending on
+(gdb)
+
+# note that this is a warning at this moment
+(gdb) b main
+Cannot access memory at address 0x0
+Breakpoint 1 at 0x29842716: file /home/abuild/rpmbuild/BUILD/org.tizen.tv-viewer-0.2.1/src/core/AppMain.cpp, line 33.
+
+# no shared library sicne the application do not started yet.
+(gdb) i sharedlibrary
+No shared libraries loaded at this time.
+
+# note that see warnings on shared library now.
+# set solib-search-path before and seems to have only one path as set solib-search-path /home/kit/mheg-port-ug
+(gdb) c
+Continuing.
+warning: `/usr/lib/libicui18n.so.48': Shared library architecture unknown is not compatible with target architecture arm.
+warning: `/usr/lib/libicuuc.so.48': Shared library architecture unknown is not compatible with target architecture arm.
+warning: `/usr/lib/libicudata.so.48': Shared library architecture unknown is not compatible with target architecture arm.
+warning: `/usr/lib/libfribidi.so.0': Shared library architecture unknown is not compatible with target architecture arm.
+warning: `/usr/lib/libicule.so.48': Shared library architecture unknown is not compatible with target architecture arm.
+warning: Could not load shared library symbols for 184 libraries, e.g. /usr/lib/libsys-assert.so.
+Use the "info sharedlibrary" command to see the complete listing.
+Do you need "set solib-search-path" or "set sysroot"?
+
+Breakpoint 1, main (argc=-1237321556, argv=0xb63f4a30)
+    at /home/abuild/rpmbuild/BUILD/org.tizen.tv-viewer-0.2.1/src/core/AppMain.cpp:33
+33           _ERR("%s","Failed to create app!");
+
+(gdb)
+Continuing.
+
+# note that even after running, not loaded full libraries. want to debug libug-mhegUG-efl.so
+(gdb) i sharedlibrary
+From        To          Syms Read   Shared Object Library
+                        No          /usr/lib/libsys-assert.so
+                        ...
+                        No          /usr/lib/libsqlite3.so.0
+0xb55efb24  0xb572307c  Yes (*)     /usr/lib/libicui18n.so.48
+0xb55154e4  0xb55dfe7c  Yes (*)     /usr/lib/libicuuc.so.48
+0xb43e4258  0xb43e4350  Yes (*)     /usr/lib/libicudata.so.48
+                        No          /usr/lib/libavoc.so
+                        ...
+(*): Shared library is missing debugging information.
+
+(gdb) c
+Continuing.
+
+(gdb) CTRL-C
+Program received signal SIGINT, Interrupt.
+0xb3db296c in ?? ()
+warning: Could not load shared library symbols for 21 libraries, e.g. /usr/lib/ecore/immodules/libisf-imf-module.so.
+Use the "info sharedlibrary" command to see the complete listing.
+Do you need "set solib-search-path" or "set sysroot"?
+
+# note that the wanted library is not loaded
+(gdb) i sharedlibrary
+From        To          Syms Read   Shared Object Library
+                        ...
+0xab8d96c0  0xab9a2d78  No          /home/kit/mheg-port-ug/libug-mhegUG-efl.so
+                        ..
+(*): Shared library is missing debugging information.
+
+# HOWEVER, the problem is that the library is loaded but not the symblos and files. can check to see
+# if that is the case by running "i sources" to see files.
+
+# note to fource to load again and check with i sources
+(gdb) sharedlibrary mheg
+Reading symbols from /home/kit/mheg-port-ug/libug-mhegUG-efl.so...done.
+Loaded symbols for /home/kit/mheg-port-ug/libug-mhegUG-efl.so
+Cannot access memory at address 0xb
+
+# here can see the result of this command:
+# set substitute-path /home/abuild/rpmbuild/BUILD/org.tizen.tv-viewer-0.2.1 /home/kit/tizen/tv-viewer
+(gdb) i sources
+Source files for which symbols have been read in:
+
+/home/kit/tizen/tv-viewer/src/core/AppMain.cpp, /usr/include/c++/4.5.3/new,
+...
+
+Source files for which symbols will be read in on demand:
+...
+/home/kit/mheg-port-ug/mh5eng/mh5e_token.c, /home/kit/mheg-port-ug/mh5eng/mh5b_program.c,
+
+# note that now set a breakpoint
+(gdb) b _key_pressed(char const*)
+Cannot access memory at address 0xb
+Breakpoint 2 at 0xab8d9afa: file /home/abuild/rpmbuild/BUILD/ug-mheg-0.2/main/Main.cpp, line 144.
+
+(gdb) c
+
+# hit breakpoint
+
+(gdb) list
+
+# note that if do not run this command fast enough, it seems that gdb fails to run a session. means
+# not hitting a breakpoint.
+
+(gdb) c
+Continuing.
+
+Program received signal SIGINT, Interrupt.
+0xb3db296c in ?? ()
+(gdb) c
+Continuing.
+Cannot access memory at address 0xb
+[New Thread 9633]
+
+Program received signal SIGSEGV, Segmentation fault.
+[Switching to Thread 9633]
+0xb4124ab0 in ?? ()
+(gdb) c
+Continuing.
+^C
+^CInterrupted while waiting for the program.
+Give up (and stop debugging it)? (y or n) n
+
+
 ={============================================================================
 *kt_linux_tool_250* gdb: remote debugging
 
@@ -3333,7 +3476,7 @@ that calls external libraries such as libjpeg. Perhaps that is why debugging is 
 case ?
 
 {gdb-term}
-GDB represents the state of each program execution with an object called an inferior. 
+GDB represents the state of each program execution with an object called an 'inferior'. 
 
 {gdb-server}
 To use a TCP connection, you could say:

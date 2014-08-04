@@ -14,6 +14,7 @@ KT KB. DEVELOPMENT. CODE.
 
 |kt_dev_design_001| use state and if checks	
 
+
 # ============================================================================
 #{
 ={============================================================================
@@ -987,7 +988,6 @@ SYSTEM_STATUS VRM_FSM_CreateDefinition(const VRM_FSM_DEFINITION_INFO* pFSM_defin
 This is cut-down version from FSM manager of realtime performance inc., and from work at jusung.
 This static fsm was used in oob dmx, opentv and sms implementaion at humax. 
 
-
 {things-to-be-useful}
 1> 32bit swap macro
 2> ip header and section dump calls
@@ -997,9 +997,9 @@ This static fsm was used in oob dmx, opentv and sms implementaion at humax.
 
 
 {analysis}
-1> Uses all global static structures.
+1) Uses all global static structures.
 
-2> Uses state and event enum and loop through state and event list to find. There should be no gap
+2) Uses state and event enum and loop through state and event list to find. There should be 'no' gap
 in event and state list. If used state or event enum as an index of state and event list then can
 remove loop overhead.
 
@@ -1007,6 +1007,8 @@ However, the index is used and should match to print out event name in eaf and o
 
 Such as fsm->event_list[post_event].name in:
 fsm->name, fsm->event_list[post_event].name, fsm->current_state->name, next_state->name );
+
+#define FSM_E(x) {x,#x}
 
 static Fsm::fsm_event_t bootEventList[] = {
   FSM_E(BOOT_EVENT_CLOSED),
@@ -1023,13 +1025,42 @@ enum Events
   ...
 }
 
-3> For common evnets for all state, then need to write transition table for each state to have that
+This also means that events cannot start from user defined value? Why need this? Since fsm events
+can be used with other system events(enums) in the same process routine such as thread main
+processing events. Solution? This fsm event names is debugging purpose and can use like this to make
+a index starting from 0. 
+
+fsm->name, fsm->event_list[post_event-start].name, fsm->current_state->name, next_state->name );
+
+The event index used to select event but not just for debugging purpose.
+
+static fsm_status_t call_state_actions( fsm_instance_t* fsm, fsm_event_hdl event, void* event_data )
+{
+  ...
+
+  /* in case there is enter function */
+  if( fsm->current_state->enter_action )
+  {
+    // note see use of data
+    fsm->event_list[event].data = (void*) event_data;
+
+    // note see selection of event using simple index in many places in fsm code for debugging and
+    // seleting event.
+    fsm->current_state->enter_action( fsm, &(fsm->event_list[event]) );
+    return FSM_OK;
+  }
+
+  return FSM_ERR;
+}
+
+3) For common evnets for all state, then need to write transition table for each state to have that
 event. Also can have transition to self state. All depends on how defines transition table.
 
-4> There is a one-two-one mapping between state and transition table.
+4) There is a one-two-one mapping between state and transition table.
 
-5> There is no lock in fsm factility itself.
+5) There is no lock in fsm factility itself.
 
+6) Fsm structure:
 instance
   - state list(array) -> state #01
                           - eaf
@@ -1042,12 +1073,88 @@ instance
   - event list(array) -> event #01
                       -> event #02 
 
+static Fsm::fsm_instance_t bootFsm = { (char*)"boot", bootStateList, bootEventList, NULL };
+
+// typedef struct fsm_instance {
+//    char*              name;
+//    fsm_state_t**      state_list;
+//    fsm_event_t*       event_list;
+//    fsm_state_t*       current_state;
+//    fsm_state_t*       previous_state;
+// } fsm_instance_t;
+
+static Fsm::fsm_state_t* bootStateList[] = {
+  &stateClosed,
+  ...
+  FSM_INVALID_STATE
+};
+
+static Fsm::fsm_event_t bootEventList[] = {
+  FSM_E(BOOT_EVENT_CLOSED),
+  ...
+  FSM_E(BOOT_EVENT_STOP)
+};
+
+static Fsm::fsm_state_t stateClosed = { BOOT_STATE_CLOSED, (char*)"Closed", eafClosed, tableClosed };
+
+// typedef struct fsm_state { 
+//   fsm_state_hdl         hdl;
+//   char*                 name;
+//   fsm_action_func_t     enter_action;
+//   fsm_transition_tbl_t* transition_tbl;
+// } fsm_state_t;
+
 Questions from the previous note: In this fsm, it runs its eaf when enters a state and this is
 actually state action compared to event action. How to handle when error occurs in eaf? Do we need
 not to make state transition depending on a return value of eaf? Currently runs eaf blindly.
 
 2014.02. This is up to eaf design but not to fsm and that means that a user of fsm do all necessary
 work and call state transition only when there is no error to change state.
+
+
+7) Careful when state initial event.
+
+// note that fsm_create will eaf without checking if it is a valid event in that state.
+
+// 1) stat = fsm_create( &bootFsm, BOOT_STATE_CLOSED, BOOT_EVENT_CLOSED, (void*) NULL );
+// 2) stat = fsm_create( &bootFsm, BOOT_STATE_CLOSED, BOOT_EVENT_RUN, (void*) NULL );
+//
+// static Fsm::fsm_transition_tbl_t tableClosed[] =
+// {
+//   {BOOT_EVENT_CLOSED, BOOT_STATE_CLOSED},
+//   {BOOT_EVENT_READY, BOOT_STATE_READY},
+//   {Fsm::INVALID_EVENT_HDL}
+// };
+//
+// 1) is expected but 2) still works because transition_tbl is only used make transition.
+//
+fsm_status_t fsm_create( fsm_instance_t* fsm, fsm_state_hdl init_state, fsm_event_hdl init_event, void* init_data )
+{
+  fsm_status_t stat = FSM_OK;
+  fsm_state_t* pstate = NULL;
+
+  if( fsm == NULL )
+  {
+    FSM_LOG( stderr, "FSM: fsm is null.\n" );
+    stat = FSM_ERR;
+  }
+
+  if( stat && (pstate = get_valid_state(fsm, init_state)) )
+  {
+    fsm->previous_state = fsm->current_state = pstate;
+    if( pstate == NULL )
+    {
+      FSM_LOG( stderr, "FSM: fail to create(%s).\n", fsm->name);
+      stat = FSM_ERR;
+    }
+  }
+
+  // change state of fsm
+  if(stat)
+    stat = call_state_actions( fsm, init_event, init_data );
+
+  return stat;
+}
 
 
 {oob-dmx-analysis}
@@ -7943,7 +8050,8 @@ void dump_data_as_byte_align(bool skip, const char* name, uint32 length, uint8* 
 
 {source-end}
 
-==============================================================================
+
+={============================================================================
 *kt_dev_code_003* static fsm demo in cpp
 
 This uses namespace and const instead #define. However found that it is not a simple thing to make
@@ -7955,7 +8063,6 @@ defintions and is a way to force user to use const.
 {source-fsm}
 
 {source-} <fsm.h>
-
 
 //
 // System   Tizen
@@ -8367,7 +8474,6 @@ fsm_status_t fsm_check_input_event( fsm_instance_t* fsm, fsm_event_hdl event )
 
 {source-} <main.cpp>
 
-
 #include <iostream>
 #include "Fsm.h"
 
@@ -8505,7 +8611,6 @@ int main()
 
 {source-} <makefile>
 
-
 # simple makefile from gmake
 
 FILE = use-main.cpp
@@ -8531,8 +8636,7 @@ clean :
 
 # ============================================================================
 #{
-
-==============================================================================
+={============================================================================
 *kt_dev_design_001* use state and if checks	
 
 {example-one}
