@@ -53,7 +53,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_103| gcc link and ld {cyclic-dependencies}
 |kt_dev_gcc_104| gcc comma-operator {C99}
 |kt_dev_gcc_105| gcc likely and unlikely 
-|kt_dev_gcc_200| gcc preprocessor
+|kt_dev_gcc_200| gcc: cpp: preprocessor
+|kt_dev_gcc_201| gcc: cpp: define? 
+|kt_dev_gcc_202| gcc: cpp: how-to-get-filename-without-full-path
 |kt_dev_gcc_300| gcc gprof
 
 #{ C AND C++
@@ -64,8 +66,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_lang_005| chaining
 |kt_dev_lang_006| compile error types
 |kt_dev_lang_007| bool type {true-and-false}
-|kt_dev_lang_008| char type
-|kt_dev_lang_009| implicit conversion {built-in-conversion} {equal-misspell}
+|kt_dev_lang_008| data type, char type
+|kt_dev_lang_009| implicit conversion {equal-misspell} {integer-division}
 |kt_dev_lang_010| incomplete type {forward-declaration} {text-query-example}
 |kt_dev_lang_011| literal type
 |kt_dev_lang_012| pointer and array {option-handling} {std::begin} {sizeof-operator}
@@ -536,7 +538,7 @@ void Usuage()
 }
 
 
-==============================================================================
+={============================================================================
 *kt_dev_prob_009*	debug printf 
 
 {ndebug}
@@ -1594,6 +1596,23 @@ int main() {
   bitset<16> bitset14{short14};
   cout << bitset14 << endl;     // 0000000000000000}
 }
+
+
+{bitwise-octal}
+A leading 0 on an integer constant means 'octal' and this seems better that hex to use with bit
+pattern.
+
+0 0
+1 01
+2 10
+3 11
+4 100
+5 101 
+6 110
+7 110
+
+0177 1.111.111
+0x7F 111.1111
 
 
 ={============================================================================
@@ -3036,7 +3055,7 @@ f(), and the return value of f() is passed to func(). The function func() is pas
 argument, because the comma expression is enclosed in parentheses within the function argument list.
 
 
-==============================================================================
+={============================================================================
 *kt_dev_gcc_105*	gcc likely and unlikely 
 
 {likey-and-unlikely}
@@ -3247,16 +3266,17 @@ Disassembly of section .text:
     goto noconv;
 
 
-==============================================================================
-*kt_dev_gcc_200*	gcc and c++11
-
-{gcc-preprocessor} 
+={============================================================================
+*kt_dev_gcc_200*	gcc: cpp: preprocessor
 
 http://gcc.gnu.org/onlinedocs/cpp/
 /usr/bin/cpp
 
-{preprocessor-options}
+The C preprocessor, often known as cpp, is a "macro processor" that is used automatically by the C
+compiler to transform your program before compilation. It is called a macro processor because it
+allows you to define 'macros', which are brief abbreviations for longer constructs. 
 
+{preprocessor-options}
 http://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html
 
 -E
@@ -3273,22 +3293,6 @@ To produce three extra files with .i, .s and .o extension. The temporary files p
 of the preprocessing, compilation and assembly steps respectively.
 
 
--D name=definition
-
-The contents of definition are tokenized and processed as if they appeared during translation phase
-three in a '#define' directive. In particular, the definition will be truncated by embedded newline
-characters.
-
-If you are invoking the preprocessor from a shell or shell-like program you may need to use the
-shell's quoting syntax to protect characters such as spaces that have a meaning in the shell syntax.
-
-If you wish to define a function-like macro on the command line, write its argument list with
-surrounding parentheses before the equals sign (if any). Parentheses are meaningful to most shells,
-so you will need to quote the option. With sh and csh, -D'name(args...)=definition' works.
-
--D and -U options are processed in the order they are given on the command line. All -imacros file
-and -include file options are processed after all -D and -U options. 
-
 -Wall
 
 Turns on all optional warnings which are desirable for normal code. At present this is -Wcomment,
@@ -3304,7 +3308,122 @@ file name for that source file, a colon, and the names of all the included files
 coming from -include or -imacros command line options. 
 
 
-{predefined-macros}
+={============================================================================
+*kt_dev_gcc_201*	gcc: cpp: define? 
+
+Q: What's the difference between "define _LIMITS_H" and "define _LIMITS_H 1"?
+
+# ifndef _LIMITS_H
+#  define _LIMITS_H	1
+...
+# endif	/* limits.h  */
+
+2.4 Once-Only Headers
+
+If a header file happens to be included twice, the compiler will process its contents twice. This is
+very likely to cause an error, e.g. when the compiler sees the same structure definition twice. Even
+if it does not, it will certainly waste time.
+
+The standard way to prevent this is to enclose the entire real contents of the file in a
+conditional, like this:
+
+     /* File foo.  */
+     #ifndef FILE_FOO_SEEN
+     #define FILE_FOO_SEEN
+     
+     the entire file
+     
+     #endif /* !FILE_FOO_SEEN */
+
+This construct is commonly known as a "wrapper #ifndef". When the header is included again, the
+conditional will be false, because FILE_FOO_SEEN is defined. The preprocessor will skip over the
+entire contents of the file, and the compiler will not see it twice.
+
+CPP optimizes even further. It remembers when a header file has a wrapper ‘#ifndef’. If a subsequent
+‘#include’ specifies that header, and the macro in the ‘#ifndef’ is still defined, it does not
+bother to rescan the file at all.
+
+You can put comments outside the wrapper. They will not interfere with this optimization.
+
+The macro FILE_FOO_SEEN is called the controlling macro or "guard macro". In a user header file, the
+macro name should 'not' begin with '_'. In a system header file, it 'should' begin with '__' to
+avoid conflicts with user programs. In any kind of header file, the macro name should contain the
+name of the file and some additional text, to avoid conflicts with other header files.  
+
+Q: Is it a problem to use '_' for user headers?
+
+-D name 
+Predefine name as a macro, with definition 1. 
+
+-D name=definition
+The contents of definition are tokenized and processed as if they appeared during translation phase
+three in a '#define' directive. In particular, the definition will be truncated by embedded newline
+characters.
+
+If you are invoking the preprocessor from a shell or shell-like program you may need to use the
+shell's quoting syntax to protect characters such as spaces that have a meaning in the shell syntax.
+
+If you wish to define a function-like macro on the command line, write its argument list with
+surrounding parentheses before the equals sign (if any). Parentheses are meaningful to most shells,
+so you will need to quote the option. With sh and csh, -D'name(args...)=definition' works.
+
+-D and -U options are processed in the order they are given on the command line. All -imacros file
+and -include file options are processed after all -D and -U options. 
+
+4.2.3 Defined
+
+The special operator defined is used in '#if' and '#elif' expressions to test whether a certain name
+is defined as a macro. "defined name" and "defined (name)" are both expressions whose value is <1>
+if name is defined as a macro at the current point in the program, and 0 otherwise. Thus, #if
+defined MACRO is precisely equivalent to #ifdef MACRO.
+
+defined is useful when you wish to test more than one macro for existence at once. For example,
+
+     #if defined (__vax__) || defined (__ns16000__)
+
+would succeed if either of the names __vax__ or __ns16000__ is defined as a macro.
+
+Conditionals written like this:
+
+     #if defined BUFSIZE && BUFSIZE >= 1024
+
+can generally be simplified to just #if BUFSIZE >= 1024, since if BUFSIZE is not defined, it will be
+interpreted as having the value zero.
+
+If the defined operator appears as a result of a macro expansion, the C standard says the behavior
+is undefined. GNU cpp treats it as a genuine defined operator and evaluates it normally. It will
+warn wherever your code uses this feature if you use the command-line option -pedantic, since other
+compilers may handle it differently. 
+
+<example>
+#define SAMPLE
+#define SAMPLE 1
+#define SAMPLE 2
+
+// This works for all three cases
+#ifdef SAMPLE
+  printf("sample is def\n");
+#endif
+
+// For 1, emit error like: 
+// sam01.c:39:12: error: operator '>' has no left operand
+// Only works for 2 case.
+#if SAMPLE == 1
+  printf("sample is =1\n");
+#endif
+
+// For 1, emit error like: 
+// sam01.c:39:12: error: operator '>' has no left operand
+// Only works for 3 case.
+#if SAMPLE > 1
+  printf("sample is >1 \n");
+#endif
+
+After all, "define MACRO x" is to use macro value and no real needs as a guard macro.
+
+
+={============================================================================
+*kt_dev_gcc_202*	gcc: cpp: how-to-get-filename-without-full-path
 
 http://gcc.gnu.org/onlinedocs/cpp/Standard-Predefined-Macros.html#Standard-Predefined-Macros
 
@@ -3437,7 +3556,7 @@ and they could be concatenated with other string literals. GCC 3.4 and later tre
 variables, like __func__. In C++, __FUNCTION__ and __PRETTY_FUNCTION__ have always been variables. 
 
 
-==============================================================================
+={============================================================================
 *kt_dev_gcc_300*	gcc gprof
 
 http://sourceware.org/binutils/docs/gprof/
@@ -4468,17 +4587,183 @@ b2 is true since b1 promoted to 1, negates to -1, and convert back to bool but i
 hence true.
 
 
-==============================================================================
-*kt_dev_lang_008*	char type
+={============================================================================
+*kt_dev_lang_008*	data type, char type
+
+{data-type}
+From ansic:
+
+char
+int      an integer, typically reflecting the natural size of integers on the host machine
+float
+double
+
+short, long, signed and unsigned 'qualifiers'. short is 'at-least' 16 bits, long 'at-least' 32 bits
+and int either 16 or 32 bits. Each compiler is free to choose appropriate sizes for its own
+hardware.
 
 The char is not singed char. there are char, signed, unsigned types because whether char is signed
-or unsigned depends on compiler. So recommendation is that use signed or unsigned.
+or unsigned depends on compiler. From ansic, "whether plain chars are signed or unsigned is
+machine-dependent". So recommendation is that use signed or unsigned.
+
+The standard header <limits.h> and <float.h> contain symbolic constants for all of these sizes along
+with other properties of the machine and compiler.
 
 
-==============================================================================
+From C++: 2.1.1 Arithmetic Types
+
+Type        Meaning           Minimum Size
+------------------------------------------
+bool        boolean           NA
+short       short integer     16 bits
+int         integer           16 bits
+long        long integer      32 bits 
+long long   long integer      64 bits
+
+<exercise>
+The ansic, page 36, exercise 2-1. Write a program to determine the range of char, short, int, and
+long variables, both signed and unsigned, by printing appropriate values from standard headers and
+by direct computation. Harder if you compute them: determine the range of the various floating-point
+types.
+
+// mine based on *kt_dev_prob_010* to get max value of type. 
+//
+#include <limits.h>
+
+#define MY_ULONG_MAX (~(unsigned long)0) // see difference from glibc version
+
+int main(int argc, char* argv[])
+{
+  printf("ulong max from limits: %luL\n", ULONG_MAX );
+  printf("ulong max from calc: %luL\n", MY_ULONG_MAX );
+}
+
+From http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_1
+
+#include <stdio.h>
+#include <limits.h>
+
+
+int main(void)
+{
+  printf("\nBits of type char: %d\n\n", CHAR_BIT);                     /* IV */
+
+  printf("Maximum numeric value of type char: %d\n", CHAR_MAX);        /* IV */
+  printf("Minimum numeric value of type char: %d\n\n", CHAR_MIN);      /* IV */
+
+  printf("Maximum value of type signed char: %d\n", SCHAR_MAX);        /* IV */
+  printf("Minimum value of type signed char: %d\n\n", SCHAR_MIN);      /* IV */
+
+  printf("Maximum value of type unsigned char: %u\n\n", (unsigned) UCHAR_MAX);    /* SF */  /* IV */
+  
+  printf("Maximum value of type short: %d\n", SHRT_MAX);               /* IV */
+  printf("Minimum value of type short: %d\n\n", SHRT_MIN);             /* IV */
+
+  printf("Maximum value of type unsigned short: %u\n\n", (unsigned) USHRT_MAX);   /* SF */  /* IV */
+
+
+  printf("Maximum value of type int: %d\n", INT_MAX);                  /* IV */
+  printf("Minimum value of type int: %d\n\n", INT_MIN);                /* IV */
+
+  printf("Maximum value of type unsigned int: %u\n\n", UINT_MAX);      /* RB */   /* IV */
+
+  printf("Maximum value of type long: %ld\n", LONG_MAX);               /* RB */   /* IV */
+  printf("Minimum value of type long: %ld\n\n", LONG_MIN);             /* RB */   /* IV */
+
+  printf("Maximum value of type unsigned long: %lu\n\n", ULONG_MAX);   /* RB */   /* IV */
+
+
+  return 0;
+}
+
+Integer solution. Floats to follow.
+I know 'long long' is not in K&R. This is the 21st century.
+Learned a bit doing this. Pilcrow 12:00, 31 July 2011 (UTC)
+
+/* calculate the ranges of various types */
+#include <stdio.h>
+#include <limits.h>
+
+int main(void)
+{
+	/* integer types */
+	unsigned char c;
+	unsigned short s;
+	unsigned int i;
+	unsigned long l;
+	unsigned long long ll;
+
+	putchar('\n');
+	printf("VALUE RANGES FOR INTEGER TYPES\nUPPERCASE comes from <limits.h>\n"
+		"lowercase is calculated.\n\n");
+
+	/* char */
+	c = ~0;     // note: this is Uxxx_MAX
+	c >>= 1;    // note: this is xxx_MAX
+	printf("signed char:   %4d,           %4d\n",-c-1,c);
+	printf("SCHAR_MIN:     %4d, SCHAR_MAX %4d\n",SCHAR_MIN,SCHAR_MAX);
+	printf("unsigned char: %4u,           %4u\n",0,c*2+1);
+	printf("UCHAR_MAX:                     %4u\n",UCHAR_MAX);
+	putchar('\n');
+
+   // kt@kt-ub-vb:~/work$ ./a.out 
+   // 
+   // VALUE RANGES FOR INTEGER TYPES
+   // UPPERCASE comes from <limits.h>
+   // lowercase is calculated.
+   // 
+   // signed char:   -128,            127
+   // SCHAR_MIN:     -128, SCHAR_MAX  127
+   // unsigned char:    0,            255
+   // UCHAR_MAX:                      255
+  
+	/* short */
+	s = ~0;
+	s >>= 1;
+	printf("signed short:   %6d,           %6d\n",-s-1,s);
+	printf("SHRT_MIN:       %6d, SHRT_MAX: %6d\n",SHRT_MIN,SHRT_MAX);
+	printf("unsigned short: %6u,           %6u\n",0,s*2+1);
+	printf("USHRT_MAX:                        %6u\n",USHRT_MAX);
+	putchar('\n');
+
+	/* int */
+	i = ~0;
+	i >>= 1;
+	printf("signed int:    %11d,          %11d\n",-i-1,i);
+	printf("INT_MIN:       %11d, INT_MAX: %11d\n",INT_MIN, INT_MAX);
+	printf("unsigned int:  %11u,          %11u\n",0,i*2+1);
+	printf("UINT_MAX:                            %11u\n",UINT_MAX);
+	putchar('\n');
+
+	/* long */
+	l = ~0;
+	l >>= 1;
+	printf("signed long:   %11ld,           %11ld\n",-l-1,l);
+	printf("LONG_MIN:      %11ld, LONG_MAX: %11ld\n",LONG_MIN, LONG_MAX);
+	printf("unsigned long: %11lu,           %11lu\n",0l,l*2+1);
+	printf("ULONG_MAX:                            %11lu\n", ULONG_MAX);
+	putchar('\n');
+
+
+	/* long long */
+	ll = ~0;
+	ll >>= 1;
+	printf("signed long long:   %20lld,            %20lld\n",-ll-1,ll);
+	printf("LLONG_MIN:          %20lld, LLONG_MAX: %20lld\n",LLONG_MIN, LLONG_MAX);
+	printf("unsigned long long: %20llu,            %20llu\n",0ll,ll*2+1);
+	printf("ULLONG_MAX:                                          %20llu\n", ULLONG_MAX);
+        return 0;
+
+}
+
+
+={============================================================================
 *kt_dev_lang_009*	implicit conversion (built-in conversion)
 
-See *kt_dev_cpp_005* for class-type conversion.
+When an operator has operands of different types, they are converted to a "common-type" according to
+a small number of rules.
+  
+{implicit-conversion} See *kt_dev_cpp_005* for class-type conversion.
 
 Primers p159. Happens when used in expression, func call and func matching
 
@@ -4501,9 +4786,12 @@ The fact that we can use assignment in a condition can have surprising effects:
 
 if (i = j)
 
+<true-means>
 The condition like this which assigns the value of j to i and then tests the result of the
-assignment. If j is nonzero, the condition will be true. The author of this code almost surely
-intended to test whether i and j have the same value:
+assignment. If j is nonzero, the condition will be true. This is what "true" means in the 'test'
+part of if, while, for, etc and 'true' means non-zero. 
+
+The author of this code almost surely intended to test whether i and j have the same value:
 
 if (i == j)
 
@@ -4572,7 +4860,134 @@ for( unsigned u = 10; u >= 0; --u )
 Causes <infinite-loop> because u = -1 and means big number.
 
 
-==============================================================================
+{integer-division}
+From ansic 1.2., this is a program to implement a formula "C = (5/9)(F-32)" to print a table of
+Fahrenheit and Celsius.
+
+<V1>
+// print Fahrenheit-Celsius table
+int main(int argc, char* argv[])
+{
+  int fahr, celsius;
+  int lower, upper, step;
+
+  lower = 0;
+  upper = 300;
+  step = 20;
+
+  fahr = lower;
+  while( fahr <= upper ) 
+  {
+    celsius = 5 * (fahr-32) / 9;
+    printf("%d\t%d\n", fahr, celsius );
+    fahr = fahr + step;
+  }
+}
+
+Why "celsius = 5 * (fahr-32) / 9;" but not "celsius = 5/9 * (fahr-32);"? Since integer division
+truncates: any fractional part is discarded so 5/9 would be trancated to zero.
+
+kt@kt-ub-vb:~/work$ ./a.out 
+0	-17
+20	-6
+40	4
+60	15
+80	26
+100	37
+120	48
+140	60
+160	71
+180	82
+200	93
+220	104
+240	115
+260	126
+280	137
+300	148
+kt@kt-ub-vb:~/work$ gcc sam01.c
+kt@kt-ub-vb:~/work$ ./a.out 
+0	0
+20	0
+40	0
+60	0
+80	0
+100	0
+120	0
+140	0
+160	0
+180	0
+200	0
+220	0
+240	0
+260	0
+280	0
+300	0
+
+<V2>
+// print Fahrenheit-Celsius table: floating-point version to be accurate
+int main(int argc, char* argv[])
+{
+  float fahr, celsius;
+  int lower, upper, step;
+
+  lower = 0;
+  upper = 300;
+  step = 20;
+
+  fahr = lower;
+  while( fahr <= upper ) 
+  {
+    // celsius = 5/9 * (fahr-32);
+    // celsius = 5/9 * (fahr-32.0);
+    celsius = 5.0/9.0 * (fahr-32.0);
+    printf("%3.0f %6.1f\n", fahr, celsius );
+    fahr = fahr + step;
+  }
+}
+
+1. "5/9" is still integer division.
+kt@kt-ub-vb:~/work$ ./a.out 
+  0   -0.0
+ 20   -0.0
+ 40    0.0
+ 60    0.0
+ 80    0.0
+100    0.0
+120    0.0
+
+If an arithmetic operator has integer operands, an integer operation is performed. If an arithmetic
+operator has on floating-point operand and one integer operand, howerver, the integer will be
+converted to floating point before the operation is done. 
+
+while(fhar <= upper) and fahr-32 would be converted to floating point. Nevertheless, writing
+floating-point constants with explicit decimal point emphasizes their floating-point nature for
+human readers.
+
+
+{char-to-int}
+From ansic.
+
+int atoi(char s[])
+{
+  int n, i;
+
+  for(n = 0, i = 0; s[i] >= '0' && s[i] <= '9'; i++)
+    n = n*10 + (s[i]-'0'); // here s[i]-'0'
+
+  return n;
+}
+
+// ASCII only and upper case comes first and lower case comes later in the table.
+int lower(int c)
+{
+  if( c => 'A' && c <= 'Z' )
+    return c + 'a' - 'A';
+  else
+    return c;
+}
+
+
+={============================================================================
 *kt_dev_lang_010*	incomplete type
 
 {text-query-example}
@@ -5080,7 +5495,6 @@ whether variable is a object or what pointer points to, this is an read operatio
 memory.  
 xxx = variable;
 
-
 {call-by-value-and-reference}
 C passes arguments to function by value.
 
@@ -5136,6 +5550,9 @@ int a[10]; int *pa;
 
 pa = a; pa++;     // okay
 a = pa; a++;      // yako
+
+<void-pointer>
+Any pointer can be cast to void* and back again without loss of information.
 
 <null-pointer>
 C gurantees that zero is never a valid address for data. Pointer and integers are not
@@ -5283,7 +5700,40 @@ In short if 'a' is a pointer, it starts at the location “a”, gets the pointe
 the pointer value, and gets the character pointed to by that value. In both cases a[3] returns same
 character but procedure is different.
 
-<pointers-are-iterator>
+
+{c-string}
+int main(int argc, char* argv[])
+{
+  //char *str1 = "\n";
+  //char *str2 = "";
+  //char *str3 = "one";
+
+  char str1[] = "\n"; 
+  // note: '\n' is character constant(single character) and "\n" is s string constant 
+  char str2[] = ""; 
+  char str3[] = "one"; 
+
+  printf("size is %d\n", sizeof(str2));
+  printf("size is 0x%x\n", '\n');
+}
+
+(gdb) p str1
+$1 = "\n"
+(gdb) p str2
+$2 = ""
+(gdb) p str3
+$3 = "one"
+
+(gdb) p /x str1
+$4 = {0xa, 0x0}
+(gdb) p /x str2
+$5 = {0x0}
+(gdb) p /x str3
+$6 = {0x6f, 0x6e, 0x65, 0x0}
+(gdb) 
+
+
+{pointers-are-iterator}
 Like, off-the-end iterator, can use off-the-end pointer which is the address of the 'nonexistent'
 element one past the last element of an array. note that just take address but not element(not
 access it). So must not derefernce or increment an off-the-end pointer.
@@ -5383,8 +5833,8 @@ $ ./comp.sh sam01.cpp
 sam01.cpp: In function ‘int main()’:
 sam01.cpp:14:11: error: invalid conversion from ‘int*’ to ‘int’ [-fpermissive]
 
-<4> sizeof
- << "size: " << sizeof(arr) << endl;
+<4> sizeof see {sizeof-operator} for more
+cout << "size: " << sizeof(arr) << endl;
 cout << "size: " << sizeof(parr) << endl;
 cout << "size: " << sizeof(*parr) << endl;
 
@@ -5473,7 +5923,6 @@ Explanation
 2) returns size in bytes of the object representation of the type, that would be returned by
 expression, if evaluated.  
 
-Notes
 1. Depending on the computer architecture, a byte may consist of 8 or more bits, the exact number being
 recorded in CHAR_BIT.
 
@@ -5491,18 +5940,19 @@ additional padding required to place such object in an array.
 <sizeof-operator-caveat>
 int func()
 {
-   int arr[] = { ... };
-   int length= sizeof(arr)/sizeof(int);
-   ...
+  int arr[] = { ... };
+  int length= sizeof(arr)/sizeof(int);
+  ...
 }
 
-This works fine as expected but if you pass array in func, it is converted to a pointer and the
-return of sizeof is the size of pointer but not the array.
+This works fine as expected; sizeof(array) returns a size of an array, but if you pass array in
+func, it is converted to a pointer and the return of sizeof is the size of pointer but not the
+array.
 
 int func(int arr[])
 {
-   int length = sizeof(arr)/sizeof(int)-1; Note: THIS DOESN'T WORK!
-   ...
+  int length = sizeof(arr)/sizeof(int)-1; note: THIS DOESN'T WORK!
+  ...
 }
 
 Why? {difference-between-arr-and-parr} explains.
@@ -5510,17 +5960,20 @@ Why? {difference-between-arr-and-parr} explains.
 <sizeof-to-get-string-length>
 int main()
 {
-   std::cout << "length is " << sizeof("DSM:!") << std::endl;
-   std::cout << "length is " << strlen("DSM:!") << std::endl;
-   std::cout << "length is " << strlen("") << std::endl;
+  std::cout << "length is " << sizeof("DSM:!") << std::endl;
+  std::cout << "length is " << strlen("DSM:!") << std::endl;
+  std::cout << "length is " << sizeof("") << std::endl;
+  std::cout << "length is " << strlen("") << std::endl;
 }
 
 length is 6
 length is 5
+length is 1
 length is 0
 
 The strlen() function calculates the length of the string s, [excluding] the terminating null byte
-('\0'). [KT] sizeof is better since it is not a func call and done in compile.
+('\0'). In other words, strlen knows about a c string but sizeof do not. Hence sizeof returns +1
+more. KT. sizeof is better since it is not a func call and done in compile.
 
 
 ={============================================================================
@@ -5641,12 +6094,12 @@ Foo& Foo::operator=( Foo& rhs )
 
 
 ={============================================================================
-*kt_dev_lang_013*	interesting codes
+*kt_dev_lang_014*	interesting codes
 
 {1} The format argument of printf can be an expression too.
 printf((argc>1) ? "%s " : "%s", *++argv );
 
-{2}
+{2} printf-format
 int main()
 {
   char *pmesg = "0123456789";
@@ -5681,6 +6134,10 @@ MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s
               (OctetStringVariableEntry(pEntry).m_osValue).buf,
               osValue.size, osValue.buf,
               osNewValue.size, osNewValue.buf);
+
+{3} print unsigned long value
+
+printf("ulong max from limits: %luL\n", ULONG_MAX );
 
 
 # ============================================================================
@@ -5748,7 +6205,14 @@ Precedence 	Operator 	Description 	Associativity
 17 , 					Comma 													Left-to-right 
 
 
-==============================================================================
+{unary-operator}
+The unary negation operator ! converts a non-zero operand into 0 and a zero operand into 1. A common
+use of ! is in constructions like:
+
+if(!valid) rather then if(valid==0)
+
+
+={============================================================================
 *kt_dev_cpp_001*	virtual inheritance (interview)
 
 MI and SI (single inheritance)
@@ -7263,7 +7727,7 @@ namespace WidgetStuff {
   }
 }
 
-This use swap(Widget< T >&, Widget< T >&) through {arg-dependant-lookup}
+This use swap(Widget< T >&, Widget< T >&) through {arg-dependent-lookup}
 
 <why-use-using-std-in-the-member-function>
 What you desire is to call a T-specific version if there is one, but to fall back on the general
@@ -7361,7 +7825,7 @@ inline void swap( HasPtr& lhs, HasPtr& rhs )
   std::swap( lhs.ps, rhs.ps );
 }
 
-The following will use swap(HasPtr&, HasPtr&) through {arg-dependant-lookup} in *kt_dev_cpp_007*
+The following will use swap(HasPtr&, HasPtr&) through {arg-dependent-lookup} in *kt_dev_cpp_007*
 
 HasPtr A, B;
 swap(A,B);		
@@ -7420,7 +7884,7 @@ For lookup of names inside a namespace, look in members in case class, and if no
 looking in enclosing scope; which is a open scope having a name to look up. This can be block,
 class, or namespace. So continue looking in classes up the chain of inheritance or
 namespaces. This search goes upwards that means declared before use and before in reading
-order. For example, int A::C1::f3() in qualified name. Plus use {arg-dependant-lookup} for
+order. For example, int A::C1::f3() in qualified name. Plus use {arg-dependent-lookup} for
 class type, reference, and pointer. For non-class, enclosing scope that is before the point
 of use and is still open. See Primers p797. 'using' declaration or directive add names to
 the candidate set. If found the name, the compiler looks no further.
@@ -7453,7 +7917,7 @@ is nothing to say about whether it calls member or non-member op overload. so th
 both member and non-member to be considered.  
 
 
-{arg-dependant-lookup}
+{arg-dependent-lookup}
  
 From {ref-CPR} p797.
 
@@ -7512,8 +7976,15 @@ It is for non-virtual funcs. If the base has overloads and 'is-a' relationship t
 note: seems need more clearer statement for the above.
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_008* const and conversion
+
+{constant-expression}
+A constant expression is an expression that involves only constants:
+
+#define MAXLINE 100
+char line[MAXLINE+1];
+
 
 {global-const-scope}
 The const object must be inited when defined and it's local to file by default. so want to use in
@@ -8134,7 +8605,7 @@ const char* _determineSource(const char*in, int* sourceLen, int *readPos, bool* 
 }
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_009* undefined result and a temp-object
 
 {undefined-result-in-return}
@@ -8189,7 +8660,6 @@ samcpp.cpp:16: error: return-statement with no value, in function returning bool
 Primus says that some picks up this error and some do not. Both VC adn GCC do not picks up this.
 
 {undefined-result}
-
 Primus also says that its result at runtime is 'undefined'. When running for VC and GCC showed
 different result: VC returns true and GCC do false. Hence 'undefined'. 
 
@@ -8246,7 +8716,7 @@ created in called site, there is a copy to call site when a func is defined to r
 {temp-object-in-converison} {cost-of-temp-object}
 From MEC++19. The cost of temp-object which is called unnamed or temp object. When is it used?
 
-<case-one-in-conversion>
+<in-conversion>
 Used in implicit type conversion, nonconst-to-const, in func call and return. Can have an impact on
 the performance in construction and destruction. 
 
@@ -8275,7 +8745,7 @@ char subtlebookplug[] = "...";
 
 uppercasify( subtlebookplug );          // type-error
 
-<case-two-in-return>
+<in-return>
 This must be temp-object and [const-return]. Why const return and temp-object? See {const-return}.
 If not, the following is legal: 
 
@@ -8287,6 +8757,12 @@ How to eliminate this cost?
 
 Not always possible to shun this. Can use operator+= and see MEC++22 for more. Or can use compiler's
 <return-value-optimisation> in MEC++20.
+
+<in-casting>
+From ansic, p45.
+The cast produces the 'value' of n in the proper type; n itself is not altered. 
+
+squrt( (double)n );
 
 
 ==============================================================================
@@ -8490,7 +8966,7 @@ int main()
 This is tree example:
 
 typedef struct treenode {
-	TreeEntry entry; // application dependant
+	TreeEntry entry; // application dependent
 	treenode  *left;
 	treenode  *right;
 } TreeNode;
@@ -8606,7 +9082,7 @@ typedef classA classB;
 {typedef-example}
 typedef struct treenode TreeNode;
 typedef struct treenode {
-	TreeEntry entry; // application dependant
+	TreeEntry entry; // application dependent
 	TreeNode  *left;
 	TreeNode  *right;
 } TreeNode;
@@ -8614,7 +9090,7 @@ typedef struct treenode {
 or
 
 typedef struct treenode {
-	TreeEntry entry; // application dependant
+	TreeEntry entry; // application dependent
 	treenode  *left;
 	treenode  *right;
 } TreeNode;
@@ -10224,7 +10700,7 @@ StrVec example which is a simplification of the library vector class. Like vecto
 reallocation. If there is not space left, then obtains new space, moves the existing elements into
 that space, free the old space, and adds the new elements.
 
-When copy a string, the new and the old are 'independant' from each other and there are two users.
+When copy a string, the new and the old are 'independent' from each other and there are two users.
 However, when reallocates copies, there will be only 'one' user after the copy. As soon as copy is
 done, will immediately destory the old.
 
@@ -10287,6 +10763,10 @@ In C, lvalue could stand on the left-hand side of an assignment whereas rvalues 
 this distinction is less simple. Generally speaking, when use an object as an rvalue, use the
 object's value(its contents) and when use lvalue, use the object's identity (its location in
 memory).
+
+From ansic: In c, any assignment, such as "c = getchar()" is an expression and has a value, which is
+the value of the left hand side after the assignment. This means that an assignment can appear as
+part of a larger expression, such as "while((c = getchar()) != EOF)"
 
 These, lvalue/rvalue, are 'properties' of an expression. Expressions yield or require rvalue/lvalue.
 Operators differ as to whether require lvalue or rvalue operands and as to whether return lvalue or
@@ -12049,7 +12529,12 @@ fi.Bar();         // use specialization of Foo<int>::Bar()
 ={============================================================================
 *kt_dev_cpp_026*	enum			{enum-hack}
 
-The enumerations group together sets of integral 'constants' and defines [new] type.
+The enumerations group together sets of integral 'constants' and defines 'new' type. From ansic,
+there are two advantages over #define:
+
+1. provide a convenient way to associate constant value with names.
+2. a debugger may be able to print values of enumeration variables. confirmed on gcc.
+
 
 {scoped-enum}
 C++11. note that used class keyword. Defines an object of 'open_modes' type and follows scoping rule
@@ -12115,7 +12600,7 @@ ff(INLINE);		// ff(Tokens)
 ff(curr);		// ff(Tokens)
 
 
-==============================================================================
+={============================================================================
 *kt_dev_cpp_027*	volatile
 
 This is non-portable feature. For values that is controlled by processes outside the direct control
@@ -14769,7 +15254,7 @@ sentence.append(w);
 
 
 ={============================================================================
-*kt_dev_stl_016*	io stream
+*kt_dev_stl_016*	io stream {getline}
 
 {io-stream}
 // ifstream, istream_iterator, and freopen
@@ -14820,7 +15305,6 @@ int main()
   ifs.close();
 }
 
-
 {example}
 Example from C reference, section 1.9.
 
@@ -14832,34 +15316,34 @@ Example from C reference, section 1.9.
 
 // <one>
 // read a line into line, return length
-//int mygetline(char line[], int maxlen )
-//{
-//  int c, i;
-//
-//  for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF) && c != '\n'; i++)
-//    line[i] = c;
-//
-//  if( c == '\n')
-//  {
-//    line[i] = c;
-//    ++i;
-//  }
-//
-//  line[i] = '\0';
-//  return i;
-//}
-
-<two>
 int mygetline(char line[], int maxlen )
 {
   int c, i;
 
-  for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF); i++)
+  for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF) && c != '\n'; i++)
     line[i] = c;
+
+  if( c == '\n')
+  {
+    line[i] = c;
+    ++i;
+  }
 
   line[i] = '\0';
   return i;
 }
+
+<two>
+// int mygetline(char line[], int maxlen )
+// {
+//   int c, i;
+// 
+//   for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF); i++)
+//     line[i] = c;
+// 
+//   line[i] = '\0';
+//   return i;
+// }
 
 // copy 'from' into 'to'; assume 'to' is big enough
 void copy( char to[], char from[] )
@@ -15994,7 +16478,7 @@ new and refer to dynamic memory.
 note: useful case? can implement memory allocation specific to class?
 
 When see new/delete expr, looks for corresponding operator function to call. For class type
-arg-dependant lookup applies. If class has a member new or delete operator, this will be used while
+arg-dependent lookup applies. If class has a member new or delete operator, this will be used while
 can use library version via ::new or ::delete.
 
 
@@ -16663,7 +17147,7 @@ For 4 bytes align, 4-1=3 [11] and get the start or boundary by & [11].
 For 8 bytes align, 7-1=3 [111] and get the start or boundary by & [111].
 
 
-==============================================================================
+={============================================================================
 *kt_dev_sys_005*	two's complement
 
 type int on MIPS. size int: 4
@@ -16675,7 +17159,7 @@ show the complement of a binary number by flipping all digits:
 	 23:    1 0111
 NOT 23: 1110 1000
 
-X + NOT X =  -1 -> -X = 1 + NOT X
+X + NOT X = -1  ->  "1 + NOT X = -X"
  
 NOT 23: 1110 1000
 +    1: 0000 0001
@@ -16686,27 +17170,35 @@ this method is called "the 2's complement".
 
 Since the addition operation in the CPU is agnostic to whether the integer is signed or unsigned,
 the same goes for signed integers. For 32-bit signed integers, the minimum value is 0x80000000
-(-2147483648, 31th MSB is on) and the maximum value is 0x7fffffff (2147483647). Note that there is
+(-2147483648, 31th MSB is on) and the maximum value is 0x7fffffff (2147483647). note that there is
 no value than can hold 2147483648, so if you negate (int)0x80000000, you get (int)0x80000000 again.
 That is something to look out for, because it means abs() returns a negative value when fed
 -2147483648.
 
+This is not true since:
+
+signed char sc = -128;
+printf("signed char: %4d, %4d\n",sc, ~sc);
+>> signed char: -128,  127
+
+
 8bit two's complement
 
-0000 0000 : 0
-0000 0001 : 1
-0000 0010 : 2
-0000 0011 : 3
-0000 0100 : 4
+0000 0000    : 0
+0000 0001 {{ : 1
+0000 0010    : 2
+0000 0011    : 3
+0000 0100    : 4
 ...
-0111 1111 : 127
-1000 0000 : -128 (127+1 = -128)
-1000 0001 : -127 (0111 1110 + 1 = 0111 1111 (127))
-1000 0010 : -126 (0111 1101 + 1 = 0111 1110 (126))
-...
-1111 1110 : -2
-1111 1111 : -1
+0111 1111 }} : 127
 
+1000 0000    : -128                                      // not -0
+
+1000 0001 {{ : -127 (0111 1110 + 1 = 0111 1111 (127))    // not -1
+1000 0010    : -126 (0111 1101 + 1 = 0111 1110 (126))    // not -2
+...
+1111 1110    : -2
+1111 1111 }} : -1
 
 Get two's complement in programmatic way
 
@@ -16714,16 +17206,15 @@ uint32_t ins = 0x27BDFFE0
 0010.0111.1011.1101.1111.1111.1110.0000
 
 two's complement
-1101.1000.0100.0010.0000.0000.0001.1111 
-+1
-1101.1000.0100.0010.0000.0000.0010.0000 
+1101.1000.0100.0010.0000.0000.0001.1111      // ~X
++1                                           // +1
+1101.1000.0100.0010.0000.0000.0010.0000      //  X
 
 (-ins) = 0xD8420020
 1101.1000.0100.0010.0000.0000.0010.0000
 
 
 {wrap-around}
-
 unsigned = out-of-range signed value   # wrap-around. by compiler from Primus p35?
 signed   = out-of-range unsigned value # undefined.
 
@@ -17705,7 +18196,7 @@ have definition.
 
 
 {one-solution}
-Make it non-virtual, move up the implementation to log in the tree and pass up the type-dependant
+Make it non-virtual, move up the implementation to log in the tree and pass up the type-dependent
 info to the base class in the tree.
 
 class Transaction {
@@ -18527,7 +19018,7 @@ NewsLetter::NewsLetter( const NewsLetter& rhs )
 }
 
 Why virtual copy ctor? This copies whatever the pointer really points to, that is calls type
-dependant clone. If copying list is allowed this means copying pointers, not real objects. So this
+dependent clone. If copying list is allowed this means copying pointers, not real objects. So this
 is useful to implement deep copying.
 
 Q: Can copy list?
