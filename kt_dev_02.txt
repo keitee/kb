@@ -72,7 +72,7 @@ KT KB. DEVELOPMENT.
 
 #{ GLIBC
 |kt_dev_glib_000| glib sites
-|kt_dev_glib_001| atoi {getchar}
+|kt_dev_glib_001| atoi, htoi {getchar}
 |kt_dev_glib_002| atof 
 |kt_dev_glib_003| itoa
 |kt_dev_glib_004| printf
@@ -11141,7 +11141,7 @@ o use tabstop=6 for better view.
 
 
 ={============================================================================
-*kt_dev_glib_001* atoi
+*kt_dev_glib_001* atoi, htoi
 
 {man-page}
 <atoi>
@@ -11183,9 +11183,10 @@ SYNOPSIS
 
 DESCRIPTION
        The strtol() function converts the initial part of the string  in  nptr
-       to  a  long  integer  value  according to the given base, which must be
+       to  a  long  integer  value  according to the given 'base', which must be
        between 2 and 36 inclusive, or be the special value 0.
 
+       // note. handle leading white space, 0x, and sign
        The string may begin with an arbitrary amount of white space (as deter‐
        mined by isspace(3)) followed by a single optional '+' or '-' sign.  If
        base is zero or 16, the string may then include a "0x" prefix, and  the
@@ -11199,6 +11200,7 @@ DESCRIPTION
        upper or lower case represents 10, 'B' represents  11,  and  so  forth,
        with 'Z' representing 35.)
 
+       // note see how return and error are handled.
        If endptr is not NULL, strtol() stores the address of the first [invalid]
        character in *endptr.  If there were no digits at all, strtol()  stores
        the  original value of nptr in *endptr (and returns 0).  In particular,
@@ -11298,7 +11300,162 @@ EXAMPLE
            exit(EXIT_SUCCESS);
        }
 
-{code-glibc}
+
+<code-from-ansic>
+From p43.
+
+// This is 'naive' implementation since no error handlings and return 0 when failed to convert.
+// Compare to strtol
+
+int atoi(char s[])
+{
+  int n, i;
+
+  // Why there is no check on the end of string input? '0' is not the same as 0(NULL) and when see
+  // any other than numbers, for loops ends.
+  for(n = 0, i = 0; s[i] >= '0' && s[i] <= '9'; i++)
+    n = n*10 + (s[i]-'0');
+
+  return n;
+}
+
+int getint(int *pn)
+{
+  int c, sign;
+
+  // skip white spaces
+  while( isspace(c = getc() ))
+      ;
+
+  // not a number
+  if( !isdigit(c) && c != EOF && c != '+' && c != '-' )
+  {
+    ungetc(c);
+    return 0;
+  }
+
+  sign = (c == '-') ? -1 : 1;
+
+  if( c == '+' || c == '-' )
+    c = getc();
+
+  for( *pn = 0; isdigit(c); c = getc() )
+    *pn = *pn * 10 + (c - '0');
+
+  *pn *= sign;
+
+  if( c != EOF )
+    ungetc(c);
+
+  return c;
+} 
+
+To make it compile in gcc:
+
+int getint(int *pn)
+{
+  int c, sign;
+
+  // skip white spaces
+  while( isspace(c = getchar() ))
+      ;
+
+  // not a number
+  if( !isdigit(c) && c != EOF && c != '+' && c != '-' )
+  {
+    ungetc(c, stdin);
+    return 0;
+  }
+
+  sign = (c == '-') ? -1 : 1;
+
+  if( c == '+' || c == '-' )
+    c = getchar();
+
+  for( *pn = 0; isdigit(c); c = getchar() )
+    *pn = *pn * 10 + (c - '0');
+
+  *pn *= sign;
+
+  if( c != EOF )
+    ungetc(c, stdin);
+
+  return c;
+} 
+
+<getchar-and-eof>
+From ansic 1.5.1, "we can't use char since c must be big enough to hold EOF in addition to any
+possible char. Therefore we use int"
+
+GETS(3)                    Linux Programmer's Manual
+int getchar(void);
+
+int main(int argc, char* argv[])
+{
+  // int c;
+  char c;
+
+  printf("EOF (0x%x)\n", EOF);
+
+  c = getchar();
+
+  while( c != EOF )
+  {
+    putchar(c);
+    c = getchar();
+  }
+}
+
+kt@kt-ub-vb:~/work$ ./a.out 
+EOF (0xffffffff)
+a b v <1>
+a b v <2>
+(waiting input)
+
+For <1>, a b v (ENTER) then <2> comes. This means that when press ENTER, input stream ends and is
+ready to process. The getchar and putchar runs on this stream and only runs when press ENTER.
+
+EOF is an integer defined in stdio.h but the specific numeric value doesn't matter as long as it is
+not the same as any char value. This is why use symbolic constant.
+
+<code-online>
+// A utility function to check whether x is numeric
+bool isNumericChar(char x)
+{
+  return (x >= '0' && x <= '9')? true: false;
+}
+
+// A simple atoi() function. If the given string contains any invalid character, then this function
+// returns 0
+int myAtoi(char *str)
+{
+  if (*str == NULL)
+    return 0;
+
+  int res = 0;  // Initialize result
+  int sign = 1;  // Initialize sign as positive
+  int i = 0;  // Initialize index of first digit
+
+  // If number is negative, then update sign
+  if (str[0] == '-')
+  {
+    sign = -1;
+    i++;  // Also update index of first digit
+  }
+
+  // Iterate through all digits of input string and update result
+  for (; str[i] != '\0'; ++i)
+  {
+    if (isNumericChar(str[i]) == false)
+      return 0; // You may add some lines to write error message to error stream
+    res = res*10 + str[i] - '0';
+  }
+
+  // Return result with sign
+  return sign*res;
+}
+
+<code-glibc>
 Here only consider usual char type which is not wide char and 10 base. So disregard followings:
 
 #ifdef USE_NUMBER_GROUPING
@@ -11498,157 +11655,262 @@ extern const unsigned char __strtol_ul_rem_tab[] attribute_hidden;
 #else
 # define LONG long
 
-{code-online}
-// A utility function to check whether x is numeric
-bool isNumericChar(char x)
+
+{htoi}
+
+From ansic, exercise 2-3. 
+Write the function htoi(s), which converts a string of hexadecimal digits (including an 'optional'
+0x or 0X) into its equivalent integer value. The allowable digits are 0 through 9, a through f,
+and A through F.
+
+<mine>
+int mhtoi(char s[])
 {
-  return (x >= '0' && x <= '9')? true: false;
-}
+  int n, i = 0, v = 0;
 
-// A simple atoi() function. If the given string contains
-// any invalid character, then this function returns 0
-int myAtoi(char *str)
-{
-  if (*str == NULL)
-    return 0;
+  // optional 0x or 0X
+  if(s[0] == '0' && ( s[1] == 'x' || s[1] == 'X' ))
+    i = 2;
 
-  int res = 0;  // Initialize result
-  int sign = 1;  // Initialize sign as positive
-  int i = 0;  // Initialize index of first digit
-
-  // If number is negative, then update sign
-  if (str[0] == '-')
+  // isxdigit()
+  // checks for a hexadecimal digits, that is, one of 
+  // 0 1 2 3 4 5 6 7 8 9 a b c d e f A B C D E F.
+   
+  for(n = 0; isxdigit(s[i]); i++)
   {
-    sign = -1;
-    i++;  // Also update index of first digit
+    if( s[i] >= '0' && s[i] <= '9' )
+      v = s[i] - '0';
+    else if( s[i] >= 'a' && s[i] <= 'f' )
+      v = s[i] - 'a' + 10;
+    else 
+      v = s[i] - 'A' + 10;
+
+    n = n*16 + v;
   }
-
-  // Iterate through all digits of input string and update result
-  for (; str[i] != '\0'; ++i)
-  {
-    if (isNumericChar(str[i]) == false)
-      return 0; // You may add some lines to write error message to error stream
-    res = res*10 + str[i] - '0';
-  }
-
-  // Return result with sign
-  return sign*res;
-}
-
-
-{code-from-ansic}
-From p43.
-
-int atoi(char s[])
-{
-  int n, i;
-
-  for(n = 0, i = 0; s[i] >= '0' && s[i] <= '9'; i++)
-    n = n*10 + (s[i]-'0');
 
   return n;
 }
 
-int getint(int *pn)
-{
-  int c, sign;
-
-  // skip white spaces
-  while( isspace(c = getc() ))
-      ;
-
-  // not a number
-  if( !isdigit(c) && c != EOF && c != '+' && c != '-' )
-  {
-    ungetc(c);
-    return 0;
-  }
-
-  sign = (c == '-') ? -1 : 1;
-
-  if( c == '+' || c == '-' )
-    c = getc();
-
-  for( *pn = 0; isdigit(c); c = getc() )
-    *pn = *pn * 10 + (c - '0');
-
-  *pn *= sign;
-
-  if( c != EOF )
-    ungetc(c);
-
-  return c;
-} 
-
-
-To make it compile in gcc:
-
-int getint(int *pn)
-{
-  int c, sign;
-
-  // skip white spaces
-  while( isspace(c = getchar() ))
-      ;
-
-  // not a number
-  if( !isdigit(c) && c != EOF && c != '+' && c != '-' )
-  {
-    ungetc(c, stdin);
-    return 0;
-  }
-
-  sign = (c == '-') ? -1 : 1;
-
-  if( c == '+' || c == '-' )
-    c = getchar();
-
-  for( *pn = 0; isdigit(c); c = getchar() )
-    *pn = *pn * 10 + (c - '0');
-
-  *pn *= sign;
-
-  if( c != EOF )
-    ungetc(c, stdin);
-
-  return c;
-} 
-
-
-{getchar-and-eof}
-From ansic 1.5.1, "we can't use char since c must be big enough to hold EOF in addition to any
-possible char. Therefore we use int"
-
-GETS(3)                    Linux Programmer's Manual
-int getchar(void);
-
 int main(int argc, char* argv[])
+{	
+  printf("0x4A is %d\n", mhtoi("0x4A"));
+  printf("0x4a is %d\n", mhtoi("0x4a"));
+  printf("4a is %d\n", mhtoi("4a"));
+  printf("0x157DCE is %d\n", mhtoi("0x157DCE"));
+} 
+
+<online>
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_3
+<1>
+/*
+ * I've tried hard to restrict the solution code to use only what
+ * has been presented in the book at this point (page 46). As a
+ * result, the implementation may seem a little naive. Error
+ * handling is a problem. I chose to adopt atoi's approach, and
+ * return 0 on error. Not ideal, but the interface doesn't leave
+ * Richard Heathfield much choice.
+ *
+ * I've used unsigned int to keep the behaviour well-defined even
+ * if overflow occurs. After all, the exercise calls for conversion
+ * to 'an integer', and unsigned ints are integers!
+ */
+
+/* These two header files are only needed for the test driver */
+#include <stdio.h>
+#include <stdlib.h>
+
+/* Here's a helper function to get Richard Heathfield around the problem of not
+ * having strchr
+ */
+// note this is interesting to get decimal value of hex char
+int hexalpha_to_int(int c)
 {
-  // int c;
-  char c;
+  char hexalpha[] = "aAbBcCdDeEfF";
+  int i;
+  int answer = 0;
 
-  printf("EOF (0x%x)\n", EOF);
-
-  c = getchar();
-
-  while( c != EOF )
+  for(i = 0; answer == 0 && hexalpha[i] != '\0'; i++)
   {
-    putchar(c);
-    c = getchar();
+    if(hexalpha[i] == c)
+    {
+      answer = 10 + (i / 2);
+    }
   }
+
+  return answer;
+}
+
+unsigned int htoi(const char s[])
+{
+  unsigned int answer = 0;
+  int i = 0;
+  int valid = 1;
+  int hexit;
+
+  if(s[i] == '0')
+  {
+    ++i;
+    if(s[i] == 'x' || s[i] == 'X')
+    {
+      ++i;
+    }
+  }
+
+  while(valid && s[i] != '\0')
+  {
+    answer = answer * 16;
+    if(s[i] >= '0' && s[i] <= '9')
+    {
+      answer = answer + (s[i] - '0');
+    }
+    else
+    {
+      hexit = hexalpha_to_int(s[i]);
+      if(hexit == 0)
+      {
+        valid = 0;
+      }
+      else
+      {
+        answer = answer + hexit;
+      }
+    }
+
+    ++i;
+  }
+
+  if(!valid)
+  {
+    answer = 0;
+  }
+
+  return answer;
+}
+
+/* Solution finished. This bit's just a test driver, so
+ * I've relaxed the rules on what's allowed.
+ */
+
+int main(void)
+{
+  char *endp = NULL;
+  char *test[] =
+  {
+    "F00",
+    "bar",
+    "0100",
+    "0x1",
+    "0XA",
+    "0X0C0BE",
+    "abcdef",
+    "123456",
+    "0x123456",
+    "deadbeef",
+    "zog_c"
+  };
+
+  unsigned int result;
+  unsigned int check;
+
+  size_t numtests = sizeof test / sizeof test[0];
+
+  size_t thistest;
+
+  for(thistest = 0; thistest < numtests; thistest++)
+  {
+    result = htoi(test[thistest]);
+    check = (unsigned int)strtoul(test[thistest], &endp, 16);
+
+    if((*endp != '\0' && result == 0) || result == check)
+    {
+      printf("Testing %s. Correct. %u\n", test[thistest], result);
+    }
+    else
+    {
+      printf("Testing %s. Incorrect. %u\n", test[thistest], result);
+    }
+  }
+
+  return 0;
+}
+
+
+Testing F00. Correct. 3840
+Testing bar. Correct. 0             // this is wrong since strtol do for "ba" as mine.
+Testing 0100. Correct. 256
+Testing 0x1. Correct. 1
+Testing 0XA. Correct. 10
+Testing 0X0C0BE. Correct. 49342
+Testing abcdef. Correct. 11259375
+Testing 123456. Correct. 1193046
+Testing 0x123456. Correct. 1193046
+Testing deadbeef. Correct. 3735928559
+Testing zog_c. Correct. 0
+
+<2>
+#include <stdio.h>
+#define HEX_LO(N) ((N) >= 'a' && (N) <= 'f')
+#define HEX_HI(N) ((N) >= 'A' && (N) <= 'F')
+#define HEX_NU(N) ((N) >= '0' && (N) <= '9')
+#define IS_HEX(N) (HEX_LO(N) || HEX_HI(N) || HEX_NU(N))
+
+unsigned long htoi(char []);
+int main(void)
+{
+  int i;
+
+  char *test[11] = {
+    "F00",
+    "bar",
+    "0100",
+    "0x1",
+    "0XA",
+    "0X0C0BE",
+    "abcdef",
+    "123456",
+    "0x123456",
+    "deadbeef",
+    "zog_c"
+  };
+
+  for(i =0; i < 11; ++i) {
+    printf("%10s %10lu\n",test[i], htoi(test[i]));
+  }
+  return 0;
+}
+
+unsigned long htoi(char hexstr[])
+{
+  int i;
+  long num;
+  num = 0;
+  i = 0;
+  char j;
+  if(hexstr[0] == '0' && (hexstr[1] == 'x' || hexstr[1] =='X')) i = 2;
+
+  while(hexstr[i] != '\0') {
+    j = hexstr[i];
+    if(! IS_HEX(j)) return 0;
+    if(HEX_LO(j)) num = num * 16 + 10 + j - 'a';
+    else if(HEX_HI(j)) num = num * 16 + 10 + j - 'A';
+    else num = num * 16 + j - '0';
+    i++;
+  }
+  return num;
 }
 
 kt@kt-ub-vb:~/work$ ./a.out 
-EOF (0xffffffff)
-a b v <1>
-a b v <2>
-(waiting input)
-
-For <1>, a b v (ENTER) then <2> comes. This means that when press ENTER, input stream ends and is
-ready to process. The getchar and putchar runs on this stream and only runs when press ENTER.
-
-EOF is an integer defined in stdio.h but the specific numeric value doesn't matter as long as it is
-not the same as any char value. This is why use symbolic constant.
+       F00       3840
+       bar          0      // here again
+      0100        256
+       0x1          1
+       0XA         10
+   0X0C0BE      49342
+    abcdef   11259375
+    123456    1193046
+  0x123456    1193046
+  deadbeef 3735928559
+     zog_c          0
 
 
 ={============================================================================
@@ -12205,6 +12467,26 @@ include/ctype.h
 note that if there is no second part, x && y, then emits compile error.
 
 if(({ int __c = (c); __c >= '0' && __c <= '9'; }))
+
+
+={============================================================================
+*kt_dev_glib_009* strcat
+
+<ansic-example>
+/* strcat: concatenate t to end of s; s must be big enough 
+ * note lib version returns a pointer of resulting string
+ */
+void strcat( char s[], char t[] )
+{
+  int i, j;
+
+  i = j = 0;
+  while( s[i] != '\0' )	/* find end of s */
+    i++;
+
+  while( (s[i++] = t[j++]) != '\0' )	/* copy t */
+    ;
+}
 
 
 ={============================================================================
