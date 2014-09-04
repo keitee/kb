@@ -1485,7 +1485,7 @@ From glibc
 #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
 # endif
 
-<problem>
+<problem> TODO: don't know what point it is to say here
 From "*kt_dev_quiz_001*	bits: how to swap two vars without using a temp"
 
 x = 1010; y = 0011;
@@ -1514,7 +1514,7 @@ ival: 2
 ival: fffffffc
 ival: fffffffc
 
-<example>
+{bitwise-shift}
 cout << "ival: " << std::hex << ((unsigned int) (~(unsigned int)0) )<< endl;
 cout << "ival: " << std::hex << ((int) ((~(unsigned int)0) >> 1))<< endl;
 cout << "ival: " << std::hex << ((int) (~(unsigned int)0) >> 1)<< endl;
@@ -1524,15 +1524,14 @@ cout << "ival: " << std::hex << ((~(unsigned int)0) >> 1)<< endl;
 // ival: ffffffff {Q} why?
 // ival: 7fffffff
 
-<shift-operator>
 Here two things happens. (Type) is higher than shift operator so singed cast happens first. Then
 right shift happens. According to the below article:
 
 shift-expression >> additive-expression
 
 "The right-shift operator causes the bit pattern in shift-expression to be shifted to the right by
-the number of positions specified by additive-expression. For unsigned numbers, the bit positions
-that have been vacated by the shift operation are <zero-filled>. For signed numbers, the sign bit is
+the number of positions specified by additive-expression. For 'unsigned' numbers, the bit positions
+that have been vacated by the shift operation are <zero-filled>. For 'signed' numbers, the sign bit is
 used to fill the vacated bit positions. In other words, if the number is positive, 0 is used, and if
 the number is negative, 1 is used."
 
@@ -1541,7 +1540,11 @@ The result of a right-shift of a signed negative number is implementation-depend
 C++ uses the sign bit to fill vacated bit positions, there is no guarantee that other
 implementations also do so.
 
-Left Shift and Right Shift Operators (>> and <<)
+The ansic says: Right shifting a 'signed' quantity will fill with sign bit (arithmetic shift) on
+some machines and with 0 bits (logical shift) on others. Q: How about left shift(<<)? Filling
+vacated bits with 0!
+
+Left Shift(<<) and Right Shift(>>) Operators
 http://msdn.microsoft.com/en-us/library/336xbhcz.aspx
 <example>
 #include <iostream>
@@ -1561,10 +1564,40 @@ int main() {
   bitset<16> bitset13{short13};
   cout << bitset13 << endl;      // 0000000000000001
 
-  nsigned short short14 = short11 >> 11;  // 0
+  unsigned short short14 = short11 >> 11;  // 0
   bitset<16> bitset14{short14};
-  cout << bitset14 << endl;     // 0000000000000000}
+  cout << bitset14 << endl;      // 0000000000000000
 }
+
+see the use of bitset and bitset only supports fixed size.  
+
+<exercise>
+From ansic, p49. The function getbits(x, p, n) returns the (right adjusted) n-bit field of x that
+begins at position p. For example, getbits( x, 4, 3 ) returns the three bits; 4, 3, 2, right
+adjusted.
+
+unsigned getbits( unsigned x, int p, int n )
+{
+  return (x >> (p+1-n)) & ~(~0 << n);
+}
+
+"~(~0 << n)" is interesting in making a 'mask' value.
+
+From ansic, p50. The function counts the number of 1 bits in its integer argument. 
+
+int bitcount( unsigned x )
+{
+  int b;
+
+  for(b = 0; x != 0; x >>= 1) // for(b = 0; x; x >>= 1) and see {operator-assign}
+    if( x & 01 )              // x & 1 works as well
+      b++;
+
+  return b;
+}
+
+Why "unsigned x" argument? To ensure that vacated bits will be filled with 0 regardless of the
+machine the program is run on.
 
 
 {bitwise-octal}
@@ -4256,6 +4289,227 @@ void strcat( char s[], char t[] )
     ;
 }
 
+<exercise>
+From ansic, exercise 2-4.
+Write an alternate version of squeeze(s1,s2) that deletes each character in the string s1 that
+matches any character in the string s2 .
+
+// one http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_4
+void squeeze2(char s[], char t[]) {
+    int i, j, k;
+    for (k = 0; t[k] != '\0'; k++) {
+        for (i = j = 0; s[i] != '\0'; i++)
+            if (s[i] != t[k])
+                s[j++] = s[i];
+        s[j] = '\0';
+    }
+}
+
+// two
+void squeeze( char s[], char c )
+{
+  char* run;
+
+  for( run = s; *run; run++ )
+  {
+    // approach one: can use a function call to check if c is in the second string.
+    // approach two: how can to it without using a function call? not possible to have a loop
+    // replacing if block. use loop on the second rather than thinking about a loop inside a loop of
+    // the first.
+    if( *run != c )
+      *s++ = *run;
+  }
+
+  *s = '\0';
+}
+
+void squeeze_mine( char s[], char t[] )
+{
+  char *run, *write;
+
+  for(; *t; t++)
+  {
+    for( write = run = s; *run; run++ )
+    {
+      if( *run != *t )
+        *write++ = *run;
+    }
+
+    *write = '\0';
+  }
+}
+
+// three. attempt to loop from s. core dumped since write s[r] for the size of t[]
+void squeeze_not_working(char s[], char t[]) {
+    int r, w, k;
+
+    for (r = w = 0; s[r] != '\0'; r++)  // r(run)
+    {
+      for (k = 0; t[k] != '\0'; k++)    // k(key)
+      {
+        if (s[r] != t[k])
+          s[w++] = s[r];
+      }
+    }
+
+    s[w] = '\0';
+}
+
+int main()
+{
+  char mesg[] = "hello world";
+  char mesg2[] = "hello world";
+
+  printf("mesg : %s\n", mesg );
+  squeeze( mesg, 'l' );
+  printf("mesg : %s\n", mesg );
+
+  printf("mesg2 : %s\n", mesg2 );
+  squeeze3( mesg2, "ol" );
+  printf("mesg2 : %s\n", mesg2 );
+}
+
+note. whatever approach used, it has the worst case of O(nm).
+
+From ansic, exercise 2-5.
+
+Write the function any(s1,s2), which returns the first location in the string s1 where any
+character from the string s2 occurs, or -1 if s1 contains no characters from s2. (The standard
+library function strpbrk does the same job but returns a pointer to the location.)
+
+// one
+// not good since based on the "squeeze" approach and did not stop on "first" match
+int any_mine( char s[], char t[] )
+{
+  int ret = -1;
+  int i;
+
+  // run through t[]
+  for(; *t; t++)
+  {
+    // run through s[]
+    for( i = 0; s[i]; i++ )
+    {
+      // found a match
+      if( s[i] == *t )
+      {
+        // update found index when either it's the first time or found the less than the previous
+        if( ret < 0 || i < ret )
+        {
+          ret = i;
+          break;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+
+// two
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_5
+
+// The pedestrian solution is Richard Heathfield's
+// Here is my solution, which is very simple but quite naive and inefficient. It has a worst-case
+// time complexity of O(nm) where n and m are the lengths of the two strings.
+
+int any_online_one(char s1[], char s2[])
+{
+  int i;
+  int j;
+  int pos;
+
+  pos = -1;
+
+  // by having "pos == -1" checks, two for loops stops as soon as found a match and means the
+  // "first" location as the problem states. But the worst still O(nm).
+  for(i = 0; pos == -1 && s1[i] != '\0'; i++)
+  {
+    for(j = 0; pos == -1 && s2[j] != '\0'; j++)
+    {
+      if(s2[j] == s1[i])
+      {
+        return = i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+// three
+// Could anything be simpler? Pilcrow 22:46, 24 August 2011 (UTC)
+int any_online_two(char s1[], char s2[])
+{
+  int i;
+  int j;
+
+  // no need for further code when found a match
+  for(i = 0; s1[i] != '\0'; i++)
+  {
+    for(j = 0; s2[j] != '\0'; j++)
+    {
+      if(s2[j] == s1[i])
+      {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+// four
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_5
+
+Here's a much better solution, by Partha Seetala. This solution has a worst- case time complexity of
+only O(n + m) which is considerably better.
+
+It works in a very interesting way. He first defines an array with one element for each possible
+character in the character set, and then takes the second string and 'ticks' the array at each
+position where the second string contains the character corresponding to that position. It's then a
+simple matter to loop through the first string, quitting as soon as he hits a 'ticked' position in
+the array.
+
+#include <stdio.h> /* for NULL */
+
+int any(char *s1, char *s2)
+{
+  char array[256]; /* rjh comments
+                    * (a) by making this char array[256] = {0}; the first loop becomes unnecessary.
+                    * (b) for full ANSIness, #include <limits.h>, make the array unsigned char,
+                    *     cast as required, and specify an array size of UCHAR_MAX(255) + 1.
+                    * (c) the return statements' (parentheses) are not required.
+                    */
+  int  i;
+  if (s1 == NULL) {
+    if (s2 == NULL) {
+      return(0);
+    } else {
+      return(-1);
+    }
+  }
+
+  for(i = 0; i < 256; i++) {
+    array[i] = 0;
+  }
+
+  while(*s2 != '\0') {
+    array[*s2] = 1;
+    s2++;
+  }
+
+  i = 0;
+  while(s1[i] != '\0') {
+    if (array[s1[i]] == 1) {
+      return(i);
+    }
+    i++;
+  }
+  return(-1);
+}
+
 
 {compounded-inc}
 From C prog lang, p95, 105:
@@ -6271,7 +6525,18 @@ for(i=0; i<lim-1 ? (c=getchar()) != '\n' ? c != EOF : 0 : 0; ++i)
    s[i] = c;
 
 
-{operator-x}
+{operator-assign}
+The operator "+=" is called "assignment operator" and most binary operators have a corresponding
+assignment operator "op=", where op is + - * / % << >> & ^ |.
+
+Notice that "expr1 op= expr2" is equivalent to "expr1 = (expr1) op (expr2)" and notice that () around
+expr since:
+
+x *= y + 1; means x = x * ( y + 1 ); rather than x = x * y + 1;
+
+Notice that "assignment statement" is: c = getchar(); and the 'type' of an assignement expression is
+the type of its left operand in case of assignement operator. The point is that expresssion has a
+'type'.
 
 
 ={============================================================================
