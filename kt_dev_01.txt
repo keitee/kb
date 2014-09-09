@@ -73,6 +73,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_lang_012| pointer and array {option-handling} {std::begin} {sizeof-operator}
 |kt_dev_lang_013| allman style 
 |kt_dev_lang_014| interesting codes
+|kt_dev_lang_015| statement, control flow {division-and-modulus} {switch-under-the-hood}
 
 #{ CPP
 |kt_dev_cpp_000| operator-precedence, operators
@@ -91,7 +92,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_013| when use reference {called-by-reference} 
 |kt_dev_cpp_014| decltype, typedef, and using {class-vs-struct} 
 |kt_dev_cpp_015| declaration and definition
-|kt_dev_cpp_016| statement {division-and-modulus} {switch-under-the-hood}
+|kt_dev_cpp_016| 
 |kt_dev_cpp_017| static-members and class const	{class-method} {class-const}
 |kt_dev_cpp_018| dtor {non-virtual-destruction-problem} {how-virtual-works}
 |kt_dev_cpp_019| exception {problem-of-exception-in-dtor} {exception-safe}
@@ -1576,16 +1577,76 @@ From ansic, p49. The function getbits(x, p, n) returns the (right adjusted) n-bi
 begins at position p. For example, getbits( x, 4, 3 ) returns the three bits; 4, 3, 2, right
 adjusted.
 
-unsigned getbits( unsigned x, int p, int n )
+unsigned getbits( unsigned x, int p, int n )    // note unsigned
 {
   return (x >> (p+1-n)) & ~(~0 << n);
 }
 
-"~(~0 << n)" is interesting in making a 'mask' value.
+this can be written using variables to make it easier to understand
 
+unsigned getbits( unsigned x, int p, int n )
+{
+  unsigned mask = ~(~0 << n);
+  unsigned shift = (p+1-n);
+  return (x >> shift)) & mask;
+}
+
+1) "~(~0 << n)" is interesting in making a 'mask' value.
+2) Why (p+1-n) for a shift? Since p(position) starts from 0.
+
+7 6 5 4 3 2 1 0   8 7 6 5 4 3 2 1  position
+     [* * *]           [* * *]
+4+1-3 = 2 shift   5-3 = 2 shift
+
+3) Do not need () since >> is higher than & but advisable to make easier to see.
+
+<independent-of-length>
+// this do not work since getting mask bit is wrong
+int getbits(int x, int p, int n)
+{
+  return x >> (p+1-n) & ~(1 << n);
+}
+
+To see the differnece, see the below result.
+
+#include <iostream>
+#include <bitset>
+
+int main()
+{
+  int ival = 1;
+
+  std::bitset<32> bitset1{ival};
+  std::cout << bitset1 << std::endl;
+
+  int ival2 = ~( 1 << 3 );
+  std::bitset<32> bitset2{ival2};
+  std::cout << bitset2 << std::endl;
+
+  int ival3 = ~(~0 << 3 );
+  std::bitset<32> bitset3{ival3};
+  std::cout << bitset3 << std::endl;
+}
+
+kit@kit-vb:~/work$ ./a.out
+00000000000000000000000000000001
+11111111111111111111111111110111       // 0...0001000
+00000000000000000000000000000111       // 1...1111000
+
+No difference when tried 'unsigned int'. The point is that "~0" is not the same as "1". This is
+"independent of word length" in ansic p49. For example,
+
+x = x & ~077
+
+set the last 'six' bits of x to zero since "x & ~077" is 'independent' of word length and it thus
+perferable to, for example, x & 0177700, which assumes that x is a 16-bit quantity. The portable
+form involves no extra cost, since ~077 is a constant expression that can be evaluated at compile
+time.
+
+<exercise>
 From ansic, p50. The function counts the number of 1 bits in its integer argument. 
 
-int bitcount( unsigned x )
+int bitcount( unsigned x )    // note unsigned
 {
   int b;
 
@@ -1596,8 +1657,208 @@ int bitcount( unsigned x )
   return b;
 }
 
+page 51. exercise 2-9. In a two's complement number system, x &= (x-1) deletes the rightmost 1-bit
+in x. Explain why. Use this observation to write a 'faster' version of bitcount.
+
+Answer:
+
+If x is odd, then (x-1) has the same bit representation as x except that the rightmost 1-bit is now
+a 0. In this case, (x & (x-1)) == (x-1).
+
+x = 5: 5(101) & 4(100) = 100
+
+If x is even, then the representation of (x-1) has the rightmost zeros of x becoming ones and the
+rightmost one becoming a zero. Anding the two clears the rightmost 1-bit in x and all the rightmost
+1-bits from (x-1).
+
+x = 4: 4(100) & 3(11)  = 0
+         ^ rightmost 1
+x = 6: 6(110) & 5(101) = 100
+          ^ rightmost 1
+
+000   0     All even numbers has tailing 0s and it becomes 1 when -1
+001   1
+010   2
+011   3
+100   4
+101   5
+110   6
+111   7
+...
+
+Here's the new version of bitcount:
+
+int bitcount(unsigned x)
+{
+  int b;
+
+  for (b = 0; x != 0; x &= (x-1))
+    b++;
+  return b;
+}
+
+<why-unsigned>
 Why "unsigned x" argument? To ensure that vacated bits will be filled with 0 regardless of the
 machine the program is run on.
+
+<exercise>
+From ansic, exercise 2-6.
+Write a function setbits(x,p,n,y) that returns x with the n bits that begin at position p set to the
+rightmost n bits of y, leaving the other bits unchanged.
+
+Had difficult to understand a question. The question is that set n bits of x starting from p with
+rightmost n bits of y and return the result.
+
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_6
+
+// one
+return (
+    (x & ~(~(~0 << n) << p+1-n))    // set n bits of x to 0. x & ~(mask << shift)
+    |
+    (
+     (~(~0 << n) & y)               // get rightmost n bits of y. mask & y
+     << p+1-n                       // shift to be in p pos
+    )
+    );
+
+
+// two
+// The following function, "getbits", is from K&R p 49 */
+// getbits: get n bits from position p
+unsigned getbits(unsigned x, int p, int n)
+{
+   return (x >>(p+1-n) & ~(~0 << n));
+}
+
+// asbits - shows integers as bit strings. note this is useful as bitset
+// Usage:                                
+//         asbits(x, sizeof(x), FLAG)    
+// FLAG = 1|0, showing if newline desired
+void asbits(unsigned x, size_t s, int nl)
+{
+    int i;
+
+    for(i = s*8-1; i>=0; i--) {
+         getbits(x, i, 1)? putchar('1') : putchar('0');
+         if(!(i%4))putchar(' ');
+    }
+    if(nl)putchar('\n');
+}
+
+// slightly modified
+void asbits( unsigned x )
+{
+  int i;
+
+  for(i = 8*sizeof(x)-1; i >= 0; i--)
+  // for(i = 8*sizeof(x)-1; i; i--) // this is an error
+  {
+    getbits(x, i, 1) ? putchar('1') : putchar('0');
+    if(!(i % 4))
+      putchar(' ');
+  } 
+  putchar('\n');
+}
+
+// this is the same as the one
+unsigned setbits(unsigned x, int p, int n, unsigned y)
+{
+    unsigned msk = ~(~0 << n);
+    return (x & ~(msk<< p+1-n)) | ((y & msk)<< p+1-n);
+}
+
+<to-print-a-bits-in-string>
+The possible approach is to right shift one by one, check if it's 0 or 1, and save or print it. This
+has a problem since if use loop and putchar, the will get the reversed output. This is why "asbits"
+strts from MSB but not LSB.
+
+<stack-and-queue>
+This reminds me stack and queue.
+input: 11101
+           ^ start
+
+      0 1 2 3 4 pos in array
+      1 1 1 0 1
+
+read(pop) as a stack, FILO          read(get) as a queue, FIFO
+note. reversed output
+       10111                           11101
+           ^ start                         ^ start
+
+if putchar(printf) array for both cases
+   11101
+
+if putchar when get it
+   10111
+
+<exercise>
+From ansic, exercise 2-7.
+Write a function invert(x,p,n) that returns x with the n bits that begin at position p inverted
+(i.e., 1 changed into 0 and vice versa), leaving the others unchanged.
+
+// setbits uses y to set x and here xin uses instead.
+unsigned invert_mine(unsigned x, int p, int n)
+{
+  // this makes easier to see a code
+  unsigned msk = ~(~0 << n);
+
+  // [*][x ][*] : x
+  // [0][1 ][0] : msk << p+1-n
+  // [0][x ][0] : (msk << p+1-n) & x
+  // [1][x'][1] : ~((msk << p+1-n) & x)
+  // [0][1 ][0]
+  // [0][x'][0] : &
+  unsigned xin = (~((msk << p+1-n) & x)) & msk << p+1-n;
+
+  // this is the same as setbits
+  return (x & ~(msk<< p+1-n)) | ((xin & msk)<< p+1-n);
+}
+
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_7    {xor}
+GP is in error. Here is a correct solution. Pilcrow 17:45, 31 August 2011 (UTC) 
+unsigned invert_online(unsigned x, int p, int n)
+{
+	return x ^ ((~(~0<<n))<< p+1-n);
+	// return x ^ (mask << shift);
+}
+
+<exercise>
+From ansic, exercise 2-8.
+Write a function rightrot(x,n) that returns the value of the integer x rotated to the right by n bit
+positions.
+
+The two things to think: 
+1) The type is 'unsigned' so do not need to concern about value when do right shift. If not, need to
+know the the length of type, such as sizeof(x).
+
+// one
+// http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_8
+unsigned rightrot(unsigned x, unsigned n)
+{
+  while (n > 0) {
+    if ((x & 1) == 1)
+      x = (x >> 1) | ~(~0U >> 1);
+    else
+      x = (x >> 1);
+    n--;
+  }
+  return x;
+}
+
+// two
+// http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_8
+unsigned int rightrot(unsigned int x, int n)
+{
+  int m, i;
+
+  for(i=0; i < n; i++) {
+    m = getbits(x, 0, 1);
+    m <<= (sizeof(m)*8-1);       // notice the use of sizeof
+    x >>= 1;
+    x |= m;
+  }
+  return x;
+}
 
 
 {bitwise-octal}
@@ -4378,7 +4639,8 @@ character from the string s2 occurs, or -1 if s1 contains no characters from s2.
 library function strpbrk does the same job but returns a pointer to the location.)
 
 // one
-// not good since based on the "squeeze" approach and did not stop on "first" match
+// not good since based on the "squeeze" approach which means more work to find the first time since
+// key chars can happen any order and did not stop on "first" match
 int any_mine( char s[], char t[] )
 {
   int ret = -1;
@@ -4430,12 +4692,12 @@ int any_online_one(char s1[], char s2[])
     {
       if(s2[j] == s1[i])
       {
-        return = i;
+        return pos = i;
       }
     }
   }
 
-  return -1;
+  return pos;
 }
 
 // three
@@ -5248,8 +5510,8 @@ floating-point constants with explicit decimal point emphasizes their floating-p
 human readers.
 
 
-{char-to-int}
-From ansic.
+{char-to-int} <ansic-example>
+From ansic, p43.
 
 int atoi(char s[])
 {
@@ -5261,11 +5523,11 @@ int atoi(char s[])
   return n;
 }
 
-// ASCII only and upper case comes first and lower case comes later in the table.
+// ASCII only and upper case comes first and lower case comes later in the table. Why ASCII only?
 int lower(int c)
 {
   if( c => 'A' && c <= 'Z' )
-    return c + 'a' - 'A';
+    return c + 'a' - 'A';     // c -'A' + 'a' or c + 'A' - 'a' ?
   else
     return c;
 }
@@ -6194,7 +6456,7 @@ void print( const int[10] );
 
 
 {sizeof-operator}
-Queries size of the object or type. Used when actual size of the object must be known: 
+Queries size of the 'object' or type. Used when actual size of the object must be known: 
 
 sizeof( type ) 		
 sizeof expression 		
@@ -6424,6 +6686,310 @@ MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s
 printf("ulong max from limits: %luL\n", ULONG_MAX );
 
 
+={============================================================================
+*kt_dev_lang_015*	statement, control flow {division-and-modulus}
+
+{division-and-modulus}
+The division truncate the remainder and modulus(%) operator.
+
+// plus to grade ending in 8 0r 9 and minus to grade ending in 0, 1, or 2.
+const vector< string > scores = { "F", "D", "C", "B", "A", "A++" };
+
+string lettergrade;
+
+if( grade < 60 )
+	lettergrade = score[0];
+else
+{
+	lettergrade = score[ (grade-50)/10 ];
+	if( grade % 10 > 7 )
+		lettergrade += '+';
+	else if( grade%10 < 3 )
+		lettergrade += '+';
+}
+
+
+{switch}
+To emphasize that the cases represent a range of values:
+
+switch(ch)
+{
+	case 'a': case 'e': case 'i': case 'o': case 'u':
+		...
+	break;
+}
+
+It can be useful to define a default label even if there is no work for the case to indicate that
+the case was considered.
+
+<switch-under-the-hood>
+http://stackoverflow.com/questions/3012011/switch-case-assembly-level-code
+
+Here is the C source:
+
+switch(i)
+{
+    case 1:
+    {
+        printf("Case 1\n");
+        break;
+    }
+    case 2:
+    {           printf("Case 2\n");
+        break;
+    }
+    case 3:
+    {
+        printf("Case 3\n");
+        break;
+    }
+    case 4:
+    {
+        printf("Case 4\n");
+        break;
+    }
+	 // omitted to 10:
+    default:
+    {
+        printf("Nothing\n");
+        break;
+    }
+}  
+
+Now the resultant assembly for the same is:
+
+movl    $5, -4(%ebp)
+cmpl    $10, -4(%ebp)
+ja  L13
+movl    -4(%ebp), %eax
+sall    $2, %eax
+movl    L14(%eax), %eax
+jmp *%eax
+.section .rdata,"dr"
+.align 4
+L14:
+.long   L13
+.long   L3
+.long   L4
+.long   L5
+.long   L6
+.long   L7
+.long   L8
+.long   L9
+.long   L10
+.long   L11
+.long   L12
+.text
+L3:
+movl    $LC0, (%esp)
+call    _printf
+jmp L2
+L4:
+movl    $LC1, (%esp)
+call    _printf
+jmp L2
+L5:
+movl    $LC2, (%esp)
+call    _printf
+jmp L2
+L6:
+movl    $LC3, (%esp)
+call    _printf
+jmp L2
+L7:
+movl    $LC4, (%esp)
+call    _printf
+jmp L2
+L8:
+movl    $LC5, (%esp)
+call    _printf
+jmp L2
+L9:
+movl    $LC6, (%esp)
+call    _printf
+jmp L2
+L10:
+movl    $LC7, (%esp)
+call    _printf
+jmp L2
+L11:
+movl    $LC8, (%esp)
+call    _printf
+jmp L2
+L12:
+movl    $LC9, (%esp)
+call    _printf
+jmp L2
+L13:
+movl    $LC10, (%esp)
+call    _printf
+L2:  
+
+
+
+First the code is comparing the i to 10 and jumping to the default case when the value is greater
+then 10 (cmpl $10, -4(%ebp) followed by ja L13). The next bit of code is shifting the input to the
+left by two (sall $2, %eax) which is the same as multiple by four (it multiplies by 4 because each
+entry in the jump table is 4 bytes long). So what is had done here is generated an offset into
+the jump table. It then loads an address from the jump table (movl L14(%eax), %eax) and jumps to it
+(jmp *%eax).
+
+The jump table is simply a list of addresses (represented in assembly code by labels):
+
+L14:
+.long   L13
+.long   L3
+.long   L4
+...
+
+One thing to notice is that L13 represents the default case. It is both the first entry in the jump
+table (for when i is 0) and is handled specially at the beginning (when i > 10).
+
+<01>
+@puffadder: most modern compilers use heuristics to determine when it's more efficient to use
+branches versus a jump table. E.g. if your case levels were say 1, 100 and 1000 you might expect
+branches to be used. –  Paul R Jun 10 '10 at 7:07 
+
+<02>
+You have a switch statement with 5 case statements and the cases all have numbers that are spread
+far apart so a jump table will not be used, 'if type' will. {Q} May choose not to use a jump table
+because there will be entries which are not used? Up to a compiler?
+
+<switch-grouping>
+
+typedef enum {
+  E_01,    //
+  E_02,
+  E_03,
+  E_11,    //
+  E_12,
+  E_13,
+  E_21,    //
+  E_22,
+  E_23,
+  E_31,    //
+  E_32,
+  E_33
+} EVENTS;
+
+typedef enum {
+  E_G00, E_G01, E_G02, E_G03, E_GNO
+} GROUPS;
+
+int getEventGroup( int events )
+{
+  switch( events )
+  {
+    case E_01: case E_02: case E_03:
+      return E_G00;
+      break;
+      ...
+
+    default:
+        return E_GNO;
+        break;
+        std::cout << "IS IT EXECUTED?? " << events << std::endl;
+  }
+}
+
+int main()
+{
+  int events = E_11;
+
+  while( cin >> events )
+  {
+    switch( getEventGroup(events) )
+    {
+      case E_G00:
+        std::cout << "E_G00" << std::endl;
+        break;
+
+        ...
+
+      case E_GNO:
+          std::cout << "E_GNO" << std::endl;
+          break;
+
+      default:
+          std::cout << "E_?? " << events << std::endl;
+          break;
+    }
+  }
+}
+
+OR
+
+int main()
+{
+  int events = E_11;
+
+  while( cin >> events )
+  {
+    switch( events )
+    {
+      case E_01: case E_02: case E_03:
+        std::cout << "E_G00" << std::endl;
+        break;
+
+        ...
+
+      case E_GNO:
+          std::cout << "E_GNO" << std::endl;
+          break;
+
+      default:
+          std::cout << "E_?? " << events << std::endl;
+          break;
+    }
+  }
+}
+
+The both do the same. The second is a bit clearer at the expense of one function call?
+
+
+<does-it-work>
+Found it in the real code. Does the line after default get executed? NO.
+
+switch( events )
+{
+  case E_01: case E_02: case E_03:
+    ...
+      break;
+  default:
+    return E_GNO;
+    break;
+    std::cout << "IS IT EXECUTED?? " << events << std::endl;
+}
+
+
+{for-vs-while}
+The for is preferable when there is a simple initialization and increment since it keeps the loop
+control statement 'close''together' and visiable at the top of the loop.
+
+// atoi second version <ansic-example> p61
+#include <ctype.h>
+
+int atoi(char s[])
+{
+  int i, n, sign;
+
+  // skip white spaces
+  for(i = 0; isspace( s[i] ); i++)
+    ;
+
+  sign = (s[i] == '-') ? -1 : 1;
+
+  // skip sign
+  if( s[i] == '+' || s[i] == '-' )
+    i++;
+
+  for(n = 0; isdigit( s[i] ); i++)
+    n = n+10 + (s[i]-'0');
+
+  return sign*n;
+}
+
+
 # ============================================================================
 #{ CPP
 ={============================================================================
@@ -6489,6 +7055,28 @@ Precedence 	Operator 	Description 	Associativity
 17 , 					Comma 													Left-to-right 
 
 
+{side-effect} <evaluation-order>
+An expression, such as 'ival+5' becomes an expression statement when it is followed by a semicolon.
+An expression statement contains an expression that has a side-effect-such as assigning a new value
+or printing a result-when it is evaluated.
+
+From ansic, p53. C do not specify the 'order' in which the operands of an operator are evaluated. 
+
+x = f() + g();                         // f may be evaluated before g or vice versa
+
+Function calls, nested assignment statements, and increment and decrement operators
+cause "side effect" - some variable is changed as a by-product of the evaluation of an expression.
+In any expression involving side effects, there can be subtle dependencies on the 'order' in which
+variables taking part in the expression are updated.
+
+printf("%d %d\n", ++n, power(2, n));   // WRONG
+
+a[i] = i++;
+
+When side effects take place is left to discretion of the compiler, since the best order depends
+strongly on machine architecture.
+
+
 {operator-unary}
 The unary negation operator ! converts a non-zero operand into 0 and a zero operand into 1. A common
 use of ! is in constructions like:
@@ -6537,6 +7125,46 @@ x *= y + 1; means x = x * ( y + 1 ); rather than x = x * y + 1;
 Notice that "assignment statement" is: c = getchar(); and the 'type' of an assignement expression is
 the type of its left operand in case of assignement operator. The point is that expresssion has a
 'type'.
+
+
+{operator-conditional}
+The conditional expression often leads to succint code.
+
+Prints newline after every 10th element and after n-th and blank for all other elements.
+
+for( i = 0; i < n; i++ )
+   printf("%6d%c", a[i], (i%10==9 || i==n-1) ? '\n' : ' ' );
+
+
+printf("You have %d item%s.\n", n, n==1 ? "" : "s" );
+
+<exercise>
+The ansic, page 52, exercise 2-10. Rewrite the function lower, which converts upper case letters to
+lower case, with a conditional expression instead of if-else.
+
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_10
+
+the natural solution for simply making this a conditional (ternary) return instead of an if end
+else. Won't work on EBCDIC machines.
+
+/* lower: convert c to lower case; ASCII only */
+int lower(int c)
+{
+  return c >= 'A' && c <= 'Z' ? c + 'a' - 'A' : c;
+}
+
+the more portable solution, requiring string.h for strchr but keeping the idea of a 
+conditional return.  
+
+/* lower: convert c to lower case */
+int lower(int c)
+{
+  char *Uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  char *Lowercase = "abcdefghijklmnopqrstuvwxyz";
+  char *p = NULL;
+
+  return NULL == (p = strchr(Uppercase, c)) ? c : *(Lowercase + (p - Uppercase));
+}
 
 
 ={============================================================================
@@ -9538,289 +10166,11 @@ void func(..)		// declare and define
 For class, see {class-definition} in *kt_dev_lang_010*
 
 
-==============================================================================
-*kt_dev_cpp_016*	statement {division-and-modulus}
-
-{side-effect}
-An expression, such as 'ival+5' becomes an expression statement when it is followed by a semicolon.
-An expression statement contains an expression that has a side-effect-such as assigning a new value
-or printing a result-when it is evaluated.
+={============================================================================
+*kt_dev_cpp_016*
 
 
-{division-and-modulus}
-The division truncate the remainder and modulus(%) operator.
-
-// plus to grade ending in 8 0r 9 and minus to grade ending in 0, 1, or 2.
-const vector< string > scores = { "F", "D", "C", "B", "A", "A++" };
-
-string lettergrade;
-
-if( grade < 60 )
-	lettergrade = score[0];
-else
-{
-	lettergrade = score[ (grade-50)/10 ];
-	if( grade % 10 > 7 )
-		lettergrade += '+';
-	else if( grade%10 < 3 )
-		lettergrade += '+';
-}
-
-
-{switch}
-To emphasize that the cases represent a range of values:
-
-switch(ch)
-{
-	case 'a': case 'e': case 'i': case 'o': case 'u':
-		...
-	break;
-}
-
-It can be useful to define a default label even if there is no work for the case to indicate that
-the case was considered.
-
-<switch-under-the-hood>
-http://stackoverflow.com/questions/3012011/switch-case-assembly-level-code
-
-Here is the C source:
-
-switch(i)
-{
-    case 1:
-    {
-        printf("Case 1\n");
-        break;
-    }
-    case 2:
-    {           printf("Case 2\n");
-        break;
-    }
-    case 3:
-    {
-        printf("Case 3\n");
-        break;
-    }
-    case 4:
-    {
-        printf("Case 4\n");
-        break;
-    }
-	 // omitted to 10:
-    default:
-    {
-        printf("Nothing\n");
-        break;
-    }
-}  
-
-Now the resultant assembly for the same is:
-
-movl    $5, -4(%ebp)
-cmpl    $10, -4(%ebp)
-ja  L13
-movl    -4(%ebp), %eax
-sall    $2, %eax
-movl    L14(%eax), %eax
-jmp *%eax
-.section .rdata,"dr"
-.align 4
-L14:
-.long   L13
-.long   L3
-.long   L4
-.long   L5
-.long   L6
-.long   L7
-.long   L8
-.long   L9
-.long   L10
-.long   L11
-.long   L12
-.text
-L3:
-movl    $LC0, (%esp)
-call    _printf
-jmp L2
-L4:
-movl    $LC1, (%esp)
-call    _printf
-jmp L2
-L5:
-movl    $LC2, (%esp)
-call    _printf
-jmp L2
-L6:
-movl    $LC3, (%esp)
-call    _printf
-jmp L2
-L7:
-movl    $LC4, (%esp)
-call    _printf
-jmp L2
-L8:
-movl    $LC5, (%esp)
-call    _printf
-jmp L2
-L9:
-movl    $LC6, (%esp)
-call    _printf
-jmp L2
-L10:
-movl    $LC7, (%esp)
-call    _printf
-jmp L2
-L11:
-movl    $LC8, (%esp)
-call    _printf
-jmp L2
-L12:
-movl    $LC9, (%esp)
-call    _printf
-jmp L2
-L13:
-movl    $LC10, (%esp)
-call    _printf
-L2:  
-
-
-
-First the code is comparing the i to 10 and jumping to the default case when the value is greater
-then 10 (cmpl $10, -4(%ebp) followed by ja L13). The next bit of code is shifting the input to the
-left by two (sall $2, %eax) which is the same as multiple by four (it multiplies by 4 because each
-entry in the jump table is 4 bytes long). So what is had done here is generated an offset into
-the jump table. It then loads an address from the jump table (movl L14(%eax), %eax) and jumps to it
-(jmp *%eax).
-
-The jump table is simply a list of addresses (represented in assembly code by labels):
-
-L14:
-.long   L13
-.long   L3
-.long   L4
-...
-
-One thing to notice is that L13 represents the default case. It is both the first entry in the jump
-table (for when i is 0) and is handled specially at the beginning (when i > 10).
-
-<01>
-@puffadder: most modern compilers use heuristics to determine when it's more efficient to use
-branches versus a jump table. E.g. if your case levels were say 1, 100 and 1000 you might expect
-branches to be used. –  Paul R Jun 10 '10 at 7:07 
-
-<02>
-You have a switch statement with 5 case statements and the cases all have numbers that are spread
-far apart so a jump table will not be used, 'if type' will. {Q} May choose not to use a jump table
-because there will be entries which are not used? Up to a compiler?
-
-<switch-grouping>
-
-typedef enum {
-  E_01,    //
-  E_02,
-  E_03,
-  E_11,    //
-  E_12,
-  E_13,
-  E_21,    //
-  E_22,
-  E_23,
-  E_31,    //
-  E_32,
-  E_33
-} EVENTS;
-
-typedef enum {
-  E_G00, E_G01, E_G02, E_G03, E_GNO
-} GROUPS;
-
-int getEventGroup( int events )
-{
-  switch( events )
-  {
-    case E_01: case E_02: case E_03:
-      return E_G00;
-      break;
-      ...
-
-    default:
-        return E_GNO;
-        break;
-        std::cout << "IS IT EXECUTED?? " << events << std::endl;
-  }
-}
-
-int main()
-{
-  int events = E_11;
-
-  while( cin >> events )
-  {
-    switch( getEventGroup(events) )
-    {
-      case E_G00:
-        std::cout << "E_G00" << std::endl;
-        break;
-
-        ...
-
-      case E_GNO:
-          std::cout << "E_GNO" << std::endl;
-          break;
-
-      default:
-          std::cout << "E_?? " << events << std::endl;
-          break;
-    }
-  }
-}
-
-OR
-
-int main()
-{
-  int events = E_11;
-
-  while( cin >> events )
-  {
-    switch( events )
-    {
-      case E_01: case E_02: case E_03:
-        std::cout << "E_G00" << std::endl;
-        break;
-
-        ...
-
-      case E_GNO:
-          std::cout << "E_GNO" << std::endl;
-          break;
-
-      default:
-          std::cout << "E_?? " << events << std::endl;
-          break;
-    }
-  }
-}
-
-The both do the same. The second is a bit clearer at the expense of one function call?
-
-
-<does-it-work>
-Found it in the real code. Does the line after default get executed? NO.
-
-switch( events )
-{
-  case E_01: case E_02: case E_03:
-    ...
-      break;
-  default:
-    return E_GNO;
-    break;
-    std::cout << "IS IT EXECUTED?? " << events << std::endl;
-}
-
-
-==============================================================================
+={============================================================================
 *kt_dev_cpp_017*	static-members and class const
 
 The staic-members that are associated with the class rather than objects. So can call
