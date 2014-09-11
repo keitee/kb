@@ -80,6 +80,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_glib_006| strlen
 |kt_dev_glib_007| fopen
 |kt_dev_glib_008| isdigit
+|kt_dev_glib_009| strcat, strpbrk
+|kt_dev_glib_010| abs
 |kt_dev_glib_101| general tips
 
 
@@ -378,8 +380,8 @@ from the end of copied array while end ptr of copied input > start ptr of input 
 more space that c-version.
 
 <c-version> if use c only and no additional memory
-#include < iostream>
-#include < string>
+#include <iostream>
+#include <string>
 
 using namespace std;
 
@@ -390,11 +392,11 @@ void reverse_c(char* str)
   char* end = str;
   char temp = 0;
 
-  // find end of the string
+  // find end of the string. 'end' points null char
   while(*end)
     ++end;
 
-  // <wrong> since needs two set two char back.
+  // <wrong> since needs two set two char back since 'end' points next char after null char
   // char str[] = "hello";
   // (gdb) p str 
   // $1 = "hello"
@@ -421,6 +423,16 @@ void reverse_c(char* str)
     temp = *str;
     *str++ = *end; // [DN] 
     *end-- = temp;
+  }
+}
+
+<ansic-example> p62
+void reverse(char s[])
+{
+  int c, i, j;
+
+  for( i = 0, j = strlen(s)-1; i < j; i++, j-- )
+    c = s[i], s[i] = s[j], s[j] = c;
   }
 }
 
@@ -12063,7 +12075,7 @@ ____STRTOF_INTERNAL (nptr, endptr, group, loc)
 }
 
 
-==============================================================================
+={============================================================================
 *kt_dev_glib_003* itoa
 
 {man-page}
@@ -12145,8 +12157,7 @@ https://android.googlesource.com/kernel/lk/+/qcom-dima-8x74-fixes/lib/libc
 #include <string.h>
 #include <ctype.h>
 
-int
-itoa(int num, unsigned char* str, int len, int base)
+int itoa(int num, unsigned char* str, int len, int base)
 {
   int sum = num;
   int i = 0;
@@ -12173,13 +12184,38 @@ itoa(int num, unsigned char* str, int len, int base)
     return -1;
 
   str[i] = '\0';
-  strrev(str); // reverse a string
+  strrev(str); // reverse a string. note this is not part of standard c
 
   return 0;
 }
 
+<ansic-example> p64
+The do-while example. This is necessary since at least one char must be installed in the array even
+if n is zero.
 
-==============================================================================
+void itoa( int n, char s[] )
+{
+  int i, sign;
+
+  if( (sign = n) < 0 )     // record sign
+    n = -n;                // make n positive
+
+  i = 0;
+
+  do {                        // generate digits in reverse order
+    s[i++] = '0' + n % 10;    // get next digit
+  } while( (n /= 10) > 0 );   // delete it
+
+  if(sign < 0)
+    s[i++] = '-';
+
+  s[i] = '\0';
+
+  reverse(s);
+}
+
+
+={============================================================================
 *kt_dev_glib_004* printf
 
 // stdio-common/printf.c
@@ -12534,7 +12570,7 @@ if(({ int __c = (c); __c >= '0' && __c <= '9'; }))
 
 
 ={============================================================================
-*kt_dev_glib_009* strcat
+*kt_dev_glib_009* strcat, strpbrk
 
 <ansic-example>
 /* strcat: concatenate t to end of s; s must be big enough 
@@ -12550,6 +12586,162 @@ void strcat( char s[], char t[] )
 
   while( (s[i++] = t[j++]) != '\0' )	/* copy t */
     ;
+}
+
+
+<exercise> <strpbrk>
+From ansic, exercise 2-5.
+Write the function any(s1,s2), which returns the first location in the string s1 where any
+character from the string s2 occurs, or -1 if s1 contains no characters from s2. (The standard
+library function strpbrk does the same job but returns a pointer to the location.)
+
+// one
+// not good since based on the "squeeze" approach which means more work to find the first time since
+// key chars can happen any order and did not stop on "first" match
+int any_mine( char s[], char t[] )
+{
+  int ret = -1;
+  int i;
+
+  // run through t[]
+  for(; *t; t++)
+  {
+    // run through s[]
+    for( i = 0; s[i]; i++ )
+    {
+      // found a match
+      if( s[i] == *t )
+      {
+        // update found index when either it's the first time or found the less than the previous
+        if( ret < 0 || i < ret )
+        {
+          ret = i;
+          break;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+
+// two
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_5
+
+// The pedestrian solution is Richard Heathfield's
+// Here is my solution, which is very simple but quite naive and inefficient. It has a worst-case
+// time complexity of O(nm) where n and m are the lengths of the two strings.
+
+int any_online_one(char s1[], char s2[])
+{
+  int i;
+  int j;
+  int pos;
+
+  pos = -1;
+
+  // by having "pos == -1" checks, two for loops stops as soon as found a match and means the
+  // "first" location as the problem states. But the worst still O(nm).
+  //
+  // <Q> is this check on pos really needed? 
+  for(i = 0; pos == -1 && s1[i] != '\0'; i++)
+  {
+    for(j = 0; pos == -1 && s2[j] != '\0'; j++)
+    {
+      if(s2[j] == s1[i])
+      {
+        return pos = i;
+      }
+    }
+  }
+
+  return pos;
+}
+
+// three
+// Could anything be simpler? Pilcrow 22:46, 24 August 2011 (UTC)
+int any_online_two(char s1[], char s2[])
+{
+  int i;
+  int j;
+
+  // no need for further code when found a match
+  for(i = 0; s1[i] != '\0'; i++)
+  {
+    for(j = 0; s2[j] != '\0'; j++)
+    {
+      if(s2[j] == s1[i])
+      {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+// four
+http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_5
+
+Here's a much better solution, by Partha Seetala. This solution has a worst- case time complexity of
+only O(n + m) which is considerably better.
+
+It works in a very interesting way. He first defines an array with one element for each possible
+character in the character set, and then takes the second string and 'ticks' the array at each
+position where the second string contains the character corresponding to that position. It's then a
+simple matter to loop through the first string, quitting as soon as he hits a 'ticked' position in
+the array.
+
+#include <stdio.h> /* for NULL */
+
+int any(char *s1, char *s2)
+{
+  char array[256]; /* rjh comments
+                    * (a) by making this char array[256] = {0}; the first loop becomes unnecessary.
+                    * (b) for full ANSIness, #include <limits.h>, make the array unsigned char,
+                    *     cast as required, and specify an array size of UCHAR_MAX(255) + 1.
+                    * (c) the return statements' (parentheses) are not required.
+                    */
+  int  i;
+  if (s1 == NULL) {
+    if (s2 == NULL) {
+      return(0);
+    } else {
+      return(-1);
+    }
+  }
+
+  for(i = 0; i < 256; i++) {
+    array[i] = 0;
+  }
+
+  while(*s2 != '\0') {
+    array[*s2] = 1;
+    s2++;
+  }
+
+  i = 0;
+  while(s1[i] != '\0') {
+    if (array[s1[i]] == 1) {
+      return(i);
+    }
+    i++;
+  }
+  return(-1);
+}
+
+
+={============================================================================
+*kt_dev_glib_010* abs
+
+stblib/abs.c
+
+/* Return the absolute value of I.  */
+int
+abs (int i)
+{
+  return i < 0 ? -i : i;
 }
 
 
