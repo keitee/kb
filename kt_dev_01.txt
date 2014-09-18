@@ -32,6 +32,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_prob_010| macro: get max value of type <bitwise> <shift-operator>
 |kt_dev_prob_011| handle or pointer
 |kt_dev_prob_012| problem of incremental build or make
+|kt_dev_prob_013| text-query and simpe grep
 
 #{ GNU CORE UTILS
 |kt_dev_guti_000| gnu core util sites
@@ -1912,6 +1913,20 @@ CPort::CPort()
 What will happen when use incremental build after removing this #define? This file was not changed
 so not compiled in the build. So other new codes were compiled without this def and this old code
 compiled with this def. Therefore, had CFs object while believeing CDsm object.
+
+
+={============================================================================
+*kt_dev_prob_013* text-query and simpe grep
+
+{simple-grep} <example>
+From ansic, p69. The outline is:
+
+while( there's another line )
+   if ( the line containes the pattern )
+      print it
+
+The code is:
+
 
 
 # ============================================================================
@@ -6446,6 +6461,17 @@ The strlen() function calculates the length of the string s, [excluding] the ter
 ('\0'). In other words, strlen knows about a c string but sizeof do not. Hence sizeof returns +1
 more. KT. sizeof is better since it is not a func call and done in compile.
 
+{array-index}
+char array[length];
+
+[0,9]
+for( i = 0; i < length; i++ )
+   array[i];
+
+[0,9]
+while( --length > 0 )
+  array[length];
+
 
 ={============================================================================
 *kt_dev_lang_013*	allman style
@@ -7028,7 +7054,7 @@ void reverse(char s[])
 
 
 {control-break-continue}
-<exercie>
+<exercise>
 From ansic, p65. Remove trailing blanks, tabs, newlines.
 
 int trim( char s[] )
@@ -7057,7 +7083,6 @@ for( i = 0; i < n; i++ )
 
 
 {control-goto}
-
 From ansic, p66, this organization is handy if the error handling is non 'trivial' and can occur in
 several places.
 
@@ -7088,7 +7113,7 @@ found:
 
 
 found = 0;
-for( i = 0; i < n && !found; i++ )     // note !found
+for( i = 0; i < n && !found; i++ )     // note !found <goto-alternative>
    for( j = 0; j < m && !found; j++ )
       if( a[i] == b[j] )
          found = 1;
@@ -16085,7 +16110,14 @@ argument '1' to '__ssize_t getline(char**, size_t*, FILE*)'
 
 must have #include <fstream>
 
-this suggest that it calls getline from <stdio.h> and <cstdio> for C++ maybe?
+<stdio-getline>
+This suggest that it calls getline from <stdio.h> and <cstdio> for C++ maybe? Right, you see:
+
+#include <stdio.h>
+ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+
+getline() reads an entire line from stream, storing the address of the buffer containing the text
+into *lineptr. The buffer is null-terminated and includes the newline character, if one was found.
 
 <example>
 #include <iostream>
@@ -16114,24 +16146,23 @@ int main()
   ifs.close();
 }
 
-{example}
-Example from C reference, section 1.9.
-
+<example> From ansic, section 1.9, p29.
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 
 #define MAXLINE 1000 // maximum input line size
 
-// <one>
-// read a line into line, return length
+// <one> notice that it includes '\n'
 int mygetline(char line[], int maxlen )
 {
   int c, i;
 
+  // <Q1> also notice that ' < maxlen-1' leave one space for a null
   for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF) && c != '\n'; i++)
     line[i] = c;
 
+  // <Q2>
   if( c == '\n')
   {
     line[i] = c;
@@ -16143,16 +16174,16 @@ int mygetline(char line[], int maxlen )
 }
 
 <two>
-// int mygetline(char line[], int maxlen )
-// {
-//   int c, i;
-// 
-//   for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF); i++)
-//     line[i] = c;
-// 
-//   line[i] = '\0';
-//   return i;
-// }
+int mygetline(char line[], int maxlen )
+{
+  int c, i;
+
+  for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF); i++)
+    line[i] = c;
+
+  line[i] = '\0';
+  return i;
+}
 
 // copy 'from' into 'to'; assume 'to' is big enough
 void copy( char to[], char from[] )
@@ -16183,23 +16214,45 @@ int main()
 }
 
 
-Q: What's the difference between one and two?
+<Q1> What's the difference between one and two when enter "hello<enter>world<enter><eof>"?
 
 one: h e l l o \n \0 w o r l d \n \0
 two: h e l l o \n w o r l d \n \0
 
-
-Q: Length and return size.
+Notice that use of 'return' size in this call since starts from 0.
 
 0  1  2  3  4  5  6  (return)
 h  e  l  l  o  \n \0
 1  2  3  4  5  6  7
 
+<Q2> Does it cause accessing out of array index when \n falls in the last of read loop?
+When array size is 10, then 0-9 is valid index. The first loop is for [0,8], and [9] for '\n', and
+[10] for '\0'?
 
-{question} How can we use std::getline for stdin?
+{
+  for(i = 0; i < maxlen-1 && ((c = getchar()) != EOF) && c != '\n'; i++)
+    line[i] = c;
 
-Obviously, cannot use cin for reading a line since:
+  if( c == '\n')
+  {
+    line[i] = c;
+    ++i;
+  }
 
+  line[i] = '\0';
+}
+
+NO since when 7th reads '\n' and loop stops so no increase. [8] = '\n' and [9] = '\0'.
+
+read idx: 0 1 2 3 4 5 6 7    8  9 
+input   : a a a a a a a '\n'
+
+
+{stdin-stream} 
+In the previous example, uses getline on file stream but when use it with stdin stream, it behaves
+differntly.
+
+<example>
 #include <iostream>
 #include <string>
 
@@ -16215,18 +16268,47 @@ int main()
   cout << "end: " << line << endl;
 }
 
-kt@kt-ub-vb:~/work$ ./a.out 
+$ ./a.out 
 this
 cout: this
 that
 cout: that
-this is a long line
+this is a long line <enter>
 cout: this
 cout: is
 cout: a
 cout: long
 cout: line
 end: line
+
+<example>
+Uses the mygetline as above
+
+int main(int argc, char* argv[])
+{	
+  char line[10];
+  int found = 0;
+
+  found = 0; line[0] = '\0';
+  printf( "enter 1:" );
+  found = mygetline(line, MAXLINE); printf( "\n1: %d\n", found );
+
+  found = 0; line[0] = '\0';
+  printf( "enter 2:" );
+  found = mygetline(line, MAXLINE); printf( "\n2: %d\n", found );
+
+  return found;
+} 
+
+$ ./a.out 
+enter 1:abcdefghijklmnop<enter>
+
+1: 9           // not includes '\n'
+enter 2:
+2: 8           // includes '\n'
+$
+
+When hits enter key, two mygetline runs without stopping.
 
 
 ={============================================================================
