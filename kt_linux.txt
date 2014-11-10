@@ -1,4 +1,4 @@
-*kt_linux*		tw=100
+*kt_linux*                                                           tw=100
 
 /^[#=]{ 
 
@@ -67,21 +67,20 @@ KT KB. Linux
 |kt_linux_core_005|  
 |kt_linux_core_006|  
 
-|kt_linux_core_100|  ipc
-|kt_linux_core_101|  ipc: pipe and fifo	
-|kt_linux_core_102|  ipc: semaphore 
-|kt_linux_core_103|  ipc: which one to use {semaphores-versus-pthreads-mutexes}
-|kt_linux_core_104|  ipc: thread and process synchronization
+|kt_linux_core_100| thread vs. process {zombie-process}
+|kt_linux_core_101| pthread {nptl}
+|kt_linux_core_102| how to run three threads sequencially
+|kt_linux_core_103| priority and schedule
 
-|kt_linux_core_110|  ipc: dbus
+|kt_linux_core_100| ipc
+|kt_linux_core_101| ipc: pipe and fifo
+|kt_linux_core_103| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
-|kt_linux_core_150|  sync: thread vs. process {zombie-process}
+|kt_linux_core_110| ipc: dbus
 
-|kt_linux_core_200|  sync: pthread {nptl}
-|kt_linux_core_201|  sync: how to run three threads sequencially
-
-|kt_linux_core_210|  sync: pthread mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
-|kt_linux_core_220|  sync: read-write lock
+|kt_linux_core_200| ipc: sync: semaphore 
+|kt_linux_core_201| ipc: sync: pthread mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
+|kt_linux_core_220| sync: read-write lock
 
 |kt_linux_core_230|  sync: file-lock
 
@@ -3619,50 +3618,1056 @@ http://cgdb.github.io/
 
 cat /proc/NNNN/maps | awk '{print $6}' | grep '\.so' | sort | uniq
 
+# ============================================================================
+#{
+={============================================================================
+*kt_linux_core_100* thread vs process
+
+A process is an instance of an executing program and a thread is an instance of an executing a task.
+In other words, a process is processor abstract, an abstract entity defined by kernel and with
+allocated resources in order to execute a program.  
+
+UNIX programs have a single thread of execution: the CPU processes instructions for a single logical
+flow of execution through the program. In a multithreaded program, there are multiple, independent,
+concurrent logical flows of execution within the same process.
+
+<key> In short, a process is an abstract(virtualisation) of a processor and a thread is an abstract
+of single flow of execution.
+
+<on-linux>
+Two virtualisation in Linux: processer and memory.
+
+Linux don't distinguish a process(task) with a thread. The thread is just a special process: 
+
+1. Linux kernel scheduler schedules based on 'thread'.
+2. Linux kernel has a double-linked list which has <thread_info> struct element which has
+thread_struct*.
+3. Thread is special since it shares resource (open files, pending signals, internal kernel data,
+process state, address space, text and data section) with others threads.
+
+In other words, process is a single thread that don't share resources.
+
+This is clear when see how to create a thread:
+
+clone( CLONE_VM| CLONE_FS| CLONE_FILES| CLONE_SIGHAND, 0);
+
+to create a process:
+
+clone(SIGCHLD, 0);
+
+Two usual steps to create a process:
+
+fork();  // copy a child from a parent and actually use clone() call
+exec*()  // load a new program text.
+
+
+{shared-and-not-shared-between-threads}
+From CH29 in {ref-LPI} and {ref-UNP}
+
+<shared>
+The attributes that are shared; in other words, global attributes to a process:
+
+the same global memory, process code and most data;
+process ID and parent process ID;
+process group ID and session ID;
+process credentials (user and group IDs);
+
+open file descriptors;
+signal dispositions;
+file system-related information: umask, current working directory, and root directory;
+resource limits;
+
+<not-shared>
+The attributes for each thread:
+
+thread ID (Section 29.5);
+signal mask;
+thread-specific data (Section 31.3);
+alternate signal stack (sigaltstack());
+the errno variable;
+realtime 'scheduling' policy and priority (Sections 35.2 and 35.3);
+capabilities (Linux-specific, described in Chapter 39); and
+'stack' (local variables and function call linkage information).
+'registers' including PC and SP
+
+
+{multithreaded-vs-singlethreaded}
+The mutiltithreaded means that a single process has multi threads, 'lightweight'-process. The
+singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
+because shares resources; less protection. ST has more IPC but more protection. 
+
+note: tradeoff between IPC and protection.
+
+
+{why-thread}
+From {ref-LPI}. Problems with fork:
+
+1) The fork call is expensive because memory is copied from the parent to the child. Although
+<copy-on-write> is used to avoid this, but still expensive.
+
+2) Need IPC after fork between parent and child.
+
+Thread help with these problems as it is 'lightweight'-process in terms of 'creation' cost:
+
+Thread creation is faster because many of the attributes that must be duplicated in a child created
+by fork() are instead shared between threads.
+
+Sharing information between threads is easy and fast. It is just a matter of copying data into
+shared (global or heap) variables.
+
+However, has disadvantages:
+
+1) more efforts to ensure thread-safe
+2) buggy thread can damage all of the threads in the process. less protection.
+3) each thread is competing for use of the finite virtual address space of a host process.
+4) usually desirable to avoid the use of signals in multi-threaded programs since requires careful
+designs.
+5) should run the same program.
+6) more threads, more memory and context switching.
+
+
+{process}
+<process-id>
+From {ref-LPI} PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, 
+the process ID counter is reset to 300, rather than 1. This is done because many low-numbered
+process IDs are in permanent use by system processes and daemons, and thus time would be wasted
+searching for an unused process ID in this range. 
+
+In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
+With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
+limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
+greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
+32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
+million), making it possible to accommodate very large numbers of processes.
+
+
+{memory-layout} 6 from LPI
+This is a layout in virtual memory.
+
+<text-segment> 
+The text segment contains the machine-language instructions of the program run by the process. The
+text segment is made 'read'-only so that a process doesn't accidentally modify its own instructions
+via a bad pointer value. Since many processes may be running the same program, the text segment is
+made 'sharable' so that a single copy of the program code can be mapped into the virtual address space
+of all of the processes.
+
+<initialized-data-segment>
+The initialized data segment contains 'global' and 'static' variables that are explicitly
+initialized.  The values of these variables are read from the executable file when the program is
+loaded into memory.
+
+<uninitialized-data-segment> <bss>
+The uninitialized data segment contains 'global' and 'static' variables that are 'not' explicitly
+initialized. Before starting the program, the system initializes all memory in this segment to 0.
+For historical reasons, this is often called the bss segment, a name derived from an old assembler
+mnemonic for “block started by symbol.” The main reason for placing global and static variables that
+are initialized into a separate segment from those that are uninitialized is that, when a program is
+stored on disk, it is not necessary to allocate space for the uninitialized data. Instead, the
+executable merely needs to record the location and size required for the uninitialized data segment,
+and this space is allocated by the program loader at run time.
+
+<stack>
+The stack is a dynamically growing and shrinking segment containing stack frames. One stack frame is
+allocated for each currently called function. A frame stores the function's local variables
+(so-called automatic variables), arguments, and return value. Stack frames are discussed in more
+detail in Section 6.5.
+
+<heap>
+The heap is an area from which memory (for variables) can be dynamically allocated at run time. The
+top end of the heap is called the program break.
+
+<process-virtual-memory-address>
+
+High           +----------------+
+                  kernel. mapped into process virtual memory but not accessible to program.
+               +----------------+
+                  argv, environ
+               +----------------+
+                  stack (grows down)
+top of stack   +----------------+
+                  unallocated
+               +----------------+
+                  heap (grows up)
+               +----------------+ < &end
+                  bss
+               +----------------+ < &edata
+                  inited data
+               +----------------+ < &etext
+                  text
+               +----------------+
+
+Low            +----------------+
+
+note: what's the kernel in this digram?
+
+
+{virtual-memory} locality-of-reference
+The aim of this virtual memory is to make efficient use of both the CPU and RAM (physical memory) by
+exploiting a property that is typical of most programs: locality of reference. Most programs
+demonstrate two kinds of locality:
+
+1. 'spatial' locality is the tendency of a program to reference memory addresses that are 'near' those
+that were recently accessed (because of 'sequential' processing of instructions, and, sometimes,
+sequential processing of data structures).
+
+2. 'temporal' locality is the tendency of a program to access the 'same' memory addresses in the near
+future that it accessed in the recent past (because of loops).
+
+The upshot of locality of reference is that it is possible to execute a program while maintaining
+only 'part' of its address space in RAM.
+
+<paging>
+A virtual memory scheme splits the memory used by each program into small, fixed-size units called
+pages. Correspondingly, RAM is divided into a series of page frames of the same size. At any one
+time, only some of the pages of a program need to be resident in physical memory page frames; these
+pages form the so-called resident set. Copies of the unused pages of a program are maintained in the
+'swap' area-a reserved area of disk space used to supplement the computer's RAM-and loaded into
+physical memory only as required. When a process references a page that is 'not' currently
+'resident' in physical memory, a page 'fault' occurs, at which point the kernel suspends execution of
+the process while the page is loaded from disk into memory.
+
+The kernel maintains a page table for 'each'-process (Figure 6-2). The page table describes the
+location of each page in the process's virtual address space (the set of all virtual memory pages
+available to the process). 
+
+process virtual address space    page table        physical memory(RAM) page frames 
+   page 0                           4                    0
+   page 1                           2                    1
+   page 2                           7                    2
+   page 3                           0                    3
+\|/
+increasing virtual address
+
+Each entry in the page table either 'indicates' the location of a virtual page in RAM or indicates
+that it currently resides on disk.
+
+Not all address ranges in the process's virtual address space require page-table entries. Typically,
+large ranges of the potential virtual address space are unused, so that it isn't necessary to
+maintain corresponding page-table entries. If a process tries to access an address for which
+there is 'no' corresponding page-table entry, it receives a SIGSEGV signal.
+
+
+{user-and-kernel-stack}
+The kernel stack is a per-process memory region maintained in kernel memory that is used as the
+stack for execution of the functions called internally during the execution of a system call.
+
+Each (user) stack frame contains the following information:
+
+1. Function arguments and local variables
+2. Some registers. RA.
+
+note: needs more about difference?
+
+
+{process-creation}
+The wait(&status) system call has two purposes. First, if a child of this process has not yet
+terminated by calling exit(), then wait() suspends execution of the process until one of its
+children has terminated. Second, the termination status of the child is returned in the status
+argument of wait().
+
+Parent process running program A
+      |
+      A
+      |
+      child PID = fork(void);                   Child process running program A. 0 = fork(void);
+      |                                               |
+Parent may perform other atcions here                 A  
+      |                                               | 
+      wait(&status); // optional                Child may perform further actions here
+                                                      |
+                                                      execev( B, ... ); // optional
+                                                      |
+                                                      B
+                                                      |
+                                                Execution of program B
+                                                      |
+                                                      exit(status);
+                                                      1> Child status passed to parent and kernel
+                                                      restarts parent.
+                                                      2> Delivers SIGCHLD optionally.
+
+The following idiom is sometimes employed when calling fork():
+
+pid_t childPid; /* Used in parent after successful fork() to record PID of child */
+
+switch (childPid = fork()) {
+  case -1: /* fork() failed */
+    /* Handle error */
+  case 0: /* Child of successful fork() comes here */
+    /* Perform actions specific to child */
+  default: /* Parent comes here after successful fork() */
+    /* Perform actions specific to parent */
+}
+
+<sharing-between-parent-and-child>
+The child's stack, data, and heap segments are initially exact duplicates of the corresponding parts
+the parent's memory. The child receives duplicates of all of the parent’s file descriptors.
+
+<race-condition-after-fork>
+After a fork(), it is indeterminate which process-the parent or the child—next has access to the
+CPU. If we need to guarantee a particular order, we must use some kind of synchronization technique.
+
+<case-use-signal>
+Avoiding Race Conditions by Synchronizing with Signals. Although, in practice, such coordination is
+more likely to be done using semaphores, file locks, or message passing. See *kt_linux_core_401* for
+code example.
+
+
+{monitoring-child-process}
+From #26 in ref-LPI. 
+<wait-system-call>
+The wait() system call waits for one of the children of the calling process to terminate and returns
+the termination status of that child in the buffer pointed to by status.
+
+#include <sys/wait.h>
+pid_t wait(int *status);
+
+If no (previously unwaited-for) child of the calling process has yet terminated, the call blocks
+until one of the children terminates. If a child has already terminated by the time of the call,
+wait() returns immediately.
+
+As its function result, wait() returns the process ID of the child that has terminated.
+
+On error, wait() returns -1. One possible error is that the calling process has no previously
+unwaited-for children, which is indicated by the errno value ECHILD. This means that we can use the
+following loop to wait for all children of the calling process to terminate:
+
+while ((childPid = wait(NULL)) != -1)
+  continue;
+if (errno != ECHILD) /* An unexpected error... */
+  errExit("wait");
+
+<waitpid-system-call>
+The wait() system call has a number of limitations, which waitpid() was designed to address. See the
+reference for more details.
+
+#include <sys/wait.h>
+pid_t waitpid(pid_t pid, int *status, int options);
+
+
+{orphan-process} {process-init} {zombie-process}
+2014.02 from google phone interview. The lifetimes of parent and child processes are usually not the
+same-either the parent outlives the child or vice versa. This raises two questions: 
+
+1. Who becomes the parent of an orphaned child? Each process has a parent-the process that created
+it. If a child process becomes orphaned because its "birth" parent terminates, then the child is
+adopted by the 'init' process, and subsequent calls to getppid() in the child return 1. See Section
+26.2. The process 1, init, the ancestor of all processes. The init process adopts the child and
+automatically performs a wait(), thus removing the zombie process from the system.
+
+note: first case when zombie is created
+2. What happens to a child that terminates before its parent has had a chance to perform a wait()?
+The point here is that, although the child has finished its work, the parent should still be
+permitted to perform a wait() at some later time to determine how the child terminated. The kernel
+deals with this situation by turning the child into a <zombie>. This means that most of the
+resources held by the child are released back to the system to be reused by other processes. The
+only part of the process that remains is an entry in the kernel's process table recording; among
+other things the child's process ID, termination status, and resource usage statistics. Section
+36.1.
+
+A zombie process can't be killed by a signal, not even the (silver bullet) SIGKILL. This ensures
+that the parent can always eventually perform a wait(). When the parent does perform a wait(), the
+kernel removes the zombie, since the last remaining information about the child is no longer
+required.
+
+<why-zombie-can-be-a-problem> note: second case when zombie is created
+If a parent creates a child, but fails to perform a wait(), then an entry for the zombie child will
+be maintained indefinitely in the kernel's process table. If a large number of such zombie children
+are created, they will eventually fill the kernel process table, 'preventing' the creation of new
+processes. Since the zombies can’t be killed by a signal, the only way to remove them from the
+system is to kill their parent (or wait for it to exit), at which time the zombies are adopted and
+waited on by init, and consequently removed from the system.
+
+$ ./make_zombie
+Parent PID=1013
+Child (PID=1014) exiting
+  1013 pts/4 00:00:00 make_zombie Output from ps(1)
+  1014 pts/4 00:00:00 make_zombie <defunct>
+After sending SIGKILL to make_zombie (PID=1014):
+  1013 pts/4 00:00:00 make_zombie Output from ps(1)
+  1014 pts/4 00:00:00 make_zombie <defunct>
+
+In the above output, we see that ps(1) displays the string <defunct> to indicate a process in the
+zombie state.
+
+A common way of reaping dead child processes is to establish a handler for the SIGCHLD signal.
+
+<key> The zombie is created in two cases: child terminates early before parent calls wait and parent
+fail to wait for child. The second case is a real problem. The problem is that kernel's process
+table fills up and prevent creatring new processes. The zombies will be adopted by init process
+eventually and can be removed by killing init process.
+
+
+={============================================================================
+*kt_linux_core_101* pthread
+
+POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard defines an API for
+creating and manipulating threads. So there is one posix standard but there are two implementation
+like NPTL.
+
+
+{pthread-apis}
+http://pubs.opengroup.org/onlinepubs/7990989799/xsh/pthread.h.html
+http://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread.h.html
+
+Linux threading models compared: LinuxThreads and NPTL
+http://www-128.ibm.com/developerworks/linux/library/l-threading.html?ca=dgr-lnxw07LinuxThreadsAndNPTL
+
+From 2.6, NPTL(New Posix Threading Library) that supports futex(fast user space mutex) and is part
+of glibc.
+
+
+{source}
+# from uclibc source
+
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\pthread.c
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\rwlock.c
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\pthread.h
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\bits\pthreadtypes.h
+(_pthread_rwlock_t)
+
+
+{pthread-errno}
+The traditional method of returning status from system calls and some library functions is to return
+0 on success and -1 on error, with errno being set to indicate the error. The functions in the
+Pthreads API do things differently. All Pthreads functions return 0 on success or a positive value
+on failure. The failure value is one of the same values that can be placed in errno by traditional
+UNIX system calls. Two approaches:
+
+<one>
+From {ref-UNP}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
+This means that set manually errno before calling err_sys() for example. This util funcs handles
+this:
+
+To avoid cluttering the code with braces, use {comma-operator} to combine assignment and the call:
+
+int n;
+if(( n = pthread_mutex_lock( &ndone_mutex )) != 0 )
+   errno = n, err_sys("pthread_mutex_lock error");
+
+Or
+
+void Pthread_mutex_lock(pthread_mutex_t* mptr)
+{
+  int n;
+
+  if(( n = pthread_mutex_lock( mptr )) == 0 )
+    return;
+
+  errno = n;
+  err_sys("pthread_mutex_lock error");
+} 
+
+From Appdix C in {ref-UNP}. The reason for our own error funcs is to handle error case with a single
+line. See {pthread-util-func} for the use.
+
+if( error condition )
+   err_sys( printf format with any number of args );
+
+instead of
+
+if( error condition ) {
+  char buff[200];
+  snprintf( buff, sizeof(buff), printf format with any number of args );
+  perror(buff);
+  exit(1);
+}
+
+<two>
+Because each reference to errno in a threaded program carries the overhead of a function call, our
+example programs don't directly assign the return value of a Pthreads function to errno. note: KT so
+no need to care about errno in pthread.
+
+From CH03 in {ref-LPI}
+
+(lib/tlpi_hdr.h)
+
+#ifndef TLPI_HDR_H
+#define TLPI_HDR_H /* Prevent accidental double inclusion */
+#include <sys/types.h> /* Type definitions used by many programs */
+#include <stdio.h> /* Standard I/O functions */
+#include <stdlib.h> /* Prototypes of commonly used library functions,
+plus EXIT_SUCCESS and EXIT_FAILURE constants */
+#include <unistd.h> /* Prototypes for many system calls */
+#include <errno.h> /* Declares errno and defines error constants */
+#include <string.h> /* Commonly used string-handling functions */
+#include "get_num.h" /* Declares our functions for handling numeric
+arguments (getInt(), getLong()) */
+#include "error_functions.h" /* Declares our error-handling functions */
+typedef enum { FALSE, TRUE } Boolean;
+#define min(m,n) ((m) < (n) ? (m) : (n))
+#define max(m,n) ((m) > (n) ? (m) : (n))
+#endif
+
+TODO: need to summarize:
+
+
+{pthread.h}
+#include <pthread.h>
+
+// return 0 if okay, positive Exxx on error which is different from most system calls. 
+//
+// If need multiple arguments to the function, must package them into a structure and then pass the
+// address of this as the single argument to the start function.
+//
+// The tid argument points to a buffer of type pthread_t into which the unique identifier for
+// this thread is copied before pthread_create() returns. This identifier can be used in later
+// Pthreads calls to refer to the thread. The arg should be in global or heap.
+//
+// EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
+//
+int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
+
+<join> <pthread-error-use>
+// return 0 if okay, positive Exxx on error which is different from most system calls. See
+// {errno-use}
+//
+// To wait for a given thread to terminate but no way to wait for any other threads. If that thread
+// has already terminated, pthread_join() returns immediately.
+//
+// If status is not null, the return value from the thread(a pointer to some object) is stored.
+//
+// <circumbent-join-restriction>
+// We noted earlier that pthread_join() can be used to join with only a specific thread. It
+// provides no mechanism for joining with any terminated thread. We now show how a condition
+// variable can be used to circumvent this restriction. The ref-LPI 30.2.4 shows code.
+
+int pthread_join( pthread_t tid, void **status);
+
+
+/* The execution of a thread terminates in one of the following ways: 
+ *
+ * o The thread's start function performs a return specifying a return value for the thread. This is
+ * equivalent to pthread_exit()  
+ * 
+ * o The thread calls pthread_exit() which can be called in any func called by start func.
+ *
+ * o The thread is canceled using pthread_cancel()
+ *
+ * o note: Any of the threads calls exit(), or the main thread performs a return (in the main() function),
+ * which causes 'all' threads in the process to terminate immediately.
+ * 
+ * {return-value}
+ *
+ * The retval argument specifies the return value for the thread. The value pointed to by retval
+ * should not be located on the thread's stack, since the contents of that stack become undefined on
+ * thread termination. (For example, that region of the process's virtual memory might be
+ * immediately reused by the stack for a new thread.) The same statement applies to the value given
+ * to a return statement in the thread's start function.
+ *
+ * {main-thread-exit}
+ *
+ * note: If the main thread calls pthread_exit() instead of calling exit() or performing a return, then
+ * the other threads continue to execute.
+ */
+void pthread_exit(void *retval);
+
+
+// {threadid}
+// return tid of calling thread. note: pthread_t is structure and need more to print out and also
+// implementation dependant. In NPTL, pthread_t is a pointer so treat it as opaque data and hence
+// need pthread_equal(). 
+//
+// if (pthread_equal(tid, pthread_self()) 
+//    printf("tid matches self\n");
+//
+// In 29.5 of {ref-LPI}, POSIX thread IDs are not the same as the thread IDs returned by the Linux
+// specific gettid() system call. POSIX thread IDs are assigned and maintained by the threading
+// implementation. The thread ID returned by gettid() is a number (similar to a process ID) that is
+// assigned by the kernel.  Although each POSIX thread has a unique kernel thread ID in the Linux
+// NPTL threading implementation, an application generally doesn't need to know about the kernel IDs
+// (and won't be portable if it depends on knowing them).
+//
+//  return 0 if they are equal
+//
+int pthread_equeal( pthread_t tid, pthread_t tid );
+pthread_t pthread_self(void);
+
+
+/*  Thread is either 'joinable'(the default) or 'detached'. The detached thread is like a daemon
+ *  process: when it terminates, all its resources are released, and cannot wait for it to
+ *  terminate. This means cannot get return state. {Q} does it mean joinable thread possibly leaks
+ *  resources when not joined? If a joinable thread termintes without pthread_join, it became a
+ *  'zombie' process. Leak resources and may not able to create additional threads. 
+ *
+ *  {ref-UNP} Detaching a thread doesn't make it immune to a call to exit() in another thread or a
+ *  return in the main thread. In such an event, all threads in the process are immediately
+ *  terminated, regardless of whether they are joinable or detached. To put things another way,
+ *  pthread_detach() simply controls what happens after a thread terminates, not how or when it
+ *  terminates.
+ *
+ *  To make the specified thread detached and often used to detach itself. Can create detached
+ *  thread when create it by using attr setting.
+ *
+ *  pthread_detach( pthread_self() );
+ */
+int pthread_detach(pthread_t tid);
+
+
+/*  status must not point to an object that is local to the calling thread.
+ *
+ *  terminate two other ways:
+ *
+ *  o thread function returns. return value is the exit status of the thread. {Q} kernal handle and
+ *  manage it?
+ *
+ *  o main thread function returns or any thread call exit/_exit, the process terminates
+ *  immediately.
+ */
+void pthread_exit(void *status);
+
+// A thread may be canceled by any other thread in the same process. For example, if multiple
+// threads are started to work on a given task (say finding a record in a database) adn the first
+// thread completes the task then cancels the other threds.
+//
+// To handle the possibility of being canceled, can install(push) and remove(pop) cleanup handlers.
+// These handlers are called:
+// a) when the thread is canceled by pthread_cancel
+// b) when the thread voluntarily terminates (either by calling pthread_exit or returning from its
+// thread)
+
+int   pthread_cancel(pthread_t);
+void  pthread_cleanup_push(void*), void *);
+void  pthread_cleanup_pop(int);
+
+
+{pthread-attribute} 
+To override the default and normally take the detault using the attr arg as a NULL. Attributes are a
+way to specify behavior that is different from the default. When a thread is created with
+pthread_create or when a synchronization variable is initialized, an attribute object can be
+specified. However the default atributes are usually sufficient for most applications. 
+
+Note: Attributes are specified [only] at thread creation time; they cannot be altered while the thread
+is being used. {Q} really?
+
+Thus three functions are usually called in tandem when setting attribute
+
+o Thread attibute intialisation 
+pthread_attr_init() create a default pthread_attr_t tattr. The function pthread_attr_init() is used
+to initialize object attributes to their default values. The storage is allocated by the thread
+system during execution. note: once the thread has been creted, the attribute object is no longer
+needed, and so is destoryed.
+
+o Thread attribute value change (unless defaults appropriate) 
+A variety of pthread_attr_*() functions are available to set individual attribute values for the
+pthread_attr_t tattr structure. (see below).  
+
+o Thread creation 
+A call to pthread_create() with approriate attribute values set in a pthread_attr_t structure. 
+ 
+<code>
+
+The following code fragment should make this point clearer: 
+
+#include <pthread.h> 
+
+pthread_attr_t tattr; // note: can be a local var
+pthread_t tid;
+void *start_routine;
+void arg
+int ret;
+
+ret = pthread_attr_init(&tattr);
+ret = pthread_attr_*(&tattr,SOME_ATRIBUTE_VALUE_PARAMETER);
+ret = pthread_create(&tid, &tattr, start_routine, arg);
+ret = pthread_attr_destroy(&tattr);
+
+In order to save space, code examples mainly focus on the attribute setting functions and the
+intializing and creation functions are ommitted. These must of course be present in all actual code
+fragtments. 
+
+An attribute object is opaque, and cannot be directly modified by assignments. A set of functions is
+provided to initialize, configure, and destroy each object type. Once an attribute is initialized
+and configured, it has process-wide scope. The suggested method for using attributes is to configure
+all required state specifications at one time in the early stages of program execution. The
+appropriate attribute object can then be referred to as needed. Using attribute objects has two
+primary advantages: 
+
+First, it adds to code portability. Even though supported attributes might vary between
+implementations, you need not modify function calls that create thread entities because the
+attribute object is hidden from the interface. If the target port supports attributes that are not
+found in the current port, provision must be made to manage the new attributes. This is an easy
+porting task though, because attribute objects need only be initialized once in a well-defined
+location. 
+
+Second, state specification in an application is simplified. As an example, consider that several
+sets of threads might exist within a process, each providing a separate service, and each with its
+own state requirements. At some point in the early stages of the application, a thread attribute
+object can be initialized for each set. All future thread creations will then refer to the attribute
+object initialized for that type of thread. The initialization phase is simple and localized, and
+any future modifications can be made quickly and reliably. Attribute objects require attention at
+process exit time. When the object is initialized, memory is allocated for it. This memory must be
+returned to the system. The pthreads standard provides function calls to destroy attribute objects. 
+
+
+{pthread-example-in-FOSH}
+/* Assert throughout that the POSIX calls worked. If not, HFL cannot be guaranteed to work. */
+resPOSIX = pthread_attr_init(&threadAttrs);
+HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
+
+
+/* The stacksize attribute defines the minimum stack size (in bytes) allocated for the created
+ * threads stack.
+ *
+ * int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize);
+ */
+resPOSIX = pthread_attr_setstack(&threadAttrs, ptThreadInfo->pvStack,(size_t)ptThreadInfo->szStack);
+/* If this assert is triggered, it might be because of not aligning address to a boundary of 8. */
+HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
+
+
+/* {pthread-schedule-at-creation}
+ * To set the other scheduling policy: 
+ */
+resPOSIX = pthread_attr_setschedpolicy(&threadAttrs, SCHED_RR);
+HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
+
+
+/* {pthread-schedule-at-creation}
+ * The example to change prio:
+ *
+ * sched_param param;
+ * param.sched_priority = 30;
+ * ret = pthread_attr_setschedparam (&tattr, &param);
+ * 
+ * used to set/inquire a current thread's priority of scheduling.
+ * 
+ * int pthread_attr_setschedparam(pthread_attr_t *attr, const struct sched_param *param);
+ * int pthread_attr_getschedparam(const pthread_attr_t *attr, struct sched_param *param);
+ *
+ * {Q} {pthread-schedule-at-runtime} is it possible as attr is only at creation?
+ */
+resPOSIX = pthread_attr_setschedparam(&threadAttrs, &tSchedParam);
+HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
+
+resPOSIX = pthread_attr_setscope(&threadAttrs, ContentionScope);
+HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
+
+
+/* The pthread_attr_setinheritsched() function sets the scheduling parameter inheritance state
+ * attribute in the specified attribute object. The thread's scheduling parameter inheritance state
+ * determines whether scheduling parameters are explicitly specified in this attribute object, or if
+ * scheduling attributes should be inherited from the creating thread. Valid settings for
+ * inheritsched include:
+ * 
+ * PTHREAD_INHERIT_SCHED Scheduling parameters for the newly created thread are the same as those of
+ * the creating thread.
+ * 
+ * PTHREAD_EXPLICIT_SCHED Scheduling parameters for the newly created thread are specified in the
+ * thread attribute object.
+ */
+resPOSIX = pthread_attr_setinheritsched(&threadAttrs, PTHREAD_EXPLICIT_SCHED);
+HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
+
+resPOSIX = pthread_create(&(ptThreadInfo->idThread), &threadAttrs, pfThreadMain, pvParam);
+
+
+{pthread-stack} from CH33 in {ref-LPI}.
+Each thread has its own stack whose size is fixed when the thread is created. On Linux/x86-32, for
+all threads other than the main thread, the default size of the per-thread stack is 2 MB. The main
+thread has a much larger space for stack growth. Occasionally, it is useful to change the size of a
+thread's stack. 
+
+The pthread_attr_setstacksize() function sets a thread attribute (Section 29.8) that determines the
+size of the stack in threads created using the thread attributes object. The related
+pthread_attr_setstack() function can be used to control both the size and the location of the stack,
+but setting the location of a stack can decrease application portability.
+
+One reason to change the size of per-thread stacks is to allow for larger stacks for threads that
+allocate large automatic variables or make nested function calls of great depth (perhaps because of
+recursion).
+
+Alternatively, an application may want to reduce the size of per-thread stacks to allow for a
+greater number of threads within a process.
+
+The minimum stack that can be employed on a particular architecture can be determined by calling
+sysconf(_SC_THREAD_STACK_MIN). For the NPTL implementation on Linux/x86-32, this call returns the
+value 16,384.
+
+
+{nptl}
+Linux threading models compared: LinuxThreads and NPTL
+http://www-128.ibm.com/developerworks/linux/library/l-threading.html?ca=dgr-lnxw07LinuxThreadsAndNPTL
+
+NPTL(new posix threading library) comes from kernel 2.6 and supports Futex(fast user space mutex).
+It is part of glibc.
+
+<how-to-check-nptl-version>
+$ getconf GNU_LIBPTHREAD_VERSION
+NPTL 2.15
+
+<pid-nptl>
+note: Q. In Linux, every thread has a PID and can see when use ps command but in NPTL, thread
+group has one PID. is it true?
+
+
+{pthread-compile-link}
+It is on GCC 4.6.3 and not -lpthread. This is said when run 'man' on pthread funcs. On Linux,
+option. The effects of this option include the following:
+
+o The _REENTRANT preprocessor macro is defined. This causes the declarations of a few reentrant
+functions to be exposed.
+
+o The program is linked with the libpthread library (the equivalent of -lpthread).
+
+gcc -pthread sample.c
+
+
+={============================================================================
+*kt_linux_core_102* how to run three threads sequencially
+
+From Cracking the coding interview, p425, 16.5:
+
+Suppose we have following code:
+
+public class Foo {
+  public Foo() {...}
+  public void first() {...}
+  public void second() {...}
+  public void third() {...}
+}
+
+The same instance of Foo will be passed to three different threads. ThreadA will call first, ThreadB
+will call second, and ThreadC will call third. Design a mechanism to ensure that first is called
+before second and second is called before third.
+
+Using lock?
+
+public class FooBad {
+  public FooBad() {
+    lock1 = new ReentrantLock();
+    lock2 = new ReentrantLock();
+
+    // locks all in a ctor
+    lock1.lock(); lock2.lock(); 
+  }
+}
+
+// already got lock1
+public void first()
+{
+  ...
+  lock1.unlock(); // finished first
+}
+
+// already got lock2
+public void second()
+{
+  lock1.lock();   // wait first to finish
+  lock1.unlock();
+  ...
+  lock2.unlock(); // finished second
+}
+
+public void third()
+{
+  lock2.lock();   // wait second to finish
+  lock2.unlock();
+  ...
+}
+
+This WON'T work in JAVA since a lock in JAVA is owned by the same thread which locked in.
+
+http://docs.oracle.com/javase/6/docs/api/java/util/concurrent/locks/ReentrantLock.html
+A ReentrantLock is owned by the thread last successfully locking, but not yet unlocking it. A thread
+invoking lock will return, successfully acquiring the lock, when the lock is not owned by another
+thread. The method will return immediately if the current thread already owns the lock. 
+
+note: There's no such limitation in Linux and it's possible in the same thread group and if threads
+in different group use lock, can use semaphore or lock on the shared memory.
+
+The mutex has ownership as well and see {mutex-ownership}.
+
+
+={============================================================================
+*kt_linux_core_103* priority and schedule 
+
+{priority-on-linux}
+
+high           low
+0     99 100   139
+
+0  -99  : realtime priority. static and can set when create a process
+100-139 : user priority. can use nice command which uses with value from -20 to +19. The default
+nice value is 0. note: does it mean 120 is default? 100 is highest?
+
+
+{realtime-and-latency}
+The aim to distribute fairly CPU resource to all process on a system is not realtime approach.
+
+<latency-components>
+
+interrupt      ISR         ISR signals       user process
+event          runs        user process      runs
+ |             |              |                 |
+---------------------------------------------------------> time
+   interrupt      interrupt      scheduling
+   latency        processing     latency
+
+<no-hard-realtime>
+No support in kernel. To use hard realtime, install patch from 
+http://people.redhat.com/~mingo/realtime-preempt
+
+
+{schedule}
+Before Linux 2, kernel didn't support preemption which means that no other process can run in kernel
+mode when one user process is already in the kernel mode until that is bloked or finishes its work.
+
+<scheduler>
+O(1) scheduler from Linux 2.5 and supports constant scheduling decision regardless of the number of
+process.
+
+<schedule-policy>
+(from ~/include/linux/sched.h)
+/*
+ * Scheduling policies
+ */
+
+// normal user process. fairness
+#define SCHED_NORMAL 0     
+
+// realtime and run the highest priority. On the same priority, the first runs until it's blocked.
+// So it is realtime without time slice.
+#define SCHED_FIFO   1     
+
+// realtime and run the highest priority. On the same priority, the first runs but in the time
+// sliced. So it is realtime with time slice.
+#define SCHED_RR     2
+
+<default-policy>
+SCHED_NORMAL(OTHER) is default.
+
+To change the policy after a boot:
+For example, if scheduling is modified before insmod-ing callisto BCM drivers, tasks inherit changed
+scheduling. In that case last two task mods can be dropped. The list is quite aggressive as changing
+policy of kthread affects all new kernel threads. Fine tuning would obviously have to be done along
+with BCM.
+
+(about ways to change from NORMAL to RR)
+http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0182.html
+http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0330.html
+
+
+<code>
+/* from sched.h.
+#define MAX_USER_RT_PRIO   100
+#define MAX_RT_PRIO        MAX_USER_RT_PRIO
+*/
+
+#define MY_RT_PRIORITY MAX_USER_RT_PRIO /* Highest possible */
+
+int main(int argc, char **argv)
+{
+  ...
+  int rc, old_scheduler_policy;
+  struct sched_param my_params;
+  ...
+
+  /* Passing zero specifies caller's (our) policy */
+  old_scheduler_policy = sched_getscheduler(0);
+  my_params.sched_priority = MY_RT_PRIORITY;
+
+  /* Passing zero specifies callers (our) pid */
+  rc = sched_setscheduler(0, SCHED_RR, &my_params);
+  if ( rc == -1 )
+    handle_error();
+  ...
+}
+
+(sched.c)
+/**
+ * sys_sched_get_priority_max - return maximum RT priority.
+ * @policy: scheduling class.
+ *
+ * this syscall returns the maximum rt_priority that can be used
+ * by a given scheduling class.
+ */
+asmlinkage long sys_sched_get_priority_max(int policy)
+{
+        int ret = -EINVAL;
+
+        switch (policy) {
+        case SCHED_FIFO:
+        case SCHED_RR:
+                ret = MAX_USER_RT_PRIO-1;
+                break;
+        case SCHED_NORMAL:
+        case SCHED_BATCH:
+                ret = 0;
+                break;
+        }
+        return ret;
+}
+
+/**
+ * sys_sched_get_priority_min - return minimum RT priority.
+ * @policy: scheduling class.
+ *
+ * this syscall returns the minimum rt_priority that can be used
+ * by a given scheduling class.
+ */
+asmlinkage long sys_sched_get_priority_min(int policy)
+{
+        int ret = -EINVAL;
+
+        switch (policy) {
+        case SCHED_FIFO:
+        case SCHED_RR:
+                ret = 1;
+                break;
+        case SCHED_NORMAL:
+        case SCHED_BATCH:
+                ret = 0;
+        }
+        return ret;
+}
+
+
+{pthread-schedule}
+The POSIX draft standard specifies scheduling policy attributes of SCHED_FIFO (first-in-first-out),
+SCHED_RR (round-robin), or SCHED_OTHER (an implementation-defined method). SCHED_FIFO and
+SCHED_RR are optional in POSIX, and only are supported for real time bound threads
+
 
 # ============================================================================
 #{
 ={============================================================================
 *kt_linux_core_100*  ipc
 
-CH43, Fig 43-1 in {ref-LPI} which says that the general term IPC is often used to describe them all;
+CH43, Fig 43-1 in {ref-LPI} which says that the 'general' term IPC is often used to describe them all;
 communication, signal, and synchronization.
 
-communication - data transfer - byte stream 	- pipe
-															- fifo
-															- stream socket
+communication - data transfer - byte stream  - pipe
+                                             - fifo
+                                             - stream socket
 
-										- message 		- sys v message q
-															- posix message q
-															- datagram socket
+                              - message      - sys v message q
+                                             - posix message q
+                                             - datagram socket
 
-										- pseudoterminal
+                              - pseudoterminal
 
-					- shared memory 	- sys v shm
-											- posix shm
-											- memory mapping 	- anonymous mapping
-																	- mapped file
+               - shared memory   - sys v shm
+                                 - posix shm
+                                 - memory mapping  - anonymous mapping
+                                                   - mapped file
 
-signal 			- standard signal
-					- realtime signal
+signal   - standard signal
+         - realtime signal
 
-synchronization- semaphore 	- sys v
-										- posix 	- named
-													- unnamed
-					- file lock 	- record lock
-										- file lock
+synchronization   - semaphore - sys v
+                  - posix     - named
+                              - unnamed
+                  - file lock - record lock
+                              - file lock
 
-					- mutex	
-					- condition variable
+                  - mutex
+                  - condition variable
 
 Signals: Although signals are intended primarily for other purposes, they can be used as a
 synchronization technique in certain circumstances. More rarely, signals can be used as a
 communication technique: the signal number itself is a form of information, and realtime signals can
 be accompanied by associated data (an integer or a pointer).
-
-
-==============================================================================
-*kt_linux_core_101*  ipc: pipe and fifo	
 
 {nonnetworked-ipc}
 From {ref-UNP}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
@@ -3682,7 +4687,6 @@ Filesystem
 
 
 <persistence> which is lifetime of an objects
-
 Define the persistence of any type of IPC as how long an object of that type remains in existence.
 Process-persistence exists until last process with IPC open closes the object and kernel one exists
 until kernel reboots or IPC objects is explicitly deleted.
@@ -3690,22 +4694,23 @@ until kernel reboots or IPC objects is explicitly deleted.
 process-persistence: pipe, fifo, mutex, condition-var, read-write-lock, ...
 kernel-presistence : shm, named-semaphore, ...
 
-Be careful when defining the presistence of ipc because it is not always as it seems: the date
+Be careful when defining the presistence of ipc because it is not always as it seems: the data
 within a pipe is maintained within the kernel, but pipes have process-persistence because after the
 last process that has the pipe open for reading closes the pipe, the kernel discard all data and
 remove the pipe.
 
 From {ref-LPI}:
 
-Data-transfer which 
-1) requires two data transfers between user and kenel memory
-2) synchronization between the reader and writer processes is automatic by kernel. if a reader
+<data-transfer> 
+1. requires two data transfers between user and kenel memory
+2. synchronization between the reader and writer processes is automatic by kernel. if a reader
 attempts to fetch data from data-transfer facility that has no data, then read will bock until some
 write data to it.  
-3) available to one which done read operation since read consumes data.
+3. available to one which done read operation since read consumes data.
 
-byte stream: read and write is independent meaning read may read an arbitrary bytes. This models
-"file as a sequence of bytes".
+<byte-stream>
+read and write is independent meaning read may read an arbitrary bytes. This models "file as a
+sequence of bytes".
 
 An application can also impose a message-oriented model on a byte-stream facility, by using
 delimiter characters, fixed-length messages, or message headers that encode the length of the total
@@ -3713,58 +4718,57 @@ message message: each read reads a whole message. not possible to read part of a
 multiple messages.
 
 
-shared memory which 
-1) don't require system calls or data transfer between user and kenel. Hence shared memory
+<shared-memory>
+1. don't require system calls or data transfer between user and kenel. Hence shared memory
 provide very fast communication. 
-2) However it can be offset by the need to sync and semaphore is the usual method used with shared
+2. However it can be offset by the need to sync and semaphore is the usual method used with shared
 memory.
-3) avaible to all of the processes that share that memory
+3. avaible to all of the processes that share that memory
 
+<file-desc-based>
 facility using file descriptors like pipe, fifo, and sockets
 
 The primary benefit of these techniques is that they allow an application to simultaneously monitor
 multiple file descriptors to see whether I/O is possible on any of them.
 
 
-{name-space}
-
+{namespace}
 Use name or identifier so that one process can create ipc object and other processes can specify
 that same ipc object.
 
-type 								name used to identify 		handle used to refer to object
+type                       name used to identify   handle used to refer to object
 ------------------------------------------------------------------------------------
-pipe 								no name 							file descriptor
-fifo 								pathname 						ditto
+pipe                       no name                 file descriptor
+fifo                       pathname                ditto
 
-UNIX domain socket 			pathname 						ditto
-Internet domain socket 		IP and port 					ditto
+UNIX domain socket         pathname                ditto
+Internet domain socket     IP and port             ditto
 
-posix message q 				posix ipc pathname 			mqd_t
-posix named semaphore 		ditto								sem_t* (sem pointer)
-posix unnamed semaphore 	no name 							sem_t*
-posix shared memory 			posix ipc pathname 			file descriptor 
+posix message q            posix ipc pathname      mqd_t
+posix named semaphore      ditto                   sem_t* (sem pointer)
+posix unnamed semaphore    no name                 sem_t*
+posix shared memory        posix ipc pathname      file descriptor 
 
-anonymous mapping 			no name 							none
-memory mapped file 			pathname 						file descriptor 
+anonymous mapping          no name                 none
+memory mapped file         pathname                file descriptor 
 
 
 {accessibility-and-persistence}
-
-type 								accessibility 					persistence
+type                       accessibility                 persistence
 ------------------------------------------------------------------------------------
-pipe 								only by related processes 	process
-fifo 								permission mask 				ditto
+pipe                       only by related processes     process
+fifo                       permission mask               ditto
 
-UNIX domain socket 			permission mask 				ditto
-Internet domain socket 		by any processe 				ditto
+UNIX domain socket         permission mask               ditto
+Internet domain socket     by any processe               ditto
 
-posix message q 				ppermission mask 				kernel
-posix named semaphore 		dpermission mask 				kernel
-posix unnamed semaphore 	permission of underlying mem depends
-posix shared memory 			permission mask 				kernel
+posix message q            permission mask               kernel
+posix named semaphore      permission mask               kernel
+posix unnamed semaphore    permission of underlying mem  depends
+posix shared memory        permission mask               kernel
 
-anonymous mapping 			only by releated				process 
-memory mapped file 			permission mask 				file system 
+anonymous mapping          only by releated              process 
+memory mapped file         permission mask               file system 
 
 unix and network domain:
 
@@ -3777,23 +4781,19 @@ domain sockets, so an application that is built using UNIX domain sockets can be
 network-capable with relatively little effort.
 
 <portability>
-
 However, the POSIX IPC facilities (message queues, semaphores, and shared memory) are not quite as
 widely available as their System V IPC counterparts, especially on older UNIX systems. An
-implementation of POSIX message queues and full support for POSIX semaphores have appeared on Linux
+implementation of POSIX message queues and 'full' support for POSIX semaphores have appeared on Linux
 only in the 2.6.x kernel series. Therefore, from a portability point of view, System V IPC may be
 preferable to POSIX IPC.
 
 As of 06 Jan 2014, the latest stable kernel release is 3.12.6
 
-releated:
-
-Here, related means related via fork(). In order for two processes to access the object, one of them
-must create the object and then call fork(). As a consequence of the fork(), the child process
-inherits a handle referring to the object, allowing both processes to share the object.
+note: Here, 'related' means related via fork(). In order for two processes to access the object, one
+of them must create the object and then call fork(). As a consequence of the fork(), the child
+process inherits a handle referring to the object, allowing both processes to share the object.
 
 <performance>
-
 In some circumstances, different IPC facilities may show notable differences in performance.
 However, in later chapters, we generally refrain from making performance comparisons, for the
 following reasons:
@@ -3811,18 +4811,21 @@ whether or not a process context switch is required for each unit of data exchan
 load on the system.
 
 If IPC performance is crucial, there is no substitute for application-specific benchmarks run under
-an environment that matches the target system. To this end, it may be worth writing an [abstract]
+an environment that matches the target system. To this end, it may be worth writing an 'abstract'
 software layer that hides details of the IPC facility from the application and then testing
 performance when different IPC facilities are substituted underneath the abstract layer.
 
 
+={============================================================================
+*kt_linux_core_101*  ipc: pipe and fifo
+
 {pipe}
-The pipe is unnamed fifo and is an early form that can be used [related-processes] such as parent
+The pipe is 'unnamed' fifo and is an early form that can be used 'related'-processes such as parent
 and child. In other words, created using fork() call. Linux supports uni-directional pipe or
-half-duplex so need two pipes for read and write.
+half-duplex so need 'two' pipes for read and write.
 
 
-{first-way::to-create-pipe}
+<first> to-create-pipe
 Get two fds from a pipe() call. fd[0] for read and fd[1] for write. Create a child via fork(). Then
 there is read-write channel between parent and child.
 
@@ -3832,11 +4835,10 @@ fd[2] read    pipe <-       fd[1] write
 
 When close fd[1] in parent and fd[0] in child, only have one-way pipe. 
 
-note: Pipe is kernel resource meaning that there is copy between kernel and process. Also there is
+note: pipe is kernel resource meaning that there is copy between kernel and process. Also there is
 <no-open-call>.
 
-
-{second-way::to-create-pipe}
+<second> to-create-pipe
 popen() call which simplfies pipe creation, fork, reading/writing setting. However, need to set
 problem to fork in the command line.
 
@@ -3862,28 +4864,26 @@ pclose(p);
 
 After all, the reason that can use pipe between parent/child is that fds are shared.
 
-
-{broken-pipe}
-When write to fifo that is not opened to read. Menas there is no reading process or reading process
+<broken-pipe>
+When 'write' to fifo that is not opened to read. Menas there is no reading process or reading process
 is killed because reading fd of pipe or file gets closed. SIGPIPE. Instead, there is no data to
 read, empty, reading thread or process is blocked.
 
 
 {fifo}
-To solve this, fifo was introduced and is called [named-pipe] since has path name. Means that it
+To solve this, fifo was introduced and is called 'named'-pipe since has path name. Means that it
 is created in the filesystem as a file. Use usual read and write call. Fifo is either read-only or
 write-only. mkfifo() call. {Q} what is 'this'?
 
-Caution. When open a fifo to read which is not opend to write, calling process is blocked.  meaning
-there is no writing process. Therfore, if parent and child opens different fifos to read, deadlock
-happens. {Q} child to read and parent to write?
+Caution. When open a fifo to read which is not opend to write, calling process is blocked. Meaning
+there is no writing process. Therfore, if parent and child opens 'different' fifos to read, deadlock
+happens.
 
 
-{from-nds-fusion-ipc}
-
+<note-from-nds-fusion-ipc>
 FIFOs have certain natural limitations, they are unidirectional, and fragment large message sizes
 with no built in support for reassembling the fragments. Furthermore FIFOs are limited in number due
-to system resources. <fragment> and <limit-in-number>
+to system resources. The key are 'fragment' and 'limit'-in-number.
 
 Due to the limited number of FIFOs it was determined that there would be one
 control FIFO per server (to establish communication from clients) and one pair of unidirectional
@@ -3893,8 +4893,8 @@ every process that uses that client). This is illustrated below.
 server                  client a
 - control pipe          -> and <-
 
-								client b
-							   -> and <-
+                        client b
+                        -> and <-
 
 note: KT. do not match with this pic?
 
@@ -3904,133 +4904,13 @@ was designed as described below. This protocol is used in both FIFO and TCP/IP I
 
 
 {summary}
-
-If there is no reading process, broken-pipe. If there is no writing process, blocked.
-
-
-==============================================================================
-*kt_linux_core_102*  ipc: semaphore
-
-{what-is-semaphore}
-
-KT. This can be used for process or thread but it is expensive for thread.
-
-System V semaphores are not used to transfer data between processes. Instead, they allow processes
-to synchronize their actions. A semaphore is a kernel-maintained integer whose value is never
-permitted to fall below 0. A process can decrease or increase the value of a semaphore. If an
-attempt is made to decrease the value of the semaphore below 0, then the kernel blocks the operation
-until the semaphore's value increases to a level that permits the operation to be performed. 
-
-The meaning of a semaphore is determined by the application. A process decrements a semaphore from
-say, 1 to 0 in order to reserve exclusive access to some shared resource, and after completing work
-on the resource, increments the semaphore so that the shared resource is released for use by some
-other process. The use of a binary semaphore-a semaphore whose value is limited to 0 or 1-is common.
-
-However, an application that deals with multiple instances of a shared resource would employ a
-semaphore whose maximum value equals the number of shared resources. Linux provides both System V
-semaphores and POSIX semaphores, which have essentially similar functionality.
-
-1> Setting the semaphore to an absolute value;
-2> Adding a number to the current value of the semaphore;            // give
-3> Subtracting a number from the current value of the semaphore; and // take
-4> Waiting for the semaphore value to be equal to 0.
-
-The last two of these operations may cause the calling process to block. A semaphore has no meaning
-in and of itself. Its meaning is determined only by the associations given to it by the processes
-using the semaphore.
-
-However, System V semaphores are rendered unusually complex by the fact that they are allocated in
-groups called semaphore sets. [KT] So move to POSIX semaphore.
-
-{posix-semaphore}
-
-SUSv3 specifies two types of POSIX semaphores:
-
-1> Named semaphores: This type of semaphore has a name. By calling sem_open() with the same name
-<unrelated> processes can access the same semaphore.
-
-2> Unnamed semaphores: This type of semaphore doesn't have a name; instead, it resides at an
-agreed-upon location in memory. Unnamed semaphores can be shared between processes or between a
-group of threads. When shared between processes, the semaphore must reside in a region of (System V,
-POSIX, or mmap()) shared memory. When shared between threads, the semaphore may reside in an
-area of memory shared by the threads (e.g., on the heap or in a global variable).
-
-POSIX semaphores operate in a manner similar to System V semaphores; that is, a POSIX semaphore is
-an integer whose value is not permitted to fall below 0. If a process attempts to decrease the value
-of a semaphore below 0, then, depending on the function used, the call either blocks or fails with
-an error indicating that the operation was not currently possible.
-
-Some systems don’t provide a full implementation of POSIX semaphores. A typical restriction is that
-only unnamed thread-shared semaphores are supported. That was the situation on Linux 2.4; 
-
-<linux-2-6-support>
-With Linux 2.6 and a glibc that provides NPTL, a full implementation of POSIX semaphores is
-available.
-
-<named-semaphore>
-To work with a named semaphore, we employ the following functions:
-
-1> The sem_open() function opens or creates a semaphore, initializes the semaphore if it is created
-by the call, and returns a handle for use in later calls.
-
-#include <fcntl.h> /* Defines O_* constants */
-#include <sys/stat.h> /* Defines mode constants */
-#include <semaphore.h>
-
-sem_t *sem_open(const char *name, int oflag, ...  /* mode_t mode, unsigned int value */ );
-
-Returns pointer to semaphore on success, or SEM_FAILED on error
+When writes, if there is no reading process, broken-pipe. When reads, if there
+is no writing process, blocked.
 
 
-2> The sem_post(sem) and sem_wait(sem) functions respectively increment and decrement a semaphore’s
-value.
-
-3> The sem_getvalue() function retrieves a semaphore’s current value.
-
-4> The sem_close() function removes the calling process’s association with a semaphore that it
-previously opened.
-
-5> The sem_unlink() function removes a semaphore name and marks the semaphore for deletion when all
-processes have closed it.
-
-<named-semaphore-on-linux>
-SUSv3 doesn't specify how named semaphores are to be implemented. On Linux, they are created as
-small POSIX shared memory objects with names of the form sem.name, in a dedicated tmpfs file system
-(Section 14.10) mounted under the directory /dev/shm. This file system has [kernel-persistence]-the
-semaphore objects that it contains will persist, even if no process currently has them open, but
-they will be lost if the system is shut down.
-
-<unnamed-semaphore>
-The semaphore is made available to the processes or threads that use it by placing it in an area of
-memory that they share.  Operations on unnamed semaphores use the same functions; sem_wait(),
-sem_post(), sem_getvalue(), and so on that are used to operate on named semaphores.
-
-In addition, two further functions are required:
-
-The sem_init() function initializes a semaphore and informs the system of whether the semaphore will
-be shared between processes or between the threads of a single process.
-
-The sem_destroy(sem) function destroys a semaphore.  These functions should not be used with named
-semaphores.
-
-<when-useful-to-use-unnamed>
-
-1> A semaphore that is shared between threads doesn't need a name. Making an unnamed semaphore a
-shared (global or heap) variable automatically makes it accessible to all threads.
-
-2> A semaphore that is being shared between [related] processes doesn't need a name. If a parent
-process allocates an unnamed semaphore in a region of shared memory (e.g., a shared anonymous
-mapping), then a child automatically inherits the mapping and thus the semaphore as part of the
-operation of fork().
-
-3> If we are building a dynamic data structure (e.g., a binary tree), each of whose items requires
-an associated semaphore, then the simplest approach is to allocate an unnamed semaphore within each
-item. Opening a named semaphore for each item would require us to design a convention for generating
-a (unique) semaphore name for each item and to manage those names (e.g., unlinking them when they
-are no longer required).
 
 
-==============================================================================
+={============================================================================
 *kt_linux_core_103* ipc: which one to use
 
 When performing interprocess synchronization, our choice of facility is typically determined by the
@@ -4077,10 +4957,6 @@ On Linux, mutexes are implemented using futexes (an acronym derived from fast us
    found in [Drepper, 2004 (a)], which also describes how mutexes are implemented using futexes.
    [Franke et al., 2002] is a (now outdated) paper written by the developers of futexes, which
    describes the early futex implementation and looks at the performance gains derived from futexes.
-
-
-==============================================================================
-*kt_linux_core_104*	ipc: thread and process synchronization 
 
 
 ==============================================================================
@@ -4189,929 +5065,203 @@ https://github.com/gregkh/kdbus
 
 # ============================================================================
 #{
-==============================================================================
-*kt_linux_core_150* thread vs. process	
-
-A process is an instance of an executing program and a thread is an instance of an executing a task.
-In other words, a process is processor abstract, an abstract entity defined by kernel and with
-allocated resources in order to execute a program.  
-
-UNIX programs have a single thread of execution: the CPU processes instructions for a single logical
-flow of execution through the program. In a multithreaded program, there are multiple, independent,
-concurrent logical flows of execution within the same process.
-
-In short, a process is an abstract of a processor and a thread is an abstract of flow of execution.
-
-{multithreaded-vs-singlethreaded}
-The mutiltithreaded means that a single process has multi threads, <lightweight-process>. The
-singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
-because shares resources; less protection. ST has more IPC but more protection.
-
-{process-id}
-From {ref-LPI} PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, 
-the process ID counter is reset to 300, rather than 1.  This is done because many low-numbered
-process IDs are in permanent use by system processes and daemons, and thus time would be wasted
-searching for an unused process ID in this range. 
-
-In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
-With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
-limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
-greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
-32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
-million), making it possible to accommodate very large numbers of processes.
-
-{process-memory-layout}
-
-<text-segment> 
-The text segment contains the machine-language instructions of the program run by the process. The
-text segment is made read-only so that a process doesn’t accidentally modify its own instructions
-via a bad pointer value. Since many processes may be running the same program, the text segment is
-made sharable so that a single copy of the program code can be mapped into the virtual address space
-of all of the processes.
-
-<initialized-data-segment>
-The initialized data segment contains global and static variables that are explicitly initialized.
-The values of these variables are read from the executable file when the program is loaded into
-memory.
-
-<uninitialized-data-segment> <bss>
-The uninitialized data segment contains global and static variables that are not explicitly
-initialized. Before starting the program, the system initializes all memory in this segment to 0.
-For historical reasons, this is often called the bss segment, a name derived from an old assembler
-mnemonic for “block started by symbol.” The main reason for placing global and static variables that
-are initialized into a separate segment from those that are uninitialized is that, when a program is
-stored on disk, it is not necessary to allocate space for the uninitialized data. Instead, the
-executable merely needs to record the location and size required for the uninitialized data segment,
-and this space is allocated by the program loader at run time.
-
-<stack>
-The stack is a dynamically growing and shrinking segment containing stack frames. One stack frame is
-allocated for each currently called function. A frame stores the function’s local variables
-(so-called automatic variables), arguments, and return value. Stack frames are discussed in more
-detail in Section 6.5.
-
-<heap>
-The heap is an area from which memory (for variables) can be dynamically allocated at run time. The
-top end of the heap is called the program break.
-
-<process-virtual-memory-address>
-
-High           +----------------+
-                  kernel. mapped into process virtual memory but not accessible to program.
-               +----------------+
-                  argv, environ
-               +----------------+
-                  stack (grows down)
-top of stack   +----------------+
-                  unallocated
-               +----------------+
-                  heap (grows up)
-               +----------------+ < &end
-                  bss
-               +----------------+ < &edata
-                  inited data
-               +----------------+ < &etext
-                  text
-               +----------------+
-
-Low            +----------------+
-
-               
-{virtual-memory} {locality-of-reference}
-
-RAM   <-> page table <-> VMEM 
-      <-> HDD
-
-The aim of this virtual memory is to make efficient use of both the CPU and RAM (physical memory) by
-exploiting a property that is typical of most programs: locality of reference. Most programs
-demonstrate two kinds of locality:
-
-1> Spatial locality is the tendency of a program to reference memory addresses that are near those
-that were recently accessed (because of sequential processing of instructions, and, sometimes,
-sequential processing of data structures).
-
-2> Temporal locality is the tendency of a program to access the same memory addresses in the near
-future that it accessed in the recent past (because of loops).
-
-The upshot of locality of reference is that it is possible to execute a program while maintaining
-only part of its address space in RAM.
-
-A virtual memory scheme splits the memory used by each program into small, fixed-size units called
-pages. Correspondingly, RAM is divided into a series of page frames of the same size. At any one
-time, only some of the pages of a program need to be resident in physical memory page frames; these
-pages form the so-called resident set. Copies of the unused pages of a program are maintained in the
-swap area—a reserved area of disk space used to supplement the computer’s RAM—and loaded into
-physical memory only as required. When a process references a page that is not currently resident in
-physical memory, a page fault occurs, at which point the kernel suspends execution of the process
-while the page is loaded from disk into memory.
-
-The kernel maintains a page table for [each-process] (Figure 6-2). The page table describes the
-location of each page in the process’s virtual address space (the set of all virtual memory pages
-available to the process). Each entry in the page table either indicates the location of a
-virtual page in RAM or indicates that it currently resides on disk.
-
-Not all address ranges in the process’s virtual address space require page-table entries. Typically,
-    large ranges of the potential virtual address space are unused, so that it isn’t necessary to
-    maintain corresponding page-table entries. If a process tries to access an address for which
-    there is no corresponding page-table entry, it receives a SIGSEGV signal.
-
-
-{user-and-kernel-stack}
-
-The kernel stack is a per-process memory region maintained in kernel memory that is used as the
-stack for execution of the functions called internally during the execution of a system call.
-
-Each (user) stack frame contains the following information:
-
-1> Function arguments and local variables
-2> Some registers. RA.
-
-{process-creation}
-
-The wait(&status) system call has two purposes. First, if a child of this process has not yet
-terminated by calling exit(), then wait() suspends execution of the process until one of its
-children has terminated. Second, the termination status of the child is returned in the status
-argument of wait().
-
-Parent process running program A
-      |
-      A
-      |
-      child PID = fork(void);                   Child process running program A. 0 = fork(void);
-      |                                               |
-Parent may perform other atcions here                 A  
-      |                                               | 
-      wait(&status); // optional                Child may perform further actions here
-                                                      |
-                                                      execev( B, ... ); // optional
-                                                      |
-                                                      B
-                                                      |
-                                                Execution of program B
-                                                      |
-                                                      exit(status);
-                                                      1> Child status passed to parent and kernel
-                                                      restarts parent.
-                                                      2> Delivers SIGCHLD optionally.
-
-The following idiom is sometimes employed when calling fork():
-
-pid_t childPid; /* Used in parent after successful fork() to record PID of child */
-
-switch (childPid = fork()) {
-  case -1: /* fork() failed */
-    /* Handle error */
-  case 0: /* Child of successful fork() comes here */
-    /* Perform actions specific to child */
-  default: /* Parent comes here after successful fork() */
-    /* Perform actions specific to parent */
-}
-
-<sharing-between-parent-and-child>
-The child’s stack, data, and heap segments are initially exact duplicates of the corresponding parts
-the parent’s memory. The child receives duplicates of all of the parent’s file descriptors.
-
-<race-condition-after-fork>
-After a fork(), it is indeterminate which process-the parent or the child—next has access to the
-CPU. If we need to guarantee a particular order, we must use some kind of synchronization technique.
-
-<case-use-signal>
-Avoiding Race Conditions by Synchronizing with Signals. Although, in practice, such coordination is
-more likely to be done using semaphores, file locks, or message passing. See *kt_linux_core_401* for
-code example.
-
-{monitoring-child-process}
-From #26 in ref-LPI. 
-
-<wait-system-call>
-The wait() system call waits for one of the children of the calling process to terminate and returns
-the termination status of that child in the buffer pointed to by status.
-
-#include <sys/wait.h>
-pid_t wait(int *status);
-
-If no (previously unwaited-for) child of the calling process has yet terminated, the call blocks
-until one of the children terminates. If a child has already terminated by the time of the call,
-wait() returns immediately.
-
-As its function result, wait() returns the process ID of the child that has terminated.
-
-On error, wait() returns -1. One possible error is that the calling process has no previously
-unwaited-for children, which is indicated by the errno value ECHILD. This means that we can use the
-following loop to wait for all children of the calling process to terminate:
-
-while ((childPid = wait(NULL)) != -1)
-  continue;
-if (errno != ECHILD) /* An unexpected error... */
-  errExit("wait");
-
-<waitpid-system-call>
-The wait() system call has a number of limitations, which waitpid() was designed to address. See the
-reference for more details.
+={============================================================================
+*kt_linux_core_200* ipc: sync: semaphore
 
-#include <sys/wait.h>
-pid_t waitpid(pid_t pid, int *status, int options);
+{what-is-semaphore}
+note: This can be used for process or thread but it is expensive for thread.
 
+System V semaphores are not used to transfer data between processes. Instead, they allow processes
+to synchronize their actions. A semaphore is a 'kernel'-maintained 'integer' whose value is never
+permitted to fall below 0. A process can decrease or increase the value of a semaphore.  If an
+attempt is made to decrease the value of the semaphore below 0, then the kernel blocks the operation
+until the semaphore's value increases to a level that permits the operation to be performed. 
 
-{orphan-process} {process-init} {zombie-process}
-2014.02 from google phone interview. The lifetimes of parent and child processes are usually not the
-same-either the parent outlives the child or vice versa. This raises two questions: 
+The meaning of a semaphore is determined by the application. A process decrements a semaphore from
+say, 1 to 0 in order to reserve exclusive access to some 'shared' resource, and after completing work
+on the resource, increments the semaphore so that the shared resource is released for use by some
+other process. The use of a binary semaphore-a semaphore whose value is limited to 0 or 1-is common.
 
-1> Who becomes the parent of an orphaned child? Each process has a parent-the process that created
-it. If a child process becomes orphaned because its "birth" parent terminates, then the child is
-adopted by the init process, and subsequent calls to getppid() in the child return 1. See Section
-26.2. The process 1, init, the ancestor of all processes. The init process adopts the child and
-automatically performs a wait(), thus removing the zombie process from the system.
+However, an application that deals with multiple instances of a shared resource would employ a
+semaphore whose maximum value equals the 'number' of shared resources. Linux provides both System V
+semaphores and POSIX semaphores, which have essentially similar functionality.
 
-2> What happens to a child that terminates before its parent has had a chance to perform a wait()?
-The point here is that, although the child has finished its work, the parent should still be
-permitted to perform a wait() at some later time to determine how the child terminated. The kernel
-deals with this situation by turning the child into a <zombie>. This means that most of the
-resources held by the child are released back to the system to be reused by other processes. The
-only part of the process that remains is an entry in the kernel’s process table recording; among
-other things the child’s process ID, termination status, and resource usage statistics. Section
-36.1.
+1. Setting the semaphore to an absolute value;
+2. Adding a number to the current value of the semaphore;            // give
+3. Subtracting a number from the current value of the semaphore; and // take
+4. Waiting for the semaphore value to be equal to 0.
 
-A zombie process can't be killed by a signal, not even the (silver bullet) SIGKILL. This ensures
-that the parent can always eventually perform a wait(). When the parent does perform a wait(), the
-kernel removes the zombie, since the last remaining information about the child is no longer
-required.
+The last two of these operations may cause the calling process to block. A semaphore has no meaning
+in and of itself. Its meaning is determined only by the associations given to it by the processes
+using the semaphore.
 
-<why-zombie-can-be-a-problem>
-If a parent creates a child, but fails to perform a wait(), then an entry for the zombie child will
-be maintained indefinitely in the kernel’s process table. If a large number of such zombie children
-are created, they will eventually fill the kernel process table, preventing the creation of new
-processes. Since the zombies can’t be killed by a signal, the only way to remove them from the
-system is to kill their parent (or wait for it to exit), at which time the zombies are adopted and
-waited on by init, and consequently removed from the system.
+However, System V semaphores are rendered unusually complex by the fact that they are allocated in
+groups called semaphore sets. So move to POSIX semaphore.
 
-$ ./make_zombie
-Parent PID=1013
-Child (PID=1014) exiting
-  1013 pts/4 00:00:00 make_zombie Output from ps(1)
-  1014 pts/4 00:00:00 make_zombie <defunct>
-After sending SIGKILL to make_zombie (PID=1014):
-  1013 pts/4 00:00:00 make_zombie Output from ps(1)
-  1014 pts/4 00:00:00 make_zombie <defunct>
 
-In the above output, we see that ps(1) displays the string <defunct> to indicate a process in the
-zombie state.
+{posix-semaphore}
+SUSv3 specifies two types of POSIX semaphores:
 
-A common way of reaping dead child processes is to establish a handler for the SIGCHLD signal.
+1. Named semaphores: This type of semaphore has a name. By calling sem_open() with the same name
+'unrelated' processes can access the same semaphore.
 
+2. Unnamed semaphores: This type of semaphore doesn't have a name; instead, it resides at an
+agreed-upon location in 'memory'. Unnamed semaphores can be shared between processes or between a
+group of 'threads'. When shared between processes, the semaphore must reside in a region of (System V,
+POSIX, or mmap()) shared memory. When shared between threads, the semaphore may reside in an
+area of memory shared by the threads (e.g., on the heap or in a global variable).
 
-{why-thread}
+POSIX semaphores operate in a manner similar to System V semaphores; that is, a POSIX semaphore is
+an integer whose value is not permitted to fall below 0. If a process attempts to decrease the value
+of a semaphore below 0(take), then, depending on the function used, the call either blocks or fails
+with an error indicating that the operation was not currently possible.
 
-From {ref-LPI}. Problems with fork:
+Some systems don't provide a full implementation of POSIX semaphores. A typical restriction is that
+only unnamed thread-shared semaphores are supported. That was the situation on Linux 2.4; 
 
-1) The fork call is expensive because memory is copied from the parent to the child. Although
-<copy-on-write> is used to avoid this, but still expensive.
+<linux-2-6-support>
+With Linux 2.6 and a glibc that provides NPTL, a full implementation of POSIX semaphores is
+available.
 
-2) Need IPC after fork between parent and child.
+<named-semaphore>
+To work with a named semaphore, we employ the following functions:
 
-Thread help with these problems as it is <lightweight-process> in terms of creation cost:
+1. The sem_open() function opens or creates a semaphore, initializes the semaphore if it is created
+by the call, and returns a handle for use in later calls.
 
-Thread creation is faster because many of the attributes that must be duplicated in a child created
-by fork() are instead shared between threads.
+#include <fcntl.h> /* Defines O_* constants */
+#include <sys/stat.h> /* Defines mode constants */
+#include <semaphore.h>
 
-Sharing information between threads is easy and fast. It is just a matter of copying data into
-shared (global or heap) variables.
+sem_t *sem_open(const char *name, int oflag, ...  /* mode_t mode, unsigned int value */ );
 
-However, has disadvantages:
+Returns pointer to semaphore on success, or SEM_FAILED on error
 
-1) more efforts to ensure thread-safe
-2) buggy thread can damage all of the threads in the process. less protection.
-3) each thread is competing for use of the finite virtual address space of a host process.
-4) usually desirable to avoid the use of signals in multi-threaded programs since requires careful
-designs.
-5) should run the same program.
-6) more threads, more memory and context switching.
+2. The sem_post(sem) and sem_wait(sem) functions respectively increment and decrement a semaphore's
+value. give and take
 
-{how-about-linux}
+3. The sem_getvalue() function retrieves a semaphore's current value.
 
-A process is a program in action and Linux kernel scheduler schedules based on 'thread'. {Q} KT.
-This is a perspective from scheduler but not from sharing resources. In Linux, kernel has a double
-linked list which has thread_info element. (have task_struct* in this struct) 
-	
-Two virtualisation in Linux: processer and memory.
+4. The sem_close() function removes the calling process’s association with a semaphore that it
+previously opened.
 
-Linux don't distinguish a process(task) with a thread. thread is just a special process. Linux
-kernel has a double-linked list which has <thread_info> struct element(link to thread_struct).
+5. The sem_unlink() function removes a semaphore name and marks the semaphore for deletion when all
+processes have closed it.
 
-why a thread is special is that it shares resource( open files, pending signals, internal kernel
-data, process state, address space, text and data section) with others.
+<named-semaphore-on-linux>
+SUSv3 doesn't specify how named semaphores are to be implemented. On Linux, they are created as
+small POSIX shared memory objects with names of the form sem.name, in a dedicated tmpfs file system
+(Section 14.10) mounted under the directory /dev/shm. This file system has 'kernel'-persistence-the
+semaphore objects that it contains will persist, even if no process currently has them open, but
+they will be lost if the system is shut down.
 
-to create a thread:
+<unnamed-semaphore>
+The semaphore is made available to the processes or threads that use it by placing it in an area of
+memory that they share. Operations on unnamed semaphores use the same functions; sem_wait(),
+sem_post(), sem_getvalue(), and so on that are used to operate on named semaphores.
 
-clone( CLONE_VM| CLONE_FS| CLONE_FILES| CLONE_SIGHAND, 0);
+In addition, two further functions are required:
 
-to create a process:
+The sem_init() function initializes a semaphore and informs the system of whether the semaphore will
+be shared between processes or between the threads of a single process.
 
-clone(SIGCHLD, 0);
+The sem_destroy(sem) function destroys a semaphore. These functions should not be used with named
+semaphores.
 
-Two usual steps to create a process:
+<when-useful-to-use-unnamed>
+1. A semaphore that is shared between 'threads' doesn't need a name. Making an unnamed semaphore a
+shared (global or heap) variable automatically makes it accessible to all threads.
 
-fork();	# copy a child from a parent and actually use clone() call
-exec*()	# load a new program text.
+2. A semaphore that is being shared between 'related' processes doesn't need a name. If a parent
+process allocates an unnamed semaphore in a region of shared memory (e.g., a shared anonymous
+mapping), then a child automatically inherits the mapping and thus the semaphore as part of the
+operation of fork().
 
+3. If we are building a dynamic data structure (e.g., a binary tree), each of whose items requires
+an associated semaphore, then the simplest approach is to allocate an unnamed semaphore within each
+item. Opening a named semaphore for each item would require us to design a convention for generating
+a (unique) semaphore name for each item and to manage those names (e.g., unlinking them when they
+are no longer required). note: real example? useful?
 
-{shared-and-not-shared-between-threads}
 
-Threads do not shares:
-From CH29 in {ref-LPI} and {ref-UNP}
+={============================================================================
+*kt_linux_core_201* ipc: sync: pthread mutex and cond var
 
-The attributes that are shared; in other words, global attributes to a process:
- 
-the same global memory, process code and most data;
-process ID and parent process ID;
-process group ID and session ID;
-process credentials (user and group IDs);
-open file descriptors;
-signal dispositions;
-file system-related information: umask, current working directory, and root directory;
-resource limits;
-
-The attributes for each thread:
-thread ID (Section 29.5);
-signal mask;
-thread-specific data (Section 31.3);
-alternate signal stack (sigaltstack());
-the errno variable;
-realtime scheduling policy and priority (Sections 35.2 and 35.3);
-capabilities (Linux-specific, described in Chapter 39); and
-stack (local variables and function call linkage information).
-registers including PC and SP
-
-
-==============================================================================
-*kt_linux_core_200* pthread
-
-POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard defines an API for
-creating and manipulating threads. So there is one posix standard but there are two implementation
-like NPTL. 
-
-{pthread-apis}
-
-http://pubs.opengroup.org/onlinepubs/7990989799/xsh/pthread.h.html
-http://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread.h.html
-
-Linux threading models compared: LinuxThreads and NPTL
-http://www-128.ibm.com/developerworks/linux/library/l-threading.html?ca=dgr-lnxw07LinuxThreadsAndNPTL
-
-From 2.6, NPTL(New Posix Threading Library) that supports futex(fast user space mutex) and is part
-of glibc.
-
-
-{source}
-
-# from uclibc source
-
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\pthread.c
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\rwlock.c
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\pthread.h
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\bits\pthreadtypes.h
-(_pthread_rwlock_t)
-
-
-{pthread-errno}
-
-The traditional method of returning status from system calls and some library functions is to return
-0 on success and -1 on error, with errno being set to indicate the error. The functions in the
-Pthreads API do things differently. All Pthreads functions return 0 on success or a positive value
-on failure. The failure value is one of the same values that can be placed in errno by traditional
-UNIX system calls. Two approaches:
-
-<one>
-
-From {ref-UNP}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
-This means that set manually errno before calling err_sys() for example. This util funcs handles
-this:
-
-To avoid cluttering the code with braces, use {comma-operator} to combine assignment and the call:
-
-int n;
-if(( n = pthread_mutex_lock( &ndone_mutex )) != 0 )
-	 errno = n, err_sys("pthread_mutex_lock error");
-
-Or
-
-void Pthread_mutex_lock(pthread_mutex_t* mptr)
-{
-	int n;
-
-	if(( n = pthread_mutex_lock( mptr )) == 0 )
-		 return;
-
-	errno = n;
-	err_sys("pthread_mutex_lock error");
-} 
-
-From Appdix C in {ref-UNP}. The reason for our own error funcs is to handle error case with a single
-line. See {pthread-util-func} for the use.
-
-if( error condition )
-	 err_sys( printf format with any number of args );
-
-instead of
-
-if( error condition ) {
-	 char buff[200];
-	 snprintf( buff, sizeof(buff), printf format with any number of args );
-	 perror(buff);
-	 exit(1);
-}
-
-<two>
-
-Because each reference to errno in a threaded program carries the overhead of a function call, our
-example programs don't directly assign the return value of a Pthreads function to errno. note: KT so
-no need to care about errno in pthread.
-
-From CH03 in {ref-LPI}
-
-(lib/tlpi_hdr.h)
-
-#ifndef TLPI_HDR_H
-#define TLPI_HDR_H /* Prevent accidental double inclusion */
-#include <sys/types.h> /* Type definitions used by many programs */
-#include <stdio.h> /* Standard I/O functions */
-#include <stdlib.h> /* Prototypes of commonly used library functions,
-plus EXIT_SUCCESS and EXIT_FAILURE constants */
-#include <unistd.h> /* Prototypes for many system calls */
-#include <errno.h> /* Declares errno and defines error constants */
-#include <string.h> /* Commonly used string-handling functions */
-#include "get_num.h" /* Declares our functions for handling numeric
-arguments (getInt(), getLong()) */
-#include "error_functions.h" /* Declares our error-handling functions */
-typedef enum { FALSE, TRUE } Boolean;
-#define min(m,n) ((m) < (n) ? (m) : (n))
-#define max(m,n) ((m) > (n) ? (m) : (n))
-#endif
-
-TODO: need to summarize:
-
-
-{pthread.h}
-
-#include <pthread.h>
-
-// return 0 if okay, positive Exxx on error which is different from most system calls. 
-//
-// If need multiple arguments to the function, must package them into a structure and then pass the
-// address of this as the single argument to the start function.
-//
-// The tid argument points to a buffer of type pthread_t into which the unique identifier for
-// this thread is copied before pthread_create() returns. This identifier can be used in later
-// Pthreads calls to refer to the thread. The arg should be in global or heap.
-//
-// EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
-//
-int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
-
-<join> <pthread-error-use>
-// return 0 if okay, positive Exxx on error which is different from most system calls. See
-// {errno-use}
-//
-// To wait for a given thread to terminate but no way to wait for any other threads. If that thread
-// has already terminated, pthread_join() returns immediately.
-//
-// If status is not null, the return value from the thread(a pointer to some object) is stored.
-//
-// <circumbent-join-restriction>
-// We noted earlier that pthread_join() can be used to join with only a specific thread. It
-// provides no mechanism for joining with any terminated thread. We now show how a condition
-// variable can be used to circumvent this restriction. The ref-LPI 30.2.4 shows code.
-
-int pthread_join( pthread_t tid, void **status);
-
-
-/* The execution of a thread terminates in one of the following ways: 
- *
- * o The thread's start function performs a return specifying a return value for the thread. This is
- * equivalent to pthread_exit()  
- * 
- * o The thread calls pthread_exit() which can be called in any func called by start func.
- *
- * o The thread is canceled using pthread_cancel()
- *
- * o Any of the threads calls exit(), or the main thread performs a return (in the main() function),
- * which causes all threads in the process to terminate immediately.
- * 
- * {return-value}
- *
- * The retval argument specifies the return value for the thread. The value pointed to by retval
- * should not be located on the thread's stack, since the contents of that stack become undefined on
- * thread termination. (For example, that region of the process's virtual memory might be
- * immediately reused by the stack for a new thread.) The same statement applies to the value given
- * to a return statement in the thread's start function.
- *
- * {main-thread-exit}
- *
- * If the main thread calls pthread_exit() instead of calling exit() or performing a return, then
- * the other threads continue to execute.
- */
-void pthread_exit(void *retval);
-
-
-// {threadid}
-// return tid of calling thread. note: pthread_t is structure and need more to print out and also
-// implementation dependant. In NPTL, pthread_t is a pointer so treat it as opaque data and hence
-// need pthread_equal(). 
-//
-// if (pthread_equal(tid, pthread_self()) 
-// 	printf("tid matches self\n");
-//
-// In 29.5 of {ref-LPI}, POSIX thread IDs are not the same as the thread IDs returned by the Linux
-// specific gettid() system call. POSIX thread IDs are assigned and maintained by the threading
-// implementation. The thread ID returned by gettid() is a number (similar to a process ID) that is
-// assigned by the kernel.  Although each POSIX thread has a unique kernel thread ID in the Linux
-// NPTL threading implementation, an application generally doesn't need to know about the kernel IDs
-// (and won't be portable if it depends on knowing them).
-//
-//  return 0 if they are equal
-//
-int pthread_equeal( pthread_t tid, pthread_t tid );
-pthread_t pthread_self(void);
-
-
-/*  Thread is either [joinable](the default) or [detached]. The detached thread is like a daemon
- *  process: when it terminates, all its resources are released, and cannot wait for it to
- *  terminate. This means cannot get return state. {Q} does it mean joinable thread possibly leaks
- *  resources when not joined? If a joinable thread termintes without pthread_join, it became a
- *  zombie process. Leak resources and may not able to create additional threads. 
- *
- *  {ref-UNP} Detaching a thread doesn't make it immune to a call to exit() in another thread or a
- *  return in the main thread. In such an event, all threads in the process are immediately
- *  terminated, regardless of whether they are joinable or detached. To put things another way,
- *  pthread_detach() simply controls what happens after a thread terminates, not how or when it
- *  terminates.
- *
- *  To make the specified thread detached and often used to detach itself. Can create detached
- *  thread when create it by using attr setting.
- *
- *  pthread_detach( pthread_self() );
- */
-int pthread_detach(pthread_t tid);
-
-
-/*  status must not point to an object that is local to the calling thread.
- *
- *  terminate two other ways:
- *
- *  o thread function returns. return value is the exit status of the thread. {Q} kernal handle and
- *  manage it?
- *
- *  o main thread function returns or any thread call exit/_exit, the process terminates
- *  immediately.
- */
-void pthread_exit(void *status);
-
-// A thread may be canceled by any other thread in the same process. For example, if multiple
-// threads are started to work on a given task (say finding a record in a database) adn the first
-// thread completes the task then cancels the other threds.
-//
-// To handle the possibility of being canceled, can install(push) and remove(pop) cleanup handlers.
-// These handlers are called:
-// a) when the thread is canceled by pthread_cancel
-// b) when the thread voluntarily terminates (either by calling pthread_exit or returning from its
-// thread)
-
-int   pthread_cancel(pthread_t);
-void  pthread_cleanup_push(void*), void *);
-void  pthread_cleanup_pop(int);
-
-
-{pthread-attribute} 
-
-To override the default and normally take the detault using the attr arg as a NULL. Attributes are a
-way to specify behavior that is different from the default. When a thread is created with
-pthread_create or when a synchronization variable is initialized, an attribute object can be
-specified. However the default atributes are usually sufficient for most applications. 
-
-Note: Attributes are specified [only] at thread creation time; they cannot be altered while the thread
-is being used. {Q} really?
-
-Thus three functions are usually called in tandem when setting attribute
-
-o Thread attibute intialisation 
-pthread_attr_init() create a default pthread_attr_t tattr. The function pthread_attr_init() is used
-to initialize object attributes to their default values. The storage is allocated by the thread
-system during execution. note: once the thread has been creted, the attribute object is no longer
-needed, and so is destoryed.
-
-o Thread attribute value change (unless defaults appropriate) 
-A variety of pthread_attr_*() functions are available to set individual attribute values for the
-pthread_attr_t tattr structure. (see below).  
-
-o Thread creation 
-A call to pthread_create() with approriate attribute values set in a pthread_attr_t structure. 
- 
-<code>
-
-The following code fragment should make this point clearer: 
-
-#include <pthread.h> 
-
-pthread_attr_t tattr; // note: can be a local var
-pthread_t tid;
-void *start_routine;
-void arg
-int ret;
-
-ret = pthread_attr_init(&tattr);
-ret = pthread_attr_*(&tattr,SOME_ATRIBUTE_VALUE_PARAMETER);
-ret = pthread_create(&tid, &tattr, start_routine, arg);
-ret = pthread_attr_destroy(&tattr);
-
-In order to save space, code examples mainly focus on the attribute setting functions and the
-intializing and creation functions are ommitted. These must of course be present in all actual code
-fragtments. 
-
-An attribute object is opaque, and cannot be directly modified by assignments. A set of functions is
-provided to initialize, configure, and destroy each object type. Once an attribute is initialized
-and configured, it has process-wide scope. The suggested method for using attributes is to configure
-all required state specifications at one time in the early stages of program execution. The
-appropriate attribute object can then be referred to as needed. Using attribute objects has two
-primary advantages: 
-
-First, it adds to code portability. Even though supported attributes might vary between
-implementations, you need not modify function calls that create thread entities because the
-attribute object is hidden from the interface. If the target port supports attributes that are not
-found in the current port, provision must be made to manage the new attributes. This is an easy
-porting task though, because attribute objects need only be initialized once in a well-defined
-location. 
-
-Second, state specification in an application is simplified. As an example, consider that several
-sets of threads might exist within a process, each providing a separate service, and each with its
-own state requirements. At some point in the early stages of the application, a thread attribute
-object can be initialized for each set. All future thread creations will then refer to the attribute
-object initialized for that type of thread. The initialization phase is simple and localized, and
-any future modifications can be made quickly and reliably. Attribute objects require attention at
-process exit time. When the object is initialized, memory is allocated for it. This memory must be
-returned to the system. The pthreads standard provides function calls to destroy attribute objects. 
-
-
-{pthread-example-in-FOSH}
-
-/* Assert throughout that the POSIX calls worked. If not, HFL cannot be guaranteed to work. */
-resPOSIX = pthread_attr_init(&threadAttrs);
-HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
-
-
-/* The stacksize attribute defines the minimum stack size (in bytes) allocated for the created
- * threads stack.
- *
- * int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize);
- */
-resPOSIX = pthread_attr_setstack(&threadAttrs, ptThreadInfo->pvStack,(size_t)ptThreadInfo->szStack);
-/* If this assert is triggered, it might be because of not aligning address to a boundary of 8. */
-HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
-
-
-/* {pthread-schedule-at-creation}
- * To set the other scheduling policy: 
- */
-resPOSIX = pthread_attr_setschedpolicy(&threadAttrs, SCHED_RR);
-HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
-
-
-/* {pthread-schedule-at-creation}
- * The example to change prio:
- *
- * sched_param param;
- * param.sched_priority = 30;
- * ret = pthread_attr_setschedparam (&tattr, &param);
- * 
- * used to set/inquire a current thread's priority of scheduling.
- * 
- * int pthread_attr_setschedparam(pthread_attr_t *attr, const struct sched_param *param);
- * int pthread_attr_getschedparam(const pthread_attr_t *attr, struct sched_param *param);
- *
- * {Q} {pthread-schedule-at-runtime} is it possible as attr is only at creation?
- */
-resPOSIX = pthread_attr_setschedparam(&threadAttrs, &tSchedParam);
-HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
-	
-resPOSIX = pthread_attr_setscope(&threadAttrs, ContentionScope);
-HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
-
-
-/* The pthread_attr_setinheritsched() function sets the scheduling parameter inheritance state
- * attribute in the specified attribute object. The thread's scheduling parameter inheritance state
- * determines whether scheduling parameters are explicitly specified in this attribute object, or if
- * scheduling attributes should be inherited from the creating thread. Valid settings for
- * inheritsched include:
- * 
- * PTHREAD_INHERIT_SCHED Scheduling parameters for the newly created thread are the same as those of
- * the creating thread.
- * 
- * PTHREAD_EXPLICIT_SCHED Scheduling parameters for the newly created thread are specified in the
- * thread attribute object.
- */
-resPOSIX = pthread_attr_setinheritsched(&threadAttrs, PTHREAD_EXPLICIT_SCHED);
-HFL_DEBUGMGR_ASSERT(resPOSIX == 0);
-
-resPOSIX = pthread_create(&(ptThreadInfo->idThread), &threadAttrs, pfThreadMain, pvParam);
-    
-
-{pthread-stack}
-
-From CH33 in {ref-LPI}.
-
-Each thread has its own stack whose size is fixed when the thread is created. On Linux/x86-32, for
-all threads other than the main thread, the default size of the per-thread stack is 2 MB. The main
-thread has a much larger space for stack growth. Occasionally, it is useful to change the size of a
-thread's stack. 
-
-The pthread_attr_setstacksize() function sets a thread attribute (Section 29.8) that determines the
-size of the stack in threads created using the thread attributes object. The related
-pthread_attr_setstack() function can be used to control both the size and the location of the stack,
-but setting the location of a stack can decrease application portability.
-
-One reason to change the size of per-thread stacks is to allow for larger stacks for threads that
-allocate large automatic variables or make nested function calls of great depth (perhaps because of
-recursion).
-
-Alternatively, an application may want to reduce the size of per-thread stacks to allow for a
-greater number of threads within a process.
-
-The minimum stack that can be employed on a particular architecture can be determined by calling
-sysconf(_SC_THREAD_STACK_MIN). For the NPTL implementation on Linux/x86-32, this call returns the
-value 16,384.
-
-
-{nptl}
-
-Linux threading models compared: LinuxThreads and NPTL
-http://www-128.ibm.com/developerworks/linux/library/l-threading.html?ca=dgr-lnxw07LinuxThreadsAndNPTL
-
-NPTL(new posix threading library) comes from kernel 2.6 and supports Futex(fast user space mutex).
-It is part of glibc.
-
-
-{how-to-check-nptl-version}
-
-$ getconf GNU_LIBPTHREAD_VERSION
-NPTL 2.15
-
-
-{pid-nptl}
-
-note: Q. In Linux, every thread has a PID and can see when use ps command but in NPTL, thread
-group has one PID. is it true?
-
-
-{pthread-compile-link}
-
-It is on GCC 4.6.3 and not -lpthread. This is said when run 'man' on pthread funcs. On Linux,
-option. The effects of this option include the following:
-
-o The _REENTRANT preprocessor macro is defined. This causes the declarations of a few reentrant
-functions to be exposed.
-
-o The program is linked with the libpthread library (the equivalent of -lpthread).
-
-gcc -pthread sample.c
-
-
-==============================================================================
-*kt_linux_core_201*	sync: how to run three threads sequencially
-
-From Cracking the coding interview, p425, 16.5:
-
-Suppose we have following code:
-
-public class Foo {
-	public Foo() {...}
-	public void first() {...}
-	public void second() {...}
-	public void third() {...}
-}
-
-The same instance of Foo will be passed to three different threads. ThreadA will call first, ThreadB
-will call second, and ThreadC will call third. Design a mechanism to ensure that first is called
-before second and second is called before third.
-
-Using lock?
-
-public class FooBad {
-	public FooBad() {
-		lock1 = new ReentrantLock();
-		lock2 = new ReentrantLock();
-		
-		// locks all in a ctor.	
-		lock1.lock(); lock2.lock(); 
-	}
-}
-
-public void first()
-{
-	...
-	lock1.unlock();	// finished first
-}
-
-public void second()
-{
-	lock1.lock();		// wait first to finish
-	lock1.unlock();
-	...
-	lock2.unlock();	// finished second
-}
-
-public void third()
-{
-	lock2.lock();		// wait second to finish
-	lock2.unlock();
-	...
-}
-
-This WON'T work in JAVA since a lock in JAVA is owned by the same thread which locked in.
-
-http://docs.oracle.com/javase/6/docs/api/java/util/concurrent/locks/ReentrantLock.html
-A ReentrantLock is owned by the thread last successfully locking, but not yet unlocking it. A thread
-invoking lock will return, successfully acquiring the lock, when the lock is not owned by another
-thread. The method will return immediately if the current thread already owns the lock. 
-
- [KT] There's no such limitation in Linux and it's possible in the same thread group and if threads
- in different group use lock, can use semaphore or lock on the shared memory.
-
- The mutex has ownership as well and see {mutex-ownership}.
-
-
-==============================================================================
-*kt_linux_core_210*	sync: pthread mutex and cond var
-
-From #07 in {ref-UNP} and #30 in {ref-LPI} 
+From #07 in {ref-UNP} and #30 in {ref-LPI}
 
 This is to sync for data or critial region. Although talking of critial region, what is really
-protected is [the-data] being manipulated within the critical region. This is posix.1 standard.
-mutex and cond-var uses global structure so if these are shared in a shared memory, these can be
-used between processes. If not, it is for threads in a process.
+protected is the 'data' being manipulated within the critical region. This is posix.1 standard.
+
+As with semaphore, mutex and cond-var uses 'global' structure and if these are shared in a shared
+memory, these can be used between processes. If not, it is for threads in a process.
 
 More generally, mutexes can be used to ensure atomic access to any shared resource, but protecting
 shared variables is the most common use.
 
-In {ref-LPI} p881, process-shared mutexes and condition variables. They are not available on all
+In {ref-LPI} p881, process-shared mutexes and condition variables. They are 'not' available on all
 UNIX systems, and so are not commonly employed for process synchronization.
+note: As said, if share mutex structure in shared memory, then what is process-shared mutex?
+
 
 {why-need-sync}
-
-Because of <race-condition>. Like {ref-LPI}, when run two threads without sync, task-switching
-happens based on time-slot given and yield <non-determistic> result.
+Because of 'race' condition. Like {ref-LPI}, when run two threads without sync, task-switching
+happens based on time-slot given and yield 'non''determistic' result.
 
 threadFunc()
 {
-	 for(j=0; j < loops; j++)
-	 {
-		  local = global;
-		  local++;
-		  global = local;
-	 }
+  for(j=0; j < loops; j++)
+  {
+    local = global;
+    local++;
+    global = local;
+  }
 }
 
 If we change this like below, do not need to sync because inc looks atomic?
 
 threadFunc()
 {
-	 for(j=0; j < loops; j++)
-	 {
-		  global++;
-	 }
+  for(j=0; j < loops; j++)
+  {
+    global++;
+  }
 }
 
-NO because this single inc operator may result in multiple machine code which are equivalent to the
+NO because this single inc operator may result in 'multiple' machine code which are equivalent to the
 before. See *kt_linux_core_107* for more about atomic and race-condition.
 
-{two-state-and-ownership} {mutex-deadlock}
 
+{ownership} mutex-deadlock
 A mutex has two states: locked and unlocked. At any moment, at most one thread may hold the lock on
 a mutex. Attempting to lock a mutex that is already locked either blocks or fails with an error
 depending on the method used to place the lock.
 
-When a thread locks a mutex, it becomes the owner of that mutex. Only the mutex owner can unlock the
-mutex. This property [improves the structure of code] that uses mutexes and also allows for some
+When a thread locks a mutex, it becomes the 'owner' of that mutex. Only the mutex owner can 'unlock' the
+mutex. This property 'improves' the structure of code that uses mutexes and also allows for some
 optimizations in the implementation of mutexes.
 
-1> Locking. If try to lock what is already locked, two may happen for [default type] of mutex:
-[mutex-deadlock] or EDEADLK. On Linux, deadlock by default from {ref-LPI}. Why deadlock? Because
-blocked trying to lock a mutex that it already owns.
+1. Locking. If try to lock what is already locked by either self or others, two may happen for
+'default' type of mutex: mutex-'deadlock' or EDEADLK. On Linux, deadlock by default from {ref-LPI}.
+Why deadlock? Because blocked trying to lock a mutex that it already owns.
 
-2> Unlocking. Unlocking a mutex that is not locked or that is locked by another thread
-[undefined-result]
+2. Unlocking. Unlocking a mutex that is not locked or that is locked by another thread 'undefined'
+result.
+
+note: ownership matters when unlock and semaphore do not have ownership.
+
 
 {cooperative-lock}
-
-This means that mutex locking is advisory, rather then mandatory; nothing can prevent one thread
+This means that mutex locking is advisory, rather than mandatory; nothing can prevent one thread
 from manipulating the data without first obtaining the mutex. For example, threads not participating
-a mutex circle.
+a mutex circle can.
 
-Each thread employs the following [protocol] for accessing a resource:
-1> lock the mutex for the shared resource;
-2> access the shared resource; and
-3> unlock the mutex.
+Each thread employs the following protocol for accessing a resource:
+1. lock the mutex for the shared resource;
+2. access the shared resource; and
+3. unlock the mutex.
+
 
 {implicit-sync}
-
 This is synchronization handled by kernel not by applicaion. Such as pipe and message-q. For
 example,
 
@@ -5120,27 +5270,27 @@ grep pattern chapters.* | wc -l
 Writing by producer and reading by consumer are handled by kernel. Does it mean that grep and wc
 runs at the same time? not one after one.
 
+
 {mutex-apis} {explicit-sync}
+Unlike semaphore and file locks, mutex only requires system call for lock contention since on Linux,
+mutexes are implemented using futexes (an acronym derived from fast user space mutexes), and lock
+contentions are dealt with using the futex() system call. So less expensive. from 30.1.3 in
+{ref-LPI}
 
-Unlike semaphore and file locks, mutex only requires system call for lock contention. So not that
-expensive. On Linux, mutex is implemented by futex which is not intended for direct use in user
-space applicaion. From ch30 in {ref-LPI}
-
-If it is [statically] allocated for default attributes, should use:
+If it is 'statically' allocated for default attributes, should use:
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-
 
 If it is dymamically allocated such as malloc or shared-mem, should use. When? mutex can be part of
 structure or object on the heap.
 
-1> The mutex was dynamically allocated on the heap. For example, suppose that we create a
+1. The mutex was dynamically allocated on the heap. For example, suppose that we create a
 dynamically allocated linked list of structures, and each structure in the list includes a
 pthread_mutex_t field that holds a mutex that is used to protect access to that structure.
 
-2> The mutex is an automatic variable allocated on the stack.
+2. The mutex is an automatic variable allocated on the stack.
 
-3> We want to initialize a statically allocated mutex with attributes other than the defaults.
+3. We want to initialize a statically allocated mutex with attributes other than the defaults.
 
 int pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t* attr);
 int pthread_mutex_destory(pthread_mutex_t* mutex);
@@ -5163,16 +5313,17 @@ other threads are not prevented from executing in parallel.
 int pthread_mutex_trylock( pthread_mutex_t *mptr);
 int pthread_mutex_timedlock( pthread_mutex_t *mptr);
 
+
 {deadlock-condition}
-In short, this is a condition waiting for something never happens. Unrequited love?
+In short, deadlock is a condition waiting for something never happens. Unrequited love?
 
 <case-01> from fifo.
-Caution. When open a fifo to read which is not opend to write, calling process is blocked.  meaning
-there is no writing process. Therfore, if parent and child opens different fifos to read, deadlock
-happens. {Q} child to read and parent to write?
+Caution. When open a fifo to read which is not opend to write but there is no writing process,
+reading process is blocked. Therfore, if parent and child opens different fifos to read, deadlock
+happens.
 
 <case-02> from {mutex-deadlock}. 
-1> Locking. If try to lock what is already locked, two may happen for [default type] of mutex:
+1. Locking. If try to lock what is already locked, two may happen for 'default' type of mutex:
 [mutex-deadlock] or EDEADLK. On Linux, deadlock by default from {ref-LPI}. Why deadlock? Because
 blocked trying to lock a mutex that it already owns.
 
@@ -5182,51 +5333,48 @@ called between line A and line B in Listing One. Then wait() will miss the notif
 have to wait for the next produced element to wake up. <If> this element never comes (no more produced
 elements or if the Produce() call actually waits for Consume() to return), there's a deadlock.
 
-<case-04> from {ref-LPI}, deadlock happens:
+<case-04> from {ref-LPI}, deadlock happens that is the same as mutex-deadlock
 
 Thead A             Thread B
 lock(mutex1)        lock(mutex2)
 lock(mutex2)        lock(mutex1)
 
-In other words, both tries to lock the mutex that the other thread has already locked. Both threads
-will remain blocked indefinitely.
+Both tries to lock the mutex that the other thread has already locked. Both threads will remain
+blocked indefinitely.
 
 
 {to-avoid-deadklock}
+1. mutex-hierarchy-or-order
+Less flexible. Use locks in the same set of mutexs in the same order.
 
-o <mutex-hierarchy-or-order> and less flexible. Use locks in the same set of mutexs in [the same
-order].
-
-o <try-and-back-off> and flexible. If try_lock fails, release all and try again later. This is less
-efficient than hierarchy approach but can be more [flexible] since no need rigid hierarchy.
+2. try-and-back-off
+Flexible. If try_lock fails, release all and try again later. This is less efficient than hierarchy
+approach but can be more 'flexible' since no need rigid hierarchy.
 
 
-{mutex-types}
-
-From {ref-LPI}:
-
-// no deadlock detection. On Linux, this is PTHREAD_MUTEX_DEFAULT
+{mutex-types} from {ref-LPI} 30.1.7:
 PTHREAD_MUTEX_NORMAL
+// no deadlock detection. On Linux, this is PTHREAD_MUTEX_DEFAULT
 
-// supports error checking for <mutex-deadlock> locking case but slower than a normal.
 PTHREAD_MUTEX_ERRORCHECK
+// supports error checking for <mutex-deadlock> locking case but 'slower' than a normal.
 
-// A recursive mutex maintains the concept of a [lock-count]. When a thread first acquires the mutex,
+PTHREAD_MUTEX_RECURSIVE
+// A recursive mutex maintains the concept of a lock-'count'. When a thread first acquires the mutex,
 // the lock count is set to 1. Each subsequent lock operation by the same thread increments the lock
 // count, and each unlock operation decrements the count. The mutex is released (i.e., made
 // available for other threads to acquire) only when the lock count falls to 0. 
 //
-// {Q} when is it useful?
+// When is it useful?
 //
 // Unlocking an unlocked mutex fails, as does unlocking a mutex that is currently locked by another
-// thread. In other words, there is no <mutex-deadlock> for unlocking case but personally prefer
-// normal lock with careful design than using recursive lock.
+// thread. 
 //
-PTHREAD_MUTEX_RECURSIVE
+// note: Still have ownership notion but there is no mutex deadlock or undefined result as NOMAL
+// type has.
 
 
 {consumer-producer-example-one}
-
 From {ref-UNP}. Multiple producer(writing) and one consumer(reading). Once writing finishs, consumer
 get started. No need to sync between producer and consumer. Only sync between producers. So use
 mutex and no cond var. 
