@@ -113,6 +113,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_032| case study: porting layer
 |kt_dev_cpp_033| case study: inheritance {how-gcc-build-vtable}
 
+|kt_dev_cpp_100| ref: C++ under the hood
+
 #{ STL follow <what-container-consideration> for points to consider
 |kt_dev_stl_000| useful links and gcc stl {stl-design-rationale}
 |kt_dev_stl_001| pair and tuple class
@@ -11316,7 +11318,7 @@ Primus p507 and EC++06. How can define a class to prevent copy or assign like io
 defining copy controls? This do not work as syn version will be made. Two ways: delete keyword and
 private access control.
 
-<delete-keyword> <C++11>
+<delete-keyword> after C++11
 Signal to the compiler not to define these members and lead to compile error when try to use it. Or
 syn version will be deleted when compiler cannot make it.
 
@@ -11339,12 +11341,8 @@ class PrivateCopy {
     ...
 };
 
-However, friends and members still can call these private members so declare copy controls but not
-define. By doing this, can cause 'link' errors when there are attempts to use. Because when needed,
-compiler will try to link but no definition. The example is ios_base, basic_ios, and sentry of STL
-implementation. 
-
-This is an example and see errors when use private to prevent copies.
+This is an example and see errors when use private to prevent copies and note that won't compile
+regardless of whether there is copy control definition in base class.
 
 #include <iostream>
 
@@ -11395,7 +11393,7 @@ base.cpp:15:7: error: ‘D& D::operator=(const D&)’ is implicitly deleted beca
 base.cpp:12:10: error: ‘Base& Base::operator=(const Base&)’ is private
 base.cpp:15:7: error: within this context
 
-<case-link-error> see not to use inheritance
+<case-link-error> show when able to get access such as friend cases
 using std::cout; using std::endl;
 
 class Base {
@@ -11420,15 +11418,19 @@ $ ./comp.sh use-prevent-copy.cpp
 /home/kit/work/use-prevent-copy.cpp:22: undefined reference to `Base::Base(Base const&)'
 collect2: ld returned 1 exit status
 
+<key>
+note: to prevent access from derived classes, make copy control private and cause compile error.
+note: to prevent access from friend or members, so declare copy controls but not define. By doing
+this, can cause 'link' errors when there are attempts to use. Because when needed, compiler will try
+to link but no definition. The example is ios_base, basic_ios, and sentry of STL implementation.
+
 <boost-noncopyable>
-EC++06. To move the link-time error up to the compile-time error. This still do not have definitions
-but why compile error this time? By moving private up the inheritence, change link error to compile
-error for the derived class. For base class object, still link error. 
+EC++06. For a easy use of adding preventing copy feature, use uncopyable base. 
 
 #include <iostream>
 
 class Uncopyable {
-  protected:
+  protected:                                                   // note
     Uncopyable() {}
     ~Uncopyable() {}
 
@@ -11437,7 +11439,8 @@ class Uncopyable {
     Uncopyable& operator=(const Uncopyable&);
 };
 
-class Foo : private Uncopyable {                            // line 13
+// class Foo : public Uncopyable {                             // note
+class Foo : private Uncopyable {                               // line 13
   public:
     void WhoAmI() { std::cout << "foo" << std::endl; }
 };
@@ -11459,9 +11462,15 @@ use-noncopy.cpp:13:7: error: ‘Foo& Foo::operator=(const Foo&)’ is implicitly
 use-noncopy.cpp:10:17: error: ‘Uncopyable& Uncopyable::operator=(const Uncopyable&)’ is private
 use-noncopy.cpp:13:7: error: within this context
 
-syn copy and assign op for derived classes are supposed to handle base class parts but the derived
-cannot use the base version since the base is private. Again, the point is that derived class part
-can't call the base class part as it's private. In boost, it's 'noncopyable'.
+note: syn copy and assign op for derived classes are supposed to handle base class parts but the
+derived cannot use the base version since the base is private. Again, the point is that derived
+class part can't call the base class part as it's private. In boost, it's 'noncopyable'.
+
+note: Regardless of inheritance type, won't compile. Why shouldn't be public? Since it is not is-a
+relationship.
+
+note: Why not virtual dtor in base? By using protected on dtor, make it error to use delete
+statement but able to run dtor via derived class. See non-virtual-destruction-problem. 
 
 
 {self-assign}
@@ -13434,7 +13443,7 @@ typedef struct tnode {
   struct tnode* left;
   struct tnode* right;
 
-  // NOT OK for C but OK for CPP.
+  // note: NOT OK for C but OK for CPP and since it is a pointer.
   // msort-list.c:7:3: error: unknown type name 'tnode'
   tnode* left;
   tnode* right;
@@ -13739,9 +13748,10 @@ In GCC spec, it will have 'undefined' result but in reality, destroy only the ba
 destroyed. In GCC, no runtime error in simple test. 
 
 This is the same for other member functions. That is if miss out virtual keywords in a base, then
-will have only base version even if expected derived version. Therefore, there are two cases when
-override do not happen; one when argument is different, see {override-keyword}, and one when miss
-out virtual keyword in a base as shown here.
+will have only base version even if expected derived version. 
+
+note: Therefore, there are two cases when override do not happen; one when argument is different,
+see {override-keyword}, and one when miss out virtual keyword in a base as shown here.
 
 <example-code>
 #include <iostream>
@@ -13751,10 +13761,10 @@ using std::cout; using std::endl;
 class Base {
   private:
     int m_iDataABCAnimal;
-  public:
+  public:                                             // <3>
     Base() { cout << "ctor: base" << endl; }
-    ~Base() { cout << "dtor: base" << endl; }         // [case-01]
-    virtual ~Base() { cout << "dtor: base" << endl; } // [case-02]
+    ~Base() { cout << "dtor: base" << endl; }         // <1>
+    virtual ~Base() { cout << "dtor: base" << endl; } // <2>
 };
 
 class Derived: public Base {
@@ -13802,6 +13812,11 @@ dtor: derived
 dtor: base
 --} main 
 
+<3> compile error
+sam01.cpp: In function ‘int main()’:
+sam01.cpp:12:5: error: ‘Base::~Base()’ is protected
+sam01.cpp:38:10: error: within this context                 // this on delete statement
+
 
 <how-virtual-works>
 Why only base part when no virtual dtor? The compiler always use static type and vtable for dynamic
@@ -13843,6 +13858,9 @@ class. All done in compile time and simple code to see vtable. note: this seems 
 <2> The other theory. For virtuals, compiler generate code to decide runtime type and run through
 vtable and if was overrided in derived class, update the vtable of that derived class. Needs more
 runtime overhead.
+
+note: the above about vtable is wrong and see <vtable-per-class> since there is only one vtable for
+all classes in the same inheritance.
 
 
 {when-use-virtual-dtor}
@@ -17478,8 +17496,8 @@ those.
 │       ├── ...
 
 
-==============================================================================
-*kt_dev_cpp_033*	case study: inheritance
+={============================================================================
+*kt_dev_cpp_033* case study: inheritance
 
 In the porting layer design and implementation, have drawn the class hierarchy.
 
@@ -17528,13 +17546,843 @@ port/libmhport.a(CCi.cpp.o): In function `~ISession':
 This shows how GCC implements vtables for a class.
 
 
+={============================================================================
+*kt_dev_cpp_100* ref: C++ under the hood
+
+Visual C and C++ (General) Technical Articles
+
+C++: Under the Hood Jan Gray March 1994
+
+Jan Gray is a Software Design Engineer in Microsoft's Visual C++ Business Unit. He helped
+design and implement the Microsoft Visual C++ compiler. 
+
+Introduction
+
+It is important to understand how your programming language is implemented. Such knowledge dispels
+the fear and wonder of "What on earth is the compiler doing here?"; imparts confidence to use the
+new features; and provides insight when debugging and learning other language features. It also
+give s a feel for the relative costs of different coding choices that is necessary to writ e the
+most efficient code day to day. This paper looks "under the hood" of C++, explaining "run-time" C++
+implementation details such as class layout techniques and the virtual function call mechanism.
+
+Questions to be answered include: 
+
+1. How are classes laid out?  
+2. How are data members accessed?
+3. How are member functions called?
+4. What is an adjuster thunk?
+5. What are the costs: Of single, multiple, and virtual inheritance? Of virtual functions and
+virtual function calls?  Of casts to bases, to virtual bases? Of exception handling? 
+
+First, we'll look at struct layout of C-like structs, single inheritance, multiple inheritance, and
+virtual inheritance, then consider data member access and member functions, virtual and not. We'll
+examine the workings of constructors, destructors, and assignment operator special member functions
+and dynamic construction and destruction of arrays. Finally, we'll briefly consider the impact of
+exception-handling support. For each language feature topic, we'll very briefly present motivation
+and semantics for the language feature (although "Introduction to C++" this is not), and examine how
+the language feature was implemented in Microsoft Visual C++. Note the distinction between abstract
+language semantics and a particular concrete implementation. Other vendors have sometimes made
+different implemen tation choices for what ever reasons. In a few cases we contrast the Visual C++
+implementation with others. 
+
+Class Layout
+
+In this section we'll consider the storage layouts required for different kinds of inheritance.
+
+C-like Structs
+
+As C++ is based upon C, it is "mostly" upwards-compatible with C. In particular, the working papers
+specify the same simple struct layout rules that C has: Members are laid out in their declaration
+order, subject to implementation defined alignment padding. All C/C++ vendors ensure
+that valid C structs are stored identically by their C and C++ compilers.
+
+Here A is a simple C struct with the ob vious expected member layout and padding.
+
+A*->   A::c (padding)
+       A::i
+
+struct A {
+  char c;
+  int i;
+}; 
+
+
+C-like Structs with C++ Features
+
+Of course, C++ is an object-oriented programming language: It provides inheritance, encapsulation,
+and polymorphism by extending the mundane C struct into the wondrous C++ class. Besides data
+members, C++ classes can also encapsulate member functions and many other things. However,
+except for 'hidden' data members introduced to implement virtual functions and virtual inheritance,
+the instance size is 'solely' determined by a class's data members and base classes.
+
+Here B is a C-like struct with some C++ features : There are public/protected/private access control
+declarations, member functions, static members, and nested type declarations. Only the non-virtual
+data members occupy space in each instance. Note that the standards committee working papers permit
+implementations to reorder data members separated by an access declarator, so these three members
+could have been laid out in 'any' order. (In Visual C++, members are always laid out in declaration
+order, just as if they were members of a C struct) 
+
+B*->   B::bm1
+       B::bm2
+       B::bm3
+
+struct B {
+  public:
+    int bm1;
+  protected:
+    int bm2;
+  private:
+    int bm3;
+    static int bsm;
+    void bf();
+    static void bsf();
+    typedef void* bpv;
+    struct N { };
+};
+
+
+Single Inheritance
+
+C++ provides inheritance to factor out and share 'common' aspects of different types. A good example
+of a classes-with-inheritance data type organization is biology's classification of living things
+into kingdoms, phyla, orders, families, genus, species, and so on. This organization makes it
+possible to specify attrib utes, such as "mammals bear live young" at the most appropriate level of
+classi fication; these attributes are then inherited by other classes, so we can conclude without
+further sp ecification that whales, squirrels, and people bear live young. Exceptional cases, such
+as platypi (a mammal, yet lays eggs), will require that we override the inherited attribute or
+behavior with one more appropriate for the derived class. More on that later. 
+
+In C++, inheritance is specified by using the ": base" syntax when defining the derived class. Here
+D is derived from its base class C.
+
+C* ->    C::c1
+
+struct C {
+  int c1;
+  void cf();
+};
+
+C*, D* ->   C::c1
+            D::d1
+
+struct D : C {
+  int d1;
+  void df();
+};
+
+Since a derived class inherits all the properties and behavior of its base class, each instance of
+the derived class will contain a 'complete' copy of the instance data of the base class. Within D,
+    there is no requirement that C's instance data precede D's. But by laying D out this way, we
+    ensure that the address of the C object within D corresponds to the address of the first byte of
+    the D object. As we shall see, this eliminates adding a displacement to a D* when we need to
+    obtain the address of its embedded C. This layout is used by all known C++ implementations.
+    Thus, in a single inheritance class hierarchy, new instance data introduced in each derived
+    class is simply appended to the layout of the base class. Note our layout diagram labels the
+    "address points" of pointers to the C and D objects within a D . 
+
+Multiple Inheritance
+
+Single inheritance is quite versatile and powerful, and generally adequate for expressing the
+(typically limited) degree of inheritance present in most design problems. Sometimes, however, we
+have two or more sets of behavior that we wish our derived class to acquire. C++ provides multiple
+inheritance to combine them. For instance, say we have a model for an organization that has a class
+Manager (who delegates) and class Worker (who actually does the work). Now how can we model a class
+MiddleManager, who, like a Worker, accepts work assignments from his/her manager and who, like a
+Manager, delegates this work to his/her employees? This is awkward to express using single
+inheritance: For MiddleManager to inherit behavior from both Manager and Worker, both must be base
+classes. If this is arranged so that MiddleManager inherits from Manager which inherits from Worker
+, it erroneously ascribes Worker behavior to Managers. (Vice versa, the same problem.) Of course,
+  MiddleManager could inherit from just one (or neither) of Worker or Manager, and instead,
+  duplicate (redeclare) both interfaces, but that defeats polymorphism, fails to reuse the existing
+  interface, and leads to maintenance woes as interfaces evolve over time.
+
+Instead, C++ allows a class to inherit from multiple base classes:
+
+struct Manager ... { ... };
+struct Worker ... { ... };
+struct MiddleManager : Manager, Worker { ... };
+
+How might this be represented? Continuing with our "classes of the alphabet" example: 
+
+E* ->   E::e1
+
+struct E {
+  int e1;
+  void ef();
+};
+
+C*, F* ->   C::c1
+    E* ->   E::e1
+            F::f1
+
+struct F : C, E {
+  int f1;
+  void ff();
+}; 
+
+Struct F multiply inherits from C and E. As with single inheritance, F contains a copy of the
+instance data of each of its base classes. Unlike single inheritance, it is not possible to make the
+address point of each bases' embedded instance correspond to the address of the derived class:
+
+F f;
+// (void*)&f == (void*)(C*)&f;
+// (void*)&f < (void*)(E*)&f; 
+
+Here, the address point of the embedded E within F is not at the address of the F itself. As we
+shall see when we consider casts and member functions, this displacement leads to a small overhead
+that single inheritance does not generally require. An implementation is free to lay out the various
+embedded base instances and the new instance data in any order. Visual C++ is typical in laying out
+the base instances in declaration order, followed by the new data members, also in declaration
+order. (As we shall see, this is not necessarily the case when some bases have virtual functions and
+others don't). 
+
+Virtual Inheritance
+
+Returning to the MiddleManager example which motivated multiple inheritance in the first place, we
+have a problem. What if both Manager and Worker are derived from Employee?
+
+struct Employee { ... };
+struct Manager : Employee { ... };
+struct Worker : Employee { ... };
+struct MiddleManager : Manager, Worker { ... };
+
+Since both Worker and Manager inherit from Employee, they each contain a copy of the Employee
+instance data. Unless something is done, each MiddleManager will contain 'two' instances of
+Employee, one from each base. If Employee is a large object, this 'duplication' may represent an
+unacceptable storage overhead. More seriously, the two copies of the Employee instance might get
+modified separately or inconsistently. We need a way to declare that Manager and Worker are each
+willing to share a single embedded instance of their Employee base class, should Manager or Worker
+ever be inherited with some other class that also wishes to share the Employee base class. In C++,
+     this "sharing inheritance" is (unfortunately) called virtual inheritance and is indicated by
+     specifying that a base class is virtual.
+
+struct Employee { ... };
+struct Manager : virtual Employee { ... };
+struct Worker : virtual Employee { ... };
+struct MiddleManager : Manager, Worker { ... };
+
+Virtual inheritance is considerably more expensive to implement and use than single and multiple
+inheritance. Recall that for single (and multiple) inherited bases and derived classes, the embedded
+base instances and their derived classes either share a common address point (as with single
+    inheritance and the leftmost base inherited via multiple inheritance), or have a simple constant
+displacement to the embedded base instance (as with multiple inherited non-leftmost bases, such as
+    E). 
+
+With virtual inheritance, on the other hand, there can (in general) be no fixed displacement from
+the address point of the derived class to its virtual base. If such a derived class is further
+derived from, the further deriving class may have to place the one shared copy of the virtual base
+at some other, different offset in the further derived class. Consider this example: 
+
+struct G : virtual C {
+  int g1;
+  void gf();
+}; 
+
+G* -> G::vbptr    -> GdGvbptrG
+      G::g1          GdGvbptrC
+C* -> C::c1
+
+struct H : virtual C {
+  int h1;
+  void hf();
+}; 
+
+H* -> H::vbptr    -> HdHvbptrH
+      H::h1          HdHvbptrC
+C* -> C::c1
+
+struct I : G, H {
+  int i1;
+  void _if();
+}; 
+
+IdGvbptrC {              G*, *I ->  G::vbptr    -> IdGvbptrG
+                                    G::g1          IdGvbptrC
+            IdHvbptrC {  H* ->      H::vbptr    -> IdHvbptrH
+                                    H::h1          IdHvbptrC
+          }           }             I::i1
+                         C* ->      C::c1
+
+Ignoring the vbptr members for a moment, notice that within a G object, the embedded C immediately
+follows the G data member, and similarly notice that within an H, the embedded C immediately follows
+the H data member. Now when we layout I , we can't preserve both relationships. In the Visual C++
+layout above, the displacements from G to C in a G instance and in an I instance are different.
+Since classes are generally compiled without knowledge of how they will be derived from, each class
+with a virtual base must have a 'way' to compute the location of the virtual base from the address
+point of its derived class. 
+
+In Visual C++, this is implemented by 'adding' a 'hidden' 'vbptr' ("virtual base table pointer")
+field to 'each' instance of a class with virtual bases. This field points to a shared, per-class
+table of displacements from the address point of the vbptr field to the class's virtual base(s). 
+
+note: Only G and H has vbptr and this is offset to get common C through G or H
+
+Other implementations use embedded pointers from the derived class to its virtual bases, one per
+base. This other representation has the advantage of a smaller code sequence to address the virtual
+base, although an optimizing code generator can often common-subexpression-eliminate repeated
+virtual base access computations. However, it also has the disadvantages of larger instance sizes
+for classes with multiple virtual bases, of slower access to virtual bases of virtual bases (unle
+    ss one incurs yet further hidden pointers), and of a less regular pointer to member dereference.
+
+In Visual C++, G has a hidden vbptr which addresses a virtual base table whose second entry is
+GdGvbptrC. (This is our notation for "in G, the displacement from G's vbptr to C". 
+
+We omit the prefix to "d" if the quantity is constant in all derived classes.
+
+For example, on a 32-bit platform, GdGvbptrC would be 8 (bytes). Similarly, the embedded G instance
+within an I addresses a vbtable customized for G's within I's, and so IdGvbptrC would be 20. As can
+be seen from the layouts of G , H , and I , Visual C++ lays out classes with virtual bases by: 
+
+note: 8 and 20 is offset value
+
+1. Placing embedded instances of the non-virtually inherited bases first, 
+
+2. Adding a hidden vbptr unless a suitable one was inherited from one of the non-virtual bases, 
+
+3. Placing the new data members declared in the derived class, and, finally, 
+
+4. Placing a single instance of each of the virtually inherited bases at the end of the instance.
+
+This representation lets the virtually inherited bases "float" within the derived class (and its
+  further derived classes) while keeping together and at constant relative displacements those parts
+of the object that are not virtual bases. 
+
+Data Member Access
+
+Now that we have seen how classes are laid out, let's consider the cost to access data members of
+these classes. No inheritance. In absence of inheritance, data member access is the same as in C: a
+dereference off some displacement from the pointer to the object. 
+
+C* pc;
+pc->c1; // *(pc + dCc1); 
+
+Single inheritance.
+
+Since the displacement from the derived object to its embedded base instance is a constant 0, that
+constant 0 can be folded with the constant offset of the member within that base.
+
+D* pd;
+pd->c1; // *(pd + dDC + dCc1); // *(pd + dDCc1);
+pd->d1; // *(pd + dDd1); 
+
+Multiple inheritance. Although the displacement to a give n base, or to a base of a base, and so
+on, might be non-zero, it is still constant, and so any set of such displacements can be folded
+together into one constant displacement off the object pointer. Thus even with multiple
+inheritance, access to any member is inexpensive.
+
+F* pf;
+pf->c1; // *(pf + dFC + dCc1); // *(pf + dFc1);
+pf->e1; // *(pf + dFE + dEe1); // *(pf + dFe1);
+pf->f1; // *(pf + dFf1); 
+
+Virtual inheritance. Within a class with virtual bases, access to a data member or non-virtually
+inherited base class is again just a constant displacement off the object pointer. However, access
+to a data member of a virtual base is comparatively expensive, since it is necessary to fetch the
+vbptr, fetch a vbtable entry, and then add that displacement to the vbptr address point, just to
+compute the address of the data member. However, as shown for i.c1 below, if the type of the derived
+class is statically known, the layout is also known, and it is unnecessary to load a vbtable entry
+to find the displacement to the virtual base.
+
+I* pi;
+pi->c1; // *(pi + dIGvbptr + (*(pi+dIGvbptr))[1] + dCc1);
+pi->g1; // *(pi + dIG + dGg1); // *(pi + dIg1);
+pi->h1; // *(pi + dIH + dHh1); // *(pi + dIh1);
+pi->i1; // *(pi + dIi1);
+I i;
+i.c1; // *(&i + IdIC + dCc1); // *(&i + IdIc1); 
+
+What about access to members of transitive virtual bases, for example, members of virtual bases of
+virtual bases (and so on)? Some implementations follow one embedded virtual base pointer to the
+intermediate virtual base, then follow its virtual base pointer to its virtual base, and so on.
+Visual C++ optimizes such access by using additional vbtable entries which provide displacements
+from the de rived class to any transitive virtual bases. 
+
+Casts
+
+Except for classes with virtual bases, it is relatively inexpensive to explicitly cast a pointer
+into another pointer type. If there is a base-derived relationship between class pointers, the
+compiler simply adds or subtracts the displacement between the two (often 0). 
+
+F* pf;
+(C*)pf; // (C*)(pf ? pf + dFC : 0); // (C*)pf;
+(E*)pf; // (E*)(pf ? pf + dFE : 0); 
+
+In the C* cast, no computations are required, because dFC is 0. In the E* cast, we must add dFE , a
+non-zero constant, to the pointer. C++ requires that null pointers (0) remain null after a cast.
+Therefore Visual C++ checks for null before performing the addition. This check occurs only when a
+pointe r is implicitly or explicitly converted to a related pointer type, not when a derived* is
+implicitly converted to a base*const this pointer when a base member function is invoked on a
+derived object. 
+
+As you might expect, casting over a virtual inheritance path is relatively expensive: about the
+same cost as accessing a member of a virtual base: 
+
+I* pi;
+(G*)pi; // (G*)pi;
+(H*)pi; // (H*)(pi ? pi + dIH : 0);
+(C*)pi; // (C*)(pi ? (pi+dIGvbptr + (*(pi+dIGvbptr))[1]) : 0); 
+
+In general, you can avoid a lot of expensive virtual base field accesses by replacing them with one
+cast to the virtual base and base relative accesses: 
+
+/* before: */              ... pi->c1 ... pi->c1 ...
+/* faster: */ C* pc = pi;  ... pc->c1 ... pc->c1 ... 
+
+Member Functions
+
+A C++ member function is just another member in the scope of its class. Each (non-static) member
+function of a class X receives a special hidden this parameter of type X *const , which is
+implicitly initialized from the object the member function is applied to. Also, within the body of a
+member function, member access off the 'this' pointer is implicit. 
+
+struct P {
+  int p1;
+  void pf(); // new
+  virtual void pvf(); // new
+}; 
+
+P* ->    P::vfptr    -> &P::pvf
+         P::p1
+
+P has a non-virtual member function pf() and a virtual member function pvf(). It is apparent that
+virtual member functions incur an instance size hit, as they require a virtual function table
+pointer. More on that later. Notice there is no instance cost to declaring non-virtual member
+functions. Now consider the definition of P::pf() : 
+
+void P::pf() { // void P::pf([P *const this])
+  ++p1;        // ++(this->p1);
+} 
+
+Here P::pf() receives a hidden this parameter, which the compiler has to pass each call. Also note
+that member access can be more expensive than it looks, because member accesses are this relative.
+On the other hand, compilers commonly enregister this so member access cost is often no worse than a
+ccessing a local variable. On the other hand, compilers may not be able to enregister the instance
+data itself because of the possibility this is aliased with some other data. 
+
+Overriding Member Functions
+
+Member functions are inherited just as data members are. Unlike data members, a derived class can
+override, or replace, the actual function definition to be used when an inherited member function is
+applied to a derived instance. Whether the override is static (determined at compile time by the
+static types involved in the member function call) or dynamic (determined at run-time by the dynamic
+object addressed by the object pointer) depends upon whether the member function is declared
+virtual.  
+
+Class Q inherits P's data and function members. It declares pf(), overriding P::pf(). It also
+declares pvf(), a virtual function overriding P::pvf(), and declares a new non-virtual member
+function qf(), and a new virtual function qvf(). 
+
+struct P {
+  int p1;
+  void pf();            // new
+  virtual void pvf();   // new
+}; 
+
+struct Q : P {
+  int q1;
+  void pf();            // overrides P::pf
+  void qf();            // new
+  void pvf();           // overrides P::pvf
+  virtual void qvf();   // new
+};
+
+P*, Q*   ->    P::vfptr    -> &Q::pvf
+               P::p1       -> &Q::qvf
+               Q::q1
+
+For non-virtual function calls, the member function to call is statically determined, at compile
+time, by the type of the pointer expression to the left of the -> operator. In particular, even
+though ppq points to an instance of Q, ppq->pf() calls P::pf(). (Also notice the pointer expressi on
+    left of the -> is passed as the hidden this parameter.) 
+
+P p; P* pp = &p; Q q; P* ppq = &q; Q* pq = &q;
+pp->pf();   // pp->P::pf();   // P::pf(pp);
+ppq->pf();  // ppq->P::pf();  // P::pf(ppq);
+pq->pf();   // pq->Q::pf();   // Q::pf((P*)pq);
+pq->qf();   // pq->Q::qf();   // Q::qf(pq); 
+
+
+For virtual function calls, the member function to call is determined at run-time. Regardless of the
+declared type of the pointer expression left of the -> operator, the virtual function to call is the
+one appropriate to the type of the actual instance addressed by the pointer. In particular, although
+ppq has type P*, it addresses a Q, and so Q::pvf() is called.
+
+pp->pvf();  // pp->P::pvf();  // P::pvf(pp);
+ppq->pvf(); // ppq->Q::pvf(); // Q::pvf((Q*)ppq);
+pq->pvf();  // pq->Q::pvf();  // Q::pvf((P*)pq); 
+
+Hidden vfptr members are introduced to implement this mechanism. A vfptr is added to a class (if it
+    doesn't already have one) to address that class's virtual function table (vftable). Each virtual
+function in a class has a corresponding entry in that class's vftable. Each entry holds the address
+of the virtual function override appropriate to that class. Therefore, calling a virtual function
+requires fetching the instance's vfptr, and indirectly calling through one of the vftable entries
+addressed by that pointer. This is in addition to the usual function call overhead of parameter
+passing, call, and return instructions. In the example below, we fetch q's vfptr, which addresses
+Q's vftable, whose first entry is &Q::pvf. Thus Q::pvf() is called. 
+
+Looking back at the layouts of P and Q, we see that the Visual C++ compiler has placed the hidden
+'vfptr' member at the start of the P and Q instances. This helps ensure that virtual function dispatch
+is as fast as possible. In fact, the Visual C++ implementation ensures that the first field in any
+class 'with' virtual functions is always a vfptr. This can require inserting the new vfptr before base
+classes in the instance layout, or even require that a right base class that does begin with a vfptr
+be placed before a left base that does not have one.
+
+<vtable-per-class>
+Most C++ implementations will share or reuse an inherited base's vfptr. Here Q did 'not' receive an
+'additional' vfptr to address a table for its new virtual function qvf(). Instead, a qvf entry is
+appended to the end of P’s vftable layout. In this way, 'single' inheritance remains inexpensive.
+Once an instance has a vfptr it doesn't need another one. New derived classes can introduce yet more
+virtual functions, and their vftable entries are simply appended to the end of their one per-class
+vftable. 
+
+note: there is only on vtable for classes of single inheritance.
+
+Virtual Functions: Multiple Inheritance
+
+It is possible for an instance to contain more than one vfptr if it inherits them from multiple
+bases, each with virtual functions. Consider R and S: 
+
+struct P {
+  int p1;
+  void pf();            // new
+  virtual void pvf();   // new
+}; 
+
+struct R {
+  int r1;
+  virtual void pvf(); // new
+  virtual void rvf(); // new
+}; 
+
+R*    ->    R::vfptr    -> &R::pvf
+            R::r1       -> &R::rvf
+
+struct S : P, R {
+  int s1;
+  void pvf(); // overrides P::pvf and R::pvf
+  void rvf(); // overrides R::rvf
+  void svf(); // new
+}; 
+
+P*, S*->    P::vfptr    -> &S::pvf
+            P::r1
+    R*->    R::vfptr    -> &thunk1
+            R::r1       -> &S::rvf
+            S::s1
+
+            trunk1: this -= SdPR; goto S::pvf
+
+Here R is just another class with some virtual functions. Since S multiply inherits, from P and R,
+     it contains an embedded instance of each, plus its own instance data contribution, S::s1.
+     Notice the right base R has a different address point than do P and S, as expected with
+     multiple inheritance. S::pvf() overrides both P::pvf() and R::pvf(), and S::rvf() overrides
+     R::rvf(). Here are the required semantics for the pvf override: 
+
+S s; S* ps = &s;
+((P*)ps)->pvf();  // ((P*)ps)->P::vfptr[0])((S*)(P*)ps)
+((R*)ps)->pvf();  // ((R*)ps)->R::vfptr[0])((S*)(R*)ps)
+ps->pvf();        // one of the above; calls S::pvf() 
+
+Since S::pvf() overrides both P::pvf() and R::pvf(), it must replace their vftable entries in the S
+vftable s. However, notice that it is possible to invoke pvf() both as a P and an R. The problem is
+that R's address point does not correspond to P's and S's. The expression (R*)ps does not point to
+the same part of the class as does (P*)ps. Since the function S::pvf() expects to receive an S* as
+its hidden this parameter, the virtual function call itself must automatically convert the R* at the
+call site into an S* at the callee. Therefore, S's copy of R's vftable's pvf slot takes the address
+of an adjuster thunk, which applies the address adjustment necessary to convert an R* pointer into
+an S* as desired. In MSC++, for multiple inheritance with virtual functions, adjuster thunks are
+required only when a derived class virtual function overrides virtual functions of multiple base
+classes. 
+
+Address Points and "Logical This Adjustment"
+
+Consider next S::rvf(), which overrides R::rvf(). Most implementations note that S::rvf() must have
+a hidden this parameter of type S*. Since R's rvf vftable slot may be used when this call occurs:
+
+((R*)ps)->rvf(); // (*((R*)ps)->R::vfptr[1])((R*)ps)
+
+Most implementations add another thunk to convert the R* passed to rvf into an S*. Some also add an
+additional vftable entry to the end of S’s vftable to provide a way to call ps->rvf() without first
+converting to an R*. MSC++ avoids this by intentionally compiling S::rvf() so as to expect a this
+pointer which addresses not the S object but rather the R embedded instance within the S. (We call
+    this "giving overrides the same expected address point as in the class that first introduced
+    this virtual function".) This is all done transparently, by applying a "logical this adjustment"
+to all member fetches, conversions from this , and so on, that occur within the member function.
+(Just as with multiple inheritance member access, this adjustment is constant-folded into other
+ member displacement address arithmetic.) Of course, we have to compensate fo r this adjustment in
+our debugger. 
+
+ps->rvf(); // ((R*)ps)->rvf(); // S::rvf((R*)ps)
+
+Thus MSC++ generally avoids creating a thunk and an additional extra vftable entry when overriding
+virtual functions of non-leftmost bases. 
+
+Adjuster Thunks
+
+As described, an adjuster thunk is sometimes called for, to adjust this (which is found just below
+    the return address on the stack, or in a register) by some constant displacement en route to the
+called virtual function. Some implementations (especially cfront-based ones) do not employ adjuster
+thunks. Rather, they add additional displacement fields to each virtual function table entry.
+Whenever a virtual function is called, the displacement field, which is quite often 0, is added to
+the object address as it is passed in to become the this pointer: 
+
+ps->rvf();
+// struct { void (*pfn)(void*); size_t disp; };
+// (*ps->vfptr[i].pfn)(ps + ps->vfptr[i].disp);
+
+
+The disadvantages of this approach include both larger vftable s and larger code sequences to call
+virtual functions. More modern PC-based implementations use adjust-and-jump techniques:
+
+
+S::pvf-adjust: // MSC++
+this -= SdPR;
+goto S::pvf()
+
+Of course, the following code sequence is even better (but no current implementation generates it):
+
+S::pvf-adjust:
+this -= SdPR; // fall into S::pvf()
+S::pvf() { ... } 
+
+Virtual Functions: Virtual Inheritance
+
+Here T virtually inherits P and overrides some of its member functions. In Visual C++, to avoid
+costly conversions to the virtual base P when fetching a vftable entry, new virtual functions of T
+receive entries in a 'new' vftable, requiring a new vfptr, introduced at the top of T. 
+
+struct T : virtual P {
+  int t1;
+  void pvf();           // overrides P::pvf
+  virtual void tvf();   // new
+}; 
+
+note: this layout is different from usual inheritance.
+
+TdTvbptrP {  T* ->  T::vfptr     -> &T::tvf
+                    T::vbptr     -> TdTvbptrT
+          }         T::t1           TdTvbptrP
+             P* ->  P::vfptr     -> &T::pvf
+                    P::p1
+
+void T::pvf() {
+  ++p1;           // ((P*)this)->p1++; // vbtable lookup!
+  ++t1;           // this->t1++;
+}
+
+As shown above, even within the definition of a virtual function, access to data members of a
+virtual base must still use the vbtable to fetch a displacement to the virtual base. This is
+necessary because the virtual function can be subsequently inherited by a further derived class with
+different layout with respect to virtual base placement. And here is just such a class: 
+
+struct U : T {
+  int u1;
+}; 
+
+
+             T* ->  T::vfptr     -> &T::tvf
+UdTvbptrP {         T::vbptr     -> UdTvbptrT
+                    T::t1           UdTvbptrP
+          }         U::u1
+             P* ->  P::vfptr     -> &trunk2
+                    P::p1
+
+                    trunk2: this -= (UdP-TdP); goto T::pvf
+
+Here U adds another data member, which changes the dP , the displacement to P . Since T::pvf expects
+to be called with a P* in a T , an adjuster thunk is necessary to adjust T this so it arrives at the
+callee addressing just past T::t1 (the address point of a P* in a T T). (Whew!  That’s about as
+complex as things get!) 
+
+Special Member Functions
+
+This section examines hidden code compiled into (or around) your special member functions.
+
+Constructors and Destructors
+
+As we have seen, sometimes there are hidden members that need to be initialized during construction
+and destruction. Worst case, a constructor may perform these activities
+
+1. If "most-derived," initialize vbptr field(s) and call constructors of virtual bases.
+2. Call constructors of direct non-virtual base classes.
+3. Call constructors of data members.
+4. Initialize vfptr field(s).
+5. Perform user-specified initialization code in body of constructor definition.
+
+A "most-derived" instance is an instance th at is not an embedded base instance within some other
+derived class.
+
+So, if you have a deep inheritance hierarchy, even a single inheritance one, construction of an
+object may require many successive initializations of a class's vfptr. (Where appropriate, Visual
+    C++ will optimize away these redundant stores.) Conversely, a destructor must tear down the
+object in the exact reverse order to how it was initialized:
+
+1. Initialize vfptr field(s).
+2. Perform user-specified destruction code in body of destructor definition.
+3. Call destructors of data members (in reverse order).
+4. Call destructors of direct non-virtual bases (in reverse order).
+5. If "most-derived," call destructors of virtual bases (in reverse order).
+
+In Visual C++, constructors for classes with virtual bases receive a hidden “most-derived flag” to
+indicate whether or not virtual bases should be initialized. For destructors, we use a "layered
+destructor model," so that one (hidden) destructor function is synthesized and called to destroy a
+class including its virtual bases (a "most-derived" instance) and another to destroy a class
+excluding its virtual bases. The former calls the latter, then destroys virtual bases (in reverse
+    order). 
+
+Virtual Destructors and Operator Delete
+
+Consider structs V and W. 
+
+V*    ->    V::vfptr    -> &V::~V
+
+struct V {
+  virtual ~V();
+}; 
+
+W*    ->    V::vfptr    -> &W::~W
+
+struct W : V {
+  operator delete();
+}; 
+
+Destructors can be virtual. A class with a virtual destructor receives a hidden vfptr member, as
+usual, which addresses a vftable. The table contains an entry holding the address of the virtual
+destructor function appropriate for the class. What is special about virtual destructors is they are
+implicitly invoked when an instance of a class is deleted. The call site (delete site) does not know
+what the dynamic type being destroyed is, and yet it must invoke the appropriate operator delete for
+that type. 
+
+For instance, when pv below addresses a W, after W::~W() is called, its storage must be destroyed
+using W::operator delete() .
+
+V* pv = new V;
+delete pv;           // pv->~V::V(); // use ::operator delete()
+pv = new W;
+delete pv;           // pv->~W::W(); // use W::operator delete()
+pv = new W;
+::delete pv;         // pv->~W::W(); // use ::operator delete()
+
+To implement these semantics, Visual C++ extends its "layered destructor model" to automatically
+create another hidden destructor helper function, the "deleting destructor," whose address replaces
+that of the "real" virtual destructor in the virtual function table. This function calls the
+destructor appropriate for the class, then optionally invokes the appropriate operator delete for
+the class. 
+
+Arrays
+
+Dynamic (heap allocated) arrays further co mplicate the responsib ilities of a virtual destructor.
+There are two sources of complexity.  First, the dynamic size of a heap allocated array must be
+stored along with the arra y itself, so dynamically allocated arrays automatically allocate extra
+storage to hold the number of array elements. The other complication occurs because a derived class
+may be larger than a base class, yet it is imperative that an array delete correctly de stroy each
+array elemen t, even in contexts where the array size is not evident:
+
+struct WW : W { int w1; };
+pv = new W[m];
+delete [] pv; // delete m W's (sizeof(W) == sizeof(V))
+pv = new WW[n];
+delete [] pv; // delete n WW's (sizeof(WW) > sizeof(V))
+
+Although, strictly speaking, polymorphic array delete is undefined behavior, we had several customer
+requests to implement it anyway. Th erefore, in MSC++, th is is implemented by yet another
+synthesized virtual destructor he lper function, the so-called “vector delete destructor,” which
+(since it is custom ized for a particular class, such as WW) has no difficulty iterating through the
+array elem ents (in reverse order), callin g the appropriate destructor for each. 
+
+Exception Handling
+
+Briefly, the exception handling proposal in the C++ standards committee working papers provides a
+facility by which a function can notify its callers of an exceptional condition and select
+appropriate code to deal with the situation. This provides an alternative mechanism to the
+conventional method of checking error status return codes at every function call return site.
+
+Since C++ is object-oriented, it should come as no surprise that objects are employed to represent
+the exception state, and that the appropriate exception handler is selected based upon the static
+or dynamic type of except ion object "thrown." Also, since C++ always ensures that frame objects
+that are going out of scope are properly destroyed, implementations must ensure that in
+transferring control (unwinding the stack frame) from throw site to "catch" site, (automatic) frame
+objects are properly destroyed. Consider this example: 
+
+struct X { X(); };         // exception object class
+struct Z { Z(); ~Z(); };   // class with a destructor
+extern void recover(const X&);
+void f(int), g(int);
+
+int main() {
+  try {
+    f(0);
+  } catch (const X& rx) {
+    recover(rx);
+  }
+  return 0;
+}
+
+void f(int i) {
+  Z z1;
+  g(i);
+  Z z2;
+  g(i-1);
+}
+
+void g(int j) {
+  if (j < 0)
+    throw X();
+}
+
+This program will throw an exception. main() establishes an exception handler context for its call
+to f(0), which in turn constructs z1, calls g(0), constructs z2, and calls g(-1). g() detects the
+negative argument condition and throws an X object exception to whatever caller can handle it.
+Since neither g() nor f() established an exception handler context, we consider whether the
+exception handler established by main() can handle an X object exception. Indeed it can. Before
+control is transferred to the catch clause in main(), however, objects on the frame between the
+throw site in g() and the catch site in main() must be destroyed. In this case, z2 and z1 are
+therefore destroyed.
+
+An exception handling implementation might employ tables at the throw site and the catch site to
+describe the set of types that might catch the thrown object (in general) and can catch the thrown
+object at this specific catch site, respectively, and generally, how the thrown object should
+initialize the catch clause "actual parameter." Reasonable encoding choices can ensure that these
+tables do not occupy too much space.
+
+However, let us reconsider function f(). It looks innocuous enough. Certainly it contains neither
+try, catch, nor throw keywords, so exception handling would not appear to have much of an impact
+on f(). Wrong! The compiler must ensure that, once z1 is constructed, if any subsequently called
+function were to raise an exception ("throw") back to f(), and therefore out of f(), that the z1
+object is properly destroyed. Similarly, once z2 is constructed, it must ensure that a subsequent
+throw is sure to destroy z2 and then z1.
+
+To implement these "unwind semantics," an implementation must, behind the scenes, provide a
+mechanism to dynamically determine the context (site), in a caller function, of the call that is
+raising the exception. This can involve additional code in each function prolog and epilog, and
+worse, updates of state variables between each set of object initializations. For instance, in the
+example above, the context in which z1 should be destroyed is clearly distinct from the subsequent
+context in which z2 and then z1 should be destroyed, and therefore Visual C++ updates (stores) a new
+value in a state variable after construction of z1 and again after construction of z2. All these
+tables, function prologs, epilogs, and state variable updates, can make exception handling
+functionality a significant space and speed 'expense'. As we have seen, this expense is incurred
+even in functions that do not employ exception handling constructs. Fortunately, some compilers
+provide a compilation switch and other mechanisms to disable exception handling and its overhead
+from code that does not require it. 
+
+Summary
+
+There, now go write your own compiler. Seriously, we have considered many of the significant C++
+run-time implementation issues. We see that some wonderful language features are almost free, and
+others can incur significant overhead. These implementation mechanisms are applied quietly for you,
+       behind the curtains, so to speak, and it is often hard to tell what a piece of code costs
+       when looking at it in isolation. The frugal coder is well advised to study the generated
+       native code from time to time and question whether use of this or that particularly cool
+       language feature is worth its overhead. 
+
+
 # ============================================================================
 #{ STL
 ={============================================================================
 *kt_dev_stl_000* useful links
 
 http://www.sgi.com/tech/stl/ 
-
+l
 {stl-design-rationale}
 The idea behind the STL is to beat the combinatorial explosion of containers and functions that
 implement the same data structures and algorithms without forcing all program structures to be
@@ -23319,8 +24167,8 @@ void f()
 }
 
 To solve this, use resource-managing-class by putting resource inside object and use the fact that
-dtor is called automatically when object is destroyed; use object lifetime. As soon as get resource, initialize
-a object. How? In a <constructor> and hence called raii. 
+dtor is called automatically when object is destroyed; use object lifetime. As soon as get resource,
+initialize a object. How? In a 'constructor' and hence called raii. 
 
 Acquire and initialize a resource-managing-class in the same statement. In other words, resource
 should be 'encapsulated' in a object, resouce-managing-class, but raii do not exist to encapsulate
@@ -23464,8 +24312,7 @@ dtor: ALOCK: 2
 dtor: ALOCK: 1
 --} main 
 
-<example-window-handle>
-MEC++09.
+<example-window-handle> MEC++09.
 
 void displayInfo(const Information& info)
 {
@@ -23476,23 +24323,21 @@ void displayInfo(const Information& info)
   destoryWindow(w);
 }
 
-
 class WindowHandle {
   public:
     WindowHandle( WINDOW_HANDLE handle ) : w(handle) {}
     ~WindowHandle() { destoryWindow(w); }
 
-    // [conversion-op]
+    // note: conversion-op
     operator WINDOW_HANDLE() { return w; }
 
   private:
     WINDOW_HANDLE w;
 
-    // [preventing-copies]
+    // note: preventing-copies
     WindowHandle( const WindowHandle& );
     WindowHandle& operator=( const WindowHandle& );
 };
-
 
 void displayInfo(const Information& info)
 {
@@ -23514,7 +24359,7 @@ The raii is great but there are two cautions when use raii.
 
 1. When use resources which has own interface such as mutex and db connection, it can raise
 exception in destructor. Since raii uses destructor, it can cause the problem is described in
-{problem-of-exception-in-dtor}. 
+{problem-of-exception-in-dtor}.
 
 2. Acquire and initialize a raii in the same statement. In other words, use constructor. If not, can
 be a problem as described in EC++17. <evaluation-order>
@@ -23546,7 +24391,7 @@ By using shared_ptr with delete, do not need to concern about clean up.
 
 <raii-vs-shared-pointer>
 <key> this is a decision point; use raii and concern about copy or use shared_ptr deleter and don't
-concern about copy.  {pointerlike} in *kt_dev_cpp_004* For this example, use 'deleter' to use unlock
+concern about copy. {pointerlike} in *kt_dev_cpp_004* For this example, use 'deleter' to use unlock
 instead of default delete.
 
 class Lock {
@@ -23564,14 +24409,14 @@ To:
 
 class Lock {
   public:
-    explicit Lock( Mutex* pm ) >
-      :mutexPtr( pm, unlock )    // <note> deleter
+    explicit Lock( Mutex* pm )
+      :mutexPtr( pm, unlock )    // note: deleter
       {
         lock( mutexPtr.get() );  // to get law pointer assuming this is C interface
       }
 
   private:
-    std::shared_ptr< Mutex > mutexPtr;
+    std::shared_ptr<Mutex> mutexPtr;
 };
 
 Set deleter using shared_ptr ctor in ctor init list. No longer declares a destructor.
@@ -23594,7 +24439,7 @@ resources get released whenever the last reference to it gets destroyed. To perf
 more complicated scenarios, helper classes, such as weak_ptr, bad_weak_ptr, and
 enable_shared_from_this, are provided.
 
-#include <memory> and def init has a nullptr. See that "T" but not "T*".
+#include <memory> and def init has a nullptr. note that "T" but not "T*".
 
 shared_ptr<T> plist;
 shared_ptr<list<int>> plist;
@@ -23681,7 +24526,7 @@ void add_item( const std::shared_ptr<Quote>& sale);
 <reset-but-not-assign>
 Why not assignment instead of using reset? Think that = operator is to decrease a reference counter
 of right and to do the opposite for left and cannot do it on new objects. To assign a new pointer to
-a shared_ptr. Like assignment, reset updates reference count of left. If sp is the only shared_ptr
+a shared_ptr. Like assignment, reset 'updates' reference count of left. If sp is the only shared_ptr
 pointing at its object, reset frees sp's existing object. If q is passed, makes sp points to q,
 otherwise makes sp null.
 
@@ -23698,7 +24543,6 @@ p = new int(1024);                  // ERROR
 p.reset( new int(1024));
 
 <deletion-and-deleter>
-
 # set-deleter
 
 This is exception safe. However, how can we make it sense when using resources which have own
@@ -23706,7 +24550,7 @@ interfacces since default deleter is delete.
 
 void f()
 {
-  shared_ptr< int > sp (new int(42) );
+  shared_ptr<int> sp (new int(42) );
   // use sp
   // exception occur and no catch
 }
@@ -23720,7 +24564,7 @@ void f()
 
 User can set deleter of shared_ptr rather than the default deleter, delete.
 
-<note> this deleter must take a 'single' argument of type T*. otherwise, compile error
+note: this deleter must take a 'single' argument of type T*. otherwise, compile error
 void end_connection( connection *p ) { disconnect(*p); }
 
 void f()
@@ -23809,21 +24653,22 @@ kt@kt-ub-vb:~/work$ ./a.out
 ------------
 *ptr: Jutta    *ptr: Jutta    *ptr: Nicolai    *ptr: Jutta    *ptr: Nicolai    
 use_count(jutta): 4
-use_count(jutta): 3
+use_count(jutta): 3              // after set nullptr
 use_count(nico ): 3
 resize to 2 
-deleter called: Nicolai
+deleter called: Nicolai          // when set nullptr
 use_count(jutta): 0              // <Q> why?
 use_count(nico ): 0
 deleter called: Jutta
-kt@kt-ub-vb:~/work$ 
+
 
 # delete with array (p80, revisit when necessary)
 
+
 # delete with other destruction policy 
 When resource cleaning up is more complicated than a single function call, needs destruction policy.
-<note> this shows how function object is useful.
-<note> the passed deleter is not allowed to throw exceptions.
+note: this examples shows how function object is useful.
+note: the passed deleter is not allowed to throw exceptions.
 
 // first example: to ensure that a temporary file gets removed when the last reference to it gets
 // destroyed. see function object that handles more than a single argument passed in deleter.
@@ -23841,9 +24686,9 @@ class FileDeleter
     FileDeleter (const std::string& fn)
       : filename(fn) {
       }
-    void operator () (std::ofstream* fp) {
-      fp->close(); // close.file
-      std::remove(filename.c_str()); // delete file
+    void operator () (std::ofstream* fp) {      // T is ofstream and T*
+      fp->close();                              // close.file
+      std::remove(filename.c_str());            // delete file
     }
 };
 
@@ -23892,7 +24737,7 @@ std::shared_ptr<int> getSharedIntMemory (int num)
     throw std::string(strerror(errno));
   }
 
-  // <note> here
+  // note: here
   return std::shared_ptr<int>(static_cast<int*>(mem), SharedMemoryDetacher());
 }
 
@@ -23920,7 +24765,7 @@ int main()
 The shared_ptrs provide only operators * and ->. Pointer arithmetic and operator [ ] are not
 provided. 
 
-When shared_ptr points to memory block as shm eample above, to access the memory, you have to use
+When shared_ptr points to memory block as shm example above, to access the memory, you have to use
 get(), which yields the internal pointer wrapped by shared_ptr to provide the full pointer
 semantics:
 
@@ -23991,10 +24836,9 @@ class StrBlob {
     std::string& front();
     std::string& back();
 
-    // return a copy object like iterator. NOTE: Why is this? Since for the begin(), use dtor with
-    // curr(0) and for end(), use dtor curr(size). vector[0] and vector[size].
+    // return a copy object like iterator. vector[0] and vector[size] that is off-the-end
     //
-    // <note> how the weak pointer in StrBlobPtr get set from *this
+    // note: how the weak pointer in StrBlobPtr get set from *this
     StrBlobPtr begin() { return StrBlobPtr(*this); }
     StrBlobPtr end() { reutn StrBlobPtr(*this, data->size(); }
 
@@ -24048,7 +24892,7 @@ lifetime of the vector.
 
 <use-cases>
 shared_ptrs are provided to automatically release resources associated with objects no longer
-needed. However, under certain circumstances, this behavior doesn’t work or is not what is intended:
+needed. However, under certain circumstances, this behavior doesn't work or is not what is intended:
 
 1. One example is 'cyclic' references. If two objects refer to each other using shared_ptrs, and you
 want to release the objects and their associated resource if no other references to these objects
@@ -24073,16 +24917,16 @@ shared_ptr.
 4. You can't use operators * and -> to access a referenced object of a weak_ptr directly. Instead,
 you have to create a shared pointer out of it. This makes sense for two reasons:
 
-* Creating a shared pointer out of a weak pointer checks whether there is (still) an associated
-object. If not, this operation will throw an exception or create an empty shared pointer; what
+4.1 Creating a shared pointer out of a weak pointer checks whether there is (still) an associated
+object. If not, this operation will throw an exception or create an 'empty' shared pointer; what
 exactly happens depends on the operation used.
 
-* While dealing with the referenced object, the shared pointer can't get released.
+4.2 While dealing with the referenced object, the shared pointer can't get released since shared
+pointer was created out of weak pointer.
 
 As a consequence, class weak_ptr provides only a small number of operations:
 
 <example>
-
 # cyclic reference. none of the Persons gets released, because each still has at least one shared
 # pointer referring to it.
 
@@ -24099,6 +24943,7 @@ class Person {
     shared_ptr<Person> mother;
     shared_ptr<Person> father;
     vector<shared_ptr<Person>> kids;
+
     Person (const string& n,
         shared_ptr<Person> m = nullptr,
         shared_ptr<Person> f = nullptr)
@@ -24111,36 +24956,36 @@ class Person {
 
 shared_ptr<Person> initFamily (const string& name)
 {
-  shared_ptr<Person> mom(new Person(name+"’s mom"));
-  shared_ptr<Person> dad(new Person(name+"’s dad"));
+  shared_ptr<Person> mom(new Person(name+"'s mom"));
+  shared_ptr<Person> dad(new Person(name+"'s dad"));
   shared_ptr<Person> kid(new Person(name,mom,dad));
   mom->kids.push_back(kid);
   dad->kids.push_back(kid);
-  return kid;
+  return kid;                                 // return kid
 }
 
 int main()
 {
   shared_ptr<Person> p = initFamily("nico");
 
-  cout << "nico’s family exists" << endl;
+  cout << "nico's family exists" << endl;
   cout << "- nico is shared " << p.use_count() << " times" << endl;
-  cout << "- name of 1st kid of nico’s mom: " << p->mother->kids[0]->name << endl;
+  cout << "- name of 1st kid of nico's mom: " << p->mother->kids[0]->name << endl;
 
-  p = initFamily("jim");
-  cout << "jim’s family exists" << endl;
+  p = initFamily("jim");                     // note: this is when expect dtor happens
+  cout << "jim's family exists" << endl;
 }
 
-nico’s family exists
+nico's family exists
 - nico shared 3 times
 - name of 1st kid of nicos mom: nico
-jim’s family exists
+jim's family exists
 
                                              mom dad
                                                \  \
 mom [ m, f, kids ]   dad [ m, f, kids ]   kid [ m, f, kids ]
-               \                    \
-                 kid                kid
+               \ (shared or weak)   \
+               kid                  kid
 
 Solution?
 
@@ -24149,7 +24994,8 @@ class Person {
     string name;
     shared_ptr<Person> mother;
     shared_ptr<Person> father;
-    vector<weak_ptr<Person>> kids; // weak pointer !!!
+    vector<weak_ptr<Person>> kids;           // note: weak pointer
+
     Person (const string& n,
         shared_ptr<Person> m = nullptr,
         shared_ptr<Person> f = nullptr)
@@ -24174,10 +25020,10 @@ delete jim’s dad
 delete jim’s mom
 
 <key>
-As soon as we lose our handle into a family created - either by assigning a new value to p or by
+As soon as we lose our handle into a kid created - either by assigning a new value to p or by
 leaving main() - the kid's object of the family loses its last owner, which has the effect that both
 parents lose their last owner. So 'all' objects, initially created by new, are deleted now so that
-their destructors get called.
+their destructors get called since weak pointer don't increase count.
 
 # StrBlobPtr example
 #
@@ -24192,14 +25038,14 @@ class StrBlobPtr {
   public:
     StrBlobPtr(): curr(0) {}
 
-    // <note> wptr gets created out of shared ptr, a.data
+    // note: wptr gets created out of shared ptr, a.data
     StrBlobPtr( StrBlob &a, size_t sz=0 ): wptr( a.data ), curr(sz) {}
 
     StrBlobPtr& incr();
     StrBlobPtr& deref() const;
 
   private:
-    std::shared_ptr< std::vector<std::string>> check( std::size_t, const std::string& ) const;
+    std::shared_ptr<std::vector<std::string>> check( std::size_t, const std::string& ) const;
     std::weak_ptr<std::vector<std::string>> wptr;
     std::size_t curr;
 };
@@ -24208,10 +25054,10 @@ class StrBlobPtr {
 # in the reference count of its corresponding shared ptr, the vector might have been deleted. If the
 # vector is gone, lock() will return a null pointer. 
 
-std::shared_ptr< std::vector<std::string>> 
+std::shared_ptr<std::vector<std::string>>
 StrBlobPtr::check( std::size_t i, const std::string &msg ) const
 {
-  // <note> lock returns 'shared' pointer when the vector is still around. If it's gone, lock()
+  // note: lock returns 'shared' pointer when the vector is still around. If it's gone, lock()
   // returns null.
   auto ret = wptr.lock();
   if(!ret)
@@ -24236,6 +25082,7 @@ StrBlobPtr& StrBlobPtr::incr() const
   curr++;
   return *this;
 }
+
 
 <Q> Expected output?
 #include <iostream>
@@ -24313,11 +25160,11 @@ $ ./a.out
 ctor for b1
 -b1 size: 0-
 ctor for b2
--b2 size: 4-  // pointing to the same underlying vector.
+-b2 size: 4-
 dtor for b2
--b1 size: 4-
+-b1 size: 4-   // pointing to the same underlying vector.
 -} main ---
-dtor for b2  // why? since it's copied using the syn copy assign in b1=b2.
+dtor for b2    // why not b1? since it's copied using the syn copy assign in b1=b2.
 
 
 <check-on-shared-pointer>
@@ -24335,24 +25182,23 @@ modification is not possible, lock() yields an empty shared_ptr. In that case, c
 
 you have several options to check that the object still exist: 
 
-1. You can call expired(), which returns true if the weak_ptr doesn’t share an object any longer.
-This option is equivalent to checking whether use_count() is equal to 0 but might be faster.
+1. You can call expired(), which returns true if the weak_ptr doesn't share an object any longer.
+This option is equivalent to checking whether use_count() is equal to 0 but might be 'faster'.
 
 2. You can explicitly convert a weak_ptr into a shared_ptr by using a corresponding shared_ptr
 constructor. If there is no valid referenced object, this constructor will throw a bad_weak_ptr
 exception.
 
-3. Use use_count. Not recommended.
+3. Use use_count. Not recommended since it is slow and not reliable.
 
 <mis-use-shared-pointer>
-
 1. Cyclic reference shown above.
 
 2. double delete. Have to ensure that only one 'group' of shared pointers owns an object.
 
 int* p = new int;
 shared_ptr<int> sp1(p);
-shared_ptr<int> sp2(p);    // ERROR
+shared_ptr<int> sp2(p);    // ERROR note: no compile error but error in double delete.
 
 For this reason, you should always directly initialize a smart pointer the moment you create the
 object with its associated resource:
@@ -24380,15 +25226,15 @@ void setParentsAndTheirKids (shared_ptr<Person> m = nullptr, shared_ptr<Person> 
 }
 
 The problem is the creation of a shared pointer out of this. Want to set the kids of members mother
-and father. But to do that, we need a shared pointer to the kid, which we don’t have at hand. This
-then open a new group of owners which is temporary. Two temporary to kids and double delete.
+and father. But to do that, we need a shared pointer to the kid, which we don't have at hand. This
+then open a 'new' group of owners which is temporary. Two 'temporary' to kids and double delete.
 
-One way to deal with this problem is to pass the shared pointer to the kid as a third argument.  But
+One way to deal with this problem is to pass the shared pointer to the kid as a third argument. But
 the C++ standard library provides another option: class std::enable_shared_from_this<>.
 
 <further-details>
 1. make_shared is faster
-Note that shared_ptr<X>(new X(...)) performs two allocations: one for X and one for the control
+note that shared_ptr<X>(new X(...)) performs two allocations: one for X and one for the control
 block used, for example, by the shared pointer to manage its use count. 
   
 Using make_shared<X>(...) instead is considerably faster, performing only one allocation, and safer
@@ -24396,7 +25242,7 @@ because a situation where the allocation of X succeeds but the allocation of the
 cannot occur.
 
 2. cast operation
-Note that using the ordinary cast operators is not possible, because it results in undefined
+note that using the ordinary cast operators is not possible, because it results in undefined
 behavior:
 
 shared_ptr<void> sp(new int);                // shared pointer holds a void* internally
@@ -24411,7 +25257,7 @@ helps to avoid resource leaks when 'exceptions' are thrown. This was auto_ptr be
 only one user because 'no' ordinary copy and assign are supported. Only 'one' unique_ptr at a time
 can point to a given object. So limit the use and it transfer ownerships.
 
-In contrast to shared pointers, a minimum space and time overhead is the focus of this class.
+note: In contrast to shared pointers, a 'minimum' space and time overhead is the focus of this class.
 
 <why>
 The unique_ptr tries to solve the exactly same problem of raii. Say that unique_ptr is one of raii
@@ -24486,7 +25332,7 @@ p2.reset( p3.release() );
 // initialize a unique_ptr with a new object
 std::unique_ptr<ClassA> up1(new ClassA);
 
-std::unique_ptr<ClassA> up2(up1);            // ERROR: in compile. not possible 
+std::unique_ptr<ClassA> up2(up1);            // ERROR in compile since no copy support
 std::unique_ptr<ClassA> up3(std::move(up1)); // copy the unique_ptr. transfer ownership of the unique_ptr
 
 # assign
@@ -24495,7 +25341,7 @@ std::unique_ptr<ClassA> up3(std::move(up1)); // copy the unique_ptr. transfer ow
 std::unique_ptr<ClassA> up1(new ClassA);
 std::unique_ptr<ClassA> up2; // create another unique_ptr
 
-up2 = up1;              // ERROR: not possible
+up2 = up1;              // ERROR: not possible since no copy support
 up2 = std::move(up1);   // assign the unique_ptr - transfers ownership from up1 to up2
 
 <source-sink>
@@ -24531,11 +25377,10 @@ void g()
 In any case, 'no' resource leak is possible. Even if an exception is thrown, any unique_ptr that owns
 data ensures that this data is deleted.
 
-Why no std::move() in the return statement of source()?
-
+<Q> Why no std::move() in the return statement of source()?
 <return-unique-ptr> move-operation
 One exception to the rule that cannot copy a unique_ptr; that according to the language rules of
-C++11, the compiler will try a move automatically. 
+C++11, the compiler will try a 'move' automatically. 
 
 unique_ptr<int> clone(int p) {
   ...
@@ -24551,7 +25396,6 @@ unique_ptr<int> clone(int p) {
 }
 
 <mis-use-unique-pointer>
-
 # lost pointer
 
 // WRONG. p2 won't free the memory and have lost the pointer.
@@ -24611,10 +25455,10 @@ class ClassB {
     // (default destructor lets ptr1 and ptr2 delete their objects)
 };
 
-<note> First, that you can skip the destructor now because unique_ptr does the job for you. 
-<note> You also have to implement the copy constructor and assignment operator. By default, both
-would try to copy or assign the members, which isn't possible. If you don’t provide them, ClassB
-also would provide only move semantics. Here valuelike used.
+note: First, that you can skip the destructor now because unique_ptr does the job for you. 
+note: You also have to implement the copy constructor and assignment operator. By default, both
+would try to copy or assign the members, which isn't possible. If you don't provide them, ClassB
+also would provide only move semantics. <Q> by compiler? Here valuelike used.
 
 <use-with-containers>
 In auto_ptr, it is not possible to store an auto_ptr in a container, nor could we return one from a
@@ -24629,7 +25473,6 @@ the deleter. (significant cost?)
 
 shared_ptr<connection> p (&c, end_connection);
 unique_ptr<connection, decltype(end_connection)*> p ( &c, end_connection );
-
 
 <get-vs-conversion>
 EC++15. Have to provide access to raw underlying resource? There are two ways: implicit and explicit
@@ -29044,7 +29887,7 @@ Virtual func must not be inline because inline is done at compile time but virtu
 
 makeCall(C1* pC1)
 {
-	 pC1->f1();
+   pC1->f1();
 }
 
 Which one? C1::f1() or C2::f1()? pC1 can be really either C1, base or C2, derived.
