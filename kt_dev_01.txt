@@ -113,7 +113,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_032| case study: porting layer
 |kt_dev_cpp_033| case study: inheritance {how-gcc-build-vtable}
 
-|kt_dev_cpp_100| ref: C++ under the hood
+|kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
+|kt_dev_cpp_101| ref: C++ under the hood, Scott Meyers
+|kt_dev_cpp_102| ref: others
 
 #{ STL follow <what-container-consideration> for points to consider
 |kt_dev_stl_000| useful links and gcc stl {stl-design-rationale}
@@ -147,6 +149,8 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_060| algorithm
 |kt_dev_stl_061| algorithm: predicate, lambda, function object
+|kt_dev_stl_062| algorithm: nonmodifying: equal, is_permutation
+|kt_dev_stl_063| algorithm: nonmodifying: count
 
 |kt_dev_stl_070| string
 |kt_dev_stl_071| string: stringstream {inefficient-concatnation}
@@ -155,8 +159,10 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_100| raii {factory-func} {auto-lock}
 |kt_dev_stl_101| smart pointer
-|kt_dev_stl_102| smart pointer examples
-|kt_dev_stl_103| when to use which containers
+|kt_dev_stl_102| smart pointer internal: auto_ptr
+|kt_dev_stl_103| smart pointer internal: shared_ptr
+|kt_dev_stl_104| smart pointer examples
+|kt_dev_stl_105| when to use which containers
 
 |kt_dev_stl_110| new and delete {default-and-value-init} {placement-new} {allocator}
 |kt_dev_stl_111| gcc stl impl files
@@ -3683,23 +3689,38 @@ ISO C99 adds the following keywords:
      inline _Bool _Complex _Imaginary
 
 
-==============================================================================
-*kt_dev_gcc_002*	error: ISO C++ forbids declaration of 'UseStatic' with no type [-fpermissive]
+={============================================================================
+*kt_dev_gcc_002* error: ISO C++ forbids declaration of X with no type [-fpermissive]
 
+<1>
 class UseStaic
 {
-	public:
-	UseStatic() { std::cout << "Use staic ctor" << std::endl; }
+  public:
+    UseStatic() { std::cout << "Use staic ctor" << std::endl; }
 
-	private:
-	Sclass m_sclass;
+  private:
+    Sclass m_sclass;
 };
 
 Happened when made a typo in class name and meant to be class UseStatic. Basically, not able to find
 UseStatic type.
 
-From GCC:
+<2>
+template <typename T>
+PRINT_ELEMENTS( T& coll, const string optstr="" )
+{
+  cout << optstr;
 
+  for( const auto &elem : coll )
+    cout << elem << " ";
+
+  cout << endl;
+}
+
+error: ISO C++ forbids declaration of ‘PRINT_ELEMENTS’ with no type [-fpermissive]
+
+
+{fpermissive}
 -fpermissive
 
 Downgrade some diagnostics about nonconformant code from errors to warnings. Thus, using
@@ -4903,15 +4924,14 @@ Syntax
 for ( expression opt ; expression opt ; expression opt) statement
 for ( declaration expression opt ; expression opt) statement
 
-> [KT] This is why the var declared in a for has a scope
- 5 An iteration statement is a block whose scope is a strict subset of the scope of its enclosing
- block. The loop body is also a block whose scope is a strict subset of the scope of the iteration
- statement. 
-<
+note: This is why the var declared in a for has a scope
+5 An iteration statement is a block whose scope is a strict subset of the scope of its enclosing
+block. The loop body is also a block whose scope is a strict subset of the scope of the iteration
+statement. 
 
 Now the 'block wrapped around the loop' comes into its own; it explains why the variable i cannot be
-accessed outside the loop. You can declare more than one variable, but they must all be of [the-same
--type]:
+accessed outside the loop. You can declare more than one variable, but they must all be of
+the-'same' -type:
 
 for (int i = 0, j = sizeof(something); i < j; i++, j--) { ... }
 
@@ -8776,7 +8796,7 @@ int main(int argc, char *argv[])
 /* Concatenate t to s. */
 void mstrcat_one(char *s, char *t)
 {
-  /*
+  /* note: this is the comment for mstrcat_three
    * '*++s' is used to reference the pointer before incremmenting it so
    * that the check for falsehood ('\0') is done with the next character
    * instead of '*s++' which would check, then increment. Using '*s++'
@@ -8807,7 +8827,7 @@ void mstrcat_two(char *s, char *t)
   }
 }
 
-// NOT OK as mstrcat_one.
+// NOT OK since s points after null char and this is the same problem as control-for-vs-while
 void mstrcat_three(char *s, char *t)
 {
   while(*s++)
@@ -9692,7 +9712,7 @@ int atoi(char s[])
     i++;
 
   for(n = 0; isdigit( s[i] ); i++)
-    n = n+10 + (s[i]-'0');
+    n = n*10 + (s[i]-'0');
 
   return sign*n;
 }
@@ -9732,7 +9752,7 @@ int atoi(char s[])
 
 <exercise> 
 From ansic, exercise 3-3. Write a function expand(s1,s2) that expands shorthand notations like a-z
-in the string s1 into the equivalent complete list abc...xyz in s2 . Allow for letters of either
+in the string s1 into the equivalent complete list abc...xyz in s2. Allow for letters of either
 case and digits, and be prepared to handle cases like a-b-c and a-z0-9 and -a-z . Arrange that a
 leading or trailing - is taken literally
 
@@ -10512,8 +10532,8 @@ as:
 
 
 {default-ctor} default-init
-Recommendation on initialization is that avoid syn version and do it explicitly: in-class
-init(C++11) or ctor init list. Why? because to avoid:
+Recommendation on initialization is to avoid syn version and do it explicitly: in-class init(C++11)
+or ctor init list. Why? because to avoid:
 
 1. Default-init for built-in types which means undefined value.
 
@@ -10523,9 +10543,9 @@ default ctor for this class.
 3. If a class requires control to init an object in one case, then the class is likely to require
 control in all cases.
 
-<note> The ctor cannot be a 'const' member func. Why? When create a const object of a class type,
-  the object does not assume its 'constness' until after the ctor completes the object's
-  initialisation. Thus, ctor can write to const objects during their construction.
+note: The ctor cannot be a 'const' member func. Why? When create a const object of a class type, the
+object does not assume its 'constness' until after the ctor completes the object's initialisation.
+Thus, ctor can write to const objects during their construction.
 
 The syn ctor will:
 Use in-class init if there is. Otherwise default init its member and use default ctor for its class
@@ -10535,7 +10555,7 @@ member.
 If there are other ctor, then compiler will not make a syn default ctor. This is 'only' for default
 ctor since other ctors will be created. So want to force it to create then use 'default' keyword.
 
-<note> There are cases when syn-operations are useful. See {make-base-class-for-reference-counting}
+note: There are cases when syn-operations are useful. See {make-base-class-for-reference-counting}
 
 
 {in-class-init} C++11
@@ -10586,10 +10606,10 @@ must use ctor-init: <quiz>
 
 const, reference, and class member that do not have a default ctor.
 
-<note> this is again the same reason as recommendation on innitialize above
-For the last case, that is because will try to use def-ctor for class memeber data when there is no
-constructor initializer but there is no def-ctor and 'no' way to init. Hence this is error. This
-applies to all other cases that need a def-ctor and that's why def ctor is almost nearly required.
+note: this is again the same reason as recommendation on initialization above. For the last case,
+  that is because will try to use def-ctor for class memeber data when there is no constructor
+  initializer but there is no def-ctor and 'no' way to init. Hence this is error. This applies to
+  all other cases that need a def-ctor and that's why def ctor is almost nearly required.
 
 For example, VC shows:
 Error 1 error C2512: 'NoDefCtor' : no appropriate default constructor available
@@ -17561,7 +17581,7 @@ Introduction
 It is important to understand how your programming language is implemented. Such knowledge dispels
 the fear and wonder of "What on earth is the compiler doing here?"; imparts confidence to use the
 new features; and provides insight when debugging and learning other language features. It also
-give s a feel for the relative costs of different coding choices that is necessary to writ e the
+gives a feel for the relative costs of different coding choices that is necessary to write the
 most efficient code day to day. This paper looks "under the hood" of C++, explaining "run-time" C++
 implementation details such as class layout techniques and the virtual function call mechanism.
 
@@ -17672,13 +17692,14 @@ struct D : C {
 
 Since a derived class inherits all the properties and behavior of its base class, each instance of
 the derived class will contain a 'complete' copy of the instance data of the base class. Within D,
-    there is no requirement that C's instance data precede D's. But by laying D out this way, we
-    ensure that the address of the C object within D corresponds to the address of the first byte of
-    the D object. As we shall see, this eliminates adding a displacement to a D* when we need to
-    obtain the address of its embedded C. This layout is used by all known C++ implementations.
-    Thus, in a single inheritance class hierarchy, new instance data introduced in each derived
-    class is simply appended to the layout of the base class. Note our layout diagram labels the
-    "address points" of pointers to the C and D objects within a D . 
+there is no requirement that C's instance data precede D's. But by laying D out this way, we ensure
+that the address of the C object within D corresponds to the address of the first byte of the D
+object. As we shall see, this eliminates adding a displacement to a D* when we need to obtain the
+address of its embedded C. This layout is used by all known C++ implementations.
+
+Thus, in a single inheritance class hierarchy, new instance data introduced in each derived class is
+simply appended to the layout of the base class. Note our layout diagram labels the "address
+'points'" of pointers to the C and D objects within a D . 
 
 Multiple Inheritance
 
@@ -17704,6 +17725,11 @@ struct MiddleManager : Manager, Worker { ... };
 
 How might this be represented? Continuing with our "classes of the alphabet" example: 
 
+struct C {
+  int c1;
+  void cf();
+};
+
 E* ->   E::e1
 
 struct E {
@@ -17723,18 +17749,19 @@ struct F : C, E {
 Struct F multiply inherits from C and E. As with single inheritance, F contains a copy of the
 instance data of each of its base classes. Unlike single inheritance, it is not possible to make the
 address point of each bases' embedded instance correspond to the address of the derived class:
+note: since E do not have C in it therefore E should not have the same point as C.
 
 F f;
 // (void*)&f == (void*)(C*)&f;
 // (void*)&f < (void*)(E*)&f; 
 
 Here, the address point of the embedded E within F is not at the address of the F itself. As we
-shall see when we consider casts and member functions, this displacement leads to a small overhead
-that single inheritance does not generally require. An implementation is free to lay out the various
-embedded base instances and the new instance data in any order. Visual C++ is typical in laying out
-the base instances in declaration order, followed by the new data members, also in declaration
-order. (As we shall see, this is not necessarily the case when some bases have virtual functions and
-others don't). 
+shall see when we consider casts and member functions, this 'displacement' leads to a small
+'overhead' that single inheritance does not generally require. An implementation is free to lay out
+the various embedded base instances and the new instance data in any order. Visual C++ is typical in
+laying out the base instances in declaration order, followed by the new data members, also in
+declaration order. (As we shall see, this is not necessarily the case when some bases have virtual
+functions and others don't). 
 
 Virtual Inheritance
 
@@ -17761,17 +17788,23 @@ struct Manager : virtual Employee { ... };
 struct Worker : virtual Employee { ... };
 struct MiddleManager : Manager, Worker { ... };
 
-Virtual inheritance is considerably more expensive to implement and use than single and multiple
+Virtual inheritance is considerably more 'expensive' to implement and use than single and multiple
 inheritance. Recall that for single (and multiple) inherited bases and derived classes, the embedded
 base instances and their derived classes either share a common address point (as with single
-    inheritance and the leftmost base inherited via multiple inheritance), or have a simple constant
-displacement to the embedded base instance (as with multiple inherited non-leftmost bases, such as
-    E). 
+    inheritance and the 'leftmost' base inherited via multiple inheritance), or have a simple
+'constant' displacement to the embedded base instance as with multiple inherited non-leftmost bases,
+such as E. 
+note: so use constant displacement for multiple inheritance.
 
 With virtual inheritance, on the other hand, there can (in general) be no fixed displacement from
 the address point of the derived class to its virtual base. If such a derived class is further
 derived from, the further deriving class may have to place the one shared copy of the virtual base
 at some other, different offset in the further derived class. Consider this example: 
+
+struct C {
+  int c1;
+  void cf();
+};
 
 struct G : virtual C {
   int g1;
@@ -17959,7 +17992,7 @@ On the other hand, compilers commonly enregister this so member access cost is o
 ccessing a local variable. On the other hand, compilers may not be able to enregister the instance
 data itself because of the possibility this is aliased with some other data. 
 
-Overriding Member Functions
+Overriding Member Functions <how-virtual-works>
 
 Member functions are inherited just as data members are. Unlike data members, a derived class can
 override, or replace, the actual function definition to be used when an inherited member function is
@@ -17990,10 +18023,12 @@ P*, Q*   ->    P::vfptr    -> &Q::pvf
                P::p1       -> &Q::qvf
                Q::q1
 
+note: this is Q instance
+
 For non-virtual function calls, the member function to call is statically determined, at compile
-time, by the type of the pointer expression to the left of the -> operator. In particular, even
-though ppq points to an instance of Q, ppq->pf() calls P::pf(). (Also notice the pointer expressi on
-    left of the -> is passed as the hidden this parameter.) 
+time, by the type of the pointer expression to the left of the -> operator. <key> In particular,
+  even though ppq points to an instance of Q, ppq->pf() calls P::pf(). Also notice the pointer
+  expression left of the -> is passed as the hidden this parameter. 
 
 P p; P* pp = &p; Q q; P* ppq = &q; Q* pq = &q;
 pp->pf();   // pp->P::pf();   // P::pf(pp);
@@ -18004,7 +18039,7 @@ pq->qf();   // pq->Q::qf();   // Q::qf(pq);
 
 For virtual function calls, the member function to call is determined at run-time. Regardless of the
 declared type of the pointer expression left of the -> operator, the virtual function to call is the
-one appropriate to the type of the actual instance addressed by the pointer. In particular, although
+one appropriate to the type of the 'actual' instance addressed by the pointer. In particular, although
 ppq has type P*, it addresses a Q, and so Q::pvf() is called.
 
 pp->pvf();  // pp->P::pvf();  // P::pvf(pp);
@@ -18015,8 +18050,8 @@ Hidden vfptr members are introduced to implement this mechanism. A vfptr is adde
     doesn't already have one) to address that class's virtual function table (vftable). Each virtual
 function in a class has a corresponding entry in that class's vftable. Each entry holds the address
 of the virtual function override appropriate to that class. Therefore, calling a virtual function
-requires fetching the instance's vfptr, and indirectly calling through one of the vftable entries
-addressed by that pointer. This is in addition to the usual function call overhead of parameter
+requires 'fetching' the instance's vfptr, and indirectly calling through one of the vftable entries
+addressed by that pointer. This is in 'addition' to the usual function call overhead of parameter
 passing, call, and return instructions. In the example below, we fetch q's vfptr, which addresses
 Q's vftable, whose first entry is &Q::pvf. Thus Q::pvf() is called. 
 
@@ -18030,12 +18065,14 @@ be placed before a left base that does not have one.
 <vtable-per-class>
 Most C++ implementations will share or reuse an inherited base's vfptr. Here Q did 'not' receive an
 'additional' vfptr to address a table for its new virtual function qvf(). Instead, a qvf entry is
-appended to the end of P’s vftable layout. In this way, 'single' inheritance remains inexpensive.
+appended to the end of P's vftable layout. In this way, 'single' inheritance remains inexpensive.
 Once an instance has a vfptr it doesn't need another one. New derived classes can introduce yet more
-virtual functions, and their vftable entries are simply appended to the end of their one per-class
+virtual functions, and their vftable entries are simply 'appended' to the end of their one per-class
 vftable. 
 
-note: there is only on vtable for classes of single inheritance.
+note: vtable is made per class so in this example, there are P's vtable and Q's vtable. 
+note: single inheritance means one level of inheritance so single inheritance is different from
+single hierachy of inheritance.
 
 Virtual Functions: Multiple Inheritance
 
@@ -18057,6 +18094,8 @@ struct R {
 R*    ->    R::vfptr    -> &R::pvf
             R::r1       -> &R::rvf
 
+note: see R has its own vfptr
+
 struct S : P, R {
   int s1;
   void pvf(); // overrides P::pvf and R::pvf
@@ -18066,7 +18105,7 @@ struct S : P, R {
 
 P*, S*->    P::vfptr    -> &S::pvf
             P::r1
-    R*->    R::vfptr    -> &thunk1
+    R*->    R::vfptr    -> &thunk1     // note: this is vtable entry
             R::r1       -> &S::rvf
             S::s1
 
@@ -18114,7 +18153,7 @@ our debugger.
 
 ps->rvf(); // ((R*)ps)->rvf(); // S::rvf((R*)ps)
 
-Thus MSC++ generally avoids creating a thunk and an additional extra vftable entry when overriding
+Thus MSC++ generally avoids creating a thunk and an 'additional' extra vftable entry when overriding
 virtual functions of non-leftmost bases. 
 
 Adjuster Thunks
@@ -18144,6 +18183,7 @@ Of course, the following code sequence is even better (but no current implementa
 S::pvf-adjust:
 this -= SdPR; // fall into S::pvf()
 S::pvf() { ... } 
+
 
 Virtual Functions: Virtual Inheritance
 
@@ -18376,6 +18416,268 @@ others can incur significant overhead. These implementation mechanisms are appli
        language feature is worth its overhead. 
 
 
+={============================================================================
+*kt_dev_cpp_101* ref: C++ under the hood, Scott Meyers
+
+http://www.han-ese.nl/~ewout/ESE/INF2/CPP_onder_de_motorkap.pdf
+
+Overview
+
+This talk offers a detailed look at how C++ compilers typically implement language features,
+focusing on the cost of those features - or, more typically, the lack thereof - compared to
+  equivalent functionality in C. It begins with an extremely detailed examination of the
+  implementation of virtual functions under both single and multiple inheritance, explaining how
+  performance considerations have influenced both the design and implementation of this language
+  feature. It then moves to an overview of the implementation of all other features of C++, dividing
+  them into "no-cost" and "low-cost" categories. The information in this paper is an overview of
+  more detailed information covered in the conference presentation.
+
+Implementing Virtual Functions
+
+Given a class such as this,
+
+class B {
+  public:
+    B();
+    virtual ~B();                            // 0
+    virtual void f1();                       // 1
+    virtual int f2(char c) const;            // 2
+    virtual void f3(const std::string& s);   // 3
+    void f4() const;
+};
+
+compilers number the virtual functions in the order in which they are encountered. Different
+compilers may start the numbering with different values, but it's common to start counting at 0.
+Assuming 0 is the initial value, the virtuals in B would be numbered as indicated by the comments.
+Note that neither B's constructor nor its member function f4 receive numbers. That's because they're
+not virtual functions, hence are implemented differently - like non-member functions, which
+themselves are implemented like functions in C.
+
+For each class with at least one virtual function, compilers generate a virtual function table
+(often abbreviated vtbl). A vtbl is an array of function pointers such that the n th entry of the
+table points to the implementations of the virtual function numbered n. B's vtbl would look like
+this:
+
+B's vtbl []    -> impl of B::~B
+         []    -> impl of B::f1
+         []    -> impl of B::f2
+         []    -> impl of B::f3
+
+In the case of pure virtual functions, there is typically no implementation to point to. In that case, the vtbl slot for the function generally points to a compiler-generated function that, when called, issues a runtime error message (e .g., "Pure virtual function called") and exits the program. 
+
+Consider now a derived class D :
+
+class D: public B {
+  public:
+    D();                          // nonvirtual - no number
+    virtual ~D();                 // redefined - number 0 (as in base class)
+    virtual void f1();            // redefined - number 1 (as in base class)
+    virtual void f5(char *str);   // new virtual - number 4
+};
+
+Compilers set up a vtbl for D in the same way they do for B, except that when D redefines a virtual
+function it inherits, that function gets the same number in D as in B. D's vtbl thus looks like
+this:
+
+D's vtbl []    -> impl of D::~D
+         []    -> impl of D::f1
+         []    -> impl of B::f2
+         []    -> impl of B::f3
+         []    -> impl of D::f5
+
+Note that in cases where D inherits its virtual function implementations from B, D's vtbl points to
+functions implemented in B . This reveals that the cost of a virtual function call is independent of
+the depth of the hierarchy. At runtime, when a virtual is to be called, there is no need to search
+the hierarchy for the "right" implementation, because the hierarchy was flattened during
+construction of the vtbls.  
+
+Every object of a class with at least one virtual function contains a virtual table pointer - a vptr
+- inside it. This pointer is added by the compiler, and its location may vary from compiler to
+compiler. An object's vptr points to the vtbl appropriate for the type of the object; compilers
+automatically insert code to achieve this into constructors and destructors. At runtime we could
+have the following situation where all B objects have a vptr pointing to B's vtbl and all D objects
+have a vptr pointing to D's vtbl:
+
+For the following C++ source code,
+
+void makeACall(B *pB)
+{
+  pB->f1(); // call the implementation of f1 appropriate for whatever type of object pB points to
+} 
+
+compilers emit code equivalent to this:
+
+(*pB->vptr[1])(pB); 
+
+call the function pointed to by vtbl entry 1 (f1's number) in the vtbl pointed to by pB->vptr; pass
+pB as the "this" pointer
+
+note: this means that the code to select 1 entry in the vtbl is done at compile time but still need
+to decide what pB actually points at runtime.
+
+
+Virtual Functions Under Multiple Inheritance
+
+Under multiple inheritance (MI), a new issues arises: a single object has multiple addresses, and
+different addresses need to be passed to different functions. For example, suppose D has two base
+classes
+
+class B1 { ... };
+class B2 { ... };
+class D: public B1, public B2 { ... };
+
+A D object can be pointed to by pointers of any of three different types (excluding void*): B1*,
+B2*, or D*. 
+
+At runtime, such an object is likely to be laid out in memory like this, where the diagram shows
+where pointers of each of these different types point:
+
+B1*, D* ->  B1 data
+B2*     ->  B2 data
+            D data
+
+Given these functions,
+
+void f(B1 *pb1);  // expects pb1 to point to the top of a B1
+void g(B2 *pb2);  // expects pb2 to point to the top of a B2
+
+consider:
+
+D *pd = new D;    // pD points to top of object
+f(pd);            // fine, f expects a pointer to top of object
+g(pd);            // pointer adjustment required : g expects
+                  // a pointer to B2 part of object
+
+In fact, offset adjustments may be necessary even for something as simple as a pointer
+initialization:
+
+B2 *pb2 = pd;     // pb2 should point to B2 part of object, not to top
+
+Unfortunately, the need for an offset adjustment may not be determinable during compilation. For
+example, given this hierarchy
+
+class B1 {
+  public:
+    virtual void mf();     // may be overridden in derived classes
+};
+
+class B2 {
+  public:
+    virtual void mf();     // may be overridden in derived classes
+};
+
+and this implementation of g,
+
+void g(B2 *pb2)
+{
+  pb2->mf();               // offset adjustment required?
+}
+
+the this pointer passed to mf may or may not require an offset adjustment. If the mf called is
+implemented in B2, no adjustment is needed, but if the mf called is implemented in B1 or D, an
+adjustment typically is required. During compilation, however, there is no way to know the type of
+object pb2 points to, hence no way to know which implementation of mf is being called.
+
+Compilers solve this problem by creating 'extra' vptrs and vtbls in MI hierarchies. In particular, a
+class with n base classes can be expected to give rise to objects with n vptrs and n vtbls, e.g.:
+
+note: this means extra vptr and vtbl entry(trunk) for each additional base class
+
+
+B1*, D* ->  B1/D vptr   -> D vtbl [] impls of virtuals declared in B1 or D (and maybe B2)
+            B1 data
+B2*     ->  B2 vptr     -> D as B2 vtbl [] impls of virtuals declared in B2
+            B2 data
+            D data
+
+When compilers generate code for a call to a virtual function, they know which vptr they are using
+hence where the object pointer currently points and they know which vtbl they are using hence the
+this pointer expected by the function pointed to by each vtbl entry, so they can determine whether
+an offset adjustment is required for the call.
+
+
+The code for the offset adjustment itself is typically placed in a thunk
+- a small piece of code not part of any function. Vtbl entries requiring offset adjustments then
+point to thunks, and thunks forward calls to the target function implementation after performing the
+offset:
+
+Thunks themselves are often implemented as alternative function entry points:
+
+This treatment of the implementation of virtual functions under MI is still incomplete, because it
+fails to take into account the possibility of virtual base classes, but, as Stan Lippman comments
+in Inside the C++ Object Model , "Virtual base class support wanders off into the Byzantine...The
+material is simply too esoteric to warrant discussion...." 
+
+However, one thing should be clear: virtual functions are implemented very efficiently. In fact,
+their implementation is both smaller and faster than most C approximations (e.g., anything based
+on cascading if/then/else type tests).
+
+note: this article has lots of references to refer to when necessary.
+
+
+={============================================================================
+*kt_dev_cpp_102* ref: others
+
+This is the link found above articles and there are more yet to see.
+http://cloudfundoo.wordpress.com/2012/04/27/deep-c-understanding-c-object-layout/
+
+
+={============================================================================
+*kt_dev_cpp_103* ref: why singletons are controversial
+
+https://code.google.com/p/google-singleton-detector/wiki/WhySingletonsAreControversial
+
+note: here suppose that talks about class singleton but singleton+factory.
+
+Why Singletons Are Controversial
+
+The use of singletons is actually a fairly controversial subject in the Java community; what was
+once an often-used design pattern is now being looked at as a less than desirable coding practice.
+
+The problem with singletons is that they introduce global state into a program, allowing anyone to
+access them at anytime (ignoring scope). Even worse, singletons are one of the most overused design
+patterns today, meaning that many people introduce this possibly detrimental global state in
+instances where it isn't even necessary. What's wrong with singletons' use of global state?
+
+First, programs using global state are very difficult to test. One of the hallmarks of testability
+is a loose coupling of classes, allowing you to isolate a single class and test it completely. When
+one class uses a singleton (and I'm talking about a classic singleton, one that enforces it own
+    singularity thorough a static getInstance() method), the singleton user and the singleton become
+inextricably coupled together. It is no longer possible to test the user (class) without also testing the
+singleton. In many cases, this is a deal breaker that can prevent a developer from testing a class
+at all, especially if the singleton represents a 'resource' that should not be updated by tests (i.e.
+    an important database). The ideal solution here is to pass in the singleton as a parameter in
+the user's constructor, allowing a tester to easily mock out the singleton for tests. The singleton
+then doesn't have to enforce its own singularity; this can be handled by the client or a factory
+class, which could produce the real version or a test version, eliminating the global state
+altogether. In fact, it should be considered a violation of the Single Responsibility Principle of
+OO design to have an object responsible for its own singularity as well as its normal tasks.
+
+Second, programs that rely on global state hide their dependencies. One of the unique abilities of a
+singleton is that it can be accessed anywhere though its globally available static method (i.e.
+    getInstance()), allowing programmers to use it inside of a method without having to pass it in
+expressly through parameters. While this may seem easier to the programmer, relying on this static
+instance means that the signatures of methods no longer show their 'dependencies', because the method
+could pull a singleton "out of thin air." This means that users need knowledge of the inner workings
+of code to properly use it, making it more difficult to use and test.
+
+Tying these two problems together shows another issue with singletons. In todays world of
+test-driven and agile development, it is more important than ever to have small tests covering most
+of your code. One of the important things about these tests is that they must be able to be run in
+any order (not dependent on each other), which can become a problem with singleton usage. Because
+the dependencies of some given methods aren't 'clear' when they rely on singletons (getting them from
+static getters), a tester may unknowing write two tests that actually depend on each other by
+modifying a shared resource (the singleton). This can produce flaky tests, ones that pass when run
+in one order but fail when run in another, which aren't very useful.
+
+Still not convinced? Well, this certainly wasn't originally my idea, and it's not even that new. If
+you're looking for some more compelling arguments, check out some of these sources:
+
+All pages with Singleton in their title at the Portland Pattern Repository Wiki
+
+Use Your Singletons Wisely (IBM developerWorks) 
+
+
 # ============================================================================
 #{ STL
 ={============================================================================
@@ -18476,32 +18778,41 @@ std::make_pair(42,’@’)
 namespace std {
   // create value pair only by providing the values
   template <template T1, template T2>
-    pair<T1,T2> make_pair (const T1& x, const T2& y) {   // <note> see how to 'deduce' types
+    pair<T1,T2> make_pair (const T1& x, const T2& y) {   // note: see how to 'deduce' types
       return pair<T1,T2>(x,y);
     }
 }
 
 <example>
+note: no need to include "utility" and make_pair uses ().
+
 #include <iostream>
 
-template <typename T1, typename T2>
-std::ostream& operator<< (std::ostream& strm, const std::pair<T1, T2> &p )
-{
-  strm << "[ " << p.first << ", " << p.second << " ]";
-}
+using namespace std;
 
+template <typename T1, typename T2>
+std::ostream& operator<< (std::ostream& strm, const std::pair<T1,T2> &p)
+{
+  strm << "{" << p.first << " ," << p.second << "}";
+}
 
 int main()
 {
-  std::pair<int, int> IntPair( 80, 88 );
-  std::cout << IntPair << std::endl;
+  pair<int,int> ipair(80,88);
+  cout << ipair << endl;
+  cout << pair<int,int>(55,88) << endl;
 
-  std::cout << std::pair<int, int>(55, 80) << std::endl;
+  cout << make_pair(80,88) << endl;
+  cout << make_pair(55,88) << endl;
 }
+
+{80 ,88}
+{55 ,88}
+{80 ,88}
+{55 ,88}
 
 <move-or-copy>
 You can influence the type make_pair() yields by forcing either move or reference semantics.
-
 
 For move semantics, you simply use std::move() to declare that the passed argument is no longer
 used:
@@ -18516,7 +18827,6 @@ forces a constant reference type (both provided by <functional>). For example, i
 statements, a pair refers to an int twice so that, finally, i has the value 2:
 
 #include <iostream>
-#include <utility>
 #include <functional>
 
 int main()
@@ -18530,7 +18840,9 @@ int main()
   std::cout << "i: " << i << std::endl;
 }
 
-<note> see how references are pakced into the pair.
+i: 2
+
+note: see how references are pakced into the pair.
 
 <comparison>
 
@@ -18541,26 +18853,20 @@ namespace std {
     }
 }
 
-<note> The first value has higher priority. Thus, if the first values of two pairs differ, the
-result of their comparison is used as the result of the overall comparison of the pairs.
+note: The first value has higher priority. Thus, if the first values of two pairs differ, the result
+of their comparison is used as the result of the overall comparison of the pairs.
 
 
 {tuple-class}
 Tuples extends the concept of pairs to an arbitrary number of heterogeneous elements.
 
 <example>
-
 #include <iostream>
-#include <tuple>
-#include <complex>
 
 using namespace std;
 
 int main()
 {
-  // create a four-elements tuple
-  tuple<string, int, int, complex<double>> t;
-
   tuple<int, float, string> t1( 41, 6.3, "nico" );
 
   // iterate over elements
@@ -18586,6 +18892,10 @@ int main()
   cout << get<2>(t1) << " ";
   cout << endl;
 }
+
+41 6.3 nico 
+t1 is bigger than t2
+22 44 two 
 
 <iteration>
 A tuple is no ordinary container class where you can iterate over the elements. Instead, you have to
@@ -18617,7 +18927,7 @@ namespace std {
 }
 
 This situation, however, has consequences when using initializer lists to define values of a tuple.
-For example, you can’t use the assignment syntax to initialize a tuple because that is considered to
+For example, you can't use the assignment syntax to initialize a tuple because that is considered to
 be an implicit conversion:
 
 std::tuple<int,double> t1(42,3.14);    // OK, old syntax
@@ -18647,7 +18957,7 @@ std::tuple<int,int,int> foo() {
 }
 
 <tuple-print>
-The tuple class was first made public in the Boost library. There, tuple had an interface to write
+The tuple class was first made public in the 'boost' library. There, tuple had an interface to write
 values to output streams, but there is no support for this in the C++ standard library. With the
 following header file, you can print any tuple with the standard output operator <<
 
@@ -19483,7 +19793,7 @@ Hello, you are how always !
 
 
 {vector-bool}
-For Boolean elements, the C++ standard library provides a specialization of vector<>. Such a usual
+For Boolean elements, the C++ standard library provides a 'specialization' of vector<>. Such a usual
 implementation would reserve at least 1 byte for each element. The vector<bool> specialization
 usually uses internally only 1 bit for an element, so it is typically eight times smaller.
 
@@ -19511,6 +19821,8 @@ c.flip()             Negates all Boolean elements (complement of all bits)
 c[idx].flip()        Negates the Boolean element with index idx (complement of a single bit)
 c[idx] = val         Assigns val to the Boolean element with index idx (assignment to a single bit)
 c[idx1] = c[idx2]    Assigns the value of the element with index idx2 to the element with index idx1
+
+note: default value is false.
 
 <proxy-design>
 How this "c[idx].flip()" possible since type bool is fundamental type? Here, the class vector<bool>
@@ -20176,7 +20488,7 @@ note: The signature of operator() must be const.
 
 
 {iterator-category}
-As with all associative container classes, the iterators are 'bidirectional' iterators.  Thus, you
+As with all associative container classes, the iterators are 'bidirectional' iterators. Thus, you
 can't use them in algorithms that are provided 'only' for random-access iterators, such as algorithms
 for sorting or random shuffling.
 
@@ -20606,7 +20918,9 @@ happens 3 setps but 3) could be extra
 2. insert element using temp pair{ word, 0 }. value init since default ctor is called
 3. assign it with 1
 
-It inserts a new element with key "ottto" and prints its value, which is 0 by default.
+note: when accessing map with key which is not exist, cause addition.
+
+This inserts a new element with key "ottto" and prints its value, which is 0 by default.
 
 std::cout << coll["ottto"];
 
@@ -21108,7 +21422,7 @@ example iterator of associative containers would do inorder traversal internally
 container type supplies its 'own' kind of iterator which knows 'how' to iterate over. As a result,
 iterators share the same interface but have different types.
 
-{categories}
+{iterator-categories}
 An iterator of a higher category provides all the operations of lower categories.
 
 1. input iterator. read but not write, single-pass, increment only
@@ -22978,6 +23292,79 @@ coll1 and coll3, even and odd elements correspond
 
 
 ={============================================================================
+*kt_dev_stl_063* algorithm: nonmodifying: count
+
+{counting-elements}
+
+<algorithm-count> count elements
+difference_type count (InputIterator beg, InputIterator end, const T& value)
+difference_type count_if (InputIterator beg, InputIterator end, UnaryPredicate op)
+
+1. The first form counts the elements in the range [beg,end) that are equal to value value.
+2. Complexity: linear (numElems comparisons or calls of op(), respectively).
+3. Associative and unordered containers provide a similar member function, count(), to count the
+number of elements that have a certain value as key
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+template<typename T>
+inline void INSERT_ELEMENTS( T& coll, int first, int last )
+{
+  for( int i = first; i <= last; i++ )
+    coll.insert( coll.end(), i );
+}
+
+template<typename T>
+inline void PRINT_ELEMENTS( T& coll, const std::string& optcstr="")
+{
+  cout << optcstr;
+
+  for( auto &elem : coll )
+    cout << elem << ' ';
+
+  cout << endl;
+}
+
+int main()
+{
+  vector<int> coll;
+  int num;
+
+  INSERT_ELEMENTS( coll, 1, 9 );
+  PRINT_ELEMENTS( coll, "coll: " );
+
+  // count elements with value 4
+  num = count( coll.cbegin(), coll.cend(), 4 );
+  cout << "number of elements equal to 4:      " << num << endl;
+
+  // count elements with even value
+  num = count_if( coll.cbegin(), coll.cend(), 
+              [] (int elem) {
+                return elem%2==0;
+                });
+  cout << "number of elememts with even value: " << num << endl;
+
+  // count elements that are greater than 4
+  num = count_if( coll.cbegin(), coll.cend(), 
+              [] (int elem) {
+                return elem > 4;
+                });
+  cout << "number of elememts than 4         : " << num << endl;
+
+  return 0;
+}
+
+coll: 1 2 3 4 5 6 7 8 9 
+number of elements equal to 4:      1
+number of elememts with even value: 4
+number of elememts than 4         : 5
+
+
+={============================================================================
 *kt_dev_stl_070* string
 
 In short, the string types of the C++ standard library are designed to behave as if they were a kind
@@ -23954,6 +24341,7 @@ for( const auto &entry : people )
 The bitset is a class template and is defined in bitset header. Like array class, has a 'fixed' size.
 This is a exmple of a nontype template parameter and this is then considered part of the type.
 
+
 {why-bitset}
 Mostly to reduce space complexity.
 
@@ -23977,6 +24365,11 @@ int main()
 size: 32 sizeof : 20
 size: 32 sizeof : 4
 size: 32
+
+note: can use variable to set size of bitset.
+const int x = 40;
+bitset<x> bitvec(1U);
+
 
 {bitset-ctors}
 
@@ -25519,79 +25912,143 @@ to ensure that a particular action - release resource - takes place. Encapsulati
 classes.
 
 
-{smart-pointer-internal}
-MEC++28. The typical implementation is:
+={============================================================================
+*kt_dev_stl_102* smart pointers internal
 
-template< class T>
+{auto-ptr}
+MEC++28 that is about auto_ptr. The typical implementation is:
+
+template<class T>
 class SmartPtr {
-	 public:
-	 	SmartPtr( T* realPtr = 0 );
-		SmartPtr( const SmartPtr& rhs );
-		~SmartPtr();
+  public:
+    // create a smart ptr to an obj given a dumb ptr to it. uninitialized ptr default to 0.
+    SmartPtr( T* realPtr = 0 );
 
-		// const. though it may lead to modification of what the pointer points to
-		T* operator->() const;
-		T& operator*() const;
+    // copy and assign a smart ptr
+    SmartPtr( const SmartPtr& rhs );
+    SmartPtr& operator=( cont SmartPtr& rhs );
 
-	private:
-		T* pointee;
+    ~SmartPtr();
+
+    // const. though it may lead to modification of what the pointer points to
+    T* operator->() const;
+    T& operator*() const;
+
+  private:
+    // dump(real) pointer
+    T* pointee;
 };
 
+note: here copy and assign are public and if not allow those, should be private.
 
-{{encapsulation}}
+<encapsulation>
+This smart pointer is testimony to the effectiveness of encapsulation:
 
-SP is testimony of encapsulation:
+1. Allow us to treat smart pointer as built-in pointer. Hide difference.
+2. Other example. Handle local and remote DB access as if it is in the same place. Hide.
 
-o Allow us to treat them as dumb, built-in, pointer. SP is object acts like a pointer.
-o Other example. Handle local and remote DB access as if it is in the same place. Hide.
+// template for smart ptrs to objects in a distributed DB
+template<class T>
+class DBPtr {
+  public:
+    // create a smart ptr to DB object given a local dumb pointer to it
+    DBPtr(T *realPtr = 0);
+    DBPtr(DataBaseID id);
+    ...
+};
+
+class Tuple {
+  ...
+};
 
 void editTuple(DBPtr<Tuple>& pt)
 {
-	 do {
-		  pt->displayEditDialog();
-	 } while (pt->isValid() == false);
+  do {
+    pt->displayEditDialog();
+  } while (pt->isValid() == false);
 }
 
 The tuple to be edited inside editTuple may be physically located on a remote machine, but the
-programmer writing editTuple need not be concerned with such matters;
+programmer writing editTuple need not be concerned with such matters.
 
+<copy-and-assign> ownership
+How support copy semantics? Here implements ownership.
 
-{{ownership}}
+// the book said it has taken from stl
+template<class T>
+class auto_ptr {
+  public:
+    auto_ptr(T *ptr = 0): pointee(ptr) {}
+    ~auto_ptr() { delete pointee; }
 
-Passing auto_ptr by value is often a bad idea. Why?
+    auto_ptr(auto_ptr<T> &rhs)
+    {
+      // transfer ownership
+      pointee = rhs.pointee;
+
+      // no longer owns anything
+      rhs.pointee = 0;
+    }
+
+    auto_ptr<T>& operator=(auto_ptr<T> &rhs )
+    {
+      // self-assign guard
+      if( this == &rhs )
+        return *this;
+
+      // delete currently owned objects
+      delete pointee;
+
+      // transfer ownership
+      pointee = rhs.pointee;
+      rhs.pointee = 0;
+
+      return *this;
+    }
+
+  private:
+    T *pointee;
+};
+
+note: unconventional copy and assign operator since do not use const on parameters. These have to
+change rhs so not use const.
+
+<pass-by-value>
+Since ownership is transferred, passing auto_ptr by value is often a bad idea. Why?
 
 void printNode( ostream& s, auto_ptr< TreeNode> p ) { s << *p; }
 
 int main()
 {
-	 auto_ptr< TreeNode> ptr( new TreeNode );
-	 ...
-	 printNode( cout, ptr );
-	 ...
+  auto_ptr<TreeNode> ptr( new TreeNode );
+  ...
+  printNode( cout, ptr );
+  ...
 }
 
 In printNode call, call copy-ctor and means transfer ownership. When returns, dtor runs and delete
-pointee. When main ends, dtor runs again. <double-free> So use reference:
+pointee. When main ends, dtor runs again and do double-free. So use reference:
 
-void printNode( ostream& s, auto_ptr< TreeNode>& p ) { s << *p; }
+void printNode( ostream& s, auto_ptr<TreeNode>& p ) { s << *p; }
 
 See {the-rule-of-three} for <double-free> example.
 
 
-{{dereferencing-and-member-selection-operator}}
+<dereferencing-operators>
 
 template< class T>
 T& SmartPtr< T>::operator*() const
 {
-	 ...
-	 return *pointee;
+  // perform "smart pointer" processing
+  return *pointee;
 }
 
 See return as reference because:
 
-o *pointee can be derived class in inheritance. Avoid sliced-off.
-o More efficient. No temp object.
+1. *pointee can be derived class in inheritance. To avoid sliced-off.
+2. More efficient. No temp object.
 
+For operator->(), the statement is interpreted by as:
 
 pt->displayEditDialog(); -> (pt.operator->())->DisplayEditDialog();
 
@@ -25600,44 +26057,48 @@ So operator-> return either pointer or another smart pointer because can use -> 
 template< class T>
 T* SmartPtr< T>::operator->() const
 {
-	 ...
-	 return pointee;
+  // perform "smart pointer" processing
+  return pointee;
 }
 
-Both returns pointer and reference, virtual call through it works as supposed to.
+Both returns pointer and reference, virtual call through it works as supposed to. This will be fine
+for most applications.
 
+<nullness-of-smart-pointer>
+If you want to push your smart pointers further, however, you must know more about dumb pointer
+behavior and how smart pointers can and cannot emulate it. The followings are for this.
 
-{{nullness-of-smart-pointer}}
+One of the things we cannot do is find out if a smart pointer is null:
 
-SmartPtr< T> ptr;
+SmartPtr<T> ptr;
 ...
 if( ptr == 0 ) ...
 if( ptr ) ...
 if(!ptr) ...
 
-All issues compile error. NOTE: How about STL?
 
-How to solve? Typical approach is to use conversion operators.
+How to solve? Add isNull member function? Not a solution since do not act like usual pointers.
+Typical approach is to use conversion operators.
 
-<approach-one> <conversion-to-void>
-
-This is the way iostream uses so it is possible:
+<approach-one> conversion-to-void
+Use implicit conversion operator which is traditional. This is the way iostream uses so it is
+possible:
 
 ifstream inputFile("datafile.dat");
 if(ifstream) ...
 
 template< class T>
 class SmartPtr {
-	 public:
-	 	operator void*(); // return 0 if smart pointer is null, non-zero otherwise.
-		...
+  public:
+    operator void*(); // return 0 if smart pointer is null, non-zero otherwise.
+    ...
 };
 
-<approach-two> <conversion-to-bool>
+note: Q: why void*? how it works?
 
-Both approaches are not complete. Why? Cases where implicit conversion is a problem:
+This approach has a problem since it allows following: 
 
-SmartPtr< Apple> pa; SmartPtr< Orange> po;
+SmartPtr<Apple> pa; SmartPtr<Orange> po;
 
 if( pa == po ) ...
 
@@ -25645,20 +26106,78 @@ Even if there is no operator== taking a SmartPtr<Apple> and a SmartPtr<Orange>, 
 because both smart pointers can be implicitly converted into void* pointers, and there is a built-in
 comparison function for built-in pointers.
 
-<approach-three>
+<approach-two>
+There are many variations and the other is:
 
-Use operator!() but still not complete.
+template< class T>
+class SmartPtr {
+  public:
+    bool operator!() const; // return true only if smart pointer is null
+    ...
+};
+
+However, still not complete.
+
+if(!ptn) {           // OK
+  ...
+}
+
+if( ptn == 0 ) ...   // ERROR
+if( ptn) ...
 
 
-{{smart-pointer-in-inheritance}}
+note: How about STL?
 
-If use smart pointer thinking it do derived-to-base conversion in inheritance, causes compile error.
-Why? Template make a new class so inheritance no longer exist. Is it useful to maintain inheritance
-when use template? If so, do further study.
+<get-dumb-pointer>
+TODO: converting smart pointers to dumb pointers.
+
+<smart-pointer-in-inheritance>
+class MusicProduct {
+  public:
+    MusicProduct( const string& title );
+    virtual void play() const = 0;
+    virtual void displayTitle() const = 0;
+    ...
+};
+
+class Cassette: public MusicProduct {
+  ...
+};
+
+class CD: public MusicProduct {
+  ...
+};
+
+void displayAndPlay( const MusicProduct* pmp, int numTimes )
+{
+  for( int i=1; i <= numTimes; ++i )
+  {
+    pmp->displayTitle();
+    pmp->play();
+  }
+}
+
+Cassette *funMusic = new Cassette("Jazz");
+CD *nightmareMusic = new CD("Disco Hits of the 70s");
+
+displayAndPlay( funMusic, 10 );
+displayAndPlay( nightmareMusic, 0 );
+
+No surprise here but if replace it with smart pointers, then compile errors:
+
+void displayAndPlay( const SmartPtr<MusicProduct> &pmp, int numTimes );
+
+SmartPtr<Cassette> funMusic(new Cassette("Jazz"));
+SmartPtr<CD> nightmareMusic(new CD("Disco Hits of the 70s"));
+
+displayAndPlay( funMusic, 10 );
+displayAndPlay( nightmareMusic, 0 );
+
+Why won't these compile? Template make a new class so inheritance no longer exist. Is it useful to
+maintain inheritance when use template? If so, do further reading.
 
 
-{{smart-pointer-and-const}}
-
+<smart-pointer-and-const>
 For built-in:
 
 const T* const ptr = ...;
@@ -25676,7 +26195,149 @@ Because template create new classes. If need more, see further.
 
 
 ={============================================================================
-*kt_dev_stl_102* smart pointers examples
+*kt_dev_stl_103* smart pointer internal: shared_ptr
+
+MEC++29.
+
+<motivation>
+1. Once an object is allocated by calling new, it's crucial to keep track of who owns that object
+because the owner - and only the owner - is responsible for calling delete on it. But ownership can
+be transferred from object to object as a program runs (by passing pointers as parameters, for
+    example), so keeping track of an object's ownership is hard work. Classes like auto_ptr can help
+with this task, but experience has shown that most programs still fail to get it right. 
+
+Reference counting eliminates the burden of tracking object ownership, because when an object
+employs reference counting, it owns itself. When nobody is using it any longer, it destroys itself
+automatically. Thus, reference counting constitutes a simple form of garbage collection.
+
+To simplify the bookkeeping 'who is allowed to delete what'. smart pointer is an example. This is
+what most uses.
+
+2. To share underlying objects. Save memory and runtime efficiency since use same memory and runs
+fast on assumption that object will share values.
+
+
+<problem-to-solve>
+class String {
+  public:
+    String( const char *value="" );
+    String& operator=( const String& rhs );
+    ...
+  private:
+      char* data;
+};
+
+// handles self-assign but not exception safe
+String& String::operator=( const String& rhs )
+{
+  if( this == &rhs ) return *this;
+
+  delete[] data;
+  data = new char[ strlen(rhs.dat) +1 ];
+  strcpy( data, rhs.data );
+  return *this;
+}
+
+With this implementation, use:
+
+String a, b, c, d;
+a = b = c = d = "Hello";
+
+This means:
+
+a -> "Hello"
+b -> "Hello"
+c -> "Hello"
+d -> "Hello"
+
+How can we make those share one copy of Hello?
+
+<approach-one>
+Need one reference count per string value, not one reference count per string object. That implies a
+coupling between values and reference counts, so we'll create a class to store reference counts and
+the values they track. StringValue. Since this is only to help implement String, nest it inside in
+private and as a struct to give full access to String members but nothing else. note: said it's
+worth knowing technique.
+
+class String {
+  public:
+    String( const char *initValue = "" );
+    String( const String& rhs );
+
+    String& operator=( const String& rhs );
+    ...
+  private:
+      struct StringValue {
+        size_t refCount;
+        char* data;
+        StringValue( const char* initValue );
+        ~StringValue();
+      };
+
+      StringValue* value;
+};
+
+// note: this StringValue implementation and default value of refCount
+String::StringValue::StringValue( const char* initValue ) : refCount(1)
+{
+  data = new char[ strlen(initValue) +1 ];
+  strcpy( data, initValue );
+}
+
+String::StringValue::~StringValue()
+{
+  delete [] data;
+}
+
+<implementation>
+// String s("Hello");   // s -> 1 -> "Hello"
+//
+String::String( const char* initValue ) : value( new StringValue( initValue )) {}
+
+But cannot avoid duplication:
+
+String s1("Hello");
+String s2("Hello");
+
+s1 -> 1 -> "Hello"
+s2 -> 1 -> "Hello"
+
+The solution is to create new one only when it is unique string and leave it as exercise. Does it need for shared pointer?
+
+
+// String S1(S2);
+//
+String::String( const String& rhs ) : value( rhs.value )
+{
+  ++value->refCount;
+}
+
+String::~String()
+{
+  if( --value->refCount == 0 ) delete value;
+}
+
+// S1 = S2; reference count of S1 is decresed by one and S2 is increased by one
+//
+String& String::operator=( const String& rhs )
+{
+  if( value == rhs.value ) return *this;
+
+  if( --value->refCount == 0 ) delete value;
+
+  value = rhs.value;
+  ++value->refCount;
+
+  return *this;
+}
+
+
+See efficiency here since there is no alloc, free, and copy.
+
+
+
+={============================================================================
+*kt_dev_stl_104* smart pointers examples
 
 If you want reference semantics in STL containers - whether because copying elements is expensive or
 because identical elements will be shared by different collections - you should use a smart pointer
@@ -25765,7 +26426,7 @@ int main()
 
 
 ={============================================================================
-*kt_dev_stl_103* when to use which container
+*kt_dev_stl_105* when to use which container
 
 However, it contains 'general' statements that might not fit in reality. For example, if you manage
 only a few elements, you can ignore the complexity because short element processing with linear
@@ -26157,6 +26818,10 @@ _Dp>&) [with _Tp = Foo, _Dp = std::default_delete<Foo>, std::unique_ptr<_Tp, _Dp
 std::unique_ptr<Foo>]’
 
 So cannot store unique_ptr in a container? No can since not copyable but moveable.
+
+note: Even if unique_ptr is copyable, it's difficult to get the expected result right. For example,
+when get a pointer from a container and use it which means pointer in a container is no longer
+vaild. What will happen when container destructor runs?
 
 http://eli.thegreenplace.net/2012/06/20/c11-using-unique_ptr-with-standard-library-containers/
 
@@ -27954,15 +28619,19 @@ The same is {factory-func} in *kt_dev_stl_018* which force client to use smart_p
 
 EC++23. About considering encapsulation in design:
 
-The greater something is encapsulated, then the greater our ability to change it. Roughly, when
-there are 'more' funcs to access data, it's less encapsulated. Assumes that it follows the rule in
-EC++22 that member data must be private and therefore provide only funtional interfaces to access
-data.
+OOD principle dictates that data and functions that operates on them should be bundled together.
+Does it suggest that member function is a better choice? No since OOD is about encapsulation. The
+nonmember and non-friend provides more encapsulation, packaging flexibility, and extensibility.
+
+The greater something is encapsulated, then the greater our ability to change it later without
+breaking user codes. Roughly, when there are 'more' funcs to access data, it's less encapsulated.
+Assumes that it follows the rule in EC++22 that member data must be private and therefore provide
+only funtional interfaces to access data.
 
 If use private member data, then only member function and friend can use it. If member function and
 non-member non-friend function provides the same functionality, which is better? non-member
 non-friend function <key> since it doesn't increase the number of functions that can access the
-private part of the class. 
+private part of the class or dependant on memeber data. 
 
 class WebBrowser
 {
@@ -29931,11 +30600,7 @@ underlying object like stl string class.
 
 Two motivations:
 
-o To simplify the bookkeeping 'who is allowed to delete what'. simple form of garbage collection.
-smart pointer is an example. This is what most uses.
 
-o To share underlying objects. efficiency since use same memory and runs fast on assumption that
-object will share values.
 
 
 {summary}
@@ -29951,132 +30616,7 @@ self-reference which causes isolated collection of objects and reference count n
 Therfore, industrial garbage collectors use special technique to find these.
 
 
-{what-problem-to-solve}
-
-class String {
-	 public:
-	 	String& operator=( const String& rhs );
-		...
-	private:
-		char* data;
-};
-
-// handles self-assign but not exception safe
-String& String::operator=( const String& rhs )
-{
-	 if( this == &rhs ) return *this;
-
-	 delete[] data;
-	 data = new char[ strlen(rhs.dat) +1 ];
-	 strcpy( data, rhs.data );
-	 return *this;
-}
-
-Use:
-
-Sring a, b, c, d;
-a = b = c = d = "Hello";
-
-This means:
-
-a -> "Hello"
-b -> "Hello"
-c -> "Hello"
-d -> "Hello"
-
-How can we make those share one copy of Hello?
-
-
 {approach-one}
-
-Have a reference count out of object. Why out of object? Because count per value but not per object.
-
-a -> 4 -> "Hello"
-b 
-c
-d 
-
-class String {
-	 public:
-	 	String& operator=( const String& rhs );
-		...
-	private:
-		struct StringValue {
-			 size_t refCount;
-			 char* data;
-			 StringValue( const char* initValue );
-			 ~StringValue();
-		};
-
-		StringValue* value;
-};
-
-String::StringValue::StringValue( const char* initValue ) : refCount(1) # <default-1>
-{
-	 data = new char[ strlen(initValue) +1 ];
-	 strcpy( data, initValue );
-}
-
-String::StringValue::~StringValue()
-{
-	 delete [] data;
-}
-
-Why private nested class? Because to make only String has a full access of it.
-
-
-{{ctor-one}}
-
-String::String( const char* initValue ) : value( new StringValue( initValue )) {}
-
-Use:
-
-String s("Hello");
-
-s -> 1 -> "Hello"
-
-But cannot avoid duplication:
-
-String s1("Hello");
-String s2("Hello");
-
-s1 -> 1 -> "Hello"
-s2 -> 1 -> "Hello"
-
-Solution is to create new one only when it is unique string and leave it for further study.
-
-
-{{ctor-two}}
-
-// String S1(S2);
-//
-String::String( const String& rhs ) : value( rhs.value )
-{
-	 ++value->refCount;
-}
-
-String::~String()
-{
-	 if( --value->refCount == 0 ) delete value;
-}
-
-// S1 = S2; reference count of S1 is decresed by one and S2 is increased by one
-//
-String& String::operator=( const String& rhs )
-{
-	 if( value == rhs.value ) return *this;
-
-	 if( --value->refCount == 0 ) delete value;
-
-	 value = rhs.value;
-	 ++value->refCount;
-
-	 return *this;
-}
-
-
-See efficiency here since there is no alloc, free, and copy.
-
 
 {{copy-on-write}}
 
@@ -30621,35 +31161,68 @@ class RCWidget {
 };
 
 
-==============================================================================
+={============================================================================
 *kt_dev_mecpp_006* 28: log entry
 
 Class template for making log entries whenever a T object is modified; see below for details
 
 template<class T>
 class LogEntry {
-public:
-	 LogEntry(const T& objectToBeModified);
-	 ~LogEntry();
+  public:
+    LogEntry(const T& objectToBeModified);
+    ~LogEntry();
 };
 
-void editTuple(DBPtr< Tuple>& pt)
+void editTuple(DBPtr<Tuple>& pt)
 {
-	 LogEntry< Tuple> entry(*pt); // make log entry for this operation
+  LogEntry< Tuple> entry(*pt); // make log entry for this operation
 
-	 do {
-	 	pt->displayEditDialog();
-	 } while (pt->isValid() == false);
+  do {
+    pt->displayEditDialog();
+  } while (pt->isValid() == false);
 }
 
 
 The LogEntry's constructor begins the log entry and its destructor ends the log entry. Two pros:
 
-o handles exception case
-o easier to create a single LogEntry object than to add separate calls to start and stop an entry 
+1. handles exception case
+2. easier to create a single LogEntry object than to add separate calls to start and stop an entry 
+
+#include <iostream>
+
+using namespace std;
+
+template<typename T>
+class LogEntry {
+  public:
+  LogEntry( const T& obj ) { cout << "{ modifed: " << obj << endl; }
+  ~LogEntry() { cout << "}" << endl; }
+};
+
+void a_function(int arg)
+{
+  LogEntry<int> log(arg);
+
+  cout << "this is a function" << endl;
+}
+
+int main()
+{
+  cout << "this is main { " << endl;
+
+  a_function(5);
+
+  cout << "this is main } " << endl;
+}
+
+this is main { 
+{ modifed: 5
+this is a function
+}
+this is main } 
 
 
-==============================================================================
+={============================================================================
 *kt_dev_mecpp_007* 34: combine C and C++
 
 There are things to know when use both together in a program.
