@@ -3,8 +3,6 @@
 /^[#=]{
 Use #{ for a group and ={ for a item
 
-aMon 13 Jan 2014 15:34:27 GMT
-
 TODO:
 1. how to instantiate all members from a template? when it is useful? from youview interview 
 2. how to implement shared_ptr for multi-threaded without using locks?
@@ -11597,7 +11595,7 @@ class T {       <- from other type to T. converting-ctor
 };
 
 
-{converting-ctor} <implicit-conversion>
+{converting-ctor} <why-explicit-keyword>
 Means ctor with single arg and enables 'implicit' conversion from arg type to class type. 
 
 class Sale_data {
@@ -11717,10 +11715,13 @@ The implicit conversion is not always useful since temporary is made. More expen
 state(input), or making changes on temporary. So the point is about making it explicit in code and
 forcing user to know what they are doing.
 
-
 <stl-example-of-explicit>
-
 The vector<T> v(number) is explicit so the following is in error.
+
+explicit container::container (size_type num)
+- Creates a container with num elements.
+- The elements are created by their default constructor.
+- Provided by vector, deque, list, forward list.
 
 // x.member(vector<string>& vec);
 x.member(10);  // error
@@ -12967,8 +12968,7 @@ casting and return. Can have an impact on the performance in construction and de
 TODO: need more to see if temp object is really a cost
 
 <temp-object-in-return>
-// example-one
-
+<1> 
 Return the plural version of the word if the counter is greater than 1.
 
 string make_plural( size_t ctr, const string& word, const string& ending)
@@ -12979,7 +12979,12 @@ string make_plural( size_t ctr, const string& word, const string& ending)
 The word is copied to the call(ing) site or unnamed string 'temp'-object is copied to the call site for
 'word + ending' case.
 
-// example-two
+<2>
+Here explicitly constructed return pair 'temporary'. 'pair<string, int>' is T. That is T() and so is
+default constructed and value-init.
+
+See {return-reference-vs-copy} for interesting case. So whether or not there is a temp object
+created in called site, there is a copy to call site when a func is defined to return a copy.
 
 pair<string, int> process( vector< string > v )
 {
@@ -12990,14 +12995,7 @@ pair<string, int> process( vector< string > v )
     return pair<string, int>();
 }
 
-Here explicitly constructed return pair 'temp'-object. 'pair<string, int>' is T. That is T() and so is
-default constructed and value-init.
-
-See {return-reference-vs-copy} for interesting case. So whether or not there is a temp object
-created in called site, there is a copy to call site when a func is defined to return a copy.
-
-// example three
-
+<3> 
 This must be 'const' return and see {const-return}. If not, the following is legal: 
 
 const Number operator+( const Number& lhs, const Number& rhs );
@@ -13007,6 +13005,12 @@ a + b = c;
 How to eliminate this cost?
 Not always possible to shun this. Can use operator+= and see MEC++22 for more. Or can use compiler's
 <return-value-optimisation> in MEC++20.
+
+<4>
+const char* PersonInfo::theName() const;
+
+virtual std::string name() const
+{ return PersonInfo::theName(); }
 
 
 <temp-object-in-converison> cost-of-temp-object
@@ -13183,7 +13187,7 @@ syntax can be the same as that of a fuction declaration.
 class background_task;
 std::thread my_thread( background_task() );     // T()
 
-This declars the function my_thread that takes a single parameter which is type pointer to a
+This declares the function my_thread that takes a single parameter which is type pointer to a
 function taking no parameters and returning a background_task object. However, the intention was to
 create std::thread instance with function object to run.
 
@@ -15026,6 +15030,17 @@ an lvalue.
 The address-of operator(&) requires an lvalue operand and returns a 'pointer' to its operand as an
 'rvalue'.
 
+<example> show that x++ returns rvalue which is the previous.
+int main(int argc, char* argv[])
+{
+  int x = 10;
+  int* pint;
+
+  pint = &(++x);
+  pint = &(x++);        // error: lvalue required as unary ‘&’ operand
+}
+
+
 <bindings> like const 
 Binding properties for lvalue reference is that cannot bind regular(lvalue) reference to expression
 that requires a conversion, to literals, or to expression that return an rvalue. Rvalue properties
@@ -16294,7 +16309,7 @@ accessed through the scope operator is a type or static member.
 
 However, in template code, when it see code such as T::mem, won't know 'until' instantiation whether
 name is a type or a static member. By default, the language assumes that a name accessed through the
-scope operator is 'not' a type. So if want to use type member of template must explicitly tell.
+scope operator is 'not' a type. So if want to use type member of template must 'explicitly' tell.
 
 template<typename T> 
 typename T::value_type top( const T& c )
@@ -16303,6 +16318,56 @@ typename T::value_type top( const T& c )
     return c.book();
   else
     return typename T::value_type();      // "typename T::value_type" is a type
+}
+
+EC++42. This is called 'dependent' type names since it depends on the template parameter. This
+causes 'parsing' difficulty and this is why must tell it to compiler and use 'typename' but not
+class.
+
+template<typename T>
+void print2nd( const T& container )
+{
+  T::const_iterator iter( container.begin() );           // iter is dependent name
+  ...
+}
+
+template<typename T>
+void print2nd( const T& container )
+{
+  typename T::const_iterator iter( container.begin() );  // must use typename
+  ...
+}
+
+The exception to this is when typename is used in base class type. Suppose that if it have to use
+typename in this case, then how difficult it is to parse. Suppose Nested is a type(class) in this
+example.
+
+template<typename T>
+class Derived: public Base<T>::Nested {               // not use typename here
+  public:
+    explicit Derived(int x) : Base<T>::Nested(x) {    // not use typename here
+      typename Base<T>::Nested temp;                  // use as usual
+      ...
+    }
+    ...
+};
+
+Use typedef for a dependent name. This is to create a local variable which is the type pointed by a
+iterator.
+
+template<typename iterT>
+void workWithIterator(iterT iter)
+{
+  typename std::iterator_traits<iterT>::value_type temp(*iter);
+  ...
+}
+
+template<typename iterT>
+void workWithIterator(iterT iter)
+{
+  typedef typename std::iterator_traits<iterT>::value_type value_type;
+  value_type temp(*iter);
+  ...
 }
 
 <template-default-parameter>
@@ -19805,12 +19870,17 @@ If you can't use a node-based container and need the full commit-or-rollback abi
 provide wrappers for each critical operation.
 
 
+{guarantees}
+From ESTL p5. The revolutionary aspect of STL is its complexity guarantees regardless of the STL
+platform you are using.
+
+
 ={============================================================================
 *kt_dev_stl_007* containers
 
 According to the way the order of elements is defined.
 
-{sequence}
+{sequence} ordered vs sorted
 Sequence containers are 'ordered' collections in which every element has a certain 'position'. This
 position depends on the time and place of the insertion, but it is 'independent' of the value of the
 element. 
@@ -19822,7 +19892,7 @@ The STL contains five predefined sequence container classes: array, vector, dequ
 forward_list.
 
 {associative}
-Associative containers are sorted collections in which the position of an element depends on its
+Associative containers are 'sorted' collections in which the position of an element depends on its
 'value' (or key, if it’s a key/value pair) due to a certain 'sorting' criterion. 
 
 If you put six elements into a collection, their 'value' determines their order. The order of
@@ -19832,7 +19902,7 @@ The STL contains four predefined associative container classes: set, multiset, m
 
 {unordered}
 Unordered (associative) containers are 'unordered' collections in which the position of an element
-doesn't matter. The only important question is whether a specific element is in such a collection.
+doesn't matter. The only important question is whether a specific element is 'in' such a collection.
 
 Thus, if you put six elements into a collection, their order is undefined and might change over
 time. 
@@ -19856,7 +19926,7 @@ the behavior and complexity specified by the standard do not leave much room for
 practice, the implementations differ only in minor details.
 
 
-{contiguous-and-node-based}
+<contiguous-and-node-based> the other category
 string, vector, deque, and array are 'contiguous' memory. Hence, insert/delete in the middle can be
 expensive since have to move elements but fast access.
 
@@ -20654,8 +20724,8 @@ provide random access, and so an operator [ ] would have bad performance.
 
 
 {list-erase}
-Thing to show here is that the header from begin() gets updated when use erase(start, end) to trim
-unused entries.
+note: that the header from begin() gets updated when use erase(start, end) to trim entries in the
+front.
 
 <code-example>
 #include <iostream>
@@ -20728,7 +20798,7 @@ items: 50
 *kt_dev_stl_015* sequential: forward list
 
 A forward_list<> is implemented as a 'singly' linked list of elements. As a consequence, where all
-operations that move backward or would cause a performance penalty are not supported. For this
+operations that move backward or would cause a performance penalty are not supported. note: For this
 reason, member functions such as push_back() and even size() are not provided.
 
 <example>
@@ -20752,6 +20822,82 @@ int main()
 }
 
 2 3 5 7 11 13 17 0 0 99
+
+<example> 
+This is <is-implemented-in-terms-of-example> to have size() which is not supported.
+
+#include <iostream>
+#include <forward_list>
+
+template<typename T>
+class Forward_list {
+  private:
+    size_t count;
+    std::forward_list<T> list;
+
+  public:
+    typedef typename std::forward_list<T>::iterator iterator;
+
+    Forward_list() : count(0) {}
+
+    void push_front(const T& elem) {
+      count++;
+      list.push_front(elem);
+    }
+
+    size_t size() const {
+      return count;
+    }
+
+    // note: "iterator begin() const" causes compile error
+    iterator begin() {
+      return list.begin();
+    }
+
+    iterator end() {
+      return list.end();
+    }
+};
+
+int main()
+{
+  int n, item;
+  Forward_list<int> ilist;
+  Forward_list<int>::iterator ihead;
+
+  std::cout << "type in an integer n(loop count) followed by n decimal numbers." << std::endl;
+
+  std::cin >> n;
+
+  for(int i=0; i<n; i++)
+  {
+    std::cin >> item;
+    ilist.push_front(item);
+  }
+
+  std::cout << "input is done and you have entered " << ilist.size() << " items" << std::endl;
+
+  ihead = ilist.begin();
+
+  for(; ihead != ilist.end(); ihead++) 
+  {
+    std::cout << "items: " << *ihead << std::endl; 
+  }
+}
+
+type in an integer n(loop count) followed by n decimal numbers.
+5
+10
+20
+30
+40
+50
+input is done and you have entered 5 items
+items: 50
+items: 40
+items: 30
+items: 20
+items: 10
 
 
 ={============================================================================
@@ -21702,6 +21848,10 @@ an array of linked lists. But because such a fast perfect hash function is not a
 might require that the array consumes a huge amount of memory, the elements in the array are linked
 lists so that you can store more than one element at each array position.
 
+<default-hash>
+A default hash function is provided for fundamental types and strings, but we would have to declare
+our own hash function for other types.
+
 All these unordered container classes have optional template arguments to specify a hash function
 and an 'equivalence' criterion. note: why equal? since no order.
 
@@ -21710,10 +21860,20 @@ and an 'equivalence' criterion. note: why equal? since no order.
 Use '==' op and hash func.
 
 
-{performance}
+{performance} amortized complexity
 Because the complexity for element access is amortized constant for unordered maps rather than
 logarithmic for maps, you should usually prefer unordered maps over maps unless you need the
 sorting.
+
+Some complexity definitions in the C++ reference manual are specified as amortized. This means that
+the operations in the long term behave as described. However, a single operation may take longer
+than specified. For example, if you append elements to a dynamic array, the runtime depends on
+whether the array has enough memory for one more element. If there is enough memory, the complexity
+is constant because inserting a new last element always takes the same time. However, if there is
+not enough memory, the complexity is linear because, depending on the number of elements, you have
+to allocate new memory and copy all elements. Reallocations are rather rare, so any sufficiently
+long sequence of that operation behaves as if each operation has constant complexity.  Thus, the
+complexity of the insertion is 'amortized' constant time.
 
 
 {duplicate-order}
@@ -21760,9 +21920,22 @@ stack, queue, priority_queue
 The {ref-001} says that STL stack uses deque by default and can change by giving it second
 paramenter.
 
-template <class T, class Container = deque< T> > class stack;
+template <class T, class Container = deque<T> > class stack;
 
+std::stack<int,std::vector<int>> st;
 
+<container>
+The deque was chosen because, unlike vectors, deques free their memory when elements are removed and
+don't have to copy all elements on reallocation (see Section 7.12, page 392, for a discussion of
+when to use which container).
+
+<interface>
+This interface is somewhat inconvenient, but it performs better if you want only to remove the next
+element without processing it. Note that the behavior of top() and pop() is 'undefined' if the stack
+contains no elements. The member functions size() and empty() are provided to check whether the
+stack contains elements.
+
+<example>
 #include <iostream>
 #include <stack>
 
@@ -21784,11 +21957,13 @@ int main()
 
   std::cout << "input is done and you have entered." << std::endl;
 
+  numbers.top() = 99;         // modify top element
+
   while( !numbers.empty() )
   {
     // access next element. top() returns a reference to the top element in a stack. 
     std::cout << numbers.top() << " : ";
-    numbers.pop();         // void pop()
+    numbers.pop();            // void pop()
   }
 
   std::cout << std::endl;
@@ -21799,7 +21974,102 @@ type in an integer n followed by n decimal numbers.
 10
 1 2 3 4 5 6 7 8 9 10 11 12
 input is done and you have entered.
-10 : 9 : 8 : 7 : 6 : 5 : 4 : 3 : 2 : 1 : 
+99 : 9 : 8 : 7 : 6 : 5 : 4 : 3 : 2 : 1 : 
+
+<example> from the reference 12.1.3 <is-implemented-in-terms-of-example>
+The standard class stack<> prefers speed over convenience and safety. This is own stack class, which
+has the following two advantages:
+
+1. pop() returns the next element.
+2. pop() and top() throw exceptions when the stack is empty. Unlike the standard stack class, this
+one throws an exception rather than resulting in undefined behavior.
+
+In addition, have skipped the members that are not necessary for the ordinary stack user, such as
+the comparison operations.
+
+#include <deque>
+#include <exception>
+
+template<typename T>
+class Stack {
+  private:
+    std::deque<T> coll;
+
+  public:
+    // exception class for pop and top with empty stack
+    class ReadEmptyStack : public std::exception {
+      public:
+        virtual const char* what() const noexcept {
+          return "read empty stack";
+        }
+    };
+
+    typename std::deque<T>::size_type size() const {
+      return coll.size();
+    }
+
+    bool empty() const {
+      return coll.empty();
+    }
+
+    void push(const T& elem) {
+      coll.push_back(elem);
+    }
+
+    T pop() {
+      if( coll.empty() )
+        throw ReadEmptyStack();
+
+      T elem( coll.back() );
+      coll.pop_back();
+      return elem;
+    }
+
+    T& top() {
+      if( coll.empty() )
+        throw ReadEmptyStack();
+
+      return coll.back();
+    }
+};
+
+#include <iostream>
+
+using namespace std;
+
+int main()
+{
+  cout << "main: { " << endl;
+
+  try {
+    Stack<int> st;
+
+    st.push(1); st.push(2); st.push(3);
+
+    cout << st.pop() << ' ' << st.pop() << ' ';
+
+    st.top() = 77;
+
+    st.push(4); st.push(5);
+
+    st.pop();
+
+    // at this point, there are two elements in the stack and expect a exception.
+    cout << st.pop() << ' ';
+    cout << st.pop() << endl;
+    cout << st.pop() << endl;
+  }
+  catch( const exception& e ) {
+    cerr << "execption: " << e.what() << endl;
+  }
+
+  cout << "main: } " << endl;
+}
+
+main: { 
+2 3 4 77
+execption: read empty stack
+main: } 
 
 
 {queue-stl}
@@ -21900,7 +22170,7 @@ multimap.
 Provide constant-time access to any position in the sequence. Supports all the functionality of
 bidirectional iterators. In addition, supports:
 
-relational operators, addition and subtraction operators on an iterator and an integral value,
+'relational' operators, addition and subtraction operators on an iterator and an integral value,
 subtraction operator when applied to two iterators, and subscript operator.
 
 vector, deque, array, and strings
@@ -22010,9 +22280,10 @@ These are several predefined special iterators, called iterator adaptors:
 insert, stream, reverse, and move iterators
 
 {insert} inserter
-Insert iterators, or inserters, are used to let algorithms operate in insert mode rather than in
+Insert iterators, or inserters, are used to let algorithms operate in 'insert' mode rather than in
 overwrite mode. (for overwrite example, algorithms using multiple range) They fall under the
-category of output iterators, which are able to write/assign values only 'while' iterating forward.
+category of 'output' iterators, which are able to write/assign values only 'while' iterating
+forward.
 
 Three different insert iterators: at the front, at the end, or at a given position.
 
@@ -22020,10 +22291,21 @@ The inserters calls a container operation to add and must use front_inserter onl
 has push_front and use back_inserter only if it has push_back. These are back_inserter,
 front_inserter, inserter which bind iterator to container operations.
 
-Why are these useful? There is no need to increase or decrease iter but still need to care about
-underlying container.
+<why-useful>
+1. There is 'no' need to increase or decrease iter but still need to care about underlying
+container. note: Seems less convincing.
+2. Less 'generic' since need to know about element type. However, it's convenient. note: Can use
+usual interator interface in code while doing insertion. How? increment operator is no-op as i the
+reference 9.4.2.
 
-<key> less 'generic' since need to know about element type. However, it's convenient.
+<inserter>
+Calls insert(pos, val) member and insert elements directly in front of the position that is passed
+as the argument of its initialization and as the start to insert. For all containers except array
+and forward_list.
+
+Passing a position(iterator) to insert doesn't sound useful? So for associative and unordered
+containers, the position is taken as a 'hint' to start the search for the correct position. However,
+containers are free to ignore it.
 
 <example> algorithm-copy
 note: copy(beg, end, a2) return points just past the last element copied into a2
@@ -22037,6 +22319,17 @@ note: copy(beg, end, a2) return points just past the last element copied into a2
 
 using namespace std;
 
+template<typename T>
+void PRINT_ELEMENTS( T& coll, const std::string& mesg = "" )
+{
+  cout << mesg << ": {";
+
+  for( const auto &elem : coll )
+    cout << elem << ",";
+
+  cout << "}" << endl;
+}
+
 int main()
 {
   list<int> coll1{ 1, 2, 3, 4, 5, 6, 7, 8, 9 };
@@ -22046,59 +22339,147 @@ int main()
   copy (coll1.cbegin(), coll1.cend(),  // source
       back_inserter(coll2));           // destination
 
+  PRINT_ELEMENTS( coll2, "vector" );
+
   // copy the elements of coll1 into coll3 by inserting them at the front
   // note: reverses the order of the elements
   deque<int> coll3;
   copy (coll1.cbegin(), coll1.cend(),  // source
       front_inserter(coll3));          // destination
 
+  PRINT_ELEMENTS( coll3, "deque " );
+
   // copy elements of coll1 into coll4
-  // note: only inserter that works for associative collections
+  // note: 'only' inserter that works for 'associative' collections
   set<int> coll4;
   copy (coll1.cbegin(), coll1.cend(), // source
       inserter(coll4,coll4.begin())); // destination
+
+  PRINT_ELEMENTS( coll4, "set   " );
+
+  // note: Q: what order of output do you expect?
+  vector<int> coll5;
+  copy (coll1.cbegin(), coll1.cend(),  // source
+      inserter(coll5, coll5.begin())); // destination
+
+  PRINT_ELEMENTS( coll5, "vector" );
 }
 
+vector: {1,2,3,4,5,6,7,8,9,}
+deque : {9,8,7,6,5,4,3,2,1,}
+set   : {1,2,3,4,5,6,7,8,9,}
+vector: {1,2,3,4,5,6,7,8,9,}
+
 note: see that uses 'collection' in inserter template as a argument without type.
+
+<why-the-order-maintained-in-inserter>
+The general inserter does followings; update and increase pos.
+
+pos = container.insert(pos,value);
+++pos;
+
+<example>
+#include <iostream>
+#include <list>
+#include <iterator>
+
+using namespace std;
+
+template<typename T>
+void PRINT_ELEMENTS( T& coll, const std::string& mesg = "" )
+{
+  cout << mesg << ": {";
+
+  for( const auto &elem : coll )
+    cout << elem << ",";
+
+  cout << "}" << endl;
+}
+
+int main()
+{
+  list<int> coll1, coll2;
+
+  // note: inconvenient way to create inserter
+  insert_iterator<list<int>> iter( coll1, coll1.begin() );
+
+  // use usual iterator interface which has the same result
+  // *iter = 1; iter++;
+  // *iter = 2; iter++;
+  // *iter = 3; iter++;
+
+  *iter = 1; *iter = 2; *iter = 3; *iter = 44; *iter = 55;
+  PRINT_ELEMENTS( coll1, "list1: " );
+
+  coll2.push_back(1); coll2.push_back(2); coll2.push_back(3);
+  coll2.push_back(44); coll2.push_back(55);
+  PRINT_ELEMENTS( coll2, "list2: " );
+
+  list<int> coll3;
+  // note: convenient way to create inserter
+  copy( coll1.begin(), coll1.end(), inserter( coll3, coll3.begin()) );
+  PRINT_ELEMENTS( coll3, "list3: " );
+
+  copy( coll1.begin(), coll1.end(), inserter( coll3, ++coll3.begin()) );
+  PRINT_ELEMENTS( coll3, "list3: " );
+}
+
+list1: : {1,2,3,44,55,}
+list2: : {1,2,3,44,55,}
+list3: : {1,2,3,44,55,}
+list3: : {1,1,2,3,44,55,2,3,44,55,}
 
 <back-inserter>
 Calls push_back so back inserters can be used 'only' for containers that provide push_back() as a
 member function: these containers are vector, deque, list, and strings.
 
+<example>
+#include <iostream>
+#include <vector>
+#include <iterator>
+
+using namespace std;
+
+template<typename T>
+void PRINT_ELEMENTS( T& coll, const std::string& mesg = "" )
+{
+  cout << mesg << ": {";
+
+  for( const auto &elem : coll )
+    cout << elem << ",";
+
+  cout << "}" << endl;
+}
+
+int main()
+{
+  vector<int> coll;
+
+  back_insert_iterator<vector<int>> iter( coll );
+
+  // use usual iterator interface
+  *iter = 1; iter++;
+  *iter = 2; iter++;
+  *iter = 3; iter++;
+  *iter = 44; iter++;
+  *iter = 45; iter++;
+
+  // *iter = 1; *iter = 2; *iter = 3; *iter = 44; *iter = 55;
+  PRINT_ELEMENTS( coll, "coll: " );
+
+  coll.reserve( 2*coll.size() );
+  copy( coll.begin(), coll.end(), back_inserter(coll) );
+  PRINT_ELEMENTS( coll, "coll: " );
+}
+
+note: that you 'must' not forget to reserve enough space before calling copy(). The reason is that
+the back inserter inserts elements, which might cause relocation; invalidate all other iterators
+referring to the same vector. Thus, the algorithm invalidates the passed source iterators while
+running.
+
 <front-inserter>
 Calls push_front so back inserters can be used 'only' for containers that provide push_front() as a
 member function: these containers are deque, list, and forward_list.
-
-<inserter>
-Calls insert(pos, val) and insert elements directly in front of the position that is passed as the
-second argument of its initialization. For all except array and forward_list.
-
-Passing a position(iterator) to insert doesn't sound useful? So for associative and unordered
-containers, the position is taken as a hint to start the search for the correct position. However,
-containers are free to ignore it.
-
-<eample>
-#include <iterator>
-
-vector<int> vec;
-auto it = back_inserter(vec);
-*it = 42;                                   // calls puch_back()
-*it = 48;
-
-[42, 48, E)
-
-<example>
-
-// see the difference between inserter and front_inserter. 
-
-list< int> lst = { 1, 2, 3, 4 }, lst2, lst3;
-
-// OutputIterator copy (InputIterator first, InputIterator last, OutputIterator result);
-// 4,3,2,1
-copy( lst.cbegin(), lst.cend(), front_inserter(lst2) );
-
-// 1,2,3,4
-copy( lst.cbegin(), lst.cend(), inserter(lst3, lst3.begin()) );
 
 
 {stream-iterator}
@@ -22162,7 +22543,6 @@ istream_iterator<string> str_it(in);
 
 
 <example> how stream-iterator can make code neat
-
 int main()
 {
   Sales_item total;
@@ -22219,7 +22599,7 @@ while( item_iter != eof )
 
 out_iter = sum;
 
-<example>
+<example> algorithm-unique_copy
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -22246,32 +22626,22 @@ int main()
 
 
 {reverse-iterator}
-Let algorithms operate backward by switching the call of an increment operator internally into a
+Allow algorithms operate backward by switching the call of an increment operator internally into a
 call of the decrement operator, and vice versa. The advantage of using reverse iterators is that all
 algorithms are able to operate in the opposite direction without special code.
 
-<difference-in-range>
-The difference between reverse and normal iterator. When we initialize or assign a reverse iterator
-from a plain iterator, the resulting iterator does not refer to the same element as the original.
-
-rcomma.base()   cend()
- |       |
- , L A S T
- |       |
- rcomma  crbegin()
-
-[crbegin(), rcomma ) which prints 'TSAL' and [rcomma.base(), cend() )
+sort( vec.begin(), vec.end() );     // sort in normal, ascending order
+sort( vec.rbegin(), vec.rend() );   // sort in reverse, decending order
 
    .cbegin()              .cend()
   [ ] [ ] [ ] [ ] ... [ ]
 .crend()               .crbegin() 
 
-All containers with bidirectional iterators or random-access iterators can create reverse interator.
+All containers with 'bidirectional' iterators or random-access iterators can create reverse
+interator. That is all containers as well as string except forward_list and unordered, supports
+ability to use reverse iterators.
 
-Primers read "The containers, aside from forward_list, all have reverse iterators" and STL reference
-read "For forward_lists and unordered containers, no backward-iteration interface (rbegin(), rend(),
-etc.) is provided. The reason is that the implementation requires only singly linked lists to go
-through the elements."
+note: Primers read "The containers, aside from forward_list, all have reverse iterators". 
 
 So container shall support ++/-- operator and rbegin/rend/crbegin/crend().
 
@@ -22323,8 +22693,116 @@ int main()
   copy( coll.crbegin(), coll.crend(), ostream_iterator<int>(cout, " "));
 
   cout << endl;
-
 }
+
+<difference-between-reverse-and-other-iterators> conversion between them
+As the sort example shown above, then use reverse iterator as a range, don't need to care about this
+difference but see the difference when use it as a single iterator.
+
+<example> Primers p408
+
+string line("FIRST,MIDDLE,LAST");
+
+// print the first word, "FIRST"
+auto comma = find(line.cbegin(), line.cend(), ',');
+cout << string(line.cbegin(), comma ) << endl;
+
+// print the last word, "LAST"?
+auto rcomma = find(line.crbegin(), line.crend(), ',');
+cout << string(line.crbegin(), rcomma ) << endl;
+
+The result is "TSAL" since iterator goes backward and means [crbegin(), rcomma ). To get the
+expected result, shall use instead [rcomma.base(), cend() ) which converts reverse iterator to
+normal interator.
+
+cout << string(rcomma.base(), line.cend() ) << endl;
+
+   rcomma.base()   
+           cend()
+ |       |
+ , L A S T
+ |       |
+ rcomma  crbegin()
+
+There is the difference when converting reverse to and from since the resulting iterator does 'not'
+refer to the same element. This is a consequence of the fact that ranges are half open.
+
+Thus, rbegin() is simply:
+container::reverse_iterator(end())
+
+and rend() is simply:
+container::reverse_iterator(begin())
+
+<example> shows the difference and to convert interators
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+int main()
+{
+  // create list with elements from 1 to 9
+  vector<int> coll = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+
+  // find position of element with value 5
+  vector<int>::const_iterator pos;
+
+  pos = find (coll.cbegin(), coll.cend(), 5);
+
+  // print value to which iterator pos refers
+  cout << "pos : " << *pos << endl;
+
+  // convert iterator to reverse iterator rpos
+  vector<int>::const_reverse_iterator rpos(pos);
+
+  // print value to which reverse iterator rpos refers
+  cout << "rpos: " << *rpos << endl;
+}
+
+pos : 5
+rpos: 4
+
+<example> when use it as a range
+#include <iostream>
+#include <deque>
+#include <algorithm>
+
+using namespace std;
+
+void print(int elem)
+{
+  cout << elem << ' ';
+}
+
+int main()
+{
+  // create deque with elements from 1 to 9
+  deque<int> coll = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+
+  // find position of element with value 2
+  deque<int>::const_iterator pos1;
+  pos1 = find (coll.cbegin(), coll.cend(), 2);
+
+  // find position of element with value 7
+  deque<int>::const_iterator pos2;
+  pos2 = find (coll.cbegin(), coll.cend(), 7);
+
+  // print all elements in range [pos1,pos2)
+  for_each (pos1, pos2, print);
+  cout << endl;
+
+  // convert iterators to reverse iterators
+  deque<int>::const_reverse_iterator rpos1(pos1);
+  deque<int>::const_reverse_iterator rpos2(pos2);
+
+  // print all elements in range [pos1,pos2) in reverse order
+  for_each (rpos2, rpos1, print); 
+  cout << endl;
+}
+
+2 3 4 5 6 
+6 5 4 3 2 
 
 
 ={============================================================================
@@ -22436,7 +22914,7 @@ int main()
   std::cout << std::endl;
 }
 
-1:5:6:7:2:3:4:
+1:5:6:7:2:3:4:                   // note: see the order of 5:6:7:
 
 <A> Core dumped since insert element in the middle and invalidate pos "it". However, set uses
 insert(elem) without pos.
@@ -22822,6 +23300,7 @@ min: 1
 max: 6
 1 2 6 5 4 3 
 
+
 {algorithm-category}
 There is architecture or the unifying principles that categorise 100+ algorithms: according to what
 do on container or required arguments. Be careful since algorithms have assumtions and use right
@@ -22841,12 +23320,10 @@ int sum = accumulate( vec.cbegin(), vec.cend(), 0 );
 string sum = accumulate( vec.cbegin(), vec.cend(), string(""));
 
 
-{ranges}
-<single>
+{assumption-on-ranges}
+<single-range>
 To be able to handle subsets of container elements, you pass the beginning and the end of the range
 as two separate arguments rather than the whole collection. This interface is flexible but dangerous.
-
-note: assumption
 
 The caller must ensure that the first and second arguments define a valid range. Otherwise, the
 behavior is 'undefined', and endless loops or forbidden memory access may result. This means that it
@@ -22855,7 +23332,7 @@ is up to the programmer to ensure that.
 Two things about 'valid' range when [beg, end) use with algorithm:
 
 1. The range do not include end.
-2. The beg must come first in order. Othewise, it is not valid range and 'undefined'.
+2. The beg must come 'first' in order. Othewise, it is not valid range and 'undefined'.
 3. The range shall exist.
 
 // fill_n( dest, size, value ) and assumes that vec is 10 size at least. so if there is no 10
@@ -22863,9 +23340,10 @@ Two things about 'valid' range when [beg, end) use with algorithm:
 vector<int> vec;
 fill_n( vec.begin(), 10, 0 );
 
-<multiple>
+<multiple-range>
 Assumption on the second range is it as big as the first since the number of elements of the second
-is deduced from the first range since 'overwrite' rather then 'insert'.
+is 'deduced' from the first range. If not, undefined. For example, copy algorithm 'overwrite' rather
+then 'insert'.
 
 This is for only sequence containers with algorithms because associative and unordered containers
 cannot be used as a destination for overwriting algorithms.
