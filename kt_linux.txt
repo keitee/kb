@@ -6,7 +6,7 @@ aWed 18 Dec 2013 09:47:23 GMT
 
 KT KB. Linux
 
-|kt_linux_bash_001| bash: history
+|kt_linux_bash_001| bash: history <reverse-search>
 |kt_linux_bash_002| bash: set array
 |kt_linux_bash_003| bash: set read only var
 |kt_linux_bash_004| bash: globbing (wildcard)
@@ -19,6 +19,11 @@ KT KB. Linux
 |kt_linux_bash_011| bash: while
 |kt_linux_bash_012| bash: break and continue
 |kt_linux_bash_013| bash: read
+|kt_linux_bash_014| bash: function
+|kt_linux_bash_015| bash: basename
+|kt_linux_bash_016| bash: here document
+|kt_linux_bash_017| bash: redirection
+|kt_linux_bash_018| bash: ':' command
 
 |kt_linux_tool_001| egrep
 |kt_linux_tool_002| cut
@@ -145,6 +150,16 @@ KT KB. Linux
 # eliminate the continuous repeated entry across the whole history
 
 export HISTCONTROL=erasedups
+
+<history-per-terminal>
+# in .bash_profile
+echo $SSH_TTY
+export HISTFILE=/home/NDS-UK/parkkt/.bash_history_$(echo $SSH_TTY | cut -f 4 -d'/')
+export HISTFILESIZE=10000
+export HISTSIZE=10000 
+
+note: better to have TTY number in the prompt as well.
+
 
 # run multiple commands from the history
 
@@ -642,13 +657,6 @@ cat list | while read f; do
 done
 
 
-<example> This cause the creation of sub process?
-while read LINE
-do
-   ... # manipulate file here
-done < file
-
-
 <example> get token from a input line
 Read three tokens and echo the second.
 
@@ -676,6 +684,308 @@ pushd -n
 
 Suppresses the normal change of directory when adding directories to the stack, so that only the
 stack is manipulated. 
+
+
+{read-and-sub-process}
+
+<example> This cause the creation of sub process?
+while read LINE
+do
+   ... # manipulate file here
+done < file
+
+
+<example>
+#!/bin/sh
+if [ -f "$1" ] ; then
+  i=0
+  while read LINE
+  do
+    i=`echo "$i + 1" | bc`
+    echo "inner $i..."
+  done < "$1"
+  echo $i
+fi
+
+echo $i
+
+$ ./sbash.sh list 
+inner 1...
+inner 2...
+inner 3...
+inner 4...
+4
+4
+
+note: in the original text, it got 0 than 4 since there is a sub-process created. However, when run
+it on PC linux, got 4 as shown. Is it difference between PC and embedded shell? Seems not since the
+below example seems to be run on build server.
+
+
+<example>
+scan_for()
+{
+  while read line
+  do
+      echo "$line"
+  done
+}
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
+
+
+This example cannot get output inside a function. So make a changes to:
+
+scan_for()
+{
+  cat x.tmp | while read line
+  do
+      echo "$line"
+  done
+}
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" > x.tmp`
+scan_for()
+
+This enables us to use echo to get output but causes the other problem.
+
+scan_for()
+{
+  STARTED=0
+  MATCHED=0
+
+  # export STARTED MATCHED LASTLINE
+
+  cat x.tmp | while read line
+  do
+    case $line in
+      *jtVRM=3*)
+          if [ $STARTED -ne 1 ]
+          then
+             STARTED=1;
+             STARTLINE=`echo $line`;
+          fi
+          ;;
+       *XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
+          if [ $STARTED -eq 1 ]
+          then
+             MATCHED=1;
+             LASTLINE=`echo $line`;
+
+             # note: can get output of variables as expected
+             echo "started = $STARTED, MATCHED=$MATCHED";
+
+          break;
+          fi
+          ;;
+    esac
+  done
+
+  # note: however, the output of variables are '0'
+  echo "started = $STARTLINE";
+  echo "matched = $LASTLINE";
+
+  if [[ $STARTED -eq 1 && $MATCHED -eq 1 ]]
+  then
+      echo "$LASTLINE";    # note: here
+  fi
+}
+
+[parkkt@ukstbuild02 SI-4063]$ ./PicassoShutdownFail job.nds
+started = 1, MATCHED=1
+started = 0
+matched = 0
+started = 0
+matched = 0
+
+The reason is that "That's a tricky one, because the "while read line do done" spawns a subshell."
+So use "echo variable" inside the loop to make it available after the loop. But still not able to
+see the output inside the loop.
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
+echo "A = $A";
+
+So A will have all lines which are ecohed from the subshell 
+
+
+[parkkt@ukstbuild02 SI-4063]$ ./PicassoShutdownFail job.nds
+--
+A = started = 1, MATCHED=1
+
+started = 2:1801:NDS: ^[08:14:11]0946714451.604390 !MIL -VRMS < p:000000b7 t:2b933100 T:VRM_SRV
+M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x3000385
+
+matched = 290:243541:NDS: ^[09:11:44]0946717904.242499 !FATAL -MSM_MS < p:000000b7 t:0144ce00
+T:FS_WT_THREAD1 M:fs_server.c F:PerformWrite L:01943 > XTVFS_WriteEx failed,returned value:
+E_FSSERVER_STATUS_INVALID_ALIGNMENT 290:243541:NDS: ^[09:11:44]0946717904.242499 !FATAL -MSM_MS <
+p:000000b7 t:0144ce00 T:FS_WT_THREAD1 M:fs_server.c F:PerformWrite L:01943 > XTVFS_WriteEx
+failed,returned value: E_FSSERVER_STATUS_INVALID_ALIGNMENT
+
+started = 1, MATCHED=1 started = 2 Time:[08:14:11]0946714451,  VRM_JOB_START: jtVRM=3 Picasso not
+shutting down properly - maybe Jira SI-3770
+
+[parkkt@ukstbuild02 SI-4063]$
+
+
+={============================================================================
+*kt_linux_bash_014* bash: function
+
+note: must use bash and see how to pass args to function
+
+#!/bin/bash
+# BASH FUNCTIONS CAN BE DECLARED IN ANY ORDER
+
+function function_B {
+   echo Function B.
+}
+
+function function_A {
+   echo $1
+}
+
+function function_D {
+   echo Function D.
+}
+
+function function_C {
+   echo $1
+}
+
+# FUNCTION CALLS
+
+# Pass parameter to function A
+function_A "Function A via pass"
+function_B
+
+# Pass parameter to function C
+function_C "Function C via pass"
+function_D 
+
+$ ./sbash.sh list 
+Function A via pass
+Function B.
+Function C via pass
+Function D.
+
+
+={============================================================================
+*kt_linux_bash_015* bash: basename
+
+$ dirname /home/kt/kb
+/home/kt
+$ basename /home/kt/kb
+kb
+
+# DESCRIPTION
+# Print NAME with any leading directory components removed. If 'specified', also remove a trailing
+# SUFFIX.
+
+$ basename cfgversion.out  
+cfgversion.out
+$ basename cfgversion.out .out
+cfgversion
+
+
+={============================================================================
+*kt_linux_bash_016* bash: here document
+
+The general form for a here document is
+
+command << delimiter
+document
+delimiter
+
+Here the shell interprets the << operator as an instruction to read 'input' until it finds a line
+containing the specified delimiter. All the input lines up to the line containing the delimiter are
+then fed into the standard 'input' of the command.
+
+The delimiter must be a single word that does not contain spaces or tabs. For example, to print a
+quick list of URLs, you could use the following here document:
+
+lpr << MYURLS
+http://www.csua.berkeley.edu/~ranga/
+http://www.cisco.com/
+http://www.marathon.org/story/
+http://www.gnu.org/
+MYURLS
+
+For example, you can use the following command to create a file with the short list of URLs given
+previously:
+
+cat > urls << MYURLS
+http://www.csua.berkeley.edu/~ranga/
+http://www.cisco.com/
+http://www.marathon.org/story/
+http://www.gnu.org/
+MYURLS
+
+
+={============================================================================
+*kt_linux_bash_017* bash: redirection
+
+<form>
+command n> file
+command n>> file
+
+<example>
+One of the most common uses of file descriptors is to redirect STDOUT and STDERR to separate files.
+The basic syntax is
+
+command 1> file1 2> file2
+
+Often the STDOUT file descriptor, 1, is not written, so a shorter form of the basic syntax is
+
+command > file1 2> file2
+
+Redirecting STDOUT and STDERR to the 'same' file
+
+list > file 2>&1
+
+n>&m. Here n and m are file descriptors (integers). If you let n=2 and m=1, you see that STDERR is
+redirected to STDOUT. By redirecting STDOUT to a file, you also redirect STDERR.
+
+
+={============================================================================
+*kt_linux_bash_018* bash: ':' command
+
+<example> can use as 'no-op'
+Can be used as a no-op, which is a command that does nothing and thus can be safely inserted
+anywhere a command is needed for purely syntactical reasons:
+
+if [ -x $CMD ]
+then :
+else
+   echo Error: $CMD is not executable >&2
+fi
+
+In this example, assume you are not quite ready to write the code to follow the then statement. The
+shell flags a syntax error if you leave that code out completely, so you insert the : command as a
+temporary noop command that can be replaced by the desired code later.
+
+
+<example>
+Because the : always returns a successful result, it is sometimes used to create an infinite loop:
+
+while :
+do
+  echo "Enter some input: \c"
+  read INPUT
+  [ "$INPUT" = stop ] && break
+Done
+
+Because the : always returns a successful or true result, the while loop will continue forever or
+until a break is executed within the loop. Sometimes you might find that "while true" used in place
+of while : but using the : is more efficient because it is a shell built-in command, whereas true is
+a command that must be read from a disk file, if you are in the Bourne shell.
+
+
+={============================================================================
+*kt_linux_bash_019* bash: run multiple commands
+
+note: must be spaces between {}.
+
+$ { date;time; }
+$ { date;time; } > mylog
 
 
 ={============================================================================
