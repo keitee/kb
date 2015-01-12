@@ -91,7 +91,13 @@ KT KB. Linux
 |kt_linux_core_102| how to run three threads sequencially
 |kt_linux_core_103| priority and schedule
 
-|kt_linux_core_100| ipc
+|kt_linux_core_100| file io
+|kt_linux_core_101| system resource limits
+
+|kt_linux_core_200| ipc
+|kt_linux_core_201| ipc: system v
+|kt_linux_core_202| ipc: system v: shm
+
 |kt_linux_core_101| ipc: pipe and fifo
 |kt_linux_core_103| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
@@ -129,14 +135,17 @@ KT KB. Linux
 |kt_linux_core_601|  time: curTime
 |kt_linux_core_602|  time: ms and us
 
-|kt_linux_sete_001|  ubuntu: virtualbox
-|kt_linux_sete_002|  ubuntu: workspace
-|kt_linux_sete_003|  ubuntu: samba
-|kt_linux_sete_004|  ubuntu: nfs
-|kt_linux_sete_005|  ubuntu: check running services
-|kt_linux_sete_006|  ubuntu: connect from windows remote desktop
-|kt_linux_sete_007|  ubuntu: cpuinfo
-|kt_linux_sete_008|  ubuntu: change default application setting
+|kt_linux_sete_001| ubuntu: virtualbox
+|kt_linux_sete_002| ubuntu: workspace
+|kt_linux_sete_003| ubuntu: samba
+|kt_linux_sete_004| ubuntu: nfs
+|kt_linux_sete_005| ubuntu: check running services
+|kt_linux_sete_006| ubuntu: connect from windows remote desktop
+|kt_linux_sete_007| ubuntu: cpuinfo
+|kt_linux_sete_008| ubuntu: change default application setting
+
+|kt_linux_sete_100| gnome: windows
+|kt_linux_sete_101| firefox key shortcuts
 
 |kt_linux_refe_001|  references
 
@@ -5418,7 +5427,33 @@ SCHED_RR are optional in POSIX, and only are supported for real time bound threa
 # ============================================================================
 #{
 ={============================================================================
-*kt_linux_core_100*  ipc
+*kt_linux_core_100* file io
+
+{open-flag} LPI, 4.3.1
+O_CREAT
+
+If the file doesn't already exist, it is created as a new, empty file. This flag is effective even
+if the file is being opened only for reading. If we specify O_CREAT, then we must supply a mode
+argument in the open() call; otherwise, the permissions of the new file will be set to some random
+value from the stack.
+
+O_EXCL
+
+This flag is used in conjunction with O_CREAT to indicate that if the file already exists, it should
+not be opened; instead, open() should fail, with errno set to EEXIST. In other words, this flag
+allows the caller to 'ensure' that it is the process creating the file. 
+
+
+={============================================================================
+*kt_linux_core_101* system resource limits
+
+Various files under the /proc/sys/kernel directory can be used to view and modify these limits.
+
+On Linux, the ipcs -l command can be used to list the limits on each of the IPC mechanisms. 
+
+
+={============================================================================
+*kt_linux_core_200* ipc
 
 CH43, Fig 43-1 in {ref-LPI} which says that the 'general' term IPC is often used to describe them all;
 communication, signal, and synchronization.
@@ -5455,12 +5490,13 @@ synchronization technique in certain circumstances. More rarely, signals can be 
 communication technique: the signal number itself is a form of information, and realtime signals can
 be accompanied by associated data (an integer or a pointer).
 
+
 {nonnetworked-ipc}
 From {ref-UNP}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
 such as socket.
 
-{categories-of-ipc}
 
+{categories-of-ipc}
 From {ref-UNP}:
 
 three-ways-to-share-between-processes
@@ -5474,6 +5510,7 @@ Filesystem
 
 <persistence> which is lifetime of an objects
 Define the persistence of any type of IPC as how long an object of that type remains in existence.
+
 Process-persistence exists until last process with IPC open closes the object and kernel one exists
 until kernel reboots or IPC objects is explicitly deleted.
 
@@ -5600,6 +5637,102 @@ If IPC performance is crucial, there is no substitute for application-specific b
 an environment that matches the target system. To this end, it may be worth writing an 'abstract'
 software layer that hides details of the IPC facility from the application and then testing
 performance when different IPC facilities are substituted underneath the abstract layer.
+
+
+={============================================================================
+*kt_linux_core_201* ipc: system v
+
+{interfaces}
+A more significant reason for discussing the System V IPC mechanisms together is that their
+programming interfaces share a number of common characteristics, so that many of the same concepts
+apply to all of these mechanisms.
+
+
+{key-and-identifier}
+System V IPC keys are integer values represented using the data type key_t. The IPC get calls
+'translate' a key into the corresponding integer IPC identifier.
+
+So, how do we provide a unique key? (LPI, 45.2)
+
+One of three methods. Specify the IPC_PRIVATE constant as the key value to the get call when
+creating the IPC object, which always results in the creation of a new IPC object that is guaranteed
+to have a unique key.
+
+
+<identifier>
+An IPC identifier is analogous to a file descriptor in that it is used in all subsequent system
+calls to refer to the IPC object. There is, however, an important semantic difference. Whereas a
+file descriptor is a process attribute, an IPC identifier is a property of the object itself and is
+visible 'system'wide.
+
+
+{persistence}
+System V IPC objects have kernel persistence. Two disadvantages: system-imposed limit and may not
+able to easily determine which will be the last process requiring access to the object. The second
+is not for shm.
+
+
+{associated-data}
+The kernel maintains an associated data structure for each instance of a System V
+IPC object. 
+
+The associated data structure for an IPC object is initialized when the object is created via the
+appropriate get system call. Once the object has been created, a program can obtain a copy of this
+data structure using the appropriate ctl system call, by specifying an operation type of IPC_STAT.
+
+
+{ipcs-command}
+The ipcs command lists the System V IPC objects that currently exist on the system. The ipcrm
+command is used to remove System IPC objects.
+
+
+={============================================================================
+*kt_linux_core_202* ipc: system v: shm
+
+{segment}
+Shared memory allows two or more processes to share the same region (usually referred to as a
+segment) of physical memory. 
+
+
+{good-and-bad}
+Since a shared memory segment becomes part of a process's user-space memory, no kernel intervention
+is required for IPC.
+
+On the other hand, the fact that IPC using shared memory is not mediated by the kernel means that,
+typically, some method of synchronization is required
+
+
+{interfaces}
+<shm-get>
+The contents of a newly created shared memory segment are initialized to 0.
+
+#include <sys/shm.h>
+
+int shmget(key_t key, size_t size, int shmflg);
+
+Returns shared memory segment identifier on success, or -1 on error
+
+<shm-at>
+#include <sys/shm.h>
+
+void *shmat(int shmid, const void *shmaddr, int shmflg);
+
+Returns address at which shared memory is attached on success, or (void *) -1 on error
+
+The shmaddr argument and the setting of the SHM_RND bit in the shmflg bit-mask argument control
+how the segment is attached: See 48.3 for full options.
+
+If shmaddr is NULL, then the segment is attached at a suitable address selected by the kernel. This
+is the 'preferred' method of attaching a segment.
+
+
+{deletion}
+Deletion of shared memory objects occurs differently. Following the 
+
+shmctl(id, IPC_RMID, NULL) 
+
+call, the shared memory segment is removed 'only' after all processes using the segment detach it
+(using shmdt()). This is much closer to the situa- tion with file deletion.
 
 
 ={============================================================================
@@ -12134,11 +12267,50 @@ cat /proc/cpuinfo
 
 
 ={============================================================================
-*kt_linux_sete_008*  ubuntu: change default application setting
+*kt_linux_sete_008* ubuntu: change default application setting
 
 Change a map between file type and default application in:
 
 /usr/share/applications/defaults.list -> /etc/gnome/defaults.list
+
+
+={============================================================================
+*kt_linux_sete_100* gnome: windows
+
+{activate-button}
+To access your windows and applications, click the Activities button, or just move your mouse
+pointer to the top-left hot corner. You can also press the Super key on your keyboard. You can see
+your windows and applications in the overview. You can also just start typing to search your
+applications, files, folders and the web. note: this is window key.
+
+
+{tile-windows}
+Super+Left     " to left
+Super+Right    " to right
+Super+Up       " to max
+Supaer+Down    " back to original size
+
+{lock-screen}
+Super-L
+
+{keyboard-shortcuts}
+https://help.gnome.org/users/gnome-help/stable/shell-keyboard-shortcuts.html.en
+
+
+={============================================================================
+*kt_linux_sete_101* firefox key shortcuts
+
+Ctrl+D                     Add Bookmark
+Ctrl+B or Ctrl+I           Bookmarks
+
+Backspace or Alt+<-        Back
+Shft+Backspace or Alt+->   Forward
+
+Ctrl+W or Ctrl+F4          Close Tab
+Ctrl+T                     New Tab
+Ctrl+Tab or Ctrl+PageDown  Next Tab
+
+F5 or Ctrl+R               Reload
 
 
 # ============================================================================
