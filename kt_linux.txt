@@ -6,7 +6,7 @@ aWed 18 Dec 2013 09:47:23 GMT
 
 KT KB. Linux
 
-|kt_linux_bash_001| bash: history
+|kt_linux_bash_001| bash: history <reverse-search>
 |kt_linux_bash_002| bash: set array
 |kt_linux_bash_003| bash: set read only var
 |kt_linux_bash_004| bash: globbing (wildcard)
@@ -19,6 +19,11 @@ KT KB. Linux
 |kt_linux_bash_011| bash: while
 |kt_linux_bash_012| bash: break and continue
 |kt_linux_bash_013| bash: read
+|kt_linux_bash_014| bash: function
+|kt_linux_bash_015| bash: basename
+|kt_linux_bash_016| bash: here document
+|kt_linux_bash_017| bash: redirection
+|kt_linux_bash_018| bash: ':' command
 
 |kt_linux_tool_001| egrep
 |kt_linux_tool_002| cut
@@ -86,7 +91,13 @@ KT KB. Linux
 |kt_linux_core_102| how to run three threads sequencially
 |kt_linux_core_103| priority and schedule
 
-|kt_linux_core_100| ipc
+|kt_linux_core_100| file io
+|kt_linux_core_101| system resource limits
+
+|kt_linux_core_200| ipc
+|kt_linux_core_201| ipc: system v
+|kt_linux_core_202| ipc: system v: shm
+
 |kt_linux_core_101| ipc: pipe and fifo
 |kt_linux_core_103| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
@@ -126,14 +137,17 @@ KT KB. Linux
 
 |kt_linux_sysa_001| sys: cannot execute a file in cdrom, fstab
 
-|kt_linux_sete_001|  ubuntu: virtualbox
-|kt_linux_sete_002|  ubuntu: workspace
-|kt_linux_sete_003|  ubuntu: samba
-|kt_linux_sete_004|  ubuntu: nfs
-|kt_linux_sete_005|  ubuntu: check running services
-|kt_linux_sete_006|  ubuntu: connect from windows remote desktop
-|kt_linux_sete_007|  ubuntu: cpuinfo
-|kt_linux_sete_008|  ubuntu: change default application setting
+|kt_linux_sete_001| ubuntu: virtualbox
+|kt_linux_sete_002| ubuntu: workspace
+|kt_linux_sete_003| ubuntu: samba
+|kt_linux_sete_004| ubuntu: nfs
+|kt_linux_sete_005| ubuntu: check running services
+|kt_linux_sete_006| ubuntu: connect from windows remote desktop
+|kt_linux_sete_007| ubuntu: cpuinfo
+|kt_linux_sete_008| ubuntu: change default application setting
+
+|kt_linux_sete_100| gnome: windows
+|kt_linux_sete_101| firefox key shortcuts
 
 |kt_linux_refe_001|  references
 
@@ -147,6 +161,16 @@ KT KB. Linux
 # eliminate the continuous repeated entry across the whole history
 
 export HISTCONTROL=erasedups
+
+<history-per-terminal>
+# in .bash_profile
+echo $SSH_TTY
+export HISTFILE=/home/NDS-UK/parkkt/.bash_history_$(echo $SSH_TTY | cut -f 4 -d'/')
+export HISTFILESIZE=10000
+export HISTSIZE=10000 
+
+note: better to have TTY number in the prompt as well.
+
 
 # run multiple commands from the history
 
@@ -644,13 +668,6 @@ cat list | while read f; do
 done
 
 
-<example> This cause the creation of sub process?
-while read LINE
-do
-   ... # manipulate file here
-done < file
-
-
 <example> get token from a input line
 Read three tokens and echo the second.
 
@@ -678,6 +695,308 @@ pushd -n
 
 Suppresses the normal change of directory when adding directories to the stack, so that only the
 stack is manipulated. 
+
+
+{read-and-sub-process}
+
+<example> This cause the creation of sub process?
+while read LINE
+do
+   ... # manipulate file here
+done < file
+
+
+<example>
+#!/bin/sh
+if [ -f "$1" ] ; then
+  i=0
+  while read LINE
+  do
+    i=`echo "$i + 1" | bc`
+    echo "inner $i..."
+  done < "$1"
+  echo $i
+fi
+
+echo $i
+
+$ ./sbash.sh list 
+inner 1...
+inner 2...
+inner 3...
+inner 4...
+4
+4
+
+note: in the original text, it got 0 than 4 since there is a sub-process created. However, when run
+it on PC linux, got 4 as shown. Is it difference between PC and embedded shell? Seems not since the
+below example seems to be run on build server.
+
+
+<example>
+scan_for()
+{
+  while read line
+  do
+      echo "$line"
+  done
+}
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
+
+
+This example cannot get output inside a function. So make a changes to:
+
+scan_for()
+{
+  cat x.tmp | while read line
+  do
+      echo "$line"
+  done
+}
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" > x.tmp`
+scan_for()
+
+This enables us to use echo to get output but causes the other problem.
+
+scan_for()
+{
+  STARTED=0
+  MATCHED=0
+
+  # export STARTED MATCHED LASTLINE
+
+  cat x.tmp | while read line
+  do
+    case $line in
+      *jtVRM=3*)
+          if [ $STARTED -ne 1 ]
+          then
+             STARTED=1;
+             STARTLINE=`echo $line`;
+          fi
+          ;;
+       *XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
+          if [ $STARTED -eq 1 ]
+          then
+             MATCHED=1;
+             LASTLINE=`echo $line`;
+
+             # note: can get output of variables as expected
+             echo "started = $STARTED, MATCHED=$MATCHED";
+
+          break;
+          fi
+          ;;
+    esac
+  done
+
+  # note: however, the output of variables are '0'
+  echo "started = $STARTLINE";
+  echo "matched = $LASTLINE";
+
+  if [[ $STARTED -eq 1 && $MATCHED -eq 1 ]]
+  then
+      echo "$LASTLINE";    # note: here
+  fi
+}
+
+[parkkt@ukstbuild02 SI-4063]$ ./PicassoShutdownFail job.nds
+started = 1, MATCHED=1
+started = 0
+matched = 0
+started = 0
+matched = 0
+
+The reason is that "That's a tricky one, because the "while read line do done" spawns a subshell."
+So use "echo variable" inside the loop to make it available after the loop. But still not able to
+see the output inside the loop.
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
+echo "A = $A";
+
+So A will have all lines which are ecohed from the subshell 
+
+
+[parkkt@ukstbuild02 SI-4063]$ ./PicassoShutdownFail job.nds
+--
+A = started = 1, MATCHED=1
+
+started = 2:1801:NDS: ^[08:14:11]0946714451.604390 !MIL -VRMS < p:000000b7 t:2b933100 T:VRM_SRV
+M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x3000385
+
+matched = 290:243541:NDS: ^[09:11:44]0946717904.242499 !FATAL -MSM_MS < p:000000b7 t:0144ce00
+T:FS_WT_THREAD1 M:fs_server.c F:PerformWrite L:01943 > XTVFS_WriteEx failed,returned value:
+E_FSSERVER_STATUS_INVALID_ALIGNMENT 290:243541:NDS: ^[09:11:44]0946717904.242499 !FATAL -MSM_MS <
+p:000000b7 t:0144ce00 T:FS_WT_THREAD1 M:fs_server.c F:PerformWrite L:01943 > XTVFS_WriteEx
+failed,returned value: E_FSSERVER_STATUS_INVALID_ALIGNMENT
+
+started = 1, MATCHED=1 started = 2 Time:[08:14:11]0946714451,  VRM_JOB_START: jtVRM=3 Picasso not
+shutting down properly - maybe Jira SI-3770
+
+[parkkt@ukstbuild02 SI-4063]$
+
+
+={============================================================================
+*kt_linux_bash_014* bash: function
+
+note: must use bash and see how to pass args to function
+
+#!/bin/bash
+# BASH FUNCTIONS CAN BE DECLARED IN ANY ORDER
+
+function function_B {
+   echo Function B.
+}
+
+function function_A {
+   echo $1
+}
+
+function function_D {
+   echo Function D.
+}
+
+function function_C {
+   echo $1
+}
+
+# FUNCTION CALLS
+
+# Pass parameter to function A
+function_A "Function A via pass"
+function_B
+
+# Pass parameter to function C
+function_C "Function C via pass"
+function_D 
+
+$ ./sbash.sh list 
+Function A via pass
+Function B.
+Function C via pass
+Function D.
+
+
+={============================================================================
+*kt_linux_bash_015* bash: basename
+
+$ dirname /home/kt/kb
+/home/kt
+$ basename /home/kt/kb
+kb
+
+# DESCRIPTION
+# Print NAME with any leading directory components removed. If 'specified', also remove a trailing
+# SUFFIX.
+
+$ basename cfgversion.out  
+cfgversion.out
+$ basename cfgversion.out .out
+cfgversion
+
+
+={============================================================================
+*kt_linux_bash_016* bash: here document
+
+The general form for a here document is
+
+command << delimiter
+document
+delimiter
+
+Here the shell interprets the << operator as an instruction to read 'input' until it finds a line
+containing the specified delimiter. All the input lines up to the line containing the delimiter are
+then fed into the standard 'input' of the command.
+
+The delimiter must be a single word that does not contain spaces or tabs. For example, to print a
+quick list of URLs, you could use the following here document:
+
+lpr << MYURLS
+http://www.csua.berkeley.edu/~ranga/
+http://www.cisco.com/
+http://www.marathon.org/story/
+http://www.gnu.org/
+MYURLS
+
+For example, you can use the following command to create a file with the short list of URLs given
+previously:
+
+cat > urls << MYURLS
+http://www.csua.berkeley.edu/~ranga/
+http://www.cisco.com/
+http://www.marathon.org/story/
+http://www.gnu.org/
+MYURLS
+
+
+={============================================================================
+*kt_linux_bash_017* bash: redirection
+
+<form>
+command n> file
+command n>> file
+
+<example>
+One of the most common uses of file descriptors is to redirect STDOUT and STDERR to separate files.
+The basic syntax is
+
+command 1> file1 2> file2
+
+Often the STDOUT file descriptor, 1, is not written, so a shorter form of the basic syntax is
+
+command > file1 2> file2
+
+Redirecting STDOUT and STDERR to the 'same' file
+
+list > file 2>&1
+
+n>&m. Here n and m are file descriptors (integers). If you let n=2 and m=1, you see that STDERR is
+redirected to STDOUT. By redirecting STDOUT to a file, you also redirect STDERR.
+
+
+={============================================================================
+*kt_linux_bash_018* bash: ':' command
+
+<example> can use as 'no-op'
+Can be used as a no-op, which is a command that does nothing and thus can be safely inserted
+anywhere a command is needed for purely syntactical reasons:
+
+if [ -x $CMD ]
+then :
+else
+   echo Error: $CMD is not executable >&2
+fi
+
+In this example, assume you are not quite ready to write the code to follow the then statement. The
+shell flags a syntax error if you leave that code out completely, so you insert the : command as a
+temporary noop command that can be replaced by the desired code later.
+
+
+<example>
+Because the : always returns a successful result, it is sometimes used to create an infinite loop:
+
+while :
+do
+  echo "Enter some input: \c"
+  read INPUT
+  [ "$INPUT" = stop ] && break
+Done
+
+Because the : always returns a successful or true result, the while loop will continue forever or
+until a break is executed within the loop. Sometimes you might find that "while true" used in place
+of while : but using the : is more efficient because it is a shell built-in command, whereas true is
+a command that must be read from a disk file, if you are in the Bourne shell.
+
+
+={============================================================================
+*kt_linux_bash_019* bash: run multiple commands
+
+note: must be spaces between {}.
+
+$ { date;time; }
+$ { date;time; } > mylog
 
 
 ={============================================================================
@@ -5110,7 +5429,33 @@ SCHED_RR are optional in POSIX, and only are supported for real time bound threa
 # ============================================================================
 #{
 ={============================================================================
-*kt_linux_core_100*  ipc
+*kt_linux_core_100* file io
+
+{open-flag} LPI, 4.3.1
+O_CREAT
+
+If the file doesn't already exist, it is created as a new, empty file. This flag is effective even
+if the file is being opened only for reading. If we specify O_CREAT, then we must supply a mode
+argument in the open() call; otherwise, the permissions of the new file will be set to some random
+value from the stack.
+
+O_EXCL
+
+This flag is used in conjunction with O_CREAT to indicate that if the file already exists, it should
+not be opened; instead, open() should fail, with errno set to EEXIST. In other words, this flag
+allows the caller to 'ensure' that it is the process creating the file. 
+
+
+={============================================================================
+*kt_linux_core_101* system resource limits
+
+Various files under the /proc/sys/kernel directory can be used to view and modify these limits.
+
+On Linux, the ipcs -l command can be used to list the limits on each of the IPC mechanisms. 
+
+
+={============================================================================
+*kt_linux_core_200* ipc
 
 CH43, Fig 43-1 in {ref-LPI} which says that the 'general' term IPC is often used to describe them all;
 communication, signal, and synchronization.
@@ -5147,12 +5492,13 @@ synchronization technique in certain circumstances. More rarely, signals can be 
 communication technique: the signal number itself is a form of information, and realtime signals can
 be accompanied by associated data (an integer or a pointer).
 
+
 {nonnetworked-ipc}
 From {ref-UNP}. nonnetworked-ipc means that ipc for local and newtworked-ipc means that for remote
 such as socket.
 
-{categories-of-ipc}
 
+{categories-of-ipc}
 From {ref-UNP}:
 
 three-ways-to-share-between-processes
@@ -5166,6 +5512,7 @@ Filesystem
 
 <persistence> which is lifetime of an objects
 Define the persistence of any type of IPC as how long an object of that type remains in existence.
+
 Process-persistence exists until last process with IPC open closes the object and kernel one exists
 until kernel reboots or IPC objects is explicitly deleted.
 
@@ -5292,6 +5639,102 @@ If IPC performance is crucial, there is no substitute for application-specific b
 an environment that matches the target system. To this end, it may be worth writing an 'abstract'
 software layer that hides details of the IPC facility from the application and then testing
 performance when different IPC facilities are substituted underneath the abstract layer.
+
+
+={============================================================================
+*kt_linux_core_201* ipc: system v
+
+{interfaces}
+A more significant reason for discussing the System V IPC mechanisms together is that their
+programming interfaces share a number of common characteristics, so that many of the same concepts
+apply to all of these mechanisms.
+
+
+{key-and-identifier}
+System V IPC keys are integer values represented using the data type key_t. The IPC get calls
+'translate' a key into the corresponding integer IPC identifier.
+
+So, how do we provide a unique key? (LPI, 45.2)
+
+One of three methods. Specify the IPC_PRIVATE constant as the key value to the get call when
+creating the IPC object, which always results in the creation of a new IPC object that is guaranteed
+to have a unique key.
+
+
+<identifier>
+An IPC identifier is analogous to a file descriptor in that it is used in all subsequent system
+calls to refer to the IPC object. There is, however, an important semantic difference. Whereas a
+file descriptor is a process attribute, an IPC identifier is a property of the object itself and is
+visible 'system'wide.
+
+
+{persistence}
+System V IPC objects have kernel persistence. Two disadvantages: system-imposed limit and may not
+able to easily determine which will be the last process requiring access to the object. The second
+is not for shm.
+
+
+{associated-data}
+The kernel maintains an associated data structure for each instance of a System V
+IPC object. 
+
+The associated data structure for an IPC object is initialized when the object is created via the
+appropriate get system call. Once the object has been created, a program can obtain a copy of this
+data structure using the appropriate ctl system call, by specifying an operation type of IPC_STAT.
+
+
+{ipcs-command}
+The ipcs command lists the System V IPC objects that currently exist on the system. The ipcrm
+command is used to remove System IPC objects.
+
+
+={============================================================================
+*kt_linux_core_202* ipc: system v: shm
+
+{segment}
+Shared memory allows two or more processes to share the same region (usually referred to as a
+segment) of physical memory. 
+
+
+{good-and-bad}
+Since a shared memory segment becomes part of a process's user-space memory, no kernel intervention
+is required for IPC.
+
+On the other hand, the fact that IPC using shared memory is not mediated by the kernel means that,
+typically, some method of synchronization is required
+
+
+{interfaces}
+<shm-get>
+The contents of a newly created shared memory segment are initialized to 0.
+
+#include <sys/shm.h>
+
+int shmget(key_t key, size_t size, int shmflg);
+
+Returns shared memory segment identifier on success, or -1 on error
+
+<shm-at>
+#include <sys/shm.h>
+
+void *shmat(int shmid, const void *shmaddr, int shmflg);
+
+Returns address at which shared memory is attached on success, or (void *) -1 on error
+
+The shmaddr argument and the setting of the SHM_RND bit in the shmflg bit-mask argument control
+how the segment is attached: See 48.3 for full options.
+
+If shmaddr is NULL, then the segment is attached at a suitable address selected by the kernel. This
+is the 'preferred' method of attaching a segment.
+
+
+{deletion}
+Deletion of shared memory objects occurs differently. Following the 
+
+shmctl(id, IPC_RMID, NULL) 
+
+call, the shared memory segment is removed 'only' after all processes using the segment detach it
+(using shmdt()). This is much closer to the situa- tion with file deletion.
 
 
 ={============================================================================
@@ -11844,11 +12287,50 @@ cat /proc/cpuinfo
 
 
 ={============================================================================
-*kt_linux_sete_008*  ubuntu: change default application setting
+*kt_linux_sete_008* ubuntu: change default application setting
 
 Change a map between file type and default application in:
 
 /usr/share/applications/defaults.list -> /etc/gnome/defaults.list
+
+
+={============================================================================
+*kt_linux_sete_100* gnome: windows
+
+{activate-button}
+To access your windows and applications, click the Activities button, or just move your mouse
+pointer to the top-left hot corner. You can also press the Super key on your keyboard. You can see
+your windows and applications in the overview. You can also just start typing to search your
+applications, files, folders and the web. note: this is window key.
+
+
+{tile-windows}
+Super+Left     " to left
+Super+Right    " to right
+Super+Up       " to max
+Supaer+Down    " back to original size
+
+{lock-screen}
+Super-L
+
+{keyboard-shortcuts}
+https://help.gnome.org/users/gnome-help/stable/shell-keyboard-shortcuts.html.en
+
+
+={============================================================================
+*kt_linux_sete_101* firefox key shortcuts
+
+Ctrl+D                     Add Bookmark
+Ctrl+B or Ctrl+I           Bookmarks
+
+Backspace or Alt+<-        Back
+Shft+Backspace or Alt+->   Forward
+
+Ctrl+W or Ctrl+F4          Close Tab
+Ctrl+T                     New Tab
+Ctrl+Tab or Ctrl+PageDown  Next Tab
+
+F5 or Ctrl+R               Reload
 
 
 # ============================================================================
