@@ -5705,16 +5705,20 @@ typically, some method of synchronization is required
 
 
 {interfaces}
-<shm-get>
+<shmget>
 The contents of a newly created shared memory segment are initialized to 0.
 
 #include <sys/shm.h>
 
 int shmget(key_t key, size_t size, int shmflg);
 
-Returns shared memory segment identifier on success, or -1 on error
+Returns shared memory segment 'identifier' on success, or -1 on error
 
-<shm-at>
+to-open:
+If we are using shmget() to obtain the identifier of an existing segment, then size has no effect on
+the segment, but it 'must' be less than or equal to the size of the segment.
+
+<shmat>
 #include <sys/shm.h>
 
 void *shmat(int shmid, const void *shmaddr, int shmflg);
@@ -5725,16 +5729,101 @@ The shmaddr argument and the setting of the SHM_RND bit in the shmflg bit-mask a
 how the segment is attached: See 48.3 for full options.
 
 If shmaddr is NULL, then the segment is attached at a suitable address selected by the kernel. This
-is the 'preferred' method of attaching a segment.
+is the 'preferred' method of attaching a segment since specifying a non-NULL value for shmaddr is
+not recommended, for the following reasons:
+
+It reduces the portability of an application and the particular address will be already in use.
+
+As its function result, shmat() returns the address at which the shared memory segment is attached.
+Typically, we assign the return value from shmat() to a pointer to some programmer-defined
+structure, in order to impose that structure on the segment If SHM_RDONLY is not specified, the
+memory can be both read and modified.
+
+<shmdt>
+When a process no longer needs to access a shared memory segment, it can call shmdt() to detach the
+segment from its virtual address space.
+
+#include <sys/shm.h>
+
+int shmdt(const void *shmaddr);
+
+Returns 0 on success, or -1 on error
+
+Detaching a shared memory segment is not the same as deleting it. Deletion is performed using the
+shmctl() IPC_RMID operation
+
+<shmctl> 
+#include <sys/shm.h>
+
+int shmctl(int shmid, int cmd, struct shmid_ds *buf);
+
+Returns 0 on success, or -1 on error
+
+IPC_RMID <deletion>
+Mark the shared memory segment and its associated shmid_ds data structure for deletion. If no
+processes currently have the segment attached, deletion is immediate; otherwise, the segment is
+removed after all processes have detached from it (i.e., when the value of the shm_nattch field in
+the shmid_ds data structure falls to 0).
+
+shmctl(id, IPC_RMID, NULL);   note: buf must be NULL.
+
+The shared memory segment is removed 'only' after all processes using the segment detach it (using
+shmdt()). This is much closer to the situation with file deletion.
+
+IPC_STAT
+Place a copy of the shmid_ds data structure associated with this shared memory segment in the buffer
+pointed to by buf.
+
+IPC_SET
+Update selected fields of the shmid_ds data structure associated with this shared memory segment
+using values in the buffer pointed to by buf.
 
 
-{deletion}
-Deletion of shared memory objects occurs differently. Following the 
+{associated-data}
+See LPI 48.8 for full details.
 
-shmctl(id, IPC_RMID, NULL) 
+struct shmid_ds {
+  struct ipc_perm shm_perm;   /* Ownership and permissions */
+  size_t shm_segsz;           /* Size of segment in bytes */
+  time_t shm_atime;           /* Time of last shmat() */
+  time_t shm_dtime;           /* Time of last shmdt() */
+  time_t shm_ctime;           /* Time of last change */
+  pid_t shm_cpid;             /* PID of creator */
+  pid_t shm_lpid;             /* PID of last shmat() / shmdt() */
+  shmatt_t shm_nattch;        /* Number of currently attached processes */
+};
 
-call, the shared memory segment is removed 'only' after all processes using the segment detach it
-(using shmdt()). This is much closer to the situa- tion with file deletion.
+shm_cpid
+This field is set to the process ID of the process that created the segment using shmget().
+
+shm_lpid
+This field is set to 0 when the shared memory segment is created, and then set to the process ID of
+the calling process on each successful shmat() or shmdt().
+
+
+{limits}
+On Linux, some of the limits can be viewed or changed via files in the /proc file system. See LPI
+48.9 for more details. 
+
+keitee@debian-keitee:/proc/sys/kernel$ ls -al sh*
+-rw-r--r-- 1 root root 0 Jan 13 00:11 shmall
+-rw-r--r-- 1 root root 0 Jan 13 00:11 shmmax
+-rw-r--r-- 1 root root 0 Jan 13 00:11 shmmni
+-rw-r--r-- 1 root root 0 Jan 13 00:11 shm_rmid_forced
+
+
+{locking}
+A shared memory segment can be locked into RAM, so that it is never swapped out. This provides a
+performance benefit, since, once each page of the segment is memory-resident, an application is
+guaranteed never to be delayed by a page fault when it accesses the page.
+
+<not-all-support> TODO:
+These operations are not specified by SUSv3, and they are not provided on all UNIX implementations.
+In versions of Linux before 2.6.10, only privileged (CAP_IPC_LOCK) processes can lock a shared
+memory segment into memory. Since Linux 2.6.10, an unprivileged process can lock and unlock a shared
+memory segment if its effective user ID matches either the owner or the creator user ID of the
+segment and (in the case of SHM_LOCK) the process has a sufficiently high RLIMIT_MEMLOCK resource
+limit. See Section 50.2 for details.
 
 
 ={============================================================================
