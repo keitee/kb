@@ -6,9 +6,10 @@ aWed 18 Dec 2013 09:47:23 GMT
 
 KT KB. Linux
 
+|kt_linux_bash_000| bash: reference
 |kt_linux_bash_001| bash: history <reverse-search>
-|kt_linux_bash_002| bash: set array
-|kt_linux_bash_003| bash: set read only var
+|kt_linux_bash_002| bash: variable
+|kt_linux_bash_003| bash: bash: if and test command primaries
 |kt_linux_bash_004| bash: globbing (wildcard)
 |kt_linux_bash_005| bash: quoting <grep>
 |kt_linux_bash_006| bash: args <shift-operator> <while>
@@ -24,10 +25,14 @@ KT KB. Linux
 |kt_linux_bash_016| bash: here document
 |kt_linux_bash_017| bash: redirection
 |kt_linux_bash_018| bash: ':' command
+|kt_linux_bash_019| bash: run multiple command
+
+|kt_linux_bash_100| bash: config: bash: config: colour prompt
+
 
 |kt_linux_tool_001| egrep
 |kt_linux_tool_002| cut
-|kt_linux_tool_003| 
+|kt_linux_tool_003| kill
 |kt_linux_tool_004| 
 |kt_linux_tool_005| 
 |kt_linux_tool_006|  gdb: run with gdb client and server/client {gdb-run-step}
@@ -38,7 +43,7 @@ KT KB. Linux
 |kt_linux_tool_011|  stdout and stderr
 |kt_linux_tool_012|  to make a empty file
 |kt_linux_tool_013|  to upgrade a kernel
-|kt_linux_tool_014|  ssh and putty {scp}
+|kt_linux_tool_014| ssh and putty {scp}
 |kt_linux_tool_015|  apt-xxx to get package
 |kt_linux_tool_016|  check linux version
 |kt_linux_tool_017|  redirection
@@ -87,6 +92,8 @@ KT KB. Linux
 |kt_linux_core_006|  
 
 |kt_linux_core_100| thread vs. process {zombie-process}
+|kt_linux_core_101| process creation
+
 |kt_linux_core_101| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
 |kt_linux_core_103| priority and schedule
@@ -100,8 +107,6 @@ KT KB. Linux
 
 |kt_linux_core_101| ipc: pipe and fifo
 |kt_linux_core_103| ipc: which one to use {semaphores-versus-pthreads-mutexes}
-
-|kt_linux_core_110| ipc: dbus
 
 |kt_linux_core_200| ipc: sync: semaphore 
 |kt_linux_core_201| ipc: sync: pthread mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
@@ -135,6 +140,8 @@ KT KB. Linux
 |kt_linux_core_601|  time: curTime
 |kt_linux_core_602|  time: ms and us
 
+|kt_linux_core_700| dbus
+
 |kt_linux_sysa_001| sys: cannot execute a file in cdrom, fstab
 
 |kt_linux_sete_001| ubuntu: virtualbox
@@ -154,6 +161,17 @@ KT KB. Linux
 
 # ============================================================================
 #{
+={============================================================================
+*kt_linux_bash_000* bash: reference
+
+
+http://www.gnu.org/software/bash/
+
+Advanced Bash-Scripting Guide
+https://wiki.kldp.org/HOWTO/html/Adv-Bash-Scr-HOWTO/
+http://www.tldp.org/LDP/abs/html/
+
+
 ={============================================================================
 *kt_linux_bash_001* bash: history
 
@@ -253,9 +271,53 @@ Library for the shell prompt and history.
 
 
 ={============================================================================
-*kt_linux_bash_002* bash: set array
+*kt_linux_bash_002* bash: variable
 
-{define}
+{global-and-local}
+Global variables or environment variables are available in all shells. The env or printenv commands
+can be used to display environment variables.
+
+Local variables are only available in the current shell. Using the set built-in command without any
+options will display a list of all variables (including environment variables) and functions.
+
+
+{set-variable}
+Putting spaces around the equal sign will cause errors.
+
+VARNAME="value"
+
+A variable created like the ones in the example above is only available to the current shell. It is
+a local variable: child processes of the current shell will not be aware of this variable. In order
+to pass variables to a subshell, we need to export them using the export built-in command.
+
+export VARNAME="value"
+
+note: parent can export variables to child but not vice versa.
+
+<reserved-variables>
+PATH        A colon-separated list of directories in which the shell looks for commands.
+PS1         The primary prompt string. The default value is "'\s-\v\$ '".
+PS2         The secondary prompt string. The default value is "'> '".
+
+
+<special-variable>
+$$          Expands to the process ID of the shell.
+
+
+{constant}
+The readonly built-in marks each specified variable as unchangeable. When tried to set, displays
+error but execution continues.
+
+readonly CONST=100
+echo "my const var is $CONST.."
+CONST=200
+echo "my const var is $CONST.."
+
+bash: CONST: readonly variable
+
+
+{array}
+<set>
 FRUIT[0]=apple
 FRUIT[1]=banana
 FRUIT[2]=orange
@@ -270,17 +332,146 @@ echo "idx 1 = ${FRUIT[1]}"
 echo "idx 2 = ${FRUIT[2]}"
 
 echo "all = ${FRUIT[*]}"      # to reference all
-echo "all = ${FRUIT[@]}"      
+echo "all = ${FRUIT[@]}"      # same as above
+
+<example>
+farm_hosts=(web03 web04 web05 web06 web07)
+
+for i in ${farm_hosts[@]}; do
+  su $login -c "scp $httpd_conf_new ${i}:${httpd_conf_path}"
+  su $login -c "ssh $i sudo /usr/local/apache/bin/apachectl graceful"
+done
+
+<example> for use of array and here document
+A cron job that fills an array with the possible candidates, uses date +%W to find the week of the
+year, and does a modulo operation to find the correct index. The lucky person gets notified by
+e-mail.
+
+
+#!/bin/bash
+# This is get-tester-address.sh
+#
+# First, we test whether bash supports arrays. (Support for arrays was only added recently.)
+#
+whotest[0]='test' || (echo 'Failure: arrays not supported in this version of bash.' && exit 2)
+#
+# Our list of candidates. (Feel free to add or
+# remove candidates.)
+#
+wholist=(
+  'Bob Smith <bob@example.com>'
+  'Jane L. Williams <jane@example.com>'
+  'Eric S. Raymond <esr@example.com>'
+  'Larry Wall <wall@example.com>'
+  'Linus Torvalds <linus@example.com>'
+)
+#
+# Count the number of possible testers.
+# (Loop until we find an empty string.)
+#
+count=0
+while [ "x${wholist[count]}" != "x" ]
+do
+   count=$(( $count + 1 ))
+done
+#
+# Now we calculate whose turn it is.
+#
+week=`date '+%W'`             # The week of the year (0..53).
+week=${week#0}                # Remove possible leading zero.
+let "index = $week % $count"  # week modulo count = the lucky person
+email=${wholist[index]}       # Get the lucky person's e-mail address.
+echo $email                   # Output the person's e-mail address.
+
+This script is then used in other scripts, such as this one, which uses a here document:
+
+email=`get-tester-address.sh` # Find who to e-mail.
+hostname=`hostname` # This machine's name.
+
+# Send e-mail to the right person.
+
+mail $email -s '[Demo Testing]' <<EOF
+  The lucky tester this week is: $email
+  Reminder: the list of demos is here:
+  http://web.example.com:8080/DemoSites
+  (This e-mail was generated by $0 on ${hostname}.)
+EOF
+
+
+{unset}
+The unset built-in is used to destroy arrays or member variables of an array:
+
+
+{substitution}
+
+${parameter:-word} 
+If parameter is null or unset, word is substituted for parameter. The value of parameter does not
+change. In other words, if unset, word is used and if set, parameter used.
+
+This use 'default' to make sure that the prompt is always set correctly.
+PS1=${HOST:-localhost}"$ " ; export PS1 ;
+
+This from often used in conditional tests and this set 80 when it is not defined before. That is
+default. note: why not use {parameter:=word} form?
+
+# [ -z STRING ] True of the length of "STRING" is zero.
+
+[ -z "${COLUMNS:-}" ] && COLUMNS=80
+
+It is a shorter notation for
+
+if [ -z "${COLUMNS:-}" ]; then
+   COLUMNS=80
+fi
+
+note: In this form, the value of parameter does not change. Here TEST is not defined.
+
+$ echo $TEST
+$ echo ${TEST:-test}
+test
+$ echo $TEST
+$
+
+
+${parameter:=word} 
+If parameter is null or unset, parameter is set to the value of word.
+
+$ echo $TEST
+$ echo ${TEST:=test}
+test
+$ echo $TEST
+test
+$
+
+
+{substring}
+The LENGTH parameter defines how many characters to keep, starting from the first character after
+the offset point. If LENGTH is omitted, the remainder of the variable content is taken
+
+${VAR:OFFSET:LENGTH}
+
+$ STRING="thisisaverylongname"
+$ echo ${STRING:4}
+isaverylongname
+$ echo ${STRING:6:5}
+avery
 
 
 ={============================================================================
-*kt_linux_bash_003* bash: set read only var
+*kt_linux_bash_003* bash: if and test command primaries
 
-$ readonly FRUIT=plum
-$ echo $FRUIT
-plum
-$ FRUIT=xxx
-bash: FRUIT: readonly variable
+if TEST-COMMANDS; then CONSEQUENT-COMMANDS; fi
+
+The TEST-COMMAND list is executed, and if its return status is zero, the CONSEQUENT-COMMANDS list is
+  executed. The return status is the exit status of the last command executed, or zero if no
+  condition tested true.
+
+Primary        Meaning
+[ -a FILE ]    True if FILE exists.
+[ -x FILE ]    True if FILE exists and is excutable.
+
+[ -z string ]  True if the length of string is zero.
+[ -n string ]  True if the length of string is non-zero.
 
 
 ={============================================================================
@@ -1000,6 +1191,12 @@ $ { date;time; } > mylog
 
 
 ={============================================================================
+*kt_linux_bash_100* bash: config: colour prompt
+
+Uncomment the line that says force_color_prompt=yes then logout and back in in the .bashrc.
+
+
+={============================================================================
 *kt_linux_tool_001* egrep
 
 $ egrep --color -an 'btreePageFromDbPage' translation/*_Feb_*/.detailed_output \
@@ -1024,7 +1221,28 @@ WIFI_SSID=`grep '\<WIFI_SSID\>' {input} | cut -f 2 -d \"`
 
 
 ={============================================================================
-*kt_linux_tool_003*	
+*kt_linux_tool_003* kill
+
+{kill-0}
+
+while kill -0 "${parent_pid}" &>/dev/null;
+do
+   usleep 500
+done
+
+From man 2 kill
+If sig is 0, then no signal is sent, but error checking is still performed; this can  be  used to
+check for the existence of a process ID or process group ID.
+
+<example>
+#!/bin/bash
+kill -0 323232 && echo "pid 323232 is present.."
+kill -0 4355 && echo "pid 4355 x sess mgr is present.."
+
+$ ./sbsh.sh 
+./sbsh.sh: line 3: kill: (323232) - No such process
+pid 4355 x sess mgr is present..
+
 
 ={============================================================================
 *kt_linux_tool_004*	
@@ -1170,10 +1388,11 @@ If the file permissions are too open then ssh will not trust them, and will stil
 you for your password. 
 
 chmod 700 ~/.ssh
-chmod 644 ~/.ssh/authorized_keys		# must check this as caused big grief when different
+chmod 644 ~/.ssh/authorized_keys    # must check this as caused big grief when different
 chmod 644 ~/.ssh/id_dsa_pub
 chmod 644 ~/.ssh/known_hosts
 chmod 600 ~/.ssh/id_dsa
+
 
 {config}
 When user name is different between servers, must have an entry in this file for servers to connect.
@@ -1240,31 +1459,6 @@ To convert keys from linux machine to putty ppk and from ppk to lunux(opsnssh ke
 
 o run puttygen and menu: conversion: import key:
 o save it as a pri key(ppk)
-
-
-{xserver} gnome-terminal
-I have just found that you can open new terminals using 'gnome-terminal'.  You can open multiple
-windows and multiple tabs like this:
-
-gnome-terminal --window --tab --window --tab --tab
-
-# 
-#
-I stumbled across " VcXsrv Windows X Server" - that seems to be the well maintained and if you want
-you can compiled yourself (not that you need to).
-
-http://sourceforge.net/projects/vcxsrv/?source=directory
-
-If you chose to use it, you need to run VcXsrc without OpenGL support but it works - see highlighted
-text below ...
-
-"C:\Program Files\VcXsrv\vcxsrv.exe" :0 -ac -terminate -lesspointer -multiwindow -clipboard -nowgl
-
-Note: this server is better since it seems to have more fonts and shows gvim properly than xming
-which is old xserver. It replace xming and seems to use the rest since use xlanuch. 'One window' do
-not works but 'multiple windows' works.
-
-http://alexcooper.co.uk/blog/2013/09/using-vcxsrv-putty-remote-x-windows/
 
 
 ==============================================================================
@@ -1638,12 +1832,64 @@ ln -sf input output. E.g., ln -sf linux-2.4.25-2.8 linux
 ={============================================================================
 *kt_linux_tool_026* cmd: rsync
 
+Rsync, which stands for "remote sync", is a remote and local file synchronization tool. It uses an
+algorithm that minimizes the amount of data copied by only moving the portions of files that have
+changed.
+
+<example>
+$ mkdir dir1 dir2
+$ touch dir1/file{1..10}
+$ ls dir1
+file1  file10  file2  file3  file4  file5  file6  file7  file8  file9
+
+$ rsync -r dir1/ dir2      " okay as synced
+$ ls dir2
+file1  file10  file2  file3  file4  file5  file6  file7  file8  file9
+
+note: This trailing / is necessary to mean "the contents of dir1".
+
+$ rsync -r dir1 dir2       " not okay as
+$ ls dir2
+dir1
+
+The -a option is a combination flag.
+
+It stands for "archive" and syncs recursively and preserves symbolic links, special and device
+files, modification times, group, owner, and permissions. It is more commonly used than -r and is
+usually what you want to use.
+
+The -n or --dry-run options. 
+
+The -v flag (for verbose). 
+
+The -P flag is very helpful. 
+It combines the flags --progress and --partial. The first of these gives you a progress bar for the
+transfers and the second allows you to resume interrupted transfers:
+
+The -z flag. 
+If you are transferring files that have not already been compressed, like text files, you can reduce
+the network transfer by adding compression with the -z option.
+
+<update>
+Update the modification time on some of the files and see that rsync intelligently re-copies only
+the changed files:
+
+<delete>
+By default, rsync does not delete anything from the destination directory. We can change this
+behavior with the --delete option. Before using this option, use the --dry-run option and do testing
+to prevent data loss:
+
+rsync -a --delete source destination
+
+
+<example> over SSH
+rsync -a ~/dir1 username@remote_host:destination_directory
+rsync -a username@remote_host:/home/username/dir1 place_to_sync_on_local_machine
+
+<example>
 Want to copy all expect .git from source to destination
 
 rsync -av --progress /home/kit/mheg-remote-git/mag_shared/ . --exclude .git
-
-NAME
-       rsync - a fast, versatile, remote (and local) file-copying tool
 
 
 ={============================================================================
@@ -4656,11 +4902,22 @@ Each (user) stack frame contains the following information:
 note: needs more about difference?
 
 
+={============================================================================
+*kt_linux_core_101* process creation
+
+LPI 24.
+
 {process-creation}
 The wait(&status) system call has two purposes. First, if a child of this process has not yet
 terminated by calling exit(), then wait() suspends execution of the process until one of its
 children has terminated. Second, the termination status of the child is returned in the status
 argument of wait().
+
+<fork-and-exec>
+Some other operating systems combine the functionality of fork() and exec() into a single operation.
+By comparison,the UNIX approach is usually simpler and more elegant. Separating these two steps
+makes the APIs simpler and allows a program a great degree of flexibility in the actions it performs
+between the two steps. Moreover, it is often useful to perform a fork() without a following exec().
 
 Parent process running program A
       |
@@ -4679,9 +4936,9 @@ Parent may perform other atcions here                 A
                                                 Execution of program B
                                                       |
                                                       exit(status);
-                                                      1> Child status passed to parent and kernel
+                                                      1. Child status passed to parent and kernel
                                                       restarts parent.
-                                                      2> Delivers SIGCHLD optionally.
+                                                      2. Delivers SIGCHLD optionally.
 
 The following idiom is sometimes employed when calling fork():
 
@@ -4698,11 +4955,11 @@ switch (childPid = fork()) {
 
 <sharing-between-parent-and-child>
 The child's stack, data, and heap segments are initially exact duplicates of the corresponding parts
-the parent's memory. The child receives duplicates of all of the parent’s file descriptors.
+the parent's memory. The child receives duplicates of all of the parent's file descriptors.
 
 <race-condition-after-fork>
-After a fork(), it is indeterminate which process-the parent or the child—next has access to the
-CPU. If we need to guarantee a particular order, we must use some kind of synchronization technique.
+After a fork(), it is indeterminate which of the two is next scheduled to use CPU. If we need to
+guarantee a particular order, we must use some kind of synchronization technique.
 
 <case-use-signal>
 Avoiding Race Conditions by Synchronizing with Signals. Although, in practice, such coordination is
@@ -5714,6 +5971,11 @@ int shmget(key_t key, size_t size, int shmflg);
 
 Returns shared memory segment 'identifier' on success, or -1 on error
 
+to-creat:
+
+IPC_CREAT
+If no segment with the specified key exists, create a new segment.
+
 to-open:
 If we are using shmget() to obtain the identifier of an existing segment, then size has no effect on
 the segment, but it 'must' be less than or equal to the size of the segment.
@@ -5799,6 +6061,11 @@ This field is set to the process ID of the process that created the segment usin
 shm_lpid
 This field is set to 0 when the shared memory segment is created, and then set to the process ID of
 the calling process on each successful shmat() or shmdt().
+
+shm_nattch
+This field counts the number of processes that currently have the segment attached. It is
+initialized to 0 when the segment is created, and then incremented by each successful shmat() and
+decremented by each successful shmdt(). 
 
 
 {limits}
@@ -5997,110 +6264,6 @@ On Linux, mutexes are implemented using futexes (an acronym derived from fast us
    found in [Drepper, 2004 (a)], which also describes how mutexes are implemented using futexes.
    [Franke et al., 2002] is a (now outdated) paper written by the developers of futexes, which
    describes the early futex implementation and looks at the performance gains derived from futexes.
-
-
-==============================================================================
-*kt_linux_core_110*  ipc: dbus and kbus	
-
-{dbus}
-
-http://www.freedesktop.org/wiki/Software/dbus/
-
-What is D-Bus?
-
-D-Bus is a message bus system, a simple way for applications to talk to one another. In addition to
-interprocess communication, D-Bus helps coordinate process lifecycle; it makes it simple and
-reliable to code a "single instance" application or daemon, and to launch applications and daemons
-on demand when their services are needed.
-
-D-Bus supplies both a system daemon (for events such as "new hardware device added" or "printer
-queue changed") and a per-user-login-session daemon (for general IPC needs among user
-applications). Also, the message bus is built on top of a general one-to-one message passing
-framework, which can be used by any two apps to communicate directly (without going through the
-message bus daemon). Currently the communicating applications are on one computer, or through
-unencrypted TCP/IP suitable for use behind a firewall with shared NFS home directories. (Help wanted
-with better remote transports - the transport mechanism is well-abstracted and extensible.)
-
-The D-Bus low-level API reference implementation and protocol have been heavily tested in the real
-world over several years, and are now "set in stone." Future changes will either be compatible or
-versioned appropriately.
-
-The low-level libdbus reference implementation has no required dependencies; the bus daemon's only
-required dependency is an XML parser (expat). Higher-level bindings specific to particular
-frameworks (Qt, GLib, Java, C#, Python, etc.) add more dependencies, but can make more assumptions
-and are thus much simpler to use. The bindings evolve separately from the low-level libdbus, so some
-are more mature and ABI-stable than others; check the docs for the binding you plan to use.
-
-There are also some reimplementations of the D-Bus protocol for languages such as C#, Java, and
-Ruby. These do not use the libdbus reference implementation.
-
-It should be noted that the low-level implementation is not primarily designed for application
-authors to use. Rather, it is a basis for binding authors and a reference for reimplementations. If
-you are able to do so it is recommended that you use one of the higher level bindings or
-implementations. A list of these can be found on the bindings page.
-
-The list of projects using D-Bus is growing and they provide a wealth of examples of using the
-various APIs to learn from.
-
-D-Bus is very portable to any Linux or UNIX flavor, and a port to Windows is in progress.
-
-D-Bus applications
-
-There are many, many technologies in the world that have "Inter-process communication" or
-"networking" in their stated purpose: CORBA, DCE, DCOM, DCOP, XML-RPC, SOAP, MBUS, Internet
-Communications Engine (ICE), and probably hundreds more. Each of these is tailored for particular
-kinds of application. 
-
-D-Bus is designed for two specific cases:
-
-Communication between desktop applications in the same desktop session; to allow integration of the
-desktop session as a whole, and address issues of process lifecycle (when do desktop components
-start and stop running).
-
-Communication between the desktop session and the operating system, where the operating system would
-typically include the kernel and any system daemons or processes. 
-
-For the within-desktop-session use case, the GNOME and KDE desktops have significant previous
-experience with different IPC solutions such as CORBA and DCOP. D-Bus is built on that experience
-and carefully tailored to meet the needs of these desktop projects in particular. D-Bus may or may
-not be appropriate for other applications; the FAQ has some comparisons to other IPC systems.
-
-The problem solved by the systemwide or communication-with-the-OS case is explained well by the
-following text from the Linux Hotplug project:
-
-A gap in current Linux support is that policies with any sort of dynamic "interact with user"
-component aren't currently supported. For example, that's often needed the first time a network
-adapter or printer is connected, and to determine appropriate places to mount disk drives. It would
-seem that such actions could be supported for any case where a responsible human can be identified:
-single user workstations, or any system which is remotely administered.
-
-This is a classic "remote sysadmin" problem, where in this case hotplugging needs to deliver an
-event from one security domain (operating system kernel, in this case) to another (desktop for
-logged-in user, or remote sysadmin). Any effective response must go the other way: the remote
-domain taking some action that lets the kernel expose the desired device capabilities. (The action
-can often be taken asynchronously, for example letting new hardware be idle until a meeting
-finishes.) At this writing, Linux doesn't have widely adopted solutions to such problems.
-However, the new D-Bus work may begin to solve that problem. 
-
-D-Bus may happen to be useful for purposes other than the one it was designed for. Its general
-properties that distinguish it from other forms of IPC are:
-
-Binary protocol designed to be used asynchronously (similar in spirit to the X Window System protocol).
-
-Stateful, reliable connections held open over time.
-
-The message bus is a daemon, not a "swarm" or distributed architecture.
-
-Many implementation and deployment issues are specified rather than left ambiguous/configurable/pluggable.
-
-Semantics are similar to the existing DCOP system, allowing KDE to adopt it more easily.
-
-Security features to support the systemwide mode of the message bus. 
-
-
-{kdbus}
-https://github.com/gregkh/presentation-kdbus
-https://github.com/gregkh/kdbus
 
 
 # ============================================================================
@@ -11462,7 +11625,7 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 
 # ============================================================================
 #{
-==============================================================================
+={============================================================================
 *kt_linux_core_400*  signal
 
 {signal-is-notification}
@@ -12203,6 +12366,115 @@ mytime.tm_min=mins;
 mytime.tm_sec=secs;
 mktime(&mytime)
 
+
+={============================================================================
+*kt_linux_core_700* dbus
+
+{dbus}
+http://www.freedesktop.org/wiki/Software/dbus/
+
+What is D-Bus?
+
+D-Bus is a message bus system, a simple way for applications to talk to one another. In addition to
+interprocess communication, D-Bus helps coordinate process lifecycle; it makes it simple and
+reliable to code a "single instance" application or daemon, and to launch applications and daemons
+on demand when their services are needed.
+
+
+from http://dbus.freedesktop.org/doc/dbus-tutorial.html
+
+D-Bus is a system for interprocess communication (IPC). Architecturally, it has several layers:
+
+<libdbus>
+1. A library, libdbus, that allows two applications to connect to each other and exchange messages.
+
+<bus-deamon>
+2. A message bus daemon executable, built on libdbus, that multiple applications can connect to. The
+daemon can route messages from one application to zero or more other applications.
+
+The message bus daemon forms the hub of a wheel. Each spoke of the wheel is a one-to-one connection
+to an application using libdbus. An application sends a message to the bus daemon over its spoke,
+   and the bus daemon forwards the message to other connected applications as appropriate. Think of
+   the daemon as a router. 
+
+3. Wrapper libraries or bindings based on particular application frameworks. For example,
+  libdbus-glib and libdbus-qt. There are also bindings to languages such as Python. These wrapper
+  libraries are the API most people should use, as they simplify the details of D-Bus programming.
+  libdbus is intended to be a low-level backend for the higher level bindings. Much of the libdbus
+  API is only useful for binding implementation. 
+
+
+D-Bus applications. D-Bus is designed for two specific cases:
+
+1. Communication between desktop applications in the same desktop session; to allow integration of
+the desktop session as a whole, and address issues of process lifecycle (when do desktop components
+    start and stop running).
+
+2. Communication between the desktop session and the operating system, where the operating system
+would typically include the kernel and any system daemons or processes. 
+
+
+For the within-desktop-session use case, the GNOME and KDE desktops have significant previous
+experience with different IPC solutions such as CORBA and DCOP. D-Bus is built on that experience
+and carefully tailored to meet the needs of these desktop projects in particular. D-Bus may or may
+not be appropriate for other applications; the FAQ has some comparisons to other IPC systems.
+
+
+{dbus-name} for application
+When each application connects to the bus daemon, the daemon immediately assigns it a name, called
+the unique connection name. A unique name begins with a ':' (colon) character. These names are never
+reused during the lifetime of the bus daemon - that is, you know a given name will always refer to
+the same application.
+
+Names have a second important use, other than routing messages. They are used to track lifecycle.
+When an application exits (or crashes), its connection to the message bus will be closed by the
+operating system kernel. The message bus then sends out notification messages telling remaining
+applications that the application's names have lost their owner. By tracking these notifications,
+your application can reliably monitor the lifetime of other applications. 
+
+
+{dbus-client-server} for addressing
+Applications using D-Bus are either servers or clients. A server listens for incoming connections; a
+client connects to a server. Once the connection is established, it is a symmetric flow of messages;
+the client-server distinction only matters when setting up the connection.
+
+If you're using the bus daemon, as you probably are, your application will be a client of the bus
+daemon. That is, the bus daemon listens for connections and your application initiates a connection
+to the bus daemon.
+
+A D-Bus address specifies where a server will listen, and where a client will connect. For example,
+  the address unix:path=/tmp/abcdef specifies that the server will listen on a UNIX domain socket at
+  the path /tmp/abcdef and the client will connect to that socket. An address can also specify
+  TCP/IP sockets, or any other transport defined in future iterations of the D-Bus specification. 
+
+
+{dbus-specify-call}
+Pulling all these concepts together, to specify a particular method call on a particular object
+instance, a number of nested components have to be named:
+
+Address -> [Bus Name] -> Path -> Interface -> Method
+
+
+{dbus-messages}
+There are 4 message types:
+
+Method call messages ask to invoke a method on an object.
+you send a method call message, and receive either a method return message or an error message in
+reply. 
+
+Method return messages return the results of invoking a method.
+
+Error messages return an exception caused by invoking a method.
+
+Signal messages are notifications that a given signal has been emitted (that an event has occurred).
+You could also think of these as "event" messages. 
+
+
+{kdbus}
+https://github.com/gregkh/presentation-kdbus
+https://github.com/gregkh/kdbus
+
+
 # ============================================================================
 #{ LINUX SYS ADMIN
 ={============================================================================
@@ -12402,12 +12674,52 @@ Supaer+Down    " back to original size
 {lock-screen}
 Super-L
 
+
+{workspace}
+Open the Activities overview.
+
+Click and drag the window toward the right of the screen.
+
+The workspace selector will appear.
+
+Drop the window onto an empty workspace. This workspace now contains the window you have dropped,
+and a new empty workspace appears at the bottom of the workspace selector.
+
+
 {keyboard-shortcuts}
 https://help.gnome.org/users/gnome-help/stable/shell-keyboard-shortcuts.html.en
 
 
 ={============================================================================
-*kt_linux_sete_101* firefox key shortcuts
+*kt_linux_sete_101* gnome: terminal
+
+{xserver} gnome-terminal
+I have just found that you can open new terminals using 'gnome-terminal'.  You can open multiple
+windows and multiple tabs like this:
+
+gnome-terminal --window --tab --window --tab --tab
+
+# 
+#
+I stumbled across " VcXsrv Windows X Server" - that seems to be the well maintained and if you want
+you can compiled yourself (not that you need to).
+
+http://sourceforge.net/projects/vcxsrv/?source=directory
+
+If you chose to use it, you need to run VcXsrc without OpenGL support but it works - see highlighted
+text below ...
+
+"C:\Program Files\VcXsrv\vcxsrv.exe" :0 -ac -terminate -lesspointer -multiwindow -clipboard -nowgl
+
+Note: this server is better since it seems to have more fonts and shows gvim properly than xming
+which is old xserver. It replace xming and seems to use the rest since use xlanuch. 'One window' do
+not works but 'multiple windows' works.
+
+http://alexcooper.co.uk/blog/2013/09/using-vcxsrv-putty-remote-x-windows/
+
+
+={============================================================================
+*kt_linux_sete_102* firefox key shortcuts
 
 Ctrl+D                     Add Bookmark
 Ctrl+B or Ctrl+I           Bookmarks
