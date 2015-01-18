@@ -45,15 +45,20 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_007| error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before
 |kt_dev_gcc_008| warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]
 |kt_dev_gcc_009| error: jump to case label and crosses initialisation of 
+
 |kt_dev_gcc_100| gcc and c++11 {how-to-use-gcc-optimisation} {gcc-profiling} {gcc-options}
 |kt_dev_gcc_101| gcc typeof
-|kt_dev_gcc_102| gcc binutil
-|kt_dev_gcc_103| gcc link and ld {cyclic-dependencies}
+|kt_dev_gcc_102| gcc: link: search library
+|kt_dev_gcc_103| gcc: link: ld {cyclic-dependencies}
 |kt_dev_gcc_104| gcc: C90 and C99 
 |kt_dev_gcc_105| gcc likely and unlikely 
+|kt_dev_gcc_106| gcc: link: lrt
+|kt_dev_gcc_107| gcc: link: sysroot and rpath-link
+
 |kt_dev_gcc_200| gcc: cpp: preprocessor
 |kt_dev_gcc_201| gcc: cpp: define? 
 |kt_dev_gcc_202| gcc: cpp: how-to-get-filename-without-full-path
+
 |kt_dev_gcc_300| gcc gprof
 
 #{ C AND C++
@@ -4257,44 +4262,191 @@ http://stackoverflow.com/questions/16832863/behaviour-of-sizeof-in-c-gcc
 
 
 ={============================================================================
-*kt_dev_gcc_102* gcc binutil
+*kt_dev_gcc_102* gcc: link: search library
 
-{gcc-binutil}
+{search-library-when-run}
+We see several open() system calls to /etc/ld.so.*, which are the Linux dynamic linker-loader
+(ld.so) doing its job.
 
-http://sourceware.org/binutils/docs-2.20/
-http://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
+(http://www.codelikezell.com/how-to-modify-the-gnu-linkers-default-search-path)
 
-GCC provides a large number of built-in functions other than the ones mentioned above. Some of these
-are for internal use in the processing of exceptions or variable-length argument lists and are not
-documented here because they may change from time to time; we do not recommend general use of these
-functions. 
+LoadError: libgsl.so.0: cannot open shared object file: No such file or directory  
 
+<default-search-path>
+I located libgsl.so.0 in /usr/local/lib; so once again I have a problem with the linker finding a
+shared library. The way I fixed this during the memcached install was to add the --rpath linker flag
+during the build. But I don't wan't to keep running into this in the future, so I decided to add
+/usr/local/lib to ld’s default search path, here's how:
 
-{nm-find-symbol}
+Open /etc/ld.so.conf and make sure there is a single line that reads:
+include ld.so.conf.d/*.conf  
+Then, from bash prompt:
+echo "/usr/local/lib" >> /etc/ld.so.conf.d/loc_lib.conf   
+/sbin/ldconfig  
 
-%nm *.a
+That should do it. If you would like to learn more on the subject, this is the only good
+documentation I have found on Shared Library Search Paths.  Thanks for reading, now find something
+to do at GoLark.com
 
-%/opt/toolchains/bin/mipsel-linux-uclibc-nm
-%nm libicammulti.a | grep vendor
-
-00000bc0 t _GLOBAL__I_vendor_init
-00000980 T vendor_cleanup
-00000000 T vendor_init
-000002c8 T vendor_setup
-000000bc r _ZZ12vendor_setupE12__FUNCTION__
-00000088 r _ZZ12vendor_setupE19__PRETTY_FUNCTION__
-
-where: for more details %man nm
  
-Uppercase means global and lowercase means local. 
-B is bss
-T/t is text and means symbols defined in this object file. 
-D data
-A is this address is absolute and is not subject to modification by an additional link stage
-U is undefined meaning extern
+(http://www.eyrie.org/~eagle/notes/rpath.html)
+Shared Library Search Paths
+It's becoming more and more common these days to link everything against shared libraries, and in
+fact many software packages (Tcl and Cyrus SASL come to mind) basically just don't work properly
+static. This means that one has to more frequently deal with the issues involved in finding the
+appropriate libraries at runtime. 
 
-Cannot use nm for a stripped object
+<three-source>
+Here's a brief primer on the way that this works on Solaris and Linux. The search paths for
+libraries come from 'three' sources: the environment variable LD_LIBRARY_PATH (if set), any rpath
+encoded in the binary (more on this later), and the system default search paths. They're searched in
+this order, and the first matching library found is used. 
 
+LD_LIBRARY_PATH is broken and should 'not' be used if at all possible. It's broken because it
+overrides the search paths for all binaries that you run using it, not just the one that you care
+about, and it doesn't add easily to other competing settings of LD_LIBRARY_PATH. It has a tendency
+to cause odd breakage, and it's best to only use it with commercial applications like Oracle where
+there's no other choice (and then to set it only in a wrapper around a particular application, and
+never in your general shell environment). 
+
+System default paths
+Far and away the best way of handling shared libraries is to add every directory into which you
+install shared libraries to the system default paths. This doesn't work if you install a variety of
+conflicting libraries, but that's a rare case. If you're just installing software into
+/usr/local/lib, for example, then just add /usr/local/lib to your system default search paths. 
+
+On Linux, you do this by adding those directories to /etc/ld.so.conf and then running ldconfig. 
+
+This doesn't always work, though. The main case where this doesn't work is when you're installing
+shared libraries into a shared network file system for use throughout your cluster or enterprise.
+Then, you probably don't want to add that network file system to the default system search path,
+since that search path is used for every binary on the system, including ones integral to the
+operation of the system. If the network file system goes down, and the default search path includes
+it, the system will become unusable. 
+
+That leads to the next approach. Encoding rpath in applications
+
+ELF binaries (used by Solaris and Linux) can contain in the binary supplemental paths for shared
+libraries. (Shared libraries can also contain their own supplemental paths for finding other shared
+libraries, but that's not as commonly used.) This path is searched 'before' the system default paths
+(but is overridden by LD_LIBRARY_PATH, if set). 
+
+This path must be encoded at compile time and after that doesn't change. The advantage of this
+approach over the LD_LIBRARY_PATH approach, apart from the other problems caused by LD_LIBRARY_PATH,
+is that the work is born by the person building the software rather than the person running it. That
+means the work of configuring library paths only has to be done once, by a fairly clued person,
+rather than by every user who may or may not understand the issues. 
+
+There are two basic ways of telling a compiler to encode a search path in the binary (called an
+rpath): Set the environment variable LD_RUN_PATH to the search path (colon-separated) you want to
+encode. You don't need to include the system default search directories (and indeed should not,
+since you may interfere with future changes in how the native library searching algorithm works).
+This environment variable will be picked up by the compiler when it links the binary. Add -R
+/usr/local/lib (or whatever path) to the link command line. You can repeat this flag multiple times
+with different paths, similar to -L. Its order in the command line doesn't matter. 
+
+Either can be used, so normally I use LD_RUN_PATH since it's less intrusive. However, note that if
+there are any -R flags on the command line, the LD_RUN_PATH setting will be ignored. This means that
+if the normal build process of the software adds -R flags, you'll need to get it to add your -R
+flags as well (unless it helpfully includes a -R flag for the installation directory, which it
+sometimes does). If the software package uses Autoconf, generally the easiest way to do this is to
+set LDFLAGS to "-R /usr/local/lib" (or whatever directory) before running configure, which will then
+stick it into the Makefile. Failing that, I'll sometimes do something like: 
+
+make CC="gcc -R /usr/local/lib"
+
+to build the software, which generally does the right thing. 
+
+Note that software that uses libtool to link its libraries and to link against libraries will more
+frequently do the right thing and encode rpath properly when it builds the final binaries, but not
+always. Thankfully libtool also understands the -R flag and does the right thing when it's provided.
+
+<check>
+Checking the binaries
+
+To verify that a binary is doing the right thing, use the command ldd on the binary. This will list
+all of the libraries and either where they came from (if found) or something like "(not found)" if
+the library wasn't found. 
+
+Solaris has the very useful -s option to ldd that will additionally show the full library search
+path, so you can confirm that you encoded the right rpath in the binary. A partial equivalent under
+Linux is: 
+
+readelf -d <binary> | grep RPATH
+
+note: Cannot get RPATH on Linux.
+
+but note that this only shows the rpath for a particular binary (executable or library). If a shared
+library depends on other shared libraries, those shared libraries may be searched for using the
+rpath of the shared library that is loading them. To make sure that the search path is correct on
+Linux, you may need to use the above readelf command on the binary and all libraries other than
+system libraries that it uses. readelf comes with binutils, so if you're compiling software you will
+probably already have it installed. 
+
+TODO: This seems not up-to-date. To study further.
+
+
+{search-library-when-compile}
+-Lsearchdir 
+--library-path=searchdir 
+
+Add path searchdir to the list of paths that ld will search for archive libraries and ld control
+scripts. You may use this option any number of times. The directories are searched in the order in
+which they are specified on the command line. Directories specified on the command line are searched
+before the default directories. All -L options apply to all -l options, regardless of the order in
+which the options appear. 
+
+If searchdir begins with =, then the = will be replaced by the sysroot prefix, a path specified when
+the linker is configured. 
+
+The default set of paths searched (without being specified with `-L') depends on which emulation
+mode ld is using, and in some cases also on how it was configured. See Environment. 
+
+The paths can also be specified in a link script with the SEARCH_DIR command. Directories specified
+this way are searched at the point in which the linker script appears in the command line. 
+
+
+{relocation-problem}
+CNXT embedded platform.
+
+[bin]$ ./arm-linux-uclibcgnueabi-gcc -print-search-dirs
+install: /home/wgrobler/platforms/CnxtPecos/M2.1/SRC/host/linux/tools-4.1.1/lib/gcc/arm-linux-uclibcgnueabi/4.1.1/
+...
+libraries:=/home/ci/views/ci_fosh_pecosa_linux_int/vobs/SYSTEM_BIN/arm1176_gcc_x86_linux_01/bin/../lib/gcc/arm-linux-uclibcgnueabi/4.1.1/
+:/home/ci/views/ci_fosh_pecosa_linux_int/vobs/SYSTEM_BIN/arm1176_gcc_x86_linux_01/bin/../lib/gcc/
+:/home/wgrobler/platforms/CnxtPecos/M2.1/SRC/host/linux/tools-4.1.1/lib/gcc/arm-linux-uclibcgnueabi/4.1.1/
+:/usr/lib/gcc/arm-linux-uclibcgnueabi/4.1.1/
+:/home/ci/views/ci_fosh_pecosa_linux_int/vobs/SYSTEM_BIN/arm1176_gcc_x86_linux_01/bin/../lib/gcc/arm-linux-uclibcgnueabi/4.1.1/../../../../arm-linux-uclibcgnueabi/lib/arm-linux-uclibcgnueabi/4.1.1/
+:/home/ci/views/ci_fosh_pecosa_linux_int/vobs/SYSTEM_BIN/arm1176_gcc_x86_linux_01/bin/../lib/gcc/arm-linux-uclibcgnueabi/4.1.1/../../../../arm-linux-uclibcgnueabi/lib/
+:/home/wgrobler/platforms/CnxtPecos/M2.1/SRC/host/linux/tools-4.1.1/arm-linux-uclibcgnueabi/lib/arm-linux-uclibcgnueabi/4.1.1/
+:/home/wgrobler/platforms/CnxtPecos/M2.1/SRC/host/linux/tools-4.1.1/arm-linux-uclibcgnueabi/lib/
+
+When do compile and link, look into a directory one by one in libraries setting above to find
+libc.so and libc.a. 
+
+The problem is that try to use fixed specific path to build
+
+/home/ci/views/ci_fosh_pecosa_linux_int/vobs/SYSTEM_BIN/arm1176_gcc_x86_linux_01/bin/../lib/gcc/arm-linux-uclibcgnueabi/4.1.1/../../../../arm-linux-uclibcgnueabi/bin/ld:
+cannot find /home/wgrobler/platforms/CnxtPecos/M2.1/SRC/host/linux/tools-4.1.1/lib/libc.so.0
+collect2: ld returned 1 exit status
+
+At first, thought that it is a problem of not supporting relocation due to use fixed path. However,
+   when have strace log, found libc.so using libraries path and try to find the real library looking
+   at the content of libc.so. The libc.so is a text file.
+
+[lib]$ cat libc.so
+/* GNU ld script
+ * Use the shared library, but some functions are only in
+ * the static library, so try that secondarily. */
+GROUP ( /home/wgrobler/platforms/CnxtPecos/M2.1/SRC/host/linux/tools-4.1.1/lib/libc.so.0
+    /home/wgrobler/platforms/CnxtPecos/M2.1/SRC/host/linux/tools-4.1.1/lib/uclibc_nonshared.a  )
+
+When fixed as below, works fine.
+
+/* GNU ld script
+ * Use the shared library, but some functions are only in
+ * the static library, so try that secondarily. */
+GROUP ( libc.so.0 uclibc_nonshared.a  )
 
 ={============================================================================
 *kt_dev_gcc_103* gcc link and ld
@@ -5131,6 +5283,77 @@ Disassembly of section .text:
 
 
 ={============================================================================
+*kt_dev_gcc_106* gcc: link: lrt
+
+-lrt 
+
+Means that librt.a to use clock_gettime.
+
+
+={============================================================================
+*kt_dev_gcc_107* gcc: link: sysroot and rpath-link
+
+When not use sysroot with NXP toolchain, cause the problem:
+
+-Wl,-rpath-link=/home/NDS-UK/parkkt/platforms/apollo/gnu_cortex-a9_tools/usr/lib
+-Xlinker --end-group -o
+/home/NDS-UK/parkkt/TestBuild/APOLLO_01/LittleEndian/components/FOSH/FOSH_App/debug/FOSH_App
+/backup/NDS-UK/parkkt/platforms/apollo/gnu_cortex-a9_tools/usr/bin/../lib/gcc/arm-linux-uclibcgnueabi/4.4.0/../../../../arm-linux-uclibcgnueabi/bin/ld:
+crt1.o: No such file: No such file or directory
+
+
+--sysroot=directory
+Use directory as the location of the sysroot, overriding the configure-time default. This option is
+only supported by linkers that were configured using --with-sysroot.
+
+e.g., --sysroot=/home/NDS-UK/parkkt/platforms/apollo/gnu_cortex-a9_tools, which is the top directory of toolchain.
+
+-rpath-link=dir
+When using ELF or SunOS, one shared library may require another. This happens when an ld -shared
+link includes a shared library as one of the input files.
+
+When the linker encounters such a dependency when doing a non-shared, non-relocatable link, it will
+automatically try to locate the required shared library and include it in the link, if it is not
+included explicitly. In such a case, the -rpath-link option specifies the first set of directories
+to search. The -rpath-link option may specify a sequence of directory names either by specifying a
+list of names separated by colons, or by appearing multiple times.
+
+This option should be used with caution as it overrides the search path that may have been hard
+compiled into a shared library. In such a case it is possible to use unintentionally a different
+search path than the runtime linker would do.
+
+The linker uses the following search paths to locate required shared libraries:
+
+1. Any directories specified by -rpath-link options.
+
+2. Any directories specified by -rpath options. The difference between -rpath and -rpath-link is
+that directories specified by -rpath options are included in the executable and used at runtime,
+whereas the -rpath-link option is only effective at link time. Searching -rpath in this way is only
+  supported by native linkers and cross linkers which have been configured with the --with-sysroot
+  option.
+
+3. On an ELF system, for native linkers, if the -rpath and -rpath-link options were not used, search
+the contents of the environment variable LD_RUN_PATH.
+
+4. On SunOS, if the -rpath option was not used, search any directories specified using -L options.
+
+5. For a native linker, the search the contents of the environment variable LD_LIBRARY_PATH.
+
+6. For a native ELF linker, the directories in DT_RUNPATH or DT_RPATH of a shared library are
+searched for shared libraries needed by it. The DT_RPATH entries are ignored if DT_RUNPATH entries
+exist.
+
+7. The default directories, normally /lib and /usr/lib.
+
+8. For a native linker on an ELF system, if the file /etc/ld.so.conf exists, the list of directories
+found in that file. 
+
+If the required shared library is not found, the linker will issue a warning and continue with the
+link.
+
+
+
+={============================================================================
 *kt_dev_gcc_200* gcc: cpp: preprocessor
 
 http://gcc.gnu.org/onlinedocs/cpp/
@@ -5170,6 +5393,9 @@ Instead of outputting the result of preprocessing, output a rule suitable for ma
 dependencies of the main source file. The preprocessor outputs one make rule containing the object
 file name for that source file, a colon, and the names of all the included files, including those
 coming from -include or -imacros command line options. 
+
+<example>
+echo '#include <errno.h>' | cpp -dM
 
 
 ={============================================================================
