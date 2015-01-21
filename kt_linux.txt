@@ -33,9 +33,9 @@ KT KB. Linux
 |kt_linux_bash_100| bash: config: colour prompt
 
 
-|kt_linux_tool_001| 
+|kt_linux_tool_001| md5sum
 |kt_linux_tool_002| cut
-|kt_linux_tool_003| kill
+|kt_linux_tool_003| kill and killall
 |kt_linux_tool_004| dmesg
 |kt_linux_tool_005| uname, check linux version
 |kt_linux_tool_006| cp
@@ -1362,7 +1362,108 @@ Uncomment the line that says force_color_prompt=yes then logout and back in in t
 # ============================================================================
 #{
 ={============================================================================
-*kt_linux_tool_001* 
+*kt_linux_tool_001* md5sum
+
+md5sum - compute and check MD5 message digest
+
+{can-use-on-library-to-check-integrity}
+The idea is that can use md5sum on a library to confirm that it uses the exact same compile and link
+options. The assumption is that if both party has the same build configuration, the library made
+from the same source 'must' have the same md5 checksum. If that is the case, can use the md5
+checksum as a quick way to check if both party has and uses the same build configuration.
+
+Is it true?
+
+https://gcc.gnu.org/ml/gcc-help/2010-01/msg00082.html
+beaugy.a@free.fr wrote:
+
+    Hi all,
+    So, to put it in a nutshell, all my generated objects file are
+    identical on dev1 and dev2 and object files contained in my
+    convenience libraries are all identical. The only difference
+    remaining, before I generate my binary, resides in the generated
+    convenience libraries which are not identical, but their contents
+    are. So AFAK, this slight difference shall not make the difference. So
+    "why does gcc output (MD5 checksum) differs when I build a binary
+    using the project object files (*.o) or the project convenience
+    libraries (*.a)?" and "what can I do to fix that?".
+
+Your *.o files are proceeded in a different order when
+on the command line and on the .a archive, putting symbols
+on different addresses, so obviously different binaries
+are produced.
+
+Even if you do:
+gcc 1.o 2.o
+And:
+gcc 2.o 1.o
+you get binaries with different md5.
+
+<example>
+This is example from "*kt_dev_gcc_103* gcc link and ld"
+
+$ cat simplefunc.c
+int func(int i) {
+    return i + 21;
+}
+
+$ cat simplemain.c
+int func(int);
+
+int main(int argc, const char* argv[])
+{
+    return func(argc);
+}
+
+$ gcc -c simplefunc.c
+$ gcc -c simplemain.c
+$ gcc simplefunc.o simplemain.o
+$ ./a.out ; echo $?
+22
+
+:~/work$ nm simplefunc.o
+00000000 T func
+
+:~/work$ nm simplemain.o 
+         U func
+00000000 T main
+
+$ ar r libsimplefunc.a simplefunc.o    // ar rs to skip ranlib command.
+$ ranlib libsimplefunc.a
+$ gcc  simplemain.o -L. -lsimplefunc
+$ ./a.out ; echo $?
+22
+
+Now we have *.o and *.a files and run the same build and ar command some time later without changes
+in source. Just make o and a files.
+
+<o-files-are-the-same>
+keitee@debian-keitee:~/work$ ll simplefunc.*
+-rw-r--r-- 1 keitee keitee 848 Jan 20 22:15 simplefunc.o
+-rw-r--r-- 1 keitee keitee 848 Jan 20 22:06 simplefunc.o.old
+keitee@debian-keitee:~/work$ diff simplefunc.o simplefunc.o.old 
+keitee@debian-keitee:~/work$ 
+
+<a-files-are-different>
+keitee@debian-keitee:~/work$ ll libsimplefunc.a*
+-rw-r--r-- 1 keitee keitee 990 Jan 20 22:14 libsimplefunc.a
+-rw-r--r-- 1 keitee keitee 990 Jan 20 22:14 libsimplefunc.a.old
+keitee@debian-keitee:~/work$ diff libsimplefunc.a libsimplefunc.a.old 
+Binary files libsimplefunc.a and libsimplefunc.a.old differ
+keitee@debian-keitee:~/work$ 
+
+The md5 checksum result shows the same.
+
+keitee@debian-keitee:~/work$ md5sum simplefunc.o*
+3acb728c611c4c936320d64c1b360633  simplefunc.o
+3acb728c611c4c936320d64c1b360633  simplefunc.o.old
+
+keitee@debian-keitee:~/work$ md5sum libsimplefunc.a*
+87663beba78feef15106bf156a8f6ef3  libsimplefunc.a
+02a369c6a4476eea407bec53beaa7b95  libsimplefunc.a.old
+
+So even when make a library from the same object at 'different' time, it will create different
+library file.
 
 
 ={============================================================================
@@ -1400,6 +1501,16 @@ kill -0 4355 && echo "pid 4355 x sess mgr is present.."
 $ ./sbsh.sh 
 ./sbsh.sh: line 3: kill: (323232) - No such process
 pid 4355 x sess mgr is present..
+
+
+{kill-l}
+       -l, --list [signal]
+              List  signal  names.   This  option has optional argument, which
+              will convert signal number to signal name, or other way round.
+
+
+{killall}
+killall - kill processes by name
 
 
 ={============================================================================

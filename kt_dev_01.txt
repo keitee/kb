@@ -4538,13 +4538,13 @@ $ gcc -c x.c
 $ nm x.o
 000000000000000e T exported
                  U imported         // note: undefined
-0000000000000000 t internal         // note: static
+0000000000000000 t internal         // note: static. 'lowercase' in nm means local.
 
 This means: exported is an external symbol - defined in the object file and visible from the
 outside. imported is an undefined symbol; in other words, the linker is expected to find it
 elsewhere. When we talk about linking later, the term undefined can become confusing - so it helps
 to remember that this is where it comes from originally. internal is defined within the object but
-'invisible' from the outside.
+'invisible' from the outside. 
 
 Now, a library is simply a 'collection' of object files. Just a bunch of object files glued together.
 Creating a library is a very trivial operation that doesn't do anything special besides placing many
@@ -4576,8 +4576,8 @@ command-line, from left to right. This is the-linking-'order'. Here's what the l
 The linker maintains a symbol table. This symbol table does a bunch of things, but among them is
 keeping two lists:
 
-1. A list of symbols exported by all the objects and libraries encountered so far.
-2. A list of undefined symbols that the encountered objects and libraries requested to import and
+1. A list of symbols 'exported' by all the objects and libraries encountered so far.
+2. A list of 'undefined' symbols that the encountered objects and libraries requested to import and
 were not found yet.
 
 <for-object-file>
@@ -4593,7 +4593,7 @@ found in the list of exported symbols.
 
 <for-library>
 note: the key is that linker tries to find a symbol only when it's in the 'undefine' list in the
-symbol table..
+symbol table.
 
 When the linker encounters a new library, things are a bit more interesting. The linker goes over
 all the objects in the library. For each one, it 'first' looks at the symbols it exports.
@@ -4658,8 +4658,18 @@ $ gcc simplefunc.o simplemain.o
 $ ./a.out ; echo $?
 22
 
+note: $? means the exit status which is return value in this case.
+
 note: <key> linking order only matters when use a libaray
-Since these are object files, the linking order does not matter. Object files are always taken into
+
+:~/work$ nm simplefunc.o
+00000000 T func
+
+:~/work$ nm simplemain.o 
+         U func
+00000000 T main
+
+Since these are object files, the linking order does 'not' matter. Object files are always taken into
 the link. We can pass them to the linker in reversed order and it still works: 
 
 $ gcc simplemain.o simplefunc.o
@@ -23617,6 +23627,7 @@ uniqie( beg, end, comp );
 ={============================================================================
 *kt_dev_stl_061* algorithm: predicate, lambda, function object
 
+{why-aux-functions-like-predicate}
 To increase their flexibility and power, several algorithms allow the passing of user-defined
 auxiliary functions. This is 'callables' to change a default operator of algorithms. For example,
 
@@ -23821,13 +23832,117 @@ int main()
 }
 
 
+{predicate-is-limited}
+Depending on algorithms to use, can use only unary and binary since the predicate only supports
+unary and binary which means must have one or two parameters. How to support more arguments?
+
+<problem>
+Revise the above algorithm-stable_sort example to report how many words are of a given size or
+greater. (From Primers 10.3.2) The sketch is:
+
+void biggies( vector<string> &words, vector<string>::size_type sz )
+{
+  elimDups( words );
+  stable_sort( words.begin(), words.end(), isShorter );
+
+  // 1. get an iterator to the first element whose size is >= sz
+  // 2. compute the number of elements with size >= sz
+  // 3. print words of the given size or longer
+}
+
+<1> Can use find_if to find the fist whose size is >= sz? However, find_if takes 'unary' predicate.
+How to solve this?
+
+
 {lambda}
 Lambdas, introduced with C++11, define a way to specify functional behavior 'inside' an expression
 or statement. You can define objects that represent functional behavior and pass these objects as
-'inline' argument to algorithms to be used as predicates or for other purposes.
+unnamed 'inline' function to algorithms to be used as predicates or for other purposes.
 
-The predicate only supports unary and binary which means must have one or two parameters. How to
-support more arguments?
+Like any other function, lambda has return, parameter, and function body but unlike function, be
+defined inside a function.
+
+<form>
+[capture list] (parameter list) -> return type { body }
+
+The capture list is a list of 'local' variables in the 'enclosing' function. The parameter and
+return are optional. If omits them, will be void for parameter or return. When return used in the
+body, has an 'inferred' return type. 
+
+<example>
+#include<iostream>
+
+using namespace std;
+
+int main()
+{
+  auto f = [] { return 42; };
+
+  cout << f() << endl;
+}
+
+<example>
+Revise this with lambda.
+
+// stable_sort( coll.begin(), coll.end(), isShorter );
+stable_sort( coll.begin(), coll.end(), 
+    [](const string &a, const string &b)
+    { return a.size() < b.size(); } );
+
+<1> To solve the above problem, use lambda
+
+auto wc = find_if( words.begin(), words.end(),
+               [sz](const string &a)
+               { return a.size() >= sz; } );
+
+Here [sz] use to capture a variable from enclosing function and has two; one from capture and one
+from parameter and return bool.
+
+<putting-it-all-together>
+string make_plural( size_t ctr, const string& word, const string& ending)
+{
+  return (ctr>1) ? word + ending : word;
+}
+
+note: "return ctr>1 ? word + ending : word;" works.
+
+void biggies( vector<string> &words, vector<string>::size_type sz )
+{
+  elimDups( words );
+
+  stable_sort( coll.begin(), coll.end(), 
+      [](const string &a, const string &b)
+      { return a.size() < b.size(); } );
+
+  // 1. get an iterator to the first element whose size is >= sz
+  auto wc = find_if( words.begin(), words.end(),
+                 [sz](const string &a)
+                 { return a.size() >= sz; } );
+  // 2. compute the number of elements with size >= sz
+  auto count = words.end() - wc;          // <iterator-arithmetic>
+
+  cout << count << " " << make_plural( count, "word", "s" ) << " of length " << sz << " or longer"
+    << endl;
+
+  // 3. print words of the given size or longer
+  for_each( words.begin(), words.end(), [](const string &s) { cout << s << " "; });
+
+  cout << endl;
+}
+
+In lambda in for_each, can use cout directly since cout is staic name and capture list can use only
+on local nonstatic variables.
+
+
+<lambda-capture>
+When define lambda, compiler generates a new unnamed class so when pass it to a function, defines
+both a new type and an object of that type. So the data member of a lambda are initialized when a
+lambda object is created.
+
+<capture-by-value-or-reference>
+auto f = [v1] { return v1; };
+auto f = [&v1] { return v1; };
+
 
 Suppose that you search in a collection for the first element with a value that is between x and y
 
