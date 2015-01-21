@@ -16,6 +16,8 @@
 |kt_dev_uv_stack_003| stack: element names
 |kt_dev_uv_stack_004| stack: oem configs
 |kt_dev_uv_stack_005| stack: brcm debug level
+|kt_dev_uv_stack_006| stack: netflix ps line
+|kt_dev_uv_stack_007| stack: git for vendors
 
 |kt_dev_uv_stack_100| commands TODO:
 
@@ -144,45 +146,15 @@ https://wiki.youview.co.uk/display/canvas/HOWTO+Install+Humax+DTR-T1000+T1000+H2
 ={============================================================================
 *kt_dev_uv_set_004* setup: zb-make. build single component in the stack
 
-#            ZB_CFG - Host for which the "Element Tree" must be built.
-#
-#                     Supported values
-#                     ----------------
-#                     humax.1000 : for Humax T1000 boxes
-#                     humax.2100 : for Humax T2100 boxes
-#                     huawei.360 : for Huawei DN360T boxes
-#                     huawei.370 : for Huawei DN370T boxes
-#                     huawei.372 : for Huawei DN372T boxes
-
-# export ET=~/sources/DEVARCH/
-
-<map-zb-cfg-to-box-config>
-conf zb.huawei.360.host-config huawei-dn360t
-conf zb.huawei.370.host-config huawei-bcm7409
-conf zb.huawei.372.host-config huawei-bcm7231
-
-:~/source$ ls -al ./DEVARCH/OEM.Huawei/OEM.Huawei.3rdPartyStack/
--rwxr-xr-x 1 kpark kpark 1671 Jan  7 15:55 setvars-huawei-bcm7231.sh
--rwxr-xr-x 1 kpark kpark 1598 Jan  7 15:55 setvars-huawei-bcm7409.sh
--rwxr-xr-x 1 kpark kpark 1670 Jan  7 15:55 setvars-huawei-dn360t.sh
-
 setvars-huawei-bcm7409.sh
 
 note: comment this to inlcude this in the build.
 
 # export ZINC_EXCLUDE_PROJECTS="Polonium.NexusInspect"
 
-:~/source$ ls -al ./DEVARCH/OEM.Humax/OEM.Humax.3rdPartyStack/
--rw-r--r-- 1 kpark kpark 1822 Jan  7 15:55 setvars-humax-db_t2200.sh
--rw-r--r-- 1 kpark kpark 1653 Jan  7 15:55 setvars-humax-dtr_t1000.sh
--rw-r--r-- 1 kpark kpark 1930 Jan  7 15:55 setvars-humax-dtr_t2100.sh
--rw-r--r-- 1 kpark kpark 2177 Jan  7 15:55 setvars-humax-dtr_t4000.sh
-
-
 cd =~/sources/DEVARCH/
 ZB_CFG="huawei.370" zb-make Polonium/Polonium.NexusInspect
 ZB_CFG="huawei.370" zb-make
-
 
 
 ={============================================================================
@@ -260,18 +232,40 @@ https://wiki.youview.co.uk/display/canvas/OEM+Staging+and+Toolchains?src=search
 
 root Password is onlydebug (Humax) TestHw123 (Huawei)
 
+{hmax}
 ||Hostname||FQDN||IP Address||MAC Address||
 humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 
+/.ssh -> /var/tmp/authorized_keys
+
+
+{hwei}
 huawei-04877 huawei-04877.dev.youview.co.uk  172.20.33.192  20:F3:A3:70:D1:94
 
 
 ={============================================================================
 *kt_dev_uv_stack_000* stack: builds
 
-<after-zb-shell>
-ZB_CFG=huawei.370  zb-shell
+Many of these tools rely on the environment variable "ET" to find your checkout of the DEVARCH repo.
+The zb-make and zb-build-with-progress tools build the stack out of your source tree, so you can
+carry on developing while a build is running. You control this behaviour with the "ZB_BUILD_DIR"
+environment variable, so make sure it exists and is writeable by yourself. Similarly, you'll
+probably want the tools available in your PATH, so add these to your ~/.profile:
 
+export PATH=~/sources/zinc-git-tools:$PATH
+export ET=~/sources/DEVARCH/
+
+$ cd ~/sources/
+ZB_CFG=huawei.370 zb-shell
+zb-make
+
+OR
+
+zb-virtual-slave zb-shell
+ZB_CFG=humax.1000 zb-make
+
+
+<after-zb-shell>
 $ env | grep ^Z
 ZINC_USER_BUILD_TYPE=release
 ZINC_HOST_PREFIX=/opt/zinc-trunk
@@ -294,13 +288,22 @@ ZINC_3PS_HOST_PREFIX=/opt/zinc-trunk/oss
 ZINC_REMOTE_LOGGING_PORT=4560
 ZINC_BUILD_TYPE=release
 
-<dd>
+<zb-virtual-slave>
 zb-virtual-slave zb-make
 {
-  {
   /home/kpark/source/zinc-git-tools/zb/zb-load-config.sh
-     pre: ET, ZB_CFG 
-     do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
+  {
+      pre: ET, ZB_CFG 
+
+      configure_git_for_zb() {
+
+      conf zb.huawei.360.host-config huawei-dn360t
+      conf zb.huawei.370.host-config huawei-bcm7409
+      conf zb.huawei.372.host-config huawei-bcm7231
+      conf zb.humax.1000.host-config humax-dtr_t1000
+      }
+
+      do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
   }
 
   + real_path=/data/builds/master
@@ -312,6 +315,8 @@ zb-virtual-slave zb-make
 
 zb-make:
 {
+   source $where_am_i/zb/zb-load-config.sh
+
    ZB_HOST_CONFIG=host
    + cd /home/kpark/source/DEVARCH
 
@@ -321,6 +326,17 @@ zb-make:
    <setvar>
    source ../../*/*/setvars-$ZB_HOST_CONFIG.sh
    + source ../../Zinc/Zinc.Build/setvars-host.sh
+
+   :~/source$ ls -al ./DEVARCH/OEM.Huawei/OEM.Huawei.3rdPartyStack/
+   -rwxr-xr-x 1 kpark kpark 1671 Jan  7 15:55 setvars-huawei-bcm7231.sh
+   -rwxr-xr-x 1 kpark kpark 1598 Jan  7 15:55 setvars-huawei-bcm7409.sh
+   -rwxr-xr-x 1 kpark kpark 1670 Jan  7 15:55 setvars-huawei-dn360t.sh
+
+   :~/source$ ls -al ./DEVARCH/OEM.Humax/OEM.Humax.3rdPartyStack/
+   -rw-r--r-- 1 kpark kpark 1822 Jan  7 15:55 setvars-humax-db_t2200.sh
+   -rw-r--r-- 1 kpark kpark 1653 Jan  7 15:55 setvars-humax-dtr_t1000.sh
+   -rw-r--r-- 1 kpark kpark 1930 Jan  7 15:55 setvars-humax-dtr_t2100.sh
+   -rw-r--r-- 1 kpark kpark 2177 Jan  7 15:55 setvars-humax-dtr_t4000.sh
    {
       ++ source ../../Zinc/Zinc.Build/setvars-common.sh
       {
@@ -388,6 +404,25 @@ move to the source dir to build:
 
 mipsel-linux-gcc -c src/nexusMgr.c -o nexusMgr.o -DPIC -fpic -std=c99 `pkg-config --cflags nexus directfb`
 mipsel-linux-g++ nexusMgr.o -lnexus `pkg-config --libs nexus directfb` -shared -o libnexusMgr.so
+
+
+<use-autoconf>
+# note: must.
+export ET=/data/builds/master/huawei.370/DEVARCH/
+
+git clone -b huawei/dn370t gitolite@git-huawei.dev.youview.co.uk:/nexusMgr.git nexusTest
+
+cd nexusMgr
+
+ZINC_USER_BUILD_TYPE=release source $ET/OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh
+
+./autogen.sh
+
+# note: if goes okay, there shoule be makefile generated.
+# $HOST_TRIPLE=mipsel-linux
+./configure --host=$HOST_TRIPLE --with-pic --enable-shared --prefix=$PWD/install
+
+make && make install
 
 
 ={============================================================================
@@ -506,6 +541,27 @@ root# which getChildItems
 
 Invalid level. Should be: err, wrn, msg or none.
 echo "nexusMgr msg" >> /proc/brcm/debug
+
+
+={============================================================================
+*kt_dev_uv_stack_006* stack: netflix ps line
+
+16386     1518 66.4 30.2 229456 97392 ?        Sl   14:45   1:03 /opt/netflix/netflix
+--write-data-path /app-data/var --cache-path /app-data/cache --disk-cache-path
+/app-data/var/nrd/gibbon --user-agent YouViewPlayer4/1.0 (Huawei Technologies Co., Ltd;
+    DN370T.02.02.T; 001; CDS/70.37.05; API/2.9.1; PS/2.9.6) (+DVR+FLASH+HTML+MHEG+IPCMC)
+--dpi-friendlyname YouView-0067 --device-model YouView_DN370T --esn
+YVWTTGD370-9cac040a-6397-4bbd-a0dd-61743837e958 --mdx-manufacturer Huawei Technologies Co., Ltd
+--mdx-model-name YouView_DN370T --software-version 70.37.05 --no-mdx
+--ui-query-string=source_type=2&trackId=13783779&trackUrl=https%3A%2F%2Fapi.netflix.com%2FBaSePaTh%3Fpage%3DMetaSearch%3F
+
+
+={============================================================================
+*kt_dev_uv_stack_007* stack: git for vendors
+
+git clone -b huawei/dn370t gitolite@git-humax.dev.youview.co.uk:/nexusMgr.git nexusTest
+
+git clone -b huawei/dn370t gitolite@git-huawei.dev.youview.co.uk:/nexusMgr.git nexusTest
 
 
 ={============================================================================
@@ -805,6 +861,21 @@ https://jira.youview.co.uk/browse/YVHUAWEI-6598
 
 2. Ongoing discussion about features to implement.
 https://jira.youview.co.uk/browse/YVHUAWEI-6095
+
+
+2015.01.21, Wed:
+
+1. Hack sources
+
+HUAWEI_SHARED_RESOURCE        : defed in src
+NEXUS_HAS_PICTURE_DECODER     : NO
+_SC_DIRECT_NEXUS_             : NO
+NEXUS_NUM_XXX                 : NO
+DFB_PLATFORM_VERSION_MAJOR    : NO
+DUAL_OUTPUT                         : defed in pkg config
+NEXUS_HAS_DMA && NEXUS_HAS_SECURITY : defed in pkg config
+BCMEXUS_STREAM_XXX                  : NO
+USE_SIMPLE_DECODER                  : NO
 
 
 ==============================================================================
