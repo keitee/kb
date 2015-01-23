@@ -48,12 +48,13 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_gcc_100| gcc and c++11 {how-to-use-gcc-optimisation} {gcc-profiling} {gcc-options}
 |kt_dev_gcc_101| gcc typeof
-|kt_dev_gcc_102| gcc: link: search library
-|kt_dev_gcc_103| gcc: link: ld {cyclic-dependencies}
+|kt_dev_gcc_102| gcc: loader and search library
+|kt_dev_gcc_103| gcc: link: link order and cyclic dependencies
 |kt_dev_gcc_104| gcc: C90 and C99 
 |kt_dev_gcc_105| gcc likely and unlikely 
 |kt_dev_gcc_106| gcc: link: lrt
 |kt_dev_gcc_107| gcc: link: sysroot and rpath-link
+|kt_dev_gcc_108| gcc: options
 
 |kt_dev_gcc_200| gcc: cpp: preprocessor
 |kt_dev_gcc_201| gcc: cpp: define? 
@@ -4210,21 +4211,6 @@ optimizes the if branching as well as the programmer-directed optimization. One 
 exercise  is, of course, to compare the assembler (cc -S) code generated for each of the above
 cases. 
 
-{gcc-options}
-http://gcc.gnu.org/onlinedocs/gcc/Invoking-GCC.html#Invoking-GCC
-
--v
-Print (on standard error output) the commands executed to run the stages of compilation. Also print
-the version number of the compiler driver program and of the preprocessor and the compiler proper.
- [KT] can see spec and include path
-
--###
-Like -v except the commands are not executed and arguments are quoted unless they contain only
-alphanumeric characters or ./-_. This is useful for shell scripts to capture the driver-generated
-command lines. 
-
--print-search-dirs [KT] to check path for lib
-
 
 {nullptr}
 This is for C++11.
@@ -4262,148 +4248,159 @@ http://stackoverflow.com/questions/16832863/behaviour-of-sizeof-in-c-gcc
 
 
 ={============================================================================
-*kt_dev_gcc_102* gcc: link: search library
+*kt_dev_gcc_102* gcc: loader and search library
 
-{search-library-when-run}
-We see several open() system calls to /etc/ld.so.*, which are the Linux dynamic linker-loader
-(ld.so) doing its job.
+{dynamic-loader}
+From GCC doc, the dynamic loader is not part of GCC; it is part of the operating system.
 
-(http://www.codelikezell.com/how-to-modify-the-gnu-linkers-default-search-path)
 
-LoadError: libgsl.so.0: cannot open shared object file: No such file or directory  
-
-<default-search-path>
-I located libgsl.so.0 in /usr/local/lib; so once again I have a problem with the linker finding a
-shared library. The way I fixed this during the memcached install was to add the --rpath linker flag
-during the build. But I don't wan't to keep running into this in the future, so I decided to add
-/usr/local/lib to ld’s default search path, here's how:
-
-Open /etc/ld.so.conf and make sure there is a single line that reads:
-include ld.so.conf.d/*.conf  
-Then, from bash prompt:
-echo "/usr/local/lib" >> /etc/ld.so.conf.d/loc_lib.conf   
-/sbin/ldconfig  
-
-That should do it. If you would like to learn more on the subject, this is the only good
-documentation I have found on Shared Library Search Paths.  Thanks for reading, now find something
-to do at GoLark.com
-
+{example}
+gcc -fpic -shared -o simple.so simplefunc.c
+ar rs libsimple.so simple.so
  
-(http://www.eyrie.org/~eagle/notes/rpath.html)
-Shared Library Search Paths
-It's becoming more and more common these days to link everything against shared libraries, and in
-fact many software packages (Tcl and Cyrus SASL come to mind) basically just don't work properly
-static. This means that one has to more frequently deal with the issues involved in finding the
-appropriate libraries at runtime. 
+:~/work$ gcc simplemain.o -lsimple
+/usr/bin/ld: cannot find -lsimple
+collect2: error: ld returned 1 exit status
 
-<three-source>
-Here's a brief primer on the way that this works on Solaris and Linux. The search paths for
-libraries come from 'three' sources: the environment variable LD_LIBRARY_PATH (if set), any rpath
-encoded in the binary (more on this later), and the system default search paths. They're searched in
-this order, and the first matching library found is used. 
+:~/work$ gcc simplemain.o -L. -lsimple
+:~/work$ 
 
-LD_LIBRARY_PATH is broken and should 'not' be used if at all possible. It's broken because it
-overrides the search paths for all binaries that you run using it, not just the one that you care
-about, and it doesn't add easily to other competing settings of LD_LIBRARY_PATH. It has a tendency
-to cause odd breakage, and it's best to only use it with commercial applications like Oracle where
-there's no other choice (and then to set it only in a wrapper around a particular application, and
-never in your general shell environment). 
+note: this is search error in compile time. See gcc: options for more detail.
 
-System default paths
-Far and away the best way of handling shared libraries is to add every directory into which you
-install shared libraries to the system default paths. This doesn't work if you install a variety of
-conflicting libraries, but that's a rare case. If you're just installing software into
-/usr/local/lib, for example, then just add /usr/local/lib to your system default search paths. 
+:~/work$ ./a.out; echo $?
+./a.out: error while loading shared libraries: simple.so: cannot open shared object file: No such
+file or directory 127
 
-On Linux, you do this by adding those directories to /etc/ld.so.conf and then running ldconfig. 
+note: this is search error in runtime.
 
-This doesn't always work, though. The main case where this doesn't work is when you're installing
-shared libraries into a shared network file system for use throughout your cluster or enterprise.
-Then, you probably don't want to add that network file system to the default system search path,
-since that search path is used for every binary on the system, including ones integral to the
-operation of the system. If the network file system goes down, and the default search path includes
-it, the system will become unusable. 
+keitee@debian-keitee:~/work$ LD_LIBRARY_PATH=/home/keitee/work
+keitee@debian-keitee:~/work$ echo $LD_LIBRARY_PATH
+/home/keitee/work
+keitee@debian-keitee:~/work$ ./a.out; echo $?
+./a.out: error while loading shared libraries: simple.so: cannot open shared object file: No such
+file or directory 127
 
-That leads to the next approach. Encoding rpath in applications
+note: still cannot find.
 
-ELF binaries (used by Solaris and Linux) can contain in the binary supplemental paths for shared
-libraries. (Shared libraries can also contain their own supplemental paths for finding other shared
-libraries, but that's not as commonly used.) This path is searched 'before' the system default paths
-(but is overridden by LD_LIBRARY_PATH, if set). 
+keitee@debian-keitee:~/work$ export LD_LIBRARY_PATH=/home/keitee/work
+keitee@debian-keitee:~/work$ ./a.out; echo $?
+22
+keitee@debian-keitee:~/work$ 
 
-This path must be encoded at compile time and after that doesn't change. The advantage of this
-approach over the LD_LIBRARY_PATH approach, apart from the other problems caused by LD_LIBRARY_PATH,
-is that the work is born by the person building the software rather than the person running it. That
-means the work of configuring library paths only has to be done once, by a fairly clued person,
-rather than by every user who may or may not understand the issues. 
+note: now it works since if you don't export the changes to an environment variable, they won't be
+inherited by the child processes. The loader and our test program didn't inherit the changes we
+made.
 
-There are two basic ways of telling a compiler to encode a search path in the binary (called an
-rpath): Set the environment variable LD_RUN_PATH to the search path (colon-separated) you want to
-encode. You don't need to include the system default search directories (and indeed should not,
-since you may interfere with future changes in how the native library searching algorithm works).
-This environment variable will be picked up by the compiler when it links the binary. Add -R
-/usr/local/lib (or whatever path) to the link command line. You can repeat this flag multiple times
-with different paths, similar to -L. Its order in the command line doesn't matter. 
+{three-search-source}
+http://www.eyrie.org/~eagle/notes/rpath.html
+http://www.cprogramming.com/tutorial/shared-libraries-linux-gcc.html
+http://tldp.org/HOWTO/Program-Library-HOWTO/shared-libraries.html
+The search paths for libraries come from 'three' sources: the environment variable LD_LIBRARY_PATH
+(if set), any rpath encoded in the binary (more on this later), and the system default search paths.
+They're searched in this order, and the first matching library found is used. 
 
-Either can be used, so normally I use LD_RUN_PATH since it's less intrusive. However, note that if
-there are any -R flags on the command line, the LD_RUN_PATH setting will be ignored. This means that
-if the normal build process of the software adds -R flags, you'll need to get it to add your -R
-flags as well (unless it helpfully includes a -R flag for the installation directory, which it
-sometimes does). If the software package uses Autoconf, generally the easiest way to do this is to
-set LDFLAGS to "-R /usr/local/lib" (or whatever directory) before running configure, which will then
-stick it into the Makefile. Failing that, I'll sometimes do something like: 
 
-make CC="gcc -R /usr/local/lib"
+The default GNU loader, ld.so, looks for libraries in the following order:
 
-to build the software, which generally does the right thing. 
+1. It looks in the DT_RPATH section of the executable, unless there is a DT_RUNPATH section. note:
+this mean rpath?
 
-Note that software that uses libtool to link its libraries and to link against libraries will more
-frequently do the right thing and encode rpath properly when it builds the final binaries, but not
-always. Thankfully libtool also understands the -R flag and does the right thing when it's provided.
+2. It looks in LD_LIBRARY_PATH. This is skipped if the executable is setuid/setgid for security
+reasons.
+
+3. It looks in the DT_RUNPATH section of the executable unless the setuid/setgid bits are set (for
+security reasons).
+
+4. It looks in the cache file /etc/ld/so/cache (disabled with the ‘-z nodeflib’ linker option).
+
+5. It looks in the default directories /lib then /usr/lib (disabled with the ‘-z nodeflib’ linker
+option).
+
+<LD_LIBRARY_PATH>
+LD_LIBRARY_PATH is broken and should 'not' be used if at all possible since LD_LIBRARY_PATH is great
+for quick tests and for systems on which you don't have admin privileges. As a downside, however,
+exporting the LD_LIBRARY_PATH variable means it may cause problems with other programs you run that
+also rely on LD_LIBRARY_PATH if you don't reset it to its previous state when you're done.
+
+<rpath>
+Use the same example.
+
+:~/work$ unset LD_LIBRARY_PATH
+:~/work$ gcc -L/home/keitee/work -Wl,-rpath=/home/keitee/work simplemain.o -lsimple
+:~/work$ 
+:~/work$ ./a.out ; echo $?
+22
+:~/work$ 
+
+There are a few downsides to rpath which encodes the path in ELF, however. First, it requires that
+shared libraries be installed in a fixed location so that all users of your program will have access
+to those libraries in those locations. That means less flexibility in system configuration. Second,
+   if that library refers to a NFS mount or other network drive, you may experience undesirable
+   delays or worse on program startup.
+
+<system-path>
+What if we want to install our library so everybody on the system can use it? For that, you will
+need 'admin' privileges. You will need this for two reasons: first, to put the library in a standard
+location, probably /usr/lib or /usr/local/lib, which normal users don't have write access to.
+Second, you will need to modify the ld.so config file and cache. As root, do the following:
+
+$ cp /home/username/foo/libfoo.so /usr/lib
+$ chmod 0755 /usr/lib/libfoo.so
+
+Now the file is in a standard location, with correct permissions, readable by everybody. We need to
+'tell' the loader it's available for use, so let's update the 'cache':
+
+$ ldconfig
+
+That should create a link to our shared library and update the cache so it's available for immediate
+use. Let's double check:
+
+-p --print-cache
+      Print the lists of directories and candidate libraries stored in
+      the current cache.
+
+$ ldconfig -p | grep foo
+libfoo.so (libc6) => /usr/lib/libfoo.so
+
+Now our library is installed. Before we test it, we have to 'clean' up a few things:
+
+Clear our LD_LIBRARY_PATH once more, just in case:
+
+$ unset LD_LIBRARY_PATH
+
+Re-link our executable. Notice we don't need the -L option since our library is stored in a default
+location and we aren't using the rpath option:
+note: this means that system path works for compile and runtime as well.
+
+$ gcc -Wall -o test main.c -lfoo
+
+Let's make sure we're using the /usr/lib instance of our library using ldd:
+
+$ ldd test | grep foo
+libfoo.so => /usr/lib/libfoo.so (0x00a42000)
+
 
 <check>
-Checking the binaries
-
 To verify that a binary is doing the right thing, use the command ldd on the binary. This will list
 all of the libraries and either where they came from (if found) or something like "(not found)" if
 the library wasn't found. 
 
-Solaris has the very useful -s option to ldd that will additionally show the full library search
-path, so you can confirm that you encoded the right rpath in the binary. A partial equivalent under
-Linux is: 
-
 readelf -d <binary> | grep RPATH
 
-note: Cannot get RPATH on Linux.
+:~/work$ readelf -d a.out 
+
+Dynamic section at offset 0x6a8 contains 27 entries:
+  Tag        Type                         Name/Value
+ 0x00000001 (NEEDED)                     Shared library: [simple.so]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+ 0x0000000f (RPATH)                      Library rpath: [/home/keitee/work]
+ ...
 
 but note that this only shows the rpath for a particular binary (executable or library). If a shared
 library depends on other shared libraries, those shared libraries may be searched for using the
 rpath of the shared library that is loading them. To make sure that the search path is correct on
 Linux, you may need to use the above readelf command on the binary and all libraries other than
-system libraries that it uses. readelf comes with binutils, so if you're compiling software you will
-probably already have it installed. 
-
-TODO: This seems not up-to-date. To study further.
-
-
-{search-library-when-compile}
--Lsearchdir 
---library-path=searchdir 
-
-Add path searchdir to the list of paths that ld will search for archive libraries and ld control
-scripts. You may use this option any number of times. The directories are searched in the order in
-which they are specified on the command line. Directories specified on the command line are searched
-before the default directories. All -L options apply to all -l options, regardless of the order in
-which the options appear. 
-
-If searchdir begins with =, then the = will be replaced by the sysroot prefix, a path specified when
-the linker is configured. 
-
-The default set of paths searched (without being specified with `-L') depends on which emulation
-mode ld is using, and in some cases also on how it was configured. See Environment. 
-
-The paths can also be specified in a link script with the SEARCH_DIR command. Directories specified
-this way are searched at the point in which the linker script appears in the command line. 
+system libraries that it uses. 
 
 
 {relocation-problem}
@@ -4448,8 +4445,9 @@ When fixed as below, works fine.
  * the static library, so try that secondarily. */
 GROUP ( libc.so.0 uclibc_nonshared.a  )
 
+
 ={============================================================================
-*kt_dev_gcc_103* gcc link and ld
+*kt_dev_gcc_103* gcc: link: link order and cyclic dependencies
 
 {gcc-compliation-process}
 Four phase: preprocessing, compilation, assembly and linking. 
@@ -4940,53 +4938,6 @@ note: KT. When use this option, it appears that linker cannot detect duplicated 
 of symbols. There are duplicated in the same lib archive but picked up wrong one. 
 
 
-{gcc-link-search-path}
-
--Lsearchdir 
---library-path=searchdir 
-
-Add path searchdir to the list of paths that ld will search for archive libraries and ld control
-scripts. You may use this option any number of times. The directories are searched in the order in
-which they are specified on the command line. Directories specified on the command line are searched
-before the default directories. All -L options apply to all -l options, regardless of the order in
-which the options appear.  If searchdir begins with =, then the = will be replaced by the sysroot
-prefix, a path specified when the linker is configured.  The default set of paths searched (without
-being specified with `-L') depends on which emulation mode ld is using, and in some cases also on
-how it was configured. See Environment.  The paths can also be specified in a link script with the
-SEARCH_DIR command. Directories specified this way are searched at the point in which the linker
-script appears in the command line. 
-
-{gcc-link-option}
-
-http://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
-https://sourceware.org/binutils/docs/ld/Options.html
-
--Wl,option
-
-Pass option as an option to the linker. If option contains commas, it is split into multiple options
-at the commas. You can use this syntax to pass an argument to the option. For example,
--Wl,-Map,output.map passes -Map output.map to the linker. When using the GNU linker, you can also
-get the same effect with -Wl,-Map=output.map. 
-
--nostdlib
-
-Do not use the standard system startup files or libraries when linking. No startup files and only
-the libraries you specify are passed to the linker, and options specifying linkage of the system
-libraries, such as -static-libgcc or -shared-libgcc, are ignored.
-
-The compiler may generate calls to memcmp, memset, memcpy and memmove. These entries are usually
-resolved by entries in libc. These entry points should be supplied through some other mechanism when
-this option is specified.
-
-One of the standard libraries bypassed by -nostdlib and -nodefaultlibs is libgcc.a, a library of
-internal subroutines which GCC uses to overcome shortcomings of particular machines, or special
-needs for some languages. (See Interfacing to GCC Output, for more discussion of libgcc.a.) In most
-cases, you need libgcc.a even when you want to avoid other standard libraries. In other words, when
-you specify -nostdlib or -nodefaultlibs you should usually specify -lgcc as well. This ensures that
-you have no unresolved references to internal GCC library subroutines. (An example of such an
-internal subroutine is '__main', used to ensure C++ constructors are called; see collect2.) 
-
-
 ={============================================================================
 *kt_dev_gcc_104* gcc: C90 and C99
 
@@ -5361,6 +5312,142 @@ found in that file.
 If the required shared library is not found, the linker will issue a warning and continue with the
 link.
 
+
+={============================================================================
+*kt_dev_gcc_108* gcc: options
+
+{reference}
+https://gcc.gnu.org/onlinedocs/gcc/Option-Index.html#Option-Index
+
+-v
+Print (on standard error output) the commands executed to run the stages of compilation. Also print
+the version number of the compiler driver program and of the preprocessor and the compiler proper.
+note: can see spec and include path
+
+-###
+Like -v except the commands are not executed and arguments are quoted unless they contain only
+alphanumeric characters or ./-_. This is useful for shell scripts to capture the driver-generated
+command lines. 
+
+-print-search-dirs 
+note: to check path for lib
+
+<debug-options>
+https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
+
+-g
+Produce debugging information in the operating system's native format (stabs, COFF, XCOFF, or DWARF
+    2). GDB can work with this debugging information.
+
+On most systems that use stabs format, -g enables use of extra debugging information that only GDB
+can use; this extra information makes debugging work better in GDB but probably makes other
+debuggers crash or refuse to read the program. If you want to control for certain whether to
+generate the extra information, use -gstabs+, -gstabs, -gxcoff+, -gxcoff, or -gvms (see below).
+
+GCC allows you to use -g with -O. The shortcuts taken by optimized code may occasionally produce
+surprising results: some variables you declared may not exist at all; flow of control may briefly
+move where you did not expect it; some statements may not be executed because they compute constant
+results or their values are already at hand; some statements may execute in different places because
+they have been moved out of loops.
+
+Nevertheless it proves possible to debug optimized output. This makes it reasonable to use the
+optimizer for programs that might have bugs.
+
+The following options are useful when GCC is generated with the capability for more than one
+debugging format. 
+
+<code-gen-options>
+-fpic
+Generate position-independent code (PIC) suitable for use in a shared library, if supported for the
+target machine. Such code accesses all constant addresses through a global offset table (GOT). The
+dynamic loader resolves the GOT entries when the program starts (the dynamic loader is not part of
+    GCC; it is part of the operating system). If the GOT size for the linked executable exceeds a
+machine-specific maximum size, you get an error message from the linker indicating that -fpic does
+not work; in that case, recompile with -fPIC instead. (These maximums are 8k on the SPARC and 32k on
+    the m68k and RS/6000. The 386 has no such limit.)
+
+Position-independent code requires special support, and therefore works only on certain machines.
+For the 386, GCC supports PIC for System V but not for the Sun 386i. Code generated for the IBM
+RS/6000 is always position-independent.
+
+When this flag is set, the macros __pic__ and __PIC__ are defined to 1. 
+
+<search-options>
+https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html#Directory-Options
+
+-Ldir
+Add directory dir to the list of directories to be searched for -l. 
+note: used when compile.
+
+-Lsearchdir 
+--library-path=searchdir 
+
+Add path searchdir to the list of paths that ld will search for archive libraries and ld control
+scripts. You may use this option any number of times. The directories are searched in the order in
+which they are specified on the command line. Directories specified on the command line are searched
+before the default directories. All -L options apply to all -l options, regardless of the order in
+which the options appear. 
+
+If searchdir begins with =, then the = will be replaced by the sysroot prefix, a path specified when
+the linker is configured. 
+
+The default set of paths searched (without being specified with `-L') depends on which emulation
+mode ld is using, and in some cases also on how it was configured. See Environment. 
+
+The paths can also be specified in a link script with the SEARCH_DIR command. Directories specified
+this way are searched at the point in which the linker script appears in the command line. 
+
+<link-options>
+http://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
+
+-llibrary
+-l library
+Search the library named library when 'linking'. 
+
+It makes a difference where in the command you write this option; the linker searches and processes
+libraries and object files in the order they are specified. Thus, 'foo.o -lz bar.o' searches library
+'z' after file foo.o but before bar.o. If bar.o refers to functions in 'z', those functions may not
+be loaded.
+
+The linker searches a standard list of directories for the library, which is actually a file named
+liblibrary.a. The linker then uses this file as if it had been specified precisely by name.
+
+The directories searched include several standard system directories plus any that you specify with
+-L.
+
+Normally the files found this way are library files-archive files whose members are object files.
+The linker handles an archive file by scanning through it for members which define symbols that have
+so far been referenced but not defined. But if the file that is found is an ordinary object file, it
+is linked in the usual fashion. The only difference between using an -l option and specifying a file
+name is that -l surrounds library with 'lib' and '.a' and searches several directories.
+
+-shared
+Produce a shared object which can then be linked with other objects to form an executable. Not all
+systems support this option. For predictable results, you must also specify the same set of options
+used for compilation (-fpic, -fPIC, or model suboptions) when you specify this linker option.1 
+
+-Wl,option
+Pass option as an option to the linker. If option contains commas, it is split into multiple options
+at the commas. You can use this syntax to pass an argument to the option. For example,
+-Wl,-Map,output.map passes -Map output.map to the linker. When using the GNU linker, you can also
+get the same effect with -Wl,-Map=output.map. 
+
+-nostdlib
+Do not use the standard system startup files or libraries when linking. No startup files and only
+the libraries you specify are passed to the linker, and options specifying linkage of the system
+libraries, such as -static-libgcc or -shared-libgcc, are ignored.
+
+The compiler may generate calls to memcmp, memset, memcpy and memmove. These entries are usually
+resolved by entries in libc. These entry points should be supplied through some other mechanism when
+this option is specified.
+
+One of the standard libraries bypassed by -nostdlib and -nodefaultlibs is libgcc.a, a library of
+internal subroutines which GCC uses to overcome shortcomings of particular machines, or special
+needs for some languages. (See Interfacing to GCC Output, for more discussion of libgcc.a.) In most
+cases, you need libgcc.a even when you want to avoid other standard libraries. In other words, when
+you specify -nostdlib or -nodefaultlibs you should usually specify -lgcc as well. This ensures that
+you have no unresolved references to internal GCC library subroutines. (An example of such an
+internal subroutine is '__main', used to ensure C++ constructors are called; see collect2.) 
 
 
 ={============================================================================
@@ -23859,6 +23946,9 @@ Lambdas, introduced with C++11, define a way to specify functional behavior 'ins
 or statement. You can define objects that represent functional behavior and pass these objects as
 unnamed 'inline' function to algorithms to be used as predicates or for other purposes.
 
+In general, lambdas provide the first convenient, readable, fast, and maintainable approach to use
+STL algorithms.
+
 Like any other function, lambda has return, parameter, and function body but unlike function, be
 defined inside a function.
 
@@ -23889,7 +23979,7 @@ stable_sort( coll.begin(), coll.end(),
     [](const string &a, const string &b)
     { return a.size() < b.size(); } );
 
-<1> To solve the above problem, use lambda
+<1> To solve the above problem, use lambda. note: Here the lambda is 'temporary' function objects.
 
 auto wc = find_if( words.begin(), words.end(),
                [sz](const string &a)
@@ -23937,14 +24027,128 @@ on local nonstatic variables.
 <lambda-capture>
 When define lambda, compiler generates a new unnamed class so when pass it to a function, defines
 both a new type and an object of that type. So the data member of a lambda are initialized when a
-lambda object is created.
+lambda object is created. That means that the variable captured by a lambda is
+'local' to a lambda.
 
 <capture-by-value-or-reference>
+v1 = 42;
 auto f = [v1] { return v1; };
+v1 = 0;
+auto j = f();     // j is 42. f is callable
+
+v1 = 42;
 auto f = [&v1] { return v1; };
+v1 = 0;
+auto j = f();     // j is 0.
+
+Unlike parameters, the value of captured variable is copied when the lambda is created, not when it
+is called (executed). When pass lambda such as return a lambda, careful for the same reason that a
+function must not return a reference to a local variable. If possible, avoid capturing pointers or
+reference.
+
+<implicit-capture>
+Let the compiler 'infer' variables we use from the code in the lambda body. Use an & or = in the
+capture list. The revised is:
+
+// 1. get an iterator to the first element whose size is >= sz
+auto wc = find_if( words.begin(), words.end(),
+               [=](const string &a)
+               { return a.size() >= sz; } );
+
+<limits-of-lambda>
+Cannot be used sorting-criterion for associative containers and have state as function object does.
 
 
-Suppose that you search in a collection for the first element with a value that is between x and y
+{function-bind}
+C++11 from boost::bind. function adaptor. Defined in functional header and takes a collable objects
+and generate a new callable that 'adapt' the parameter list of the original.
+
+auto newCallable = bind( callable, arg_list );
+
+When call newCallable, newCallable calls callable, 'passing' the arguments in arg_list.
+
+<arg_list>
+_n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. Thas is _1 is
+first parameter in newCallable.
+
+bool check_size( const string &s, string::size_type sz )
+{
+  return s.size() >= sz;
+}
+
+
+auto check6 = bind( check_size, _1, 6 );
+
+string s = "hello";
+bool b1 = check6(s);    // calls check_size(s, 6)
+
+auto wc = find_if( words.begin(), words.end(), 
+                     [sz] (const string &a)
+                     { return a.size() >= sz; } );
+
+auto wc = find_if( words.begin(), words.end(), 
+                     bind(check_size, _1, 6) );
+
+<placeholder-namespace>
+placeholder is defined in std::placeholders namespace in functional header.
+
+sample.cpp:20:25: error: ‘_1’ was not declared in this scope
+
+#include<iostream>
+#include<vector>
+#include<string>
+#include<algorithm>
+#include<functional>
+
+using namespace std;
+using namespace std::placeholders;
+
+bool check_size( const string &s, string::size_type sz )
+{
+  return s.size() >= sz;
+}
+
+int main()
+{
+  vector<string> coll{"over", "quick", "red", 
+    "fox", "jumps", "red", "the", "slow", "turtle", "the"};
+
+  sort( coll.begin(), coll.end() );
+
+  auto wc = find_if( coll.begin(), coll.end(),
+      bind( check_size, _1, 4 ));
+
+  cout << "wc = " << *wc << endl;
+}
+
+<rearrange-arguments>
+Can use bind to bind or rearrange the parameters in the given collable.
+
+auto g = bind( f, a, b, _2, c, _1 );      
+g(X, Y); // f( a, b, Y, c, X );
+
+As an example, invert the meaning of isShorter.
+
+bool isShorter(const string &s1, const string &s2)
+{
+  return s1.size() < s2.size();
+}
+
+sort( words.begin(), words.end(), isShorter );
+sort( words.begin(), words.end(), bind( isShorter, _2, _1 ));
+
+<reference>
+To use reference in bind:
+
+for_each( words.begin(), words.end(), bind( print, ref(os), _1, ' ' ));
+
+
+{lambda-vs-others}
+Suppose that you search in a collection for the first element with a value that is between x and y.
+
+If need to use in more than one or two places, use function than a lambda. However, it is not easy
+to write function  to replace a lambda that captures local variables. For example, find_if takes
+unary predicate and no way to pass more than one as this example.
 
 #include <algorithm>
 #include <deque>
@@ -23959,19 +24163,18 @@ int main()
   int x = 5;
   int y = 12;
 
-  auto pos = find_if (coll.cbegin(), coll.cend(), // range
-      [=](int i) { // search criterion
+  auto pos = find_if (coll.cbegin(), coll.cend(),  // range
+      [=](int i) {                                 // search criterion
          return i > x && i < y;
       });
 
   cout << "first elem >5 and <12: " << *pos << endl;
 }
 
-<why-lambda>
-Now compare this way to search for "the first element >5 and <12" with the other approaches provided
-by C++ before lambdas were introduced
+Now compare this way to search for "the first element >5 and <12" with the 'other' approaches
+provided by C++ before lambdas were introduced
 
-# handwritten loop
+<1> handwritten loop
 
 // find first element > x and < y
 vector<int>::iterator pos;
@@ -23981,38 +24184,28 @@ for (pos = coll.begin() ; pos != coll.end(); ++pos) {
   }
 }
 
-# predicate
+<2> predicate
 
 bool pred (int i)
 {
   return i > x && i < y;
 }
 
-pos = find_if (coll.begin(), coll.end(), pred);
+pos = find_if(coll.begin(), coll.end(), pred);
 
-<key> You have to scroll up to find out what find_if() exactly is looking for
-<key> C++ compilers optimize lambdas better than they do ordinary functions.
+note: 
+1. You have to scroll up to find out what find_if() exactly is looking for
+2. C++ compilers optimize lambdas better than they do ordinary functions.
 
-# function object
+<3> function object
+ 
+<4> bind
 
-# bind
+pos = find_if (coll.begin(), coll.end(),  // range
+            bind(logical_and<bool>(),     // search criterion
+               bind(greater<int>(),_1,x), // _1 > x
+               bind(less<int>(),_1,y)));  // _1 < y
 
-pos = find_if (coll.begin(), coll.end(), // range
-            bind(logical_and<bool>(), // search criterion
-               bind(greater<int>(),_1,x),
-               bind(less<int>(),_1,y)));
-
-To summarize, lambdas provide the first convenient, readable, fast, and maintainable approach to use
-STL algorithms.
-
-<capture>
-By specifying = as a capture inside [=], you pass the symbols, which are valid where the lambda gets
-declared, by value into the body of the lambda. Thus, inside the lambda, you have read access to the
-variables x and y declared in main(). With [&], you could even pass the values by reference so that
-inside the lambda.
-
-<limits-of-lambda>
-Cannot be used sorting-criterion for associative containers and have state as function object does.
 
 
 {function-object}
