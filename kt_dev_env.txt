@@ -115,8 +115,10 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_034| diff, difftool
 |kt_dev_env_git_035| show
 |kt_dev_env_git_036| commit
+|kt_dev_env_git_037| commit: ranges and double dot
 
-|kt_dev_env_git_108| remote: origin and master, push and pull.
+|kt_dev_env_git_107| remote: origin and master, push and pull.
+|kt_dev_env_git_108| remote: check before push
 |kt_dev_env_git_109| remote: tracking branch
 |kt_dev_env_git_110| remote: inspect and ls-remote
 |kt_dev_env_git_111| remote: push errors. bare
@@ -4482,13 +4484,43 @@ http://git-scm.com/book
 {gui-client}
 <gitk>
 
-note: cannot show tree so use qgit instead.
+--all
+    Show all refs (branches, tags, etc.).
 
-you may want to take a look at a Tcl/Tk program called gitk that is distributed with Git. Gitk is
-basically a visual git log tool, and it accepts nearly all the filtering options that git log does. 
+The yellow dot next to the top commit indicates that is the snapshot currently in my working folder
+(referred to as HEAD) 
 
+<reload>
+http://gitolite.com/gitk.html#bcpc
+If you're doing stuff on the command line in another screen, and want those changes reflected in
+gitk, hit F5.
 
-git-gui
+F5 updates the refs and shows you their new values while still showing you the old ones. It is most
+useful after operations like rebase, because you can compare the previous branch head with the new
+one.
+
+Ctrl-F5, on the other hand, is a total refresh, throwing away everything that was previously shown.
+
+<browse-diff>
+At any time, the bottom left pane shows a "diff", usually of the current commit shown in the top
+pane. The bottom right pane (by default) shows a list of files in this "diff".
+
+spacebar: move forward 1 page in the diff view
+backspace/delete: ditto, but backward
+"f": move to next file in the diff. Both the bottom left and right panes will show a change when you do this.
+"b": ditto, but previous file
+click a file in the bottom right pane: scrolls the left pane to show that file's changes
+
+5.1 running a diff between two arbitrary commits
+
+left click on the "new" commit
+navigate using the scrollbar (no keyboard shortcut, AFAICT) to some other commit
+right-click and choose "Diff this -> selected"
+
+Now you can browse that diff using the keyboard or mouse. Note that any movement that selects a
+different commit (like pressing an arrow key) will change the view to show that commit, so while
+examining this "diff", stick to these keys.
+
 
 <qgit>
 sudo apt-get install qgit
@@ -6063,6 +6095,27 @@ assumed to be HEAD
 
 git diff 04a2 b36f > patch.diff
 
+<merge-base>
+Rather than creating a patch of the entire branch, we can let GIT determine the 'point' at which our
+experimental branch diverged from the master branch using the git merge-base command:
+
+git diff $(git merge-base <public branch> <experimental branch>) > <output file>
+
+git merge-base will determine the most recent common commit between 2 branches. It will be defaulted
+to HEAD, and since the experimental branch checked out, HEAD will be the most recent commit of the
+experimental branch.
+
+$ git diff $(git merge-base master experimental) > anotherPatch.diff
+
+<apply-patch>
+
+$ git apply patch.diff
+
+<no-history>
+Although applying a patch in this way will exactly replicate content, no commit history will be
+replicated. This means that even if the patch you create spans several commits, it will appear as a
+single set of changes when applied.
+
 
 ={============================================================================
 *kt_dev_env_git_035* show
@@ -6074,7 +6127,7 @@ $ git show --name-only {commit}
 
 
 ={============================================================================
-*kt_dev_env_git_036* git commit
+*kt_dev_env_git_036* commit
 
 {git-commit}
 $ git commit
@@ -6094,7 +6147,85 @@ $ git commit -am 'added new benchmarks'
 
 
 ={============================================================================
-*kt_dev_env_git_108* remote servers, branches, push and pull.
+*kt_dev_env_git_037* commit: ranges and double dot
+
+From 7.1 Git Tools - Revision Selection
+
+How to specify or query ranges of commits using range specifications.
+
+{double-dot}
+This basically asks Git to resolve a range of commits that are reachable from one commit but aren't
+reachable from another.
+
+A  B  E  F  <- master
+      C  D  <- experiment
+
+<example>
+To see what is in your experiment branch that hasn't yet been merged into your master branch: that
+means "all commits reachable by experiment that aren't reachable by master."
+
+$ git log master..experiment
+D
+C
+
+To see the opposite - all commits in master that aren¿t in experiment - you can reverse the branch
+names.
+
+$ git log experiment..master
+F
+E
+
+This is useful if you want to keep the experiment branch up to date and preview what you're about to
+merge in.
+
+<multiple-points>
+Git allows you to do this by using either the ^ character or --not before any reference from which
+you don't want to see reachable commits. Thus these three commands are equivalent:
+
+$ git log refA..refB
+$ git log ^refA refB
+$ git log refB --not refA
+
+
+This is nice because with this syntax you can specify more than two references in your query, which
+you cannot do with the double-dot syntax. For instance, if you want to see all commits that are
+reachable from refA or refB but not from refC, you can type one of these:
+
+$ git log refA refB ^refC
+$ git log refA refB --not refC
+
+This makes for a very powerful revision query system that should help you figure out what is in your
+branches.
+
+
+{triple-dot}
+The last major range-selection syntax is the triple-dot syntax, which specifies all the commits that
+are reachable by 'either' of two references but 'not' by both of them. Look back at the example
+above. If you want to see what is in master or experiment but not any common references, you can run
+
+$ git log master...experiment
+F
+E
+D
+C
+
+Again, this gives you normal log output but shows you only the commit information for those four
+commits, appearing in the traditional commit date ordering.
+
+A common switch to use with the log command in this case is --left-right, which shows you which side
+of the range each commit is in. This helps make the data more useful:
+
+$ git log --left-right master...experiment
+< F
+< E
+> D
+> C
+
+With these tools, you can much more easily let Git know what commit or commits you want to inspect.
+
+
+={============================================================================
+*kt_dev_env_git_107* remote: servers, branches, push and pull.
 
 {to-list-remotes}
 $ git remote -v
@@ -6255,6 +6386,23 @@ Switched to a new branch "serverfix"
 (-b means to create a local branch and switch to it)
 
 This gives you a local branch that you can work on that starts where origin/serverfix is.
+
+
+={============================================================================
+*kt_dev_env_git_108* remote: check commits before push
+
+From double-dot example.
+
+Very frequent use of this syntax is to see what you're about to push to a remote:
+
+$ git log origin/master..HEAD
+
+This command shows you any commits in your current branch that aren't in the master branch on your
+origin remote. The commits listed by this command are the commits that will be transferred to the
+server.
+
+You can also leave off one side of the syntax to have Git assume HEAD. For example, you can get the
+same results as in the previous example by typing git log origin/master..
 
 
 ={============================================================================

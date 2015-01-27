@@ -29,6 +29,7 @@ KT KB. Linux
 |kt_linux_bash_020| bash: list options
 |kt_linux_bash_021| bash: test exit status
 |kt_linux_bash_022| bash: && and ||
+|kt_linux_bash_023| bash: debug
 
 |kt_linux_bash_100| bash: config: colour prompt
 
@@ -52,7 +53,7 @@ KT KB. Linux
 |kt_linux_tool_017| ldd
 |kt_linux_tool_018| ls
 |kt_linux_tool_019| strace
-|kt_linux_tool_020| time
+|kt_linux_tool_020| time and date
 |kt_linux_tool_021| chmod
 |kt_linux_tool_022| mknod
 |kt_linux_tool_023| wc
@@ -63,6 +64,7 @@ KT KB. Linux
 |kt_linux_tool_028| sed
 |kt_linux_tool_029| pyserial and grabserial
 |kt_linux_tool_030| diff and patch
+|kt_linux_tool_031| tar
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -1225,7 +1227,7 @@ redirected to STDOUT. By redirecting STDOUT to a file, you also redirect STDERR.
 list &> file
 
 Bash allows for both standard output and standard error to be redirected to the file. This is the
-equivalent of > FILE 2>&1
+equivalent of > FILE 2>&1. note: cannot use tee in this case.
 
 <example> 
 prog1 > /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log 2>&1
@@ -1426,6 +1428,14 @@ follows:
 
 Similar to the "&&" expression which indicates what to do if the test proves true, "||" specifies
 what to do if the test is false.
+
+
+={============================================================================
+*kt_linux_bash_023* bash: debug
+
+-x    " to start up the subshell in debug mode
+
+#!/bin/bash -ex
 
 
 ={============================================================================
@@ -2136,7 +2146,7 @@ $ strace ./appname
 
 
 ={============================================================================
-*kt_linux_tool_020* time
+*kt_linux_tool_020* time and date
 
 kit@kit-vb:~/tizencore$ time -f "%E real,%U user,%S sys" ls -Fs
 -f: command not found
@@ -2154,6 +2164,14 @@ kit@kit-vb:~/tizencore$
 Users of the bash shell need to use an explicit path in order to run the external time command and
 not the shell builtin variant. On system where time is installed in /usr/bin, the first example
 would become /usr/bin/time wc /etc/hosts
+
+
+{date}
+$ date --rfc-3339=s
+2015-01-27 13:49:11+00:00
+
+$ date
+Tue Jan 27 13:49:19 UTC 2015
 
 
 ={============================================================================
@@ -2675,6 +2693,52 @@ diff -Naur darwin-spk-1.18_orig/target/device/Sky/ams-drx890/kernel-debug.config
          exit 1
       fi
       ;;
+
+
+={============================================================================
+*kt_linux_tool_031* zip and tar
+
+{zip}
+-d --decompress --uncompress 
+-l --list
+
+" maintain the original file
+       -c --stdout --to-stdout
+              Write output on standard output; keep original files unchanged.  If there are
+              several input files, the output consists of a sequence of independently  com-
+              pressed  members.  To  obtain better compression, concatenate all input files
+              before compressing them.
+
+gzip -c ramdisk_rootfs_img > ramdisk_rootfs_img.gz
+
+
+{tar}
+" maintain permissions when create a archive
+% tar cvzfp xxx.tgz ./
+
+" to extract
+% tar zxvf *.tgz
+
+" to extract bz file
+% tar xjf *.bz2
+
+" to create bzip2
+% tar cvjfp filename
+% bzip2 -d gdb.bz2
+
+" to list
+% tar tvf 
+
+<C-option>
+-C changes dir
+
+tar -cjvf "$SPK_TARBALL_MW" -C nds-mw.
+
+Since when run $nds-mw> tar -cjvf xx.bz . then there will be xx.bz which is empty in the archive. To
+get around this, use -C to move dir and do zip but the output will be make before moving a dir.
+
+<symlink>
+When use tar on dir which is a symlink, then tar don not work. Any options?
 
 
 # ============================================================================
@@ -7675,12 +7739,15 @@ Since a shared memory segment becomes part of a process's user-space memory, no 
 is required for IPC. note: means the fastest IPC.
 
 On the other hand, the fact that IPC using shared memory is not mediated by the kernel means that,
-typically, some method of synchronization is required
+   typically, some method of synchronization is required so that processes don't simultaneously
+   access the shared memory. e.g., two processes performing simultaneous updates, or one process
+   fetching data from the shared memory while another process is in the middle of updating it.
 
 
 {interfaces}
 <shmget>
-The contents of a newly created shared memory segment are initialized to 0.
+To create a new shared memory segment or obtain the identifier of an existing segment. note: The
+contents of a newly created shared memory segment are initialized to 0.
 
 #include <sys/shm.h>
 
@@ -7694,7 +7761,7 @@ IPC_CREAT
 If no segment with the specified key exists, create a new segment.
 
 to-open:
-If we are using shmget() to obtain the identifier of an existing segment, then size has no effect on
+If we are using shmget() to obtain the identifier of an existing segment, then size has 'no' effect on
 the segment, but it 'must' be less than or equal to the size of the segment.
 
 <shmat>
@@ -7715,8 +7782,11 @@ It reduces the portability of an application and the particular address will be 
 
 As its function result, shmat() returns the address at which the shared memory segment is attached.
 Typically, we assign the return value from shmat() to a pointer to some programmer-defined
-structure, in order to impose that structure on the segment If SHM_RDONLY is not specified, the
-memory can be both read and modified.
+structure, in order to impose that structure on the segment. 
+
+If SHM_RDONLY is not specified, the memory can be both read and modified.
+
+note: Q: seen shmat(, , 0), that is shmflg is 0. what is it?
 
 <shmdt>
 When a process no longer needs to access a shared memory segment, it can call shmdt() to detach the
@@ -7731,6 +7801,12 @@ Returns 0 on success, or -1 on error
 Detaching a shared memory segment is not the same as deleting it. Deletion is performed using the
 shmctl() IPC_RMID operation
 
+<child-and-exec>
+A child created by fork() inherits its parent's attached shared memory segments. Thus, shared memory
+provides an easy method of IPC between parent and child. During an exec(), all attached shared
+memory segments are detached. Shared memory segments are also automatically detached on process
+termination.
+
 <shmctl> 
 #include <sys/shm.h>
 
@@ -7741,7 +7817,7 @@ Returns 0 on success, or -1 on error
 IPC_RMID <deletion>
 Mark the shared memory segment and its associated shmid_ds data structure for deletion. If no
 processes currently have the segment attached, deletion is immediate; otherwise, the segment is
-removed after all processes have detached from it (i.e., when the value of the shm_nattch field in
+removed 'after' all processes have detached from it (i.e., when the value of the shm_nattch field in
 the shmid_ds data structure falls to 0).
 
 shmctl(id, IPC_RMID, NULL);   note: buf must be NULL.
@@ -7781,7 +7857,7 @@ the calling process on each successful shmat() or shmdt().
 
 shm_nattch
 This field counts the number of processes that currently have the segment attached. It is
-initialized to 0 when the segment is created, and then incremented by each successful shmat() and
+initialized to 0 when the segment is 'created', and then incremented by each successful shmat() and
 decremented by each successful shmdt(). 
 
 
