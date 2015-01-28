@@ -8,7 +8,7 @@ KT KB. Linux
 
 |kt_linux_bash_000| bash: reference
 |kt_linux_bash_001| bash: history and reverse search
-|kt_linux_bash_002| bash: variable
+|kt_linux_bash_002| bash: variable <substitution>
 |kt_linux_bash_003| bash: bash: if and test command primaries <string-comparison>
 |kt_linux_bash_004| bash: globbing (wildcard)
 |kt_linux_bash_005| bash: quoting <grep>
@@ -30,6 +30,8 @@ KT KB. Linux
 |kt_linux_bash_021| bash: test exit status
 |kt_linux_bash_022| bash: && and ||
 |kt_linux_bash_023| bash: debug
+|kt_linux_bash_024| bash: builtin: exec
+|kt_linux_bash_025| bash: builtin: set
 
 |kt_linux_bash_100| bash: config: colour prompt
 
@@ -65,6 +67,7 @@ KT KB. Linux
 |kt_linux_tool_029| pyserial and grabserial
 |kt_linux_tool_030| diff and patch
 |kt_linux_tool_031| tar
+|kt_linux_tool_032| split
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -445,7 +448,13 @@ EOF
 The unset built-in is used to destroy arrays or member variables of an array:
 
 
-{substitution}
+{parameter-expansion}
+3.5.3 Shell Parameter Expansion
+
+The '$' character introduces parameter expansion, command substitution, or arithmetic expansion. The
+parameter name or symbol to be expanded may be enclosed in 'braces', which are 'optional' but serve to
+protect the variable to be expanded from characters immediately following it which could be
+interpreted as part of the name. 
 
 ${parameter:-word} 
 If parameter is null or unset, word is substituted for parameter. The value of parameter does not
@@ -487,7 +496,11 @@ test
 $
 
 
-{substring}
+<substring-expansion>
+
+${parameter:offset}
+${parameter:offset:length}
+
 The LENGTH parameter defines how many characters to keep, starting from the first character after
 the offset point. If LENGTH is omitted, the remainder of the variable content is taken
 
@@ -498,6 +511,38 @@ $ echo ${STRING:4}
 isaverylongname
 $ echo ${STRING:6:5}
 avery
+
+
+If parameter is @, the result is length positional parameters beginning at offset. A negative offset
+is taken relative to one greater than the greatest positional parameter, so an offset of -1
+evaluates to the last positional parameter. It is an expansion error if length evaluates to a number
+less than zero.
+
+The following examples illustrate substring expansion using positional parameters:
+
+$ set -- 1 2 3 4 5 6 7 8 9 0 a b c d e f g h
+$ echo ${@:7}
+7 8 9 0 a b c d e f g h
+$ echo ${@:7:0}
+
+$ echo ${@:7:2}
+7 8
+
+$ echo ${@:7:-2}
+bash: -2: substring expression < 0
+
+$ echo ${@: -7:2}
+b c
+
+note: this shows all args
+$ echo ${@}
+1 2 3 4 5 6 7 8 9 0 a b c d e f g h
+
+$ echo ${@:0}
+./bash 1 2 3 4 5 6 7 8 9 0 a b c d e f g h
+
+$ echo ${@:0:2}
+./bash 1
 
 
 ={============================================================================
@@ -1233,9 +1278,10 @@ list &> file
 Bash allows for both standard output and standard error to be redirected to the file. This is the
 equivalent of > FILE 2>&1. note: cannot use tee in this case.
 
-<example> 
+<example> the all are the same
 prog1 > /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log 2>&1
 prog1 2>&1 | tee /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log
+prog1 |& tee /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log
 
 
 ={============================================================================
@@ -1274,6 +1320,118 @@ a command that must be read from a disk file, if you are in the Bourne shell.
 
 ={============================================================================
 *kt_linux_bash_019* bash: run multiple commands
+
+3.7.3 Command Execution Environment
+
+The shell has an execution environment, which consists of the following:
+
+open files inherited by the shell at invocation, as modified by redirections supplied to the exec builtin
+
+the current working directory as set by cd, pushd, or popd, or inherited by the shell at invocation
+the file creation mode mask as set by umask or inherited from the shell's parent
+
+current traps set by trap
+
+shell parameters that are set by variable assignment or with set or inherited from the shell's
+parent in the environment
+
+shell functions defined during execution or inherited from the shell's parent in the environment
+options enabled at invocation (either by default or with command-line arguments) or by set
+options enabled by shopt (see The Shopt Builtin)
+shell aliases defined with alias (see Aliases)
+
+various process IDs, including those of background jobs (see Lists), the value of $$, and the value of $PPID 
+
+<separate>
+When a simple command other than a builtin or shell function is to be executed, it is invoked in a
+'separate' execution environment that consists of the following. Unless otherwise noted, the values
+are inherited from the shell.
+
+- the shell's open files, plus any modifications and additions specified by redirections to the command
+
+- the current working directory
+- the file creation mode mask
+
+- note: shell variables and functions marked for export, along with variables exported for the
+command, passed in the environment (see Environment)
+
+A command invoked in this separate environment cannot affect the shell's execution environment.
+
+Command substitution, commands grouped with parentheses, and asynchronous commands are invoked in a
+subshell environment that is a duplicate of the shell environment, except that traps caught by the
+shell are reset to the values that the shell inherited from its parent at invocation. 
+
+Builtin commands that are invoked as part of a pipeline are also executed in a 'subshell' environment.
+Changes made to the subshell environment cannot affect the shell's execution environment.
+
+Subshells spawned to execute command substitutions inherit the value of the -e option from the parent shell. When not in POSIX mode, Bash clears the -e option in such subshells.
+
+
+3.2.2 Pipelines
+
+A pipeline is a sequence of simple commands separated by one of the control operators | or |&.
+
+The format for a pipeline is
+
+[time [-p]] [!] command1 [ | or |& command2 ] ...
+
+The output of each command in the pipeline is connected via a pipe to the input of the next command.
+That is, each command reads the previous command's output. This connection is performed before any
+redirections specified by the command.
+
+If |& is used, command1's standard error, in addition to its standard output, is connected to
+command2's standard input through the pipe; it is shorthand for 2>&1 |. This implicit redirection of
+the standard error to the standard output is performed after any redirections specified by the
+command.
+
+If the pipeline is 'not' executed asynchronously (see Lists), the shell 'waits' for all commands in
+the pipeline to complete.
+
+'each' command in a pipeline is executed in its own subshell (see Command Execution Environment). The
+exit status of a pipeline is the exit status of the last command in the pipeline, unless the
+pipefail option is enabled (see The Set Builtin). 
+
+
+3.2.3 Lists of Commands
+
+A list is a sequence of one or more pipelines separated by one of the operators ;, &, &&, or ||, and
+optionally terminated by one of ;, &, or a newline. 
+
+Commands separated by a ; are executed 'sequentially'; the shell waits for each command to terminate
+in turn. The return status is the exit status of the last command executed. 
+
+If a command is terminated by the control operator &, the shell executes the command asynchronously
+in a subshell. This is known as executing the command in the background.
+
+
+3.2.4.3 Grouping Commands
+
+Bash provides two ways to group a list of commands to be executed as a unit. When commands are
+grouped, redirections may be applied to the entire command list. For example, the output of all the
+commands in the list may be redirected to a single stream.
+
+()
+
+( list )
+
+Placing a list of commands between parentheses causes a 'subshell' environment to be created (see
+    Command Execution Environment), and each of the commands in list to be executed in that
+subshell. Since the list is executed in a subshell, variable assignments do not remain in effect
+after the subshell completes.
+
+{}
+
+{ list; }
+
+Placing a list of commands between curly braces causes the list to be executed in the 'current'
+shell context. No subshell is created. The semicolon (or newline) following list is required. 
+
+In addition to the creation of a subshell, there is a subtle difference between these two constructs
+due to historical reasons. The braces are reserved words, so they must be separated from the list by
+blanks or other shell metacharacters. The parentheses are operators, and are recognized as separate
+tokens by the shell even if they are not separated from the list by whitespace.
+
+The exit status of both of these constructs is the exit status of list. 
 
 note: must be spaces between {}.
 
@@ -1445,17 +1603,34 @@ $
 *kt_linux_bash_022* bash: && and ||
 
 if [ "$(whoami)" != 'root' ]; then
-   echo "You have no permission to run $0 as non−root user."
+   echo "You have no permission to run $0 as non-root user."
    exit 1;
 fi
 
 With Bash, you can shorten this type of construct. The compact equivalent of the above test is as
 follows:
 
-[ "$(whoami)" != 'root' ] && ( echo you are using a non−privileged account; exit 1 )
+[ "$(whoami)" != 'root' ] && ( echo you are using a non-privileged account; exit 1 )
 
 Similar to the "&&" expression which indicates what to do if the test proves true, "||" specifies
 what to do if the test is false.
+
+<and-and-or>
+3.2.3 Lists of Commands
+
+An AND list has the form
+
+command1 && command2
+
+command2 is executed if, and only if, command1 returns an exit status of zero.
+
+An OR list has the form
+
+command1 || command2
+
+command2 is executed if, and only if, command1 returns a non-zero exit status.
+
+The return status of AND and OR lists is the exit status of the last command executed in the list. 
 
 
 ={============================================================================
@@ -1464,6 +1639,52 @@ what to do if the test is false.
 -x    " to start up the subshell in debug mode
 
 #!/bin/bash -ex
+
+
+={============================================================================
+*kt_linux_bash_024* bash: builtin: exec
+
+exec
+
+exec [-cl] [-a name] [command [arguments]]
+
+If command is supplied, it replaces the shell 'without' creating a new process. If the -l option is
+supplied, the shell places a dash at the beginning of the zeroth argument passed to command. This is
+what the login program does. The -c option causes command to be executed with an empty environment.
+If -a is supplied, the shell passes name as the zeroth argument to command. If command cannot be
+executed for some reason, a non-interactive shell exits, unless the execfail shell option is
+enabled. In that case, it returns failure. An interactive shell returns failure if the file cannot
+be executed. If no command is specified, redirections may be used to affect the current shell
+environment. If there are no redirection errors, the return status is zero; otherwise the return
+status is non-zero.
+
+
+={============================================================================
+*kt_linux_bash_025* bash: builtin: set
+
+4.3.1 The Set Builtin
+
+This builtin is so complicated that it deserves its own section. set allows you to change the values
+of shell options and set the positional parameters, or to display the names and values of shell
+variables.
+
+set
+
+    set [--abefhkmnptuvxBCEHPT] [-o option-name] [argument ...]
+    set [+abefhkmnptuvxBCEHPT] [+o option-name] [argument ...]
+
+If no options or arguments are supplied, set displays the names and values of all shell variables
+and functions, sorted according to the current locale, in a format that may be reused as input for
+setting or resetting the currently-set variables. Read-only variables cannot be reset. In POSIX
+mode, only shell variables are listed.
+
+When options are supplied, they set or unset shell attributes. Options, if specified, have the
+following meanings: 
+
+-- 
+
+If no arguments follow this option, then the positional parameters are unset. Otherwise, the
+positional parameters are set to the arguments, even if some of them begin with a -.
 
 
 ={============================================================================
@@ -2767,6 +2988,24 @@ get around this, use -C to move dir and do zip but the output will be make befor
 
 <symlink>
 When use tar on dir which is a symlink, then tar don not work. Any options?
+
+
+={============================================================================
+*kt_linux_tool_032* split
+
+       split [OPTION]... [INPUT [PREFIX]]
+
+       Output  fixed-size  pieces of INPUT to PREFIXaa, PREFIXab, ...; default size is 1000
+       lines, and default PREFIX is 'x'.  
+
+       -b, --bytes=SIZE
+              put SIZE bytes per output file
+
+$ split -b 200MB build-full-after-clean.log build-full-after-clean.
+
+build-full-after-clean.aa
+...
+build-full-after-clean.ci
 
 
 # ============================================================================
@@ -6136,8 +6375,8 @@ indicate the specific error condition. For example, fopen() returns a NULL point
 setting of errno depends on which underlying system call failed. The perror() and strerror()
   functions can be used to diagnose these errors.
 
-3. Other library functions don’t use errno at all. The method for determining the existence and
-cause of errors depends on the particular function and is documented in the function’s manual page.
+3. Other library functions don't use errno at all. The method for determining the existence and
+cause of errors depends on the particular function and is documented in the function's manual page.
 For these functions, it is a mistake to use errno, perror(), or strerror() to diagnose errors.
 
 <print-errnos>
@@ -7439,13 +7678,13 @@ $ sort < longlist | uniq -c            " Creates 2 processes in foreground group
 <---------------------------- session 400 ----------------------------------->
 bash (session/group leader)      find (group leader)        sort(group leader)
    PID  = 400                       PID  = 658                 PID  = 660
-   PPID = 399                       PPID = 400                 PPID = 400
+   PPID = 399                       PPID = <400>               PPID = <400>
    PGID = 400                       PGID = 658                 PGID = 660
    SID  = 400                       SID  = 400                 SID  = 400
 
                                  wc                         uniq
                                     PID  = 659                 PID  = 661
-                                    PPID = 400                 PPID = 400
+                                    PPID = <400>               PPID = <400>
                                     PGID = 658                 PGID = 660
                                     SID  = 400                 SID  = 400
 
@@ -7458,6 +7697,121 @@ background process group         background group           forground group
 <controlling-terminal>
 Forground PGID    = 660
 Controlling SID   = 400
+
+
+{setpgid}
+The setpgid() system call changes the process group of the process whose process ID is pid to the
+value specified in pgid.
+
+#include <unistd.h>
+int setpgid(pid_t pid, pid_t pgid);
+
+Returns 0 on success, or -1 on error
+
+If pid is specified as 0, the calling process's process group ID is changed. If pgid is specified as
+0, then the process group ID of the process specified by pid is made the same as its process ID.
+Thus, the following setpgid() calls are equivalent:
+
+setpgid(0, 0);
+setpgid(getpid(), 0);
+setpgid(getpid(), getpid());
+
+If the pid and pgid arguments specify the same process (i.e., pgid is 0 or matches the process ID of
+    the process specified by pid), then a 'new' process group is created, and the specified process
+is made the leader of the new group (i.e., the process group ID of the process is made the same as
+    its process ID). 
+
+note: In sum, by having 0 as pgid, pid and pgid will be the same, the new group will be created, and
+a process of pid will be a leader.
+
+If the two arguments specify different values (i.e., pgid is not 0 and doesn't match the process ID
+    of the process specified by pid), then setpgid() is being used to move a process between process
+groups.
+
+<restrictions>
+1. The pid argument may specify only the calling process or one of its children. Violation of this
+rule results in the error ESRCH.
+
+2. A process may not change the process group ID of one of its children after that child has
+performed an exec(). Violation of this rule results in the error EACCES. The rationale for this
+constraint is that it could confuse a program if its process group ID were changed after it had
+commenced.
+
+This restriction affects the programming of job-control shells, which have the following requirements:
+
+All of the processes in a job (i.e., a command or a pipeline) must be placed in a single process
+group. This step permits the shell to use killpg() (or, equivalently, kill() with a negative pid
+    argument) to simultaneously send job-control signals to 'all' of the members of the process
+group. Naturally, this step must be carried out before any job-control signals are sent.
+
+killpg - send signal to a process group
+
+#include <signal.h>
+
+int killpg(int pgrp, int sig);
+
+<example>
+The thing is that when a shell runs this line, creates a child process to run this application and
+in this application, it make a new background group and make it itself a group leader.
+
+note: In the first time, scripts runs "else" and set PPID with the pid that runs this script
+
+#!/bin/bash
+
+# to clean up A/V resources when a process dies, especially on a crash.
+#
+this_script=$0
+prefix=@prefix@
+parent_pid=${NEXUS_INSPECT_PARENT_PID:-}
+
+if [ -n "${parent_pid}" ];
+then
+        echo "Going to watch pid: ${parent_pid}"
+        while kill -0 "${parent_pid}" &>/dev/null;
+        do
+                usleep 500
+        done
+        echo "Pid ${parent_pid} has died. Going to cleanup."
+        ${prefix}/bin/nexus-inspect -r -p "${parent_pid}"
+else
+        [ -x "${prefix}/bin/nexus-inspect" ] && \
+            NEXUS_INSPECT_PARENT_PID=$$ \
+               ${prefix}/bin/setpgid-and-exec bash "${this_script}" &
+        exec "${@}"
+fi
+
+
+/*
+ * The purpose of this simple program is to launch a program in a new process
+ * group and have it become the group leader.
+ *
+ * This is useful in situations where the launched program fork()s and we want
+ * to be sure that when we kill it, all of it's children are also killed.
+ */
+
+#include <unistd.h>
+#include <error.h>
+#include <stdio.h>
+
+int main(int argc, char* argv[]) {
+
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <program> [ <arg> ... ]", argv[0]);
+    exit(1);
+  }
+
+  /* Create new group and become group leader */
+  if (setpgid(0, 0)) {
+    perror("setpgid failed!");
+    exit(2);
+  }
+
+  /* Execute the command */
+  if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
+    perror("exec failed!");
+    exit(3);
+  }
+}
 
 
 ={============================================================================
