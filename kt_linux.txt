@@ -25,7 +25,7 @@ KT KB. Linux
 |kt_linux_bash_016| bash: here document
 |kt_linux_bash_017| bash: redirection
 |kt_linux_bash_018| bash: ':' command
-|kt_linux_bash_019| bash: run multiple command
+|kt_linux_bash_019| bash: subshell and multiple command
 |kt_linux_bash_020| bash: list options
 |kt_linux_bash_021| bash: test exit status
 |kt_linux_bash_022| bash: && and ||
@@ -34,7 +34,7 @@ KT KB. Linux
 |kt_linux_bash_025| bash: builtin: set
 
 |kt_linux_bash_100| bash: config: colour prompt
-
+|kt_linux_bash_101| bash: config: how to know shell nesting level
 
 |kt_linux_tool_001| md5sum
 |kt_linux_tool_002| cut
@@ -128,7 +128,7 @@ KT KB. Linux
 |kt_linux_core_106| process: virtual memory
 |kt_linux_core_107| process: group
 
-|kt_linux_core_101| pthread {nptl}
+|kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
 |kt_linux_core_103| priority and schedule
 
@@ -136,8 +136,11 @@ KT KB. Linux
 |kt_linux_core_101| system resource limits
 
 |kt_linux_core_200| ipc
-|kt_linux_core_201| ipc: system v
+|kt_linux_core_201| ipc: system v <ipcs-command>
 |kt_linux_core_202| ipc: system v: shm
+
+|kt_linux_core_250| ipc: posix
+|kt_linux_core_251| ipc: posix: shm
 
 |kt_linux_core_101| ipc: pipe and fifo
 |kt_linux_core_103| ipc: which one to use {semaphores-versus-pthreads-mutexes}
@@ -175,6 +178,8 @@ KT KB. Linux
 |kt_linux_core_700| dbus
 |kt_linux_core_800| proc: /proc/mounts
 |kt_linux_core_801| proc: /proc/PID/status
+|kt_linux_core_802| proc: /proc/PID/maps
+|kt_linux_core_803| proc: /proc/sys/kernel
 
 |kt_linux_sysa_001| sys: cannot execute a file in cdrom, fstab
 
@@ -1319,7 +1324,7 @@ a command that must be read from a disk file, if you are in the Bourne shell.
 
 
 ={============================================================================
-*kt_linux_bash_019* bash: run multiple commands
+*kt_linux_bash_019* bash: subshell and multiple commands
 
 3.7.3 Command Execution Environment
 
@@ -1415,7 +1420,7 @@ commands in the list may be redirected to a single stream.
 ( list )
 
 Placing a list of commands between parentheses causes a 'subshell' environment to be created (see
-    Command Execution Environment), and each of the commands in list to be executed in that
+    Command Execution Environment), and each of the commands in list to be executed 'in' that
 subshell. Since the list is executed in a subshell, variable assignments do not remain in effect
 after the subshell completes.
 
@@ -1648,15 +1653,30 @@ exec
 
 exec [-cl] [-a name] [command [arguments]]
 
-If command is supplied, it replaces the shell 'without' creating a new process. If the -l option is
-supplied, the shell places a dash at the beginning of the zeroth argument passed to command. This is
-what the login program does. The -c option causes command to be executed with an empty environment.
-If -a is supplied, the shell passes name as the zeroth argument to command. If command cannot be
-executed for some reason, a non-interactive shell exits, unless the execfail shell option is
+Two uses:
+
+1. If command is supplied, it replaces the shell 'without' creating a new process. If command cannot
+be executed for some reason, a non-interactive shell exits, unless the execfail shell option is
 enabled. In that case, it returns failure. An interactive shell returns failure if the file cannot
-be executed. If no command is specified, redirections may be used to affect the current shell
-environment. If there are no redirection errors, the return status is zero; otherwise the return
-status is non-zero.
+be executed. 
+
+Replace the shell with a given program (executing it, not as new process)
+
+<example>
+As you can see, the subshell is replaced by echo.
+
+user@host:~$ PS1="supershell$ "
+supershell$ bash
+user@host:~$ PS1="subshell$ "
+subshell$ exec echo hello
+hello
+supershell$ 
+
+2. If no command is specified, redirections may be used to affect the current shell environment. If
+there are no redirection errors, the return status is zero; otherwise the return status is non-zero.
+
+Set redirections for the program to execute or for the current shell. If only redirections are
+given, the redirections affect the current shell without executing any program. 
 
 
 ={============================================================================
@@ -1691,6 +1711,24 @@ positional parameters are set to the arguments, even if some of them begin with 
 *kt_linux_bash_100* bash: config: colour prompt
 
 Uncomment the line that says force_color_prompt=yes then logout and back in in the .bashrc.
+
+
+={============================================================================
+*kt_linux_bash_101* bash: config: how to know shell nesting level
+
+SHLVL  Incremented by one each time an instance of bash is started.
+$ echo $SHLVL
+
+
+={============================================================================
+*kt_linux_bash_102* bash: config: prompt
+
+keitee@debian-keitee:~/github/kb$ echo $PS1
+\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\u@\h:\w\$
+
+PS1="\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\u@\h:\w\:$SHLVL$"
+
+keitee@debian-keitee:~/github/kb\:2$
 
 
 # ============================================================================
@@ -6348,6 +6386,8 @@ commence with E.
 
 man errno
 
+EINVAL          Invalid argument (POSIX.1)
+
 <when-to-check>
 Successful system calls and library functions 'never' reset errno to 0, so this variable may have a
 nonzero value as a consequence of an error from a previous call. Furthermore, SUSv3 permits a
@@ -7815,7 +7855,7 @@ int main(int argc, char* argv[]) {
 
 
 ={============================================================================
-*kt_linux_core_101* pthread
+*kt_linux_core_150* pthread
 
 POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard defines an API for
 creating and manipulating threads. So there is one posix standard but there are two implementation
@@ -8645,41 +8685,126 @@ apply to all of these mechanisms.
 
 
 {key-and-identifier}
-System V IPC keys are integer values represented using the data type key_t. The IPC get calls
-'translate' a key into the corresponding integer IPC identifier.
+System V IPC keys are integer values represented using the data type key_t which is analogous to a
+filename and get calls which is analogous to the open() system call used for files. The get calls
+'translate' a key into the corresponding integer IPC identifier which is analogous to a file
+descriptor.
 
+<identifier>
+There is, however, an important semantic difference. Whereas a file descriptor is a process
+attribute, an IPC identifier is a property of the object itself and is visible 'system'-wide.
+
+All processes accessing the same object use the same identifier. This means that if we know an IPC
+object already exists, we can skip the get call, provided we have some other means of knowing the
+identifier of the object.
+
+<flag>
+We specify the permissions to be placed on the new object as part of the final (flags) argument to
+the get call, using the 'same' bit-mask constants as are used for files.
+
+<key>
 So, how do we provide a unique key? (LPI, 45.2)
 
 One of three methods. Specify the IPC_PRIVATE constant as the key value to the get call when
-creating the IPC object, which always results in the creation of a new IPC object that is guaranteed
-to have a unique key.
+creating the IPC object, which 'always' results in the creation of a 'new' IPC object that is
+guaranteed to have a 'unique' key.
 
 
-<identifier>
-An IPC identifier is analogous to a file descriptor in that it is used in all subsequent system
-calls to refer to the IPC object. There is, however, an important semantic difference. Whereas a
-file descriptor is a process attribute, an IPC identifier is a property of the object itself and is
-visible 'system'wide.
+{ctl-calls}
+A few are generic to all IPC mechanisms. An example of a generic control operation is IPC_RMID,
+  which is used to delete an object.
+
+<when-deleted>
+For message queues and semaphores, deletion of the IPC object is immediate, and any information
+contained within the object is destroyed, regardless of whether any other process is still using the
+object.
+
+For files, if we remove the last link to a file, then the file is actually removed only after all
+open file descriptors referring to it have been closed. As with files, Deletion of shared memory
+objects occurs differently.
 
 
 {persistence}
-System V IPC objects have kernel persistence. Two disadvantages: system-imposed limit and may not
-able to easily determine which will be the last process requiring access to the object. The second
-is not for shm.
+System V IPC objects have 'kernel' persistence. Once created, an object continues
+to exist until it is explicitly deleted or the system is shut down. 
+
+Two disadvantages: 
+1. system-imposed limit. If we fail to remove unused objects, we may eventually encounter
+application errors as a result of reaching these limits.
+
+2. When deleting a message queue or semaphore object, a multiprocess application may not be able to
+easily determine which will be the last process requiring access to the object, and thus when the
+object can be safely deleted. Not for shm.
 
 
 {associated-data}
-The kernel maintains an associated data structure for each instance of a System V
-IPC object. 
+The kernel maintains an associated data structure for 'each' instance of a System V IPC object. 
 
 The associated data structure for an IPC object is initialized when the object is created via the
-appropriate get system call. Once the object has been created, a program can obtain a copy of this
+appropriate get system call. Once the object has been 'created', a program can obtain a copy of this
 data structure using the appropriate ctl system call, by specifying an operation type of IPC_STAT.
+
+<ipc_perm>
+As well as data specific to the type of IPC object, the associated data structure for all three IPC
+mechanisms includes a substructure, ipc_perm, that holds information used to determine permissions
+granted on the object
+
+EACCES.
+
+See LPI 45.3 for more about permission checks.
+
+<bypass-permission-check>
+The second user could bypass this check by specifying 0 for the second argument of the msgget()
+  call, in which case an error would occur only when the program attempted an operation requiring
+  write permission on the IPC object
+
+msgget(key, 0);
 
 
 {ipcs-command}
 The ipcs command lists the System V IPC objects that currently exist on the system. The ipcrm
 command is used to remove System IPC objects.
+
+ipcs - provide information on ipc facilities
+
+       ipcs [-asmq] [-tclup]
+
+       Resources may be specified as follows:
+       -m     shared memory segments
+       -q     message queues
+       -s     semaphore arrays
+       -a     all (this is the default)
+
+       The output format may be specified as follows:
+       -t     time
+       -p     pid
+       -c     creator
+       -l     limits
+       -u     summary
+
+$ ipcs -m -l
+
+The status flags indicate whether the region has been locked into RAM to prevent swapping (Section
+    48.7) and whether the region has been marked to be destroyed when all processes have detached
+it.
+
+<limitation>
+On Linux, ipcs(1) displays information 'only' about IPC objects for which we have read permission,
+   regardless of whether we own the objects.
+
+<non-portable-means>
+Linux provides two nonstandard methods of obtaining a list of all IPC objects on the system:
+
+1. files within the /proc/sysvipc directory that list all IPC objects
+
+/proc/sysvipc/msg
+/proc/sysvipc/sem
+/proc/sysvipc/shm
+
+2. the use of Linux-specific ctl calls.
+
+Unlike the ipcs command, these files always show all objects of the corresponding type, regardless
+of whether read permission is available on the objects.
 
 
 ={============================================================================
@@ -8711,14 +8836,25 @@ int shmget(key_t key, size_t size, int shmflg);
 
 Returns shared memory segment 'identifier' on success, or -1 on error
 
+<creator-and-size>
+The 'kernel' allocates shared memory in multiples of the system page size, so size is effectively
+rounded up to the next multiple of the system page size. If we are using shmget() to obtain the
+identifier of an existing segment, then size has 'no' effect on the segment, but it 'must' be less
+than or equal to the size of the segment.
+
 to-creat:
 
 IPC_CREAT
 If no segment with the specified key exists, create a new segment.
 
-to-open:
-If we are using shmget() to obtain the identifier of an existing segment, then size has 'no' effect on
-the segment, but it 'must' be less than or equal to the size of the segment.
+<when-get-errors>
+The real case which got EINVAL when called shmget. The below is from man page.
+
+EINVAL 
+
+A new segment was to be created and size < SHMMIN or size > SHMMAX, or no new segment was to be
+created, a segment with given key existed, but size is greater than the size of that segment.
+
 
 <shmat>
 #include <sys/shm.h>
@@ -8742,7 +8878,7 @@ structure, in order to impose that structure on the segment.
 
 If SHM_RDONLY is not specified, the memory can be both read and modified.
 
-note: Q: seen shmat(, , 0), that is shmflg is 0. what is it?
+note: Seen shmat(, , 0), that is shmflg is 0. what is it? See <bypass-permission-check>
 
 <shmdt>
 When a process no longer needs to access a shared memory segment, it can call shmdt() to detach the
@@ -8760,8 +8896,8 @@ shmctl() IPC_RMID operation
 <child-and-exec>
 A child created by fork() inherits its parent's attached shared memory segments. Thus, shared memory
 provides an easy method of IPC between parent and child. During an exec(), all attached shared
-memory segments are detached. Shared memory segments are also automatically detached on process
-termination.
+memory segments are detached. Shared memory segments are also 'automatically' detached on process
+'termination'.
 
 <shmctl> 
 #include <sys/shm.h>
@@ -8773,13 +8909,13 @@ Returns 0 on success, or -1 on error
 IPC_RMID <deletion>
 Mark the shared memory segment and its associated shmid_ds data structure for deletion. If no
 processes currently have the segment attached, deletion is immediate; otherwise, the segment is
-removed 'after' all processes have detached from it (i.e., when the value of the shm_nattch field in
-the shmid_ds data structure falls to 0).
+removed only 'after' all processes have detached from it (i.e., when the value of the shm_nattch
+    field in the shmid_ds data structure falls to 0). This is much closer to the situation with file
+deletion.
 
 shmctl(id, IPC_RMID, NULL);   note: buf must be NULL.
 
-The shared memory segment is removed 'only' after all processes using the segment detach it (using
-shmdt()). This is much closer to the situation with file deletion.
+Only one process needs to perform this step.
 
 IPC_STAT
 Place a copy of the shmid_ds data structure associated with this shared memory segment in the buffer
@@ -8817,15 +8953,108 @@ initialized to 0 when the segment is 'created', and then incremented by each suc
 decremented by each successful shmdt(). 
 
 
-{limits}
+{shm-in-virtual-memory}
+From LPI 48.5. To check shm details from /proc/PID/maps.
+
+The shared memory segments are attached starting at the virtual address 0x40000000 between heap and
+stack. Mapped mappings and shared libraries are also placed in this area. The address 0x40000000 is
+defined as the kernel constant TASK_UNMAPPED_BASE. Than can be changed.
+
+$ ./svshm_create -p 102400       # size
+9633796                          # shm id
+$ ./svshm_create -p 3276800
+9666565
+
+$ ./svshm_attach 9633796:0 9666565:0
+SHMLBA = 4096 (0x1000), PID = 9903
+1: 9633796:0 ==> 0xb7f0d000      # attached at a address chosen by kernel
+2: 9666565:0 ==> 0xb7bed000
+
+$ cat /proc/9903/maps
+...
+b7bed000-b7f0d000 rw-s 00000000 00:09 9666565 /SYSV00000000 (deleted)
+b7f0d000-b7f26000 rw-s 00000000 00:09 9633796 /SYSV00000000 (deleted)
+...
+
+<2> Two lines for the attached System V shared memory segments.
+
+<columns>
+1. A pair of hyphen-separated numbers indicating the virtual address range at which the memory
+segment is mapped. The second of these numbers is the address of the next byte after the end of the
+segment.
+
+note: From this, can get the size. b7f0d000-b7bed000=0x320000. 3,276,800
+
+2. Protection and flags for this memory segment. The first three letters indicate the protection of
+the segment: read (r), write (w), and execute (x). A hyphen (-) in place of any of these letters
+indicates that the corresponding protection is disabled. The final letter indicates the mapping flag
+for the memory segment; it is either private (p) or shared (s). For an explanation of these flags,
+    see the description of the MAP_PRIVATE and MAP_SHARED flags in Section 49.2. 
+    
+note: A System V shared memory segment is always marked shared.
+
+3. The hexadecimal offset (in bytes) of the segment within the corresponding mapped file. The
+meanings of this and the following two columns will become clearer when we describe the mmap()
+system call in Chapter 49. 
+
+note: For a System V shared memory segment, the offset is always 0.
+
+4. The device number (major and minor IDs) of the device on which the corresponding mapped file is
+located.
+
+5. The i-node number of the mapped file, or, for System V shared memory segments, the 'identifier'
+for the segment.
+
+6. The filename or other identifying tag associated with this memory segment. For a System V shared
+memory segment, this consists of the string SYSV concatenated with the shmget() key of the segment
+(expressed in hexadecimal). In this example, SYSV is followed by zeros because we created the
+segments using the key IPC_PRIVATE (which has the value 0). The string (deleted) that appears after
+the SYSV field for a System V shared memory segment is an artifact of the implementation of shared
+memory segments. Such segments are created as mapped files in an invisible tmpfs file system
+(Section 14.10), and then later unlinked. Shared anonymous memory mappings are implemented in the
+same manner. (We describe mapped files and shared anonymous memory mappings in Chapter 49.)
+
+
+{shm-limits}
 On Linux, some of the limits can be viewed or changed via files in the /proc file system. See LPI
 48.9 for more details. 
 
-keitee@debian-keitee:/proc/sys/kernel$ ls -al sh*
--rw-r--r-- 1 root root 0 Jan 13 00:11 shmall
--rw-r--r-- 1 root root 0 Jan 13 00:11 shmmax
--rw-r--r-- 1 root root 0 Jan 13 00:11 shmmni
--rw-r--r-- 1 root root 0 Jan 13 00:11 shm_rmid_forced
+Below is a list of the Linux shared memory limits. The system call affected by the limit and the
+error that results if the limit is reached are noted in parentheses.
+
+SHMMNI
+This is a system-wide limit on the number of shared memory 'identifiers' (in other words, shared
+    memory segments) that can be created. (shmget(), ENOSPC)
+
+SHMMIN
+This is the minimum size (in bytes) of a shared memory segment. This limit is defined with the value
+1 (this can't be changed). However, the effective limit is the system page size. (shmget(), <EINVAL>)
+
+SHMMAX
+This is the maximum size (in bytes) of a shared memory segment. The practical upper limit for SHMMAX
+depends on available RAM and swap space. (shmget(), <EINVAL>)
+
+SHMALL
+This is a system-wide limit on the total number of pages of shared memory. Most other UNIX
+implementations don't provide this limit. The practical upper limit for SHMALL depends on available
+RAM and swap space. (shmget(), ENOSPC)
+
+<debian-linux>
+keitee@debian-keitee:/proc/sys/kernel$ uname -a
+Linux debian-keitee 3.2.0-4-486 #1 Debian 3.2.63-2+deb7u2 i686 GNU/Linux
+keitee@debian-keitee:/proc/sys/kernel$ ls -al shm*
+-rw-r--r-- 1 root root 0 Jan 28 21:25 shmall
+-rw-r--r-- 1 root root 0 Jan 28 21:25 shmmax
+-rw-r--r-- 1 root root 0 Jan 28 21:25 shmmni
+-rw-r--r-- 1 root root 0 Jan 28 21:25 shm_rmid_forced
+keitee@debian-keitee:/proc/sys/kernel$ cat shmall
+2097152
+keitee@debian-keitee:/proc/sys/kernel$ cat shmmax
+33554432
+keitee@debian-keitee:/proc/sys/kernel$ cat shmmni
+4096
+keitee@debian-keitee:/proc/sys/kernel$ cat shm_rmid_forced 
+0
 
 <source> ucLinux case
 /include/linux/shm.h
@@ -8848,6 +9077,14 @@ memory segment into memory. Since Linux 2.6.10, an unprivileged process can lock
 memory segment if its effective user ID matches either the owner or the creator user ID of the
 segment and (in the case of SHM_LOCK) the process has a sufficiently high RLIMIT_MEMLOCK resource
 limit. See Section 50.2 for details.
+
+
+={============================================================================
+*kt_linux_core_250*  ipc: posix
+
+One of the POSIX.1b developers' aims was to devise a set of IPC mechanisms that did not suffer the
+deficiencies of the System V IPC facilities. These IPC mechanisms are collectively referred to as
+POSIX IPC.
 
 
 ={============================================================================
@@ -15034,6 +15271,88 @@ Mems_allowed:	1
 Mems_allowed_list:	0
 voluntary_ctxt_switches:	310
 nonvoluntary_ctxt_switches:	127
+
+={============================================================================
+*kt_linux_core_802* proc: /proc/PID/maps
+
+Using the Linux-specific /proc/PID/maps file, we can see the location of the shared memory segments
+and shared libraries mapped by a program.
+
+From LPI 48.5.
+
+$ cat /proc/9903/maps
+08048000-0804a000 r-xp 00000000 08:05 5526989 /home/mtk/svshm_attach          <1>
+0804a000-0804b000 r--p 00001000 08:05 5526989 /home/mtk/svshm_attach
+0804b000-0804c000 rw-p 00002000 08:05 5526989 /home/mtk/svshm_attach
+b7bed000-b7f0d000 rw-s 00000000 00:09 9666565 /SYSV00000000 (deleted)         <2>
+b7f0d000-b7f26000 rw-s 00000000 00:09 9633796 /SYSV00000000 (deleted)
+b7f26000-b7f27000 rw-p b7f26000 00:00 0
+b7f27000-b8064000 r-xp 00000000 08:06 122031 /lib/libc-2.8.so                 <3>
+b8064000-b8066000 r--p 0013d000 08:06 122031 /lib/libc-2.8.so
+b8066000-b8067000 rw-p 0013f000 08:06 122031 /lib/libc-2.8.so
+b8067000-b806b000 rw-p b8067000 00:00 0
+b8082000-b8083000 rw-p b8082000 00:00 0
+b8083000-b809e000 r-xp 00000000 08:06 122125 /lib/ld-2.8.so                   <4>
+b809e000-b809f000 r--p 0001a000 08:06 122125 /lib/ld-2.8.so
+b809f000-b80a0000 rw-p 0001b000 08:06 122125 /lib/ld-2.8.so
+bfd8a000-bfda0000 rw-p bffea000 00:00 0 [stack]                               <5>
+ffffe000-fffff000 r-xp 00000000 00:00 0 [vdso]                                <6>
+
+<1> Three lines for the main program, shm_attach. These correspond to the text and data segments of
+the program. The second of these lines is for a readonly page holding the string constants used by
+the program.
+
+<2> Two lines for the attached System V shared memory segments.
+
+<3> Lines corresponding to the segments for two shared libraries. One of these is the standard C
+library (libc-version.so). 
+
+<4> The other is the dynamic linker (ld-version.so).
+
+<5> A line labeled [stack]. This corresponds to the process stack.
+
+<columns>
+1. A pair of hyphen-separated numbers indicating the virtual address range at which the memory
+segment is mapped. The second of these numbers is the address of the next byte after the end of the
+segment.
+
+note: From this, can get the size. b7f0d000-b7bed000=0x320000. 3,276,800
+
+2. Protection and flags for this memory segment. The first three letters indicate the protection of
+the segment: read (r), write (w), and execute (x). A hyphen (-) in place of any of these letters
+indicates that the corresponding protection is disabled. The final letter indicates the mapping flag
+for the memory segment; it is either private (p) or shared (s). For an explanation of these flags,
+    see the description of the MAP_PRIVATE and MAP_SHARED flags in Section 49.2. 
+    
+note: A System V shared memory segment is always marked shared.
+
+3. The hexadecimal offset (in bytes) of the segment within the corresponding mapped file. The
+meanings of this and the following two columns will become clearer when we describe the mmap()
+system call in Chapter 49. 
+
+note: For a System V shared memory segment, the offset is always 0.
+
+4. The device number (major and minor IDs) of the device on which the corresponding mapped file is
+located.
+
+5. The i-node number of the mapped file, or, for System V shared memory segments, the 'identifier'
+for the segment.
+
+6. The filename or other identifying tag associated with this memory segment. For a System V shared
+memory segment, this consists of the string SYSV concatenated with the shmget() key of the segment
+(expressed in hexadecimal). In this example, SYSV is followed by zeros because we created the
+segments using the key IPC_PRIVATE (which has the value 0). The string (deleted) that appears after
+the SYSV field for a System V shared memory segment is an artifact of the implementation of shared
+memory segments. Such segments are created as mapped files in an invisible tmpfs file system
+(Section 14.10), and then later unlinked. Shared anonymous memory mappings are implemented in the
+same manner. (We describe mapped files and shared anonymous memory mappings in Chapter 49.)
+Starting with kernel 2.6.14, Linux also provides the /proc/PID/smaps file, which exposes more
+information about the memory consumption of each of a process's mappings. For further details, see
+the proc(5) manual page.
+
+
+={============================================================================
+*kt_linux_core_803* proc: /proc/sys/kernel
 
 
 # ============================================================================
