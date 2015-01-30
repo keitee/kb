@@ -55,7 +55,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_106| gcc: link: lrt
 |kt_dev_gcc_107| gcc: link: sysroot and rpath-link
 |kt_dev_gcc_108| gcc: options
-|kt_dev_gcc_109| gcc: attributes
+|kt_dev_gcc_109| gcc: options: get dependancies
+|kt_dev_gcc_110| gcc: attributes
 
 |kt_dev_gcc_200| gcc: cpp: preprocessor
 |kt_dev_gcc_201| gcc: cpp: define? 
@@ -5452,7 +5453,126 @@ internal subroutine is '__main', used to ensure C++ constructors are called; see
 
 
 ={============================================================================
-*kt_dev_gcc_109* gcc: attributes
+*kt_dev_gcc_109* gcc: options: get dependancies
+
+https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html
+
+<E-option>
+-E
+
+If you use the -E option, nothing is done except preprocessing. Some of these options make sense
+only together with -E because they cause the preprocessor output to be 'unsuitable' for actual
+compilation. 
+
+$ g++ -std=c++0x -E useargs.cpp > out.txt
+
+<save-temp>
+To produce three extra files with .i, .s and .o extension. The temporary files produced by
+-save-temps flag in one go can be produced one by one by using the gcc flags -E, -C and -S at each
+of the preprocessing, compilation and assembly steps respectively.
+
+note: -save-temps is in debugging options.
+
+<wall>
+-Wall
+
+Turns on all optional warnings which are desirable for normal code. At present this is -Wcomment,
+-Wtrigraphs, -Wmultichar and a warning about integer promotion causing a change of sign in #if
+  expressions. Note that many of the preprocessor's warnings are on by default and have no options
+  to control them. 
+
+note: it is different from -Wall in warning options.
+
+<dependancies-output>
+Found that there is .deps dir which has dependancy output.
+
+$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF ./deps/$*.Tpo -c -o $@ $<                                                                                                                    
+-MP
+This option instructs CPP to add a phony target for each dependency other than the main file,
+causing each to depend on nothing. These dummy rules work around errors make gives if you remove
+  header files without updating the Makefile to match.
+
+    This is typical output:
+
+              test.o: test.c test.h
+              
+              test.h:
+
+-MD
+-MD is equivalent to -M -MF file, except that -E is not implied. The driver determines file based on
+whether an -o option is given. If it is, the driver uses its argument but with a suffix of .d,
+otherwise it takes the name of the input file, removes any directory components and suffix, and
+  applies a .d suffix.
+
+If -MD is used in conjunction with -E, any -o switch is understood to specify the dependency output
+file (see -MF), but if used without -E, each -o is understood to specify a target object file.
+
+Since -E is not implied, -MD can be used to generate a dependency output file as a side-effect of
+the compilation process. 
+
+-M
+Instead of outputting the result of preprocessing, output a rule suitable for make describing the
+dependencies of the main source file. The preprocessor outputs one make rule containing the object
+file name for that source file, a colon, and the names of 'all' the 'included' files, including those
+coming from -include or -imacros command line options.
+
+Unless specified explicitly (with -MT or -MQ), the object file name consists of the name of the
+source file with any suffix replaced with object file suffix and with any leading directory parts
+removed. If there are many included files then the rule is split into several lines using
+\ newline. The rule has no commands.
+
+This option does not suppress the preprocessor's debug output, such as -dM. To 'avoid' mixing such
+debug output with the dependency rules you should explicitly specify the dependency output file with
+-MF, or use an environment variable like DEPENDENCIES_OUTPUT (see Environment Variables). Debug
+output will still be sent to the regular output stream as normal.
+
+Passing -M to the driver implies -E, and suppresses warnings with an implicit -w.
+
+note: gcc -M tgetopt.c
+
+tgetopt.o: tgetopt.c /usr/include/unistd.h /usr/include/features.h \
+ /usr/include/x86_64-linux-gnu/bits/predefs.h \
+ /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+ /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+ /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+ ...
+
+
+-MF file
+When used with -M or -MM, specifies a file to write the dependencies to. If no -MF switch is given
+the preprocessor sends the rules to the same place it would have sent preprocessed output.
+
+When used with the driver options -MD or -MMD, -MF overrides the default dependency output file. 
+
+<debugging>
+-dCHARS
+
+CHARS is a sequence of one or more of the following characters, and must not be preceded by a space.
+Other characters are interpreted by the compiler proper, or reserved for future versions of GCC, and
+so are silently ignored. If you specify characters whose behavior conflicts, the result is
+undefined.
+
+   'M'
+   Instead of the normal output, generate a list of '#define' directives for all the macros defined
+   during the execution of the preprocessor, including predefined macros. This gives you a way of
+   'finding' out what is predefined in your version of the preprocessor. Assuming you have no file
+   foo.h, the command
+
+   touch foo.h; cpp -dM foo.h
+
+   will show all the predefined macros.
+
+   If you use -dM without the -E option, -dM is interpreted as a synonym for -fdump-rtl-mach. See
+   Debugging Options. 
+
+note: can see #defines
+
+$ cpp -dM tgetopt.c
+$ echo '#include <errno.h>' | cpp -dM
+
+
+={============================================================================
+*kt_dev_gcc_110* gcc: attributes
 
 https://gcc.gnu.org/onlinedocs/gcc-4.1.2/gcc/Function-Attributes.html
 
@@ -5517,40 +5637,6 @@ http://gcc.gnu.org/onlinedocs/cpp/
 The C preprocessor, often known as cpp, is a "macro processor" that is used automatically by the C
 compiler to transform your program before compilation. It is called a macro processor because it
 allows you to define 'macros', which are brief abbreviations for longer constructs. 
-
-{preprocessor-options}
-http://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html
-
--E
-
-If you use the -E option, nothing is done except preprocessing. Some of these options make sense
-only together with -E because they cause the preprocessor output to be unsuitable for actual
-compilation. 
-
-g++ -std=c++0x -E useargs.cpp > out.txt
-
-<save-temp-option>
-To produce three extra files with .i, .s and .o extension. The temporary files produced by
--save-temps flag in one go can be produced one by one by using the gcc flags -E, -C and -S at each
-of the preprocessing, compilation and assembly steps respectively.
-
-
--Wall
-
-Turns on all optional warnings which are desirable for normal code. At present this is -Wcomment,
--Wtrigraphs, -Wmultichar and a warning about integer promotion causing a change of sign in #if
-expressions. Note that many of the preprocessor's warnings are on by default and have no options to
-control them. 
-
-<to-get-header-lists>
--M
-Instead of outputting the result of preprocessing, output a rule suitable for make describing the
-dependencies of the main source file. The preprocessor outputs one make rule containing the object
-file name for that source file, a colon, and the names of all the included files, including those
-coming from -include or -imacros command line options. 
-
-<example>
-echo '#include <errno.h>' | cpp -dM
 
 
 ={============================================================================
