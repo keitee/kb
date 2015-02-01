@@ -117,12 +117,14 @@ KT KB. Linux
 |kt_linux_core_004| system call errors and errno
 |kt_linux_core_005| error handling codes from LPI
 |kt_linux_core_006| process credential
-|kt_linux_core_007| 
+|kt_linux_core_007| /dev/null
 
+#{ SIGNAL
 |kt_linux_core_050| signal
 |kt_linux_core_051| signal: example: use signal as synchronization
 |kt_linux_core_052| signal: kill: checking for the existence of a process
 
+#{ PROCESS
 |kt_linux_core_100| thread vs. process
 |kt_linux_core_101| process: creation
 |kt_linux_core_102| process: termination
@@ -131,6 +133,7 @@ KT KB. Linux
 |kt_linux_core_105| process: memory layout
 |kt_linux_core_106| process: virtual memory
 |kt_linux_core_107| process: group
+|kt_linux_core_108| process: deamon
 
 |kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
@@ -3097,6 +3100,11 @@ $ getconf PAGESIZE
 kpark@wll1p04345:~/work$ ps -o pgid $$
  PGID
  7523
+
+
+$ ps -p $$ -o 'pid pgid sid command'
+  PID  PGID   SID COMMAND
+ 3697  3697  3697 bash
 
 
 # ============================================================================
@@ -6821,10 +6829,16 @@ For example, if an executable file is owned by root (superuser) and has the set-
 bit enabled, then the process gains superuser privileges when that program is run.
 
 
+={============================================================================
+*kt_linux_core_007* /dev/null
+
+/dev/null is a virtual device that always discards the data written to it. When we want to eliminate
+the standard output or error of a shell command, we can redirect it to this file. Reads from this
+device always return end-of-file.
+
 
 # ============================================================================
-#{
-
+#{ SIGNAL
 ={============================================================================
 *kt_linux_core_050* signal
 
@@ -7129,6 +7143,10 @@ process needs appropriate permissions to be able send a signal to another proces
 If pid equals 0, the signal is sent to every process in the same process group as the calling
 process, including the calling process itself. 
 
+<signal-to-process-group>
+If pid is less than -1, the signal is sent to all of the processes in the process group whose ID
+equals the absolute value of pid. Sending a signal to all of the processes in a process group finds
+particular use in shell job control.
 
 <check-existence>
 The kill() system call can serve another purpose. If the sig argument is specified as 0, the
@@ -7727,11 +7745,23 @@ note: what's the kernel in this digram?
 
 LPI 34.
 
+{why-group-and-session}
+A process group is a collection of 'related' processes, and a session is a collection of 'related'
+process groups. Process groups and sessions are abstractions defined to 'support' two uses:
+
+1. shell job control, which allows interactive users to run commands in the foreground or in the
+background. note: So need to know fine details when write a shell.
+
+2. send a signal to a group.
+
+
 {process-group} also known as job
 A process group is a set of one or more processes sharing the same process group identifier (PGID).
 A process group ID is a number of the same type (pid_t) as a process ID. A process group has a
 process group 'leader', which is the process that 'creates' the group and whose process ID becomes
 the process group ID of the group. A new process inherits its parent's process group ID.
+
+note: the group leader has PID == PGID.
 
 A process group has a lifetime, which is the period of time beginning when the leader creates the
 group and ending when the last member process leaves the group.
@@ -7743,12 +7773,14 @@ session identifier (SID), which, like the process group ID, is a number of type 
 'leader' is the process that 'creates' a new session and whose process ID becomes the session ID. A
 new process inherits its parent's session ID.
 
+note: the session leader has PID == PGID == SID. That is group and session leader.
+
 
 {controlling-process-and-terminal}
 All of the processes in a session 'share' a single controlling terminal. The controlling terminal is
-established when the session leader first 'opens' a terminal device, /dev/tty. A terminal may be the
-controlling terminal of at most 'one' session. Opening the controlling terminal also causes the
-session leader to become the controlling process for the terminal.
+established when the 'session' leader first 'opens' a terminal device, /dev/tty. A terminal may be
+the controlling terminal of at most 'one' session. Opening the controlling terminal also causes the
+session leader to become the 'controlling' process for the terminal.
 
 <forground-process-group>
 At any point in time, one of the process groups in a session is the foreground process group for the
@@ -7757,28 +7789,29 @@ group can read input from the controlling terminal. note: process'es'
 
 <signal-forground-group>
 When the user types one of the signal-generating terminal characters on the controlling terminal, a
-signal is sent to 'all' members of the foreground process group. These characters are the interrupt
-character (usually Control-C), which generates SIGINT; the quit character (usually Control-\), which
-generates SIGQUIT; and the suspend character (usually Control-Z), which generates SIGTSTP.
+signal is sent to 'all' members of the 'foreground' process group. These characters are the
+interrupt character (usually Control-C), which generates SIGINT; the quit character (usually
+    Control-\), which generates SIGQUIT; and the suspend character (usually Control-Z), which
+    generates SIGTSTP.
 
 
-{session-leader-is-controlling-process}
-As a consequence of establishing the connection to (i.e., opening) the controlling terminal, the
-'session' 'leader' becomes the 'controlling' process for the terminal.
+{use-other-case} 
+Process groups occasionally find uses in areas other than job control, since they have two useful
+properties: a parent process can wait on any of its children in a particular process group (Section
+  26.1.2), and a signal can be sent to all of the members of a process group.
 
-The principal significance of being the controlling process is that the 'kernel' sends 'this'
-process a SIGHUP signal if a terminal 'disconnect' occurs. note: say only SIGHUP.
+note: Use kill system call and see <signal-to-process-group> for detail.
 
 
-{login-shell}
-Why session and group? Sessions and process groups were defined to support shell job control
+{use-job-control} login-shell
+Why session and group? Sessions and process groups were defined to support 'shell' job control
 
 For an interactive login, the controlling terminal is the one on which the user logs in. The login
 shell becomes the session leader and the controlling process for the terminal, and is also made the
-sole member of its own process group. 
+'sole' member of its own process group. 
 
-Each job(a simple command or pipeline of commands) started from the shell results in the creation of
-one or more processes, and the shell places all of these processes in a 'new' process group.
+'each' job(a simple command or pipeline of commands) started from the shell results in the creation
+of one or more processes, and the shell places all of these processes in a 'new' process group.
 
 $ echo $$                              " Display the PID of the shell
 400
@@ -7804,19 +7837,21 @@ process group 400                process group 658          process group 660
 'controlling' process
 background process group         background group           forground group
 
-
 <controlling-terminal>
 Forground PGID    = 660
 Controlling SID   = 400
 
 
-{setpgid}
+{group}
+<calls>
 The setpgid() system call changes the process group of the process whose process ID is pid to the
 value specified in pgid. Put simply, change pgid of a process with pid.
 
 #include <unistd.h>
-int setpgid(pid_t pid, pid_t pgid);
+pid_t getpgrp(void);
+Always successfully returns process group ID of calling process
 
+int setpgid(pid_t pid, pid_t pgid);
 Returns 0 on success, or -1 on error
 
 If pid is specified as 0, the 'calling' process's process group ID is changed. If pgid is specified
@@ -7831,8 +7866,8 @@ note: Put simply, this call is to change pgid of a process with the pid. However
 is for the calling process.
 
 If the pid and pgid arguments specify the 'same' process, then a 'new' process group is created, and
-the specified process is made the 'leader' of the new group (i.e., the process group ID of the
-    process is made the same as its process ID). 
+the specified process is made the 'leader' of the new group. The typical callers of setpgid() and
+setsid() are programs such as the shell 
 
 If the two arguments specify different values, then setpgid() is being used to move a process
 between process groups.
@@ -7855,6 +7890,9 @@ switch (childPid)
     /* Child carries on to exec the required program */
 
    default: /* Parent */
+      if (setpgid(childPid, pipelinePgid) == -1 && errno != EACCES)
+        /* Handle error */
+        /* Parent carries on to do other things */
 }
 
 and 
@@ -7863,6 +7901,15 @@ Each job(a simple command or pipeline of commands) started from the shell result
 one or more processes, and the shell places all of these processes in a 'new' process group.
 
 note: Q? 'not' clear when and how a group is created? The <example> seems to make more sense.
+
+note: The above code is to show "How a job-control shell sets the process group ID of a child
+process" because the scheduling of the parent and child is indeterminate after a fork(). 
+
+Therefore, job-control shells are programmed so that the parent and the child process both call
+setpgid() to change the child’s process group ID to the same value immediately after a fork(), and
+the parent ignores any occurrence of the EACCES error on the setpgid() call.
+
+So seems that the group creation is done before doing this.
 
 <restrictions>
 1. The pid argument may specify only the calling process or one of its children. Violation of this
@@ -7876,10 +7923,11 @@ commenced.
 This restriction affects the programming of job-control shells, which have the following
 requirements:
 
+<sent-by-shell>
 All of the processes in a job (i.e., a command or a pipeline) must be placed in a single process
-group. This step permits the shell to use killpg() (or, equivalently, kill() with a negative pid
-    argument) to simultaneously send job-control signals to 'all' of the members of the process
-group. Naturally, this step must be carried out before any job-control signals are sent.
+group. This step permits the 'shell' to use killpg() (or, kill() with a negative pid argument) to
+simultaneously send job-control signals to 'all' of the members of the process group. Naturally this
+step must be carried out before any job-control signals are sent.
 
 killpg - send signal to a process group
 
@@ -7952,8 +8000,71 @@ int main(int argc, char* argv[]) {
 }
 
 
-{SIGHUP}
+{session}
+<calls>
+If the calling process is 'not' a process group leader, setsid() creates a 'new' session.
 
+#include <unistd.h>
+pid_t setsid(void);
+
+Returns session ID of new session, or (pid_t) -1 on error
+
+The setsid() system call creates a new session as follows:
+
+1. The calling process becomes the leader of a new session, and is made the leader of a new process
+group within that session. The calling process’s process group ID and session ID are set to the same
+value as its process ID. note: this is a login shell example.
+
+2. The calling process has 'no' controlling terminal. Any previously existing connection to a
+controlling terminal is broken. note: Upon creation, a session has no controlling terminal
+
+<restriction>
+If the calling process is a process group leader, setsid() fails with the error EPERM. The simplest
+way of ensuring that this doesn't happen is to perform a fork() and have the parent exit while the
+child carries on to call setsid(). Since the child inherits its parent's process group ID and
+receives its own unique process ID, it can't be a process group leader.
+
+The restriction that group leader cannot call setsid() is necessary because, without it, the process
+group leader would be able to place itself in another (new) session,
+
+<example>
+Shows the use of setsid() to create a new session. To check that it no longer has a controlling
+terminal, this program attempts to open the special file /dev/ tty
+
+$ ps -p $$ -o 'pid pgid sid command'      # $$ is PID of shell
+PID PGID SID COMMAND
+12243 12243 12243                         # bash PID, PGID, and SID of shell
+
+$ ./t_setsid
+$ PID=12352, PGID=12352, SID=12352
+ERROR [ENXIO Device not configured] open /dev/tty
+
+As can be seen from the output, the process successfully places itself in a new process group within
+a new session. Has no controlling terminal, the open() call fails.
+
+int
+main(int argc, char *argv[])
+{
+  if (fork() != 0) /* Exit if parent, or on error */
+    _exit(EXIT_SUCCESS);
+
+  if (setsid() == -1)
+    errExit("setsid");
+
+  printf("PID=%ld, PGID=%ld, SID=%ld\n", (long) getpid(),
+      (long) getpgrp(), (long) getsid(0));
+
+  if (open("/dev/tty", O_RDWR) == -1)
+    errExit("open /dev/tty");
+
+  exit(EXIT_SUCCESS);
+}
+
+note: From this example, shell is not a group leader and this shows how a shell creates a new
+session.
+
+
+{SIGHUP-signal}
 SIGHUP
 When a terminal disconnect (hangup) occurs, this signal is sent to the controlling process of the
 terminal. A second use of SIGHUP is with daemons (e.g., init, httpd, and inetd). Many daemons are
@@ -8093,9 +8204,23 @@ PID=15300; PPID=15299; PGID=15300; SID=7523
 15299: caught SIGHUP
 
 
+{session-leader-is-controlling-process}
+As a consequence of establishing the connection to (i.e., opening) the controlling terminal, the
+'session' 'leader' becomes the 'controlling' process for the terminal.
+
+<disconnect>
+The principal significance of being the controlling process is that the 'kernel' sends 'this'
+process a SIGHUP signal if a terminal 'disconnect' occurs. note: say only SIGHUP.
+
+<termination>
+As for the termination of the controlling process, the following steps occur: The kernel sends a
+SIGHUP signal (and a SIGCONT signal) to all members of the foreground process group, to inform them
+of the loss of the controlling terminal.
+
+
 {io-on-controlling-terminal}
 The controlling terminal is inherited by the child of a fork() and preserved across an exec(). When
-a session leader opens a controlling terminal, it simultaneously becomes
+a session leader opens a controlling terminal, it becomes controlling process.
 
 <terminal-driver>
 To support job control, the terminal driver maintains a record of the foreground process group for
@@ -8126,6 +8251,27 @@ running under a job-control shell, if the TOSTOP (terminal output stop) option h
 the terminal (perhaps via the command stty tostop), the terminal driver sends SIGTTOU to a
 background process group when it attempts to write() to the terminal (see Section 34.7.1).  This
 signal stops a process by default.
+
+
+={============================================================================
+*kt_linux_core_108* process: daemon
+
+LPI 37.
+
+{}
+A daemon is a process with the following characteristics:
+
+1. It runs in the background and has 'no' controlling terminal. The lack of a controlling terminal
+ensures that the kernel never automatically generates any job-control or terminal-related signals
+(such as SIGINT, SIGTSTP, and SIGHUP) for a daemon.
+
+2. Many standard daemons run as privileged processes (i.e., effective user ID of 0),
+
+3. It is a convention (not universally observed) that daemons have names ending with the letter d.
+On Linux, certain daemons are run as kernel threads. The code of such daemons is part of the kernel,
+   and they are typically created during system startup. When listed using ps(1), the names of these
+   daemons are surrounded by square brackets ([]). One example of a kernel thread is pdflush, which
+   periodically flushes dirty pages (e.g., pages from the buffer cache) to disk.
 
 
 ={============================================================================
