@@ -188,7 +188,8 @@ KT KB. Linux
 |kt_linux_core_800| proc: /proc/mounts
 |kt_linux_core_801| proc: /proc/PID/status
 |kt_linux_core_802| proc: /proc/PID/maps
-|kt_linux_core_803| proc: /proc/sys/kernel
+|kt_linux_core_803| proc: /proc/PID/exe
+|kt_linux_core_813| proc: /proc/sys/kernel
 
 #{ syscall
 |kt_linux_sysc_001| pause
@@ -8375,6 +8376,123 @@ error string correspond- ing to the current value of errno (i.e., the equivalent
 
 LPI. 27
 
+{execve-system-call}
+Various library functions, all with names beginning with exec, are layered on top of the execve()
+  system call. Each of these functions provides a different interface to the same functionality. The
+  loading of a new program by any of these calls is commonly referred to as an exec operation, or
+  simply by the notation exec().
+
+#include <unistd.h>
+int execve(const char *pathname, char *const argv[], char *const envp[]);
+
+'never' returns on success; returns -1 on error
+
+<attribute-that-remains>
+After an execve(), the process ID of the process remains the same, because the same process
+continues to exist.
+
+<never-return>
+Never need to check the return value from execve(); it will always be -1 if get since the very fact
+that it returned informs us that an error occurred,
+
+<example>
+note: See how envs are passed to.
+
+$ ./t_execve ./envargs 
+argv[0] = envargs 
+argv[1] = hello world 
+argv[2] = goodbye 
+env: GREET=salut 
+env: BYE=adieu 
+
+// t_execve.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+int main(int argc, char** argv)
+{
+  char *argVec[10];
+  char *envVec[] = { "GREET=salut", "BYE=adieu", NULL };
+
+  if( argc != 2 || strcmp( argv[1], "--help" ) == 0 )
+    printf("%s pathname\n", argv[0] );
+
+  // get basename
+  argVec[0] = strrchr( argv[1], '/' );
+  if( argVec[0] != NULL )
+    argVec[0]++;
+  else
+    argVec[0] = argv[1];
+
+  argVec[1] = "hello world";
+  argVec[2] = "goodbye";
+  argVec[3] = NULL;
+
+  execve( argv[1], argVec, envVec );
+
+  printf("if we get here, someting wrong.\n" );
+  exit(EXIT_FAILURE);
+}
+
+// envarg.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+extern char **environ;
+
+int main(int argc, char** argv)
+{
+  int j;
+  char **ep;
+
+  for( j = 0; j < argc; j++ )
+    printf("argv[%d] = %s \n", j, argv[j] );
+
+  for( ep = environ; *ep != NULL; ep++ )
+    printf("env: %s \n", *ep );
+
+  exit(EXIT_SUCCESS);
+}
+
+
+{exec-library}
+The library functions perfors an exec() and all are layered on top of execve().
+
+#include <unistd.h>
+
+int execle(const char *pathname, const char *arg, ...  /* , (char *) NULL, char *const envp[] */ );
+int execlp(const char *filename, const char *arg, ...  /* , (char *) NULL */);
+int execvp(const char *filename, char *const argv[]);
+int execv(const char *pathname, char *const argv[]);
+int execl(const char *pathname, const char *arg, ...  /* , (char *) NULL */);
+
+None of the above returns on success; all return -1 on error
+
+<path-filename>
+execvp() allow the program to be specified using just a filename. The filename is sought in the list
+of directories specified in the PATH environment variable. The functions contain the letter p for
+PATH to indicate this.
+
+The PATH variable is 'not' used if the filename contains a slash (/), in which case it is treated as a
+relative or absolute pathname.
+
+The PATH value for a login shell is set by system-wide and user-specific shell startup scripts.
+Since a child process inherits a copy of its parent's environment variables, each process that the
+shell creates to execute a command inherits a copy of the shell's PATH.
+
+<env>
+The execve() and execle() functions allow the programmer to 'explicitly' specify the environment for
+the new program using envp, a NULL-terminated array of pointers to character strings. The names of
+these functions end with the letter e (for environment) to indicate this fact. All of the other
+exec() functions use the caller's existing environment (i.e., the contents of environ) as the
+environment for the new program.
+
 <example>
 #include <unistd.h>
 #include <signal.h>
@@ -8387,108 +8505,108 @@ LPI. 27
 
 void usage(const char* exec_name)
 {
-    fprintf(stderr, "Usage: %s cmd [args]\n\n"
-                    "Run `cmd` passing it `args` and run nexus-inspect"
-                    " when that completes\n", basename(exec_name));
+  fprintf(stderr, "Usage: %s cmd [args]\n\n"
+                  "Run `cmd` passing it `args` and run inspect"
+                  " when that completes\n", basename(exec_name));
 }
 
 int main(int argc, char** argv)
 {
-    pid_t pid;
-    int opt = 0;
-    char* parent_pid_str = getenv("NEXUS_INSPECT_PARENT_PID");
-    char* cleanup_exe = PKG_BIN_DIR "/nexus-inspect";
+  pid_t pid;
+  int opt = 0;
+  char* parent_pid_str = getenv("NEXUS_INSPECT_PARENT_PID");
+  char* cleanup_exe = PKG_BIN_DIR "/nexus-inspect";
 
-    if (NULL == parent_pid_str && argc < 2)
+  if (NULL == parent_pid_str && argc < 2)
+  {
+    usage(argv[0]);
+    return 1;
+  }
+
+  fprintf( stderr, "** KT: ===================== **\n" );
+  fprintf( stderr, "** KT: exec-then-cleanup-app ** pid(%s) \n", parent_pid_str );
+
+  if (NULL == parent_pid_str)
+  {
+    fprintf( stderr, "** KT: exec-then-cleanup-app: pid(null) \n" );
+
+    // Even if pids were unsigned 64-bit numbers, there could be a maximum
+    // of 20 characters in it. We add another for the null terminator.
+    char parent_pid[21];
+    int ret = snprintf(parent_pid, sizeof(parent_pid), "%i", getpid());
+    if (ret >= 20)
     {
-        usage(argv[0]);
-        return 1;
+      // If you're on a system with pids that are larger than unsigned
+      // 64-bit integers, you should seriously consider why you're still
+      // using nexus-inspect.
+      fprintf(stderr, "Pids are longer than expected (ie %d characters)."
+          " What's going on?", ret);
+      return 2;
     }
 
-    fprintf( stderr, "** KT: ===================== **\n" );
-    fprintf( stderr, "** KT: exec-then-cleanup-app ** pid(%s) \n", parent_pid_str );
-
-    if (NULL == parent_pid_str)
+    pid = fork();
+    assert(!(pid < 0));
+    if (0 == pid)
     {
-        fprintf( stderr, "** KT: exec-then-cleanup-app: pid(null) \n" );
+      // Child.
 
-        // Even if pids were unsigned 64-bit numbers, there could be a maximum
-        // of 20 characters in it. We add another for the null terminator.
-        char parent_pid[21];
-        int ret = snprintf(parent_pid, sizeof(parent_pid), "%i", getpid());
-        if (ret >= 20)
-        {
-            // If you're on a system with pids that are larger than unsigned
-            // 64-bit integers, you should seriously consider why you're still
-            // using nexus-inspect.
-            fprintf(stderr, "Pids are longer than expected (ie %d characters)."
-                            " What's going on?", ret);
-            return 2;
-        }
+      // Only launch the watcher if the cleanup app exists.
+      struct stat sb;
+      if (-1 == stat(cleanup_exe, &sb))
+      {
+        fprintf(stderr, "Cleanup executable (%s) doesn't exist, so not"
+            " spawning watcher\n", cleanup_exe);
+        return 0;
+      }
 
-        pid = fork();
-        assert(!(pid < 0));
-        if (0 == pid)
-        {
-            // Child.
+      // Create new group and become group leader.
+      if (setpgid(0, 0)) {
+        perror("setpgid failed!");
+        return 3;
+      }
 
-            // Only launch the watcher if the cleanup app exists.
-            struct stat sb;
-            if (-1 == stat(cleanup_exe, &sb))
-            {
-                fprintf(stderr, "Cleanup executable (%s) doesn't exist, so not"
-                                " spawning watcher\n", cleanup_exe);
-                return 0;
-            }
+      const char* args[4] = { argv[0], "-p", parent_pid, NULL };
 
-            // Create new group and become group leader.
-            if (setpgid(0, 0)) {
-                perror("setpgid failed!");
-                return 3;
-            }
+      fprintf( stderr, "** KT: exec-then-cleanup-app: child: argv[0](%s) parent_pid(%s) \n"
+          , argv[0], parent_pid );
 
-            const char* args[4] = { argv[0], "-p", parent_pid, NULL };
-
-            fprintf( stderr, "** KT: exec-then-cleanup-app: child: argv[0](%s) parent_pid(%s) \n"
-                , argv[0], parent_pid );
-
-            // We set the pid in the environment. Doing it via environment
-            // rather than arguments simplifies the code because we don't
-            // have to do any argument parsing - note that we do accept
-            // arguments and options, but they are *all* passed on to the
-            // exec'd process (see the parent branch, below).
-            setenv("NEXUS_INSPECT_PARENT_PID", parent_pid, 1);
-            execv(argv[0], (char*const*)args);
-        }
-        else
-        {
-            fprintf( stderr, "** KT: exec-then-cleanup-app: parent: argv[1](%s) \n", argv[1] );
-
-            // Parent.
-            if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
-                perror("exec failed!");
-                return 4;;
-            }
-        }
+      // We set the pid in the environment. Doing it via environment
+      // rather than arguments simplifies the code because we don't
+      // have to do any argument parsing - note that we do accept
+      // arguments and options, but they are *all* passed on to the
+      // exec'd process (see the parent branch, below).
+      setenv("NEXUS_INSPECT_PARENT_PID", parent_pid, 1);
+      execv(argv[0], (char*const*)args);
     }
     else
     {
-        fprintf( stderr, "** KT: exec-then-cleanup-app: pid(not null), cleanup_exe(%s) \n", 
-            cleanup_exe );
+      fprintf( stderr, "** KT: exec-then-cleanup-app: parent: argv[1](%s) \n", argv[1] );
 
-        int parent_pid=atoi(parent_pid_str);
-        fprintf(stderr, "Going to watch pid: %d\n", parent_pid);
-        while (0 == kill(parent_pid, 0))
-        {
-            sleep(1);
-        }
-        fprintf(stderr, "Pid %d has died. Going to cleanup.\n", parent_pid);
-
-        char* args[5] = { cleanup_exe, "-r", "-p", parent_pid_str, NULL };
-        return execv(cleanup_exe, args);
+      // Parent.
+      if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
+        perror("exec failed!");
+        return 4;;
+      }
     }
+  }
+  else
+  {
+    fprintf( stderr, "** KT: exec-then-cleanup-app: pid(not null), cleanup_exe(%s) \n", 
+        cleanup_exe );
 
-    return 0;
+    int parent_pid=atoi(parent_pid_str);
+    fprintf(stderr, "Going to watch pid: %d\n", parent_pid);
+    while (0 == kill(parent_pid, 0))
+    {
+      sleep(1);
+    }
+    fprintf(stderr, "Pid %d has died. Going to cleanup.\n", parent_pid);
+
+    char* args[5] = { cleanup_exe, "-r", "-p", parent_pid_str, NULL };
+    return execv(cleanup_exe, args);
+  }
+
+  return 0;
 }
 
 
@@ -16132,7 +16250,16 @@ Locked:                0 kB
 
 
 ={============================================================================
-*kt_linux_core_803* proc: /proc/sys/kernel
+*kt_linux_core_803* proc: /proc/PID/exe
+
+The Linux-specific /proc/PID/exe file is a symbolic link containing the absolute pathname of the
+executable file being run by the corresponding process.
+
+$ ls -1l /proc/3510/exe
+lrwxrwxrwx 1 keitee keitee 0 Feb  2 22:21 /proc/3510/exe -> /home/keitee/bin/vim
+
+note: to check the path name of the process.
+
 
 # ============================================================================
 #{ SYSCALL
