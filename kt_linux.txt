@@ -134,6 +134,7 @@ KT KB. Linux
 |kt_linux_core_106| process: virtual memory
 |kt_linux_core_107| process: group
 |kt_linux_core_108| process: deamon
+|kt_linux_core_109| process: execution
 
 |kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
@@ -192,6 +193,7 @@ KT KB. Linux
 #{ syscall
 |kt_linux_sysc_001| pause
 |kt_linux_sysc_002| alarm
+|kt_linux_sysc_003| getenv
 
 #{ sys admin
 |kt_linux_sysa_001| sys: cannot execute a file in cdrom, fstab
@@ -2107,6 +2109,25 @@ The script example:
 F=cat
 echo "$1" | grep -q '\.gz$' && F=zcat
 $F "$1"
+
+
+{line-control}
+-A NUM, --after-context=NUM
+Print NUM lines of trailing context after matching lines.  Places a line containing a group
+separator  (--)  between  contiguous  groups  of  matches.   With  the  -o  or --only-matching
+option, this has no effect and a warning is given.
+
+-B NUM, --before-context=NUM
+Print  NUM  lines  of  leading  context  before  matching  lines.   Places  a  line containing a
+group separator (--) between contiguous groups of matches.  With the -o or --only-matching option,
+      this has no effect and a warning is given.
+
+-C NUM, -NUM, --context=NUM
+Print NUM lines of output context.  Places a line containing a group separator (--) between
+contiguous groups of matches.  With the -o or --only-matching option, this  has no effect and a
+warning is given.
+
+note: -C works like before and after
 
 
 {case-example}
@@ -7164,6 +7185,14 @@ Read another way, this means we can use the null signal to test if a process wit
 3. succeeds (meaning we do have permission to send a signal to the process), then we know that the
 process exists.
 
+So this code do sleep while a process of pid is alive.
+
+while (0 == kill(parent_pid, 0))
+{
+    sleep(1);
+}
+
+
 <but>
 Verifying the existence of a particular process ID doesn't guarantee that a 'particular' program is
 still running. Because the kernel recycles process IDs as processes are born and die, the same
@@ -8272,6 +8301,195 @@ On Linux, certain daemons are run as kernel threads. The code of such daemons is
    and they are typically created during system startup. When listed using ps(1), the names of these
    daemons are surrounded by square brackets ([]). One example of a kernel thread is pdflush, which
    periodically flushes dirty pages (e.g., pages from the buffer cache) to disk.
+
+
+{syslog}
+
+note: no syslogd on a embedded system.
+
+<why>
+When writing a daemon, one problem we encounter is how to display error messages. Since a daemon
+runs in the background, we can't display messages on an associated terminal, as we would typically
+do with other programs. 
+
+One possible alternative is to write messages to an application-specific log file, as is done in the
+program in Listing 37-3. The main problem with this approach is that it is difficult for a system
+administrator to manage multiple application log files and monitor them all for error messages. 
+
+The syslog facility was devised to address this problem which provides a single, centralized logging
+facility that can be used to log messages by all applications on the system.
+
+<daemon-and-conf>
+The System Log daemon, syslogd, accepts log messages from two different sources: /dev/log, which
+holds locally produced messages, and remote.
+
+The syslogd daemon examines the facility and level of each message, and then passes it along to any
+of several possible destinations according to the dictates of an associated configuration file,
+   /etc/syslog.conf. Possible destinations include a terminal or virtual console, a disk file, etc.
+
+<klogd>
+An alternative source of the messages placed on /dev/log is the Kernel Log daemon, klogd, which
+collects kernel log messages (produced by the kernel using its printk() function). These messages
+are collected using either of two equivalent Linux-specific interfaces-the /proc/kmsg file and the
+syslog(2) 'system' call-and then placed on /dev/log using the syslog(3) 'library' function.
+
+note: Figure 37-1. printf uses syslog 2 and /proc/kmsg to log and klogd uses syslog 3 to log in to
+/dev/log.
+
+<calls>
+#include <syslog.h>
+
+void openlog(const char *ident, int log_options, int facility);
+void syslog(int priority, const char *format, ...);
+
+<facility-and-level>
+The priority argument is created by ORing together a facility value and a level value. The facility
+indicates the general category of the application logging the message, and is specified as one of
+the values listed in Table 37-1. If omitted, the facility defaults to the value specified in a
+previous openlog() call, or to LOG_USER if that call was omitted.
+
+       LOG_AUTH       security/authorization messages
+       LOG_AUTHPRIV   security/authorization messages (private)
+       ...
+
+The level value indicates the severity of the message, and is specified as one of the values in
+Table 37-2. All of the level values listed in this table appear in SUSv3.
+
+       LOG_EMERG      system is unusable
+       LOG_ALERT      action must be taken immediately
+       LOG_CRIT       critical conditions
+       LOG_ERR        error conditions
+       LOG_WARNING    warning conditions
+       LOG_NOTICE     normal, but significant, condition
+       LOG_INFO       informational message
+       LOG_DEBUG      debug-level message
+
+One difference from printf() is that the format string doesn't need to include a terminating newline
+character. Also, the format string may include the 2-character sequence %m, which is replaced by the
+error string correspond- ing to the current value of errno (i.e., the equivalent of
+    strerror(errno)).
+
+
+={============================================================================
+*kt_linux_core_109* process: execution
+
+LPI. 27
+
+<example>
+#include <unistd.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+void usage(const char* exec_name)
+{
+    fprintf(stderr, "Usage: %s cmd [args]\n\n"
+                    "Run `cmd` passing it `args` and run nexus-inspect"
+                    " when that completes\n", basename(exec_name));
+}
+
+int main(int argc, char** argv)
+{
+    pid_t pid;
+    int opt = 0;
+    char* parent_pid_str = getenv("NEXUS_INSPECT_PARENT_PID");
+    char* cleanup_exe = PKG_BIN_DIR "/nexus-inspect";
+
+    if (NULL == parent_pid_str && argc < 2)
+    {
+        usage(argv[0]);
+        return 1;
+    }
+
+    fprintf( stderr, "** KT: ===================== **\n" );
+    fprintf( stderr, "** KT: exec-then-cleanup-app ** pid(%s) \n", parent_pid_str );
+
+    if (NULL == parent_pid_str)
+    {
+        fprintf( stderr, "** KT: exec-then-cleanup-app: pid(null) \n" );
+
+        // Even if pids were unsigned 64-bit numbers, there could be a maximum
+        // of 20 characters in it. We add another for the null terminator.
+        char parent_pid[21];
+        int ret = snprintf(parent_pid, sizeof(parent_pid), "%i", getpid());
+        if (ret >= 20)
+        {
+            // If you're on a system with pids that are larger than unsigned
+            // 64-bit integers, you should seriously consider why you're still
+            // using nexus-inspect.
+            fprintf(stderr, "Pids are longer than expected (ie %d characters)."
+                            " What's going on?", ret);
+            return 2;
+        }
+
+        pid = fork();
+        assert(!(pid < 0));
+        if (0 == pid)
+        {
+            // Child.
+
+            // Only launch the watcher if the cleanup app exists.
+            struct stat sb;
+            if (-1 == stat(cleanup_exe, &sb))
+            {
+                fprintf(stderr, "Cleanup executable (%s) doesn't exist, so not"
+                                " spawning watcher\n", cleanup_exe);
+                return 0;
+            }
+
+            // Create new group and become group leader.
+            if (setpgid(0, 0)) {
+                perror("setpgid failed!");
+                return 3;
+            }
+
+            const char* args[4] = { argv[0], "-p", parent_pid, NULL };
+
+            fprintf( stderr, "** KT: exec-then-cleanup-app: child: argv[0](%s) parent_pid(%s) \n"
+                , argv[0], parent_pid );
+
+            // We set the pid in the environment. Doing it via environment
+            // rather than arguments simplifies the code because we don't
+            // have to do any argument parsing - note that we do accept
+            // arguments and options, but they are *all* passed on to the
+            // exec'd process (see the parent branch, below).
+            setenv("NEXUS_INSPECT_PARENT_PID", parent_pid, 1);
+            execv(argv[0], (char*const*)args);
+        }
+        else
+        {
+            fprintf( stderr, "** KT: exec-then-cleanup-app: parent: argv[1](%s) \n", argv[1] );
+
+            // Parent.
+            if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
+                perror("exec failed!");
+                return 4;;
+            }
+        }
+    }
+    else
+    {
+        fprintf( stderr, "** KT: exec-then-cleanup-app: pid(not null), cleanup_exe(%s) \n", 
+            cleanup_exe );
+
+        int parent_pid=atoi(parent_pid_str);
+        fprintf(stderr, "Going to watch pid: %d\n", parent_pid);
+        while (0 == kill(parent_pid, 0))
+        {
+            sleep(1);
+        }
+        fprintf(stderr, "Pid %d has died. Going to cleanup.\n", parent_pid);
+
+        char* args[5] = { cleanup_exe, "-r", "-p", parent_pid_str, NULL };
+        return execv(cleanup_exe, args);
+    }
+
+    return 0;
+}
 
 
 ={============================================================================
@@ -15947,6 +16165,18 @@ int main(int argc, char *argv[])
     printf("%ld: caught SIGHUP\n", (long) getpid());
   }
 }
+
+
+={============================================================================
+*kt_linux_sysc_003* getenv
+
+#include <stdlib.h>
+
+char *getenv(const char *name);
+
+RETURN VALUE
+The getenv() function returns a pointer to the value in the environment, or NULL if there is no
+match.
 
 
 # ============================================================================
