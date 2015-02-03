@@ -17,7 +17,7 @@ KT KB. Linux
 |kt_linux_bash_008| bash: for
 |kt_linux_bash_009| bash: select
 |kt_linux_bash_010| bash: case
-|kt_linux_bash_011| bash: while
+|kt_linux_bash_011| bash: while <getopts>
 |kt_linux_bash_012| bash: break and continue
 |kt_linux_bash_013| bash: read
 |kt_linux_bash_014| bash: function
@@ -71,6 +71,8 @@ KT KB. Linux
 |kt_linux_tool_032| split
 |kt_linux_tool_033| getconf
 |kt_linux_tool_034| ps
+|kt_linux_tool_035| wget, curl
+|kt_linux_tool_036| nc
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -140,8 +142,8 @@ KT KB. Linux
 |kt_linux_core_102| how to run three threads sequencially
 |kt_linux_core_103| priority and schedule
 
-|kt_linux_core_100| file io
-|kt_linux_core_101| system resource limits
+|kt_linux_core_200| file io
+|kt_linux_core_201| system resource limits
 
 |kt_linux_core_200| ipc
 |kt_linux_core_201| ipc: system v <ipcs-command>
@@ -189,7 +191,7 @@ KT KB. Linux
 |kt_linux_core_801| proc: /proc/PID/status
 |kt_linux_core_802| proc: /proc/PID/maps
 |kt_linux_core_803| proc: /proc/PID/exe
-|kt_linux_core_813| proc: /proc/sys/kernel
+|kt_linux_core_813| proc: /proc/sys/kernel, system resource limits
 
 #{ syscall
 |kt_linux_sysc_001| pause
@@ -519,6 +521,15 @@ $ echo $TEST
 test
 $
 
+note: Q? this works as it has default value when parameter is not set, null. what is it?
+box_ip=${2-localhost}
+box_port=${3-2033}
+
+
+${parameter:+word}
+If parameter is null or unset, nothing is substituted, otherwise the expansion of word is
+substituted.
+
 
 <substring-expansion>
 
@@ -578,12 +589,14 @@ The TEST-COMMAND list is executed, and if its return status is zero, the CONSEQU
   executed. The return status is the exit status of the last command executed, or zero if no
   condition tested true.
 
+<primaries-on-conditional>
 Primary        Meaning
 [ -a FILE ]    True if FILE exists.
 [ -x FILE ]    True if FILE exists and is excutable.
 [ -f FILE ]    True if FILE exists and is a regular file.
 
 [ -z string ]  True if the length of string is zero.
+[ -n string ]  True if the length of string is non-zero.
 
 note: can use on env variable.
 
@@ -593,7 +606,6 @@ else
    # when set
 fi
 
-[ -n string ]  True if the length of string is non-zero.
 
 if [ -n "${ZB_FORCE_BRANCH}" ]; then
    # when set
@@ -611,6 +623,108 @@ Regular expressions may also be used in comparisons:
 
 gender="female"
 if [[ "$gender" == f* ]]
+
+
+{test-expr}
+<single>
+test
+[
+
+    test expr
+
+Evaluate a conditional expression expr and return a status of 0 (true) or 1 (false). Each operator
+and operand must be a separate argument. Expressions are composed of the primaries described below
+in Bash Conditional Expressions. test does not accept any options, nor does it accept and ignore an
+argument of -- as signifying the end of options.
+
+When the [ form is used, the last argument to the command must be a ].
+
+Expressions may be combined using the following operators, listed in decreasing order of precedence.
+The evaluation depends on the number of arguments; see below. Operator precedence is used when there
+are five or more arguments.
+
+! expr 
+True if expr is false.
+
+( expr )
+Returns the value of expr. This may be used to override the normal precedence of operators.
+
+expr1 -a expr2
+True if both expr1 and expr2 are true.
+
+expr1 -o expr2
+True if 'either' expr1 or expr2 is true. 
+
+The test and [ builtins evaluate conditional expressions using a set of rules based on the number of
+arguments. 
+
+<double>
+http://www.gnu.org/software/bash/manual/bash.html#Conditional-Constructs
+
+note: Use [] whenever you want your script to be portable across shells. Use [[]] if you want
+conditional expressions not supported by [] and don't need to be portable.
+
+[[ is bash's improvement to the [ command. It has several enhancements that make it a better choice
+if you write scripts that target bash. My favorites are:
+
+1. It is a syntactical feature of the shell, so it has some special behavior that [ doesn't have.
+You no longer have to quote variables like mad because [[ handles empty strings and strings with
+whitespace more intuitively. For example, with [ you have to write
+
+    if [ -f "$FILE" ]
+
+to correctly handle empty strings or file names with spaces in them. With [[ the quotes are
+unnecessary:
+
+    if [[ -f $FILE ]]
+
+2. Because it is a syntactical feature, it lets you use && and || operators for boolean tests and < and
+> for string comparisons. [ cannot do this because it is a regular command and &&, ||, <, and > are
+not passed to regular commands as command-line arguments.
+
+3. It has a wonderful =~ operator for doing regular expression matches. With [ you might write
+
+    if [ "$ANSWER" = y -o "$ANSWER" = yes ]
+
+    With [[ you can write this as
+
+    if [[ $ANSWER =~ ^y(es)?$ ]]
+
+It even lets you access the captured groups which it stores in BASH_REMATCH. For instance,
+   ${BASH_REMATCH[1]} would be "es" if you typed a full "yes" above.
+
+4. You get pattern matching aka globbing for free. Maybe you're less strict about how to type yes.
+Maybe you're okay if the user types y-anything. Got you covered:
+
+    if [[ $ANSWER = y* ]]
+
+Keep in mind that it is a bash extension, so if you are writing sh-compatible scripts then you need
+to stick with [. Make sure you have the #!/bin/bash shebang line for your script if you use double
+brackets.
+
+<example>
+1. if loginscript is set(defined), run -f. 
+   if file exist then test return true so no fail() call.
+   if file not exist then test return false so run fail() call.
+2. if loginscript is not set, no run -f and test return true(0) so no fail() call.
+
+[[ -z "$loginscript" || -f "$loginscript" ]] ||
+    fail "Loginscript '$loginscript' doesn't exist."
+
+note: progress to next cond when only previous one is true. [[ cond || cond ]] || exec
+
+<example>
+To see if meet at least one of options.
+
+    [[ -n "$release" || -n "$zincdir" || -n "$jenkinshost" || -n "$jenkinsurl" ||
+       -n "$galliumurl" || -n "$localgallium" || -n "$platformconfigurl" ||
+       "$virtualinputdriver" -ne 0 || -n "$irdriver" || "$enabledbustcp" -ne 0 ||
+       "$directfbsrc" -ne 0 || "$killzincdaemons" -ne 0 || -n "$toolnames" ||
+       -n "$networkmanager" || -n "$loginscript" || -n "$startupscript" ||
+       "$forcefirsttime" -ne 0 || "$needsreboot" -ne 0 || "$vidmemcapture" -ne 0 ]] ||
+    {
+        fail "You must specify at least one of -[ZzjugcdeEtsknlbTfrv]."
+    }
 
 
 ={============================================================================
@@ -690,8 +804,8 @@ echo $1 $2 $3 ' -> echo $1 $2 $3'
 $./runsh.sh 1 2
 1 2
 
-<$@>
-args=("$@");   # to get all args and set it to array.
+<$@> <$*>
+args=("$@");   # to get 'all' args and set it to array.
 echo ${args[0]} ${args[1]} ${args[2]}
 
 echo $@        # to print all args in a one go
@@ -965,6 +1079,27 @@ while [ "$1" != "" ]; do
   esac
   shift
 done
+
+
+{getopts} shell built-in
+
+getopts optstring name [args]
+
+getopts is used by shell scripts to parse positional parameters. 'optstring' contains the option
+characters to be recognized; if a character is followed by a colon, the option is expected to have
+an argument, which should be separated from it by whitespace. 
+
+<option>
+Each time it is invoked, getopts 'places' the next option in the shell variable 'name', initializing
+name if it does not exist, and the 'index' of the next argument to be processed into the variable
+'OPTIND'. OPTIND is initialized to 1 each time the shell or a shell script is invoked. 
+
+<arg>
+When an option requires an argument, getopts places that 'argument' into the variable OPTARG. 
+
+<return>
+When the end of options is encountered, getopts exits with a return value greater than zero. note:
+false. OPTIND is set to the index of the first 'non'-option argument, and name is set to '?'.
 
 
 ={============================================================================
@@ -1571,28 +1706,23 @@ xpg_echo       	off
 The $? expands to the exit status of the 'most' recently executed foreground pipeline. Can be used
 in test construct.
 
-The following example demonstrates that TEST−COMMANDS might be 'any' UNIX command that returns an
+The following example demonstrates that TEST COMMANDS might be 'any' UNIX command that returns an
 exit status, and that if again returns an exit status of zero:
 
-note: use exit value but not return value of a command
-
 <example>
-:~/github/kb$ grep KB README
-This is KB for keitee.
+note: The grep return 0 when found and 1 when not found. The test in shell see that 0 is true and 1
+is false.
 
-:~/github/kb$ if grep KT README; then echo "found KB"; fi
-:~/github/kb$ echo $?
-0
+kpark@wll1p04345:~$ if grep KB readme; then echo "found"; fi
+readme:1:this is KB for keitee.
+found
 
-:~/github/kb$ if ! grep KT README; then echo "found KB"; fi
-found KB
-:~/github/kb$ echo $?
-0
+kpark@wll1p04345:~$ if ! grep KB readme; then echo "found"; fi
+readme:1:this is KB for keitee.
+kpark@wll1p04345:~$ 
 
-The same result
-
-grep KB README
-if [ $? −ne 0 ] ; then echo "found KB" ; fi
+kpark@wll1p04345:~$ if true; then echo "found"; fi
+found
 
 <example>
 while kill -0 "${parent_pid}" &>/dev/null;
@@ -1654,7 +1784,7 @@ An OR list has the form
 
 command1 || command2
 
-command2 is executed if, and only if, command1 returns a non-zero exit status.
+command2 is executed if, and only if, command1 returns a non-zero(false) exit status.
 
 The return status of AND and OR lists is the exit status of the last command executed in the list. 
 
@@ -1756,6 +1886,16 @@ keitee@debian-keitee:~/github/kb$ echo $PS1
 PS1="\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\u@\h:\w\:$SHLVL$"
 
 keitee@debian-keitee:~/github/kb\:2$
+
+
+={============================================================================
+*kt_linux_bash_200* bash: code: debug and printf
+
+debug() {
+    # Note: echo -e doesn't work on OS X's default bash (3.2).
+    printf '\n\033[0;32m%s\n' "$*"
+    tput sgr0
+}
 
 
 # ============================================================================
@@ -3046,11 +3186,18 @@ gzip -c ramdisk_rootfs_img > ramdisk_rootfs_img.gz
 
 
 {tar}
-" maintain permissions when create a archive
+# maintain permissions when create a archive
 % tar cvzfp xxx.tgz ./
 
-" to extract
+# to extract
 % tar zxvf *.tgz
+
+-f, --file ARCHIVE
+use archive file or device ARCHIVE
+
+# '-' is used instead of filename after -f
+# to extract from stdin. wget write to stdout and tar read from stdin. '-' used differently.
+wget http://xxx.tar.bz2 -O - | tar -xjf -
 
 " to extract bz file
 % tar xjf *.bz2
@@ -3127,6 +3274,45 @@ kpark@wll1p04345:~/work$ ps -o pgid $$
 $ ps -p $$ -o 'pid pgid sid command'
   PID  PGID   SID COMMAND
  3697  3697  3697 bash
+
+
+={============================================================================
+*kt_linux_tool_035* wget
+
+{wget}
+wget http://xxx.tar.bz2 -O - | tar -xjf -
+
+-O file
+--output-document=file
+The documents will not be written to the appropriate files, but all will be concatenated together
+and written to file. If - is used as file, documents will be printed to standard output, disabling
+link conversion. 
+
+
+{curl}
+curl  is  a  tool  to  transfer data from or to a server, using one of the supported protocols
+(DICT, FILE, FTP, FTPS, GOPHER, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, POP3, POP3S, RTMP, RTSP, SCP,
+ SFTP, SMTP, SMTPS, TELNET and TFTP). The command is designed to work without user interaction.
+
+curl offers a busload of useful tricks like proxy support, user authentication, FTP upload, HTTP
+post, SSL connections, cookies, file transfer resume and more. As  you  will  see below, the number
+of features will make your head spin!
+
+curl is powered by libcurl for all transfer-related features. See libcurl(3) for details.
+
+curl --silent --show-error -o "$(basename $galliumurl)" "$galliumurl"
+
+
+={============================================================================
+*kt_linux_tool_036* nc
+
+note: on host but not the target, when run nc without -q then no prompt back when run so need to
+specify -q to get prompt back.
+
+printf "D\t${key}\n\0U\t${key}\n\0" | nc -q 1 $box_ip $box_port
+
+-q seconds   after EOF on stdin, wait the specified number of seconds and then quit. If seconds is
+negative, wait forever.
 
 
 # ============================================================================
@@ -8494,6 +8680,18 @@ exec() functions use the caller's existing environment (i.e., the contents of en
 environment for the new program.
 
 <example>
+This is to two things: parent is to run actual application given and child is to check if a parent
+is alive in a loop. If parent is died, do some action.
+
+shell:
+   exec "exec-then-cleanup-app applicaion-name args..."
+
+1. shell and exec-then-cleanup-app will have the same pid.
+2. After fork, child will set ppid via env and exec exec-then-cleanup-app. This time will do loop.
+3. After fork, parent will exec application with args.
+
+// exec-then-cleanup-app
+
 #include <unistd.h>
 #include <signal.h>
 #include <stdio.h>
@@ -8514,6 +8712,8 @@ int main(int argc, char** argv)
 {
   pid_t pid;
   int opt = 0;
+
+  // note: getenv returns NULL if an env is not set.
   char* parent_pid_str = getenv("NEXUS_INSPECT_PARENT_PID");
   char* cleanup_exe = PKG_BIN_DIR "/nexus-inspect";
 
@@ -8523,13 +8723,8 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  fprintf( stderr, "** KT: ===================== **\n" );
-  fprintf( stderr, "** KT: exec-then-cleanup-app ** pid(%s) \n", parent_pid_str );
-
   if (NULL == parent_pid_str)
   {
-    fprintf( stderr, "** KT: exec-then-cleanup-app: pid(null) \n" );
-
     // Even if pids were unsigned 64-bit numbers, there could be a maximum
     // of 20 characters in it. We add another for the null terminator.
     char parent_pid[21];
@@ -8554,8 +8749,7 @@ int main(int argc, char** argv)
       struct stat sb;
       if (-1 == stat(cleanup_exe, &sb))
       {
-        fprintf(stderr, "Cleanup executable (%s) doesn't exist, so not"
-            " spawning watcher\n", cleanup_exe);
+        fprintf(stderr, "Cleanup executable (%s) doesn't exist, so not" " spawning watcher\n", cleanup_exe);
         return 0;
       }
 
@@ -8567,21 +8761,16 @@ int main(int argc, char** argv)
 
       const char* args[4] = { argv[0], "-p", parent_pid, NULL };
 
-      fprintf( stderr, "** KT: exec-then-cleanup-app: child: argv[0](%s) parent_pid(%s) \n"
-          , argv[0], parent_pid );
+      // We set the pid in the environment. Doing it via environment rather than arguments
+      // simplifies the code because we don't have to do any argument parsing - note that we do
+      // accept arguments and options, but they are *all* passed on to the exec'd process (see the
+      // parent branch, below).
 
-      // We set the pid in the environment. Doing it via environment
-      // rather than arguments simplifies the code because we don't
-      // have to do any argument parsing - note that we do accept
-      // arguments and options, but they are *all* passed on to the
-      // exec'd process (see the parent branch, below).
       setenv("NEXUS_INSPECT_PARENT_PID", parent_pid, 1);
       execv(argv[0], (char*const*)args);
     }
     else
     {
-      fprintf( stderr, "** KT: exec-then-cleanup-app: parent: argv[1](%s) \n", argv[1] );
-
       // Parent.
       if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
         perror("exec failed!");
@@ -8591,9 +8780,6 @@ int main(int argc, char** argv)
   }
   else
   {
-    fprintf( stderr, "** KT: exec-then-cleanup-app: pid(not null), cleanup_exe(%s) \n", 
-        cleanup_exe );
-
     int parent_pid=atoi(parent_pid_str);
     fprintf(stderr, "Going to watch pid: %d\n", parent_pid);
     while (0 == kill(parent_pid, 0))
@@ -9217,9 +9403,9 @@ SCHED_RR are optional in POSIX, and only are supported for real time bound threa
 
 
 # ============================================================================
-#{
+#{ FILE
 ={============================================================================
-*kt_linux_core_100* file io
+*kt_linux_core_200* file io
 
 {open-flag} LPI, 4.3.1
 O_CREAT
@@ -9237,11 +9423,48 @@ allows the caller to 'ensure' that it is the process creating the file.
 
 
 ={============================================================================
-*kt_linux_core_101* system resource limits
+*kt_linux_core_201* file attribute
 
-Various files under the /proc/sys/kernel directory can be used to view and modify these limits.
+LPI 15.
 
-On Linux, the ipcs -l command can be used to list the limits on each of the IPC mechanisms. 
+{calls}
+The stat(), lstat(), and fstat() system calls retrieve information about a file, mostly drawn from
+the file i-node.
+
+man 2 stat
+
+#include <sys/stat.h>
+int stat(const char *pathname, struct stat *statbuf);
+int lstat(const char *pathname, struct stat *statbuf);
+int fstat(int fd, struct stat *statbuf);
+
+All return 0 on success, or -1 on error
+
+stat() returns information about a named file;
+
+lstat() is similar to stat(), except that if the named file is a symbolic link, information about
+the link itself is returned, rather than the file to which the link points; and
+
+fstat() returns information about a file referred to by an open file descriptor.
+
+<permission>
+The stat() and lstat() system calls don't require permissions on the file itself. However, execute
+(search) permission is required on 'all' of the parent directories specified in pathname. The fstat()
+  system call always succeeds, if provided with a valid file descriptor. 
+
+<use-to-check>
+Shows that can use stat() to check if the file exist or not.
+
+struct stat sb;
+if (-1 == stat(cleanup_exe, &sb))
+{
+  fprintf(stderr, "executable (%s) doesn't exist\n", cleanup_exe);
+  return 0;
+}
+
+
+={============================================================================
+*kt_linux_core_202* 
 
 
 ={============================================================================
@@ -16261,6 +16484,14 @@ lrwxrwxrwx 1 keitee keitee 0 Feb  2 22:21 /proc/3510/exe -> /home/keitee/bin/vim
 note: to check the path name of the process.
 
 
+={============================================================================
+*kt_linux_core_813* proc: /proc/sys/kernel, system resource limits
+
+Various files under the /proc/sys/kernel directory can be used to view and modify these limits.
+
+On Linux, the ipcs -l command can be used to list the limits on each of the IPC mechanisms. 
+
+
 # ============================================================================
 #{ SYSCALL
 ={============================================================================
@@ -16295,8 +16526,9 @@ int main(int argc, char *argv[])
 
 
 ={============================================================================
-*kt_linux_sysc_003* getenv
+*kt_linux_sysc_003* getenv, setenv
 
+<getenv>
 #include <stdlib.h>
 
 char *getenv(const char *name);
@@ -16304,6 +16536,14 @@ char *getenv(const char *name);
 RETURN VALUE
 The getenv() function returns a pointer to the value in the environment, or NULL if there is no
 match.
+
+<setenv>
+int setenv(const char *name, const char *value, int overwrite);
+
+The setenv() function adds the variable name to the environment with the value value, if name does
+  not already exist. If name does exist in the environment, then its value is changed to value 'if'
+  overwrite is 'nonzero'; if overwrite is zero, then the value of name is not changed. This function
+  makes copies of the strings pointed to by name and value (by contrast with putenv(3)).
 
 
 # ============================================================================
