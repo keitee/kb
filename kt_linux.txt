@@ -193,15 +193,15 @@ KT KB. Linux
 |kt_linux_core_803| proc: /proc/PID/exe
 |kt_linux_core_813| proc: /proc/sys/kernel, system resource limits
 
-#{ syscall
+#{ SYSCALL
 |kt_linux_sysc_001| pause
 |kt_linux_sysc_002| alarm
-|kt_linux_sysc_003| getenv
+|kt_linux_sysc_003| getenv, setenv
 
-#{ sys admin
+#{ SYSADMIN
 |kt_linux_sysa_001| sys: cannot execute a file in cdrom, fstab
 
-#{ sys env
+#{ SYSENV
 |kt_linux_sete_001| ubuntu: virtualbox
 |kt_linux_sete_002| ubuntu: workspace
 |kt_linux_sete_003| ubuntu: samba
@@ -6638,7 +6638,7 @@ const char *gnu_get_libc_version(void);
 
 
 ={============================================================================
-*kt_linux_core_004* system call errors and errno
+*kt_linux_core_004* errors and errno
 
 The syscalls(2) manual page lists the Linux system calls.
 
@@ -6665,7 +6665,7 @@ if (fd == -1) {
 
 
 {errno}
-When a system call fails, it sets the global integer variable errno to a positive value that
+When a system call fails, it sets the 'global' integer variable errno to a positive value that
 identifies the specific error. Including the <errno.h> header file provides a declaration of errno,
 as well as a set of constants for the various error numbers. All of these symbolic names
 commence with E.
@@ -6678,6 +6678,7 @@ EINVAL          Invalid argument (POSIX.1)
 Successful system calls and library functions 'never' reset errno to 0, so this variable may have a
 nonzero value as a consequence of an error from a previous call. Furthermore, SUSv3 permits a
 successful function call to set errno to a nonzero value (although few functions do this).
+
 Therefore, when checking for an error, we should always first check if the function return value
 indicates an error, and only then examine errno to determine the cause of the error.
 
@@ -6705,6 +6706,8 @@ setting of errno depends on which underlying system call failed. The perror() an
 cause of errors depends on the particular function and is documented in the function's manual page.
 For these functions, it is a mistake to use errno, perror(), or strerror() to diagnose errors.
 
+note: no 'uniform' way of error reporting when use system and library calls.
+
 <print-errnos>
 to print an error message based on the errno value. The perror() and strerror() library functions
 are provided for this purpose.
@@ -6712,7 +6715,7 @@ are provided for this purpose.
 #include <stdio.h>
 void perror(const char *msg);
 
-The perror() function prints the string pointed to by its msg argument, followed by a message
+The perror() function prints the string pointed to by its msg argument, 'followed' by a message
 corresponding to the current value of errno.
 
 #include <string.h>
@@ -6722,15 +6725,62 @@ char *strerror(int errnum);
 ={============================================================================
 *kt_linux_core_005* error handling codes from LPI
 
-<thread-errno>
-The errExitEN() function is the same as errExit(), except that instead of printing the error text
-corresponding to the current value of errno, it prints the text corresponding to the error number
-(thus, the EN suffix) given in the argument errnum.
+errMsg()
+Prints a message on standard error. Its argument list is the same as for printf(), except that a
+terminating newline character is automatically appended to the output string. The errMsg() function
+prints the error text corresponding to the current value of errno-this consists of the error name,
+such as EPERM, plus the error description as returned by strerror()-followed by the formatted output
+  specified in the argument list.
 
-Why?
+errExit() 
+Operates like errMsg(), but also terminates the program, either by calling exit() or, if the
+environment variable EF_DUMPCORE is defined with a nonempty string value, by calling abort() to
+produce a core dump file.
+
+err_exit() 
+is similar to errExit(), but differs in two respects:
+
+@ It doesn't flush standard output before printing the error message.
+@ It terminates the process by calling _exit() instead of exit(). This causes the process to
+terminate without flushing stdio buffers or invoking exit handlers.
+
+The details of these differences in the operation of err_exit() will become clearer where we
+describe the differences between _exit() and exit(), and consider the treatment of stdio buffers and
+exit handlers in a child created by fork(). 
+
+For now, we simply note that err_exit() is especially 'useful' if we write a library function that
+creates a child process that needs to terminate because of an error. This termination should occur
+without flushing the child's copy of the parent’s (i.e., the calling process's) stdio buffers and
+without invoking exit handlers established by the parent.
+
+errExitEN() 
+is the same as errExit(), except that instead of printing the error text corresponding to the
+current value of errno, it prints the text corresponding to the error number (thus, the EN suffix)
+given in the argument errnum.
+
+Mainly, we use errExitEN() in programs that employ the POSIX threads API. Since:
+
+The traditional method of returning status from system calls and some library functions is to return
+0 on success and -1 on error, with errno being set to indicate the error. The functions in the
+pthreads API do things differently. All pthreads functions return 0 on success or a positive value
+on failure. The failure value is one of the same values that can be placed in errno by traditional
+UNIX system calls. 
+
+We could diagnose errors from the POSIX threads functions using code such as the following:
+
+errno = pthread_create(&thread, NULL, func, &arg);
+if (errno != 0)
+   errExit("pthread_create");
 
 However, this approach is inefficient because errno is defined in threaded programs as a macro that
-expands into a function call that returns a modifiable lvalue. 
+expands into a 'function' call that returns a modifiable lvalue. 
+
+errExitEN() function allows us to write a more efficient equivalent of the above code:
+
+int s;
+s = pthread_create(&thread, NULL, func, &arg);
+if (s != 0)
+   errExitEN(s, "pthread_create");
 
 note: errExitEN do not use errno and user provide it instead. this also suggest that errno is
 managed per thread.
@@ -7228,9 +7278,12 @@ However, this is generally a mistake. A well-designed application will have a ha
 that causes the application to exit 'gracefully', cleaning up temporary files and releasing other
 resources beforehand. Killing a process with SIGKILL bypasses the SIGTERM handler. Thus, we should
 always first attempt to terminate a process using SIGTERM, and reserve SIGKILL as a last resort for
-killing runaway processes that don’t respond to SIGTERM. 
+killing runaway processes that don't respond to SIGTERM. 
 
 note: this means that if use sure kill, then can cause resource locked up and leaking.
+
+note: what if there is no handler of SIGTERM? will be terminated by kernel anyway? when tried to
+kill a simple application which do sleep and loop, it is terminated when use kill, SIGTERM.
 
 <SIGURG>
 This signal is sent to a process to indicate the presence of out-of-band (also known as urgent) data
@@ -8474,24 +8527,97 @@ signal stops a process by default.
 
 LPI 37.
 
-{}
+{characteritics}
 A daemon is a process with the following characteristics:
 
 1. It runs in the background and has 'no' controlling terminal. The lack of a controlling terminal
-ensures that the kernel never automatically generates any job-control or terminal-related signals
+ensures that the kernel 'never' automatically generates any job-control or terminal-related signals
 (such as SIGINT, SIGTSTP, and SIGHUP) for a daemon.
 
 2. Many standard daemons run as privileged processes (i.e., effective user ID of 0),
 
-3. It is a convention (not universally observed) that daemons have names ending with the letter d.
+3. It is a 'convention' (not universally observed) that daemons have names ending with the letter d.
 On Linux, certain daemons are run as kernel threads. The code of such daemons is part of the kernel,
    and they are typically created during system startup. When listed using ps(1), the names of these
    daemons are surrounded by square brackets ([]). One example of a kernel thread is pdflush, which
    periodically flushes dirty pages (e.g., pages from the buffer cache) to disk.
 
 
-{syslog}
+{steps-to-create-daemon}
 
+1. Perform a fork(), after which the parent exits and the child continues. As a consequence, the
+daemon becomes a child of the init process. note: zombie.
+
+This is done for two reasons:
+
+@ Assuming the daemon was started from the command line, the parent's termination is noticed by the
+shell, which then displays another shell prompt and leaves the child to 'continue' in the
+background.
+
+@ To guarantee not to be a process group leader, since it inherited its process group ID from its
+parent and obtained its own unique process ID, which differs from the inherited process group ID.
+
+2. The child process calls setsid() to start a new session and free itself of any association with a
+controlling terminal.
+
+note: From step 1, it is guaranteed not to be a group leader and this is necessary since only a
+process which is not a group leader can create a new session and this has no controlling terminal.
+See process: group: session.
+
+3. If the daemon never opens any terminal devices thereafter, then we don't need to worry about the
+daemon reacquiring a controlling terminal.
+
+4.5. See 37.2
+
+6. Close all open file descriptors that the daemon has inherited from its parent. A daemon may need
+to keep certain inherited file descriptors open, so this step is optional, or open to variation.
+
+This is done for a variety of reasons. Since the daemon has lost its controlling terminal and is
+running in the background, it makes 'no' sense for the daemon to keep file descriptors 0, 1, and 2
+open if these refer to the terminal. 
+
+Furthermore, we can't 'unmount' any file systems on which the long-lived daemon holds files open.
+And, as usual, we should close unused open file descriptors because file descriptors are a finite
+resource.
+
+7. After having closed file descriptors 0, 1, and 2, a daemon normally opens /dev/null and uses
+dup2() (or similar) to make all those descriptors refer to this device.
+
+note: this is why cannot see output when use sandbox?
+
+This is done for two reasons:
+
+@ It ensures that if the daemon calls library functions that perform I/O on these descriptors, those
+functions won't unexpectedly fail. note: due to step 6.
+
+@ It prevents the possibility that the daemon later opens a file using descriptor 1 or 2, which is
+then written to-and thus corrupted-by a library function that expects to treat these descriptors as
+standard output and standard error.
+
+TODO: Once figure out the daemon implementation and compare it with listing 37.1.
+
+
+{reinit-daemon}
+The fact that many daemons should run continuously presents a couple of programming hurdles:
+
+@ Typically, a daemon reads operational parameters from an associated configuration file on startup.
+Sometimes, it is desirable to be able to change these parameters "on the fly," 'without' needing to
+stop and restart the daemon.
+
+@ Some daemons produce log files. If the daemon never closes the log file, then it may grow
+endlessly, eventually clogging the file system. noted that even if we remove the last name of a
+file, the file continues to exist as long as any process has it open. What we need is a way of
+telling the daemon to close its log file and open a new file, so that we can rotate log files as
+required.
+
+The solution to both of these problems is to have the daemon establish a handler for SIGHUP, and
+perform the required steps upon receipt of this signal.
+
+Why is it possible? Since a daemon has no controlling terminal, the kernel never generates this
+signal for a daemon. Therefore, daemons can use SIGHUP for the purpose described here.
+
+
+{syslog}
 note: no syslogd on a embedded system.
 
 <why>
@@ -8504,15 +8630,15 @@ program in Listing 37-3. The main problem with this approach is that it is diffi
 administrator to manage multiple application log files and monitor them all for error messages. 
 
 The syslog facility was devised to address this problem which provides a single, centralized logging
-facility that can be used to log messages by all applications on the system.
+facility that can be used to log messages by 'all' applications on the system.
 
 <daemon-and-conf>
 The System Log daemon, syslogd, accepts log messages from two different sources: /dev/log, which
 holds locally produced messages, and remote.
 
 The syslogd daemon examines the facility and level of each message, and then passes it along to any
-of several possible destinations according to the dictates of an associated configuration file,
-   /etc/syslog.conf. Possible destinations include a terminal or virtual console, a disk file, etc.
+of several possible destinations according to the associated configuration file, /etc/syslog.conf.
+Possible destinations include a terminal or virtual console, a disk file, etc.
 
 <klogd>
 An alternative source of the messages placed on /dev/log is the Kernel Log daemon, klogd, which
