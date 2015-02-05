@@ -12,7 +12,7 @@ KT KB. Linux
 LPI 41.
 
 {static-library}
-<ar-command>
+<create-static> ar-command
 The archive also records various attributes of each of the component object files, including file
 permissions, numeric user and group IDs, and last modification time.
 
@@ -33,21 +33,21 @@ rw-r--r-- 1000/100 1001016 Nov 15 12:26 2009 mod1.o
 rw-r--r-- 1000/100 406668 Nov 15 12:21 2009 mod2.o
 rw-r--r-- 1000/100 46672 Nov 15 12:21 2009 mod3.o
 
-<how-to-link-static>
-
+<link-static>
 1. The first is to name the static library as part of the link command, as in the following:
 
 $ cc -g -c prog.c
 $ cc -g -o prog prog.o libdemo.a
 
-2. can place the library in one of the 'standard' directories searched by the linker (e.g.,
-    /usr/lib), and then specify the library name; the filename of the library without the lib prefix
-and .a suffix using the –l option:
+note: link-time search
+2. can place the library in one of the 'standard' directories searched by the linker such as
+/usr/lib, and then specify the library name; the filename of the library without the lib prefix and
+.a suffix using the -l option:
 
 $ cc -g -o prog prog.o -ldemo
 
 3. If the library resides in a directory not normally searched by the linker, we can specify that
-the linker should search this additional directory using the –L option:
+the linker should search this additional directory using the -L option:
 
 $ cc -g -o prog prog.o -Lmylibdir -ldemo
 
@@ -105,19 +105,133 @@ previously built shared library. As with normal executables, the object files wi
 library no longer maintain distinct identities.
 
 
+{shared-vs-static} <do-not-use-single-line>
+
+$ cat main.c 
+#include <stdio.h>
+
+extern void foo(void);
+
+int main(void)
+{
+  foo();
+  return 0;
+}
+
+$ cat foo.c 
+#include <stdio.h>
+
+void foo(void)
+{
+  printf("foo: this is foo...\n");
+}
+
+kpark@wll1p04345:~/work/xxx$ ls -alR 
+drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:34 one
+drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:37 two
+drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:46 thr
+
+<used-seperated-step> shared library
+./one:
+-rw-r--r-- 1 kpark kpark   73 Feb  5 09:32 foo.c
+-rw-r--r-- 1 kpark kpark 1528 Feb  5 09:33 foo.o
+-rwxr-xr-x 1 kpark kpark 6407 Feb  5 09:33 libfoo.so
+-rw-r--r-- 1 kpark kpark   82 Feb  5 09:32 main.c
+-rwxr-xr-x 1 kpark kpark 7120 Feb  5 09:34 one
+
+$ gcc -c -fpic foo.c 
+$ gcc -shared -o libfoo.so foo.o
+$ gcc -o one main.c libfoo.so 
+
+$ ./one 
+./one: error while loading shared libraries: libfoo.so: cannot open shared object file: No such file
+or directory
+
+$ readelf -d one | grep NEEDED
+(standard input):4: 0x0000000000000001 (NEEDED)             Shared library: [libfoo.so]
+(standard input):5: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
+$ file libfoo.so 
+libfoo.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked,
+  BuildID[sha1]=0x7c5aa43368b2a98af48a1558d7e2c5a010d238b0, not stripped
+
+$ readelf -s libfoo.so | grep _OFFSET_TA
+(standard input):64:    43: 0000000000200978     0 OBJECT  LOCAL  DEFAULT  ABS _GLOBAL_OFFSET_TABLE_
+
+<used-single-step>
+./two:
+-rw-r--r-- 1 kpark kpark   73 Feb  5 09:32 foo.c
+-rw-r--r-- 1 kpark kpark 1528 Feb  5 09:37 libfoo.so
+-rw-r--r-- 1 kpark kpark   82 Feb  5 09:32 main.c
+-rwxr-xr-x 1 kpark kpark 6872 Feb  5 09:37 two
+
+$ gcc -c -fpic foo.c -shared -o libfoo.so
+$ gcc -o two main.c libfoo.so
+
+$ ./two 
+foo: this is foo...
+
+$ readelf -d two | grep NEEDED
+(standard input):4: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
+$ readelf -s libfoo.so | grep _OFFSET_TA
+(standard input):14:    10: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND _GLOBAL_OFFSET_TABLE_
+
+$ file libfoo.so 
+libfoo.so: ELF 64-bit LSB relocatable, x86-64, version 1 (SYSV), not stripped
+
+<used-static-build>
+./thr:
+-rw-r--r-- 1 kpark kpark   73 Feb  5 09:45 foo.c
+-rw-r--r-- 1 kpark kpark 1480 Feb  5 09:46 foo.o
+-rw-r--r-- 1 kpark kpark   82 Feb  5 09:45 main.c
+-rwxr-xr-x 1 kpark kpark 6872 Feb  5 09:46 thr
+
+$ gcc -c foo.c -o foo.o 
+$ gcc -o thr main.c foo.o 
+
+$ ./thr 
+foo: this is foo...
+
+$ file foo.o 
+foo.o: ELF 64-bit LSB relocatable, x86-64, version 1 (SYSV), not stripped
+
+$ readelf -s foo.o | grep _OFFSET_TA
+$ readelf -d thr | grep NEEDED
+(standard input):4: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
+
 {position-independent-code}
 These changes allow the code to be located at any virtual address at run time. This is necessary for
 shared libraries, since there is no way of knowing at link time where the shared library code will
 be located in memory.
 
-In order to determine whether an existing object file has been compiled with the –fPIC option, we
-can check for the presence of the name _GLOBAL_OFFSET_TABLE_ in the object file’s symbol table,
+In order to determine whether an existing object file has been compiled with the -fPIC option, we
+can check for the presence of the name _GLOBAL_OFFSET_TABLE_ in the object file's symbol table,
     using either of the following commands:
 
 $ nm mod1.o | grep _GLOBAL_OFFSET_TABLE_
 $ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_
 
+note: as shown above, this not necessarily means 'shared' object. It's only tell -fPIC used.
+
+<pic-vs-relocatable>
+This is talking about position independent code, which is 'not' the same as relocatable code.
+Relocatable code is code whose address may be assigned at link time. Position independent code is
+code whose address may be assigned at run time.
+
+'all' object files are relocatable. For most targets, only object files compiled with -fpic or -fPIC
+or -pie are position independent.
+
+For more about relocatable code: http://www.airs.com/blog/archives/41
+
+
 {dynamic-linker}
+note: From GCC doc, the dynamic loader is not part of GCC; it is part of the operating system.
+
+Embedding the name of the library inside the executable happens automatically when we link our
+program with a shared library.
+
 Must have some mechanism for identifying the shared library that it needs at run time. This is done
 by embedding the name of the shared library inside the executable during the link phase. DT_NEEDED
 tag in ELF.
@@ -130,23 +244,279 @@ ELF executable that uses shared libraries.
 $ ls -l /lib/ld-linux.so.2 
 lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
 
-<standard-dirs>
-Some of these rules specify a set of standard directories in which shared libraries normally reside.
 
+{runtime-search}
+Some of these rules specify a set of 'standard' directories in which shared libraries normally
+reside.
+
+<ld-library-path>
 To inform the dynamic linker that a shared library resides in a nonstandard directory
 
 If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared library in the
 directories it lists before looking in the standard library directories.
 
-$ LD_LIBRARY_PATH=. ./prog
+$ ./one                   
+./one: error while loading shared libraries: libfoo.so: cannot open shared object file: No such file
+or directory
 
-Creates an environment variable definition within the process executing prog.
+note: Creates an environment variable definition 'within' the process executing prog. Since if you
+don't export the changes to an environment variable, they won't be inherited by the child processes.
+The loader and our test program didn't inherit the changes we made.
+
+$ LD_LIBRARY_PATH=. ./one 
+foo: this is foo...
+
+$ ./one 
+./one: error while loading shared libraries: libfoo.so: cannot open shared object file: No such file
+or directory
+
+$ export LD_LIBRARY_PATH=.
+$ ./one 
+foo: this is foo...
 
 
 {soname}
+The soname is used in linking and is embedded in the executable, and used by the linker at runtime.
 
-$ readelf -d /lib/ld-linux.so.2 | grep SONAME
- 0x0000000e (SONAME)                     Library soname: [ld-linux.so.2]
+The purpose of the soname is to provide a level of 'indirection' that permits an executable to use,
+    at run time, a version of the shared library that is different from (but compatible with) the
+    library against which it was linked.
+
+$ gcc -c -fpic foo.c
+$ gcc -shared -Wl,-soname,libbar.so -o libfoo.so foo.o      note: shall no space between -soname
+$ readelf -d libfoo.so | grep SONAME
+(standard input):5: 0x000000000000000e (SONAME)             Library soname: [libbar.so]
+$ gcc -o one main.c libfoo.so
+
+$ ./one 
+./one: error while loading shared libraries: libbar.so: cannot open shared object file: No such file
+or directory
+
+$ LD_LIBRARY_PATH=. ./one
+./one: error while loading shared libraries: libbar.so: cannot open shared object file: No such file
+or directory
+
+note: ld looks for libbar but not libfoo
+
+When using a soname, one further step is required: we must create a symbolic link from the soname to
+the real name of the library. This symbolic link must be created in one of the directories searched
+by the dynamic linker. Thus, we could run our program as follows:
+
+$ ln -s libfoo.so libbar.so 
+$ ll
+lrwxrwxrwx 1 kpark kpark    9 Feb  5 11:22 libbar.so -> libfoo.so*
+$ ./one 
+foo: this is foo...
+
+
+{versioning}
+<requirement>
+The same calling interface and are semantically equivalent (they achieve identical results). Such
+differing but compatible versions are referred to as 'minor' versions of a shared library.
+
+Occasionally, however, it is necessary to create a new 'major' version of a library-one that is
+incompatible with a previous version. At the same time, it must still be possible to continue
+running programs that require the older version of the library.
+
+<realname>
+libdemo.so.1.0.1
+libdemo.so.1.0.2        Minor version, compatible with version 1.0.1
+libdemo.so.2.0.0        New major version, incompatible with version 1.*
+
+<soname> minor-independent link
+The soname of the shared library includes the same 'major' version identifier as its corresponding
+real library name, but excludes the minor version identifier. Thus, the soname has the form
+libname.so.major-id.
+
+Usually, the soname is created as a relative symbolic link in the directory that contains the real
+name. The following are some examples of sonames, along with the real names to which they might be
+symbolically linked:
+
+libdemo.so.1   -> libdemo.so.1.0.2
+libdemo.so.2   -> libdemo.so.2.0.0
+
+Normally, the soname corresponding to each major library version points to the most recent 'minor'
+version within the major version. This setup allows for the correct versioning semantics during the
+run-time operation of shared libraries. 
+
+Because the static-linking phase embeds a copy of the soname in the executable which has major, and
+the soname symbolic link may subsequently be modified to point to a newer (minor) version of the
+shared library, it is possible to ensure that an executable loads the most up-to-date minor version
+of the library at run time.
+
+Furthermore, since different major versions of a library have different sonames, they can happily
+coexist and be accessed by the programs that require them.
+
+note: Due to this indirection, possible to meet versioning requirement by changing a sym link.
+
+<linkername> version-independent link
+The linker name, which is used when linking an executable against the shared library. The linker
+name is a symbolic link containing just the library name and thus has the form libname.so. The
+linker name allows us to construct version-independent link commands that automatically operate with
+the correct version of the shared library.
+
+libdemo.so ->  libdemo.so.2
+
+
+real name          <-   soname                <-   linker name         
+lib name.so.2.0.0       libname.so.2               lib name.so
+(regular file)          (symbolic link)            (symbolic link)
+Object code for         lib name.so.maj.min        libname.so.maj
+library modules
+
+
+$ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c
+
+# created a realname and soname
+$ gcc -g -shared -Wl,-soname,libdemo.so.1 -o libdemo.so.1.0.1 mod1.o mod2.o mod3.o
+
+$ ln -s libdemo.so.1.0.1 libdemo.so.1
+$ ln -s libdemo.so.1 libdemo.so
+
+$ ls -l libdemo.so* | awk '{print $1, $9, $10, $11}'
+lrwxrwxrwx libdemo.so -> libdemo.so.1
+lrwxrwxrwx libdemo.so.1 -> libdemo.so.1.0.1
+-rwxr-xr-x libdemo.so.1.0.1
+
+# use linkername when link
+$ gcc -g -Wall -o prog prog.c -L. -ldemo
+
+$ LD_LIBRARY_PATH=. ./prog
+Called mod1-x1
+Called mod2-x2
+
+note: this linkername is only for admin purpose since the executable only have soname in it even if
+uesed -l during the link.
+
+
+={============================================================================
+*kt_linux_core_107* shared library: md5sum
+
+{can-use-on-library-to-check-integrity}
+The idea is that can use md5sum on a library to confirm that it uses the exact same compile and link
+options. The assumption is that if both party has the same build configuration, the library made
+from the same source 'must' have the same md5 checksum. If that is the case, can use the md5
+checksum as a quick way to check if both party has and uses the same build configuration.
+
+Is it true?
+
+https://gcc.gnu.org/ml/gcc-help/2010-01/msg00082.html
+beaugy.a@free.fr wrote:
+
+    Hi all,
+    So, to put it in a nutshell, all my generated objects file are
+    identical on dev1 and dev2 and object files contained in my
+    convenience libraries are all identical. The only difference
+    remaining, before I generate my binary, resides in the generated
+    convenience libraries which are not identical, but their contents
+    are. So AFAK, this slight difference shall not make the difference. So
+    "why does gcc output (MD5 checksum) differs when I build a binary
+    using the project object files (*.o) or the project convenience
+    libraries (*.a)?" and "what can I do to fix that?".
+
+Your *.o files are proceeded in a different order when on the command line and on the .a archive,
+     putting symbols on different addresses, so obviously different binaries are produced.
+
+Even if you do:
+gcc 1.o 2.o
+And:
+gcc 2.o 1.o
+
+you get binaries with different md5.
+
+<example>
+This is example from "*kt_dev_gcc_103* gcc link and ld"
+
+$ cat simplefunc.c
+int func(int i) {
+    return i + 21;
+}
+
+$ cat simplemain.c
+int func(int);
+
+int main(int argc, const char* argv[])
+{
+    return func(argc);
+}
+
+$ gcc -c simplefunc.c
+$ gcc -c simplemain.c
+$ gcc simplefunc.o simplemain.o
+$ ./a.out ; echo $?
+22
+
+:~/work$ nm simplefunc.o
+00000000 T func
+
+:~/work$ nm simplemain.o 
+         U func
+00000000 T main
+
+$ ar r libsimplefunc.a simplefunc.o    // ar rs to skip ranlib command.
+$ ranlib libsimplefunc.a
+$ gcc simplemain.o -L. -lsimplefunc
+$ ./a.out ; echo $?
+22
+
+Now we have *.o and *.a files and run the same build and ar command without changes in source. Just
+make o and a files.
+
+<o-files-are-the-same>
+keitee@debian-keitee:~/work$ ll simplefunc.*
+-rw-r--r-- 1 keitee keitee 848 Jan 20 22:15 simplefunc.o
+-rw-r--r-- 1 keitee keitee 848 Jan 20 22:06 simplefunc.o.old
+keitee@debian-keitee:~/work$ diff simplefunc.o simplefunc.o.old 
+keitee@debian-keitee:~/work$ 
+
+<a-files-are-different>
+keitee@debian-keitee:~/work$ ll libsimplefunc.a*
+-rw-r--r-- 1 keitee keitee 990 Jan 20 22:14 libsimplefunc.a
+-rw-r--r-- 1 keitee keitee 990 Jan 20 22:14 libsimplefunc.a.old
+keitee@debian-keitee:~/work$ diff libsimplefunc.a libsimplefunc.a.old 
+Binary files libsimplefunc.a and libsimplefunc.a.old differ
+keitee@debian-keitee:~/work$ 
+
+The md5 checksum result shows the same.
+
+keitee@debian-keitee:~/work$ md5sum simplefunc.o*
+3acb728c611c4c936320d64c1b360633  simplefunc.o
+3acb728c611c4c936320d64c1b360633  simplefunc.o.old
+
+keitee@debian-keitee:~/work$ md5sum libsimplefunc.a*
+87663beba78feef15106bf156a8f6ef3  libsimplefunc.a
+02a369c6a4476eea407bec53beaa7b95  libsimplefunc.a.old
+
+So even when make a library from the same object at 'different' time, it will create different
+library file.
+
+<Q> However, when do the md5sum on library files created from project build at different time, the
+libraries are the same on diff and md5. WHY?
+
+Tried to make a shared library with the same code:
+
+gcc -fpic -shared -o simple.so simplefunc.c
+ar rs libsimple.so simple.so
+
+Again, simple.so files are the same but libsimple.so are differ. This means that when run ar, will
+have different output files. Then how were the libraries the same for the above case?
+
+<A> The answer is that do not use ar when make a shared library and then will the same md5sum.
+
+-rw-r--r-- 1 kpark kpark 1528 Feb  5 10:02 foo.o
+-rw-r--r-- 1 kpark kpark 1528 Feb  5 09:33 foo.o.old
+-rwxr-xr-x 1 kpark kpark 6407 Feb  5 10:03 libfoo.so*
+-rwxr-xr-x 1 kpark kpark 6407 Feb  5 09:33 libfoo.so.old*
+
+$ diff foo.o foo.o.old 
+$ diff libfoo.so libfoo.so.old 
+$ md5sum foo.o*
+1f87ad103b677a3090707fee9daaea33  foo.o
+1f87ad103b677a3090707fee9daaea33  foo.o.old
+
+$ md5sum libfoo.so*
+e64fd5c673979f09360178f938e6e1b7  libfoo.so
+e64fd5c673979f09360178f938e6e1b7  libfoo.so.old
 
 
 -------------------------------------------------------------------------------
