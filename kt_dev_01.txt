@@ -57,6 +57,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_108| gcc: options
 |kt_dev_gcc_109| gcc: options: get dependancies
 |kt_dev_gcc_110| gcc: attributes
+|kt_dev_gcc_111| gcc: profiling
+|kt_dev_gcc_112| gcc: options: optimization
 
 |kt_dev_gcc_200| gcc: cpp: preprocessor
 |kt_dev_gcc_201| gcc: cpp: define? 
@@ -4174,52 +4176,6 @@ $ g++ -std=c++0x sample.cpp
 http://gcc.gnu.org/onlinedocs/libstdc++/index.html
 
 
-{how-to-use-gcc-optimisation} {gcc-profiling}
-The example program above does have a very predictable, repeatable flow of execution. Let's see what
-happens when we use compiler-assisted optimization. Building the programming now involves two steps:
-a profiling phase and an optimized compile. In the profiling phase, we build and run an instrumented
-version of the executable. We build as follows:
-
-    $ cc -O3 -DDONT_EXPECT -fprofile-generate builtin_expect_test.c -o bn.prof
-
-(The -fprofile-generate option implies -fprofile-arcs, as well as one or two other profiling
-options.)
-
-We then run the executable, which generates profiling information that is stored in a file (with the
-extension .gcda).
-
-    $ time -f "%E real, %U user, %S sys" ./bn.prof 1000
-    0, 1000000000
-    0:05.39 real,  5.37 user, 0.00 sys
-
-Note that, because of the instrumentation code, the profiled version runs rather slower that the
-normally compiled code.  Running this code created a file containing the profiling results:
-
-    $ ls *.gcda
-    builtin_expect_test.gcda
-
-We then employ the -fprofile-use compiler option,which (implicitly) uses the profiling results to
-create an optimized executable.
-
-    $ cc -O3 -DDONT_EXPECT -fprofile-use builtin_expect_test.c -o bn.opt
-
-And then we run the optimized program:
-
-    $ time -f "%E real, %U user, %S sys" ./bn.opt 1000
-    0, 1000000000
-    0:01.95 real,  1.94 user, 0.00 sys
-
-This optimized version runs significantly faster (1.95 versus 2.28 seconds) than our version that
-used __builtin_expect(). This is because, in addition to the branching in the if statement, the
-branching in the for loops was also optimized.
-
-It's left as an exercise for the reader to show that employing __builtin_expect() (to expect 0) in
-conjunction with compiler-assisted optimization doesn't improve things: the compiler already
-optimizes the if branching as well as the programmer-directed optimization. One other interesting
-exercise  is, of course, to compare the assembler (cc -S) code generated for each of the above
-cases. 
-
-
 {nullptr}
 This is for C++11.
 
@@ -5632,6 +5588,79 @@ that the symbol will be placed in the dynamic symbol table, but that references 
 module will bind to the local symbol. That is, the symbol cannot be overridden by another module. 
 
 Not all ELF targets support this attribute. 
+
+={============================================================================
+*kt_dev_gcc_111* gcc: profiling
+
+{how-to-use-gcc-optimisation} {gcc-profiling}
+The example program above does have a very predictable, repeatable flow of execution. Let's see what
+happens when we use compiler-assisted optimization. Building the programming now involves two steps:
+a profiling phase and an optimized compile. In the profiling phase, we build and run an instrumented
+version of the executable. We build as follows:
+
+    $ cc -O3 -DDONT_EXPECT -fprofile-generate builtin_expect_test.c -o bn.prof
+
+(The -fprofile-generate option implies -fprofile-arcs, as well as one or two other profiling
+options.)
+
+We then run the executable, which generates profiling information that is stored in a file (with the
+extension .gcda).
+
+    $ time -f "%E real, %U user, %S sys" ./bn.prof 1000
+    0, 1000000000
+    0:05.39 real,  5.37 user, 0.00 sys
+
+Note that, because of the instrumentation code, the profiled version runs rather slower that the
+normally compiled code.  Running this code created a file containing the profiling results:
+
+    $ ls *.gcda
+    builtin_expect_test.gcda
+
+We then employ the -fprofile-use compiler option,which (implicitly) uses the profiling results to
+create an optimized executable.
+
+    $ cc -O3 -DDONT_EXPECT -fprofile-use builtin_expect_test.c -o bn.opt
+
+And then we run the optimized program:
+
+    $ time -f "%E real, %U user, %S sys" ./bn.opt 1000
+    0, 1000000000
+    0:01.95 real,  1.94 user, 0.00 sys
+
+This optimized version runs significantly faster (1.95 versus 2.28 seconds) than our version that
+used __builtin_expect(). This is because, in addition to the branching in the if statement, the
+branching in the for loops was also optimized.
+
+It's left as an exercise for the reader to show that employing __builtin_expect() (to expect 0) in
+conjunction with compiler-assisted optimization doesn't improve things: the compiler already
+optimizes the if branching as well as the programmer-directed optimization. One other interesting
+exercise  is, of course, to compare the assembler (cc -S) code generated for each of the above
+cases. 
+
+
+={============================================================================
+*kt_dev_gcc_112* gcc: options: optimization
+
+From LPI 41.
+
+In addition, on some architectures, such as x86-32, the –fomit–frame–pointer option should not be
+specified because this makes debugging impossible. On some architectures, such as x86-64, this
+option is enabled by default since it doesn't prevent debugging. For the same reason, executables
+and libraries should not be stripped of debugging information using strip(1).
+
+From gcc doc:
+
+-fomit-frame-pointer
+Don't keep the frame pointer in a register for functions that don't need one. This avoids the
+instructions to save, set up and restore frame pointers; it also makes an extra register available
+in many functions. It also makes debugging impossible on some machines.
+
+On some machines, such as the VAX, this flag has no effect, because the standard calling sequence
+automatically handles the frame pointer and nothing is saved by pretending it doesn't exist. The
+machine-description macro FRAME_POINTER_REQUIRED controls whether a target machine supports this
+flag. See Register Usage.
+
+Enabled at levels -O, -O2, -O3, -Os. 
 
 
 ={============================================================================
@@ -13981,7 +14010,7 @@ analogous to defining objects of any type.
 
 "struct { ... } x, y, z;" is analogus to "int x, y, z;"
 
-Why 'tag'? The tag can be used later in definition of instances of the structure. Given the
+Why 'tag'? The tag can be used 'later' in definition of instances of the structure. Given the
 declaration above:
 
 struct point pt = { 320, 200 };
@@ -13994,7 +14023,7 @@ To define instance of structure, need to use like below since "struct tag" is a 
 struct point top;
 
 From ansic, p146.
-The typedef creates a new data type 'names'. It does not create a new type in any sense; merely adds
+The typedef creates a new data type 'names'. It does not create a new 'type' in any sense; merely adds
 a new name for some 'existing' type. In effect, typedef is like #define, except that it is
 interpreted by the compiler.
 
@@ -14011,21 +14040,50 @@ struct view_class {
   void (*pause)(Evas_Object *base, Elm_Object_Item *it);
   void (*terminate)(Evas_Object *base);
   int show_bg;
-};
+};                                                          
 
-This is struct declaration and not a typedef. So need to use struct keyword to create a object.
+This is struct declaration and not a typedef. So need to use struct keyword to create a object. All
+three examples below creates objects.
 
-static struct view_class _vclass = {
-  .title = NULL,
-  .style = "homepanel/apps/1",
-  .create = _create,
-  .update = _update,
-  .show = _show,
-  .hide = _hide,
-  .resume = _resume,
-  .pause = _pause,
-  .terminate = _terminate,
-  .show_bg = 0,
+note: see use of comma for below examples to create a object.
+
+static struct view_class _vclass = {   static struct view_class _vclass = {
+  .title = NULL,                         NULL,                             
+  .style = "homepanel/apps/1",           "homepanel/apps/1",               
+  .create = _create,                     _create,                          
+  .update = _update,                     _update,                          
+  .show = _show,                         _show,                            
+  .hide = _hide,                         _hide,                            
+  .resume = _resume,                     _resume,                          
+  .pause = _pause,                       _pause,                           
+  .terminate = _terminate,               _terminate,                       
+  .show_bg = 0,                          0,                                
+};                                     };                                  
+
+or
+
+struct view_class {
+  const char *title;
+  const char *style;
+  Evas_Object *(*create)(struct viewmgr *vmgr);
+  void (*update)(Evas_Object *base, Elm_Object_Item *it);
+  void (*show)(Evas_Object *base, Elm_Object_Item *it);
+  void (*hide)(Evas_Object *base, Elm_Object_Item *it);
+  void (*resume)(Evas_Object *base, Elm_Object_Item *it);
+  void (*pause)(Evas_Object *base, Elm_Object_Item *it);
+  void (*terminate)(Evas_Object *base);
+  int show_bg;
+} x = {
+  NULL,
+  "homepanel/apps/1",
+  _create,
+  _update,
+  _show,
+  _hide,
+  _resume,
+  _pause,
+  _terminate,
+  0,
 };
 
 If it was a typedef then would use like:
@@ -14043,23 +14101,21 @@ static view_class _vclass = {
   .show_bg = 0,
 };
 
-// example, this creates two new type keywords called Treenode and Treeptr. note that however, do
-// not create an instance unlike struct case.
-
+<example> creates a type name but not object. <diff-between-c-and-cpp>
 typedef struct tnode {
   char *word;
   int count;
   struct tnode* left;
   struct tnode* right;
 
-  // note: NOT OK for C but OK for CPP and since it is a pointer.
-  // msort-list.c:7:3: error: unknown type name 'tnode'
+  // note: NOT OK for C but OK for CPP since it is a pointer.
+  // msort-list.c:7:3: error: unknown type name 'tnode' when use C.
   tnode* left;
   tnode* right;
 
 } Treenode;
 
-
+<example> both creates a type name.
 typedef struct tnode *Treeptr;
 
 typedef struct tnode {
@@ -14070,7 +14126,7 @@ typedef struct tnode {
 } Treenode;
 
 
-// example
+<example>
 typedef struct treenode TreeNode;
 
 typedef struct treenode {
@@ -14082,19 +14138,19 @@ typedef struct treenode {
 or
 
 typedef struct treenode {
-  TreeEntry entry; // application dependent
+  TreeEntry entry; 
   treenode  *left;
   treenode  *right;
 } TreeNode;
 
-// example: 
+<example>
 <error>
 struct List;         // 7
 
 typedef struct node
 {
   EntryType entry;
-  node*     pnext;
+  node*     pnext;         // okay for CPP
   List*     plist;
 } Node;
 
@@ -14121,7 +14177,23 @@ typedef struct list {
   Node*  header;
 } List;
 
-// example, this is to create a pointer typedef
+OR
+
+typedef struct list List;
+
+typedef struct node
+{
+  EntryType entry;
+  node*     pnext;
+  List*     plist; or list* plist;
+} Node;
+
+typedef struct list {
+  int    count;
+  Node*  header;
+} List;
+
+<example> this is to create a pointer type name but not object.
 typedef struct _fsm
 {
   VRM_FSM_INIT  init;
@@ -14146,10 +14218,10 @@ Is it error to have multiple typedefs? No. See *kt_dev_gcc_001* and the error is
 typedefs.
 
 <two-reasons-to-use-typedef>
-1) To parameterize a program against portability problems. If typedef are used for data types that
+1. To parameterize a program against portability problems. If typedef are used for data types that
 may be machine-dependent, only the typedef need change when the program is moved.
 
-2) To provide better documentation for a program. A type Treeprt may be easier to understand.
+2. To provide better documentation for a program. A type Treeprt may be easier to understand.
 
 
 {class-vs-struct}
