@@ -7,291 +7,146 @@ aWed 18 Dec 2013 09:47:23 GMT
 KT KB. Linux
 
 ={============================================================================
-*kt_linux_core_107* process: group
+*kt_linux_core_107* shared library
 
-LPI 34.
+LPI 41.
 
-{process-group} also known as job
-A process group is a set of one or more processes sharing the same process group identifier (PGID).
-A process group ID is a number of the same type (pid_t) as a process ID. A process group has a
-process group 'leader', which is the process that 'creates' the group and whose process ID becomes
-the process group ID of the group. A new process inherits its parent's process group ID.
+{static-library}
+<ar-command>
+The archive also records various attributes of each of the component object files, including file
+permissions, numeric user and group IDs, and last modification time.
 
-A process group has a lifetime, which is the period of time beginning when the leader creates the
-group and ending when the last member process leaves the group.
+r (replace): Insert an object file into the archive, replacing any previous object file of the same
+             name. This is the standard method for creating and updating an archive. Thus, we might
+             build an archive with the following commands:
 
+$ cc -g -c mod1.c mod2.c mod3.c
+$ ar r libdemo.a mod1.o mod2.o mod3.o
 
-{process-session}
-A session is a collection of process groups. A process's session membership is determined by its
-session identifier (SID), which, like the process group ID, is a number of type pid_t. A session
-'leader' is the process that 'creates' a new session and whose process ID becomes the session ID. A
-new process inherits its parent's session ID.
+t (table of contents): Display a table of contents of the archive. By default, this lists just the
+                       names of the object files in the archive. By adding the v (verbose) modifier,
+                       we additionally see all of the other attributes recorded in the archive for
+                       each object file, as in the following example:
 
+$ ar tv libdemo.a
+rw-r--r-- 1000/100 1001016 Nov 15 12:26 2009 mod1.o
+rw-r--r-- 1000/100 406668 Nov 15 12:21 2009 mod2.o
+rw-r--r-- 1000/100 46672 Nov 15 12:21 2009 mod3.o
 
-{controlling-process-and-terminal}
-All of the processes in a session 'share' a single controlling terminal. The controlling terminal is
-established when the session leader first 'opens' a terminal device, /dev/tty. A terminal may be the
-controlling terminal of at most 'one' session. Opening the controlling terminal also causes the
-session leader to become the controlling process for the terminal.
+<how-to-link-static>
 
-<forground-process-group>
-At any point in time, one of the process groups in a session is the foreground process group for the
-terminal, and the others are background process groups. 'only' processes in the foreground process
-group can read input from the controlling terminal. note: process'es'
+1. The first is to name the static library as part of the link command, as in the following:
 
-<signal-forground-group>
-When the user types one of the signal-generating terminal characters on the controlling terminal, a
-signal is sent to 'all' members of the foreground process group. These characters are the interrupt
-character (usually Control-C), which generates SIGINT; the quit character (usually Control-\), which
-generates SIGQUIT; and the suspend character (usually Control-Z), which generates SIGTSTP.
+$ cc -g -c prog.c
+$ cc -g -o prog prog.o libdemo.a
 
+2. can place the library in one of the 'standard' directories searched by the linker (e.g.,
+    /usr/lib), and then specify the library name; the filename of the library without the lib prefix
+and .a suffix using the –l option:
 
-{session-leader-is-controlling-process}
-As a consequence of establishing the connection to (i.e., opening) the controlling terminal, the
-'session' 'leader' becomes the 'controlling' process for the terminal.
+$ cc -g -o prog prog.o -ldemo
 
-The principal significance of being the controlling process is that the 'kernel' sends 'this'
-process a SIGHUP signal if a terminal 'disconnect' occurs. note: say only SIGHUP.
+3. If the library resides in a directory not normally searched by the linker, we can specify that
+the linker should search this additional directory using the –L option:
 
+$ cc -g -o prog prog.o -Lmylibdir -ldemo
 
-{login-shell}
-Why session and group? Sessions and process groups were defined to support shell job control
+Although a static library may contain many object modules, the linker includes only those modules
+that the program requires.
 
-For an interactive login, the controlling terminal is the one on which the user logs in. The login
-shell becomes the session leader and the controlling process for the terminal, and is also made the
-sole member of its own process group. 
 
-Each job(a simple command or pipeline of commands) started from the shell results in the creation of
-one or more processes, and the shell places all of these processes in a 'new' process group.
+{downside-of-static}
+1. Duplicates in disk and ram spce.
 
-$ echo $$                              " Display the PID of the shell
-400
-$ find / 2> /dev/null | wc -l &        " Creates 2 processes in background group
-[1] 659
-$ sort < longlist | uniq -c            " Creates 2 processes in foreground group
+2. If a change is required perhaps a security or bug fix to an object module in a static library,
+  then all executables using that module must be relinked in order to incorporate the change. This
+  disadvantage is further compounded by the fact that the system administrator needs to be aware of
+  which applications were linked against the library.
 
-<---------------------------- session 400 ----------------------------------->
-bash (session/group leader)      find (group leader)        sort(group leader)
-   PID  = 400                       PID  = 658                 PID  = 660
-   PPID = 399                       PPID = <400>               PPID = <400>
-   PGID = 400                       PGID = 658                 PGID = 660
-   SID  = 400                       SID  = 400                 SID  = 400
 
-                                 wc                         uniq
-                                    PID  = 659                 PID  = 661
-                                    PPID = <400>               PPID = <400>
-                                    PGID = 658                 PGID = 660
-                                    SID  = 400                 SID  = 400
+{what-is-shared}
+Although the code of a shared library is shared among multiple processes, its variables are not.
+Each process that uses the library has its own copies of the global and static variables that are
+defined within the library.
 
-<-------------------------->    <-------------------->    <------------------>
-process group 400                process group 658          process group 660
-'controlling' process
-background process group         background group           forground group
 
+{further-advantages}
+@ Because overall program size is smaller, in some cases, programs can be loaded into memory and
+started more quickly. This point holds true only for large shared libraries that are already in use
+by another program.
 
-<controlling-terminal>
-Forground PGID    = 660
-Controlling SID   = 400
+@ Such changes can be carried out even while running programs are using an existing version of the
+shared library.
 
 
-{setpgid}
-The setpgid() system call changes the process group of the process whose process ID is pid to the
-value specified in pgid. Put simply, change pgid of a process with pid.
+{cost-of-shared}
+@ Shared libraries are more complex than static libraries, both at the conceptual level, and at the
+practical level of creating shared libraries and building the programs that use them.
 
-#include <unistd.h>
-int setpgid(pid_t pid, pid_t pgid);
+@ Shared libraries must be compiled to use position-independent code, which has a performance
+overhead on most architectures because it requires the use of an extra register 
 
-Returns 0 on success, or -1 on error
+@ Symbol relocation must be performed at run time. During symbol relocation, references to each
+symbol (a variable or function) in a shared library need to be modified to correspond to the actual
+run-time location at which the symbol is placed in virtual memory. Take a little more time to
+execute.
 
-If pid is specified as 0, the 'calling' process's process group ID is changed. If pgid is specified
-as 0, then the process group ID of the process specified by pid is made the same as its process ID.
-Thus, the following setpgid() calls are equivalent:
 
-setpgid(0, 0);
-setpgid(getpid(), 0);
-setpgid(getpid(), getpid());
-
-note: Put simply, this call is to change pgid of a process with the pid. However, when pid is 0, it
-is for the calling process.
-
-If the pid and pgid arguments specify the 'same' process, then a 'new' process group is created, and
-the specified process is made the 'leader' of the new group (i.e., the process group ID of the
-    process is made the same as its process ID). 
+{create-shared}
+$ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c
+$ gcc -g -shared -o libfoo.so mod1.o mod2.o mod3.o
 
-If the two arguments specify different values, then setpgid() is being used to move a process
-between process groups.
-
-<group-creation>
-The setpgid(0,0) is a way to create a new group and a group leader once a process is created such as
-fork as shown example below.
-
-However, from LPI 34-1 code:
-
-childPid = fork();
-switch (childPid) 
-{
-  case -1: /* fork() failed */
-  /* Handle error */
-
-  case 0: /* Child */
-    if (setpgid(0, pipelinePgid) == -1)
-    /* Handle error */
-    /* Child carries on to exec the required program */
-
-   default: /* Parent */
-}
-
-and 
-
-Each job(a simple command or pipeline of commands) started from the shell results in the creation of
-one or more processes, and the shell places all of these processes in a 'new' process group.
-
-note: Q? 'not' clear when and how a group is created? The <example> seems to make more sense.
-
-<restrictions>
-1. The pid argument may specify only the calling process or one of its children. Violation of this
-rule results in the error ESRCH.
-
-2. A process may 'not' change the process group ID of one of its children 'after' that child has
-performed an exec(). Violation of this rule results in the error EACCES. The rationale for this
-constraint is that it could confuse a program if its process group ID were changed after it had
-commenced.
-
-This restriction affects the programming of job-control shells, which have the following
-requirements:
+or 
 
-All of the processes in a job (i.e., a command or a pipeline) must be placed in a single process
-group. This step permits the shell to use killpg() (or, equivalently, kill() with a negative pid
-    argument) to simultaneously send job-control signals to 'all' of the members of the process
-group. Naturally, this step must be carried out before any job-control signals are sent.
-
-killpg - send signal to a process group
+$ gcc -g -fPIC -Wall mod1.c mod2.c mod3.c -shared -o libfoo.so
 
-#include <signal.h>
-int killpg(int pgrp, int sig);
-
-<example>
-The thing is that when a shell runs this line, creates a child process to run this application and
-in this application, it make a new background group and make it itself a group leader.
+Unlike static libraries, it is not possible to add or remove individual object modules from a
+previously built shared library. As with normal executables, the object files within a shared
+library no longer maintain distinct identities.
 
-note: In the first time, scripts runs "else" and set PPID with the pid that runs this script
 
-#!/bin/bash
+{position-independent-code}
+These changes allow the code to be located at any virtual address at run time. This is necessary for
+shared libraries, since there is no way of knowing at link time where the shared library code will
+be located in memory.
 
-# to clean up A/V resources when a process dies, especially on a crash.
-#
-this_script=$0
-prefix=@prefix@
-parent_pid=${NEXUS_INSPECT_PARENT_PID:-}
+In order to determine whether an existing object file has been compiled with the –fPIC option, we
+can check for the presence of the name _GLOBAL_OFFSET_TABLE_ in the object file’s symbol table,
+    using either of the following commands:
 
-if [ -n "${parent_pid}" ];
-then
-        echo "Going to watch pid: ${parent_pid}"
-        while kill -0 "${parent_pid}" &>/dev/null;
-        do
-                usleep 500
-        done
-        echo "Pid ${parent_pid} has died. Going to cleanup."
-        ${prefix}/bin/nexus-inspect -r -p "${parent_pid}"
-else
-        [ -x "${prefix}/bin/nexus-inspect" ] && \
-            NEXUS_INSPECT_PARENT_PID=$$ \
-               ${prefix}/bin/setpgid-and-exec bash "${this_script}" &
-        exec "${@}"
-fi
+$ nm mod1.o | grep _GLOBAL_OFFSET_TABLE_
+$ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_
 
+{dynamic-linker}
+Must have some mechanism for identifying the shared library that it needs at run time. This is done
+by embedding the name of the shared library inside the executable during the link phase. DT_NEEDED
+tag in ELF.
 
-/*
- * The purpose of this simple program is to launch a program in a new process
- * group and have it become the group leader.
- *
- * This is useful in situations where the launched program fork()s and we want
- * to be sure that when we kill it, all of it's children are also killed.
- */
+The dynamic linking, which is the task of resolving the embedded library name at run time. This task
+is performed by the dynamic linker (also called the dynamic linking loader or the run-time linker).
+The dynamic linker is itself a shared library, named /lib/ld-linux.so.2, which is employed by every
+ELF executable that uses shared libraries.
 
-note: Q? does this mean that if kill group leader then all children will be killed automatically? 
+$ ls -l /lib/ld-linux.so.2 
+lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
 
-#include <unistd.h>
-#include <error.h>
-#include <stdio.h>
+<standard-dirs>
+Some of these rules specify a set of standard directories in which shared libraries normally reside.
 
-int main(int argc, char* argv[]) {
+To inform the dynamic linker that a shared library resides in a nonstandard directory
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <program> [ <arg> ... ]", argv[0]);
-    exit(1);
-  }
+If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared library in the
+directories it lists before looking in the standard library directories.
 
-  /* Create new group and become group leader */
-  if (setpgid(0, 0)) {
-    perror("setpgid failed!");
-    exit(2);
-  }
+$ LD_LIBRARY_PATH=. ./prog
 
-  /* Execute the command */
-  if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
-    perror("exec failed!");
-    exit(3);
-  }
-}
+Creates an environment variable definition within the process executing prog.
 
 
-{SIGHUP}
+{soname}
 
-SIGHUP
-When a terminal disconnect (hangup) occurs, this signal is sent to the controlling process of the
-terminal. A second use of SIGHUP is with daemons (e.g., init, httpd, and inetd). Many daemons are
-designed to respond to the receipt of SIGHUP by reinitializing themselves and rereading their
-configuration files. The system administrator triggers these actions by manually sending SIGHUP to
-the daemon, either by using an explicit kill command or by executing a program or script that does
-the same.
-
-The default action of SIGHUP is to terminate a process (by kernel). The delivery of SIGHUP to the
-controlling process can set off a kind of chain reaction, resulting in the delivery of SIGHUP to
-many other processes. This may occur in two ways:
-
-First, if the controlling process is a shell (as is typically the case), then, before terminating,
-  the shell sends SIGHUP to each of the process groups it has created. 
-
-Second, if delivery of SIGHUP results in termination of a controlling process, then the kernel also
-sends SIGHUP to all of the members of the foreground process group of the controlling terminal.
-
-note: SIGHUP is to terminate by default. So both terminates all children.
-
-
-{io-on-controlling-terminal}
-<terminal-driver>
-To support job control, the terminal driver maintains a record of the foreground process group for
-the controlling terminal. The terminal driver delivers job-control signals to the foreground job
-when certain characters are typed. These signals either terminate or stop the foreground job.
-
-<read>
-The notion of the terminal's foreground job is also used to arbitrate terminal I/O requests. Only
-processes in the foreground job may read from the controlling terminal. Background jobs are
-prevented from reading by delivery of the SIGTTIN signal, whose default action is to stop the job. 
-
-note: process'es'
-
-SIGTTIN
-When running under a job-control shell, the terminal driver sends this signal to a background
-process 'group' when it attempts to read() from the terminal. This signal stops 'a' process by
-default.
-
-note: group but not process? when one of process in background group then get this signal.
-
-<write>
-If the terminal TOSTOP is set, then background jobs are also prevented from writing to the
-controlling terminal by delivery of a SIGTTOU signal, whose default action is to stop the job.
-
-SIGTTOU
-This signal serves an analogous purpose to SIGTTIN, but for terminal output by background jobs. When
-running under a job-control shell, if the TOSTOP (terminal output stop) option has been enabled for
-the terminal (perhaps via the command stty tostop), the terminal driver sends SIGTTOU to a
-background process group when it attempts to write() to the terminal (see Section 34.7.1).  This
-signal stops a process by default.
-
-
-{what-are-these-for}
+$ readelf -d /lib/ld-linux.so.2 | grep SONAME
+ 0x0000000e (SONAME)                     Library soname: [ld-linux.so.2]
 
 
 -------------------------------------------------------------------------------
