@@ -48,7 +48,7 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_gcc_100| gcc and c++11 {how-to-use-gcc-optimisation} {gcc-profiling} {gcc-options}
 |kt_dev_gcc_101| gcc typeof
-|kt_dev_gcc_102| gcc: loader and search library
+|kt_dev_gcc_102| gcc: link: link script
 |kt_dev_gcc_103| gcc: link: link order and cyclic dependencies
 |kt_dev_gcc_104| gcc: C90 and C99 
 |kt_dev_gcc_105| gcc likely and unlikely 
@@ -113,7 +113,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_025| template {debug-delete}
 |kt_dev_cpp_026| enum {enum-hack}
 |kt_dev_cpp_027| volatile
-|kt_dev_cpp_028| namespace  {unnamed-namespace}
+|kt_dev_cpp_028| namespace {case-example} {unnamed-namespace}
 |kt_dev_cpp_029| nested class
 |kt_dev_cpp_030| case study: framework {tizen-case}
 |kt_dev_cpp_031| wrapper
@@ -4212,120 +4212,7 @@ http://stackoverflow.com/questions/16832863/behaviour-of-sizeof-in-c-gcc
 
 
 ={============================================================================
-*kt_dev_gcc_102* gcc: loader and search library
-
-
-{three-search-source}
-http://www.eyrie.org/~eagle/notes/rpath.html
-http://www.cprogramming.com/tutorial/shared-libraries-linux-gcc.html
-http://tldp.org/HOWTO/Program-Library-HOWTO/shared-libraries.html
-The search paths for libraries come from 'three' sources: the environment variable LD_LIBRARY_PATH
-(if set), any rpath encoded in the binary (more on this later), and the system default search paths.
-They're searched in this order, and the first matching library found is used. 
-
-
-The default GNU loader, ld.so, looks for libraries in the following order:
-
-1. It looks in the DT_RPATH section of the executable, unless there is a DT_RUNPATH section. note:
-this mean rpath?
-
-2. It looks in LD_LIBRARY_PATH. This is skipped if the executable is setuid/setgid for security
-reasons.
-
-3. It looks in the DT_RUNPATH section of the executable unless the setuid/setgid bits are set (for
-security reasons).
-
-4. It looks in the cache file /etc/ld/so/cache (disabled with the ‘-z nodeflib’ linker option).
-
-5. It looks in the default directories /lib then /usr/lib (disabled with the ‘-z nodeflib’ linker
-option).
-
-<LD_LIBRARY_PATH>
-LD_LIBRARY_PATH is broken and should 'not' be used if at all possible since LD_LIBRARY_PATH is great
-for quick tests and for systems on which you don't have admin privileges. As a downside, however,
-exporting the LD_LIBRARY_PATH variable means it may cause problems with other programs you run that
-also rely on LD_LIBRARY_PATH if you don't reset it to its previous state when you're done.
-
-<rpath>
-Use the same example.
-
-:~/work$ unset LD_LIBRARY_PATH
-:~/work$ gcc -L/home/keitee/work -Wl,-rpath=/home/keitee/work simplemain.o -lsimple
-:~/work$ 
-:~/work$ ./a.out ; echo $?
-22
-:~/work$ 
-
-There are a few downsides to rpath which encodes the path in ELF, however. First, it requires that
-shared libraries be installed in a fixed location so that all users of your program will have access
-to those libraries in those locations. That means less flexibility in system configuration. Second,
-   if that library refers to a NFS mount or other network drive, you may experience undesirable
-   delays or worse on program startup.
-
-<system-path>
-What if we want to install our library so everybody on the system can use it? For that, you will
-need 'admin' privileges. You will need this for two reasons: first, to put the library in a standard
-location, probably /usr/lib or /usr/local/lib, which normal users don't have write access to.
-Second, you will need to modify the ld.so config file and cache. As root, do the following:
-
-$ cp /home/username/foo/libfoo.so /usr/lib
-$ chmod 0755 /usr/lib/libfoo.so
-
-Now the file is in a standard location, with correct permissions, readable by everybody. We need to
-'tell' the loader it's available for use, so let's update the 'cache':
-
-$ ldconfig
-
-That should create a link to our shared library and update the cache so it's available for immediate
-use. Let's double check:
-
--p --print-cache
-      Print the lists of directories and candidate libraries stored in
-      the current cache.
-
-$ ldconfig -p | grep foo
-libfoo.so (libc6) => /usr/lib/libfoo.so
-
-Now our library is installed. Before we test it, we have to 'clean' up a few things:
-
-Clear our LD_LIBRARY_PATH once more, just in case:
-
-$ unset LD_LIBRARY_PATH
-
-Re-link our executable. Notice we don't need the -L option since our library is stored in a default
-location and we aren't using the rpath option:
-note: this means that system path works for compile and runtime as well.
-
-$ gcc -Wall -o test main.c -lfoo
-
-Let's make sure we're using the /usr/lib instance of our library using ldd:
-
-$ ldd test | grep foo
-libfoo.so => /usr/lib/libfoo.so (0x00a42000)
-
-
-<check>
-To verify that a binary is doing the right thing, use the command ldd on the binary. This will list
-all of the libraries and either where they came from (if found) or something like "(not found)" if
-the library wasn't found. 
-
-readelf -d <binary> | grep RPATH
-
-:~/work$ readelf -d a.out 
-
-Dynamic section at offset 0x6a8 contains 27 entries:
-  Tag        Type                         Name/Value
- 0x00000001 (NEEDED)                     Shared library: [simple.so]
- 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
- 0x0000000f (RPATH)                      Library rpath: [/home/keitee/work]
- ...
-
-but note that this only shows the rpath for a particular binary (executable or library). If a shared
-library depends on other shared libraries, those shared libraries may be searched for using the
-rpath of the shared library that is loading them. To make sure that the search path is correct on
-Linux, you may need to use the above readelf command on the binary and all libraries other than
-system libraries that it uses. 
-
+*kt_dev_gcc_102* gcc: link script
 
 {relocation-problem}
 CNXT embedded platform.
@@ -17491,22 +17378,29 @@ It's a directive to the compiler telling that is shoud not perform 'optimisation
 ={============================================================================
 *kt_dev_cpp_028* namespace
 
-{real-problem}
+{case-example}
 03/07/2014. At samsung. 
-When moves application which is a process and uses static link to shared library implementation
-which will be used by the different process. The codes which works well before starts to fail. In
-particular, crashes when try to create a thread. Problem of linking? Problem of pthread library when
-used in shared library? Somehow, linker picks up the wrong pthred libaray since a debugger shows odd
-address when thread creation call is made? Various directions and many days spent. Eventually, found
-out that PCThread::Create() is a problem and works fine when changes parameter orders. The problem
-was that the process loads a lot of shared library and one of those has the same PCThread class in
-it but different signature. When our library make a call, it picks it up from the other shared
-library in which has different signature so crashes. Sovled when wraps PCThread class with a
-namespace.
+When moves application which was a process and uses static link to the shared library application to
+be used by other processes. The codes which works well before starts to fail since crash happens
+when try to create a thread using custom thread library. 
+
+Problem of linking? Problem of the thread library when used in shared library application? Somehow
+linker picks up the wrong libaray since a debugger shows odd address when thread creation call is
+made and causes a crash? 
+
+Tried various directions and spent many days. Eventually, found out that PCThread::Create() is a
+problem and works fine when changes parameter orders. The problem was that the process loads a lot
+of shared library and one of those has the same PCThread class in it but different signature. When
+our library make a call, it picks it up from the other shared library in which has different
+signature so crashes. Sovled when wraps PCThread class with a namespace.
+
+note: So this was a problem of symbols between shared libraries.
 
 The typical example is to use third party library and name conflict happens when other parties
 develops a libaray separately. Howerver, in static link, conflict happens in link stage. In dynamic
 loading, this happens at run time and called dynamic binding. So more difficult to find out.
+
+See *kt_linux_core_107* shared library: search and resove
 
 
 {namespace}

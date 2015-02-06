@@ -245,12 +245,9 @@ $ ls -l /lib/ld-linux.so.2
 lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
 
 
-{runtime-search}
+{ld-library-path}
 Some of these rules specify a set of 'standard' directories in which shared libraries normally
-reside.
-
-<ld-library-path>
-To inform the dynamic linker that a shared library resides in a nonstandard directory
+reside. To inform the dynamic linker that a shared library resides in a nonstandard directory
 
 If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared library in the
 directories it lists before looking in the standard library directories.
@@ -387,6 +384,143 @@ Called mod2-x2
 
 note: this linkername is only for admin purpose since the executable only have soname in it even if
 uesed -l during the link.
+
+
+={============================================================================
+*kt_linux_core_107* shared library: search and resove
+
+{search-rules}
+
+note: >
+LD_LIBRARY_PATH is broken and should 'not' be used if at all possible since LD_LIBRARY_PATH is great
+for quick tests and for systems on which you don't have admin privileges. However, as a downside,
+    exporting the LD_LIBRARY_PATH variable means it may cause problems with other programs if you
+    don't reset it to its previous state when you're done.
+
+
+{runtime-resolution}
+Suppose that a global symbol (i.e., a 'function' or variable) is defined in multiple locations, such
+as in an executable and in a shared library, or in multiple shared libraries. How is a reference to
+that symbol resolved?
+
+         prog                                   libfoo.so
+-----------------------------          -----------------------------
+xyz() {                                xyz() {               
+  printf("main-xyz\n");                  printf("foo-xyz\n");
+}                                      }
+                                       
+main() {                               func() {
+  func();    -->                         xyz();                
+}                                      }       
+
+$ gcc -g -c -fPIC -Wall -c foo.c
+$ gcc -g -shared -o libfoo.so foo.o
+$ gcc -g -o prog prog.c libfoo.so
+$ LD_LIBRARY_PATH=. ./prog
+main-xyz
+
+See that the definition of xyz() in the main program overrides the one in the shared library.
+
+The following semantics apply:
+
+@ A definition of a global symbol in the 'main' program 'overrides' a definition in a library.
+
+@ If a global symbol is defined in multiple libraries, then a reference to that symbol is bound to
+the 'first' definition found by scanning libraries in the left-to-right 'order' in which they were
+listed on the static 'link' command line.
+
+<problem>
+Although these semantics make the transition from static to shared libraries relatively
+straightforward, they can cause some problems. The most significant problem is that these semantics
+conflict with the model of a shared library as implementing a self-contained subsystem. 
+
+By default, a shared library can 'not' guarantee that a reference to one of its own global symbols
+will actually be bound to the library's definition of that symbol.
+
+<case-example>
+03/07/2014. At samsung. 
+When moves application which was a process and uses static link to the shared library application to
+be used by other processes. The codes which works well before starts to fail since crash happens
+when try to create a thread using custom thread library. 
+
+Problem of linking? Problem of the thread library when used in shared library application? Somehow
+linker picks up the wrong libaray since a debugger shows odd address when thread creation call is
+made and causes a crash? 
+
+Tried various directions and spent many days. Eventually, found out that PCThread::Create() is a
+problem and works fine when changes parameter orders. The problem was that the process loads a lot
+of shared library and one of those has the same PCThread class in it but different signature. When
+our library make a call, it picks it up from the other shared library in which has different
+signature so crashes. Sovled when wraps PCThread class with a namespace.
+
+note: So this was a problem of symbols between shared libraries.
+
+<Q> so when say 'symbol' in runtime resolution, does it mean 'name' only or the whole signature?
+
+# foo.c
+
+#include <stdio.h>
+
+void foo()           <1>
+void foo(int x)      <2>
+{
+  printf("foo: this is foo... %d \n", x );
+}
+
+# main.c
+
+#include <stdio.h>
+
+// extern void foo(void);
+void foo()
+{
+  printf("main: this is foo...\n");
+}
+
+int main(void)
+{
+  foo();       <1>
+  foo(5);      <2>
+  return 0;
+}
+
+$ gcc -c -fpic foo.c
+$ gcc -shared -o libfoo.so foo.o
+$ gcc -o prog main.c libfoo.so 
+$ LD_LIBRARY_PATH=. ./prog
+main: this is foo...
+$ gcc -c -fpic foo.c
+$ gcc -shared -o libfoo.so foo.o
+$ gcc -o prog main.c libfoo.so 
+$ LD_LIBRARY_PATH=. ./prog
+main: this is foo...
+$ 
+
+note: Unlike the case-example, this is a problem between main and shared library.
+
+<Q> So always picks up the main version and suggest that only use 'name' in C. Given the real-case
+above, C++ may be different?
+
+<Q> If multiple shared library are used in a process, all constitute a single lookup space?
+
+<solution> to the case-example
+
+1. As the case-example, can use namespace which effectively make a different symbol.
+
+2. As shown here, can use linker option, -Bsymbolic to ensure that the invocation of the same symbol
+in the shared library actually called the version of the function defined 'within' the library.
+
+$ gcc -g -shared -Wl,-Bsymbolic -o libfoo.so foo.o
+
+note: this means that main version gets called for the above example but would solve the
+case-example since it force to pick up the one in the same library.
+
+
+={============================================================================
+*kt_linux_core_107* shared library: sandbox
+
+There are occasional situations where static libraries may be appropriate. If the program is to be
+run in an environment (perhaps a chroot jail, for example) where shared libraries are unavailable.
 
 
 ={============================================================================
