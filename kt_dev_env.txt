@@ -100,24 +100,30 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_005| status
 |kt_dev_env_git_006| ignore
 |kt_dev_env_git_007| log
-|kt_dev_env_git_008| change commit and unstage
+|kt_dev_env_git_008| undo, change commit, unstage and discard changes
 |kt_dev_env_git_009| auto completion
 |kt_dev_env_git_010| branch
-|kt_dev_env_git_011| branch: inspect and workflow
+|kt_dev_env_git_011| merge branch and workflow
+|kt_dev_env_git_012| generate patch between branch
+|kt_dev_env_git_013| merge: undo merge attempt
+|kt_dev_env_git_014| branch: status, merged option and topic branch
+|kt_dev_env_git_012| tag
 
-|kt_dev_env_git_020| merge
-|kt_dev_env_git_021| merge: check before
 
 |kt_dev_env_git_030| stash
 |kt_dev_env_git_031| rebasing
 |kt_dev_env_git_032| list
-|kt_dev_env_git_033| add and clean
+|kt_dev_env_git_033| add, rm, mv and clean
 |kt_dev_env_git_034| diff, difftool
 |kt_dev_env_git_035| show
 |kt_dev_env_git_036| commit
-|kt_dev_env_git_037| commit: ranges and double dot
+|kt_dev_env_git_037| ranges and dot notation
 
-|kt_dev_env_git_107| remote: origin and master, push and pull.
+|kt_dev_env_git_100| remote: origin and master
+|kt_dev_env_git_101| remote: inspect, show, and ls-remote
+|kt_dev_env_git_102| remote: fetch, inspect, merge and pull
+|kt_dev_env_git_103| remote: push
+
 |kt_dev_env_git_108| remote: check before push
 |kt_dev_env_git_109| remote: tracking branch
 |kt_dev_env_git_110| remote: inspect and ls-remote
@@ -4611,12 +4617,14 @@ man git-???
 
 
 {alias}
+This means that, for example, instead of typing git commit, you just need to type git ci.
+
 $ git config --global alias.co checkout
 $ git config --global alias.br branch
 $ git config --global alias.ci commit
 $ git config --global alias.st status
 
-This means that, for example, instead of typing git commit, you just need to type git ci.
+Can also be very useful in creating commands that you think should exist.
 
 $ git config --global alias.last 'log -1 HEAD'
 $ git last
@@ -4852,21 +4860,89 @@ build/
 ={============================================================================
 *kt_dev_env_git_007* log
 
-{git-log}
-With no arguments, git log lists the commits made in that repository in reverse chronological order. 
-$git log
+{log}
+With no arguments, git log lists the commits made in that repository in reverse chronological order.
+This is from the most recent commits. note: unit is commit.
 
+$ git log
+
+<patch-format-and-specify-limit>
+You can also use -2, which limits the output to only the last two entries. note: last two means the
+latest two commits.
+
+$ git log -2
+$ git log -p -2
+
+<stat>
+--stat option prints below each commit entry a list of modified files, how many files were changed,
+  and how many lines in those files were added and removed. It also puts a summary of the
+  information at the end.
+
+$ git log --stat
+commit 4092efb248db69311cc6efd65985818a2150c688
+Author: kit <tegipark@gmail.com>
+Date:   Fri Feb 6 00:50:05 2015 +0000
+
+    2015.02.06 fh
+
+ kt_dev_01.txt |  148 ++++++++-------------------------------------------------
+ temp.txt      |  144 +++++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 160 insertions(+), 132 deletions(-)
+
+commit fa2cb0ad40dcc108dfdacdcedf7adc4bc3bfce3b
+Author: Kit Park <kit.park@youview.com>
+Date:   Thu Feb 5 17:15:32 2015 +0000
+
+    2015.02.05 fo
+...
+
+<pretty>
 $ git log --pretty=oneline
-git log --pretty=format:"%h - %an, %ar : %s" --graph
 
-the time-limiting options such as --since and --until are very useful. 
+$ git log --pretty=format:"%h - %an, %ar : %s" --graph
+$ git log --pretty=format:"%h - %an, %ar : %s" 
+4092efb - kit, 2 days ago : 2015.02.06 fh
+fa2cb0a - Kit Park, 2 days ago : 2015.02.05 fo
+...
+
+<limit>
+The time-limiting options such as --since and --until are very useful. 
 
 $ git log --since=2.weeks
 
+<search>
+--author option allows you to filter on a specific author
+--grep option lets you search for keywords in the commit messages.
+
+<search-function>
+Another really helpful filter is the -S option which takes a string and only shows the commits that
+introduced a change to the code that added or removed that string. For instance, if you wanted to
+find the last commit that added or removed a reference to a specific function, you could call:
+
+$ git log -Sfunction_name
+
+<search-file>
+The last really useful option to pass to git log as a filter is a path. If you specify a directory
+or file name, you can limit the log output to commits that introduced a change to those files. This
+is always the last option and is generally preceded by double dashes (--) to separate the paths from
+the options.
+
+<example>
+If you want to see which commits modifying test files in the Git source code history were committed
+by Junio Hamano and were not merges in the month of October 2008, you can run something like this:
+
+$ git log --pretty="%h - %s" --author=gitster --since="2008-10-01" \
+--before="2008-11-01" --no-merges -- t/
+
+<graph>
 For graphs [note] shows the same as qgit
 git log --graph --oneline --all
 
 git log --oneline --all
+
+<decorate>
+To see where the branch pointers are pointing:
+$ git log --oneline --decorate
 
 <options>
        --all
@@ -4879,7 +4955,7 @@ git log --oneline --all
 
 
 ={============================================================================
-*kt_dev_env_git_008* change commit and unstage
+*kt_dev_env_git_008* undo, change commit, unstage and discard changes
 
 From 2.4 Git Basics - Undoing Things
 
@@ -4933,58 +5009,13 @@ $ git status
 #       modified:   benchmarks.rb
 #
 
-The command is a bit strange, but it works. The benchmarks.rb file is modified but once again
-unstaged.
+note: the reset command simply remove the staged changes. For example, suppose that a file staged
+already and changes it after. what would happen when 'unstage' it? would you lost the changes made
+after staged? NO. The working copy remains the same but the staged is gone.
 
 
-{revert-back-and-discard-changes}
+{discard-changes}
 $ git checkout -- <filename>
-
-
-{revert-merge}
-When merge conflict happens, git modifies the file so will have modified status. How can undo this?
-If you get conflicts, you can immediately get back to the state you were at before with:
-
-~/git-work$ git merge undo
-Auto-merging readme
-CONFLICT (content): Merge conflict in readme
-Automatic merge failed; fix conflicts and then commit the result.
-
-~/git-work$ git status
-# On branch master
-# You have unmerged paths.
-#   (fix conflicts and run "git commit")
-#
-# Unmerged paths:
-#   (use "git add <file>..." to mark resolution)
-#
-#	both modified:      readme
-#
-# Untracked files:
-#   (use "git add <file>..." to include in what will be committed)
-#
-#	.readme.swp
-no changes added to commit (use "git add" and/or "git commit -a")
-
-~/git-work$ more readme 
-<<<<<<< HEAD
-1: changed first and changed by master.
-=======
-1: changed first and changed by undo and by undo
->>>>>>> undo
-2: changed second.
-3: added topic first.
-4: added topic second.
-
-~/git-work$ git reset --merge
-
-kit@kit-vb:~/git-work$ git status
-# On branch master
-# Untracked files:
-#   (use "git add <file>..." to include in what will be committed)
-#
-#	.readme.swp
-nothing added to commit but untracked files present (use "git add" to track)
 
 
 ={============================================================================
@@ -4997,7 +5028,7 @@ $ git co<tab><tab>
 
 
 ={============================================================================
-*kt_dev_env_git_010* branching
+*kt_dev_env_git_010* branch
 
 {branch-is-special}
 Why is it so special? The way Git branches is incredibly lightweight, making branching operations
@@ -5026,12 +5057,18 @@ the last commit you made. Every time you commit, it moves forward automatically.
 commit a      <------   commit b       <-------   commit c
 
 
-{create-new-branch} head
+{create-new-branch}
+What happens if you create a new branch? Well, doing so creates a new pointer for you to move
+around.
+
 $ git branch testing
                                                    <HEAD>
                                                   <master>
 commit a      <------   commit b       <-------   commit c
                                                   <testing>
+
+To see where the branch pointers are pointing:
+$ git log --oneline --decorate
 
 
 {branch-and-head}
@@ -5056,17 +5093,17 @@ The head means the current branch or what is currently checked out. However, whe
 result, we often just use the term "branch" both for branches and for branch heads. A branch is~
 nothing more than a named reference to a commit.~
 
-How does Git know what branch you're currently on? It keeps a special pointer called [HEAD]. note
-that this is a lot different than the concept of HEAD in other VCSs you may be used to. Cannot have
-the same branch name in the same repository.
+How does Git know what branch you're currently on? It keeps a special pointer called 'HEAD'.
+Cannot have the same branch name in the same repository.
 
 
-{switch-branch} {checkout-command}
-To switch to an existing branch, you run the git checkout command
+{switch-branch} checkout
+To switch to an existing branch, you run the git checkout command. This moves HEAD to point to the
+testing branch.
 
 $ git checkout testing
 
-To 'make' a branch and to swith to it in a single shot.
+To 'make' a branch and to 'switch' to it in a single shot.
 
 $ git checkout -b testing
 
@@ -5091,8 +5128,8 @@ commit a      <------   commit b       <-------   commit c    <------  commit d
                                                                        <testing>
 
 Two things done by doing this, essentially rewinds the your work:
-o move the head back to point to master
-o revert your working dirs back to the snapshot that master 'points' to
+1. move the head back to point to master
+2. revert your working dirs back to the snapshot that master 'points' to
 
 note: switching head, branch, commit means changing working dirs.
 
@@ -5133,16 +5170,313 @@ A tag represents a version of a particular branch at a moment in time. A branch 
 separate thread of development that may run concurrently with other development efforts on the same
 code base. Changes to a branch may eventually be merged back into another branch to unify them.
 
-note: looks the same but tag is fixed one and branch is moving one?
-
-Tag is very much like a branch that doesn't change - it's just a pointer to a specific commit. 
+The tag is very much like a branch that doesn't change - it's just a pointer to a specific commit. 
 
 
 ={============================================================================
-*kt_dev_env_git_011* branch: inspect
+*kt_dev_env_git_011* merge branch and workflow
+
+{merge-with-no-diverge} <upstrem>
+The workflow is that make a hotfix to fix a issue and once verify it, them merge it into the master.
+
+           <master>      <hotfix> branch
+c0 <- c1 <- c2        <- c4
+                      <- c3
+                        <iss53> branch
+
+Switch to master and merge hotfix to master:
+
+$ git checkout master
+$ git merge hotfix              # support auto-completion for branch name
+Updating f42c576..3a0874c
+Fast forward
+ README |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+
+The phrase "Fast forward" in that merge. Because the commit pointed to by the branch(hotfix) you
+merged in was directly 'upstream' of the commit(master) you're on, Git moves the pointer forward.
+<no-diverge>. note: This means that simply apply changes up to hotfix and move master to where
+hotfix was. Just overwrite with what hotfix has. No conflict.
+
+note: merge "hotfix" into the current branch that you are on and is master in this example.
+
+So tree becomes:
+                        <master>
+                        <hotfix> branch
+c0 <- c1 <- c2        <- c4
+                      <- c3
+                        <iss53> branch
+
+To switch back to the work you were doing before you were interrupted. However, first you'll delete
+the hotfix branch, because you no longer need it - the master branch points at the same place. You
+can delete it with the -d option to git branch:
+
+$ git branch -d hotfix
+Deleted branch hotfix (3a0874c).
+
+
+{merge-with-diverge}
+Switch back to your work-in-progress branch on issue #53 and continue working on it 
+
+$ git checkout iss53
+Switched to branch "iss53"
+$ vim index.html
+$ git commit -a -m 'finished the new footer [issue 53]'
+
+                         <master>
+c0 <- c1 <- c2        <- c4
+                      <- c3 <- c5
+                              <iss53> branch
+                              <head>
+
+note: merge can be done in any direction.
+It's worth noting here that the work you did in your hotfix branch is not contained in the files in
+your iss53 branch. If you need to pull it in, you can merge your master branch into your iss53
+branch by running git merge master, or you can wait to integrate those changes until you decide to
+pull the iss53 branch back into master later.
+
+<merge-into-master>
+Suppose you've decided that your issue #53 work is complete and ready to be merged into your master
+branch. To merge in iss53 into master
+
+$ git checkout master
+$ git merge iss53
+Merge made by recursive.
+ README |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+This looks a bit different than the hotfix merge because your development history has diverged from
+some older point. 'diverged' Because the commit on the branch you're on(master) isn't a 'direct'
+ancestor of the branch you're merging in(iss53). Git do simple <three-way-merge> using c2, c4, and
+c5.
+
+            # common   # snapshot to merge into
+            # ancestor <head>
+                       <master>
+c0 <- c1 <- [c2]      <- [c4]
+                      <- c3 <- [c5]
+                               <iss53> branch
+                               # snapshot to merge in
+
+<merge-commit>
+Git creates a new snapshot that results from this three-way merge and automatically creates a 'new'
+commit that points to it. This is referred to as a 'merge' commit and is special in that it has more
+than one parent. 
+
+note: this is different from 'fast-forward' move that create no commit.
+
+Git determines the best 'common' ancestor to use for its merge base; this is different than CVS or
+Subversion (before version 1.5), where the developer doing the merge has to figure out the best
+merge base for themselves. 
+
+                                                <master>
+c0 <- c1 <- c2        <- c4                     <- c6
+                      <- c3 <- c5                |
+                              <iss53> branch    <-
+
+c6 has two ancestor.
+
+$ git branch -d iss53
+
+note: This assumes that there is no conflict between hotfix and iss53 branch.
+
+
+{merge-conflict}
+If you changed "the same part of the same file" differently in the two branches you're merging
+together, Git won't be able to merge them cleanly. If your fix for issue #53 modified the same part
+of a file as the hotfix, you'll get a merge conflict that looks something like this:
+
+                        <master>
+                        <hotfix> branch
+c0 <- c1 <- c2        <- c4
+                      <- c3
+                        <iss53> branch
+
+$ git merge iss53
+Auto-merging index.html
+CONFLICT (content): Merge conflict in index.html
+Automatic merge failed; fix conflicts and then commit the result.
+
+Git has paused the process while you resolve the conflict. If you want to see which files are
+unmerged at any point after a merge conflict, you can run git status:
+
+$ git status
+On branch master
+You have unmerged paths.
+  (fix conflicts and run "git commit")
+
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+
+	both modified:   readme
+
+no changes added to commit (use "git add" and/or "git commit -a")
+$
+
+<see-merge-conflict>
+Git adds standard conflict-resolution markers to the files that have conflicts, so you can 'open'
+them manually and resolve those conflicts. The conflicted file contains section like:
+
+note: this is version on master since HEAD and is on master
+
+<<<<<<< HEAD:index.html                                        # { HEAD, master version
+<div id="footer">contact : email.support@github.com</div>
+=======                                                        # }
+<div id="footer">                                              # { iss53 version
+  please contact us at support@github.com
+</div>
+>>>>>>> iss53:index.html                                       # }
+
+In order to resolve the conflict, you have to either choose one side or the other or merge the
+contents yourself. After you've resolved each of these sections in each conflicted file, run git add
+on each file to mark it as resolved. "Staging the file" marks it as resolved in Git.  
+
+<use-mergetool>
+Instead of editing manually, can use GUI by running mergetool.
+
+$ git mergetool
+
+Then will run external merge tool with 'three' panes.
+
+Local: HEAD version     Base: common base version  Remote: merge-in version.
+
+So can select either head version or merge-in version. Or can write up new one. The mergetool runs
+'mordal' mode and when close it, stage it automatically unlike the merge case.
+
+<finish-merge>
+Once resolved conflicts, run git status again to verify that all conflicts have been resolved. Run
+git commit to 'finalize' the merge commit. Can modify that message with details about how you resolved
+the merge 
+
+<config-mergetool>
+To set GUI tool to reslove merge conflict.
+
+$ git config --global merge.tool gvimdiff
+
+note: gvimdiff shows 4 panes.
+
+
+={============================================================================
+*kt_dev_env_git_012* generate patch between branch
+
+{check-before-merge}
+Can do {revert-merge} when conflict happens and want to go back. Also, can check patch output before
+merging. You are on undo topic barnch and want to see changes 'against' master then:
+
+note: when omit --stdout, *.patch file is made.
+
+$ git format-patch master --stdout
+From 223da602d2e71c6d6708b52c80cd672c159b442d Mon Sep 17 00:00:00 2001
+From: Kit Park <keitee.park@samsung.com>
+Date: Tue, 22 Oct 2013 14:59:37 +0100
+Subject: [PATCH 1/2] changed by undo
+
+---
+ readme | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/readme b/readme
+index 3ba462e..a80c866 100644
+--- a/readme
++++ b/readme
+@@ -1,4 +1,4 @@
+-1: changed first and added one by merge-test
++1: changed first and changed by undo
+ 2: changed second.
+ 3: added topic first.
+ 4: added topic second.
+-- 
+1.8.3.4
+
+
+From fa9d05492f1f0357f5803edbf6232b73797b6d8f Mon Sep 17 00:00:00 2001
+From: Kit Park <keitee.park@samsung.com>
+Date: Tue, 22 Oct 2013 15:04:21 +0100
+Subject: [PATCH 2/2] changed by undo undo
+
+---
+ readme | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/readme b/readme
+index a80c866..67d833a 100644
+--- a/readme
++++ b/readme
+@@ -1,4 +1,4 @@
+-1: changed first and changed by undo
++1: changed first and changed by undo and by undo
+ 2: changed second.
+ 3: added topic first.
+ 4: added topic second.
+-- 
+1.8.3.4
+
+<TODO>
+Stackoverflow also said that can apply this patch on master but cannot work for me.
+
+git checkout master
+git apply crazy.patch --check
+[all good! cleanup...]
+rm crazy.patch
+
+
+={============================================================================
+*kt_dev_env_git_013* merge: undo merge attempt
+
+{revert-merge}
+When merge conflict happens, git modifies the file so will have modified status. How can undo this?
+If you get conflicts, you can immediately get back to the state you were at before with:
+
+~/git-work$ git merge undo
+Auto-merging readme
+CONFLICT (content): Merge conflict in readme
+Automatic merge failed; fix conflicts and then commit the result.
+
+~/git-work$ git status
+# On branch master
+# You have unmerged paths.
+#   (fix conflicts and run "git commit")
+#
+# Unmerged paths:
+#   (use "git add <file>..." to mark resolution)
+#
+#	both modified:      readme
+#
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#
+#	.readme.swp
+no changes added to commit (use "git add" and/or "git commit -a")
+
+~/git-work$ more readme 
+<<<<<<< HEAD
+1: changed first and changed by master.
+=======
+1: changed first and changed by undo and by undo
+>>>>>>> undo
+2: changed second.
+3: added topic first.
+4: added topic second.
+
+$ git merge --abort     # for the latest git
+$ git reset --merge
+
+kit@kit-vb:~/git-work$ git status
+# On branch master
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#
+#	.readme.swp
+nothing added to commit but untracked files present (use "git add" to track)
+
+
+={============================================================================
+*kt_dev_env_git_014* branch: status, merged option and topic branch
 
 {branch-management}
-To list branches and * indicates that you currently have checked out.
+To list branches and * indicates that you currently have checked out. i.e., the branch that HEAD
+points to.
 
 $ git branch
   iss53
@@ -5165,7 +5499,7 @@ $ git branch --merged
   iss53
 * master
 
-Branches on this list without the * in front of them are generally fine to delete because you've
+Branches on this list 'without' the * in front of them are generally fine to delete because you've
 'already' incorporated their work into another branch
 
 
@@ -5249,258 +5583,16 @@ To see a tag
 $ git show v1.4
 
 
-{to-tag-a-specific-commit}
+{to-tag-a-commit} tag later
 To tag that commit, you specify the commit checksum (or part of it) at the end of the command:
 
 $ git tag -a v1.2 -m 'version 1.2' 9fceb02
 
 
-={============================================================================
-*kt_dev_env_git_020* merge
+{tag-is-local}
+By default, the git push command doesn't transfer tags to remote servers. You will have to
+explicitly push tags to a shared server after you have created them.
 
-{merge-with-no-diverge} <upstrem>
-
-           <master>      <hotfix> branch
-c0 <- c1 <- c2        <- c4
-                      <- c3
-                        <iss53> branch
-
-Swith to master and merge hotfix to master:
-
-$ git checkout master
-$ git merge hotfix              # support auto-completion for branch name
-Updating f42c576..3a0874c
-Fast forward
- README |    1 -
- 1 files changed, 0 insertions(+), 1 deletions(-)
-
-
-The phrase "Fast forward" in that merge. Because the commit pointed to by the branch(hotfix) you
-merged in was directly 'upstream' of the commit(master) you're on, Git moves the pointer forward.
-<no-diverge>. note: This means that simply apply changes up to hotfix and move master to where
-hotfix was. Just overwrite with what hotfix has. No conflict.
-
-So tree becomes:
-                        <master>
-                        <hotfix> branch
-c0 <- c1 <- c2        <- c4
-                      <- c3
-                        <iss53> branch
-
-To switch back to the work you were doing before you were interrupted. However, first you'll delete
-the hotfix branch, because you no longer need it - the master branch points at the same place. You
-can delete it with the -d option to git branch:
-
-$ git branch -d hotfix
-Deleted branch hotfix (3a0874c).
-
-
-{merge-with-diverge}
-Switch back to your work-in-progress branch on issue #53 and continue working on it 
-
-$ git checkout iss53
-Switched to branch "iss53"
-$ vim index.html
-$ git commit -a -m 'finished the new footer [issue 53]'
-
-                         <master>
-c0 <- c1 <- c2        <- c4
-                      <- c3 <- c5
-                              <iss53> branch
-                              <head>
-
-To merge in iss53 into master
-
-$ git checkout master
-$ git merge iss53
-Merge made by recursive.
- README |    1 +
- 1 files changed, 1 insertions(+), 0 deletions(-)
-
-This looks a bit different than the hotfix merge because your development history has diverged from
-some older point. <diverge> Because the commit on the branch you're on(master) isn't a 'direct'
-ancestor of the branch you're merging in(iss53). Git do simple <three-way-merge> 
-
-            # common   # snapshot to merge into
-            # ancestor <head>
-                       <master>
-c0 <- c1 <- c2        <- c4
-                      <- c3 <- c5
-                               <iss53> branch
-                               # snapshot to merge in
-
-Git creates a new snapshot that results from this three-way merge and automatically creates a 'new'
-commit that points to it. This is referred to as a 'merge' commit and is special in that it has more
-than one parent.
-
-Git determines the best common ancestor to use for its merge base; this is different than CVS or
-Subversion (before version 1.5), where the developer doing the merge has to figure out the best
-merge base for themselves. 
-
-                                                <master>
-c0 <- c1 <- c2        <- c4                     <- c6
-                      <- c3 <- c5
-                              <iss53> branch    <- c6
-
-c6 has two ancestor.
-
-
-{merge-conflict}
-If you changed "the same part of the same file" differently in the two branches you're merging
-together, Git won't be able to merge them cleanly. If your fix for issue #53 modified the same part
-of a file as the hotfix, you'll get a merge conflict that looks something like this:
-
-                        <master>
-                        <hotfix> branch
-c0 <- c1 <- c2        <- c4
-                      <- c3
-                        <iss53> branch
-
-$ git merge iss53
-Auto-merging index.html
-CONFLICT (content): Merge conflict in index.html
-Automatic merge failed; fix conflicts and then commit the result.
-
-Git has paused the process while you resolve the conflict. If you want to see which files are
-unmerged at any point after a merge conflict, you can run git status:
-
-$ git st
-On branch master
-You have unmerged paths.
-  (fix conflicts and run "git commit")
-
-Unmerged paths:
-  (use "git add <file>..." to mark resolution)
-
-	both modified:   readme
-
-no changes added to commit (use "git add" and/or "git commit -a")
-$
-
-The output file from conflict contains: note: git changes the file like this.
-
-<<<<<<< HEAD:index.html       note: this is version on master since HEAD and is on master
-<div id="footer">contact : email.support@github.com</div>
-=======
-<div id="footer">
-  please contact us at support@github.com
-</div>
->>>>>>> iss53:index.html      note: branch to merge in.
-
-
-HEAD (your master branch, because that was what you had checked out when you ran your merge command)
-is the top part of that block (everything above the =======), while the version in your iss53 branch
-looks like everything in the bottom part.
-
-In order to resolve the conflict, you have to either choose one side or the other or merge the
-contents yourself. After you've resolved each of these sections in each conflicted file, run git add
-on each file to mark it as resolved. Staging the file marks it as resolved in Git.  
-
-
-{config-merge}
-To use GUI tool after conflict happens.
-
-$ git config --global merge.tool meld
-$ git config --global merge.tool gvimdiff
-
-
-For following conflict when merging topic to master:
-
-$ git merge topic
-Auto-merging readme
-CONFLICT (content): Merge conflict in readme
-Automatic merge failed; fix conflicts and then commit the result.
-
-$ more readme
-1: changed first and added by topic. [note] git doesn't show changes made here
-2: added second.
-<<<<<<< HEAD
-3: continue to add third.
-4: continue to add forth.
-=======
-3: added topic first.
-4: added topic second.
->>>>>>> topic
-
-To run external merge tool.
-
-$ git mergetool
-
-Local: HEAD               Base:                Remote:
-1: added first.           1: added first.      1: changed first and added by topic.
-2: added second.          2: added second.     2: added second.
-3: continue to add third.                      3: added topic first.
-4: continue to add forth.                      4: added topic second.
-
-note: this temp files are done by git mergetool. See git mergetool help for more. 
-
-Once resolved conflicts, run git status again to verify that all conflicts have been resolved. Run
-git commit to finalize the merge commit. Can modify that message with details about how you resolved
-the merge 
-
-
-={============================================================================
-*kt_dev_env_git_021* merge: check before
-
-{check-before-merge}
-Can do {revert-merge} when conflict happens and want to go back. Also, can check patch output before
-merging. You are on undo topic barnch and want to see changes 'against' master then:
-
-note: when omit --stdout, *.patch file is made.
-
-$ git format-patch master --stdout
-From 223da602d2e71c6d6708b52c80cd672c159b442d Mon Sep 17 00:00:00 2001
-From: Kit Park <keitee.park@samsung.com>
-Date: Tue, 22 Oct 2013 14:59:37 +0100
-Subject: [PATCH 1/2] changed by undo
-
----
- readme | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
-diff --git a/readme b/readme
-index 3ba462e..a80c866 100644
---- a/readme
-+++ b/readme
-@@ -1,4 +1,4 @@
--1: changed first and added one by merge-test
-+1: changed first and changed by undo
- 2: changed second.
- 3: added topic first.
- 4: added topic second.
--- 
-1.8.3.4
-
-
-From fa9d05492f1f0357f5803edbf6232b73797b6d8f Mon Sep 17 00:00:00 2001
-From: Kit Park <keitee.park@samsung.com>
-Date: Tue, 22 Oct 2013 15:04:21 +0100
-Subject: [PATCH 2/2] changed by undo undo
-
----
- readme | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
-diff --git a/readme b/readme
-index a80c866..67d833a 100644
---- a/readme
-+++ b/readme
-@@ -1,4 +1,4 @@
--1: changed first and changed by undo
-+1: changed first and changed by undo and by undo
- 2: changed second.
- 3: added topic first.
- 4: added topic second.
--- 
-1.8.3.4
-
-<TODO>
-Stackoverflow also said that can apply this patch on master but cannot work for me.
-
-git checkout master
-git apply crazy.patch --check
-[all good! cleanup...]
-rm crazy.patch
 
 
 ={============================================================================
@@ -5974,6 +6066,18 @@ $ git status
 #
 #    add-me
 
+{rm}
+When accidentally staged it, like a large log file or a bunch of .a compiled files. To do this, use
+the --cached option:
+
+$ git rm --cached README
+
+
+{mv}
+If you want to rename a file in Git, you can run something like
+
+$ git mv file_from file_to
+
 
 {clean}
 git-clean - Remove 'untracked' files from the working tree
@@ -6026,70 +6130,103 @@ How to clean working dirs with having files manually created?
 ={============================================================================
 *kt_dev_env_git_034* diff, difftool
 
-{log-p}
+{diff-between-unstaged-and-repository}
+That command compares what is in your working directory with what is in your staging area. The
+result tells you the changes you've made that you haven't yet staged. 
 
--p
--u
---patch
+note: 'diff' shows the patch format by default.
 
-Generate patch (see section on generating patches). {git-diff This is the default.}
+$ git diff
+diff --git a/sample.c b/sample.c
+index bb699af..1ee2e2c 100644
+--- a/sample.c
++++ b/sample.c
+@@ -74,9 +74,7 @@ outputError(Boolean useErr, int err, Boolean flushStdout,
+     fflush(stderr);           /* In case stderr is not line-buffered */
+ }
+ 
+-/* Display error message including 'errno' diagnostic, and
+-   return to caller */
+-
++// Display error message including 'errno' diagnostic, and return to caller
+ void
+ errMsg(const char *format, ...)
+ {
+$ 
 
-Helpful options is -p, which shows the diff introduced in 'each' commit. You can also use -2, which
-limits the output to only the last two entries:
+note:
+That means that shows diff as if run the below and 'b' in diff is a destination.
 
-$ git log -p -2
+$ git diff "from" "to" $git diff "repository" "working directory"
 
 
-{diff}
-To see what you've changed but not yet staged, type git diff with no other arguments. show ONLY
-changes that are still 'unstaged'.
+{diff-between-staged-and-repository}
+Sows the diff between index and repository.
 
-<unstaged>
-git diff
+$ git diff --cached or --staged
+$ git diff HEAD                     # shows the same
 
-To see what you've staged that will go into your next commit, you can use git diff --cached. (In Git
-versions 1.6.1 and later, you can also use git diff --staged, which may be easier to remember.) 
 
-<staged>
-git diff --cached
+{diff-between-local-and-remote}
+note:
+As shown above, "from" and "to" can be used in different order. So 
 
-Suppose this output for git status:
+$ git diff master origin/master  # shows diff to goes to "origin/master"
+$ git diff origin/master master  # shows diff to goes to "master"
 
-$ git status
-# On branch master
-# Changes to be committed:
-#   (use "git reset HEAD <file>..." to unstage)
-#
-#   new file:   y
-#
-# Changes not staged for commit:
-#   (use "git add <file>..." to update what will be committed)
-#   (use "git checkout -- <file>..." to discard changes in working directory)
-#
-#   modified:   x
-#
-As you see, there is one file modified but not staged for commit, and a new file added that is ready
-to be committed.
+$ git fetch
+$ git diff master origin/master
+diff --git a/kt_dev_01.txt b/kt_dev_01.txt
+index 4e8bdd1..51a3cb1 100644
+--- a/kt_dev_01.txt
++++ b/kt_dev_01.txt
+@@ -36,7 +36,7 @@ KT KB. DEVELOPMENT.
+ 
+ #{ GCC
+ |kt_dev_gcc_000| gcc compile script
+-|kt_dev_gcc_001| error: two or more data types in declaration specifiers {prepr
++|kt_dev_gcc_001| error: two or more data types in declaration specifiers <bool>
+ |kt_dev_gcc_002| error: ISO C++ forbids declaration of 'UseStatic' with no type
+ |kt_dev_gcc_003| error: invalid conversion from 'Singleton*' to 'MySingleton*' 
+ |kt_dev_gcc_004| error: variable-sized object 'out' may not be initialised
+@@ -3655,7 +3655,6 @@ sam01.cpp:6:0: warning: "MYBOOL" redefined [enabled by def
+...
 
-git diff --staged will only show changes to files in the "staged" area.
+<to-see-filenames-changed>
+$ git fetch
+$ git diff --name-only master origin/master
 
-<all>
-git diff HEAD 
+<to-see-single-file-diff>
+$ git fetch
+$ git diff master:kt_dev_01.txt  origin/master:kt_dev_01.txt  
 
-will show all changes to 'tracked' files. If you have all changes staged for commit, then both
-commands will output the same.
+<to-see-commits-between-local-and-fetch>
+This shows 'commits' that were downloaded from the remote. In other words, differences to goes to
+remote. This is based on double-dot notation.
 
+$ git fetch
+$ git log master..origin      # commits to 'become' origin.
+
+$ git log HEAD..origin        # if you're not on master branch.
+
+To get the diff format:
+
+$ git log -p master..origin 
+
+The below shows the same result except that log has a commit details.
+
+$ git diff master..origin 
+
+
+{diff-between-commits}
 git diff --name-only commit commit
 git diff commit commit
 
-<on-branch>
-to show name only
 
-$ git diff --name-status master..branchName
+{diff-between-branches}
+That will produce the diff between the 'tips' of the two branches. 
 
-
-That will produce the diff between the 'tips' of the two branches. If you'd prefer to find the diff
-from their common ancestor to test, you can use three dots instead of two:
+$ git diff --name-only master..branchName
 
 git diff branch_1..branch_2
 git diff branch_1...branch_2
@@ -6154,7 +6291,6 @@ $ git show --name-only {commit}
 ={============================================================================
 *kt_dev_env_git_036* commit
 
-{git-commit}
 $ git commit
 [master 312e37a] Stroy 182: fix benchmarks for speed
  1 file changed, 1 insertion(+)
@@ -6172,7 +6308,7 @@ $ git commit -am 'added new benchmarks'
 
 
 ={============================================================================
-*kt_dev_env_git_037* commit: ranges and double dot
+*kt_dev_env_git_037* ranges and double dot
 
 From 7.1 Git Tools - Revision Selection
 
@@ -6250,7 +6386,7 @@ With these tools, you can much more easily let Git know what commit or commits y
 
 
 ={============================================================================
-*kt_dev_env_git_107* remote: servers, branches, push and pull.
+*kt_dev_env_git_100* remote: servers, branches, push and pull.
 
 {to-list-remotes}
 $ git remote -v
@@ -6258,12 +6394,23 @@ bakkdoor  git://github.com/bakkdoor/grit.git
 origin    git@github.com:mojombo/grit.git         # it means SSH url
 
 
-{make-shortname-for-remotes}
+{add-remote-repo-as-shortname}
+The shortname is reference to remote.
+
 $ git remote add [shortname] [url]:
 $ git remote add pb git://github.com/paulboone/ticgit.git
 $ git remote -v
 origin  git://github.com/schacon/ticgit.git
 pb  git://github.com/paulboone/ticgit.git
+
+$ git remote rename pb paul
+
+$ git remote rm paul
+
+
+{clone-do-two-things}
+The clone command automatically add shortname and sets up your local master branch to track the
+remote master branch (or whatever the default branch is called) on the server you cloned from.
 
 
 {remote-and-local-master}
@@ -6328,6 +6475,53 @@ note:
 origin is not a branch but a name of local repo for a remote repo.
 
 
+={============================================================================
+*kt_dev_env_git_101* remote: inspect, show, and ls-remote
+
+{inspect-remote}
+To show branch
+git branch 
+       -r, --remotes
+           List or delete (if used with -d) the remote-tracking branches.
+
+       -a, --all
+           List both remote-tracking branches and local branches.
+
+$ git branch -a
+* master
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/master
+
+$ git branch -r
+
+
+{show}
+show [shortname]
+
+$ git remote show origin
+* remote origin
+  URL: git://github.com/schacon/ticgit.git
+  Remote branch merged with 'git pull' while on branch master
+    master
+  Tracked remote branches
+    master
+    ticgit
+
+<ls-remote>
+The ls-remote command returns the SHA1 hash of the latest commit for that reference, so it is quite
+easy to parse out and get to the exact commit you need if you're doing some scripting. The --heads
+option lists only branch names since the command can list tags too.
+
+$ git ls-remote --heads origin
+$ git ls-remote origin 
+f7abd1ac44367aff4056b3755e1bdff669aa279b	HEAD
+acf12d1ec25a3bf0ed800eda4ad8470d9f4a9f26	refs/heads/14base
+5d42e9f6d46160888a5f90729d0bc0285e844d2b	refs/heads/gpi
+f7abd1ac44367aff4056b3755e1bdff669aa279b	refs/heads/master
+
+={============================================================================
+*kt_dev_env_git_101* remote: fetch, inspect, merge and pull
+
 {fetch-and-inspect}
 To get data from your remote projects, pulls down all the data from that remote that you do not have
 yet. After that, you can merge in or inspect.
@@ -6338,7 +6532,7 @@ From git://github.com/paulboone/ticgit
  * [new branch]      master     -> pb/master
  * [new branch]      ticgit     -> pb/ticgit
 
-Paul's master branch is accessible locally as pb/master
+ The fetched data is accessible locally as pb/master.
 
 Fetches all the changesets to your local repository and means you can now refer to the changes as
 origin/master you can operate on it with any 'local' branch. Inspect them and merge to your branch
@@ -6347,6 +6541,8 @@ that you are currently on.
 $ git fetch origin
 $ git diff master origin/master
 $ git merge origin/master
+
+TODO: is there any way what it would look like when do merge? --no-commit option?
 
 
 {pull}
@@ -6372,12 +6568,16 @@ note:
 So fetch is pulling data but do not merge but pull do merge automatically.
 
 
+={============================================================================
+*kt_dev_env_git_102* remote: push
+
+
 {push} {upstream} {reject}
 Your local branches aren't automatically synchronized to the remotes you write to - you have to
 explicitly push the branches you want to share. That way, you can use private branches for work you
 don't want to share, and push up only the topic branches you want to collaborate on.
 
-$ git push origin serverfix
+$ git push origin serverfix   # $ git push "remote name" "branch name"
 
 If you didn't want it to be called serverfix on the remote, you could instead run to push your [local]
 serverfix branch to the awesomebranch branch on the remote project.
@@ -6560,46 +6760,6 @@ remote = origin
 merge = refs/heads/tztv_2.2
 
 
-={============================================================================
-*kt_dev_env_git_110* remote: inspect and ls-remote
-
-{inspect-remote}
-git branch # to show local branch
-git branch 
-       -r, --remotes
-           List or delete (if used with -d) the remote-tracking branches.
-
-       -a, --all
-           List both remote-tracking branches and local branches.
-
-$ git branch -a
-* master
-  remotes/origin/HEAD -> origin/master
-  remotes/origin/master
-
-To show only remote branches:
-$ git branch -r
-
-$ git remote show origin
-* remote origin
-  URL: git://github.com/schacon/ticgit.git
-  Remote branch merged with 'git pull' while on branch master
-    master
-  Tracked remote branches
-    master
-    ticgit
-
-<ls-remote>
-The ls-remote command returns the SHA1 hash of the latest commit for that reference, so it is quite
-easy to parse out and get to the exact commit you need if you're doing some scripting. The --heads
-option lists only branch names since the command can list tags too.
-
-$ git ls-remote --heads origin
-$ git ls-remote origin 
-f7abd1ac44367aff4056b3755e1bdff669aa279b	HEAD
-acf12d1ec25a3bf0ed800eda4ad8470d9f4a9f26	refs/heads/14base
-5d42e9f6d46160888a5f90729d0bc0285e844d2b	refs/heads/gpi
-f7abd1ac44367aff4056b3755e1bdff669aa279b	refs/heads/master
 
 
 ={============================================================================
@@ -6910,23 +7070,6 @@ git clone keitee.park@magnum:/dsk1/git/tizen-mheg-shared.git mag_shared
 *kt_dev_env_git_112* remote: diff between local and remote
 
 {diff-between-local-remote}
-$ git fetch
-$ git diff master origin/master
-
-or
-
-After doing a git fetch, do a 
-
-git log HEAD..origin 
-
-to show the log entries between your last common commit and the origin branch. 
-
-To show the diffs, use either 
-
-git log -p HEAD..origin 
-
-to show each patch, or git diff HEAD...origin (three dots not two) to show a single diff.
-
 <cherry-pick>
 There normally isn't any need to undo a fetch, because doing a fetch only updates the remote branch
 and none of your branches. If you're not prepared to do a pull and merge in all the remote commits,
