@@ -34,6 +34,8 @@ rw-r--r-- 1000/100 406668 Nov 15 12:21 2009 mod2.o
 rw-r--r-- 1000/100 46672 Nov 15 12:21 2009 mod3.o
 
 <link-static>
+Couple of ways in linking:
+
 1. The first is to name the static library as part of the link command, as in the following:
 
 $ cc -g -c prog.c
@@ -126,7 +128,7 @@ void foo(void)
   printf("foo: this is foo...\n");
 }
 
-kpark@wll1p04345:~/work/xxx$ ls -alR 
+$ ls -alR 
 drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:34 one
 drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:37 two
 drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:46 thr
@@ -138,6 +140,12 @@ drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:46 thr
 -rwxr-xr-x 1 kpark kpark 6407 Feb  5 09:33 libfoo.so
 -rw-r--r-- 1 kpark kpark   82 Feb  5 09:32 main.c
 -rwxr-xr-x 1 kpark kpark 7120 Feb  5 09:34 one
+
+note:
+-shared
+Produce a shared object which can then be linked with other objects to form an executable. Not all
+systems support this option. For predictable results, you must also specify the same set of options
+used for compilation (-fpic, -fPIC, or model suboptions) when you specify this linker option
 
 $ gcc -c -fpic foo.c 
 $ gcc -shared -o libfoo.so foo.o
@@ -398,10 +406,48 @@ for quick tests and for systems on which you don't have admin privileges. Howeve
     don't reset it to its previous state when you're done.
 
 
+The dynamic linker searches for the shared library using the following rules:
+
+1. If the executable has any directories listed in its DT_RPATH run-time library path list (rpath)
+  and the executable does not contain a DT_RUNPATH list, then these directories are searched (in
+      the order that they were supplied when linking the program).
+
+2. If the LD_LIBRARY_PATH environment variable is defined, then each of the colon-separated
+directories listed in its value is searched in turn. 
+
+<security>
+If the executable is a set-user-ID or set-group-ID program, then LD_LIBRARY_PATH is ignored. This is
+a security measure to prevent users from tricking the dynamic linker into loading a private version
+of a library with the same name as a library required by the executable.
+
+3. If the executable has any directories listed in its DT_RUNPATH run-time library path list, then
+these directories are searched (in the order that they were supplied when linking the program).
+
+4. The file /etc/ld.so.cache is checked to see if it contains an entry for the library.
+
+5. The directories /lib and /usr/lib are searched (in that order).
+
+<rpath>
+There is a third way: during the static editing phase, we can insert into the exe- cutable a list of
+directories that should be searched at run time for shared libraries.  This is useful if we have
+libraries that reside in fixed locations that are not among the standard locations searched by the
+dynamic linker. To do this, we employ the -rpath linker option when creating an executable:
+
+$ gcc -g -Wall -Wl,-rpath,/home/mtk/pdir -o prog prog.c libdemo.so
+
+note: From ld linker docs:
+
+2. Any directories specified by -rpath options. The difference between -rpath and -rpath-link is
+that directories specified by -rpath options are included in the executable and used at runtime,
+     whereas the -rpath-link option is only effective at link time. Searching -rpath in this way is
+     only supported by native linkers and cross linkers which have been configured with the
+     --with-sysroot option.
+
+
 {runtime-resolution}
 Suppose that a global symbol (i.e., a 'function' or variable) is defined in multiple locations, such
-as in an executable and in a shared library, or in multiple shared libraries. How is a reference to
-that symbol resolved?
+as in an executable and in a shared library, or in 'multiple' shared libraries. How is a reference
+to that symbol resolved?
 
          prog                                   libfoo.so
 -----------------------------          -----------------------------
@@ -432,7 +478,7 @@ listed on the static 'link' command line.
 <problem>
 Although these semantics make the transition from static to shared libraries relatively
 straightforward, they can cause some problems. The most significant problem is that these semantics
-conflict with the model of a shared library as implementing a self-contained subsystem. 
+conflict with the model of a shared library as implementing a 'self'-contained subsystem. 
 
 By default, a shared library can 'not' guarantee that a reference to one of its own global symbols
 will actually be bound to the library's definition of that symbol.
@@ -514,6 +560,220 @@ $ gcc -g -shared -Wl,-Bsymbolic -o libfoo.so foo.o
 
 note: this means that main version gets called for the above example but would solve the
 case-example since it force to pick up the one in the same library.
+
+
+={============================================================================
+*kt_linux_core_107* shared library: dl and ABI
+
+When an executable starts, the dynamic linker loads 'all' of the shared libraries in the program's
+dynamic dependency list. Sometimes, however, it can be useful to load libraries at a later time. For
+example, a plug-in is loaded only when it is needed. This functionality is provided by an API to the
+dynamic linker.
+
+{symbol-name} from LPI 42.1
+The dlsym() function searches a library for a symbol (a string containing the 'name' of a function
+    or variable) and returns its address.
+
+{link-option}
+To build programs that use the dlopen API on Linux, we must specify the -ldl option, in order to
+link against the libdl library.
+
+
+{access-symbols-in-main}
+Sometimes, it is desirable instead to have x() in shared library invoke an implementation of y() in
+the main program. In order to do this, we must make the (global-scope) symbols in the main program
+available to the dynamic linker, by linking the program using the --export-dynamic linker option:
+
+$ gcc -Wl,--export-dynamic main.c (plus further options and arguments)
+
+Equivalently, we can write the following:
+
+$ gcc -export-dynamic main.c
+
+Using either of these options allows a dynamically loaded library to access global symbols in the
+main program.
+
+
+{visibility}
+A well-designed shared library should make visible only those symbols (functions and variables) that
+form part of its specified application binary interface (ABI). The reasons for this are as follows:
+
+@ If the shared library designer accidentally exports unspecified interfaces, then authors of
+applications that use the library may choose to employ these interfaces. This creates a
+'compatibility' problem for future upgrades of the shared library.
+
+The library developer expects to be able to change or remove any interfaces 'other' than those in
+the documented ABI, while the library user expects to continue using the same interfaces (with the
+    same semantics) that they currently employ.
+
+@ During run-time symbol resolution, any symbols that are exported by a shared library might
+interpose definitions that are provided in other shared libraries.
+
+note: needs more about problems in other shared libraries.
+
+@ Exporting unnecessary symbols increases the size of the dynamic symbol table that must be loaded
+at run time.
+
+All of these problems can be minimized or avoided altogether if the library designer ensures that
+only the symbols required by the library's specified ABI are exported. 
+
+The following techniques can be used to control the export of symbols:
+
+@ In a C program, we can use the static keyword to make a symbol private to a source-code module,
+  thus rendering it unavailable for binding by other object files.
+
+note:
+As well as making a symbol private to a source-code module, the static keyword also has a converse
+effect. If a symbol is marked as static, then all references to the symbol in the same source file
+will be bound to that definition of the symbol. Consequently, these references won't be subject to
+run-time interposition by definitions from other shared libraries in the manner described in Section
+41.12. This effect of the static keyword is similar to the -Bsymbolic linker option described in
+Section 41.12, with the difference that the static keyword affects a 'single' symbol within a single
+source file.
+
+@ The GNU C complier, gcc, provides a compiler-specific attribute declaration that performs a
+similar task to the static keyword:
+
+void __attribute__ ((visibility("hidden")))
+func(void) {
+   /* Code */
+}
+
+note: see *kt_dev_gcc_110* gcc: attributes
+
+Whereas the static keyword limits the visibility of a symbol to a single source code file, the
+hidden attribute makes the symbol available across all source code files that compose the shared
+library, but prevents it from being visible outside the library.
+
+As with the static keyword, the hidden attribute also has the converse effect of preventing symbol
+interposition at run time.
+
+note: there are more ways in LPI 42.3.
+
+
+={============================================================================
+*kt_linux_core_107* shared library: preload and monitor ld
+
+{ld-preload}
+For testing purposes, it can sometimes be useful to 'selectively' override functions and other symbols
+that would normally be found by the dynamic linker using the search rules. 
+
+To do this, we can define the environment variable LD_PRELOAD as a string consisting of
+space-separated or colon-separated names of shared libraries that should be loaded 'before' any
+other shared libraries. 
+
+Since these libraries are loaded first, any functions they define will automatically be used if
+required by the executable, thus overriding any other functions of the same 'name' that the dynamic
+linker would otherwise have searched for.
+
+$ ./prog
+Called mod1-x1 DEMO
+Called mod2-x2 DEMO
+
+$ LD_PRELOAD=libalt.so ./prog
+Called mod1-x1 ALT                  # x1 in libalt.so and changed this only, selectively.
+Called mod2-x2 DEMO
+
+<process-and-system-wide>
+The LD_PRELOAD environment variable controls preloading on a per-process basis. Alternatively, the
+file /etc/ld.so.preload, which lists libraries separated by white space, can be used to perform the
+same task on a system-wide basis. Libraries specified by LD_PRELOAD are loaded before those
+specified in /etc/ld.so.preload. 
+
+<security>
+For security reasons, set-user-ID and set-group-ID programs ignore LD_PRELOAD.
+
+
+{ld-debug}
+Sometimes, it is useful to monitor the operation of the dynamic linker in order to know, for
+example, where it is searching for libraries. We can use the LD_DEBUG environment variable to do
+this. By setting this variable to one (or more) of a set of standard keywords, we can obtain various
+kinds of tracing information from the dynamic linker.
+
+If we assign the value help to LD_DEBUG, the dynamic linker displays help information about
+LD_DEBUG, and the specified command is not executed:
+
+note: can be any command other 
+$ LD_DEBUG=help ls  
+Valid options for the LD_DEBUG environment variable are:
+
+  libs        display library search paths
+  reloc       display relocation processing
+  files       display progress for input file
+  symbols     display symbol table processing
+  bindings    display information about symbol binding
+  versions    display version dependencies
+  all         all previous options combined
+  statistics  display relocation statistics
+  unused      determined unused DSOs
+  help        display this help message and exit
+
+To direct the debugging output into a file instead of standard output
+a filename can be specified using the LD_DEBUG_OUTPUT environment variable.
+
+
+$ LD_DEBUG=libs ls
+     20177:	find library=libselinux.so.1 [0]; searching
+     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
+     20177:	  trying file=./tls/x86_64/libselinux.so.1
+     20177:	  trying file=./tls/libselinux.so.1
+     20177:	  trying file=./x86_64/libselinux.so.1
+     20177:	  trying file=./libselinux.so.1
+     20177:	 search cache=/etc/ld.so.cache
+     20177:	  trying file=/lib/x86_64-linux-gnu/libselinux.so.1
+     20177:	
+     20177:	find library=librt.so.1 [0]; searching
+     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
+     20177:	  trying file=./tls/x86_64/librt.so.1
+     20177:	  trying file=./tls/librt.so.1
+     20177:	  trying file=./x86_64/librt.so.1
+     20177:	  trying file=./librt.so.1
+     ...
+     20177:	
+install-sh  ltmain.sh  Makefile.am  Makefile.in  missing  src $ 
+
+note: ls command was executed.
+
+The PID value displayed at the start of each line and this is useful if we are monitoring several
+processes (e.g., parent and child).
+
+If desired, we can assign multiple options to LD_DEBUG by separating them with commas (no spaces
+    should appear). 
+
+<symbol-option>
+The output of the symbols option (which traces symbol resolution by the dynamic linker) is
+particularly voluminous.
+
+LD_DEBUG is effective both for libraries implicitly loaded by the dynamic linker and for libraries
+dynamically loaded by dlopen().
+
+For security reasons, LD_DEBUG is (since glibc 2.2.5) ignored in set-user-ID and set- group-ID
+programs.
+
+
+={============================================================================
+*kt_linux_core_107* shared library: further information
+
+Further information
+
+Various information related to static and shared libraries can be found in the ar(1), gcc(1), ld(1),
+ldconfig(8), ld.so(8), dlopen(3), and objdump(1) manual pages and in the info documentation for ld
+  and readelf. [Drepper, 2004 (b)] covers many of the finer details of writing shared libraries on
+  Linux. Further useful information can also be found in David Wheeler's Program Library HOWTO,
+which is online at the LDP web site, http://www.tldp.org/. 
+
+The GNU shared library scheme has many similarities to that implemented in Solaris, and therefore it
+is worth reading Sun¿s Linker and Libraries Guide (available at http://docs.sun.com/) for further
+information and examples. [Levine, 2000] provides an introduction to the operation of static and
+dynamic linkers.
+
+Information about GNU Libtool, a tool that shields the programmer from the implementation-specific
+details of building shared libraries, can be found online at http://www.gnu.org/software/libtool and
+in [Vaughan et al., 2000].
+
+The document Executable and Linking Format, from the Tools Interface Standards committee, provides
+details on ELF. This document can be found online at http://refspecs.freestandards.org/elf/elf.pdf.
+[Lu, 1995] also provides a lot of useful detail on ELF.
 
 
 ={============================================================================
