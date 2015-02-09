@@ -290,7 +290,7 @@ git clone -b huawei/dn370t gitolite@git-dev:/nexusMgr.git XX
 
 <hmax>
 note: need to figure out branch name
-git clone -b huawei/dn370t gitolite@git-humax.dev.youview.co.uk:/nexusMgr.git nexusHmax
+git clone gitolite@git-humax.dev.youview.co.uk:/nexusMgr.git nexusHmax
 
 <hwei>
 git clone -b huawei/dn370t gitolite@git-huawei.dev.youview.co.uk:/nexusMgr.git nexusHwei
@@ -1379,6 +1379,97 @@ kpark@wll1p04345:/opt/oem-staging/huawei-bcm7409$ find . -name nexusMgr.*
 -L/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/usr/local/lib -lnexusMgr
 -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread -pthread nexus_inspect-nexus-inspect.o: In
 function `main': /home/kpark/source/DEVARCH/Polonium/Polonium.NexusInspect/src/nexus-inspect.c:343:
+
+02.09:
+======
+
+{inspect-feature}
+
+The handles are all pointers like:
+typedef struct NEXUS_AudioMixer *NEXUS_AudioMixerHandle;
+
+
+   humax                                                                         hwei
+--------------------------------------------------------------------          --------------------------------------------------------------------
+typedef struct                                                                typedef struct 
+{                                                                             {                                                                 
+  NEXUS_AudioMixerHandle      mixer;                                            NEXUS_AudioMixerHandle              mixer;
+  // 2 in mgr source                                                            // 1 in oem stage
+  NEXUS_AudioPlaybackHandle   pcmPlayback[NEXUS_NUM_AUDIO_PLAYBACKS];           NEXUS_AudioPlaybackHandle           pcmPlayback[NEXUS_NUM_AUDIO_PLAYBACKS];
+  NEXUS_AudioDecoderHandle    audioDecoder[1];           // used to stop        NEXUS_AudioDecoderHandle            audioDecoder[2];
+  NEXUS_Ac3EncodeHandle       ac3Encoder;                // used in info        NEXUS_VideoDecoderHandle            videoDecoder;
+  NEXUS_StcChannelHandle      stcChannel;                // used in info        NEXUS_StcChannelHandle              stcChannel;
+  NEXUS_VideoDecoderHandle    videoDecoder;              // used in info        pid_t                               resource_pid;
+  NEXUS_VideoWindowHandle     videoWindow;               // used in info      } BcmNexus_Shared_Memory;                                                        
+  // 1 in mgr source
+  NEXUS_PlaypumpHandle        playpump[MAX_PUMP_NUM];    // used to stop
+  NEXUS_DmaHandle             dmaHandle;                 // used in info
+  pid_t                       resource_pid;
+} BcmNexus_Shared_Memory;
+
+
+{make-link-error}
+
+note: when build under source/ and see fail or success
+ZB_CFG="huawei.370" zb-make Polonium/Polonium.NexusRelease
+
+/home/kpark/source/DEVARCH/Polonium/Polonium.NexusRelease/src
+
+note: when build under build root and build this only.
+
+export ET=/data/builds/master/huawei.370/DEVARCH/
+ZINC_USER_BUILD_TYPE=release source $ET/OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh
+
+make clean; make;
+
+/data/builds/master/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusRelease
+
+can see output and o file under this.
+
+note: two different places
+
+/home/kpark/source/DEVARCH/Polonium/Polonium.NexusRelease/src/nexus-inspect.c
+/data/builds/master/huawei.370/DEVARCH/Polonium/Polonium.NexusRelease/src/nexus-inspect.c
+
+
+$ /opt/toolchains/huawei-bcm7409/bin/mipsel-linux-uclibc-objdump -x 
+/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/bin/nexus-inspect  | grep NEED
+(standard input):31:  NEEDED               libnexus.so
+(standard input):32:  NEEDED               libgcc_s.so.1
+(standard input):33:  NEEDED               libpthread.so.0
+(standard input):34:  NEEDED               libc.so.0
+(standard input):58:  VERNEED              0x004008fc
+(standard input):59:  VERNEEDNUM           0x00000001
+kpark@wll1p04345:~/source/DEVARCH/Polonium/Polonium.NexusRelease/src$ 
+
+
+note: build root has the latest than install root
+
+kpark@wll1p04345:/data/builds/master/huawei.370/zinc-build-root/release-huawei-bcm7409$ readelf -d ./Polonium/Polonium.NexusRelease/nexus-inspect | grep NEED
+(standard input):4: 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
+(standard input):5: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+(standard input):6: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+(standard input):7: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+(standard input):31: 0x6ffffffe (VERNEED)                    0x4008fc
+(standard input):32: 0x6fffffff (VERNEEDNUM)                 1
+
+kpark@wll1p04345:/opt/oem-staging/huawei-bcm7409/usr/local/lib$ readelf -d libnexusMgr.so | grep NEED 
+(standard input):4: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+(standard input):5: 0x00000001 (NEEDED)                     Shared library: [libinit.so]
+(standard input):6: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+(standard input):7: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+(standard input):27: 0x6ffffffe (VERNEED)                    0x1970
+(standard input):28: 0x6fffffff (VERNEEDNUM)                 1
+
+kpark@wll1p04345:/opt/oem-staging/huawei-bcm7409/usr/local/lib$ readelf -d libnexusMgr.so.org | grep NEED
+(standard input):4: 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
+(standard input):5: 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
+(standard input):6: 0x00000001 (NEEDED)                     Shared library: [libm.so.0]
+(standard input):7: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+(standard input):8: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+(standard input):29: 0x6ffffffe (VERNEED)                    0x1b3c
+(standard input):30: 0x6fffffff (VERNEEDNUM)                 1
+
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
