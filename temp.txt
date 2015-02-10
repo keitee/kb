@@ -303,9 +303,13 @@ executable to use, at run time, a version of the shared library that is differen
 
 $ gcc -c -fpic foo.c
 $ gcc -shared -Wl,-soname,libbar.so -o libfoo.so foo.o      note: shall no space between -soname
-$ readelf -d libfoo.so | grep SONAME
+$ readelf -d libfoo.so | grep SONAME                        note: DT_SONAME in ELF
 (standard input):5: 0x000000000000000e (SONAME)             Library soname: [libbar.so]
 $ gcc -o one main.c libfoo.so
+
+$ readelf -d one | grep NEED 
+(standard input):4: 0x0000000000000001 (NEEDED)             Shared library: [libbar.so]
+(standard input):5: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 
 $ ./one 
 ./one: error while loading shared libraries: libbar.so: cannot open shared object file: No such file
@@ -315,8 +319,9 @@ $ LD_LIBRARY_PATH=. ./one
 ./one: error while loading shared libraries: libbar.so: cannot open shared object file: No such file
 or directory
 
-note: ld looks for libbar but not libfoo
+note: Now linker ld looks for libbar but not libfoo since soname was 'embedded' instead.
 
+<indirection>
 When using a soname, one further step is required: we must create a symbolic link from the soname to
 the real name of the library. This symbolic link must be created in one of the directories searched
 by the dynamic linker. Thus, we could run our program as follows:
@@ -366,7 +371,8 @@ of the library at run time.
 Furthermore, since different major versions of a library have different sonames, they can happily
 coexist and be accessed by the programs that require them.
 
-note: Due to this indirection, possible to meet versioning requirement by changing a sym link.
+note: Due to this indirection, possible to meet versioning requirement by changing a sym link. After
+all, soname is to have 'indirection' to minor version.
 
 <linkername> version-independent link
 The linker name, which is used when linking an executable against the shared library. The linker
@@ -404,8 +410,21 @@ $ LD_LIBRARY_PATH=. ./prog
 Called mod1-x1
 Called mod2-x2
 
-note: this linkername is only for admin purpose since the executable only have soname in it even if
-uesed -l during the link.
+note: After all, soname is in a library and linkername is in executable. Using two names and two
+indirections enable us to change major and minor libs to use. 
+
+When major changes, changes linkname link: 
+
+libdemo.so -> libdemo.so.1          =>    libdemo.so -> libdemo.so.2
+
+When minor changes, change soname link:
+
+libdemo.so.1 -> libdemo.so.1.0.1    =>    libdemo.so.1 -> libdemo.so.1.0.1
+
+note: The above is convention but not mandatory so can have followings:
+
+17 Dec 29 13:08 liblog4c.so -> liblog4c.so.3.1.0*
+17 Dec 29 13:08 liblog4c.so.3 -> liblog4c.so.3.1.0*
 
 
 ={============================================================================
@@ -414,9 +433,10 @@ uesed -l during the link.
 --as-needed 
 --no-as-needed
 
-This option affects ELF DT_NEEDED tags for dynamic libraries mentioned on the command line 'after'
+This option affects ELF DT_NEEDED tags for 'dynamic' libraries mentioned on the command line 'after'
 the --as-needed option. Normally the linker will add a DT_NEEDED tag for each dynamic library
 mentioned on the command line, 'regardless' of whether the library is actually needed or not.
+
 --as-needed causes a DT_NEEDED tag to 'only' be emitted for a library that at that point in the link
 satisfies a non-weak undefined symbol reference from a regular object file or, if the library is not
 found in the DT_NEEDED lists of other needed libraries, a non-weak undefined symbol reference from
@@ -449,8 +469,90 @@ $ gcc -Wl,--as-needed -o one main.c libfoo.so
 note: Seen this which is a bit different from 'default' option but showed the point.
 http://stackoverflow.com/questions/8140494/why-am-i-getting-a-gcc-undefined-reference-error-trying-to-create-shared-objec
 
-TODO
+<problem>
+There is an application which is said that it uses one shared library and this library again uses
+the other shard library. That is: application <- a.so <- b.so.
+
+The problem happens when simply changes application source file in the build and statred to see
+"undefined symbols" from the linder. But those symbols were not used in that application at all. Why
+is this?
+
+When looked at application and library dependancies for okay case, there was no reference to that
+library which has undefined symbols defined. Why was it okay before?
+
+Two problems:
+
+1. Wrong assumption. For okay case, there was actually no reference between application and a.so.
+That's why cannot see dependancies.
+
+2. When build the new source, this code introduce a call to new so and this so has reference to the
+other. Since the application is the final in the linking process and now see undefined symbols which
+used in the other so but not the direct so.
+
+<useful>
 http://wiki.gentoo.org/wiki/Project:Quality_Assurance/As-needed#What_is_--as-needed.3F
+
+What is --as-needed?
+
+The --as-needed flag is passed to the GNU linker (GNU ld ). The flag tells the linker to link in the
+produced binary only the libraries containing symbols actually used by the binary itself. This
+binary can be either a final executable or another library.
+
+In theory, when linking something, only the needed libraries are passed to the command line used to
+invoke the linker. But to workaround systems with broken linkers or not using ELF format, many
+libraries declare some "dependencies" that get pulled in while linking. A simple example can be
+found by looking at the libraries declared as dependencies by gtk+ 2.0 :
+
+libraries needed to link to gtk+ 2.0
+
+$ pkg-config gtk+-2.0 --libs
+-lgtk-x11-2.0 -lgdk-x11-2.0 -latk-1.0 -lgdk_pixbuf-2.0 -lm -lpangocairo-1.0 -lpango-1.0 -lcairo
+-lgobject-2.0 -lgmodule-2.0 -ldl -lglib-2.0
+
+If the application is just using functions from gtk+ 2.0, a simple link line with -lgtk-x11-2.0
+should make it build fine, but looking at which libraries are needed and which are not from a
+package point of view is often an impossible task. 
+
+How can --as-needed be useful?
+
+The use of the --as-needed flag allows the linker to avoid linking extra libraries in a binary. This
+not only improves startup times (as the loader does not have to load all the libraries for every
+    step) but might avoid the full initialization of things like KDE's KIO for a binary if it's not
+using the KIO framework. 
+
+note: The above seems wrong since it's for staic but this option is only for dynamic.
+
+More importantly, the use of --as-needed 'avoids' adding dependencies to a binary that are
+prerequisites of one of its direct or indirect dependencies. This is important because when a
+library changes SONAME after an ABI change, all the binaries directly linking to it have to be
+rebuilt. By linking only the libraries that are actually needed, the breakage due to an ABI change
+is reduced. It is particularly useful when the ABI breakage happens in a library used by some other
+high level library (like cairo , which is used directly by gtk+-2.0 , and gets linked indirectly in
+    applications using the latter), as it prevents the rebuild of the final binaries and thus of the
+packages carrying them.
+
+It is also useful to check whether the dependencies stated by the documentation are actually used by
+a package: it's not impossible that a package checks in a configure script for some library, and
+then links to it, but without using it at all because the code using it was removed or refactored or
+has not been written. 
+
+<final-linking> only for executable but not library
+Failure in final linking, undefined symbols
+
+This is the most common error that happens while using --as-needed. It happens during the final
+linking stage of an executable note: libraries don't create problems, because they are allowed to
+have undefined symbols. The executable linking stage dies because of an undefined symbol that is
+present in one of the libraries fed to the command line. However, the library is not used by the
+executable itself, thus it gets removed by --as-needed .
+
+This usually means that a library was not linked to another library, but was using it, and then
+'relying' on the final executable to link them together. This behavior is also an extra encumbrance
+on developers using that library because they have to check for the requirements.
+
+The fix to this kind of problem is usually simple: just find which library provides the symbols and
+which one is requiring them (the error message from the linker should contain the name of the
+    latter). Then make sure that when the library is linked from the source files it's also linked
+to the first. 
 
 
 ={============================================================================

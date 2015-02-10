@@ -33,6 +33,7 @@ KT KB. Linux
 |kt_linux_bash_024| bash: builtin: exec
 |kt_linux_bash_025| bash: builtin: set
 |kt_linux_bash_026| bash: which one when there are script and exe binary in the same dir?
+|kt_linux_bash_027| bash: test on file using which command
 
 |kt_linux_bash_100| bash: config: colour prompt
 |kt_linux_bash_101| bash: config: how to know shell nesting level
@@ -618,7 +619,7 @@ fi
 
 <string-comparison>
 [ STRING1 == STRING2 ] 
-True if the strings are equal. "=" may be used instead of "==" for strict POSIX compliance.
+True if the strings are equal. note: "=" may be used instead of "==" for strict POSIX compliance.
 
 [ STRING1 != STRING2 ] True if the strings are not equal.
 
@@ -1868,6 +1869,15 @@ The executable binary gets executed.
 
 
 ={============================================================================
+*kt_linux_bash_027* bash: test on file using which command
+
+if which ssh-copy-id >/dev/null;
+then
+    ssh-copy-id -i $privatekey root@$stbip || true  # ssh-copy-id always returns failure
+fi
+
+
+={============================================================================
 *kt_linux_bash_100* bash: config: colour prompt
 
 Uncomment the line that says force_color_prompt=yes then logout and back in in the .bashrc.
@@ -2342,6 +2352,29 @@ note: ssh-copy is not working and key line in authorized_keys must be one line.
 note: if copy host's pub key in the target's authorized_keys, then do need to enter password when
 ssh to the target from host.
 
+<to-passwordless-login-to-box>
+Therefore, if copy rsa.pub to authorized_keys on a box then make one direction open and no need to
+use password from host to box.
+
+<ssh-copy-id>
+NAME
+       ssh-copy-id - install your public key in a remote machine's authorized_keys
+
+SYNOPSIS
+       ssh-copy-id [-i [identity_file]] [user@]machine
+
+DESCRIPTION
+       ssh-copy-id is a script that uses ssh to log into a remote machine and append the indicated identity file to that machine's ~/.ssh/authorized_keys file.
+
+       If the -i option is given then the identity file (defaults to ~/.ssh/id_rsa.pub) is used, regardless of whether there are any keys in your ssh-agent.  Otherwise, if this:
+
+             ssh-add -L
+
+       provides any output, it uses that in preference to the identity file.
+
+       If the -i option is used, or the ssh-add produced no output, then it uses the contents of the identity file.  Once it has one or more fingerprints (by whatever means) it uses ssh
+       to append them to ~/.ssh/authorized_keys on the remote machine (creating the file, and directory, if necessary.)
+
 
 {to-check-match-pair}
 $ ssh-keygen /?
@@ -2473,6 +2506,18 @@ The simplest approach is to pick a binary that you consider is typical (e.g. /bi
 $ ldd /bin/ls
         libc.so.6 => /lib/libc.so.6 (0x4000e000)
         /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x40000000)
+
+
+{case}
+The ldd is script. Although the binary uses shared library, ldd don't understand it.
+
+$ readelf -d nexus-inspect | grep NEED
+(standard input):4: 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
+(standard input):5: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+(standard input):6: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+(standard input):7: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+$ ldd -v nexus-inspect
+	not a dynamic executable
 
 
 ={============================================================================
@@ -2686,6 +2731,16 @@ rsync -a username@remote_host:/home/username/dir1 place_to_sync_on_local_machine
 Want to copy all expect .git from source to destination
 
 rsync -av --progress /home/kit/mheg-remote-git/mag_shared/ . --exclude .git
+
+<example>
+setupRsyncDaemon() {
+
+    # Setup rsync daemon for faster non-encrypted transfer
+    rsync ${privatekey:+ --rsh="ssh -i $privatekey"} \
+        "$(thisScriptSrcDir)"/rsyncd.{conf,scrt} root@$stbip:/etc/
+    $ssh "chmod o-rwx /etc/rsyncd.scrt && rsync --daemon --ipv4"
+    export RSYNC_PASSWORD=zinc
+}
 
 
 ={============================================================================
