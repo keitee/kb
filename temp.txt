@@ -41,7 +41,7 @@ Couple of ways in linking:
 $ cc -g -c prog.c
 $ cc -g -o prog prog.o libdemo.a
 
-note: link-time search
+note: 'linktime' search
 2. can place the library in one of the 'standard' directories searched by the linker such as
 /usr/lib, and then specify the library name; the filename of the library without the lib prefix and
 .a suffix using the -l option:
@@ -53,7 +53,7 @@ the linker should search this additional directory using the -L option:
 
 $ cc -g -o prog prog.o -Lmylibdir -ldemo
 
-Although a static library may contain many object modules, the linker includes only those modules
+Although a static library may contain many object modules, the linker includes 'only' those modules
 that the program requires.
 
 
@@ -237,20 +237,37 @@ For more about relocatable code: http://www.airs.com/blog/archives/41
 {dynamic-linker}
 note: From GCC doc, the dynamic loader is not part of GCC; it is part of the operating system.
 
-Embedding the name of the library inside the executable happens automatically when we link our
-program with a shared library.
+Two steps must occur that are not required for programs that use static libraries:
 
-Must have some mechanism for identifying the shared library that it needs at run time. This is done
-by embedding the name of the shared library inside the executable during the link phase. DT_NEEDED
-tag in ELF.
+$ gcc -c -fpic foo.c 
+$ gcc -shared -o libfoo.so foo.o
+$ gcc -o one main.c libfoo.so          <embedding-the-name-of-lib>
 
+1. At 'linktime'. Since the executable file 'no' longer contains copies of the object files that it
+requires, must have some mechanism for identifying the shared library that it needs at run time.
+This is done by 'embedding' the name of the shared library inside the executable during the link
+phase. DT_NEEDED tag in ELF.
+
+$ readelf -d one | grep NEED
+ 0x00000001 (NEEDED)                     Shared library: [libfoo.so]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+
+2. At 'runtime', there must be some mechanism for 'resolving' the embedded library name-that is, for
+finding the shared library file corresponding to the name specified in the executable file-and then
+loading the library into memory, if it is not already present.
+
+<dynamic-linking>
 The dynamic linking, which is the task of resolving the embedded library name at run time. This task
 is performed by the dynamic linker (also called the dynamic linking loader or the run-time linker).
-The dynamic linker is itself a shared library, named /lib/ld-linux.so.2, which is employed by every
-ELF executable that uses shared libraries.
+The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2, which is employed by
+every ELF executable that uses shared libraries.
 
 $ ls -l /lib/ld-linux.so.2 
 lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
+
+note:
+Every program-including those that use shared libraries-goes through a static-linking phase. At run
+time, a program that employs shared libraries additionally undergoes dynamic linking.
 
 
 {ld-library-path}
@@ -259,10 +276,6 @@ reside. To inform the dynamic linker that a shared library resides in a nonstand
 
 If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared library in the
 directories it lists before looking in the standard library directories.
-
-$ ./one                   
-./one: error while loading shared libraries: libfoo.so: cannot open shared object file: No such file
-or directory
 
 note: Creates an environment variable definition 'within' the process executing prog. Since if you
 don't export the changes to an environment variable, they won't be inherited by the child processes.
@@ -280,12 +293,13 @@ $ ./one
 foo: this is foo...
 
 
-{soname}
-The soname is used in linking and is embedded in the executable, and used by the linker at runtime.
+{soname-and-realname}
+In the above example, libfoo is realname. As with a realname, soname is used in linking and is
+embedded in the executable, and used by the linker at runtime.
 
-The purpose of the soname is to provide a level of 'indirection' that permits an executable to use,
-    at run time, a version of the shared library that is different from (but compatible with) the
-    library against which it was linked.
+Why soname? The purpose of the soname is to provide a level of 'indirection' that permits an
+executable to use, at run time, a version of the shared library that is different from (but
+    compatible with) the library against which it was linked.
 
 $ gcc -c -fpic foo.c
 $ gcc -shared -Wl,-soname,libbar.so -o libfoo.so foo.o      note: shall no space between -soname
@@ -392,6 +406,51 @@ Called mod2-x2
 
 note: this linkername is only for admin purpose since the executable only have soname in it even if
 uesed -l during the link.
+
+
+={============================================================================
+*kt_linux_core_107* shared library: ld --as-needed problem
+
+--as-needed 
+--no-as-needed
+
+This option affects ELF DT_NEEDED tags for dynamic libraries mentioned on the command line 'after'
+the --as-needed option. Normally the linker will add a DT_NEEDED tag for each dynamic library
+mentioned on the command line, 'regardless' of whether the library is actually needed or not.
+--as-needed causes a DT_NEEDED tag to 'only' be emitted for a library that at that point in the link
+satisfies a non-weak undefined symbol reference from a regular object file or, if the library is not
+found in the DT_NEEDED lists of other needed libraries, a non-weak undefined symbol reference from
+another needed dynamic library. Object files or libraries appearing on the command line after the
+library in question do not affect whether the library is seen as needed. This is similar to the
+rules for extraction of object files from archives. --no-as-needed restores the 'default' behaviour. 
+
+<example>
+$ gcc -c -fpic foo.c 
+$ gcc -shared -o libfoo.so foo.o
+$ gcc -o one main.c libfoo.so          <embedding-the-name-of-lib>
+
+or 
+
+$ gcc -L. -lfoo -o one main.c
+
+However, when tried:
+
+$ gcc -Wl,--as-needed -L. -lfoo -o one main.c
+/tmp/ccUshwwe.o: In function `main':
+main.c:(.text+0x7): undefined reference to `foo'
+collect2: error: ld returned 1 exit status
+
+The followings are okay.
+
+$ gcc -L. -lfoo -Wl,--as-needed -o one main.c
+$ gcc -Wl,--as-needed -o one main.c libfoo.so
+
+
+note: Seen this which is a bit different from 'default' option but showed the point.
+http://stackoverflow.com/questions/8140494/why-am-i-getting-a-gcc-undefined-reference-error-trying-to-create-shared-objec
+
+TODO
+http://wiki.gentoo.org/wiki/Project:Quality_Assurance/As-needed#What_is_--as-needed.3F
 
 
 ={============================================================================
@@ -911,6 +970,76 @@ $ md5sum foo.o*
 $ md5sum libfoo.so*
 e64fd5c673979f09360178f938e6e1b7  libfoo.so
 e64fd5c673979f09360178f938e6e1b7  libfoo.so.old
+
+
+={============================================================================
+*kt_linux_core_107* shared library: md5sum
+
+int ioctl(int fd, int request == VIDEO_DECODER_GET_CAP_EX_VERSION, uint32_t *version);
+
+#define VIDEO_DECODER_CAP_V0     (0x00000001)
+#define VIDEO_DECODER_CAP_V1     (0x00000002)
+#define VIDEO_DECODER_CAP_V2     (0x00000004)
+#define VIDEO_DECODER_CAP_V3     (0x00000008)
+
+typedef struct {
+  ...
+} VideoDecoderCapsV2;
+
+typedef struct {
+  ...
+} VideoDecoderCapsV3;
+
+typedef struct {
+   uint32_t    version;
+   void        *capability;
+   uint32_t    capabilitySize;
+} VideoDecoderCapEx;
+
+int ioctl(int fd, int request == VIDEO_DECODER_GET_CAP_EX, VideoDecoderCapEx *arg);
+
+
+{
+  uint32_t                video_dec_caps_version;
+  VideoDecoderCapsEx      video_decoder_caps;
+  VideoDecoderCapsV0      caps_v0 = {0U, 0U, 0U, 0U, 0U, 0U, 0U};
+  VideoDecoderCapsV1      caps_v1 = {0U, 0U, 0U, 0U, 0U, 0U, 0U};
+  VideoDecoderCapsV2      caps_v2 = {0U, 0U, 0U, 0U, 0U, 0U, 0U};
+
+  if (ioctl(fd, VIDEO_DECODER_GET_CAPS_EX_VERSIONS, &video_dec_caps_version) == 0)
+  {
+    if (video_dec_caps_version & VIDEO_DECODER_CAP_V2)
+    {
+      video_decoder_caps.version = VIDEO_DECODER_CAP_V2;
+      video_decoder_caps.capability = &caps_v2;
+      video_decoder_caps.capabilitySize = sizeof(caps_v2);
+
+      if (ioctl( fd, VIDEO_DECODER_GET_CAPS_EX, &video_decoder_caps) == 0)
+      {
+        *(uint32_t *)data = caps_v2.decodingModes;
+      }
+      else
+      {
+        *(uint32_t *)data = VIDEO_DECODER_SKIP_NONE;
+      }
+    }
+    else (video_dec_caps_version & VIDEO_DECODER_CAP_V1)
+    {
+      video_decoder_caps.version = VIDEO_DECODER_CAP_V1;
+      video_decoder_caps.capability = &caps_v1;
+      video_decoder_caps.capabilitySize = sizeof(caps_v1);
+
+      if (ioctl( fd, VIDEO_DECODER_GET_CAPS_EX, &video_decoder_caps) == 0)
+      {
+        *(uint32_t *)data = caps_v1.decodingModes;
+      }
+      else
+      {
+        *(uint32_t *)data = VIDEO_DECODER_SKIP_NONE;
+      }
+    }
+  }
+}
 
 
 -------------------------------------------------------------------------------
