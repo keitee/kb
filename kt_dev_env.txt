@@ -109,8 +109,9 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_014| branch: status, merged option and topic branch
 |kt_dev_env_git_015| tag
 |kt_dev_env_git_016| rebase
+|kt_dev_env_git_017| rebase vs merge
+|kt_dev_env_git_018| stash
 
-|kt_dev_env_git_030| stash
 |kt_dev_env_git_032| list
 |kt_dev_env_git_033| add, rm, mv and clean
 |kt_dev_env_git_034| diff, difftool
@@ -5635,6 +5636,17 @@ c0 <- c1 <- c2        <- c4
 $ git checkout experiment               
 $ git rebase master                     
 
+<Q> The git reference says that both are the same and also mentioned automatic checkout. So
+
+$ git rebase master experiment
+
+This would have the same result? YES!.
+
+$ git rebase test experi   note: on test branch and no conflict
+First, rewinding head to replay your work on top of it...
+Applying: experi: add 1st line in main
+Applying: experi: add 2st line in main
+
                                     <experiment>
 c0 <- c1 <- c2        
                       <- c3         <- c4'
@@ -5657,6 +5669,134 @@ $ git rebase master     # take current and replay onto master
 
 Now, the snapshot pointed to by C4' is exactly the same as the one that was pointed to by C5 in the
 merge example. 
+
+
+{rebase-conflict}
+As with merge, rebase can cause conflict. When tried the above scenario with test is master and
+experi is experiment at to mapping to the example.
+
+$ git checkout experi
+$ git rebase test 
+First, rewinding head to replay your work on top of it...
+Applying: add foo func and call to it                    # note: this the first commit mesg from the common parent
+Using index info to reconstruct a base tree...
+M	sample.c
+Falling back to patching base and 3-way merge...
+Auto-merging sample.c
+CONFLICT (content): Merge conflict in sample.c
+Failed to merge in the changes.
+Patch failed at 0001 add foo func and call to it
+The copy of the patch that failed is found in:
+   /home/kpark/work/gitwork/.git/rebase-apply/patch
+
+When you have resolved this problem, run "git rebase --continue".
+If you prefer to skip this patch, run "git rebase --skip" instead.
+To check out the original branch and stop rebasing, run "git rebase --abort".
+
+$ git st
+rebase in progress; onto cfeeadd
+You are currently rebasing branch 'experi' on 'cfeeadd'.    # note: seems that made a temp branch
+  (fix conflicts and then run "git rebase --continue")
+  (use "git rebase --skip" to skip this patch)
+  (use "git rebase --abort" to check out the original branch)
+
+Unmerged paths:
+  (use "git reset HEAD <file>..." to unstage)
+  (use "git add <file>..." to mark resolution)
+
+	both modified:   sample.c
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+
+	.sample.c.swp
+	a.out
+
+no changes added to commit (use "git add" and/or "git commit -a")
+
+<when-see-conflicted-file>
+Since that rebase 'to' test, HEAD means test branch. As with merge, can use 'mergetool' to resolve a
+conflict.
+
+#include <stdio.h>
+
+<<<<<<< HEAD
+int bar()
+{
+  printf("hello, this is bar\n");
+
+  return 0;
+=======
+void foo()
+{
+  printf("hello, it's foo\n");
+>>>>>>> add foo func and call to it
+}
+
+int main( int argc, char **argv )
+{
+  int ret = 0;
+
+  printf("this is main\n");
+
+  printf( "**********************************\n"
+          "this is to exercise rebase feature\n"
+          "this is to exercise rebase feature\n" );
+
+<<<<<<< HEAD
+  ret = bar();
+
+  if( 0 == ret )
+    printf("bar returns false\n");
+  else
+    printf("bar returns true\n");
+=======
+  foo();
+>>>>>>> add foo func and call to it
+
+  return 0;
+}
+
+<try-again>
+$ git rebase --continue 
+Applying: add foo func and call to it
+Applying: add more in main
+Using index info to reconstruct a base tree...
+M	sample.c
+Falling back to patching base and 3-way merge...
+Auto-merging sample.c
+
+<see-result>
+
+* a5102be65c402bfe96598edb6d7456f948f86f32 add more in main                   # note: experi branch
+* ef9b72008785c8b3e80ec04ffe2b6507f9cb2e4e add foo func and call to it
+* cfeeaddadd5249b1a8ec4d291d8881ba4b2d39f0 add more handling of using bar     # note: test branch
+* db9865ce0d83e84fcfeccab41b90e16116603d9c add bar func and call to it
+* 006df56c775b4eb7ed4822431bd876677732c1cb add more prints
+* 5ba523500ddf1e4c59287e2062126f42b96f9474 add sample.c
+
+As can see, applied two commits from experi 'to' master and test branch remains the same. So do
+fast-forward merge.
+
+note: At this point, still on experi branch.
+
+$ git checkout test 
+Switched to branch 'test'
+
+$ git merge experi 
+Updating cfeeadd..a5102be
+Fast-forward
+ sample.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+* a5102be65c402bfe96598edb6d7456f948f86f32 add more in main                   # note: experi and test branch
+* ef9b72008785c8b3e80ec04ffe2b6507f9cb2e4e add foo func and call to it
+* cfeeaddadd5249b1a8ec4d291d8881ba4b2d39f0 add more handling of using bar     
+* db9865ce0d83e84fcfeccab41b90e16116603d9c add bar func and call to it
+* 006df56c775b4eb7ed4822431bd876677732c1cb add more prints
+* 5ba523500ddf1e4c59287e2062126f42b96f9474 add sample.c
+
+The tree remains the same but test branch moved to experi.
 
 
 {why-rebase}
@@ -5707,13 +5847,13 @@ So want to apply C8 and C9 only to master.
 
 $ git rebase --onto master server client
 
-<Q> This is the same as:
-$ git checkout client
-$ git rebase master
+<Q> why 'server' in command when want to pull in client only? Looks because client had diverged from
+server as well but cannot find any more detail from the reference. This means that the branch to
+pull in must be the last in command?
 
 This basically says, "Check out the client branch, figure out the patches from the common ancestor
 of the client and server branches, and then replay them onto master." It's a bit complex; but the
-result is pretty cool.
+result is pretty cool. The git ref says "make topic forked from branch master"
 
          <master>
 C1 C2 C5 C6 C8' C9'
@@ -5760,11 +5900,10 @@ note: So, rebasing is useful when use topic branches.
 
 
 {peril-of-rebase}
-Drawbacks, which can be summed up in a single line:
-Do not rebase commits that you have pushed to a public repository.
+The advise: Do 'not' rebase commits that you have pushed to a public repository.
 
 When you rebase stuff, you're abandoning existing commits and creating new ones that are similar but
-different. If you push commits somewhere and others pull them down and base work on them, and then
+'different'. If you push commits somewhere and others pull them down and base work on them, and then
 you rewrite those commits with git rebase and push them up again, your collaborators will have to
 re-merge their work and things will get messy when you try to pull their work back into yours.
 
@@ -5773,12 +5912,11 @@ only rebase commits that have never been available publicly, then you'll be fine
 commits that have already been pushed publicly, and people may have based work on those commits,
 then you may be in for some frustrating trouble.
 
-(end of chap 3)
+note: can see the problem illustration on the pro git book.
 
 
-{rebase-interactive-and-squash}
-
-What this does is take smaller commits and combine them into larger ones, which could be useful if
+{rebase-and-squash}
+What this does is take smaller commits and 'combine' them into larger ones, which could be useful if
 you're wrapping up the day's work or if you just want to package your changes differently.
 
                   <head>
@@ -5788,22 +5926,83 @@ Say want to mege from C4 to C7 into one C7.
 
 git rebase -i HEAD~4      # select last 4 commit from head
 
-# vim pops up and edit to choose what to do
+Vim pops up and edit to choose what to do
 
-pick 01d1124 Adding license	             # assume C7
-s 6340aaa Moving license into its own file # squash this
-s ebfd367 Jekyll has become self-aware.
-s 30e0ccb Changed the tagline in the binary, too.
+<one>
+# { vim screen 
+pick a15973d test: add 1st line in foo
+pick 6a896f8 test: add 2st line in foo
+pick 3f56085 experi: add 1st line in main
+pick 6e3fdb5 experi: add 2st line in main
 
-# quit vim and vim pops again to edit commit message. edit commit message and quit.
+# Rebase a5102be..6e3fdb5 onto a5102be (4 TODO item(s))
+#
+# Commands:
+#  p, pick = use commit
+#  r, reword = use commit, but edit the commit message
+#  e, edit = use commit, but stop for amending
+#  s, squash = use commit, but meld into previous commit
+#  f, fixup = like "squash", but discard this commit's log message
+#  x, exec = run command (the rest of the line) using shell
+#
+# These lines can be re-ordered; they are executed from top to bottom.
+#
+# If you remove a line here THAT COMMIT WILL BE LOST.
+#
+# However, if you remove everything, the rebase will be aborted.
+#
+# Note that empty commits are commented out
+# } vim screen 
+
+
+Successfully rebased and updated refs/heads/test.
+
+note: Although the message when exit vim sounds done well, nothing has changed since picked 'all'.
+
+<two>
+pick a15973d test: add 1st line in foo
+s 6a896f8 test: add 2st line in foo
+s 3f56085 experi: add 1st line in main
+s 6e3fdb5 experi: add 2st line in main
+
+Then quit vim and vim pops again to edit commit message. edit commit message and quit.
 
 Tree will be:
          <head>
 C1 C2 C3 C7 
 
+So the three commits were removed and merged into one last commit.
+
 
 ={============================================================================
-*kt_dev_env_git_030* stash
+*kt_dev_env_git_017* rebase vs merge
+
+Which one is better?
+
+One point of view on this is that your repository's commit history is a record of what actually
+happened. It's a historical document, valuable in its own right, and shouldn't be tampered with.
+From this angle, changing the commit history is almost blasphemous; you're lying about what actually
+transpired. So what if there was a messy series of merge commits? That's how it happened, and the
+repository should preserve that for posterity.
+
+The opposing point of view is that the commit history is the story of how your project was made. You
+wouldn't publish the first draft of a book, and the manual for how to maintain your software
+deserves careful editing. This is the camp that uses tools like rebase and filter-branch to tell the
+story in the way that's best for future readers.
+
+Now, to the question of whether merging or rebasing is better: hopefully you'll see that it's not
+that simple. Git is a powerful tool, and allows you to do many things to and with your history, but
+every team and every project is different. Now that you know how both of these things work, it's up
+to you to decide which one is best for your particular situation.
+
+<point>
+In general the way to get the best of both worlds is to rebase local changes you¿ve made but haven¿t
+shared yet before you push them in order to clean up your story, but never rebase anything you¿ve
+pushed somewhere.
+
+
+={============================================================================
+*kt_dev_env_git_018* stash
 
 Stashing takes the dirty state of your working directory - that is, your modified tracked files and
 staged changes - and saves it on a stack of unfinished changes that you can reapply at any time.
@@ -5811,7 +6010,6 @@ staged changes - and saves it on a stack of unfinished changes that you can reap
 note: Save two things; staged and tracked but 'not' untracked. When apply the stash, all goes to
 'unstaged' area by default. 
 note: After stashing, your working directory is clean since all changes are stashed.
-
 
 <to-stash-untracked>
 If you specify --include-untracked or -u, Git will also stash any untracked files you have created.
@@ -5832,13 +6030,13 @@ stash@{0}: WIP on master: d926edd new third
 $ git stash save "temp work on master"
 stash@{0}: On master: temp work on master
 
-<save-all>
+<save-all> than clean
 Be pretty careful with this git clean command, since it's designed to remove files from your working
 directory that are not tracked. If you change your mind, there is often no retrieving the content of
 those files. A safer option is to run git stash --all to remove everything but save it in a stash.
 
 
-{list} like stack since 0 is the latest
+{list} like stack since 0 is the 'latest'
 $ git stash list
 stash@{0}: WIP on master: 049d078 added the index file
 stash@{1}: WIP on master: c264051 Revert "added file_size"
@@ -5862,7 +6060,8 @@ Again, if you do not specify a stash, Git assumes the most recent stash:
 
 $ git stash show -p | git apply -R
 
-This works fine when there were no changes made since apply. Otherwise, git emits conflict errors.
+note: This works fine when there were no changes made since apply. Otherwise, git emits conflict
+errors.
 
 <apply-conflict>
 When make changes to the stashed file and want to apply the different stash. Git gives you merge
@@ -5994,8 +6193,6 @@ git stash apply $stash_hash
 Or you can use the context menu in gitk to create branches for any unreachable commits you are
 interested in. After that, you can do whatever you want with them with all the normal tools. When
 you're done, just blow those branches away 
-
-
 
 
 ={============================================================================
@@ -6263,6 +6460,12 @@ $ git diff --name-only master..branchName
 git diff branch_1..branch_2
 git diff branch_1...branch_2
 git diff branch1 branch2
+
+
+{word-diff-option}
+When useful?
+
+git diff --word-diff
 
 
 {difftool}
@@ -7216,6 +7419,40 @@ To copy a file from the exisiting commit:
 git checkout otherbranch myfile.txt
 
 note: the current dir and the path sould match.
+
+
+={============================================================================
+*kt_dev_env_git_300* github: fork projects and pull request
+
+{fork-projects}
+If you want to contribute to an existing project to which you do 'not' have push access, you can
+"fork" the project. What this means is that GitHub will make a copy of the project that is entirely
+yours; it lives in your user's namespace, and you can push to it.
+
+<pull-request> note: from a project owner's POV, it's pull.
+This way, projects don't have to worry about adding users as collaborators to give them push access.
+People can fork a project, push to it, and contribute their changes back to the original repository
+by creating what's called a Pull Request. 
+
+This opens up a discussion thread with code review, and the owner and the contributor can then
+communicate about the change 'until' the owner is happy with it, at which point the owner can merge it
+in. To fork a project, visit the project page and click the "Fork" button.
+
+When done, you'll be taken to your new project page, with your own 'writeable' copy of the code.
+
+
+{workflow}
+GitHub is designed around a particular collaboration workflow, centered on pull requests and topic
+branches workflow.
+
+Here's how it generally works:
+
+1. Create a topic branch from master.
+2. Make some commits to improve the project.
+3. Push this branch to your GitHub project.
+4. Open a Pull Request on GitHub.
+5. Discuss, and optionally continue committing.
+6. The project owner merges or closes the Pull Request.
 
 
 # ============================================================================
