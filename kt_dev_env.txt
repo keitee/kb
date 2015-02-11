@@ -103,15 +103,14 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_008| undo, change commit, unstage and discard changes
 |kt_dev_env_git_009| auto completion
 |kt_dev_env_git_010| branch
-|kt_dev_env_git_011| merge branch and workflow
+|kt_dev_env_git_011| local branch and workflow
 |kt_dev_env_git_012| generate patch between branch
 |kt_dev_env_git_013| merge: undo merge attempt
 |kt_dev_env_git_014| branch: status, merged option and topic branch
-|kt_dev_env_git_012| tag
-
+|kt_dev_env_git_015| tag
+|kt_dev_env_git_016| rebase
 
 |kt_dev_env_git_030| stash
-|kt_dev_env_git_031| rebasing
 |kt_dev_env_git_032| list
 |kt_dev_env_git_033| add, rm, mv and clean
 |kt_dev_env_git_034| diff, difftool
@@ -119,8 +118,12 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_036| commit
 |kt_dev_env_git_037| ranges and dot notation
 
-|kt_dev_env_git_100| remote: origin and master
-|kt_dev_env_git_101| remote: inspect, show, and ls-remote
+|kt_dev_env_git_100| remote: branch, origin/master
+|kt_dev_env_git_101| remote: branch and workflow: push, fetch, merge, checkout
+|kt_dev_env_git_103| remote: tracking branch
+|kt_dev_env_git_104| remote: pull
+|kt_dev_env_git_105| remote: delete remote branch
+
 |kt_dev_env_git_102| remote: fetch, inspect, merge and pull
 |kt_dev_env_git_103| remote: push
 
@@ -5174,7 +5177,7 @@ The tag is very much like a branch that doesn't change - it's just a pointer to 
 
 
 ={============================================================================
-*kt_dev_env_git_011* merge branch and workflow
+*kt_dev_env_git_011* local branch and workflow
 
 {merge-with-no-diverge} <upstrem>
 The workflow is that make a hotfix to fix a issue and once verify it, them merge it into the master.
@@ -5559,7 +5562,7 @@ communication is happening.
 
 
 ={============================================================================
-*kt_dev_env_git_012* tagging
+*kt_dev_env_git_015* tagging
 
 To tag specific points in history as being important and to mark release points (v1.0, and so on)
 
@@ -5593,6 +5596,210 @@ $ git tag -a v1.2 -m 'version 1.2' 9fceb02
 By default, the git push command doesn't transfer tags to remote servers. You will have to
 explicitly push tags to a shared server after you have created them.
 
+
+={============================================================================
+*kt_dev_env_git_016* rebase
+
+In Git, there are two main ways to 'integrate' changes from one branch into another: the merge and
+the rebase.
+
+{when-use-merge}
+Like an example in merge-with-diverge, merge do three-way merge between c2(recent common ancestor),
+     c4, c3 and crate a new snapshot(commit):
+
+                      <experiment>
+c0 <- c1 <- c2        <- c4
+                      <- c3
+                      <master>
+
+                      <experiment>
+c0 <- c1 <- c2        <- c4               <- c5
+                      <- c3               <|
+                                          <master> branch
+
+{when-use-rebase}
+Another way: you can take the patch of the change that was introduced in C3 and reapply it on top of
+C4. In Git, this is called rebasing. Take changes from experiment and apply to master.
+
+It works by going to the common ancestor (c2) of the two branches; the one you're on (experiment)
+and the one you're rebasing onto (master), getting the diff introduced by each commit of the branch
+you're on (diff between c4 and c2), saving those diffs to temporary files, resetting the current
+branch to the same commit as the branch you are rebasing onto(checkout to master), and finally
+applying each change in turn (apply temp diff to c3 which makes c4')
+
+                      <experiment>
+c0 <- c1 <- c2        <- c4
+                      <- c3
+                      <master>
+
+$ git checkout experiment               
+$ git rebase master                     
+
+                                    <experiment>
+c0 <- c1 <- c2        
+                      <- c3         <- c4'
+                      <master>
+
+At this point, you can go back to the master branch and do a fast-forward merge.
+
+$ git checkout master
+$ git merge experiment
+
+                                    <experiment>
+c0 <- c1 <- c2        <- c3         <- c4'
+                                    <master> branch
+
+note:
+The rebase has different sementics than merge:
+
+$ git merge master      # take master and merge onto current
+$ git rebase master     # take current and replay onto master
+
+Now, the snapshot pointed to by C4' is exactly the same as the one that was pointed to by C5 in the
+merge example. 
+
+
+{why-rebase}
+The rebase makes for a 'cleaner' history by removing diverge in tree. If you examine the log of a
+rebased branch, it looks like a linear history: it appears that all the work happened in series even
+when it originally happened in parallel
+
+Often, you'll do this to make sure your commits apply cleanly on a remote branch - perhaps in a
+project to which you're trying to contribute but that you don't maintain. That way, the maintainer
+doesn't have to do any integration work - just a fast-forward or a clean apply.
+
+Rebasing 'replays' changes from one line of work 'onto' another in the order they were introduced
+whereas merging takes the endpoints and merges them together.
+
+
+{advanced-rebase}
+
+# from git help
+# 
+# git rebase [-i | --interactive] [options] [--onto <newbase>] [<upstream>] [<branch>]
+# 
+# If <branch> is specified, git rebase will perform an automatic git checkout <branch> before doing
+# anything else. Otherwise it remains on the current branch.
+# 
+# The current branch is reset to <upstream>, or <newbase> if the --onto option was supplied. This
+# has the exact same effect as git reset --hard <upstream> (or <newbase>). ORIG_HEAD is set to point
+# at the tip of the branch before the reset.
+# 
+# Starting point at which to create the new commits. If the --onto option is not specified, the
+# starting point is <upstream>. May be any valid commit, and not just an existing branch name.
+
+<description>
+You can also have your rebase replay on something other than the rebase target branch.
+
+         <master>
+C1 C2 C5 C6
+
+      C3 C4 C10
+            <server>    # topic branch for server functionality
+         C8 C9
+            <client>    # topic branch for client functionality
+
+<one>
+Suppose you decide that you want to merge your client-side changes into your mainline for a release,
+but you want to hold off on the server-side changes until it's tested further. 
+
+So want to apply C8 and C9 only to master.
+
+$ git rebase --onto master server client
+
+<Q> This is the same as:
+$ git checkout client
+$ git rebase master
+
+This basically says, "Check out the client branch, figure out the patches from the common ancestor
+of the client and server branches, and then replay them onto master." It's a bit complex; but the
+result is pretty cool.
+
+         <master>
+C1 C2 C5 C6 C8' C9'
+                <client>
+      C3 C4 C10
+            <server>          # topic branch
+
+Now you can fast-forward your master branch:
+
+$ git checkout master
+$ git merge client
+
+                <client>
+C1 C2 C5 C6 C8' C9'
+                <master>
+      C3 C4 C10
+            <server> # topic branch
+
+<two>
+Let's say you decide to pull 'in' your server branch as well. You can rebase the server branch onto
+the master branch without having to check it out first by running. note: no need to checkout server? 
+
+git rebase [basebranch] [topicbranch] 
+
+which checks out the topic branch (in this case, server) for you and replays it onto the base branch
+(master):
+
+$ git rebase master server
+$ git checkout master
+$ git merge server
+
+The end result is:
+
+                <client>    <server>
+C1 C2 C5 C6 C8' C9' C3' C4' C10'
+                            <master>
+
+Now remove topic branches:
+
+$ git branch -d client
+$ git branch -d server
+
+note: So, rebasing is useful when use topic branches.
+
+
+{peril-of-rebase}
+Drawbacks, which can be summed up in a single line:
+Do not rebase commits that you have pushed to a public repository.
+
+When you rebase stuff, you're abandoning existing commits and creating new ones that are similar but
+different. If you push commits somewhere and others pull them down and base work on them, and then
+you rewrite those commits with git rebase and push them up again, your collaborators will have to
+re-merge their work and things will get messy when you try to pull their work back into yours.
+
+If you treat rebasing as a way to clean up and work with commits before you push them, and if you
+only rebase commits that have never been available publicly, then you'll be fine. If you rebase
+commits that have already been pushed publicly, and people may have based work on those commits,
+then you may be in for some frustrating trouble.
+
+(end of chap 3)
+
+
+{rebase-interactive-and-squash}
+
+What this does is take smaller commits and combine them into larger ones, which could be useful if
+you're wrapping up the day's work or if you just want to package your changes differently.
+
+                  <head>
+C1 C2 C3 C4 C5 C6 C7 
+
+Say want to mege from C4 to C7 into one C7.
+
+git rebase -i HEAD~4      # select last 4 commit from head
+
+# vim pops up and edit to choose what to do
+
+pick 01d1124 Adding license	             # assume C7
+s 6340aaa Moving license into its own file # squash this
+s ebfd367 Jekyll has become self-aware.
+s 30e0ccb Changed the tagline in the binary, too.
+
+# quit vim and vim pops again to edit commit message. edit commit message and quit.
+
+Tree will be:
+         <head>
+C1 C2 C3 C7 
 
 
 ={============================================================================
@@ -5789,182 +5996,6 @@ interested in. After that, you can do whatever you want with them with all the n
 you're done, just blow those branches away 
 
 
-={============================================================================
-*kt_dev_env_git_031* rebasing
-
-In Git, there are two main ways to integrate changes from one branch into another: the merge and the
-rebase.
-
-{merge-way}
-
-Like {merge-with-diverge}, use merge which do three-way merge between c2(recent common ancestor), c4,
-c3 and crate a new snapshot(commit):
-
-                         <experiment>
-c0 <- c1 <- c2        <- c3               <- c5
-                      <- c4               <- c5
-			                <master> branch
-
-{rebase-way}
-
-Another way: you can take the patch of the change that was introduced in C3 and reapply it on top of
-C4. In Git, this is called rebasing. Take changes from experiment and apply to master.
-
-$ git checkout experiment                # note: two step which can be done in one. see below
-$ git rebase master                      # git merge master in merge case
-
-First, rewinding head to replay your work on top of it...
-Applying: added staged command
-
-                                          <experiment>
-c0 <- c1 <- c2        <- c4               <- c3'
-			                                 <master> branch
-
-KT. essentially, remove diverge and do fast-forward merge.
-
-Now, the snapshot pointed to by C3' is exactly the same as the one that was pointed to by C5 in the
-merge example. 
-
-
-{why-rebase}
-
-But rebasing makes for a <cleaner-history>. If you examine the log of a rebased branch, it looks like
-a linear history: it appears that all the work happened in series, even when it originally happened
-in parallel
-
-Often, you'll do this to make sure your commits apply cleanly on a remote branch - perhaps in a
-project to which you're trying to contribute but that you don't maintain. That way, the maintainer
-doesn't have to do any integration work - just a fast-forward or a clean apply.
-
-
-Rebasing replays changes from one line of work onto another in the order they were introduced,
-whereas merging takes the endpoints and merges them together.
-
-
-{more-rebase-example}
-
-(from git help)
-
-git rebase [-i | --interactive] [options] [--onto <newbase>] [<upstream>] [<branch>]
-
-If <branch> is specified, git rebase will perform an automatic git checkout <branch> before doing
-anything else. Otherwise it remains on the current branch.
-
-The current branch is reset to <upstream>, or <newbase> if the --onto option was supplied. This has
-the exact same effect as git reset --hard <upstream> (or <newbase>). ORIG_HEAD is set to point at
-the tip of the branch before the reset.
-
-Starting point at which to create the new commits. If the --onto option is not specified, the
-starting point is <upstream>. May be any valid commit, and not just an existing branch name.
-
-
-Suppose you decide that you want to merge your client-side changes into your mainline for a release,
-but you want to hold off on the server-side changes until it's tested further. 
-
-
-C1 C2 C5 C6
-         <master>
-      C3 C4 C10
-		      <server> # topic branch
-		C8 C9
-		   <client>    # topic branch
-
-
-So want to apply C8 and C9 only to master.
-
-$ git rebase --onto master server client
-
-This basically says, >Check out the client branch, figure out the patches from the common ancestor
-of the client and server branches, and then replay them onto master.< It's a bit complex; but the
-result, shown in Figure 3-32, is pretty cool.
-
-                <client>
-C1 C2 C5 C6 C8' C9'
-         <master>
-      C3 C4 C10
-		      <server> # topic branch
-
-Now you can fast-forward your master branch (see Figure 3-33):
-
-$ git checkout master
-$ git merge client
-
-                <client>
-C1 C2 C5 C6 C8' C9'
-                <master>
-      C3 C4 C10
-		      <server> # topic branch
-
-
-Let's say you decide to pull in your server branch as well. You can rebase the server branch onto
-the master branch without having to check it out first by running 
-
-git rebase [basebranch] [topicbranch] 
-
-- which checks out the topic branch (in this case, server) for you and replays it onto the base
-  branch (master):
-
-$ git rebase master server
-$ git checkout master
-$ git merge server
-
-The end result is:
-
-                <client>    <server>
-C1 C2 C5 C6 C8' C9' C3' C4' C10'
-                            <master>
-
-Remove topic branches:
-
-$ git branch -d client
-$ git branch -d server
-
-
-note: KT. rebasing is useful when use topic branches.
-
-
-{peril-of-rebase}
-
-Drawbacks, which can be summed up in a single line:
-Do not rebase commits that you have pushed to a public repository.
-
-When you rebase stuff, you're abandoning existing commits and creating new ones that are similar but
-different. If you push commits somewhere and others pull them down and base work on them, and then
-you rewrite those commits with git rebase and push them up again, your collaborators will have to
-re-merge their work and things will get messy when you try to pull their work back into yours.
-
-If you treat rebasing as a way to clean up and work with commits before you push them, and if you
-only rebase commits that have never been available publicly, then you'll be fine. If you rebase
-commits that have already been pushed publicly, and people may have based work on those commits,
-then you may be in for some frustrating trouble.
-
-(end of chap 3)
-
-
-{rebase-interactive-and-squash}
-
-What this does is take smaller commits and combine them into larger ones, which could be useful if
-you're wrapping up the day's work or if you just want to package your changes differently.
-
-                  <head>
-C1 C2 C3 C4 C5 C6 C7 
-
-Say want to mege from C4 to C7 into one C7.
-
-git rebase -i HEAD~4      # select last 4 commit from head
-
-# vim pops up and edit to choose what to do
-
-pick 01d1124 Adding license	             # assume C7
-s 6340aaa Moving license into its own file # squash this
-s ebfd367 Jekyll has become self-aware.
-s 30e0ccb Changed the tagline in the binary, too.
-
-# quit vim and vim pops again to edit commit message. edit commit message and quit.
-
-Tree will be:
-         <head>
-C1 C2 C3 C7 
 
 
 ={============================================================================
@@ -6387,7 +6418,7 @@ With these tools, you can much more easily let Git know what commit or commits y
 
 
 ={============================================================================
-*kt_dev_env_git_100* remote: servers, branches, push and pull.
+*kt_dev_env_git_100* remote: branch, origin/master
 
 {to-list-remotes}
 $ git remote -v
@@ -6395,7 +6426,7 @@ bakkdoor  git://github.com/bakkdoor/grit.git
 origin    git@github.com:mojombo/grit.git         # it means SSH url
 
 
-{add-remote-repo-as-shortname}
+{add-delete-remote-repo-as-shortname}
 The shortname is reference to remote.
 
 $ git remote add [shortname] [url]:
@@ -6406,17 +6437,23 @@ pb  git://github.com/paulboone/ticgit.git
 
 $ git remote rename pb paul
 
+<delete>
 $ git remote rm paul
 
 
 {clone-do-two-things}
 The clone command automatically add shortname and sets up your local master branch to track the
-remote master branch (or whatever the default branch is called) on the server you cloned from.
+remote master branch (or whatever the default branch is called) on the server you cloned from. That
+is it creates origin/master.
+
+note:
+origin is not a branch but a name(shortname) of local repo for a remote repo.
 
 
 {remote-and-local-master}
 The remote branches act as bookmarks to remind you where the branches on your remote repositories
-were the last time you connected to them.
+were the last time you connected to them. They take the form (remote)/(branch) and remote branch is
+also local branch but to point to remote.
 
 After clone, your local git looks:
 
@@ -6437,10 +6474,9 @@ Local:
 c1 c2 c3 c4 c9 c10 c11 
                    <msater>         # local master branch
 
-
-To synchronize your work, you run a git fetch origin command. {fetch-vs-pull} This command looks up
-which server origin is and fetches any data from it that you don't 'yet' have, and updates your
-local database, moving your origin/master pointer to its new, more up-to-date position.
+To synchronize your work, you run a git fetch origin command. This command looks up which server
+origin is and fetches any data from it that you don't 'yet' have, and updates your local database,
+       moving your origin/master pointer to its new, more up-to-date position.
 
 Local:
                      <origin/master>   # remote branch
@@ -6459,135 +6495,43 @@ o If you checkout a specific commit, HEAD refers to that commit only. This is re
 detached head and occurs, for example, if you check out a tag name.
 
 
-{origin-repo} {remote-repository}
-If you clone a repository, the command 'automatically' adds that remote repository under the name
-'origin'. So, 
-
-$ git fetch origin 
-
-fetches any new work that has been pushed to that server since you cloned (or last fetched from) it. 
-
-note:
-It's important to note that the fetch command pulls the data to your local repository - it doesn't
-automatically merge it with any of your work or modify what you're currently working on. You have to
-merge it manually into your work when you're ready.
-
-note:
-origin is not a branch but a name of local repo for a remote repo.
-
-
 ={============================================================================
-*kt_dev_env_git_101* remote: inspect, show, and ls-remote
+*kt_dev_env_git_101* remote: branch and workflow
 
-{inspect-remote}
-To show branch
-git branch 
-       -r, --remotes
-           List or delete (if used with -d) the remote-tracking branches.
-
-       -a, --all
-           List both remote-tracking branches and local branches.
-
-$ git branch -a
-* master
-  remotes/origin/HEAD -> origin/master
-  remotes/origin/master
-
-$ git branch -r
-
-
-{show}
-show [shortname]
-
-$ git remote show origin
-* remote origin
-  URL: git://github.com/schacon/ticgit.git
-  Remote branch merged with 'git pull' while on branch master
-    master
-  Tracked remote branches
-    master
-    ticgit
-
-<ls-remote>
-The ls-remote command returns the SHA1 hash of the latest commit for that reference, so it is quite
-easy to parse out and get to the exact commit you need if you're doing some scripting. The --heads
-option lists only branch names since the command can list tags too.
-
-$ git ls-remote --heads origin
-$ git ls-remote origin 
-f7abd1ac44367aff4056b3755e1bdff669aa279b	HEAD
-acf12d1ec25a3bf0ed800eda4ad8470d9f4a9f26	refs/heads/14base
-5d42e9f6d46160888a5f90729d0bc0285e844d2b	refs/heads/gpi
-f7abd1ac44367aff4056b3755e1bdff669aa279b	refs/heads/master
-
-={============================================================================
-*kt_dev_env_git_101* remote: fetch, inspect, merge and pull
-
-{fetch-and-inspect}
-To get data from your remote projects, pulls down all the data from that remote that you do not have
-yet. After that, you can merge in or inspect.
-
-$ git fetch [remote-name]
-$ git fetch pb
-From git://github.com/paulboone/ticgit
- * [new branch]      master     -> pb/master
- * [new branch]      ticgit     -> pb/ticgit
-
- The fetched data is accessible locally as pb/master.
-
-Fetches all the changesets to your local repository and means you can now refer to the changes as
-origin/master you can operate on it with any 'local' branch. Inspect them and merge to your branch
-that you are currently on.
-
-$ git fetch origin
-$ git diff master origin/master
-$ git merge origin/master
-
-TODO: is there any way what it would look like when do merge? --no-commit option?
-
-
-{pull}
-$ git pull
-
-If you have a branch set up to track a remote branch, you can use the git pull command to
-automatically fetch and then merge a remote branch into your current branch. Otherwise, should
-speficy:
-
-$ git pull origin master
-
-This will pull the branch speficifed to your local filesystem from remote server.
-
-$ git pull origin branch-name-you-want-to-pull
-
-This may be an easier or more comfortable workflow for you; and by default, the git clone command
-automatically sets up your <local-master-branch> to track the <remote-master-branch> on the server
-you cloned from (assuming the remote has a 'master' branch). Running git pull generally fetches data
-from the server you originally cloned from and automatically tries to merge it into the code you're
-currently working on.
-
-note:
-So fetch is pulling data but do not merge but pull do merge automatically.
-
-
-={============================================================================
-*kt_dev_env_git_102* remote: push
-
-
-{push} {upstream} {reject}
+{push}
 Your local branches aren't automatically synchronized to the remotes you write to - you have to
 explicitly push the branches you want to share. That way, you can use private branches for work you
 don't want to share, and push up only the topic branches you want to collaborate on.
 
-$ git push origin serverfix   # $ git push "remote name" "branch name"
+$ git push origin serverfix      # git push "remote name" "branch name"
 
-If you didn't want it to be called serverfix on the remote, you could instead run to push your [local]
-serverfix branch to the awesomebranch branch on the remote project.
+note: 
+The remote branch is automatically created when you 'push' it to the remote server:
 
-$ git push origin serverfix:awesomebranch    // this is <local branch name>:<remote branch name>
+$ git checkout -b 14base
+$ // do commit
+$ git push origin 14base
+
+
+<push-as-different-name>
+This is a bit of a shortcut. Git automatically expands the serverfix branchname
+out to refs/heads/serverfix:refs/heads/serverfix, which
+means, "Take my serverfix local branch and push it to update the remote's serverfix
+branch."
+
+So this means the same thing:
+
+$ git push origin serverfix: serverfix
+
+This push a branch as a differnt name:
+
+$ git push origin serverfix:awesomebranch
 
 The next time one of your collaborators fetches from the server, they will get a reference to where
 the server's version of serverfix is under the remote branch origin/serverfix:
 
+
+{fetch}
 $ git fetch origin
 remote: Counting objects: 20, done.
 remote: Compressing objects: 100% (14/14), done.
@@ -6597,74 +6541,57 @@ From git@github.com:schacon/simplegit
  * [new branch]      serverfix    -> origin/serverfix
 
 
-{to-base-from-remote-branch}
-<1>
-To note that when you do a fetch that brings down new remote branches, you don't automatically have
-local, editable copies of them. In other words, in this case, you don't have a new serverfix branch
-- you only have an origin/serverfix pointer that you can't modify.
+{merge}
+The fetch brings down new remote branches, you don't automatically have local, editable copies of
+them. In other words, in this case, you don't have a new serverfix branch but you only have an
+origin/serverfix pointer that you can't modify.
 
-To merge this work into your <current-working-branch>, you can run
+<1>
+To merge this work into your 'current' working branch, you can run:
 
 $ git merge origin/serverfix
 
 OR
 
 <2>
-If you want your 'own' serverfix branch(local) that you can work on, you can base it off your remote
-branch:
+To create a seperate serverfix branch(local) that track remote and you can work on, you can base it
+off your remote branch:
 
 $ git checkout -b serverfix origin/serverfix
 
-Branch serverfix set up to track remote branch refs/remotes/origin/serverfix.
-Switched to a new branch "serverfix"
-
-(-b means to create a local branch and switch to it)
-
-This gives you a local branch that you can work on that starts where origin/serverfix is.
+Two things: 'branch' serverfix set up to track remote branch refs/remotes/origin/serverfix.
+'switched' to a new branch "serverfix" That is -b means to create a local branch and switch to it.
 
 
 ={============================================================================
-*kt_dev_env_git_108* remote: check commits before push
-
-From double-dot example.
-
-Very frequent use of this syntax is to see what you're about to push to a remote:
-
-$ git log origin/master..HEAD
-
-This command shows you any commits in your current branch that aren't in the master branch on your
-origin remote. The commits listed by this command are the commits that will be transferred to the
-server.
-
-You can also leave off one side of the syntax to have Git assume HEAD. For example, you can get the
-same results as in the previous example by typing git log origin/master..
-
-
-={============================================================================
-*kt_dev_env_git_109* remote: tracking branch
+*kt_dev_env_git_103* remote: tracking branch
 
 {tracking-branch}
 Checking out a local branch from a remote branch automatically creates what is called a tracking
-branch. If you're on a tracking branch and type git push/pull, Git automatically knows which server
-and branch to push to.
+branch or upstream branch. If you're on a tracking branch and type git push/pull, Git automatically
+knows which server and branch to push to.
 
-When you clone a repository, it generally automatically creates a <remote-master-branch> that tracks
+When you clone a repository, it generally automatically creates a remote-master-branch that tracks
 origin/master. origin/master is remote master. 
 
-However, you can set up other tracking branches if you wish - ones that don't track branches on
-origin and don't track the master branch. The simple case is the example you just saw, running git
+note: The point is that shall be a local branch to track remote branch. Hence tracking branch.
 
-$git checkout -b [branch] [remotename]/[branch]. 
+The simple case is the example you just saw, running git
+
+$ git checkout -b [branch] [remotename]/[branch]. 
 
 If you have Git version 1.6.2 or later, you can also use the --track shorthand:
 
 $ git checkout --track origin/serverfix
-Branch serverfix set up to track remote branch refs/remotes/origin/serverfix. Switched to a new
-branch "serverfix"
+
+note: --track option is limited since not able to choose local branch name to track remote.
+
+As with example before, branch serverfix set up to track remote branch refs/remotes/origin/serverfix
+and switched to a new branch "serverfix"
+
 
 <example>
-The below shows the origin settings after setting the origin to track remote master by doing. See
-{tracking-branch}:
+The below shows the origin settings after setting the origin to track remote master by doing.
 
 $ git checkout -b origin remote/master
 
@@ -6701,20 +6628,19 @@ $ git branch -a
   remotes/origin/hqcheckin
   remotes/origin/master
 
-However, still on master. Since want to trak hqcheckin branch, set the tracking branch:
+However, still on master. Since want to track hqcheckin branch, set the tracking branch:
 
-$ git checkout --track origin/hqcheckin 
-(this is the same as $ git checkout -b hqcheckin origin/hqcheckin)
+$ git checkout --track origin/hqcheckin or git checkout -b hqcheckin origin/hqcheckin)
+
 Branch hqcheckin set up to track remote branch hqcheckin from origin.
 Switched to a new branch 'hqcheckin'
-kit@kit-vb:~/mheg-remote-git/hq/mheg$ git branch -a
-* hqcheckin
+
+$ git branch -a
+* hqcheckin                   note: see a local branch is made
   master
   remotes/origin/HEAD -> origin/master
   remotes/origin/hqcheckin
   remotes/origin/master
-
-This will create a local hqcheckin branch. 
 
 <example>
 You can download a remote branch using "git checkout". Download a remote branch(tztv_2.2) and create
@@ -6735,15 +6661,10 @@ $ git checkout tztv_2.2
 Branch tztv_2.2 set up to track remote branch tztv_2.2 from origin. Switched to a new branch
 'tztv_2.2'
 
-<create-a-remote-branch-when-push>
-The remote branch is automatically created when you 'push' it to the remote server. You can just do.
 
-$ git checkout -b 14base
-$ // do commit
-$ git push origin 14base
+{check-tracking-in-config}
+Can see tracking details in git config.
 
-
-<check-tracking-in-config>
 $ cat .git/config
 [core]
 repositoryformatversion = 0
@@ -6760,6 +6681,158 @@ merge = refs/heads/master
 remote = origin
 merge = refs/heads/tztv_2.2
 
+
+={============================================================================
+*kt_dev_env_git_104* remote: pull
+
+{pull}
+If you have a branch set up to track a remote branch, you can use the git pull command to
+automatically 'fetch' and then 'merge' a remote branch into your 'current' branch. 
+
+$ git pull
+
+$ git pull origin master
+
+$ git pull origin branch-name-you-want-to-pull
+
+note: Generally it's better to simply use the fetch and merge commands explicitly as the magic of
+git pull can often be confusing.
+
+
+={============================================================================
+*kt_dev_env_git_105* remote: delete remote branch
+
+You can delete a remote branch using the --delete option to git push. If you want to delete your
+serverfix branch from the 'server', you run the following:
+
+$ git push origin --delete serverfix
+To https://github.com/schacon/simplegit
+- [deleted] serverfix
+
+Basically all this does is remove the pointer from the server. The Git server will generally keep
+the data there for a while until a garbage collection runs, so if it was accidentally deleted, it's
+often easy to recover.
+
+
+={============================================================================
+*kt_dev_env_git_101* remote: inspect, show, and ls-remote
+
+{branch} inspect-remote
+To show branch
+
+git branch 
+       -r, --remotes
+           List or delete (if used with -d) the remote-tracking branches.
+
+       -a, --all
+           List both remote-tracking branches and local branches.
+
+$ git branch -a
+* master
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/master
+
+$ git branch -r
+
+<vv-option>
+This will list out your local branches with more information including what each branch is tracking
+and if your local branch is ahead, behind or both.
+
+$ git branch -vv
+iss53 7e424c3 [origin/iss53: ahead 2] forgot the brackets
+master 1ae2a45 [origin/master] deploying index fix
+* serverfix f8674d9 [teamone/server-fix-good: ahead 3, behind 1] this should do it
+testing 5ea463a trying something new
+
+So here we can see that our iss53 branch is tracking origin/iss53 and is "ahead" by two, meaning
+that we have two commits locally that are not pushed to the server. 
+
+We can also see that our master branch is tracking origin/ master and is up to date. 
+
+Next we can see that our serverfix branch is tracking the server-fix-good branch on our teamone
+server and is ahead by three and behind by one, meaning that there is one commit on the server we
+haven't merged in yet and three commits locally that we haven't pushed. 
+
+Finally we can see that our testing branch is not tracking any remote branch.
+
+
+{fetch-all}
+It's important to note that these numbers are only since the last time you fetched from each server.
+This command does not reach out to the servers, it's telling you about what it has cached from these
+servers locally. If you want totally up to date ahead and behind numbers, you'll need to fetch from
+all your remotes right before running this. You could do that like this: 
+
+$ git fetch -- all; git branch -vv
+
+
+{show}
+show [shortname]
+
+$ git remote show origin
+* remote origin
+  URL: git://github.com/schacon/ticgit.git
+  Remote branch merged with 'git pull' while on branch master
+    master
+  Tracked remote branches
+    master
+    ticgit
+
+<ls-remote>
+The ls-remote command returns the SHA1 hash of the latest commit for that reference, so it is quite
+easy to parse out and get to the exact commit you need if you're doing some scripting. The --heads
+option lists only branch names since the command can list tags too.
+
+$ git ls-remote --heads origin
+$ git ls-remote origin 
+f7abd1ac44367aff4056b3755e1bdff669aa279b	HEAD
+acf12d1ec25a3bf0ed800eda4ad8470d9f4a9f26	refs/heads/14base
+5d42e9f6d46160888a5f90729d0bc0285e844d2b	refs/heads/gpi
+f7abd1ac44367aff4056b3755e1bdff669aa279b	refs/heads/master
+
+
+={============================================================================
+*kt_dev_env_git_101* remote: fetch, inspect, merge and pull
+
+{fetch-and-inspect}
+To get data from your remote projects, pulls down all the data from that remote that you do not have
+yet. After that, you can merge in or inspect.
+
+$ git fetch [remote-name]
+$ git fetch pb
+From git://github.com/paulboone/ticgit
+ * [new branch]      master     -> pb/master
+ * [new branch]      ticgit     -> pb/ticgit
+
+ The fetched data is accessible locally as pb/master.
+
+Fetches all the changesets to your local repository and means you can now refer to the changes as
+origin/master you can operate on it with any 'local' branch. Inspect them and merge to your branch
+that you are currently on.
+
+$ git fetch origin
+$ git diff master origin/master
+$ git merge origin/master
+
+TODO: is there any way what it would look like when do merge? --no-commit option?
+
+
+
+
+={============================================================================
+*kt_dev_env_git_108* remote: check commits before push
+
+From double-dot example.
+
+Very frequent use of this syntax is to see what you're about to push to a remote:
+
+$ git log origin/master..HEAD
+
+This command shows you any commits in your current branch that aren't in the master branch on your
+origin remote. The commits listed by this command are the commits that will be transferred to the
+server.
+
+You can also leave off one side of the syntax to have Git assume HEAD. For example, you can get the
+same results as in the previous example by typing git log origin/master..
 
 
 
@@ -7081,20 +7154,6 @@ Update: I'm not entirely sure why you want to avoid the use of git fetch. All gi
 update your local copy of a remote branch. This local copy doesn't have anything to do with any of
 your branches, and it doesn't have anything to do with uncommitted local changes. I have heard of
 people who run git fetch in a cron job because it's so safe.
-
-
-{remove-remote}
-$ git remote rm paul
-$ git remote
-origin
-
-
-{delete-remote-branch}
-Suppose you're done with a remote branch.
-
-$ git push origin :serverfix
-To git@github.com:schacon/simplegit.git
- - [deleted]         serverfix
 
 
 ={============================================================================
