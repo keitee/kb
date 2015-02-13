@@ -14,11 +14,12 @@
 |kt_dev_uv_stack_000| stack: builds
 |kt_dev_uv_stack_001| stack: build: oem
 |kt_dev_uv_stack_002| stack: build: deploy
-|kt_dev_uv_stack_002| stack: startup and tree
+|kt_dev_uv_stack_003| stack: startup and tree
 |kt_dev_uv_stack_004| stack: oem configs
 |kt_dev_uv_stack_005| stack: brcm debug level
 |kt_dev_uv_stack_006| stack: netflix ps line
 |kt_dev_uv_stack_007| stack: virtual rcu
+|kt_dev_uv_stack_008| stack: startup mw
 
 |kt_dev_uv_stack_100| stack: element names
 |kt_dev_uv_stack_101| stack: vanadium: runBrowser
@@ -688,7 +689,7 @@ zb-deploy -o huawei.370 -- -r
 
 
 ={============================================================================
-*kt_dev_uv_stack_002* stack: startup
+*kt_dev_uv_stack_003* stack: startup
 
 cds: core driver software
 
@@ -901,6 +902,97 @@ escape                           Close
 cursor_up/down/left/right        
 ok                               Enter
 back                             Back
+
+
+={============================================================================
+*kt_dev_uv_stack_008* stack: startup mw
+
+/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/bin/yv-start-services.sh
+
+#!/bin/sh
+
+prefix="/opt/zinc-trunk"
+
+start() {
+    echo "Starting $1"
+    "${prefix}/bin/start-service-over-dbus.sh" "$@"
+}
+
+start Zinc.DIAL
+start Zinc.Crb
+
+exit 0
+
+
+/opt/zinc-trunk/bin$ cat start-service-over-dbus.sh 
+#!/bin/bash
+
+#
+# Launch a dbus service using dbus activation
+#
+# Author: morgan.henry@youview.com
+#
+
+#
+# Usage: ./start-service-over-dbus.sh Zinc.Metadata [ --requires Zinc.System ]
+#
+
+busname=$1
+
+if [[ $2 == "--requires" ]]; then
+	# If we know the service we are about to start requires some other service
+	# that has an initialisation period that is potentially greater that the dbus method_call timeout
+	# then we can explicitly wait for the required service to start
+	# This should be avoided where possible, since it is sub-optimial
+	requires=$3
+	dbuswaitbusname --timeout 30 $requires
+fi
+
+# Send a ping to a known dbus service daemon to cause dbus activation trigger daemon launch
+dbus-send --session --type=method_call --print-reply --dest=$busname / org.freedesktop.DBus.Peer.Ping &
+
+
+{nickelmediad}
+
+/source/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp
+
+int main(int argc, char *argv[]) {
+  NICKEL_INFO("Launching Fake Media Router Service Daemon...");
+  int result = EXIT_SUCCESS;
+
+  try {
+    MainLoop mainloop(BusName::MEDIA);
+    MediaDaemon daemon(mainloop);
+    mainloop.post(boost::bind(&MediaDaemon::start, &daemon, argc, argv));
+    result = mainloop.run();
+  } catch (std::exception& e) {
+    std::cerr << e.what() << endl;
+    result = EXIT_FAILURE;
+  }
+
+  NICKEL_INFO("Fake Media Router Service Daemon shutting down...");
+  return result;
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_009* stack: nexusmgr
+
+While working on nexus inspect tool, found that it failed to find the libnexusMgr.so at runtime.
+Investigated and found that SONAME was libnexusMgr.so.0 but there is no file in /usr/local/lib. When
+made a sym link like:
+
+libnexusMgr.so.0 -> libnexusMgr.so
+
+Worked okay. Do we need to make a change to a system to make a link? Why was it okay to run other
+application that uses that library?
+
+Investigated the system and found that applications uses the realname.
+
+pcmplaybackd:
+Shared library: [libnexusMgr.so]
+
+So the easiest is to change makefile of libnexusMgr to use realname than soname.
 
 
 ={============================================================================
@@ -1506,6 +1598,10 @@ $ readelf -d libnexusMgr.so | grep SONAME
 
 $ readelf -d libdirectfb.so | grep SONAME
 (standard input):12: 0x0000000e (SONAME)                     Library soname: [libdirectfb-1.4.so.15]
+
+use this in build-root build:
+
+`test -f 'src/exec-then-cleanup-app.c' || echo '/data/builds/master/huawei.370/DEVARCH/Polonium/Polonium.NexusRelease/'`src/exec-then-cleanup-app.c
 
 
 ==============================================================================
