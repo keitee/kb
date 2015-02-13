@@ -117,7 +117,7 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_034| diff, difftool
 |kt_dev_env_git_035| show
 |kt_dev_env_git_036| commit
-|kt_dev_env_git_037| ranges and dot notation
+|kt_dev_env_git_037| determine what is introduced. commit ranges.
 
 |kt_dev_env_git_100| different workflows
 |kt_dev_env_git_101| commit guideline
@@ -131,7 +131,7 @@ KT KB. VIM. ECLIPSE. NETBEAN
 
 |kt_dev_env_git_102| remote: fetch, inspect, merge and pull
 
-|kt_dev_env_git_108| remote: check before push
+|kt_dev_env_git_108| 
 |kt_dev_env_git_110| remote: inspect and ls-remote
 |kt_dev_env_git_111| remote: push errors. bare
 |kt_dev_env_git_112| remote: diff between local and remote
@@ -6579,55 +6579,49 @@ $ git commit -am 'added new benchmarks'
 
 
 ={============================================================================
-*kt_dev_env_git_037* ranges and double dot
-
-From 7.1 Git Tools - Revision Selection
+*kt_dev_env_git_037* determine what is introduced. commit ranges.
 
 How to specify or query ranges of commits using range specifications.
 
 {double-dot} 'exclusion'
-This basically asks Git to resolve a range of commits that are reachable from one commit but aren't
+This basically asks Git to resolve a range of commits that are 'reachable' from one commit but aren't
 reachable from another.
 
 A  B  E  F  <- master
       C  D  <- experiment
 
 <example>
-To see what is in your experiment branch that hasn't yet been merged into your master branch: that
-means "all commits reachable by experiment that aren't reachable by master."
+Means "all commits reachable by experiment that aren't reachable by master." shows what are needed
+to become experiment. what is in your branch.
 
-$ git log master..experiment
+$ git log master..experiment        # git log experiment --not master
 D
 C
 
-To see the opposite - all commits in master that aren¿t in experiment - you can reverse the branch
-names.
+The opposite: shows what experiment do not have. what is not in your branch
 
-$ git log experiment..master
+$ git log experiment..master        # git log master --not experiment
 F
 E
 
-This is useful if you want to keep the experiment branch up to date and preview what you're about to
-merge in.
+note: see two usages.
 
-<multiple-points>
-Git allows you to do this by using either the ^ character or --not before any reference from which
-you don't want to see reachable commits. Thus these three commands are equivalent:
+{multiple-points}
+Want to specify 'more' than two branches to indicate your revision. Thus these three commands are
+equivalent:
 
 $ git log refA..refB
 $ git log ^refA refB
 $ git log refB --not refA
 
-
-This is nice because with this syntax you can specify more than two references in your query, which
-you cannot do with the double-dot syntax. For instance, if you want to see all commits that are
-reachable from refA or refB but not from refC, you can type one of these:
+For instance, if you want to see all commits that are reachable from refA 'or' refB but not from
+refC, you can type one of these:
 
 $ git log refA refB ^refC
 $ git log refA refB --not refC
 
-This makes for a very powerful revision query system that should help you figure out what is in your
-branches.
+This makes for a very powerful revision query system that should help you figure out what is in
+branches in question.
 
 
 {triple-dot} 'aggregation'
@@ -6641,11 +6635,10 @@ E
 D
 C
 
-Again, this gives you normal log output but shows you only the commit information for those four
-commits, appearing in the traditional commit date ordering.
+appearing in the traditional commit date 'ordering'.
 
 A common switch to use with the log command in this case is --left-right, which shows you which side
-of the range each commit is in. This helps make the data more useful:
+of the range each commit is in. 
 
 $ git log --left-right master...experiment
 < F
@@ -6656,52 +6649,100 @@ $ git log --left-right master...experiment
 With these tools, you can much more easily let Git know what commit or commits you want to inspect.
 
 
-={============================================================================
-*kt_dev_env_git_038* determine what is introduced
+{to-see-what-to-push}
+This command shows you any commits in your current branch that aren't in the master branch on your
+origin remote. The commits listed by this command are the commits that will be transferred to the
+server.
 
-$ git log --no-merges issue54..origin/master
-$ git log origin/master --not issue54           # same as above
-$ git log -p origin/master --not issue54        # patch format
+You can also leave off one side of the syntax to have Git assume HEAD. For example, you can get the
+same results as in the previous example by typing git log origin/master..
+
+$ git log origin/master..HEAD
 
 
-{when-three-dot-useful}
-To see a full diff of what would happen if you were to merge this topic branch with another branch,
-   you may have to use a weird trick to get the correct results. You may think to run this:
+{to-see-what-to-merge}
+To see exactly what you'll be introducing if you merge this topic into your master branch.
 
-$ git diff master          # from master to working
+$ git log --no-merges master..topic
+$ git log topic --not master           # same as above
+$ git log -p topic --not master        # patch format
 
-This command gives you a diff, but it may be misleading. If your master branch has moved forward
-since you created the topic branch from it, then you'll get seemingly strange results. This happens
-because Git directly compares the snapshots of the last commit of the topic branch you are on and
-the snapshot of the last commit on the master branch. 
 
-For example, if you've added a line in a file on the master branch, a direct comparison of the
-snapshots will look like the topic branch is going to remove that line. If master is a direct
-ancestor of your topic branch, this isn't a problem; but if the two histories have diverged, the
-diff will look like you're adding all the new stuff in your topic branch and removing everything
-unique to the master branch. note: this is what you get from double dot.
+{different-in-diff-context}
 
-What you really want to see are the changes added to the topic branch - the work you'll introduce if
-you merge this branch with master. You do that by having Git compare the last commit on your topic
-branch with the first common ancestor it has with the master branch.
+master
+C1    C2    C3    topic1
+      C4    C5    topic2
 
-Technically, you can do that by explicitly figuring out the common ancestor
-and then running your diff on it:
+To see what will be introduced when merge topic1:
 
-$ git merge-base contrib master
-36c7dba2c95e6bbb78dfa822519ecfec6e1ca649
-$ git diff 36c7db
+git log master..topic1        # the same. C3, C2 note: reverse order
+git log topic2..topic1        # the same
 
-<Q> different in diff context?
-However, that isn't convenient, so Git provides another shorthand for doing the same thing: the
-triple-dot syntax. In the 'context' of the diff command, you can put three periods after another
-branch to do a diff between the last commit of the branch you are on and its common ancestor with
-another branch:
+git merge-base topic1 topic2  # C1
 
-$ git diff master...contrib
+git diff master               # shows C2, C3 since currently on topic1
+git diff C1                   # the same
 
-This command shows you only the work your current topic branch has introduced since its common
+git diff master..topic1       # shows C2, C3
+git diff topic2..topic1       # the end result is the same but shows deleting C4, C5
+
+git diff topic2...topic1      # shows C2, C3
+
+The range in diff context is different. 
+
+<one>
+If master is a direct ancestor of your topic branch, this isn't a problem; but if the two histories
+have diverged, the diff will look like you're adding all the new stuff in your topic branch and
+'removing' everything unique to the master branch. note: this is what you get from double dot.
+
+<two> 
+This command shows you only the work your current topic1 branch has introduced since its common
 ancestor with master. That is a very useful syntax to remember.
+
+$ git diff topic2...topic1
+
+
+={============================================================================
+*kt_dev_env_git_038* grep
+
+To search through any 'committed' tree or the working directory for a string or 'regular'
+expression.
+
+Advantages over normal searching commands like grep and ack. 
+
+The first is that it's really fast. 
+
+The second is that you can search through any tree in Git, not just the working directory. As we saw
+in the above example, we looked for terms in an older version of the Git source code, not the
+version that was currently checked out.  
+
+By default, it will look through the files in your working directory. You can pass -n to print out
+the line numbers
+
+$ git grep -n gmtime_r
+
+To see what method or function it thinks it has found a match in, you can pass -p:
+
+$ git grep -p gmtime_r *.c
+date.c=static int match_multi_number(unsigned long num, char c, const char *date, 
+date.c: if (gmtime_r(&now, &now_tm))
+date.c=static int match_digit(const char *date, struct tm *tm, int *offset, int *tm_
+date.c: if (gmtime_r(&time, tm)) {
+
+Look for complex combinations of strings with the --and flag. Use the --break and --heading options
+which help split up the output into a more readable format.
+
+$ git grep --break --heading -n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
+
+$ git grep --break --heading \
+-n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
+v1.8.0:builtin/index-pack.c
+62:#define FLAG_LINK (1u<<20)
+
+v1.8.0:cache.h
+73:#define S_IFGITLINK 0160000
+74:#define S_ISGITLINK(m) (((m) & S_IFMT) == S_IFGITLINK)
 
 
 ={============================================================================
@@ -7367,21 +7408,7 @@ TODO: is there any way what it would look like when do merge? --no-commit option
 
 
 ={============================================================================
-*kt_dev_env_git_108* remote: check commits before push
-
-From double-dot example.
-
-Very frequent use of this syntax is to see what you're about to push to a remote:
-
-$ git log origin/master..HEAD
-
-This command shows you any commits in your current branch that aren't in the master branch on your
-origin remote. The commits listed by this command are the commits that will be transferred to the
-server.
-
-You can also leave off one side of the syntax to have Git assume HEAD. For example, you can get the
-same results as in the previous example by typing git log origin/master..
-
+*kt_dev_env_git_108* 
 
 
 ={============================================================================
