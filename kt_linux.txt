@@ -196,6 +196,7 @@ KT KB. Linux
 |kt_linux_core_801| proc: /proc/PID/status
 |kt_linux_core_802| proc: /proc/PID/maps
 |kt_linux_core_803| proc: /proc/PID/exe
+|kt_linux_core_804| proc: /proc/PID/fd
 |kt_linux_core_813| proc: /proc/sys/kernel, system resource limits
 
 #{ SYSCALL
@@ -16429,7 +16430,7 @@ to be a low-level backend for the higher level bindings. Much of the libdbus API
 binding implementation. 
 
 
-D-Bus applications. D-Bus is designed for two specific cases:
+D-Bus applications. D-Bus is designed for 'two' specific 'cases':
 
 1. The bus daemon has multiple instances on a typical computer. The first instance is a
 machine-global singleton, that is, a system daemon similar to sendmail or Apache. This instance has
@@ -16452,27 +16453,10 @@ experience with different IPC solutions such as CORBA and DCOP. D-Bus is built '
 and carefully tailored to meet the needs of these desktop projects in particular. D-Bus may or may
 not be appropriate for other applications; the FAQ has some comparisons to 'other' IPC systems.
 
+
 {concept}
-<object-path>
-The low-level D-Bus protocol, and corresponding libdbus API, does not care about native objects.
-However, it provides a concept called an object path. The idea of an object path is that
-higher-level bindings can name native object instances, and allow remote applications to refer to
-them. 
 
-{dbus-name} for application
-When each application connects to the bus daemon, the daemon immediately assigns it a name, called
-the unique connection name. A unique name begins with a ':' (colon) character. These names are never
-reused during the lifetime of the bus daemon - that is, you know a given name will always refer to
-the same application.
-
-Names have a second important use, other than routing messages. They are used to track lifecycle.
-When an application exits (or crashes), its connection to the message bus will be closed by the
-operating system kernel. The message bus then sends out notification messages telling remaining
-applications that the application's names have lost their owner. By tracking these notifications,
-your application can reliably monitor the lifetime of other applications. 
-
-
-{dbus-client-server} for addressing
+<address>
 Applications using D-Bus are either servers or clients. A server listens for incoming connections; a
 client connects to a server. Once the connection is established, it is a symmetric flow of messages;
 the client-server distinction only matters when setting up the connection.
@@ -16486,8 +16470,73 @@ A D-Bus address specifies where a server will listen, and where a client will co
   the path /tmp/abcdef and the client will connect to that socket. An address can also specify
   TCP/IP sockets, or any other transport defined in future iterations of the D-Bus specification. 
 
+<dbus-name> for application
+When each application connects to the bus daemon, the daemon immediately assigns it a name, called
+the unique connection name. A unique name begins with a ':' (colon) character. These names are never
+reused during the lifetime of the bus daemon - that is, you know a given name will always refer to
+the same application.
 
-{dbus-specify-call}
+An example of a unique name might be :34-907. The numbers after the colon have no meaning other than
+their 'uniqueness'.
+
+When a name is mapped to a particular application's connection, that application is said to own that
+name.
+
+Applications may ask to own additional well-known names. For example, you could write a
+specification to define a name called com.mycompany.TextEditor. Your definition could specify that
+to own this name, an application should have an object at the path /com/mycompany/TextFileManager
+supporting the interface org.freedesktop.FileHandler.
+
+Applications could then send messages to this bus name, object, and interface to execute method calls.
+
+You could think of the unique names as IP addresses, and the well-known names as domain names. So
+com.mycompany.TextEditor might map to something like :34-907 just as mycompany.com maps to something
+like 192.168.0.5. 
+
+Names have a 'second' important 'use', other than routing messages. They are used to track
+'lifecycle'.  When an application exits (or crashes), its connection to the message bus will be
+closed by the operating system kernel. The message bus then sends out notification messages telling
+remaining applications that the application's names have lost their owner. By tracking these
+notifications, your application can reliably monitor the lifetime of other applications. 
+<object-path>
+The low-level D-Bus protocol, and corresponding libdbus API, does not care about native objects.
+However, it provides a concept called an object path. The idea of an object path is that
+higher-level bindings can name native object instances, and allow remote applications to refer to
+them. 
+
+The object path looks like a filesystem path, for example an object could be named
+/org/kde/kspread/sheets/3/cells/4/5. Human-readable paths are nice, but you are free to create an
+object named /com/mycompany/c5yo817y0c1y1c5b if it makes sense for your application.
+
+Namespacing object paths is smart, by starting them with the components of a domain name you own
+(e.g. /org/kde). This keeps different code modules in the same process from stepping on one
+another's toes. 
+
+<method-and-signal>
+Each object has members; the two 'kinds' of member are methods and signals. Methods are operations
+that can be invoked on an object, with optional input (aka arguments or "in parameters") and output
+(aka return values or "out parameters"). Signals are broadcasts from the object to any interested
+observers of the object; signals may contain a data payload.
+
+<interface>
+Each object supports one or more interfaces. Think of an interface as a named group of methods and
+signals, just as it is in GLib or Qt or Java. Interfaces define the type of an object instance.
+
+DBus identifies interfaces with a simple 'namespaced' string, something like
+org.freedesktop.Introspectable. Most bindings will map these interface names directly to the
+appropriate programming language construct, for example to Java interfaces or C++ pure virtual
+classes. 
+
+<proxies>
+A proxy object is a convenient native object created to represent a remote object in another
+process. The low-level DBus API involves manually creating a method call message, sending it, then
+manually receiving and processing the method reply message. Higher-level bindings provide proxies as
+an alternative. Proxies look like a normal native object; but when you invoke a method on the proxy
+object, the binding converts it into a DBus method call message, waits for the reply message,
+  unpacks the return value, and returns it from the native method.
+
+
+{big-picture} to specify call
 Pulling all these concepts together, to specify a particular method call on a particular object
 instance, a number of nested components have to be named:
 
@@ -16497,16 +16546,70 @@ Address -> [Bus Name] -> Path -> Interface -> Method
 {dbus-messages}
 There are 4 message types:
 
-Method call messages ask to invoke a method on an object.
-you send a method call message, and receive either a method return message or an error message in
-reply. 
+1. Method call messages ask to invoke a method on an object.  you send a method call message, and
+receive either a method return message or an error message in reply. 
 
-Method return messages return the results of invoking a method.
+2. Method return messages return the results of invoking a method.
 
-Error messages return an exception caused by invoking a method.
+3. Error messages return an exception caused by invoking a method.
 
-Signal messages are notifications that a given signal has been emitted (that an event has occurred).
-You could also think of these as "event" messages. 
+4. Signal messages are notifications that a given signal has been emitted (that an event has
+    occurred). You could also think of these as "event" messages. 
+
+A method call maps very simply to messages: you send a method call message, and receive either a
+method return message or an error message in reply.
+
+Each message has a header, including fields, and a body, including arguments. You can think of the
+header as the routing information for the message, and the body as the payload. Header fields might
+include the sender bus name, destination bus name, method or signal name, and so forth. One of the
+header fields is a type signature describing the values found in the body. For example, the letter
+"i" means "32-bit integer" so the signature "ii" means the payload has two 32-bit integers. 
+
+
+{dbus-send}
+Usage: dbus-send [--help] [--system | --session | --address=ADDRESS] [--dest=NAME] [--type=TYPE]
+[--print-reply[=literal]] [--reply-timeout=MSEC] <destination object path> <message name> [contents
+...]
+
+From http://dbus.freedesktop.org/doc/dbus-send.1.html
+dbus-send [ --system | --session | --address=ADDRESS ] [--dest=NAME] [ --print-reply [=literal]]
+[--reply-timeout=MSEC] [--type=TYPE] OBJECT_PATH INTERFACE.MEMBER [CONTENTS...]
+
+<lsdbus>
+#cat /opt/zinc/devel/bin/lsdbus
+#!/bin/sh -e
+
+# Print a list of all dbus connections and the processes that own them.
+# Taken from the wiki page:
+# https://wiki.youview.co.uk/display/canvas/How+to+Introspect+DBus+from+the+Command+Line
+
+# The format of the output is:
+# pid | bus name | command
+
+function ListBusNames {
+    dbus-send --session --type=method_call --print-reply \
+              --dest=org.freedesktop.DBus / \
+              org.freedesktop.DBus.ListNames
+}
+
+function GetProcessID {
+    dbus-send --session --type=method_call --print-reply \
+              --dest=org.freedesktop.DBus / \
+              org.freedesktop.DBus.GetConnectionUnixProcessID string:$1 2>/dev/null \
+        | xargs -n1 | tail -1
+}
+
+for i in $(ListBusNames | grep string | cut -d'"' -f2)
+do
+    DCNAME=$i
+    DCPID=$(GetProcessID $DCNAME)
+    if [ -n "$DCPID" ]
+    then
+        DCPCMD=$(cat /proc/$DCPID/cmdline 2>/dev/null | xargs -0 echo) && \
+               printf "%-6s%-25s%-40s%-8s%s\n" \
+                  "$DCPID" "$DCNAME" "$DCPCMD"
+    fi
+done | sort -n
 
 
 {kdbus}
@@ -16516,6 +16619,8 @@ https://github.com/gregkh/kdbus
 
 ={============================================================================
 *kt_linux_core_800* proc: /proc/mounts
+
+The proc(5) manual page.
 
 from stackoverflow:
 The definitive list of mounted filesystems in in /proc/mounts.
@@ -16585,6 +16690,7 @@ Mems_allowed:	1
 Mems_allowed_list:	0
 voluntary_ctxt_switches:	310
 nonvoluntary_ctxt_switches:	127
+
 
 ={============================================================================
 *kt_linux_core_802* proc: /proc/PID/maps
@@ -16701,6 +16807,54 @@ $ ls -1l /proc/3510/exe
 lrwxrwxrwx 1 keitee keitee 0 Feb  2 22:21 /proc/3510/exe -> /home/keitee/bin/vim
 
 note: to check the path name of the process.
+
+
+={============================================================================
+*kt_linux_core_804* proc: /proc/PID/fd
+
+/proc/[pid]/fd
+
+This is a subdirectory containing one entry for each file which the process has open, named by its
+file descriptor, and which is a symbolic link to the actual file. Thus, 0 is standard input, 1
+standard output, 2 standard error, etc.
+
+In a multithreaded process, the contents of this directory are not available if the main thread has
+already terminated (typically by calling pthread_exit(3)).
+
+root       793  0.7  1.0  25528  4176 ?        Sl   16:04   0:00 /opt/zinc/oss/sbin/NetworkManager --no-daemon --log-level=INFO
+
+# ll /proc/793/fd
+fd/     fdinfo/ 
+
+# ll /proc/793/fd/
+dr-x------    2 root     root           0 Feb 16 16:06 ./
+dr-xr-xr-x    6 root     root           0 Jan  1  2000 ../
+lr-x------    1 root     root          64 Feb 16 16:06 0 -> /dev/null
+l-wx------    1 root     root          64 Feb 16 16:06 1 -> /var/tmp/NetworkManager.log
+lrwx------    1 root     root          64 Feb 16 16:06 10 -> /dev/nexus_astm
+lrwx------    1 root     root          64 Feb 16 16:06 11 -> /dev/nexus_display
+lrwx------    1 root     root          64 Feb 16 16:06 12 -> /dev/nexus_graphics2d
+lrwx------    1 root     root          64 Feb 16 16:06 13 -> /dev/nexus_surface
+lrwx------    1 root     root          64 Feb 16 16:06 14 -> /dev/nexus_audio
+lrwx------    1 root     root          64 Feb 16 16:06 15 -> /dev/nexus_video_decoder
+lrwx------    1 root     root          64 Feb 16 16:06 16 -> /dev/nexus_transport
+lrwx------    1 root     root          64 Feb 16 16:06 17 -> /dev/nexus_dma
+lrwx------    1 root     root          64 Feb 16 16:06 18 -> /dev/nexus_security
+lrwx------    1 root     root          64 Feb 16 16:06 19 -> /dev/nexus_spi
+l-wx------    1 root     root          64 Feb 16 16:06 2 -> /var/tmp/NetworkManager.log
+lrwx------    1 root     root          64 Feb 16 16:06 20 -> /dev/nexus_frontend
+lrwx------    1 root     root          64 Feb 16 16:06 21 -> /dev/nexus_keypad
+lrwx------    1 root     root          64 Feb 16 16:06 22 -> /dev/nexus_rfm
+lrwx------    1 root     root          64 Feb 16 16:06 23 -> /dev/nexus_uhf_input
+lrwx------    1 root     root          64 Feb 16 16:06 24 -> /dev/nexus_input_capture
+lrwx------    1 root     root          64 Feb 16 16:06 25 -> /dev/nexus_ir_blaster
+lrwx------    1 root     root          64 Feb 16 16:06 26 -> /dev/nexus_ir_input
+lrwx------    1 root     root          64 Feb 16 16:06 27 -> /dev/nexus_led
+lrwx------    1 root     root          64 Feb 16 16:06 28 -> /dev/nexus_gpio
+lrwx------    1 root     root          64 Feb 16 16:06 29 -> /dev/nexus_i2c
+lr-x------    1 root     root          64 Feb 16 16:06 3 -> pipe:[548]|
+lrwx------    1 root     root          64 Feb 16 16:06 30 -> /dev/nexus_pwm
+...
 
 
 ={============================================================================
