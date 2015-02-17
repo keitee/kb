@@ -21922,14 +21922,14 @@ insert a new element that has the new value. The interface reflects this behavio
 element value is 'constant'.
 
 
-{specific-insert-erase}
+{set-insert-erase}
 Again, bidirectional iterator and from an iterator's point of view, all elements are considered
 'constant'. Means that iterators are also constant.
 
 As a result, you can't call any 'modifying' algorithm on the elements of a set or a multiset. For
-example, you can't call the remove() algorithm, because it "removes" by overwriting "removed"
-elements with the following elements. To remove elements in sets and multisets, you can use only
-'member' functions provided by the container.
+example, you can't call the algorithm-remove, because it "removes" by overwriting "removed" elements
+with the following elements. To remove elements in sets and multisets, you can use only 'member'
+functions provided by the container.
 
 c.insert(val)
 c.insert(pos,val)
@@ -22181,7 +22181,7 @@ key 3.0 found!(3,2)
 value 3.0 found!(4,3)
 
 
-{specific-insert-erase}
+{map-insert-erase}
 As for set, you can't call any modifying algorithm on the elements of a set or a multiset as a
 destination since key is constant.
 
@@ -23398,6 +23398,32 @@ insert a new element. Also use at() not to insert element accidentally in which 
 ={============================================================================
 *kt_dev_stl_053* iterator: invalid iterator, insert, remove
 
+
+{erase}
+
+<list>
+list.erase( start, end );
+
+<set>
+m/set.erase(val);             // return # of erased elements
+m/set.erase(pos);             // note 2
+m/set.erase(beg,end);
+
+note 1: why cannot use modifying algorithm on set. copied again from set
+
+Again, bidirectional iterator and from an iterator's point of view, all elements are considered
+'constant'. Means that iterators are also constant.
+
+As a result, you can't call any 'modifying' algorithm on the elements of a set or a multiset. For
+example, you can't call the algorithm-remove, because it "removes" by overwriting "removed" elements
+with the following elements. To remove elements in sets and multisets, you can use only 'member'
+functions provided by the container.
+
+note 2:
+These removes the element at iterator position pos or range[beg, eng) and returns the 'following'
+position. Returned nothing before C++11.
+
+
 {invalidated-iterator} from Primers p353.
 After add an element:
 
@@ -23596,7 +23622,7 @@ pre : 12 elements
 post: 12 elements
 6 5 4 2 1 1 2 4 5 6 5 6 
 
-When runs remove(), it will reorder like:
+When runs algorithm-remove, it will reorder like:
 
 <elemenets not matched> <elements matched>
                        |
@@ -24240,36 +24266,102 @@ Here [sz] use to capture a variable from enclosing function and has two; one fro
 from parameter and return bool.
 
 <putting-it-all-together>
-string make_plural( size_t ctr, const string& word, const string& ending)
+#include<iostream>
+#include<vector>
+#include<string>
+#include<algorithm>
+#include<functional>
+
+using namespace std;
+using namespace std::placeholders;
+
+template<typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &opt = "")
+{
+  std::cout << opt;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+void elimDups( vector<string> &words)
+{
+  sort( words.begin(), words.end() );
+
+  PRINT_ELEMENTS( words, "sorted       : ");
+
+  auto end_unique = unique( words.begin(), words.end() );
+
+  words.erase( end_unique, words.end() );
+}
+
+// note: "return ctr>1 ? word + ending : word;" works.
+//
+string make_plural( size_t ctr, const string &word, const string &ending )
 {
   return (ctr>1) ? word + ending : word;
 }
 
-note: "return ctr>1 ? word + ending : word;" works.
+bool check_size( const string &s, string::size_type sz )
+{
+  return s.size() >= sz;
+}
 
 void biggies( vector<string> &words, vector<string>::size_type sz )
 {
   elimDups( words );
 
-  stable_sort( coll.begin(), coll.end(), 
+  PRINT_ELEMENTS(words, "eliminated   : ");
+
+  stable_sort( words.begin(), words.end(), 
       [](const string &a, const string &b)
       { return a.size() < b.size(); } );
 
+  PRINT_ELEMENTS(words, "stable sorted: ");
+
   // 1. get an iterator to the first element whose size is >= sz
+  // auto wc = find_if( words.begin(), words.end(),
+  //                [sz](const string &a)
+  //                { return a.size() >= sz; } );
+
   auto wc = find_if( words.begin(), words.end(),
-                 [sz](const string &a)
-                 { return a.size() >= sz; } );
+                 bind( check_size, _1, sz ));
+
   // 2. compute the number of elements with size >= sz
   auto count = words.end() - wc;          // <iterator-arithmetic>
 
   cout << count << " " << make_plural( count, "word", "s" ) << " of length " << sz << " or longer"
     << endl;
 
+  PRINT_ELEMENTS(words, "for_each     : ");
+
   // 3. print words of the given size or longer
-  for_each( words.begin(), words.end(), [](const string &s) { cout << s << " "; });
+  for_each( wc, words.end(), [](const string &s) { cout << s << " "; });
 
   cout << endl;
 }
+
+int main()
+{
+  vector<string> coll{"over", "quick", "red", 
+    "fox", "jumps", "red", "the", "slow", "turtle", "the"};
+
+  PRINT_ELEMENTS( coll, "initialized  : ");
+
+  biggies( coll, 5 );
+}
+
+// both lambda and bind version
+//
+initialized  : over quick red fox jumps red the slow turtle the 
+sorted       : fox jumps over quick red red slow the the turtle 
+eliminated   : fox jumps over quick red slow the turtle 
+stable sorted: fox red the over slow jumps quick turtle 
+3 words of length 5 or longer
+for_each     : fox red the over slow jumps quick turtle 
+jumps quick turtle 
 
 In lambda in for_each, can use cout directly since cout is staic name and capture list can use only
 on local nonstatic variables.
@@ -24326,7 +24418,6 @@ bool check_size( const string &s, string::size_type sz )
 {
   return s.size() >= sz;
 }
-
 
 auto check6 = bind( check_size, _1, 6 );
 
