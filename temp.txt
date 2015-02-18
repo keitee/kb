@@ -1144,6 +1144,90 @@ int ioctl(int fd, int request == VIDEO_DECODER_GET_CAP_EX, VideoDecoderCapEx *ar
 }
 
 
+int main(int argc, char *argv[])
+{
+    YVWindow window;
+}
+
+class YVWindow : public QWidget
+{
+private:
+    void init();
+
+    boost::scoped_ptr<QSocketNotifier> snTerm;
+    boost::scoped_ptr<QSocketNotifier> snInt;
+};
+
+YVWindow::YVWindow(QWidget *parent)
+    : QWidget(parent),
+      fullScreenWidth(1280),
+      fullScreenHeight(720)
+{
+    init();
+}
+
+void YVWindow::init()
+{
+    struct sigaction sInt, sTerm;
+    sTerm.sa_handler = posixSignalHandler;
+    sInt.sa_handler = posixSignalHandler;
+    sigaction(SIGTERM, &sTerm, 0);
+    sigaction(SIGINT, &sInt, 0);
+    sigset_t signalSet;
+    sigfillset(&signalSet);
+    sigdelset(&signalSet, SIGTERM);
+    sigdelset(&signalSet, SIGINT);
+    pthread_sigmask(SIG_SETMASK, &signalSet, NULL);
+
+    snTerm.reset(new QSocketNotifier(sigtermFd[1], QSocketNotifier::Read, this));
+    connect(snTerm.get(), SIGNAL(activated(int)), this, SLOT(handleSigTerm()));
+
+    snInt.reset(new QSocketNotifier(sigintFd[1], QSocketNotifier::Read, this));
+    connect(snInt.get(), SIGNAL(activated(int)), this, SLOT(handleSigInt()));
+}
+
+void YVWindow::posixSignalHandler(int signo)
+{
+    if (signo == SIGTERM)
+    {
+        char a = SOCKET_SIGTERM_CODE;
+        ::write(sigtermFd[0], &a, sizeof(a));
+    }
+    else if (signo == SIGINT)
+    {
+        char a = SOCKET_SIGINT_CODE;
+        ::write(sigintFd[0], &a, sizeof(a));
+    }
+}
+
+void YVWindow::handleSigTerm()
+{
+    VANADIUM_INFO("Handling SIGTERM");
+    snTerm->setEnabled(false);
+    char tmp;
+    ::read(sigtermFd[1], &tmp, sizeof(tmp));
+
+    if( tmp != SOCKET_SIGTERM_CODE ){
+        std::cerr << "WARNING: Unexpected value received from sigTerm socket." << std::endl;
+    }
+
+    QApplication::instance()->quit();
+}
+
+void YVWindow::handleSigInt()
+{
+    VANADIUM_INFO("Handling SIGINT");
+    snInt->setEnabled(false);
+    char tmp;
+    ::read(sigintFd[1], &tmp, sizeof(tmp));
+
+    if( tmp != SOCKET_SIGINT_CODE ){
+        std::cerr << "WARNING: Unexpected value received from sigTerm socket." << std::endl;
+    }
+
+    QApplication::instance()->quit();
+}
+
 -------------------------------------------------------------------------------
 Copyright: see |ktkb|  vim:tw=100:ts=3:ft=help:norl:
 
