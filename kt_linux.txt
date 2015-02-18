@@ -77,6 +77,7 @@ KT KB. Linux
 |kt_linux_tool_035| wget, curl
 |kt_linux_tool_036| nc
 |kt_linux_tool_037| port checks
+|kt_linux_tool_038| minicom
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -3227,6 +3228,9 @@ $ ps -p $$ -o 'pid pgid sid command'
  3697  3697  3697 bash
 
 
+$ ps -ewf
+
+
 ={============================================================================
 *kt_linux_tool_035* wget
 
@@ -3350,6 +3354,30 @@ firewall tool:
 
 $ /sbin/iptables -A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT
 $ service iptables save
+
+
+={============================================================================
+*kt_linux_tool_038* minicom
+
+1. Setup minicon with -s switch
+
+$ minicom -s
+
+Choose Serial port setup and specify below settings, come out of Serial port setup by pressing Esc
+and then save configuration file.
+
+Once saved, it will store the configuration in /etc/minicom/. To connect to your device, run minicom
+with config file name:
+
+$ minicom cisco or minicom -c on cisco
+
+To Exit from minicom, Click Ctrl, A, Z then X.
+
+<when-cannot-get-shell-prompt>
+Without knowing either your set-top box or your cable, I would first try disabling hardware flow
+control, since the set top probably doesn't implement it. Essentially your Linux client is waiting
+for an "OK to send" signal that it will never receive because there's no physical wire in the set
+  top to send it
 
 
 # ============================================================================
@@ -16536,6 +16564,7 @@ Names have a 'second' important 'use', other than routing messages. They are use
 closed by the operating system kernel. The message bus then sends out notification messages telling
 remaining applications that the application's names have lost their owner. By tracking these
 notifications, your application can reliably monitor the lifetime of other applications. 
+
 <object-path>
 The low-level D-Bus protocol, and corresponding libdbus API, does not care about native objects.
 However, it provides a concept called an object path. The idea of an object path is that
@@ -16613,7 +16642,188 @@ From http://dbus.freedesktop.org/doc/dbus-send.1.html
 dbus-send [ --system | --session | --address=ADDRESS ] [--dest=NAME] [ --print-reply [=literal]]
 [--reply-timeout=MSEC] [--type=TYPE] OBJECT_PATH INTERFACE.MEMBER [CONTENTS...]
 
-<lsdbus>
+
+<example> xml has member and type defs as well
+[17-02-2015 10:57:31.574183] signal sender=:1.0 -> dest=(null destination) serial=96 path=/org/freedesktop/NetworkManager/Devices/0; interface=org.freedesktop.NetworkManager.Device; member=StateChanged
+
+<node name="/" xmlns:tp="http://telepathy.freedesktop.org/wiki/DbusSpec#extensions-v0">
+  <interface name="org.freedesktop.NetworkManager.Device">
+    ...
+    <signal name="StateChanged">
+      <arg name="new_state" type="u" tp:type="NM_DEVICE_STATE">
+        <tp:docstring>
+          The new state of the device.
+        </tp:docstring>
+      </arg>
+      <arg name="old_state" type="u" tp:type="NM_DEVICE_STATE">
+        <tp:docstring>
+          The previous state of the device.
+        </tp:docstring>
+      </arg>
+      <arg name="reason" type="u" tp:type="NM_DEVICE_STATE_REASON">
+        <tp:docstring>
+          A reason for the state transition.
+        </tp:docstring>
+      </arg>
+    </signal>
+
+    <tp:enum name="NM_DEVICE_STATE" type="u">
+      <tp:enumvalue suffix="UNKNOWN" value="0">
+        <tp:docstring>
+          The device is in an unknown state.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="UNMANAGED" value="1">
+        <tp:docstring>
+          The device is not managed by NetworkManager.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="UNAVAILABLE" value="2">
+        <tp:docstring>
+          The device cannot be used (carrier off, rfkill, etc).
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="DISCONNECTED" value="3">
+        <tp:docstring>
+          The device is not connected.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="PREPARE" value="4">
+        <tp:docstring>
+          The device is preparing to connect.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="CONFIG" value="5">
+        <tp:docstring>
+          The device is being configured.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="NEED_AUTH" value="6">
+        <tp:docstring>
+          The device is awaiting secrets necessary to continue connection.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="IP_CONFIG" value="7">
+        <tp:docstring>
+          The IP settings of the device are being requested and configured.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="ACTIVATED" value="8">
+        <tp:docstring>
+          The device is active.
+        </tp:docstring>
+      </tp:enumvalue>
+      <tp:enumvalue suffix="FAILED" value="9">
+        <tp:docstring>
+          The device is in a failure state following an attempt to activate it.
+        </tp:docstring>
+      </tp:enumvalue>
+    </tp:enum>
+    ...
+
+<introspect>
+dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.Introspectable.Introspect
+
+method return sender=org.freedesktop.DBus -> dest=:1.255 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+  <interface name="org.freedesktop.DBus"> ~
+    <method name="Hello">
+      <arg direction="out" type="s"/>
+    </method>
+    ...
+    <method name="ListNames"> ~
+      <arg direction="out" type="as"/>
+    </method>
+    ...
+  </interface>
+  <interface name="org.freedesktop.DBus.Introspectable"> ~
+    <method name="Introspect">
+      <arg direction="out" type="s"/>
+    </method>
+  </interface>
+</node>
+"
+
+
+<lsdbus> to find the owners of all dbus connections
+# dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.ListNames
+
+note: org.freedesktop.Dbus means the dbus itself and ListNmaes to get the list of names on the bus
+
+method return sender=org.freedesktop.DBus -> dest=:1.81 reply_serial=2
+   array [
+      string "org.freedesktop.DBus"
+      string ":1.7"
+      string ":1.8"
+      string "Zinc.BabySitter"
+      string "Zinc.Application"
+      string "org.freedesktop.NetworkManager"
+      string "Zinc.Crb"
+      string "Zinc.OEMSystemTime"
+      string ":1.81"
+      string "Zinc.ApplicationPackages"
+      string ":1.41"
+      string "Zinc.UsageCollection"
+      string ":1.42"
+      string ":1.65"
+      string ":1.21"
+      string ":1.43"
+      string ":1.66"
+      string ":1.44"
+      string ":1.67"
+      string ":1.45"
+      string "org.freedesktop.NetworkManagerSystemSettings"
+      string ":1.46"
+      string ":1.69"
+      string "Zinc.Media"
+      string ":1.47"
+      string ":1.48"
+      string "Zinc.OEMSystem"
+      string ":1.29"
+      string "Zinc.ContentAcquisition"
+      string "Zinc.Broker"
+      string "org.freedesktop.Avahi"
+      string "Zinc.DeviceSoftware"
+      string "Zinc.RemoteBooking"
+      string "Zinc.LinearSource"
+      string "Zinc.DeviceManager"
+      string "Zinc.Tuner"
+      string ":1.70"
+      string ":1.71"
+      string "Zinc.OEMSystemManager"
+      string ":1.72"
+      string ":1.73"
+      string ":1.75"
+      string "Zinc.MetadataProxy"
+      string ":1.53"
+      string ":1.76"
+      string "Zinc.Reminders"
+      string ":1.34"
+      string "Zinc.Metadata"
+      string "Zinc.System"
+      string ":1.0"
+      string ":1.58"
+      string "Zinc.RemoteDiagnostics"
+      string ":1.4"
+      string ":1.5"
+      string ":1.18"
+      string ":1.19"
+   ]
+
+
+# lsdbus
+793   :1.0                     /opt/zinc/oss/sbin/NetworkManager --no-daemon --log-level=INFO        
+793   org.freedesktop.NetworkManager/opt/zinc/oss/sbin/NetworkManager --no-daemon --log-level=INFO        
+793   org.freedesktop.NetworkManagerSystemSettings/opt/zinc/oss/sbin/NetworkManager --no-daemon --log-level=INFO        
+831   :1.4                     /opt/zinc/bin/litaniumsystemmanagerd            
+831   :1.5                     /opt/zinc/bin/litaniumsystemmanagerd            
+831   Zinc.OEMSystemManager    /opt/zinc/bin/litaniumsystemmanagerd            
+831   Zinc.System              /opt/zinc/bin/litaniumsystemmanagerd            
+...
+
+
 #cat /opt/zinc/devel/bin/lsdbus
 #!/bin/sh -e
 
@@ -16648,6 +16858,41 @@ do
                   "$DCPID" "$DCNAME" "$DCPCMD"
     fi
 done | sort -n
+
+
+{dbus-monitor}
+dbus-monitor [ --system | --session | --address ADDRESS ] [ --profile | --monitor ] [ watch expressions ]
+
+<session>
+There are two well-known message buses: the systemwide message bus; installed on many systems as the
+"messagebus" service and the per-user-login-session message bus; started each time a user logs in.
+The --system and --session options direct dbus-monitor to monitor the system or session buses
+respectively. note: If neither is specified, dbus-monitor monitors the session bus.
+
+<monitor>
+dbus-monitor has two different output modes, the 'classic'-style monitoring mode and profiling mode.
+The profiling format is a compact format with a single line per message and microsecond-resolution
+timing information. The --profile and --monitor options select the profiling and monitoring output
+format respectively. note: If neither is specified, dbus-monitor uses the monitoring output format.
+
+<watch-expr>
+In order to get dbus-monitor to see the messages you are interested in, you should specify a set of
+watch expressions as you would expect to be passed to the dbus_bus_add_match function.
+
+# display only method calls, returns and errors. No signals at all will be displayed but it does
+# have the benefit of you not getting the PositionChange signals cluttering your display.
+
+dbus-monitor "type=method_call" "type=method_return" "type=error"
+
+
+dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
+   "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
+
+dbus-monitor > /mnt/hd1/mylogs.log &
+dbus-monitor | tee /mnt/hd1/mylogs.log &
+
+# To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the following command:
+dbus-monitor "interface=Zinc.Media.MediaRouter"
 
 
 {kdbus}
