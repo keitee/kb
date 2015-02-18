@@ -26,8 +26,11 @@
 
 |kt_dev_uv_stack_100| stack: element names
 |kt_dev_uv_stack_101| stack: vanadium: runBrowser
-|kt_dev_uv_stack_102| stack: network
-|kt_dev_uv_stack_103| stack: dbus
+|kt_dev_uv_stack_102| stack: vanadium: binding
+|kt_dev_uv_stack_103| stack: vanadium: remote debug
+
+|kt_dev_uv_stack_150| stack: network
+|kt_dev_uv_stack_200| stack: dbus
 
 |kt_dev_uv_stack_200| commands TODO:
 
@@ -1107,6 +1110,24 @@ https://wiki.youview.co.uk/display/canvas/YouView+Element+Names?src=search
 ={============================================================================
 *kt_dev_uv_stack_101* stack: vanadium: runbrowser
 
+Vanadium provides:
+
+Support for Remote Debugging Webkit provides a protocol that allows remote access to the browser.
+See https://www.webkit.org/blog/1620/webkit-remote-debugging/ It adds a "-debug" option to the
+command line for w3cEngine that will enable the remote debug on port 9222. Once enabled, you can
+access the remote debug information by connecting to port 9222 on the STB using Chrome.
+
+Support for client-side disk cache, i.e. support for storing data on the client in a directory that
+is specified by the "-cache" command line. Specifically, it adds support for:
+
+Client-side caching of resources requested by the w3cEngine
+Usage of the LocalStorage HTML5 API
+Usage of the application cache HTML5 feature
+
+Support for persistent storage of cookies It adds a CookieJar class that uses the QSettings API to
+persist cookies. The file used to store cookies is specified by the "-jar" command line option.
+
+
 # from terminal
 Running '/opt/zinc-trunk/bin/runBrowser.sh --app /app --data /app-data --app-launch-parameters
 http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application
@@ -1160,8 +1181,177 @@ Going to watch pid: 1479
 ** HMAX KT: The nexus resources are currently free. shm is 0
 
 
+16385     2025 15.1 19.9 341300 75940 ?        Sl   15:22   0:37 /opt/zinc/bin/w3cEngine -cache
+/app-data/client-cache -cache-size 50000000 -jar /app-data/cookies.sqlite -url
+http://www.bbc.co.uk/iplayer/ -src http://www.test.bbc.co.uk http://www.bbc.co.uk
+http://www.int.bbc.co.uk http://www.stage.bbc.co.uk http://filegateway.youview.co.uk
+
+
 ={============================================================================
-*kt_dev_uv_stack_102* stack: network
+*kt_dev_uv_stack_102* stack: vanadium: binding
+
+JSBindingNP.h
+
+/**
+ * This is a single entry point for binding JavaScript with C++ via NPAPI.
+ *
+ * `JSBindingNP` is a base class which API specific classes should inherit For
+ * example if `Example` API needs to be provided to JavaScript, a binding class
+ * for it should be created:
+ *
+ *     class ExampleBindingNP : public JSBindingNP { ... };
+ *
+ * The reason for this relationship is that the `JSBindingNP` base class is used
+ * to resolve the actual calls with what's been registered by the concrete
+ * binding class.
+ *
+ * The concrete binding class should provide an API that mirrors the actual
+ * "back-end" implementation API and register it in the `JSBindingNP` class with
+ * macros provided.  When the call is resolved it's responsible for
+ * unmarshalling and validating the arguments, making a call to the
+ * implementation and marshalling the result.
+ *
+ *    ExampleBindingNP::ExampleBindingNP(const boost::shared_ptr<Example>& impl)
+ *        : impl(impl), ...
+ *    {
+ *        JS_BINDING_NP_BEGIN(ExampleBindingNP);
+ *        ADD_METHOD(foo);
+ *        ADD_PROPERTY(bar);
+ *        JS_BINDING_NP_END();
+ *    }
+ *
+ *    NPVariant ExampleBindingNP::foo(const NPVariant* const args,
+ *                                    const uint32_t argCount)
+ *    {
+ *        // ...
+ *    }
+ *
+ *    NPVariant ExampleBindingNP::bar()
+ *    {
+ *        // getter
+ *    }
+ *
+ *    void ExampleBindingNP::bar(const NPVariant* value)
+ *    {
+ *        // setter
+ *    }
+ *
+ * Adding and removing events is pretty much handled by the `JSBindingNP` class.
+ * A concrete binding class only needs to register the event and set a callback
+ * on a relevant implementation callback handler.  The callback should then do
+ * all arguments marshalling and call `JSBindingNP::notifyListeners()` method.
+ *
+ *    JS_BINDING_NP_BEGIN(ExampleBindingNP);
+ *    // ...
+ *    ADD_EVENT(onbaz);
+ *    impl->onbaz(
+ *        boost::bind(&ExampleBindingNP::onbaz, this));
+ *    // ...
+ *
+ *    void ExampleBindingNP::onbaz()
+ *    {
+ *        notifyListeners("onbaz", std::vector<NPVariant>());
+ *    }
+ */
+
+<0> To be used from JavaScript like this:
+
+broadcastObj = document.getElementById('someId');
+broadcastObj.addEventListener("NetworkConnectivityStateChange",
+function(state, error) { /* console.log("state = "+state); */ });
+
+The state argument is an integer enumeration with 0 standing for "disconnected" and 1 standing for "connected".
+
+
+<1> so "binding" dir has sources for each interface bindings such as channel and videobroadcast.
+
+// a/Vanadium/Vanadium.W3CEngine/src/plugins/broadcast/bindings/VideoBroadcastBindingNP.h, cpp
+// 
+// class VideoBroadcast is ABC and then concrete impl classes:
+//
+// /broadcast/production/
+// class ProductionVideoBroadcast : public VideoBroadcast,
+//
+// /broadcast/fake/
+// class ZINC_LOCAL FakeBroadcast : virtual public Broadcast   note: why virtual?
+//
+
+class VideoBroadcastBindingNP : public JSBindingNP
+{
+    boost::shared_ptr<VideoBroadcast> vb;
+}
+
+note: register its handler with vb "impl" class. that is event 'down' path
+
+VideoBroadcastBindingNP::VideoBroadcastBindingNP()
+{
+    ADD_EVENT(onNetworkConnectivityStateChange);
+    vb->onNetworkConnectivityStateChange(
+        boost::bind(&VideoBroadcastBindingNP::onNetworkConnectivityStateChange,
+                    this, _1));
+}
+
+note: forward 'event' up to the chain.
+
+void VideoBroadcastBindingNP::onNetworkConnectivityStateChange(
+    NetworkConnectivityState::Enum state)
+{
+    std::vector<NPVariant> args(1);
+    args[0] = wrap(state, plugin());
+
+    notifyListeners("onNetworkConnectivityStateChange", args);
+}
+
+
+<2> save a handler from "binding" class
+
+// a/Vanadium/Vanadium.W3CEngine/src/plugins/broadcast/production/ProductionVideoBroadcast.cpp 
+
+void ProductionVideoBroadcast::onNetworkConnectivityStateChange(
+    boost::function<void(NetworkConnectivityState::Enum)> handler)
+{
+    onNetworkConnectivityStateChangeHandler = handler;
+}
+
+// from NM?
+// a/Vanadium/Vanadium.W3CEngine/src/plugins/broadcast/production/ProductionVideoBroadcast.cpp 
+// 
+void ProductionVideoBroadcast::StateChanged(
+    const NS_NEON_SYSTEM::NM_STATE::Enum state)
+{
+    NetworkConnectivityState::Enum const targetState =
+        state == NS_NEON_SYSTEM::NM_STATE::connected
+        ? NetworkConnectivityState::connected
+        : NetworkConnectivityState::disconnected;
+
+    emitNetworkConnectivityStateChange(targetState);
+}
+
+void ProductionVideoBroadcast::emitNetworkConnectivityStateChange(
+    NetworkConnectivityState::Enum state)
+{
+    if (onNetworkConnectivityStateChangeHandler)
+    {
+        try
+        {
+            onNetworkConnectivityStateChangeHandler(state);
+        }
+        catch (...)
+        {
+            VANADIUM_WARN("Executing network connectivity state change handler failed");
+        }
+    }
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_103* stack: vanadium: remote debug
+
+https://wiki.youview.co.uk/display/YVDP/Debugging?src=search
+
+
+={============================================================================
+*kt_dev_uv_stack_150* stack: network
 
 The dbus log when plug out and then plug in a cable
 
@@ -1295,9 +1485,9 @@ Feb 17 14:33:56 syslog[785]: <info> Trying to start the supplicant...
 
 
 ={============================================================================
-*kt_dev_uv_stack_103* stack: dbus
+*kt_dev_uv_stack_200* stack: dbus
 
-To get the list of active bus names. This is script.
+To get the list of active bus names. This is script in box: opt/zinc/devel/bin/lsdbus
 
 $lsdbus
 
@@ -1380,15 +1570,8 @@ LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/
 ={============================================================================
 *kt_dev_uv_wiki_001* dbus-monitor
 
-{lsdbus}
-#cat /opt/zinc/devel/bin/lsdbus
-
-
 dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.ListNames
 dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
-
-{dbus-monitor}
-
 
 {dbus-spy}
 https://wiki.youview.co.uk/display/YVDP/How+to+inspect+MediaRouter+activity
@@ -1397,12 +1580,6 @@ This is a python script and run on the box.
 MediaRouter Dbus Spy is a tool that prints all the MediaRouter dbus communications in a more
 readable format than the raw output. It also reports when a new application is launched or killed
 and any MediaRouter crash.
-
-
-{dbus-lsdebug}
-There are many tools under box:/opt/zinc/devel/bin/ and lsdbus is one of them and is a script.
-
-https://wiki.youview.co.uk/display/canvas/How+to+Introspect+DBus+from+the+Command+Line
 
 
 ={============================================================================
@@ -1937,6 +2114,70 @@ This matches to:
 
 dbus-send  --session --type=method_call --print-reply --dest='Zinc.ContentAcquisition' \
  /Zinc org.freedesktop.DBus.Introspectable.Introspect
+
+
+02.18
+======
+1. https://jira.youview.co.uk/browse/DEVARCH-7941
+
+Shows the requirement. The points to note:
+
+1. about handling errors that happen during playback and not during tuning. If does when tuning,
+kill CRB application.
+
+From OIPF-DAE:
+
+LAN connectivity problem (results in a YVM102 message being shown by the YouView UI) 	Presenting
+Connecting 	PlayStateChange (playstate 1, errorState 9 - insufficient bandwidth)
+
+LAN connectivity problem
+
+This one is quite easy and should just consist in making ProductionVideoBroadcast listen to
+Neon.Client.API / NetworkStatusChange.  The UI might need to be modified to show only a notification
+instead of showing a dialogue in case the CRB app is running (TBC), and usage reporting need to be
+preserved if there is any.
+
+note: Given there is "LAN connectivity problem restored:", the above includes no connection and
+timed-out one?
+
+On demand UI req:
+https://wiki.youview.co.uk/display/UXDWIP/FR+12+-+On+Demand+Playback
+
+From CANTST-15347:
+Test description:
+1. Launch a piece of content from BBC application (tested with iPlayer,and iPlayer from CRB)
+
+Actual result:
+note: 4. When the app freezes and must be closed and restarted.
+
+NB in all the above cases the YV box reports the loss of internet connection (YVM-102) when the
+cable is pulled from the back of the box.
+
+The scenarios in all cases are the same whether it is the ethernet or the WAN being disconnected.
+
+<test-result>
+The version used:
+Humax DTR-T1000 T1000 H21.7.30
+
+The version reported:
+Box: Humax T1000 PRK
+CDS: H20.9.0
+Environment: Live
+
+The observation:
+
+1. run iplayer 
+2. run one of contents
+3. plug out a cable
+4. YVM-102 is shown on tv.
+5. video still runs for some time and shows waiting icon 
+6. error 02100 from iplayer app saying "something are not working playing this program. ..."
+7. plug it back
+8. shows "youview is connected again" message on tv.
+9. able to navigate iplayer app which is 'different' from the reported.
+
+Tried 5 times and no problem. Tried once after a reboot, no problem.
+
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
