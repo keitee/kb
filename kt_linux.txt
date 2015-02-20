@@ -8,8 +8,8 @@ KT KB. Linux
 
 |kt_linux_bash_000| bash: reference
 |kt_linux_bash_001| bash: history and reverse search
-|kt_linux_bash_002| bash: variable <substitution>
-|kt_linux_bash_003| bash: bash: if and test command primaries <string-comparison>
+|kt_linux_bash_002| bash: variable <substitution> <expansion>
+|kt_linux_bash_003| bash: if and test command primaries <string-comparison> <[[>
 |kt_linux_bash_004| bash: globbing (wildcard)
 |kt_linux_bash_005| bash: quoting <grep>
 |kt_linux_bash_006| bash: args <shift-operator> <while>
@@ -34,11 +34,16 @@ KT KB. Linux
 |kt_linux_bash_025| bash: builtin: set
 |kt_linux_bash_026| bash: which one when there are script and exe binary in the same dir?
 |kt_linux_bash_027| bash: test on file using which command
+|kt_linux_bash_028| bash: bash: builtin: programmable completion
+|kt_linux_bash_029| bash: variable arithmetic
 
 |kt_linux_bash_100| bash: config: colour prompt
 |kt_linux_bash_101| bash: config: how to know shell nesting level
 
 |kt_linux_bash_200| bash: code: debug and printf
+|kt_linux_bash_201| bash: code: array from 0 and return 1 for success like c
+
+|kt_linux_bash_300| bash: faq: var# 
 
 |kt_linux_tool_001| md5sum
 |kt_linux_tool_002| cut
@@ -143,7 +148,7 @@ KT KB. Linux
 |kt_linux_core_106| process: virtual memory
 |kt_linux_core_107| process: group
 |kt_linux_core_108| process: deamon
-|kt_linux_core_109| process: execution
+|kt_linux_core_109| process: execution <exec-wrapper-example>
 
 |kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
@@ -412,7 +417,7 @@ echo "idx 1 = ${FRUIT[1]}"
 echo "idx 2 = ${FRUIT[2]}"
 
 echo "all = ${FRUIT[*]}"      # to reference all
-echo "all = ${FRUIT[@]}"      # same as above
+echo "all = ${FRUIT[@]}"      # same as above. note: this is to array'fy' from a long string.
 
 <example>
 farm_hosts=(web03 web04 web05 web06 web07)
@@ -556,8 +561,9 @@ $ echo ${STRING:6:5}
 avery
 
 
-If parameter is @, the result is length positional parameters beginning at offset. A negative offset
-is taken relative to one greater than the greatest positional parameter, so an offset of -1
+{expansion-on-arg}
+If parameter is @, the result is length positional parameters 'beginning' at offset. A negative
+offset is taken relative to one greater than the greatest positional parameter, so an offset of -1
 evaluates to the last positional parameter. It is an expansion error if length evaluates to a number
 less than zero.
 
@@ -669,7 +675,7 @@ arguments.
 <double>
 http://www.gnu.org/software/bash/manual/bash.html#Conditional-Constructs
 
-note: Use [] whenever you want your script to be portable across shells. Use [[]] if you want
+note: Use [] whenever you want your script to be 'portable' across shells. Use [[]] if you want
 conditional expressions not supported by [] and don't need to be portable.
 
 [[ is bash's improvement to the [ command. It has several enhancements that make it a better choice
@@ -709,30 +715,6 @@ Maybe you're okay if the user types y-anything. Got you covered:
 Keep in mind that it is a bash extension, so if you are writing sh-compatible scripts then you need
 to stick with [. Make sure you have the #!/bin/bash shebang line for your script if you use double
 brackets.
-
-<example>
-1. if loginscript is set(defined), run -f. 
-   if file exist then test return true so no fail() call.
-   if file not exist then test return false so run fail() call.
-2. if loginscript is not set, no run -f and test return true(0) so no fail() call.
-
-[[ -z "$loginscript" || -f "$loginscript" ]] ||
-    fail "Loginscript '$loginscript' doesn't exist."
-
-note: progress to next cond when only previous one is true. [[ cond || cond ]] || exec
-
-<example>
-To see if meet at least one of options.
-
-    [[ -n "$release" || -n "$zincdir" || -n "$jenkinshost" || -n "$jenkinsurl" ||
-       -n "$galliumurl" || -n "$localgallium" || -n "$platformconfigurl" ||
-       "$virtualinputdriver" -ne 0 || -n "$irdriver" || "$enabledbustcp" -ne 0 ||
-       "$directfbsrc" -ne 0 || "$killzincdaemons" -ne 0 || -n "$toolnames" ||
-       -n "$networkmanager" || -n "$loginscript" || -n "$startupscript" ||
-       "$forcefirsttime" -ne 0 || "$needsreboot" -ne 0 || "$vidmemcapture" -ne 0 ]] ||
-    {
-        fail "You must specify at least one of -[ZzjugcdeEtsknlbTfrv]."
-    }
 
 
 ={============================================================================
@@ -1054,14 +1036,6 @@ note: can use true only in the script but not command line.
 
 while [ true ] ; do ls -l; echo Wait 1 sec ; sleep 1; done
 
-note: The let command carries out arithmetic operations on variables.
-
-while [ $COUNT -gt 0 ]; do
-   echo Value of count is: $COUNT
-   let COUNT=COUNT-1
-done
-
-
 while [ "$1" != "" ]; do
   case $1 in
     -h | -help | --help)
@@ -1331,19 +1305,28 @@ note: must use bash and see how to pass args to function
 # BASH FUNCTIONS CAN BE DECLARED IN ANY ORDER
 
 function function_B {
-   echo Function B.
+  echo "{ fb"
+  echo Function B.
+  echo "} fb"
 }
 
 function function_A {
-   echo $1
+  echo "{ fa"
+  echo $1
+  echo "} fa"
 }
 
 function function_D {
-   echo Function D.
+  echo "{ fd"
+  echo Function D.
+  echo "} fd"
 }
 
-function function_C {
-   echo $1
+# function function_C {
+function_C () {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
 }
 
 # FUNCTION CALLS
@@ -1357,10 +1340,47 @@ function_C "Function C via pass"
 function_D 
 
 $ ./sbash.sh list 
+{ fa
 Function A via pass
+} fa
+{ fb
 Function B.
+} fb
+{ fc
 Function C via pass
+} fc
+{ fd
 Function D.
+} fd
+
+{syntax}
+
+function function_C {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
+}
+
+function_C () {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
+}
+
+note: this causes an error as:
+
+function_C {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
+}
+
+./sample.sh: line 23: function_C: command not found
+{ fc
+
+} fc
+./sample.sh: line 27: syntax error near unexpected token `}'
+./sample.sh: line 27: `}'
 
 
 ={============================================================================
@@ -1802,6 +1822,55 @@ command2 is executed if, and only if, command1 returns a non-zero(false) exit st
 
 The return status of AND and OR lists is the exit status of the last command executed in the list. 
 
+<example>
+1. if loginscript is set(defined), run -f. 
+   if file exist then test return true so no fail() call.
+   if file not exist then test return false so run fail() call.
+2. if loginscript is not set, no run -f and test return true(0) so no fail() call.
+
+[[ -z "$loginscript" || -f "$loginscript" ]] ||
+    fail "Loginscript '$loginscript' doesn't exist."
+
+note: progress to next cond when only previous one is true. [[ cond || cond ]] || exec
+
+<example>
+To see if meet at least one of options.
+
+    [[ -n "$release" || -n "$zincdir" || -n "$jenkinshost" || -n "$jenkinsurl" ||
+       -n "$galliumurl" || -n "$localgallium" || -n "$platformconfigurl" ||
+       "$virtualinputdriver" -ne 0 || -n "$irdriver" || "$enabledbustcp" -ne 0 ||
+       "$directfbsrc" -ne 0 || "$killzincdaemons" -ne 0 || -n "$toolnames" ||
+       -n "$networkmanager" || -n "$loginscript" || -n "$startupscript" ||
+       "$forcefirsttime" -ne 0 || "$needsreboot" -ne 0 || "$vidmemcapture" -ne 0 ]] ||
+    {
+        fail "You must specify at least one of -[ZzjugcdeEtsknlbTfrv]."
+    }
+
+<example>
+
+function x {
+  ...
+
+  [[ 
+    "$cacheOptionCorrectAtExpectedPosition" = 1 &&
+    "$cacheValueCorrectAtExpectedPosition" = 1 &&
+    "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
+    "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
+    "$jarOptionCorrectAtExpectedPosition" = "1" && 
+    "$jarValueCorrectAtExpectedPosition" = "1" && 
+    "$urlOptionCorrectAtExpectedPosition" = "1" && 
+    "$urlValueCorrectAtExpectedPosition" = "1" 
+  ]] 
+}
+
+From the debug output, shows only 4 since stops as soon as see flase. This may be confusing when
+debugging.
+
++ [[ 1 = 1 ]]
++ [[ 1 = 1 ]]
++ [[ 1 = 1 ]]
++ [[ 0 = 1 ]]
+
 
 ={============================================================================
 *kt_linux_bash_023* bash: debug
@@ -1888,6 +1957,107 @@ fi
 
 
 ={============================================================================
+*kt_linux_bash_028* bash: builtin: programmable completion
+
+https://www.gnu.org/software/bash/manual/html_node/Programmable-Completion-Builtins.html
+
+Three builtin commands are available to manipulate the programmable completion facilities: one to
+specify how the arguments to a particular command are to be completed, and two to modify the
+completion as it is happening.
+
+compgen
+
+compgen [option] [word]
+
+Generate possible completion matches for word according to the options, which may be any option
+accepted by the complete builtin with the exception of -p and -r, and write the matches to the
+standard output. 
+
+The matches will be generated in the same way as if the programmable completion code had generated
+them directly from a completion specification with the same flags. If word is specified, only those
+completions matching word will be displayed.
+
+The return value is true unless an invalid option is supplied, or no matches were generated.
+
+note: compgen is the same as complete command but limited. use to 'generate' matches.
+
+complete
+
+complete [-abcdefgjksuv] [-o comp-option] [-DE] [-A action] [-G globpat] [-W wordlist]
+    [-F function] [-C command] [-X filterpat]
+    [-P prefix] [-S suffix] name [name ¿]
+    complete -pr [-DE] [name ...
+
+-A action
+The action may be one of the following to generate a list of possible completions: 
+
+function    Names of shell functions.
+
+<example>
+#!/bin/bash
+# BASH FUNCTIONS CAN BE DECLARED IN ANY ORDER
+
+function func_B {
+  echo "{ fb"
+  echo Function B.
+  echo "} fb"
+}
+
+function func_A {
+  echo "{ fa"
+  echo $1
+  echo "} fa"
+}
+
+function func_D {
+  echo "{ fd"
+  echo Function D.
+  echo "} fd"
+}
+
+# function function_C {
+function_C () {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
+}
+
+## foreach test
+for test_fun in $(compgen -A function func_); do
+
+  echo -e -n "\n$test_fun ... "
+
+done
+
+
+func_D ... kpark@wll1p04345:$ ./sample.sh 
+
+func_A ... 
+func_B ... 
+func_D ... kpark@wll1p04345:$ 
+
+
+={============================================================================
+*kt_linux_bash_029* bash: variable arithmetic
+
+The both makes the same result.
+
+COUNT=10
+
+while [ $COUNT -gt 0 ]; do
+   echo Value of count is: $COUNT
+   let COUNT=COUNT-1
+done
+
+COUNT=10
+
+while [ $COUNT -gt 0 ]; do
+   echo Value of count is: $COUNT
+   COUNT=$(( $COUNT-1 ))
+done
+
+
+={============================================================================
 *kt_linux_bash_100* bash: config: colour prompt
 
 Uncomment the line that says force_color_prompt=yes then logout and back in in the .bashrc.
@@ -1919,6 +2089,64 @@ debug() {
     printf '\n\033[0;32m%s\n' "$*"
     tput sgr0
 }
+
+
+={============================================================================
+*kt_linux_bash_201* bash: code: array from 0 and return 1 for success like c
+
+Use array from index 0 and return 1 for success. Unlike a shell convention which use 0 for success.
+
+// return 1 (okay) when found a string in a array at the expected position. otherwise, return 0 (fail).
+
+function paramsContainStringAtPosition () {
+    local stringToSearchFor="$1"
+    local positionToExpectStringAt="$2"
+    local stringToSearch="${@:3}"
+    local stringToSearchAsArray=($stringToSearch)
+    local currentParamPos=0;
+    local currentSearchString
+        
+    for currentSearchString in "${stringToSearchAsArray[@]}"
+        do
+            if [ "$currentSearchString" == "$stringToSearchFor" ]; then
+                if [ "$positionToExpectStringAt" == "$currentParamPos" ]; then
+                    return 1;
+                fi
+            fi
+            currentParamPos=$(( $currentParamPos+1 ))
+        done
+    return 0
+}
+
+function x {
+
+   ... 
+   paramsContainStringAtPosition "$expected_url" 7 "$@"
+   urlValueCorrectAtExpectedPosition=$?
+
+   // note: here convert c style return to shell return by comararing "return from function = 1"
+   
+   [[
+     "$cacheOptionCorrectAtExpectedPosition" = 1 &&
+     "$cacheValueCorrectAtExpectedPosition" = 1 &&
+     "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
+     "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
+     "$jarOptionCorrectAtExpectedPosition" = "1" && 
+     "$jarValueCorrectAtExpectedPosition" = "1" && 
+     "$urlOptionCorrectAtExpectedPosition" = "1" && 
+     "$urlValueCorrectAtExpectedPosition" = "1" 
+   ]] 
+}
+
+
+={============================================================================
+*kt_linux_bash_300* bash: faq: var#
+
+The both shows the same result. What is this "${test_func#test*}" for?
+
+test_handler="${test_fun#test*}_handler"
+test_handler_two="${test_fun}_handler"
+echo ">> $test_handler, $test_handler_two"
 
 
 # ============================================================================
@@ -8956,12 +9184,33 @@ environment for the new program.
 This is to two things: parent is to run actual application given and child is to check if a parent
 is alive in a loop. If parent is died, do some action.
 
-shell:
-   exec "exec-then-cleanup-app applicaion-name args..."
+1. shell runs this line in a script. 
+note: this cmd comes from outside to specify the application to run.
 
-1. shell and exec-then-cleanup-app will have the same pid.
-2. After fork, child will set ppid via env and exec exec-then-cleanup-app. This time will do loop.
-3. After fork, parent will exec application with args.
+   exec $exec_wrapper "$cmd" args...
+   
+2. $exec_wrapper is an application, exec-then-cleanup-app, which do two things: 
+   @ call fork
+   @ call 'exec' to exec the given arg from $cmd and thst is parent becomes the actual application such as a browser.
+   @ child is alive in a loop while checking if parent is died. If so, do some action.
+
+   same pid starting from the shell which runs a script
+<------------------------------------------------->
+$cmd    run script      exec           fork: exec
+      <------------> <------------> <------------->
+                     shell    wrapper_app    application
+                  
+                                       diff pid
+                                    <------------->
+                                       fork:
+                                    <------------->
+                                             child
+
+4. After fork, child will set ppid via env and exec exec-then-cleanup-app. This time will do loop.
+5. After fork, parent will exec application with args.
+
+note: see how exec used to replace application to run. the shell exec replace itself with given
+application.
 
 // exec-then-cleanup-app
 

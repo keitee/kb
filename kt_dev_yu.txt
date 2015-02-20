@@ -28,6 +28,7 @@
 |kt_dev_uv_stack_101| stack: vanadium: runBrowser
 |kt_dev_uv_stack_102| stack: vanadium: binding
 |kt_dev_uv_stack_103| stack: vanadium: remote debug
+|kt_dev_uv_stack_104| stack: LSR (local storage repository)
 
 |kt_dev_uv_stack_150| stack: network
 |kt_dev_uv_stack_200| stack: dbus
@@ -40,6 +41,7 @@
 
 |kt_dev_uv_task_001| task:01: nexusMgr
 |kt_dev_uv_task_002| task:02: DEVARCH-8869
+|kt_dev_uv_task_003| task:02: DEVARCH-7508
 
 
 # ============================================================================
@@ -1369,6 +1371,12 @@ https://wiki.youview.co.uk/display/YVDP/Debugging?src=search
 
 
 ={============================================================================
+*kt_dev_uv_stack_104* stack: LSR (local storage repository)
+
+./Copper/Copper.System.DBusClient/src/lsr-config.c
+
+
+={============================================================================
 *kt_dev_uv_stack_150* stack: network
 
 The dbus log when plug out and then plug in a cable
@@ -2201,6 +2209,69 @@ Tried 5 times and no problem. Tried once after a reboot, no problem.
 ======
 Assigned back to the reporter to re-test.
 Started on the new one, #7508, which is about runBrowser-test.sh
+
+
+={============================================================================
+*kt_dev_uv_task_003* task:02: DEVARCH-7508
+
+02.20
+======
+kpark@wll1p04345:/data/builds/master/humax.1000/zinc-install-root/release/humax-dtr_t1000/opt/zinc-trunk$ find . -name runBrowser.sh
+./bin/runBrowser.sh
+kpark@wll1p04345:/data/builds/master/humax.1000/zinc-install-root/release/humax-dtr_t1000/opt/zinc-trunk$ find . -name runBrowser-test.sh
+./tests/vanadium-w3c-engine/test/runBrowser-test.sh
+
+[root@HUMAX zinc-trunk]# find . -name runBrowser* ./bin/runBrowser.sh
+./devel/bin/runBrowserStandalone.sh
+./tests/vanadium-w3c-engine/test/runBrowser-test.sh
+[root@HUMAX zinc-trunk]# 
+
+
+From runBrowser-test.sh log:
+
++ paramsContainStringAtPosition 0 3 -cache /tmp/client-cache -cache-size 50000000 -jar /tmp/cookies.sqlite -url 'http://youview.tv/test-player?launch_context.ui.youview.com=portal&some.test.param=some.test.param.value&test.param.spaces=param%20value%20with%20spaces' -src '
+      http://youview.tv http://broadcast.example.com
+      http://www.bbc.co.uk http://cdn.example.net:8080
+    '
++ local stringToSearchFor=0
++ local positionToExpectStringAt=3
++ local 'stringToSearch=-cache /tmp/client-cache -cache-size 50000000 -jar /tmp/cookies.sqlite -url http://youview.tv/test-player?launch_context.ui.youview.com=portal&some.test.param=some.test.param.value&test.param.spaces=param%20value%20with%20spaces -src 
+      http://youview.tv http://broadcast.example.com
+      http://www.bbc.co.uk http://cdn.example.net:8080
+    '
+So expect to see 0 but 50000000. Why?
+
+From runBrowser.sh
+
+# Decide whether to turn on Qt's network cache + local storage.
+cacheSize="$(lsr-config --int platform.settings.html-app-cache-size || echo 0)"
+
+This cache size comes from external but the test script uses the 'fixed' value. mismatch.
+
+that_generates_url_handler() {
+
+    paramsContainStringAtPosition "0" 3 "$@"
+    cacheSizeValueCorrectAtExpectedPosition=$?
+}
+
+
+related https://jira.youview.co.uk/browse/DEVARCH-7362 since about cache size.
+
+The solution:
+
+kpark@wll1p04345:~/jira/feb-7508$ diff runBrowser-test-old.sh runBrowser-test.sh 
+--- runBrowser-test-old.sh	2015-02-20 14:23:37.978416274 +0000
++++ runBrowser-test.sh	2015-02-20 14:21:59.318417412 +0000
+@@ -173,7 +173,8 @@ test.param.spaces=param%20value%20with%2
+     paramsContainStringAtPosition "-cache-size" 2 "$@"
+     cacheSizeOptionCorrectAtExpectedPosition=$?
+ 
+-    paramsContainStringAtPosition "0" 3 "$@"
++    # paramsContainStringAtPosition "0" 3 "$@"
++    paramsContainStringAtPosition "$(lsr-config --int platform.settings.html-app-cache-size || echo 0)" 3 "$@"
+     cacheSizeValueCorrectAtExpectedPosition=$?
+ 
+     paramsContainStringAtPosition "-jar" 4 "$@"
 
 
 ==============================================================================
