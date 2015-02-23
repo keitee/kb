@@ -43,6 +43,7 @@ KT KB. Linux
 
 |kt_linux_bash_200| bash: code: debug and printf
 |kt_linux_bash_201| bash: code: array from 0 and return 1 for success like c
+|kt_linux_bash_202| bash: code: recursion test
 
 |kt_linux_bash_300| bash: faq: var# 
 
@@ -2142,6 +2143,172 @@ function x {
      "$urlValueCorrectAtExpectedPosition" = "1" 
    ]] 
 }
+
+
+={============================================================================
+*kt_linux_bash_202* bash: code: recursion test
+
+The same script file is used to define tests and routines to check result using exec trick and
+communication between parent process that runs the the script and the subshell that runs each test
+case.
+
+test.sh
+
+test_xxx () {
+  set local vars
+
+  run.sh args...        
+  " run.sh to exec the subprocess with the given cmd so the subprocess will run the cmd.
+
+}
+
+test_xxx_handler() {
+
+}
+
+if [ -z "$test_handler" ]; then
+   for each test case
+
+   " create a subprocess
+   " run a test case that runs the other script and exec call eventually.
+   (
+    set env vars to pass to subprocess.
+
+    " note: use env var to pass data to a subprocess
+    " note: use a single line to run
+
+    cmd = test.sh \                       " set cmd as the same script so 
+    test_handler="${test_xxx}_handler" \
+    test_xxx
+   )
+   done
+
+else
+
+  xxx_handler     " that checks the results
+
+fi
+
+So the parent process runs the test.sh and drives the whole test. For each test, set env vars and
+create a subprocess that exec and run the given cmd. By having cmd as the same test.sh and the
+test_handler env var set, subprocess runs the same script and env var set. So run the different path
+and run check call in this case. So looks like a recursion or callback.
+
+<code>
+
+test_that_generates_url() {
+
+    local app_dir="$scratch_dir/app"
+    createApp "$app_dir"
+
+    runBrowser.sh --app "$app_dir" --data "$default_app_data_dir" \
+        --app-launch-parameters \
+        "launch_context.ui.youview.com" "portal" \
+        "some.test.param" "some.test.param.value" \
+        "test.param.spaces" "param value with spaces"
+}
+
+
+that_generates_url_handler() {
+
+    echo "that_generates_url_handler() - Got args: '$@'"
+
+    local expected_url="http://youview.tv/test-player?\
+launch_context.ui.youview.com=portal&some.test.param=some.test.param.value&\
+test.param.spaces=param%20value%20with%20spaces"
+
+    paramsContainStringAtPosition "-cache" 0 "$@"
+    cacheOptionCorrectAtExpectedPosition=$?
+
+    paramsContainStringAtPosition "/tmp/client-cache" 1 "$@"
+    cacheValueCorrectAtExpectedPosition=$?
+
+    paramsContainStringAtPosition "-cache-size" 2 "$@"
+    cacheSizeOptionCorrectAtExpectedPosition=$?
+
+    paramsContainStringAtPosition "0" 3 "$@"
+    cacheSizeValueCorrectAtExpectedPosition=$?
+
+    paramsContainStringAtPosition "-jar" 4 "$@"
+    jarOptionCorrectAtExpectedPosition=$?
+
+    paramsContainStringAtPosition "$default_cookie_jar_location" 5 "$@"
+    jarValueCorrectAtExpectedPosition=$?
+
+    paramsContainStringAtPosition "-url" 6 "$@"
+    urlOptionCorrectAtExpectedPosition=$?
+
+    paramsContainStringAtPosition "$expected_url" 7 "$@"
+    urlValueCorrectAtExpectedPosition=$?
+
+    [[ 
+      "$cacheOptionCorrectAtExpectedPosition" = 1 &&
+      "$cacheValueCorrectAtExpectedPosition" = 1 &&
+      "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
+      "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
+      "$jarOptionCorrectAtExpectedPosition" = "1" && 
+      "$jarValueCorrectAtExpectedPosition" = "1" && 
+      "$urlOptionCorrectAtExpectedPosition" = "1" && 
+      "$urlValueCorrectAtExpectedPosition" = "1" 
+    ]] 
+}
+
+
+# In test configuration runBrowser.sh will not actually launch the browser but
+# will instead call back into this test script recursively.  We then check the
+# environment in the test to see if the browser would have been launched with
+# the appropriate environment and parameters.  This is done with pairs of
+# functions, one called test_xxx and the other xxx_handler.  test_x functions
+# are tests and the xxx_handler functions are what will be run when we
+# runBrowser.sh calls us back.
+#
+# The recursion and the callback are communicated through the environment
+# variable $test_handler.
+if [ -z "$test_handler" ]; then
+
+        failures=0
+        successes=0
+
+        ## foreach test
+        for test_fun in $(compgen -A function test_); do
+
+            echo -e -n "\n$test_fun ... "
+
+            setup
+            (
+
+                RUN_BROWSER_CMD="$this_script" \
+                RUN_BROWSER_DATA_DIR="${datadir:-}" \
+                GST_INSPECT_CMD="touch $scratch_dir/gst-inspect" \
+                test_handler="${test_fun#test_*}_handler" \
+                $test_fun
+
+            ) >> $logfile 2>&1
+
+            status=$?
+            if [ $status -eq 0 ]; then
+                echo "OK"
+                ((++successes))
+            else
+                echo "FAILURE"
+                ((++failures))
+            fi
+
+            [[ "$1" == '-v' || $status -ne 0 ]] && { cat $logfile; echo; }
+            teardown &> /dev/null
+
+        done
+
+        printf "$invoked_as complete. %i PASSES %i FAILURES\n" \
+            $successes $failures
+
+        exit $failures
+
+else
+
+        $test_handler "$@"
+
+fi
 
 
 ={============================================================================
