@@ -348,7 +348,7 @@ ZINC_BUILD_CFG=debian-7-x86_64
 ZINC_INSTALL_ROOT=/data/builds/master/huawei.370/zinc-install-root
 ZB_CFG=huawei.370 ~
 ZB_BUILD_DIR=/data/builds ~
-ZB_BRANCH=master 
+ZB_BRANCH=master ~
 ZINC_USER_HOST_PREFIX=/opt/zinc-trunk
 ZINC_HOST_CFG=huawei-bcm7409
 ZINC_3PS_HOST_PREFIX=/opt/zinc-trunk/oss
@@ -363,19 +363,22 @@ note: the build system picks up any dirs in the tree and try to build those.
 note: source is copied to /data/builds/.../DEVARCH
 1. ~/source/DEVARCH
 
-2. But the makefile uses sources from the copied sources as
-
-`test -f 'src/exec-then-cleanup-app.c' || echo
-'/data/builds/master/huawei.370/DEVARCH/Polonium/Polonium.NexusRelease/'`src/exec-then-cleanup-app.c
-/data/builds/master/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect
-
-3. The build root has only output files such as o and a:
+2. The build root has only output files such as o and a:
 can run make here:
-/data/builds/master/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusRelease
+
+/data/builds/<ZB_BRANCH> /huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect/Makefile
+/data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect/Makefile
+
+3. But the makefile uses sources from the copied sources as
+
+/data/builds/<ZB_BRANCH> /huawei.370/DEVARCH/Polonium/Polonium.NexusInspect/src/nexus-inspect.c
+/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Polonium/Polonium.NexusInspect/src/nexus-inspect.c
+
+-c -o nexus_inspect-nexus-inspect.o `test -f 'src/nexus-inspect.c' || echo
+'/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Polonium/Polonium.NexusInspect/'`src/nexus-inspect.c
 
 
-/data/builds/master/huawei.370/zinc-install-root/release
-huawei-bcm7409/opt/
+/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/
 `-- zinc-trunk
     |-- bin
     |-- devel
@@ -484,22 +487,64 @@ zb-virtual-slave zb-make
 zb-make:
 {
    source $where_am_i/zb/zb-load-config.sh
+   {
+      note: pick up brach name or force it
+
+      # Branch of git repository for which build is to be performed
+      if [ -n "${ZB_FORCE_BRANCH}" ]; then
+          echo "Overriding branch to build to: ${ZB_FORCE_BRANCH}"
+          branch=$ZB_FORCE_BRANCH
+          # TODO: Validate that the branch exists.
+      else
+          if [ -f "$ET/.git/rebase-merge/head-name" ]; then
+              # We are in the middle of rebasing
+              branch="$(cut -b 12- < "$ET/.git/rebase-merge/head-name")"
+          else
+              branch=$(GIT_DIR=$ET/.git git symbolic-ref HEAD | cut -b 12- )
+          fi
+      fi
+
+      ++++ GIT_DIR=/home/kpark/source/DEVARCH//.git
+      ++++ git config zb.huawei.install-prefix
+      +++ var=/opt/zinc-trunk
+      ++ ZINC_USER_HOST_PREFIX=/opt/zinc-trunk
+
+      export ZB_BRANCH=$branch
+      ++ ZB_BRANCH=DEVARCH-8092
+
+      if
+          slave_dir=$ZB_SLAVE_DIR/$ZB_CFG
+      else
+          slave_dir=$ZB_BUILD_DIR/$branch/$ZB_CFG
+      fi
+
+      ++ slave_dir=/data/builds/DEVARCH-8092/huawei.370
+   }
 
    ZB_HOST_CONFIG=host 
    cd $ET
    + cd /home/kpark/source/DEVARCH
 
+   ++ git rev-parse HEAD
+   + commit_sha=fa4948db164a29775e0804795047ebefdce29e5d
+
+   + git update-ref -m zb-make refs/heads/zb/DEVARCH-8092 7887ca28ed3a1480959ce9f5d1804405b3b5bfdc
+   + branch=zb/DEVARCH-8092
+
+   note: one time and can clone again by deleting a makefile?
+
+   # Create repo
+   if [ ! -e "$slave_dir/DEVARCH/Zinc/Zinc.Build/Makefile" ]; then
+       echo "Creating new build slave - \
+         $branch because $slave_dir/DEVARCH/Zinc/Zinc.Build/Makefile doesn't exist"
+       rm -Rf "$slave_dir/DEVARCH/"
+       mkdir -p "$slave_dir/DEVARCH"
+       cd "$slave_dir"
+       git clone -s --depth=1 --branch "$branch" "$ET" "$slave_dir/DEVARCH"
+   fi
+
    build_cmd=${ZB_BUILD_CMD-"make"}
    + build_cmd=make
-
-   <clone>
-   /data/builds/master/pc/DEVARCH
-   + cd /data/builds/master/pc/DEVARCH
-   git fetch origin "$branch"
-   + git fetch origin zb/master
-
-   cd "$slave_dir/DEVARCH/Zinc/Zinc.Build"
-   + cd /data/builds/master/pc/DEVARCH/Zinc/Zinc.Build
 
    <setvars>
    {
@@ -521,8 +566,11 @@ zb-make:
       -rw-r--r-- 1 kpark kpark 1930 Jan  7 15:55 setvars-humax-dtr_t2100.sh
       -rw-r--r-- 1 kpark kpark 2177 Jan  7 15:55 setvars-humax-dtr_t4000.sh
       {
-         note: this is for host tools
+         note: this is for host tools and cwd.
+
+         <setvars-common>
          ++ source ../../Zinc/Zinc.Build/setvars-common.sh
+         +++ where_am_i=/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Zinc/Zinc.Build
          {
             {
             if [[ "${ZINC_HOST_CFG}" != "${ZINC_BUILD_CFG}" ]]
@@ -532,11 +580,12 @@ zb-make:
                echo "Cross compiling. Host cfg: '${ZINC_HOST_CFG}' Build cfg: '${ZINC_BUILD_CFG}'"
             }
 
-           +++ ZINC_SRC_ROOT=/data/builds/master/pc/DEVARCH
-           +++ ZINC_BUILD_ROOT=/data/builds/master/pc/zinc-build-root
+           +++ ZINC_SRC_ROOT=/data/builds/DEVARCH-8092/huawei.370/DEVARCH
+           +++ ZINC_BUILD_ROOT=/data/builds/DEVARCH-8092/huawei.370/zinc-build-root
+           +++ ZINC_INSTALL_ROOT=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root
 
-           export ZINC_BUILD_DIR="${ZINC_BUILD_ROOT}/${ZINC_BUILD_TYPE}-${ZINC_HOST_CFG}"
-           +++ ZINC_BUILD_DIR=/data/builds/master/pc/zinc-build-root/debug-debian-7-x86_64
+
+           +++ ZINC_BUILD_DIR=/data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-debian-7-x86_64
 
            # CXXFLAGS
            if [[ "${ZINC_BUILD_TYPE}" == "debug" ]]
@@ -554,6 +603,24 @@ zb-make:
            +++ CFLAGS='-g -O0 -pipe '
 
            +++ PKG_CONFIG=/data/builds/master/pc/zinc-install-root/debug/debian-7-x86_64/oss/bin/pkg-config
+
+           # N.B. We are setting -rpath-link here, but DO NOT use this to set -rpath.
+           # We should leave libtool to deal with -rpath. Setting it here leads to test executables
+           # linking against the old (already installed) libraries.
+           #
+           
+           LDFLAGS="-L${ZINC_DESTDIR}${ZINC_HOST_PREFIX}/lib
+           -L${ZINC_DESTDIR}${ZINC_3PS_HOST_PREFIX}/lib -Wl,--as-needed
+           -Wl,-rpath-link,${ZINC_DESTDIR}${ZINC_HOST_PREFIX}/lib
+           -Wl,-rpath-link,${ZINC_DESTDIR}${ZINC_3PS_HOST_PREFIX}/lib"
+           
+           +++
+           LDFLAGS='-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/debian-7-x86_64/lib
+           -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/debian-7-x86_64/oss/lib
+           -Wl,--as-needed
+           -Wl,-rpath-link,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/debian-7-x86_64/lib
+        -Wl,-rpath-link,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/debian-7-x86_64/oss/lib'
+
          }
       }
 
@@ -598,9 +665,10 @@ zb-make:
    ) && exit_code=0 || exit_code=1 # Don't want to exit on failure
 
    + unset DBUS_SESSION_BUS_ADDRESS
-   + set -o pipefail
-}
+   + set -o pipefai
+l
 
++ make buildtools
 + make
 + sed -u 's|/data/builds/master/pc/DEVARCH|/home/kpark/source/DEVARCH|'
  sed -u "s|$ZINC_SRC_ROOT|$ET|" >&2 
@@ -610,44 +678,178 @@ zb-make:
 make[1]: Entering directory `/home/kpark/source/DEVARCH/Zinc/Zinc.Build'
 make[1]: Leaving directory `/home/kpark/source/DEVARCH/Zinc/Zinc.Build'
 
-/data/builds/master/pc/DEVARCH/Zinc/Zinc.Build/Makefile
-
-+++ Source: /home/kpark/source/DEVARCH +++
-+++ Host build dir: /data/builds/master/pc/zinc-build-root/debug-debian-7-x86_64 +++
-+++ Build log dir: /data/builds/master/pc/zinc-build-root/debug-debian-7-x86_64/logs +++
-+++ Install location: /data/builds/master/pc/zinc-install-root/debug/debian-7-x86_64 +++
-+++ debug build +++
++++ Source: /home/kpark/source/DEVARCH/ +++
++++ Host build dir: /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409 +++
++++ Build log dir: /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/logs +++
++++ Install location: /data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk +++
++++ release build +++
 +++ Building Zinc/Zinc.3rdPartyStack +++
 
-note: object files in /data/builds/master/pc/zinc-build-root/debug-debian-7-x86_64/Zinc/*
-touch /data/builds/master/pc/zinc-build-root/debug-debian-7-x86_64/Zinc/Zinc.3rdPartyStack.built
+[gmock] libtool: link: (cd "lib/.libs" && rm -f "libgtest_main.so.0" && ln -s "libgtest_main.so.0.0.0" "libgtest_main.so.0")
 
-+++ Finished Zinc/Zinc.3rdPartyStack +++
-+++ Building Zinc/Zinc.DBus-C++ +++
-+++ Building Zinc/Zinc.Common +++
-+++ Building Zinc/Zinc.Tools.BindingGenerator +++
-+++ Building Polonium/Polonium.GSTTSPacer +++
+note: for vanadium
 
-/bin/bash ./libtool  --tag=CXX   --mode=compile g++ -DHAVE_CONFIG_H -I.
--I/home/kpark/source/DEVARCH/Zinc/Zinc.DBus-C++
--I/data/builds/master/pc/zinc-install-root/debug/debian-7-x86_64/oss/include/dbus-1.0
--I/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/oss/lib/dbus-1.0/include
--I/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/oss/include
--I/data/builds/_virtual_/pc/DEVARCH/Zinc/Zinc.DBus-C++/include -I./include
--I/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/include  -isystem
-/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/oss/include  -D_GLIBCXX_DEBUG
--fstack-protector-all   -fvisibility-inlines-hidden -fvisibility=hidden -g -O0 -pipe -pthread
--march=core2 -Wall -Wextra -Werror=address -Werror=array-bounds -Werror=c++0x-compat
--Werror=char-subscripts -Werror=comment -Werror=enum-compare -Werror=format -Werror=missing-braces
--Werror=nonnull -Werror=parentheses -Werror=pointer-sign -Werror=return-type -Werror=sequence-point
--Werror=strict-overflow=1 -Werror=trigraphs -Werror=unknown-pragmas -Werror=unused-function
--Werror=unused-label -Werror=unused-value -Werror=volatile-register-var -fdiagnostics-show-option
--MT libdbus_c___1_la-dispatcher.lo -MD -MP -MF .deps/libdbus_c___1_la-dispatcher.Tpo -c -o
-libdbus_c___1_la-dispatcher.lo `test -f 'src/dispatcher.cpp' || echo
-'/data/builds/_virtual_/pc/DEVARCH/Zinc/Zinc.DBus-C++/'`src/dispatcher.cpp
++++ Building Vanadium/Vanadium.Common +++
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-BigData.xml doc/htmlfragments/interface-BigData.html --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/doc-interface.html.template
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-AnotherInterface.xml doc/htmlfragments/interface-AnotherInterface.html --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/doc-interface.html.template
+make[1]: Entering directory `/home/kpark/source/DEVARCH//Zinc/Zinc.Build'
+Generating configure files... may take a while.
+Found new dependencies; recursively calling docmakedepend. $*='/home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-Farm.xml'; $dependents_list='/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Lead/Lead.System.API/data/introspection-xml/enum-Animal.xml'
+mv -f .deps/Profiler.Tpo .deps/Profiler.Plo
+Found new dependencies; recursively calling docmakedepend. $*='/home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-ChannelService.xml'; $dependents_list='/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Lead/Lead.System.API/data/introspection-xml/struct-BroadcastData.xml /data/builds/DEVARCH-8092/huawei.370/DEVARCH/Lead/Lead.System.API/data/introspection-xml/struct-ChannelData.xml'
+Found new dependencies; recursively calling docmakedepend. $*='/home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-BroadcastService.xml'; $dependents_list='/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Lead/Lead.System.API/data/introspection-xml/struct-BroadcastData.xml'
+rm -rf /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Vanadium/Vanadium.Common
 
-touch /data/builds/master/pc/zinc-build-root/debug-debian-7-x86_64/Nickel/NickelOnScreenId.System.API.built
-+++ Finished Nickel/NickelOnScreenId.System.API +++
+
++++ Building Vanadium/Vanadium.Client.API +++
+make[1]: Entering directory `/home/kpark/source/DEVARCH//Zinc/Zinc.Build'
+make[2]: Leaving directory `/data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Lead/Lead.System.API'
+Generating configure files... may take a while.
+make[2]: Entering directory `/data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Lead/Lead.System.API'
+/bin/mkdir -p include src
+/bin/mkdir -p include/mock
+/bin/mkdir -p mock-python
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-AnotherInterface.xml src/AnotherInterface.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template 
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-BigData.xml src/BigData.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template 
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-BroadcastService.xml src/BroadcastService.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template '--extra-include="BroadcastData.h"'
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-ChannelService.xml src/ChannelService.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template '--extra-include="ChannelData.h" --extra-include="BroadcastData.h"'
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-ComplexTypes.xml src/ComplexTypes.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template '--extra-include="MediaRouter.h" --extra-include="ComplexStruct.h" --extra-include="AnotherInterface.h"'
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-EchoService.xml src/EchoService.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template 
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-Farm.xml src/Farm.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template '--extra-include="Animal.h"'
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-MediaRouter.xml src/MediaRouter.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template 
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-MediaRouterService.xml src/MediaRouterService.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template '--extra-include="MediaRouter.h"'
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-Properties.xml src/Properties.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template 
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/interface-TuningService.xml src/TuningService.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base.cpp.template 
+run_xml2cpp.sh /home/kpark/source/DEVARCH//Lead/Lead.System.API/data/introspection-xml/error-InvalidApplication.xml src/InvalidApplicationException.cpp --template=/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/share/zinc-system-api/templates/base-exception.cpp.template '--extra-include="lead-system-exceptions.h"' 
+mv -f .deps/acl-utils-test.Tpo .deps/acl-utils-test.Po
+rm -rf /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Vanadium/Vanadium.Client.API
+
+note: to search, use "Building\|NexusInspect" since logs are intermixed.
+
++++ Building Polonium/Polonium.NexusInspect +++
+
+mkdir -p /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect
+
+cd /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect
+&& /home/kpark/source/DEVARCH//Polonium/Polonium.NexusInspect/configure
+--prefix=/opt/zinc-trunk --build=x86_64-pc-linux-gnu --host=mipsel-linux
+--enable-shared --disable-static
+
+make -C /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect
+
+cd /home/kpark/source/DEVARCH//Polonium/Polonium.NexusInspect && /bin/bash
+/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Polonium/Polonium.NexusInspect/missing
+--run automake-1.11 --foreign
+
+make[2]: Entering directory `/data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect'
+
+mipsel-linux-gcc -DPACKAGE_NAME=\"nexus-inspect\"
+-DPACKAGE_TARNAME=\"nexus-inspect\" -DPACKAGE_VERSION=\"0.1\"
+-DPACKAGE_STRING=\"nexus-inspect\ 0.1\"
+-DPACKAGE_BUGREPORT=\"darren.garvey@youview.com\"
+-DPACKAGE_URL=\"http://www.youview.com\" -DPACKAGE=\"nexus-inspect\"
+-DVERSION=\"0.1\" -DSTDC_HEADERS=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1
+-DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+-DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 -DHAVE_DLFCN_H=1
+-DLT_OBJDIR=\".libs/\" -I.
+-I/home/kpark/source/DEVARCH//Polonium/Polonium.NexusInspect
+-I/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/include
+-isystem
+/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/include
+-I/opt/oem-staging/huawei-bcm7409/usr/include
+-I/opt/oem-staging/huawei-bcm7409/usr/local/include  -D_GNU_SOURCE=1  -fPIC
+-fvisibility=hidden -DVERSION=\"0.1\" -DPACKAGE=\"nexus-inspect\"
+-DPKG_BIN_DIR=\"/opt/zinc-trunk/bin\" -O3 -g -Wall -Wextra -std=c99
+-Werror=implicit-function-declaration -D_REENTRANT -pthread -DNEXUS_MODE_proxy
+-DPLATFORM=97409 -DNEXUS_PLATFORM=97409 -DLINUX -D_GNU_SOURCE=1 -DHAVE_RSRVD=1
+-DKBUILD_MODNAME=nexus -DPLATFORM=97409 -DNEXUS_PLATFORM=97409
+-DBCHP_CHIP=7420 -DBCHP_VER=BCHP_VER_C1 -DBSTD_CPU_ENDIAN=BSTD_ENDIAN_LITTLE
+-DBINT_REENTRANT_CONFIG=BINT_REENTRANT -DBMEM_REENTRANT_CONFIG=BMEM_REENTRANT
+-DNEXUS_BASE_OS_linuxkernel=1 -DNEXUS_PROFILE_OS_linuxkernel
+-DNEXUS_MODE_driver -DNEXUS_PLATFORM_7410_UMA_32b=1 -DNEXUS_IPLICENSING=1
+-DNEXUS_OTPMSP=1 -DNEXUS_USERCMD=1 -DNEXUS_HAS_KEYLADDER_SUPPORT=1
+-DNEXUS_KEYLADDER=1 -DNEXUS_SECUREACCESS=1 -DNEXUS_SECURERSA=1
+-DNEXUS_SECURITY_EXT_KEY_IV -DNEXUS_SECURITY_SC_VALUE -DNEXUS_FRONTEND_NIM
+-DNEXUS_AC3 -DNEXUS_CONFIG_IMAGE -DNEXUS_DDP -DNEXUS_HAS_PLATFORM
+-DNEXUS_HAS_CORE -DNEXUS_HAS_BASE -DNEXUS_HAS_I2C -DNEXUS_HAS_GPIO
+-DNEXUS_HAS_PWM -DNEXUS_HAS_LED -DNEXUS_HAS_IR_INPUT -DNEXUS_HAS_IR_BLASTER
+-DNEXUS_HAS_KEYPAD -DNEXUS_HAS_INPUT_CAPTURE -DNEXUS_HAS_UHF_INPUT
+-DNEXUS_HAS_RFM -DNEXUS_HAS_FRONTEND -DNEXUS_HAS_SPI -DNEXUS_HAS_SECURITY
+-DNEXUS_HAS_DMA -DNEXUS_HAS_TRANSPORT -DNEXUS_HAS_VIDEO_DECODER
+-DNEXUS_HAS_AUDIO -DNEXUS_HAS_SURFACE -DNEXUS_HAS_GRAPHICS2D
+-DNEXUS_HAS_PLAYBACK -DNEXUS_HAS_DISPLAY -DNEXUS_HAS_ASTM
+-DNEXUS_HAS_SYNC_CHANNEL -DNEXUS_HAS_HDMI_OUTPUT -DNEXUS_HAS_SMARTCARD
+-DNEXUS_HAS_SIMPLE_DECODER -DNEXUS_HAS_EEPROM -DNEXUS_HAS_SCART
+-DBADS_312X_VER=BCHP_VER_A0 -DBHAB_312X_VER=BCHP_VER_A0 -DBHDM_CEC_SUPPORT
+-DBHSM_AEGIS_SUPPORT -DBHSM_SC_VALUE -DBHSM_SECURE_PI_SUPPORT=1
+-DBHSM_SECURE_PI_SUPPORT_KEYLADDER=1 -DBHSM_SECURE_PI_SUPPORT_MISC=0
+-DBHSM_SECURE_PI_SUPPORT_OTPMSP=1 -DBSP_GENERIC -DBXVD_USE_CUSTOM_IMAGE
+-DB_HAS_AVI=1 -DB_HAS_RMFF=1 -DGRCPACKET_SUPPORT=1
+-DRAP_AACSBR_PASSTHRU_SUPPORT -DRAP_AACSBR_SUPPORT -DRAP_AC3ENC_SUPPORT
+-DRAP_AC3_PASSTHRU_SUPPORT -DRAP_AC3_SUPPORT -DRAP_DDP_PASSTHRU_SUPPORT
+-DRAP_DDP_SUPPORT -DRAP_DDP_TO_AC3_SUPPORT -DRAP_DRA_PASSTHRU_SUPPORT
+-DRAP_DSOLA_SUPPORT -DRAP_DTSBROADCAST_PASSTHRU_SUPPORT
+-DRAP_DTSHD_PASSTHRU_SUPPORT -DRAP_LPCMDVD_SUPPORT -DRAP_MPEG_PASSTHRU_SUPPORT
+-DRAP_MPEG_SUPPORT -DRAP_PCMWAV_SUPPORT -DRAP_PCM_SUPPORT
+-DRAP_REALAUDIOLBR_PASSTHRU_SUPPORT -DRAP_SRC_SUPPORT -DUNIFIED_ITB_SUPPORT
+-DDUAL_OUTPUT
+-DNDEBUG -O2 -pipe  -MT nexus_inspect-nexus-inspect.o -MD -MP -MF
+.deps/nexus_inspect-nexus-inspect.Tpo -c -o nexus_inspect-nexus-inspect.o
+`test -f 'src/nexus-inspect.c' || echo
+'/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Polonium/Polonium.NexusInspect/'`src/nexus-inspect.c
+
+libtool: link: mipsel-linux-gcc -fPIC -fvisibility=hidden -DVERSION=\"0.1\"
+-DPACKAGE=\"nexus-inspect\" -DPKG_BIN_DIR=\"/opt/zinc-trunk/bin\" -O3 -g -Wall
+-Wextra -std=c99 -Werror=implicit-function-declaration -D_REENTRANT -pthread
+-DNEXUS_MODE_proxy -DPLATFORM=97409 -DNEXUS_PLATFORM=97409 -DLINUX
+-D_GNU_SOURCE=1 -DHAVE_RSRVD=1 -DKBUILD_MODNAME=nexus -DPLATFORM=97409
+-DNEXUS_PLATFORM=97409 -DBCHP_CHIP=7420 -DBCHP_VER=BCHP_VER_C1
+-DBSTD_CPU_ENDIAN=BSTD_ENDIAN_LITTLE -DBINT_REENTRANT_CONFIG=BINT_REENTRANT
+-DBMEM_REENTRANT_CONFIG=BMEM_REENTRANT -DNEXUS_BASE_OS_linuxkernel=1
+-DNEXUS_PROFILE_OS_linuxkernel -DNEXUS_MODE_driver
+-DNEXUS_PLATFORM_7410_UMA_32b=1 -DNEXUS_IPLICENSING=1 -DNEXUS_OTPMSP=1
+-DNEXUS_USERCMD=1 -DNEXUS_HAS_KEYLADDER_SUPPORT=1 -DNEXUS_KEYLADDER=1
+-DNEXUS_SECUREACCESS=1 -DNEXUS_SECURERSA=1 -DNEXUS_SECURITY_EXT_KEY_IV
+-DNEXUS_SECURITY_SC_VALUE -DNEXUS_FRONTEND_NIM -DNEXUS_AC3
+-DNEXUS_CONFIG_IMAGE -DNEXUS_DDP -DNEXUS_HAS_PLATFORM -DNEXUS_HAS_CORE
+-DNEXUS_HAS_BASE -DNEXUS_HAS_I2C -DNEXUS_HAS_GPIO -DNEXUS_HAS_PWM
+-DNEXUS_HAS_LED -DNEXUS_HAS_IR_INPUT -DNEXUS_HAS_IR_BLASTER -DNEXUS_HAS_KEYPAD
+-DNEXUS_HAS_INPUT_CAPTURE -DNEXUS_HAS_UHF_INPUT -DNEXUS_HAS_RFM
+-DNEXUS_HAS_FRONTEND -DNEXUS_HAS_SPI -DNEXUS_HAS_SECURITY -DNEXUS_HAS_DMA
+-DNEXUS_HAS_TRANSPORT -DNEXUS_HAS_VIDEO_DECODER -DNEXUS_HAS_AUDIO
+-DNEXUS_HAS_SURFACE -DNEXUS_HAS_GRAPHICS2D -DNEXUS_HAS_PLAYBACK
+-DNEXUS_HAS_DISPLAY -DNEXUS_HAS_ASTM -DNEXUS_HAS_SYNC_CHANNEL
+-DNEXUS_HAS_HDMI_OUTPUT -DNEXUS_HAS_SMARTCARD -DNEXUS_HAS_SIMPLE_DECODER
+-DNEXUS_HAS_EEPROM -DNEXUS_HAS_SCART -DBADS_312X_VER=BCHP_VER_A0
+-DBHAB_312X_VER=BCHP_VER_A0 -DBHDM_CEC_SUPPORT -DBHSM_AEGIS_SUPPORT
+-DBHSM_SC_VALUE -DBHSM_SECURE_PI_SUPPORT=1
+-DBHSM_SECURE_PI_SUPPORT_KEYLADDER=1 -DBHSM_SECURE_PI_SUPPORT_MISC=0
+-DBHSM_SECURE_PI_SUPPORT_OTPMSP=1 -DBSP_GENERIC -DBXVD_USE_CUSTOM_IMAGE
+-DB_HAS_AVI=1 -DB_HAS_RMFF=1 -DGRCPACKET_SUPPORT=1
+-DRAP_AACSBR_PASSTHRU_SUPPORT -DRAP_AACSBR_SUPPORT -DRAP_AC3ENC_SUPPORT
+-DRAP_AC3_PASSTHRU_SUPPORT -DRAP_AC3_SUPPORT -DRAP_DDP_PASSTHRU_SUPPORT
+-DRAP_DDP_SUPPORT -DRAP_DDP_TO_AC3_SUPPORT -DRAP_DRA_PASSTHRU_SUPPORT
+-DRAP_DSOLA_SUPPORT -DRAP_DTSBROADCAST_PASSTHRU_SUPPORT
+-DRAP_DTSHD_PASSTHRU_SUPPORT -DRAP_LPCMDVD_SUPPORT -DRAP_MPEG_PASSTHRU_SUPPORT
+-DRAP_MPEG_SUPPORT -DRAP_PCMWAV_SUPPORT -DRAP_PCM_SUPPORT
+-DRAP_REALAUDIOLBR_PASSTHRU_SUPPORT -DRAP_SRC_SUPPORT -DUNIFIED_ITB_SUPPORT
+-DDUAL_OUTPUT
+-DNDEBUG -O2 -pipe -rdynamic -Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-o nexus-release nexus_release-nexus-release.o -Wl,-rpath -Wl,/usr/local/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-Wl,--as-needed
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
+-L/opt/oem-staging/huawei-bcm7409/usr/local/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/usr/local/lib
+-lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread -pthread
+
+/opt/oem-staging/huawei-bcm7409/usr/local/lib/libnexusMgr.so: undefined reference to `DirectFBSetOption'
+/opt/oem-staging/huawei-bcm7409/usr/local/lib/libnexusMgr.so: undefined reference to `DirectFBCreate'
+/opt/oem-staging/huawei-bcm7409/usr/local/lib/libnexusMgr.so: undefined reference to `DirectFBInit'
 
 
 ={============================================================================
@@ -1052,10 +1254,118 @@ application that uses that library?
 
 Investigated the system and found that applications uses the realname.
 
+/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/bin/pcmplaybackd
+
 pcmplaybackd:
-Shared library: [libnexusMgr.so]
+ 0x00000001 (NEEDED)                     Shared library: [libnexusMgr.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libdirectfb-1.4.so.15]
+ 0x00000001 (NEEDED)                     Shared library: [libfusion-1.4.so.15]
+ 0x00000001 (NEEDED)                     Shared library: [libdirect-1.4.so.15]
+ 0x00000001 (NEEDED)                     Shared library: [libinit.so]
+ 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
+ 0x00000001 (NEEDED)                     Shared library: [libz.so.1]
+ 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+ 0x0000000f (RPATH)                      Library rpath: [/usr/local/lib]
+ 0x0000001d (RUNPATH)                    Library runpath: [/usr/local/lib]
 
 So the easiest is to change makefile of libnexusMgr to use realname than soname.
+
+
+checking for MONGOOSE... mipsel-linux-gcc -DPACKAGE_NAME=\"polonium-pcmplayback\"
+-DPACKAGE_TARNAME=\"polonium-pcmplayback\" -DPACKAGE_VERSION=\"0.1\"
+-DPACKAGE_STRING=\"polonium-pcmplayback\ 0.1\"
+-DPACKAGE_BUGREPORT=\"joseph.artsimovich@youview.com\" -DPACKAGE_URL=\"\"
+-DPACKAGE=\"polonium-pcmplayback\" -DVERSION=\"0.1\" -DSTDC_HEADERS=1 -DHAVE_SYS_TYPES_H=1
+-DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+-DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 -DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\"
+-DPCMPLAYBACK_USE_BUFFER_SPACE_AVAILABILITY_CALLBACK=1 -DPCMPLAYBACK_START_STOP_BY_NEXUSMGR=0 -I.
+-I/home/kpark/source/DEVARCH//Polonium/Polonium.PCMPlayback  -DNEXUS_MODE_proxy -DPLATFORM=97409
+-DNEXUS_PLATFORM=97409 -DLINUX -D_GNU_SOURCE=1 -DHAVE_RSRVD=1 -DKBUILD_MODNAME=nexus
+-DPLATFORM=97409 -DNEXUS_PLATFORM=97409 -DBCHP_CHIP=7420 -DBCHP_VER=BCHP_VER_C1
+-DBSTD_CPU_ENDIAN=BSTD_ENDIAN_LITTLE -DBINT_REENTRANT_CONFIG=BINT_REENTRANT
+-DBMEM_REENTRANT_CONFIG=BMEM_REENTRANT -DNEXUS_BASE_OS_linuxkernel=1 -DNEXUS_PROFILE_OS_linuxkernel
+-DNEXUS_MODE_driver -DNEXUS_PLATFORM_7410_UMA_32b=1 -DNEXUS_IPLICENSING=1 -DNEXUS_OTPMSP=1
+-DNEXUS_USERCMD=1 -DNEXUS_HAS_KEYLADDER_SUPPORT=1 -DNEXUS_KEYLADDER=1 -DNEXUS_SECUREACCESS=1
+-DNEXUS_SECURERSA=1 -DNEXUS_SECURITY_EXT_KEY_IV -DNEXUS_SECURITY_SC_VALUE -DNEXUS_FRONTEND_NIM
+-DNEXUS_AC3 -DNEXUS_CONFIG_IMAGE -DNEXUS_DDP -DNEXUS_HAS_PLATFORM -DNEXUS_HAS_CORE -DNEXUS_HAS_BASE
+-DNEXUS_HAS_I2C -DNEXUS_HAS_GPIO -DNEXUS_HAS_PWM -DNEXUS_HAS_LED -DNEXUS_HAS_IR_INPUT
+-DNEXUS_HAS_IR_BLASTER -DNEXUS_HAS_KEYPAD -DNEXUS_HAS_INPUT_CAPTURE -DNEXUS_HAS_UHF_INPUT
+-DNEXUS_HAS_RFM -DNEXUS_HAS_FRONTEND -DNEXUS_HAS_SPI -DNEXUS_HAS_SECURITY -DNEXUS_HAS_DMA
+-DNEXUS_HAS_TRANSPORT -DNEXUS_HAS_VIDEO_DECODER -DNEXUS_HAS_AUDIO -DNEXUS_HAS_SURFACE
+-DNEXUS_HAS_GRAPHICS2D -DNEXUS_HAS_PLAYBACK -DNEXUS_HAS_DISPLAY -DNEXUS_HAS_ASTM
+-DNEXUS_HAS_SYNC_CHANNEL -DNEXUS_HAS_HDMI_OUTPUT -DNEXUS_HAS_SMARTCARD -DNEXUS_HAS_SIMPLE_DECODER
+-DNEXUS_HAS_EEPROM -DNEXUS_HAS_SCART -DBADS_312X_VER=BCHP_VER_A0 -DBHAB_312X_VER=BCHP_VER_A0
+-DBHDM_CEC_SUPPORT -DBHSM_AEGIS_SUPPORT -DBHSM_SC_VALUE -DBHSM_SECURE_PI_SUPPORT=1
+-DBHSM_SECURE_PI_SUPPORT_KEYLADDER=1 -DBHSM_SECURE_PI_SUPPORT_MISC=0
+-DBHSM_SECURE_PI_SUPPORT_OTPMSP=1 -DBSP_GENERIC -DBXVD_USE_CUSTOM_IMAGE -DB_HAS_AVI=1 -DB_HAS_RMFF=1
+-DGRCPACKET_SUPPORT=1 -DRAP_AACSBR_PASSTHRU_SUPPORT -DRAP_AACSBR_SUPPORT -DRAP_AC3ENC_SUPPORT
+-DRAP_AC3_PASSTHRU_SUPPORT -DRAP_AC3_SUPPORT -DRAP_DDP_PASSTHRU_SUPPORT -DRAP_DDP_SUPPORT
+-DRAP_DDP_TO_AC3_SUPPORT -DRAP_DRA_PASSTHRU_SUPPORT -DRAP_DSOLA_SUPPORT
+-DRAP_DTSBROADCAST_PASSTHRU_SUPPORT -DRAP_DTSHD_PASSTHRU_SUPPORT -DRAP_LPCMDVD_SUPPORT
+-DRAP_MPEG_PASSTHRU_SUPPORT -DRAP_MPEG_SUPPORT -DRAP_PCMWAV_SUPPORT -DRAP_PCM_SUPPORT
+-DRAP_REALAUDIOLBR_PASSTHRU_SUPPORT -DRAP_SRC_SUPPORT -DUNIFIED_ITB_SUPPORT -DDUAL_OUTPUT
+-O3 -g -Wall -Wextra -std=c99 -Werror=implicit-function-declaration
+-I/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/include
+-isystem
+/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/include
+-I/opt/oem-staging/huawei-bcm7409/usr/include -I/opt/oem-staging/huawei-bcm7409/usr/local/include
+-D_GNU_SOURCE=1   -DNDEBUG -O2 -pipe  -MT SoundEngine.o -MD -MP -MF .deps/SoundEngine.Tpo -c -o
+SoundEngine.o `test -f 'src/SoundEngine.c' || echo
+'/data/builds/DEVARCH-8092/huawei.370/DEVARCH/Polonium/Polonium.PCMPlayback/'`src/SoundEngine.c
+
+/bin/bash ./libtool  --tag=CC   --mode=link mipsel-linux-gcc  -DNDEBUG -O2 -pipe
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/usr/local/lib
+-lnexusMgr -ldirectfb -Wl,-rpath,/usr/local/lib -lfusion -ldirect -linit -lnexus -lz -lpthread
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-Wl,--as-needed
+-Wl,-rpath-link,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-Wl,-rpath-link,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
+-L/opt/oem-staging/huawei-bcm7409/usr/local/lib  -o pcmplaybackd SoundDaemon.o SoundEngine.o
+/bin/bash ./libtool  --tag=CXX   --mode=compile mipsel-linux-g++ -DHAVE_CONFIG_H -I.
+
+libtool: link: mipsel-linux-gcc -DNDEBUG -O2 -pipe -Wl,-rpath -Wl,/usr/local/lib -Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-o pcmplaybackd SoundDaemon.o SoundEngine.o
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/usr/local/lib
+-lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-Wl,--as-needed -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
+-L/opt/oem-staging/huawei-bcm7409/usr/local/lib
+
+Q. How the previous nexus-inspect find the libnexus.so?
+
+/data/builds/master/huawei.370/zinc-build-root/release-huawei-bcm7409$ readelf -d ./Polonium/Polonium.NexusRelease/nexus-inspect | grep NEED
+(standard input):4: 0x00000001 (NEEDED)                     Shared library: [libnexus.so] ~
+(standard input):5: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+(standard input):6: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+(standard input):7: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+(standard input):31: 0x6ffffffe (VERNEED)                    0x4008fc
+(standard input):32: 0x6fffffff (VERNEEDNUM)                 1
+
+$ readelf -d libnexus.so | grep SONAME
+(standard input):6: 0x0000000e (SONAME)                     Library soname: [libnexus.so] ~
+
+OKAY
+
+Then, the new nexus inspect?
+
+$ readelf -d libnexusMgr.so | grep SONAME
+(standard input):8: 0x0000000e (SONAME)                     Library soname: [libnexusMgr.so.0]
+
+/data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect$ readelf -d nexus-inspect
+
+Dynamic section at offset 0x1a0 contains 37 entries:
+  Tag        Type                         Name/Value
+ 0x00000001 (NEEDED)                     Shared library: [libnexusMgr.so.0]
+ 0x0000000f (RPATH)                      Library rpath: [/usr/local/lib]
+ 0x0000001d (RUNPATH)                    Library runpath: [/usr/local/lib]
 
 
 ={============================================================================
@@ -1090,6 +1400,9 @@ Please review the commits for [DEVARCH-8092] which on the branch [review/DEVARCH
 [2]: https://git-dev.dev.youview.co.uk/?p=DEVARCH.git;a=shortlog;h=refs/heads/remotes/origin/review/DEVARCH-8092/0
 [828fbf1] https://git-dev.dev.youview.co.uk/?p=DEVARCH.git;a=commit;h=828fbf140aa180e7fef2c0b2a206dd13ef146aa8
 [45cfa4f] https://git-dev.dev.youview.co.uk/?p=DEVARCH.git;a=commit;h=45cfa4f0cda2429b7bac44690c5a8bb21dd297d8
+
+
+$ zg-jira-request-review DEVARCH-7508_1 b6157860ac9fbc1d54bb48820b2f2ed7d662c094^1..b6157860ac9fbc1d54bb48820b2f2ed7d662c094
 
 
 ={============================================================================
@@ -2057,13 +2370,6 @@ kpark@wll1p04345:~/source/DEVARCH/Polonium/Polonium.NexusRelease/src$
 
 note: build root has the latest than install root
 
-kpark@wll1p04345:/data/builds/master/huawei.370/zinc-build-root/release-huawei-bcm7409$ readelf -d ./Polonium/Polonium.NexusRelease/nexus-inspect | grep NEED
-(standard input):4: 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
-(standard input):5: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
-(standard input):6: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
-(standard input):7: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
-(standard input):31: 0x6ffffffe (VERNEED)                    0x4008fc
-(standard input):32: 0x6fffffff (VERNEEDNUM)                 1
 
 kpark@wll1p04345:/opt/oem-staging/huawei-bcm7409/usr/local/lib$ readelf -d libnexusMgr.so | grep NEED 
 (standard input):4: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
@@ -2082,11 +2388,7 @@ kpark@wll1p04345:/opt/oem-staging/huawei-bcm7409/usr/local/lib$ readelf -d libne
 (standard input):29: 0x6ffffffe (VERNEED)                    0x1b3c
 (standard input):30: 0x6fffffff (VERNEEDNUM)                 1
 
-$ readelf -d libnexus.so | grep SONAME
-(standard input):6: 0x0000000e (SONAME)                     Library soname: [libnexus.so]
 
-$ readelf -d libnexusMgr.so | grep SONAME
-(standard input):8: 0x0000000e (SONAME)                     Library soname: [libnexusMgr.so.0]
 
 $ readelf -d libdirectfb.so | grep SONAME
 (standard input):12: 0x0000000e (SONAME)                     Library soname: [libdirectfb-1.4.so.15]
@@ -2109,6 +2411,68 @@ change name nexus-inspect to nexus-release
 4. Add nexus-inspect.[ch] 
 
 5. Change Makefile.am to build both files.
+
+
+02.25
+======
+as-needed option problem
+
+<fail>
+-O2 -pipe -rdynamic -Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-o nexus-release nexus_release-nexus-release.o -Wl,-rpath -Wl,/usr/local/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-Wl,--as-needed -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
+-L/opt/oem-staging/huawei-bcm7409/usr/local/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/usr/local/lib
+-lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread -pthread
+
+/opt/oem-staging/huawei-bcm7409/usr/local/lib/libnexusMgr.so: undefined reference to `DirectFBSetOption' 
+/opt/oem-staging/huawei-bcm7409/usr/local/lib/libnexusMgr.so: undefined reference to `DirectFBCreate' 
+/opt/oem-staging/huawei-bcm7409/usr/local/lib/libnexusMgr.so: undefined reference to `DirectFBInit' collect2: ld returned 1 exit status
+
+<okay>
+-O2 -pipe -Wl,-rpath -Wl,/usr/local/lib -Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-o nexus-inspect nexus_inspect-nexus-inspect.o
+
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/usr/local/lib
+-lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
+-Wl,--as-needed -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
+-L/opt/oem-staging/huawei-bcm7409/usr/local/lib -pthread
+
+
+<runtime>
+/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/bin$ readelf -d w3cEngine | grep NEED
+(standard input):4: 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
+(standard input):5: 0x00000001 (NEEDED)                     Shared library: [libsoup-2.4.so.1]
+(standard input):6: 0x00000001 (NEEDED)                     Shared library: [libgobject-2.0.so.0]
+(standard input):7: 0x00000001 (NEEDED)                     Shared library: [libglib-2.0.so.0]
+(standard input):8: 0x00000001 (NEEDED)                     Shared library: [libNickelTunerSystemAPI.so.0]
+(standard input):9: 0x00000001 (NEEDED)                     Shared library: [libQt5WebKitWidgets.so.5]
+(standard input):10: 0x00000001 (NEEDED)                     Shared library: [libQt5Widgets.so.5]
+(standard input):11: 0x00000001 (NEEDED)                     Shared library: [libZincJsCoreBindingRuntime.so.0]
+(standard input):12: 0x00000001 (NEEDED)                     Shared library: [libZincCommon.so.0]
+(standard input):13: 0x00000001 (NEEDED)                     Shared library: [libboost_thread.so.1.42.0]
+(standard input):14: 0x00000001 (NEEDED)                     Shared library: [liblog4cplus-1.0.so.4]
+(standard input):15: 0x00000001 (NEEDED)                     Shared library: [libboost_system.so.1.42.0]
+(standard input):16: 0x00000001 (NEEDED)                     Shared library: [libQt5WebKit.so.5]
+(standard input):17: 0x00000001 (NEEDED)                     Shared library: [libQt5Gui.so.5]
+(standard input):18: 0x00000001 (NEEDED)                     Shared library: [libQt5Network.so.5]
+(standard input):19: 0x00000001 (NEEDED)                     Shared library: [libQt5Core.so.5]
+(standard input):20: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+(standard input):21: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+(standard input):22: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+(standard input):49: 0x6ffffffe (VERNEED)                    0x40bd3c
+(standard input):50: 0x6fffffff (VERNEEDNUM)                 2
+
 
 
 ={============================================================================
