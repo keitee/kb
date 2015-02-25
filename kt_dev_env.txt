@@ -1,11 +1,11 @@
-*kt_dev_env*                                                          tw=100
+*kt_dev_env*                                                          tw=100, utf-8
 
 "Do one thing, and do it well" is a principle of Unix philosophy.
 
 /^[#=]{ 
 Use #{ for a group and ={ for a item
 
-KT KB. VIM. ECLIPSE. NETBEAN
+KT KB. vim, git, ECLIPSE. NETBEAN
 
 #{ vim setup
 |kt_dev_env_vim_000| links
@@ -106,7 +106,7 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_005| status
 |kt_dev_env_git_006| ignore
 |kt_dev_env_git_007| log
-|kt_dev_env_git_008| undo, change commit, unstage and discard changes
+|kt_dev_env_git_008| undo, amend, unstage and discard changes
 |kt_dev_env_git_009| auto completion
 |kt_dev_env_git_010| branch
 |kt_dev_env_git_011| merge workflow
@@ -118,9 +118,10 @@ KT KB. VIM. ECLIPSE. NETBEAN
 |kt_dev_env_git_017| rebase pull --rebase
 |kt_dev_env_git_018| rebase squash and drop
 |kt_dev_env_git_019| rebase vs merge
-|kt_dev_env_git_020| stash
-|kt_dev_env_git_021| config: use gvim as default editor
+|kt_dev_env_git_020| reset
 
+|kt_dev_env_git_030| stash
+|kt_dev_env_git_031| config: use gvim as default editor
 |kt_dev_env_git_032| list
 |kt_dev_env_git_033| add, rm, mv and clean
 |kt_dev_env_git_034| diff, difftool
@@ -5520,7 +5521,7 @@ $ git log --oneline --decorate
 
 
 ={============================================================================
-*kt_dev_env_git_008* undo, change commit, unstage and discard changes
+*kt_dev_env_git_008* undo, amend, unstage and discard changes
 
 From 2.4 Git Basics - Undoing Things
 
@@ -5537,6 +5538,24 @@ To stage missing file:
 $ git commit -m 'initial commit'
 $ git add forgotten_file
 $ git commit --amend
+
+--no-edit flag will allow you to make the amendment to your commit without changing its commit
+message. 
+
+<when-push-rejected>
+Suppose that already pushed the commit and wanted to change its message. Used --amend and changed
+message. When tried to push it again to remote, this will be rejected.
+
+How to solve?
+
+1. If it is safe to push it such as its review purpose so no one is based off, then can use
+
+git push --force or -f origin master
+
+2. Can make a proper commit and push it. However, want to change only message? Is there any way to
+make a commit with only message? Use
+
+git commit --allow-empty
 
 
 {unstaging}
@@ -6195,7 +6214,7 @@ explicitly push tags to a shared server after you have created them.
 In Git, there are two main ways to 'integrate' changes from one branch into another: the merge and
 the rebase.
 
-{when-use-merge}
+{use-merge}
 Like an example in merge-with-diverge, merge do three-way merge between c2(recent common ancestor),
      c4, c3 and crate a new snapshot(commit):
 
@@ -6209,7 +6228,7 @@ c0 <- c1 <- c2        <- c4               <- c5
                       <- c3               <|
                                           <master> branch
 
-{when-use-rebase}
+{use-rebase-and-merge}
 Another way: you can take the patch of the change that was introduced in C3 and reapply it on top of
 C4. In Git, this is called rebasing. Take changes from experiment and apply to master.
 
@@ -6255,7 +6274,7 @@ note:
 The rebase has different sementics than merge:
 
 $ git merge master      # take master and merge onto current
-$ git rebase master     # take current and replay onto master
+$ git rebase master     # take current and replay onto master. rebase master onto current.
 
 Now, the snapshot pointed to by C4' is exactly the same as the one that was pointed to by C5 in the
 merge example. 
@@ -6472,10 +6491,17 @@ value with something like git config --global pull.rebase true.
 Suppose you are on master which tracks remote/master.
 
 git pull --rebase                # take current(master) and replay onto remote/master
-
+                                 # rebase remote/master onto local master
          remote/master
                |
 C1  - C5  -   C4' -  C2'  -   C3'  <- master
+
+
+{why-pull-rebase}
+Rebasing is a common way to integrate upstream changes into your local repository. Pulling in
+upstream changes with git merge results in a superfluous merge commit every time you want to see how
+the project has progressed. On the other hand, rebasing is like saying, "I want to base my changes
+on what everybody has already done."
 
 
 ={============================================================================
@@ -6676,7 +6702,93 @@ pushed somewhere.
 
 
 ={============================================================================
-*kt_dev_env_git_020* stash
+*kt_dev_env_git_020* reset
+
+From Ch07, Reset demystified
+
+{three-trees}
+Git as a system manages and manipulates three trees in its normal operation:
+
+Tree                    Role
+HEAD                    Last commit snapshot, parent of next commit
+Index                   Proposed next commit snapshot
+Working Directory       Sandbox
+
+
+{soft-mixed-hard}
+Switching branches or cloning goes through a similar process. When you checkout a branch, it changes
+HEAD to point to the new branch ref, populates your Index with the snapshot of that commit, then
+copies the contents of the Index into your Working Directory.
+
+                        HEAD
+                        master
+v1    <-    v2    <-    v3
+
+git reop
+
+HEAD        index       working directory
+v3          v3          v3
+
+<soft> move HEAD
+"git reset --soft HEAD~"
+
+            HEAD
+            master
+v1    <-    <v2>  <-    v3
+
+git reop
+
+HEAD        index       working directory
+<v2>        v3          v3
+
+It essentially 'undo' the last git commit command. git status shows difference in green since HEAD
+is different from index. 
+
+When you reset back to HEAD~, you are moving the branch back to where it was, without changing the
+Index or Working Directory. You could now update the Index and run git commit again to accomplish
+what git commit --amend would have done
+
+<mixed> move HEAD and update index. default
+"git reset [--mixed] HEAD~"
+
+            HEAD
+            master
+v1    <-    <v2>  <-    v3
+
+git reop
+
+HEAD        index       working directory
+<v2>        <v2>        v3
+
+'undo' your last commit, but also unstaged everything. You rolled back to before you ran all your
+git add and git commit commands.
+
+<hard> undo all
+"git reset --hard HEAD~"
+
+            HEAD
+            master
+v1    <-    <v2>  <-    v3
+
+git reop
+
+HEAD        index       working directory
+<v2>        <v2>        <v2>
+
+
+{hard-dangerous}
+It's important to note that this --hard is the only way to make the reset command dangerous, and one
+of the very few cases where Git will actually destroy data. 
+  
+Any other invocation of reset can be easily undone, but the --hard cannot, since it forcibly
+overwrites files in the Working Directory. In this particular case, we still have the v3 version of
+our file in a commit in our git DB, and we could get it back by looking at our reflog, but if we had
+not committed it (means not in the repo), Git still would have overwritten the file and it would be
+unrecoverable.
+
+
+={============================================================================
+*kt_dev_env_git_030* stash
 
 Stashing takes the dirty state of your working directory - that is, your modified tracked files and
 staged changes - and saves it on a stack of unfinished changes that you can reapply at any time.
@@ -6870,7 +6982,7 @@ you're done, just blow those branches away
 
 
 ={============================================================================
-*kt_dev_env_git_021* config: use gvim as default editor
+*kt_dev_env_git_031* config: use gvim as default editor
 
 $ git config --global core.editor gvim
 
