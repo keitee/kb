@@ -1,4 +1,4 @@
-*kt_dev_01*                                                           tw=100
+*kt_dev_01*                                                           tw=100, utf-8
 
 /^[#=]{
 Use #{ for a group and ={ for a item
@@ -13965,8 +13965,7 @@ note: decltype usage. decltype is used to get type for template.
 note: solution was to have #define to use decltype only for C++0x but typeof for before C++0x.
 
 
-{typedef}
-<struct>
+{struct-and-typedef}
 The structure is declared like this. No space allocated since it is declaration.
 
 struct point {
@@ -13974,27 +13973,47 @@ struct point {
   int y;
 };
 
-Here point is 'structure tag' and a structure defines a 'type'. So defining structure objects is
+note: As with class, see terminating ";".
+
+Here point is that "structure tag" defines a 'type'. So defining structure objects is
 analogous to defining objects of any type.
 
 "struct { ... } x, y, z;" is analogus to "int x, y, z;"
 
-Why 'tag'? The tag can be used 'later' in definition of instances of the structure. Given the
-declaration above:
+Why 'tag'? The tag can be used 'later' in definition of instances of the structure since cannot use
+the above later. Given the declaration above:
 
 struct point pt = { 320, 200 };
 
 The only 'legal' operation on structure are copy and assign as a unit but not compare.
 
-<designated-initializers>
-https://gcc.gnu.org/onlinedocs/gcc/Designated-Inits.html
+<why-typedef>
+From ansic, p146.
+The typedef creates a new data type 'names'. It does not create a new 'type' in any sense; merely adds
+a new name for some 'existing' type. In effect, typedef is like #define, except that it is
+interpreted by the compiler.
 
-Standard C90 requires the elements of an initializer to appear in a fixed order, the same as the
-order of the elements in the array or structure being initialized.
+So using typedef is convenient:
 
-In ISO C99 you can give the elements in any order, specifying the array indices or structure field
-names they apply to, and GNU C allows this as an extension in C90 mode as well. This extension is
-not implemented in GNU C++.
+Point top; vs. struct point top;
+
+<c-vs-cpp>
+However, this only applies to C. See these:
+
+struct Node
+{
+  int     a;
+  int     arr[2];
+  int     b;
+};
+
+int main(int argc, char** argv)
+{
+  Node node = {1, {2,3}, 4};        # note: This is error in C but not in C++.
+}
+
+
+{initialization}
 
 typedef struct {
   int a;
@@ -14004,8 +14023,7 @@ typedef struct {
 
 int main()
 {
-
-  // this warning happens due to -Wextra
+  // note: this warning happens due to -Wextra
   // sample.c:11:3: warning: missing initializer [-Wmissing-field-initializers]
   // sample.c:11:3: warning: (near initialization for 'node.arr') [-Wmissing-field-initializers]
   // NODE node = {0,0};
@@ -14015,7 +14033,7 @@ int main()
   return 0;
 }
 
-note: to avoide warning, may have {0} for a single element array
+note: to avoid warning, may have {0} for a single element array
 
 typedef struct {
   int a;
@@ -14026,17 +14044,16 @@ typedef struct {
 
 NODE node = {0,0,{0},0};
 
-<why-typedef>
-To define instance of structure, need to use like below since "struct tag" is a type.
 
-struct point top;
+<designated-initializers> note: about the initialzation order but not layout.
+https://gcc.gnu.org/onlinedocs/gcc/Designated-Inits.html
 
-From ansic, p146.
-The typedef creates a new data type 'names'. It does not create a new 'type' in any sense; merely adds
-a new name for some 'existing' type. In effect, typedef is like #define, except that it is
-interpreted by the compiler.
+Standard C90 requires the elements of an initializer to appear in a fixed order, the same as the
+order of the elements in the array or structure being initialized.
 
-<example>
+In ISO C99 you can give the elements in 'any' order, specifying the array indices or structure field
+names they apply to, and GNU C allows this as an extension in C90 mode as well. This extension is
+not implemented in GNU C++.
 
 struct view_class {
   const char *title;
@@ -14110,15 +14127,18 @@ static view_class _vclass = {
   .show_bg = 0,
 };
 
-<example> creates a type name but not object. <diff-between-c-and-cpp>
+<example> creates a type name but not object. 
 typedef struct tnode {
   char *word;
   int count;
   struct tnode* left;
   struct tnode* right;
 
-  // note: NOT OK for C but OK for CPP since it is a pointer.
+  // note: <diff-between-c-and-cpp> error for C but okay for CPP since it is a pointer and okay as
+  // long as not define object. To define object, compiler may see whole definition.
+  //
   // msort-list.c:7:3: error: unknown type name 'tnode' when use C.
+  //
   tnode* left;
   tnode* right;
 
@@ -14236,6 +14256,43 @@ may be machine-dependent, only the typedef need change when the program is moved
 {class-vs-struct}
 The only difference between struct and class is the default access specifier for members and
 derivation; struct is 'public' and class is private by default. p616 in ref-CPR.
+
+
+{layout-order-and-size}
+From C++BS 8.2.1.
+
+An object of a struct holds its members in the order they are declared.
+
+struct Readout {
+  char hour;
+  int value;
+  char seq;
+};
+
+A more realistic layout of a Readout on a machine with 4-byte int would be:
+
+hour :   [*      ]
+value:   [* * * *]
+seq  :   [*      ]
+
+In this case, as on many machines, sizeof(Readout) is 12, and not 6 as one would naively expect from
+simply adding the sizes of the individual members.
+
+You can minimize wasted space by simply ordering members by size (largest member first).
+
+struct Readout {
+  int value;
+  char hour;
+  char seq;
+};
+
+This would give us:
+
+value:      [* * * *]
+hour: seq : [* *    ]
+
+It is usually best to order members for readability and sort them by size only if there is a
+demonstrated need to optimize.
 
 
 ={============================================================================
