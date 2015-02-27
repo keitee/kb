@@ -2,10 +2,15 @@
 
 /^[#=]{ 
 
-aWed 18 Dec 2013 09:47:23 GMT
+#{ bash
+#{ tool
+#{ gdb
+#{ linux-core
+#{ syscall
+#{ sysadmin
+#{ syssetup
 
-KT KB. Linux
-
+#{ bash
 |kt_linux_bash_000| bash: reference
 |kt_linux_bash_001| bash: history and reverse search
 |kt_linux_bash_002| bash: variable <substitution> <expansion>
@@ -47,6 +52,7 @@ KT KB. Linux
 
 |kt_linux_bash_300| bash: faq: var# 
 
+#{ tool
 |kt_linux_tool_001| md5sum
 |kt_linux_tool_002| cut
 |kt_linux_tool_003| kill and killall
@@ -106,7 +112,7 @@ KT KB. Linux
 |kt_linux_tool_205| binutil: ld
 
 
-#{ GDB
+#{ gdb
 |kt_linux_tool_200| gdb: core dump setting
 |kt_linux_tool_201| gdb: core dump analysis {frame-command}
 |kt_linux_tool_202| gdb: kernel crash analysis
@@ -128,6 +134,7 @@ KT KB. Linux
 |kt_linux_tool_300| gdb: frontend tool: cgdb
 
 
+#{ linux-core
 |kt_linux_core_001| check shared libraries that process uses 
 |kt_linux_core_002| stdin, stdout, and stderr
 |kt_linux_core_003| check libc version and path
@@ -137,12 +144,10 @@ KT KB. Linux
 |kt_linux_core_007| /dev/null
 |kt_linux_core_008| file ownership and permissions
 
-#{ SIGNAL
 |kt_linux_core_050| signal
 |kt_linux_core_051| signal: example: use signal as synchronization
 |kt_linux_core_052| signal: kill: checking for the existence of a process
 
-#{ PROCESS
 |kt_linux_core_100| thread vs. process
 |kt_linux_core_101| process: creation
 |kt_linux_core_102| process: termination
@@ -211,15 +216,15 @@ KT KB. Linux
 |kt_linux_core_804| proc: /proc/PID/fd
 |kt_linux_core_813| proc: /proc/sys/kernel, system resource limits
 
-#{ SYSCALL
+#{ syscall
 |kt_linux_sysc_001| pause
 |kt_linux_sysc_002| alarm
 |kt_linux_sysc_003| getenv, setenv
 
-#{ SYSADMIN
+#{ sysadmin
 |kt_linux_sysa_001| sys: cannot execute a file in cdrom, fstab
 
-#{ SYSENV
+#{ syssetup
 |kt_linux_sete_001| ubuntu: virtualbox
 |kt_linux_sete_002| ubuntu: workspace
 |kt_linux_sete_003| ubuntu: samba
@@ -8195,6 +8200,8 @@ The following idiom is sometimes employed when calling fork():
 
 pid_t childPid; /* Used in parent after successful fork() to record PID of child */
 
+note: PID of parent remains the same but child is not
+
 switch (childPid = fork()) {
   case -1: /* fork() failed */
     /* Handle error */
@@ -9321,6 +9328,8 @@ int main(int argc, char** argv)
   else
     argVec[0] = argv[1];
 
+  // note: ternimate with NULL and argVec[] is passed as a whole to exexed application.
+
   argVec[1] = "hello world";
   argVec[2] = "goodbye";
   argVec[3] = NULL;
@@ -9397,9 +9406,15 @@ note: this cmd comes from outside to specify the application to run.
    exec $exec_wrapper "$cmd" args...
    
 2. $exec_wrapper is an application, exec-then-cleanup-app, which do two things: 
+   @ ppid from env is null and set ppid of shell. 
    @ call fork
-   @ call 'exec' to exec the given arg from $cmd and thst is parent becomes the actual application such as a browser.
-   @ child is alive in a loop while checking if parent is died. If so, do some action.
+
+   @ child sets env with ppid and 'exec' wrapper again. since env is set, child runs in a loop while
+   checking if parent is died. If so, 'exec' cleanup application with ppid. 
+
+   note: ppid comes from env and argv as well. argv's one is not used.
+
+   @ parent 'exec' $cmd to run the given application such as a browser.
 
    same pid starting from the shell which runs a script
 <------------------------------------------------->
@@ -9413,11 +9428,16 @@ $cmd    run script      exec           fork: exec
                                     <------------->
                                              child
 
-4. After fork, child will set ppid via env and exec exec-then-cleanup-app. This time will do loop.
-5. After fork, parent will exec application with args.
+note: see how exec used to replace application to run. the shell, parent, replace itself with given
+application and the chain of exec in the child.
 
-note: see how exec used to replace application to run. the shell exec replace itself with given
-application.
+exec "$prefix/bin/exec-then-cleanup-app" "$prefix/bin/w3cEngine" \
+$enable_webkit_remote_debugging_as_needed \
+-cache "$app_data_dir/client-cache" \
+-cache-size "$cacheSize" \
+-jar "$app_data_dir/cookies.sqlite" \
+-url "$url" \
+-src "$sources"
 
 // exec-then-cleanup-app
 
@@ -9488,6 +9508,11 @@ int main(int argc, char** argv)
         return 3;
       }
 
+      // "$prefix/bin/exec-then-cleanup-app" "-p" "$parent_pid"
+      // args: /opt/zinc-trunk/bin/exec-then-cleanup-app -p 1479 
+
+      // note: ppid via args is not used.
+
       const char* args[4] = { argv[0], "-p", parent_pid, NULL };
 
       // We set the pid in the environment. Doing it via environment rather than arguments
@@ -9509,6 +9534,8 @@ int main(int argc, char** argv)
   }
   else
   {
+    // note: even if got ppid in number, have to use ppid string to pass over cleanup_exe
+
     int parent_pid=atoi(parent_pid_str);
     fprintf(stderr, "Going to watch pid: %d\n", parent_pid);
     while (0 == kill(parent_pid, 0))
@@ -11078,7 +11105,7 @@ The remaining arguments to accept() 'return' the address of the peer socket. The
 points to a structure that is used to return the socket address. The type of this argument depends
 on the socket domain
 
-note: value-result argument is in-out argument
+note: <value-result> argument is in-out argument which is also mentioned in man page.
 
 The addrlen argument is a value-result argument. It points to an integer that, prior to the call,
     must be initialized to the size of the buffer pointed to by addr, 'so' that the kernel 'knows'
