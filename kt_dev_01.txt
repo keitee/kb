@@ -10,13 +10,13 @@ TODO:
 
 KT KB. DEVELOPMENT.
 
-#{ SE
+#{ sw eng
 |kt_dev_seng_001| first major hurdle in attacking a large problem
 |kt_dev_seng_002| 
 |kt_dev_seng_003| comments in source
 |kt_dev_seng_004| 80 and 20
 
-#{ ISSUES and CODES
+#{ problems and CODES
 |kt_dev_prob_001| memcpy considered danger
 |kt_dev_prob_002| out of index of array
 |kt_dev_prob_003| double free
@@ -31,10 +31,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_prob_012| problem of incremental build or make
 |kt_dev_prob_013| simple grep
 
-#{ GNU CORE UTILS
+#{ gnu core utils
 |kt_dev_guti_000| gnu core util sites
 
-#{ GCC
+#{ gcc
 |kt_dev_gcc_000| gcc compile script
 |kt_dev_gcc_001| error: two or more data types in declaration specifiers <bool> 
 |kt_dev_gcc_002| error: ISO C++ forbids declaration of 'UseStatic' with no type [-fpermissive]
@@ -103,7 +103,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_013| use reference {called-by-reference} 
 |kt_dev_cpp_014| decltype, typedef, and struct {class-vs-struct} 
 |kt_dev_cpp_015| declaration and definition
-|kt_dev_cpp_016| 
+|kt_dev_cpp_016| array and struct
 |kt_dev_cpp_017| static-members and class const {class-method} {class-const}
 |kt_dev_cpp_018| dtor {non-virtual-destruction-problem} {how-virtual-works}
 |kt_dev_cpp_019| exception {problem-of-exception-in-dtor} {exception-safe}
@@ -11478,6 +11478,32 @@ Foo[0xbfc60f4c] dtor(100)
 Foo[0x9aba008] dtor(100)
 
 
+{ctor-use}
+From C++BS 8.2.3. Constructors are needed if you need to reorder arguments, validate arguments,
+modify arguments. For example:
+
+struct Address {
+  string name; // "Jim Dandy"
+  int number; // 61
+  string street; // "South St"
+  string town; // "New Providence"
+  char state[2]; // ’N’ ’J’
+  char zip[5]; // 07974
+
+  Address(const string n, int nu, const string& s, const string& t, const string& st, int z);
+};
+
+note: this is a case to modify arguments and see conversion from
+
+struct Address {
+  ...
+  char state[2]; // ’N’ ’J’
+  char zip[5]; // 07974
+
+  Address(..., const string& st, int z);
+};
+
+
 ={============================================================================
 *kt_dev_cpp_004* copy-controls when use dyn resource.
 
@@ -14363,7 +14389,92 @@ this 'declare' for the rest of the source file that sp is an int and val is a do
 
 
 ={============================================================================
-*kt_dev_cpp_016*
+*kt_dev_cpp_016* array and struct
+
+{array-vs-struct}
+1. From C++BS 8.2. Objects of structure types can be assigned, passed as function arguments, and
+returned as the result from a function. For example:
+
+Address current;
+Address set_current(Address next)
+{
+  address prev = current;
+  current = next;
+  return prev;
+}
+
+Other plausible operations, such as comparison (== and !=), are not available by default. However,
+      the user can define such operators.
+
+2. An array is an aggregate of elements of the same type. In its simplest form, a struct is an
+aggregate of elements of arbitrary types.
+
+
+{array-as-an-object}
+Placing a built-in array in a struct allows us to treat that array as an 'object': we can copy the
+struct containing it in initialization (including argument passing and function return) and
+assignment. For example:
+
+struct Point {
+  int x,y
+};
+
+struct Array {
+  Point elem[3];
+};
+
+Array shift(Array a, Point p)
+{
+  for (int i=0; i!=3; ++i) {
+    a.elem[i].x += p.x;
+    a.elem[i].y += p.y;
+  }
+  return a;
+}
+
+Array points2 {{1,2},{3,4},{5,6}};
+
+Array ax = shift(points2,{10,20});
+
+The notation for Array is a bit primitive: Why i!=3? Why keep repeating .elem[i]? Why just elements
+of type Point? The standard library provides std::array as a more complete and elegant development
+of the idea of a fixed-size array as a struct:
+
+This array is a template to allow arbitrary numbers of elements of arbitrary types. It also deals
+directly with the possibility of exceptions and const objects.
+
+struct Point {
+   int x,y
+};
+
+using Array = array<Point,3>; // array of 3 Points
+
+Array points {{1,2},{3,4},{5,6}};
+
+int x2 = points[2].x;
+int y2 = points[2].y;
+
+Array shift(Array a, Point p)
+{
+  for (int i=0; i!=a.size(); ++i) {
+    a[i].x += p.x;
+    a[i].y += p.y;
+  }
+  return a;
+}
+
+Array ax = shift(points,{10,20});
+
+<pros-and-cons>
+The main advantages of std::array over a built-in array are that it is a 'proper' object type (has
+    assignment, etc.) and does not implicitly convert to a pointer to an individual element:
+
+The disadvantage of std::array compared to a built-in array is that we can't 'deduce' the number of
+elements from the length of the 'initializer':
+
+Point point1[] = {{1,2},{3,4},{5,6}}; // 3 elements
+array<Point,3> point2 = {{1,2},{3,4},{5,6}}; // 3 elements
+array<Point> point3 = {{1,2},{3,4},{5,6}}; // error : number of elements not given
 
 
 ={============================================================================
