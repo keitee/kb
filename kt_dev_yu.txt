@@ -1366,6 +1366,23 @@ Dynamic section at offset 0x14c contains 27 entries:
  0x0000000e (SONAME)                     Library soname: [libnexusMgr.so.0]
 
 
+5. Given that the original mgr so do not have soname, the original inspect tool used realname.
+However, build mgr own and then it has soname as below. 
+
+10:libtool: link: mipsel-linux-gcc -shared  -fPIC -DPIC  .libs/nexusMgr.o   -lpthread -linit
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc/lib
+-L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc/oss/lib
+-Wl,--as-needed -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
+-L/opt/oem-staging/huawei-bcm7409/usr/local/lib  -O3 -pthread -O2 -Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc/lib
+-Wl,-rpath-link
+-Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc/oss/lib
+-pthread -Wl,-soname -Wl,libnexusMgr.so.0 -o .libs/libnexusMgr.so.0.0.0
+
+Therefore, when link an executable, the exe will picks up soname. So it's all down to how mgr is
+built to see if it requires to have a sym link in /usr/local/lib.
+
+
 ={============================================================================
 *kt_dev_uv_stack_010* stack: commit
 
@@ -1417,6 +1434,12 @@ shouldn't be surprising.
 [1] See DEVARCH-7362, commit cddb793
 
 $ zg-jira-request-review DEVARCH-7508_1 b6157860ac9fbc1d54bb48820b2f2ed7d662c094^1..b6157860ac9fbc1d54bb48820b2f2ed7d662c094
+
+<log>
+YVHUAWEI-6095: Add the latest nexusMgr from Huawei
+
+This is the latest which fixes kernel Oops when an application exits abnormally and is delivered via
+this Jira ticket. 
 
 
 ={============================================================================
@@ -1634,7 +1657,7 @@ JSBindingNP.h
  *    }
  */
 
-<0> To be used from JavaScript like this:
+<0> To be used from JavaScript like this to register app 'listener' to NPAPI.
 
 broadcastObj = document.getElementById('someId');
 broadcastObj.addEventListener("NetworkConnectivityStateChange",
@@ -1643,7 +1666,7 @@ function(state, error) { /* console.log("state = "+state); */ });
 The state argument is an integer enumeration with 0 standing for "disconnected" and 1 standing for "connected".
 
 
-<1> so "binding" dir has sources for each interface bindings such as channel and videobroadcast.
+<1> so "binding" dir has bindings for each 'interface' such as Channelxxx and VideoBroadcastxxx.
 
 // a/Vanadium/Vanadium.W3CEngine/src/plugins/broadcast/bindings/VideoBroadcastBindingNP.h, cpp
 // 
@@ -1661,36 +1684,65 @@ class VideoBroadcastBindingNP : public JSBindingNP
     boost::shared_ptr<VideoBroadcast> vb;
 }
 
-note: register its handler with vb "impl" class. that is event 'down' path
+<2-1>
+Register its handler with vb "impl" class. This is to set up path to get event
+from lower parts. 'down' path
 
-VideoBroadcastBindingNP::VideoBroadcastBindingNP()
+VideoBroadcastBindingNP::VideoBroadcastBindingNP(
+    const boost::shared_ptr<VideoBroadcast>& vb,
+    NPP npp)
+    : JSBindingNP(npp),
+      vb(vb)
 {
+    ...
+
     ADD_EVENT(onNetworkConnectivityStateChange);
+
     vb->onNetworkConnectivityStateChange(
         boost::bind(&VideoBroadcastBindingNP::onNetworkConnectivityStateChange,
                     this, _1));
+    ...
 }
 
-note: forward 'event' up to the chain.
+<2-2>
+Forward 'event' up to app.
 
 void VideoBroadcastBindingNP::onNetworkConnectivityStateChange(
     NetworkConnectivityState::Enum state)
 {
-    std::vector<NPVariant> args(1);
-    args[0] = wrap(state, plugin());
+  std::vector<NPVariant> args(1);
+  args[0] = wrap(state, plugin());
 
-    notifyListeners("onNetworkConnectivityStateChange", args);
+  notifyListeners("onNetworkConnectivityStateChange", args);
 }
 
 
-<2> save a handler from "binding" class
+<3> save a handler of "binding" class in the concrete class.
 
 // a/Vanadium/Vanadium.W3CEngine/src/plugins/broadcast/production/ProductionVideoBroadcast.cpp 
 
 void ProductionVideoBroadcast::onNetworkConnectivityStateChange(
     boost::function<void(NetworkConnectivityState::Enum)> handler)
 {
-    onNetworkConnectivityStateChangeHandler = handler;
+  // this is function<> object
+  onNetworkConnectivityStateChangeHandler = handler;
+}
+
+<4>
+void ProductionVideoBroadcast::emitNetworkConnectivityStateChange(
+    NetworkConnectivityState::Enum state)
+{
+  if (onNetworkConnectivityStateChangeHandler)
+  {
+    try
+    {
+      onNetworkConnectivityStateChangeHandler(state);
+    }
+    catch (...)
+    {
+      VANADIUM_WARN("Executing network connectivity state change handler failed");
+    }
+  }
 }
 
 // from NM?
@@ -1699,30 +1751,106 @@ void ProductionVideoBroadcast::onNetworkConnectivityStateChange(
 void ProductionVideoBroadcast::StateChanged(
     const NS_NEON_SYSTEM::NM_STATE::Enum state)
 {
-    NetworkConnectivityState::Enum const targetState =
-        state == NS_NEON_SYSTEM::NM_STATE::connected
-        ? NetworkConnectivityState::connected
-        : NetworkConnectivityState::disconnected;
+  NetworkConnectivityState::Enum const targetState =
+    state == NS_NEON_SYSTEM::NM_STATE::connected
+    ? NetworkConnectivityState::connected
+    : NetworkConnectivityState::disconnected;
 
-    emitNetworkConnectivityStateChange(targetState);
+  emitNetworkConnectivityStateChange(targetState);
 }
 
-void ProductionVideoBroadcast::emitNetworkConnectivityStateChange(
-    NetworkConnectivityState::Enum state)
+<map-to-concrete-class>
+BroadcastPluginNP::BroadcastPluginNP(BroadcastFactory& f, NPP npp) :
+    f(f),
+    jsCallInProgress(false),
+    releasing(false),
+    npp(npp),
+    jsDispatcher(boost::make_shared<JSEventDispatcherNP>(npp)),
+    jsAsyncDispatcher(boost::make_shared<JSEventDispatcherNP>(npp, true))
 {
-    if (onNetworkConnectivityStateChangeHandler)
-    {
-        try
-        {
-            onNetworkConnectivityStateChangeHandler(state);
-        }
-        catch (...)
-        {
-            VANADIUM_WARN("Executing network connectivity state change handler failed");
-        }
-    }
+  ...
+
+  // boost::shared_ptr<VideoBroadcast> videoBroadcast;
+  
+  videoBroadcast = f.createVideoBroadcast(jsDispatcher, jsAsyncDispatcher);
+
+  // Create a binding for videoBroadcast.
+  const boost::shared_ptr<VideoBroadcastBindingNP> videoBroadcastBinding =
+    boost::make_shared<VideoBroadcastBindingNP>(videoBroadcast, npp);
 }
 
+<>
+kpark@wll1p04345:~/source/DEVARCH/Vanadium/Vanadium.W3CEngine/src/plugins/broadcast$ tree .
+.
+|-- api
+|   |-- BroadcastFactory.cpp
+|   |-- ChannelConfig.cpp
+|   |-- Channel.cpp
+|   |-- ChannelList.cpp
+|   |-- VideoBroadcast.cpp
+
+|-- bindings
+|   |-- ChannelBindingNP.cpp
+|   |-- ChannelConfigBindingNP.cpp
+|   |-- ChannelListBindingNP.cpp
+|   |-- CollectionBindingNP.h
+|   |-- VideoBroadcastBindingNP.cpp
+
+|-- broadcast-plugin.cpp
+|-- broadcast-plugin.h
+|-- BroadcastPluginNP.cpp
+|-- BroadcastPluginNP.h
+
+|-- fake
+|   |-- FakeBroadcastFactory.cpp
+|   |-- FakeBroadcastFactory.h
+|   |-- FakeVideoBroadcast.cpp
+|   `-- FakeVideoBroadcast.h
+
+|-- JSBindingNP.cpp
+|-- JSBindingNP.h
+|-- JSEventDispatcherNP.cpp
+|-- JSEventDispatcherNP.h
+|-- JSObjectNP.h
+|-- JSTypeUnwrappingNP.cpp
+|-- JSTypeUnwrappingNP.h
+|-- JSTypeWrappingNP.cpp
+|-- JSTypeWrappingNP.h
+|-- NPObjectIntrusivePtr.h
+|-- plugin-logger.h
+`-- production
+    |-- ProductionBroadcastFactory.cpp
+    |-- ProductionBroadcastFactory.h
+    |-- ProductionVideoBroadcast.cpp
+    `-- ProductionVideoBroadcast.h
+
+
+# broadcast-plugin.cpp
+
+    // not sure who calls this but from a code, a browser call this and this
+    // function registers functions
+//
+NPError NP_Initialize(NPNetscapeFuncs* nFuncs, NPPluginFuncs* pFuncs)
+{
+    try
+    {
+      // 1. register its function table with the caller(browser?)
+      // *pFuncs = npp;
+      //
+      // 2. create T and add T to a map<mine, T*> for MINE, video/broadcast.
+      //
+      // boost::ptr_map<std::string, BroadcastFactory> factories;
+      //
+      // addFactory<ProductionBroadcastFactory>(MIME_TYPE);
+      //
+      // note: 'Production' created.
+      return internal::NP_Initialize(nFuncs, pFuncs);
+    }
+    CATCH_BAD_ALLOC
+    CATCH_ALL
+
+    return NPERR_GENERIC_ERROR;
+}
 
 ={============================================================================
 *kt_dev_uv_stack_103* stack: vanadium: remote debug
