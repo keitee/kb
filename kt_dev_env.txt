@@ -119,7 +119,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_015| tag
 |kt_dev_env_git_016| rebase
 |kt_dev_env_git_017| rebase pull --rebase
-|kt_dev_env_git_018| rebase squash and drop
+|kt_dev_env_git_018| rebase rewriting-history
 |kt_dev_env_git_019| rebase vs merge
 |kt_dev_env_git_020| reset
 
@@ -5775,7 +5775,7 @@ From 2.4 Git Basics - Undoing Things
 If you've made no changes since your last commit, forget to add some files, or you mess up your
 commit message. 
 
-To change message:
+To change 'message':
 
 $ git commit --amend
 
@@ -6871,8 +6871,7 @@ on what everybody has already done."
 
 
 ={============================================================================
-*kt_dev_env_git_018* rebase vs merge
-
+*kt_dev_env_git_018* rebase rewriting-history
 
 {advanced-rebase}
 
@@ -6968,7 +6967,7 @@ $ git branch -d server
 note: So, rebasing is useful when use topic branches.
 
 
-{rebase-and-squash}
+{rebase-and-rewrite}
 Changing Multiple Commit Messages in Ch 07 Rewriting History.
 
 What this does is take smaller commits and 'combine' them into larger ones, which could be useful if
@@ -6993,7 +6992,7 @@ a6e0d20 - kit, 5 minutes ago : rebase three     # C5
 
 <one>
 # { vim screen 
-pick 3691dd1 rebase two       note: opposite order
+pick 3691dd1 rebase two       note: reverse order from old to new
 pick a6e0d20 rebase three
 pick 7b622e7 rebase four 
 pick 1616841 rebase five 
@@ -7022,7 +7021,7 @@ Successfully rebased and updated refs/heads/test.
 
 note: Although the message when exit vim sounds done well, nothing has changed since picked 'all'.
 
-<two>
+<squashing-commits>
 pick 3691dd1 rebase two       note: reverse order
 s a6e0d20 rebase three
 s 7b622e7 rebase four 
@@ -7034,10 +7033,121 @@ Tree will be:
          <head>
 C1 C2 C3 C8 
 
-So the three commits were removed and merged into one last commit.
+So the three commits were removed and merged into one 'new' commit.
 
 3fabf21 - kit, 23 minutes ago : rebase from two to five note: this will have C4-C7.
 99e3f70 - kit, 23 minutes ago : rebase one
+
+<reordering-commits>
+Git 'rewinds' your branch to the parent of these commits, 'applies'(replay) 310154e and then
+f7f3f6d, and then 'stops'. You effectively change the order of those commits and remove the "added
+cat-file" commit completely.
+
+From:
+
+pick f7f3f6d changed my name a bit
+pick 310154e updated README formatting and added blame
+pick a5f4a0d added cat-file
+
+to this:
+
+pick 310154e updated README formatting and added blame
+pick f7f3f6d changed my name a bit
+
+note: When replaying commits, merge conflict can happen and replaying means that it will create new
+commits for every commits to replay including 'pick' one.
+
+<spliting-commits>
+Want to split it into two commits: "updated README formatting" for the first, and "added blame" for
+the second.
+
+pick f7f3f6d changed my name a bit
+edit 310154e updated README formatting and added blame
+pick a5f4a0d added cat-file
+
+When you save and exit the editor, rewinds to the parent of the first commit in your list, applies
+the first commit (f7f3f6d), applies the second (310154e), and drops you to the console.
+
+Then, when the script drops you to the command line, you reset that commit, take the changes that
+have been reset, and create multiple commits out of them. 
+
+$ git rebase -i HEAD~3
+Stopped at da355b8... updated readme formatting and added blame
+You can amend the commit now, with
+
+	git commit --amend
+
+Once you are satisfied with your changes, run
+
+	git rebase --continue
+
+$ git st
+# Not currently on any branch.  note: here 'detached' state and no modified files in working directory.
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#
+nothing added to commit but untracked files present (use "git add" to track)
+
+$ git reset HEAD^
+Unstaged changes after reset:
+M	sample.c
+
+note: this is 'important' to rewind back since the second is 'already' replayed.
+
+$ git st
+# Not currently on any branch.
+# Changes not staged for commit:
+#   (use "git add <file>..." to update what will be committed)
+#   (use "git checkout -- <file>..." to discard changes in working directory)
+#
+#	modified:   sample.c
+#
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#
+no changes added to commit (use "git add" and/or "git commit -a")
+
+note: edited sample.c or add/remove files so do whatever you want
+
+$ git commit -am "updated readme formatting"
+[detached HEAD 0c5d9cd] updated readme formatting
+ 1 file changed, 1 insertion(+)
+keitee@debian-keitee:~/git-work$ git st
+# Not currently on any branch.
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#
+nothing added to commit but untracked files present (use "git add" to track)
+
+note: edited sample.c or add/remove files so do whatever you want
+
+$ git commit -am "added blame"
+[detached HEAD 709b103] added blame
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+keitee@debian-keitee:~/git-work$ git st
+# Not currently on any branch.
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#
+nothing added to commit but untracked files present (use "git add" to track)
+
+$ git rebase --continue 
+Successfully rebased and updated refs/heads/topic2.
+
+$ git st
+# On branch topic2
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#
+nothing added to commit but untracked files present (use "git add" to track)
+
+$ git log
+e8da604 - kit, 6 minutes ago : added cat-file
+709b103 - kit, 31 seconds ago : added blame
+0c5d9cd - kit, 81 seconds ago : updated readme formatting
+532b821 - kit, 7 minutes ago : changed my name a bit
+
+note: see the commit is splitted two and shows 4 in total.
 
 
 ={============================================================================
