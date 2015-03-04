@@ -29,6 +29,7 @@
 |kt_dev_uv_stack_102| stack: vanadium: binding
 |kt_dev_uv_stack_103| stack: vanadium: remote debug
 |kt_dev_uv_stack_104| stack: LSR (local storage repository)
+|kt_dev_uv_stack_105| stack: uranium
 
 |kt_dev_uv_stack_150| stack: network
 |kt_dev_uv_stack_200| stack: dbus
@@ -1932,6 +1933,21 @@ https://wiki.youview.co.uk/display/YVDP/Debugging?src=search
 
 
 ={============================================================================
+*kt_dev_uv_stack_105* stack: uranium. air.
+
+<air>
+Adobe AIR for TV. AIR is flash runtime engine.
+https://wiki.youview.co.uk/display/YVDP/Air+for+TV?src=search
+
+<stagecraft>
+Adobe had taken great steps in making the Flash Lite player available to be licensed by mobile
+device and CE manufacturers.  As I understand it Stagecraft goes one step farther by wrapping the
+Flash Lite player in a layer that mitigates the risks associated with porting just the Flash Lite
+player itself. It insures that SWFs created for one Stagecraft based device will work on all
+Stagecraft based devices.
+
+
+={============================================================================
 *kt_dev_uv_stack_150* stack: network
 
 The dbus log when plug out and then plug in a cable
@@ -2901,6 +2917,245 @@ Please review the commits for [DEVARCH-7508] which on the branch [review/DEVARCH
 [1]: https://jira.youview.co.uk/browse/DEVARCH-7508
 [2]: https://git-dev.dev.youview.co.uk/?p=DEVARCH.git;a=shortlog;h=refs/heads/review/DEVARCH-7508/0
 [e4ac0e1]: https://git-dev.dev.youview.co.uk/?p=DEVARCH.git;a=commit;h=e4ac0e157a900d55fa30b7c9c88a9f080b3767b1
+
+
+={============================================================================
+*kt_dev_uv_task_004* task:03: DEVARCH-9135
+
+03.04
+======
+Assigned.
+https://jira.youview.co.uk/browse/DEVARCH-9135
+
+UI is provided two metadata APIs for events:
+
+From the API docs: http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/lastSuccessfulBuild/artifact/as3-developer-api-docs/index.html
+
+<Q> CTV?
+
+ctv.enhancemetadata.Event
+http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/lastSuccessfulBuild/artifact/as3-developer-api-docs/ctv/enhancedmetadata/Event.html
+
+ctv.linearmetadata.Event
+http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/lastSuccessfulBuild/artifact/as3-developer-api-docs/ctv/linearmetadata/Event.html
+
+The latter Event type is an old API that we don't consider efficient and would ideally remove it. In order to do this, the ctv.enhancedmetadata.Event type needs to contain all of the information that the UI needs.
+
+It has been noticed (by Stephen Spencer) that ctv.enhancedmetadata.Event.getSynopsis() doesn't always return a value for some types of events. This should be investigated and fixed.
+
+The implementation of ctv.enhancedmetadata.Event is in the file:
+
+Uranium/Uranium.Client.System/src/metadata/SystemClientEvent.cpp
+
+<Q> is it dev tool? not a one of components?
+
+# Uranium.Client.System/src/local-media-library/SystemMediaRecord.cpp
+
+class SystemMediaRecord : virtual public MediaRecord {
+
+    virtual std::string getSynopsis() const;
+    { return mr->synopsis; }
+
+    boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRecord> mr;
+};
+
+
+# Uranium.Client.System/src/metadata/SystemClientEvent.cpp
+
+/**
+ *  A class that represents the Event in the EPG.
+ */
+class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic {
+public:
+
+    /**
+     * Returns the synopsis of the Event if current data source provides it.
+     */
+    virtual std::string getSynopsis() const = 0;
+};
+
+class ZINC_LOCAL SystemClientEvent : virtual public Event
+{
+public://uranium::metadata::client::Event
+
+    /**
+     * Returns the synopsis of the Event if current data source provides it.
+     */
+    virtual std::string getSynopsis() const;
+};
+
+SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
+    shared_ptr<SystemClientEvent>& masEvent):
+            ...
+            synopsis(dttEvent->getSynopsis()),
+{}
+
+
+<client-system-factory> <cpptest>
+
+# LocalMediaLibrary 
+#
+
+# Uranium/Uranium.Client.System/src/local-media-library/SystemLocalMediaLibrary.h/cpp
+#
+# 1. build and return vector< MediaRecord > from cache.
+#
+
+class ZINC_LOCAL SystemLocalMediaLibrary
+	:	virtual public NS_URANIUM_LML_CLIENT::LocalMediaLibrary
+	,	virtual public NS_NICKEL_SYSTEM::LocalMediaLibraryEventListener
+	,   public NS_ZINC::Resettable
+	,	public boost::enable_shared_from_this<SystemLocalMediaLibrary>
+{
+};
+
+boost::shared_ptr< std::vector< boost::shared_ptr< MediaRecord > > > SystemLocalMediaLibrary::getMediaRecords(
+        const FilterByType::Enum filterByType,
+        const FilterByPlayed::Enum filterByPlayed,
+        const SortBy::Enum sortBy,
+        const bool includeAdult,
+        const uint32_t start,
+        const uint32_t size)
+{
+  URANIUM_FUNC_DEBUG;
+
+  boost::shared_ptr< vector< boost::shared_ptr< MediaRecord > > > results
+    = boost::make_shared< vector< boost::shared_ptr< MediaRecord > > >();
+
+  // Shortcut building the results set if we can.
+  if ( size > 0 && start < cache->size() )
+  {
+    MediaRecordCache::const_iterator iter, end;
+    iter = cache->begin();
+    end = cache->end();
+
+    // Only do a single allocation for the results set, if we can. This
+    // may allocate more than we need, but we'll reduce this down again
+    // after applying filters.
+    //results->reserve( cache->size() - start );
+
+    // Grab at most size items from the list.
+    MediaRecordsFilter filter( filterByType, filterByPlayed, includeAdult );
+    for( ; iter != end; ++iter )
+    {
+      if ( filter( *iter ) )
+      {
+        results->push_back( *iter );
+      }
+    }
+
+    // Shrink the vector back down to size if we can.
+    //results->resize( results->size() );
+
+    std::sort( results->begin(), results->end(), MediaRecordsSorter( sortBy ) );
+
+    inplace_subset( *results, start, size );
+  }
+
+  return results;
+}
+
+
+# Uranium/Uranium.Client.System/src/SystemClientFactory.cpp
+#
+# 1. create a specific instance which is uranium
+# 2. implements interfaces
+
+class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable {
+
+  // factory function.
+  boost::shared_ptr<NS_URANIUM_LML_CLIENT::LocalMediaLibrary> SystemClientFactory::createLocalMediaLibrary() {
+
+    boost::mutex::scoped_lock lock(boost::mutex);
+
+    if(localMediaLibrary == NULL) {
+      URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibrary()");
+
+      note: get cache
+      boost::shared_ptr<NS_URANIUM_LML_CLIENT::MediaRecordCache> cache
+        = getMediaRecordCache();
+
+      boost::shared_ptr<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary> lml
+        = boost::make_shared<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary>(
+            getSystemLocalMediaLibrary(), getProvisioningService(), cache);
+
+      lml->setDispatcher(getDefaultDispatcher());
+      localMediaLibrary = lml;
+      getSystemLocalMediaLibrary()->addListener(lml);
+    }
+    return(localMediaLibrary);
+  }
+
+  Plugin* createSystemClientFactory() {
+    URANIUM_PROFILE_FUNC;
+    return new NS_URANIUM_CLIENT::SystemClientFactory();
+  }
+
+};
+
+# Uranium.Client.System/test/local-media-library/SystemLocalMediaLibraryTest.cpp
+#
+
+class ZINC_LOCAL SystemLocalMediaLibraryTest : IntegrationTestSandbox, TestUsingDbus,  
+  TestUsingServiceDaemon, public CppUnit::TestFixture {
+
+private:
+	ClientFactory *factory;
+
+	boost::shared_ptr<LocalMediaLibrary> localMediaLibrary;
+	boost::shared_ptr<LMLListener> lmlListener;
+public:
+
+   // suppose that it retuns function pointer from a so
+   //
+   static const PluginConfig &getClientFactoryPluginConfig(void)
+   {
+     static const FixedPluginConfig pluginConfig("libUraniumClientSystem.so", "createSystemClientFactory");
+     return(pluginConfig);
+   }
+
+   // ? called by cppuint?
+   //
+	void setUp()
+   {
+     URANIUM_FUNC_TRACE;
+     startService();
+
+     factory = &PluginFactory::getInstance<ClientFactory>(getClientFactoryPluginConfig());
+     localMediaLibrary = factory->createLocalMediaLibrary();
+
+     lmlListener.reset(new LMLListener());
+     localMediaLibrary->addListener(lmlListener);
+   }
+
+   // test routine
+   void testGetMediaRecords()
+   {
+     URANIUM_FUNC_DEBUG;
+     boost::shared_ptr< std::vector< boost::shared_ptr< MediaRecord > > >
+       mrs = localMediaLibrary->getMediaRecords( FilterByType::recordings,
+           FilterByPlayed::played_and_unplayed,
+           SortBy::least_recently_acquired,
+           true, 0, 1234567890);
+
+     CPPUNIT_ASSERT_MESSAGE("No records",mrs);
+     CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong number of records",
+         size_t(45),
+         mrs->size());
+
+     mrs = localMediaLibrary->getMediaRecords(FilterByType::recordings,
+         FilterByPlayed::played_and_unplayed, SortBy::least_recently_acquired, false, 0, 1234567890);
+     CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong number of records",
+         size_t(43),mrs->size());
+   }
+
+	CPPUNIT_TEST_SUITE(SystemLocalMediaLibraryTest);
+
+	CPPUNIT_TEST(testGetMediaRecords);
+   ...
+	CPPUNIT_TEST_SUITE_END();
+};
+
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
