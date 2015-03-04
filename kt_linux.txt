@@ -111,7 +111,6 @@
 |kt_linux_tool_204| binutil: addr2line
 |kt_linux_tool_205| binutil: ld
 
-
 #{ gdb
 |kt_linux_tool_200| gdb: core dump setting
 |kt_linux_tool_201| gdb: core dump analysis {frame-command}
@@ -158,6 +157,14 @@
 |kt_linux_core_107| process: group
 |kt_linux_core_108| process: deamon
 |kt_linux_core_109| process: execution <exec-wrapper-example>
+
+|kt_linux_core_150| thread vs process. LPI 29
+|kt_linux_core_151| pthread and source
+|kt_linux_core_152| pthread errno. LPI 29.2
+|kt_linux_core_153| pthread compile
+|kt_linux_core_154| pthread create and exit
+|kt_linux_core_155| pthread join and detach. zombie-thread. LPI 29
+|kt_linux_core_156| pthread thread id. LPI 29
 
 |kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
@@ -7311,6 +7318,7 @@ creates a child process that needs to terminate because of an error. This termin
 without flushing the child's copy of the parent's (i.e., the calling process's) stdio buffers and
 without invoking exit handlers established by the parent.
 
+<thread-errno>
 errExitEN() 
 is the same as errExit(), except that instead of printing the error text corresponding to the
 current value of errno, it prints the text corresponding to the error number (thus, the EN suffix)
@@ -7318,7 +7326,6 @@ given in the argument errnum.
 
 Mainly, we use errExitEN() in programs that employ the POSIX threads API. Since:
 
-<difference>
 The traditional method of returning status from system calls and some library functions is to return
 0 on success and -1 on error, with errno being set to indicate the error. The functions in the
 pthreads API do things differently. All pthreads functions return 0 on success or a positive value
@@ -7331,7 +7338,7 @@ errno = pthread_create(&thread, NULL, func, &arg);
 if (errno != 0)
    errExit("pthread_create");
 
-However, this approach is inefficient because errno is defined in threaded programs as a macro that
+However, this approach is 'inefficient' because errno is defined in threaded programs as a macro that
 expands into a 'function' call that returns a modifiable lvalue. 
 
 errExitEN() function allows us to write a more efficient equivalent of the above code:
@@ -7341,8 +7348,7 @@ s = pthread_create(&thread, NULL, func, &arg);
 if (s != 0)
    errExitEN(s, "pthread_create");
 
-note: errExitEN do not use errno and user provide it instead. this also suggest that errno is
-managed per thread.
+note: errExitEN do 'not' use errno which is a function call and user provides it instead. 
 
 <lib/error_functions.h>
 
@@ -8033,139 +8039,6 @@ while (0 == kill(parent_pid, 0))
 Verifying the existence of a particular process ID doesn't guarantee that a 'particular' program is
 still running. Because the kernel recycles process IDs as processes are born and die, the same
 process ID may, over time, refer to a different process.
-
-
-={============================================================================
-*kt_linux_core_100* thread vs process
-
-A process is an instance of an executing program and a thread is an instance of an executing a task.
-In other words, a process is processor abstract, an abstract entity defined by kernel and with
-allocated resources in order to execute a program.  
-
-UNIX programs have a single thread of execution: the CPU processes instructions for a single logical
-flow of execution through the program. In a multithreaded program, there are multiple, independent,
-concurrent logical flows of execution within the same process.
-
-<key> In short, a process is an abstract(virtualisation) of a processor and a thread is an abstract
-of single flow of execution.
-
-<on-linux>
-Two virtualisation in Linux: processer and memory.
-
-Linux don't distinguish a process(task) with a thread. The thread is just a special process: 
-
-1. Linux kernel scheduler schedules based on 'thread'.
-2. Linux kernel has a double-linked list which has <thread_info> struct element which has
-thread_struct*.
-3. Thread is special since it shares resource (open files, pending signals, internal kernel data,
-process state, address space, text and data section) with others threads.
-
-In other words, process is a single thread that don't share resources.
-
-This is clear when see how to create a thread:
-
-clone( CLONE_VM| CLONE_FS| CLONE_FILES| CLONE_SIGHAND, 0);
-
-to create a process:
-
-clone(SIGCHLD, 0);
-
-Two usual steps to create a process:
-
-fork();  // copy a child from a parent and actually use clone() call
-exec*()  // load a new program text.
-
-
-{shared-and-not-shared-between-threads}
-From CH29 in {ref-LPI} and {ref-UNP}
-
-<shared>
-The attributes that are shared; in other words, global attributes to a process:
-
-the same global memory, process code and most data;
-process ID and parent process ID;
-process group ID and session ID;
-process credentials (user and group IDs);
-
-open file descriptors;
-signal dispositions;
-file system-related information: umask, current working directory, and root directory;
-resource limits;
-
-<not-shared>
-The attributes for each thread:
-
-thread ID (Section 29.5);
-signal mask;
-thread-specific data (Section 31.3);
-alternate signal stack (sigaltstack());
-the errno variable;
-realtime 'scheduling' policy and priority (Sections 35.2 and 35.3);
-capabilities (Linux-specific, described in Chapter 39); and
-'stack' (local variables and function call linkage information).
-'registers' including PC and SP
-
-
-{multithreaded-vs-singlethreaded}
-The mutiltithreaded means that a single process has multi threads, 'lightweight'-process. The
-singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
-because shares resources; less protection. ST has more IPC but more protection. 
-
-note: tradeoff between IPC and protection.
-
-
-{why-thread}
-From {ref-LPI}. Problems with fork:
-
-1) The fork call is expensive because memory is copied from the parent to the child. Although
-<copy-on-write> is used to avoid this, but still expensive.
-
-2) Need IPC after fork between parent and child.
-
-Thread help with these problems as it is 'lightweight'-process in terms of 'creation' cost:
-
-Thread creation is faster because many of the attributes that must be duplicated in a child created
-by fork() are instead shared between threads.
-
-Sharing information between threads is easy and fast. It is just a matter of copying data into
-shared (global or heap) variables.
-
-However, has disadvantages:
-
-1) more efforts to ensure thread-safe
-2) buggy thread can damage all of the threads in the process. less protection.
-3) each thread is competing for use of the finite virtual address space of a host process.
-4) usually desirable to avoid the use of signals in multi-threaded programs since requires careful
-designs.
-5) should run the same program.
-6) more threads, more memory and context switching.
-
-
-{process}
-<process-id>
-From {ref-LPI} PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, 
-the process ID counter is reset to 300, rather than 1. This is done because many low-numbered
-process IDs are in permanent use by system processes and daemons, and thus time would be wasted
-searching for an unused process ID in this range. 
-
-In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
-With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
-limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
-greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
-32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
-million), making it possible to accommodate very large numbers of processes.
-
-
-{user-and-kernel-stack}
-The kernel stack is a per-process memory region maintained in kernel memory that is used as the
-stack for execution of the functions called internally during the execution of a system call.
-
-Each (user) stack frame contains the following information:
-
-1. Function arguments and local variables
-2. Some registers. RA.
-
-note: needs more about difference?
 
 
 ={============================================================================
@@ -9562,11 +9435,141 @@ int main(int argc, char** argv)
 
 
 ={============================================================================
-*kt_linux_core_150* pthread
+*kt_linux_core_150* thread vs process. LPI 29
+
+A process is an instance of an executing program and a thread is an instance of an executing a task.
+In other words, a process is processor abstract, an abstract entity defined by kernel and with
+allocated resources in order to execute a program.  
+
+UNIX programs have a single thread of execution: the CPU processes instructions for a single logical
+flow of execution through the program. In a multithreaded program, there are multiple, independent,
+concurrent logical flows of execution within the same process.
+
+<key> In short, a process is an abstract(virtualisation) of a processor and a thread is an abstract
+of single flow of execution.
+
+<on-linux>
+Two virtualisation in Linux: processer and memory.
+
+Linux don't distinguish a process(task) with a thread. The thread is just a special process: 
+
+1. Linux kernel scheduler schedules based on 'thread'.
+2. Linux kernel has a double-linked list which has <thread_info> struct element which has
+thread_struct*.
+3. Thread is special since it shares resource (open files, pending signals, internal kernel data,
+process state, address space, text and data section) with others threads.
+
+In other words, process is a single thread that don't share resources.
+
+This is clear when see how to create a thread:
+
+clone( CLONE_VM| CLONE_FS| CLONE_FILES| CLONE_SIGHAND, 0);
+
+to create a process:
+
+clone(SIGCHLD, 0);
+
+Two usual steps to create a process:
+
+fork();  // copy a child from a parent and actually use clone() call
+exec*()  // load a new program text.
+
+{thread-vs-process-model}
+PM or TM?
+<PM>
+1. It is difficult to share information between processes. Since the parent and child don't share
+memory other than the read-only text segment, we must use IPC.
+
+2. Process creation with fork() is relatively expensive although 'copy-on-write' is used. The need
+to duplicate various process attributes such as page tables and file descriptor tables means that a
+fork() call is still time-consuming.
+
+<TM>
+1. Sharing information between threads is easy and fast since it is just a matter of copying data
+into shared (global or heap) variables. However, needs syncronization.
+
+2. Thread creation is faster because many of the attributes that must be duplicated in a child
+created by fork() are instead shared between threads such as page table.
+
+<TM-disadvantages>
+1. more efforts to ensure thread-safe
+2. buggy thread can damage all of the threads in the process. less protection.
+3. each thread is competing for use of the finite virtual address space of a host process.
+4. desirable to avoid the use of signals in multi-threaded since requires careful designs.
+5. should run the same program.
+6. more threads means more memory and context switching.
+
+
+{shared-and-not-shared-between-threads}
+From CH29 in {ref-LPI} and {ref-UNP}
+
+<shared-attributes>
+The attributes that are shared; in other words, global attributes to a process:
+
+the same global memory, process code and most data;
+process ID and parent process ID;
+process group ID and session ID;
+controlling terminal
+process credentials (user and group IDs);
+
+open file descriptors;
+signal dispositions;
+file system-related information: umask, current working directory, and root directory;
+resource limits;
+
+<not-shared-attributes> thread specific
+thread ID (Section 29.5);
+signal mask;
+thread-specific data (Section 31.3);
+alternate signal stack (sigaltstack());
+the errno variable;
+realtime 'scheduling' policy and priority (Sections 35.2 and 35.3);
+capabilities (Linux-specific, described in Chapter 39); and
+'stack' (local variables and function call linkage information).
+'registers' including PC and SP
+
+
+{multithreaded-vs-singlethreaded}
+The mutiltithreaded means that a single process has multi threads, 'lightweight'-process. The
+singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
+because shares resources; less protection. ST has more IPC but more protection. 
+
+note: tradeoff between IPC and protection.
+
+
+{process}
+<process-id>
+From {ref-LPI} PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, 
+the process ID counter is reset to 300, rather than 1. This is done because many low-numbered
+process IDs are in permanent use by system processes and daemons, and thus time would be wasted
+searching for an unused process ID in this range. 
+
+In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
+With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
+limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
+greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
+32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
+million), making it possible to accommodate very large numbers of processes.
+
+
+{user-and-kernel-stack}
+The kernel stack is a per-process memory region maintained in kernel memory that is used as the
+stack for execution of the functions called internally during the execution of a system call.
+
+Each (user) stack frame contains the following information:
+
+1. Function arguments and local variables
+2. Some registers. RA.
+
+note: needs more about difference?
+
+
+={============================================================================
+*kt_linux_core_151* pthread and source
 
 POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard defines an API for
-creating and manipulating threads. So there is one posix standard but there are two implementation
-like NPTL.
+creating and manipulating threads. The two main Linux threading implementations - LinuxThreads and
+Native POSIX Threads Library (NPTL) - deviate from the standard.
 
 
 {pthread-apis}
@@ -9590,13 +9593,72 @@ uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\bits\pth
 (_pthread_rwlock_t)
 
 
+={============================================================================
+*kt_linux_core_152* pthread errno. LPI 29.2
+
 {thread-errno}
+The traditional method of returning status from system calls and some library functions is to return
+0 on success and -1 on error, with errno being set to indicate the error. 
+
+The functions in the pthreads API do things differently. 
+
+<why>
+The errno is a global integer variable. However, this doesn't suffice for threaded programs. If a
+thread made a call that returned an error in a global errno variable, then this would confuse other
+threads that might also be making calls and checking errno. In other words, race conditions would
+result.
+
+<how>
+Each thread has its own errno value. On Linux, a thread-specific errno is achieved in a similar
+manner to most other UNIX: errno is defined as a 'macro' that expands into a function call returning
+a modifiable lvalue that is distinct for each thread. Since the lvalue is modifiable, it is still
+possible to write assignment statements of the form errno = value in threaded programs.
+
+To summarize, the errno mechanism has been adapted for threads in a manner that leaves error
+reporting unchanged from the traditional UNIX API.
+
+note: after all, errno macro returns a per-thread errno.
+note: Nowadays, a program is required to declare errno by including <errno.h>, which enables the
+implementation of a per-thread errno.
+
+<value>
+All pthreads functions return 0 on success or a positive value on 'failure'. The failure value is
+one of the same values that can be placed in errno by traditional UNIX system calls. 
+
+
+{LPI-approach}
+errExitEN() 
+is the same as errExit(), except that instead of printing the error text corresponding to the
+current value of errno, it prints the text corresponding to the error number (thus, the EN suffix)
+given in the argument errnum.
+
+Mainly, we use errExitEN() in programs that employ the POSIX threads API. Since:
+
 The traditional method of returning status from system calls and some library functions is to return
 0 on success and -1 on error, with errno being set to indicate the error. The functions in the
 pthreads API do things differently. All pthreads functions return 0 on success or a positive value
 on failure. The failure value is one of the same values that can be placed in errno by traditional
-UNIX system calls. Two approaches:
+UNIX system calls. 
 
+We could diagnose errors from the POSIX threads functions using code such as the following:
+
+errno = pthread_create(&thread, NULL, func, &arg);
+if (errno != 0)
+   errExit("pthread_create");
+
+However, this approach is 'inefficient' because errno is defined in threaded programs as a macro that
+expands into a 'function' call that returns a modifiable lvalue. 
+
+errExitEN() function allows us to write a more efficient equivalent of the above code:
+
+int s;
+s = pthread_create(&thread, NULL, func, &arg);
+if (s != 0)
+   errExitEN(s, "pthread_create");
+
+note: errExitEN do 'not' use errno which is a function call and user provides it instead. 
+
+TODO: needs to clarify further. 
 <one>
 From {ref-UNP}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
 This means that set manually errno before calling err_sys() for example. This util funcs handles
@@ -9636,11 +9698,25 @@ if( error condition ) {
   exit(1);
 }
 
-<two>
-See "error handling codes from LPI".
+
+={============================================================================
+*kt_linux_core_153* pthread compile
+
+On Linux, programs that use the Pthreads API must be compiled with the cc -pthread option. The
+effects of this option include the following:
+
+1. The _REENTRANT preprocessor macro is defined. This causes the declarations of a few reentrant
+functions to be exposed.
+
+2. The program is linked with the libpthread library (the equivalent of -lpthread).
+
+gcc -pthread sample.c
 
 
-{pthread.h}
+={============================================================================
+*kt_linux_core_154* pthread create and exit
+
+<pthread-create>
 #include <pthread.h>
 
 // return 0 if okay, positive Exxx on error which is different from most system calls. 
@@ -9649,98 +9725,161 @@ See "error handling codes from LPI".
 // address of this as the single argument to the start function.
 //
 // The tid argument points to a buffer of type pthread_t into which the unique identifier for
-// this thread is copied before pthread_create() returns. This identifier can be used in later
+// this thread is 'copied' before pthread_create() returns. This identifier can be used in later
 // Pthreads calls to refer to the thread. The arg should be in global or heap.
 //
-// EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
+// If attr is NULL, uses default values.
 //
+// EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
+
 int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
 
-<join> <pthread-error-use>
-// return 0 if okay, positive Exxx on error which is different from most system calls. See
-// {errno-use}
-//
-// To wait for a given thread to terminate but no way to wait for any other threads. If that thread
-// has already terminated, pthread_join() returns immediately.
-//
-// If status is not null, the return value from the thread(a pointer to some object) is stored.
-//
-// <circumbent-join-restriction>
-// We noted earlier that pthread_join() can be used to join with only a specific thread. It
-// provides no mechanism for joining with any terminated thread. We now show how a condition
-// variable can be used to circumvent this restriction. The ref-LPI 30.2.4 shows code.
 
-int pthread_join( pthread_t tid, void **status);
+<pthread-exit>
+// The execution of a thread terminates in one of the following ways: 
+//
+// o The thread's start function performs a return specifying a return value for the thread. This is
+// equivalent to pthread_exit()  
+// 
+// o The thread calls pthread_exit() which can be called in any func called by start func.
+//
+// o The thread is canceled using pthread_cancel()
+//
+// o note: Any of the threads calls exit(), or the main thread performs a return (in the main() function),
+// which causes 'all' threads in the process to terminate immediately.
+// 
+// @retval
+//
+// Specifies a return value that can be obtained in 'another' thread by calling pthread_join(). The
+// value pointed to by retval should 'not' be located on the thread's stack, since the contents of
+// that stack become undefined on thread termination. The same statement applies to the value given
+// to a return statement in the thread's start function.
+//
+// <continue-after-main-thread-exit>
+// note: If the main thread calls pthread_exit() instead of calling exit() or performing a return,
+// then the other threads continue to execute.
 
-
-/* The execution of a thread terminates in one of the following ways: 
- *
- * o The thread's start function performs a return specifying a return value for the thread. This is
- * equivalent to pthread_exit()  
- * 
- * o The thread calls pthread_exit() which can be called in any func called by start func.
- *
- * o The thread is canceled using pthread_cancel()
- *
- * o note: Any of the threads calls exit(), or the main thread performs a return (in the main() function),
- * which causes 'all' threads in the process to terminate immediately.
- * 
- * {return-value}
- *
- * The retval argument specifies the return value for the thread. The value pointed to by retval
- * should not be located on the thread's stack, since the contents of that stack become undefined on
- * thread termination. (For example, that region of the process's virtual memory might be
- * immediately reused by the stack for a new thread.) The same statement applies to the value given
- * to a return statement in the thread's start function.
- *
- * {main-thread-exit}
- *
- * note: If the main thread calls pthread_exit() instead of calling exit() or performing a return, then
- * the other threads continue to execute.
- */
 void pthread_exit(void *retval);
 
 
-// {threadid}
-// return tid of calling thread. note: pthread_t is structure and need more to print out and also
-// implementation dependant. In NPTL, pthread_t is a pointer so treat it as opaque data and hence
-// need pthread_equal(). 
-//
-// if (pthread_equal(tid, pthread_self()) 
-//    printf("tid matches self\n");
-//
-// In 29.5 of {ref-LPI}, POSIX thread IDs are not the same as the thread IDs returned by the Linux
-// specific gettid() system call. POSIX thread IDs are assigned and maintained by the threading
-// implementation. The thread ID returned by gettid() is a number (similar to a process ID) that is
-// assigned by the kernel.  Although each POSIX thread has a unique kernel thread ID in the Linux
-// NPTL threading implementation, an application generally doesn't need to know about the kernel IDs
-// (and won't be portable if it depends on knowing them).
-//
-//  return 0 if they are equal
-//
-int pthread_equeal( pthread_t tid, pthread_t tid );
-pthread_t pthread_self(void);
+={============================================================================
+*kt_linux_core_155* pthread join and zombie thread. LPI 29
 
+<pthread-join> 
+// return 0 if okay, positive Exxx on error. 
+//
+// To 'wait' for a given thread to terminate. If that thread has already terminated, pthread_join()
+// returns 'immediately'.
+//
+// If retval is a non-NULL pointer, then it receives a copy of the terminated thread's return value
+// - that is, the value that was specified when the thread performed a return or called
+// pthread_exit().
 
-/*  Thread is either 'joinable'(the default) or 'detached'. The detached thread is like a daemon
- *  process: when it terminates, all its resources are released, and cannot wait for it to
- *  terminate. This means cannot get return state. {Q} does it mean joinable thread possibly leaks
- *  resources when not joined? If a joinable thread termintes without pthread_join, it became a
- *  'zombie' process. Leak resources and may not able to create additional threads. 
- *
- *  {ref-UNP} Detaching a thread doesn't make it immune to a call to exit() in another thread or a
- *  return in the main thread. In such an event, all threads in the process are immediately
- *  terminated, regardless of whether they are joinable or detached. To put things another way,
- *  pthread_detach() simply controls what happens after a thread terminates, not how or when it
- *  terminates.
- *
- *  To make the specified thread detached and often used to detach itself. Can create detached
- *  thread when create it by using attr setting.
- *
- *  pthread_detach( pthread_self() );
- */
+int pthread_join( pthread_t thread, void **retval );
+
+<join-restriction>
+Calling pthread_join() for a thread ID that has been previously joined can lead to 'unpredictable'
+behavior; for example, it might instead join with a thread created later that happened to reuse the
+same thread ID.
+
+<pthread-detach>
 int pthread_detach(pthread_t tid);
 
+Thread is either 'joinable'(the 'default') or 'detached'. 
+
+To make the specified thread detached and often used to detach itself or can create detached thread
+when create it by using attr setting.
+
+pthread_detach( pthread_self() );
+
+By default, a thread is joinable, meaning that when it terminates, another thread can obtain its
+  return status using pthread_join(). Sometimes, we don't care about the thread's return status; we
+  simply want the system to automatically clean up and remove the thread when it terminates. In this
+  case, can mark the thread as detached, by making a call to pthread_detach().
+
+Detaching a thread does 'not' make it 'immune' to a call to exit() in another thread or a return in
+the main thread. In such an event, all threads in the process are immediately terminated,
+    'regardless' of whether they are joinable or detached. 
+    
+To put things another way, pthread_detach() simply controls what happens after a thread terminates,
+   not how or when it terminates.
+
+note: After all, detaching means cannot use join() to get retrun value but not like zombie process
+since still related to a process.
+
+
+{zombie-thread}
+If a thread is not detached, then we must join with it using pthread_join(). If not, then, when the
+thread terminates, it produces the thread 'equivalent of a zombie process. Aside from wasting system
+resources, if enough thread zombies accumulate, we won't be able to create additional threads.
+
+{what-join-do}
+The task that pthread_join() performs for threads is similar to that performed
+by waitpid() for processes. However, there are some notable differences:
+
+1. Threads are 'peers'. Any thread in a process can use pthread_join() to join with any other thread
+in the process. For example, if thread A creates thread B, which creates thread C, then it is
+possible for thread A to join with thread C, or vice versa. This differs from the 'hierarchical'
+relationship between processes.
+
+When a parent process creates a child using fork(), it is the only process that can wait() on that
+child. There is no such relationship between the thread that calls pthread_create() and the
+resulting new thread.
+
+2. There is no way of saying "join with any thread" (for processes, we can do this using the call
+    waitpid(-1, &status, options)); nor is there a way to do a nonblocking join (analogous to the
+    waitpid() WNOHANG flag). There are ways to achieve similar functionality using condition
+    variables; we show an example in Section 30.2.4.
+
+
+={============================================================================
+*kt_linux_core_156* pthread thread id. LPI 29
+
+{TID}
+Each thread within a process is uniquely identified by a thread ID. This ID is returned to the
+caller of pthread_create(), and a thread can obtain its own ID using pthread_self().
+
+int pthread_equeal( pthread_t tid, pthread_t tid );
+
+Returns nonzero value if t1 and t2 are equal, otherwise 0
+
+pthread_t pthread_self(void);
+
+<why-equal-function-needed> opaque-data
+All pthread data type should be treated 'opaque' data. On Linux, pthread_t happens to be defined as
+an unsigned long, but on other implementations, it could be a pointer or a structure.
+
+In NPTL, pthread_t is actually a pointer that has been cast to unsigned long.
+
+Two problems:
+
+1. Therefore, we can't 'portably' use code such as the following to display a thread ID. Though it
+does work on many implementations, including Linux, and is sometimes useful for debugging purposes:
+
+pthread_t thr;
+printf("Thread ID = %ld\n", (long) thr);
+
+note: Q. really work?
+
+// return tid of calling thread. note: pthread_t is structure and need more to print out and also
+// implementation dependant. 
+
+2. In the Linux threading implementations, thread IDs are unique across processes. However, this is
+'not' necessarily the case on other implementations
+
+
+{posix-TID-and-kernel-TID}
+POSIX thread IDs are 'not' the same as the thread IDs returned by the Linux specific gettid() system
+call. POSIX thread IDs are assigned and maintained by the threading implementation. The thread ID
+returned by gettid() is a number (similar to a process ID) that is assigned by the kernel. 
+
+Although each POSIX thread has a unique kernel thread ID in the Linux NPTL implementation, an
+application generally doesn't need to know about the kernel IDs and won't be portable if it depends
+on knowing them.
+
+
+={============================================================================
+*kt_linux_core_157* pthread thread id. LPI 29
 
 /*  status must not point to an object that is local to the calling thread.
  *
@@ -9937,18 +10076,6 @@ NPTL 2.15
 <pid-nptl>
 note: Q. In Linux, every thread has a PID and can see when use ps command but in NPTL, thread
 group has one PID. is it true?
-
-
-{pthread-compile-link}
-It is on GCC 4.6.3 and not -lpthread. This is said when run 'man' on pthread funcs. On Linux,
-option. The effects of this option include the following:
-
-o The _REENTRANT preprocessor macro is defined. This causes the declarations of a few reentrant
-functions to be exposed.
-
-o The program is linked with the libpthread library (the equivalent of -lpthread).
-
-gcc -pthread sample.c
 
 
 ={============================================================================
