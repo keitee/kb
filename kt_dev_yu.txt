@@ -2949,24 +2949,75 @@ Uranium/Uranium.Client.System/src/metadata/SystemClientEvent.cpp
 
 <Q> is it dev tool? not a one of components?
 
+
+<client-api> note: bindings
+Uranium.AIR.Client.API/src/UraniumAirPlugin.cpp
+
+class ZINC_LOCAL UraniumAirPlugin : public GenericAirPlugin<UraniumAirPlugin, ClientFactory> 
+{
+  void registerBindings() {
+    // ...
+  }
+
+  void initSingletons(ClientFactory& clientFactory) {
+
+    note: create ML
+    shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> nativeLocator(
+        clientFactory.createMetadataLocator()
+        );
+
+    NS_URANIUM_METADATA_AIR_CLIENT::LocatorBinding::setSingletonInstance(nativeLocator);
+
+    shared_ptr<NS_URANIUM_METADATA_CLIENT::ParamFactory> nativeParamFactory(
+        clientFactory.createParamFactory());
+
+    NS_URANIUM_METADATA_AIR_CLIENT::ParamFactoryBinding::setSingletonInstance(nativeParamFactory);
+
+    NS_URANIUM_LINEAR_AIR_CLIENT::LocatorBinding::setSingletonInstance(
+        clientFactory.createLinearMetadataLocator());
+
+    NS_URANIUM_DVR_AIR_CLIENT::LocatorBinding::setSingletonInstance(
+        clientFactory.createLinearAcquisitionLocator());
+
+   note: get LMLL(locator) and pass up to client application. see factory below
+    NS_URANIUM_LML_AIR_CLIENT::LocatorBinding::setSingletonInstance(
+        clientFactory.createLocalMediaLibraryLocator());
+
+    NS_URANIUM_TUNER_AIR_CLIENT::LocatorBinding::setSingletonInstance(clientFactory.createTunerLocator());
+  }
+};
+
+
+<client-api>
+Uranium.Client.API/include/local-media-library/MediaRecord.h
+Uranium.Client.API/include/metadata/Event.h
+Uranium.Client.API/include/linear-acquisition/Booking.h
+
+struct ZINC_EXPORT MediaRecord : virtual public NS_ZINC::Polymorphic {
+   virtual std::string getSynopsis() const = 0;
+}
+
+<client-system> <media-record>
 # Uranium.Client.System/src/local-media-library/SystemMediaRecord.cpp
 
 class SystemMediaRecord : virtual public MediaRecord {
 
-    virtual std::string getSynopsis() const;
-    { return mr->synopsis; }
+  note: getSynopsis
+  virtual std::string getSynopsis() const;
+  { return mr->synopsis; }
 
-    boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRecord> mr;
+  boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRecord> mr;
 };
 
 
+<client-system> <event>
 # Uranium.Client.System/src/metadata/SystemClientEvent.cpp
 
 /**
  *  A class that represents the Event in the EPG.
  */
 class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic {
-public:
+  public:
 
     /**
      * Returns the synopsis of the Event if current data source provides it.
@@ -2976,38 +3027,188 @@ public:
 
 class ZINC_LOCAL SystemClientEvent : virtual public Event
 {
-public://uranium::metadata::client::Event
+  std::string synopsis;
 
-    /**
-     * Returns the synopsis of the Event if current data source provides it.
-     */
-    virtual std::string getSynopsis() const;
+  public://uranium::metadata::client::Event
+
+  /**
+   * Returns the synopsis of the Event if current data source provides it.
+   */
+  virtual std::string getSynopsis() const
+  {
+    URANIUM_PROFILE_FUNC;
+    return synopsis;
+  }
+
+  // *  @brief Constructs SystemClientEvent from Iron System Event and MAS event.
+  //
+  SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
+      shared_ptr<SystemClientEvent>& masEvent):
+    synopsis(dttEvent->getSynopsis())
+  {
+   //
+  }
 };
 
-SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
-    shared_ptr<SystemClientEvent>& masEvent):
-            ...
-            synopsis(dttEvent->getSynopsis()),
-{}
+
+<client-system> <summary>
+Uranium.Client.System/src/metadata/SystemClientSummary.h
+
+class SystemClientSummary : public Summary
+{
+  public:
+    SystemClientSummary(
+        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult_,
+        boost::shared_ptr<SystemClientMetadataConfig> config_,
+        boost::weak_ptr<MetadataRepositories> repos_,
+        boost::shared_ptr<ProvisioningCache> provisioningCache_,
+        uint32_t absoluteIndex_);
+
+      :sysResult(sysResult), config(config), repos(repos_)
+      {}
+
+    virtual boost::shared_ptr<Event> getEvent()
+    {
+      if(entityType != ENTITY_SCHEDULE_EVENT)
+      {
+        throw EntityNotPresentException("Incorrect entity type. Expected " +
+            boost::lexical_cast<string>(ENTITY_SCHEDULE_EVENT) + ", got " +
+            boost::lexical_cast<string>(entityType));
+      }
+
+      note: this repo is DTT event from Iron?
+      return boost::make_shared<SystemClientEvent>(repos, sysResult);
+    }
+
+  private:
+    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
+    boost::weak_ptr<MetadataRepositories> repos;
+};
 
 
-<client-system-factory> <cpptest>
+<client-system> <booking>
+# Uranium.Client.System/src/linear-acquisition/SystemClientBooking.h
 
+class ZINC_LOCAL SystemClientBooking
+    : public boost::enable_shared_from_this<SystemClientBooking>
+    , public Booking
+{
+  virtual const std::string& getSynopsis() const;
+  { return booking.synopsis; }
+}
+
+
+<common> <event>
+
+class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable {
+
+   note: has default arg.
+   void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
+       boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
+
+  private:
+
+    typedef std::pair<boost::weak_ptr<hoisted_event_listener>, 
+            boost::shared_ptr<EventDispatcher> > listener_entry;
+
+    std::list<listener_entry> listeners;
+
+    /**
+     * This is the default dispatcher. Clients can provide their own in addListener().
+     */
+    boost::shared_ptr<EventDispatcher> dispatcher;
+
+    note: why mutable?
+    mutable boost::mutex mutex;
+}
+
+note: abc to define 2 interfaces: add/remove listener
+
+template<class ListenerT>
+class ZINC_EXPORT EventProducer : virtual public Polymorphic {
+};
+
+
+DEVARCH/Zinc/Zinc.Common/include/DispatchingEventProducer.h
+
+/**
+ * EventProducer specialization that implements produceEvent() by delegating
+ * events to an EventDispatcher implementation.
+ */
+template<class ListenerT>
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> {
+
+  /**
+   * Add an event listener.
+   * The event listener methods will be invoked on the default dispatcher.
+   *
+   * @param listener the event listener.
+   *
+   * @throws std::invalid_argument if a <code>null</code> listener is given.
+   *
+   * @acl all
+   */
+  virtual void addListener(boost::shared_ptr<ListenerT> listener) {
+    // Hoisting note: we cast to void* here, and cast back down in
+    // DowncastingCaller so everything is lovely and symmetrical
+    impl.addListener(listener);
+  }
+
+private:
+
+  note: mutable?
+   mutable detail::DispatchingEventProducerHoisted impl;
+};
+
+class ZINC_EXPORT EventListener : virtual public Polymorphic {
+};
+
+struct ZINC_EXPORT LocalMediaLibraryEventListener : public NS_ZINC::EventListener {
+};
+
+
+<client-system> <SLML>
 # LocalMediaLibrary 
-#
 
-# Uranium/Uranium.Client.System/src/local-media-library/SystemLocalMediaLibrary.h/cpp
-#
+Uranium/Uranium.Client.System/src/local-media-library/SystemLocalMediaLibrary.h/cpp
+
 # 1. build and return vector< MediaRecord > from cache.
 #
 
+struct ZINC_EXPORT LocalMediaLibrary : 
+
+   note: event
+   virtual public NS_ZINC::DispatchingEventProducer<LocalMediaLibraryEventListener>
+{}
+
+struct ZINC_EXPORT LocalMediaLibraryEventListener : public NS_ZINC::EventListener;
+
 class ZINC_LOCAL SystemLocalMediaLibrary
-	:	virtual public NS_URANIUM_LML_CLIENT::LocalMediaLibrary
-	,	virtual public NS_NICKEL_SYSTEM::LocalMediaLibraryEventListener
-	,   public NS_ZINC::Resettable
-	,	public boost::enable_shared_from_this<SystemLocalMediaLibrary>
+   :  virtual public NS_URANIUM_LML_CLIENT::LocalMediaLibrary
+   ,  virtual public NS_NICKEL_SYSTEM::LocalMediaLibraryEventListener
+   ,   public NS_ZINC::Resettable
+   ,  public boost::enable_shared_from_this<SystemLocalMediaLibrary>
 {
+  SystemLocalMediaLibrary::SystemLocalMediaLibrary(
+      boost::shared_ptr<NS_NICKEL_SYSTEM::LocalMediaLibrary> localMediaLibrary_,
+      boost::shared_ptr<NS_COBALT_SYSTEM::ProvisioningService> provisioningService_,
+      boost::shared_ptr<MediaRecordCache> cache_ )
+    : localMediaLibrary(localMediaLibrary_),
+    provisioningService(provisioningService_),
+    cache( cache_ )
+  {
+    URANIUM_FUNC_TRACE;
+    // We aren't going to allow this local media library implementation work
+    // without a cache of any sort, to reduce the complexity and bloat that
+    // would come with maintaining fallback code in every function.
+    BOOST_VERIFY( cache );
+  }
+
+  boost::shared_ptr<MediaRecordCache>                     cache;
 };
+
+
+note: after all, use cache. how is it going to be populated?
 
 boost::shared_ptr< std::vector< boost::shared_ptr< MediaRecord > > > SystemLocalMediaLibrary::getMediaRecords(
         const FilterByType::Enum filterByType,
@@ -3056,105 +3257,353 @@ boost::shared_ptr< std::vector< boost::shared_ptr< MediaRecord > > > SystemLocal
 }
 
 
-# Uranium/Uranium.Client.System/src/SystemClientFactory.cpp
-#
+<client-system> <factory>
+Uranium/Uranium.Client.System/src/SystemClientFactory.cpp
+
 # 1. create a specific instance which is uranium
 # 2. implements interfaces
 
 class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable {
 
-  // factory function.
-  boost::shared_ptr<NS_URANIUM_LML_CLIENT::LocalMediaLibrary> SystemClientFactory::createLocalMediaLibrary() {
+  public: // Local Media Library ClientFactory API Methods
 
-    boost::mutex::scoped_lock lock(boost::mutex);
+    boost::shared_ptr<NS_URANIUM_LML_CLIENT::LocalMediaLibrary> createLocalMediaLibrary();
+    boost::shared_ptr<NS_URANIUM_LML_CLIENT::Locator> createLocalMediaLibraryLocator();
 
-    if(localMediaLibrary == NULL) {
-      URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibrary()");
+    note: events
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> SystemClientFactory::createMetadataLocator() {
+
+      URANIUM_FUNC_DEBUG;
+
+      if(!metadataLocator)
+      {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::createMetadataLocator()");
+
+        metadataLocator = boost::make_shared<NS_URANIUM_METADATA_CLIENT::SystemClientLocator>(
+            createMetadataBroker(), createEventRepository(), createServiceRepository());
+      }
+      return metadataLocator;
+    }
+
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() {
+
+        return createConcreteEventRepository();
+    }
+
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> 
+      createConcreteEventRepository() 
+    {
+      if(eventRepository == 0)
+      {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::createConcreteEventRepository()");
+
+        boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> systemMB = getSystemMetadataBroker();
+        boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemER(getIronSystemEventRepository());
+        boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::ReminderRepository> clientRR(createReminderRepository());
+        boost::shared_ptr<NS_URANIUM_DVR_CLIENT::LinearAcquisition> clientLA(createLinearAcquisition());
+        boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientMetadataConfig> 
+          metadataconfig(createMetadataConfig());
+
+        boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> concreteER(
+            'new' NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository(
+              metadataconfig,
+              createMetadataObserver(), note: create MDO.
+              serviceRepository,
+              systemER,
+              systemMB,
+              clientRR,
+              clientLA,
+              createExtraEventInfoFacade(),
+              createPresentEventsCache(),
+              createBrokerStatusMonitor()
+              )
+            );
+
+        concreteER->setDefaultDispatcher(getDefaultDispatcher());
+        concreteER->setFutureDispatcher(futureDispatcher);
+        eventRepository = concreteER;
+
+        <createMetadataObserver>()->addListener(concreteER);
+        serviceRepository->setEventRepository(concreteER);
+      }
+
+      return eventRepository;
+    }
+
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataObserver> <createMetadataObserver>()
+    {
+      using namespace NS_URANIUM_METADATA_CLIENT;
+
+      if(metadataObserver == 0)
+      {
+        boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataObserver> mo(
+            MetadataObserver::create(
+              createServiceCache(),
+              createReminderRepository(),
+              getIronSystemEventRepository(),
+              createPresentEventsCache(),
+              createProvisioningCache(),
+              createMediaRecordCache(),
+              createMetadataConfig(),
+              createActionProcessor()
+              )
+            );
+
+        // WARNING:
+        // It is necessary to have an InlineDispatcher: see MetadataObserver::ServiceListChange.
+        mo->setDispatcher(boost::make_shared<InlineDispatcher>());
+
+        getIronSystemEventRepository()->addListener(mo);
+        getSystemUnifiedServiceRepository()->addListener(mo);
+        createReminderRepository()->addListener(mo);
+        createLinearAcquisition()->addListener(mo);
+
+        note: set listener
+        createLocalMediaLibrary()->addListener(mo);
+
+        createMetadataConfig()->addListener(mo);
+        getProvisioningService()->addListener(mo);
+        ipnetwork = getNeonClientFactory().createIPNetwork();
+        ipnetwork->addListener(mo);
+        getHiddenServicesStore()->addListener(mo);
+
+        //FIXME: 
+        //the order here is not accidental - unfortunately there is a cyclic indirect dependency between 
+        //service repo and metadata observer, and this is a way to stop infinite loops in the factory
+        mo->addListener(createConcreteServiceRepository(false));
+        createConcreteServiceRepository(false)->setMetadataObserver(mo);
+        metadataObserver = mo;
+      }
+
+      return metadataObserver;
+    }
+
+   note: factory function. call from application or cpptest.
+    boost::shared_ptr<NS_URANIUM_LML_CLIENT::LocalMediaLibrary> SystemClientFactory::createLocalMediaLibrary() 
+    {
+
+      boost::mutex::scoped_lock lock(boost::mutex);
+
+      if(localMediaLibrary == NULL) {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibrary()");
 
       note: get cache
-      boost::shared_ptr<NS_URANIUM_LML_CLIENT::MediaRecordCache> cache
+        boost::shared_ptr<NS_URANIUM_LML_CLIENT::MediaRecordCache> cache
         = getMediaRecordCache();
 
-      boost::shared_ptr<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary> lml
+      note: create SLML
+        boost::shared_ptr<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary> lml
         = boost::make_shared<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary>(
             getSystemLocalMediaLibrary(), getProvisioningService(), cache);
 
       lml->setDispatcher(getDefaultDispatcher());
       localMediaLibrary = lml;
       getSystemLocalMediaLibrary()->addListener(lml);
+      }
+      
+      return(localMediaLibrary);
     }
-    return(localMediaLibrary);
-  }
 
-  Plugin* createSystemClientFactory() {
-    URANIUM_PROFILE_FUNC;
-    return new NS_URANIUM_CLIENT::SystemClientFactory();
-  }
+    Plugin* createSystemClientFactory() {
+      URANIUM_PROFILE_FUNC;
+      return 'new' NS_URANIUM_CLIENT::SystemClientFactory();
+    }
 
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataRepositories> createMetadataRepositories()
+    {
+      if(metadataRepositories == 0)
+      {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::createMetadataRepositories()");
+        metadataRepositories = 
+          boost::make_shared<NS_URANIUM_METADATA_CLIENT::MetadataRepositories>( createServiceRepository(),
+              createReminderRepository(),
+              createLinearAcquisition(),
+              <createConcreteEventRepository>(),
+              createExtraEventInfoFacade());
+      }
+      return metadataRepositories;
+    }
 };
 
+
+note: 'create' LMLL(locator) and LML.
+
+boost::shared_ptr<NS_URANIUM_LML_CLIENT::Locator> SystemClientFactory::createLocalMediaLibraryLocator() {
+
+  using namespace NS_URANIUM_LML_CLIENT;
+
+  if(!localMediaLibraryLocator)
+  {
+    URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibraryLocator()");
+    localMediaLibraryLocator = boost::make_shared<SystemClientLocator>(createLocalMediaLibrary());
+  }
+
+  return localMediaLibraryLocator;
+}
+
+
+<client-system> MO
+Uranium.Client.System/src/metadata/MetadataObserver.h
+
+class ZINC_LOCAL MetadataObserver:
+{
+  std::vector<boost::weak_ptr<SystemClientEventRepository> > clientEventRepos;
+
+  void MetadataObserver::addListener(boost::shared_ptr<SystemClientEventRepository> er_)
+  {
+    URANIUM_FUNC_TRACE;
+    URANIUM_PROFILE_FUNC;
+    boost::mutex::scoped_lock lock(listenerMutex);
+    clientEventRepos.push_back(er_);
+  }
+
+  void MetadataObserver::notifyServicesChanged(const vector<string>& changedServiceLocators)
+  {
+    URANIUM_FUNC_TRACE;
+    URANIUM_PROFILE_FUNC;
+
+    //Service and event repository need to be notified in this order,
+    //and before EventWindows. EventDispatchers give us no guarantee
+    //about the order of notifications, so we need to ensure it ourselves here.
+    boost::shared_ptr<ServiceCache> serviceCacheStrong = serviceCache.lock();
+
+    if(serviceCacheStrong)
+    {
+      serviceCacheStrong->ServicesChanged(changedServiceLocators);
+    }
+
+    //notify and cleanup Service/Event repos.
+    boost::mutex::scoped_lock lock(listenerMutex);
+    notify<SystemClientServiceRepository>(clientServiceRepos, boost::bind(&SystemClientServiceRepository::ServicesChanged, _1, changedServiceLocators)) ;
+    notify<SystemClientEventRepository>(clientEventRepos, boost::bind(&SystemClientEventRepository::ServicesChanged, _1, changedServiceLocators));
+    lock.unlock();
+
+    produceEvent(boost::bind(&MetadataChangeListener::ServicesChanged, _1, changedServiceLocators));
+  }
+
+  void MetadataObserver::ServiceChange(const std::string& serviceLocator)
+  {
+    URANIUM_FUNC_TRACE;
+    URANIUM_PROFILE_FUNC;
+    notifyServicesChanged(vector<std::string>(1, serviceLocator));
+
+    //we don't need to reload present events cache, because spec 0011-S says that if RCNs change, then the box should
+    //emit ServiceListChange anyway.
+  }
+
+}
+
+
+<client-system> <test> <LML>
 # Uranium.Client.System/test/local-media-library/SystemLocalMediaLibraryTest.cpp
-#
 
 class ZINC_LOCAL SystemLocalMediaLibraryTest : IntegrationTestSandbox, TestUsingDbus,  
-  TestUsingServiceDaemon, public CppUnit::TestFixture {
+  TestUsingServiceDaemon, public CppUnit::TestFixture 
+{
 
-private:
-	ClientFactory *factory;
+  private:
+    ClientFactory *factory;
 
-	boost::shared_ptr<LocalMediaLibrary> localMediaLibrary;
-	boost::shared_ptr<LMLListener> lmlListener;
-public:
+    boost::shared_ptr<LocalMediaLibrary> localMediaLibrary;
+    boost::shared_ptr<LMLListener> lmlListener;
+  public:
 
-   // suppose that it retuns function pointer from a so
-   //
-   static const PluginConfig &getClientFactoryPluginConfig(void)
-   {
-     static const FixedPluginConfig pluginConfig("libUraniumClientSystem.so", "createSystemClientFactory");
-     return(pluginConfig);
-   }
+   note: suppose that it retuns function pointer from a so
+  static const PluginConfig &getClientFactoryPluginConfig(void)
+  {
+    static const FixedPluginConfig pluginConfig("libUraniumClientSystem.so", "createSystemClientFactory");
+    return(pluginConfig);
+  }
 
-   // ? called by cppuint?
-   //
-	void setUp()
-   {
-     URANIUM_FUNC_TRACE;
-     startService();
+   note: called by cppuint?
+  void setUp()
+  {
+    URANIUM_FUNC_TRACE;
+    startService();
 
-     factory = &PluginFactory::getInstance<ClientFactory>(getClientFactoryPluginConfig());
-     localMediaLibrary = factory->createLocalMediaLibrary();
+    factory = &PluginFactory::getInstance<ClientFactory>(getClientFactoryPluginConfig());
 
-     lmlListener.reset(new LMLListener());
-     localMediaLibrary->addListener(lmlListener);
-   }
+    note: call create LML
+    localMediaLibrary = factory->createLocalMediaLibrary();
 
-   // test routine
-   void testGetMediaRecords()
-   {
-     URANIUM_FUNC_DEBUG;
-     boost::shared_ptr< std::vector< boost::shared_ptr< MediaRecord > > >
-       mrs = localMediaLibrary->getMediaRecords( FilterByType::recordings,
-           FilterByPlayed::played_and_unplayed,
-           SortBy::least_recently_acquired,
-           true, 0, 1234567890);
+    lmlListener.reset(new LMLListener());
+    localMediaLibrary->addListener(lmlListener);
+  }
 
-     CPPUNIT_ASSERT_MESSAGE("No records",mrs);
-     CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong number of records",
-         size_t(45),
-         mrs->size());
+  // test routine
+  void testGetMediaRecords()
+  {
+    URANIUM_FUNC_DEBUG;
 
-     mrs = localMediaLibrary->getMediaRecords(FilterByType::recordings,
-         FilterByPlayed::played_and_unplayed, SortBy::least_recently_acquired, false, 0, 1234567890);
-     CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong number of records",
-         size_t(43),mrs->size());
-   }
+    note: get MRs
+    boost::shared_ptr< std::vector< boost::shared_ptr< MediaRecord > > >
+    mrs = localMediaLibrary->getMediaRecords( FilterByType::recordings,
+        FilterByPlayed::played_and_unplayed,
+        SortBy::least_recently_acquired,
+        true, 0, 1234567890);
 
-	CPPUNIT_TEST_SUITE(SystemLocalMediaLibraryTest);
+//    CPPUNIT_ASSERT_MESSAGE("No records",mrs);
+//    CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong number of records",
+//      size_t(45),
+//      mrs->size());
 
-	CPPUNIT_TEST(testGetMediaRecords);
-   ...
-	CPPUNIT_TEST_SUITE_END();
+    note: call to LML.
+    mrs = localMediaLibrary->getMediaRecords(FilterByType::recordings,
+      FilterByPlayed::played_and_unplayed, SortBy::least_recently_acquired, false, 0, 1234567890);
+
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong number of records",
+      size_t(43),mrs->size());
+  }
+
+  void testGetMediaRecordsByContentIdentifier()
+  {
+    URANIUM_FUNC_DEBUG;
+
+    note: call to LML.
+    mrs = sortByMediaRecordId(localMediaLibrary->getMediaRecordsByContentIdentifier(
+          "dvb://233a..1044;b741"));
+
+//    CPPUNIT_ASSERT_EQUAL_MESSAGE(
+//        "Wrong title",
+//        string("TV Very Short Duration"),
+//        mrs->at(0)->getTitle());
+
+    note: getSynopsis
+    CPPUNIT_ASSERT_EQUAL_MESSAGE(
+        "Wrong synopsis",
+        string("A very short programme "),
+        mrs->at(0)->getSynopsis());
+  }
+
+  CPPUNIT_TEST_SUITE(SystemLocalMediaLibraryTest);
+
+  CPPUNIT_TEST(testGetMediaRecords);
+  CPPUNIT_TEST(testGetMediaRecordsByContentIdentifier);
+
+  CPPUNIT_TEST_SUITE_END();
 };
+
+
+<client-system> <test> <event>
+Uranium.Client.System/test/metadata/SummaryTest.cpp
+
+class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultMetadataMocksEnvironment
+{
+  void testGetEventFromSummary()
+  {
+    SystemClientSummary summary( sysResult,
+        clientFactory->createMetadataConfig(),
+        clientFactory->createMetadataRepositories(),     note: this is repo(event)
+        // These tests do not rely on ProvisioningCache
+        boost::shared_ptr<ProvisioningCache>(),
+        3 );
+
+    CPPUNIT_ASSERT(summary.getEvent());
+    CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
+    CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
+    CPPUNIT_ASSERT(summary.getEvent()->getService());
+  }
+}
 
 
 ==============================================================================
