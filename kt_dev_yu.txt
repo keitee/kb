@@ -31,6 +31,10 @@
 |kt_dev_uv_stack_104| stack: LSR (local storage repository)
 |kt_dev_uv_stack_105| stack: uranium
 |kt_dev_uv_stack_106| stack: cal
+|kt_dev_uv_stack_107| stack: cal: metadata creation
+|kt_dev_uv_stack_108| stack: cal: metadata event connection to application
+
+|kt_dev_uv_stack_120| stack: cppunit
 
 |kt_dev_uv_stack_150| stack: network
 |kt_dev_uv_stack_200| stack: dbus
@@ -1397,6 +1401,250 @@ Therefore, when link an executable, the exe will picks up soname. So it's all do
 built to see if it requires to have a sym link in /usr/local/lib.
 
 
+<the-proposal>
+https://jira.youview.co.uk/browse/DEVARCH-9145
+
+h3. New nexusMgr library proposal and guideline
+
+h4. 0. Introduction
+There has been a need to have tools to release forcefully nexus resources which are locked up when
+an application exits abnormally and to have more information about nexus resources.
+
+The tools are developed for one of OEMs and it uses the private nexusMgr implementation details.
+However, the both OEMs have different implementations and prevents YouView from having common
+nexus tools that works on both OEMs.
+
+Therefore, this proposal propose a separation between inspection and releasing and OEMs and
+YouView, propose new APIs, and shows a working implementation as a base for them to have a quick start. 
+
+
+h4. 1. Capability interface and the inspect header
+The proposal introduces capability interface to query the exposed capability of OEM nexusMgr and
+uses it to inspect resources.
+
+The header defines the version and the structure to be used for both OEMs and is subject to future
+extension if necessary. YouView maintain and release it to OEMs based on the common agreement and it
+will be the part of OEM staging delivery.
+
+{noformat}
+/**
+ * nexus-inspect.h
+ *
+ * Created: 11 February, 2015
+ *
+ * This header defines a capability structure and API to get nexus resources
+ * from OEM nexus managers in order to inspect various status or information
+ * about nexus resources.
+ *
+ * OEMs may implement the API with this header provided by YouView and use the
+ * version specified and agreed between YouView and OEMs.
+ *
+ * Copyright (C) 2015 YouView TV Ltd
+ */     
+
+#ifndef _NEXUS_INSPECT_H_
+#define _NEXUS_INSPECT_H_
+
+/**
+ * Defines nexus inspect capability versions for future extensions.
+ */
+#define NEXUS_INSPECT_CAP_V0     (0x00000001)
+#define NEXUS_INSPECT_CAP_V1     (0x00000002)
+
+/**
+ * Defines nexus inspect capability structure for each version. OEM may set the
+ * unsupported resources to NULL from a return.
+ *
+ * More version structures for future extensions if necessary.
+ */
+#define NEXUS_INSPECT_NUM_ADECS       (2)
+#define NEXUS_INSPECT_NUM_PLAYBACKS   (2)
+#define NEXUS_INSPECT_NUM_PLAYPUMPS   (1)
+
+typedef struct {
+  NEXUS_AudioMixerHandle      mixer;
+  NEXUS_AudioPlaybackHandle   pcmPlayback[NEXUS_INSPECT_NUM_PLAYBACKS];
+  NEXUS_AudioDecoderHandle    audioDecoder[NEXUS_INSPECT_NUM_ADECS];
+  NEXUS_VideoDecoderHandle    videoDecoder;
+  NEXUS_StcChannelHandle      stcChannel;
+  NEXUS_Ac3EncodeHandle       ac3Encoder;
+  NEXUS_DmaHandle             dmaHandle;
+  NEXUS_VideoWindowHandle     videoWindow;
+  NEXUS_PlaypumpHandle        playpump[NEXUS_INSPECT_NUM_PLAYPUMPS];
+  pid_t                       resource_pid;
+} NexusInspectCapsV0;
+
+
+#endif /* _NEXUS_INSPECT_H_ */
+{noformat}
+
+h4. 2. New APIs
+The proposal introduces two new APIs which are implemented in nexusMgr.
+
+{noformat}
+/**
+ * Defines a API to get nexus inspect capability.
+ *
+ * @ param {version} specify the capability version to request
+ * @ param {cap} specify the capability structure to get values from nexus
+ * manger according to the version.
+ *
+ * @ return {bool} true when nexus manager supports the provided version and
+ * fills up the structure.  Otherwise, false.
+ */     
+bool BcmNexus_Acquire_Capability( unsigned int version, void *cap, size_t size );
+
+/**
+ * Defines a API to release nexus resources.
+ *
+ * @ param {application_pid} specify the PID which holds nexus resources.
+ *
+ * @ return none
+ */     
+void BcmNexus_Release_All_Resources_Acquired_By_Process( pid_t application_pid );
+{noformat}
+
+h4. 3. The suggested nexusMgr implementation
+The suggested implementation shows implementation to support the proposal. Although this is working
+on a target, it is OEM's onus to make a official delivery to YouView that may supports both the
+proposal and the OEM specific needs. The suggested in nexusMgr.c only shows the added code.
+
+{noformat}
+typedef struct {
+  // {PROPOSED}
+  pid_t                               resource_pid;
+} BcmNexus_Shared_Memory;
+
+const BcmNexus_StreamPlayer_Resources *
+BcmNexus_StreamPlayer_Resources_Acquire( const BcmNexus_StreamPlayer_Resources_Config *config)
+{
+  // {PROPOSED}
+  if( (BcmNexus_State.sharedMem->resource_pid != 0) && (BcmNexus_State.sharedMem->resource_pid != getpid()) )
+  {
+    BDBG_MSG_TRACE(("BcmNexus_StreamPlayer_Resources_Acquire: already acquired"));
+    goto err_playpump;
+  }
+
+  // {PROPOSED}
+  BcmNexus_State.sharedMem->resource_pid = getpid();
+}
+
+void 
+BcmNexus_StreamPlayer_Resources_Release(const BcmNexus_StreamPlayer_Resources *resources_)
+{
+  // {PROPOSED}
+  BcmNexus_State.sharedMem->resource_pid = 0;
+}
+
+// {PROPOSED}
+void 
+BcmNexus_Release_All_Resources_Acquired_By_Process( pid_t application_pid )
+{
+  // Getting nexus shm
+  //
+  BcmNexus_State.masterProcess = do_platform_init(sizeof(BcmNexus_Shared_Memory));
+  BDBG_MSG_TRACE(("BcmNexus_Release_All_Resources_Acquired_By_Process: masterProcess = %c",BcmNexus_State.masterProcess?'y':'n'));
+
+  NEXUS_Platform_Join();
+
+  BcmNexus_State.sharedMem = (BcmNexus_Shared_Memory*)setupSharedMemory(sizeof(BcmNexus_Shared_Memory), (BcmNexus_State.masterProcess ? true : false));
+  BDBG_ASSERT(BcmNexus_State.sharedMem);
+
+  if (BcmNexus_State.masterProcess) {
+    return;
+  }
+
+  if( BcmNexus_State.sharedMem->resource_pid == application_pid ) 
+  {
+    // Cleaning up nexus resources
+    //
+    BDBG_MSG_TRACE(("BcmNexus_Release_All_Resources_Acquired_By_Process: Stopping video decoder"));
+    NEXUS_VideoDecoder_Stop( BcmNexus_State.sharedMem->videoDecoder );
+
+    for (uint8_t i = 0; i < NEXUS_INSPECT_NUM_ADECS; ++i)
+    {
+      BDBG_MSG_TRACE(("BcmNexus_Release_All_Resources_Acquired_By_Process: Stopping audio decoder"));
+      NEXUS_AudioDecoder_Stop( BcmNexus_State.sharedMem->audioDecoder[i] );
+    }
+
+    BDBG_MSG_TRACE(("BcmNexus_Release_All_Resources_Acquired_By_Process: Flushing video decoder"));
+    NEXUS_VideoDecoder_Flush( BcmNexus_State.sharedMem->videoDecoder );
+
+    for (uint8_t i = 0; i < NEXUS_INSPECT_NUM_ADECS; ++i)
+    {
+      BDBG_MSG_TRACE(("BcmNexus_Release_All_Resources_Acquired_By_Process: Flushing audio decoder"));
+      NEXUS_AudioDecoder_Flush( BcmNexus_State.sharedMem->audioDecoder[i] );
+    }
+
+    BcmNexus_State.sharedMem->resource_pid = 0;
+  }
+
+  return;
+}
+
+bool 
+BcmNexus_Acquire_Capability( unsigned int version, void *cap, size_t capSize )
+{
+  // Getting nexus shm
+  //
+  BcmNexus_State.masterProcess = do_platform_init(sizeof(BcmNexus_Shared_Memory));
+  BDBG_MSG_TRACE(("BcmNexus_Release_All_Resources_Acquired_By_Process: masterProcess = %c",BcmNexus_State.masterProcess?'y':'n'));
+
+  NEXUS_Platform_Join();
+
+  BcmNexus_State.sharedMem = (BcmNexus_Shared_Memory*)setupSharedMemory(sizeof(BcmNexus_Shared_Memory), (BcmNexus_State.masterProcess ? true : false));
+  BDBG_ASSERT(BcmNexus_State.sharedMem);
+
+  if (BcmNexus_State.masterProcess) {
+    return false;
+  }
+
+  ((NexusInspectCapsV0*)cap)->videoDecoder = BcmNexus_State.sharedMem->videoDecoder;
+
+  return true;
+}
+{noformat}
+
+h4. 4. The JIRAs, the branch and git
+DEVARCH-8081, DEVARCH-8092, DEVARCH-8101, and DEVARCH-8080.
+
+o The proposed nexus tools. review/DEVARCH-8092/3 on Stash
+https://stash.dev.youview.co.uk/projects/DEVARCH/repos/devarch-mirror/compare/commits?sourceBranch=refs%2Fheads%2Freview%2FDEVARCH-8092%2F3&targetBranch=refs%2Fheads%2Fmaster
+
+DEVARCH-9131: NexusInspect: Fix up makefile to build nexus utilities. There is no common solution
+for nexus utility features since both OEMs have different nexusMgr implementations and the current
+implementation of nexus utility is tightly coupled with nexusMgr implementation which is private and
+OEM dependant as described in DEVARCH-8081, DEVARCH-8092, DEVARCH-8101, and DEVARCH-8080. This
+commit has the necessary changes of makefile to build nexus utility and to fix the link order
+problem ...		24 Feb 2015	5 JIRA Issues	
+
+DEVARCH-9130: NexusInspect: Add nexus inspect tool. There is no common solution for nexus utility
+features since both OEMs have different nexusMgr implementations and the current implementation of
+nexus utility is tightly coupled with nexusMgr implementation which is private and OEM dependant as
+described in DEVARCH-8081, DEVARCH-8092, DEVARCH-8101, and DEVARCH-8080. This commit add the nexus
+inspect which uses the proposed APIs to show information of nexus resources. Since the tool is no
+l...		24 Feb 2015	5 JIRA Issues	
+
+DEVARCH-9129: NexusInspect: Add nexus release tool and revise the exec wrapper There is no common
+solution for nexus utility features since both OEMs have different nexusMgr implementations and the
+current implementation of nexus utility is tightly coupled with nexusMgr implementation which is
+private and OEM dependant as described in DEVARCH-8081, DEVARCH-8092, DEVARCH-8101, and
+DEVARCH-8080. This commit add the nexus release which is revised to use the proposed APIs to release
+nexus resou...		24 Feb 2015	5 JIRA Issues	
+
+DEVARCH-9128: NexusInspect: Add the nexus inspect to the build for Huawei dn370t There is no common
+solution for nexus utility features since both OEMs have different nexusMgr implementations and the
+current implementation of nexus utility is tightly coupled with nexusMgr implementation which is
+private and OEM dependant as described in DEVARCH-8081, DEVARCH-8092, DEVARCH-8101, and
+DEVARCH-8080. This commit add the nexus utility project to the build for Huawei dn370t.		5 days ago
+5 JIRA Issues	
+
+o The updated and proposed nexusMgr.
+https://git-dev.dev.youview.co.uk/?p=nexusMgr.git;a=shortlog;h=refs/heads/propose/huawei
+
+
+
+
 ={============================================================================
 *kt_dev_uv_stack_010* stack: commit
 
@@ -1571,6 +1819,8 @@ cat /opt/zinc/var/daemons/osmiumd/log/osmium.log
 element or component names
 https://wiki.youview.co.uk/display/canvas/YouView+Element+Names?src=search
 
+Cobalt   Enhanced metadata (IP sourced) Zinc.Broker 
+Iron     Linear metadata (Broadcast sourced) Zinc.Metadata 
 
 
 ={============================================================================
@@ -2011,9 +2261,8 @@ class ZINC_LOCAL SystemLocalMediaLibraryTest
     }
 
 
-{binding}
-
-<client-api> Uranium.AIR.Client.API/src/UraniumAirPlugin.cpp
+{client-apis}
+<binding> Uranium.AIR.Client.API/src/UraniumAirPlugin.cpp
 
 1. Create a client factory. Done inside AIR since no code is available.
 2. Create a singletone instance of each interface locator and this locator has a singletone of real
@@ -2032,64 +2281,17 @@ class ZINC_LOCAL UraniumAirPlugin : public GenericAirPlugin<UraniumAirPlugin, Cl
 
     NS_URANIUM_METADATA_AIR_CLIENT::LocatorBinding::setSingletonInstance(nativeLocator);
 
-   note: get LMLL(locator) and pass up to client application. see factory below
+    note: create LMD
+    NS_URANIUM_LINEAR_AIR_CLIENT::LocatorBinding::setSingletonInstance(
+        clientFactory.createLinearMetadataLocator());
+
+    note: get LMLL(locator) and pass up to client application. see factory below
     NS_URANIUM_LML_AIR_CLIENT::LocatorBinding::setSingletonInstance(
         clientFactory.createLocalMediaLibraryLocator());
   }
 };
 
-<client-system> Uranium.Client.System/src/SystemClientFactory.cpp
-
-class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
-{
-  boost::shared_ptr<NS_URANIUM_LML_CLIENT::Locator> createLocalMediaLibraryLocator();
-  {
-    using namespace NS_URANIUM_LML_CLIENT;
-
-    if(!localMediaLibraryLocator)
-    {
-      URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibraryLocator()");
-      localMediaLibraryLocator = boost::make_shared<SystemClientLocator>(createLocalMediaLibrary());
-    }
-
-    return localMediaLibraryLocator;
-  }
-
-  boost::shared_ptr<NS_URANIUM_LML_CLIENT::LocalMediaLibrary> createLocalMediaLibrary();
-  {
-    boost::mutex::scoped_lock lock(boost::mutex);
-
-    if(localMediaLibrary == NULL) {
-      URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibrary()");
-
-         note: get cache
-        boost::shared_ptr<NS_URANIUM_LML_CLIENT::MediaRecordCache> cache
-        = getMediaRecordCache();
-
-         note: create SLML
-        boost::shared_ptr<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary> lml
-        = boost::make_shared<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary>(
-            getSystemLocalMediaLibrary(), getProvisioningService(), cache);
-
-      lml->setDispatcher(getDefaultDispatcher());
-      localMediaLibrary = lml;
-      getSystemLocalMediaLibrary()->addListener(lml);
-    }
-
-    return(localMediaLibrary);
-  }
-};
-
-
-struct ZINC_EXPORT Locator : public NS_ZINC::Polymorphic 
-
-class SystemClientLocator : public Locator 
-{
-    SystemClientLocator(const boost::shared_ptr<LocalMediaLibrary> lml_);
-};
-
-
-{client-apis}
+<apis>
 Uranium.Client.API/include/metadata/Event.h
 Uranium.Client.API/include/metadata/Summary.h
 Uranium.Client.API/include/local-media-library/MediaRecord.h
@@ -2109,41 +2311,238 @@ class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic
 }
 
 
-{event-handling}
-This is MD(metadata) creation called from binding:
+{client-system}
 
-Uranium/Uranium.Client.System/src/SystemClientFactory.cpp
+Uranium.Client.System/src/SystemClientFactory.cpp
 
-class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable {
+class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
+{
+  private:
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> eventRepository;
+    boost::weak_ptr<NS_URANIUM_LINEAR_CLIENT::SystemClientEventRepository> linearEventRepository;
 
-    note: see use of namespace to specify
-    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> SystemClientFactory::createMetadataLocator() {
+  public:
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> createMetadataLocator();
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> createConcreteEventRepository();
+    boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::Locator> createLinearMetadataLocator();
 
-      URANIUM_FUNC_DEBUG;
 
-      if(!metadataLocator)
+    // <factory-lml>
+    boost::shared_ptr<NS_URANIUM_LML_CLIENT::Locator> createLocalMediaLibraryLocator();
+    {
+      using namespace NS_URANIUM_LML_CLIENT;
+
+      if(!localMediaLibraryLocator)
       {
-        URANIUM_PROFILE_SCOPE("SystemClientFactory::createMetadataLocator()");
-
-        metadataLocator = boost::make_shared<NS_URANIUM_METADATA_CLIENT::SystemClientLocator>(
-            createMetadataBroker(), createEventRepository(), createServiceRepository());
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibraryLocator()");
+        localMediaLibraryLocator = boost::make_shared<SystemClientLocator>(createLocalMediaLibrary());
       }
-      return metadataLocator;
+
+      return localMediaLibraryLocator;
+    }
+
+    boost::shared_ptr<NS_URANIUM_LML_CLIENT::LocalMediaLibrary> createLocalMediaLibrary();
+    {
+      boost::mutex::scoped_lock lock(boost::mutex);
+
+      if(localMediaLibrary == NULL) {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::createLocalMediaLibrary()");
+
+        // note: get cache
+        boost::shared_ptr<NS_URANIUM_LML_CLIENT::MediaRecordCache> cache
+          = getMediaRecordCache();
+
+        // note: create SLML
+        boost::shared_ptr<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary> lml
+          = boost::make_shared<NS_URANIUM_LML_CLIENT::SystemLocalMediaLibrary>(
+              getSystemLocalMediaLibrary(), getProvisioningService(), cache);
+
+        lml->setDispatcher(getDefaultDispatcher());
+        localMediaLibrary = lml;
+        getSystemLocalMediaLibrary()->addListener(lml);
+      }
+
+      return(localMediaLibrary);
     }
 };
 
-<MDB>
-boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> SystemClientFactory::createMetadataBroker() {
 
+struct ZINC_EXPORT Locator : public NS_ZINC::Polymorphic 
+
+class SystemClientLocator : public Locator 
+{
+    SystemClientLocator(const boost::shared_ptr<LocalMediaLibrary> lml_);
+};
+
+
+{locators}
+Each interface defines 'own' locator class chain and how it is possible? Use namespace.
+
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+/**
+ * This is the top-level entrypoint to the Zinc Client API.
+ * A singleton instance will likely be exposed in the global
+ * context within the Javascript environment. An Actionscript
+ * binding will be newed in the Flash case.
+ */
+class ZINC_EXPORT Locator : public NS_ZINC::Polymorphic {
+
+public:
+    virtual ~Locator();
+    virtual boost::shared_ptr<MetadataBroker> getMetadataBroker() const = 0;
+    virtual boost::shared_ptr<EventRepository> getEventRepository() const = 0;
+    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const = 0;
+};
+
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+class SystemClientLocator : virtual public Locator {
+
+  public:
+    SystemClientLocator(boost::shared_ptr<MetadataBroker> metadataBroker, 
+        boost::shared_ptr<EventRepository> er, boost::shared_ptr<ServiceRepository> sr);
+
+    boost::shared_ptr<MetadataBroker> getMetadataBroker() const;
+    virtual boost::shared_ptr<EventRepository> getEventRepository() const;
+    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const;
+
+  private:
+    boost::shared_ptr<MetadataBroker> metadataBroker;
+    boost::shared_ptr<EventRepository> eventRepository;
+    boost::shared_ptr<ServiceRepository> serviceRepository;
+};
+
+
+={============================================================================
+*kt_dev_uv_stack_107* stack: cal: metadata creation
+
+{creation-chain} for linear and metadata and creation chian. 
+
+<MDL> MDCL   -> { MB, ER, SR }
+<CMB>        SCMB(MB) -> { SMB(COBALT), C, MO }
+                                        C -> { MDR, PC }
+Binding:
+<MDL> MDCL   -> { MB, ER, SR }
+
+shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> nativeLocator(
+    clientFactory.createMetadataLocator());
+
+class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
+{
+
+  // <LINEAR>
+  // LCL    -> { ER, RCR, RR }:
+  //              |
+  //              -> { ER(IRON), RR }
+  //
+  boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::Locator> createLinearMetadataLocator() 
+  {
+    using namespace NS_URANIUM_LINEAR_CLIENT;
+
+    URANIUM_FUNC_DEBUG;
+
+    boost::shared_ptr<Locator> loc(linearMetadataLocator.lock());
+
+    if(loc == NULL)
+    {
+      linearMetadataLocator = loc =
+        boost::make_shared<SystemClientLocator>(
+            createLinearEventRepository(),
+            createRelatedContentRepository(),
+            createReminderRepository()
+            );
+    }
+    return loc;
+  }
+
+  boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::EventRepository> createLinearEventRepository() 
+  {
+    using namespace NS_URANIUM_LINEAR_CLIENT;
+
+    boost::shared_ptr<SystemClientEventRepository> eventRepository(linearEventRepository.lock());
+
+    if(!eventRepository) {
+
+      //create Event Repository
+      boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemEventRepository(getIronSystemEventRepository());
+
+      eventRepository = boost::make_shared<SystemClientEventRepository>(
+          systemEventRepository,
+          createReminderRepository()
+          );
+
+      systemEventRepository->addListener(eventRepository);
+      eventRepository->setDispatcher(getDefaultDispatcher());
+      eventRepository->setFutureDispatcher(futureDispatcher);
+      linearEventRepository = eventRepository;
+    }
+    return eventRepository;
+  }
+
+  // <METADATA> note: see use of namespace to specify
+  //
+  // <MCL> MCL    -> { MB, ER, SR }
+  //
+  // <CMB>        SCMB(MB) -> { SMB(COBALT), C, MO }
+  //
+  //                                         C -> { MDR, PC }
+  //
+  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> createMetadataLocator() 
+  {
+    URANIUM_FUNC_DEBUG;
+
+    if(!metadataLocator)
+    {
+      metadataLocator = boost::make_shared<NS_URANIUM_METADATA_CLIENT::SystemClientLocator>(
+          createMetadataBroker(),   <CMB> 
+          createEventRepository(),  <CER>
+          createServiceRepository());
+    }
+    return metadataLocator;
+  }
+};
+
+Uranium/Uranium.Client.System/src/SystemClientFactory.cpp
+
+<CMB> SCMB(MB) -> { SMB(COBALT), C, MO }
+                                 C -> { MDR, PC }
+
+struct ZINC_LOCAL Converter
+{
+  explicit Converter(boost::shared_ptr<SystemClientMetadataConfig> config_,
+      boost::weak_ptr<MetadataRepositories> repos_,
+      boost::shared_ptr<ProvisioningCache> provisioningCache_)
+    : config(config_),
+    repos(repos_),
+    provisioningCache(provisioningCache_)
+  {}
+};
+
+// note: returns a copy
+
+NS_URANIUM_METADATA_CLIENT::Converter SystemClientFactory::createConverter()
+{
+  URANIUM_PROFILE_FUNC;
+  return NS_URANIUM_METADATA_CLIENT::Converter(
+      createMetadataConfig(),
+      createMetadataRepositories(),
+      createProvisioningCache());
+}
+
+boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> SystemClientFactory::createMetadataBroker() 
+{
   URANIUM_FUNC_DEBUG;
 
   if(metadataBroker == 0)
   {
-    URANIUM_PROFILE_SCOPE("SystemClientFactory::createMetadataBroker()");
+    // note: cobalt
+    
     boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> systemMetadataBroker(getSystemMetadataBroker());
-    URANIUM_DEBUG("systemMetadataBroker "<<systemMetadataBroker);
 
     using NS_URANIUM_METADATA_CLIENT::SystemClientMetadataBroker;
+
+    <SCMB>
     boost::shared_ptr<SystemClientMetadataBroker> mb = 
       boost::make_shared<SystemClientMetadataBroker>( systemMetadataBroker,
           createConverter(),
@@ -2157,7 +2556,119 @@ boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> SystemClientFactor
   return metadataBroker;
 }
 
-<MDO>
+
+<CMB> <SCMB>
+Uranium.Client.System/src/metadata/SystemClientMetadataBroker.cpp
+
+class ZINC_EXPORT SystemClientMetadataBroker
+    : virtual public MetadataBroker,
+      virtual public NS_ZINC::DispatchingFutureProducer,
+      public boost::enable_shared_from_this<SystemClientMetadataBroker>
+{
+
+  SystemClientMetadataBroker(
+      boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> metadataBroker_,
+      Converter convert_,
+      boost::shared_ptr<MetadataObserver> metadataObserver_) :
+    metadataBroker(metadataBroker_),
+    convert(convert_),
+    metadataObserver(metadataObserver_)
+  {}
+
+  boost::shared_ptr<SummaryResultSet>
+    SystemClientMetadataBroker::searchCallback(uint32_t requestedStartIndex,
+        const NS_ZINC::FutureValue<NS_COBALT_SYSTEM::ResultSet>& fvSystem) const
+    {
+      URANIUM_FUNC_TRACE;
+      translateAndThrowCobaltSystemExceptions(fvSystem.getError());
+      NS_COBALT_SYSTEM::ResultSet sysval = fvSystem.get();
+
+      // note: SCMB        -> { RS(COBALT), , MR, }
+      // note: repos is MR 
+      // note: create <SCSRS> and not sure how this callback is called
+      
+      boost::shared_ptr<SystemClientSummaryResultSet> srs =
+        convert(sysval, boost::shared_ptr<SystemClientSummaryResultSet>(), requestedStartIndex);
+
+      // boost::shared_ptr<SystemClientSummaryResultSet>
+      //   Converter::operator()(const NS_COBALT_SYSTEM::ResultSet& rs,
+      //       boost::shared_ptr<SystemClientSummaryResultSet>, uint32_t requestedStartIndex) const
+      //   {
+      //     return boost::make_shared<SystemClientSummaryResultSet>(
+      //         boost::make_shared<NS_COBALT_SYSTEM::ResultSet>(rs), config, repos, 
+      //         provisioningCache, requestedStartIndex);
+      //   }
+
+      metadataObserver->addListener(srs);
+      srs->setDispatcher(getDispatcher());
+
+      return boost::static_pointer_cast<SummaryResultSet>(srs);
+    }
+
+  boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> metadataBroker;
+  boost::shared_ptr<SystemClientMetadataConfig> config;
+  Converter convert;
+  boost::shared_ptr<MetadataObserver> metadataObserver;
+
+  boost::weak_ptr<MetadataRepositories> repos;
+};
+
+<CER> SCER(ER) -> { MDO, SR, SER, SMB, CRR, CLA, EEIF, PEC, BSM }
+
+note: ER is metadat ER
+
+class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
+{
+  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() 
+  {
+    return createConcreteEventRepository();
+  }
+
+  note: MD-ER
+
+  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> 
+    createConcreteEventRepository() 
+    {
+      if(eventRepository == 0)
+      {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::createConcreteEventRepository()");
+
+        boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> systemMB = getSystemMetadataBroker();
+        boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemER(getIronSystemEventRepository());
+        boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::ReminderRepository> clientRR(createReminderRepository());
+        boost::shared_ptr<NS_URANIUM_DVR_CLIENT::LinearAcquisition> clientLA(createLinearAcquisition());
+        boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientMetadataConfig> 
+          metadataconfig(createMetadataConfig());
+
+        // note: c-SCER
+        boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> concreteER(
+            'new' NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository(
+              metadataconfig,
+              createMetadataObserver(), note: create MDO.
+              serviceRepository,
+              systemER,
+              systemMB,
+              clientRR,
+              clientLA,
+              createExtraEventInfoFacade(),
+              createPresentEventsCache(),
+              createBrokerStatusMonitor()
+              )
+            );
+
+        concreteER->setDefaultDispatcher(getDefaultDispatcher());
+        concreteER->setFutureDispatcher(futureDispatcher);
+        eventRepository = concreteER;
+
+        createMetadataObserver()->addListener(concreteER);
+        serviceRepository->setEventRepository(concreteER);
+      }
+
+      return eventRepository;
+    }
+}
+
+<MO>
 boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataObserver> <createMetadataObserver>()
 {
   using namespace NS_URANIUM_METADATA_CLIENT;
@@ -2206,7 +2717,6 @@ boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataObserver> <createMetadataO
   return metadataObserver;
 }
 
-<MO>
 Uranium.Client.System/src/metadata/MetadataObserver.h
 
 class ZINC_LOCAL MetadataObserver:
@@ -2238,8 +2748,12 @@ class ZINC_LOCAL MetadataObserver:
 
     //notify and cleanup Service/Event repos.
     boost::mutex::scoped_lock lock(listenerMutex);
-    notify<SystemClientServiceRepository>(clientServiceRepos, boost::bind(&SystemClientServiceRepository::ServicesChanged, _1, changedServiceLocators)) ;
-    notify<SystemClientEventRepository>(clientEventRepos, boost::bind(&SystemClientEventRepository::ServicesChanged, _1, changedServiceLocators));
+
+    notify<SystemClientServiceRepository>(clientServiceRepos, 
+        boost::bind(&SystemClientServiceRepository::ServicesChanged, _1, changedServiceLocators)) ;
+
+    notify<SystemClientEventRepository>(clientEventRepos, 
+        boost::bind(&SystemClientEventRepository::ServicesChanged, _1, changedServiceLocators));
     lock.unlock();
 
     produceEvent(boost::bind(&MetadataChangeListener::ServicesChanged, _1, changedServiceLocators));
@@ -2251,50 +2765,347 @@ class ZINC_LOCAL MetadataObserver:
     URANIUM_PROFILE_FUNC;
     notifyServicesChanged(vector<std::string>(1, serviceLocator));
 
-    //we don't need to reload present events cache, because spec 0011-S says that if RCNs change, then the box should
-    //emit ServiceListChange anyway.
-  }
+    //we don't need to reload present events cache, because spec 0011-S says that if RCNs change,
+    //then the box should emit ServiceListChange anyway.
+  } 
+};
+
+
+={============================================================================
+*kt_dev_uv_stack_108* stack: cal: metadata event connection to application
+
+{event-apis}
+The old API has:
+
+getLongSynopsis():Object
+getMediumSynopsis():Object
+
+The new API has:
+
+getSynopsis():String
+Returns the synopsis of the Event if current data source provides it.
+
+The both are defined in "Event".
+
+                     linear::Event                 metadat::Event
+
+                     SCE                           SCE
+
+Application          SCER                          SCER
+
+
+{which-events}
+DEVARCH/Uranium/Uranium.Client.API/include/linear-metadata/Event.h 
+
+class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic 
+{
+  public:
+    virtual boost::shared_ptr<synopsis> getMediumSynopsis() const = 0;
+    virtual boost::shared_ptr<synopsis> getLongSynopsis() const = 0;
+};
+
+
+DEVARCH/Uranium/Uranium.Client.API/include/metadata/Event.h
+
+class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic 
+{
+  public:
+    virtual std::string getSynopsis() const = 0;
+};
+
+Uranium.Client.System/src/metadata/SystemClientEvent.h
+Uranium.Client.System/src/metadata/SystemClientEvent.cpp
+
+Uranium.Client.System/src/linear-metadata/SystemClientEvent.h
+Uranium.Client.System/src/linear-metadata/SystemClientEvent.cpp
+
+This means Event is ABC and SCE is concrete class to have implementation. How to select an
+appropriate class to use in client side? Uses 'namespace'
+
+NS_URANIUM_LINEAR_CLIENT_OPEN
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+
+{metadata-sce-overloads}
+
+note: used <1>
+SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
+   const std::string& lang,
+   const NS_IRON_SYSTEM::Event& dttEvent) :
+
+   synopsis(extractValueFromMap(dttEvent.longSynopsis, lang))
+{}
+
+
+SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
+   shared_ptr<SystemClientEvent>& masEvent):
+
+   synopsis(dttEvent->getSynopsis()),
+{}
+
+
+SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
+   const uint32_t start_,
+   const uint32_t end_):
+
+   synopsis(),
+{}
+
+note: used <2>
+SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
+        const SystemEventWrapper& masEvent) :
+
+            synopsis(),
+{}
+
+SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos, 
+    boost::shared_ptr<Service> service_, uint32_t start_, uint32_t end_):
+    synopsis(),
+{}
+
+SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
+        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
+            flags(0),
+            isCachedFlag(false),
+            id(locator),
+            type(IP)
+{
+  synopsis = fullEvent.getMediumSynopsis();
 }
 
 
+{where-create-scs}
+Calls to create SCE. 
 
-{locators}
-Each interface defines 'own' locator class chain and how it is possible? Use namespace.
+<linear>
+src/linear-metadata/SystemClientEventRepository.cpp
 
-NS_URANIUM_METADATA_CLIENT_OPEN
+boost::shared_ptr<Event> makeEvent() 
+{
+  return make_shared<SystemClientEvent>(
+      systemEvent.get(), sysEventRepository, sysLinearAcquisition, reminderRepository);
+}
 
-/**
- * This is the top-level entrypoint to the Zinc Client API.
- * A singleton instance will likely be exposed in the global
- * context within the Javascript environment. An Actionscript
- * binding will be newed in the Flash case.
- */
-class ZINC_EXPORT Locator : public NS_ZINC::Polymorphic {
+boost::shared_ptr<std::vector<boost::shared_ptr<Event> > > getPresentFollowing()
+{
+   eventsPtr->push_back(make_shared<SystemClientEvent>(
+         *event, eventRepository, linearAcquisition, reminderRepository));
+}
 
-public:
-    virtual ~Locator();
-    virtual boost::shared_ptr<MetadataBroker> getMetadataBroker() const = 0;
-    virtual boost::shared_ptr<EventRepository> getEventRepository() const = 0;
-    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const = 0;
-};
 
-NS_URANIUM_METADATA_CLIENT_OPEN
+<metadata>
+src/metadata/SystemClientEventRepository.cpp
 
-class SystemClientLocator : virtual public Locator {
+boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Event& e)
+{
+  if(!e.eventLocator.empty())
+  {
+    // note: uses the first and see above.
+    return boost::shared_ptr<SystemClientEvent>( 
+        new SystemClientEvent(getRepos(), config->getLanguage(), e));
+  }
 
-  public:
-    SystemClientLocator(boost::shared_ptr<MetadataBroker> metadataBroker, 
-        boost::shared_ptr<EventRepository> er, boost::shared_ptr<ServiceRepository> sr);
+  return boost::shared_ptr<SystemClientEvent>();
+}
 
-    boost::shared_ptr<MetadataBroker> getMetadataBroker() const;
-    virtual boost::shared_ptr<EventRepository> getEventRepository() const;
-    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const;
+note: this has overloads
 
-  private:
-    boost::shared_ptr<MetadataBroker> metadataBroker;
-    boost::shared_ptr<EventRepository> eventRepository;
-    boost::shared_ptr<ServiceRepository> serviceRepository;
-};
+event_collection_ptr getClientEvents()
+{
+   // note: uses <2> and see above
+   boost::shared_ptr<SystemClientEvent> mevent = 
+     boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+}
+
+
+{how-events-updated}
+
+void eventsReceived()
+{
+  // note:
+  event_collection_ptr clientEvents = getClientEvents(systemEvents);
+}
+
+note: some called callback and get some updated events?
+
+void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+{
+  URANIUM_FUNC_TRACE;
+  URANIUM_PROFILE_FUNC;
+  Bounds& dataRetrievalBounds = cmd.requestedDataBounds;
+
+  int64_t start = to_time_t(dataRetrievalBounds.startTime);
+  int64_t end = to_time_t(dataRetrievalBounds.startTime) + dataRetrievalBounds.seconds;
+
+  NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
+
+  //eventsReceived is overloaded, we need to get the pointer to it first, and the pass to bind.
+  void (SystemClientEventRepository::*masCallback)
+    (boost::shared_ptr<EventWindowCreateCommand>,
+     const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
+    &SystemClientEventRepository::eventsReceived;
+
+  void (SystemClientEventRepository::*dttCallback)
+    (boost::shared_ptr<EventWindowCreateCommand>,
+     const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
+    &SystemClientEventRepository::eventsReceived;
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_120* stack: cppunit
+
+depbase=`echo SummaryTest.o | sed 's|[^/]*$|.deps/&|;s|\.o$||'`;\
+i686-pc-linux-gnu-g++ -DHAVE_CONFIG_H -I.
+-I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata
+-I../..  -DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\"
+-DMACRO__libdir=\"/opt/zinc/lib\" -DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include
+-I/opt/zinc/oss/include -DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\"
+-DMACRO__libdir=\"/opt/zinc/lib\" -DMACRO__PACKAGE=\"uranium-client-system\"
+-DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include -I/opt/zinc/include/dbus-c++-1/include
+-I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0 -I/opt/zinc/oss/lib/dbus-1.0/include
+-DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
+-I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
+-I/opt/zinc/oss/lib/dbus-1.0/include -DMACRO__prefix=\"/opt/zinc\"
+-DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
+-I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
+-I/opt/zinc/oss/lib/dbus-1.0/include -DDBUS_API_SUBJECT_TO_CHANGE -DMACRO__prefix=\"/opt/zinc\"
+-DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include
+-I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/include -I/opt/zinc/oss/include/dbus-1.0
+-I/opt/zinc/oss/lib/dbus-1.0/include -I/opt/zinc/oss/include -DMACRO__prefix=\"/opt/zinc\"
+-DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
+-I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
+-I/opt/zinc/oss/lib/dbus-1.0/include -DMACRO__prefix=\"/opt/zinc\"
+-DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
+-DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
+-I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
+-I/opt/zinc/oss/lib/dbus-1.0/include -I/opt/zinc/include -DMACRO__prefix=\"/opt/zinc\"
+-DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
+-DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
+-I/opt/zinc/lib -I/opt/zinc/include -I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include
+-I/opt/zinc/oss/include/dbus-1.0 -I/opt/zinc/oss/lib/dbus-1.0/include
+-DMACRO__top_srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System\"
+-DMACRO__srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata\"
+-DMACRO__builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System/test/metadata\"
+-DMACRO__top_builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System\"
+-DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
+-DMACRO__top_srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System\"
+-DMACRO__srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata\"
+-DMACRO__builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System/test/metadata\"
+-DMACRO__top_builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System\"
+-DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
+-DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
+-DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
+-I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
+-I/opt/zinc/oss/lib/dbus-1.0/include -I/opt/zinc/oss/include
+-DSRC_DIR=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata\"
+-I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/include
+-I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/metadata
+-I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/linear-metadata
+-I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/linear-acquisition
+-I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/reminders
+-DMACRO__pkgdatadir=\"/opt/zinc/share/uranium-client-system\" -m32 -I/opt/zinc/include  -isystem
+/opt/zinc/oss/include  -D_FORTIFY_SOURCE=2  -fstack-protector-all   -m32 -DNDEBUG -O3 -pipe -pthread
+-march=i686 -Wall -Wextra -Werror=address -Werror=array-bounds -Werror=c++0x-compat
+-Werror=char-subscripts -Werror=comment -Werror=enum-compare -Werror=format -Werror=missing-braces
+-Werror=nonnull -Werror=parentheses -Werror=pointer-sign -Werror=return-type -Werror=sequence-point
+-Werror=strict-overflow=1 -Werror=trigraphs -Werror=unknown-pragmas -Werror=unused-function
+-Werror=unused-label -Werror=unused-value -Werror=volatile-register-var -fdiagnostics-show-option
+-Werror=uninitialized  -MT SummaryTest.o -MD -MP -MF $depbase.Tpo -c -o SummaryTest.o
+/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata/SummaryTest.cpp
+&&\
+
+
+/bin/sh ../../libtool  --tag=CXX   --mode=link i686-pc-linux-gnu-g++  -m32 -DNDEBUG -O3 -pipe
+-pthread  -march=i686 -Wall -Wextra -Werror=address -Werror=array-bounds -Werror=c++0x-compat
+-Werror=char-subscripts -Werror=comment -Werror=enum-compare -Werror=format -Werror=missing-braces
+-Werror=nonnull -Werror=parentheses -Werror=pointer-sign -Werror=return-type -Werror=sequence-point
+-Werror=strict-overflow=1 -Werror=trigraphs -Werror=unknown-pragmas -Werror=unused-function
+-Werror=unused-label -Werror=unused-value -Werror=volatile-register-var -fdiagnostics-show-option
+-Werror=uninitialized  -rdynamic -L/opt/zinc/lib -L/opt/zinc/oss/lib -Wl,--as-needed
+-Wl,-rpath-link,/opt/zinc/lib -Wl,-rpath-link,/opt/zinc/oss/lib -o summarytest SummaryTest.o
+helpers/SynchronisableDispatcher.o helpers/TestSupport.o ../../src/libUraniumClientSystemStatic.la
+-L/opt/zinc/lib -L/opt/zinc/oss/lib -lCadmiumSystemAPI -lZincCommon -ldl -lboost_thread -llog4cplus
+-lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1 -L/opt/zinc/lib
+-L/opt/zinc/oss/lib -L/opt/zinc/lib -L/opt/zinc/oss/lib -lUraniumClientAPI -lUraniumCommon
+-lZincCommon -ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system
+-lZincCommon -ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system
+-L/opt/zinc/lib -L/opt/zinc/oss/lib -L/opt/zinc/lib -L/opt/zinc/oss/lib -lCobaltCommon -lZincCommon
+-ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -lZincCommon
+-ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -L/opt/zinc/lib
+-L/opt/zinc/oss/lib -lCopperSystemDbus -lCopperSystemAPI -lZincDbusBindingRuntime -ldbus-c++-1
+-ldbus-1 -lZincCommon -ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem
+-lboost_system -L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronSystemAPI -lZincCommon -ldl -lboost_thread
+-llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
+-L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronRemindersSystemAPI -lZincCommon -ldl -lboost_thread
+-llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
+-L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronRemindersSystemDbus -lIronRemindersSystemAPI
+-lZincDbusBindingRuntime -ldbus-c++-1 -ldbus-1 -lZincCommon -ldl -lboost_thread -llog4cplus
+-lboost_date_time -lboost_filesystem -lboost_system -L/opt/zinc/lib -L/opt/zinc/oss/lib
+-lIronRemindersSystemDbus -lZincDbusBindingRuntime -lIronRemindersSystemAPI -lZincCommon -ldl
+-lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
+-L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronRemindersSystemAPI -lZincCommon -ldl -lboost_thread
+-llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
+-L/opt/zinc/lib -L/opt/zinc/oss/lib -lNeonClientSystem -lNeonClientApi -lNeonSystemAPI -lZincCommon
+-ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1
+-ldbus-1 -L/opt/zinc/lib -L/opt/zinc/oss/lib -lNickelSystemAPI -lZincCommon -ldl -lboost_thread
+-llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
+-L/opt/zinc/tests/lib -L/opt/zinc/lib -L/opt/zinc/oss/lib -lZincCommonTestSupport -lZincCommon -ldl
+-llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -lgmock -lgtest
+-lboost_program_options -lboost_thread -lboost_iostreams -L/opt/zinc/tests/lib -L/opt/zinc/lib
+-L/opt/zinc/oss/lib -lZincCommonTestRunner -ldl 
+
+-lcppunit 
+
+-lZincCommonTestSupport -lZincCommon -ldl
+-llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -lgmock -lgtest
+-lboost_program_options -lboost_thread -lboost_iostreams -L/opt/zinc/tests/lib -L/opt/zinc/lib
+-L/opt/zinc/oss/lib -lZincDbusBindingTestSupport -lZincDbusBindingRuntime -lZincCommon -ldl
+-lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system
+-ldbus-c++-testsupport-1 -ldbus-c++-1 -ldbus-1 -L/opt/zinc/oss/lib -lcppunit -L/opt/zinc/oss/lib
+
+-lgmock -lgtest  
+
+From the build mail:
+
+2015-03-09_03-28-01
+
+48 PASSED (PASSED)
+ 7 Vanadium/Vanadium.W3CEngine
+ 6 Zinc/Zinc.HTTP.DBusBridge (test/scripts/integration-test-launcher.sh)
+ 5 Zinc/Zinc.3rdPartyStack
+ 3 Uranium/Uranium.Client.System (provisioningcachetest)
+ 3 Uranium/Uranium.Client.System
+ 3 Cobalt/Cobalt.System.Production (formatfiltertest)
+ 2 Uranium/Uranium.Client.System (systoclitest)
+ 2 Uranium/Uranium.Client.System (systemmediarecordcachetest)
+ 2 Uranium/Uranium.Client.System (systemclienteventwindowdtttest provisioningcachetest)
+ 1 Zinc/Zinc.HTTP.DBusBridge
+ 1 Zinc/Zinc.Downloader (httpdownloadertest)
+ 1 Zinc/Zinc.BindingRuntime (edk2-sc2/zinc.binding.air.TypeWrappingTest)
+ 1 Zinc/Zinc.AIR.CTV.API
+ 1 Vanadium/Vanadium.MediaPlayback.Tests (src/run-hlsdemuxintegrationtest.sh)
+ 1 Uranium/Uranium.Client.System (eventrepositorytest)
+ 1 Nickel/NickelTuner.System.DBusClient
+ 1 Nickel/Nickel.System.Fake
+ 1 Nickel/Nickel.Client.System
+ 1 Mercury/Mercury.Client.System (systemapplicationdisplaycontexttest)
+ 1 Lead/Lead.System.DBusClient
+ 1 Iron/Iron.System.DBusClient
+ 1 Iron/IronReminders.System.API
+ 1 Cobalt/Cobalt.System.Production (formatfiltertest testbrokerconfig)
+ 1 Cobalt/Cobalt.System.Production
+
 
 
 ={============================================================================
@@ -3289,17 +4100,24 @@ http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i
 ctv.linearmetadata.Event
 http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/lastSuccessfulBuild/artifact/as3-developer-api-docs/ctv/linearmetadata/Event.html
 
-The latter Event type is an old API that we don't consider efficient and would ideally remove it. In order to do this, the ctv.enhancedmetadata.Event type needs to contain all of the information that the UI needs.
+The latter Event type is an old API that we don't consider efficient and would ideally remove it. In
+order to do this, the ctv.enhancedmetadata.Event type needs to contain all of the information that
+the UI needs.
 
-It has been noticed (by Stephen Spencer) that ctv.enhancedmetadata.Event.getSynopsis() doesn't always return a value for some types of events. This should be investigated and fixed.
+It has been noticed (by Stephen Spencer) that ctv.enhancedmetadata.Event.getSynopsis() doesn't
+always return a value for some types of events. This should be investigated and fixed.
 
 The implementation of ctv.enhancedmetadata.Event is in the file:
 
 Uranium/Uranium.Client.System/src/metadata/SystemClientEvent.cpp
 
 
-03.05
+03.05, 03.09
 ======
+
+<Q>
+Events are defines in around Iron but none of them has this memeber; this seems to be a map.
+
 
 {test}
 
@@ -3318,13 +4136,18 @@ class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultM
 
     CPPUNIT_ASSERT(summary.getEvent());
     CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
-    CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
-    CPPUNIT_ASSERT(summary.getEvent()->getService());
+
+   note: MEDIUM SYNOPSIS
+
+   CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
+   CPPUNIT_ASSERT(summary.getEvent()->getService());
   }
 }
 
 
 {summary}
+
+note: this uses metadat event since it is in the same NS.
 
 class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic
 {
@@ -3359,7 +4182,8 @@ class SystemClientSummary : public Summary
             boost::lexical_cast<string>(entityType));
       }
 
-      // note: this repo is DTT event from Iron?
+      // note: OVERLOADES
+
       return boost::make_shared<SystemClientEvent>(repos, sysResult);
     }
 
@@ -3380,7 +4204,6 @@ SystemClientSummaryResultSet::SystemClientSummaryResultSet(
     boost::shared_ptr<SystemClientMetadataConfig> config,
     boost::weak_ptr<MetadataRepositories> repos,
     boost::shared_ptr<ProvisioningCache> provisioningCache_,
-    uint32_t startIndex )
     : provisioningCache(provisioningCache_),
       summaries(
           getClientSummaries(sysResultSet->results, config, repos, startIndex)),    note: see
@@ -3439,198 +4262,6 @@ SystemClientMetadataBroker::search(const std::string& searchTerms,
           shared_from_this(),
           start,
           _1));
-}
-
-
-{MD-creations} on event repository of metadata
-
-Binding:
-
-shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> nativeLocator(
-    clientFactory.createMetadataLocator());
-
-class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
-{
-  // note: see use of namespace to specify
-  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> SystemClientFactory::createMetadataLocator() 
-  {
-    URANIUM_FUNC_DEBUG;
-
-    if(!metadataLocator)
-    {
-      URANIUM_PROFILE_SCOPE("SystemClientFactory::createMetadataLocator()");
-
-      // note:
-      metadataLocator = boost::make_shared<NS_URANIUM_METADATA_CLIENT::SystemClientLocator>(
-          createMetadataBroker(),   <CMB> 
-          createEventRepository(),  <CER>
-          createServiceRepository());
-    }
-    return metadataLocator;
-  }
-};
-
-Uranium/Uranium.Client.System/src/SystemClientFactory.cpp
-
-<CMB> SCMB(MB) -> { SMB(COBALT), C, MO }
-      C        -> { MDR, PC }
-
-struct ZINC_LOCAL Converter
-{
-  explicit Converter(boost::shared_ptr<SystemClientMetadataConfig> config_,
-      boost::weak_ptr<MetadataRepositories> repos_,
-      boost::shared_ptr<ProvisioningCache> provisioningCache_)
-    : config(config_),
-    repos(repos_),
-    provisioningCache(provisioningCache_)
-  {}
-};
-
-// note: returns a copy
-
-NS_URANIUM_METADATA_CLIENT::Converter SystemClientFactory::createConverter()
-{
-  URANIUM_PROFILE_FUNC;
-  return NS_URANIUM_METADATA_CLIENT::Converter(
-      createMetadataConfig(),
-      createMetadataRepositories(),
-      createProvisioningCache());
-}
-
-boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> SystemClientFactory::createMetadataBroker() 
-{
-  URANIUM_FUNC_DEBUG;
-
-  if(metadataBroker == 0)
-  {
-    URANIUM_PROFILE_SCOPE("SystemClientFactory::createMetadataBroker()");
-
-    // note: cobalt
-    
-    boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> systemMetadataBroker(getSystemMetadataBroker());
-    URANIUM_DEBUG("systemMetadataBroker "<<systemMetadataBroker);
-
-    using NS_URANIUM_METADATA_CLIENT::SystemClientMetadataBroker;
-
-    <SCMB>
-    boost::shared_ptr<SystemClientMetadataBroker> mb = 
-      boost::make_shared<SystemClientMetadataBroker>( systemMetadataBroker,
-          createConverter(),
-          createMetadataObserver() );
-
-    mb->setDispatcher(getDefaultDispatcher());
-    mb->setFutureDispatcher(futureDispatcher);
-    metadataBroker = mb;
-  }
-
-  return metadataBroker;
-}
-
-
-<CMB> <SCMB>
-Uranium.Client.System/src/metadata/SystemClientMetadataBroker.cpp
-
-class ZINC_EXPORT SystemClientMetadataBroker
-    : virtual public MetadataBroker,
-      virtual public NS_ZINC::DispatchingFutureProducer,
-      public boost::enable_shared_from_this<SystemClientMetadataBroker>
-{
-
-  SystemClientMetadataBroker(
-      boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> metadataBroker_,
-      Converter convert_,
-      boost::shared_ptr<MetadataObserver> metadataObserver_) :
-    metadataBroker(metadataBroker_),
-    convert(convert_),
-    metadataObserver(metadataObserver_)
-  {}
-
-  boost::shared_ptr<SummaryResultSet>
-    SystemClientMetadataBroker::searchCallback(uint32_t requestedStartIndex,
-        const NS_ZINC::FutureValue<NS_COBALT_SYSTEM::ResultSet>& fvSystem) const
-    {
-      URANIUM_FUNC_TRACE;
-      translateAndThrowCobaltSystemExceptions(fvSystem.getError());
-      NS_COBALT_SYSTEM::ResultSet sysval = fvSystem.get();
-
-      // note: SCMB        -> { RS(COBALT), , MR, }
-      // note: repos is MR 
-      // note: create <SCSRS> and not sure how this callback is called
-      
-      boost::shared_ptr<SystemClientSummaryResultSet> srs =
-        convert(sysval, boost::shared_ptr<SystemClientSummaryResultSet>(), requestedStartIndex);
-
-      // boost::shared_ptr<SystemClientSummaryResultSet>
-      //   Converter::operator()(const NS_COBALT_SYSTEM::ResultSet& rs,
-      //       boost::shared_ptr<SystemClientSummaryResultSet>, uint32_t requestedStartIndex) const
-      //   {
-      //     return boost::make_shared<SystemClientSummaryResultSet>(
-      //         boost::make_shared<NS_COBALT_SYSTEM::ResultSet>(rs), config, repos, provisioningCache, requestedStartIndex);
-      //   }
-
-      metadataObserver->addListener(srs);
-      srs->setDispatcher(getDispatcher());
-
-      return boost::static_pointer_cast<SummaryResultSet>(srs);
-    }
-
-  boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> metadataBroker;
-  boost::shared_ptr<SystemClientMetadataConfig> config;
-  Converter convert;
-  boost::shared_ptr<MetadataObserver> metadataObserver;
-
-  boost::weak_ptr<MetadataRepositories> repos;
-};
-
-<CER> SCER(ER) -> { MDO, SR, SER, SMB, CRR, CLA, EEIF, PEC, BSM }
-
-class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
-{
-  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() {
-
-    return createConcreteEventRepository();
-  }
-
-  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> 
-    createConcreteEventRepository() 
-    {
-      if(eventRepository == 0)
-      {
-        URANIUM_PROFILE_SCOPE("SystemClientFactory::createConcreteEventRepository()");
-
-        boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> systemMB = getSystemMetadataBroker();
-        boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemER(getIronSystemEventRepository());
-        boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::ReminderRepository> clientRR(createReminderRepository());
-        boost::shared_ptr<NS_URANIUM_DVR_CLIENT::LinearAcquisition> clientLA(createLinearAcquisition());
-        boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientMetadataConfig> 
-          metadataconfig(createMetadataConfig());
-
-        // note: c-SCER
-        boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> concreteER(
-            'new' NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository(
-              metadataconfig,
-              createMetadataObserver(), note: create MDO.
-              serviceRepository,
-              systemER,
-              systemMB,
-              clientRR,
-              clientLA,
-              createExtraEventInfoFacade(),
-              createPresentEventsCache(),
-              createBrokerStatusMonitor()
-              )
-            );
-
-        concreteER->setDefaultDispatcher(getDefaultDispatcher());
-        concreteER->setFutureDispatcher(futureDispatcher);
-        eventRepository = concreteER;
-
-        createMetadataObserver()->addListener(concreteER);
-        serviceRepository->setEventRepository(concreteER);
-      }
-
-      return eventRepository;
-    }
 }
 
 
@@ -3899,6 +4530,33 @@ class ZINC_LOCAL SystemLocalMediaLibraryTest : IntegrationTestSandbox, TestUsing
 };
 
 
+03.09
+======
+
+Search for getLongSynopsis()
+
+Uranium.Client.System/test/linear-metadata/SysToCliEventTest.cpp
+181:        CPPUNIT_ASSERT_MESSAGE("Incorrect value",sysEvent.longSynopsis == 
+    *(cliEvent->getLongSynopsis()));
+
+Uranium.Client.System/test/metadata/SystemClientServiceRepositoryTest.cpp
+486-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong longSynopsis",
+487-                string("303 StagIS test is a linear television service."
+488-                    " This is the long description."), 
+489:                service2->getLongSynopsis());
+
+
+Search for getSynopsis()
+
+Uranium.Client.System/test/metadata/SummaryTest.cpp
+118-        CPPUNIT_ASSERT(summary.getEvent());
+119-        CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
+120:        CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
+
+
+Uranium.Client.System/test/linear-acquisition/SysToCliTest.cpp
+120-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Incorrect value",
+121:                sysB.synopsis, cliB->getSynopsis());
 
 
 ==============================================================================
