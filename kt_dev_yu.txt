@@ -33,6 +33,8 @@
 |kt_dev_uv_stack_106| stack: cal
 |kt_dev_uv_stack_107| stack: cal: metadata creation
 |kt_dev_uv_stack_108| stack: cal: metadata event connection to application
+|kt_dev_uv_stack_109| stack: cal: metadata: summary
+|kt_dev_uv_stack_110| stack: cal: test
 
 |kt_dev_uv_stack_120| stack: cppunit
 
@@ -323,6 +325,12 @@ git clone -b huawei/dn370t gitolite@git-huawei.dev.youview.co.uk:/nexusMgr.git n
 ={============================================================================
 *kt_dev_uv_stack_000* stack: builds
 
+<log>
++++ Build log dir: /data/builds/DEVARCH-8092/huawei.370/zinc-build-root/release-debian-7-x86_64/logs +++
+
+However, there are no log files there.
+
+
 <ET>
 Many of these tools rely on the environment variable "ET" to find your checkout of the DEVARCH repo.
 The zb-make and zb-build-with-progress tools build the stack out of your source tree, so you can
@@ -332,16 +340,6 @@ probably want the tools available in your PATH, so add these to your ~/.profile:
 
 export PATH=~/sources/zinc-git-tools:$PATH
 export ET=~/sources/DEVARCH/
-
-$ cd ~/sources/
-ZB_CFG=huawei.370 zb-shell
-zb-make
-
-OR
-
-zb-virtual-slave zb-shell
-ZB_CFG=humax.1000 zb-make
-
 
 <after-zb-shell>
 $ env | grep ^Z
@@ -890,6 +888,17 @@ move to the source dir to build:
 
 mipsel-linux-gcc -c src/nexusMgr.c -o nexusMgr.o -DPIC -fpic -std=c99 `pkg-config --cflags nexus directfb`
 mipsel-linux-g++ nexusMgr.o -lnexus `pkg-config --libs nexus directfb` -shared -o libnexusMgr.so
+
+<three>
+$ cd ~/sources/
+ZB_CFG=huawei.370 zb-shell
+zb-make
+
+OR
+
+zb-virtual-slave zb-shell
+ZB_CFG=humax.1000 zb-make
+
 
 <example> to run makefile on built-root or build nexusMgr
 export ET=/data/builds/master/huawei.370/DEVARCH/
@@ -2274,7 +2283,7 @@ class ZINC_LOCAL UraniumAirPlugin : public GenericAirPlugin<UraniumAirPlugin, Cl
 {
   void initSingletons(ClientFactory& clientFactory) 
   {
-    note: create MD
+    note: <CMD>
     shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> nativeLocator(
         clientFactory.createMetadataLocator()
         );
@@ -2301,14 +2310,9 @@ struct ZINC_EXPORT MediaRecord : virtual public NS_ZINC::Polymorphic {
    virtual std::string getSynopsis() const = 0;
 }
 
-class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic
-{
-  /**
-   * Returns Event object if getSummaryType() returns SCHEDULE_EVENT otherwise throws
-   * EntityNotPresentException.
-   */
-  virtual boost::shared_ptr<Event> getEvent() = 0;
-}
+class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic;
+
+class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic;
 
 
 {client-system}
@@ -2323,7 +2327,8 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
 
   public:
     boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> createMetadataLocator();
-    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> createConcreteEventRepository();
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> 
+      createConcreteEventRepository();
     boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::Locator> createLinearMetadataLocator();
 
 
@@ -2431,7 +2436,7 @@ shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> nativeLocator(
 class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
 {
 
-  // <LINEAR>
+  // 'linear'
   // LCL    -> { ER, RCR, RR }:
   //              |
   //              -> { ER(IRON), RR }
@@ -2465,7 +2470,8 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
     if(!eventRepository) {
 
       //create Event Repository
-      boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemEventRepository(getIronSystemEventRepository());
+      boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemEventRepository(
+          getIronSystemEventRepository());
 
       eventRepository = boost::make_shared<SystemClientEventRepository>(
           systemEventRepository,
@@ -2480,7 +2486,7 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
     return eventRepository;
   }
 
-  // <METADATA> note: see use of namespace to specify
+  // note: 'metadata' see use of namespace to specify
   //
   // <MCL> MCL    -> { MB, ER, SR }
   //
@@ -2490,8 +2496,6 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
   //
   boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> createMetadataLocator() 
   {
-    URANIUM_FUNC_DEBUG;
-
     if(!metadataLocator)
     {
       metadataLocator = boost::make_shared<NS_URANIUM_METADATA_CLIENT::SystemClientLocator>(
@@ -2575,17 +2579,45 @@ class ZINC_EXPORT SystemClientMetadataBroker
     metadataObserver(metadataObserver_)
   {}
 
+  // note: search
+  // note: WHO'S CALLING THIS?
+
+  NS_ZINC::Future<boost::shared_ptr<SummaryResultSet>> search(const std::string& searchTerms,
+      boost::shared_ptr<SearchOptions> searchOptions,
+      size_t start,
+      size_t size) const
+  {
+    shared_ptr<SystemClientSearchOptions> scSearchOptions
+      = boost::dynamic_pointer_cast<SystemClientSearchOptions>(searchOptions);
+
+    // note: this is SMB(COBALT)
+
+    return metadataBroker->search(searchTerms,
+        getSysQopts(scSearchOptions),
+        getSysGopts(scSearchOptions),
+        scSearchOptions->getFilters(),
+        start,
+        size)
+      .then(*getDispatcher(),
+          bind(&SystemClientMetadataBroker::searchCallback,
+            shared_from_this(),
+            start,
+            _1));
+  }
+
+  // note: searchCallback
+
   boost::shared_ptr<SummaryResultSet>
     SystemClientMetadataBroker::searchCallback(uint32_t requestedStartIndex,
         const NS_ZINC::FutureValue<NS_COBALT_SYSTEM::ResultSet>& fvSystem) const
     {
-      URANIUM_FUNC_TRACE;
       translateAndThrowCobaltSystemExceptions(fvSystem.getError());
       NS_COBALT_SYSTEM::ResultSet sysval = fvSystem.get();
 
       // note: SCMB        -> { RS(COBALT), , MR, }
       // note: repos is MR 
-      // note: create <SCSRS> and not sure how this callback is called
+      
+      // note: create <SCSRS> and see <use-summary>
       
       boost::shared_ptr<SystemClientSummaryResultSet> srs =
         convert(sysval, boost::shared_ptr<SystemClientSummaryResultSet>(), requestedStartIndex);
@@ -2613,9 +2645,10 @@ class ZINC_EXPORT SystemClientMetadataBroker
   boost::weak_ptr<MetadataRepositories> repos;
 };
 
+
 <CER> SCER(ER) -> { MDO, SR, SER, SMB, CRR, CLA, EEIF, PEC, BSM }
 
-note: ER is metadat ER
+note: ER is metadata ER
 
 class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
 {
@@ -2631,8 +2664,6 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
     {
       if(eventRepository == 0)
       {
-        URANIUM_PROFILE_SCOPE("SystemClientFactory::createConcreteEventRepository()");
-
         boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> systemMB = getSystemMetadataBroker();
         boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemER(getIronSystemEventRepository());
         boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::ReminderRepository> clientRR(createReminderRepository());
@@ -2640,7 +2671,7 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
         boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientMetadataConfig> 
           metadataconfig(createMetadataConfig());
 
-        // note: c-SCER
+        // note: <SCER>
         boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> concreteER(
             'new' NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository(
               metadataconfig,
@@ -2667,6 +2698,7 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
       return eventRepository;
     }
 }
+
 
 <MO>
 boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataObserver> <createMetadataObserver>()
@@ -2772,7 +2804,7 @@ class ZINC_LOCAL MetadataObserver:
 
 
 ={============================================================================
-*kt_dev_uv_stack_108* stack: cal: metadata event connection to application
+*kt_dev_uv_stack_108* stack: cal: metadata: event connection to application
 
 {event-apis}
 The old API has:
@@ -2828,7 +2860,7 @@ NS_URANIUM_METADATA_CLIENT_OPEN
 
 {metadata-sce-overloads}
 
-note: used <1>
+note: used <1> from iron
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
    const std::string& lang,
    const NS_IRON_SYSTEM::Event& dttEvent) :
@@ -2851,11 +2883,11 @@ SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
    synopsis(),
 {}
 
-note: used <2>
+note: used <2> from cobalt
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         const SystemEventWrapper& masEvent) :
 
-            synopsis(),
+   synopsis(),
 {}
 
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos, 
@@ -2863,6 +2895,7 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
     synopsis(),
 {}
 
+note: used <3> in Summary
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
             flags(0),
@@ -2893,14 +2926,16 @@ boost::shared_ptr<std::vector<boost::shared_ptr<Event> > > getPresentFollowing()
 }
 
 
-<metadata>
+<metadata> metadata-overload
 src/metadata/SystemClientEventRepository.cpp
+
+note: this uses overloads
 
 boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Event& e)
 {
   if(!e.eventLocator.empty())
   {
-    // note: uses the first and see above.
+    // note: uses <1> and see above.
     return boost::shared_ptr<SystemClientEvent>( 
         new SystemClientEvent(getRepos(), config->getLanguage(), e));
   }
@@ -2908,13 +2943,23 @@ boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Eve
   return boost::shared_ptr<SystemClientEvent>();
 }
 
-note: this has overloads
-
 event_collection_ptr getClientEvents()
 {
    // note: uses <2> and see above
    boost::shared_ptr<SystemClientEvent> mevent = 
      boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+}
+
+
+<SCER>repos is passed from SCER to SCE.
+
+boost::shared_ptr<MetadataRepositories> SystemClientEventRepository::getRepos()
+{
+  boost::shared_ptr<MetadataRepositories> repos =
+    boost::make_shared<MetadataRepositories>(
+        serviceRepo, reminderRepo, linearAcquisition, shared_from_this(), extraInfo);
+
+  return repos;
 }
 
 
@@ -2950,6 +2995,207 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
      const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
     &SystemClientEventRepository::eventsReceived;
 }
+
+
+={============================================================================
+*kt_dev_uv_stack_109* stack: cal: metadata: summary
+
+Uranium.Client.API/include/metadata/Summary.h
+
+class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic;
+
+note: this uses metadata event since it is in the same NS.
+
+class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic
+{
+  /**
+   * Returns Event object if getSummaryType() returns SCHEDULE_EVENT otherwise throws
+   * EntityNotPresentException.
+   */
+  virtual boost::shared_ptr<Event> getEvent() = 0;
+}
+
+Uranium.Client.System/src/metadata/SystemClientSummary.h
+
+class SystemClientSummary : public Summary
+{
+  public:
+    SystemClientSummary(
+        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult_,
+        boost::shared_ptr<SystemClientMetadataConfig> config_,
+        boost::weak_ptr<MetadataRepositories> repos_,
+        boost::shared_ptr<ProvisioningCache> provisioningCache_,
+        uint32_t absoluteIndex_);
+
+    :sysResult(sysResult), config(config), repos(repos_)
+    {}
+
+    virtual boost::shared_ptr<Event> getEvent()
+    {
+      if(entityType != ENTITY_SCHEDULE_EVENT)
+      {
+        throw EntityNotPresentException("Incorrect entity type. Expected " +
+            boost::lexical_cast<string>(ENTITY_SCHEDULE_EVENT) + ", got " +
+            boost::lexical_cast<string>(entityType));
+      }
+
+      // note: uses <3> and see above. metedata-overload
+      
+      return boost::make_shared<SystemClientEvent>(repos, sysResult);
+    }
+
+  private:
+    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
+    boost::weak_ptr<MetadataRepositories> repos;
+};
+
+
+<use-summary>
+Uranium.Client.System/src/metadata/SystemClientSummaryResultSet.cpp
+
+note: this is 'only' place to use SCS and the the set is a vector of SCS. See <CMB>
+
+SystemClientSummaryResultSet::SystemClientSummaryResultSet( 
+    boost::shared_ptr<NS_COBALT_SYSTEM::ResultSet> sysResultSet,
+    boost::shared_ptr<SystemClientMetadataConfig> config,
+    boost::weak_ptr<MetadataRepositories> repos,
+    boost::shared_ptr<ProvisioningCache> provisioningCache_,
+    : provisioningCache(provisioningCache_),
+      summaries(
+
+          // note:
+          getClientSummaries(sysResultSet->results, config, repos, startIndex)),
+
+      totalMASResultSetSize(sysResultSet->totalSize)
+{
+}
+
+
+boost::shared_ptr<SystemClientSummaryResultSet::summary_ptr_vector>
+    SystemClientSummaryResultSet::getClientSummaries( const std::vector< Result >& systemResults,
+                                                      boost::shared_ptr<SystemClientMetadataConfig> config,
+                                                      boost::weak_ptr<MetadataRepositories> repos,
+                                                      uint32_t startIndex)
+{
+  shared_ptr<summary_ptr_vector> clientSummaries = make_shared<summary_ptr_vector>();
+  clientSummaries->reserve(systemResults.size());
+
+  for( size_t i = 0; i < systemResults.size(); ++i)
+  {
+    clientSummaries->push_back(
+        make_shared_summary( systemResults[i], config, repos, provisioningCache, i + startIndex) );
+  }
+  return clientSummaries;
+}
+
+shared_ptr<SystemClientSummary> make_shared_summary( const Result& sysResult,
+    boost::shared_ptr<SystemClientMetadataConfig> config,
+    boost::weak_ptr<MetadataRepositories> repos,
+    boost::shared_ptr<ProvisioningCache> provisioningCache,
+    uint32_t index )
+{
+  shared_ptr<Result> sysResultPtr = make_shared<Result>(sysResult);
+  return make_shared<SystemClientSummary>(sysResultPtr, config, repos, provisioningCache, index);
+}
+
+
+<test>
+Uranium.Client.System/test/metadata/SummaryTest.cpp
+
+class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultMetadataMocksEnvironment
+{
+  void testGetEventFromSummary()
+  {
+    SystemClientSummary summary( sysResult,
+        clientFactory->createMetadataConfig(),
+        clientFactory->createMetadataRepositories(),     note: this is repo(event)
+        // These tests do not rely on ProvisioningCache
+        boost::shared_ptr<ProvisioningCache>(),
+        3 );
+
+    CPPUNIT_ASSERT(summary.getEvent());
+    CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
+
+   note: MEDIUM SYNOPSIS
+
+   CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
+   CPPUNIT_ASSERT(summary.getEvent()->getService());
+  }
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_109* stack: cal: test
+
+/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/tests/uranium-client-system/test/metadata
+
+-rwxr-xr-x 1 kpark kpark  391852 Feb 25 14:44 brokerintegrationtest*
+-rwxr-xr-x 1 kpark kpark 5250731 Feb 25 14:44 eventcachettltest*
+-rwxr-xr-x 1 kpark kpark 5260059 Feb 25 14:44 eventwindowresizetest*
+-rwxr-xr-x 1 kpark kpark 3986922 Feb 25 14:44 fulleventtest*
+-rwxr-xr-x 1 kpark kpark 2024474 Feb 25 14:44 identifierbagtest*
+-rwxr-xr-x 1 kpark kpark 2022120 Feb 25 14:44 identifierprocessingtest*
+-rwxr-xr-x 1 kpark kpark 4468512 Feb 25 14:44 mediarecordcachetest*
+-rwxr-xr-x 1 kpark kpark 5292645 Feb 25 14:44 metadatabrokerfunctest*
+-rwxr-xr-x 1 kpark kpark 1502519 Feb 25 14:44 metadataobservertest*
+-rwxr-xr-x 1 kpark kpark 1624748 Feb 25 14:44 metadatasourcefallbacktest*
+-rwxr-xr-x 1 kpark kpark  217077 Feb 25 14:44 metadata-systemclientfactorytest*
+-rwxr-xr-x 1 kpark kpark 4423512 Feb 25 14:44 presenteventscachesanitisationtest*
+-rwxr-xr-x 1 kpark kpark 4426963 Feb 25 14:44 presenteventscachetest*
+-rwxr-xr-x 1 kpark kpark 3977156 Feb 25 14:44 programmetest*
+-rwxr-xr-x 1 kpark kpark 2265663 Feb 25 14:44 provisioningcachetest*
+-rwxr-xr-x 1 kpark kpark 3986679 Feb 25 14:44 publicationtest*
+-rwxr-xr-x 1 kpark kpark 5249049 Feb 25 14:44 servicefilteringtest*
+-rwxr-xr-x 1 kpark kpark 1482503 Feb 25 14:44 servicehidingtest*
+-rwxr-xr-x 1 kpark kpark 5371826 Feb 25 14:44 stagedeventmetadataretrievaltest*
+-rwxr-xr-x 1 kpark kpark 5230334 Feb 25 14:44 summaryresultsettest*
+-rwxr-xr-x 1 kpark kpark 5159299 Feb 25 14:44 summarytest*
+-rwxr-xr-x 1 kpark kpark 4978003 Feb 25 14:44 systemclienteventrepositorytest*
+-rwxr-xr-x 1 kpark kpark 5197127 Feb 25 14:44 systemclienteventtest*
+-rwxr-xr-x 1 kpark kpark 4167294 Feb 25 14:44 systemclienteventwindowdtttest*
+-rwxr-xr-x 1 kpark kpark 4143268 Feb 25 14:44 systemclienteventwindowiptest*
+-rwxr-xr-x 1 kpark kpark  278360 Feb 25 14:44 systemclientmetadataconfigtest*
+-rwxr-xr-x 1 kpark kpark 1609246 Feb 25 14:44 systemclientservicerepositorytest*
+
+test/metadata/Makefile.am
+
+summarytest_SOURCES = SummaryTest.cpp $(metadata_helpers)
+summarytest_LDADD = $(ldadd_static)
+
+note: see that executables are all lowercases.
+
+
+<log-from-jenkins>
+Uranium.Client.System.log
+
+PASS: systemclientservicerepositorytest
+
+
+<synopsis>
+Search for getLongSynopsis()
+
+Uranium.Client.System/test/linear-metadata/SysToCliEventTest.cpp
+181:        CPPUNIT_ASSERT_MESSAGE("Incorrect value",sysEvent.longSynopsis == 
+    *(cliEvent->getLongSynopsis()));
+
+Uranium.Client.System/test/metadata/SystemClientServiceRepositoryTest.cpp
+486-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong longSynopsis",
+487-                string("303 StagIS test is a linear television service."
+488-                    " This is the long description."), 
+489:                service2->getLongSynopsis());
+
+
+Search for getSynopsis()
+
+Uranium.Client.System/test/metadata/SummaryTest.cpp
+118-        CPPUNIT_ASSERT(summary.getEvent());
+119-        CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
+120:        CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
+
+
+Uranium.Client.System/test/linear-acquisition/SysToCliTest.cpp
+120-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Incorrect value",
+121:                sysB.synopsis, cliB->getSynopsis());
 
 
 ={============================================================================
@@ -4121,153 +4367,11 @@ Events are defines in around Iron but none of them has this memeber; this seems 
 
 {test}
 
-Uranium.Client.System/test/metadata/SummaryTest.cpp
-
-class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultMetadataMocksEnvironment
-{
-  void testGetEventFromSummary()
-  {
-    SystemClientSummary summary( sysResult,
-        clientFactory->createMetadataConfig(),
-        clientFactory->createMetadataRepositories(),     note: this is repo(event)
-        // These tests do not rely on ProvisioningCache
-        boost::shared_ptr<ProvisioningCache>(),
-        3 );
-
-    CPPUNIT_ASSERT(summary.getEvent());
-    CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
-
-   note: MEDIUM SYNOPSIS
-
-   CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
-   CPPUNIT_ASSERT(summary.getEvent()->getService());
-  }
-}
-
-
-{summary}
-
-note: this uses metadat event since it is in the same NS.
-
-class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic
-{
-  /**
-   * Returns Event object if getSummaryType() returns SCHEDULE_EVENT otherwise throws
-   * EntityNotPresentException.
-   */
-  virtual boost::shared_ptr<Event> getEvent() = 0;
-}
-
-Uranium.Client.System/src/metadata/SystemClientSummary.h
-
-class SystemClientSummary : public Summary
-{
-  public:
-    SystemClientSummary(
-        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult_,
-        boost::shared_ptr<SystemClientMetadataConfig> config_,
-        boost::weak_ptr<MetadataRepositories> repos_,
-        boost::shared_ptr<ProvisioningCache> provisioningCache_,
-        uint32_t absoluteIndex_);
-
-    :sysResult(sysResult), config(config), repos(repos_)
-    {}
-
-    virtual boost::shared_ptr<Event> getEvent()
-    {
-      if(entityType != ENTITY_SCHEDULE_EVENT)
-      {
-        throw EntityNotPresentException("Incorrect entity type. Expected " +
-            boost::lexical_cast<string>(ENTITY_SCHEDULE_EVENT) + ", got " +
-            boost::lexical_cast<string>(entityType));
-      }
-
-      // note: OVERLOADES
-
-      return boost::make_shared<SystemClientEvent>(repos, sysResult);
-    }
-
-  private:
-    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
-    boost::weak_ptr<MetadataRepositories> repos;
-};
-
-
-
-<use-summary>
-Uranium.Client.System/src/metadata/SystemClientSummaryResultSet.cpp
-
-note: this is only place to use SCS
-
-SystemClientSummaryResultSet::SystemClientSummaryResultSet( 
-    boost::shared_ptr<NS_COBALT_SYSTEM::ResultSet> sysResultSet,
-    boost::shared_ptr<SystemClientMetadataConfig> config,
-    boost::weak_ptr<MetadataRepositories> repos,
-    boost::shared_ptr<ProvisioningCache> provisioningCache_,
-    : provisioningCache(provisioningCache_),
-      summaries(
-          getClientSummaries(sysResultSet->results, config, repos, startIndex)),    note: see
-      totalMASResultSetSize(sysResultSet->totalSize)
-{
-}
-
-boost::shared_ptr<SystemClientSummaryResultSet::summary_ptr_vector>
-    SystemClientSummaryResultSet::getClientSummaries( const std::vector< Result >& systemResults,
-                                                      boost::shared_ptr<SystemClientMetadataConfig> config,
-                                                      boost::weak_ptr<MetadataRepositories> repos,
-                                                      uint32_t startIndex)
-{
-  shared_ptr<summary_ptr_vector> clientSummaries = make_shared<summary_ptr_vector>();
-  clientSummaries->reserve(systemResults.size());
-
-  for( size_t i = 0; i < systemResults.size(); ++i)
-  {
-    clientSummaries->push_back(
-        make_shared_summary( systemResults[i], config, repos, provisioningCache, i + startIndex) );
-  }
-  return clientSummaries;
-}
-
-shared_ptr<SystemClientSummary> make_shared_summary( const Result& sysResult,
-    boost::shared_ptr<SystemClientMetadataConfig> config,
-    boost::weak_ptr<MetadataRepositories> repos,
-    boost::shared_ptr<ProvisioningCache> provisioningCache,
-    uint32_t index )
-{
-  shared_ptr<Result> sysResultPtr = make_shared<Result>(sysResult);
-  return make_shared<SystemClientSummary>(sysResultPtr, config, repos, provisioningCache, index);
-}
-
-
-<use-search-callback>
-NS_ZINC::Future<boost::shared_ptr<SummaryResultSet> >
-SystemClientMetadataBroker::search(const std::string& searchTerms,
-    boost::shared_ptr<SearchOptions> searchOptions,
-    size_t start,
-    size_t size) const
-{
-  shared_ptr<SystemClientSearchOptions> scSearchOptions
-    = boost::dynamic_pointer_cast<SystemClientSearchOptions>(searchOptions);
-
-  // note: this is SMB(COBALT)
-
-  return metadataBroker->search(searchTerms,
-      getSysQopts(scSearchOptions),
-      getSysGopts(scSearchOptions),
-      scSearchOptions->getFilters(),
-      start,
-      size)
-    .then(*getDispatcher(),
-        bind(&SystemClientMetadataBroker::searchCallback,
-          shared_from_this(),
-          start,
-          _1));
-}
-
 
   <common> <event>
 
-    class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable {
+class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
+{
 
 note: has default arg.
         void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
@@ -4529,34 +4633,6 @@ class ZINC_LOCAL SystemLocalMediaLibraryTest : IntegrationTestSandbox, TestUsing
   CPPUNIT_TEST_SUITE_END();
 };
 
-
-03.09
-======
-
-Search for getLongSynopsis()
-
-Uranium.Client.System/test/linear-metadata/SysToCliEventTest.cpp
-181:        CPPUNIT_ASSERT_MESSAGE("Incorrect value",sysEvent.longSynopsis == 
-    *(cliEvent->getLongSynopsis()));
-
-Uranium.Client.System/test/metadata/SystemClientServiceRepositoryTest.cpp
-486-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong longSynopsis",
-487-                string("303 StagIS test is a linear television service."
-488-                    " This is the long description."), 
-489:                service2->getLongSynopsis());
-
-
-Search for getSynopsis()
-
-Uranium.Client.System/test/metadata/SummaryTest.cpp
-118-        CPPUNIT_ASSERT(summary.getEvent());
-119-        CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
-120:        CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
-
-
-Uranium.Client.System/test/linear-acquisition/SysToCliTest.cpp
-120-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Incorrect value",
-121:                sysB.synopsis, cliB->getSynopsis());
 
 
 ==============================================================================
