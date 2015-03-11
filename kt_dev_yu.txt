@@ -35,6 +35,7 @@
 |kt_dev_uv_stack_108| stack: cal: metadata event connection to application
 |kt_dev_uv_stack_109| stack: cal: metadata: summary
 |kt_dev_uv_stack_110| stack: cal: test
+|kt_dev_uv_stack_111| stack: build pc target
 
 |kt_dev_uv_stack_120| stack: cppunit
 
@@ -471,7 +472,7 @@ yv-start-services.sh*
 <zb-virtual-slave>
 zb-virtual-slave zb-make
 {
-  /home/kpark/source/zinc-git-tools/zb/zb-load-config.sh
+  /source/zinc-git-tools/zb/zb-load-config.sh
   {
       pre: ET, ZB_CFG 
 
@@ -486,10 +487,14 @@ zb-virtual-slave zb-make
       do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
   }
 
-  + real_path=/data/builds/master
-  + virtual_path=/data/builds/_virtual_
-  + exec map-dir-and-exec /data/builds/master:/data/builds/_virtual_ /bin/bash -c '"zb-make"  		2> >( sed -u "s|/data/builds/_virtual_|/data/builds/master|" >&2 ) | sed -u "s|/data/builds/_virtual_|/data/builds/master|"'
+   real_path="${ZB_BUILD_DIR}/$branch"
+   virtual_path="${ZB_BUILD_DIR}/_virtual_"
 
+  + real_path=/data/builds/<BRANCH>
+  + virtual_path=/data/builds/_virtual_
+  + exec map-dir-and-exec /data/builds/master:/data/builds/_virtual_ /bin/bash -c '"zb-make"  		
+  2> >( sed -u "s|/data/builds/_virtual_|/data/builds/master|" >&2 ) \
+  | sed -u "s|/data/builds/_virtual_|/data/builds/master|"'
 }
 
 
@@ -498,7 +503,7 @@ zb-make:
   if [ -n "${ZB_FORCE_BRANCH}" ]; then
       echo "Using overridden branch."
   else
-
+   <load-config>
    source $where_am_i/zb/zb-load-config.sh
    {
       note: pick up brach name or force it
@@ -530,6 +535,8 @@ zb-make:
       else
           slave_dir=$ZB_BUILD_DIR/$branch/$ZB_CFG
       fi
+
+      note: ZB_BUILD_DIR is set
 
       ++ slave_dir=/data/builds/DEVARCH-8092/huawei.370
    }
@@ -897,7 +904,46 @@ zb-make
 OR
 
 zb-virtual-slave zb-shell
-ZB_CFG=humax.1000 zb-make
+zb-virtual-slave zb-build-with-progress
+
+<tips>
+
+note: can specify make build target
+ZINC_SILENT_RULES=1 zb-virtual-slave zb-build-with-progress Zinc.AIR.CTV.Tests-install
+
+ZINC_SILENT_RULES=1 zb-virtual-slave zb-build-with-progress Zinc.AIR.CTV.Tests
+
+DEVARCH/Zinc/Zinc.Build/setvars-common.sh
+391-
+392-# Automake "silent-rules" can be turned on to reduce the amount of repetitive
+393-# information printed when building. Warnings and errors are all still printed
+394-# so using silent-rules by default is safe.
+395:if [[ "${ZINC_SILENT_RULES}" == 1 ]]; then
+396-    export MAKEFLAGS="$MAKEFLAGS V=0"
+397-fi
+
+
+ZINC_INCREMENTAL
+
+DEVARCH/Zinc/Zinc.Build/Makefile
+129-#
+130-$(patsubst %,$(ZINC_BUILD_DIR)/%buildtools.built,$(PACKAGES) $(zinc3ps) $(zinc_bash_test)) : $(ZINC_BUILD_DIR)/%buildtools.built :
+131- $(info +++ Building $* +++)
+132-ifeq (${ZINC_DRY_RUN},)  
+133:ifeq (${ZINC_INCREMENTAL},)
+134- -rm -rf $(HOST_BUILD_DIR)/$*
+135:endif # ! ZINC_INCREMENTAL
+
+
+ZINC_SKIP_TESTS
+
+DEVARCH/Zinc/Zinc.Build/Makefile
+37-envtest:=$(and ${ZINC_HOST_CFG},${ZINC_HOST_3PS},${ZINC_HOST_PREFIX},${ZINC_SRC_ROOT},${ZINC_BUILD_ROOT},${PKG_CONFIG},${PKG_CONFIG_PATH},${LDFLAGS},${CPPFLAGS},${ZINC_BUILD_DIR},${BUILD_TRIPLE})
+38-
+39-DO_CHECK_FLAGS=
+40-
+41:# Set ZINC_SKIP_TESTS to skip running of the "make check"
+42:ifeq (${ZINC_SKIP_TESTS},)
 
 
 <example> to run makefile on built-root or build nexusMgr
@@ -909,7 +955,7 @@ can see output and o file under this.
 
 /data/builds/master/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusRelease
 
-But uses sources from:
+But uses sources from: note: DEVARCH
 
 `test -f 'src/exec-then-cleanup-app.c' || echo '/data/builds/master/huawei.370/DEVARCH/Polonium/Polonium.NexusRelease/'`src/exec-then-cleanup-app.c
 
@@ -2857,10 +2903,19 @@ appropriate class to use in client side? Uses 'namespace'
 NS_URANIUM_LINEAR_CLIENT_OPEN
 NS_URANIUM_METADATA_CLIENT_OPEN
 
+note: Events differs in 'interfaces' and not like a simple structure. So how Events differs is not
+to compare two in diff since it's up to SCE how to present via interface.
+
+
+{where-events}
+Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
+	<yv:struct name="Zinc.Metadata.Event">
+		<yv:member type="a{ss}" name="longSynopsis">
+
 
 {metadata-sce-overloads}
 
-note: used <1> from iron
+note: used <1> from iron <CSCE>
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
    const std::string& lang,
    const NS_IRON_SYSTEM::Event& dttEvent) :
@@ -2906,6 +2961,12 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
   synopsis = fullEvent.getMediumSynopsis();
 }
 
+std::string SystemClientEvent::getSynopsis() const
+{
+    URANIUM_PROFILE_FUNC;
+    return synopsis;
+}
+
 
 {where-create-scs}
 Calls to create SCE. 
@@ -2935,7 +2996,7 @@ boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Eve
 {
   if(!e.eventLocator.empty())
   {
-    // note: uses <1> and see above.
+    // note: uses <1> and see above. <CSCE>
     return boost::shared_ptr<SystemClientEvent>( 
         new SystemClientEvent(getRepos(), config->getLanguage(), e));
   }
@@ -2943,9 +3004,18 @@ boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Eve
   return boost::shared_ptr<SystemClientEvent>();
 }
 
-event_collection_ptr getClientEvents()
+event_collection_ptr SystemClientEventRepository::getClientEvents(
+            const std::vector<NS_IRON_SYSTEM::Event> & events) 
 {
-   // note: uses <2> and see above
+   boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
+}
+
+note:  getClientEvents is overloads
+
+event_collection_ptr SystemClientEventRepository::getClientEvents(
+            const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
+{
+   // note: uses <2> and see above. <CSCE>
    boost::shared_ptr<SystemClientEvent> mevent = 
      boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
 }
@@ -2965,11 +3035,41 @@ boost::shared_ptr<MetadataRepositories> SystemClientEventRepository::getRepos()
 
 {how-events-updated}
 
-void eventsReceived()
+<ip-version>
+
+# 01
+event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
-  // note:
-  event_collection_ptr clientEvents = getClientEvents(systemEvents);
+  SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
+
+  boost::shared_ptr<SystemClientEvent> mevent =
+    boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+  events->push_back(mevent);
 }
+
+# 02
+void eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
+        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+{
+  const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+  event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+}
+
+<dtt-version>
+
+event_collection_ptr getClientEvents(
+            const std::vector<NS_IRON_SYSTEM::Event> & events) 
+{
+  boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
+}
+
+void eventsReceived(
+   boost::shared_ptr<EventWindowCreateCommand> command,
+   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
+{
+   event_collection_ptr clientEvents = getClientEvents(systemEvents);
+}  
+
 
 note: some called callback and get some updated events?
 
@@ -2982,9 +3082,11 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
   int64_t start = to_time_t(dataRetrievalBounds.startTime);
   int64_t end = to_time_t(dataRetrievalBounds.startTime) + dataRetrievalBounds.seconds;
 
+  // note: Future?
   NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
 
   //eventsReceived is overloaded, we need to get the pointer to it first, and the pass to bind.
+
   void (SystemClientEventRepository::*masCallback)
     (boost::shared_ptr<EventWindowCreateCommand>,
      const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
@@ -2994,6 +3096,33 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
     (boost::shared_ptr<EventWindowCreateCommand>,
      const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
     &SystemClientEventRepository::eventsReceived;
+
+  // 'request' data from System API:
+
+  if(recids.empty() == false)
+  {
+    URANIUM_INFO("Requesting schedule metadata from MAS.");
+
+    Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
+      metadataBroker->getEventSummariesByServices(recids, start, end);
+    //fMASEvents.setCallback(boost::bind(masCallback, this, cmd, _1));
+    
+    note: masCallback 
+    bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
+  }
+
+  if(locators.empty() == false)
+  {
+    URANIUM_INFO("Requesting schedule metadata from DTT.");
+
+    int64_t dttStart = adjustDTTWindowStart(config, start);
+
+    Future <vector<NS_IRON_SYSTEM::Event>> fDTTEvents 
+      = systemEventRepo->getScheduleEvents(locators, dttStart, end);
+
+    note: dttCallback
+    bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
+  }
 }
 
 
@@ -3125,7 +3254,7 @@ class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultM
 
 
 ={============================================================================
-*kt_dev_uv_stack_109* stack: cal: test
+*kt_dev_uv_stack_110* stack: cal: test
 
 /data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/tests/uranium-client-system/test/metadata
 
@@ -3171,6 +3300,10 @@ Uranium.Client.System.log
 PASS: systemclientservicerepositorytest
 
 
+<build-from-pc-target>
+zb-make Uranium/Uranium.Client.System
+
+
 <synopsis>
 Search for getLongSynopsis()
 
@@ -3196,6 +3329,72 @@ Uranium.Client.System/test/metadata/SummaryTest.cpp
 Uranium.Client.System/test/linear-acquisition/SysToCliTest.cpp
 120-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Incorrect value",
 121:                sysB.synopsis, cliB->getSynopsis());
+
+
+<test-cases>
+For enhanced metadata:
+
+test/metadata/SystemClientEventRepositoryTest.cpp
+454-        
+455-        CPPUNIT_ASSERT_MESSAGE("There should be an event returned", e);
+456-        
+457-        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].eventLocator, e->getIdentifier("locator"));
+458:        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].shortTitle["eng"], e->getTitle());
+459-        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].start, (uint32_t)to_time_t(e->getStart()));
+460-        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].publishedDuration, (uint32_t)e->getDuration());
+461-    }
+462-    
+
+
+test/metadata/StagedEventMetadataRetrievalTest.cpp
+222-        }
+223-        CPPUNIT_ASSERT_EQUAL(from_time_t(availabilityStart), ecli->getAvailabilityStart());
+224-        CPPUNIT_ASSERT_EQUAL(from_time_t(availabilityEnd), ecli->getAvailabilityEnd());
+225-        CPPUNIT_ASSERT_EQUAL(false, ecli->isAvailable());
+226:        CPPUNIT_ASSERT_EQUAL(edtt.shortTitle["eng"], ecli->getTitle());
+227-        CPPUNIT_ASSERT_EQUAL( (int32_t)edtt.publishedDuration, ecli->getDuration());
+228-        CPPUNIT_ASSERT_EQUAL(from_time_t(edtt.start), ecli->getStart());
+229-        CPPUNIT_ASSERT_EQUAL(edtt.programmeCrid, ecli->getIdentifier("progcrid"));
+
+
+test/metadata/SystemClientEventWindowTestBase.h
+45-{
+46-
+47-    std::string eventTitleExtractor(boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> e)
+48-    {
+49:        return e->getTitle();
+50-    }
+
+
+src/metadata/tools/textEPG.cpp
+92-    if(e->isPresent())
+93-    {
+94-        s = "*";
+95-    }
+96:    return s + e->getTitle();
+
+
+={============================================================================
+*kt_dev_uv_stack_111* stack: build pc target
+
+Unlike cross platform builds, build runs tests and pc target build fails if any test fails.
+
+1. Fail to buile due to failure on tests/cobalt-system-api/test/dateparsingtest
+
+Test name: N6cobalt6system15DateParsingTestE::test_calling_isDaylightSavingTime_with_DST_times
+
+To solve this, need to do:
+
+export TZ="Europe/London"
+
+
+2. Various failure on some python tests such as Rubidium/Rubidium.System.Production
+
+The reason is that python script has "#!/bin/env python" which expect /bin/env but there is not. So
+
+$ sudo ln -s /usr/bin/env /bin/env
+
+Make a build success.
 
 
 ={============================================================================
