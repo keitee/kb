@@ -106,10 +106,12 @@ Use #{ for a group and ={ for a item
 |kt_dev_test_100| cppunit
 |kt_dev_test_101| cppunit: cookbook
 |kt_dev_test_102| cppunit: simple
+|kt_dev_test_103| cppunit: macros
 
 |kt_dev_test_200| gmock:
 |kt_dev_test_201| gmock: for dummies
 |kt_dev_test_202| gmock: cookbook
+|kt_dev_test_203| gmock: real examples
 
 
 # ============================================================================
@@ -20991,7 +20993,7 @@ bool operator==( const Complex &a, const Complex &b)
 }
 
 Now compile the test, and run it. This time it compiles but the test fails. note: since it always
-returns true and fails on the second assert. We need a bit more to get an operator==working
+returns true and fails on the second assert. We need a bit more to get an operator==() working
 correctly, so we revisit the code.
 
 class Complex { 
@@ -21019,10 +21021,12 @@ numbers and reuse them across our tests.
 Here is how we do it:
 
 o Add member variables for each part of the fixture
-o Override setUp() to initialize the variables
-o Override tearDown() to release any permanent resources you allocated in setUp()
+o 'override' setUp() to initialize the variables
+o 'override' tearDown() to release any permanent resources you allocated in setUp()
 
-note: requires #include <cppunit/TestFixture.h>
+note: requires to inherit from "TextFixture"
+
+#include <cppunit/TestFixture.h>
 
 class ComplexNumberTest : public CppUnit::TestFixture 
 {
@@ -21054,7 +21058,7 @@ How do you write and invoke individual tests using a fixture?
 
 There are two steps to this process:
 
-o Write the test case 'as' a method in the fixture class
+o Write the test case 'as' a 'method' in the fixture class
 o Create a TestCaller which runs that particular method
 
 Here is our test case class with a few extra case methods:
@@ -21166,6 +21170,7 @@ note: 'static' function.
     }
 }
 
+
 <text-version> note: this is main file to 'run' test files.
 To use the text version, include the header files for the tests in Main.cpp:
 
@@ -21192,10 +21197,23 @@ o The name of the source file that contains the test
 o The line number where the failure occurred
 o All of the text inside the call to CPPUNIT_ASSERT() which detected the failure
 
+
 <failure-and-error>
 CppUnit distinguishes between failures and errors. A failure is anticipated and checked for with
 assertions. Errors are unanticipated problems like division by zero and other exceptions thrown by
 the C++ runtime or your code.
+
+note: nested or hiarachical structure and this can be even simpler when use factory below.
+
+main                          Test file(feature/group) 01            Test file(feature/group) 02 
+                  
+{                             class A : public CppUnit::TestFixture  class B : ...
+   runner.addTest(A.suite);   {
+   runner.addTest(B.suite);      suite:
+   runner.run();                    caller(test01);
+}                                   caller(test02);
+                                    ...
+                              };
 
 
 {helper-macros}
@@ -21207,59 +21225,62 @@ http://cppunit.sourceforge.net/doc/1.8.0/group___writing_test_fixture.html
 
 The following code is a rewrite of ComplexNumberTest using those macros:
 
+{{ ComplexNumberTest.cpp  
+
 #include <cppunit/extensions/HelperMacros.h>
 
-class ComplexNumberTest : public CppUnit::TestFixture  {
+class ComplexNumberTest : public CppUnit::TestFixture  
+{
+  protected:
+    // First, we declare the suite, passing the class name to the macro:
+    CPPUNIT_TEST_SUITE( ComplexNumberTest );
 
-// First, we declare the suite, passing the class name to the macro:
+    // The suite created by the static suite() method is named after the class name. Then, we declare
+    // each test case of the fixture:
+    CPPUNIT_TEST( testEquality );
+    CPPUNIT_TEST( testAddition );
 
-CPPUNIT_TEST_SUITE( ComplexNumberTest );
+    // Finally, we end the suite declaration:
+    CPPUNIT_TEST_SUITE_END();
 
-// The suite created by the static suite() method is named after the class name. Then, we declare
-// each test case of the fixture:
+    // At this point, a method with the following signature has been implemented:
+    static CppUnit::TestSuite *suite();
 
-CPPUNIT_TEST( testEquality );
-CPPUNIT_TEST( testAddition );
+    // note: So the above three macros is to implement "suite()" and the rest of the fixture is left as
+    // it was. So 'unchanged'.
 
-Finally, we end the suite declaration:
+  private:
+    Complex *m_10_1, *m_1_1, *m_11_2;
+  protected:
+    void setUp()
+    {
+      m_10_1 = new Complex( 10, 1 );
+      m_1_1 = new Complex( 1, 1 );
+      m_11_2 = new Complex( 11, 2 );  
+    }
 
-CPPUNIT_TEST_SUITE_END();
+    void tearDown() 
+    {
+      delete m_10_1;
+      delete m_1_1;
+      delete m_11_2;
+    }
 
-At this point, a method with the following signature has been implemented:
+    void testEquality()
+    {
+      CPPUNIT_ASSERT( *m_10_1 == *m_10_1 );
+      CPPUNIT_ASSERT( !(*m_10_1 == *m_11_2) );
+    }
 
-static CppUnit::TestSuite *suite();
-
-note: So the above three macros is to implement suite() and the rest of the fixture is left as it
-        was. So 'unchanged'.
-
-private:
-  Complex *m_10_1, *m_1_1, *m_11_2;
-protected:
-  void setUp()
-  {
-    m_10_1 = new Complex( 10, 1 );
-    m_1_1 = new Complex( 1, 1 );
-    m_11_2 = new Complex( 11, 2 );  
-  }
-
-  void tearDown() 
-  {
-    delete m_10_1;
-    delete m_1_1;
-    delete m_11_2;
-  }
-
-  void testEquality()
-  {
-    CPPUNIT_ASSERT( *m_10_1 == *m_10_1 );
-    CPPUNIT_ASSERT( !(*m_10_1 == *m_11_2) );
-  }
-
-  void testAddition()
-  {
-    CPPUNIT_ASSERT( *m_10_1 + *m_1_1 == *m_11_2 );
-  }
+    void testAddition()
+    {
+      CPPUNIT_ASSERT( *m_10_1 + *m_1_1 == *m_11_2 );
+    }
 };
+
+CPPUNIT_TEST_SUITE_REGISTRATION(ComplexNumberTest);
+
+}} ComplexNumberTest.cpp  
 
 The name of the TestCaller added to the suite are a composition of the fixture name and the method name.
 
@@ -21300,7 +21321,7 @@ o compilation bottleneck caused by the inclusion of all test case headers (see p
 
 The TestFactoryRegistry is a place where suites can be registered at initialization time.
 
-To register the ComplexNumber suite, in the .cpp file, you add:
+To register the ComplexNumber suite, in the .cpp file, you add: see above.
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -21532,6 +21553,32 @@ note: failure is different from errors.
 
 
 ={============================================================================
+*kt_dev_test_103* cppunit: macros
+
+<1>
+* Making assertions
+http://cppunit.sourceforge.net/doc/1.8.0/group___assertions.html
+
+#define CPPUNIT_ASSERT_EQUAL(expected, actual)
+
+Asserts that two values are equals. A diagnostic is printed if actual and expected values disagree. 
+
+<2> not in the 1.8.0 doc and but in the latest.
+
+include/cppunit/TestAssert.h
+
+/** Asserts that the given expression throws an exception of the specified type, 
+ * setting a user supplied message in case of failure. 
+ * \ingroup Assertions
+ * Example of usage:
+ * \code
+ *   std::vector<int> v;
+ *  CPPUNIT_ASSERT_THROW_MESSAGE( "- std::vector<int> v;", v.at( 50 ), std::out_of_range );
+ * \endcode
+ */
+
+
+={============================================================================
 *kt_dev_test_200* gmock:
 
 https://code.google.com/p/googlemock/
@@ -21693,12 +21740,12 @@ If you are lucky, the mocks you need to use have already been implemented by som
 
 Using the Turtle interface as example, here are the simple steps you need to follow:
 
-1. Derive a class MockTurtle from Turtle.
+1. 'derive' a class MockTurtle from Turtle.
 
 2. Take a virtual function of Turtle while it's possible to mock non-virtual methods using
 templates, it's much more involved. Count how many arguments it has.
 
-3. In the public: section of the child class, write MOCK_METHODn(); or MOCK_CONST_METHODn(); if you
+3. In the 'public' section of the child class, write MOCK_METHODn(); or MOCK_CONST_METHODn(); if you
 are mocking a const method, where n is the 'number' of the arguments; if you counted wrong, shame on
 you, and a compiler error will tell you so.
 
@@ -21749,6 +21796,7 @@ does. For more details, read the user documentation.
 
 http://code.google.com/p/googlemock/source/browse/trunk/scripts/generator/README
 
+
 ** Where to Put It
 
 When you define a mock class, you need to decide where to put its definition. Some people put it in
@@ -21775,7 +21823,7 @@ much better than Foo does.
 
 Once you have a mock class, using it is easy. The typical work flow is:
 
-1. Import the Google Mock names from the testing namespace such that you can use them unqualified
+1. Import the Google Mock names from the "testing" namespace such that you can use them unqualified
 (You only have to do it once per file. Remember that namespaces are a good idea and good for your
  health.).
 
@@ -21935,6 +21983,7 @@ Sometimes you may not want to be too specific. Remember that talk about tests be
 specification leads to brittle tests and obscures the intent of tests. Therefore we encourage you to
 specify only what's necessary - no more, no less. 
 
+<_>
 If you care to check that Forward() will be called but aren't interested in its actual argument,
    write _ as the argument, which means "anything goes":
 
@@ -22043,6 +22092,7 @@ EXPECT_CALL(turtle, GetX())
 .Times(4)
 .WillRepeatedly(Return(n++));
 
+<custom-action>
 Instead of returning 100, 101, 102, ..., consecutively, this mock function will 'always' return 100
 as n++ is only evaluated once. Similarly, Return(new Foo) will create a new Foo object when the
 EXPECT_CALL() is executed, and will return the same pointer every time. If you want the side effect
@@ -22220,6 +22270,33 @@ bliss.
 *kt_dev_test_202* gmock: cookbook
 
 https://code.google.com/p/googlemock/wiki/CookBook
+
+
+={============================================================================
+*kt_dev_test_203* gmock: real example
+
+<1> use gmock and cppunit
+
+class X {
+
+  void testGetScheduleEventFull()
+  {
+    NS_X_SYSTEM::Result result;
+    result.recordIdentifier = "id12";
+
+    // note: <custom-action>
+    // note: mock object is in outside.
+    EXPECT_CALL(*mockMB, getEvent("abc"))
+      .WillOnce(returnNewCompletedFuture(result));
+
+    // note: Broker is from setUp()
+    NS_Z::Future<FullEventPtr> f = Broker->getFullEvent("abc");
+    boost::shared_ptr<FullEvent> fe(f.get());
+
+    CPPUNIT_ASSERT(fe);
+    CPPUNIT_ASSERT_EQUAL(result.recordIdentifier, fe->getRecordIdentifier());
+  }
+};
 
 
 # ============================================================================
