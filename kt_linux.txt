@@ -96,6 +96,7 @@
 |kt_linux_tool_101| package: pkg-config
 |kt_linux_tool_102| package: dpkg and install deb file
 
+#{ make and build
 |kt_linux_tool_140| cmake
 |kt_linux_tool_141| cmake: mix of c and cpp build
 |kt_linux_tool_142| cmake: cflags
@@ -103,6 +104,7 @@
 |kt_linux_tool_144| cmake: link group
 
 |kt_linux_tool_150| automake: LDADD vs LDFLAGS
+|kt_linux_tool_160| ccache
 
 |kt_linux_tool_200| binutil:
 |kt_linux_tool_201| binutil: readelf
@@ -254,6 +256,7 @@
 |kt_linux_sete_101| gnome: gnome-terminal
 |kt_linux_sete_102| win xserver
 |kt_linux_sete_103| firefox key shortcuts
+|kt_linux_sete_104| solarized color for ls and gnome
 
 |kt_linux_sete_200| which to install?
 
@@ -4228,6 +4231,36 @@ Some variables are inherited from Autoconf; these are CC, CFLAGS, CPPFLAGS, DEFS
 
 This is the variable the Makefile.am author can use to pass in additional C compiler flags. In some
 situations, this is not used, in preference to the per-executable (or per-library) _CFLAGS.
+
+
+={============================================================================
+*kt_linux_tool_160* ccache
+
+The ccache tool tries to speed up a build by taking object files from cache when the preprocessed
+source didn't change. In addition, it can often avoid preprocessing, as a cache lookup on the source
+file path and compiler options returns a list of include files and their modification times. If
+those weren't updated, that counts as a 'direct hit'. Otherwise it falls back to preprocessing the
+source and trying to look-up its hash in the cache. If successful, that counts as a 'preprocessed
+hit'.
+
+The main barrier preventing cache sharing across git branches has to do with the fact we create
+separate build slaves for each git branch, which results in different source and binary directories
+being seen by the compiler. More specifically:
+
+The compiler sets the __FILE__ macro to be the absolute path to the source file. The value of that
+macro leaks to preprocessed source through the use of assert().
+
+We pass preprocessor definitions like -DMACRO__prefix="...", -DMACRO__builddir="...",
+   -DMACRO__top_srcdir="...", which can also leak to preprocessed source.
+
+To address this issue, the new zb-virtual-slave tool was developed. It's meant to wrap around other
+build tools, such as zb-build-with-progress, zb-deploy, zb-shell, etc. and leading them to believe
+we are always building a branch called _virtual_. This way, the compiler will see identical source
+and binary locations, enabling cache hits across different git branches. zb-virtual-slave uses the
+map-dir-and-exec tool internally, which you will have to build and install yourself.
+
+note: need to install map-dir-and-exec package
+
 
 
 ={============================================================================
@@ -19681,6 +19714,113 @@ Ctrl+T                     New Tab
 Ctrl+Tab or Ctrl+PageDown  Next Tab
 
 F5 or Ctrl+R               Reload
+
+
+={============================================================================
+*kt_linux_sete_104* solarized color for ls and gnome
+
+http://www.webupd8.org/2011/04/solarized-must-have-color-paletter-for.html
+
+{for-ls}
+wget --no-check-certificate https://raw.github.com/seebi/dircolors-solarized/master/dircolors.ansi-dark
+mv dircolors.ansi-dark .dircolors
+eval `dircolors ~/.dircolors`
+
+wget --no-check-certificate https://raw.github.com/seebi/dircolors-solarized/master/dircolors.ansi-light
+mv dircolors.ansi-light .dircolors
+eval `dircolors ~/.dircolors`
+
+
+{gonme}
+git clone https://github.com/sigurdga/gnome-terminal-colors-solarized.git
+cd gnome-terminal-colors-solarized
+
+" can set it to light or dark using the following commands:
+
+./set_dark.sh
+./set_light.sh
+
+
+{guake}
+git clone https://github.com/coolwanglu/guake-colors-solarized.git
+cd guake-colors-solarized
+
+./set_dark.sh
+./set_light.sh
+
+
+={============================================================================
+*kt_linux_sete_105* guake
+
+https://github.com/Guake/guake#ubuntu
+
+Keys are configurable.
+
+F12      Toggle guake visually
+A-F      Toogle full
+S-C-Q    Quit
+
+A-N      New tab
+A-C      Close tab
+A-R      Rename tab
+A-H      Previous tab
+A-L      Next tab
+A-1...0  Goto tab 1...10
+C-C/V    Copy and paste
+
+http://dalibornasevic.com/posts/48-guake-terminal-for-super-productivity
+
+Scripting Guake
+
+Another great thing about Guake is that it is scriptable. I work on projects where I need 10 or more
+tabs to start everything up. That is just a click / command away with a simple Guake script. Here's
+an example that I'm using for a project:
+
+  -n NEW_TAB, --new-tab=NEW_TAB
+                        Add a new tab (with current directory set to NEW_TAB)
+  -s SELECT_TAB, --select-tab=SELECT_TAB
+                        Select a tab (SELECT_TAB is the index of the tab)
+  -g, --selected-tab    Return the selected tab index.
+  -e COMMAND, --execute-command=COMMAND
+                        Execute an arbitrary command in the selected tab.
+
+  -r TITLE, --rename-current-tab=TITLE
+                        Rename the current tab. Reset to default if TITLE is a
+                        single dash "-".
+
+#!/bin/sh
+
+# open project notes
+guake -e "cd ~/Dropbox/projects/project1" -r notes;
+guake -e "vim"
+
+# start project 1 (rails app, sidekiq, deferrer, vim, rails console)
+guake -n ~/projects/project1 -r "project1" -e "foreman start";
+guake -n ~/projects/project1 -r "vim" -e "vim";
+guake -n ~/projects/project1 -r "terminal";
+
+# start project 2 (client library)
+guake -n ~/projects/project2 -r "client" -e "vim";
+guake -n ~/projects/project2 -r "terminal";
+
+# start project 3 (API testing tool)
+guake -n ~/projects/project3 -r "api" -e "vim";
+guake -n ~/projects/project3 -r "terminal";
+
+# start project 4 (billing app)
+guake -n ~/projects/project4 -r "billing" -e "passenger start -p 8080";
+
+# start project 5 (main web app, resque, vim, rails console)
+guake -n ~/projects/project5 -r "resque" -e "bundle exec rake resque:work QUEUE='*'";
+guake -n ~/projects/project5 "main" -e "passenger start -p 3000";
+guake -n ~/projects/project5 -r "vim" -e "vim";
+guake -n ~/projects/project5 -r "terminal";
+
+# start mailcatcher and open few pages in browser
+guake -n ~/projects/project5 -r "terminal"
+guake -e "mailcatcher"
+guake -e "/usr/bin/google-chrome http://127.0.0.1:1080 http://localhost:3005/sidekiq http://localhost:3005 http://localhost:3000 &"
+guake -e "exit"
 
 
 ={============================================================================

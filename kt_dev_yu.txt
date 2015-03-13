@@ -63,7 +63,9 @@
 sudo apt-get install cups
 
 2. add printers via cups admin page 
-See this page, add user to the printer group, and browse to localhost, and follow the instructions to add printers. 
+See this page, add user to the printer group, and browse to localhost, and
+follow the instructions to add printers. 
+
 www.howtoforge.com/how-to-install-a-canon-printer-on-debian-and-debian-like-systems
 
 3. use printer names from this page.
@@ -98,42 +100,12 @@ http://devarch-deb:8080/job/DEBs/ws/DEBS/
 sudo apt-get install map-dir-and-exec
 
 
-{ccache}
-https://wiki.youview.co.uk/display/canvas/2014/03/26/Speeding+up+builds+with+ccache?src=search
-
-The ccache tool tries to speed up a build by taking object files from cache when the preprocessed
-source didn't change. In addition, it can often avoid preprocessing, as a cache lookup on the source
-file path and compiler options returns a list of include files and their modification times. If
-those weren't updated, that counts as a 'direct hit'. Otherwise it falls back to preprocessing the
-source and trying to look-up its hash in the cache. If successful, that counts as a 'preprocessed
-hit'.
-
-The main barrier preventing cache sharing across git branches has to do with the fact we create
-separate build slaves for each git branch, which results in different source and binary directories
-being seen by the compiler. More specifically:
-
-The compiler sets the __FILE__ macro to be the absolute path to the source file. The value of that
-macro leaks to preprocessed source through the use of assert().
-
-We pass preprocessor definitions like -DMACRO__prefix="...", -DMACRO__builddir="...",
-   -DMACRO__top_srcdir="...", which can also leak to preprocessed source.
-
-To address this issue, the new zb-virtual-slave tool was developed. It's meant to wrap around other
-build tools, such as zb-build-with-progress, zb-deploy, zb-shell, etc. and leading them to believe
-we are always building a branch called _virtual_. This way, the compiler will see identical source
-and binary locations, enabling cache hits across different git branches. zb-virtual-slave uses the
-map-dir-and-exec tool internally, which you will have to build and install yourself.
-
-note: need to install map-dir-and-exec package
-
-
 {1} build-stack
 $ cd ~/sources/
 zb-virtual-slave zb-shell
 ZB_CFG=humax.1000 zb-make
 
 note: shall have pysical data dir under /. when use sym link to the home, failed to build.
-
 
 <check-package>
 dpkg-query -l | grep humax
@@ -492,10 +464,16 @@ zb-virtual-slave zb-make
 
   + real_path=/data/builds/<BRANCH>
   + virtual_path=/data/builds/_virtual_
+
+  note: "bash -c string" execute string on the given shell.
+
   + exec map-dir-and-exec /data/builds/master:/data/builds/_virtual_ /bin/bash -c '"zb-make"  		
   2> >( sed -u "s|/data/builds/_virtual_|/data/builds/master|" >&2 ) \
   | sed -u "s|/data/builds/_virtual_|/data/builds/master|"'
 }
+
+
+<zb-shell>
 
 
 <zb-make>
@@ -2723,7 +2701,10 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
       if(eventRepository == 0)
       {
         boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> systemMB = getSystemMetadataBroker();
+
+        // note: create ER via 'iron' factory. shared lib. is it proxy?
         boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemER(getIronSystemEventRepository());
+
         boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::ReminderRepository> clientRR(createReminderRepository());
         boost::shared_ptr<NS_URANIUM_DVR_CLIENT::LinearAcquisition> clientLA(createLinearAcquisition());
         boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientMetadataConfig> 
@@ -2927,7 +2908,7 @@ Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
 
 {metadata-sce-overloads}
 
-note: used <1> from iron <CSCE>
+note: used <1> from 'iron' <CSCE>
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
    const std::string& lang,
    const NS_IRON_SYSTEM::Event& dttEvent) :
@@ -3016,13 +2997,16 @@ boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Eve
   return boost::shared_ptr<SystemClientEvent>();
 }
 
+note:  getClientEvents from 'iron'
+
 event_collection_ptr SystemClientEventRepository::getClientEvents(
             const std::vector<NS_IRON_SYSTEM::Event> & events) 
 {
    boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
 }
 
-note:  getClientEvents is overloads
+
+note:  getClientEvents from 'cobalt'
 
 event_collection_ptr SystemClientEventRepository::getClientEvents(
             const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
@@ -3386,6 +3370,162 @@ src/metadata/tools/textEPG.cpp
 96:    return s + e->getTitle();
 
 
+{xx}       
+
+<MOCK-EDIS>
+struct ZINC_EXPORT Dispatcher : boost::noncopyable
+
+class ZINC_EXPORT InlineDispatcher : public Dispatcher
+
+typedef InlineDispatcher MultipleListenerEventDispatcher;
+
+<MOCK-ER>
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+class ZINC_EXPORT MockEventRepositoryAsyncWithCallbacks : 
+    public virtual NS_IRON_SYSTEM::MockEventRepositoryAsync // note: cannot find a def or file
+{
+public:
+    void publicProduceEvent(boost::shared_ptr<NS_ZINC::Event> event) const
+    {
+        URANIUM_FUNC_TRACE;
+        produceEvent(event);
+    }
+};
+
+note: this has overloads
+
+void setUp()
+{
+    systemEventDispatcher = boost::make_shared<MultipleListenerEventDispatcher>();
+
+    // note this is mock object
+    mockEventRepo = boost::make_shared<NS_IRON_SYSTEM::MockEventRepositoryAsync>();
+
+    mockEventRepo->setDispatcher(systemEventDispatcher);
+
+    mockServiceRepo = boost::make_shared<NS_COBALT_SYSTEM::MockUnifiedServiceRepositoryAsync>();
+    mockServiceRepo->setDispatcher(systemEventDispatcher);
+}
+
+void setUp(MetadataSource source, bool useDTTHistory = true, bool skipPFCallsSetup = false, bool enableEventCache = false,
+               bool useBrokerMock = false)
+{
+}
+
+
+vector<NS_IRON_SYSTEM::Event> getBBC1Events()
+{
+    NS_IRON_SYSTEM::Event e1;
+    NS_IRON_SYSTEM::Event e2;
+
+    e1.serviceLocator = "dvb://233a..1044";
+    e1.eventLocator = "dvb://233a..1044;1";
+    e1.shortTitle["eng"] = "Title of e1";
+    e1.start = 0;
+    e1.publishedDuration = 100;
+
+    e2.serviceLocator = "dvb://233a..1044";
+    e2.eventLocator = "dvb://233a..1044;2";
+    e2.shortTitle["eng"] = "Title of e2";
+    e2.start = 200;
+    e2.publishedDuration = 100;
+
+    vector<NS_IRON_SYSTEM::Event> result;
+    result.reserve(2);
+    result.push_back(e1);
+    result.push_back(e2);
+
+    return result;
+}
+
+
+// note: where can see IRON::Event?
+void testGetPresentEvent()
+{
+    //setup the mocks so that there is a present event on all services
+    EXPECT_CALL(*mockEventRepo, getPresentFollowing(getDefaultUnifiedServices()[0].serviceLocator)).
+            WillOnce(returnNewCompletedFuture(vector<NS_IRON_SYSTEM::Event>(1, getBBC1Events()[0])));
+
+    EXPECT_CALL(*mockEventRepo, getPresentFollowing(getDefaultUnifiedServices()[1].serviceLocator)).
+            WillOnce(returnNewCompletedFuture(vector<NS_IRON_SYSTEM::Event>(1, getCafeTVEvents()[0])));
+
+    setUp(DTT_ONLY, true, true);
+
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> e = eventRepo->getPresentEvent(0);
+    
+    CPPUNIT_ASSERT_MESSAGE("There should be an event returned", e);
+    
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].eventLocator, e->getIdentifier("locator"));
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].shortTitle["eng"], e->getTitle());
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].start, (uint32_t)to_time_t(e->getStart()));
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].publishedDuration, (uint32_t)e->getDuration());
+}
+
+/**
+ * File:   FutureMockActions.h
+ *
+ * Created on 11 April 2013
+ *
+ * Copyright (c) 2013, YouView TV Ltd.
+ */
+#ifndef ZINC_COMMON_FUTUREMOCKACTIONS_H
+#define	ZINC_COMMON_FUTUREMOCKACTIONS_H
+
+#include "../async/Promise.h"
+#include "../async/async-helpers.h"
+
+#include <gmock/gmock.h>
+
+NS_ZINC_OPEN
+
+/**
+ * These helper actions are for use with Google Mock objects.
+ *
+ * When returning a future from a mock object expectation, care is needed to
+ * make sure a new future is created each time the expectation is matched.
+ * This shows up as a problem when setCallback is called on the returned future.
+ *
+ * The problem is that when using something like:
+ *
+ * EXPECT_CALL( ... ).WillRepeatedly(Return(FunctionThatReturnsAFuture()));
+ *
+ * Google Mock will copy the future returned from `FunctionThatReturnsAFuture()`
+ * and always return the same future. This doesn't work for instance if you ever
+ * call setCallback() on that future, which will throw a
+ * DuplicateFutureCallback error on subsequent calls.
+ *
+ * Even this doesn't work, surprisingly:
+ *
+ * EXPECT_CALL( ... ).WillOnce(Return(FunctionThatReturnsAFuture()))
+ *                   .WillOnce(Return(FunctionThatReturnsAFuture()));
+ *
+ * Again, the same promise is returned. I'm not quite sure how that happens
+ * though.
+ *
+ * This can be used like this:
+ *
+ * EXPECT_CALL( ... ).WillOnce(returnNewCompletedFuture(someValue))
+ *
+ */
+
+ACTION(returnNewCompletedFuture) {
+    return completedFuture();
+}
+
+ACTION_P(returnNewCompletedFuture, value) {
+    return completedFuture<typename return_type::value_type>(value);
+}
+
+ACTION_P(returnNewExceptionalFuture, exception) {
+    return exceptionalFuture<typename return_type::value_type>(exception);
+}
+
+NS_ZINC_CLOSE
+
+#endif // ZINC_COMMON_FUTUREMOCKACTIONS_H
+
+
 ={============================================================================
 *kt_dev_uv_stack_111* stack: build pc target
 
@@ -3412,65 +3552,6 @@ Make a build success.
 ={============================================================================
 *kt_dev_uv_stack_120* stack: cppunit
 
-depbase=`echo SummaryTest.o | sed 's|[^/]*$|.deps/&|;s|\.o$||'`;\
-i686-pc-linux-gnu-g++ -DHAVE_CONFIG_H -I.
--I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata
--I../..  -DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\"
--DMACRO__libdir=\"/opt/zinc/lib\" -DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include
--I/opt/zinc/oss/include -DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\"
--DMACRO__libdir=\"/opt/zinc/lib\" -DMACRO__PACKAGE=\"uranium-client-system\"
--DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include -I/opt/zinc/include/dbus-c++-1/include
--I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0 -I/opt/zinc/oss/lib/dbus-1.0/include
--DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
--I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
--I/opt/zinc/oss/lib/dbus-1.0/include -DMACRO__prefix=\"/opt/zinc\"
--DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
--I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
--I/opt/zinc/oss/lib/dbus-1.0/include -DDBUS_API_SUBJECT_TO_CHANGE -DMACRO__prefix=\"/opt/zinc\"
--DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include
--I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/include -I/opt/zinc/oss/include/dbus-1.0
--I/opt/zinc/oss/lib/dbus-1.0/include -I/opt/zinc/oss/include -DMACRO__prefix=\"/opt/zinc\"
--DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
--I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
--I/opt/zinc/oss/lib/dbus-1.0/include -DMACRO__prefix=\"/opt/zinc\"
--DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
--DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
--I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
--I/opt/zinc/oss/lib/dbus-1.0/include -I/opt/zinc/include -DMACRO__prefix=\"/opt/zinc\"
--DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
--DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
--I/opt/zinc/lib -I/opt/zinc/include -I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include
--I/opt/zinc/oss/include/dbus-1.0 -I/opt/zinc/oss/lib/dbus-1.0/include
--DMACRO__top_srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System\"
--DMACRO__srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata\"
--DMACRO__builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System/test/metadata\"
--DMACRO__top_builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System\"
--DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
--DMACRO__top_srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System\"
--DMACRO__srcdir=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata\"
--DMACRO__builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System/test/metadata\"
--DMACRO__top_builddir=\"/home/jenkins/host-build-root/release-CentOS-6.4-i686/Uranium/Uranium.Client.System\"
--DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -I/opt/zinc/include -I/opt/zinc/oss/include
--DMACRO__prefix=\"/opt/zinc\" -DMACRO__datadir=\"/opt/zinc/share\" -DMACRO__libdir=\"/opt/zinc/lib\"
--DMACRO__PACKAGE=\"uranium-client-system\" -DDBUS_API_SUBJECT_TO_CHANGE -I/opt/zinc/include
--I/opt/zinc/include/dbus-c++-1/include -I/opt/zinc/oss/include -I/opt/zinc/oss/include/dbus-1.0
--I/opt/zinc/oss/lib/dbus-1.0/include -I/opt/zinc/oss/include
--DSRC_DIR=\"/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/test/metadata\"
--I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/include
--I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/metadata
--I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/linear-metadata
--I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/linear-acquisition
--I/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Uranium/Uranium.Client.System/src/reminders
 -DMACRO__pkgdatadir=\"/opt/zinc/share/uranium-client-system\" -m32 -I/opt/zinc/include  -isystem
 /opt/zinc/oss/include  -D_FORTIFY_SOURCE=2  -fstack-protector-all   -m32 -DNDEBUG -O3 -pipe -pthread
 -march=i686 -Wall -Wextra -Werror=address -Werror=array-bounds -Werror=c++0x-compat
@@ -3492,76 +3573,45 @@ i686-pc-linux-gnu-g++ -DHAVE_CONFIG_H -I.
 -Werror=uninitialized  -rdynamic -L/opt/zinc/lib -L/opt/zinc/oss/lib -Wl,--as-needed
 -Wl,-rpath-link,/opt/zinc/lib -Wl,-rpath-link,/opt/zinc/oss/lib -o summarytest SummaryTest.o
 helpers/SynchronisableDispatcher.o helpers/TestSupport.o ../../src/libUraniumClientSystemStatic.la
--L/opt/zinc/lib -L/opt/zinc/oss/lib -lCadmiumSystemAPI -lZincCommon -ldl -lboost_thread -llog4cplus
--lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1 -L/opt/zinc/lib
--L/opt/zinc/oss/lib -L/opt/zinc/lib -L/opt/zinc/oss/lib -lUraniumClientAPI -lUraniumCommon
--lZincCommon -ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system
--lZincCommon -ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system
--L/opt/zinc/lib -L/opt/zinc/oss/lib -L/opt/zinc/lib -L/opt/zinc/oss/lib -lCobaltCommon -lZincCommon
--ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -lZincCommon
--ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -L/opt/zinc/lib
--L/opt/zinc/oss/lib -lCopperSystemDbus -lCopperSystemAPI -lZincDbusBindingRuntime -ldbus-c++-1
--ldbus-1 -lZincCommon -ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem
--lboost_system -L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronSystemAPI -lZincCommon -ldl -lboost_thread
--llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
--L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronRemindersSystemAPI -lZincCommon -ldl -lboost_thread
--llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
--L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronRemindersSystemDbus -lIronRemindersSystemAPI
--lZincDbusBindingRuntime -ldbus-c++-1 -ldbus-1 -lZincCommon -ldl -lboost_thread -llog4cplus
--lboost_date_time -lboost_filesystem -lboost_system -L/opt/zinc/lib -L/opt/zinc/oss/lib
--lIronRemindersSystemDbus -lZincDbusBindingRuntime -lIronRemindersSystemAPI -lZincCommon -ldl
--lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
--L/opt/zinc/lib -L/opt/zinc/oss/lib -lIronRemindersSystemAPI -lZincCommon -ldl -lboost_thread
--llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
--L/opt/zinc/lib -L/opt/zinc/oss/lib -lNeonClientSystem -lNeonClientApi -lNeonSystemAPI -lZincCommon
--ldl -lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1
--ldbus-1 -L/opt/zinc/lib -L/opt/zinc/oss/lib -lNickelSystemAPI -lZincCommon -ldl -lboost_thread
--llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -ldbus-c++-1 -ldbus-1
--L/opt/zinc/tests/lib -L/opt/zinc/lib -L/opt/zinc/oss/lib -lZincCommonTestSupport -lZincCommon -ldl
--llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -lgmock -lgtest
--lboost_program_options -lboost_thread -lboost_iostreams -L/opt/zinc/tests/lib -L/opt/zinc/lib
--L/opt/zinc/oss/lib -lZincCommonTestRunner -ldl 
+-L/opt/zinc/lib -L/opt/zinc/oss/lib 
 
+-lboost_date_time 
+-lboost_filesystem 
+-lboost_system 
+-lboost_program_options 
+-lboost_thread 
+-lboost_iostreams 
+
+-llog4cplus 
+
+-ldl 
+-lboost_thread 
+-llog4cplus
+-ldbus-c++-1 
+-ldbus-1 
+-ldbus-c++-testsupport-1 
+
+-lCadmiumSystemAPI 
+
+-lUraniumClientAPI -lUraniumCommon
+
+-lCobaltCommon 
+
+-lCopperSystemDbus -lCopperSystemAPI 
+
+-lIronSystemAPI -lIronRemindersSystemAPI -lIronRemindersSystemDbus -lIronRemindersSystemAPI
+
+-lNeonClientSystem -lNeonClientApi -lNeonSystemAPI 
+
+-lNickelSystemAPI 
+
+-lZincCommonTestRunner
 -lcppunit 
-
--lZincCommonTestSupport -lZincCommon -ldl
--llog4cplus -lboost_date_time -lboost_filesystem -lboost_system -lgmock -lgtest
--lboost_program_options -lboost_thread -lboost_iostreams -L/opt/zinc/tests/lib -L/opt/zinc/lib
--L/opt/zinc/oss/lib -lZincDbusBindingTestSupport -lZincDbusBindingRuntime -lZincCommon -ldl
--lboost_thread -llog4cplus -lboost_date_time -lboost_filesystem -lboost_system
--ldbus-c++-testsupport-1 -ldbus-c++-1 -ldbus-1 -L/opt/zinc/oss/lib -lcppunit -L/opt/zinc/oss/lib
-
--lgmock -lgtest  
-
-From the build mail:
-
-2015-03-09_03-28-01
-
-48 PASSED (PASSED)
- 7 Vanadium/Vanadium.W3CEngine
- 6 Zinc/Zinc.HTTP.DBusBridge (test/scripts/integration-test-launcher.sh)
- 5 Zinc/Zinc.3rdPartyStack
- 3 Uranium/Uranium.Client.System (provisioningcachetest)
- 3 Uranium/Uranium.Client.System
- 3 Cobalt/Cobalt.System.Production (formatfiltertest)
- 2 Uranium/Uranium.Client.System (systoclitest)
- 2 Uranium/Uranium.Client.System (systemmediarecordcachetest)
- 2 Uranium/Uranium.Client.System (systemclienteventwindowdtttest provisioningcachetest)
- 1 Zinc/Zinc.HTTP.DBusBridge
- 1 Zinc/Zinc.Downloader (httpdownloadertest)
- 1 Zinc/Zinc.BindingRuntime (edk2-sc2/zinc.binding.air.TypeWrappingTest)
- 1 Zinc/Zinc.AIR.CTV.API
- 1 Vanadium/Vanadium.MediaPlayback.Tests (src/run-hlsdemuxintegrationtest.sh)
- 1 Uranium/Uranium.Client.System (eventrepositorytest)
- 1 Nickel/NickelTuner.System.DBusClient
- 1 Nickel/Nickel.System.Fake
- 1 Nickel/Nickel.Client.System
- 1 Mercury/Mercury.Client.System (systemapplicationdisplaycontexttest)
- 1 Lead/Lead.System.DBusClient
- 1 Iron/Iron.System.DBusClient
- 1 Iron/IronReminders.System.API
- 1 Cobalt/Cobalt.System.Production (formatfiltertest testbrokerconfig)
- 1 Cobalt/Cobalt.System.Production
+-lZincCommonTestSupport 
+-lZincCommon 
+-lZincDbusBindingTestSupport -lZincDbusBindingRuntime -lZincCommon -ldl
+-lcppunit 
+-lgmock -lgtest
 
 
 
