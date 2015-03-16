@@ -2326,7 +2326,7 @@ class ZINC_LOCAL UraniumAirPlugin : public GenericAirPlugin<UraniumAirPlugin, Cl
 
     NS_URANIUM_METADATA_AIR_CLIENT::LocatorBinding::setSingletonInstance(nativeLocator);
 
-    note: create LMD
+    note: create <LMD>
     NS_URANIUM_LINEAR_AIR_CLIENT::LocatorBinding::setSingletonInstance(
         clientFactory.createLinearMetadataLocator());
 
@@ -2508,6 +2508,14 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
       //create Event Repository
       boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemEventRepository(
           getIronSystemEventRepository());
+
+      // note: from 'iron-system-factory.plugin-config
+      //
+      // libIronSystemDbusClient.so createDbusSystemFactory(Zinc.MetadataProxy)
+      //
+      // MetadataProxy      15 ../Cobalt/Cobalt.System.DBusServer/src/BusName.cpp char const * const
+      // BusName::LINEAR_METADATA = "Zinc.MetadataProxy";
+      //
 
       eventRepository = boost::make_shared<SystemClientEventRepository>(
           systemEventRepository,
@@ -2773,6 +2781,8 @@ boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataObserver> <createMetadataO
 
     createMetadataConfig()->addListener(mo);
     getProvisioningService()->addListener(mo);
+
+    // note: 'neon' so 
     ipnetwork = getNeonClientFactory().createIPNetwork();
     ipnetwork->addListener(mo);
     getHiddenServicesStore()->addListener(mo);
@@ -2900,12 +2910,6 @@ note: Events differs in 'interfaces' and not like a simple structure. So how Eve
 to compare two in diff since it's up to SCE how to present via interface.
 
 
-{where-events}
-Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
-	<yv:struct name="Zinc.Metadata.Event">
-		<yv:member type="a{ss}" name="longSynopsis">
-
-
 {metadata-sce-overloads}
 
 note: used <1> from 'iron' <CSCE>
@@ -2931,7 +2935,7 @@ SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
    synopsis(),
 {}
 
-note: used <2> from cobalt
+note: used <2> from 'cobalt'
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         const SystemEventWrapper& masEvent) :
 
@@ -3012,6 +3016,9 @@ event_collection_ptr SystemClientEventRepository::getClientEvents(
             const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
    // note: uses <2> and see above. <CSCE>
+   
+   SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
+   
    boost::shared_ptr<SystemClientEvent> mevent = 
      boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
 }
@@ -3033,7 +3040,7 @@ boost::shared_ptr<MetadataRepositories> SystemClientEventRepository::getRepos()
 
 <ip-version>
 
-# 01
+# 01 'cobalt'
 event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
   SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
@@ -3083,11 +3090,13 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
 
   //eventsReceived is overloaded, we need to get the pointer to it first, and the pass to bind.
 
+  // 'cobalt'
   void (SystemClientEventRepository::*masCallback)
     (boost::shared_ptr<EventWindowCreateCommand>,
      const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
     &SystemClientEventRepository::eventsReceived;
 
+  // 'iron'
   void (SystemClientEventRepository::*dttCallback)
     (boost::shared_ptr<EventWindowCreateCommand>,
      const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
@@ -3120,6 +3129,84 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
     bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
   }
 }
+
+
+{events-xml}
+Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
+
+	<yv:struct name="Zinc.Metadata.Event">
+
+	<p>The Event structure members are as follows:</p>
+		</yv:docstring>
+
+		<yv:member type="a{ss}" name="shortTitle">
+			<yv:docstring>
+				<p>A title for the event taken from the <tt>short_event_descriptor()</tt> 
+            <tt>event_name_char</tt> field.</p>
+				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+            to a title in the indicated language (the value).</p>
+			</yv:docstring>
+		</yv:member>
+
+		<yv:member type="a{ss}" name="mediumSynopsis">
+			<yv:docstring>
+				<p>A description for the event taken from the <tt>short_event_descriptor()</tt> 
+            <tt>text_char</tt> field.</p>
+				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+            to a synopsis in the indicated language (the value).</p>
+			</yv:docstring>
+		</yv:member>
+
+		<yv:member type="a{ss}" name="longSynopsis">
+			<yv:docstring>
+				<p>A description for the event taken from the <tt>extended_event_descriptor()</tt> 
+            <tt>text_char</tt> field.</p>
+				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+            to a synopsis in the indicated language (the value).</p>
+			</yv:docstring>
+		</yv:member>
+
+
+Cobalt/Cobalt.System.API/data/introspection-xml/struct-EventDescription.xml
+
+    <yv:struct name="Zinc.Broker.EventDescription">
+
+        <yv:member type="s" name="mediumSynopsis">
+            <yv:docstring>
+                A description for the event. It corresponds to 
+                yv:description in MAS data or NS_IRON::Event::mediumSynopsis. 
+            </yv:docstring>
+        </yv:member>
+        <yv:member type="s" name="longSynopsis">
+            <yv:docstring>
+                A description for the event that corresponds to 
+                NS_IRON::Event::longSynopsis, there is no corresponding field
+                in scheduleevent entity of MAS data.
+            </yv:docstring>
+        </yv:member>
+
+
+Cobalt/Cobalt.System.API/data/introspection-xml/struct-UnifiedService.xml
+
+	<yv:struct name="Zinc.Broker.UnifiedService">
+
+		<yv:member type="s" name="shortSynopsis">
+			<yv:docstring>
+				<p>The short synopsis of this Service.</p>
+			</yv:docstring>
+		</yv:member>
+
+		<yv:member type="s" name="mediumSynopsis">
+			<yv:docstring>
+				<p>The medium synopsis of this Service.</p>
+			</yv:docstring>
+		</yv:member>
+
+		<yv:member type="s" name="longSynopsis">
+			<yv:docstring>
+				<p>The long synopsis of this Service.</p>
+			</yv:docstring>
+		</yv:member>
 
 
 ={============================================================================
@@ -3408,9 +3495,11 @@ void setUp()
     mockServiceRepo->setDispatcher(systemEventDispatcher);
 }
 
-void setUp(MetadataSource source, bool useDTTHistory = true, bool skipPFCallsSetup = false, bool enableEventCache = false,
-               bool useBrokerMock = false)
+void setUp(MetadataSource source, bool useDTTHistory = true, bool skipPFCallsSetup = false, 
+        bool enableEventCache = false, bool useBrokerMock = false)
 {
+    eventRepo = boost::dynamic_pointer_cast<SystemClientEventRepository>(
+            clientFactory->createEventRepository());
 }
 
 
@@ -3450,17 +3539,54 @@ void testGetPresentEvent()
     EXPECT_CALL(*mockEventRepo, getPresentFollowing(getDefaultUnifiedServices()[1].serviceLocator)).
             WillOnce(returnNewCompletedFuture(vector<NS_IRON_SYSTEM::Event>(1, getCafeTVEvents()[0])));
 
+    // note: set to 'unified'
     setUp(DTT_ONLY, true, true);
 
+    // note: 'metadate'
     boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> e = eventRepo->getPresentEvent(0);
     
     CPPUNIT_ASSERT_MESSAGE("There should be an event returned", e);
     
+    // note: all are EAPIs
     CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].eventLocator, e->getIdentifier("locator"));
     CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].shortTitle["eng"], e->getTitle());
     CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].start, (uint32_t)to_time_t(e->getStart()));
     CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].publishedDuration, (uint32_t)e->getDuration());
 }
+
+
+note: to run a single test and should match how it was built since it shall be run under virtual?
+
+kpark@wll1p04345:/data/builds/_virtual_/pc/zinc-build-root/debug-debian-7-x86_64/Uranium/Uranium.Client.System/test/metadata$ ./systemclienteventrepositorytest --cases SystemClientEventRepos
+itoryTest::testGetPresentEvent
+Metadata source is DTT_ONLY
+Overriding metadata source to DTT_ONLY
+
+.2015-03-16 14:18:31,062 INFO   140235723970336 iron
+/data/builds/_virtual_/pc/DEVARCH/Iron/IronReminders.System.Production/src/ProductionSystemFactory.cpp:43
+Using configuration file:
+/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/tests/uranium-client-system/share/copper-system-factory.plugin-config
+
+2015-03-16 14:18:31,063 INFO   140235723970336 iron
+/data/builds/_virtual_/pc/DEVARCH/Iron/IronReminders.System.Production/src/ProductionSystemFactory.cpp:58
+Using configuration file:
+/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/tests/uranium-client-system/share/metadata/iron-system-factory.plugin-config
+
+2015-03-16 14:18:31,092 INFO   140235723970336 cadmium
+/data/builds/_virtual_/pc/DEVARCH/Cadmium/Cadmium.System.Fake/src/FakeLinearAcquisition.cpp:40 Using
+Cadmium DB file "/tmp/testmutabledatadir.6aPGJO/cadmium-system-fake/dvrdata.db"
+
+2015-03-16 14:18:31,092 INFO   140235723970336 cadmium
+/data/builds/_virtual_/pc/DEVARCH/Cadmium/Cadmium.System.Fake/src/FakeLinearAcquisition.cpp:44 Using
+Nickel DB file "/tmp/testmutabledatadir.6aPGJO/nickel-system-fake/lmldata.db"
+
+Caching media records...Caching services...done.
+Caching PF...done.
+done.
+
+
+OK (1)
+kpark@wll1p04345:/data/builds/_virtual_/pc/zinc-build-root/debug-debian-7-x86_64/Uranium/Uranium.Client.System/test/metadata$ 
 
 /**
  * File:   FutureMockActions.h

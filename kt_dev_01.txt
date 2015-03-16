@@ -234,6 +234,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_estl_001| design: 02: illusion of container-independent code
 
 
+#{ c++ concurrent in action
+|kt_dev_ccon_001| future
+
+
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
 |kt_dev_blush_002| default return values
@@ -34249,6 +34253,136 @@ class CustomerList {
 	 // limit the list-specific detail visible through this interface
 	 ...
 };
+
+
+# ============================================================================
+#{ c++ concurrent in action
+={============================================================================
+*kt_dev_ccon_001* future
+
+
+<packaged-task>
+Many GUI frameworks require that updates to the GUI be done from specific threads, so if another
+thread needs to update the GUI, it must send a message to the right thread in order to do so.
+
+std:packaged_task provides one way of doing this 'without' requiring a 'custom' message for each and
+every GUI-related activity, as shown here.
+
+#include <deque>
+#include <mutex>
+#include <future>
+#include <thread>
+#include <utility>
+
+std::mutex m;
+std::deque<std::packaged_task<void()> > tasks;
+
+boolvoidgui_shutdown_message_received();
+get_and_process_gui_message();
+
+// note: future will be fired
+// The future associated with the task will then be 'made' 'ready' when the task completes.
+
+// loops until a message has been received telling the GUI to shut down.
+void gui_thread()
+{
+    // polling for GUI message
+    while(!gui_shutdown_message_received())
+    {
+        get_and_process_gui_message();
+
+        std::packaged_task<void()> task;
+        {
+            std::lock_guard<std::mutex> lk(m);
+
+            // 'tasks' but not task. loops again if there are no tasks on the queue.
+            if(tasks.empty())
+                continue;
+
+            task=std::move(tasks.front());
+            tasks.pop_front();
+        }
+        task();
+    }
+}
+
+
+std::thread gui_bg_thread(gui_thread);
+
+// The code that posted the message to the GUI thread can then wait for the future if it needs to
+// know that the task has been completed, or it can discard the future if it doesn’t need to know.
+
+template<typename Func>
+std::future<void> post_task_for_gui_thread(Func f)
+{
+    std::packaged_task<void()> task(f);
+    std::future<void> res=task.get_future();
+    std::lock_guard<std::mutex> lk(m);
+    tasks.push_back(std::move(task));
+    return res;
+}
+
+note: That is packaged_task is a callable which wraps the given f and associated future and returns
+a future. The user has a returnted future and can wait on that.
+
+
+{promise}
+What about those tasks that can't be expressed as a simple function call or those tasks where the
+result may come from more than one place? These cases are dealt with by the 'third' way of creating
+a future: using a std::promise to set the value explicitly.
+
+<promise-future-pair>
+
+std::promise<T> provides a means of setting a value (of type T), which can later
+be read through an associated std::future<T> object. A std::promise/std::future
+pair would provide one possible mechanism for this facility; the waiting thread could
+block on the future, while the thread providing the data could use the promise half of
+the pairing to set the associated value and make the future ready.
+
+When the value of the promise is set (using the set_value() member function), the future
+becomes 'ready' and can be used to retrieve the stored value.
+
+
+#include <future>
+
+void process_connections(connection_set& connections)
+{
+    // every time through the loop, checks each connection in turn.
+    while(!done(connections))
+    {
+        for(connection_iterator
+                connection=connections.begin(),end=connections.end();
+                connection!=end;
+                ++connection)
+        {
+            // assumes that packet has some ID and payload
+            if(connection->has_incoming_data())
+            {
+                data_packet data=connection->incoming();
+
+                // ID is mapped to 'promise' and the value is set to payload. future is assocoated
+                // with payload.
+
+                std::promise<payload_type>& p= connection->get_promise(data.id);
+                p.set_value(data.payload);
+            }
+
+            if(connection->has_outgoing_data())
+            {
+                outgoing_packet data= connection->top_of_outgoing_queue();
+
+                connection->send(data.payload);
+
+                // set to true to indicate successful transmission. std::promise<bool> and
+                // std::future<bool>. The value associated with the future is a simple
+                // success/failure flag.
+
+                data.promise.set_value(true);
+            }
+        }
+    }
+}
+
 
 # ============================================================================
 #{
