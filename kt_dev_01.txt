@@ -1935,11 +1935,55 @@ debug() {
     tput sgr0
 }
 
-# dark blue
-printf("\033[34m CR-1048: NVRAM Retry Byte set to 0x%X \033[0m \n",nvram_retry_bytes);
+Esc[Value;...;Valuem 	Set Graphics Mode:
 
-# worked, green.
-fprintf(stderr, "\033[0;32m *** KT: hwei proposed inspect: try pid(%d): \033[0m \n");
+Calls the graphics functions specified by the following values. These specified functions remain
+active until the next occurrence of this escape sequence. Graphics mode changes the colors and
+attributes of text (such as bold and underline) displayed on the screen.
+ 
+
+Text attributes
+0	All attributes off
+1	Bold on
+4	Underscore (on monochrome display adapter only)
+5	Blink on
+7	Reverse video on
+8	Concealed on
+ 
+Foreground colors
+30	Black
+31	Red
+32	Green
+33	Yellow
+34	Blue
+35	Magenta
+36	Cyan
+37	White
+ 
+Background colors
+40	Black
+41	Red
+42	Green
+43	Yellow
+44	Blue
+45	Magenta
+46	Cyan
+47	White
+ 
+Parameters 30 through 47 meet the ISO 6429 standard.
+
+("\033[04;31;47m ansi: \033[m \n" );
+
+#define ESC '\033'
+#define EOE 'm'
+#define DEFAULT_COLOR "04;31;47"
+#define DEFAULT_COLOR "01;31"
+
+int main()
+{
+    printf("\033[" DEFAULT_COLOR "m ansi: \033[m \n" );
+    return 0;
+}
 
 
 ={============================================================================
@@ -34260,8 +34304,213 @@ class CustomerList {
 ={============================================================================
 *kt_dev_ccon_001* future
 
+{task-based-concurrency}
+From C++ 42.4.
 
-<packaged-task>
+<task-model>
+Focuses on specifying a simple kind of task: a task that does one thing given arguments and produces
+one result. Hiding uses of the messier threads-and-locks level.
+
+Often, we would like to provide a lot of small tasks and let 'the system' worry about how to map
+their execution onto hardware resources and how to keep them out of problems with data races,
+      spurious wake-ups, excessive waits, etc.
+
+The importance of these facilities is their 'simplicity'. In a sequential program, we usually write
+something like:
+
+res = task(args);                // perform a task given arguments and get the result
+
+The concurrent version becomes:
+
+auto handle = async(task,args);  // perform a task given arguments
+
+// ... do something else ...
+
+res = handle.get()               // get the result
+
+    
+{future-and-promise}
+Communication between tasks is handled by a future/promise pair. A task 'puts' its result into a
+promise, and a task that needs the result 'retrieves' the result from the corresponding future:
+
+task 1                                       task 2:
+-----------------------                      ------------------------------------------
+get()    ->    future    <->  value   <->    promise    <- set_value(), set_exception()
+
+The value is known as "shared state". In addition to the return value or exception, it contains the
+information needed for two threads to 'safely' exchange the information. For example:
+
+o A ready bit to indicate whether a value or exception is ready to be extracted by a future.
+
+An implementation can take action on a shared state:
+
+o Make ready: Set the 'ready bit' and unblock any waiting threads.
+
+
+{promise}
+A promise is the 'handle' to a shared state. It is where a task can deposit its result to be
+retrieved through a future.
+
+<operations>
+
+promise pr {};       Default constructor: pr has a shared state that is not yet ready
+
+fu=pr.get_future()   fu is the future corresponding to pr
+
+pr.set_value(x)      The result of the task is the value x
+pr.set_value()       Set the result of the task for a void future
+
+pr.set_exception(p)  The result of the task is the exception pointed to by p; p is an exception_ptr
+
+note: there are 'no' copy operations for a promise. A set function throws future_error if a value or
+exception is already set.
+
+
+<single-value>
+Only possible to transmit a 'single' result value through a promise. That may seem restrictive, but
+remember that the value is moved into and out of the shared state, rather than copied, so that we
+can cheaply pass a collection of objects. For example:
+
+promise<map<string,int>> pr;
+map<string,int>> m;
+
+// ... fill m with a million <string,int> pairs ...
+
+pr.set_value(m);
+
+A task may then extract that map from a corresponding future at essentially zero cost.
+
+
+{future}
+A future is a handle to a shared state. It is where a task can retrieve a result deposited by a
+promise.
+
+<operations>
+
+future fu {fu2};
+
+Move constructor: fu gets fu2's shared state, if any; fu2 no longer has a shared state; noexcept
+
+fu.get()
+
+For future<void>: like x=fu.get(), but don’t move any value
+
+example:
+
+I can easily implement a version of wait_for_all():
+
+template<typename T>
+vector<T> wait_for_all(vector<future<T>>& vf)
+{
+    vector<T> res;
+    for (auto& fu : vf)
+        res.push_back(fu.get());
+    return res;
+}
+
+
+{packaged-task}
+A packaged_task holds a 'task' and a future/promise 'pair'.
+
+task 1                                       packaged_task: 
+                                                                              task 2:
+-----------------------                      ------------------------------------------
+get()    ->    future    <->  value   <->    promise  <- set_value(x)         <- return x
+                                                      <- set_exception(px)    <- throw x
+
+We pass a task (a function or a function object) that we want executed to a packaged_task. When our
+task executes a return x, it causes a set_value(x) on the packaged_task's promise. Similarly, a
+throw x causes a set_exception(px) where px is an exception_ptr for x. Basically, the packaged_task
+executes its task, f(args), like this:
+
+try {
+   pr.set_value(f(args));  // assume that the promise is called pr
+}
+catch(...) {
+   pr.set_exception(current_exception());
+}
+
+<operations>
+
+packaged_task pt {f};
+
+Construct pt holding f; f is moved into pt; use the default allocator; explicit
+
+pt()(args)     
+    
+Execute f(args); a return x in f() does a set_value(x) to pt's promise, a throw x in f() does a
+set_exception(px) to pt's promise; px is an exception_ptr to x
+
+fu=pt.get_future()
+
+fu is the future for pt's promise; throws future_error if called twice
+
+<example>
+For a really simple example we don't even need any threads. First define a simple task:
+
+int ff(int i)
+{
+    if (i) return i;
+    throw runtime_error("ff(0)");
+}
+
+packaged_task<int(int)> pt1 {ff};   // store ff in pt1
+packaged_task<int(int)> pt2 {ff};   // store ff in pt2
+
+pt1(1);  // let pt1 call ff(1);
+pt2(0);  // let pt2 call ff(0);
+
+So far, nothing appears to have happened. In particular, we don't see the exception triggered by
+ff(0). In fact, pt1(1) did a set_value(1) on the promise attached to pt1, and pt1(0) did a
+set_exception(px) on the promise attached to pt2; that px is an exception_ptr to a
+runtime_error("ff(0)").
+
+'later', we can try to retrieve the results. The get_future() operation is used to get hold of the
+future into which the packaged thread will deposit the result of its task.
+
+auto v1 = pt1.get_future();
+auto v2 = pt2.get_future();
+
+try {
+    cout << v1.get() << '\n'; // will print
+    cout << v2.get() << '\n'; // will throw
+}
+catch (exception& e) {
+    cout << "exception: " << e.what() << '\n';
+}
+
+The output is:
+
+1
+exception: ff(0)
+
+We could have gotten exactly the same effect by simply writing:
+
+try {
+    cout << ff(1) << '\n'; // will print
+    cout << ff(0) << '\n'; // will throw
+}
+catch (exception& e) {
+    cout << "exception: " << e.what() << '\n';
+}
+
+So why use this?
+
+note:
+The 'point' is that the packaged_task version works exactly like the version using 'ordinary'
+function calls even when the calls of the task (here ff) and the calls of the get()s are in
+'different' 'threads'. We can concentrate on specifying the tasks 'rather' than thinking about
+threads and locks.
+
+We can move the future, the packaged_task, or both around. Eventually, the packaged_task is invoked
+and its task deposits its result in the future without having to know either which thread executed
+it or which thread will receive the result. This is simple and general.
+
+The packaged_tasks are actually easier for the server to use than ordinary functions because the
+handling of their exceptions has been taken care of.
+
+
+<example>
 Many GUI frameworks require that updates to the GUI be done from specific threads, so if another
 thread needs to update the GUI, it must send a message to the right thread in order to do so.
 
