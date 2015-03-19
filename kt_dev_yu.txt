@@ -32,11 +32,13 @@
 |kt_dev_uv_stack_105| stack: uranium
 |kt_dev_uv_stack_106| stack: cal
 |kt_dev_uv_stack_107| stack: cal: metadata creation
-|kt_dev_uv_stack_108| stack: cal: metadata event connection to application
-|kt_dev_uv_stack_109| stack: cal: event dispatcher
-|kt_dev_uv_stack_109| stack: cal: metadata: summary
-|kt_dev_uv_stack_110| stack: cal: test
-|kt_dev_uv_stack_111| stack: build pc target
+|kt_dev_uv_stack_108| stack: cal: metadata: event structures and mapping
+|kt_dev_uv_stack_109| stack: cal: metadata: event connection to application
+|kt_dev_uv_stack_110| stack: cal: event dispatcher
+|kt_dev_uv_stack_111| stack: cal: metadata: summary
+|kt_dev_uv_stack_112| stack: cal: test
+|kt_dev_uv_stack_113| stack: build pc target
+|kt_dev_uv_stack_114| stack: text epg
 
 |kt_dev_uv_stack_120| stack: cppunit
 
@@ -2888,50 +2890,9 @@ class ZINC_LOCAL MetadataObserver:
 
 
 ={============================================================================
-*kt_dev_uv_stack_108* stack: cal: metadata: event connection to application
-
-{event-apis}
-
-note: this comes from "build root"
-
-Uranium.AIR.Client.API/asInterfaces/ctv/enhancedmetadata/Event.as
-
-/**
- *  A class that represents the Event in the EPG.
- */ 
-public interface Event {
-
-    /**
-     *  Returns the title of the Event in the currently selected language.
-     */
-    function getTitle():String;
-    ...
-};
-
-
-The old API has:
-
-getLongSynopsis():Object
-getMediumSynopsis():Object
-
-The new API has:
-
-getSynopsis():String
-Returns the synopsis of the Event if current data source provides it.
-
-The both are defined in "Event".
-
-   linear::Event                 metadata::Event
-
-   SCE                           SCE
-
-   SCER                          SCER
-
-                                 SCER->getEventWindow() : EPG has SCER via SCF
-
+*kt_dev_uv_stack_108* stack: cal: metadata: event structures and mapping
 
 {iron-event-struct}
-
 /zinc-build-root/debug-debian-7-x86_64/Iron/Iron.System.API/include/Event.h
 
 namespace Zinc {
@@ -2951,7 +2912,10 @@ struct Event
     uint32_t publishedDuration;
     std::map< std::string, std::string > shortTitle;
     std::map< std::string, std::string > mediumSynopsis;
+
+    // map<lang key, string>
     std::map< std::string, std::string > longSynopsis;
+
     std::vector< std::string > classifier;
     std::string programmeCrid;
     std::string splitInstanceIdentifier;
@@ -3000,10 +2964,208 @@ struct Result
     std::vector< std::string > classifiers;
     std::map< std::string, std::vector< std::string > > identifiers;
     std::map< std::string, std::vector< std::string > > internalReferences;
-    std::map< std::string, std::vector< std::string > > description;
-    std::map< std::string, std::vector< XmlNode > > nodes;
 
+    std::map< std::string, std::vector< std::string > > description;
+
+    // note: map<>
+    std::map< std::string, std::vector< XmlNode > > nodes;
 };
+
+
+{translation}
+
+Cobalt/Cobalt.System.Production/data/b2c_map.yaml
+
+node_transformations: [
+    ['serviceId',       'AppendToDescription', 'owningServiceId'],
+
+    ['summary',         'AppendToDescription', 'shortSynopsis'],
+    ['description',     'AppendToDescription', 'mediumSynopsis'],
+    ['longDescription', 'AppendToDescription', 'longSynopsis'],
+
+
+Cobalt.System.Production/src/XMLProcessor.cpp
+261-
+262:struct AppendToDescription {
+263-    typedef void result_type;
+264:    AppendToDescription(const string& keyName_)
+265-     : keyName(keyName_)
+266-    {
+
+https://jira.youview.co.uk/browse/DEVARCH-8960
+XMLProcessor is responsible for parsing B2C XML responses into `Result` objects. It is used for
+    parsing all results, but in particular it is used to parse schedule query results, which can be
+    very large. For instance schedule "Tiles" retrieved for the purposes of P/F generation (for
+            IP-channels) are >1MB. Since these are being periodically retrieved, and several such
+    tiles will be required to cover all the IP-channels, parsing performance is critical.
+
+
+note: this test shows how to use 'result' structure.
+
+Uranium.Client.System/test/metadata/SummaryTest.cpp
+
+SystemClientSummary make_sample_summary(const GuidanceInfo& gi = GuidanceInfo())
+{
+    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult = boost::make_shared<NS_COBALT_SYSTEM::Result>();
+
+    sysResult->description["entityType"] = vector<string>(1, "scheduleevent");
+    sysResult->description["eventTitle"] = vector<string>(1, "Eastenders");
+    sysResult->description["mediumSynopsis"] = vector<string>(1, "mediumSynopsis");
+    sysResult->description["serviceLocator"] = vector<string>(1, "dvb://233a..1044");
+    sysResult->description["owningServiceId"] = vector<string>(1, "1");
+
+    if(gi.hasGuidanceCode)
+    {
+        sysResult->description["guidanceCodes"] = vector<string>(1, "15");
+    }
+
+    if(gi.hasGuidanceScheme)
+    {
+        sysResult->description["guidanceScheme"] = vector<string>(1, "BBCFC");
+    }
+
+    if(gi.hasGuidanceText)
+    {
+        sysResult->description["guidanceText"] = vector<string>(1, "Naughty programme.");
+    }
+
+    if(gi.hasGuidanceLongText)
+    {
+        sysResult->description["longGuidanceText"] = vector<string>(1, "Naughty programme. Watch alone.");
+    }
+
+    sysResult->identifiers[
+        "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#linear.eventLocator"]
+        = vector<string>(1, "dvb://233a..1044;1");
+
+    sysResult->identifiers[
+        "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#linear.programmeCRID"]
+        = vector<string>(1, "crid://bbc.co.uk/someid");
+
+    SystemClientSummary summary( sysResult,
+            clientFactory->createMetadataConfig(),
+            clientFactory->createMetadataRepositories(),
+            // These tests do not rely on ProvisioningCache
+            boost::shared_ptr<ProvisioningCache>(),
+            3 );
+
+    return summary;
+}
+
+
+note: WRT getSynopsis, it only uses in void testGetEventFromSummary() but don't see why is doing this.
+
+
+{wrapper}
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+class SystemEventWrapper  {
+public:
+
+    // note: "::cobalt::system"
+    
+    explicit SystemEventWrapper(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
+        scResult(sysResult),
+        idBag(scResult)
+    {}
+
+    std::string getOwningServiceId() const
+    {
+        return scResult.getStringFromDescription("owningServiceId");
+    }
+
+    ...
+
+    SystemClientResult scResult;
+    IdentifierBag idBag;
+};
+
+
+class SystemClientResult
+{
+    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
+
+    explicit SystemClientResult(
+            boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult)
+        :sysResult(sysResult)
+    {}
+
+    std::string getFirstValueFromDescription(const std::string& key, bool toLower = true) const;
+
+    public:
+
+    string SystemClientResult::getStringFromDescription(const std::string& key) const
+    {
+        return getFirstValueFromDescription(key, false);
+    }
+
+    string SystemClientResult::getFirstValueFromDescription(const std::string& key,
+            bool toLower) const
+    {
+        map<string, vector<string> >::const_iterator iter;
+
+        if((iter = sysResult->description.find(key)) == sysResult->description.end())
+        {
+            return string();
+        }
+        vector<string> values = iter->second;
+        if(values.size() == 0)
+        {
+            return string();
+        }
+        string s = values[0];
+        if(toLower)
+        {
+            s = boost::to_lower_copy(s);
+        }
+        return s;
+    }
+};
+
+
+
+
+={============================================================================
+*kt_dev_uv_stack_109* stack: cal: metadata: event connection to application
+
+{event-apis}
+
+note: this comes from "build root"
+
+Uranium.AIR.Client.API/asInterfaces/ctv/enhancedmetadata/Event.as
+
+/**
+ *  A class that represents the Event in the EPG.
+ */ 
+public interface Event {
+
+    /**
+     *  Returns the title of the Event in the currently selected language.
+     */
+    function getTitle():String;
+    ...
+};
+
+
+The old API has:
+
+getLongSynopsis():Object
+getMediumSynopsis():Object
+
+The new API has:
+
+getSynopsis():String
+Returns the synopsis of the Event if current data source provides it.
+
+The both are defined in "Event".
+
+   linear::Event                 metadata::Event
+
+   SCE                           SCE
+
+   SCER                          SCER
+
+                                 SCER->getEventWindow() : EPG has SCER via SCF
 
 
 {which-events}
@@ -3047,7 +3209,8 @@ to compare two in diff since it's up to SCE how to present via interface.
 
 {metadata-sce-overloads}
 
-note: used <1> from 'iron' <CSCE>
+// dtt event. used <1> from 'iron' <CSCE>
+//
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
    const std::string& lang,
    const NS_IRON_SYSTEM::Event& dttEvent) :
@@ -3056,13 +3219,17 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
 {}
 
 
+// Constructs SystemClientEvent from Iron System Event and MAS event. 
+// note that used <4> and SCE dttEvent via <1>. This means DTT uses longSynopsis.
+//
 SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
    shared_ptr<SystemClientEvent>& masEvent):
 
    synopsis(dttEvent->getSynopsis()),
 {}
 
-
+// Creates MAS event with a new broadcast time
+// used <5>
 SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
    const uint32_t start_,
    const uint32_t end_):
@@ -3071,20 +3238,27 @@ SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
 {}
 
 
-note: used <2> from 'cobalt'
+// Creates MAS Event
+// used <2> from 'cobalt'
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         const SystemEventWrapper& masEvent) :
 
    synopsis(),
-{}
+{
+    // note: no updates on synopsis.
+}
 
+// Creates null event.
+//
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos, 
     boost::shared_ptr<Service> service_, uint32_t start_, uint32_t end_):
     synopsis(),
 {}
 
 
-note: used <3> in Summary
+// Creates a SystemClientEvent from FullEvent. This is used for linear search.
+// used <3> in Summary
+//
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
             flags(0),
@@ -3092,7 +3266,8 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
             id(locator),
             type(IP)
 {
-  synopsis = fullEvent.getMediumSynopsis();
+    const SystemClientFullEvent fullEvent = SystemClientFullEvent(sysResult);
+    synopsis = fullEvent.getMediumSynopsis();
 }
 
 std::string SystemClientEvent::getSynopsis() const
@@ -3100,27 +3275,6 @@ std::string SystemClientEvent::getSynopsis() const
     URANIUM_PROFILE_FUNC;
     return synopsis;
 }
-
-
-<SEW>
-NS_URANIUM_METADATA_CLIENT_OPEN
-
-class SystemEventWrapper  {
-public:
-
-    // note: "::cobalt::system"
-    
-    explicit SystemEventWrapper(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
-        scResult(sysResult),
-        idBag(scResult)
-    {}
-
-    std::string getRecordIdentifier() const
-    {
-        return scResult.getRecordIdentifier();
-    }
-    ...
-};
 
 
 {where-create-scs}
@@ -3145,8 +3299,6 @@ boost::shared_ptr<std::vector<boost::shared_ptr<Event> > > getPresentFollowing()
 <metadata> metadata-overload
 src/metadata/SystemClientEventRepository.cpp
 
-note: this uses overloads
-
 boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Event& e)
 {
   if(!e.eventLocator.empty())
@@ -3164,7 +3316,9 @@ note:  getClientEvents from 'iron'
 event_collection_ptr SystemClientEventRepository::getClientEvents(
             const std::vector<NS_IRON_SYSTEM::Event> & events) 
 {
-   boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
+    BOOST_FOREACH(const NS_IRON_SYSTEM::Event& event, events)
+
+    boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
 }
 
 
@@ -3173,13 +3327,74 @@ note:  getClientEvents from 'cobalt'
 event_collection_ptr SystemClientEventRepository::getClientEvents(
             const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
-   // note: uses <2> and see above. <CSCE>
+    BOOST_FOREACH(const NS_COBALT_SYSTEM::Result& sysResult, systemResults)
+
+    // note: uses <2> and see above. <CSCE>
    
-   SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
+    SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
    
-   boost::shared_ptr<SystemClientEvent> mevent = 
-     boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+    boost::shared_ptr<SystemClientEvent> mevent = 
+      boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
 }
+
+<merged>
+270 Uranium.Client.System/src/metadata/EventCollectionOperations.cpp     
+
+/**
+ * Creates a null event a.k.a "no information available" event.
+ * They basically are events which fill any gaps in schedule EventWindow may contain.
+ */
+boost::shared_ptr<SystemClientEvent> createNullEvent(boost::weak_ptr<MetadataRepositories> repos,
+                                                     uint32_t service, uint32_t start, uint32_t end)
+{
+    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::ServiceRepository> serviceRepo 
+        = strongRepos->serviceRepo;
+
+    //clog<<"Creating null event on service "<<service<<" time: ("<<start<<","<<end<<")"<<endl;
+    
+    return boost::make_shared<SystemClientEvent>(repos,
+            serviceRepo->getServiceBySLI(service % serviceRepo->getServiceCount()), start, end);
+}
+
+
+typedef std::vector<boost::shared_ptr<SystemClientEvent> > event_collection;
+typedef boost::shared_ptr<event_collection> event_collection_ptr;
+
+/**
+ * Merges two sets of events coming from different data sources
+ */
+event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collection_ptr masEvents)
+{
+
+    BOOST_FOREACH(boost::shared_ptr<SystemClientEvent>& edtt, *dttEvents)
+
+    event_collection::iterator eip = x;
+
+    // 102 <4>
+    //there is one, merge the properties
+    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
+            new SystemClientEvent(edtt, *eip));
+
+    // note: eip is SCE here !!!
+
+    BOOST_FOREACH(boost::shared_ptr<SystemClientEvent>& eip, *masEvents)
+
+    boost::shared_ptr<SystemClientEvent> firstDTTEvent = *firstDTTEventIter;
+    boost::shared_ptr<SystemClientEvent> lastDTTEvent = *lastDTTEventIter;
+
+    // 189 <5>
+    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
+            new SystemClientEvent(eip, eip->getStartAsTimeT(), firstDTTEvent->getStartAsTimeT()));
+
+    // 202
+    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
+            new SystemClientEvent(eip, lastDTTEvent->getEndAsTimeT(), eip->getEndAsTimeT()));
+}
+
+
+<summary>
+163 Uranium.Client.System/src/metadata/SystemClientSummary.cpp     
+return boost::make_shared<SystemClientEvent>(repos, sysResult);
 
 
 <SCER>repos is passed from SCER to SCE.
@@ -3196,76 +3411,30 @@ boost::shared_ptr<MetadataRepositories> SystemClientEventRepository::getRepos()
 
 {how-events-updated}
 
-<ip-version>
+<1> EPG 
+EPG uses this:
+Package ctv.enhancedmetadata, Interface public interface EventRepository::getEventWindow
 
-# 01 'cobalt'
-event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
+This scenario is to make a command to FD and to get response, events, back.
+
+Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWindow(
+        uint32_t startingServiceRow, uint32_t serviceCount,
+        boost::posix_time::ptime startTime, int32_t seconds,
+        event_collection_ptr intersectingEvents, Bounds missing,
+        bool isMovingForward)
 {
-  SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
+    NS_ZINC::Promise<boost::shared_ptr<EventWindow> > p(*getFutureDispatcher());
 
-  boost::shared_ptr<SystemClientEvent> mevent =
-    boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
-  events->push_back(mevent);
+    EventWindowCreateCommand cmd( p, newWindowLocation, newWindowLocation,
+            intersectingEvents, microsec_clock::universal_time(),
+            serviceRepo);
+
+    // note: this cmd has *SCEW, and promise
+    
+    getEventsFromSystemAPI(cmd);
+
+    return p.getFuture();
 }
-
-# 02
-void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
-        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
-{
-  const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
-  event_collection_ptr  clientEvents = getClientEvents(systemEvents);
-}
-
-<dtt-version>
-
-event_collection_ptr getClientEvents(
-            const std::vector<NS_IRON_SYSTEM::Event> & events) 
-{
-  boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
-}
-
-void eventsReceived(
-   boost::shared_ptr<EventWindowCreateCommand> command,
-   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
-{
-   event_collection_ptr clientEvents = getClientEvents(systemEvents);
-}  
-
-
-<0> This scenario is to make a command to FD and to get response, events, back.
-
-void SystemClientEventWindow::notifyWindowChanged()
-{
-    produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
-}
-
-void SystemClientEventWindow::ConfigChanged()
-{
-    isStale = true;
-    std::clog<<"EventWindow: Config changed"<<std::endl;
-    notifyWindowChanged();
-}
-
-void SystemClientEventRepository::notifyExistingWindowAboutNewData(
-        boost::shared_ptr<EventWindowCreateCommand> command)
-{
-    boost::shared_ptr<SystemClientEventWindow> w = command->newWindow.lock();
-
-    if (w && (cacheGetResult.isStale() == false || w->isCreatedFromStaleData() == false))
-    {
-        URANIUM_DEBUG("Sending update to the existing window.");
-        w->ConfigChanged();
-    }
-}
-
-void SystemClientEventRepository::eventWindowDataRetrievalComplete(
-        boost::shared_ptr<EventWindowCreateCommand> command)
-{
-    notifyExistingWindowAboutNewData(command);
-}
-
-
-::FutureBar
 
 
 void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
@@ -3281,6 +3450,15 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
   NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
 
   //eventsReceived is overloaded, we need to get the pointer to it first, and the pass to bind.
+  void (SystemClientEventRepository::*masCallback)
+      (boost::shared_ptr<EventWindowCreateCommand>,
+       const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
+      &SystemClientEventRepository::eventsReceived;
+
+  void (SystemClientEventRepository::*dttCallback)
+      (boost::shared_ptr<EventWindowCreateCommand>,
+       const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
+      &SystemClientEventRepository::eventsReceived;
 
   // 'cobalt'
   void (SystemClientEventRepository::*masCallback)
@@ -3302,6 +3480,8 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
   //we know about it and can react appropriately (e.g. marking the EventWindow about to be created as stale)
   metadataObserver->addListener(sharedCmd);
 
+  // 'eventWindowDataRetrievalComplete'
+ 
   bar.setCallback(boost::bind(
               &SystemClientEventRepository::eventWindowDataRetrievalComplete, shared_from_this(), sharedCmd));
 
@@ -3314,7 +3494,6 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
     // this is call to 'cobalt'
     Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
       metadataBroker->getEventSummariesByServices(recids, start, end);
-    //fMASEvents.setCallback(boost::bind(masCallback, this, cmd, _1));
     
     // note: masCallback 
     bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
@@ -3335,27 +3514,79 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
 }
 
 
-<1> EPG 
-EPG uses this:
-Package ctv.enhancedmetadata, Interface public interface EventRepository
+::FutureBar
 
-Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWindow(
-        uint32_t startingServiceRow, uint32_t serviceCount,
-        boost::posix_time::ptime startTime, int32_t seconds,
-        event_collection_ptr intersectingEvents, Bounds missing,
-        bool isMovingForward)
+<callback-one>
+
+# 01 'cobalt' for IP
+event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
-    NS_ZINC::Promise<boost::shared_ptr<EventWindow> > p(*getFutureDispatcher());
+  SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
 
-    EventWindowCreateCommand cmd( p, newWindowLocation, newWindowLocation,
-            intersectingEvents, microsec_clock::universal_time(),
-            serviceRepo);
+  boost::shared_ptr<SystemClientEvent> mevent =
+    boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+  events->push_back(mevent);
+}
 
-    // note: this cmd has *SCEW, and promise
-    
-    getEventsFromSystemAPI(cmd);
+# 02
+void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
+        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+{
+  const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+  event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+}
 
-    return p.getFuture();
+# DTT version
+#
+event_collection_ptr getClientEvents(
+            const std::vector<NS_IRON_SYSTEM::Event> & events) 
+{
+  boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
+}
+
+void eventsReceived(
+   boost::shared_ptr<EventWindowCreateCommand> command,
+   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
+{
+   event_collection_ptr clientEvents = getClientEvents(systemEvents);
+}  
+
+This leads to getClientEvents overloads for IP or DTT
+
+
+<callback-two> 'merge' events
+
+void SystemClientEventRepository::eventWindowDataRetrievalComplete(
+        boost::shared_ptr<EventWindowCreateCommand> command)
+{
+    event_collection_ptr events =  mergeEvents(command->newDTTEvents, command->newMASEvents);
+
+    notifyExistingWindowAboutNewData(command);
+}
+
+void SystemClientEventRepository::notifyExistingWindowAboutNewData(
+        boost::shared_ptr<EventWindowCreateCommand> command)
+{
+    boost::shared_ptr<SystemClientEventWindow> w = command->newWindow.lock();
+
+    if (w && (cacheGetResult.isStale() == false || w->isCreatedFromStaleData() == false))
+    {
+        URANIUM_DEBUG("Sending update to the existing window.");
+        w->ConfigChanged();
+    }
+}
+
+void SystemClientEventWindow::ConfigChanged()
+{
+    isStale = true;
+    std::clog<<"EventWindow: Config changed"<<std::endl;
+    notifyWindowChanged();
+}
+
+
+void SystemClientEventWindow::notifyWindowChanged()
+{
+    produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
 }
 
 
@@ -3571,7 +3802,7 @@ Cobalt/Cobalt.System.API/data/introspection-xml/struct-UnifiedService.xml
 
 
 ={============================================================================
-*kt_dev_uv_stack_109* stack: cal: default event dispatcher
+*kt_dev_uv_stack_110* stack: cal: default event dispatcher
 
 <1>
 
@@ -3903,7 +4134,7 @@ void SystemClientFactory::setFutureDispatcher(boost::shared_ptr<NS_ZINC::FutureD
 
 
 ={============================================================================
-*kt_dev_uv_stack_109* stack: cal: metadata: summary
+*kt_dev_uv_stack_111* stack: cal: metadata: summary
 
 Uranium.Client.API/include/metadata/Summary.h
 
@@ -4030,9 +4261,10 @@ class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultM
 
 
 ={============================================================================
-*kt_dev_uv_stack_110* stack: cal: test
+*kt_dev_uv_stack_112* stack: cal: test
 
-/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/tests/uranium-client-system/test/metadata
+/data/builds/DEVARCH-8092/huawei.370/ \
+   zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/tests/uranium-client-system/test/metadata
 
 -rwxr-xr-x 1 kpark kpark  391852 Feb 25 14:44 brokerintegrationtest*
 -rwxr-xr-x 1 kpark kpark 5250731 Feb 25 14:44 eventcachettltest*
@@ -4080,33 +4312,6 @@ PASS: systemclientservicerepositorytest
 zb-make Uranium/Uranium.Client.System
 
 
-<synopsis>
-Search for getLongSynopsis()
-
-Uranium.Client.System/test/linear-metadata/SysToCliEventTest.cpp
-181:        CPPUNIT_ASSERT_MESSAGE("Incorrect value",sysEvent.longSynopsis == 
-    *(cliEvent->getLongSynopsis()));
-
-Uranium.Client.System/test/metadata/SystemClientServiceRepositoryTest.cpp
-486-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong longSynopsis",
-487-                string("303 StagIS test is a linear television service."
-488-                    " This is the long description."), 
-489:                service2->getLongSynopsis());
-
-
-Search for getSynopsis()
-
-Uranium.Client.System/test/metadata/SummaryTest.cpp
-118-        CPPUNIT_ASSERT(summary.getEvent());
-119-        CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
-120:        CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
-
-
-Uranium.Client.System/test/linear-acquisition/SysToCliTest.cpp
-120-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Incorrect value",
-121:                sysB.synopsis, cliB->getSynopsis());
-
-
 <test-cases>
 For enhanced metadata:
 
@@ -4151,6 +4356,7 @@ src/metadata/tools/textEPG.cpp
 
 
 {xx}       
+Uranium.Client.System/test/metadata/SystemClientEventRepositoryTest.cpp
 
 <MOCK-EDIS>
 struct ZINC_EXPORT Dispatcher : boost::noncopyable
@@ -4188,11 +4394,46 @@ void setUp()
     mockServiceRepo->setDispatcher(systemEventDispatcher);
 }
 
+
 void setUp(MetadataSource source, bool useDTTHistory = true, bool skipPFCallsSetup = false, 
         bool enableEventCache = false, bool useBrokerMock = false)
 {
+
+    setUpClientFactory();
+
+    if(!skipPFCallsSetup)
+    {
+        EXPECT_CALL(*mockEventRepo, getPresentFollowing(_))
+            .WillRepeatedly(returnNewCompletedFuture(vector<NS_IRON_SYSTEM::Event>()));
+    }
+    clientFactory->setIronSystemEventRepository(mockEventRepo);
+
+    EXPECT_CALL(*mockServiceRepo, getAllServices(true))
+        .WillRepeatedly(returnNewCompletedFuture(getDefaultUnifiedServices(source)));
+    clientFactory->setSystemUnifiedServiceRepository(mockServiceRepo);
+
+    if(useBrokerMock)
+    {
+        mockMB = boost::make_shared<NS_COBALT_SYSTEM::MockMetadataBrokerAsync>();
+        clientFactory->setSystemMetadataBroker(mockMB);
+    }
+
+    config = clientFactory->createMetadataConfig();
+    config->overrideSource(source);
+    if(source == IP_AND_DTT)
+    {
+        config->overrideStagedDataRetrieval(true);
+    }
+
+    config->overrideCache(enableEventCache);
+    config->overrideUseHistoricDTTData(useDTTHistory);
+
+    //Effectively disable PECache sanitization so that it doesn't interfere with this test.
+    config->overrideInitialPECacheSanitisationDelay(3600);
+
     eventRepo = boost::dynamic_pointer_cast<SystemClientEventRepository>(
             clientFactory->createEventRepository());
+    serviceRepo = clientFactory->createServiceRepository();
 }
 
 
@@ -4222,7 +4463,6 @@ vector<NS_IRON_SYSTEM::Event> getBBC1Events()
 }
 
 
-// note: where can see IRON::Event?
 void testGetPresentEvent()
 {
     //setup the mocks so that there is a present event on all services
@@ -4346,7 +4586,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_uv_stack_111* stack: build pc target
+*kt_dev_uv_stack_113* stack: build pc target
 
 Unlike cross platform builds, build runs tests and pc target build fails if any test fails.
 
@@ -4366,6 +4606,52 @@ The reason is that python script has "#!/bin/env python" which expect /bin/env b
 $ sudo ln -s /usr/bin/env /bin/env
 
 Make a build success.
+
+
+={============================================================================
+*kt_dev_uv_stack_114* stack: text epg
+
+./Uranium.Client.System/src/metadata/tools/textEPG.cpp
+
+https://wiki.youview.co.uk/display/YVFDT/2014/04/09/TextEPG+howto?src=search
+
+TextEPG is a a little text based app that lets you view the schedule data that the UI consumes via
+the ctv.enhancedmetadata.EventWindow interface. It can be very useful for debugging. Just type
+textEPG on in an ssh/telnet session on the box textEPG
+
+you should then see something like this: text based epg using ncurses
+
+Present events are marked with an asterisk.
+
+You can navigate the window using the WASD keys.  
+
+You can view just DTT, just IP, or merged DTT/IP data (this last is what the UI uses, assuming you
+        have accepted T&Cs and have a network connection)
+
+[root@HUMAX /]# textEPG --help
+Invalid data source
+Usage: textEPG [ip | dtt |stagedip] [<number of services> <number of seconds>]
+The numbers specify the dimensions of the epg window.
+
+Other options :
+
++ / - keys cycle through a subset of the available 'fields' in each event, e.g. title, event
+locator, service record identifier.  It a field is missing, then it will need adding in the textEPG
+source, see Devarch, or find a book on ncurses.
+
+Running on a read only box
+
+If you get terminal related  error running the textEPG on a read only box, try this first
+export TERMINFO=/opt/zinc/oss/share/terminfo
+
+The textEPG was created several years ago (by Jarek in Devarch), as a diagnostic tools to help in
+testing/development of the EventWindow API in the CAL, and has not had much love since then. It was
+designed to show the schedule data from the CAL, back when that was the main cache of event data
+used by the UI. Since the implementation of IP channels, a lot of the event information that was
+previously cached in the CAL has moved down to the Unified Event Repository. The textEPG still seems
+to work, as it just fetches an EventWindow and renders it in text, but YMMV.
+
+/data/builds/DEVARCH-9135/pc/zinc-install-root/debug/debian-7-x86_64/devel/bin/textEPG
 
 
 ={============================================================================
