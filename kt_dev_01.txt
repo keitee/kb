@@ -235,7 +235,8 @@ KT KB. DEVELOPMENT.
 
 
 #{ c++ concurrent in action
-|kt_dev_ccon_001| future
+|kt_dev_ccon_001| data race and std::mutex
+|kt_dev_ccon_002| std::future
 
 
 #{ BLUSHES OR BUGS
@@ -34350,7 +34351,120 @@ class CustomerList {
 # ============================================================================
 #{ c++ concurrent in action
 ={============================================================================
-*kt_dev_ccon_001* future
+*kt_dev_ccon_001* data race and std::mutex
+
+{avoid-race-conditions}
+A race condition is anything where the outcome depends on the relative ordering of execution of
+operations on two or more threads. In other words, The invariants of the system cannot be
+maintained. Broken invariants.
+
+The C++ Standard also defines the term data race to mean the specific type of race condition that
+arises because of concurrent modification to a single 'object'
+
+o The simplest option is to wrap your data structure with a protection mechanism
+
+o lock-free programming
+
+o software transactional memory (STM)
+
+
+{std-mutex}
+Mutexes are the most general of the data-protection mechanisms. But they're not a silver bullet;
+it's important to structure your code to protect the right data and avoid race conditions inherent
+in your interfaces. Mutexes also come with their own problems, in the form of a deadlock and
+protecting either too much or too little data.
+
+<lock-guard>
+Not recommended practice to call the member functions, lock() and unlock(), directly, because this
+means that you have to remember to call unlock() on every code path out of a function, including
+those due to exceptions.
+
+the std::lock_guard class template, which implements that RAII idiom for a mutex;
+
+#include <mutex>
+
+std::list<int> some_list;
+std::mutex some_mutex;
+
+void add_to_list(int new_value)
+{
+    std::lock_guard<std::mutex> guard(some_mutex);
+    some_list.push_back(new_value);
+}
+
+bool list_contains(int value_to_find)
+{
+    std::lock_guard<std::mutex> guard(some_mutex);
+    return std::find(some_list.begin(),some_list.end(),value_to_find) != some_list.end();
+}
+
+Can encapsulate the functionality and enforce the protection if follows that in the majority of
+cases it's common to group the mutex and the protected data together in a class rather than use
+global variables.
+
+
+<careful-design>
+If all the member functions of the class lock the mutex before accessing any other data members and
+unlock it when done, the data is nicely protected from all comers.
+
+Really?
+
+Well, that’s not quite true. If one of the member functions returns a pointer or reference to the
+protected data? doesn't matter that the member functions all lock the mutex
+
+Protecting data with a mutex therefore requires careful interface design, to ensure that the mutex
+is locked before there’s any access to the protected data and that there are no backdoors.
+
+
+<dont-pass-into-function>
+If do careful design, the data is safe now? No. If you dig a little deeper, it's not that
+straightforward-nothing ever is.
+
+Important to check that they don’t pass such pointers or references in to functions they call that
+aren't under your control; functions that are supplied at runtime via a function argument or other
+means
+
+Accidentally passing out a reference to protected data
+
+class some_data
+{
+    int a;
+    std::string b;
+    public:
+    void do_something();
+};
+
+class data_wrapper
+{
+    private:
+        some_data data;
+        std::mutex m;
+    public:
+        template<typename Function> void process_data(Function func)
+        {
+            std::lock_guard<std::mutex> l(m);
+            func(data);                         // pass "protected" data to user-supplied function
+        }
+};
+
+some_data* unprotected;
+
+void malicious_function(some_data& protected_data)
+{
+    unprotected=&protected_data;
+}
+
+data_wrapper x;
+
+void foo()
+{
+    x.process_data(malicious_function);
+    unprotected->do_something();
+}
+
+
+={============================================================================
+*kt_dev_ccon_002* std::future
 
 {task-based-concurrency}
 From C++ 42.4.

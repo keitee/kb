@@ -6120,7 +6120,7 @@ branch by running git merge master, or you can wait to integrate those changes u
 pull the iss53 branch back into master later.
 
 <merge-into-master>
-Suppose you've decided that your issue #53 work is complete and ready to be merged into your master
+Suppose you've decided that your issue #53 work is complete and ready to be merged 'into' your master
 branch. To merge in iss53 into master
 
 $ git checkout master
@@ -6203,7 +6203,6 @@ them manually and resolve those conflicts. The conflicted file contains section 
 
 note: this is version on master since HEAD and is on master
 
-<<<<<<< HEAD:index.html                                        # { HEAD, master version
 <div id="footer">contact : email.support@github.com</div>
 =======                                                        # }
 <div id="footer">                                              # { iss53 version
@@ -6549,11 +6548,7 @@ Automatic merge failed; fix conflicts and then commit the result.
 no changes added to commit (use "git add" and/or "git commit -a")
 
 ~/git-work$ more readme 
-<<<<<<< HEAD
 1: changed first and changed by master.
-=======
-1: changed first and changed by undo and by undo
->>>>>>> undo
 2: changed second.
 3: added topic first.
 4: added topic second.
@@ -6700,21 +6695,22 @@ In Git, there are two main ways to 'integrate' changes from one branch into anot
 the rebase.
 
 {use-merge}
-Like an example in merge-with-diverge, merge do three-way merge between c2(recent common ancestor),
-     c4, c3 and crate a new snapshot(commit):
+Like an example in merge-with-diverge, merge experiment into master:
 
                       <experiment>
-c0 <- c1 <- c2        <- c4
-                      <- c3
+                     <- c4
+c0 <- c1 <- c2       <- c3
                       <master>
 
 $ git checkout master
 $ git merge experiment        // take input and merge onto current
 
                       <experiment>
-c0 <- c1 <- c2        <- c4               <- c5
-                      <- c3               <|
-                                          <master> branch
+                     <- c4              
+                                       \
+c0 <- c1 <- c2       <- c3             <- c5    # points to c3 and c4
+                                       <master> branch
+
 
 {use-rebase-and-merge}
 Another way: you can take the patch of the change that was introduced in C3 and 'reapply' it on top of
@@ -6734,19 +6730,8 @@ c0 <- c1 <- c2        <- c4
 $ git checkout experiment               
 $ git rebase master                     
 
-<Q> The git reference says that both are the same and also mentioned automatic checkout. So
-
-$ git rebase master experiment
-
-This would have the same result? YES!.
-
-$ git rebase test experi   note: on test branch and no conflict
-First, rewinding head to replay your work on top of it...
-Applying: experi: add 1st line in main
-Applying: experi: add 2st line in main
-
-c0 <- c1 <- c2        
-                      <- c3         <- c4'
+                     <- c4
+c0 <- c1 <- c2       <- c3         <- c4'
                       <master>      <experiment>
 
 At this point, you can go back to the master branch and do a fast-forward merge.
@@ -6766,6 +6751,18 @@ $ git rebase master     # take master and replay master onto current. rebase mas
 
 Now, the snapshot pointed to by C4' is exactly the same as the one that was pointed to by C5 in the
 merge example. 
+
+note:
+The git reference says that both are the same and also mentioned automatic checkout. So
+
+$ git rebase master experiment
+
+This would have the same result? YES!.
+
+$ git rebase test experi   note: on test branch and no conflict
+First, rewinding head to replay your work on top of it...
+Applying: experi: add 1st line in main
+Applying: experi: add 2st line in main
 
 
 {rebase-conflict}
@@ -6817,17 +6814,11 @@ conflict.
 
 #include <stdio.h>
 
-<<<<<<< HEAD
 int bar()
 {
   printf("hello, this is bar\n");
 
   return 0;
-=======
-void foo()
-{
-  printf("hello, it's foo\n");
->>>>>>> add foo func and call to it
 }
 
 int main( int argc, char **argv )
@@ -6840,16 +6831,12 @@ int main( int argc, char **argv )
           "this is to exercise rebase feature\n"
           "this is to exercise rebase feature\n" );
 
-<<<<<<< HEAD
   ret = bar();
 
   if( 0 == ret )
     printf("bar returns false\n");
   else
     printf("bar returns true\n");
-=======
-  foo();
->>>>>>> add foo func and call to it
 
   return 0;
 }
@@ -6914,19 +6901,56 @@ whereas merging takes the endpoints and merges them together.
 
 From Ch03 Rebase when you rebase.
 
-Git has some further magic that might help you out. If someone on your team force pushes changes
-that overwrite work that you've based work on, your challenge is to figure out what is yours and
-what they've rewritten.
+{peril-of-rebase}
+If you pull, create a merge commit. Furthermore, push this back up to the server, will 'reintroduce'
+all commits which are dropped and can further confuse people. This is a problem in figure 3-39.
 
-Git can often successfully figure out what is 'uniquely' yours and apply them back on top of the new
-branch. For instance, in the previous scenario, if instead of doing a merge when
+The advise: Do 'not' rebase commits that you have pushed to a public repository.
 
-remote: someone pushes rebased commits, abandoning commits you're based your work on. () denotes
-dropped commits.
+When you rebase stuff, you're 'abandoning' existing commits and creating new ones that are similar
+but 'different'. If you push commits somewhere and others pull them down and base work on them, and
+then you rewrite those commits with git rebase and push them up again. 
+     
+THEN your collaborators will have to re-merge their work and things will get 'messy' when you try to
+pull their work back into yours.
+
+
+For example, fetch them and merge the new remote branch into your work, making your history look
+something like this:
+
+local:
+
+C1  <- teamone/master
+    \            
+      C2  -   C3 <- master
+
+To figure 3-37
+
+remote: 
+
+      C5   
+   /      \
+C1 <- C4 <- C6    <- master
+
+local:
+
+      C5  
+    /    \
+C1  - C4  -   C6   <- teamone/master
+    \            \
+      C2  -   C3  -  C7    <- master
+
+the person who pushed the merged work decides to go back and rebase their work instead; they do a
+git push --force to 'overwrite' the history on the server. You then fetch from that server, bringing
+down the new commits.
+
+figure 3-38
+
+remote: 
 
 C1 <- C5   <- C4' <- master
           \
-   <- (C4) <- (C6)
+     (C4) <- (C6)      # these are no longer available
 
 local:
 
@@ -6936,40 +6960,54 @@ C1  - C4  -   C6
     \            \
       C2  -   C3  -  C7    <- master
 
+Now you’re both in a pickle. If you do a git pull, you'll create a merge commit which includes both
+lines of history due to C4'. 
 
-{peril-of-rebase}
-If you pull, create a merge commit. Furthermore, push this back up to the server, will 'reintroduce'
-all commits which are dropped and can further confuse people. This is a problem in figure 3-39.
-
-The advise: Do 'not' rebase commits that you have pushed to a public repository.
-
-When you rebase stuff, you're abandoning existing commits and creating new ones that are similar but
-'different'. If you push commits somewhere and others pull them down and base work on them, and then
-you rewrite those commits with git rebase and push them up again, your collaborators will have to
-re-merge their work and things will get messy when you try to pull their work back into yours.
-
-If you treat rebasing as a way to clean up and work with commits before you push them, and if you
-only rebase commits that have never been available publicly, then you'll be fine. If you rebase
-commits that have already been pushed publicly, and people may have based work on those commits,
-then you may be in for some frustrating trouble.
+If you run a git log when your history looks like this, you'll see two commits that have the same
+author, date, and message, which will be confusing. Furthermore, if you push this history back up to
+the server, you'll reintroduce all those rebased commits to the central server, which can further
+confuse people. It's pretty safe to assume that the other developer doesn't want C4 and C6 to be in
+the history; that’s why she rebased in the first place.
 
 
-{pull-rebase}
-If you run followings (rebase master onto teamone/master) then git figure out unique commits which
+Git has some further magic that might help you out. If someone on your team force pushes changes
+that overwrite work that you've based work on, your challenge is to figure out what is yours and
+what they've rewritten.
+
+Git can often successfully figure out what is 'uniquely' yours and apply them back on top of the new
+branch. For instance, in the previous scenario, if instead of doing a merge, 
+
+If you run followings (rebase master onto teamone/master) then git figure out 'unique' commits which
 have not been rewritten into the target branch and apply them.
 
 git fetch
-git rebase teamone/master           # take current(master) and replay onto teamone/master
+git rebase teamone/master           # replay onto teamone/master
 
-or
+remote: 
 
-git pull --rebase
+C1 <- C5   <- C4' <- master
+          \
+     (C4) <- (C6)      # these are no longer available
+
+local:
+
+      C5  -   C4'          <- teamone/master
+    /    \
+C1  - C4  -   C6
+    \            \
+      C2  -   C3  -  C7    <- master
 
 local:
 
          teamone/master
                |
 C1  - C5  -   C4' -  C2'  -   C3'  <- master
+
+
+{pull-rebase}
+You can also simplify this by running a git pull --rebase
+
+git pull --rebase
 
 
 If you are using git pull and want to make --rebase the default, you can set the pull.rebase config
@@ -6985,11 +7023,15 @@ git pull --rebase                # take current(master) and replay onto remote/m
 C1  - C5  -   C4' -  C2'  -   C3'  <- master
 
 
-{why-pull-rebase}
+If you treat rebasing as a way to clean up and work with commits 'before' you push them, and if you
+only rebase commits that have 'never' been available publicly, then you'll be fine. 
+
+
+<why-pull-rebase>
 Rebasing is a common way to integrate upstream changes into your local repository. Pulling in
 upstream changes with git merge results in a superfluous merge commit every time you want to see how
 the project has progressed. On the other hand, rebasing is like saying, "I want to base my changes
-on what everybody has already done."
+'on' what everybody has already done."
 
 
 ={============================================================================
