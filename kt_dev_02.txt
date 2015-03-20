@@ -107,6 +107,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_test_101| cppunit: cookbook
 |kt_dev_test_102| cppunit: simple
 |kt_dev_test_103| cppunit: macros
+|kt_dev_test_104| cppunit: example
+|kt_dev_test_105| cppunit: with gmock example
 
 |kt_dev_test_200| gmock:
 |kt_dev_test_201| gmock: for dummies
@@ -21599,6 +21601,79 @@ include/cppunit/TestAssert.h
  *                  test failed.
  */
 #define CPPUNIT_ASSERT_MESSAGE(message,condition)                          \
+
+
+={============================================================================
+*kt_dev_test_104* cppunit: example
+
+void testGetEventFromSummary()
+{
+    // 1
+    SystemClientSummary summary = make_sample_summary();
+
+    // 2
+    CPPUNIT_ASSERT_EQUAL(ENTITY_SCHEDULE_EVENT, summary.getSummaryType());
+    CPPUNIT_ASSERT_NO_THROW(summary.getEvent());
+    CPPUNIT_ASSERT(summary.getEvent());
+    CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
+    CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
+    CPPUNIT_ASSERT(summary.getEvent()->getService());
+    CPPUNIT_ASSERT_EQUAL(string("dvb://233a..1044"), 
+            summary.getEvent()->getService()->getIdentifier("locator"));
+    CPPUNIT_ASSERT_EQUAL(string("dvb://233a..1044;1"), summary.getEvent()->getIdentifier("locator"));
+    CPPUNIT_ASSERT_EQUAL(false, summary.getEvent()->isPresent());
+    CPPUNIT_ASSERT_EQUAL(false, summary.getEvent()->getReminderBookingStatus());
+    CPPUNIT_ASSERT_EQUAL(METADATA_CLIENT::COMPLETED, summary.getEvent()->getRecordingStatus());
+    CPPUNIT_ASSERT_EQUAL(0U, summary.getEvent()->getContainingServiceListIndex());
+}
+
+#1: Create an object to test. In this case, makes up summary object made up with data structure.
+#2: Run tests on this object.
+
+Essentially, this mocks up an object, and excersize tests to see if returns matches data from the
+mock and to see if has expected initialize value and state.
+
+
+={============================================================================
+*kt_dev_test_105* cppunit: with gmock example
+
+#1: See how to create mock object and use it for the rest using pointer.
+#2: Use setUp overloads
+
+void setUp()
+{
+    // this is a mock object
+    mockEventRepo = boost::make_shared<NS_IRON_SYSTEM::MockEventRepositoryAsync>();
+}
+
+void setUp(MetadataSource source, bool useDTTHistory = true, bool skipPFCallsSetup = false, 
+        bool enableEventCache = false, bool useBrokerMock = false)
+{
+    ...
+}
+
+void testGetPresentEvent()
+{
+    // setup the mocks
+    EXPECT_CALL(*mockEventRepo, getPresentFollowing(getDefaultUnifiedServices()[0].serviceLocator)).
+            WillOnce(returnNewCompletedFuture(vector<NS_IRON_SYSTEM::Event>(1, getBBC1Events()[0])));
+
+    EXPECT_CALL(*mockEventRepo, getPresentFollowing(getDefaultUnifiedServices()[1].serviceLocator)).
+            WillOnce(returnNewCompletedFuture(vector<NS_IRON_SYSTEM::Event>(1, getCafeTVEvents()[0])));
+
+    // 
+    setUp(DTT_ONLY, true, true);
+
+    // object under test
+    boost::shared_ptr<NS_CLIENT::Event> e = eventRepo->getPresentEvent(0);
+    
+    CPPUNIT_ASSERT_MESSAGE("There should be an event returned", e);
+    
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].eventLocator, e->getIdentifier("locator"));
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].shortTitle["eng"], e->getTitle());
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].start, (uint32_t)to_time_t(e->getStart()));
+    CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].publishedDuration, (uint32_t)e->getDuration());
+}
 
 
 ={============================================================================
