@@ -1013,7 +1013,14 @@ make && make install
 cd ~/source
 ./setup-humax/setup-humax.sh -h humax-0873
 ./setup-humax/setup-humax.sh -f humax-0873
+
 zb-deploy -o humax.1000 -- -r
+
+
+-f <file(s)>  Copy one or more files to the device without doing anything drastic, such as killing
+daemons or wiping out application sandboxes.
+
+zb-deploy -o humax.1000 -f textEPG
 
 
 <setup-xx-sh>
@@ -1898,7 +1905,8 @@ problem when links with nexusMgr shared library.
 {from-proc}
 As an example, can work out log file from fd info:
 
-root       793  0.7  1.0  25528  4176 ?        Sl   16:04   0:00 /opt/zinc/oss/sbin/NetworkManager --no-daemon --log-level=INFO
+root       793  0.7  1.0  25528  4176 ?        Sl   16:04   0:00 /opt/zinc/oss/sbin/NetworkManager 
+   --no-daemon --log-level=INFO
 
 # ll /proc/793/fd
 fd/     fdinfo/ 
@@ -1936,13 +1944,64 @@ lrwx------    1 root     root          64 Feb 16 16:06 30 -> /dev/nexus_pwm
 cat /var/tmp/NetworkManager.log
 
 <when-in-sandbox>
-l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:14 10 -> /run/youview/jail/daemons/osmiumd-N7HXTA/opt/zinc/var/log/litanium.log
+l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:14 10 -> /run/youview/jail/daemons/
+   osmiumd-N7HXTA/opt/zinc/var/log/litanium.log
 lrwx------    1 osmiumd  osmiumd       64 Feb 16 16:14 11 -> anon_inode:[eventpoll]
 lrwx------    1 osmiumd  osmiumd       64 Feb 16 16:14 12 -> anon_inode:[eventfd]
 l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 2 -> /dev/null
-l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 3 -> /run/youview/jail/daemons/osmiumd-N7HXTA/opt/zinc/var/log/osmium.log
+l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 3 -> /run/youview/jail/daemons/
+   osmiumd-N7HXTA/opt/zinc/var/log/osmium.log
 
 cat /opt/zinc/var/daemons/osmiumd/log/osmium.log
+
+
+{refs}
+https://wiki.youview.co.uk/display/canvas/Zinc+Logging+Framework
+
+Canvas Core C++ components use the log4cplus.sourceforge.net project. 
+
+#include <zinc-common/Logger.h>
+
+ZINC_DECLARE_LOGGER(uranium);
+
+#define URANIUM_FUNC_TRACE ZINC_FUNC_TRACE(ZINC_GET_LOGGER(uranium))
+#define URANIUM_FUNC_DEBUG ZINC_FUNC_DEBUG(ZINC_GET_LOGGER(uranium))
+
+#define URANIUM_SCOPE_TRACE(a) ZINC_SCOPE_TRACE(ZINC_GET_LOGGER(uranium), a)
+#define URANIUM_SCOPE_DEBUG(a) ZINC_SCOPE_DEBUG(ZINC_GET_LOGGER(uranium), a)
+
+#define URANIUM_TRACE(a) ZINC_TRACE(ZINC_GET_LOGGER(uranium), a)
+#define URANIUM_DEBUG(a) ZINC_DEBUG(ZINC_GET_LOGGER(uranium), a)
+#define URANIUM_INFO(a) ZINC_INFO(ZINC_GET_LOGGER(uranium), a)
+#define URANIUM_WARN(a) ZINC_WARN(ZINC_GET_LOGGER(uranium), a)
+#define URANIUM_ERROR(a) ZINC_ERROR(ZINC_GET_LOGGER(uranium), a)
+#define URANIUM_FATAL(a) ZINC_FATAL(ZINC_GET_LOGGER(uranium), a)
+
+
+#define ZINC_DECLARE_LOGGER(name) \
+	namespace name { \
+		namespace detail { \
+			ZINC_EXPORT extern log4cplus::Logger* logger; \
+			ZINC_EXPORT log4cplus::Logger& getLoggerFallback(); \
+		} \
+	}
+
+
+https://wiki.youview.co.uk/display/canvas/Debugging+Issues+on+a+Device?src=search
+
+Applications like the main UI or OnDemand players live in a different place:
+
+# Main UI logs on a patch-o-tron build:
+/opt/zinc-trunk/var/applications/data/air/mainui/log/
+
+# Main UI logs on an integrated build:
+/opt/zinc/var/applications/data/air/mainui/log/
+
+To collect all application logs into a single tarball, you can run this command:
+tar -cjf application-logs.tar.bz2 $(find /opt/zinc*/var/applications/ -name "*.log")
+
+ie. create a bzipped tarball called "application-logs.tar.bz2" by finding all files in application
+directories ending in ".log"
 
 
 ={============================================================================
@@ -3061,6 +3120,7 @@ struct Result
 Cobalt/Cobalt.System.Production/data/b2c_map.yaml
 
 node_transformations: [
+    # tag                action                 args....
     ['serviceId',       'AppendToDescription', 'owningServiceId'],
 
     ['summary',         'AppendToDescription', 'shortSynopsis'],
@@ -3082,6 +3142,32 @@ XMLProcessor is responsible for parsing B2C XML responses into `Result` objects.
     very large. For instance schedule "Tiles" retrieved for the purposes of P/F generation (for
             IP-channels) are >1MB. Since these are being periodically retrieved, and several such
     tiles will be required to cover all the IP-channels, parsing performance is critical.
+
+
+vector<NS_IRON_SYSTEM::Event> getBBC1Events()
+{
+    NS_IRON_SYSTEM::Event e1;
+    NS_IRON_SYSTEM::Event e2;
+
+    e1.serviceLocator = "dvb://233a..1044";
+    e1.eventLocator = "dvb://233a..1044;1";
+    e1.shortTitle["eng"] = "Title of e1";          // see map<string, string>
+    e1.start = 0;
+    e1.publishedDuration = 100;
+
+    e2.serviceLocator = "dvb://233a..1044";
+    e2.eventLocator = "dvb://233a..1044;2";
+    e2.shortTitle["eng"] = "Title of e2";
+    e2.start = 200;
+    e2.publishedDuration = 100;
+
+    vector<NS_IRON_SYSTEM::Event> result;
+    result.reserve(2);
+    result.push_back(e1);
+    result.push_back(e2);
+
+    return result;
+}
 
 
 note: this test shows how to use 'result' structure.
@@ -3141,6 +3227,8 @@ note: WRT getSynopsis, it only uses in void testGetEventFromSummary() but don't 
 
 
 {wrapper}
+/Uranium/Uranium.Client.System/src/metadata/SystemEventWrapper.h
+
 NS_URANIUM_METADATA_CLIENT_OPEN
 
 class SystemEventWrapper  {
@@ -3155,7 +3243,7 @@ public:
 
     std::string getOwningServiceId() const
     {
-        return scResult.getStringFromDescription("owningServiceId");
+        return scResult.getStringFromDescription("owningServiceId");    // note: key
     }
 
     ...
@@ -3183,6 +3271,7 @@ class SystemClientResult
         return getFirstValueFromDescription(key, false);
     }
 
+    // note: key
     string SystemClientResult::getFirstValueFromDescription(const std::string& key,
             bool toLower) const
     {
@@ -3205,8 +3294,6 @@ class SystemClientResult
         return s;
     }
 };
-
-
 
 
 ={============================================================================
@@ -3275,6 +3362,16 @@ class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic
     virtual std::string getSynopsis() const = 0;
 };
 
+class ZINC_LOCAL SystemClientEvent : virtual public Event
+{
+    std::string SystemClientEvent::getSynopsis() const
+    {
+        URANIUM_PROFILE_FUNC;
+        return synopsis;
+    }
+};
+
+
 Uranium.Client.System/src/metadata/SystemClientEvent.h
 Uranium.Client.System/src/metadata/SystemClientEvent.cpp
 
@@ -3291,9 +3388,42 @@ note: Events differs in 'interfaces' and not like a simple structure. So how Eve
 to compare two in diff since it's up to SCE how to present via interface.
 
 
+{linear-sce}
+
+typedef std::map<std::string,std::string> synopsis;
+
+boost::shared_ptr<NS_IRON_SYSTEM::Event> systemEvent;
+
+SystemClientEvent::SystemClientEvent(NS_IRON_SYSTEM::Event event_,
+        boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> eventRepository_,
+        boost::shared_ptr<NS_CADMIUM_SYSTEM::LinearAcquisition> linearAcquisition_,
+        boost::weak_ptr<NS_URANIUM_LINEAR_CLIENT::ReminderRepository> reminderRepository_)
+    : eventRepository(eventRepository_),
+      reminderRepository(reminderRepository_),
+
+      systemEvent(boost::make_shared<NS_IRON_SYSTEM::Event>(event_)),
+
+      linearAcquisition(convertToSync(linearAcquisition_))
+{
+
+}
+
+1. events->push_back(
+        make_shared<SystemClientEvent>(
+            sysEvents.at(i), eventRepository, linearAcquisition, reminderRepository));
+
+2. return make_shared<SystemClientEvent>(
+        systemEvent.get(), sysEventRepository, sysLinearAcquisition, reminderRepository);
+
+
+
 {metadata-sce-overloads}
 
-// dtt event. used <1> from 'iron' <CSCE>
+// <1> dtt event. from 'iron' <CSCE>
+//
+// used in DTT::getClientEvents(). 
+//
+// run on a target: 'nothing' logged in the log
 //
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
    const std::string& lang,
@@ -3303,17 +3433,22 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
 {}
 
 
-// Constructs SystemClientEvent from Iron System Event and MAS event. 
-// note that used <4> and SCE dttEvent via <1>. This means DTT uses longSynopsis.
+// <2> Constructs SystemClientEvent from Iron System Event and MAS event. 
+// note that used in mergeEvent(). use <4> for mas and use <1> for dttEvent. This means DTT uses
+// longSynopsis.
+//
+// run on a target: 'nothing' logged in the log
 //
 SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
-   shared_ptr<SystemClientEvent>& masEvent):
+        shared_ptr<SystemClientEvent>& masEvent):
 
    synopsis(dttEvent->getSynopsis()),
-{}
+{
+    // fill some from masEvent but not for synopsis.
+}
 
-// Creates MAS event with a new broadcast time
-// used <5>
+// <3> Creates MAS event with a new broadcast time
+// used in mergeEvent(). 
 SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
    const uint32_t start_,
    const uint32_t end_):
@@ -3323,7 +3458,11 @@ SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
 
 
 // Creates MAS Event
-// used <2> from 'cobalt'
+// <4> used in IP::getClientEvents(). 'cobalt' and 'wrapper'
+//
+// run on a target: wrapper used but only 'medium' logged in the log. means that only medium in
+// cobalt::result.
+//
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         const SystemEventWrapper& masEvent) :
 
@@ -3340,8 +3479,8 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
 {}
 
 
-// Creates a SystemClientEvent from FullEvent. This is used for linear search.
-// used <3> in Summary
+// <5> Creates a SystemClientEvent from FullEvent. This is used for linear search.
+// used in Summary
 //
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
@@ -3354,11 +3493,20 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
     synopsis = fullEvent.getMediumSynopsis();
 }
 
-std::string SystemClientEvent::getSynopsis() const
-{
-    URANIUM_PROFILE_FUNC;
-    return synopsis;
-}
+// note: do the same as 'wrapper' 
+class SystemClientFullEvent : public FullEvent {
+public:
+    explicit SystemClientFullEvent(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
+        scResult(sysResult),
+        idBag(scResult)
+    {}
+
+    virtual std::string getMediumSynopsis() const
+    {
+       return scResult.getStringFromDescription("mediumSynopsis");
+    }
+};
+
 
 
 {where-create-scs}
@@ -3413,8 +3561,7 @@ event_collection_ptr SystemClientEventRepository::getClientEvents(
 {
     BOOST_FOREACH(const NS_COBALT_SYSTEM::Result& sysResult, systemResults)
 
-    // note: uses <2> and see above. <CSCE>
-   
+    // 'wrapper' >
     SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
    
     boost::shared_ptr<SystemClientEvent> mevent = 
@@ -3452,7 +3599,7 @@ event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collectio
 
     BOOST_FOREACH(boost::shared_ptr<SystemClientEvent>& edtt, *dttEvents)
 
-    event_collection::iterator eip = x;
+    event_collection::iterator eip = // SCE in masEvents
 
     // 102 <4>
     //there is one, merge the properties
@@ -3473,23 +3620,6 @@ event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collectio
     // 202
     boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
             new SystemClientEvent(eip, lastDTTEvent->getEndAsTimeT(), eip->getEndAsTimeT()));
-}
-
-
-<summary>
-163 Uranium.Client.System/src/metadata/SystemClientSummary.cpp     
-return boost::make_shared<SystemClientEvent>(repos, sysResult);
-
-
-<SCER>repos is passed from SCER to SCE.
-
-boost::shared_ptr<MetadataRepositories> SystemClientEventRepository::getRepos()
-{
-  boost::shared_ptr<MetadataRepositories> repos =
-    boost::make_shared<MetadataRepositories>(
-        serviceRepo, reminderRepo, linearAcquisition, shared_from_this(), extraInfo);
-
-  return repos;
 }
 
 
@@ -3521,7 +3651,7 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
 }
 
 
-void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
 {
   URANIUM_FUNC_TRACE;
   URANIUM_PROFILE_FUNC;
@@ -3533,17 +3663,7 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
   // note: Future?
   NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
 
-  //eventsReceived is overloaded, we need to get the pointer to it first, and the pass to bind.
-  void (SystemClientEventRepository::*masCallback)
-      (boost::shared_ptr<EventWindowCreateCommand>,
-       const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
-      &SystemClientEventRepository::eventsReceived;
-
-  void (SystemClientEventRepository::*dttCallback)
-      (boost::shared_ptr<EventWindowCreateCommand>,
-       const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
-      &SystemClientEventRepository::eventsReceived;
-
+  // eventsReceived is overloaded, we need to get the pointer to it first, and the pass to bind.
   // 'cobalt'
   void (SystemClientEventRepository::*masCallback)
     (boost::shared_ptr<EventWindowCreateCommand>,
@@ -3564,6 +3684,7 @@ void getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
   //we know about it and can react appropriately (e.g. marking the EventWindow about to be created as stale)
   metadataObserver->addListener(sharedCmd);
 
+  // calls 'merge' events
   // 'eventWindowDataRetrievalComplete'
  
   bar.setCallback(boost::bind(
@@ -4574,7 +4695,8 @@ void testGetPresentEvent()
 
 note: to run a single test and should match how it was built since it shall be run under virtual?
 
-kpark@wll1p04345:/data/builds/_virtual_/pc/zinc-build-root/debug-debian-7-x86_64/Uranium/Uranium.Client.System/test/metadata$ ./systemclienteventrepositorytest --cases SystemClientEventRepos
+./systemclienteventrepositorytest --cases SystemClientEventRepositoryTest::testGetSynopsis
+
 itoryTest::testGetPresentEvent
 Metadata source is DTT_ONLY
 Overriding metadata source to DTT_ONLY
@@ -4740,39 +4862,6 @@ to work, as it just fetches an EventWindow and renders it in text, but YMMV.
 box: /opt/zinc-trunk/devel/bin/textEPG
 box: /opt/zinc/devel/bin/textEPG
 
-
-={============================================================================
-*kt_dev_uv_stack_115* stack: log
-
-https://wiki.youview.co.uk/display/canvas/Zinc+Logging+Framework
-
-Canvas Core C++ components use the log4cplus.sourceforge.net project. 
-
-#include <zinc-common/Logger.h>
-
-ZINC_DECLARE_LOGGER(uranium);
-
-#define URANIUM_FUNC_TRACE ZINC_FUNC_TRACE(ZINC_GET_LOGGER(uranium))
-#define URANIUM_FUNC_DEBUG ZINC_FUNC_DEBUG(ZINC_GET_LOGGER(uranium))
-
-#define URANIUM_SCOPE_TRACE(a) ZINC_SCOPE_TRACE(ZINC_GET_LOGGER(uranium), a)
-#define URANIUM_SCOPE_DEBUG(a) ZINC_SCOPE_DEBUG(ZINC_GET_LOGGER(uranium), a)
-
-#define URANIUM_TRACE(a) ZINC_TRACE(ZINC_GET_LOGGER(uranium), a)
-#define URANIUM_DEBUG(a) ZINC_DEBUG(ZINC_GET_LOGGER(uranium), a)
-#define URANIUM_INFO(a) ZINC_INFO(ZINC_GET_LOGGER(uranium), a)
-#define URANIUM_WARN(a) ZINC_WARN(ZINC_GET_LOGGER(uranium), a)
-#define URANIUM_ERROR(a) ZINC_ERROR(ZINC_GET_LOGGER(uranium), a)
-#define URANIUM_FATAL(a) ZINC_FATAL(ZINC_GET_LOGGER(uranium), a)
-
-
-#define ZINC_DECLARE_LOGGER(name) \
-	namespace name { \
-		namespace detail { \
-			ZINC_EXPORT extern log4cplus::Logger* logger; \
-			ZINC_EXPORT log4cplus::Logger& getLoggerFallback(); \
-		} \
-	}
 
 ={============================================================================
 *kt_dev_uv_stack_120* stack: cppunit
