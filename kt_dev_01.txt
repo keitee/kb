@@ -67,7 +67,7 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_gcc_300| gcc gprof
 
-#{ C AND C++
+#{ lang basic
 |kt_dev_lang_001| file and function static {singleton-pattern}
 |kt_dev_lang_002| stdio
 |kt_dev_lang_003| #error and #warning
@@ -85,8 +85,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_lang_015| control flow {control-for-vs-while} {switch-under-the-hood}
 |kt_dev_lang_016| operator-precedence, operators {evaulation-order}
 |kt_dev_lang_017| identifier name rule
+|kt_dev_lang_018| style consideration: define variable
 
-#{ CPP
+#{ cpp
 |kt_dev_cpp_000| oop
 |kt_dev_cpp_001| virtual inheritance (interview) {virtual-base-class}
 |kt_dev_cpp_002| reference-vs-pointer (interview)
@@ -99,9 +100,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_009| undefined result
 |kt_dev_cpp_010| temp-object
 |kt_dev_cpp_011| inline {empty-ctor-represenstaion}
-|kt_dev_cpp_012| initializer_list
+|kt_dev_cpp_012| list initialization. initializer_list
 |kt_dev_cpp_013| use reference {called-by-reference} 
-|kt_dev_cpp_014| decltype, typedef, and struct {class-vs-struct} 
+|kt_dev_cpp_014| auto, decltype, typedef, and struct {class-vs-struct} 
 |kt_dev_cpp_015| declaration and definition
 |kt_dev_cpp_016| array and struct
 |kt_dev_cpp_017| static-members and class const {class-method} {class-const}
@@ -4189,10 +4190,6 @@ class Foo {
 };
 
 
-{auto}
-GCC 4.4.5 do.
-
-
 {explicit}
 From GCC 45. See *kt_dev_cpp_005* for more.
 
@@ -4261,9 +4258,9 @@ f(0);       // calls f(int)
 f(NULL);    // calls f(int) if NULL is 0, ambiguous otherwise
 f(nullptr); // calls f(void*)
 
-nullptr is a new 'keyword'. It automatically converts into each pointer type but not to any integral
-type. It has type std::nullptr_t, defined in <cstddef>, so you can now even overload operations for
-the case that a null pointer is passed.
+nullptr is a new 'keyword' and literal that has special type and automatically converts into 'any'
+other pointer type. Has type std::nullptr_t defined in <cstddef>, so you can now even overload
+operations for the case that a null pointer is passed.
 
 
 ={============================================================================
@@ -7715,9 +7712,10 @@ short, long, signed and unsigned 'qualifiers'. short is 'at-least' 16 bits, long
 and int either 16 or 32 bits. Each compiler is free to choose appropriate sizes for its own
 hardware.
 
+note:
 The char is not singed char. there are char, signed, unsigned types because whether char is signed
 or unsigned 'depends' on compiler. From ansic, "whether plain chars are signed or unsigned is
-machine-dependent". So recommendation is that use signed or unsigned.
+machine-dependent". So recommendation is that 'not' use char but use signed or unsigned.
 
 The standard header <limits.h> and <float.h> contain symbolic constants for all of these sizes along
 with other properties of the machine and compiler.
@@ -10912,6 +10910,25 @@ global namespace.165
 
 165) Such names are also reserved in namespace ::std (17.4.3.1).
 
+C++P 2.3.3
+The standard also reserves a set of names for use in the standard library. May not contain two
+consecutive underscores, nor can an identifier begin with an underscore followed immediately by an
+uppercase letter.
+
+
+={============================================================================
+*kt_dev_lang_018* style consideration: define variable
+
+{two-style-to-define}
+Since type modifier(* or &) is different from base type, there are two style choices:
+
+1.
+int *p1, *p2;
+
+2. 
+int* p1;
+int* p2;
+
 
 # ============================================================================
 #{ CPP
@@ -11041,6 +11058,15 @@ objects.
 
 <5> 
 There is no reference to a reference. but there's a pointer to a pointer. 
+
+note: this do not mean it's a compile error but mean it has not effect as pointer has. This refVal3
+binds to iVal but not to refVal.
+
+int &refVal = iVal;
+int &refVal3 = refVal;
+
+int &refVal = iVal;        // the same
+int &refVal3 = iVal;
 
 <6>
 Reference should 'match' to type and cannot bind to a literal.
@@ -12754,9 +12780,13 @@ char line[MAXLINE+1];
 
 
 {const-scope}
-The const object must be inited when defined and it's 'local' to 'file' by default. so want to use in
-multiple files, must use 'extern' keyword on 'both' definition and declaration. This is different
-from <file-staic-mean>. The important principle is that shouldn't change const object.
+To support seperate compilation of const variable, the variable must be defined in every file so
+compiler make it 'local' to file as if had written definitions for separate variables in each file.
+C++P p60. So can have same name in different files.  
+
+So want to use in multiple files, must use 'extern' keyword on 'both' definition and declaration.
+This is different from <file-staic-mean>. The important principle is that shouldn't change const
+object.
 
 // file one
 extern const int gc_max = 100;
@@ -12766,28 +12796,39 @@ extern const int gc_max;
 
 
 {top-and-low-level-const}
-The top level const is for object itself. So there are top-level-const and low-level-const for a
-'reference' and 'pointer'. Top-level-const is for reference and pointer itself and low-level-const is
-for underlying object. Top can be ignored but low level 'never' because top-level-const do 'not' say
-anything about 'underlying' object. const-pointer can point either const or non-const. Hence can be
-ignored. 
+The reference and pointer are 'indirect' access so makes two level in terms of constness. This
+matters when copy an object.
+
+               const int *const <variable-name>
+               <-- 1 --> <- 2 ->
+
+               const int * <variable-name>            // pointer to const
+               const int *const <variable-name>       // const pointer to const
+               const int & <variable-name>            // reference to const
+
+1. base type part which is for underlying object and for low-level. That is a object that points or
+reference to.
+
+2. declarator part which is for compound type, reference or pointer, and for top-level. That is
+pointer or reference itself.
+
+The point is that it is compiler POV and for static type checking. To maintain constness, low-level
+'never' be ignored but top-level can be since it's not about underlying object. 
+
+In other words, top-level restrics only what we can do 'through' that reference or pointer and says
+nothing about whether the underlying object itself. 
 
 int i = 42;
 const int ci = i;
-int j = ci;             // top-level const ignored.
+int j = ci;
 
-The initialization do not change the value of an object. Constness of ci matters only for operations
-that might change ci. Copying doesn't change ci. The new object has no further access to the
-original object. 
+The initialization do not change the value of an object. Constness of ci matters 'only' for
+operations that might change ci. Copying doesn't change ci. The new object has no further access to
+the original object. 
 
 
-{reference-to-const} 
-Unlike pointer, <reference-to-const> is different since there's 'no' const-reference since reference
-is not object. The reference-to-const restrics only what we can do 'through' that reference and says
-nothing about whether the underlying object itself. 
-
-For pointer, there are <pointer-to-const> and <const-pointer>. The following initialzation is error
-because should NOT be able to use a reference to change ci. Remember a reference is another name.
+<reference-to-const> 
+Unlike pointer, there is only reference-to-const since reference is not object. 
 
 int &ri = i;
 const int &r2 = i;
@@ -12795,7 +12836,9 @@ const int &r2 = i;
 r1 = 0;
 r2 = 0;              // error since r2 is reference-to-const
 
-<const-to-nonconst-error>
+
+<no-const-to-nonconst>
+This is an error because this is not a copy and 'no' const to non-const conversion.
 
 int main()
 {
@@ -12805,31 +12848,39 @@ int main()
 }
 
 :6:13: error: invalid initialisation of reference of type ‘int&’ from expression of type ‘const int’
-This is an error because 'no' const to non-const conversion. Not a copy.
-
-For ordinary reference, must match type and must bind to a object.
-
-int &ri = 10;           // error
-int &ri = double_val;   // error
-
-For pointer examples, see and remember that read from right to left; that is from modifiers to base
-type.
-
-const double *cptr = &pi;           // pointer to const 
-int *const curErr = &errNumb;       // const pointer
 
 
-{type-match-exceptions} p61
-Two 'exceptions' to type match: <nonconst-to-const> and <derived-to-base-reference> conversion. Can
-bind <reference-to-const> to non-const, a literal, a temp, or other expression that evaluate to an
-type.
+<nonconst-to-const> type-match-exceptions. C++P p61
+As long as maintain constness, allow conversion and so two 'exceptions' to type match rule. If
+necessary, compiler make a temporary to allow conversion and maintain constness.
+
+These exception are 'implicit' nonconst-to-const and derived-to-base-reference conversion. Can bind
+reference-to-const to non-const, a literal, a temp, or other expression that evaluate to an type.
+
+const int ci = 42;      
+int i = ci;             
+
+const int& r = ci;      // is 'always' low-level
+
+int i;
+const int &j = i;       // conversion from non-const to const
+const int *p = &i;
+int &r = j, *q = p;     // error since conversion from const to non-const
 
 const int &ri = 42;     // ok but int &ri = 42 is an error
+int &ri = 10;           // error
+int &ri = double_val;   // error
 
 double dval = 3.14;
 const int &ri = dval;   // ok becuase will bind to temp-object and cannot change it via ri
 
-<example>
+The reference is alias for something exist and also need to maintain constness. This is all about
+for 'compiler' to maintain constness by creating temporary. So the compiler transforms this:
+
+const int temp = dval;     // temp-object. see const and tempoary is const object.
+cont int &di = temp;
+
+This also shows an example of creating a temporary through const conversion.
 
 int main()
 {
@@ -12854,36 +12905,6 @@ i: 200
 ri: 200
 d: 6.28
 rd: 3          // see
-
-<key> The reference is alias for something exist and also need to maintain constness. This is all
-about for 'compiler' to maintain constness by creating temporary. So the compiler transforms this:
-
-const int temp = dval;     // temp-object. see const and tempoary is const object.
-cont int &di = temp;
-
-<convert-to-const>
-Implicit nonconst-to-const conversion 'only' <for reference and pointer>.
-
-const  -- NO --> non-const
-const <-- OK --  non-const
-
-const int &ri = const object        // cannot change as both are const
-const int &ri = non-const object    // cannot change via ri but can change object itself. 
-
-When copy an object, both object must have the same low-level const or be conversion.
-
-const int ci = 42;   // top-level
-int i = ci;          // ignored
-
-const int& r = ci;   // is 'always' low-level
-
-int i;
-const int &j = i;    // conversion from non-const to const
-const int *p = &i;
-int &r = j, *q = p;  // error since conversion from const to non-const
-
-If this is allowed, const object can be changed via non-const pointer and reference. So not allowed.
-This is the same reason as <temp-object-is-const>
 
 
 {const-on-iterators}
@@ -13680,25 +13701,25 @@ profiler to find out 20% as a candidate for inlining.
 
 
 ={============================================================================
-*kt_dev_cpp_012* initializer_list 
+*kt_dev_cpp_012* list initialization. initializer_list 
 
-{confusing-initialization}
-Initialization could happen with parentheses, braces, and/or assignment operators. 
+{why-list-initialization}
+Many different ways to initialize.So the generalized use of curly brace was introduced in new
+standard.
 
 int units_sold = 0;
 int units_sold = {0};
-int units_sold{0};
+int units_sold{0};            // list initialzation.
 int units_sold(0);
 int units_sold{};
 
-<in-ctor>
+<in-constructor>
 ABEntry::ABEntry(...)
-: theName(),                  // var()
+: theName(),                  // var(). same as units_sold(0)
   theAddress(),
   thePhones(),
   numTimesConsulted(0)
-{
-}
+{}
 
 <temporary>
 void doSomething(B bObject);
@@ -13706,26 +13727,69 @@ doSomething(B(28));           // T(val). converting ctor
 
 return pair<string, int>();   // T()
 
-<direct-init>
+<direct-initialization>
 string dots(10, '.');
 string s(dots);
 
-<default-and-value-init>
+<default-and-value-initialzation>
 string* ps = new string;      // default-init
 string* ps = new string();    // value-init. new T()
 
 int* pi = new int;            // default-init
 int* pi = new int();          // value-init. new T()
 
-Only for built-in types, value-init makes difference and this means that default-init for built-in
-types has uninitialized values. For class types, both will use default 'ctors' and so no difference.
-<new-operator> combines allocation and construction. it creates 'unnamed' and then 'default-init'
-objects e.g. calls ctor for class object.
 
-<vexing-parse>
+{list-initialization} uniform initialization
+C++11 introduced the concept of uniform initialization, which means that for any initialization. 
+
+note: >
+Must use -std=c++0x or -std=gnu++0x. Otherwise, compile error.
+
+The followings are possible now:
+
+const std::string hybrid_str{"hybrid:"};
+int values[] { 1, 2, 3 };
+std::vector<int> v { 2, 3, 5, 7, 11, 13, 17 };
+std::vector<std::string> cities {"Berlin", "New York", "London", "Braunschweig", "Cairo", "Cologne" };
+std::complex<double> c{4.0,3.0}; // equivalent to c(4.0,3.0)
+
+The good things are:
+
+1. default value for built-in types
+
+An initializer list forces so-called value initialization, which means that even local variables of
+fundamental data types, which usually have an 'undefined' value, are initialized by zero, or
+nullptr, if it is a pointer.
+
+int i;      // i has undefined value
+int j{};    // j is initialized by 0
+int* p;     // p has undefined value
+int* q{};   // q is initialized by nullptr
+
+note: why it is for built-in type? class type will have default values since ctors would do if ctors
+do the right work.
+
+note: C++P p44. Some classes require that every object be explicitly initialized. The compiler will
+complain if try to create an object of such a class with no initializer. HOW?
+
+
+2. narrowing conversion
+
+The list initialization do not allow narrowing conversion of 'built-in' type.
+
+int x3{5.0};      // ERROR: narrowing
+int x4 = {5.3};   // ERROR: narrowing
+
+note: Worthwhile to use this property? Since unlikely to directly initialize an int from a long
+double? However such initialization might happen unintentionally in template. 'todo'
+
+3. use single form of initialization
+
+4. avoid vexing-parse
+
 <example>
-From C++ concurrency in action, 2.1.1., if you pass a 'temporary' rather than a named variable the the
-syntax can be the same as that of a fuction declaration.
+From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the the syntax can be the
+same as that of a fuction declaration.
 
 class background_task;
 std::thread my_thread( background_task() );     // T()
@@ -13745,49 +13809,16 @@ The intention is to have value-init but defines a function.
 std::string source();
 source = _determineSource((char*)in, &sourcelen, &inIndex, &usePath);
 
-error: assignment of function 'std::string source()'     // note. function in error message
+error: assignment of function 'std::string source()'     // see 'function' in error message
 error: cannot convert 'std::string' to 'std::string()' in assignment
 
+note: to make it as intended and this create a temporary and use copy initialzation. not useful.
 
-{list-initialization} uniform initialization
-So initialization is complieted and confusing. For this reason C++11 introduced the concept of
-uniform initialization, which means that for any initialization. 
-
-<C++11>
-On gcc 4.5.x:
-const std::string hybrid_str{"hybrid:"};
-/: warning: extended initializer lists only available with -std=c++0x or -std=gnu++0x
-/: error: in C++98 '<unnamed>::hybrid_str' must be initialized by constructor, not by '{...}'
-
-you can use one common syntax, braces, so the following is possible now:
-
-int values[] { 1, 2, 3 };
-std::vector<int> v { 2, 3, 5, 7, 11, 13, 17 };
-std::vector<std::string> cities {"Berlin", "New York", "London", "Braunschweig", "Cairo", "Cologne" };
-std::complex<double> c{4.0,3.0}; // equivalent to c(4.0,3.0)
-
-
-An initializer list forces so-called value initialization, which means that even local variables of
-fundamental data types, which usually have an undefined initial value, are initialized by zero (or
-nullptr, if it is a pointer):
-
-int i;      // i has undefined value
-int j{};    // <note> j is initialized by 0
-int* p;     // p has undefined value
-int* q{};   // q is initialized by nullptr
-
-<narrowing-conversion>
-The list initialization do not allow narrowing conversion of 'built-in' type.
-
-int x3{5.0};      // ERROR: narrowing
-int x4 = {5.3};   // ERROR: narrowing
-
-Worthwhile to use this property? Since unlikely to directly initialize an int from a long double?
-However such initialization might happen unintentionally in template. <note> TODO
+std::string source = source();
 
 
 {initializer-list}
-To support the concept of initializer lists for user-defined types. It is a library template type
+To 'support' the concept of initializer lists for user-defined types. It is a library template type
 that repersents an 'array' of values of the specified type. The element in a list are always const.
 
 #include "initializer_list"
@@ -13795,36 +13826,35 @@ that repersents an 'array' of values of the specified type. The element in a lis
 initializer_list<int> li; 
 initializer_list<string> ls;
 
-Since it's array, it supports begin and end and can process elements.
+Since it's array, it supports begin()/end() and can process elements.
 
-# 01
-#
+<1>
 void error_msg( initializer_list<string> ls )
 {
-  for( auto beg = ls.begin(); beg != ls.end(); ++beg )
-    cout << *beg << " ";
-  cout << endl;
+    for( auto beg = ls.begin(); beg != ls.end(); ++beg )
+        cout << *beg << " ";
+
+    cout << endl;
 }
 
-# 02
-#
+<2>
 void error_msg( ErrorCode e, initializer_list<string> ls )
 {
-  cout << e.msg() << " ";
-  for( const auto &elem : ls )
-    cout << *elem << " ";
-  cout << endl;
+    cout << e.msg() << " ";
+
+    for( const auto &elem : ls )
+        cout << *elem << " ";
+
+    cout << endl;
 }
 
-# 03
-#
-print ({12,3,5,7,11,13,17});  // pass a list of values to print()
+<3>
+print( {12,3,5,7,11,13,17} );
 
-void print (std::initializer_list<int> vals)
+void print( std::initializer_list<int> vals )
 {
-  for (auto p=vals.begin(); p!=vals.end(); ++p) { // process a list of values
-    std::cout << *p << "\n";
-  }
+    for (auto p=vals.begin(); p!=vals.end(); ++p)  
+        std::cout << *p << "\n";
 }
 
 
@@ -14027,14 +14057,49 @@ object.
 
 
 ={============================================================================
-*kt_dev_cpp_014* decltype, typedef, and struct
+*kt_dev_cpp_014* auto, decltype, typedef, and struct
 
-{decltype-and-auto}
-This is the realization of the often requested typeof feature. However, the existing typeof
-implementations were inconsistent and incomplete, so C++11 introduced decltype keyword.
+{auto-specifier}
+The name of each object becomes visible 'immediately' so possible to initialize a variable to the
+value of one defined earlier in the same definition.
+
+double price = 109.99, discount = price * 0.16;
+double salePrice = applyDiscout( price, discount );
+
+When initialize it from a expression, have to know the type of that expression and can be difficult.
+
+Under new standard, let the compiler figure out the type by using auto type specifier and by
+deducing the type from the initializer.
+
+note: GCC 4.4.5 supports.
+
+auto item = val1 + val2;
+
+
+{decltype-specifier}
+Want to use type that the compiler decuces but do not want to use that to initialize the variable.
+Return the type of expression but do not 'evaluate' it, that is, do not call expression.
 
 string s("...");
 decltype( s.size() ) count = 0;
+
+<when-decltype-return-reference-type> to get reference type of expression
+The decltype return reference type when expression yields objects that is lvalue, that can stand on
+the left hand side of assignment.
+
+int i = 42, *p = &i, &r = i;
+
+decltype( r + 0 ) b;          // int b
+decltype( *p ) c;             // int& c; error.
+
+The decltype of a parenthesized variable is always a reference.
+
+decltype((i)) d;              // int& d; error.
+decltype(i) e;                // int e;
+
+The side effect when decltype returns a reference is that variable must be initialized as usual
+reference variable does.
+
 
 <typeof-and-decltype>
 The 'typeof' is gcc one and decltype is C++.
@@ -14318,9 +14383,19 @@ typedef struct _fsm
 
 FSM_T new_fsm = 0;
 
-<typedef-in-cpp>
+
+{type-alias}
 typedef double wages;
-using wages = double;   // C++11
+using wages = double;         // C++11
+
+note: can be suprising result when use alias with compound type and const
+
+typedef char *pstring;
+const pstring cstr = 0;       // do not interpret as "const char *pstring cstr"
+const pstring *ps;
+
+The cstr is "const pointer to char" but not "pointer to const char" since base type is "char *" and
+const applies on base type.
 
 <typedef-in-class>
 Effectively, make alias to classA. Useful when class name changes. Seen in Tizen code. typedef is
@@ -25686,8 +25761,9 @@ namespace std {
 }
 
 
-{string-operation}
-<operation-arg-scheme>
+{operations}
+
+<initialization> operation-arg-scheme
 The operations that manipulate the value of a string have several overloaded versions that use the
 argument scheme:
 
@@ -25723,7 +25799,21 @@ s1.length() // yields 4
 s2.length() // yields 5
 s3.length() // yields 5
 
-<end-of-string>
+string s1;                 // default initialzation. empty
+
+string s2( s1 );           // direct form of initialzation.
+string s2 = s1;            // copy form of initialzation.
+
+string s3( "value" );
+string s3 = "value";
+
+string s4( n, 'c' );
+
+
+<no-null> TODO: needs more to clarify
+
+string s3( "value" );      // 'not' including the null
+
 This end-of-string character is initialized by the default constructor of the character type (’\0’
 for class string):
 
