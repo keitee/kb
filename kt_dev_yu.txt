@@ -3053,10 +3053,14 @@ struct Event
     std::string eventLocator;
     uint32_t start;
     uint32_t publishedDuration;
+
+    // note: all use 'lang' eg eng as a key in map<lang, string>
+    //
+    // extractValueFromMap(dttEvent.shortTitle, lang)
+    // extractValueFromMap(dttEvent.mediumSynopsis, lang)
+    //
     std::map< std::string, std::string > shortTitle;
     std::map< std::string, std::string > mediumSynopsis;
-
-    // map<lang key, string>
     std::map< std::string, std::string > longSynopsis;
 
     std::vector< std::string > classifier;
@@ -3625,11 +3629,72 @@ event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collectio
 
 {how-events-updated}
 
-<1> EPG 
+<0> EPG 
 EPG uses this:
 Package ctv.enhancedmetadata, Interface public interface EventRepository::getEventWindow
 
+// from textEPG
+//
+boost::shared_ptr<TextEPGEventWindowEventListener> listener = 
+   boost::make_shared<TextEPGEventWindowEventListener>();
+
+boost::shared_ptr<EventWindow>  createEventWindow(boost::shared_ptr<EventRepository> eventRepo)
+{
+    Future<boost::shared_ptr<EventWindow> > f = 
+        eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
+
+    boost::shared_ptr<EventWindow> newWindow = f.get();
+
+    newWindow->addListener(listener);
+    return newWindow;
+}
+
+<1>
 This scenario is to make a command to FD and to get response, events, back.
+
+/**
+ * @brief A private struct capturing all the necessary data about the request to create a new EventWindow
+ */
+struct EventWindowCreateCommand : public MetadataChangeListener {
+
+    EventWindowCreateCommand(
+            NS_ZINC::Promise<boost::shared_ptr<EventWindow> > promise_,
+            Bounds location_,
+            Bounds requestedDataBounds_,
+            event_collection_ptr oldEvents_,
+            boost::posix_time::ptime dataRetrievalStartTime_,
+            boost::weak_ptr<ServiceRepository> serviceRepo_):
+                promise(promise_),
+                location(location_),
+                requestedDataBounds(requestedDataBounds_),
+                oldEvents(oldEvents_),
+                newMASEvents(boost::make_shared<event_collection>()),
+                newDTTEvents(boost::make_shared<event_collection>()),
+                newEvents(boost::make_shared<event_collection>()),
+                newWindow(),
+                serviceRepo(serviceRepo_),
+                promiseCompleted(false),
+                dataRetrievalStartTime(dataRetrievalStartTime_),
+                masDataRequested(false),
+                dttDataRequested(false),
+                noDttDataFound(false),
+                metadataChanged(false),
+                isListeningToMetadataChanges(false)
+    {
+    }
+
+    NS_ZINC::Promise<boost::shared_ptr<EventWindow> > promise;
+
+    //Events from old event window that intersect with the new one
+    event_collection_ptr oldEvents;
+    //Events for this event window that came from MAS
+    event_collection_ptr newMASEvents;
+    //Events for this event window that came from Iron
+    event_collection_ptr newDTTEvents;
+
+    //The window created as a result of this request
+    boost::weak_ptr<SystemClientEventWindow> newWindow;
+};
 
 Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWindow(
         uint32_t startingServiceRow, uint32_t serviceCount,
@@ -3642,6 +3707,12 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
     EventWindowCreateCommand cmd( p, newWindowLocation, newWindowLocation,
             intersectingEvents, microsec_clock::universal_time(),
             serviceRepo);
+
+    // note: save up ew?
+    //
+    boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents, hasStaleData);
+    cmd.promise.complete(ew);
+    cmd.promiseCompleted = true;
 
     // note: this cmd has *SCEW, and promise
     
@@ -3676,7 +3747,7 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
      const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
     &SystemClientEventRepository::eventsReceived;
 
-  // 'cmd'
+  // 'cmd'. create 'window'
   //the two callbacks share the ownership of the command
   boost::shared_ptr<EventWindowCreateCommand> sharedCmd = boost::make_shared<EventWindowCreateCommand>(cmd);
 
@@ -3794,104 +3865,93 @@ void SystemClientEventWindow::notifyWindowChanged()
     produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
 }
 
+//
+// produceEvent(f)		
+//    -> f( <boost::weak_ptr<hoisted_event_listener> );
+//       -> EventWindowEventListener::EventsChanged( <boost::weak_ptr<hoisted_event_listener> );
+//
+//       -> callback to EPG. see above
+//
 
-<2> future dispatcher
-http://dbus-cplusplus.sourceforge.net/index.html
+<DEPH> Zinc/Zinc.Common/src/DispatchingEventProducer.cpp
 
-/DEVARCH/Zinc/Zinc.Common/include/async/Dispatcher.h
+typedef std::pair<boost::weak_ptr<hoisted_event_listener>, boost::shared_ptr<EventDispatcher> > 
+   listener_entry;
 
-/*
- * Interface for general functor dispatcher.
- *
- * Dispatchers are used to 'invoke' callback functors (for events and futures for example).
- *
- */
-struct ZINC_EXPORT Dispatcher : boost::noncopyable
+class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
 {
-	/**
-	 * Dispatcher::work is a RAII class.  An object of this type should exist
-	 * for as long as there is the possibility of you calling post.  This is
-	 * similar to an boost::io_service::work and will prevent the dispatcher
-	 * from running down.
-	 *
-	 * Example: A Future will hold a work object after setCallback is called
-	 *          as it knows it will be posting a functor at some point in the
-	 *          future (but doesn't know when).  After the callback is called
-	 *          the work object is destroyed so the dispatcher can run down.
-	 */
-	typedef boost::unique_lock<Dispatcher> work;
+    DispatchingEventProducerHoisted(boost::shared_ptr<EventDispatcher> dispatcher_) :
+        dispatcher(dispatcher_) { }
 
-	virtual ~Dispatcher();
-
-	/**
-	 * Post the supplied completion handler to the dispatcher for execution.
-	 *
-	 * The Dispatcher will hold a reference to the suppled functor until the
-	 * it has been executed.
-	 *
-	 * @param handler the completion handler
-	 */
-	virtual void post(boost::function<void ()> handler) = 0;
-
-private:
-	/**
-	 * These methods are called when a Dispatcher::work object is
-	 * created/destroyed. Typically a dispatcher that is interested will treat
-	 * these functions like a ref count inc/dec.
-	 *
-	 * It is not necessary to implement these functions.  The default
-	 * implementations do nothing.
-	 */
-	virtual void onWorkAdded() {};
-	virtual void onWorkRemoved() {};
-
-private: // Lockable concept
-	// Implement the "lockable" concept so we can use unique_lock as our RAII
-	// "work" class
-	friend class boost::unique_lock<Dispatcher>;
-	void lock() ZINC_LOCAL { onWorkAdded(); };
-	void unlock() ZINC_LOCAL { onWorkRemoved(); };
-};
-
-
-/*
- * A Dispatcher implementation that 'owns' a single 'thread' on which it executes the
- * functors posted to it. Functors are executed strictly in the order that they are
- * posted to the dispatcher.
- */
-class ZINC_EXPORT SingleThreadDispatcher : public Dispatcher
-{
-
-};
-
-typedef SingleThreadDispatcher SequentialFutureDispatcher;
-
-
-class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
-{
-    boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
-    boost::shared_ptr<NS_ZINC::FutureDispatcher> futureDispatcher;
-
-    // create FD
-
-    SystemClientFactory() :
-        defaultDispatcher(boost::make_shared<InlineDispatcher>()),
-        futureDispatcher(boost::make_shared<SequentialFutureDispatcher>()),
-        provisioningCacheThread(boost::make_shared<SingleThreadDispatcher>())
+    void produceEvent(boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
     {
+        boost::mutex::scoped_lock lock(mutex);
+
+        size_t len = listeners.size();
+        // We copy listeners to this stack allocated array before dispatch so we
+        // don't have to hold the lock while calling user code.
+        listener_entry localListeners[len];
+        listener_entry* next = localListeners;
+
+        std::list<listener_entry>::iterator i = listeners.begin();
+
+        std::list<listener_entry> forRemoval;
+        while (i != listeners.end()) {
+
+            if (!i->first.expired()) {
+                *next++ = *i;
+                ++i;
+            } else {
+                // Listener or dispatcher instance may have been destroyed since it was registered.
+                // Detect this, and remove from collection.
+                // Avoid calling dispatcher destructors while the mutex is locked.
+                forRemoval.splice(forRemoval.end(), listeners, i++);
+                len--;
+            }
+        }
+
+        // Don't hold locks while running user code:
+        lock.unlock();
+
+        BOOST_FOREACH(listener_entry& l, forRemoval) {
+
+            // note: DISPATCH. <Q> How this maps to 'dispatcher' which is DD.
+            
+            // Call entry->second->onWorkRemoved()
+            Dispatcher::work(*l.second, boost::adopt_lock_t());
+        }
+        forRemoval.clear();
+
+        for (size_t i = 0; i < len; ++i) {
+
+            localListeners[i].second->post(
+                    makeWeakFunctor(event, localListeners[i].first));
+        }
     }
 
-    // pass FD to SCER
+    private:
+    /**
+     * This is the default dispatcher. Clients can provide their own in addListener().
+     */
+    boost::shared_ptr<EventDispatcher> dispatcher;
 
-    boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> 
-        createConcreteEventRepository() 
-        {
-            // set dispatcher
-            concreteER->setDefaultDispatcher(getDefaultDispatcher());
-
-            concreteER->setFutureDispatcher(futureDispatcher);
-        }
+    // note: 'mutable' ?
+    mutable boost::mutex mutex;
 };
+
+
+/**
+ * Make a WeakFunctor given a functor and a weak_ptr.
+ */
+template <typename Functor, typename T>
+inline WeakFunctor<Functor, T>
+makeWeakFunctor(Functor f, boost::weak_ptr<T> object)
+{
+    return WeakFunctor<Functor, T>(f, object);
+}
+
+
+
 
 
 <3> SCER has DFP which has maintain FD.
@@ -4009,11 +4069,117 @@ Cobalt/Cobalt.System.API/data/introspection-xml/struct-UnifiedService.xml
 ={============================================================================
 *kt_dev_uv_stack_110* stack: cal: default event dispatcher
 
-<1>
+<0> DD. do not seems to have a thread
 
+class ZINC_EXPORT InlineDispatcher : public Dispatcher
+{
+    public:
+        InlineDispatcher();
+        ~InlineDispatcher();
+
+        /**
+         * Since InlineDispatcher is stateless, it is convenient to reuse
+         * a single instance of it.
+         *
+         * This does not mean that we must always use it as a singleton.
+         *
+         * @return an instance that may be shared.
+         */
+        static InlineDispatcher& sharedInstance();
+
+    public: // from Dispatcher
+        virtual void post(boost::function<void ()> handler);
+        virtual int getPendingCount();
+};
+
+
+future dispatcher
+http://dbus-cplusplus.sourceforge.net/index.html
+
+/DEVARCH/Zinc/Zinc.Common/include/async/Dispatcher.h
+
+/*
+ * Interface for general functor dispatcher.
+ *
+ * Dispatchers are used to 'invoke' callback functors (for events and futures for example).
+ *
+ */
+struct ZINC_EXPORT Dispatcher : boost::noncopyable
+{
+	/**
+	 * Dispatcher::work is a RAII class.  An object of this type should exist
+	 * for as long as there is the possibility of you calling post.  This is
+	 * similar to an boost::io_service::work and will prevent the dispatcher
+	 * from running down.
+	 *
+	 * Example: A Future will hold a work object after setCallback is called
+	 *          as it knows it will be posting a functor at some point in the
+	 *          future (but doesn't know when).  After the callback is called
+	 *          the work object is destroyed so the dispatcher can run down.
+	 */
+	typedef boost::unique_lock<Dispatcher> work;
+
+	virtual ~Dispatcher();
+
+	/**
+	 * Post the supplied completion handler to the dispatcher for execution.
+	 *
+	 * The Dispatcher will hold a reference to the suppled functor until the
+	 * it has been executed.
+	 *
+	 * @param handler the completion handler
+	 */
+	virtual void post(boost::function<void ()> handler) = 0;
+
+private:
+	/**
+	 * These methods are called when a Dispatcher::work object is
+	 * created/destroyed. Typically a dispatcher that is interested will treat
+	 * these functions like a ref count inc/dec.
+	 *
+	 * It is not necessary to implement these functions.  The default
+	 * implementations do nothing.
+	 */
+	virtual void onWorkAdded() {};
+	virtual void onWorkRemoved() {};
+
+private: // Lockable concept
+	// Implement the "lockable" concept so we can use unique_lock as our RAII
+	// "work" class
+	friend class boost::unique_lock<Dispatcher>;
+	void lock() ZINC_LOCAL { onWorkAdded(); };
+	void unlock() ZINC_LOCAL { onWorkRemoved(); };
+};
+
+
+/*
+ * A Dispatcher implementation that 'owns' a single 'thread' on which it executes the
+ * functors posted to it. Functors are executed strictly in the order that they are
+ * posted to the dispatcher.
+ */
+class ZINC_EXPORT SingleThreadDispatcher : public Dispatcher
+{
+public:
+	SingleThreadDispatcher();
+	~SingleThreadDispatcher();
+
+public: // from Dispatcher
+	virtual void post(boost::function<void ()> handler);
+	virtual int getPendingCount();
+
+private:
+	boost::asio::io_service io;
+	boost::thread thread;
+};
+
+typedef SingleThreadDispatcher SequentialFutureDispatcher;
+
+
+<1>
 class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
 {
     boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
+
     boost::shared_ptr<NS_ZINC::FutureDispatcher> futureDispatcher;
 
     // create ED, FD
@@ -4041,10 +4207,48 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
             throw runtime_error("No default dispatcher set");
         return defaultDispatcher;
     }
+
+    // note: used by EPG?
+
+    setFutureDispatcher(boost::shared_ptr<NS_ZINC::FutureDispatcher> dispatcher)
+    {
+        URANIUM_FUNC_DEBUG;
+        if (!dispatcher.get())
+            throw invalid_argument("Dispatcher is null");
+        futureDispatcher = dispatcher;
+    }
 };
 
 
-<2>
+{future-producer}
+/*
+ * DispatchingFutureProducer
+ *
+ * Provide an interface for injecting a future dispatcher
+ */
+class DispatchingFutureProducer : virtual public Polymorphic
+{
+public:
+	virtual void setFutureDispatcher(boost::shared_ptr<FutureDispatcher> dispatcher)
+	{
+		boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
+		this->dispatcher = dispatcher;
+	}
+	virtual void removeFutureDispatcher()
+	{
+		boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
+		dispatcher.reset();
+	}
+	virtual boost::shared_ptr<FutureDispatcher> getFutureDispatcher() const
+	{
+		boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
+		return dispatcher;
+	}
+private:
+	boost::shared_ptr<FutureDispatcher> dispatcher;
+	mutable boost::recursive_mutex dispatcherMutex;
+};
+
 
 class ZINC_EXPORT SystemClientEventRepository : 
     public EventRepository,
@@ -4084,28 +4288,32 @@ class ZINC_EXPORT SystemClientEventRepository :
 };
 
 
-<3> DD. do not seems to have a thread
 
-class ZINC_EXPORT InlineDispatcher : public Dispatcher
-{
-    public:
-        InlineDispatcher();
-        ~InlineDispatcher();
 
-        /**
-         * Since InlineDispatcher is stateless, it is convenient to reuse
-         * a single instance of it.
-         *
-         * This does not mean that we must always use it as a singleton.
-         *
-         * @return an instance that may be shared.
-         */
-        static InlineDispatcher& sharedInstance();
+<4> listener line
 
-    public: // from Dispatcher
-        virtual void post(boost::function<void ()> handler);
-        virtual int getPendingCount();
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+class ZINC_EXPORT MetadataChangeListener : public NS_ZINC::EventListener {
+public:
+    virtual void ConfigChanged() = 0;
+
+    virtual void ServicesChanged(const std::vector<std::string>& modifiedServices) = 0;
+
+    virtual void ServiceListChanged() = 0;
+
+    virtual void ScheduleChanged(const std::string& serviceLocator, 
+            const uint32_t start, const uint32_t end) = 0;
+
+    virtual void EventsChanged(const std::vector<std::string > &identifiers) = 0;
+
+    virtual void ProvisioningChanged(const std::vector< std::string >& provisionedServices, 
+            const std::vector< std::string >& deprovisionedServices) = 0;
 };
+
+NS_URANIUM_METADATA_CLIENT_CLOSE
+
+
 
 
 <4> SCEW
@@ -4203,72 +4411,6 @@ class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow,
 };
 
 
-<5> <DEPH>
-
-// Zinc/Zinc.Common/src/DispatchingEventProducer.cpp
-
-class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
-{
-    void produceEvent(boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event);
-
-    DispatchingEventProducerHoisted(boost::shared_ptr<EventDispatcher> dispatcher_) :
-        dispatcher(dispatcher_) { }
-
-    void produceEvent(boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
-    {
-        boost::mutex::scoped_lock lock(mutex);
-
-        size_t len = listeners.size();
-        // We copy listeners to this stack allocated array before dispatch so we
-        // don't have to hold the lock while calling user code.
-        listener_entry localListeners[len];
-        listener_entry* next = localListeners;
-
-        std::list<listener_entry>::iterator i = listeners.begin();
-
-        std::list<listener_entry> forRemoval;
-        while (i != listeners.end()) {
-
-            if (!i->first.expired()) {
-                *next++ = *i;
-                ++i;
-            } else {
-                // Listener or dispatcher instance may have been destroyed since it was registered.
-                // Detect this, and remove from collection.
-                // Avoid calling dispatcher destructors while the mutex is locked.
-                forRemoval.splice(forRemoval.end(), listeners, i++);
-                len--;
-            }
-        }
-
-        // Don't hold locks while running user code:
-        lock.unlock();
-
-        BOOST_FOREACH(listener_entry& l, forRemoval) {
-
-            // note: DISPATCH. <Q> How this maps to 'dispatcher' which is DD.
-            
-            // Call entry->second->onWorkRemoved()
-            Dispatcher::work(*l.second, boost::adopt_lock_t());
-        }
-        forRemoval.clear();
-
-        for (size_t i = 0; i < len; ++i) {
-
-            localListeners[i].second->post(
-                    makeWeakFunctor(event, localListeners[i].first));
-        }
-    }
-
-    private:
-    /**
-     * This is the default dispatcher. Clients can provide their own in addListener().
-     */
-    boost::shared_ptr<EventDispatcher> dispatcher;
-
-    // note: 'mutable' ?
-    mutable boost::mutex mutex;
-};
 
 
 <5> ER
@@ -4570,7 +4712,107 @@ class ZINC_EXPORT InlineDispatcher : public Dispatcher
 
 typedef InlineDispatcher MultipleListenerEventDispatcher;
 
-<MOCK-ER>
+{mock-er}
+
+<1> 
+/*
+ *	include/EventRepositoryAsync.h
+ *
+ *	This file was automatically generated by dbusxx-xml2cpp; DO NOT EDIT!
+ *
+ *	Template base-async.template
+ *	Using
+ *	/DEVARCH/Iron/Iron.System.API/data/introspection-xml/interface-EventRepository.xml
+ */
+namespace Zinc {
+namespace Metadata {
+
+class EventRepositoryEventListener;
+
+class ZINC_EXPORT EventRepositoryAsync : 
+    public virtual NS_ZINC::DispatchingEventProducer<EventRepositoryEventListener>
+{
+
+/* =============================== Methods ================================= */
+public:
+
+	virtual NS_ZINC::Future< std::vector< Event > > getPresentFollowing(const std::string& serviceLocator_in) = 0;
+
+	virtual NS_ZINC::Future< Event > getEvent(const std::string& eventLocator_in) = 0;
+
+	virtual NS_ZINC::Future< std::vector< Event > > getScheduleEvents(
+           const std::vector< std::string >& serviceLocators_in, 
+           const uint32_t startTime_in, const uint32_t endTime_in) = 0;
+
+	virtual NS_ZINC::Future< std::vector< Event > > findByProgrammeCrid(
+           const std::string& programmeCrid_in) = 0;
+
+	virtual NS_ZINC::Future< std::vector< Event > > findBySeriesCrid(const std::string& seriesCrid_in) = 0;
+
+protected:
+	virtual ~EventRepositoryAsync();
+};
+
+
+<2> 
+
+MockEventRepositoryAsync.h from install root
+
+/*
+ *	This file was automatically generated by dbusxx-xml2cpp; DO NOT EDIT!
+ */
+
+namespace Zinc {
+namespace Metadata {
+
+class ZINC_LOCAL MockEventRepositoryAsync: public EventRepositoryAsync
+{
+public:
+/* ============================== Methods ================================== */
+
+	typedef std::vector< Event > Mock_getPresentFollowingRet;
+	MOCK_METHOD1(getPresentFollowing, NS_ZINC::Future< Mock_getPresentFollowingRet > (const std::string&));
+
+	typedef Event Mock_getEventRet;
+	MOCK_METHOD1(getEvent, NS_ZINC::Future< Mock_getEventRet > (const std::string&));
+
+	typedef std::vector< Event > Mock_getScheduleEventsRet;
+	MOCK_METHOD3(getScheduleEvents, 
+           NS_ZINC::Future< Mock_getScheduleEventsRet > 
+           (const std::vector< std::string >&, const uint32_t, const uint32_t));
+
+	typedef std::vector< Event > Mock_findByProgrammeCridRet;
+	MOCK_METHOD1(findByProgrammeCrid, NS_ZINC::Future< Mock_findByProgrammeCridRet > (const std::string&));
+
+	typedef std::vector< Event > Mock_findBySeriesCridRet;
+	MOCK_METHOD1(findBySeriesCrid, NS_ZINC::Future< Mock_findBySeriesCridRet > (const std::string&));
+
+/* ============================== Signals ================================== */
+	void emitPresentFollowingChange(const std::string& serviceLocator, 
+           const std::vector< Event >& events)
+	{
+		produceEvent(
+			boost::bind(&EventRepositoryEventListener::PresentFollowingChange,
+			     _1,
+			     serviceLocator,
+			     events));
+	}
+
+	void emitScheduleChange(const std::string& serviceLocator, 
+           const uint32_t start, const uint32_t end, const std::vector< Event >& events)
+	{
+		produceEvent(
+			boost::bind(&EventRepositoryEventListener::ScheduleChange,
+			     _1,
+			     serviceLocator,
+			     start,
+			     end,
+			     events));
+	}
+
+	virtual ~MockEventRepositoryAsync() { };
+};
+
 NS_URANIUM_METADATA_CLIENT_OPEN
 
 class ZINC_EXPORT MockEventRepositoryAsyncWithCallbacks : 

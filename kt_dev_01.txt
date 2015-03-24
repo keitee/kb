@@ -155,7 +155,7 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_040| adaptor containers {stack} {queue}
 
-|kt_dev_stl_050| iterator {category}
+|kt_dev_stl_050| iterator: range-for 
 |kt_dev_stl_051| iterator: adaptors 
 |kt_dev_stl_052| iterator: subscript for sequential and associative
 |kt_dev_stl_053| iterator: invalid iterator, insert, remove
@@ -4145,40 +4145,6 @@ For ubuntu:
 {override-keyword}
 Explicit virtual overrides from GCC 4.7
 
-{range-for}
-VC 2012 supports but g++ (GCC) 4.4.5 don't. This 'range based for' is supported from 4.6
-
-vector< int > v{ ... };
-
-for(auto& r : v )
-   r *= 2;
-
-is equals to:
-
-for(auto beg = v.begin(), end = v.end(); beg != end; ++beg )
-{
-  auto& r = *beg;
-  r *= 2;
-}
-
-#include <iostream>
-#include <vector>
-
-template<typename T>
-void printElements( const T& col )           // see &
-{
-  for( const auto& elem : col )              // see &
-    std::cout << ":" << elem << std::endl;
-}
-
-int main()
-{
-  std::vector<int> v{ 1, 2, 3 };
-
-  printElements(v);
-}
-
-
 {alias-declaration}
 Primers p68. GCC 4.4.5 don't.
 
@@ -6932,6 +6898,24 @@ int main()
   std:: cout << "hid :" << hid << "hid i: " << hidi << std::endl;
 
   ifs.close();
+}
+
+
+#include <iostream>
+#include <fstream>
+
+int main()
+{
+    std::ofstream ofile("test-out.txt");
+
+    if( !ofile )
+    {
+        std::cerr << "cannot open output file" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    ofile << "0: this is sample output file" << std::endl;
+    ofile << "1: this is sample output file" << std::endl;
 }
 
 
@@ -23138,6 +23122,8 @@ for (auto pos = coll.cbegin(); pos != coll.cend(); ++pos) {
 
 
 {range-for}
+VC 2012 supports but g++ (GCC) 4.4.5 don't. This 'range based for' is supported from 4.6
+
 This shows two points:
 1. range for caches begin and end so has risk of using 'invalidated' iterators.
 2. shall use const & in for loop statement to avoid unnecessary copy.
@@ -23151,6 +23137,18 @@ for( auto beg = vec.begin(), end = vec.end(); beg != end; ++beg )
 {
   const T &r = *beg;
   r *= 2;
+}
+
+
+template <typename T>
+void PRINT_ELEMENTS( const T& coll, const string optstr="" )
+{
+  cout << optstr;
+
+  for( const auto &elem : coll )
+    cout << elem << " ";
+
+  cout << endl;
 }
 
 
@@ -23691,10 +23689,18 @@ int main()
 
 The operator[] has different sementics in sequential and associative.
 
+{return-reference}
+s[n]  return a reference to the element at position n in string.
+v[n]  return a reference to the element at position n in vector.
+
+
 {for-sequential}
-The index must be 'in' range as C array does. The operator does not check whether the index is in
+The index must be 'in' range as C array does. The operator does 'not' check whether the index is in
 range and the program must ensure that the index is valid. To ensure that can use at() that throws
 out_of_range if the index is invalid.
+
+A safer way to access a character is to use the at() member function. However, such a check costs
+runtime, so the check is 'not' provided for the usual accessing of characters of a string.
 
 
 {for-associative}
@@ -25604,7 +25610,7 @@ Thus, strings are optimized to reduce the costs of assigning and passing the who
 These different goals typically result in completely different implementations.
 
 
-{sting-size-type}
+{sting-size-type-and-npos}
 The return type of all find functions is string::size_type, an 'unsigned' integral type that is
 defined inside the string class. 
 
@@ -25612,21 +25618,52 @@ Be very 'careful' that you always use string::size_type, not int or unsigned, fo
 when you want to check the return value of a find function. Otherwise, the comparison with
 string::npos might not work.
 
-<example> string-find, string-substr, string-replace
+<string-element-access>
+Accessing a single character of the string is done with operator[]
+
+1. An argument specifying the index must have a 'valid' value. That value must be less than the
+number of characters of the string. As usual, the first character has index 0, and the last
+character has index length()-1. In addition, the index of the position after the last character
+could be used to specify the end.
+
+string s[s.length()];      // OK
+string s.at(s.length());   // ERROR. the current number of characters is 'not' a valid index.
+
+The operator[] does 'not' check whether the index of the string is valid. Thus, a safer way to
+access a character is to use the at() member function. 
+
+However, such a check costs runtime, so the check is 'not' provided for the usual accessing of
+characters of a string. A good way is to aviod subscripting altogether by using a range-for whenever
+possible. However not all compiler supports and see range-for
+
+note: However, all functions that search for a character or a position allow any index. If the index
+exceeds the number of characters, these functions simply return string::npos ("not found").
+
+2. An argument specifying the number of characters could have 'any' value. If the size is greater
+than the remaining number of characters, all remaining characters are used. string::npos always
+works as a 'synonym' for "all remaining characters." or "until the end of the string". 
+
+Why? -1, which because size_t is an unsigned integral type, it is the largest possible representable
+value for this type.
+
+Thus, the following expression throws an exception if the period is not found:
+note: no exception under gcc 4.6.3.
+
+filename.substr(filename.find(’.’))
+
+But the following expression does not throw an exception: If the period is not found, it results in
+the whole filename.
+
+filename.substr(0, filename.find(’.’))
+
+
+example: string-find, string-substr, string-replace
+
 #include <iostream>
 #include <string>
 
 using namespace std;
 
-// $ string1 prog.dat mydir hello. oops.tmp end.dat
-//
-// the output is
-// prog.dat => prog.tmp
-// mydir => mydir.tmp
-// hello. => hello.tmp
-// oops.tmp => oops.xxx
-// end.dat => end.tmp
-//
 int main(int argc, char* argv[])
 {
   string filename, basename, extname, tmpname;
@@ -25641,7 +25678,7 @@ int main(int argc, char* argv[])
     filename = *++argv;
 
     // search period in filename
-    // note: searches for the 'first' occurrence of a period inside the string filename abd return
+    // note: searches for the 'first' occurrence of a period inside the string filename and return
     // position. If the search fails, a special value is needed to return the failure. That value is
     // npos.
 
@@ -25684,6 +25721,14 @@ int main(int argc, char* argv[])
     cout << filename << " => " << tmpname << endl;
   }
 }
+
+$ string1 prog.dat mydir hello. oops.tmp end.dat
+prog.dat => prog.tmp
+mydir => mydir.tmp
+hello. => hello.tmp
+oops.tmp => oops.xxx
+end.dat => end.tmp
+
 
 <example> string-find_first_of
 #include <iostream>
@@ -25872,53 +25917,6 @@ s.reserve();         // would like to shrink capacity to fit the current size
 Since C++11, shrink_to_fit() provides the same effect:
 s.shrink_to_fit();   // would like to shrink capacity to fit the current size (C++11)
 
-
-{string-element-access}
-note: that all returns a reference of char element in a string.
-
-<index-and-length>
-At all places where an index and a length are used as arguments, two rules:
-
-1. An argument specifying the index must have a 'valid' value. That value must be less than the
-number of characters of the string (as usual, the index of the first character is 0). In addition,
-the index of the position after the last character could be used to specify the end.
-
-As usual, the first character has index 0, and the last character has index length()-1.
-
-string s[s.length()];      // OK
-string s.at(s.length());   // ERROR. the current number of characters is 'not' a valid index.
-
-In most cases, a use of an index greater than the number of characters throws out_of_range.
-
-However, all functions that search for a character or a position allow any index. If the index
-exceeds the number of characters, these functions simply return string::npos ("not found").
-
-Accessing a single character of the string is done with operator [ ]. note that this operator does
-'not' check whether the index of the string is valid. Thus, the programmer has to ensure that the
-index is valid, as was done here. A safer way to access a character is to use the at() member
-function. However, such a check costs runtime, so the check is 'not' provided for the usual
-accessing of characters of a string.
-
-<key>
-How to ensure that subscript is in range? A good way is to aviod subscripting altogether by using a
-range for whenever possible. However not all compiler supports and see range-for
-
-2. An argument specifying the number of characters could have 'any' value. If the size is greater
-than the remaining number of characters, all remaining characters are used. string::npos always
-works as a 'synonym' for "all remaining characters." or "until the end of the string". 
-
-Why? -1, which because size_t is an unsigned integral type, it is the largest possible representable
-value for this type.
-
-Thus, the following expression throws an exception if the period is not found:
-note: no exception under gcc 4.6.3.
-
-filename.substr(filename.find(’.’))
-
-But the following expression does not throw an exception: If the period is not found, it results in
-the whole filename.
-
-filename.substr(0, filename.find(’.’))
 
 <string-back>
 Since C++11, front() and back() are provided to also access the first or last character,
