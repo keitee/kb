@@ -34,11 +34,14 @@
 |kt_dev_uv_stack_107| stack: cal: metadata creation
 |kt_dev_uv_stack_108| stack: cal: metadata: event structures and mapping
 |kt_dev_uv_stack_109| stack: cal: metadata: event connection to application
-|kt_dev_uv_stack_110| stack: cal: event dispatcher
-|kt_dev_uv_stack_111| stack: cal: metadata: summary
-|kt_dev_uv_stack_112| stack: cal: test
-|kt_dev_uv_stack_113| stack: build pc target
-|kt_dev_uv_stack_114| stack: text epg
+|kt_dev_uv_stack_110| stack: cal: metadata: how events get updated
+|kt_dev_uv_stack_111| stack: cal: future producer and event producer
+|kt_dev_uv_stack_112| stack: cal: metadata: summary
+|kt_dev_uv_stack_113| stack: cal: test
+|kt_dev_uv_stack_114| stack: build pc target
+|kt_dev_uv_stack_115| stack: text epg
+|kt_dev_uv_stack_116| stack: future
+|kt_dev_uv_stack_117| stack: metadata and dbus
 
 |kt_dev_uv_stack_120| stack: cppunit
 
@@ -3059,6 +3062,9 @@ struct Event
     // extractValueFromMap(dttEvent.shortTitle, lang)
     // extractValueFromMap(dttEvent.mediumSynopsis, lang)
     //
+    // sysEvent.mediumSynopsis["eng"] = "The latest national and international"
+    //   "news stories from the BBC News team, followed by weather.";
+    
     std::map< std::string, std::string > shortTitle;
     std::map< std::string, std::string > mediumSynopsis;
     std::map< std::string, std::string > longSynopsis;
@@ -3112,11 +3118,70 @@ struct Result
     std::map< std::string, std::vector< std::string > > identifiers;
     std::map< std::string, std::vector< std::string > > internalReferences;
 
+    // note: 
+    // sysResult->description["mediumSynopsis"] = vector<string>(1, "The latest national and international"
+    //   "news stories from the BBC News team, followed by weather.");
+
     std::map< std::string, std::vector< std::string > > description;
 
-    // note: map<>
     std::map< std::string, std::vector< XmlNode > > nodes;
 };
+
+
+{events-xml}
+
+Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
+
+	<yv:struct name="Zinc.Metadata.Event">
+
+	<p>The Event structure members are as follows:</p>
+		</yv:docstring>
+
+		<yv:member type="a{ss}" name="shortTitle">
+			<yv:docstring>
+				<p>A title for the event taken from the <tt>short_event_descriptor()</tt> 
+            <tt>event_name_char</tt> field.</p>
+				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+            to a title in the indicated language (the value).</p>
+			</yv:docstring>
+		</yv:member>
+
+		<yv:member type="a{ss}" name="mediumSynopsis">
+			<yv:docstring>
+				<p>A description for the event taken from the <tt>short_event_descriptor()</tt> 
+            <tt>text_char</tt> field.</p>
+				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+            to a synopsis in the indicated language (the value).</p>
+			</yv:docstring>
+		</yv:member>
+
+		<yv:member type="a{ss}" name="longSynopsis">
+			<yv:docstring>
+				<p>A description for the event taken from the <tt>extended_event_descriptor()</tt> 
+            <tt>text_char</tt> field.</p>
+				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+            to a synopsis in the indicated language (the value).</p>
+			</yv:docstring>
+		</yv:member>
+
+
+Cobalt/Cobalt.System.API/data/introspection-xml/struct-EventDescription.xml
+
+    <yv:struct name="Zinc.Broker.EventDescription">
+
+        <yv:member type="s" name="mediumSynopsis">
+            <yv:docstring>
+                A description for the event. It corresponds to 
+                yv:description in MAS data or NS_IRON::Event::mediumSynopsis. 
+            </yv:docstring>
+        </yv:member>
+        <yv:member type="s" name="longSynopsis">
+            <yv:docstring>
+                A description for the event that corresponds to 
+                NS_IRON::Event::longSynopsis, there is no corresponding field
+                in scheduleevent entity of MAS data.
+            </yv:docstring>
+        </yv:member>
 
 
 {translation}
@@ -3627,7 +3692,8 @@ event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collectio
 }
 
 
-{how-events-updated}
+={============================================================================
+*kt_dev_uv_stack_110* stack: cal: metadata: how events get updated
 
 <0> EPG 
 EPG uses this:
@@ -3638,7 +3704,8 @@ Package ctv.enhancedmetadata, Interface public interface EventRepository::getEve
 boost::shared_ptr<TextEPGEventWindowEventListener> listener = 
    boost::make_shared<TextEPGEventWindowEventListener>();
 
-boost::shared_ptr<EventWindow>  createEventWindow(boost::shared_ptr<EventRepository> eventRepo)
+boost::shared_ptr<EventWindow>  EPG::createEventWindow(
+        boost::shared_ptr<EventRepository> eventRepo)
 {
     Future<boost::shared_ptr<EventWindow> > f = 
         eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
@@ -3702,6 +3769,8 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
         event_collection_ptr intersectingEvents, Bounds missing,
         bool isMovingForward)
 {
+    // note: set FD?
+    //
     NS_ZINC::Promise<boost::shared_ptr<EventWindow> > p(*getFutureDispatcher());
 
     EventWindowCreateCommand cmd( p, newWindowLocation, newWindowLocation,
@@ -3718,6 +3787,8 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
     
     getEventsFromSystemAPI(cmd);
 
+    // note: return future
+    
     return p.getFuture();
 }
 
@@ -3790,11 +3861,15 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
 }
 
 
-::FutureBar
+
+::FutureBar    <- from components on dbus?
+
+
 
 <callback-one>
 
 # 01 'cobalt' for IP
+
 event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
   SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
@@ -3805,6 +3880,7 @@ event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>
 }
 
 # 02
+
 void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
 {
@@ -3813,7 +3889,7 @@ void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCr
 }
 
 # DTT version
-#
+
 event_collection_ptr getClientEvents(
             const std::vector<NS_IRON_SYSTEM::Event> & events) 
 {
@@ -3888,6 +3964,9 @@ class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable
         boost::mutex::scoped_lock lock(mutex);
 
         size_t len = listeners.size();
+
+        // note: copy listeners to localListeners
+
         // We copy listeners to this stack allocated array before dispatch so we
         // don't have to hold the lock while calling user code.
         listener_entry localListeners[len];
@@ -3951,125 +4030,10 @@ makeWeakFunctor(Functor f, boost::weak_ptr<T> object)
 }
 
 
-
-
-
-<3> SCER has DFP which has maintain FD.
-
-class DispatchingFutureProducer : virtual public Polymorphic
-{
-    public:
-        virtual void setFutureDispatcher(boost::shared_ptr<FutureDispatcher> dispatcher)
-        {
-            boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
-            this->dispatcher = dispatcher;
-        }
-        virtual void removeFutureDispatcher()
-        {
-            boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
-            dispatcher.reset();
-        }
-        virtual boost::shared_ptr<FutureDispatcher> getFutureDispatcher() const
-        {
-            boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
-            return dispatcher;
-        }
-    private:
-        boost::shared_ptr<FutureDispatcher> dispatcher;
-        mutable boost::recursive_mutex dispatcherMutex;
-};
-
-class ZINC_EXPORT SystemClientEventRepository : 
-    public EventRepository,
-    public NS_ZINC::DispatchingFutureProducer,
-    public boost::enable_shared_from_this<SystemClientEventRepository>,
-    public MetadataChangeListener
-{
-};
-
-
-{events-xml}
-Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
-
-	<yv:struct name="Zinc.Metadata.Event">
-
-	<p>The Event structure members are as follows:</p>
-		</yv:docstring>
-
-		<yv:member type="a{ss}" name="shortTitle">
-			<yv:docstring>
-				<p>A title for the event taken from the <tt>short_event_descriptor()</tt> 
-            <tt>event_name_char</tt> field.</p>
-				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-            to a title in the indicated language (the value).</p>
-			</yv:docstring>
-		</yv:member>
-
-		<yv:member type="a{ss}" name="mediumSynopsis">
-			<yv:docstring>
-				<p>A description for the event taken from the <tt>short_event_descriptor()</tt> 
-            <tt>text_char</tt> field.</p>
-				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-            to a synopsis in the indicated language (the value).</p>
-			</yv:docstring>
-		</yv:member>
-
-		<yv:member type="a{ss}" name="longSynopsis">
-			<yv:docstring>
-				<p>A description for the event taken from the <tt>extended_event_descriptor()</tt> 
-            <tt>text_char</tt> field.</p>
-				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-            to a synopsis in the indicated language (the value).</p>
-			</yv:docstring>
-		</yv:member>
-
-
-Cobalt/Cobalt.System.API/data/introspection-xml/struct-EventDescription.xml
-
-    <yv:struct name="Zinc.Broker.EventDescription">
-
-        <yv:member type="s" name="mediumSynopsis">
-            <yv:docstring>
-                A description for the event. It corresponds to 
-                yv:description in MAS data or NS_IRON::Event::mediumSynopsis. 
-            </yv:docstring>
-        </yv:member>
-        <yv:member type="s" name="longSynopsis">
-            <yv:docstring>
-                A description for the event that corresponds to 
-                NS_IRON::Event::longSynopsis, there is no corresponding field
-                in scheduleevent entity of MAS data.
-            </yv:docstring>
-        </yv:member>
-
-
-Cobalt/Cobalt.System.API/data/introspection-xml/struct-UnifiedService.xml
-
-	<yv:struct name="Zinc.Broker.UnifiedService">
-
-		<yv:member type="s" name="shortSynopsis">
-			<yv:docstring>
-				<p>The short synopsis of this Service.</p>
-			</yv:docstring>
-		</yv:member>
-
-		<yv:member type="s" name="mediumSynopsis">
-			<yv:docstring>
-				<p>The medium synopsis of this Service.</p>
-			</yv:docstring>
-		</yv:member>
-
-		<yv:member type="s" name="longSynopsis">
-			<yv:docstring>
-				<p>The long synopsis of this Service.</p>
-			</yv:docstring>
-		</yv:member>
-
-
 ={============================================================================
-*kt_dev_uv_stack_110* stack: cal: default event dispatcher
+*kt_dev_uv_stack_111* stack: cal: future producer and event producer
 
-<0> DD. do not seems to have a thread
+{future-dispatcher}
 
 class ZINC_EXPORT InlineDispatcher : public Dispatcher
 {
@@ -4091,10 +4055,6 @@ class ZINC_EXPORT InlineDispatcher : public Dispatcher
         virtual void post(boost::function<void ()> handler);
         virtual int getPendingCount();
 };
-
-
-future dispatcher
-http://dbus-cplusplus.sourceforge.net/index.html
 
 /DEVARCH/Zinc/Zinc.Common/include/async/Dispatcher.h
 
@@ -4175,7 +4135,6 @@ private:
 typedef SingleThreadDispatcher SequentialFutureDispatcher;
 
 
-<1>
 class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable 
 {
     boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
@@ -4186,7 +4145,10 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
 
     SystemClientFactory() :
         defaultDispatcher(boost::make_shared<InlineDispatcher>()),
+
+        // note:
         futureDispatcher(boost::make_shared<SequentialFutureDispatcher>()),
+
         provisioningCacheThread(boost::make_shared<SingleThreadDispatcher>())
     {
     }
@@ -4196,8 +4158,10 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
     boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> 
         createConcreteEventRepository() 
         {
-            // set dispatchers
             concreteER->setDefaultDispatcher(getDefaultDispatcher());
+
+            // set dispatchers
+            
             concreteER->setFutureDispatcher(futureDispatcher);
         }
 
@@ -4207,20 +4171,12 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
             throw runtime_error("No default dispatcher set");
         return defaultDispatcher;
     }
-
-    // note: used by EPG?
-
-    setFutureDispatcher(boost::shared_ptr<NS_ZINC::FutureDispatcher> dispatcher)
-    {
-        URANIUM_FUNC_DEBUG;
-        if (!dispatcher.get())
-            throw invalid_argument("Dispatcher is null");
-        futureDispatcher = dispatcher;
-    }
 };
 
 
+
 {future-producer}
+
 /*
  * DispatchingFutureProducer
  *
@@ -4289,34 +4245,7 @@ class ZINC_EXPORT SystemClientEventRepository :
 
 
 
-
-<4> listener line
-
-NS_URANIUM_METADATA_CLIENT_OPEN
-
-class ZINC_EXPORT MetadataChangeListener : public NS_ZINC::EventListener {
-public:
-    virtual void ConfigChanged() = 0;
-
-    virtual void ServicesChanged(const std::vector<std::string>& modifiedServices) = 0;
-
-    virtual void ServiceListChanged() = 0;
-
-    virtual void ScheduleChanged(const std::string& serviceLocator, 
-            const uint32_t start, const uint32_t end) = 0;
-
-    virtual void EventsChanged(const std::vector<std::string > &identifiers) = 0;
-
-    virtual void ProvisioningChanged(const std::vector< std::string >& provisionedServices, 
-            const std::vector< std::string >& deprovisionedServices) = 0;
-};
-
-NS_URANIUM_METADATA_CLIENT_CLOSE
-
-
-
-
-<4> SCEW
+{event-producer} window
 
 // * An abstract producer of events matching a particular specification.
 
@@ -4327,8 +4256,9 @@ class ZINC_EXPORT EventProducer : virtual public Polymorphic
 };
 
 
-typedef Dispatcher EventDispatcher;
+// note: it do not have a thread
 
+typedef Dispatcher EventDispatcher;
 
 // /Zinc/Zinc.Common/include/DispatchingEventProducer.h
 
@@ -4351,11 +4281,11 @@ class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<Listene
         impl.addListener(listener);
     }
 
-    // 'set' DD
+    // pass 'dispatcher' to 'impl' which is the hoisted
+    
     virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher) {
         impl.setDispatcher(dispatcher);
     }
-
 
 	 // * Derived implementations should call this method to dispatch an event.
     
@@ -4369,11 +4299,9 @@ class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<Listene
 
 
 //  * A class that represents the Event Window, basically the EPG view.
-// note: no addListener and setDispatcher impl below this class
-// note: EventWindow is ABC
-
 class ZINC_EXPORT EventWindow : virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> 
 {
+   // EventWindow is ABC
 };
 
 
@@ -4385,7 +4313,7 @@ class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow,
                                 virtual public MetadataChangeListener 
 {
     // note: add f = bind() to listeners. so when called from listners, will lead to 
-    // EventWindowEventListener::EventsChanged(, _1, events);
+    // EventWindowEventListener::EventsChanged(_1, events);
     
     notifyEventsChanged(std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> > events)
     {
@@ -4396,92 +4324,93 @@ class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow,
     {
         produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
     }
+};
 
-    //
-    // <Q> WHO'S calling this?
-    //
 
-    void EventsChanged(const std::vector<std::string> &eventIdentifiers)
-    {
-        if(!eventsInThisWindow.empty())
-        {
-            notifyEventsChanged(eventsInThisWindow);
-        }
+{listener}
+
+boost::shared_ptr<EventWindow>  EPG::createEventWindow(
+        boost::shared_ptr<EventRepository> eventRepo)
+{
+    Future<boost::shared_ptr<EventWindow> > f = 
+        eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
+
+    boost::shared_ptr<EventWindow> newWindow = f.get();
+
+    // note: mean that got window from future?
+    
+    newWindow->addListener(listener);
+
+    return newWindow;
+}
+
+newWindow->addListener(listener)
+
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> 
+{
+    virtual void addListener(boost::shared_ptr<ListenerT> listener) {
+        // Hoisting note: we cast to void* here, and cast back down in
+        // DowncastingCaller so everything is lovely and symmetrical
+        impl.addListener(listener);
     }
 };
 
+/Zinc/Zinc.Common/src/DispatchingEventProducer.cpp
 
+void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
+        boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
 
-
-<5> ER
-
-class ZINC_EXPORT EventRepository : virtual public NS_ZINC::Polymorphic 
+void DispatchingEventProducerHoisted::addListener(
+   boost::shared_ptr<hoisted_event_listener> listener, boost::shared_ptr<EventDispatcher> clientDispatcher) 
 {
-};
 
+    if (!listener) {
+        throw std::invalid_argument("NULL listener provided in call to addListener()!");
+    }
 
-class ZINC_EXPORT MetadataChangeListener : public NS_ZINC::EventListener 
-{
-    public:
-        virtual void ConfigChanged() = 0;
+    ZINC_COMMON_DEBUG(std::string(__func__)+" Dispatcher: "
+            +boost::lexical_cast<std::string>(static_cast<const EventDispatcher*>(clientDispatcher.get()))+
+            ", Producer: "+boost::lexical_cast<std::string>(this)+
+            ", Listener: "+boost::lexical_cast<std::string>(listener.get())
+            );
 
-        virtual void ServicesChanged(const std::vector<std::string>& modifiedServices) = 0;
+    bool duplicate = false;
 
-        virtual void ServiceListChanged() = 0;
+    boost::mutex::scoped_lock lock(mutex);
 
-        virtual void ScheduleChanged(
-                const std::string& serviceLocator, const uint32_t start, const uint32_t end) = 0;
+    if (!clientDispatcher) {
+        if (!dispatcher) {
+            throw std::logic_error("addListener() called, but event producer has no dispatcher set.");
+        }
+        clientDispatcher = dispatcher;
+    }
 
-        virtual void EventsChanged(const std::vector<std::string > &identifiers) = 0;
+    // Call entry->second->onWorkAdded()
+    Dispatcher::work work(*clientDispatcher);
 
-        virtual void ProvisioningChanged(
-                const std::vector< std::string >& provisionedServices, 
-                const std::vector< std::string >& deprovisionedServices) = 0;
-};
+    // note: make one
+    listener_entry newEntry(listener, clientDispatcher);
 
+    BOOST_FOREACH(const listener_entry& entry, listeners) {
 
+        if (entry.first == newEntry.first) {
+            duplicate = true;
+            break;
+        }
+    }
 
+    if (!duplicate) {
+        work.release();
 
-
-
-NS_URANIUM_METADATA_CLIENT_OPEN
-
-class ZINC_EXPORT EventWindowEventListener : public NS_ZINC::EventListener
-{
-public:
-
-    virtual ~EventWindowEventListener();
-    /**
-     * Indicates the Event Window has changed substantially. To update the data call EventWindow::refresh.
-     */
-    virtual void EventWindowChanged() = 0;
-
-    /**
-     * Indicates that some of the events in the Event Window have changed.
-     * @param events the list of events that changed
-     */
-    virtual void EventsChanged(const std::vector<boost::shared_ptr<Event> > events) = 0;
-};
-
-<6> SCF
-
-// Uranium.Client.System/src/SystemClientFactory.cpp
-
-
-// SCF gets created with no arg from binding
-
-
-
-void SystemClientFactory::setFutureDispatcher(boost::shared_ptr<NS_ZINC::FutureDispatcher> dispatcher)
-{
-    if (!dispatcher.get())
-        throw invalid_argument("Dispatcher is null");
-    futureDispatcher = dispatcher;
+        // note: push one
+        
+        listeners.push_front(newEntry);
+    }
 }
 
 
 ={============================================================================
-*kt_dev_uv_stack_111* stack: cal: metadata: summary
+*kt_dev_uv_stack_112* stack: cal: metadata: summary
 
 Uranium.Client.API/include/metadata/Summary.h
 
@@ -4608,7 +4537,7 @@ class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultM
 
 
 ={============================================================================
-*kt_dev_uv_stack_112* stack: cal: test
+*kt_dev_uv_stack_113* stack: cal: test
 
 /data/builds/DEVARCH-8092/huawei.370/ \
    zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/tests/uranium-client-system/test/metadata
@@ -5034,7 +4963,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_uv_stack_113* stack: build pc target
+*kt_dev_uv_stack_114* stack: build pc target
 
 Unlike cross platform builds, build runs tests and pc target build fails if any test fails.
 
@@ -5057,7 +4986,7 @@ Make a build success.
 
 
 ={============================================================================
-*kt_dev_uv_stack_114* stack: text epg
+*kt_dev_uv_stack_115* stack: text epg
 
 ./Uranium.Client.System/src/metadata/tools/textEPG.cpp
 
@@ -5103,6 +5032,694 @@ to work, as it just fetches an EventWindow and renders it in text, but YMMV.
 
 box: /opt/zinc-trunk/devel/bin/textEPG
 box: /opt/zinc/devel/bin/textEPG
+
+
+={============================================================================
+*kt_dev_uv_stack_116* stack: future
+
+<future>
+
+template <typename T> class Promise;
+
+namespace detail {
+template <typename T> class FutureContext;
+}
+
+namespace internal {
+class PolymorphicFuture;
+}
+
+class Dispatcher;
+
+class FutureBase {
+
+
+	friend class internal::PolymorphicFuture;
+
+public:
+
+	/**
+	 * Cancel the Future.
+	 *
+	 * This merely prevents the Future ever being fulfilled. If a callback
+	 * has been set, and not called already, it will not be called.
+	 *
+	 * Cancellation may, or may not, cause the underlying asynchronous operation to be
+	 * canceled. The client should not assume this to be the case.
+	 *
+	 * Cancellation may be modified with the flags argument.
+	 *  * future.cancel(clear_callback) just prevents the
+	 *    callback set with setCallback from being invoked.
+	 *  * future.cancel(deep) calls the onCancel handler that may have been
+	 *    provided promise-side
+	 *  * future.cancel(immediately) has behaviour equivalent to the Promise
+	 *    being immediately completed with a CancelledFuture exception.  If the
+	 *    promise has already been completed calling get() will still cause a
+	 *    CancelledFuture exception to be thrown.
+	 *  * future.cancel(0) does nothing.
+	 */
+	void cancel(unsigned flags = cancel_flag::clear_callback |
+	                             cancel_flag::deep |
+	                             cancel_flag::immediately);
+
+
+	/**
+	 * Synchronously wait for the value to become available.
+	 *
+	 * This will block the calling thread until either the value is available,
+	 * or an exception occurs.
+	 *
+	 * When the caller returns from this call, a subsequent call to get() will not
+	 * block.
+	 */
+	void wait();
+
+	/**
+	 * Synchronously wait for the value to become available, with a timeout
+	 * specified as a relative time duration
+	 *
+	 * eg
+	 *		Future<int> f = fn_returning_a_future();
+	 *		f.wait_for(boost::posix_time::milliseconds(500));
+	 *
+	 * @param rel_time specifies the time duration to wait for completion
+	 * @return false if the given time period elapses without completion or cancellation
+	 * @see wait()
+	 */
+	template<typename duration_type>
+	bool wait_for(const duration_type &rel_time);
+
+	/**
+	 * Synchronously wait for the value to become available, with a timeout
+	 * specified as an absolute time point
+	 *
+	 * Use wait_for() in preference
+	 *
+	 * @param abs_time specifies the time point to stop waiting
+	 * @return false if we reach the given time point without completion or cancellation
+	 *
+	 * @see wait()
+	 * @see wait_for()
+	 */
+	template<typename time_point_type>
+	bool wait_until(const time_point_type &abs_time);
+
+
+	/**
+	 * Ask if the Future has been completed with a value provided by its Promise
+	 *
+	 * A positive response does not guarantee that the callback has yet been executed
+	 *
+	 * @return true if this Future has been completed
+	 */
+	bool isComplete();
+
+	/**
+	 * Has this Future been default constructed?  If so, then it is not useful
+	 *
+	 * @see Future<T>::swap
+	 * @see Promise<T>::getFuture
+	 *
+	 * @return false if this Future is valid
+	 */
+	bool isEmpty();
+
+
+protected:
+
+	explicit FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context) ZINC_EXPORT;
+
+	FutureBase(const FutureBase& other) ZINC_EXPORT;
+
+	FutureBase() {}
+
+	~FutureBase() ZINC_EXPORT;
+
+	void baseSwap(FutureBase& other);
+
+	boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
+};
+
+
+/**
+ * A Future is a token for some value that will be delivered asynchronously.
+ *
+ * The holder of the Future token may either wait for the value synchronously,
+ * (blocking the executing thread), or set a callback method that will be invoked
+ * either when the value becomes available, or will not become available due to
+ * some exception.
+ *
+ * The Future holder also has the option to cancel the Future, which will prevent
+ * the value from being delivered, assuming this hasn't happened already.
+ */
+template <typename T>
+class Future : public FutureBase
+{
+public:
+	typedef T value_type;
+
+	Future(const Future & other);
+
+	Future & operator=(const Future & other);
+
+	~Future();
+
+	/**
+	 * Provide a default constructor so we can put Futures in
+	 * STL containers
+	 *
+	 * A Future without a Promise is not much use to you,
+	 * so use Promise.getFuture() instead, or use swap(Future<T> & other)
+	 * to swap in a valid future
+	 *
+	 * @see Promise<T>::getFuture()
+	 * @see Future<T>::swap(Future<T> & other)
+	 */
+	Future() {}
+
+	/**
+	 * Set a callback method to be invoked when either the value becomes
+	 * available, or an exception occurs.
+	 *
+	 * The callback will be executed on the dispatcher that was provided to
+	 * the Promise constructor.
+	 *
+	 * @param fn A function that must accept a FutureValue<T> as it's single
+	 *           argument.
+	 *
+	 * @throws DuplicateFutureCallback if a callback has already been set on
+	 * this Future.
+	 * @throws CallbackSetWithoutDispatcherException if the corresponding
+	 *         wasn't initialized with a dispatcher.  Use the two argument
+	 *         setCallback instead
+	 */
+	template <typename Handler>
+	void setCallback(const Handler& fn) {
+		// fn(x) must be valid where x is a FutureValue<T>
+		ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+		static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, 0);
+	}
+
+	/**
+	 * Set a callback method to be invoked when either the value becomes
+	 * available, or an exception occurs.
+	 *
+	 * The callback will be executed on the provided dispatcher, rather than the
+	 * dispatcher used by the Promise.
+	 *
+	 * Explicitly providing the dispatcher gives the caller more control over
+	 * which thread will execute their callback.
+	 *
+	 * @param dispatcher_ The dispatcher on which the callback should be executed.
+	 *
+	 * @param fn A function that must accept a FutureValue<T> as it's single
+	 *           argument.
+	 *
+	 * @throws DuplicateFutureCallback if a callback has already been set on
+	 * this Future.
+	 */
+	template <typename Handler>
+	void setCallback(Dispatcher& dispatcher_, const Handler& fn) {
+		// fn(x) must be valid where x is a FutureValue<T>
+		ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+		static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, &dispatcher_);
+	}
+
+	/**
+	 * then() allows specifying a Functor to be called once the Future is
+	 * completed.  It is much like Future.setCallback() but for a Future<T> if
+	 * the functor has the form:
+	 *
+	 *     R Functor(FutureValue<T>)
+	 *
+	 * then then() will return a new Future of type Future<R> which will be
+	 * completed when the original Future completes and the functor has
+	 * operated on the original value.  The value/exception contained in the
+	 * new future will be that returned/thrown from the functor.  This makes
+	 * then() very convenient for transforming the value (and potentially the
+	 * type) contained within a `Future`.
+	 *
+	 * If a dispatcher is provided the functor will be executed on that
+	 * dispatcher.  Otherwise it will be run inline at the point and in the
+	 * context in which the `Promise` is completed or the setCallback is set
+	 * (whichever comes later).  As the environment in which the functor will
+	 * be run is unknown and even non-deterministic it is only safe to do the
+	 * simplest pure-functional transformations in these functors, e.g.
+	 * translating between exceptions/enum types, etc.  Anything dependent on
+	 * some state may require locking a mutex of similar and to make it
+	 * deterministic, safe and to avoid unexpected failures as changes are
+	 * made to other parts of the code the callbacks should be run on a user
+	 * specified `Dispatcher`.
+	 *
+	 *`Future.then()` is a proposed addition to the C++14 standard[1].
+	 *
+	 * [1]: http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2013/n3558.pdf
+	 *
+	 * Usage Example:
+	 *
+	 * @code
+	 * string boolToYesNo(FutureValue<bool> b) {
+	 *     try {
+	 *         return (b.get()?"yes":"no");
+	 *     } catch (const std::exception& e) {
+	 *         // translating exception thrown from original future.
+	 *         throw MyNewException(e.what());
+	 *     }
+	 * }
+	 *
+	 * Future<bool> answer = isCool();
+	 *
+	 * Future<string> answerAsString = answer.then(&boolToYesNo);
+	 *
+	 * cout << "Cool? " << answerAsString.get() << endl;
+	 * @endcode
+	 */
+	template<typename Functor>
+	Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+		Dispatcher& dispatcher, Functor transformRtoT);
+	template<typename Functor>
+	Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+		Functor transformRtoT);
+
+	/**
+	 * Synchronously wait for and retrieve the value.
+	 *
+	 * This method may throw an exception of any type, in the event that the
+	 * value could not be retrieved due to an exception in the asynchronous
+	 * operation producing the value.
+	 *
+	 * Equivalent to f.getFutureValue().get();
+	 *
+	 * @return the value.
+	 */
+	typename const_return<T>::type get();
+
+	/**
+	 * Synchronously wait for and retrieve the value.
+	 *
+	 * Unlike get() this method does not throw if the promise has been completed
+	 * with an exception.  This can be used to deal with errors without a try
+	 * catch block.
+	 *
+	 * @return the value.
+	 */
+	FutureValue<T> getFutureValue();
+
+	/**
+	 * Swap this Future with the one provided
+	 */
+	void swap(Future<T> & other);
+
+private:
+	friend class Promise<T>; // only Promises can create a Future
+	explicit Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ );
+
+};
+
+<future-barrier>
+
+class Dispatcher;
+typedef Dispatcher FutureDispatcher;
+
+namespace detail {
+    template <typename Functor> class BarrierWrapper;
+    class FutureBarrierImpl;
+}
+
+/**
+ * FutureBarrier is designed to aid synchronisation when making multiple
+ * asynchronous calls simultaneously.  FutureBarrier will call a given
+ * callback asynchronously once all the futures added to it have
+ * completed AND the FutureBarrier itself has gone out of scope.
+ *
+ * (NOTE: This means you must not keep a FutureBarrier alive after the method
+ * creating it returns; for example you must not pass around a shared_ptr to a
+ * FutureBarrier, and you must not make a FutureBarrier be a member of your
+ * class.)
+ *
+ * FutureBarrier is "FutureLike" in that it defines the functions setCallback
+ * and cancel() and thus can be used as an argument to
+ * Continuation::setCallback();
+ */
+class FutureBarrier : boost::noncopyable {
+public:
+    typedef void value_type;
+
+    /**
+     * Constructor
+     */
+    explicit FutureBarrier(FutureDispatcher& dispatcher);
+    ~FutureBarrier();
+
+    /**
+     * Add a Future to the barrier to delay the FutureBarrier from completing
+     * until the Future has completed.
+     *
+     * @param f The future to add. This can be any "FutureLike" object, such
+     *          as a Future, a Continuation, or even another FutureBarrier.
+     *
+     * @param c Callback to be called when the future "f" completes
+     *          *successfully*. It must have the signature:
+     *              void SuccessCallback(T);
+     *          where T is the value_type of the future "f".
+     *          Note that the parameter is T, not FutureValue<T>.
+     *          If the future "f" completes with an error, this callback will
+     *          not be called; and the "final" callback (set with setCallback)
+     *          will (eventually, once all other futures have completed) be
+     *          called with an error.
+     *
+     * Note: It is guaranteed that the callback given here will be called
+     * *before* the callback given in FutureBarrier::setCallback().
+     *
+     * Note: The FutureDispatcher you use should provide the guarantee that all
+     * callbacks will be dispatched on the same thread (which may be a
+     * different thread than the thread where you create the FutureBarrier and
+     * call addWithSuccessCallback). This way, the various callbacks you set
+     * with addWithSuccessCallback don't need to worry about synchronisation
+     * issues.
+     */
+    template <class FutureLike, typename SuccessCallback>
+    void addWithSuccessCallback(FutureLike f, SuccessCallback /* void (T) */ c);
+
+    /**
+     * Add a future to the barrier to delay the FutureBarrier callback until
+     * after the future has completed.
+     *
+     * This is distinct from addWithSuccessCallback in that this is called with a
+     * FutureValue<T> rather than just T, thus allowing finer grained control
+     * of error conditions.
+     *
+     * @param f The future to add.
+     *
+     * @param c The function to call once the future "f" is complete.
+     *          It must have the signature:
+     *              void Callback(FutureValue<T>);
+     *          where T is the value_type of the future "f".
+     *
+     * Note: It is guaranteed that the callback given here will be called
+     * *before* the callback given in FutureBarrier::setCallback().
+     */
+    template <class FutureLike, typename Callback>
+    void addWithCallback(FutureLike f, Callback /* void (FutureValue<T>) */ c);
+
+    /**
+     * Add a future to the barrier to delay the FutureBarrier callback until
+     * after the future has completed.
+     *
+     * The value returned by the completed future is ignored, as long as it is
+     * not an error. An error will cause this FutureBarrier to complete with
+     * the error, just like addWithSuccessCallback.
+     *
+     * @param f The future to add.
+     */
+    template <class FutureLike>
+    void add(FutureLike f);
+
+    /**
+     * Cancel the FutureBarrier.  The behaviour of this function depends on the
+     * template parameter CancellationPolicy.
+     */
+    void cancel(unsigned flags);
+
+    /**
+     * Set the "final" callback method to be invoked after all of the barrier's
+     * Futures have completed, successfully or otherwise.
+     *
+     * @param c The function to call once all the futures have completed.
+     *          This function should have the signature:
+     *              void (FutureValue<void>);
+     *          In this way FutureBarrier is interface compatible with
+     *          Future<void>.
+     */
+    template <typename Callback>
+    void setCallback(Callback c) const;
+
+    template <typename Callback>
+    void setCallback(FutureDispatcher& dispatcher, Callback c);
+private:
+    template <typename Functor, typename ValueType> friend class detail::BarrierWrapper;
+    detail::FutureBarrierImpl* impl;
+};
+
+
+
+={============================================================================
+*kt_dev_uv_stack_117* stack: metadata and dbus
+
+# from lsdbus
+
+1055  :1.20                    /opt/zinc-trunk/bin/cobaltmetadatabrokerd        
+1055  :1.45                    /opt/zinc-trunk/bin/cobaltmetadatabrokerd        
+1055  Zinc.Broker              /opt/zinc-trunk/bin/cobaltmetadatabrokerd        
+1055  Zinc.MetadataProxy       /opt/zinc-trunk/bin/cobaltmetadatabrokerd        
+
+1237  :1.69                    /opt/stagecraft-2.0/bin/stagecraft --astrace --bgalpha 0 --outputrect
+0,0,1280,720 --extensionsdir /opt/zinc-trunk/lib/stagecraft2-extensions --profile extendedTV
+--modulemap IGraphicsDriver:/opt/stagecraft-2.0/bin/libIGraphicsDriver2.so /app        
+
+# from dbus full log
+
+method call sender=:1.20 -> dest=Zinc.Metadata serial=7034 path=/Zinc/Metadata/EventRepository; interface=Zinc.Metadata.EventRepository; member=getScheduleEvents
+
+method return sender=:1.20 -> dest=:1.69 reply_serial=4682
+
+   array [
+      struct {
+         string "12651407"
+         int64 1426653570
+         int64 1427284880
+         int32 0
+         array [
+         ]
+         array [
+            dict entry(
+               string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#linear.eventLocator"
+               array [
+                  string "dvb://233a..5a90;3cf"
+               ]
+            )
+         ]
+         array [
+         ]
+         array [
+            dict entry(
+               string "entityType"
+               array [
+                  string "scheduleevent"
+               ]
+            )
+            dict entry(
+               string "eventId"
+               array [
+                  string "12651407"
+               ]
+            )
+            dict entry(
+               string "eventTitle"
+               array [
+                  string "TruTV is on ch. 68..."
+               ]
+            )
+            dict entry(
+               string "isAdult"
+               array [
+                  string "0"
+               ]
+            )
+            dict entry(
+               string "mediumSynopsis"
+               array [
+                  string "...truTV +1 returns at 5am"
+               ]
+            )
+            dict entry(
+               string "owningServiceId"
+               array [
+                  string "10193572"
+               ]
+            )
+            dict entry(
+               string "start"
+               array [
+                  string "2015-03-25T09:00:00Z"
+               ]
+            )
+         ]
+         array [
+            dict entry(
+               string "classifiers"
+               array [
+                  struct {
+                     array [
+                        dict entry(
+                           string "categoryScheme"
+                           string "urn:dtg:metadata:cs:DTGGenreCS:2010-11"
+                        )
+                     ]
+                     string "0"
+                  }
+               ]
+            )
+            dict entry(
+               string "mediaContent"
+               array [
+                  struct {
+                     array [
+                        dict entry(
+                           string "aspectRatio"
+                           string "4:3"
+                        )
+                        dict entry(
+                           string "audioLanguage"
+                           string "eng"
+                        )
+                        dict entry(
+                           string "audioMixType"
+                           string "1"
+                        )
+                        dict entry(
+                           string "contentDuration"
+                           string "28800"
+                        )
+                        dict entry(
+                           string "contentIsHighDefinition"
+                           string "0"
+                        )
+                        dict entry(
+                           string "format"
+                           string "sd"
+                        )
+                        dict entry(
+                           string "mediaType"
+                           string "video"
+                        )
+                     ]
+                     string ""
+                  }
+               ]
+            )
+         ]
+      }
+      struct {
+         string "12655907"
+         int64 1426654853
+         int64 1427284880
+         int32 0
+         array [
+         ]
+         array [
+            dict entry(
+               string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#linear.eventLocator"
+               array [
+                  string "dvb://233a..a0b0;cca3"
+               ]
+            )
+         ]
+         array [
+         ]
+         array [
+            dict entry(
+               string "entityType"
+               array [
+                  string "scheduleevent"
+               ]
+            )
+            dict entry(
+               string "eventId"
+               array [
+                  string "12655907"
+               ]
+            )
+            dict entry(
+               string "eventTitle"
+               array [
+                  string "FIM X-Trial World Championship"
+               ]
+            )
+            dict entry(
+               string "isAdult"
+               array [
+                  string "0"
+               ]
+            )
+            dict entry(
+               string "mediumSynopsis"
+               array [
+                  string "Coverage from the X-Trial World Championship where the world's 
+                  top riders attempt to clear a series of near-impossible obstacles in the 
+                  fastest time. Action from Wiener Neustadt (Austria)."
+               ]
+            )
+            dict entry(
+               string "owningServiceId"
+               array [
+                  string "10672980"
+               ]
+            )
+            dict entry(
+               string "start"
+               array [
+                  string "2015-03-25T09:00:00Z"
+               ]
+            )
+         ]
+         array [
+            dict entry(
+               string "classifiers"
+               array [
+                  struct {
+                     array [
+                        dict entry(
+                           string "categoryScheme"
+                           string "urn:dtg:metadata:cs:DTGGenreCS:2010-11"
+                        )
+                     ]
+                     string "0"
+                  }
+               ]
+            )
+            dict entry(
+               string "mediaContent"
+               array [
+                  struct {
+                     array [
+                        dict entry(
+                           string "aspectRatio"
+                           string "16:9"
+                        )
+                        dict entry(
+                           string "audioLanguage"
+                           string "eng"
+                        )
+                        dict entry(
+                           string "audioMixType"
+                           string "2"
+                        )
+                        dict entry(
+                           string "contentDuration"
+                           string "3900"
+                        )
+                        dict entry(
+                           string "contentIsHighDefinition"
+                           string "0"
+                        )
+                        dict entry(
+                           string "format"
+                           string "sd"
+                        )
+                        dict entry(
+                           string "mediaType"
+                           string "video"
+                        )
+                     ]
+                     string ""
+                  }
+               ]
+            )
+         ]
+      }
+      ...
+   ]
 
 
 ={============================================================================
@@ -5361,6 +5978,34 @@ kpark@wll1p04345:~/source/DEVARCH/Neon$ find . -name *.xml
 ./Neon.System.API/data/introspection-xml/interface-NetworkManagerSettingsConnection.xml
 ./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_STATE_REASON.xml
 ./Neon.System.API/data/introspection-xml/interface-IPNetwork.xml
+
+
+<interface-name>
+Cobalt.System.DBusClient/src/MetadataBrokerDBusToSyncAndAsync.cpp
+
+36-
+37-#include "MetadataBrokerDBusToSyncAndAsync.h"
+38-
+39-NS_ZINC_DBUS_BINDING_OPEN
+40:const char* const interface_name<Zinc::Broker::MetadataBrokerAsync>::value = "Zinc.Broker.MetadataBroker";
+41:const char* const interface_name<Zinc::Broker::MetadataBrokerSync>::value = "Zinc.Broker.MetadataBroker";
+42:const char* const interface_name<Zinc::Broker::MetadataBrokerDBusToSyncAndAsync>::value =
+       "Zinc.Broker.MetadataBroker";
+
+Iron.System.DBusClient/src/EventRepositoryDBusToSyncAndAsync.cpp
+
+35-
+36-#include "EventRepositoryDBusToSyncAndAsync.h"
+37-
+38-NS_ZINC_DBUS_BINDING_OPEN
+39:const char* const interface_name<Zinc::Metadata::EventRepositoryAsync>::value =
+"Zinc.Metadata.EventRepository";
+
+40:const char* const interface_name<Zinc::Metadata::EventRepositorySync>::value =
+       "Zinc.Metadata.EventRepository";
+
+41:const char* const interface_name<Zinc::Metadata::EventRepositoryDBusToSyncAndAsync>::value =
+       "Zinc.Metadata.EventRepository";
 
 
 ={============================================================================
