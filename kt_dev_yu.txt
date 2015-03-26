@@ -1785,8 +1785,6 @@ o The updated and proposed nexusMgr.
 https://git-dev.dev.youview.co.uk/?p=nexusMgr.git;a=shortlog;h=refs/heads/propose/huawei
 
 
-
-
 ={============================================================================
 *kt_dev_uv_stack_010* stack: commit
 
@@ -1900,6 +1898,35 @@ DEVARCH-8101, and DEVARCH-8080.
 
 This commit has the necessary changes of makefile to build nexus utility and to fix the link order
 problem when links with nexusMgr shared library.
+
+
+<commit-log>
+DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+
+The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
+
+This commit fixes SystemClientEvent to use the right Event field for Synopsis and to implement
+missing map between the Event Repository and SystemClientEvent for DTT and IP source. It also
+updated the related test case to test getSynopsis() for both sources.
+
+
+DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+
+The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
+
+This commit fixes SystemClientEvent to use the right Event field for Synopsis and to implement
+missing map between the Event Repository and SystemClientEvent for DTT and IP source. 
+
+
+DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+
+The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
+
+This commit updated the related test case to test getSynopsis() for both sources.
+
+
+<stash>
+kpark@wll1p04345:~/source/DEVARCH$ git push origin DEVARCH-9135:review/DEVARCH-9135/0
 
 
 ={============================================================================
@@ -2401,65 +2428,32 @@ So can use either config file or the direct name.
 
 note: uses the same "createSystemClientFactory" for all libraries.
 
-<1>
-Uranium.Client.System/data/neon-client-factory.plugin-config
-libNeonClientSystem.so createSystemClientFactory
 
-NS_NEON_CLIENT::ClientFactory& SystemClientFactory::getNeonClientFactory()
+<0> EPG gets a CF via this
+Create a client factory. The below is how test cast do to get CF. 
+
+static const PluginConfig &getClientFactoryPluginConfig(void)
 {
-  URANIUM_PROFILE_FUNC;
-
-  // Get the singleton instance of the client factory plugin, loading it if necessary.
-  const NS_ZINC::FilePluginConfig pluginConfig(PackageDataFinder().find("neon-client-factory.plugin-config"));
-  NS_NEON_CLIENT::ClientFactory& neonClientFactory =
-    PluginFactory::getInstance<NS_NEON_CLIENT::ClientFactory>(pluginConfig);
-
-  // Ensure that we make the neon client use the same event and future
-  // dispatchers are this class does.
-  neonClientFactory.setDefaultDispatcher(getDefaultDispatcher());
-  neonClientFactory.setFutureDispatcher(futureDispatcher);
-  return neonClientFactory;
+    static const FixedPluginConfig pluginConfig("libUraniumClientSystem.so", "createSystemClientFactory");
+    return(pluginConfig);
 }
 
-
-<2> 
 Uranium.AIR.Client.API/data/client-factory.plugin-config
 1:libUraniumClientSystem.so createSystemClientFactory
 
-class ZINC_LOCAL SystemLocalMediaLibraryTest 
-  : IntegrationTestSandbox, TestUsingDbus,  TestUsingServiceDaemon, public CppUnit::TestFixture 
-{
-  static const PluginConfig &getClientFactoryPluginConfig(void)
-  {
-    static const FixedPluginConfig pluginConfig("libUraniumClientSystem.so", "createSystemClientFactory");
-    return(pluginConfig);
-  }
+Uranium.Client.System/src/SystemClientFactory.cpp
 
-  void setUp()
-  {
-    URANIUM_FUNC_TRACE;
-    startService();
-
-    factory = &PluginFactory::getInstance<ClientFactory>(getClientFactoryPluginConfig());
-
-    localMediaLibrary = factory->createLocalMediaLibrary();
-    lmlListener.reset(new LMLListener());
-    localMediaLibrary->addListener(lmlListener);
-  }
+Plugin* createSystemClientFactory() {
+  URANIUM_PROFILE_FUNC;
+  return 'new' NS_URANIUM_CLIENT::SystemClientFactory();
 }
 
-<client-system> Uranium.Client.System/src/SystemClientFactory.cpp
-    Plugin* createSystemClientFactory() {
-      URANIUM_PROFILE_FUNC;
-      return 'new' NS_URANIUM_CLIENT::SystemClientFactory();
-    }
 
+<1> Binding. Using CF, calls createXXX.
 
-{client-apis}
-<binding> Uranium.AIR.Client.API/src/UraniumAirPlugin.cpp
+Uranium.AIR.Client.API/src/UraniumAirPlugin.cpp
 
-1. Create a client factory. Done inside AIR since no code is available.
-2. Create a singletone instance of each interface locator and this locator has a singletone of real
+Create a singletone instance of each interface locator and this locator has a singletone of real
 interface so this is singletone chain. Pass a SP to it back to a client. Client can use a real
 instance since locator has interface to get SP of real instance.
 
@@ -2484,6 +2478,146 @@ class ZINC_LOCAL UraniumAirPlugin : public GenericAirPlugin<UraniumAirPlugin, Cl
         clientFactory.createLocalMediaLibraryLocator());
   }
 };
+
+
+<2> How to get connected to 'iron'
+
+$ cat ./Uranium.Client.System/data/iron-system-factory.plugin-config
+libIronSystemDbusClient.so createDbusSystemFactory(Zinc.MetadataProxy)
+
+
+NS_IRON_SYSTEM::SystemFactory& SystemClientFactory::getIronSystemFactory() 
+{
+    URANIUM_PROFILE_FUNC;
+    const NS_ZINC::FilePluginConfig pluginConfig(PackageDataFinder().find(
+                "iron-system-factory.plugin-config"));
+    return PluginFactory::getInstance<NS_IRON_SYSTEM::SystemFactory>(pluginConfig);
+}
+
+boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> SystemClientFactory::getIronSystemEventRepository()
+{
+    if(ironSystemEr == 0)
+    {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::getIronSystemEventRepository()");
+
+        // note: this is a call to DBUS client
+
+        ironSystemEr = getIronSystemFactory().createEventRepository();
+    }
+    return ironSystemEr;
+}
+
+
+note: this getIronSystemEventRepository() is used in various places and one of them is:
+
+boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::SystemClientEventRepository> 
+createConcreteEventRepository() 
+{
+  if(eventRepository == 0)
+  {
+    // note: create ER via 'iron' factory. shared lib. is it proxy?
+    boost::shared_ptr<NS_IRON_SYSTEM::EventRepository> systemER(
+            getIronSystemEventRepository());
+
+    // ...
+  }
+}
+
+
+<3> How to get connected to 'cobalt'
+
+/Uranium.Client.System/data$ cat cobalt-system-factory.plugin-config 
+libCobaltSystemDbusClient.so createDbusSystemFactory
+
+
+NS_COBALT_SYSTEM::SystemFactory& SystemClientFactory::getCobaltSystemFactory() 
+{
+    const NS_ZINC::FilePluginConfig pluginConfig(PackageDataFinder().find(
+                "cobalt-system-factory.plugin-config"));
+    
+    return PluginFactory::getInstance<NS_COBALT_SYSTEM::SystemFactory>(pluginConfig);
+}
+
+
+boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> SystemClientFactory::getSystemMetadataBroker()
+{
+    if(systemMetadataBroker == 0)
+    {
+        URANIUM_PROFILE_SCOPE("SystemClientFactory::getSystemMetadataBroker()");
+        systemMetadataBroker = getCobaltSystemFactory().createMetadataBroker();
+    }
+    return systemMetadataBroker;
+}
+
+
+<4> SF is DBUS SF
+
+unity.cpp. auto generated.
+
+class ZINC_EXPORT DbusSystemFactory : public SystemFactory
+{
+    public: // from SystemFactory
+        DbusSystemFactory(const char* args = NULL);
+
+        virtual boost::shared_ptr<Zinc::Broker::MetadataBroker> createMetadataBroker();
+        virtual boost::shared_ptr<Zinc::Broker::HiddenServicesStore> createHiddenServicesStore();
+        virtual boost::shared_ptr<Zinc::Broker::UnifiedServiceRepository> createUnifiedServiceRepository();
+        virtual boost::shared_ptr<Zinc::Broker::ProvisioningService> createProvisioningService();
+        virtual boost::shared_ptr<Zinc::Broker::UnifiedEventRepository> createUnifiedEventRepository();
+        virtual boost::shared_ptr<Zinc::Broker::LinearAcquisitionServiceResolver> 
+            createLinearAcquisitionServiceResolver();
+        virtual boost::shared_ptr<Zinc::Broker::DeviceConfig> createDeviceConfig();
+
+    private:
+        NS_ZINC_DBUS_BINDING::DBusSystemFactoryImpl impl;
+
+        // references to our proxy objects
+        boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> theMetadataBroker;
+        boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> theHiddenServicesStore;
+        boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> theUnifiedServiceRepository;
+        boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> theProvisioningService;
+        boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> theUnifiedEventRepository;
+        boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> theLinearAcquisitionServiceResolver;
+        boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> theDeviceConfig;
+};
+
+DbusSystemFactory::DbusSystemFactory(const char* args)
+ : impl(DBus::BusType::SESSION, getBusName(args))
+{
+}
+
+boost::shared_ptr<Zinc::Broker::MetadataBroker> DbusSystemFactory::createMetadataBroker()
+{
+    // 'interface'
+    
+    return NS_ZINC_DBUS_BINDING::applyInterface<Zinc::Broker::MetadataBroker>(
+            impl.getOrCreateObject(theMetadataBroker, "/Zinc/Broker/MetadataBroker"));
+}
+
+static std::string getBusName(const char* overrideBusName)
+{
+    const char* busName = NULL;
+    if (overrideBusName != NULL && overrideBusName[0] != '\0') {
+        busName = overrideBusName;
+    }
+    if (busName == NULL) {
+        busName = ::getenv(BUSNAME_ENV);
+    }
+    std::string theBusName;
+
+    if(busName && strlen(busName) > 0) {
+        theBusName = busName;
+    } else {
+        theBusName = "Zinc.Broker";          // note: see
+    }
+    return theBusName;
+}
+
+NS_ZINC::Plugin *createDbusSystemFactory(const char* args) {
+    return new Zinc::Broker::DbusSystemFactory(args);
+}
+
+
 
 <apis>
 Uranium.Client.API/include/metadata/Event.h
@@ -3093,12 +3227,12 @@ struct Event
 /zinc-build-root/debug-debian-7-x86_64/Cobalt/Cobalt.System.API/include
 
 /*
- *	include/Result.h
+ * include/Result.h
  *
- *	This file was automatically generated by dbusxx-xml2cpp; DO NOT EDIT!
+ * This file was automatically generated by dbusxx-xml2cpp; DO NOT EDIT!
  *
- *	Template struct.h.template
- *	Using /data/builds/_virtual_/pc/DEVARCH/Cobalt/Cobalt.System.API/data/introspection-xml/struct-Result.xml
+ * Template struct.h.template
+ * Using /data/builds/_virtual_/pc/DEVARCH/Cobalt/Cobalt.System.API/data/introspection-xml/struct-Result.xml
  */
 namespace Zinc {
 namespace Broker {
@@ -3132,56 +3266,56 @@ struct Result
 
 Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
 
-	<yv:struct name="Zinc.Metadata.Event">
+<yv:struct name="Zinc.Metadata.Event">
 
-	<p>The Event structure members are as follows:</p>
-		</yv:docstring>
+   <p>The Event structure members are as follows:</p>
 
-		<yv:member type="a{ss}" name="shortTitle">
-			<yv:docstring>
-				<p>A title for the event taken from the <tt>short_event_descriptor()</tt> 
-            <tt>event_name_char</tt> field.</p>
-				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-            to a title in the indicated language (the value).</p>
-			</yv:docstring>
-		</yv:member>
+   ...
 
-		<yv:member type="a{ss}" name="mediumSynopsis">
-			<yv:docstring>
-				<p>A description for the event taken from the <tt>short_event_descriptor()</tt> 
-            <tt>text_char</tt> field.</p>
-				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-            to a synopsis in the indicated language (the value).</p>
-			</yv:docstring>
-		</yv:member>
+   <yv:member type="a{ss}" name="shortTitle">
+       <yv:docstring>
+           <p>A title for the event taken from the <tt>short_event_descriptor()</tt> 
+           <tt>event_name_char</tt> field.</p>
+           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+           to a title in the indicated language (the value).</p>
+       </yv:docstring>
+   </yv:member>
 
-		<yv:member type="a{ss}" name="longSynopsis">
-			<yv:docstring>
-				<p>A description for the event taken from the <tt>extended_event_descriptor()</tt> 
-            <tt>text_char</tt> field.</p>
-				<p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-            to a synopsis in the indicated language (the value).</p>
-			</yv:docstring>
-		</yv:member>
+   <yv:member type="a{ss}" name="mediumSynopsis">
+       <yv:docstring>
+           <p>A description for the event taken from the <tt>short_event_descriptor()</tt> 
+           <tt>text_char</tt> field.</p>
+           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+           to a synopsis in the indicated language (the value).</p>
+       </yv:docstring>
+   </yv:member>
+
+   <yv:member type="a{ss}" name="longSynopsis">
+       <yv:docstring>
+           <p>A description for the event taken from the <tt>extended_event_descriptor()</tt> 
+           <tt>text_char</tt> field.</p>
+           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+           to a synopsis in the indicated language (the value).</p>
+       </yv:docstring>
+   </yv:member>
 
 
-Cobalt/Cobalt.System.API/data/introspection-xml/struct-EventDescription.xml
+Cobalt/Cobalt.System.API/data/introspection-xml/struct-Result.xml
 
-    <yv:struct name="Zinc.Broker.EventDescription">
-
-        <yv:member type="s" name="mediumSynopsis">
-            <yv:docstring>
-                A description for the event. It corresponds to 
-                yv:description in MAS data or NS_IRON::Event::mediumSynopsis. 
-            </yv:docstring>
-        </yv:member>
-        <yv:member type="s" name="longSynopsis">
-            <yv:docstring>
-                A description for the event that corresponds to 
-                NS_IRON::Event::longSynopsis, there is no corresponding field
-                in scheduleevent entity of MAS data.
-            </yv:docstring>
-        </yv:member>
+<?xml version="1.0" encoding="UTF-8"?>
+<node xmlns:yv="http://refdata.youview.com/schemas/dbus-extensions-v1.0">
+    <yv:struct name ="Zinc.Broker.Result">
+        <yv:member type="s" name="recordIdentifier" />
+        <yv:member type="x" name="lastModified" />
+        <yv:member type="x" name="validUntil" />
+        <yv:member type="i" yv:type="[DataSource]" name="dataSource" />
+        <yv:member type="as" name="classifiers" />
+        <yv:member type="a{sas}" name="identifiers" />
+        <yv:member type="a{sas}" name="internalReferences" />
+        <yv:member type="a{sas}" name="description" />
+        <yv:member type="a{sa(a{ss}s)}" yv:type="a{sa[XmlNode]}" name="nodes" />
+    </yv:struct>
+</node>
 
 
 {translation}
@@ -5039,6 +5173,8 @@ box: /opt/zinc/devel/bin/textEPG
 
 <future>
 
+#ifndef ZINC_FUTURE_H_
+
 template <typename T> class Promise;
 
 namespace detail {
@@ -5051,113 +5187,112 @@ class PolymorphicFuture;
 
 class Dispatcher;
 
-class FutureBase {
+class FutureBase 
+{
+    friend class internal::PolymorphicFuture;
+
+    public:
+
+    /**
+     * Cancel the Future.
+     *
+     * This merely prevents the Future ever being fulfilled. If a callback
+     * has been set, and not called already, it will not be called.
+     *
+     * Cancellation may, or may not, cause the underlying asynchronous operation to be
+     * canceled. The client should not assume this to be the case.
+     *
+     * Cancellation may be modified with the flags argument.
+     *  * future.cancel(clear_callback) just prevents the
+     *    callback set with setCallback from being invoked.
+     *  * future.cancel(deep) calls the onCancel handler that may have been
+     *    provided promise-side
+     *  * future.cancel(immediately) has behaviour equivalent to the Promise
+     *    being immediately completed with a CancelledFuture exception.  If the
+     *    promise has already been completed calling get() will still cause a
+     *    CancelledFuture exception to be thrown.
+     *  * future.cancel(0) does nothing.
+     */
+    void cancel(unsigned flags = cancel_flag::clear_callback |
+            cancel_flag::deep |
+            cancel_flag::immediately);
 
 
-	friend class internal::PolymorphicFuture;
+    /**
+     * Synchronously wait for the value to become available.
+     *
+     * This will block the calling thread until either the value is available,
+     * or an exception occurs.
+     *
+     * When the caller returns from this call, a subsequent call to get() will not
+     * block.
+     */
+    void wait();
 
-public:
+    /**
+     * Synchronously wait for the value to become available, with a timeout
+     * specified as a relative time duration
+     *
+     * eg
+     *		Future<int> f = fn_returning_a_future();
+     *		f.wait_for(boost::posix_time::milliseconds(500));
+     *
+     * @param rel_time specifies the time duration to wait for completion
+     * @return false if the given time period elapses without completion or cancellation
+     * @see wait()
+     */
+    template<typename duration_type>
+        bool wait_for(const duration_type &rel_time);
 
-	/**
-	 * Cancel the Future.
-	 *
-	 * This merely prevents the Future ever being fulfilled. If a callback
-	 * has been set, and not called already, it will not be called.
-	 *
-	 * Cancellation may, or may not, cause the underlying asynchronous operation to be
-	 * canceled. The client should not assume this to be the case.
-	 *
-	 * Cancellation may be modified with the flags argument.
-	 *  * future.cancel(clear_callback) just prevents the
-	 *    callback set with setCallback from being invoked.
-	 *  * future.cancel(deep) calls the onCancel handler that may have been
-	 *    provided promise-side
-	 *  * future.cancel(immediately) has behaviour equivalent to the Promise
-	 *    being immediately completed with a CancelledFuture exception.  If the
-	 *    promise has already been completed calling get() will still cause a
-	 *    CancelledFuture exception to be thrown.
-	 *  * future.cancel(0) does nothing.
-	 */
-	void cancel(unsigned flags = cancel_flag::clear_callback |
-	                             cancel_flag::deep |
-	                             cancel_flag::immediately);
-
-
-	/**
-	 * Synchronously wait for the value to become available.
-	 *
-	 * This will block the calling thread until either the value is available,
-	 * or an exception occurs.
-	 *
-	 * When the caller returns from this call, a subsequent call to get() will not
-	 * block.
-	 */
-	void wait();
-
-	/**
-	 * Synchronously wait for the value to become available, with a timeout
-	 * specified as a relative time duration
-	 *
-	 * eg
-	 *		Future<int> f = fn_returning_a_future();
-	 *		f.wait_for(boost::posix_time::milliseconds(500));
-	 *
-	 * @param rel_time specifies the time duration to wait for completion
-	 * @return false if the given time period elapses without completion or cancellation
-	 * @see wait()
-	 */
-	template<typename duration_type>
-	bool wait_for(const duration_type &rel_time);
-
-	/**
-	 * Synchronously wait for the value to become available, with a timeout
-	 * specified as an absolute time point
-	 *
-	 * Use wait_for() in preference
-	 *
-	 * @param abs_time specifies the time point to stop waiting
-	 * @return false if we reach the given time point without completion or cancellation
-	 *
-	 * @see wait()
-	 * @see wait_for()
-	 */
-	template<typename time_point_type>
-	bool wait_until(const time_point_type &abs_time);
+    /**
+     * Synchronously wait for the value to become available, with a timeout
+     * specified as an absolute time point
+     *
+     * Use wait_for() in preference
+     *
+     * @param abs_time specifies the time point to stop waiting
+     * @return false if we reach the given time point without completion or cancellation
+     *
+     * @see wait()
+     * @see wait_for()
+     */
+    template<typename time_point_type>
+        bool wait_until(const time_point_type &abs_time);
 
 
-	/**
-	 * Ask if the Future has been completed with a value provided by its Promise
-	 *
-	 * A positive response does not guarantee that the callback has yet been executed
-	 *
-	 * @return true if this Future has been completed
-	 */
-	bool isComplete();
+    /**
+     * Ask if the Future has been completed with a value provided by its Promise
+     *
+     * A positive response does not guarantee that the callback has yet been executed
+     *
+     * @return true if this Future has been completed
+     */
+    bool isComplete();
 
-	/**
-	 * Has this Future been default constructed?  If so, then it is not useful
-	 *
-	 * @see Future<T>::swap
-	 * @see Promise<T>::getFuture
-	 *
-	 * @return false if this Future is valid
-	 */
-	bool isEmpty();
+    /**
+     * Has this Future been default constructed?  If so, then it is not useful
+     *
+     * @see Future<T>::swap
+     * @see Promise<T>::getFuture
+     *
+     * @return false if this Future is valid
+     */
+    bool isEmpty();
 
 
-protected:
+    protected:
 
-	explicit FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context) ZINC_EXPORT;
+    explicit FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context) ZINC_EXPORT;
 
-	FutureBase(const FutureBase& other) ZINC_EXPORT;
+    FutureBase(const FutureBase& other) ZINC_EXPORT;
 
-	FutureBase() {}
+    FutureBase() {}
 
-	~FutureBase() ZINC_EXPORT;
+    ~FutureBase() ZINC_EXPORT;
 
-	void baseSwap(FutureBase& other);
+    void baseSwap(FutureBase& other);
 
-	boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
+    boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
 };
 
 
@@ -5175,166 +5310,660 @@ protected:
 template <typename T>
 class Future : public FutureBase
 {
-public:
-	typedef T value_type;
+    public:
+        typedef T value_type;
 
-	Future(const Future & other);
+        Future(const Future & other);
 
-	Future & operator=(const Future & other);
+        Future & operator=(const Future & other);
 
-	~Future();
+        ~Future();
 
-	/**
-	 * Provide a default constructor so we can put Futures in
-	 * STL containers
-	 *
-	 * A Future without a Promise is not much use to you,
-	 * so use Promise.getFuture() instead, or use swap(Future<T> & other)
-	 * to swap in a valid future
-	 *
-	 * @see Promise<T>::getFuture()
-	 * @see Future<T>::swap(Future<T> & other)
-	 */
-	Future() {}
+        /**
+         * Provide a default constructor so we can put Futures in
+         * STL containers
+         *
+         * A Future without a Promise is not much use to you,
+         * so use Promise.getFuture() instead, or use swap(Future<T> & other)
+         * to swap in a valid future
+         *
+         * @see Promise<T>::getFuture()
+         * @see Future<T>::swap(Future<T> & other)
+         */
+        Future() {}
 
-	/**
-	 * Set a callback method to be invoked when either the value becomes
-	 * available, or an exception occurs.
-	 *
-	 * The callback will be executed on the dispatcher that was provided to
-	 * the Promise constructor.
-	 *
-	 * @param fn A function that must accept a FutureValue<T> as it's single
-	 *           argument.
-	 *
-	 * @throws DuplicateFutureCallback if a callback has already been set on
-	 * this Future.
-	 * @throws CallbackSetWithoutDispatcherException if the corresponding
-	 *         wasn't initialized with a dispatcher.  Use the two argument
-	 *         setCallback instead
-	 */
-	template <typename Handler>
-	void setCallback(const Handler& fn) {
-		// fn(x) must be valid where x is a FutureValue<T>
-		ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
-		static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, 0);
-	}
+        /**
+         * Set a callback method to be invoked when either the value becomes
+         * available, or an exception occurs.
+         *
+         * The callback will be executed on the dispatcher that was provided to
+         * the Promise constructor.
+         *
+         * @param fn A function that must accept a FutureValue<T> as it's single
+         *           argument.
+         *
+         * @throws DuplicateFutureCallback if a callback has already been set on
+         * this Future.
+         * @throws CallbackSetWithoutDispatcherException if the corresponding
+         *         wasn't initialized with a dispatcher.  Use the two argument
+         *         setCallback instead
+         */
+        template <typename Handler>
+            void setCallback(const Handler& fn) {
+                // fn(x) must be valid where x is a FutureValue<T>
+                ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+                static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, 0);
+            }
 
-	/**
-	 * Set a callback method to be invoked when either the value becomes
-	 * available, or an exception occurs.
-	 *
-	 * The callback will be executed on the provided dispatcher, rather than the
-	 * dispatcher used by the Promise.
-	 *
-	 * Explicitly providing the dispatcher gives the caller more control over
-	 * which thread will execute their callback.
-	 *
-	 * @param dispatcher_ The dispatcher on which the callback should be executed.
-	 *
-	 * @param fn A function that must accept a FutureValue<T> as it's single
-	 *           argument.
-	 *
-	 * @throws DuplicateFutureCallback if a callback has already been set on
-	 * this Future.
-	 */
-	template <typename Handler>
-	void setCallback(Dispatcher& dispatcher_, const Handler& fn) {
-		// fn(x) must be valid where x is a FutureValue<T>
-		ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
-		static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, &dispatcher_);
-	}
+        /**
+         * Set a callback method to be invoked when either the value becomes
+         * available, or an exception occurs.
+         *
+         * The callback will be executed on the provided dispatcher, rather than the
+         * dispatcher used by the Promise.
+         *
+         * Explicitly providing the dispatcher gives the caller more control over
+         * which thread will execute their callback.
+         *
+         * @param dispatcher_ The dispatcher on which the callback should be executed.
+         *
+         * @param fn A function that must accept a FutureValue<T> as it's single
+         *           argument.
+         *
+         * @throws DuplicateFutureCallback if a callback has already been set on
+         * this Future.
+         */
+        template <typename Handler>
+            void setCallback(Dispatcher& dispatcher_, const Handler& fn) {
+                // fn(x) must be valid where x is a FutureValue<T>
+                ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+                static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, &dispatcher_);
+            }
 
-	/**
-	 * then() allows specifying a Functor to be called once the Future is
-	 * completed.  It is much like Future.setCallback() but for a Future<T> if
-	 * the functor has the form:
-	 *
-	 *     R Functor(FutureValue<T>)
-	 *
-	 * then then() will return a new Future of type Future<R> which will be
-	 * completed when the original Future completes and the functor has
-	 * operated on the original value.  The value/exception contained in the
-	 * new future will be that returned/thrown from the functor.  This makes
-	 * then() very convenient for transforming the value (and potentially the
-	 * type) contained within a `Future`.
-	 *
-	 * If a dispatcher is provided the functor will be executed on that
-	 * dispatcher.  Otherwise it will be run inline at the point and in the
-	 * context in which the `Promise` is completed or the setCallback is set
-	 * (whichever comes later).  As the environment in which the functor will
-	 * be run is unknown and even non-deterministic it is only safe to do the
-	 * simplest pure-functional transformations in these functors, e.g.
-	 * translating between exceptions/enum types, etc.  Anything dependent on
-	 * some state may require locking a mutex of similar and to make it
-	 * deterministic, safe and to avoid unexpected failures as changes are
-	 * made to other parts of the code the callbacks should be run on a user
-	 * specified `Dispatcher`.
-	 *
-	 *`Future.then()` is a proposed addition to the C++14 standard[1].
-	 *
-	 * [1]: http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2013/n3558.pdf
-	 *
-	 * Usage Example:
-	 *
-	 * @code
-	 * string boolToYesNo(FutureValue<bool> b) {
-	 *     try {
-	 *         return (b.get()?"yes":"no");
-	 *     } catch (const std::exception& e) {
-	 *         // translating exception thrown from original future.
-	 *         throw MyNewException(e.what());
-	 *     }
-	 * }
-	 *
-	 * Future<bool> answer = isCool();
-	 *
-	 * Future<string> answerAsString = answer.then(&boolToYesNo);
-	 *
-	 * cout << "Cool? " << answerAsString.get() << endl;
-	 * @endcode
-	 */
-	template<typename Functor>
-	Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
-		Dispatcher& dispatcher, Functor transformRtoT);
-	template<typename Functor>
-	Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
-		Functor transformRtoT);
+        /**
+         * then() allows specifying a Functor to be called once the Future is
+         * completed.  It is much like Future.setCallback() but for a Future<T> if
+         * the functor has the form:
+         *
+         *     R Functor(FutureValue<T>)
+         *
+         * then then() will return a new Future of type Future<R> which will be
+         * completed when the original Future completes and the functor has
+         * operated on the original value.  The value/exception contained in the
+         * new future will be that returned/thrown from the functor.  This makes
+         * then() very convenient for transforming the value (and potentially the
+         * type) contained within a `Future`.
+         *
+         * If a dispatcher is provided the functor will be executed on that
+         * dispatcher.  Otherwise it will be run inline at the point and in the
+         * context in which the `Promise` is completed or the setCallback is set
+         * (whichever comes later).  As the environment in which the functor will
+         * be run is unknown and even non-deterministic it is only safe to do the
+         * simplest pure-functional transformations in these functors, e.g.
+         * translating between exceptions/enum types, etc.  Anything dependent on
+         * some state may require locking a mutex of similar and to make it
+         * deterministic, safe and to avoid unexpected failures as changes are
+         * made to other parts of the code the callbacks should be run on a user
+         * specified `Dispatcher`.
+         *
+         *`Future.then()` is a proposed addition to the C++14 standard[1].
+         *
+         * [1]: http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2013/n3558.pdf
+         *
+         * Usage Example:
+         *
+         * @code
+         * string boolToYesNo(FutureValue<bool> b) {
+         *     try {
+         *         return (b.get()?"yes":"no");
+         *     } catch (const std::exception& e) {
+         *         // translating exception thrown from original future.
+         *         throw MyNewException(e.what());
+         *     }
+         * }
+         *
+         * Future<bool> answer = isCool();
+         *
+         * Future<string> answerAsString = answer.then(&boolToYesNo);
+         *
+         * cout << "Cool? " << answerAsString.get() << endl;
+         * @endcode
+         */
+        template<typename Functor>
+            Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+                    Dispatcher& dispatcher, Functor transformRtoT);
+        template<typename Functor>
+            Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+                    Functor transformRtoT);
 
-	/**
-	 * Synchronously wait for and retrieve the value.
-	 *
-	 * This method may throw an exception of any type, in the event that the
-	 * value could not be retrieved due to an exception in the asynchronous
-	 * operation producing the value.
-	 *
-	 * Equivalent to f.getFutureValue().get();
-	 *
-	 * @return the value.
-	 */
-	typename const_return<T>::type get();
+        /**
+         * Synchronously wait for and retrieve the value.
+         *
+         * This method may throw an exception of any type, in the event that the
+         * value could not be retrieved due to an exception in the asynchronous
+         * operation producing the value.
+         *
+         * Equivalent to f.getFutureValue().get();
+         *
+         * @return the value.
+         */
+        typename const_return<T>::type get();
 
-	/**
-	 * Synchronously wait for and retrieve the value.
-	 *
-	 * Unlike get() this method does not throw if the promise has been completed
-	 * with an exception.  This can be used to deal with errors without a try
-	 * catch block.
-	 *
-	 * @return the value.
-	 */
-	FutureValue<T> getFutureValue();
+        /**
+         * Synchronously wait for and retrieve the value.
+         *
+         * Unlike get() this method does not throw if the promise has been completed
+         * with an exception.  This can be used to deal with errors without a try
+         * catch block.
+         *
+         * @return the value.
+         */
+        FutureValue<T> getFutureValue();
 
-	/**
-	 * Swap this Future with the one provided
-	 */
-	void swap(Future<T> & other);
+        /**
+         * Swap this Future with the one provided
+         */
+        void swap(Future<T> & other);
 
-private:
-	friend class Promise<T>; // only Promises can create a Future
-	explicit Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ );
+    private:
+        friend class Promise<T>; // only Promises can create a Future
+        explicit Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ );
 
 };
+
+#endif
+
+
+<future-impl>
+#ifndef ZINC_FUTURE_INL
+
+NS_ZINC_OPEN
+
+inline void FutureBase::wait()
+{
+	context->wait();
+}
+
+template<typename duration_type>
+inline bool FutureBase::wait_for(const duration_type &rel_time)
+{
+	return context->wait_for(rel_time);
+}
+
+template<typename time_point_type>
+inline bool FutureBase::wait_until(const time_point_type &abs_time)
+{
+	return context->wait_until(abs_time);
+}
+
+inline bool FutureBase::isComplete()
+{
+	return context->completed;
+}
+
+inline bool FutureBase::isEmpty()
+{
+	return (context.get() == NULL);
+}
+
+inline void FutureBase::cancel(unsigned flags)
+{
+	context->cancel(flags);
+}
+
+inline void FutureBase::baseSwap(FutureBase& other)
+{
+	using std::swap;
+	swap(context, other.context);
+}
+
+
+/**
+ * Generic Future definitions
+ */
+
+template<typename T>
+inline Future<T>::Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ ) : FutureBase(boost::static_pointer_cast<detail::FutureContextCommonImpl>(context_)) {}
+
+template<typename T>
+inline Future<T>::Future(const Future<T>& other) : FutureBase(other) {}
+
+template<typename T>
+inline Future<T>::~Future() {}
+
+template<typename T>
+inline Future<T>& Future<T>::operator=(const Future<T>& other)
+{
+	Future<T>(other).swap(*this);
+	return *this;
+}
+
+template<typename T>
+inline FutureValue<T> Future<T>::getFutureValue()
+{
+    wait();
+    return FutureValue<T>(boost::static_pointer_cast<detail::FutureContext<T> >(context));
+}
+
+template<typename T>
+inline typename const_return<T>::type Future<T>::get()
+{
+	return getFutureValue().get();
+}
+
+template<typename T>
+inline void Future<T>::swap(Future<T> & other)
+{
+	 baseSwap(other);
+}
+
+/**
+ * Future<void> definitions
+ */
+template<>
+inline void Future<void>::get()
+{
+	wait();
+	// get() may throw
+	FutureValue<void>(boost::static_pointer_cast<detail::FutureContext<void> >(context)).get();
+}
+
+namespace detail {
+
+template<typename T, typename R, typename Functor>
+struct DoTransformAndComplete {
+    static inline void apply(Promise<R>& promise, Functor& transform, const FutureValue<T>& fv) {
+        promise.complete(transform(fv));
+    }
+};
+
+template<typename T, typename Functor>
+struct DoTransformAndComplete<T, void, Functor> {
+    static inline void apply(Promise<void>& promise, Functor& transform, const FutureValue<T>& fv) {
+        transform(fv);
+        promise.complete();
+    }
+};
+
+template<typename T, typename Functor>
+struct TransformAndComplete {
+
+    typedef typename boost::result_of<Functor(FutureValue<T>)>::type R;
+
+    TransformAndComplete(const Functor& f)
+     : transform(f) {}
+
+    void operator()(const FutureValue<T>& fv) {
+        try {
+            DoTransformAndComplete<T, R, Functor>::apply(promise, transform, fv);
+        } catch (const std::exception& e) {
+            promise.exception(e);
+        } catch (...) {
+            promise.exception(std::runtime_error("Unknown exception."));
+        }
+    }
+
+    Promise<R> promise;
+    Functor transform;
+};
+
+template<typename FutureLike, typename Functor>
+Future<typename boost::result_of<Functor(FutureValue<typename FutureLike::value_type>)>::type> futureThen(
+        FutureLike& future, Dispatcher& dispatcher, Functor transformTtoR) {
+
+    detail::TransformAndComplete<typename FutureLike::value_type, Functor>
+        transformAndComplete(transformTtoR);
+    future.setCallback(dispatcher, transformAndComplete);
+    return transformAndComplete.promise.getFuture();
+}
+} // namespace detail
+
+template<typename T>
+template<typename Functor>
+Future<typename boost::result_of<Functor(FutureValue<T>)>::type> Future<T>::then(
+        Dispatcher& dispatcher, Functor transformTtoR) {
+
+    return detail::futureThen(*this, dispatcher, transformTtoR);
+}
+
+template<typename T>
+template<typename Functor>
+Future<typename boost::result_of<Functor(FutureValue<T>)>::type> Future<T>::then(
+        Functor transformTtoR) {
+
+    return then(InlineDispatcher::sharedInstance(), transformTtoR);
+}
+
+#endif
+
+
+<promise>
+#ifndef ZINC_PROMISE_H_
+
+namespace internal{
+class PolymorphicPromise;
+}
+
+/**
+ * Base class for Promises which contain different types.  This can be useful
+ * when hoisting to reduce object code size.
+ */
+class PromiseBase : boost::noncopyable 
+{
+    friend class internal::PolymorphicPromise;
+
+    public:
+
+    /**
+     * Complete this Promise with a zinc::ErrorCode
+     *
+     * @param error the error code value
+     *
+     * @throws PromiseAlreadyCompleted if this Promise has already been completed
+     */
+    void error(const NS_ZINC::ErrorCode& error);
+
+    /**
+     * Complete this Promise with an exception
+     *
+     * @param e the exception
+     *
+     * @throws PromiseAlreadyCompleted if this Promise has already been completed
+     */
+    void exception(const std::exception& e);
+
+    /**
+     * Ask if this async operation has been completed with a value
+     *
+     * @return true if the async operation associated with this Promise has been completed
+     */
+    bool isComplete() const;
+
+    protected:
+
+    // Destructor and Constructor are protected to prevent deletion through the
+    // base class.  If you want to store a Promise polymorphically use
+    // PolymorphicPromise.
+    ~PromiseBase() ZINC_EXPORT;
+    explicit PromiseBase(detail::FutureContextCommonImpl*) ZINC_EXPORT;
+    PromiseBase(const PromiseBase& other) ZINC_EXPORT;
+    boost::intrusive_ptr<detail::FutureContextCommonImpl> context;
+    void baseSwap(PromiseBase& other);
+};
+
+
+/**
+ * A Promise provides the API to set the result of an asynchronous operation,
+ * signal the caller, and trigger dispatch of any associated completion handlers
+ */
+template<typename T>
+class Promise : public PromiseBase
+{
+    public:
+        /**
+         * Construct a Promise for an asynchronous operation.
+         *
+         * If a dispatcher is passed the deprecated single-argument
+         * Future::setCallback which does not take a Dispatcher may be used on the
+         * Future returned from getFuture().  In this case the callback will be
+         * executed on the Dispatcher passed here.  This is a deprecated mode of
+         * use.
+         *
+         * Using the default Promise constructor and the two argument Future
+         * setCallback is strongly recommended in new code.  The single argument
+         * Promise constructor is likely to be deprecated in the future.
+         *
+         * If a cancellation callback is provided it will be executed on the
+         * dispatcher provided here.
+         */
+        Promise();
+        explicit Promise(Dispatcher& dispatcher_);
+        explicit Promise(Dispatcher& dispatcher_,
+                boost::function<void ()> cancelationCallback);
+
+        Promise(const Promise<T> & other);
+
+        Promise & operator=(const Promise<T> & other);
+
+        /**
+         * Swap this promise with the one provided
+         */
+        void swap(Promise<T> & other);
+
+        /**
+         * Create a Future for this Promise.
+         *
+         * The created Future can be used to access the result of this Promise.
+         *
+         * @return A Future used to access the result of this Promise
+         */
+        Future<T> getFuture();
+
+        /**
+         * Complete this Promise with a value and deliver the result to
+         * all associated Futures
+         *
+         * @param value the result to be delivered
+         *
+         * @throws PromiseAlreadyCompleted if this Promise has already been completed
+         */
+        void complete(typename const_param<T>::type);
+    private:
+        detail::FutureContext<T>& getContext();
+        // WARNING: DO NOT ADD MEMBERS HERE:
+        //     PolymorphicPromise depends on Promise<T> having no additional members
+        //     vs. PromiseBase
+};
+
+
+/**
+ * A Promise<void> provides the API to signal the caller of an asynchronous operation,
+ * and trigger dispatch of any associated completion handlers
+ *
+ * FIXME: It's a shame that we have to specialize the whole class for void, when complete()
+ * is really the only method that is different. But, to use sub-classing to do this
+ * would confuse the interface.
+ */
+template<>
+class Promise<void> : public PromiseBase
+{
+    public:
+
+        /**
+         * Construct a Promise for an asynchronous operation.
+         *
+         * If a dispatcher is passed the deprecated single-argument
+         * Future::setCallback which does not take a Dispatcher may be used on the
+         * Future returned from getFuture().  In this case the callback will be
+         * executed on the Dispatcher passed here.  This is a deprecated mode of
+         * use.
+         *
+         * Using the default Promise constructor and the two argument Future
+         * setCallback is strongly recommended in new code.  The single argument
+         * Promise constructor is likely to be deprecated in the future.
+         *
+         * If a cancellation callback is provided it will be executed on the
+         * dispatcher provided here.
+         */
+        Promise();
+        explicit Promise(Dispatcher& dispatcher_);
+        explicit Promise(Dispatcher& dispatcher_,
+                boost::function<void ()> cancelationCallback);
+
+        Promise(const Promise<void> &other);
+
+        Promise & operator=(const Promise<void> & other);
+
+        /**
+         * Swap this promise with the one provided
+         */
+        void swap(Promise<void> & other);
+
+        /**
+         * Create a Future for this Promise.
+         *
+         * The created Future can be used to synchronise on completion of this Promise,
+         * and retrieve any error conditions that may occur.
+         *
+         * @return A Future used to access the result of this Promise
+         */
+        Future<void> getFuture();
+
+        /**
+         * Complete this Promise and notify all associated Futures
+         *
+         * @throws PromiseAlreadyCompleted if this Promise has already been completed
+         */
+        void complete();
+
+    private:
+        detail::FutureContext<void>& getContext();
+        // WARNING: DO NOT ADD MEMBERS HERE:
+        //     PolymorphicPromise depends on Promise<T> having no additional members
+        //     vs. PromiseBase
+};
+
+#include "detail/Promise_Impl.h"
+
+#endif
+
+
+<promise-impl>
+#ifndef ZINC_PROMISE_IMPL_H_
+
+#include "../Future.h"
+#include "../async-exceptions.h"
+
+
+inline void PromiseBase::baseSwap(PromiseBase& other)
+{
+	using std::swap;
+	swap(context, other.context);
+}
+
+inline void PromiseBase::error(const NS_ZINC::ErrorCode& error)
+{
+	context->completeError(error);
+}
+
+inline void PromiseBase::exception(const std::exception& e)
+{
+	error(zinc::copyException(e));
+}
+
+inline bool PromiseBase::isComplete() const
+{
+	return context->completed;
+}
+
+template<typename T>
+inline Promise<T>::Promise() :
+	PromiseBase( new detail::FutureContext<T>(NULL) )
+{
+}
+
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
+	PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
+{
+}
+
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_, boost::function<void ()> cancellationCallback_) :
+	PromiseBase( new detail::FutureContext<T>(&dispatcher_, cancellationCallback_ ) )
+{
+}
+
+template<typename T>
+Promise<T>::Promise(const Promise<T> &other)
+ : PromiseBase(other.context.get())
+{
+}
+
+template<typename T>
+Promise<T>& Promise<T>::operator=(const Promise<T> & other)
+{
+	Promise<T>(other).swap(*this);
+	return *this;
+}
+
+template<typename T>
+inline Future<T> Promise<T>::getFuture()
+{
+	return Future<T>(&getContext());
+}
+
+template<typename T>
+inline void Promise<T>::complete(typename const_param<T>::type value)
+{
+	getContext().set(value);
+}
+
+template<typename T>
+inline void Promise<T>::swap(Promise<T> & other)
+{
+    baseSwap(other);
+}
+
+template<typename T>
+inline detail::FutureContext<T>& Promise<T>::getContext()
+{
+	return *static_cast<detail::FutureContext<T>* >(context.get());
+}
+
+// ** void specialization **
+
+// This is the only method that actually needs to be different.
+inline void Promise<void>::complete()
+{
+	getContext().set();
+}
+
+// But we have to repeat all these, because whole class is specialized.
+
+inline Promise<void>::Promise() :
+	PromiseBase( new detail::FutureContext<void>(NULL) )
+{
+}
+
+inline Promise<void>::Promise(FutureDispatcher& dispatcher_) :
+	PromiseBase( new detail::FutureContext<void>(&dispatcher_) )
+{
+}
+
+inline Promise<void>::Promise(FutureDispatcher & dispatcher_, boost::function<void ()> cancellationCallback_) :
+	PromiseBase( new detail::FutureContext<void>(&dispatcher_, cancellationCallback_) )
+{
+}
+
+inline Promise<void> & Promise<void>::operator=(const Promise<void> & other)
+{
+	Promise<void>(other).swap(*this);
+	return *this;
+}
+
+inline Promise<void>::Promise(const Promise<void> & other)
+ : PromiseBase(other.context.get())
+{
+}
+
+inline Future<void> Promise<void>::getFuture()
+{
+	return Future<void>(&getContext());
+}
+
+inline void Promise<void>::swap(Promise<void> & other)
+{
+    baseSwap(other);
+}
+
+inline detail::FutureContext<void>& Promise<void>::getContext()
+{
+	return *static_cast<detail::FutureContext<void>* >(context.get());
+}
+
+#endif 
+
 
 <future-barrier>
 
@@ -5465,6 +6094,90 @@ private:
 
 ={============================================================================
 *kt_dev_uv_stack_117* stack: metadata and dbus
+
+# from lsdbus
+
+1287  :1.57                    /opt/zinc/bin/ironmetadatad.oem                 
+1287  Zinc.Metadata            /opt/zinc/bin/ironmetadatad.oem                 
+
+# 'iron'
+# /Iron/Iron.System.API/data/introspection-xml/service.xml
+# note: see bus name
+<node xmlns:yv="http://refdata.youview.com/schemas/dbus-extensions-v1.0" name="/" yv:busname="Zinc.Metadata">
+    <node name="Zinc/Metadata/EventRepository">
+        <interface name="Zinc.Metadata.EventRepository"/>
+    </node>
+    <node name="Zinc/Metadata/RelatedContentRepository">
+        <interface name="Zinc.Metadata.RelatedContentRepository"/>
+    </node>
+    <node name="Zinc/Metadata/ServiceRepository">
+        <interface name="Zinc.Metadata.ServiceRepository"/>
+    </node>
+</node>
+
+
+# 'cobalt'
+<node xmlns:yv="http://refdata.youview.com/schemas/dbus-extensions-v1.0" name="/" yv:busname="Zinc.Broker">
+    <node name="Zinc/Broker/MetadataBroker">
+        <interface name="Zinc.Broker.MetadataBroker"/>
+    </node>
+    <node name="Zinc/Broker/HiddenServicesStore">
+        <interface name="Zinc.Broker.HiddenServicesStore"/>
+    </node>
+    <node name="Zinc/Broker/UnifiedServiceRepository">
+        <interface name="Zinc.Broker.UnifiedServiceRepository"/>
+    </node>
+    <node name="Zinc/Broker/ProvisioningService">
+        <interface name="Zinc.Broker.ProvisioningService"/>
+    </node>
+    <node name="Zinc/Broker/UnifiedEventRepository">
+        <interface name="Zinc.Broker.UnifiedEventRepository"/>
+    </node>
+    <node name="Zinc/Broker/LinearAcquisitionServiceResolver">
+        <interface name="Zinc.Broker.LinearAcquisitionServiceResolver"/>
+    </node>
+    <node name="Zinc/Broker/DeviceConfig">
+        <interface name="Zinc.Broker.DeviceConfig"/>
+    </node>
+</node>
+
+
+# note: auto generated to
+# zinc-build-root/release-humax-dtr_t1000/Iron/Iron.System.API/include/SystemFactory.h
+
+namespace Zinc {
+namespace Metadata {
+
+struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
+    virtual ~SystemFactory();
+
+    virtual boost::shared_ptr<Zinc::Metadata::EventRepository> createEventRepository() = 0;
+    virtual boost::shared_ptr<Zinc::Metadata::RelatedContentRepository> createRelatedContentRepository() = 0;
+    virtual boost::shared_ptr<Zinc::Metadata::ServiceRepository> createServiceRepository() = 0;
+};
+} //namespace
+} //namespace
+
+
+namespace Zinc {
+namespace Broker {
+
+struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
+    virtual ~SystemFactory();
+
+    virtual boost::shared_ptr<Zinc::Broker::MetadataBroker> createMetadataBroker() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::HiddenServicesStore> createHiddenServicesStore() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::UnifiedServiceRepository> createUnifiedServiceRepository() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::ProvisioningService> createProvisioningService() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::UnifiedEventRepository> createUnifiedEventRepository() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::LinearAcquisitionServiceResolver> 
+        createLinearAcquisitionServiceResolver() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::DeviceConfig> createDeviceConfig() = 0;
+
+};
+} //namespace
+} //namespace
+
 
 # from lsdbus
 
