@@ -119,10 +119,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_027| volatile
 |kt_dev_cpp_028| namespace {case-example} {unnamed-namespace}
 |kt_dev_cpp_029| nested class
-|kt_dev_cpp_030| case study: framework {tizen-case}
-|kt_dev_cpp_031| wrapper
-|kt_dev_cpp_032| case study: porting layer
-|kt_dev_cpp_033| case study: inheritance {how-gcc-build-vtable}
 
 |kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
 |kt_dev_cpp_101| ref: C++ under the hood, Scott Meyers
@@ -131,6 +127,12 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_104| ref: why singletons are controversial
 
 |kt_dev_cpp_200| example: Quote example from primers
+
+|kt_dev_cpp_300| case: framework {tizen-case}
+|kt_dev_cpp_301| case: wrapper
+|kt_dev_cpp_302| case: porting layer
+|kt_dev_cpp_303| case: inheritance {how-gcc-build-vtable}
+|kt_dev_cpp_304| case: overload
 
 #{ STL follow <what-container-consideration> for points to consider
 |kt_dev_stl_000| useful links and gcc stl {stl-design-rationale}
@@ -12934,18 +12936,6 @@ d: 6.28
 rd: 3          // see
 
 
-{const-on-iterators}
-In iterator, begin() has overloads: const and non-const version because if it has only const
-version, *this is const and any data member is also const. begin() may return its member. note:
-syntax is different.
-
-// like 'T* const' and iter itself is const
-const std::vector<T>::iterator iter = vec.begin();
-
-// like 'const T*' and *iter is const
-std::vector<T>::const_iterator iter = vec.begin();
-
-
 {const-return} equal-misspell
 EC++03. When use return by value as a return, use const to raise error when mistake happens:
 
@@ -12998,7 +12988,7 @@ it makes:
 T *const this -> 'const' T *const this
 
 
-<constness-and-overload> overload-condition
+{constness-and-overload} overload-condition
 Member functions differing only in their constness can be overloaded. Conditons for overloading
 
 1. Shall be the same 'name'
@@ -13015,11 +13005,42 @@ Record lookup( account *const ); // const pointer. re-define.
 Record lookup( account & );      // non-const version
 Record lookup( const account &); // const version
 
+
+{const-on-iterators}
+In iterator, begin() has overloads: const and non-const version because if it has only const
+version, *this is const and any data member is also const. 
+
+note: see how it has overloads 'depending' on object called upon and how to use const iterator.
+
+/**
+*  Returns a read/write iterator that points to the first
+*  element in the %vector.  Iteration is done in ordinary
+*  element order.
+*/
+iterator
+begin() _GLIBCXX_NOEXCEPT
+{ return iterator(this->_M_impl._M_start); }
+
+/**
+*  Returns a read-only (constant) iterator that points to the
+*  first element in the %vector.  Iteration is done in ordinary
+*  element order.
+*/
+const_iterator
+begin() const _GLIBCXX_NOEXCEPT
+{ return const_iterator(this->_M_impl._M_start); }
+
+// like 'T* const' and iter itself is const
+const std::vector<T>::iterator iter = vec.begin();
+
+// like 'const T*' and *iter is const
+std::vector<T>::const_iterator iter = vec.begin();
+
+
 <const-non-const-version>
 Why neeeds const and nonconst version? When use reference to const argument for better performance
 and clearer interface about constness, required to have both version. 
 
-<const-param-args>
 The const matters when copying vars and func params. That is why copy-ctor is usded here.
 
 void fcn( const int i );
@@ -13032,6 +13053,7 @@ fcn(cj);    // int i = cj; ERROR
 
 These are all explained by the fact that fcn(const int i) can be used both fcn( const-pararm ) and
 fcn( non-const-param ) and in other words, top-level-const can be ignored.
+
 
 <const-reference-param>
 Two implications when use 'plain' reference param in func:
@@ -13048,7 +13070,7 @@ find_char("Hello", 'o');   // compile error because temp object is const
 So recommend const-reference-param over plain reference-param for flexibility: can use for both
 const and nonconst parameter. can use conversion.
 
-<example> this force to have const and nonconst version.
+example. this force to have const and nonconst version.
 
 class Screen {
   public:
@@ -13061,13 +13083,15 @@ void print_screen( const Screen &s )
   cout << s.getMesg() << endl;                  // call on const but getMesg is nonconst version
 }
 
-<example>
+example
+
 void print( const TextBlock& cbt )
 {
   std::cout << cbt[0];                    // operator[] shall be const version
 }
 
-<example>
+example
+
 If there is only a const version of display() then following is a compile error. Assume display() is
 const member func and set_set is non-const member func.
 
@@ -13076,7 +13100,7 @@ myscreen.display().set_set(10);
 
 Since display() returns const and cannot call nonconst, set_set() on const object. Solution?
 
-<approach-one> Use overloads for non const and const
+<approach-one> Use overloads for nonconst and const
 
 class screen{
   public:
@@ -13093,7 +13117,7 @@ class screen{
 };
 
 
-// gcc-eample
+example
 
 class Screen {
   public:
@@ -13105,6 +13129,9 @@ class Screen {
 
     void set()
     { cout << "set: this is non-const member" << endl; }
+
+    void set() const
+    { cout << "set: this is const member" << endl; }
 };
 
 
@@ -13121,12 +13148,10 @@ int main(int argc, char** argv)
   cscreen.display().set();    // error for note-02
 }
 
-<1>
-This is why cannot return nonconst from const member function: when return *this from const member
-function. error on const to non-const conversion. So const member 'must' have this form when return
-*this in particular since const applies to this pointer: 
 
-const T& display() const
+note: 1. const member function 'must' return reference-to-const
+
+If it were written:
 
 Screen& display() const
 { cout << "dis: this is const member" << endl; return *this; }
@@ -13135,16 +13160,11 @@ test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&' from expression of type
 'const Screen'
 
-<2> 
-The right version is called depending on objects. <Q> How to resolve overloads? Guess that it uses
-const on this since actual function call is display( Screen* const this ).
+This is an error on "const to nonconst conversion" So const member 'must' have this form since const
+applies to this pointer: 
 
-dis: this is non-const member
-dis: this is non-const member
-set: this is non-const member
-dis: this is const member
 
-<3>
+note: 2. this shows why cannot use nonconst member on const object
 
 cscreen.display().set();
 
@@ -13154,10 +13174,10 @@ test.cpp: In function 'int main(int, char**)':
 test.cpp:32:24: error: passing 'const Screen' as 'this' argument of 'void Screen::set()' discards
 qualifiers [-fpermissive]
 
-<4> when remove const return and function do not return.
+note: 3. when remove const return and function do not return *this.
 
-Screen& display() const    // note: not "const Screen& display() const"
-{ cout << "dis: this is const member" << endl; }
+Screen& display() const                               // not "const Screen& display() const"
+{ cout << "dis: this is const member" << endl; }      // do not return *this
 
 dis: this is non-const member
 dis: this is non-const member
@@ -13166,11 +13186,10 @@ dis: this is const member
 dis: this is const member
 set: this is non-const member
 
-The const display() returns as declared since no comiple error and works. When use "const Screen&
-display() const", get the same error as <3>
+The const display() returns as 'declared' since no comiple error and works. 
 
-<key> The const member func has always this form when use return. why? see bitwise-const for more.
-This matters only when returns reference but not a copy.
+The point is taht the const member func has always this form when use return. why? see bitwise-const
+for more.  This matters only when returns reference but not a copy.
 
 const T func( ... ) const // OK
 T func( ... ) const       // NO 
@@ -18133,573 +18152,6 @@ enclosing scope {
 
 
 ={============================================================================
-*kt_dev_cpp_030* case study: framework {tizen-case}
-
-From Tizen and points to see are:
-
-o Used factory-func to create a self in the derived class but used static-factory-func. Have
-separation and single point of acess to create whole instances.
-
-o Not used singleton but used protected and private ctor or/and dtor in a tree. The protected is
-used like singleton to allow derived to create base part.
-
-o Used pimpl-idiom but do not have the same interface between them. not necessary to have the same
-interface 
-
-o the way to pass cpp func addresses to c
-
- 
-App: ABC                                     _AppImpl: public interface classes
-                                                friend class App
- 'protected': ctor(); new _AppImpl              'private': ctor and dtor (only App can create AppImpl)
- 'static' App* GetInstance(); calls ->          static _AppImpl* GetInstance()
-                                                Construct()
-                                                Execute()
- |
- |
- |
-ServiceApp:                                  _ServiceAppImpl: public interface classes
- 'protected': ctor(); new _ServiceAppImpl       'private': ctor and dtor
- static ServiceApp* GetInstance(); ->           static _ServiceAppImpl* GetInstance()
- static Execute(); 
-   : use user provided factory-func to create user class and creates all instances
-   : register a event listener and run efl_main
-
- | 
- | Framework 
- |-----------------------------------------------------------------------------
- | User classes
- |----------------------------------
- |                                 | ...
-AppService:                       XXXService:
- static CreateInstance();
-   : member-static-factory-func to create AppService. This is interesting because used subclassing
-   to decide what to create but used static-factory-func.
-
-OspMain():
-   result r = Tizen::App::Service::Execute( AppService::CreateInstance, &args);
-   (result r = Tizen::App::ServiceApp::Execute( AppService::CreateInstance, &args); )
-
-
-// App
-
-class App
-{
-  // interfaces
-  public: 
-    virtual OnXXX()=0;
-    virtual void OnLowMemory(void);
-
-    // very few use of forwarding to impl.
-    virtual OnYYY()
-    { __pAppImpl->OnYYY(); }
-
-    static App* GetInstance();
-    {
-      _AppImpl* pAppImpl = _AppImpl::GetInstance();
-
-      if (pAppImpl != null)
-      {  // [KT] why need this as it returns App* which is passed to Impl?
-        return pAppImpl->GetAppInstance();
-      }
-
-      return null;
-    }
-
-    virtual ~App(void)			# see virtual
-    { delete __pAppImpl; }
-
-  protected:
-    App(void);
-    { __pAppImpl = 'new' (std::nothrow) _AppImpl('this'); }
-
-  private:
-    class _AppImpl* __pAppImpl;
-};
-
-
-// _AppImpl
-
-class _AppImpl : public IEventListener
-{
-  public:
-    'static' _AppImpl* GetInstance()
-    { return __pAppImpl; }
-
-    App* _AppImpl::GetAppInstance(void)
-    { return __pApp; }
-
-    result Construct(const Tizen::Base::Collection::IList* pArgs);
-    result Execute(_IAppImpl* pIAppImpl);
-    {
-      pAppImpl->__pIAppImpl = pIAppImpl;
-
-      app_event_callback_s state_handler;
-
-      state_handler.create = &OnCreate;
-      state_handler.service = &OnService;
-      state_handler.terminate = &OnTerminate;
-      state_handler.pause = &OnPause;
-      state_handler.resume = &OnResume;
-      state_handler.device_orientation = NULL;
-
-      state_handler.low_memory = &OnLowMemory;
-      state_handler.low_battery = NULL;
-      state_handler.language_changed = &OnLanguageChanged;
-      state_handler.region_format_changed = &OnRegionFormatChanged;
-
-      // see how to pass data from cpp to c and efl_main should copy since it is local
-      // 
-      eflResult = app_efl_main(&argc, &pArgv, &state_handler, this);
-    }
-
-    // same name but static. what will happen?
-    'static' void OnLowMemory(void* user_data);
-
-  private:
-
-    _AppImpl::_AppImpl(App* pApp)
-      : ...
-        , __pApp(pApp)
-          , __pIAppImpl(null)
-  { __pAppImpl = this; }
-
-    virtual ~_AppImpl(void)
-    { __pAppImpl = null; }
-
-    'static' _AppImpl* __pAppImpl;
-
-    App* __pApp;
-    _IAppImpl* __pIAppImpl;
-
-    // [KT] otherwise, compile errer when App creates Impl
-    friend class App;
-};
-
-
-// ServiceApp(Service) since used typedef ServiceApp Service
-
-class ServiceApp : public Tizen::App::App
-{
-  public:
-    virtual ~ServiceApp(void)
-    { delete __pServiceAppImpl; }
-
-    'static' ServiceApp* GetInstance(void)
-    {
-      _ServiceAppImpl* pServiceAppImpl = _ServiceAppImpl::GetInstance();
-      if (pServiceAppImpl == null)
-      {
-        return null;
-      }
-
-      return pServiceAppImpl->GetServiceAppInstance();
-    }
-
-    'static' result Execute(ServiceAppInstanceFactory pServiceAppFactory, 
-        const Tizen::Base::Collection::IList* pArguments);
-    {
-      result r = E_SUCCESS;
-
-      ServiceApp* pServiceApp = null;
-      _AppImpl* pAppImpl = null;
-
-      // call AppService::CreateInstance. create <AppService> instance
-      // use pServiceApp only when exception happens to delete. Here done all creations of objects. 
-      pServiceApp = pServiceAppFactory();
-
-      // free to use all instances
-      pAppImpl = _AppImpl::GetInstance();
-
-      _ServiceAppImpl* 'pServiceAppImpl' = _ServiceAppImpl::GetInstance();
-
-      // add it as event listner and set app state to initializing
-      r = pAppImpl->Construct(pArguments);
-
-      // derive-to-base conversion as _ServiceAppImpl to _IAppImpl
-      // pass cpp Onxx funcs to c efl and run app_efl_main
-      r = pAppImpl->Execute(pServiceAppImpl); 
-    }
-
-  protected:
-    ServiceApp(void)
-    { __pServiceAppImpl = 'new' (std::nothrow) _ServiceAppImpl('this'); }
-
-  private:
-    ServiceApp(const ServiceApp& rhs);
-    ServiceApp& operator =(const ServiceApp& rhs);
-
-    class _ServiceAppImpl* __pServiceAppImpl;
-}
-
-
-// _ServiceAppImpl
-
-class _ServiceAppImpl
-: public Tizen::Base::Object
-, public Tizen::App::_IAppImpl
-, public Tizen::Base::Runtime::ITimerEventListener
-, virtual public Tizen::Base::Runtime::IEventListener
-{
-  public:
-    static _ServiceAppImpl* GetInstance();
-    { return __pServiceAppImpl; }
-
-  private:
-    _ServiceAppImpl(ServiceApp* pServiceApp)
-      : __pAppImpl(_AppImpl::GetInstance())
-        , __pServiceApp(pServiceApp)
-        , __pAppTerminatingInternalEventListener(null)
-        , __pLifeDurationTimer(null)
-        , __lifeDuration(0)
-        , __pauseLifeDurationTimer(false)
-  {
-    __pServiceAppImpl = this;
-  }
-
-    ServiceApp*
-      _ServiceAppImpl::GetServiceAppInstance(void)
-      {
-        return __pServiceApp;
-      }
-
-    virtual ~_ServiceAppImpl(void);
-
-    static _ServiceAppImpl* __pServiceAppImpl;
-    _AppImpl* __pAppImpl;
-    ServiceApp* __pServiceApp;
-    _IAppEventListener* __pAppTerminatingInternalEventListener;
-
-    friend class ServiceApp;
-};
-
-
-// AppService. client class which is out of framework and namespace.
-
-class AppService
-: public Tizen::App::ServiceApp
-, public Tizen::App::Package::IPackageInstallationEventListener
-, public Tizen::App::_IAppManagerEventListener
-, public Tizen::System::IBootEventListener
-, virtual public Tizen::Base::Runtime::IEventListener
-{
-
-  public:
-    // create self
-    'static' Tizen::App::ServiceApp* CreateInstance(void)
-    {
-      // [KT] why static?
-      'static' AppService* pAppService = new (std::nothrow) AppService();
-      __pAppService = pAppService;
-
-      // convert to base
-      return pAppService;
-    }
-
-    static AppService* GetAppServiceInstance(void);
-    AppService();
-    virtual ~AppService();
-
-    // OnXXX interfaces
-    virtual bool OnAppInitializing(Tizen::App::AppRegistry& appRegistry);
-    ...
-      virtual void OnLowMemory(void);
-
-    static AppService* __pAppService;
-};
-
-OspMain() {
-
-   result r = Tizen::App::Service::Execute(AppService::CreateInstance, &args);
-   (result r = Tizen::App::ServiceApp::Execute(AppService::CreateInstance, &args); )
-}
-
-int main(int argc, char* pArgv[])
-{
-   int r = OspMain(argc, pArgv);
-}
-
-
-={============================================================================
-*kt_dev_cpp_031*	wrapper
-
-{example-one} {wrapper}
-This is taken from *kt_dev_mecpp_007* to discuss it again: This case is that main is in c and is to
-use some features written cpp.
-
-C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++)
-
-#include "wrapper.h"                                  #include "wrapper.h" 
-                            extern "C"                extern "C"
-                            {   typedefs               {
-										  int wraaper_func();       int wrapper_func()
-										  ...                       {
-									 }                                ....
-                                                          }
-																			 ...
-																		}
-
-Here wrapper is used to bridge between cpp and c:
-
-int wrapper_func()
-{
-	ClassX* pclass = new Class( params );
-
-	pclass->func();
-	...
-}
-
-
-{example-two} {{add-reference-counting-to-existing-classes}} {wrapper} {forwarding}
-How to add this reference-counting feature, RCObject, to a class which is in libary and do not
-have source? Here Widget is library class:
-
-            RCObject
-			    |
-RCWidget -> Widget
-+RCPtr
-
->
- Use that most problems in Computer Science can be solved with an additional level of indirection.
- See how to forward and how to get around the problem.
-<
-
-                  RCObject
-			          |
-RCWidget       -> CounterHolder    -> Widget
-+RCIPtr
-  (counter)->      (pointee)->
-
-Here Widget or CounterHolder is <reference-counted-object>
-
-
-template<class T>
-class RCIPtr {
-	 public:
-		  RCIPtr(T* realPtr = 0);
-		  ...
-		  RCObject& getRCObject() // give clients access to
-		  { return *counter; } // isShared, etc.
-
-	 private:
-		  struct CountHolder: public RCObject {
-				~CountHolder() { delete pointee; }
-				T *pointee;
-		  };
-
-		  CountHolder *counter;
-		  void init();
-};
-
-template<class T>
-void RCIPtr<T>::init()
-{
-	 if (counter->isShareable() == false) {
-		  T *oldValue = counter->pointee;
-		  counter = new CountHolder;
-		  counter->pointee = oldValue ? new T(*oldValue) : 0;
-	 }
-	 counter->addReference();
-}
-
-template<class T>
-RCIPtr<T>::RCIPtr(T* realPtr) : counter( 'new' CountHolder)
-{
-	 counter->pointee = realPtr;
-	 init();
-}
-
-class RCWidget {
-	 public:
-		  # <see-how-to-pass-widget> 
-		  RCWidget(int size): value( 'new' Widget(size)) {} 
-
-        # <forwarding> [see-how-to-forward]
-		  void doThis()
-		  {
-				if (value.getRCObject().isShared()) { 
-					 value = new Widget(*value); 
-				}
-				value->doThis();
-		  }
-
-		  int showThat() const { return value->showThat(); }
-
-	 private:
-		  RCIPtr<Widget> value;
-};
-
-
-={============================================================================
-*kt_dev_cpp_032* case study: porting layer
-
-{case-one}
-The case which use singleton to have a porting layer for different platforms.
-
-├── Interfaces
-│   ├── Core
-│   │   ├── IPluginRegister.h
-│   │   └── SectionDataDefines.h
-│   └── PortingLayer (has interface classes)
-│       ├── IAPLAppLaunch.h
-│       ├── IAPLAVControl.h
-│       ├── ...
-│       ├── IAPLMutex.h
-│       ├── IAPLOSAbstraction.h
-│       └── IApplitePortingLayer.h
-├
-├── PortingLayer (for platform A)
-│   ├── Inc (headers for each class which implements each interface
-│   │   ├── APLAVController.h
-│   │   ├── APLDebug.h
-│   │   ├── ...
-│   │   ├── APLMutex.h
-│   │   ├── APLOSAbstraction.h
-│   │   └── ApplitePortingLayer.h
-│   └── Src (sources for each class which implements eash interface, functionality)
-│       ├── APLAVController.cpp
-│       ├── APLDebug.cpp
-│       ├── ...
-│       └── ApplitePortingLayer.cpp (this is the gate class)
-
-
-User                 CApplitePortingLayer : publuc IApplitePortingLayer
-getInstace()         - get functions to get each interface pointer
-Ins->getInterface(); - pointer members for each interface
-
-                     CInterfaceA : public IInterfaceA             CInterfaceB ...
-                     - *.h, *.cpp
-                     - actual platform specific implementation
-
-
-class CApplitePortingLayer : public IApplitePortingLayer
-{
-
-private:
-	///default constructor
-	CApplitePortingLayer(){};
-
-public:
-	uses singleton
-	has all getXXX funcs for each functionality which returns member pointer for each.
-	ctor creates all interface classes and set member pointers.
-
-	///This function creates the porting layer interfaces. factory-func
-	static CApplitePortingLayer* Instance(CReceiverAppBase* receiver);
-	{
-		 if (m_singleton == NULL)
-		 {
-			  m_singleton = new CApplitePortingLayer(receiver);
-		 }
-		 return m_singleton;
-	}
-
-	///This function gets the porting layer interfaces if created.
-	static CApplitePortingLayer* GetInstance();
-	{
-		return m_singleton;
-	}
-}
-
-Creates all concrete classes which implments interfaces.
-
-CApplitePortingLayer::CApplitePortingLayer(CReceiverAppBase* receiver)
-:m_receiver(receiver)
-{
-	m_graphics =  new CAPLGraphics((IReceiverAppPorting*)receiver, receiver->GetViewIndex());
-	m_debug = new CAPLDebug((PCTask*)receiver, receiver->GetTCTv());
-	m_mediaManager = new CAPLMediaManager((IReceiverAppPorting*)receiver, receiver->GetTCWindowByAutoSelect(), (PCTask*)receiver);		m_OSAbstraction = new CAPLOSAbstraction((IReceiverAppPorting*)receiver, receiver->GetTCTv(), (PCTask*)receiver);
-	m_persistentStorage = new CAPLPersistentStorage();
-	m_sectionFilter = new CAPLSectionFilter(receiver->GetTCWindowByAutoSelect(), (PCTask*)receiver);
-	m_serviceInformation = CAPLServiceInformation::Instance((IReceiverAppPorting*)receiver, 
-			receiver->GetTCTv(), receiver->GetTCWindowByAutoSelect());
-	m_systemProperties = new CAPLSystemProperties((IReceiverAppPorting*)receiver, 
-			receiver->GetTCTv(), receiver->GetTCWindowByAutoSelect());
-	m_security = new CAPLSecurity();
-	m_serial = new CAPLSerial();
-	m_typeface = CAPLTypeface::getInstance();
-	m_appLaunch = new CAPLAppLaunch((IReceiverAppPorting*)receiver);
-
-    //initialise curl here, needed for both network and X509 operations
-    CAPLCurl::InitCurl();
-}
-
-The good thing is that make CApplitePortingLayer singleton and manage other interfaces via it rather
-than making every interface a singleton class.
-
-This approach means that each concrete implementation calss, Cxx, implements interfaces and users
-will use it directly. If the client is CPP file, that's fine and each Cxx can have typedefs, enums
-and so on but if C file then do not work. For C files, each Cxx class provide C function and there
-should be a way to share typedefs between CPP and C files. So should be a single header which has
-common typedefs for C and CPP land.
-
-Also can use that make all interface concrete class to have private interfaces and make a friend
-between CApplitePortingLayer and otheres. That makes only CApplitePortingLayer can create and use
-those.
-
-{case-two}
-├── OAL (OS AL)
-│   ├── Inc
-│   │   ├── ...h
-│   │   └── ...h
-│   └── Src 
-│       ├── LINUX (this is folder which has platform implementation)
-│       ├── WINDOWS
-│       ├── VXWORS
-│       ├── ...
-
-
-={============================================================================
-*kt_dev_cpp_033* case study: inheritance
-
-In the porting layer design and implementation, have drawn the class hierarchy.
-
- ISession (ABC) and more...      IEvent 
-
- IDriver : public ISession, public IEvent
-
- CDsm : public IDriver and more...
-
-When add more interface classes which are ABC and add more concrete derived classes, shall add the
-same member functions in a header and source of a derived class. Otherwise, will have compile/link
-error since ABC forces derived class to define functions. See {error-when-create-abc} for what
-happens when not overrides pure virtual functions. Tedious. Any other better way?
-
-1> How about having a pure-virtual-dtor to make a ABC and having normal virtual members?  If have a
-class definition and the defintion of a pure-virtual-dtor in the header, get a multiple defintion
-error since this is included in every file which use it. Can have source file which has a dtor
-definition but still needs definitions for other members. If not, get errors as 3>.
-
-2> How about having a virtual members for interface classes? Since it has implementation, that is
-okay for a derived class not to override or implement it. So no tedious work. However, cannot force
-derived to override and can forget to implement it. Here talking about 'interface' class.
-
-3> What will happen when changes pure virtual functions to normal virtual functions but do not have
-implementation? Simply changes a header since it has a header only as a interface class.
-
-Linking CXX executable mhegproto
-port/libmhport.a(CDsm.cpp.o): In function `~ISession':
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-port/libmhport.a(CDsm.cpp.o): In function `~IDriver':
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x94): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x98): undefined reference to `IEvent::unsubscribeEvent(void*)'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x9c): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTI7IDriver[typeinfo for IDriver]+0x28): undefined reference to `typeinfo for IEvent'
-port/libmhport.a(CDsm.cpp.o): In function `.LANCHOR0':
-CDsm.cpp:(.rodata+0x5ac): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
-CDsm.cpp:(.rodata+0x5b0): undefined reference to `IEvent::unsubscribeEvent(void*)'
-CDsm.cpp:(.rodata+0x5b4): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
-port/libmhport.a(CCi.cpp.o): In function `~ISession':
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-
-This shows how GCC implements vtables for a class.
-
-
-={============================================================================
 *kt_dev_cpp_100* ref: C++ under the hood
 
 Visual C and C++ (General) Technical Articles
@@ -20179,6 +19631,625 @@ ISBN: 345 # sold: 8 total due: 306
 ISBN: 678 # sold: 9 total due: 371.25
 ISBN: def # sold: 3 total due: 105
 Total sale: 917.25
+
+
+={============================================================================
+*kt_dev_cpp_300* case: framework {tizen-case}
+
+From Tizen and points to see are:
+
+o Used factory-func to create a self in the derived class but used static-factory-func. Have
+separation and single point of acess to create whole instances.
+
+o Not used singleton but used protected and private ctor or/and dtor in a tree. The protected is
+used like singleton to allow derived to create base part.
+
+o Used pimpl-idiom but do not have the same interface between them. not necessary to have the same
+interface 
+
+o the way to pass cpp func addresses to c
+
+ 
+App: ABC                                     _AppImpl: public interface classes
+                                                friend class App
+ 'protected': ctor(); new _AppImpl              'private': ctor and dtor (only App can create AppImpl)
+ 'static' App* GetInstance(); calls ->          static _AppImpl* GetInstance()
+                                                Construct()
+                                                Execute()
+ |
+ |
+ |
+ServiceApp:                                  _ServiceAppImpl: public interface classes
+ 'protected': ctor(); new _ServiceAppImpl       'private': ctor and dtor
+ static ServiceApp* GetInstance(); ->           static _ServiceAppImpl* GetInstance()
+ static Execute(); 
+   : use user provided factory-func to create user class and creates all instances
+   : register a event listener and run efl_main
+
+ | 
+ | Framework 
+ |-----------------------------------------------------------------------------
+ | User classes
+ |----------------------------------
+ |                                 | ...
+AppService:                       XXXService:
+ static CreateInstance();
+   : member-static-factory-func to create AppService. This is interesting because used subclassing
+   to decide what to create but used static-factory-func.
+
+OspMain():
+   result r = Tizen::App::Service::Execute( AppService::CreateInstance, &args);
+   (result r = Tizen::App::ServiceApp::Execute( AppService::CreateInstance, &args); )
+
+
+// App
+
+class App
+{
+  // interfaces
+  public: 
+    virtual OnXXX()=0;
+    virtual void OnLowMemory(void);
+
+    // very few use of forwarding to impl.
+    virtual OnYYY()
+    { __pAppImpl->OnYYY(); }
+
+    static App* GetInstance();
+    {
+      _AppImpl* pAppImpl = _AppImpl::GetInstance();
+
+      if (pAppImpl != null)
+      {  // [KT] why need this as it returns App* which is passed to Impl?
+        return pAppImpl->GetAppInstance();
+      }
+
+      return null;
+    }
+
+    virtual ~App(void)			# see virtual
+    { delete __pAppImpl; }
+
+  protected:
+    App(void);
+    { __pAppImpl = 'new' (std::nothrow) _AppImpl('this'); }
+
+  private:
+    class _AppImpl* __pAppImpl;
+};
+
+
+// _AppImpl
+
+class _AppImpl : public IEventListener
+{
+  public:
+    'static' _AppImpl* GetInstance()
+    { return __pAppImpl; }
+
+    App* _AppImpl::GetAppInstance(void)
+    { return __pApp; }
+
+    result Construct(const Tizen::Base::Collection::IList* pArgs);
+    result Execute(_IAppImpl* pIAppImpl);
+    {
+      pAppImpl->__pIAppImpl = pIAppImpl;
+
+      app_event_callback_s state_handler;
+
+      state_handler.create = &OnCreate;
+      state_handler.service = &OnService;
+      state_handler.terminate = &OnTerminate;
+      state_handler.pause = &OnPause;
+      state_handler.resume = &OnResume;
+      state_handler.device_orientation = NULL;
+
+      state_handler.low_memory = &OnLowMemory;
+      state_handler.low_battery = NULL;
+      state_handler.language_changed = &OnLanguageChanged;
+      state_handler.region_format_changed = &OnRegionFormatChanged;
+
+      // see how to pass data from cpp to c and efl_main should copy since it is local
+      // 
+      eflResult = app_efl_main(&argc, &pArgv, &state_handler, this);
+    }
+
+    // same name but static. what will happen?
+    'static' void OnLowMemory(void* user_data);
+
+  private:
+
+    _AppImpl::_AppImpl(App* pApp)
+      : ...
+        , __pApp(pApp)
+          , __pIAppImpl(null)
+  { __pAppImpl = this; }
+
+    virtual ~_AppImpl(void)
+    { __pAppImpl = null; }
+
+    'static' _AppImpl* __pAppImpl;
+
+    App* __pApp;
+    _IAppImpl* __pIAppImpl;
+
+    // [KT] otherwise, compile errer when App creates Impl
+    friend class App;
+};
+
+
+// ServiceApp(Service) since used typedef ServiceApp Service
+
+class ServiceApp : public Tizen::App::App
+{
+  public:
+    virtual ~ServiceApp(void)
+    { delete __pServiceAppImpl; }
+
+    'static' ServiceApp* GetInstance(void)
+    {
+      _ServiceAppImpl* pServiceAppImpl = _ServiceAppImpl::GetInstance();
+      if (pServiceAppImpl == null)
+      {
+        return null;
+      }
+
+      return pServiceAppImpl->GetServiceAppInstance();
+    }
+
+    'static' result Execute(ServiceAppInstanceFactory pServiceAppFactory, 
+        const Tizen::Base::Collection::IList* pArguments);
+    {
+      result r = E_SUCCESS;
+
+      ServiceApp* pServiceApp = null;
+      _AppImpl* pAppImpl = null;
+
+      // call AppService::CreateInstance. create <AppService> instance
+      // use pServiceApp only when exception happens to delete. Here done all creations of objects. 
+      pServiceApp = pServiceAppFactory();
+
+      // free to use all instances
+      pAppImpl = _AppImpl::GetInstance();
+
+      _ServiceAppImpl* 'pServiceAppImpl' = _ServiceAppImpl::GetInstance();
+
+      // add it as event listner and set app state to initializing
+      r = pAppImpl->Construct(pArguments);
+
+      // derive-to-base conversion as _ServiceAppImpl to _IAppImpl
+      // pass cpp Onxx funcs to c efl and run app_efl_main
+      r = pAppImpl->Execute(pServiceAppImpl); 
+    }
+
+  protected:
+    ServiceApp(void)
+    { __pServiceAppImpl = 'new' (std::nothrow) _ServiceAppImpl('this'); }
+
+  private:
+    ServiceApp(const ServiceApp& rhs);
+    ServiceApp& operator =(const ServiceApp& rhs);
+
+    class _ServiceAppImpl* __pServiceAppImpl;
+}
+
+
+// _ServiceAppImpl
+
+class _ServiceAppImpl
+: public Tizen::Base::Object
+, public Tizen::App::_IAppImpl
+, public Tizen::Base::Runtime::ITimerEventListener
+, virtual public Tizen::Base::Runtime::IEventListener
+{
+  public:
+    static _ServiceAppImpl* GetInstance();
+    { return __pServiceAppImpl; }
+
+  private:
+    _ServiceAppImpl(ServiceApp* pServiceApp)
+      : __pAppImpl(_AppImpl::GetInstance())
+        , __pServiceApp(pServiceApp)
+        , __pAppTerminatingInternalEventListener(null)
+        , __pLifeDurationTimer(null)
+        , __lifeDuration(0)
+        , __pauseLifeDurationTimer(false)
+  {
+    __pServiceAppImpl = this;
+  }
+
+    ServiceApp*
+      _ServiceAppImpl::GetServiceAppInstance(void)
+      {
+        return __pServiceApp;
+      }
+
+    virtual ~_ServiceAppImpl(void);
+
+    static _ServiceAppImpl* __pServiceAppImpl;
+    _AppImpl* __pAppImpl;
+    ServiceApp* __pServiceApp;
+    _IAppEventListener* __pAppTerminatingInternalEventListener;
+
+    friend class ServiceApp;
+};
+
+
+// AppService. client class which is out of framework and namespace.
+
+class AppService
+: public Tizen::App::ServiceApp
+, public Tizen::App::Package::IPackageInstallationEventListener
+, public Tizen::App::_IAppManagerEventListener
+, public Tizen::System::IBootEventListener
+, virtual public Tizen::Base::Runtime::IEventListener
+{
+
+  public:
+    // create self
+    'static' Tizen::App::ServiceApp* CreateInstance(void)
+    {
+      // [KT] why static?
+      'static' AppService* pAppService = new (std::nothrow) AppService();
+      __pAppService = pAppService;
+
+      // convert to base
+      return pAppService;
+    }
+
+    static AppService* GetAppServiceInstance(void);
+    AppService();
+    virtual ~AppService();
+
+    // OnXXX interfaces
+    virtual bool OnAppInitializing(Tizen::App::AppRegistry& appRegistry);
+    ...
+      virtual void OnLowMemory(void);
+
+    static AppService* __pAppService;
+};
+
+OspMain() {
+
+   result r = Tizen::App::Service::Execute(AppService::CreateInstance, &args);
+   (result r = Tizen::App::ServiceApp::Execute(AppService::CreateInstance, &args); )
+}
+
+int main(int argc, char* pArgv[])
+{
+   int r = OspMain(argc, pArgv);
+}
+
+
+={============================================================================
+*kt_dev_cpp_301* case: wrapper
+
+{example-one} {wrapper}
+This is taken from *kt_dev_mecpp_007* to discuss it again: This case is that main is in c and is to
+use some features written cpp.
+
+C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++)
+
+#include "wrapper.h"                                  #include "wrapper.h" 
+                            extern "C"                extern "C"
+                            {   typedefs               {
+										  int wraaper_func();       int wrapper_func()
+										  ...                       {
+									 }                                ....
+                                                          }
+																			 ...
+																		}
+
+Here wrapper is used to bridge between cpp and c:
+
+int wrapper_func()
+{
+	ClassX* pclass = new Class( params );
+
+	pclass->func();
+	...
+}
+
+
+{example-two} {{add-reference-counting-to-existing-classes}} {wrapper} {forwarding}
+How to add this reference-counting feature, RCObject, to a class which is in libary and do not
+have source? Here Widget is library class:
+
+            RCObject
+			    |
+RCWidget -> Widget
++RCPtr
+
+>
+ Use that most problems in Computer Science can be solved with an additional level of indirection.
+ See how to forward and how to get around the problem.
+<
+
+                  RCObject
+			          |
+RCWidget       -> CounterHolder    -> Widget
++RCIPtr
+  (counter)->      (pointee)->
+
+Here Widget or CounterHolder is <reference-counted-object>
+
+
+template<class T>
+class RCIPtr {
+	 public:
+		  RCIPtr(T* realPtr = 0);
+		  ...
+		  RCObject& getRCObject() // give clients access to
+		  { return *counter; } // isShared, etc.
+
+	 private:
+		  struct CountHolder: public RCObject {
+				~CountHolder() { delete pointee; }
+				T *pointee;
+		  };
+
+		  CountHolder *counter;
+		  void init();
+};
+
+template<class T>
+void RCIPtr<T>::init()
+{
+	 if (counter->isShareable() == false) {
+		  T *oldValue = counter->pointee;
+		  counter = new CountHolder;
+		  counter->pointee = oldValue ? new T(*oldValue) : 0;
+	 }
+	 counter->addReference();
+}
+
+template<class T>
+RCIPtr<T>::RCIPtr(T* realPtr) : counter( 'new' CountHolder)
+{
+	 counter->pointee = realPtr;
+	 init();
+}
+
+class RCWidget {
+	 public:
+		  # <see-how-to-pass-widget> 
+		  RCWidget(int size): value( 'new' Widget(size)) {} 
+
+        # <forwarding> [see-how-to-forward]
+		  void doThis()
+		  {
+				if (value.getRCObject().isShared()) { 
+					 value = new Widget(*value); 
+				}
+				value->doThis();
+		  }
+
+		  int showThat() const { return value->showThat(); }
+
+	 private:
+		  RCIPtr<Widget> value;
+};
+
+
+={============================================================================
+*kt_dev_cpp_302* case: porting layer
+
+{case-one}
+The case which use singleton to have a porting layer for different platforms.
+
+├── Interfaces
+│   ├── Core
+│   │   ├── IPluginRegister.h
+│   │   └── SectionDataDefines.h
+│   └── PortingLayer (has interface classes)
+│       ├── IAPLAppLaunch.h
+│       ├── IAPLAVControl.h
+│       ├── ...
+│       ├── IAPLMutex.h
+│       ├── IAPLOSAbstraction.h
+│       └── IApplitePortingLayer.h
+├
+├── PortingLayer (for platform A)
+│   ├── Inc (headers for each class which implements each interface
+│   │   ├── APLAVController.h
+│   │   ├── APLDebug.h
+│   │   ├── ...
+│   │   ├── APLMutex.h
+│   │   ├── APLOSAbstraction.h
+│   │   └── ApplitePortingLayer.h
+│   └── Src (sources for each class which implements eash interface, functionality)
+│       ├── APLAVController.cpp
+│       ├── APLDebug.cpp
+│       ├── ...
+│       └── ApplitePortingLayer.cpp (this is the gate class)
+
+
+User                 CApplitePortingLayer : publuc IApplitePortingLayer
+getInstace()         - get functions to get each interface pointer
+Ins->getInterface(); - pointer members for each interface
+
+                     CInterfaceA : public IInterfaceA             CInterfaceB ...
+                     - *.h, *.cpp
+                     - actual platform specific implementation
+
+
+class CApplitePortingLayer : public IApplitePortingLayer
+{
+
+private:
+	///default constructor
+	CApplitePortingLayer(){};
+
+public:
+	uses singleton
+	has all getXXX funcs for each functionality which returns member pointer for each.
+	ctor creates all interface classes and set member pointers.
+
+	///This function creates the porting layer interfaces. factory-func
+	static CApplitePortingLayer* Instance(CReceiverAppBase* receiver);
+	{
+		 if (m_singleton == NULL)
+		 {
+			  m_singleton = new CApplitePortingLayer(receiver);
+		 }
+		 return m_singleton;
+	}
+
+	///This function gets the porting layer interfaces if created.
+	static CApplitePortingLayer* GetInstance();
+	{
+		return m_singleton;
+	}
+}
+
+Creates all concrete classes which implments interfaces.
+
+CApplitePortingLayer::CApplitePortingLayer(CReceiverAppBase* receiver)
+:m_receiver(receiver)
+{
+	m_graphics =  new CAPLGraphics((IReceiverAppPorting*)receiver, receiver->GetViewIndex());
+	m_debug = new CAPLDebug((PCTask*)receiver, receiver->GetTCTv());
+	m_mediaManager = new CAPLMediaManager((IReceiverAppPorting*)receiver, receiver->GetTCWindowByAutoSelect(), (PCTask*)receiver);		m_OSAbstraction = new CAPLOSAbstraction((IReceiverAppPorting*)receiver, receiver->GetTCTv(), (PCTask*)receiver);
+	m_persistentStorage = new CAPLPersistentStorage();
+	m_sectionFilter = new CAPLSectionFilter(receiver->GetTCWindowByAutoSelect(), (PCTask*)receiver);
+	m_serviceInformation = CAPLServiceInformation::Instance((IReceiverAppPorting*)receiver, 
+			receiver->GetTCTv(), receiver->GetTCWindowByAutoSelect());
+	m_systemProperties = new CAPLSystemProperties((IReceiverAppPorting*)receiver, 
+			receiver->GetTCTv(), receiver->GetTCWindowByAutoSelect());
+	m_security = new CAPLSecurity();
+	m_serial = new CAPLSerial();
+	m_typeface = CAPLTypeface::getInstance();
+	m_appLaunch = new CAPLAppLaunch((IReceiverAppPorting*)receiver);
+
+    //initialise curl here, needed for both network and X509 operations
+    CAPLCurl::InitCurl();
+}
+
+The good thing is that make CApplitePortingLayer singleton and manage other interfaces via it rather
+than making every interface a singleton class.
+
+This approach means that each concrete implementation calss, Cxx, implements interfaces and users
+will use it directly. If the client is CPP file, that's fine and each Cxx can have typedefs, enums
+and so on but if C file then do not work. For C files, each Cxx class provide C function and there
+should be a way to share typedefs between CPP and C files. So should be a single header which has
+common typedefs for C and CPP land.
+
+Also can use that make all interface concrete class to have private interfaces and make a friend
+between CApplitePortingLayer and otheres. That makes only CApplitePortingLayer can create and use
+those.
+
+{case-two}
+├── OAL (OS AL)
+│   ├── Inc
+│   │   ├── ...h
+│   │   └── ...h
+│   └── Src 
+│       ├── LINUX (this is folder which has platform implementation)
+│       ├── WINDOWS
+│       ├── VXWORS
+│       ├── ...
+
+
+={============================================================================
+*kt_dev_cpp_303* case: inheritance
+
+In the porting layer design and implementation, have drawn the class hierarchy.
+
+ ISession (ABC) and more...      IEvent 
+
+ IDriver : public ISession, public IEvent
+
+ CDsm : public IDriver and more...
+
+When add more interface classes which are ABC and add more concrete derived classes, shall add the
+same member functions in a header and source of a derived class. Otherwise, will have compile/link
+error since ABC forces derived class to define functions. See {error-when-create-abc} for what
+happens when not overrides pure virtual functions. Tedious. Any other better way?
+
+1> How about having a pure-virtual-dtor to make a ABC and having normal virtual members?  If have a
+class definition and the defintion of a pure-virtual-dtor in the header, get a multiple defintion
+error since this is included in every file which use it. Can have source file which has a dtor
+definition but still needs definitions for other members. If not, get errors as 3>.
+
+2> How about having a virtual members for interface classes? Since it has implementation, that is
+okay for a derived class not to override or implement it. So no tedious work. However, cannot force
+derived to override and can forget to implement it. Here talking about 'interface' class.
+
+3> What will happen when changes pure virtual functions to normal virtual functions but do not have
+implementation? Simply changes a header since it has a header only as a interface class.
+
+Linking CXX executable mhegproto
+port/libmhport.a(CDsm.cpp.o): In function `~ISession':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+port/libmhport.a(CDsm.cpp.o): In function `~IDriver':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x94): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x98): undefined reference to `IEvent::unsubscribeEvent(void*)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x9c): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTI7IDriver[typeinfo for IDriver]+0x28): undefined reference to `typeinfo for IEvent'
+port/libmhport.a(CDsm.cpp.o): In function `.LANCHOR0':
+CDsm.cpp:(.rodata+0x5ac): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
+CDsm.cpp:(.rodata+0x5b0): undefined reference to `IEvent::unsubscribeEvent(void*)'
+CDsm.cpp:(.rodata+0x5b4): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
+port/libmhport.a(CCi.cpp.o): In function `~ISession':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+
+This shows how GCC implements vtables for a class.
+
+
+={============================================================================
+*kt_dev_cpp_304* case: overloads
+
+{overloads-ctor}
+Has many ctor overloads to create different SCE objects depending on different event sources.
+
+SCE::SCE(boost::weak_ptr<MetadataRepositories> repos,
+   const std::string& lang,
+   const NS_IRON_SYSTEM::Event& dttEvent) :
+{}
+
+
+SCE::SCE(shared_ptr<SCE>& dttEvent, shared_ptr<SCE>& masEvent):
+{
+}
+
+SCE::SCE(shared_ptr<SCE>& masEvent, const uint32_t start_, const uint32_t end_):
+{}
+
+SCE::SCE(boost::weak_ptr<MetadataRepositories> repos, const SystemEventWrapper& masEvent) :
+{
+}
+
+SCE::SCE(boost::weak_ptr<MetadataRepositories> repos, 
+    boost::shared_ptr<Service> service_, uint32_t start_, uint32_t end_):
+    synopsis(),
+{}
+
+
+{overloads-call-operator}
+Likewise, has many () overloads to call () operator depending on arguments. 
+
+ServicePtrVecPtr operator()(
+        const std::vector<NS_SYSTEM::Result>& sysServices,
+        ServicePtrVecPtr) const;
+
+SummaryResultSetPtr operator()(
+        const NS_SYSTEM::ResultSet&, SummaryResultSetPtr, uint32_t requestedStartIndex = 0) const;
+
+CategoryResultSetPtr operator()(
+        const NS_SYSTEM::ResultSet&, CategoryResultSetPtr) const;
+
+PublicationResultSetPtr operator()(
+        const NS_SYSTEM::ResultSet&, PublicationResultSetPtr) const;
+
+ProgrammePtr operator()(
+        const NS_SYSTEM::Result&, ProgrammePtr) const;
+
+FullEventPtr operator()(
+        const NS_SYSTEM::Result&, FullEventPtr) const;
 
 
 # ============================================================================
