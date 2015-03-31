@@ -11196,7 +11196,7 @@ note: There are cases when syn-operations are useful. See {make-base-class-for-r
 
 {default-initialization-mean}
 The detault synthesised ctor will use in-class init if there is. Otherwise default init its member
-and use default ctor for its class member. So undefined value for built-in types and default
+and use default ctor for its class member. So 'undefined' value for built-in types and default
 constructed value for user types.
 
 
@@ -11348,44 +11348,124 @@ If not defined, syn version will be created. Don't use syn version of copy contr
 use dyn allocated resource. *kt_dev_cpp_004* 
 
 
-<copy-ctor> copy-init, pass-by-value
+{copy-constructor} copy-init, pass-by-value
 Initialize object from the other of the 'same' type. Ask compiler to copy the right hand operand
-into the object being created, converting that operand if necessary.
+into the object being created, and to convert that operand if necessary.
 
-The first arg is a reference to a class and the rest args can be defaults. Used in 'four' context:
-copy 'initialization', function 'call' pass by value, 'return' by value and implicit 'coversion'
-using temp object. For pass and return by value they are rightly non reference type, they are
-copy-inited. Hence called copy-ctor. In other words, defines how pass-by-value is implemented for
-that type.
+The first arg is a reference to a class and the rest args can be defaults. 
 
 class Foo {
   Foo(const &Foo);   // wrong
   Foo(const Foo&);   // okay
 };
 
-ABEntry::ABEntry(...)
-: theName(name),           // note this is copy ctor for this member type
-  theAddress(address),
-  thePhones(phones),
-  numTimesConsulted(0)
-{
-}
+Used in 'four' context:
 
-<direct-and-copy-init>
-// direct init. use ordinary func matching in searching string ctor.
+1. copy from of initialization
+2. function call pass by value. pass an object as an argument to a parameter of nonreference type.
+3. return an object by value, nonreference type. 
+4. implicit 'coversion' using temp object. 
+
+For pass and return by value they are rightly non reference type, they are copy-inited. Hence called
+copy-ctor. In other words, defines how pass-by-value is implemented for that type.
+
+
+<direct-and-copy-form-initialization>
+// default initialzation. empty
+string s1;                 
+
+// direct form of initialzation. use ordinary function matching in searching string ctor.
+string s2( s1 );           
 string dots(10, '.');
-string s(dots);
 
-// copy init. use copy ctor but not assignment. see implicit conversion here
+// copy form of initialzation. use copy ctor but not assignment. see implicit conversion here
 string null_book = "9-999-99999-9";
-string s1;
 string s2 = s1;
 
-<key>
+note:
 1. The copy ctor cannot be 'explicit' since used implicitly in cases mentioned above such as pass by
-value.
+value. 
 
-2. The copy init(copy form of init) invloves copy ctor and use converting ctor. See converting ctor
+2. When converting constructor is explicit, cannot use copy form of initialzation since copy form may use converting ctor. 
+
+// error: cannot use the copy form of initialization with an explicit converting constructor.
+Sales_data item2 = null_book;
+
+The C++SLR says that you can't use the assignment notation here because that is considered to be an
+implicit conversion.
+
+
+<synthesized-copy-constructor>
+Do 'memberwise' copies the members of its argument. The type of each member determines how that
+member is copied. Members of class type are copied by the copy constructor for that class and
+members of built-in are copied directly.
+
+class Sales_data
+{
+    public:
+        Sales_data( const Sales_data & );
+
+    private:
+        std::string bookNo;
+        int units_sold = 0;
+        double revenue = 0.0;
+};
+
+The equivalent copy constructor that would be synthesized:
+
+Sales_data::Sales_data( const Sales_data& orig ):
+    bookNo( orig.bookNo ),          // note: use string copy constructor
+    units_sold( orig.units_sold ),  // direct copies orig.units_sold
+    revenue( orig.revenue )
+{}
+
+#include<iostream>
+#include<string>
+#include<memory>
+
+using namespace std;
+
+class Foo 
+{
+    public:
+
+    // Foo() = default;
+    Foo()
+    { cout << "Foo's def ctor" << endl; }
+
+    Foo( int val ) 
+    { fval = val; }
+
+    Foo( const Foo &f )
+    { fval = f.fval; cout << "Foo's copy ctor: " << fval << endl; }
+
+    int get() { return fval; }
+
+    private:
+        int fval;
+};
+
+class XX
+{
+    public:
+    XX(int val) : foo(val) 
+    { cout << "XX's ctor: " << val << endl; }
+
+    // XX(const XX& arg): foo(arg.foo) 
+    XX(const XX& arg) 
+    { cout << "XX's copy ctor: " << foo.get() << endl; }
+
+    private:
+        Foo foo;
+};
+
+int main()
+{
+    XX ax(100);
+    XX bx(200);
+
+    XX cx = bx;
+}
 
 
 {pass-by-reference-to-const} EC++20.
@@ -12203,50 +12283,53 @@ class T {       <- from other type to T. converting-ctor
 
 
 {converting-ctor} <why-explicit-keyword>
-Means ctor with single arg and enables 'implicit' conversion from arg type to class type. 
+The converting ctor means ctor with single argument and do 'implicit' conversion from arg type to
+class type. 
 
 class Sale_data {
-   ...
+
    combine(const Sales_data&);
    Sales_data(const std::string &s);
-   ...
+   Sales_data(std::istream &);
+
 };
-
-string str;
-item.combine(str);
-
-Here, combine() expect Sales_date type but it is given a string type. This equates to:
-
-item.combine(Sales_data(str));
-
-So compiler do implicit conversion to make a call succeed and creates a temporary Sales_data object.
-
-class Sale_data {
-  ...
-  combine(const Sales_data&);
-  Sales_data(istream& in);
-  ...
-};
-
-item.combine(cin);
-
-<problem>
-When combine finishes, temp-object is gone and lost input. To avoid this, can use explicit-keyword:
-
-class Sales_data {
-  'explicit' Sales_data(const std::string &s);
-  combine(const Sales_data&);
-  ...
-};
-
 
 string null_book;
 
-// error: cannot use the copy form of initialization with an explicit converting constructor.
-Sales_data item2 = null_book;
+item.combine(null_book);
+item.combine(cin);
 
-item.combine( Sales_data(str) );                   // T()
-item.combine( static_cast<Sales_data>(str) );
+The combine() expect Sales_date type but it is given a string and istream. How does it work? The
+compiler do implicit conversion to make a call succeed and creates a temporary Sales_data object. So
+this equates to:
+
+item.combine(Sales_data(str));
+
+
+<not-always-useful>
+However, it is not always useful. When combine finishes, temporary is gone and lost input. To avoid
+this, can use explicit-keyword:
+
+class Sales_data {
+
+  'explicit' Sales_data(const std::string &s);
+  combine(const Sales_data&);
+
+};
+
+Now have to use:
+
+item.combine( Sales_data(null_book) );                   // T()
+item.combine( static_cast<Sales_data>(cin) );
+
+
+note:
+The explicit-keyword is 'meaningful' only on constructors that can be called with a 'single'
+arguments since constructors with more arguments are 'not' used to perform an implicit conversion.
+
+note:
+The explicit-keyword is used only in constructor 'declaration' inside a class.
+
 
 <errors>
 
