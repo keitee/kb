@@ -5,7 +5,7 @@
 |kt_dev_uv_set_003| setup: humax build the stack
 |kt_dev_uv_set_004| 
 |kt_dev_uv_set_005| setup: screen connection
-|kt_dev_uv_set_006| 
+|kt_dev_uv_set_006| filegateway
 |kt_dev_uv_set_007| setup: huawei build the stack
 |kt_dev_uv_set_008| setup: oem staging and toolchains
 |kt_dev_uv_set_009| setup: boxes
@@ -162,7 +162,9 @@ to close screen use Ctrl-A, k, y. Do not use Ctrl-C as it can kill processes run
 
 
 ={============================================================================
-*kt_dev_uv_set_006* 
+*kt_dev_uv_set_006* filegateway
+
+$ scp -r kit.park@filegateway.youview.co.uk:/export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP33_Eng_Release_20150331_for_YVHUAWEI-6751 ./
 
 
 ={============================================================================
@@ -2828,7 +2830,7 @@ class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Re
 
   // note: 'metadata' see use of namespace to specify
   //
-  // <MCL> MCL    -> { MB, ER, SR }
+  // <MDL> MCL    -> { MB, ER, SR }
   //
   // <CMB>        SCMB(MB) -> { SMB(COBALT), C, MO }
   //
@@ -3284,8 +3286,8 @@ inline Result::Result(const std::string& recordIdentifier_, const int64_t
     internalReferences(internalReferences_), description(description_),
     nodes(nodes_) { }
 
-{events-xml}
 
+{events-xml}
 Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
 
 <yv:struct name="Zinc.Metadata.Event">
@@ -3480,6 +3482,7 @@ public:
 
 class SystemClientResult
 {
+    // note: this is SP
     boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
 
     explicit SystemClientResult(
@@ -3753,46 +3756,6 @@ boost::shared_ptr<std::vector<boost::shared_ptr<Event> > > getPresentFollowing()
 }
 
 
-<metadata> metadata-overload
-src/metadata/SystemClientEventRepository.cpp
-
-boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Event& e)
-{
-  if(!e.eventLocator.empty())
-  {
-    // note: uses <1> and see above. <CSCE>
-    return boost::shared_ptr<SystemClientEvent>( 
-        new SystemClientEvent(getRepos(), config->getLanguage(), e));
-  }
-
-  return boost::shared_ptr<SystemClientEvent>();
-}
-
-note:  getClientEvents from 'iron'
-
-event_collection_ptr SystemClientEventRepository::getClientEvents(
-            const std::vector<NS_IRON_SYSTEM::Event> & events) 
-{
-    BOOST_FOREACH(const NS_IRON_SYSTEM::Event& event, events)
-
-    boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
-}
-
-
-note:  getClientEvents from 'cobalt'
-
-event_collection_ptr SystemClientEventRepository::getClientEvents(
-            const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
-{
-    BOOST_FOREACH(const NS_COBALT_SYSTEM::Result& sysResult, systemResults)
-
-    // 'wrapper' >
-    SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
-   
-    boost::shared_ptr<SystemClientEvent> mevent = 
-      boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
-}
-
 <merged>
 270 Uranium.Client.System/src/metadata/EventCollectionOperations.cpp     
 
@@ -3810,41 +3773,6 @@ boost::shared_ptr<SystemClientEvent> createNullEvent(boost::weak_ptr<MetadataRep
     
     return boost::make_shared<SystemClientEvent>(repos,
             serviceRepo->getServiceBySLI(service % serviceRepo->getServiceCount()), start, end);
-}
-
-
-typedef std::vector<boost::shared_ptr<SystemClientEvent> > event_collection;
-typedef boost::shared_ptr<event_collection> event_collection_ptr;
-
-/**
- * Merges two sets of events coming from different data sources
- */
-event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collection_ptr masEvents)
-{
-
-    BOOST_FOREACH(boost::shared_ptr<SystemClientEvent>& edtt, *dttEvents)
-
-    event_collection::iterator eip = // SCE in masEvents
-
-    // 102 <4>
-    //there is one, merge the properties
-    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
-            new SystemClientEvent(edtt, *eip));
-
-    // note: eip is SCE here !!!
-
-    BOOST_FOREACH(boost::shared_ptr<SystemClientEvent>& eip, *masEvents)
-
-    boost::shared_ptr<SystemClientEvent> firstDTTEvent = *firstDTTEventIter;
-    boost::shared_ptr<SystemClientEvent> lastDTTEvent = *lastDTTEventIter;
-
-    // 189 <5>
-    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
-            new SystemClientEvent(eip, eip->getStartAsTimeT(), firstDTTEvent->getStartAsTimeT()));
-
-    // 202
-    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
-            new SystemClientEvent(eip, lastDTTEvent->getEndAsTimeT(), eip->getEndAsTimeT()));
 }
 
 
@@ -3873,7 +3801,7 @@ boost::shared_ptr<EventWindow>  EPG::createEventWindow(
 }
 
 <1>
-This scenario is to make a command to FD and to get response, events, back.
+This scenario is to make a command to FD(future dispatcher) and to get response, events, back.
 
 /**
  * @brief A private struct capturing all the necessary data about the request to create a new EventWindow
@@ -4021,35 +3949,68 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
 ::FutureBar    <- from components on dbus?
 
 
-
 <callback-one>
 
-# 01 'cobalt' for IP
+typedef std::vector<boost::shared_ptr<SystemClientEvent> > event_collection;
+typedef boost::shared_ptr<event_collection> event_collection_ptr;
+
+
+# IP version note:  getClientEvents from 'cobalt'
 
 event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
-  SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
+    BOOST_FOREACH(const NS_COBALT_SYSTEM::Result& sysResult, systemResults)
+    {
+        // 'wrapper'  note: wrapper is no longer used in the john's change.
+        // need to check!
+        
+        SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
 
-  boost::shared_ptr<SystemClientEvent> mevent =
-    boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
-  events->push_back(mevent);
+        boost::shared_ptr<SystemClientEvent> mevent =
+            boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+        events->push_back(mevent);
+    }
+
+    return events;
 }
-
-# 02
 
 void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
 {
-  const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
-  event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+    const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+
+    event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+
+    copy(clientEvents->begin(), clientEvents->end(), back_inserter(*command->newMASEvents));
+
+    //
+    // <Q> HOW THIS newMASEvents get delivered to EPG?
+    //
 }
 
-# DTT version
+
+# DTT version note:  getClientEvents from 'iron'
+
+src/metadata/SystemClientEventRepository.cpp
+
+boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Event& e)
+{
+  if(!e.eventLocator.empty())
+  {
+    // note: uses <1> and see above. <CSCE>
+    return boost::shared_ptr<SystemClientEvent>( 
+        new SystemClientEvent(getRepos(), config->getLanguage(), e));
+  }
+
+  return boost::shared_ptr<SystemClientEvent>();
+}
 
 event_collection_ptr getClientEvents(
             const std::vector<NS_IRON_SYSTEM::Event> & events) 
 {
-  boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
+    BOOST_FOREACH(const NS_IRON_SYSTEM::Event& event, events)
+
+    boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
 }
 
 void eventsReceived(
@@ -4064,6 +4025,8 @@ This leads to getClientEvents overloads for IP or DTT
 
 <callback-two> 'merge' events
 
+// called from getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+//
 void SystemClientEventRepository::eventWindowDataRetrievalComplete(
         boost::shared_ptr<EventWindowCreateCommand> command)
 {
@@ -4071,6 +4034,181 @@ void SystemClientEventRepository::eventWindowDataRetrievalComplete(
 
     notifyExistingWindowAboutNewData(command);
 }
+
+
+/**
+ * Merges two sets of events coming from different data sources
+ */
+event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collection_ptr masEvents)
+{
+
+    BOOST_FOREACH(boost::shared_ptr<SystemClientEvent>& edtt, *dttEvents)
+
+    event_collection::iterator eip = // SCE in masEvents
+
+    // 102 <4>
+    //there is one, merge the properties
+    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
+            new SystemClientEvent(edtt, *eip));
+
+    // note: eip is SCE here !!!
+
+    BOOST_FOREACH(boost::share d_ptr<SystemClientEvent>& eip, *masEvents)
+
+    boost::shared_ptr<SystemClientEvent> firstDTTEvent = *firstDTTEventIter;
+    boost::shared_ptr<SystemClientEvent> lastDTTEvent = *lastDTTEventIter;
+
+    // 189 <5>
+    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
+            new SystemClientEvent(eip, eip->getStartAsTimeT(), firstDTTEvent->getStartAsTimeT()));
+
+    // 202
+    boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
+            new SystemClientEvent(eip, lastDTTEvent->getEndAsTimeT(), eip->getEndAsTimeT()));
+}
+
+
+<notify-to-epg>
+
+class ZINC_EXPORT EventListener : virtual public Polymorphic 
+
+class ZINC_EXPORT `EventWindowEventListener` : public NS_ZINC::EventListener
+{
+    /**
+     * Indicates the Event Window has changed substantially. To update the data call EventWindow::refresh.
+     */
+    virtual void EventWindowChanged() = 0;
+
+    /**
+     * Indicates that some of the events in the Event Window have changed.
+     * @param events the list of events that changed
+     */
+    virtual void EventsChanged(const std::vector<boost::shared_ptr<Event> > events) = 0;
+};
+
+// note: from textEPG
+
+class TextEPGEventWindowEventListener : public EventWindowEventListener
+{
+public:
+
+    /**
+     * Indicates the Event Window has changed substantially. To update the data call EventWindow::refresh.
+     */
+    virtual void EventWindowChanged()
+    {
+    	printDebug("EventWindowChanged.");
+        actionProcessor->post(boost::bind(&doRefreshWindowAndPrintStats));
+    }
+
+    /**
+     * Indicates that some of the events in the Event Window have changed.
+     * @param events the list of events that changed
+     */
+    virtual void EventsChanged(
+            const std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> >  events)
+    {
+        string s = "EventsChanged: ";
+        BOOST_FOREACH(boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> e, events)
+        {
+            s += e->getTitle() + string("(") +
+                    boost::lexical_cast<string>(e->getContainingServiceListIndex()) + string("), ");
+        }
+        printDebug(s);
+        sleep(3);
+        actionProcessor->post(doRefreshWindowAndPrintStats);
+    }
+};
+
+
+boost::shared_ptr<TextEPGEventWindowEventListener> listener = 
+   boost::make_shared<TextEPGEventWindowEventListener>();
+
+
+boost::shared_ptr<EventWindow>  EPG::createEventWindow(
+        boost::shared_ptr<EventRepository> eventRepo)
+{
+    Future<boost::shared_ptr<EventWindow> > f = 
+        eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
+
+    boost::shared_ptr<EventWindow> newWindow = f.get();
+
+    // note: mean that got window from future?
+    
+    newWindow->addListener(listener);
+
+    return newWindow;
+}
+
+
+template<class ListenerT>
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> 
+{
+    virtual void addListener(boost::shared_ptr<ListenerT> listener) {
+        // Hoisting note: we cast to void* here, and cast back down in
+        // DowncastingCaller so everything is lovely and symmetrical
+        impl.addListener(listener);
+    }
+};
+
+typedef void hoisted_event_listener;
+
+// from class definition
+
+void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
+        boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
+
+// /Zinc/Zinc.Common/src/DispatchingEventProducer.cpp
+
+void DispatchingEventProducerHoisted::addListener(
+   boost::shared_ptr<hoisted_event_listener> listener, boost::shared_ptr<EventDispatcher> clientDispatcher) 
+{
+
+    if (!listener) {
+        throw std::invalid_argument("NULL listener provided in call to addListener()!");
+    }
+
+    ZINC_COMMON_DEBUG(std::string(__func__)+" Dispatcher: "
+            +boost::lexical_cast<std::string>(static_cast<const EventDispatcher*>(clientDispatcher.get()))+
+            ", Producer: "+boost::lexical_cast<std::string>(this)+
+            ", Listener: "+boost::lexical_cast<std::string>(listener.get())
+            );
+
+    bool duplicate = false;
+
+    boost::mutex::scoped_lock lock(mutex);
+
+    if (!clientDispatcher) {
+        if (!dispatcher) {
+            throw std::logic_error("addListener() called, but event producer has no dispatcher set.");
+        }
+        clientDispatcher = dispatcher;
+    }
+
+    // Call entry->second->onWorkAdded()
+    Dispatcher::work work(*clientDispatcher);
+
+    // note: make one which is a pair
+    
+    listener_entry newEntry(listener, clientDispatcher);
+
+    BOOST_FOREACH(const listener_entry& entry, listeners) {
+
+        if (entry.first == newEntry.first) {
+            duplicate = true;
+            break;
+        }
+    }
+
+    if (!duplicate) {
+        work.release();
+
+        // note: push one
+        
+        listeners.push_front(newEntry);
+    }
+}
+
 
 void SystemClientEventRepository::notifyExistingWindowAboutNewData(
         boost::shared_ptr<EventWindowCreateCommand> command)
@@ -4092,18 +4230,22 @@ void SystemClientEventWindow::ConfigChanged()
 }
 
 
-void SystemClientEventWindow::notifyWindowChanged()
+// void SystemClientEventWindow::notifyWindowChanged()
+// {
+// 
+//     // ?? 
+//     // void SystemClientEventWindow::EventsChanged
+//     // (const std::vector<std::string> &eventIdentifiers)
+//     
+//     produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+// }
+
+void SystemClientEventWindow::notifyEventsChanged(
+        std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> > events)
 {
-    produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+    produceEvent(bind(&EventWindowEventListener::EventsChanged, _1, events));
 }
 
-//
-// produceEvent(f)		
-//    -> f( <boost::weak_ptr<hoisted_event_listener> );
-//       -> EventWindowEventListener::EventsChanged( <boost::weak_ptr<hoisted_event_listener> );
-//
-//       -> callback to EPG. see above
-//
 
 <DEPH> Zinc/Zinc.Common/src/DispatchingEventProducer.cpp
 
@@ -4115,6 +4257,8 @@ class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable
     DispatchingEventProducerHoisted(boost::shared_ptr<EventDispatcher> dispatcher_) :
         dispatcher(dispatcher_) { }
 
+    // note: event is 'functor'
+    
     void produceEvent(boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
     {
         boost::mutex::scoped_lock lock(mutex);
@@ -4183,6 +4327,45 @@ inline WeakFunctor<Functor, T>
 makeWeakFunctor(Functor f, boost::weak_ptr<T> object)
 {
     return WeakFunctor<Functor, T>(f, object);
+}
+
+
+//
+// produceEvent(f)		
+//    -> dispatch thread calls 
+//       f( <boost::weak_ptr<hoisted_event_listener> ); // event(pair.second);
+//    
+//       this expands to due to bind()
+//
+//       -> EventWindowEventListener::EventsChanged( <boost::weak_ptr<hoisted_event_listener> );
+//
+
+
+void SystemClientEventWindow::EventsChanged(const std::vector<std::string> &eventIdentifiers)
+{
+    URANIUM_FUNC_TRACE;
+    if(!isZombie)
+    {
+        std::vector<boost::shared_ptr<Event> > eventsInThisWindow;
+        eventsInThisWindow.reserve(events.size());
+
+        BOOST_FOREACH(const std::string& identifier, eventIdentifiers)
+        {
+            vector<boost::shared_ptr<Event> > events = this->findEventsByIdentifier(identifier);
+            eventsInThisWindow.insert(eventsInThisWindow.end(), events.begin(), events.end());
+        }
+
+        URANIUM_DEBUG("Number of events changed in this window: "<<eventsInThisWindow.size());
+
+        if(!eventsInThisWindow.empty())
+        {
+            notifyEventsChanged(eventsInThisWindow);
+        }
+    }
+    else
+    {
+        URANIUM_INFO("Ignoring events change signal - this window requires refresh anyway.");
+    }
 }
 
 
@@ -4287,6 +4470,15 @@ private:
 	boost::asio::io_service io;
 	boost::thread thread;
 };
+
+/**
+ * Post a functor to the dispatcher, and put it on the pending dispatch queue.
+ */
+void SingleThreadDispatcher::post(boost::function<void ()> handler)
+{
+	io.post(handler);
+}
+
 
 typedef SingleThreadDispatcher SequentialFutureDispatcher;
 
@@ -4393,6 +4585,8 @@ class ZINC_EXPORT SystemClientEventRepository :
                     (microsec_clock::universal_time() - cmd.dataRetrievalStartTime).total_milliseconds(),
                     cmd.hasDataFromAllSources(), hasStaleData);
 
+        // note: set FD!
+
         ew->setDispatcher(dispatcher);
 
         metadataObserver->addListener(ew);
@@ -4461,12 +4655,12 @@ class ZINC_EXPORT EventWindow : virtual public NS_ZINC::DispatchingEventProducer
 };
 
 
-// <Q> HOW DEP is called 'explicitly'?
-// <Q> dispatcher in DEP is used?
-//
-class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow,
-                                public boost::enable_shared_from_this<SystemClientEventWindow>,
-                                virtual public MetadataChangeListener 
+// created from createEventWindow() and passed up to EPG
+
+class ZINC_EXPORT SystemClientEventWindow 
+                                 : virtual public EventWindow,
+                                   public boost::enable_shared_from_this<SystemClientEventWindow>,
+                                   virtual public MetadataChangeListener 
 {
     // note: add f = bind() to listeners. so when called from listners, will lead to 
     // EventWindowEventListener::EventsChanged(_1, events);
@@ -4481,88 +4675,6 @@ class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow,
         produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
     }
 };
-
-
-{listener}
-
-boost::shared_ptr<EventWindow>  EPG::createEventWindow(
-        boost::shared_ptr<EventRepository> eventRepo)
-{
-    Future<boost::shared_ptr<EventWindow> > f = 
-        eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
-
-    boost::shared_ptr<EventWindow> newWindow = f.get();
-
-    // note: mean that got window from future?
-    
-    newWindow->addListener(listener);
-
-    return newWindow;
-}
-
-newWindow->addListener(listener)
-
-class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> 
-{
-    virtual void addListener(boost::shared_ptr<ListenerT> listener) {
-        // Hoisting note: we cast to void* here, and cast back down in
-        // DowncastingCaller so everything is lovely and symmetrical
-        impl.addListener(listener);
-    }
-};
-
-/Zinc/Zinc.Common/src/DispatchingEventProducer.cpp
-
-void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
-        boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
-
-void DispatchingEventProducerHoisted::addListener(
-   boost::shared_ptr<hoisted_event_listener> listener, boost::shared_ptr<EventDispatcher> clientDispatcher) 
-{
-
-    if (!listener) {
-        throw std::invalid_argument("NULL listener provided in call to addListener()!");
-    }
-
-    ZINC_COMMON_DEBUG(std::string(__func__)+" Dispatcher: "
-            +boost::lexical_cast<std::string>(static_cast<const EventDispatcher*>(clientDispatcher.get()))+
-            ", Producer: "+boost::lexical_cast<std::string>(this)+
-            ", Listener: "+boost::lexical_cast<std::string>(listener.get())
-            );
-
-    bool duplicate = false;
-
-    boost::mutex::scoped_lock lock(mutex);
-
-    if (!clientDispatcher) {
-        if (!dispatcher) {
-            throw std::logic_error("addListener() called, but event producer has no dispatcher set.");
-        }
-        clientDispatcher = dispatcher;
-    }
-
-    // Call entry->second->onWorkAdded()
-    Dispatcher::work work(*clientDispatcher);
-
-    // note: make one
-    listener_entry newEntry(listener, clientDispatcher);
-
-    BOOST_FOREACH(const listener_entry& entry, listeners) {
-
-        if (entry.first == newEntry.first) {
-            duplicate = true;
-            break;
-        }
-    }
-
-    if (!duplicate) {
-        work.release();
-
-        // note: push one
-        
-        listeners.push_front(newEntry);
-    }
-}
 
 
 ={============================================================================
