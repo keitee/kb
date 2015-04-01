@@ -214,7 +214,7 @@
 
 |kt_linux_core_400| shared library
 |kt_linux_core_401| shared library: ld --as-needed problem
-|kt_linux_core_402| shared library: search and resove
+|kt_linux_core_402| shared library: search and resolve
 |kt_linux_core_403| shared library: dl and ABI
 |kt_linux_core_404| shared library: preload and monitor ld
 |kt_linux_core_405| shared library: further information
@@ -17138,25 +17138,50 @@ defined within the library.
 
 
 {further-advantages}
-@ Because overall program size is smaller, in some cases, programs can be loaded into memory and
+o Because overall program size is smaller, in some cases, programs can be loaded into memory and
 started more quickly. This point holds true only for large shared libraries that are already in use
 by another program.
 
-@ Such changes can be carried out even while running programs are using an existing version of the
+o Such changes can be carried out even while running programs are using an existing version of the
 shared library.
 
 
 {cost-of-shared}
-@ Shared libraries are more complex than static libraries, both at the conceptual level, and at the
+o Shared libraries are more complex than static libraries, both at the conceptual level, and at the
 practical level of creating shared libraries and building the programs that use them.
 
-@ Shared libraries must be compiled to use position-independent code, which has a performance
+o Shared libraries must be compiled to use position-independent code, which has a performance
 overhead on most architectures because it requires the use of an extra register 
 
-@ Symbol relocation must be performed at run time. During symbol relocation, references to each
+o Symbol relocation must be performed at run time. During symbol relocation, references to each
 symbol (a variable or function) in a shared library need to be modified to correspond to the actual
 run-time location at which the symbol is placed in virtual memory. Take a little more time to
 execute.
+
+
+{position-independent-code}
+These changes allow the code to be located at any virtual address at run time. This is necessary for
+shared libraries, since there is no way of knowing at link time where the shared library code will
+be located in memory.
+
+In order to determine whether an existing object file has been compiled with the -fPIC option, can
+check for the presence of the name _GLOBAL_OFFSET_TABLE_ in the object file's symbol table, using
+either of the following commands:
+
+$ nm mod1.o | grep _GLOBAL_OFFSET_TABLE_
+$ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_
+
+note: as shown above, this not necessarily means 'shared' object. It's only tell -fPIC used.
+
+<pic-vs-relocatable>
+This is talking about position independent code, which is 'not' the same as relocatable code.
+Relocatable code is code whose address may be assigned at 'linktime'. Position independent code is
+code whose address may be assigned at 'runtime'.
+
+'all' object files are relocatable. For most targets, only object files compiled with -fpic or -fPIC
+or -pie are position independent.
+
+For more about relocatable code: http://www.airs.com/blog/archives/41
 
 
 {create-shared}
@@ -17175,7 +17200,7 @@ library no longer maintain distinct identities.
 {shared-vs-static} do-not-use-single-line
 
 $ cat main.c 
-#include <stdio.h>
+#nclude <stdio.h>
 
 extern void foo(void);
 
@@ -17206,8 +17231,7 @@ drwxr-xr-x 2 kpark kpark 4096 Feb  5 09:46 thr
 -rw-r--r-- 1 kpark kpark   82 Feb  5 09:32 main.c
 -rwxr-xr-x 1 kpark kpark 7120 Feb  5 09:34 one
 
-note:
--shared
+note: -shared
 Produce a shared object which can then be linked with other objects to form an executable. Not all
 systems support this option. For predictable results, you must also specify the same set of options
 used for compilation (-fpic, -fPIC, or model suboptions) when you specify this linker option
@@ -17231,7 +17255,7 @@ libfoo.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically l
 $ readelf -s libfoo.so | grep _OFFSET_TA
 (standard input):64:    43: 0000000000200978     0 OBJECT  LOCAL  DEFAULT  ABS _GLOBAL_OFFSET_TABLE_
 
-note: no SONAME is involved here.
+note: no SONAME is involved here and use a realname since so do not have SONAME.
 
 <used-single-step>
 ./two:
@@ -17255,6 +17279,8 @@ $ readelf -s libfoo.so | grep _OFFSET_TA
 $ file libfoo.so 
 libfoo.so: ELF 64-bit LSB relocatable, x86-64, version 1 (SYSV), not stripped
 
+note: what does it mean? same as static link?
+
 <used-static-build>
 ./thr:
 -rw-r--r-- 1 kpark kpark   73 Feb  5 09:45 foo.c
@@ -17276,31 +17302,6 @@ $ readelf -d thr | grep NEEDED
 (standard input):4: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 
 
-{position-independent-code}
-These changes allow the code to be located at any virtual address at run time. This is necessary for
-shared libraries, since there is no way of knowing at link time where the shared library code will
-be located in memory.
-
-In order to determine whether an existing object file has been compiled with the -fPIC option, we
-can check for the presence of the name _GLOBAL_OFFSET_TABLE_ in the object file's symbol table,
-    using either of the following commands:
-
-$ nm mod1.o | grep _GLOBAL_OFFSET_TABLE_
-$ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_
-
-note: as shown above, this not necessarily means 'shared' object. It's only tell -fPIC used.
-
-<pic-vs-relocatable>
-This is talking about position independent code, which is 'not' the same as relocatable code.
-Relocatable code is code whose address may be assigned at link time. Position independent code is
-code whose address may be assigned at run time.
-
-'all' object files are relocatable. For most targets, only object files compiled with -fpic or -fPIC
-or -pie are position independent.
-
-For more about relocatable code: http://www.airs.com/blog/archives/41
-
-
 {dynamic-linker}
 note: From GCC doc, the dynamic loader is not part of GCC; it is part of the operating system.
 
@@ -17318,6 +17319,9 @@ phase. DT_NEEDED tag in ELF.
 $ readelf -d one | grep NEED
  0x00000001 (NEEDED)                     Shared library: [libfoo.so]
  0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+
+note: In order to make executable that use so, requires 'so' file in linking.
+
 
 2. At 'runtime', there must be some mechanism for 'resolving' the embedded library name-that is, for
 finding the shared library file corresponding to the name specified in the executable file-and then
@@ -17365,8 +17369,8 @@ In the above example, libfoo is realname. As with a realname, soname is used in 
 embedded in the executable, and used by the linker at runtime.
 
 Why soname? The purpose of the soname is to provide a level of 'indirection' that permits an
-executable to use, at run time, a version of the shared library that is different from (but
-    compatible with) the library against which it was linked.
+executable to use, at run time, a version of the shared library that is different from but
+compatible with the library against which it was linked.
 
 $ gcc -c -fpic foo.c
 
@@ -17375,6 +17379,7 @@ $ gcc -shared -Wl,-soname -Wl,libbar.so -o libfoo.so foo.o
 
 $ readelf -d libfoo.so | grep SONAME                        note: DT_SONAME in ELF
 (standard input):5: 0x000000000000000e (SONAME)             Library soname: [libbar.so]
+
 $ gcc -o one main.c libfoo.so
 
 $ readelf -d one | grep NEED 
@@ -17389,7 +17394,8 @@ $ LD_LIBRARY_PATH=. ./one
 ./one: error while loading shared libraries: libbar.so: cannot open shared object file: No such file
 or directory
 
-note: Now linker ld looks for libbar but not libfoo since soname was 'embedded' instead.
+note: So set soname in so itself and executable embeds it instead of realname. Now linker ld looks
+for libbar instead but not libfoo.
 
 <indirection>
 When using a soname, one further step is required: we must create a symbolic link from the soname to
@@ -17445,7 +17451,7 @@ note: Due to this indirection, possible to meet versioning requirement by changi
 all, soname is to have 'indirection' to minor version.
 
 <linkername> version-independent link
-The linker name, which is used when linking an executable against the shared library. The linker
+The linker name, which is used when 'linking' an executable against the shared library. The linker
 name is a symbolic link containing just the library name and thus has the form libname.so. The
 linker name allows us to construct version-independent link commands that automatically operate with
 the correct version of the shared library.
@@ -17454,15 +17460,17 @@ libdemo.so ->  libdemo.so.2
 
 
 real name          <-   soname                <-   linker name         
-lib name.so.2.0.0       libname.so.2               lib name.so
+libdemo.so.1.0.1        libdemo.so.1               libdemo.so
 (regular file)          (symbolic link)            (symbolic link)
-Object code for         lib name.so.maj.min        libname.so.maj
+lib name.so.maj.min     libname.so.maj
+Object code for         
 library modules
 
 
 $ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c
 
-# created a realname and soname
+created a realname and soname
+
 $ gcc -g -shared -Wl,-soname,libdemo.so.1 -o libdemo.so.1.0.1 mod1.o mod2.o mod3.o
 
 $ ln -s libdemo.so.1.0.1 libdemo.so.1
@@ -17473,17 +17481,23 @@ lrwxrwxrwx libdemo.so -> libdemo.so.1
 lrwxrwxrwx libdemo.so.1 -> libdemo.so.1.0.1
 -rwxr-xr-x libdemo.so.1.0.1
 
-# use linkername when link
+use linkername when link. note: this is different step from when use soname only.
+
 $ gcc -g -Wall -o prog prog.c -L. -ldemo
 
 $ LD_LIBRARY_PATH=. ./prog
 Called mod1-x1
 Called mod2-x2
 
-note: After all, soname is in a library and linkername is in executable. 
-The executable use linkername: 
-1. the case when linkername is realname. Means that no soname is used. 
-2. the case when linername is soname. 
+So three cases:
+
+o the case when linkername is realname. Means that no soname is used. 
+o the case when linkername is soname. This is one-level indirection. 
+o the case when linkername is different from soname. This is two-level indirection.
+
+note: Even when linkername is different from soname, executable 'always' embeds 'soname' and the
+linkername is a name to use linking stage that must be exist before doing linking. Checked with the
+above one example. 
 
 Using two names and two indirections enable us to change major and minor libs to use. 
 
@@ -17632,7 +17646,7 @@ to the first.
 
 
 ={============================================================================
-*kt_linux_core_402* shared library: search and resove
+*kt_linux_core_402* shared library: search and resolve
 
 {search-rules}
 
