@@ -935,7 +935,9 @@ zb-make
 
 OR
 
-zb-virtual-slave zb-shell
+ZB_CFG=huawei.370 zb-virtual-slave zb-shell
+zb-make
+
 zb-virtual-slave zb-build-with-progress
 
 <tips>
@@ -1032,6 +1034,8 @@ zb-deploy -o humax.1000 -f textEPG
 note: no zinc-trunk handling. okay to run it as a standalone.
 
 note: this requires RW rfs.
+
+#/   -r            Reboot the box when this script has completed.
 
 #/   -f            Force first time setup. Does additional installation of
 #/                 eg. password-less login, rsync, scp.
@@ -1448,59 +1452,33 @@ int main(int argc, char *argv[]) {
 *kt_dev_uv_stack_009* stack: nexusmgr
 
 While working on nexus inspect tool, found that it failed to find the libnexusMgr.so at runtime.
-Investigated and found that SONAME was libnexusMgr.so.0 but there is no file in /usr/local/lib. When
-made a sym link like:
+Investigated and found that the inspect tool expect libnexusMgr.so.0 and own-built mgr has the same
+as SONAME but there is ONLY libnexusMgr.so in /usr/local/lib. 
 
 libnexusMgr.so.0 -> libnexusMgr.so
 
-Worked okay. Do we need to make a change to a system to make a link? Why was it okay to run other
+This easy solution worked okay. 
+
+Do we need to make a change to a system to make a link? Why was it okay to run other
 application that uses that library?
 
 note: <QQQQ> this is hwei case. how about humax? see /usr/local/lib
 
 Investigated the system and found that applications uses the realname.
 
-note: not used in a box
-/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/bin/pcmplaybackd
-
-pcmplaybackd:
- 0x00000001 (NEEDED)                     Shared library: [libnexusMgr.so.0]
- 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
- 0x0000000f (RPATH)                      Library rpath: [/usr/local/lib]
- 0x0000001d (RUNPATH)                    Library runpath: [/usr/local/lib]
-
 So the easiest is to change makefile of libnexusMgr to use realname than soname.
 
-<Q>
 1. the previous next inspect do not have a reference to nexusMgr.so as below:
 
 $ readelf -d ./Polonium/Polonium.NexusRelease/nexus-inspect | grep NEED
 (standard input):4: 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
 
-2. when run w3c, not load nexusMgr but when runs video, can see nexusMgr in mem mapping. So there
-  seems other so to load nexusMgr when needed.
+That's why it was not a problem before.
 
-Then, the new nexus inspect?
+2. when run w3c, not load nexusMgr but when 'runs' video, can see nexusMgr in mem mapping. So there
+seems other so to load nexusMgr when needed. note that w3c do have a reference to nexus mgr so.
 
-3. Who's using nexusMgr?
-
-Found that mhegdaemon use and get it from a box:
-
-# mhegdaemon
-root# cat 1402/maps | grep nexus
-2ad14000-2ad17000 r-xp 00000000 08:04 131668     /run/youview/jail/daemons/mhegdaemon-5Zfubm/opt/cds/lib/libdrm_nexus_security.so
-2ad26000-2ad28000 rw-p 00002000 08:04 131668     /run/youview/jail/daemons/mhegdaemon-5Zfubm/opt/cds/lib/libdrm_nexus_security.so
-2ae12000-2ae17000 r-xp 00000000 08:04 131372     /run/youview/jail/daemons/mhegdaemon-5Zfubm/usr/local/lib/libnexusMgr.so
-2ae26000-2ae27000 r--p 00004000 08:04 131372     /run/youview/jail/daemons/mhegdaemon-5Zfubm/usr/local/lib/libnexusMgr.so
-2ae27000-2ae28000 rw-p 00005000 08:04 131372     /run/youview/jail/daemons/mhegdaemon-5Zfubm/usr/local/lib/libnexusMgr.so
-
-# readelf -d
-0x00000001 (NEEDED)                     Shared library: [libnexusMgr.so]
-
-
-4.
-
-note: DO NOT have soname but rpath
+3. The nexus mgr so from boxes DO NOT have soname but rpath
 kpark@wll1p04345:/opt/oem-staging/huawei-dn370t/usr/local/lib$ readelf -d libnexusMgr.so.org 
 
 Dynamic section at offset 0x14c contains 29 entries:
@@ -1517,6 +1495,9 @@ Dynamic section at offset 0x14c contains 29 entries:
  0x6ffffff0 (VERSYM)                     0x1a34
  0x00000000 (NULL)                       0x0
 
+
+note: this is from the own built mgr. 
+
 kpark@wll1p04345:/opt/oem-staging/huawei-dn370t/usr/local/lib$ readelf -d libnexusMgr.so
 
 Dynamic section at offset 0x14c contains 27 entries:
@@ -1528,8 +1509,8 @@ Dynamic section at offset 0x14c contains 27 entries:
  0x0000000e (SONAME)                     Library soname: [libnexusMgr.so.0]
 
 
-5. Given that the original mgr so do not have soname, the original inspect tool used realname.
-However, build mgr own and then it has soname as below. 
+4. Given that the original mgr so do not have soname. However, build mgr own and then it has soname
+as below. 
 
 10:libtool: link: mipsel-linux-gcc -shared  -fPIC -DPIC  .libs/nexusMgr.o   -lpthread -linit
 -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc/lib
@@ -1543,6 +1524,14 @@ However, build mgr own and then it has soname as below.
 
 Therefore, when link an executable, the exe will picks up soname. So it's all down to how mgr is
 built to see if it requires to have a sym link in /usr/local/lib.
+
+
+5. The libgstnexus.so for both oems uses the real name.
+
+Dynamic Section:
+  NEEDED               libnexusMgr.so
+  ...
+  SONAME               libgstnexus.so.0
 
 
 <the-proposal>
@@ -7434,6 +7423,39 @@ as-needed option problem
 (standard input):49: 0x6ffffffe (VERNEED)                    0x40bd3c
 (standard input):50: 0x6fffffff (VERNEEDNUM)                 2
 
+
+04.01:
+======
+1. Got eng release and check on shm first.
+
+before:
+cat /proc/sysvipc/shm
+
+key         shmid    perms    size  cpid  lpid nattch uid   gid  cuid  cgid      atime      dtime      ctime
+
+305450176   163844   666      24    1063  1395 4      504   504   504   504
+1422517874 1422517866         33
+
+now:
+305450176     196613   666         28  1074  1422      4   504   504   504
+504 1427879275 1427879314         43
+
+from ps:
+1074 ?        Sl     3:09 /opt/cds/bin/huaweidaemon
+
+
+2. Need to make a box writable since requires to copy exec and nexus-release
+binary.
+
+exec-then-cleanup-app
+
+3. Seen a problem of making fs writable.
+
+4. Cannot run iplayer and nexus-release as well
+/opt/zinc-trunk/bin/nexus-release: can't load library 'libnexusMgr.so.0'
+
+In that case, shows this error:
+(w3cEngine:2429): GStreamer-WARNING **: Failed to load plugin '/opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstnexus.so': File not found
 
 
 ={============================================================================

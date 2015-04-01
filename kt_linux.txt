@@ -137,7 +137,7 @@
 
 
 #{ linux-core
-|kt_linux_core_001| check shared libraries that process uses 
+|kt_linux_core_001| 
 |kt_linux_core_002| stdin, stdout, and stderr
 |kt_linux_core_003| check libc version and path
 |kt_linux_core_004| system call errors and errno
@@ -219,6 +219,8 @@
 |kt_linux_core_404| shared library: preload and monitor ld
 |kt_linux_core_405| shared library: further information
 |kt_linux_core_406| shared library: md5sum
+|kt_linux_core_407| shared library: inspect dynamic sections
+|kt_linux_core_408| check shared libraries that process uses
 
 |kt_linux_core_500| sandbox
 
@@ -3024,8 +3026,13 @@ $ readelf -d nexus-inspect | grep NEED
 (standard input):5: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
 (standard input):6: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
 (standard input):7: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+
 $ ldd -v nexus-inspect
 	not a dynamic executable
+
+note: 
+The ldd on a target is an executable but not a script and also shows details when used on shared
+library. This is different from HOST version as above.
 
 
 ={============================================================================
@@ -3881,7 +3888,7 @@ $ minicom cisco or minicom -c on cisco
 
 To Exit from minicom, Click Ctrl-A and Z then X.
 
-alias mc='sudo minicom -C=hmax.log -c on hmax'
+alias mc='sudo minicom -C hmax.log -c on hmax'
 
 <when-cannot-get-shell-prompt>
 Without knowing either your set-top box or your cable, I would first try disabling hardware flow
@@ -18134,6 +18141,103 @@ $ md5sum foo.o*
 $ md5sum libfoo.so*
 e64fd5c673979f09360178f938e6e1b7  libfoo.so
 e64fd5c673979f09360178f938e6e1b7  libfoo.so.old
+
+
+={============================================================================
+*kt_linux_core_407* shared library: inspect dynamic sections
+
+$ readelf -d libgstnexus.so.from.huawei.box 
+
+Dynamic section at offset 0x16c contains 35 entries:
+  Tag        Type                         Name/Value
+ 0x00000001 (NEEDED)                     Shared library: [libnexusMgr.so]
+ 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
+ 0x00000001 (NEEDED)                     Shared library: [libgstbase-1.0.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgstmpegts-1.0.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgstreamer-1.0.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgobject-2.0.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libglib-2.0.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+ 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+ 0x0000000e (SONAME)                     Library soname: [libgstnexus.so.0]
+ 0x0000000f (RPATH)                      Library rpath: [/usr/local/lib]
+ 0x0000001d (RUNPATH)                    Library runpath: [/usr/local/lib]
+ ...
+
+
+$ objdump -p libgstnexus.so.from.huawei.box 
+
+libgstnexus.so.from.huawei.box:     file format elf32-little
+
+...
+
+Dynamic Section:
+  NEEDED               libnexusMgr.so
+  NEEDED               libnexus.so
+  NEEDED               libgstbase-1.0.so.0
+  NEEDED               libgstmpegts-1.0.so.0
+  NEEDED               libgstreamer-1.0.so.0
+  NEEDED               libgobject-2.0.so.0
+  NEEDED               libglib-2.0.so.0
+  NEEDED               libgcc_s.so.1
+  NEEDED               libpthread.so.0
+  NEEDED               libc.so.0
+  SONAME               libgstnexus.so.0
+  RPATH                /usr/local/lib
+  RUNPATH              /usr/local/lib
+
+...
+
+
+note: this is ldd on a target which is executable but ldd on host pc is scripts and do not show
+details like this.
+
+root# ldd libgstnexus.so
+checking sub-depends for '/usr/local/lib/libnexusMgr.so'
+checking sub-depends for '/usr/local/lib/libnexus.so'
+checking sub-depends for '/opt/zinc/oss/lib/libgstbase-1.0.so.0'
+checking sub-depends for '/opt/zinc/oss/lib/libgstmpegts-1.0.so.0'
+checking sub-depends for '/opt/zinc/oss/lib/libgstreamer-1.0.so.0'
+checking sub-depends for '/opt/zinc/oss/lib/libgobject-2.0.so.0'
+checking sub-depends for '/opt/zinc/oss/lib/libglib-2.0.so.0'
+checking sub-depends for '/lib/libgcc_s.so.1'
+checking sub-depends for '/lib/libpthread.so.0'
+checking sub-depends for '/lib/libc.so.0'
+checking sub-depends for '/lib/libstdc++.so.6'
+checking sub-depends for '/lib/libm.so.0'
+checking sub-depends for '/opt/zinc/oss/lib/libgmodule-2.0.so.0'
+checking sub-depends for '/opt/zinc/oss/lib/libintl.so.8'
+checking sub-depends for '/lib/libdl.so.0'
+checking sub-depends for '/opt/zinc/oss/lib/libffi.so.5'
+	libnexusMgr.so => /usr/local/lib/libnexusMgr.so (0x00000000)
+	libnexus.so => /usr/local/lib/libnexus.so (0x00000000)
+	libgstbase-1.0.so.0 => /opt/zinc/oss/lib/libgstbase-1.0.so.0 (0x00000000)
+	libgstmpegts-1.0.so.0 => /opt/zinc/oss/lib/libgstmpegts-1.0.so.0 (0x00000000)
+	libgstreamer-1.0.so.0 => /opt/zinc/oss/lib/libgstreamer-1.0.so.0 (0x00000000)
+	libgobject-2.0.so.0 => /opt/zinc/oss/lib/libgobject-2.0.so.0 (0x00000000)
+	libglib-2.0.so.0 => /opt/zinc/oss/lib/libglib-2.0.so.0 (0x00000000)
+	libgcc_s.so.1 => /lib/libgcc_s.so.1 (0x00000000)
+	libpthread.so.0 => /lib/libpthread.so.0 (0x00000000)
+	libc.so.0 => /lib/libc.so.0 (0x00000000)
+	libstdc++.so.6 => /lib/libstdc++.so.6 (0x00000000)
+	libm.so.0 => /lib/libm.so.0 (0x00000000)
+	libgmodule-2.0.so.0 => /opt/zinc/oss/lib/libgmodule-2.0.so.0 (0x00000000)
+	libintl.so.8 => /opt/zinc/oss/lib/libintl.so.8 (0x00000000)
+	libdl.so.0 => /lib/libdl.so.0 (0x00000000)
+	libffi.so.5 => /opt/zinc/oss/lib/libffi.so.5 (0x00000000)
+	not a dynamic executable
+root# 
+
+
+={============================================================================
+*kt_linux_core_408* check shared libraries that process uses
+
+cat /proc/NNNN/maps | awk '{print $6}' | grep '\.so' | sort | uniq
+
+or
+
+can use ldd.
 
 
 ={============================================================================
