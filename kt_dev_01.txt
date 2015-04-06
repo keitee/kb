@@ -93,7 +93,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_001| virtual inheritance (interview) {virtual-base-class}
 |kt_dev_cpp_002| reference-vs-pointer (interview)
 |kt_dev_cpp_003| ctor and copy controls. constructor-initializers
-|kt_dev_cpp_004| copy-controls when use dyn resource {the-rule-of-three} {valuelike} {preventing-copies} {self-assign}
+|kt_dev_cpp_004| copy controls of dyn resource. valuelike. preventing-copies. swap and move example
 |kt_dev_cpp_005| converting ctor {class-type-conversion} {explicit-keyword}
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
 |kt_dev_cpp_007| function matching and overload {scope-in-inheritance}
@@ -11388,7 +11388,8 @@ note:
 1. The copy ctor cannot be 'explicit' since used implicitly in cases mentioned above such as pass by
 value. 
 
-2. When converting constructor is explicit, cannot use copy form of initialzation since copy form may use converting ctor. 
+2. When 'converting' constructor is explicit, cannot use copy form of initialzation since copy form
+may use converting ctor. 
 
 // error: cannot use the copy form of initialization with an explicit converting constructor.
 Sales_data item2 = null_book;
@@ -11486,6 +11487,12 @@ int main()
     // note: this direct from also has the same call as above. calls copy constructor.
     FooFoo cx(bx);
 }
+
+
+<why-reference-parameter>
+Why the copy constructor's own parameter 'must' be a reference? If it is not a reference, then the
+call would never succeed. To call the copy constructor, need to use copy constructor to copy the
+argument and to copy the argument, need to use copy constructor. indefinite recursive call.
 
 
 {pass-by-reference-to-const} EC++20.
@@ -11727,7 +11734,7 @@ struct Address {
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-controls when use dyn resource.
+*kt_dev_cpp_004* copy controls of dyn resource. valuelike. preventing-copies. swap and move example
 
 {when-use-resource-has-dyn-lifetime}
 1. don't know how many object is needed
@@ -11741,7 +11748,7 @@ if a class defines one of the following it should probably explicitly define all
 
 dtor, copy-ctor, and copy-assign operator
 
-<case-example> C++ Primer p505
+<case-example> C++P p505
 The need of own dtor for a class allocating dynamic resources is obvious. Since if there's no dtor
 defined, the syn dtor will not run delete on the pointer, ps, so must define own dtor. how possibly
 the compiler can know what pointer member points to?
@@ -11842,7 +11849,7 @@ class PriorityCustomer: public Customer {
 };
 
 
-{valuelike} # deep-copy, self-contained-object
+{valuelike} deep-copy, self-contained-object
 The copy and the original are independent since copy underlying object as well. note: library containers
 and string use valuelike copy
 
@@ -11856,10 +11863,12 @@ class HasPtr {
         ps( new std::string( *p.ps ));
 
     HasPtr& operator=(const HasPtr& p);
+
     ~HasPtr() { delete ps; }
 
   private:
-    std::string* ps;
+    std::string* ps; 
+    int i;
 };
 
 Think about self-assign and exception safe. The below covers self-assign and exception-safe.
@@ -11874,14 +11883,21 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 }
 
 
-{pointerlike} # shallow-copy, own-reference-counting
-The copy and the original share underlying object like shared_ptr. Alternatively, use own reference
-counting as following:
+{pointerlike} shallow-copy, own-reference-counting
+The copy and the original share underlying object like shared_ptr. To show own reference counting:
 
 class HasPtr {
   public:
     // see default arg and new size_t
-    HasPtr(const std::string& s = std::string() ) : ps( new std::string(s)), i(0), use( new std::size_t(1) ) {}
+    HasPtr(const std::string& s = std::string() ) 
+        : ps( new std::string(s)), i(0), use( new std::size_t(1) ) {}
+
+    // if separate constructors in two. the difference is a cost of temporary.
+    // HasPtr() 
+    //     : ps( new std::string()), i(0), use( new std::size_t(1) ) {}
+
+    // HasPtr(const std::string &s) 
+    //     : ps( new std::string(s)), i(0), use( new std::size_t(1) ) {}
 
     HasPtr(const HasPtr& p): ps( p.ps ), use( p.use ) { ++*use; };
 
@@ -11901,7 +11917,7 @@ HasPtr::~HasPtr()
    }
 }
 
-Combine dtor and copy ctor. handle self-assign
+The copy assign do dtor and copy constructor. handle self-assign
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
@@ -11921,8 +11937,8 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 
 
 {copy-control-for-bookkeeping} message class example
-p519. Although user copy control is most often needed for classes that allocate resources, some
-class have bookkeeping or other actions that copy control must perform.
+C++P p519. Although copy control is most often needed for classes that allocate resources, that is
+not the only reason and some class have bookkeeping or other actions that copy control must perform.
 
 Folder (set of pointers to Message)  Message (set of pointers to Folder)
 [ ][ ][ ][ ][ ]: set                 message text
@@ -11933,24 +11949,28 @@ Folder (set of pointers to Message)  Message (set of pointers to Folder)
                                      [ ][ ][ ][ ]: set
 ...                                  ...
 
-<lits-of-operations-message-class> # how to sketch a class
-To have the same message in multiple folders, each message has a set of pointers to folder;
-folder-set and requires to update that when necessary.
+<lits-of-operations-message-class> how to sketch a class
+o To keep track of which Message are in which Folders, each message has a set of pointers to Folders
+and each Folder will have a set of pointers to its Message.
 
-- Message class provide save and remove operations to add or remove a Message from a specified
+note: Why set of pointers for Message and Folder? This example have seperate interface for Folder
+and Message and if do operations on Message, there is a need to update Folder as weel such as
+deleting a Message. So need to have a set for each object.
+
+o Message class provide save and remove operations to add or remove a Message from a specified
 folder. To create a new Message, specify the contents of the message but no folder. To put a message
 call save. note: Why? Can have ctor(Folder&) but needs remove() member anyway. So better to have
 save and remove pair?
 
-- To copy a message, the copy and the original will be distinct and be in the same 'set' of Folders.
-Thus will copy the contents and folder-set; copying-set. To appear in the same Folders as the
-original message, must traverse the folder-set to add a pointer to the new into each Folder.
+o To copy a message, the copy and the original will be distinct and be in the same 'set' of Folders.
+Thus will copy the contents and Folder-set; copying-set. To appear in the same Folders as the
+original message, must traverse the Folder-set to add a pointer to the new into each Folder.
 traverse().
 
-- To destroy a message, remove pointers to that from the Folders. traverse().
+o To destroy a Message, remove pointers to that from the Folders. traverse().
 
-- To assign a message, will replace the contents and also update folder-set of lhs by removing lhs
-Message from lhs folder-set and adding that Message to rhs folder-set. traverse().
+o To assign a Message, will replace the contents and also update Folder-set of lhs by removing lhs
+Message from lhs Folder-set and adding that Message to rhs Folder-set. traverse().
 
 Looking at this list of operations, both the dtor and the copy assign have to 'remove' this Message
 from the Folders. Both the copy ctor and the copy assign 'add' a Message to a given list of Folders.
@@ -12034,38 +12054,53 @@ Message& Message::operator=(const Message& rhs)
   return *this;
 }
 
+note:
 Handle self-assign by removing pointers to this message from lhs before inserting pointers to rhs.
-<Q> Really? Isn't folders empty after removing pointers? Seems broken and needs a direct check as
-done in move? If do inserting first, adding has no effect since adds the same address(message) to a
-set in a folder. So would have removed this from 'all' of its corresponding Folders.
+If do inserting first, adding has no effect since adds the same address(message) to a set in a
+folder. So would have removed this from 'all' of its corresponding Folders.
+
+Again, HasPtr example for self-assign and exception safe. 
+
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
+}
+
+This handles "rhs" first and "lhs" later. However, this message example do "lhs" first. So
+self-assign and exception safe is 'context' dependant.
+
 
 <swap-consideration>
 Since the library string and set defines own swap, Message class will benefit from defining own
-version of swap to avoid extraneous copies of 'folder' memder.
+version of swap to avoid extraneous copies of 'folder' set member.
 
-However, must manage Folder pointers that Folders have since after a swap(m1, m2) call, the Folders
-that had pointed to m1 must now point to m2.
+However, must update a set of pointers that Folders have since after a swap(m1, m2) call, the
+Folders that had pointed to m1 must now point to m2.
 
 void swap( Message &lhs, Message &rhs )
 {
-  // not necessary but good habit.
+  // not necessary in this case but good habit.
   using std::swap;
 
-  // 1 pass. remove pointers to each message from Folders
+  // first pass. remove pointers to each message from Folders
   for( auto f: lhs.folders )
     f->remMsg(&lhs);
   for( auto f: rhs.folders )
     f->remMsg(&rhs);
 
-  swap( lhs.folders, rhs.folders );       // swap(set&, set&)
-  swap( lhs.contents, rhs.contents );     // swap(string&, string&)
+  swap( lhs.folders, rhs.folders );       // swap(set&, set&). set::swap
+  swap( lhs.contents, rhs.contents );     // swap(string&, string&). string::swap
 
-  // 1 pass. add pointers to each message from Folders
+  // second pass. add pointers to each message from Folders
   for( auto f: lhs.folders )
     f->addMsg(&lhs);
   for( auto f: rhs.folders )
     f->addMsg(&rhs);
 }
+
 
 <move-consideration>
 As with copy and swap, in addition to moving, must update each Folder and both move ctor and assign
@@ -12109,12 +12144,12 @@ Message& Message::operator=( Message &&rhs )
 }
 
 
-{preventing-copies} # delete-keywords
+{preventing-copies} delete-keywords
 Primus p507 and EC++06. How can define a class to prevent copy or assign like iostream class? Do not
 defining copy controls? This do not work as syn version will be made. Two ways: delete keyword and
 private access control.
 
-<delete-keyword> after C++11
+<delete-keyword> since C++11
 Signal to the compiler not to define these members and lead to compile error when try to use it. Or
 syn version will be deleted when compiler cannot make it.
 
@@ -12166,30 +12201,34 @@ int main()
 
   Base b1, b2;
 
-  Base b3(b1);       // <01> 21
+  Base b3(b1);       // note: 01. line: 21
 
   D d1, d2;
 
   d1.getShout();
 
-  d2 = d1;           // <02>
+  d2 = d1;           // note: 02
 
   std::cout << "--} main " << std::endl;
 }
 
-<01>
+note: 01
 use-prevent-copy.cpp: In function ‘int main()’:
 use-prevent-copy.cpp:11:4: error: ‘Base::Base(const Base&)’ is private
 use-prevent-copy.cpp:21:12: error: within this context
 
-<02>
+note: 02
 base.cpp: In function ‘int main()’:
 base.cpp:33:8: error: use of deleted function ‘D& D::operator=(const D&)’
 base.cpp:15:7: error: ‘D& D::operator=(const D&)’ is implicitly deleted because the default definition would be ill-formed:
 base.cpp:12:10: error: ‘Base& Base::operator=(const Base&)’ is private
 base.cpp:15:7: error: within this context
 
-<case-link-error> show when able to get access such as friend cases
+
+<friend-can-access> 
+However, friend and members still can access private. How to prevent this? Use link error by not
+defining in addition to private trick.
+
 using std::cout; using std::endl;
 
 class Base {
@@ -12214,15 +12253,18 @@ $ ./comp.sh use-prevent-copy.cpp
 /home/kit/work/use-prevent-copy.cpp:22: undefined reference to `Base::Base(Base const&)'
 collect2: ld returned 1 exit status
 
-<key>
-note: to prevent access from derived classes, make copy control private and cause compile error.
-note: to prevent access from friend or members, so declare copy controls but not define. By doing
-this, can cause 'link' errors when there are attempts to use. Because when needed, compiler will try
-to link but no definition. The example is ios_base, basic_ios, and sentry of STL implementation.
+note: summary
+
+o To prevent access from derived classes, make copy control private and cause compile error.
+
+o To prevent access from friend or members, so declare copy controls but not define. By doing this,
+  can cause 'link' errors when there are attempts to use. Because when used, compiler will try to
+  link but no definition. The example is ios_base, basic_ios, and sentry of STL implementation.
+
 
 <boost-noncopyable>
-EC++06. For a easy use of adding preventing copy feature, use uncopyable base since private in base
-will not inherited in derived. So compile error even if friend or member case.
+EC++06. For a easy use of adding preventing copy features discussed above, use uncopyable class as a
+base which is boost::noncopyable. This has couple of consideration for inheritance.
 
 #include <iostream>
 
@@ -12259,15 +12301,30 @@ use-noncopy.cpp:13:7: error: ‘Foo& Foo::operator=(const Foo&)’ is implicitly
 use-noncopy.cpp:10:17: error: ‘Uncopyable& Uncopyable::operator=(const Uncopyable&)’ is private
 use-noncopy.cpp:13:7: error: within this context
 
-note: syn copy and assign op for derived classes are supposed to handle base class parts but the
-derived cannot use the base version since the base is private. Again, the point is that derived
-class part can't call the base class part as it's private. In boost, it's 'noncopyable'.
+note: Why protected on ctor and dtor? Only possible to create it via inheritance. e.g. derived
+class.
 
 note: Regardless of inheritance type, won't compile. Why shouldn't be public? Since it is not is-a
-relationship.
+relationship and the case use is 'private'.
 
-note: Why not virtual dtor in base? By using protected on ctor and dtor, make it error to use delete
-on base but able to run dtor via derived class. See non-virtual-destruction-problem. 
+note: Why not virtual dtor in base? By using protected dtor, make it error to use delete on base but
+able to run dtor via derived class. See non-virtual-destruction-problem. 
+
+<Q> Why this error on calling test_f()? Since use of reference parameter do not cost copy
+constructor, what calls are involved here?
+
+error: 'Uncopyable' is an inaccessible base of ‘Foo’
+
+void test_f( Uncopyable &uc )
+{
+    uc.WhoAmI();
+}
+
+int main()
+{
+    Foo fo;
+    test_f(fo);
+}
 
 
 {self-assign}
@@ -12481,20 +12538,106 @@ note. Like cin, seems useful to have bool conversion when class has 'state'.
 *kt_dev_cpp_006* swap 
 
 {why-swap}
-The swap provides two characteritics: efficiency and strong exception-safety.
- 
-<efficiency>
-It is for valuelike class and use swap when used by algorithm such as reorder elements. For
-pointerlike class, no need as it naturally swaps pointers. STL containers are valuelike. 
 
-Since valuelike swap is expensive such as resource managing class which is valuelike, need to have
-better way and provide type specific swap which has efficient way to do it; not to swap all elements
-but swap its internal structure. Constant-time operation. 
+1. efficiency
+Better performance for valuelike class that used by algorithm such as reorder elements and remember
+that STL assumes copy context. note: requires copy assign.
 
-<exception-safety>
+Since valuelike swap is expensive, need to have better way and efficient way to do it; not to swap
+all elements but swap its internal structure. Constant-time operation. 
+
+So the approach is that if type defines its own swap then STL use it and if not, use std::swap from
+library. Means that STL is implemented to use type's swap and if there isn't, use std::swap.
+
+For pointerlike class, no need sind std::swap do what it is requireds; swaps pointers. 
+
+2. exception-safety
+
 Like STL containers, provide both memeber and non-member swap. To have the member version swap never
 throw exception (because it use swap on built-in types that never throw exception.) This offers the
 strong excepiton-safety gurantee.
+
+
+<typical-swap>
+The typical swap involves "one copy and two assignments"
+
+T temp = v1;
+v1 = v2;
+v2 = temp;
+
+
+<nonmember-friend-swap> C++P p516. non-member and friend swap.
+Take "valuelike" example from kt_dev_cpp_004 and see how swap can be uses in copy assign.
+
+class HasPtr {
+
+  friend void swap( HasPrt&, HasPtr& );               // note: friend
+
+  public:
+   HasPtr(const std::string& s = std::string() )
+    : ps( new std::string(s)), i(0) {}
+        
+   ~HasPtr() { delete ps; }
+
+  private:
+   std::string* ps;
+};
+
+inline void swap( HasPtr& lhs, HasPtr& rhs )
+{
+  using std::swap;                                    // note:  
+  swap( lhs.ps, rhs.ps );
+  
+  OR 
+
+  std::swap( lhs.ps, rhs.ps );
+}
+
+note: 
+Although doesn't matter in this case since there is no type specific swap for built-in types because
+ps is a pointer to string, 'must' use swap() but not std::swap() to try type specific version first.
+
+
+<how-finding-swap-work>
+How "try type version and std version next" works? Two things:
+
+{
+    using std::swap;
+    swap( T, T );
+}
+
+1. Type specific version is better match in function matching and std::swap is template.
+2. Use 'arg-dependent-lookup' in *kt_dev_cpp_007* in swap( HasPtr&, HasPtr& ).
+
+note: 
+Why not "using std::swap" hide swap(T)? Since arg-dependant-lookup adds swap(T) in to search which
+is better match than std::swap.
+
+
+<copy-and-swap-idiom>
+To rewrite using copy-and-swap-idiom which is exception-safe code which automatically handle
+self-assign
+
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
+}
+
+To rewrite using copy-and-swap-idiom: <Q> does swap change const HasPtr?
+
+HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy so copy ctor used.
+{
+  swap(*this, rhs);
+  return *this;      // rhs is destroyed, which deletes the old ps.
+}
+
+Also EC++11 says the compiler can generate more efficient code by moving copying from the function
+body to parameter construction. 
+
+<Q> does swap change const HasPtr?
 
 
 {define-swap-use-specialisation}
@@ -12706,74 +12849,6 @@ template<typename _Tp, typename _Alloc>
   { __x.swap(__y); }
 
 
-{define-swap-use-friend}
-Primer p516. This is an example which use non-member swap and friend approach. Example from
-{valuelike} in *kt_dev_cpp_004*
-
-class HasPtr {
->
-  friend void swap( HasPrt&, HasPtr& );
-<
-  public:
-   HasPtr(const std::string& s = std::string() )   // def arg. 
-    : ps( new std::string(s)), i(0) {}
-        
-   ~HasPtr() { delete ps; }
-
-  private:
-   std::string* ps;
-};
-
-inline void swap( HasPtr& lhs, HasPtr& rhs )
-{
-  using std::swap;
-  swap( lhs.ps, rhs.ps );  // std::swap as no swap in string
-  
-  OR 
-
-  std::swap( lhs.ps, rhs.ps );
-}
-
-The following will use swap(HasPtr&, HasPtr&) through {arg-dependent-lookup} in *kt_dev_cpp_007*
-
-HasPtr A, B;
-swap(A,B);
-
-note: caution. The following has the same result as used on built-in memeber data since it is
-pointer in this case.  However, this can be mistake for any class member because this force to use
-std::swap no matter whether there is type specific version.
-
-inline void swap( HasPtr& lhs, HasPtr& rhs )
-{
-  std::swap( lhs.ps, rhs.ps );   // std::swap as no swap in string
-}
-
-
-{copy-and-swap-idiom}
-For valuelike, this is exception-safe code which automatically handle self-assign
-
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
-{
-  auto newp = new string(*rhs.ps);
-  delete ps;
-  ps = newp;
-  return *this;
-}
-
-To rewrite using copy-and-swap-idiom: <Q> does swap change const HasPtr?
-
-HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy so copy ctor used.
-{
-  swap(*this, rhs);
-  return *this;      // rhs is destroyed, which deletes the old ps.
-}
-
-It this HasPrt has swap implementation, then this operator= will be efficient. SO, have
-optimization, self and exception safe and neat implementation using swap. Also EC++11 says the
-compiler can generate more efficient code by moving copying from the function body to parameter
-construction. 
-
-
 {swap-usuage}
 There are two use cases:
 <1>
@@ -12858,30 +12933,14 @@ is nothing to say about whether it calls member or non-member op overload. so th
 both member and non-member to be considered.  
 
 
-{arg-dependent-lookup} from {ref-CPR} p797.
-std::string s;
-std::cin >> s;
-
-this is equi to:
-
-operator>>(std::cin, s); 
-
-This operator>>() func is defined in the 'string' libaray as a 'nonmemeber' and in 'std'. Why is it
-okay without using either 'std::' or 'using'? When func has class type argument which is class
-object, pointer or reference, the compiler searches 'namespace' in which arg defined in addition to
-the normal scope lookup.
-
-In this case, searches the namespace, 'std', where cin and string is defined and found this func
-from 'string'. note: it is namespace, not else.
-
-Why this? This makes it easy to use non-member func which is conceptually part of class interface.
-otherwise, should use
-
-using std::operator>>; or std::operator>>(std::cin, s);
+{scope-and-search}
+The search looks 'outwards' or 'upwards' through the 'enclosing' scopes which are declared 'before'
+the point of use and are still 'open'. The enclosing scopdes are blocks, namespaces, and base
+classes and search goes upwards and ends 'global' namespace. Hence 'hiding' name can happen.
 
 
-{scope-in-inheritance}
-Primus p617. Hierarchical nesting of class scope; this means that the derived is nested in the base
+<in-inheritance>
+C++P p617. Hierarchical nesting of class scope; this means that the derived is nested in the base
 scope and names in the derived can hide names declared in the base. See {override-keyword}
 *kt_dev_cpp_023* The point is that the name-lookup happens at compile time and uses static-type. The
 below shows that point.
@@ -12908,6 +12967,35 @@ this is not found in Quote class.
 
 Tried with GCC and got an error:
 .cpp:139:10: error: 'class Quote' has no member named 'discount_policy'
+
+
+{arg-dependent-lookup} C++P p797.
+See this statements:
+
+std::string s;
+std::cin >> s;
+
+this is equi to:
+
+operator>>(std::cin, s); 
+
+This operator>>() is defined in the string libaray as a nonmemeber and in std namespace. 
+
+Why is it okay without using either "std::" or "using"? 
+
+When func has class type argument which is class object, pointer or reference, the compiler searches
+'namespace' in which arg defined in addition to the normal scope to lookup. This is 'exception' to
+the rule that names defined in a (closed) namespace are hidden.
+
+In this case, searches the namespace std, where cin and string is defined and found this func
+from string. note: it is namespace, not else.
+
+Why this exception? This makes it easy to use non-member func which is conceptually part of class
+interface. Otherwise, should use
+
+using std::operator>>; or std::operator>>(std::cin, s);
+
+Either would make simple use of the IO library more complicated.
 
 
 ={============================================================================
