@@ -16101,27 +16101,10 @@ unique_ptr classes which cannot be copied but can be moved.
 note: In previous library, class stored in a container had to be 'copyable'. Under new standard, can
 use container on types that cannot be copied so long as they can be moved.
 
-<problem-example>
+<own-allocation-example>
 StrVec example which is a simplification of the library vector class. Like vector, supports
 reallocation. If there is not enough space left, then obtains new space, moves the existing elements
 into that space, free the old space, and adds the new elements.
-
-When copy a string, the new and the old are 'independent' from each other and there are two users.
-However, when reallocates copies, there will be only 'one' user after the copy. As soon as copy is
-done, will immediately destory the old.
-
-Copying the old is 'unnecessary' in this case so StrVec's 'performance' will be much better if can avoid
-the overhead of allocating and deallocating the 'strings' themselves each time we reallocate.
-
-<how-to-avoid-copy>
-Two facilities by C++11. 
-
-First, several library classes, including string, define so called 'move constructor' but the detail
-of implementation are not disclosed. Presumably the string move ctor copies the pointer rather than
-allocating spaces.
-
-Second, the library 'move' which is defined 'utility' header. Two things. must use move to signal it
-want to use the string move ctor and use std::move() not move().
 
 | 0 | 1 | 2 | 3 | 4 | unconstructed elements |
 
@@ -16134,29 +16117,116 @@ class StrVec {
     std::string* end() const { return first_free; }
     ...
   private:
+
+    static std::allocator<std::string> alloc;
+
     std::string *elements;
     std::string *first_free;
     std::string *cap;
     ...
 };
 
+<copy-sementaic> valuelike
+
+pair<string*, string*>
+StrVec::alloc_n_copy( const string *begin, const string *end )
+{
+    // allocate space to hold as many elements as are in the range
+    auto data = alloc.allocate( end - begin );
+
+    // uninitialized_copy 'construct' copies of given elements in 'uninitialized' space.
+    // return { begin, end }
+    return { data, uninitialized_copy( begin, end, data ) };
+}
+
+StrVec::StrVec( const StrVec& s )
+{
+    // memeber function to allocate and copy exactly as many elements as in s
+    auto newdata = alloc_n_copy( s.begin(), s.end() );
+    elements = newdata.first;
+    first_free = cap = newdata.second;
+}
+
+void StrVec::free()
+{
+    // may not pass deallocate a null pointer. moves backwards
+    if(elements)
+    {
+        for( auto p = first_free; p != elements; /* empty */ )
+            alloc.destroy(--p);
+
+        alloc.deallocate( elements, cap - elements );
+    }
+}
+
+StrVec::~StrVec() { free(); }
+
+StrVec &StrVec::operator=( const StrVec &rhs )
+{
+    // for self-assign
+    auto data = alloc_n_copy( rhs.begin(), rhs.end() );
+    free();
+    elements = data.first;
+    first_free = cap = data.second;
+    return *this;
+}
+
+
+<reallocation>
+The string is valuelike and has own memory for those characters. When copy a string, the new and the
+old are independent from each other. However, when reallocates copies, there will be only 'one' user
+after the copy and as soon as copy is done, no need to keep the old.
+
+So copying the data in these strings in the old is 'unnecessary' in this case so StrVec's
+'performance' will be much better if can avoid the overhead of allocating and deallocating the
+strings themselves each time we reallocate.
+
+
+<how-to-avoid-coping>
+Two facilities by C++11. 
+
+1. move constructor. 
+Several library classes, including string, define so called move constructor. Presumably the string
+move ctor copies the pointer rather than allocating spaces.
+
+2. std::move().
+The library 'move' which is defined 'utility' header. Two things. must use move to signal it want to
+use the string move ctor. Otherwise, copy ctor will be used. Use std::move() not move().
+
+void chk_n_alloc() 
+{ if( size() == capacity() ) reallocate(); }
+
+void StrVec::push_back( const string &s )
+{
+    chk_n_alloc();
+
+    // note: construct() calls string's copy ctor
+    alloc.construct( first_free++, s );
+}
+
 void StrVec::reallocate()
 {
-  auto newcapacity = size() ? 2 * size() : 1;
-  auto first = alloc.allocate(newcapacity);
+    auto newcapacity = size() ? 2 * size() : 1;
 
-  auto last = first;
-  auto elem = elements;
+    auto newdata = alloc.allocate(newcapacity);
 
-  for( size_t i = 0; i != size(); ++i )
-    alloc.construct( last++, std::move(*elem++) );    // note. move() which is string::move
+    auto dest = newdata;      // start in the new array
+    auto elem = elements;     // start in the old array
 
-  free();   // member which destroy and deallocate old container StrVec object. see below.
+    // note: construct() calls string's move ctor
+    for( size_t i = 0; i != size(); ++i )
+        alloc.construct( dest++, std::move(*elem++) );
 
-  elements = first;
-  first_free = last;
-  cap = elements + newcapacity;
+    // note: this frees up the old allocated memory and string element but not string's memory for
+    // characters
+    free();
+
+    elements = newdata;
+    first_free = dest;
+    cap = elements + newcapacity;
 }
+
+note: the std::move() returns a result that cause construct() to use the string move ctor.
 
 
 {rvalue-reference}
@@ -16209,56 +16279,39 @@ const int &r3 = i*42;   // okay
 int &&r2 = i*42;        // okay
 
 
-<ravlue-is-temporary> implicit move sementics
+<rvalue-is-temporary> implicit move sementics
 Functions that 'return' a nonreference type, along with the arithmetic, relational, bitwise, and
 postfix increment/decrement operators, all yield rvalues. So can bind rvalue to such expressions.
 
 Looking at the list of rvalue and lvalue expressions, lvalue has 'persitent' state, whereas rvalue
 are either literals or 'temporary' objects created in the course of evaluating expressions.
 
-We know that: the referred-to object is about to be destroyed and there can be 'no' other users of
-that object. So the code that uses an rvalue reference is 'free' to 'take' over resources from the
-object to which the reference refers.
+The rvalue reference can only be bound to temporaries: the referred-to object is about to be
+destroyed and there can be 'no' other users of that object. So the code that uses an rvalue
+reference is 'free' to 'take' over resources from the object to which the reference refers.
 
 
 {std-move}
-This is defined in <utility> header and to 'return' rvalue reference to its given object.
+This is defined in <utility> header and to 'return' rvalue reference to an lvalue.
 
 int &&rr = std::move(rr1);
 moved-to             moved-from
 
-Essentially to tell or signal compiler that we do 'not' intend to use rr1 again 'except' to 'assign'
-to it or destroy it. After move, cannot make any assumptions about the value of the moved-from
-object. <Q> Why assign?
+Essentially to tell or signal compiler that we do 'not' intend to use rr1 again except to 'assign'
+to it or destroy it. So after move, cannot make any assumptions about the value of the moved-from
+object. note: Think a string case that can destory string object itself and can assign new memory
+for characters. 
 
-note: To avoid name collisions, should use std::move, not move. p798.
+
+<why-std-move>
+Since there is argument dependant lookup, if user defines move() then overloading rule picks up the
+right version. However, std::move is template and rvalue matches to any type so name collision are
+more likely but less likely to be intentional. Therefore, suggest fully qualified one, std::move().
 
 
 {move-constructor}
 See copy ctor and move ctor in comparison.
 
-void StrVec::free()
-{
-  // may not pass deallocate a null pointer
-  if(elements)
-  {
-    for( auto p = first_free; p != elements; /* empty */ )
-      alloc.destroy(--p);
-
-    alloc.deallocate( elements, cap - elements );
-  }
-}
-
-StrVec::~StrVec() { free(); }
-
-// copy ctor
-StrVec::StrVec( const StrVec& s )
-{
-  // memeber function to allocate exactly as many elements as in s
-  auto newdata = alloc_n_copy( s.begin(), s.end());
-  elements = newdata.first;
-  first_free = cap = newdata.second;
-}
 
 In move ctor, see NO const in parameter. noexcept since do not allocate any new memory and take over
 the memory from its argument. note on noexcept syntax and see <noexcept-keyword> for more.
