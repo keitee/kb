@@ -16126,7 +16126,7 @@ class StrVec {
     ...
 };
 
-<copy-sementaic> valuelike
+<copy-context> valuelike
 
 pair<string*, string*>
 StrVec::alloc_n_copy( const string *begin, const string *end )
@@ -16309,78 +16309,59 @@ right version. However, std::move is template and rvalue matches to any type so 
 more likely but less likely to be intentional. Therefore, suggest fully qualified one, std::move().
 
 
-{move-constructor}
-See copy ctor and move ctor in comparison.
-
-
-In move ctor, see NO const in parameter. noexcept since do not allocate any new memory and take over
-the memory from its argument. note on noexcept syntax and see <noexcept-keyword> for more.
+<move-context>
+See 'no' const in parameter and noexcept since do 'not' allocate any new memory and take over the
+memory from its argument. See <noexcept-keyword> for more.
 
 After move, the moved-from object continues to 'exist' and eventually will be destroyed, meaning
-that the dtor will be run on that. That is 'why' set member ptrs null not to deallocate memory in
-dtor and eventually free(). Otherwise, would delete the memory we have taken over. Also thus is
-'why' do not have const on s since changes its state. <Q> When moved-from will be destroyed? 
+that the dtor will be run on that. That is 'why' set pointer members null not to deallocate memory
+in dtor and eventually free(). Otherwise, would delete the memory we have taken over. Also thus is
+'why' do not have const on s since changes its state.
 
-// move ctor
 StrVec::StrVec( StrVec&& s ) noexcept
-// member initializers take over the resources in s.
 : elements(s.elements), first_free(s.first_free), cap(s.cap)
 {
-  // leave s in a state in which it is safe to tun the dtor
-  s.elements = s.first_free = s.cap = nullptr;
+    // leave s in a state in which it is safe to tun the dtor
+    s.elements = s.first_free = s.cap = nullptr;
 }
 
-<why-noexcept-needed>
-The library containers provide guarantees as to what they do if an exception happens. As an example,
-vector guarantees that if an exception happens when call push_back, the vector itself will be left
-unchanged.
-
-Imagine that push_back in StrVec causes reallocation as vector, uses move ctor but exceptions
-happens in the middle of moving. There would be a problem. However, if used copy ctor, not a problem
-when exception happens since the original copy still remains. Like, exception safe condition in
-using dynamic resources.
-
-To avoid this potential problem, vector must use a copy ctor instead move during reallocation
-'unless' it knows that 'element's type move ctor cannot throw an exception. How to do? Do so by
-using noexcept keyword and explicity tell the library that move ctor is safe to use.
-
-<Q> How actually does the library know what to use? A: By function matching and see below.
-
-<note> Whreas copy controls are more of necessary to work properly, move controls are more of
-performace choice since if there are not, copy controls will be used.
-
-
-{move-assign}
 The move assign does the same work as the dtor and the move ctor. If move assign won't throw any
 exceptions, should make it noexcept and must guard against self-assignment.
 
-StrVec &StrVec::operator=( StrVec&& rhs ) noexcept
+StrVec &StrVec::operator=( StrVec &&rhs ) noexcept
 {
-  // direct test for self-assignment
-  if( this != &rhs )    // note see &rhs
-  {
-    // free existing elements since it is assign and has already elements
-    free();    
+    // direct test for self-assignment. note "&rhs" is address of rhs.
+    if( this != &rhs )
+    {
+        // free existing elements
+        free();    
 
-    // member initializers take over the resources from rhs. this is move as with move ctor.
-    elements = rhs.elements;
-    first_free = rhs.first_free;
-    cap = rhs.cap;
+        // member initializers take over the resources from rhs. this is move as with move ctor.
+        elements = rhs.elements;
+        first_free = rhs.first_free;
+        cap = rhs.cap;
 
-    // leave rhs(moved-from) in a destructible state
-    rhs.elements = rhs.first_free = rhs.cap = nullptr;
-  }
+        // leave rhs(moved-from) in a destructible state
+        rhs.elements = rhs.first_free = rhs.cap = nullptr;
+    }
 
-  return *this;
+    return *this;
 }
 
+
 <destructible-state>
+Be careful about meaning of move: The actual move happens on elements which is string in this
+case and move is done by copying and setting pointer members in StrVec POV and is not to free the
+memory moved. This is a meaning of taking over the resources in s, StrVec.
+
 Moving from an object does not destroy that object. Therefore, must ensure that the moved-from
-object is in a state in which the dtor can be run. In this example, memebers are 'pointers' and if
-not set these as null, there shall be a problem when dtor runs and calls free().
+object is in a state in which the dtor can be run. In this example, if not set these pointer members
+null, there shall be a problem when dtor runs and calls free().
 
 In addition to that, move operations guarantee that the object remains 'valid' meaning that can runs
-operations but no guarantees/assumptions about its 'value'.
+operations but no guarantees/assumptions about its 'value'. Can safely be given a new value or used
+in other ways that do not depend on its current value. StrVec move leave the moved-from object in
+the same state as a default initialized object and other classes may behave differently.
 
 
 {synthesized-move-operations}
@@ -16410,6 +16391,27 @@ Otherwise, those members are deleted by default.
 
 
 {copy-or-move}
+
+<why-noexcept-needed>
+The library containers provide guarantees as to what they do if an exception happens. As an example,
+vector guarantees that if an exception happens when call push_back, the vector itself will be left
+unchanged.
+
+Imagine that push_back in StrVec causes reallocation as vector, uses move ctor but exceptions
+happens in the middle of moving. There would be a problem. However, if used copy ctor, not a problem
+when exception happens since the original copy still remains. Like, exception safe condition in
+using dynamic resources.
+
+To avoid this potential problem, vector must use a copy ctor instead move during reallocation
+'unless' it knows that 'element's type move ctor cannot throw an exception. How to tell the library
+that move ctor is safe to use? Do so by using explicitly noexcept keyword on move ctor and assign.
+
+<Q> How actually does the library know what to use? A: By function matching and see below.
+
+<note> Whreas copy controls are more of necessary to work properly, move controls are more of
+performace choice since if there are not, copy controls will be used.
+
+
 Compiler use ordinary function matching to determine which to use. copy takes const StrVec& and move
 takes StrVec&&.
 
@@ -28674,7 +28676,7 @@ class auto_ptr {
       rhs.pointee = 0;
     }
 
-    auto_ptr<T>& operator=(auto_ptr<T> &rhs )
+    auto_ptr<T>& operator=( auto_ptr<T> &rhs )
     {
       // self-assign guard
       if( this == &rhs )

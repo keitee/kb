@@ -31,13 +31,18 @@
 |kt_dev_uv_stack_103| stack: vanadium: remote debug
 |kt_dev_uv_stack_104| stack: LSR (local storage repository)
 |kt_dev_uv_stack_105| stack: uranium
-|kt_dev_uv_stack_106| stack: cal
-|kt_dev_uv_stack_107| stack: cal: metadata creation
-|kt_dev_uv_stack_108| stack: cal: metadata: event structures and mapping
-|kt_dev_uv_stack_109| stack: cal: metadata: event connection to application
-|kt_dev_uv_stack_110| stack: cal: metadata: how events get updated
-|kt_dev_uv_stack_111| stack: cal: future producer and event producer
-|kt_dev_uv_stack_112| stack: cal: metadata: summary
+|kt_dev_uv_stack_106| stack: cal: loading
+|kt_dev_uv_stack_107| stack: cal: component link creation
+|kt_dev_uv_stack_108| stack: cal: metadata: event structures and dbus mapping.
+|kt_dev_uv_stack_109| stack: cal: metadata: api and dbus mapping.
+|kt_dev_uv_stack_110| stack: cal: metadata: event connection to application
+|kt_dev_uv_stack_111| stack: cal: metadata: how events get updated
+|kt_dev_uv_stack_112| stack: cal: metadata: events data flow
+|kt_dev_uv_stack_113| stack: cal: metadata: summary data flow
+|kt_dev_uv_stack_114| stack: cal: metadata: wrapper and convert flow
+
+|kt_dev_uv_stack_120| stack: cal: future producer and event producer
+|kt_dev_uv_stack_121| 
 |kt_dev_uv_stack_113| stack: cal: test
 |kt_dev_uv_stack_114| stack: build pc target
 |kt_dev_uv_stack_115| stack: text epg
@@ -860,11 +865,11 @@ libtool: install: /usr/bin/install -C nexus-inspect
 
 
 <install-root-not-updated>
-kpark@wll1p04345:~/source/DEVARCH$ find /data/builds/_virtual_/huawei.370/zinc-build-root/ -name nexus-inspect | xargs ls -al
+$ find /data/builds/_virtual_/huawei.370/zinc-build-root/ -name nexus-inspect | xargs ls -al
 -rwxrwxr-x 1 kpark kpark 12213 Apr  7 15:00
 /data/builds/_virtual_/huawei.370/zinc-build-root/release-huawei-bcm7409/Polonium/Polonium.NexusInspect/nexus-inspect
 
-kpark@wll1p04345:~/source/DEVARCH$ find /data/builds/_virtual_/huawei.370/zinc-install-root/ -name nexus-inspect | xargs ls -al
+$ find /data/builds/_virtual_/huawei.370/zinc-install-root/ -name nexus-inspect | xargs ls -al
 -rwxr-xr-x 1 kpark kpark  7846 Apr  7 14:13
 /data/builds/_virtual_/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/bin/nexus-inspect
 
@@ -2475,6 +2480,7 @@ NPError NP_Initialize(NPNetscapeFuncs* nFuncs, NPPluginFuncs* pFuncs)
     return NPERR_GENERIC_ERROR;
 }
 
+
 ={============================================================================
 *kt_dev_uv_stack_103* stack: vanadium: remote debug
 
@@ -2834,7 +2840,7 @@ class SystemClientLocator : virtual public Locator {
 
 
 ={============================================================================
-*kt_dev_uv_stack_107* stack: cal: metadata creation
+*kt_dev_uv_stack_107* stack: cal: component link creation
 
 {creation-chain} for linear and metadata and creation chian. 
 
@@ -2988,6 +2994,9 @@ boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> SystemClientFactor
 
 
 <CMB> <SCMB>
+
+// note: SCMB        -> { RS(COBALT), , MR, }. repos is MR 
+
 Uranium.Client.System/src/metadata/SystemClientMetadataBroker.cpp
 
 class ZINC_EXPORT SystemClientMetadataBroker
@@ -3015,8 +3024,7 @@ class ZINC_EXPORT SystemClientMetadataBroker
     shared_ptr<SystemClientSearchOptions> scSearchOptions
       = boost::dynamic_pointer_cast<SystemClientSearchOptions>(searchOptions);
 
-    // note: this is SMB(COBALT)
-
+    // note: <dbus-call-to-cobalt>
     return metadataBroker->search(searchTerms,
         getSysQopts(scSearchOptions),
         getSysGopts(scSearchOptions),
@@ -3029,38 +3037,6 @@ class ZINC_EXPORT SystemClientMetadataBroker
             start,
             _1));
   }
-
-  // note: searchCallback
-
-  boost::shared_ptr<SummaryResultSet>
-    SystemClientMetadataBroker::searchCallback(uint32_t requestedStartIndex,
-        const NS_ZINC::FutureValue<NS_COBALT_SYSTEM::ResultSet>& fvSystem) const
-    {
-      translateAndThrowCobaltSystemExceptions(fvSystem.getError());
-      NS_COBALT_SYSTEM::ResultSet sysval = fvSystem.get();
-
-      // note: SCMB        -> { RS(COBALT), , MR, }
-      // note: repos is MR 
-      
-      // note: create <SCSRS> and see <use-summary>
-      
-      boost::shared_ptr<SystemClientSummaryResultSet> srs =
-        convert(sysval, boost::shared_ptr<SystemClientSummaryResultSet>(), requestedStartIndex);
-
-      // boost::shared_ptr<SystemClientSummaryResultSet>
-      //   Converter::operator()(const NS_COBALT_SYSTEM::ResultSet& rs,
-      //       boost::shared_ptr<SystemClientSummaryResultSet>, uint32_t requestedStartIndex) const
-      //   {
-      //     return boost::make_shared<SystemClientSummaryResultSet>(
-      //         boost::make_shared<NS_COBALT_SYSTEM::ResultSet>(rs), config, repos, 
-      //         provisioningCache, requestedStartIndex);
-      //   }
-
-      metadataObserver->addListener(srs);
-      srs->setDispatcher(getDispatcher());
-
-      return boost::static_pointer_cast<SummaryResultSet>(srs);
-    }
 
   boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> metadataBroker;
   boost::shared_ptr<SystemClientMetadataConfig> config;
@@ -3309,7 +3285,46 @@ struct Event
     std::map< std::string, bool > alternativeEventLocator;
 };
 
+Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
 
+<yv:struct name="Zinc.Metadata.Event">
+
+   <p>The Event structure members are as follows:</p>
+
+   ...
+
+   <yv:member type="a{ss}" name="shortTitle">
+       <yv:docstring>
+           <p>A title for the event taken from the <tt>short_event_descriptor()</tt> 
+           <tt>event_name_char</tt> field.</p>
+           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+           to a title in the indicated language (the value).</p>
+       </yv:docstring>
+   </yv:member>
+
+   <yv:member type="a{ss}" name="mediumSynopsis">
+       <yv:docstring>
+           <p>A description for the event taken from the <tt>short_event_descriptor()</tt> 
+           <tt>text_char</tt> field.</p>
+           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+           to a synopsis in the indicated language (the value).</p>
+       </yv:docstring>
+   </yv:member>
+
+   <yv:member type="a{ss}" name="longSynopsis">
+       <yv:docstring>
+           <p>A description for the event taken from the <tt>extended_event_descriptor()</tt> 
+           <tt>text_char</tt> field.</p>
+           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
+           to a synopsis in the indicated language (the value).</p>
+       </yv:docstring>
+   </yv:member>
+
+note: "a{ss}" is array of dictionary(string, string) and maps to
+   std::map< std::string, std::string > shortTitle;
+
+
+{cobalt-result}
 /zinc-build-root/debug-debian-7-x86_64/Cobalt/Cobalt.System.API/include
 
 /*
@@ -3357,51 +3372,15 @@ inline Result::Result(const std::string& recordIdentifier_, const int64_t
         dataSource_, const std::vector< std::string >& classifiers_, const
         std::map< std::string, std::vector< std::string > >& identifiers_,
         const std::map< std::string, std::vector< std::string > >&
-        internalReferences_, const std::map< std::string, std::vector<
-        std::string > >& description_, const std::map< std::string,
-        std::vector< XmlNode > >& nodes_) 
+        internalReferences_, const std::map< std::string, 
+        std::vector<std::string > >& description_, 
+        const std::map< std::string, std::vector< XmlNode > >& nodes_) 
+
     : recordIdentifier(recordIdentifier_), lastModified(lastModified_),
     validUntil(validUntil_), dataSource(dataSource_),
     classifiers(classifiers_), identifiers(identifiers_),
     internalReferences(internalReferences_), description(description_),
     nodes(nodes_) { }
-
-
-{events-xml}
-Iron/Iron.System.API/data/introspection-xml/struct-Event.xml
-
-<yv:struct name="Zinc.Metadata.Event">
-
-   <p>The Event structure members are as follows:</p>
-
-   ...
-
-   <yv:member type="a{ss}" name="shortTitle">
-       <yv:docstring>
-           <p>A title for the event taken from the <tt>short_event_descriptor()</tt> 
-           <tt>event_name_char</tt> field.</p>
-           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-           to a title in the indicated language (the value).</p>
-       </yv:docstring>
-   </yv:member>
-
-   <yv:member type="a{ss}" name="mediumSynopsis">
-       <yv:docstring>
-           <p>A description for the event taken from the <tt>short_event_descriptor()</tt> 
-           <tt>text_char</tt> field.</p>
-           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-           to a synopsis in the indicated language (the value).</p>
-       </yv:docstring>
-   </yv:member>
-
-   <yv:member type="a{ss}" name="longSynopsis">
-       <yv:docstring>
-           <p>A description for the event taken from the <tt>extended_event_descriptor()</tt> 
-           <tt>text_char</tt> field.</p>
-           <p>Each dictionary entry matches an ISO&#160;639 “alpha-3” language code (the key) 
-           to a synopsis in the indicated language (the value).</p>
-       </yv:docstring>
-   </yv:member>
 
 
 Cobalt/Cobalt.System.API/data/introspection-xml/struct-Result.xml
@@ -3421,9 +3400,11 @@ Cobalt/Cobalt.System.API/data/introspection-xml/struct-Result.xml
     </yv:struct>
 </node>
 
+note: "a{sas}" maps to
+   std::map< std::string, std::vector< std::string > > description;
+
 
 {translation}
-
 Cobalt/Cobalt.System.Production/data/b2c_map.yaml
 
 node_transformations: [
@@ -3451,6 +3432,34 @@ XMLProcessor is responsible for parsing B2C XML responses into `Result` objects.
     tiles will be required to cover all the IP-channels, parsing performance is critical.
 
 
+
+{cobalt-resultset}
+introspection-xml/struct-ResultSet.xml
+
+	<yv:struct name ="Zinc.Broker.ResultSet">
+	    <yv:member type="u" name="totalSize" />
+        <yv:member type="a(sxxiasa{sas}a{ss}a{sas}a{sa(a{ss}s)})"
+            yv:type="a[Result]"
+            name="results"/>
+	</yv:struct>
+
+
+namespace Zinc { namespace Broker {
+
+struct ResultSet
+{
+    ResultSet();
+    explicit ResultSet(const uint32_t totalSize_, const std::vector< Result >& results_);
+    void swap(ResultSet&);
+
+    // Members:
+    uint32_t totalSize;
+    std::vector< Result > results;
+
+};
+
+
+{use}
 vector<NS_IRON_SYSTEM::Event> getBBC1Events()
 {
     NS_IRON_SYSTEM::Event e1;
@@ -3477,7 +3486,7 @@ vector<NS_IRON_SYSTEM::Event> getBBC1Events()
 }
 
 
-note: this test shows how to use 'result' structure.
+note: this test shows how to use 'cobalt::result' structure.
 
 Uranium.Client.System/test/metadata/SummaryTest.cpp
 
@@ -3533,79 +3542,191 @@ SystemClientSummary make_sample_summary(const GuidanceInfo& gi = GuidanceInfo())
 note: WRT getSynopsis, it only uses in void testGetEventFromSummary() but don't see why is doing this.
 
 
-{wrapper}
-/Uranium/Uranium.Client.System/src/metadata/SystemEventWrapper.h
 
-NS_URANIUM_METADATA_CLIENT_OPEN
+={============================================================================
+*kt_dev_uv_stack_109* stack: cal: metadata: api and dbus mapping.
 
-class SystemEventWrapper  {
-public:
+    // note: <dbus-call-to-cobalt>
+    return metadataBroker->search(searchTerms,
+        getSysQopts(scSearchOptions),
+        getSysGopts(scSearchOptions),
+        scSearchOptions->getFilters(),
+        start,
+        size)
+      .then(*getDispatcher(),
+          bind(&SystemClientMetadataBroker::searchCallback,
+            shared_from_this(),
+            start,
+            _1));
 
-    // note: "::cobalt::system"
-    
-    explicit SystemEventWrapper(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
-        scResult(sysResult),
-        idBag(scResult)
-    {}
+introspection-xml/interface-MetadataBroker.xml
 
-    std::string getOwningServiceId() const
-    {
-        return scResult.getStringFromDescription("owningServiceId");    // note: key
-    }
+        <method name="search">
+            <yv:docstring>
+                This method searches the on-demand catalogue using the B2C
+                interface's Search Service, to return Programme Summaries,
+                Series, Brands, Applications and/or Services. This method
+                is also used for un-rolling Series and Brands within search
+                user experiences.
+            </yv:docstring>
+            <arg type="s" name="queryString" direction="in">
+                <yv:docstring>
+                    The query string for the search.
+                </yv:docstring>
+            </arg>
+            <arg type="(ii)" yv:type="[QueryOptions]" name="queryOptions" direction="in">
+                <yv:docstring>
+                    Options for the query including sorting of the results. 
+                    See the QueryOptions structure definition for further 
+                    details.
+                </yv:docstring>
+            </arg>
+            <arg type="(iu)" yv:type="[GroupingOptions]" name="groupingOptions" direction="in">
+                <yv:docstring>
+                    Options controlling the grouping of results. See the 
+                    GroupingOptions structure for more details.
+                </yv:docstring>
+            </arg>
+            <arg type="a{sas}" name="filters" direction="in">
+                <yv:docstring>
+                    A set of filters to be applied to the query with the key
+                    beging the filter name and the value being an array of 
+                    values for the filter which will be applied using the OR
+                    operator. The different filters are ANDed together in the
+                    request URL.
+                </yv:docstring>
+            </arg>
+            <arg type="i" name="startIndex" direction="in">
+                <yv:docstring>
+                    The start index of the result set requested, where 0 is 
+                    the index of the first item in the result set.
+                </yv:docstring>
+            </arg>
+            <arg type="u" name="size" direction="in">
+                <yv:docstring>
+                    The maximum size of the result set requested.
+                </yv:docstring>
+            </arg>
+            <arg type="(ua(sxxiasa{sas}a{sas}a{sas}a{sa(a{ss}s)}))"
+                yv:type="[ResultSet]" 
+                name="searchResults" direction="out">                   // note: return
+                <yv:docstring>
+                    A SummaryResultSet structure which indicates the size of 
+                    the total result set and contains an array of the 
+                    summaries.
+                </yv:docstring>
+            </arg>
+            <yv:possible-errors>
+                <yv:error name="Zinc.Broker.Error.Misconfiguration">
+                    <yv:docstring>
+                        The box is not configured with endpoint addresses etc.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.InvalidRequest">
+                    <yv:docstring>
+                        If the querystring is empty.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.NetworkProblem">
+                    <yv:docstring>
+                        Network error.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.InvalidResponse">
+                    <yv:docstring>
+                        Invalid response from Metadata Aggregation System.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.InternalProblem">
+                    <yv:docstring>
+                        Internal problem in MetadataBroker or MAS.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.TransientServerProblem">
+                    <yv:docstring>
+                        Transient problem in MAS.
+                    </yv:docstring>
+                </yv:error>
+            </yv:possible-errors>
+            <yv:const />
+        </method>
 
-    ...
+    // note: <dbus-call-to-cobalt>
+    Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
+      metadataBroker->getEventSummariesByServices(recids, start, end);
 
-    SystemClientResult scResult;
-    IdentifierBag idBag;
-};
-
-
-class SystemClientResult
-{
-    // note: this is SP
-    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
-
-    explicit SystemClientResult(
-            boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult)
-        :sysResult(sysResult)
-    {}
-
-    std::string getFirstValueFromDescription(const std::string& key, bool toLower = true) const;
-
-    public:
-
-    string SystemClientResult::getStringFromDescription(const std::string& key) const
-    {
-        return getFirstValueFromDescription(key, false);
-    }
-
-    // note: key
-    string SystemClientResult::getFirstValueFromDescription(const std::string& key,
-            bool toLower) const
-    {
-        map<string, vector<string> >::const_iterator iter;
-
-        if((iter = sysResult->description.find(key)) == sysResult->description.end())
-        {
-            return string();
-        }
-        vector<string> values = iter->second;
-        if(values.size() == 0)
-        {
-            return string();
-        }
-        string s = values[0];
-        if(toLower)
-        {
-            s = boost::to_lower_copy(s);
-        }
-        return s;
-    }
-};
+        <method name="getEventSummariesByServices">
+            <yv:docstring>
+                Returns the schedule for a Service(s) based upon MAS Record 
+                Identifiers for the Service(s) and the start and end times of 
+                a given time window.
+            </yv:docstring>
+            <arg type="as" name="serviceRecordIds" direction="in">
+                <yv:docstring>
+                    MAS Record Identifier(s) of the Service(s) for which
+                   the schedule is requested.  
+                </yv:docstring>
+            </arg>
+            <arg type="x" name="startTime" direction="in">
+                <yv:docstring>
+                    The start of the time window for which a schedule is
+                    requested.
+                </yv:docstring>
+            </arg>
+            <arg type="x" name="endTime" direction="in">
+                <yv:docstring>
+                    The end of the time window for which a schedule is 
+                    reequested.
+                </yv:docstring>
+            </arg>
+            <arg type="a(sxxiasa{sas}a{sas}a{sas}a{sa(a{ss}s)})"
+                yv:type="a[Result]"
+                name="eventSummaries" direction="out">
+                <yv:docstring>
+                    Schedule Event Summaries of the Events in the requested 
+                    schedule window. 
+                </yv:docstring>
+            </arg>
+            <yv:possible-errors>
+                <yv:error name="Zinc.Broker.Error.Misconfiguration">
+                    <yv:docstring>
+                        The box is not configured with endpoint addresses etc.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.InvalidRequest">
+                    <yv:docstring>
+                        No serviceRecordId sepcified, one (or more) of the 
+                        specified serviceRecordId values is malformed, 
+                        or the specified time window is out of bounds.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.NetworkProblem">
+                    <yv:docstring>
+                        Network error.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.InvalidResponse">
+                    <yv:docstring>
+                        Invalid response from Metadata Aggregation System.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.InternalProblem">
+                    <yv:docstring>
+                        Internal problem in MetadataBroker or MAS.
+                    </yv:docstring>
+                </yv:error>
+                <yv:error name="Zinc.Broker.Error.TransientServerProblem">
+                    <yv:docstring>
+                        Transient problem in MAS.
+                    </yv:docstring>
+                </yv:error>
+            </yv:possible-errors>
+            <yv:const />
+        </method>
 
 
 ={============================================================================
-*kt_dev_uv_stack_109* stack: cal: metadata: event connection to application
+*kt_dev_uv_stack_110* stack: cal: metadata: event connection to application
 
 {event-apis}
 
@@ -3732,7 +3853,7 @@ SystemClientEvent::SystemClientEvent(NS_IRON_SYSTEM::Event event_,
 // used in DTT::getClientEvents(). 
 //
 // run on a target: 'nothing' logged in the log
-//
+
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
    const std::string& lang,
    const NS_IRON_SYSTEM::Event& dttEvent) :
@@ -3740,13 +3861,16 @@ SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos
    synopsis(extractValueFromMap(dttEvent.longSynopsis, lang))
 {}
 
+-> fix: synopsis(extractValueFromMap(dttEvent.mediumSynopsis, lang)),
+
 
 // <2> Constructs SystemClientEvent from Iron System Event and MAS event. 
-// note that used in mergeEvent(). use <4> for mas and use <1> for dttEvent. This means DTT uses
-// longSynopsis.
 //
-// run on a target: 'nothing' logged in the log
+// note: that used in mergeEvent(). use <4> for mas and use <1> for dttEvent. This means DTT uses
+// longSynopsis. 'nothing' logged in the log
 //
+// note: if fix 1 and will be fixed as well.
+
 SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
         shared_ptr<SystemClientEvent>& masEvent):
 
@@ -3756,7 +3880,9 @@ SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& dttEvent,
 }
 
 // <3> Creates MAS event with a new broadcast time
-// used in mergeEvent(). 
+//
+// note: used in mergeEvent(). if fix 4 and will be fixed as well.
+
 SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
    const uint32_t start_,
    const uint32_t end_):
@@ -3764,13 +3890,14 @@ SystemClientEvent::SystemClientEvent(shared_ptr<SystemClientEvent>& masEvent,
    synopsis(),
 {}
 
+-> fix: synopsis(masEvent->getSynopsis()),
 
 // Creates MAS Event
 // <4> used in IP::getClientEvents(). 'cobalt' and 'wrapper'
 //
 // run on a target: wrapper used but only 'medium' logged in the log. means that only medium in
 // cobalt::result.
-//
+
 SystemClientEvent::SystemClientEvent(boost::weak_ptr<MetadataRepositories> repos,
         const SystemEventWrapper& masEvent) :
 
@@ -3857,7 +3984,7 @@ boost::shared_ptr<SystemClientEvent> createNullEvent(boost::weak_ptr<MetadataRep
 
 
 ={============================================================================
-*kt_dev_uv_stack_110* stack: cal: metadata: how events get updated
+*kt_dev_uv_stack_111* stack: cal: metadata: how events get updated
 
 <0> EPG 
 EPG uses this:
@@ -4002,7 +4129,7 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
   {
     URANIUM_INFO("Requesting schedule metadata from MAS.");
 
-    // this is call to 'cobalt'
+    // note: <dbus-call-to-cobalt>
     Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
       metadataBroker->getEventSummariesByServices(recids, start, end);
     
@@ -4034,8 +4161,23 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
 typedef std::vector<boost::shared_ptr<SystemClientEvent> > event_collection;
 typedef boost::shared_ptr<event_collection> event_collection_ptr;
 
+note: getClientEvents are overloads for IP or DTT
 
 # IP version note:  getClientEvents from 'cobalt'
+
+void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
+        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+{
+    const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+
+    event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+
+    copy(clientEvents->begin(), clientEvents->end(), back_inserter(*command->newMASEvents));
+
+    //
+    // <Q> HOW THIS newMASEvents get delivered to EPG?
+    //
+}
 
 event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
 {
@@ -4054,24 +4196,26 @@ event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>
     return events;
 }
 
-void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
-        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+
+# DTT version note:  getClientEvents from 'iron'
+#
+void eventsReceived(
+   boost::shared_ptr<EventWindowCreateCommand> command,
+   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
 {
-    const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+   event_collection_ptr clientEvents = getClientEvents(systemEvents);
+}  
 
-    event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+event_collection_ptr getClientEvents(
+            const std::vector<NS_IRON_SYSTEM::Event> & events) 
+{
+    BOOST_FOREACH(const NS_IRON_SYSTEM::Event& event, events)
 
-    copy(clientEvents->begin(), clientEvents->end(), back_inserter(*command->newMASEvents));
-
-    //
-    // <Q> HOW THIS newMASEvents get delivered to EPG?
-    //
+    boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
 }
 
 
-# DTT version note:  getClientEvents from 'iron'
-
-src/metadata/SystemClientEventRepository.cpp
+// src/metadata/SystemClientEventRepository.cpp
 
 boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Event& e)
 {
@@ -4084,23 +4228,6 @@ boost::shared_ptr<SystemClientEvent> make_client_event(const NS_IRON_SYSTEM::Eve
 
   return boost::shared_ptr<SystemClientEvent>();
 }
-
-event_collection_ptr getClientEvents(
-            const std::vector<NS_IRON_SYSTEM::Event> & events) 
-{
-    BOOST_FOREACH(const NS_IRON_SYSTEM::Event& event, events)
-
-    boost::shared_ptr<SystemClientEvent> scEvent = make_client_event(event);
-}
-
-void eventsReceived(
-   boost::shared_ptr<EventWindowCreateCommand> command,
-   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
-{
-   event_collection_ptr clientEvents = getClientEvents(systemEvents);
-}  
-
-This leads to getClientEvents overloads for IP or DTT
 
 
 <callback-two> 'merge' events
@@ -4126,7 +4253,7 @@ event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collectio
 
     event_collection::iterator eip = // SCE in masEvents
 
-    // 102 <4>
+    // 102 <2>
     //there is one, merge the properties
     boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
             new SystemClientEvent(edtt, *eip));
@@ -4138,7 +4265,7 @@ event_collection_ptr mergeEvents(event_collection_ptr dttEvents, event_collectio
     boost::shared_ptr<SystemClientEvent> firstDTTEvent = *firstDTTEventIter;
     boost::shared_ptr<SystemClientEvent> lastDTTEvent = *lastDTTEventIter;
 
-    // 189 <5>
+    // 189 <3>
     boost::shared_ptr<SystemClientEvent> emerged = boost::shared_ptr<SystemClientEvent>(
             new SystemClientEvent(eip, eip->getStartAsTimeT(), firstDTTEvent->getStartAsTimeT()));
 
@@ -4450,7 +4577,383 @@ void SystemClientEventWindow::EventsChanged(const std::vector<std::string> &even
 
 
 ={============================================================================
-*kt_dev_uv_stack_111* stack: cal: future producer and event producer
+*kt_dev_uv_stack_112* stack: cal: metadata: event data flow
+
+/Uranium/Uranium.Client.System/src/metadata/SystemEventWrapper.h
+
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+class SystemEventWrapper  {
+public:
+
+    // note: "::cobalt::system"
+    
+    explicit SystemEventWrapper(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult) :
+        scResult(sysResult),
+        idBag(scResult)
+    {}
+
+    std::string getOwningServiceId() const
+    {
+        return scResult.getStringFromDescription("owningServiceId");    // note: key
+    }
+
+    ...
+
+    SystemClientResult scResult;
+    IdentifierBag idBag;
+};
+
+
+class SystemClientResult
+{
+    // note: this is SP
+    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
+
+    explicit SystemClientResult(
+            boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult)
+        :sysResult(sysResult)
+    {}
+
+    std::string getFirstValueFromDescription(const std::string& key, bool toLower = true) const;
+
+    public:
+
+    string SystemClientResult::getStringFromDescription(const std::string& key) const
+    {
+        return getFirstValueFromDescription(key, false);
+    }
+
+    // note: key
+    string SystemClientResult::getFirstValueFromDescription(const std::string& key,
+            bool toLower) const
+    {
+        map<string, vector<string> >::const_iterator iter;
+
+        if((iter = sysResult->description.find(key)) == sysResult->description.end())
+        {
+            return string();
+        }
+        vector<string> values = iter->second;
+        if(values.size() == 0)
+        {
+            return string();
+        }
+        string s = values[0];
+        if(toLower)
+        {
+            s = boost::to_lower_copy(s);
+        }
+        return s;
+    }
+
+    private:
+        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
+};
+
+
+{from-cobalt}
+
+1. get a 'reference' to "Result" array from "Future". NO COPY. 
+
+std::vector<NS_COBALT_SYSTEM::Result>
+
+2. copy ctor "Result" from future Result.
+
+3. populate SEWs with SP to ctored 'each' "Result" and construct vector< SP< SCE >> 
+
+SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
+
+boost::shared_ptr<SystemClientEvent> mevent =
+   boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+
+
+{from-iron}
+
+1. get a 'reference' to "Event" array from "Future". NO COPY. 
+
+std::vector<NS_IRON_SYSTEM::Event>
+
+2. populate SCE with SP to ctored "Result" and construct vector< SP< SCE >> 
+
+boost::shared_ptr<SystemClientEvent>( 
+        new SystemClientEvent(getRepos(), config->getLanguage(), e));
+
+
+={============================================================================
+*kt_dev_uv_stack_113* stack: cal: metadata: summary data flow
+
+1. From EPG?
+
+  NS_ZINC::Future<boost::shared_ptr<SummaryResultSet>> search(const std::string& searchTerms,
+      boost::shared_ptr<SearchOptions> searchOptions,
+      size_t start,
+      size_t size) const
+  {
+    shared_ptr<SystemClientSearchOptions> scSearchOptions
+      = boost::dynamic_pointer_cast<SystemClientSearchOptions>(searchOptions);
+
+    // note: <dbus-call-to-cobalt>
+    return metadataBroker->search(searchTerms,
+        getSysQopts(scSearchOptions),
+        getSysGopts(scSearchOptions),
+        scSearchOptions->getFilters(),
+        start,
+        size)
+      .then(*getDispatcher(),
+          bind(&SystemClientMetadataBroker::searchCallback,
+            shared_from_this(),
+            start,
+            _1));
+  }
+
+
+2-7.
+
+result set     client type                   system type on dbus
+---------      ------------------------      -------------------------------
+[SRS].SP    -> vector< SP<SCS> >             
+                  [ SCS ].SP  -> class Result object      <- copied from struct Result[i]
+                  [ SCS ].SP  -> class Result object
+                  ...
+
+
+2. Callback from cobalt. Get "ResultSet"
+
+boost::shared_ptr<SummaryResultSet>
+SystemClientMetadataBroker::searchCallback(uint32_t requestedStartIndex,
+    const NS_ZINC::FutureValue<NS_COBALT_SYSTEM::ResultSet>& fvSystem) const
+{
+    translateAndThrowCobaltSystemExceptions(fvSystem.getError());
+
+    // note: COPY CTOR. copies all from future and once copied, destoried in this function.
+    // sysval.results :  std::vector< Result > results;
+    //
+    // <Q> is there also a copy in 'future'?
+    
+    NS_COBALT_SYSTEM::ResultSet sysval = fvSystem.get();
+
+    boost::shared_ptr<SystemClientSummaryResultSet> srs =
+        convert(sysval, boost::shared_ptr<SystemClientSummaryResultSet>(), requestedStartIndex);
+
+    metadataObserver->addListener(srs);
+    srs->setDispatcher(getDispatcher());
+
+    return boost::static_pointer_cast<SummaryResultSet>(srs);
+}
+
+
+3. call Convert. ResultSet -> SummaryResultSet
+
+boost::shared_ptr<SystemClientSummaryResultSet>
+Converter::operator()(const NS_COBALT_SYSTEM::ResultSet& rs,
+        boost::shared_ptr<SystemClientSummaryResultSet>, uint32_t requestedStartIndex) const
+{
+    return boost::make_shared<SystemClientSummaryResultSet>(
+            boost::make_shared<NS_COBALT_SYSTEM::ResultSet>(rs), config, repos, 
+            provisioningCache, requestedStartIndex);
+}
+
+
+4. SystemClientSummaryResultSet
+
+Uranium.Client.System/src/metadata/SystemClientSummaryResultSet.cpp
+
+this is 'only' place to use SCS and the the set is a vector of SCS. See <CMB>
+
+typedef boost::shared_ptr<Summary> SummaryPtr;
+
+class SystemClientSummaryResultSet : public SummaryResultSet, public MetadataChangeListener
+{
+    boost::shared_ptr<std::vector<SummaryPtr> > summaries;
+
+    SystemClientSummaryResultSet( 
+            boost::shared_ptr<NS_COBALT_SYSTEM::ResultSet> sysResultSet,
+            boost::shared_ptr<SystemClientMetadataConfig> config,
+            boost::weak_ptr<MetadataRepositories> repos,
+            boost::shared_ptr<ProvisioningCache> provisioningCache_,
+            uint32_t startIndex )
+
+        : provisioningCache(provisioningCache_),
+        summaries(
+
+                getClientSummaries(sysResultSet->results, config, repos, startIndex)),
+
+        totalMASResultSetSize(sysResultSet->totalSize)
+        {
+        }
+};
+
+
+5. SummaryClientSummary
+
+class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic
+
+class SystemClientSummary : public Summary
+{
+  public:
+    SystemClientSummary(
+        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult,
+        boost::shared_ptr<SystemClientMetadataConfig> config,
+        boost::weak_ptr<MetadataRepositories> repos_,
+        boost::shared_ptr<ProvisioningCache> provisioningCache_,
+        uint32_t absoluteIndex_);
+
+    :sysResult(sysResult), config(config), repos(repos_)
+    {}
+
+    virtual boost::shared_ptr<Event> getEvent()
+    {
+      if(entityType != ENTITY_SCHEDULE_EVENT)
+      {
+        throw EntityNotPresentException("Incorrect entity type. Expected " +
+            boost::lexical_cast<string>(ENTITY_SCHEDULE_EVENT) + ", got " +
+            boost::lexical_cast<string>(entityType));
+      }
+
+      // note: uses <3> to create SCS and see above. metedata-overload
+      
+      return boost::make_shared<SystemClientEvent>(repos, sysResult);
+    }
+
+  private:
+    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
+    boost::weak_ptr<MetadataRepositories> repos;
+};
+
+
+6. vector< SP<SCS> > 
+
+typedef std::vector<boost::shared_ptr<Summary> > summary_ptr_vector;
+
+boost::shared_ptr<SystemClientSummaryResultSet::summary_ptr_vector>
+    SystemClientSummaryResultSet::getClientSummaries( const std::vector< Result >& systemResults,
+                                                      boost::shared_ptr<SystemClientMetadataConfig> config,
+                                                      boost::weak_ptr<MetadataRepositories> repos,
+                                                      uint32_t startIndex)
+{
+  shared_ptr<summary_ptr_vector> clientSummaries = make_shared<summary_ptr_vector>();
+
+  clientSummaries->reserve(systemResults.size());
+
+  for( size_t i = 0; i < systemResults.size(); ++i)
+  {
+    clientSummaries->push_back(
+        make_shared_summary( systemResults[i], config, repos, provisioningCache, i + startIndex) );
+  }
+  return clientSummaries;
+}
+
+
+7. Result -> SCS
+
+shared_ptr<SystemClientSummary> make_shared_summary( const Result& sysResult,
+    boost::shared_ptr<SystemClientMetadataConfig> config,
+    boost::weak_ptr<MetadataRepositories> repos,
+    boost::shared_ptr<ProvisioningCache> provisioningCache,
+    uint32_t index )
+{
+    // note: COPY SCS from vector<Result> results[i] since class Result don't define copy ctor.
+    //
+    // create SP{SCS} -> Result
+    
+    shared_ptr<Result> sysResultPtr = make_shared<Result>(sysResult);
+    return make_shared<SystemClientSummary>(sysResultPtr, config, repos, provisioningCache, index);
+}
+
+
+<populate-to-others>
+SCS has interfaces to make other class from "result" that SP points to. All class has
+"SystemClientResult" member which has a SP to "result" and this SP is set to SP from SCS.
+
+
+[ SCS ].SP        -> class Result object
+
+[ Wrappers ].SP   -> the same "Result" object
+
+class SystemClientBrand : public Brand 
+{
+    explicit SystemClientBrand(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult)
+        :scResult(sysResult)
+    {}
+
+    private:
+    SystemClientResult scResult;    note: has SP which is set to the arg SP.
+};
+
+   -> return boost::make_shared<SystemClientApplication>(sysResult);
+   -> return boost::make_shared<SystemClientEvent>(repos, sysResult);
+   -> return boost::make_shared<SystemClientProgrammeSummary>(sysResult);
+   -> return boost::make_shared<SystemClientSeries>(sysResult);
+   -> return boost::make_shared<SystemClientBrand>(sysResult);
+
+
+<test>
+Uranium.Client.System/test/metadata/SummaryTest.cpp
+
+class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultMetadataMocksEnvironment
+{
+  void testGetEventFromSummary()
+  {
+    SystemClientSummary summary( sysResult,
+        clientFactory->createMetadataConfig(),
+        clientFactory->createMetadataRepositories(),     note: this is repo(event)
+        // These tests do not rely on ProvisioningCache
+        boost::shared_ptr<ProvisioningCache>(),
+        3 );
+
+    CPPUNIT_ASSERT(summary.getEvent());
+    CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
+
+   note: MEDIUM SYNOPSIS
+
+   CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
+   CPPUNIT_ASSERT(summary.getEvent()->getService());
+  }
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_114* stack: cal: metadata: wrapper and convert flow
+
+1. From EPG?
+
+NS_ZINC::Future<ProgrammePtr>
+SystemClientMetadataBroker::getProgramme(
+        const string& recId) const
+{
+    return metadataBroker->getProgramme(recId)
+        .then(*getDispatcher(),
+              bind(
+                  &commonCallback< ProgrammePtr, NS_COBALT_SYSTEM::Result>, 
+                  shared_from_this(), convert, _1));
+}
+
+template<typename ClientType, typename SysType>
+ClientType commonCallback(
+        const boost::shared_ptr<const SystemClientMetadataBroker>& broker,
+        const Converter& convert,
+        const NS_ZINC::FutureValue<SysType>& fvSystem)
+{
+    translateAndThrowCobaltSystemExceptions(fvSystem.getError());
+    return convert(fvSystem.get(), ClientType());
+}
+
+
+2. COPY CTOR from "fvSystem.get()" to "SP<Result>". Client API wrapper
+
+ProgrammePtr
+Converter::operator()(const NS_COBALT_SYSTEM::Result& result,
+        ProgrammePtr) const
+{
+    return boost::make_shared<SystemClientProgramme>(
+            boost::make_shared<NS_COBALT_SYSTEM::Result>(result)
+            );
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_120* stack: cal: future producer and event producer
 
 {future-dispatcher}
 
@@ -4758,130 +5261,7 @@ class ZINC_EXPORT SystemClientEventWindow
 
 
 ={============================================================================
-*kt_dev_uv_stack_112* stack: cal: metadata: summary
-
-Uranium.Client.API/include/metadata/Summary.h
-
-NS_URANIUM_METADATA_CLIENT_OPEN
-
-class ZINC_EXPORT Event : virtual public NS_ZINC::Polymorphic;
-
-class ZINC_EXPORT Summary : virtual public NS_ZINC::Polymorphic
-{
-  /**
-   * Returns Event object if getSummaryType() returns SCHEDULE_EVENT otherwise throws
-   * EntityNotPresentException.
-   */
-  virtual boost::shared_ptr<Event> getEvent() = 0;
-}
-
-Uranium.Client.System/src/metadata/SystemClientSummary.h
-
-class SystemClientSummary : public Summary
-{
-  public:
-    SystemClientSummary(
-        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult,
-        boost::shared_ptr<SystemClientMetadataConfig> config,
-        boost::weak_ptr<MetadataRepositories> repos_,
-        boost::shared_ptr<ProvisioningCache> provisioningCache_,
-        uint32_t absoluteIndex_);
-
-    :sysResult(sysResult), config(config), repos(repos_)
-    {}
-
-    virtual boost::shared_ptr<Event> getEvent()
-    {
-      if(entityType != ENTITY_SCHEDULE_EVENT)
-      {
-        throw EntityNotPresentException("Incorrect entity type. Expected " +
-            boost::lexical_cast<string>(ENTITY_SCHEDULE_EVENT) + ", got " +
-            boost::lexical_cast<string>(entityType));
-      }
-
-      // note: uses <3> to create SCS and see above. metedata-overload
-      
-      return boost::make_shared<SystemClientEvent>(repos, sysResult);
-    }
-
-  private:
-    boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
-    boost::weak_ptr<MetadataRepositories> repos;
-};
-
-
-<use-summary>
-Uranium.Client.System/src/metadata/SystemClientSummaryResultSet.cpp
-
-note: this is 'only' place to use SCS and the the set is a vector of SCS. See <CMB>
-
-SystemClientSummaryResultSet::SystemClientSummaryResultSet( 
-    boost::shared_ptr<NS_COBALT_SYSTEM::ResultSet> sysResultSet,
-    boost::shared_ptr<SystemClientMetadataConfig> config,
-    boost::weak_ptr<MetadataRepositories> repos,
-    boost::shared_ptr<ProvisioningCache> provisioningCache_,
-    : provisioningCache(provisioningCache_),
-      summaries(
-
-          // note:
-          getClientSummaries(sysResultSet->results, config, repos, startIndex)),
-
-      totalMASResultSetSize(sysResultSet->totalSize)
-{
-}
-
-
-boost::shared_ptr<SystemClientSummaryResultSet::summary_ptr_vector>
-    SystemClientSummaryResultSet::getClientSummaries( const std::vector< Result >& systemResults,
-                                                      boost::shared_ptr<SystemClientMetadataConfig> config,
-                                                      boost::weak_ptr<MetadataRepositories> repos,
-                                                      uint32_t startIndex)
-{
-  shared_ptr<summary_ptr_vector> clientSummaries = make_shared<summary_ptr_vector>();
-  clientSummaries->reserve(systemResults.size());
-
-  for( size_t i = 0; i < systemResults.size(); ++i)
-  {
-    clientSummaries->push_back(
-        make_shared_summary( systemResults[i], config, repos, provisioningCache, i + startIndex) );
-  }
-  return clientSummaries;
-}
-
-shared_ptr<SystemClientSummary> make_shared_summary( const Result& sysResult,
-    boost::shared_ptr<SystemClientMetadataConfig> config,
-    boost::weak_ptr<MetadataRepositories> repos,
-    boost::shared_ptr<ProvisioningCache> provisioningCache,
-    uint32_t index )
-{
-  shared_ptr<Result> sysResultPtr = make_shared<Result>(sysResult);
-  return make_shared<SystemClientSummary>(sysResultPtr, config, repos, provisioningCache, index);
-}
-
-
-<test>
-Uranium.Client.System/test/metadata/SummaryTest.cpp
-
-class ZINC_LOCAL SummaryTest :  NS_ZINC::IntegrationTestSandbox, public DefaultMetadataMocksEnvironment
-{
-  void testGetEventFromSummary()
-  {
-    SystemClientSummary summary( sysResult,
-        clientFactory->createMetadataConfig(),
-        clientFactory->createMetadataRepositories(),     note: this is repo(event)
-        // These tests do not rely on ProvisioningCache
-        boost::shared_ptr<ProvisioningCache>(),
-        3 );
-
-    CPPUNIT_ASSERT(summary.getEvent());
-    CPPUNIT_ASSERT_EQUAL(string("Eastenders"), summary.getEvent()->getTitle());
-
-   note: MEDIUM SYNOPSIS
-
-   CPPUNIT_ASSERT_EQUAL(string("mediumSynopsis"), summary.getEvent()->getSynopsis());
-   CPPUNIT_ASSERT(summary.getEvent()->getService());
-  }
-}
+*kt_dev_uv_stack_121* 
 
 
 ={============================================================================
@@ -7971,6 +8351,14 @@ The implementation of ctv.enhancedmetadata.Event is in the file:
 Uranium/Uranium.Client.System/src/metadata/SystemClientEvent.cpp
 
 
+03.25
+======
+The fix made:
+Uranium/Uranium.Client.System/test/metadata/SystemClientEventTest.cpp
+Uranium/Uranium.Client.System/src/metadata/SystemClientEvent.cpp
+Uranium/Uranium.Client.System/src/metadata/SystemEventWrapper.h
+
+
 04.01
 ======
 
@@ -7984,64 +8372,120 @@ Uranium/Uranium.Client.System/src/metadata/SystemClientEvent.cpp
 * b7c5176 DEVARCH-9272: Cobalt.System.Fake: Use correct ISO 8601 format when constructing event times.
 * d3d85d5 DEVARCH-9271: Cobalt.System.API: Add `ResultHelpers` functions to get OD Availability & ProgrammeId fields from `Result`.
 * 29c9fab  DEVARCH-9271: Uranium.Client.System: Avoid pointless copy of entire Broker ResultSet when constructing CAL ResultSet wrappers.
-* 7d2a5f3 DEVARCH-9269: Uranium.Client.System: Make `SystemClientSummary` create CAL `Result` wrapper immediately in it's constructor.
-
-* d0e695e DEVARCH-9266: Uranium.Client.System: Don't heap-allocate a copy of System API `Result` when creating Client API wrappers.
-
-ProgrammePtr
-Converter::operator()(const NS_COBALT_SYSTEM::Result& result, ProgrammePtr) const
-{
-    return boost::make_shared<SystemClientProgramme>(
-            boost::make_shared<NS_COBALT_SYSTEM::Result>(result)
-            );
-}
-
-class SystemClientProgramme : public Programme 
-{
-    public:
-        explicit SystemClientProgramme(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult)
-            :scResult(sysResult)
-        {}
-
-        virtual std::string getRecordIdentifier() const
-        {
-            return scResult.getRecordIdentifier();
-        }
-        ...
-
-    private:
-            SystemClientResult scResult;
-};
-
-class SystemClientResult
-{
-    public:
-        explicit SystemClientResult(
-                boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult)
-            :sysResult(sysResult)
-        {}
-
-        int64_t getValidUntil() const
-        {
-            return sysResult->validUntil;
-        }
-
-        std::string getRecordIdentifier() const
-        {
-            return sysResult->recordIdentifier;
-        }
-
-        const NS_COBALT_SYSTEM::Result& getResult() const
-        {
-            return *sysResult;
-        }
-
-    private:
-        boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult;
-};
 
 
-TO:
+* 7d2a5f3 
+=========
+
+John Sadler committed e9a6201940707 Mar 2015
+DEVARCH-9269: Uranium.Client.System: Make `SystemClientSummary` create CAL `Result` wrapper
+immediately in it's constructor.
+
+Due to the wonderfully-generic MAS B2C interface, the MetadataBroker
+`search()` and `getSummaries()` methods each return a vector of `Summary`
+objects where each `Summary` could be one of a number of entity types:
+`Brand`, `Series`, `Programme Summary`, `Service`, `Application`, and
+`Schedule Event`.
+
+So essentially, `Summary` is a discriminated variant type.
+
+The current implementation of `Summary` in the CAL: `SystemClientSummary`
+defers creation of the specific CAL entity until a caller asks for it by
+calling a method such as: `getBrand()` via the `Summary` interface. It
+doesn't bother caching the object once it has created it either, which means
+that repeated calls will return different instances, (so a shallow
+"identity comparison" would fail).
+
+This commit modifies `SystemClientSummary` such that it immediately creates
+the appropriate CAL entity, depending on the `entity-type` conveyed in the
+System API `Result` object it is constructed from. It holds the entity in a
+type-erased form (`shared_ptr<void>`), but since it also knows the type of
+the entity, it can safely static_cast back to the appropriate type when a
+client calls a getter method (such as `getBrand()`).
+
+By doing this, we remove the need for `SystemClientSummary` to hold a copy
+of the original System API `Result` struct, and also enable it to give the
+guarantee that repeated calls to getter methods return the same object.
+That also means that clients which call the getter multiple times don't
+repeatedly incur the overhead of constructing the CAL entity and copying
+the `Result` struct.
+
+It should be pointed-out that this change introduces a slight change in
+behaviour which required one of the existing testcases to be modified.
+What the testcase was doing was retrieving an Event from Summary that
+was on a hidden Service, and then un-hiding the Service via the
+ServiceRepository. Following this, it was then re-fetching the Event from
+the Summary, and then the Service from the Event, and asserting that the
+Service was now "unhidden". This no-longer works because the Event is
+now being created only once (and the Service is looked-up in the constructor),
+and changes to Services are unfortunately not reflected on Service objects
+(it is necessary to re-fetch the Service from the ServiceRepository).
+Happily, the UI does not make use of the previous behaviour (which is in
+any case undocumented).
+
+note: two points
+
+1. By doing this, we remove the need for `SystemClientSummary` to hold a copy
+of the original System API `Result` struct, 
+
+
+-> The point is to remove a copy in SCS since SystemClientSummary in JS has Result member. This save
+    a memory in SCS and copy to SCS. However, my master has SP to Result instead and this change has
+    no effect. Which one is the latest?
+
+
+and also enable it to give the guarantee that repeated calls to getter methods return the same
+object.  That also means that clients which call the getter multiple times don't repeatedly incur
+the overhead of constructing the CAL entity and copying the `Result` struct.
+
+-> This is valid since creates different wrapper instances from the same result. So one result and
+one wrapper instance. Good point.
+
+
+* d0e695e 
+=========
+commit d0e695e6e148f911dfbc6aee3a36238a3e90a9f6
+Author: John Sadler <john.sadler@youview.com>
+Date:   Sat Mar 7 12:23:07 2015 +0000
+
+DEVARCH-9266: Uranium.Client.System: Don't heap-allocate a copy of System API `Result` when creating
+Client API wrappers.
+
+The MetadataBroker System API `Result` struct is very generic and is used
+to transport a variety of different entities, such as Schedule Events,
+Applications, Programmes, & Publications.
+
+In the Client API (which is implemented in-terms-of the System API), we
+expose different, strongly-typed, interfaces for each of the different
+entity types. Each instance of these ultimately either wraps a `Result`
+object, or is constructed from one.
+
+As a System API, MetadataBroker returns it's results by-value. Non of the
+generated System APIs return structs, or collections by `boost::shared_ptr`.
+However, all of the Client API wrappers expect to receive the `Result`
+object via `boost::shared_ptr`. This leads to the conversion functions
+heap-allocating a copy of the returned `Result`, just so it can be passed
+via shared_ptr.
+
+If we consider that:
+
+a) each Client API wrapper object will end-up uniquely owning a copy of the
+System API `Result` and
+
+b) the Client API objects themselves are referenced by shared_ptr (because
+they are bound-up to AS3 & JavaScript, and we want by-reference semantics).
+
+Then it doesn't make much sense to use shared_ptr. An in-line copy of the
+System API `Result` will give better locality (rather than dereferencing
+another pointer), and we can also avoid the shared_ptr overhead.
+
+This change also paves the way for eliding copies of the `Result` objects
+by stealing/moving them directly into the CAL wrappers.
+
+
+note: 
+1. do not "copy ctor" in converter and make SCR have a copy of "Result" instead. No changes in
+wrapper classes but SCR now do "copy ctor" to copy "Result".
 
 ProgrammePtr
 Converter::operator()(const NS_COBALT_SYSTEM::Result& result, ProgrammePtr) const
@@ -8052,18 +8496,10 @@ Converter::operator()(const NS_COBALT_SYSTEM::Result& result, ProgrammePtr) cons
 class SystemClientProgramme : public Programme 
 {
     public:
-        explicit SystemClientProgramme(const NS_COBALT_SYSTEM::Result& sysResult)
+         -explicit SystemClientProgramme(boost::shared_ptr<NS_COBALT_SYSTEM::Result> sysResult)
+         +explicit SystemClientProgramme(const NS_COBALT_SYSTEM::Result& sysResult)
             :scResult(sysResult)
-        {}
-
-        virtual std::string getRecordIdentifier() const
-        {
-            return scResult.getRecordIdentifier();
-        }
-        ...
-
-    private:
-            SystemClientResult scResult;
+            {}
 };
 
 class SystemClientResult
@@ -8090,12 +8526,16 @@ class SystemClientResult
         ...
 
     private:
-        NS_COBALT_SYSTEM::Result sysResult;
+        NS_COBALT_SYSTEM::Result sysResult;  // note:
 };
 
-    -> LGTM. * 5c9a202 DEVARCH-9266: Uranium.Client.System: Get rid of defunct `wrapSysResult()` and `wrapSysResults()` in Converter.
 
-    -> LGTM. * 3e896f3 DEVARCH-9265: Uranium.Client.System: Reserve vector capacity when converting System Broker results.
+* 5c9a202 DEVARCH-9266: Uranium.Client.System: Get rid of defunct `wrapSysResult()` and `wrapSysResults()` in Converter.
+-> LGTM. 
+
+* 3e896f3 DEVARCH-9265: Uranium.Client.System: Reserve vector capacity when converting System Broker results.
+-> LGTM. 
+
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
