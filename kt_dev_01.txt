@@ -12103,29 +12103,34 @@ void swap( Message &lhs, Message &rhs )
 
 
 <move-consideration>
-As with copy and swap, in addition to moving, must update each Folder and both move ctor and assign
-need to update Folder pointers. So make common work as a function.
+By defining move operations, the Message class can use string::move and set::move operations to
+avoid the overhead of copying the contents and folders members.
+
+As with copy and swap, moving must update each Folder and both move ctor and assign need to update
+Folder pointers. So make it common work.
 
 // move Folder pointers 'from' m 'to' this message
 void Message::move_Folders(Message *m)
 {
-  folders = std::move(m->folders);  // <key> use set move assign rather than copy, folders = m->folders
+    // note: use set move assign rather than copy, folders = m->folders
+    folders = std::move(m->folders);  
 
-  for( auto f : folders )  // use 'folders' for both add and remove but not m.folders
-  {
-    f->remMsg(m);
-    f->addMsg(this);
-  }
+    // note: use 'folders' for both add and remove but not m.folders
+    for( auto f : folders ) 
+    {
+        f->remMsg(m);
+        f->addMsg(this);
+    }
 
-  m->folders.clear();      // ensure that destroying m is harmless
+    m->folders.clear();      // ensure that destroying m is harmless
 }
 
 note: that inserting an element to a set might throw since it requires memory to be allocated. As a
-result, unlike HasPtr and StrVec case, will not mark move operations as noexcept. Q: what this
-actually mean to me?
+result, unlike HasPtr and StrVec case, will not mark move operations as noexcept. Q: whether or not
+noexcept is necessary requirement on move operations? 
 
 // move ctor
-Message::Message( Message &&m ) : contents(std::move(m.contents))    // string move
+Message::Message( Message &&m ) : contents(std::move(m.contents))    // string::move
 {
   move_Folders(&m);
 }
@@ -16391,10 +16396,23 @@ Otherwise, those members are deleted by default.
 
 
 {copy-or-move}
+When class has both a move and copy ctor, how does the library know what to use? Use function
+matching since copy ctor takes const StrVec& and move only takes StrVec&&.
 
-<why-noexcept-needed>
-The library containers provide guarantees as to what they do if an exception happens. As an example,
-vector guarantees that if an exception happens when call push_back, the vector itself will be left
+StrVec v1, v2;
+v1 = v2;                   // copy assign
+
+StrVec getVec(istream &);  // assume getVec returns an rvalue
+v2 = getVec(cin);          // note: move assign
+   
+Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in the second assign, both
+are viable but copy assign requires conversion to const. Hence move is used since it is exact match.
+
+
+{conditions-to-use-move}
+1. noexcept on move
+The library containers provide guarantees as to what they do if an exception happens; vector
+guarantees that if an exception happens when call push_back, the vector itself will be left
 unchanged.
 
 Imagine that push_back in StrVec causes reallocation as vector, uses move ctor but exceptions
@@ -16406,27 +16424,11 @@ To avoid this potential problem, vector must use a copy ctor instead move during
 'unless' it knows that 'element's type move ctor cannot throw an exception. How to tell the library
 that move ctor is safe to use? Do so by using explicitly noexcept keyword on move ctor and assign.
 
-<Q> How actually does the library know what to use? A: By function matching and see below.
-
-<note> Whreas copy controls are more of necessary to work properly, move controls are more of
-performace choice since if there are not, copy controls will be used.
-
-
-Compiler use ordinary function matching to determine which to use. copy takes const StrVec& and move
-takes StrVec&&.
-
-StrVec v1, v2;
-v1 = v2;                   // <1> copy assign
-
-StrVec getVec(istream &);  // assume getVec returns an rvalue
-v2 = getVec(cin);          // <2> move assign
-   
-<1> move not viable since cannot implicitly bind lvalue to rvalue.
-<2> both are viable but copy assign requires conversion to const. Hence move is used.
-
-<moved-by-copy>
+2. copy is bigger than move 
 Using the copy controls in place of move controls is safe and will meet the requirement of move
-controls since objects is moved by copying operations. So copy will be used if no move operations.
+controls since objects is moved by copying operations. In other words, copy controls are more of
+necessary to work properly, move controls are more of performace choice so if there are no move
+operations, copy controls will be used instead.
 
 If a class has no move operations, copy operations will be used 'even if' attempt to use move by
 calling std::move().
@@ -16445,7 +16447,26 @@ Foo z( std::move(x) );     // copy ctor
 Here copy initialization happens but std::move returns rvalue, Foo&&, but no move ctor. So can
 convert a Foo&& to const Foo&, copy ctor is viable and it is called.
 
-<function-matching>
+
+<move-example>
+Using the HasPtr copy-and-swap example this shows that single assignment operator acts as both copy
+and move assign.
+
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
+}
+
+HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy
+{
+  ...                // operations to change the copy if there are more to do
+  swap(*this, rhs);
+  reutn *this;       // rhs is destroyed, which deletes the old ps.
+}
+
 If add move ctor to HasPtr class then effectively add move assign as well. The assign operator is
 both the move and copy assign. note that this is from copy-and-swap-idiom which is for valuelike
 case. Hence move is safe.
@@ -16454,27 +16475,36 @@ class HasPtr {
   public:
     HasPtr(HasPtr &&p) noexcept : ps(p.ps), i(p.i), { p.ps = 0; }
 
-    // HasPtr& operator=(const HasPtr rhs)
+    // note: HasPtr& operator=(const HasPtr rhs)
     HasPtr& operator=(HasPtr rhs)
     { swap(*this, rhs); return *this; }
     ...
 };
 
-Depending on the type of argument, copy initialization for rhs uses either the copy ctor or the move
-ctor.
+Since operator=() uses nonreference type, uses copy initialization. Depending on the type of
+argument, it uses either the copy ctor or the move ctor.
 
 HadPtr hp, hp2;
 
-hp = hp2;
-hp = std::move(hp2);
+hp = hp2;                        // copy ctor is viable
+hp = std::move(hp2);             // move ctor is exact match
 
-In the second assignment, std::move return rvalue and move ctor is the exact match so move ctor used
-and the same assign code used.
+In the second assignment, std::move return rvalue and move ctor used. Since copy-and-swap do
+allocation and deallocation and allocation is done by move, there are no other thing to do to
+maintaion move assign behaviour. So no need to have move assign.
+
+note: see <nonmember-friend-swap> for swap in HasPtr
+This was HasPtr& operator=(const HasPtr rhs) in the original example as copy context and do not have
+const now as move context even if the code of function is the same. Means that swap works always
+regardless of const. Why? Here swap works on built-in type, pointer which is not affected by
+constness check; bitwise const.
 
 
 {move-iterator-adaptor}
-The StrVec::reallocate can be rewritten using move iterator which would be easier. <Q> move iterator
-from STL?
+The StrVec::reallocate can be rewritten using move iterator which would be easier. The
+initialized_copy copy and costruct elements but there is no analogous to move. Instead, library
+defines move iterator adaptor which changes the behavior of iterator's dereference operator to
+'fetch' elements; return rvalue or lvalue. 
 
 void StrVec::reallocate()
 {
@@ -16483,10 +16513,10 @@ void StrVec::reallocate()
 
   // 'before'
   // for( size_t i = 0; i != size(); ++i )
-  //  alloc.construct( last++, std::move(*elem++) );    // note. move()
+  //  alloc.construct( last++, std::move(*elem++) );
 
   // 'after'
-  auto last = uninitialized_copy( make_move_iterator( begin()), make_move_iterator( end()), first );
+  auto last = uninitialized_copy( make_move_iterator( begin() ), make_move_iterator( end() ), first );
 
   free();   // member which destroy and deallocate
 
@@ -16494,6 +16524,12 @@ void StrVec::reallocate()
   first_free = last;
   cap = elements + newcapacity;
 }
+
+
+note:
+STL makes no guarantees about which algorithms can be used with move iterators or which cannot since
+move can disappear the source. Should pass move iterators to algorithms only when confident that
+algorithms does not access an element after it has assigned to that element.
 
 
 {move-can-be-dangerous}
@@ -16505,7 +16541,13 @@ Use it in user code(outside of class implementation) ONLY when 'certain' that yo
 and is guaranteeted to be safe.
 
 
-{move-overload}
+{move-and-overload}
+Member functions other than constructors and assignment can benefit from providing both copy and
+move versions.
+
+copy version: lvalue reference to const
+move version: rvalue reference to nonconst
+
 class StrVec {
   public:
     void push_back( const std::string& );
@@ -16519,7 +16561,7 @@ void StrVec::push_back( const std::string& s )
   alloc.construct( first_free++, s );
 }
 
-void StrVec::push_back( std::string&& s )    // 'must' not const
+void StrVec::push_back( std::string&& s )
 {
   chk_n_alloc();
   alloc.construct( first_free++, std::move(s) );   // use string move ctor
@@ -16528,15 +16570,57 @@ void StrVec::push_back( std::string&& s )    // 'must' not const
 StrVec vec;
 string s = "some string or another";
 
-vec.push_back(s);          // calls push_back(const string&)
-vec.push_back("done");     // calls push_back(string&&). temporary string.
+vec.push_back(s);                                  // calls push_back(const string&)
+vec.push_back("done");                             // calls push_back(string&&). temporary string.
 
-<key>
+
+note:
 Move operations is about moving pointers and nothing special about that. The std::move is to signal
-to compiler to pick up move operations. 
+to compiler to pick up move operations. The std::move() doesn't itself do any moving, but merely
+converts its argument into a so-called rvalue reference.
 
-However, std::move() doesn't itself do any moving, but merely converts its argument into a so-called
-rvalue reference.
+
+{assign-to-rvalue} 
+Can call a member function regardless of whether that is an lvalue or rvalue.
+
+auto n = ( s1 + s2 ).find('a');
+
+Here assign to the rvalue result of concatentating these strings.
+
+s1 + s2 = "wow!";
+
+<reference-quailifier>
+Prior to the new standard, no way to prevent such usage. The new standard have a way to prevent such
+usage by forcing the left-hand operand to be an lvalue.
+
+The reference qualifier indicate the lvalue/rvalue property of 'this' in the same way that define
+const member function.
+
+class Foo
+{
+    public:
+        // may assign only to modifiable lvalue
+        Foo &operator=( const Foo & ) &;
+};
+
+Foo &Foo::operator=( const Foo &rhs ) &
+{
+    // do whatever is needed to assign rhs to this object
+    return *this;
+}
+
+May run a function qualified by & only on an lvalue and by && only on an rvalue.
+
+Foo &retFoo();    // return a reference
+Foo retVal();     // return by value; a call to retVal is an rvalue
+
+Foo i, j;
+i = j;
+
+retFoo() = j;
+retVal() = j;     // error: retVal() returns an rvalue
+
+i = retVal();
 
 
 ={============================================================================
@@ -17321,6 +17405,7 @@ are not known until run times.
 
 The STL library algorithms are function template and containers are class template.
 
+
 {space-in-template-expression}
 The requirement to put a space between two closing template expressions has gone:
 
@@ -17329,8 +17414,8 @@ vector<list<int>>;   // OK since C++11
 
 
 {function-template}
-For function template, the compiler uses the template argument to 'deduce' the template parameter
-type.
+For function template, the compiler uses the argument of call to 'deduce' the template argument type
+which is to determine what type to 'bind' to the template parameter T.
 
 compare( 1, 0 );
 compare( vec1, vec2 );
@@ -17343,7 +17428,9 @@ int compare( const T& v1, const T& v2 )
   return 0;
 }
 
+<principle-to-write-generic-code>
 Here two important principles to write generic codes from this example:
+
 1. The function parameters in the templeate are reference to const.
 This makes the function runs faster and also it can be uses with types that cannot be copied such as
 unique_ptr. Why? do not need to copy.
@@ -17397,6 +17484,7 @@ template <typename T, U> inline T calc( const T&, const U& );
 # can use typename or class but recommands typename
 template <typename T, class U> inline T calc( const T&, const U& );
 
+
 <overloading-and-templates>
 function templetes can be overloaded by other templates or by ordinary nontemplate functions. The
 things to remember is:
@@ -17410,12 +17498,15 @@ objects of class type, the class definition must be available but the definition
 functions need not be present. As a result, put class definition and function declaration in header
 file and definition of ordinary and class member function is source files. 
 
-Templates are 'different' and needs to have the code that defines a function and class template member
-function. As a result, headers includes definitions as well as declarations.
+Templates are 'different' since the compiler generates code 'only' when use a template; instantiate
+a specific instance of the template. So to generate an instantiation, needs to have the code that
+defines a function and class template member function. As a result, headers includes definitions as
+well as declarations.
 
 Generic programming. 'instantiation' is a process that create a concrete 'independent' function or
-class from a template when compiling. code generation. Must be defined in the same namespace that
-contains the original template. See p675 for C++ feature to control this.  note: what does it mean?
+class from a template when compiling. Code generation and these compiler generated function or class
+are an 'instantiation' of the template. Must be defined in the same namespace that contains the
+original template. See p675 for C++ feature to control this.  note: what does it mean?
 
 
 {class-template}
@@ -17426,14 +17517,82 @@ Also it is up to the user to gurantee that the template argument support any ope
 template uses, and that those operations behave correctly in the context in which the template uses
 them. Include headers for any type to instantiate that template.
 
-<example> # template-version of StrBlob. No longer specific to string. See original-version in
-shared_ptr. 
+
+<example> 
+This is the original StrBlob class from C++P p455 which show how to implement a new collection type
+to share.
+
+This shows when shared_ptr is useful than own raii since this case don't have 'copy-controls' and
+use syn versions but not a problem as it has only one member which is shared_ptr.
+
+class StrBlob {
+  friend class StrBlobPtr;
+
+  public:
+    typedef std::vector<std::string>::size_type size_type;
+
+    StrBlob();
+    StrBlob( std::initializer_list<std::string> il );
+
+    size_type size() const { return data->size(); }
+    bool empty() const { return data->empty(); }
+
+    void push_back( const std::string &t ) { data->push_back(t); }
+    void pop_back();
+
+    std::string& front();
+    std::string& back();
+
+    // return a copy object like iterator. vector[0] and vector[size] that is off-the-end
+    //
+    // note: how the weak pointer in StrBlobPtr get set from *this
+    StrBlobPtr begin() { return StrBlobPtr(*this); }
+    StrBlobPtr end() { reutn StrBlobPtr(*this, data->size(); }
+
+  private:
+    std::shared_ptr<std::vector<std::string>> data;
+    void check( size_type i, const std::string &msg ) const;
+};
+
+# ctors
+
+StrBlob::StrBlob: data( make_shared<vector<string>> ()) {}
+StrBlob::StrBlob( initializer_list<string> il ) : data( make_shared<vector<string>> (il)) {}
+
+# see that return type is void when raise an exception.
+
+void StrBlob::check( size_type i, const string &msg ) const
+{
+  if( i >= data->size() )
+    throw out_of_range(msg);
+}
+
+string& StrBlob::front()
+{
+  check( 0, "front on empty StrBlob" );
+  return data->front();
+};
+
+string& StrBlob::back()
+{
+  check( 0, "back on empty StrBlob" );
+  return data->back();
+};
+
+string& StrBlob::pop_back()
+{
+  check( 0, "pop_back on empty StrBlob" );
+  return data->pop_back();
+};
+
+
+This is the template-version of the same. No longer specific to string.
 
 template<typename T>
 class Blob {
   public:
     typedef T value_type;
-    typedef typename std::vector<T>::size_type size_type; <using-class-members-that-are-types>
+    typedef typename std::vector<T>::size_type size_type; // <using-class-members-that-are-types>
 
     Blob();
     Blob( std::initializer_list<T> il );
@@ -29565,7 +29724,7 @@ However, some needs to do their 'own' allocation. Such classes must define own c
 example, see StrVec in Primers p524.
 
 <companion-algorithms>
-The library defines two that calls construct on each element in uninitialsed memory.
+The library defines two that calls 'construct' on each element in uninitialsed memory.
 
 uninitialized_copy(b, e, b2);
 copies elements from the input range by iterator b and e into 'unconstructed' memory by iterator b2.
