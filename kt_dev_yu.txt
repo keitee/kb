@@ -64,6 +64,7 @@
 |kt_dev_uv_task_002| task:02: DEVARCH-8869: about IP connection.
 |kt_dev_uv_task_003| task:02: DEVARCH-7508: runBrowser-test.sh
 |kt_dev_uv_task_004| task:03: DEVARCH-9135: uranium metadata
+|kt_dev_uv_task_005| task:01: nexus tools for both hmax and hwei
 
 
 # ============================================================================
@@ -487,7 +488,11 @@ zb-virtual-slave zb-make
       conf zb.humax.1000.host-config humax-dtr_t1000
       }
 
+      // [zb]
+      // 	build-dir = /data/builds
+
       do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
+
   }
 
    real_path="${ZB_BUILD_DIR}/$branch"
@@ -1963,31 +1968,6 @@ DEVARCH-8101, and DEVARCH-8080.
 
 This commit has the necessary changes of makefile to build nexus utility and to fix the link order
 problem when links with nexusMgr shared library.
-
-
-<commit-log>
-DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
-
-The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
-
-This commit fixes SystemClientEvent to use the right Event field for Synopsis and to implement
-missing map between the Event Repository and SystemClientEvent for DTT and IP source. It also
-updated the related test case to test getSynopsis() for both sources.
-
-
-DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
-
-The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
-
-This commit fixes SystemClientEvent to use the right Event field for Synopsis and to implement
-missing map between the Event Repository and SystemClientEvent for DTT and IP source. 
-
-
-DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
-
-The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
-
-This commit updated the related test case to test getSynopsis() for both sources.
 
 
 <stash>
@@ -5781,6 +5761,109 @@ box: /opt/zinc/devel/bin/textEPG
 ={============================================================================
 *kt_dev_uv_stack_116* stack: future
 
+<futurecontext>
+
+/**
+ * This class provides context to a dispatcher about async function calls
+ *
+ * Intrusively reference counted by Futures, Promises, and FutureDispatchers
+ * The intrusive_ptr implementation keeps the size of client facing objects
+ * Future<T>, Promise<T>, FutureValue<T>, Chunk<T> small
+ *
+ */
+class ZINC_EXPORT FutureContextBase : boost::noncopyable
+{
+public:
+
+protected:
+
+	explicit FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_);
+
+public:
+	bool completed;
+	FutureDispatcher* dispatcher;
+	FutureDispatcher* clientDispatcher;
+	static boost::condition_variable cond;
+	static boost::mutex mutex;
+
+private:
+	FutureContextBase(); // forbid default construction
+};
+
+
+class ZINC_EXPORT FutureContextCommonImpl : public NS_ZINC::FutureContextBase
+{
+
+	// The state of the promise and the future can evolve semi-independently
+	promise_state::Enum promiseState;
+	bool callCancellationCallback;
+	boost::function<void ()> cancellationCallback;
+};
+
+
+/**
+ * A context object for Futures
+ * FutureContext holds a single value passed from a providing Promise and the client Future
+ * and (if set) a completionHandler that is called by the dispatcher when the value is available
+ */
+template <typename T>
+class FutureContext : public FutureContextCommonImpl
+{
+};
+
+
+<futurevalue>
+
+class FutureValueBase
+{
+	friend class internal::PolymorphicFutureValue;
+
+public:
+
+	/**
+	 * Retrieve exception as an ErrorCode.
+	 *
+	 * In the success case, there will be no exception so this method will return
+	 * a default-constructed ErrorCode, where the not operator (!) will return true.
+	 * So, you can test whether an error occurred by doing:
+	 *
+	 *     if (!futureValue.getError()) {
+	 *         // no error
+	 *     }
+	 *
+	 * @return an ErrorCode wrapper around the exception that occurred in the
+	 * asynchronous operation.
+	 */
+	const ErrorCode& getError() const;
+
+protected:
+
+	explicit FutureValueBase(const boost::intrusive_ptr<detail::FutureContextCommonImpl> & context) ZINC_EXPORT;
+
+	~FutureValueBase() ZINC_EXPORT;
+
+	boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
+	detail::futurevalue_state::Enum state;
+};
+
+
+template<>
+class FutureValue<void> : public FutureValueBase
+{
+	friend FutureValue<void> makeFutureValue();
+};
+
+// FutureValue_Impl.h
+
+inline FutureValue<void> makeFutureValue()
+{
+    detail::FutureContext<void>* fc = new detail::FutureContext<void>(NULL);
+    FutureValue<void> f(fc);
+    fc->set();
+    return f;
+}
+
+
 <future>
 
 #ifndef ZINC_FUTURE_H_
@@ -8441,7 +8524,7 @@ class SystemEventWrapper  {
 +
 
 
-04.01
+04.01: have had a look at john's commits since these makes conflict with changes I made.
 ======
 
 * 62ef094 (HEAD, origin/john.sadler/uranium-opt-1, john.sadler/uranium-opt-1) DEVARCH-9276: Uranium.Client.API: Simplify `TargetRegion`.
@@ -8617,6 +8700,98 @@ class SystemClientResult
 
 * 3e896f3 DEVARCH-9265: Uranium.Client.System: Reserve vector capacity when converting System Broker results.
 -> LGTM. 
+
+
+04.13
+======
+Megre john's commits and on top of it, make fixes to this problem. Build is fine against the latest
+master.
+
+
+<commit-log>
+DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+
+The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
+
+The UI is provided two metadata APIs for events; ctv.linearmetadata.Event which is an old API and
+ctv.enhancedmetadata.Event which is an new API. It has been reported that
+ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value.
+
+It appears that getSynopsis() is never been implemented since the current implementation of
+`SystemClientEvent` is broken in either it uses wrong field of Event or do not handle getSynopsis()
+at all to return a synopsis to UI.
+
+This commit fixes `SystemClientEvent` to use the right field for synopsis and to implement missing
+mappings between the Event Repository and SystemClientEvent for DTT and IP source. It also revises
+the related test cases to test getSynopsis() of various `SystemClientEvent` instances for both
+sources.
+
+
+DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+
+The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
+
+The UI is provided two metadata APIs for events; ctv.linearmetadata.Event which is an old API and
+ctv.enhancedmetadata.Event which is an new API. It has been reported that
+ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value.
+
+It appears that getSynopsis() is never been implemented since the current implementation of
+`SystemClientEvent` is broken in either it uses wrong field of Event or do not handle getSynopsis()
+at all to return a synopsis to UI.
+
+This commit fixes `SystemClientEvent` to use the right field for synopsis and to implement missing
+mappings between the Event Repository and SystemClientEvent for DTT and IP source. 
+
+
+DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+
+The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
+
+The UI is provided two metadata APIs for events; ctv.linearmetadata.Event which is an old API and
+ctv.enhancedmetadata.Event which is an new API. It has been reported that
+ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value.
+
+It appears that getSynopsis() is never been implemented since the current implementation of
+`SystemClientEvent` is broken in either it uses wrong field of Event or do not handle getSynopsis()
+at all to return a synopsis to UI.
+
+This commit fixes `SystemClientEvent` to use the right field for synopsis and to implement missing
+mappings between the Event Repository and SystemClientEvent for DTT and IP source. 
+
+This commit revises the related test cases to test getSynopsis() of various `SystemClientEvent`
+instances for both sources.
+
+
+={============================================================================
+*kt_dev_uv_task_005* task:01: nexus tools for both hmax and hwei
+
+04.13
+======
+While waiting for the official release from Huawei for nexusMgr, told that do some work; that is to
+have a temp solution for a release. The old nexus tools for Humax and the new nexus tools for Huawe.
+How?
+
+1. Have a different directory for each oems
+
+/source/DEVARCH/Polonium/Polonium.NexusInspect.deprecated/   // for hmax
+/source/DEVARCH/Polonium/Polonium.NexusInspect/              // for hwei
+
+2. Use exclude feature
+
+OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh
+   -> exclude 'deprecated' version
+
+# N.B: This is a temporary for a QIP release and to be removed.
+export ZINC_EXCLUDE_PROJECTS="Polonium.NexusInspect.deprecated"
+
+OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh
+   -> exclude the normal version
+
+# N.B: This is a temporary for a QIP release and to be removed.
+export ZINC_EXCLUDE_PROJECTS="Polonium.NexusInspect"
+
+3. No other changes and it means that the output( exec_wrapper and inspect ) will have the same name
+and will be placed under the same in install root.
 
 
 ==============================================================================

@@ -4091,13 +4091,15 @@ $ make
 $ make install
 
 
-{gtag-config}
+{gtag}
+
+<config>
 note: there are gtag and global config.
 
 skip (comma separated list)
 
 
-{script-to-build-flist}
+<use-file-list> script-to-build-flist
 find . -type f -print >/tmp/list     # make a file set
 vi /tmp/list                         # customize the file set
 gtags -f /tmp/list
@@ -4109,11 +4111,30 @@ gtags -f ./flist.out
 
 note: don't use incremental tag updating.
 
+
+<the-point-to-start>
+Gtags recursively collects source files under the 'current' directory. So where you run this command
+affects which files are used to build a tag.
+
 gtags DEVARCH              # will create tag files in DEVARCH
-gtags ~/source DEVARCH     # will create tag files in ~/source
+gtags ~/source             # will create tag files in ~/source
+
+Q: why? 
+
+$ pwd
+/source/DEVARCH
+$ gtags ~/source
+$ gl FutureContextCommonImpl        // works okay
+$ gl -r FutureContextCommonImpl     // not find any
+
+$ pwd
+/source
+$ gtags ~/source
+$ gl FutureContextCommonImpl        // works okay
+$ gl -r FutureContextCommonImpl     // works okay
 
 
-{gtag-outputs}
+<gtag-outputs>
 $ ls G*
 GPATH   GRTAGS  GTAGS
 `GTAGS' definition database
@@ -4125,6 +4146,64 @@ note: the size differnece for the same tree
 -rw-r--r--  1 kpark kpark 18718720 Feb 18 09:08 GRTAGS
 -rw-r--r--  1 kpark kpark  3907584 Feb 18 09:08 GTAGS
 -rw-r--r--  1 kpark kpark 33285064 Feb 17 09:40 tags
+
+
+<use-external-tags>
+
+// approach one
+
+If you want to locate symbols that are not defined in the source tree, then you can specify library
+directories with GTAGSLIBPATH environment variable.
+
+Should execute gtags(1) at each directory in the GTAGSLIBPATH. If GTAGS is not found there, global
+ignores such directories.
+
+$ pwd
+/develop/src/mh                                       # this is a source project
+
+$ gtags
+$ ls G*TAGS
+GRTAGS  GTAGS
+
+$ global mhl
+uip/mhlsbr.c                                          # mhl() is found
+
+$ global strlen                                       # strlen() is not found
+$ (cd /usr/src/lib; gtags)                            # build tag for library source
+$ (cd /usr/src/sys; gtags)                            # build tage for kernel source
+
+$ export GTAGSLIBPATH=/usr/src/lib:/usr/src/sys       # note: has multiples
+$ global strlen
+../../../usr/src/lib/libc/string/strlen.c             # now found in library
+$ global access
+../../../usr/src/sys/kern/vfs_syscalls.c              # now found in kernel
+
+
+// approach two
+
+Or, you can take a more straightforward way to do the same thing. In the following example, we treat
+as if the system library and the kernel are part of our project.
+
+$ ln -s /usr/src/lib .
+$ ln -s /usr/src/sys .
+$ gtags
+$ global strlen
+lib/libc/string/strlen.c
+$ global access
+sys/kern/vfs_syscalls.c
+
+
+// approach three
+
+Seems that <2> sometimes do not work but works anyway. The way based on <2> is 
+
+~/gtags/proj-a/
+   G* files
+   link -> /dir-real-a-project
+
+~/gtags/proj-b/
+   G* files
+   link -> /dir-real-b-project
 
 
 {global-options}
@@ -4201,58 +4280,6 @@ $ global -r AEM_JAVA_Invite_Delete
 The [-s] command locates symbols which are not defined in 'GTAGS'. 
 -s, --symbol
 Print other symbol tags. Other symbol means the reference to a symbol which has no definition. 
-
-
-{use-external-tags}
-<1>
-If you want to locate symbols that are not defined in the source tree, then you can specify library
-directories with GTAGSLIBPATH environment variable.
-
-Should execute gtags(1) at each directory in the GTAGSLIBPATH. If GTAGS is not found there, global
-ignores such directories.
-
-$ pwd
-/develop/src/mh                                       # this is a source project
-
-$ gtags
-$ ls G*TAGS
-GRTAGS  GTAGS
-
-$ global mhl
-uip/mhlsbr.c                                          # mhl() is found
-
-$ global strlen                                       # strlen() is not found
-$ (cd /usr/src/lib; gtags)                            # build tag for library source
-$ (cd /usr/src/sys; gtags)                            # build tage for kernel source
-
-$ export GTAGSLIBPATH=/usr/src/lib:/usr/src/sys       # note: has multiples
-$ global strlen
-../../../usr/src/lib/libc/string/strlen.c             # now found in library
-$ global access
-../../../usr/src/sys/kern/vfs_syscalls.c              # now found in kernel
-
-<2>
-Or, you can take a more straightforward way to do the same thing. In the following example, we treat
-as if the system library and the kernel are part of our project.
-
-$ ln -s /usr/src/lib .
-$ ln -s /usr/src/sys .
-$ gtags
-$ global strlen
-lib/libc/string/strlen.c
-$ global access
-sys/kern/vfs_syscalls.c
-
-<3>
-Seems that <2> sometimes do not work but works anyway. The way based on <2> is 
-
-~/gtags/proj-a/
-   G* files
-   link -> /dir-real-a-project
-
-~/gtags/proj-b/
-   G* files
-   link -> /dir-real-b-project
 
 
 {use-in-vim}
@@ -7130,12 +7157,14 @@ which checks out the topic branch (in this case, server) for you and replays it 
 
 $ git checkout server
 $ git rebase master
+
 $ git checkout master
 $ git merge server
 
 or
 
 $ git rebase master server
+
 $ git checkout master
 $ git merge server
 
@@ -7164,7 +7193,7 @@ C1 C2 C3 C4 C5 C6 C7
 
 Say want to mege from C4 to C7 into one C7.
 
-git rebase -i HEAD~4      # select last 4 commit from head
+git rebase -i HEAD~4      # select last 4 commit 'including' head
 
 Vim pops up and edit to choose what to do
 
@@ -7207,8 +7236,9 @@ Successfully rebased and updated refs/heads/test.
 
 note: Although the message when exit vim sounds done well, nothing has changed since picked 'all'.
 
+
 <squashing-commits>
-pick 3691dd1 rebase two       note: reverse order
+pick 3691dd1 rebase two       // note: reverse order from older
 s a6e0d20 rebase three
 s 7b622e7 rebase four 
 s 1616841 rebase five 
@@ -7221,10 +7251,11 @@ C1 C2 C3 C8
 
 So the three commits were removed and merged into one 'new' commit.
 
-3fabf21 - kit, 23 minutes ago : rebase from two to five note: this will have C4-C7.
+3fabf21 - kit, 23 minutes ago : rebase from two to five           // note: this will have C4-C7.
 99e3f70 - kit, 23 minutes ago : rebase one
 
-<reordering-commits>
+
+<reordering-commits> by changing the order in rebase vim screen
 Git 'rewinds' your branch to the parent of these commits, 'applies'(replay) 310154e and then
 f7f3f6d, and then 'stops'. You effectively change the order of those commits and remove the "added
 cat-file" commit completely.
@@ -7243,16 +7274,19 @@ pick f7f3f6d changed my name a bit
 note: When replaying commits, merge conflict can happen and replaying means that it will create new
 commits for every commits to replay including 'pick' one.
 
+
 <spliting-commits>
 Want to split it into two commits: "updated README formatting" for the first, and "added blame" for
 the second.
 
 pick f7f3f6d changed my name a bit
-edit 310154e updated README formatting and added blame
+edit 310154e updated README formatting and added blame      // this to be split
 pick a5f4a0d added cat-file
 
 When you save and exit the editor, rewinds to the parent of the first commit in your list, applies
-the first commit (f7f3f6d), applies the second (310154e), and drops you to the console.
+the first commit (f7f3f6d), applies the second (310154e), and 'drops' you to the console.
+
+note: the rebase stops at the second commit after that is already replayed.
 
 Then, when the script drops you to the command line, you reset that commit, take the changes that
 have been reset, and create multiple commits out of them. 
@@ -7279,14 +7313,14 @@ Unstaged changes after reset:
 M	sample.c
 
 
-note: this is 'important' to rewind back since the second is 'already' replayed.
-note: 
-this take the privious to the stages and shows 'modifiled' state like:
+note: this is 'important' to rewind back since the second is 'already' replayed. this take the
+privious to the stages and shows 'modifiled' state like:
+
 
 Changes not staged for commit:
 	modified:   xxx
 
-When run git diff, this shows the diff which are introduced from the privious(stateg) to the
+When run git diff, this shows the diff which are introduced from the privious(staged) to the
 stopped(working).
 
 
@@ -7303,7 +7337,7 @@ $ git st
 #
 no changes added to commit (use "git add" and/or "git commit -a")
 
-note: edited sample.c or add/remove files so do whatever you want
+note: Split part one. Here can do whtever you want and edited sample.c to split the commit
 
 $ git commit -am "updated readme formatting"
 [detached HEAD 0c5d9cd] updated readme formatting
@@ -7315,7 +7349,7 @@ keitee@debian-keitee:~/git-work$ git st
 #
 nothing added to commit but untracked files present (use "git add" to track)
 
-note: edited sample.c or add/remove files so do whatever you want
+note: Split part two. Here can do whtever you want and edited sample.c to split the commit
 
 $ git commit -am "added blame"
 [detached HEAD 709b103] added blame
@@ -7344,6 +7378,62 @@ e8da604 - kit, 6 minutes ago : added cat-file
 532b821 - kit, 7 minutes ago : changed my name a bit
 
 note: see the commit is splitted two and shows 4 in total.
+
+
+<amend-option>
+Example: We edit a few files that we would like to commit in a single snapshot, but then we forget
+to add one of the files the first time around. Fixing the error is simply a matter of staging the
+other file and committing with the --amend flag:
+
+# Edit hello.py and main.py
+git add hello.py
+git commit
+
+# Realize you forgot to add the changes from main.py
+git add main.py
+git commit --amend --no-edit
+
+The editor will be populated with the message from the previous commit and including the --no-edit
+flag will allow you to make the amendment to your commit 'without' changing its commit message. 
+
+You can change it if necessary, otherwise just save and close the file as usual. The resulting
+commit will replace the incomplete one, and it will look like we committed the changes to hello.py
+and main.py in a 'single' snapshot.
+
+So it lets you combine "staged changes" with "the previous commit" instead of committing it as an
+entirely new snapshot. Also be used to simply edit the previous commit message without changing its
+snapshot.
+
+note: But, amending doesn’t just alter the most recent commit—it replaces it entirely.
+
+note: The amend option pickes up the previous and replace it. Cannot be used in the splitting case
+as above. Do not use to change commmit since while rebasing since it always to pick up the previous
+while in rebasing. Can use it to change commit log. This is more for cases: It’s easy to forget to
+stage a file or to format your commit message the wrong way. The --amend flag is a convenient way to
+fix these little mistakes.
+
+
+<tip>
+When run rebase, it stops at a comment to edit. However, git diff do not show any since it already
+replayed the commit that stopped at. The head, index and working are the same.
+
+$ git rebase -i HEAD~3
+$ git st
+
+Changes to be committed:
+// note: here can see the files to be changed
+
+To show the diff between the previous and the commit that stopped at:
+
+$ git reset HEAD~ 
+
+To show the diff what was changed in this commit that stopped at:
+
+$ git reset --soft HEAD
+
+This set HEAD to the previous and can see the diff:
+
+$ git diff --staged
 
 
 ={============================================================================
@@ -7490,6 +7580,7 @@ From Ch07, Reset demystified
 Git as a system manages and manipulates three trees in its normal operation:
 
 Tree                    Role
+-------------------------------------------------------------------
 HEAD                    Last commit snapshot, parent of next commit
 Index                   Proposed next commit snapshot
 Working Directory       Sandbox
@@ -7509,7 +7600,7 @@ git reop
 HEAD        index       working directory
 v3          v3          v3
 
-<soft> move HEAD
+<soft> move only HEAD
 "git reset --soft HEAD~"
 
             HEAD
