@@ -17592,7 +17592,7 @@ template<typename T>
 class Blob {
   public:
     typedef T value_type;
-    typedef typename std::vector<T>::size_type size_type; // <using-class-members-that-are-types>
+    typedef typename std::vector<T>::size_type size_type; // <use-class-type-members>
 
     Blob();
     Blob( std::initializer_list<T> il );
@@ -17611,15 +17611,17 @@ class Blob {
     void check( size_type i, const std::string &msg ) const;
 };
 
-<instantiation>
-Must provide the element type which is extra information. Each instantiation constitutes an
-'independent' class. So 'specialization' is what compiler do.
+
+<extra-information>
+Unlike function template, must provide the element type which is extra information and is template
+argument which binds to tempalte parameter. Use these argument to instantiate a 'specific' class
+from the template. constitutes an 'independent' class.  So 'specialization' is what compiler do.
 
 Blob<int> ia;
 Blob<int> ia2 = { 0, 1, 2, 3, 4 };
 Blob<string> names;
 
-These use the same 'type-specific' version of Blob. From these definitions, compiler will
+These use the same "type-specific" version of Blob<int>. From these definitions, compiler will
 instantiate a class:
 
 template <> class Blob<int> {
@@ -17632,23 +17634,66 @@ template <> class Blob<int> {
     ...
 };
 
-<member-function>
+
+<instantiated-type>
+A class template is used to instantiate a 'type' and an instantiated type always includes template
+arguments.
+
+shared_ptr< vector< T >>      -> shared_ptr< vector< string >>
+                                 shared_ptr< vector< int >>
+
+
+<template-member-function>
 For member functions of class template, it is instantiated 'only' if it is used and if not, it is
 not instantiated.
 
 To write a member function of class template in 'outside' of class definition, remember that the
-instantiated class is a new type. As an example:
+instantiated type is a new type and must say to which class the member belongs.
 
 template <typename T>
-void Blob<T>::check(size_type i, const std::string &msg) const
+void Blob<T>::check( size_type i, const std::string &msg ) const
 {
   if( i >= data->size())
     throw std::out_of_range(msg);
 }
 
-<static-member-func>
-As with a static in ordinary class, there must be exactly one definition of each static member. Only
-one in the same instantiated class and other instance in the other instantiated class.
+
+{template-friend}
+When a class contains a friend declaration, the class and the friend can independently be template
+or not.
+
+<one-to-one>
+The one-to-one friendship is the most common form of friendship from a class template to another
+template( class or function ).
+
+// forward declaration needed for friend declaration in Blob
+
+template <typename T> class BlobPtr;
+template <typename T> class Blob;
+template <typename T> bool operator==( const Blob<T> &, const Blob<T> & );
+
+template <typename T> class Blob {
+
+    // each intantiation of Blob grants access to the instantiation of BlobPtr and the equality
+    // operator with the same type. Use Blob's template parameter.
+
+    friend class BlobPt<T>;
+    friend bool operator==<T>( const Blob<T> &, const Blob<T> & );
+};
+
+note: Here intantiation means both intantiated type and objects.
+
+
+<one-to-many>
+Can also make every(all) instantiation(type) of another template its friend or may limit friendship
+to a specific instantiation.
+
+note: See C++P 665 for more.
+
+
+{template-static}
+As with a static in ordinary class, there must be exactly one definition of each static member. Each
+instantiation has its own instance of static members.
 
 template <typename T> class Foo {
   public:
@@ -17666,15 +17711,11 @@ Foo<int> fi;
 auto ct = Foo<int>::count();     // via scope operator
 ct = fi.count();                 // via an object
 
-<declaration>
-As with members of template, template declaration must include the template parameters.
 
-template <typename T> class Blob;
-
-<use-class-type-members> <typename-keyword>
-Often uses :: scope operator to access both static member and type members. e.g., string::size_type.
-In nontemplate code, the compiler has access to the class definition and knows whether a name
-accessed through the scope operator is a type or static member.
+{use-class-type-members} <typename-keyword>
+Uses scope operator(::) to access both static member and type members. e.g., string::size_type. In
+nontemplate code, the compiler has access to the class definition and knows whether a name accessed
+through the scope operator is a type or static member.
 
 However, in template code, when it see code such as T::mem, won't know 'until' instantiation whether
 name is a type or a static member. By default, the language assumes that a name accessed through the
@@ -17689,14 +17730,14 @@ typename T::value_type top( const T& c )
     return typename T::value_type();      // "typename T::value_type" is a type
 }
 
-EC++42. This is called 'dependent' type names since it depends on the template parameter. This
+EC++42. This is called 'dependant' type names since it depends on the template parameter. This
 causes 'parsing' difficulty and this is why must tell it to compiler and use 'typename' but not
 class.
 
 template<typename T>
 void print2nd( const T& container )
 {
-  T::const_iterator iter( container.begin() );           // iter is dependent name
+  T::const_iterator iter( container.begin() );           // iter is dependant name
   ...
 }
 
@@ -17721,8 +17762,9 @@ class Derived: public Base<T>::Nested {               // not use typename here
     ...
 };
 
-Use typedef for a dependent name. This is to create a local variable which is the type pointed by a
-iterator.
+
+Use typedef alias for a dependant name. This example is to create a local variable which is the type
+pointed by a iterator.
 
 template<typename iterT>
 void workWithIterator(iterT iter)
@@ -17739,11 +17781,12 @@ void workWithIterator(iterT iter)
   ...
 }
 
-<template-default-parameter>
+
+{template-default-argument}
 Under new standard, supports default argument for both function and class template while the earlier
 version support only for class.
 
-# for function template
+o function template
 
 The rewritten example of the previous example and see that F represent the type of a callable
 objects.
@@ -17756,8 +17799,8 @@ int compare( const T& v1, const T& v2 )
   return 0;
 }
 
-template <typename T, typename F = less<T>>
-int compare( const T &v1, const T &v2, F f = F())     // note: f is callable
+template <typename T, typename F = less<T>>        // default template argument, the type of callable 
+int compare( const T &v1, const T &v2, F f = F())  // default function argument, F()
 {
   if( f(v1, v2) ) return -1;
   if( f(v2, v1) ) return 1;
@@ -17771,17 +17814,14 @@ bool i = compare(0,42);
 Sales_data item1(cin), item2(cin);
 bool j = compare( item1, item2, compareIsbn );
 
-note: If type of item1 supports operator< then the previous works and if not, this version using
+note: If type of item1 supports operator<() then the previous works and if not, this version using
 compareIsbn works. Matter of choice?
 
 
+o class template
+
 template <typename T, typename container = vector<T>>
 class MyClass;
-
-
-# for class
-
-The empty braket says we want the 'default' type to instantiate.
 
 template <typename T = int> 
 class Numbers {
@@ -17792,6 +17832,9 @@ class Numbers {
 };
 
 Numbers<long double> lots_of_precision;
+
+The empty braket says we want the 'default' type to instantiate.
+
 Numbers<> average_precision;
 
 
@@ -22907,13 +22950,13 @@ requirements:
 note: As with set, key is 'constant'. However, a direct modification of the value of the element is
 still possible, provided that the type of the value is not constant.
 
-<key-value-pair>
+<key-value-pair> value-type
 Thing to remember is the value_type is pair<'const' key_type, mapped_type> so implies key cannot be
 changed. This affects the use with algorithms because key is const, only be used with algorithm that
 is read-only and the use is limited to search but associative is better in searching so little use
 of map with algorithm. In practice, associative can be used as a source or dest in algorithm.
 
-map<string, int>::value_type v3;    // pair< const string, int>
+map<string, int>::value_type v3;    // pair< const string, int > 
 map<string, int>::key_type v4;      // string
 map<string, int>::mapped_type v5;   // int
 
