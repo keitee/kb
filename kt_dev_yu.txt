@@ -48,7 +48,7 @@
 |kt_dev_uv_stack_116| stack: future
 |kt_dev_uv_stack_117| stack: future use
 |kt_dev_uv_stack_118| stack: metadata and dbus
-|kt_dev_uv_stack_118| stack: sandbox
+|kt_dev_uv_stack_119| stack: sandbox
 
 |kt_dev_uv_stack_120| stack: cppunit
 
@@ -488,6 +488,7 @@ zb-virtual-slave zb-make
 
       do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
 
+      export ZB_HOST_CONFIG=$(get_conf host-config "host")
   }
 
    real_path="${ZB_BUILD_DIR}/$branch"
@@ -4180,17 +4181,20 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
         event_collection_ptr intersectingEvents, Bounds missing,
         bool isMovingForward)
 {
-    // note: set FD?
-    //
+    // note: create Promise and set it with FD
+    
     NS_ZINC::Promise<boost::shared_ptr<EventWindow> > p(*getFutureDispatcher());
+
+    // note: Promise is copied to cmd
 
     EventWindowCreateCommand cmd( p, newWindowLocation, newWindowLocation,
             intersectingEvents, microsec_clock::universal_time(),
             serviceRepo);
 
-    // note: save up ew?
-    //
+    // note: create SCEW
+    
     boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents, hasStaleData);
+
     cmd.promise.complete(ew);
     cmd.promiseCompleted = true;
 
@@ -4213,10 +4217,12 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
   int64_t start = to_time_t(dataRetrievalBounds.startTime);
   int64_t end = to_time_t(dataRetrievalBounds.startTime) + dataRetrievalBounds.seconds;
 
-  // note: Future?
+  // note: create FB with FD
+
   NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
 
   // eventsReceived is overloaded, we need to get the pointer to it first, and the pass to bind.
+  
   // 'cobalt'
   void (SystemClientEventRepository::*masCallback)
     (boost::shared_ptr<EventWindowCreateCommand>,
@@ -4253,7 +4259,8 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
     Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
       metadataBroker->getEventSummariesByServices(recids, start, end);
     
-    // note: masCallback 
+    // note: maps 'future' to masCallback 
+
     bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
   }
 
@@ -4266,7 +4273,8 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
     Future <vector<NS_IRON_SYSTEM::Event>> fDTTEvents 
       = systemEventRepo->getScheduleEvents(locators, dttStart, end);
 
-    note: dttCallback
+    // note: maps 'future' to masCallback 
+
     bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
   }
 }
@@ -4283,36 +4291,131 @@ typedef boost::shared_ptr<event_collection> event_collection_ptr;
 
 note: getClientEvents are overloads for IP or DTT
 
-# IP version note:  getClientEvents from 'cobalt'
+// old
+//
+// # IP version note:  getClientEvents from 'cobalt'
+// 
+// void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
+//         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+// {
+//     const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+// 
+//     event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+// 
+//     copy(clientEvents->begin(), clientEvents->end(), back_inserter(*command->newMASEvents));
+// 
+//     //
+//     // <Q> HOW THIS newMASEvents get delivered to EPG?
+//     //
+// }
+// 
+// event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
+// {
+//     BOOST_FOREACH(const NS_COBALT_SYSTEM::Result& sysResult, systemResults)
+//     {
+//         // 'wrapper'  note: wrapper is no longer used in the john's change.
+//         // need to check!
+//         
+//         SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
+// 
+//         boost::shared_ptr<SystemClientEvent> mevent =
+//             boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+//         events->push_back(mevent);
+//     }
+// 
+//     return events;
+// }
+
+
+// new: do not use wrapper
 
 void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
 {
-    const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+    try
+    {
+        const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
 
-    event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+        // note: build vector<sp<sce>> from vector<result>
 
-    copy(clientEvents->begin(), clientEvents->end(), back_inserter(*command->newMASEvents));
+        event_collection_ptr  clientEvents = getClientEvents(systemEvents);
 
-    //
-    // <Q> HOW THIS newMASEvents get delivered to EPG?
-    //
+        // note: copy vector<sp> to vector<sp> in cmd object
+        //
+        // newMASEvents(boost::make_shared<event_collection>()),
+        //
+        // WHY? copy a vector to newMASEvents. CAN BE REMOVED?
+        
+        copy(clientEvents->begin(), clientEvents->end(), back_inserter(*command->newMASEvents));
+
+        URANIUM_DEBUG("Got "<<clientEvents->size() <<" events from MAS.");
+
+        //if there was no dtt request, continue with creation of the window
+        if(command->promiseCompleted == false)
+        {
+            if((command->dttDataRequested == false) || (command->noDttDataFound == true))
+            {
+            	URANIUM_DEBUG("Creating window from IP data.");
+                clog<<"Creating window from IP data."<<endl;
+
+                event_collection_ptr events = prepareEventsForNewEventWindow(*command, command->newMASEvents);
+
+                command->promise.complete(createEventWindow(*command, events));
+                command->promiseCompleted = true;
+            }
+        }
+    }
 }
 
-event_collection_ptr getClientEvents(const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
-{
-    BOOST_FOREACH(const NS_COBALT_SYSTEM::Result& sysResult, systemResults)
-    {
-        // 'wrapper'  note: wrapper is no longer used in the john's change.
-        // need to check!
-        
-        SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult));
 
-        boost::shared_ptr<SystemClientEvent> mevent =
-            boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
-        events->push_back(mevent);
+event_collection_ptr SystemClientEventRepository::prepareEventsForNewEventWindow(
+        EventWindowCreateCommand& command,
+        event_collection_ptr newEvents)
+{
+    // note: copy ctor sp vector again.
+
+    event_collection_ptr events = boost::make_shared<event_collection>();
+    //add in the newly fetched events.
+    events->insert(events->end(), newEvents->begin(), newEvents->end());
+
+    //add to events whatever we have in cache.
+    event_collection_ptr cachedEvents = getEventCache()->get(command.location, true).events;
+    setCached(cachedEvents);
+    events = uniqueJoin(events, cachedEvents);
+
+    //Add any events we might have from the old window.
+    if(command.oldEvents != 0)
+    {
+        setCached(command.oldEvents);
+        events = uniqueJoin(events, command.oldEvents);
     }
 
+    //We might have requested more data than necessary. These events should go into cache, but not into
+    //any window we might be creating now. Filter these events out for now.
+    //Sanitisation to make sure errors in schedule don't cause us pain.
+
+    events = sanitizeEvents(events, command.location, getRepos());
+    //insert null events to cover any gaps in the event window
+    insertNullEvents(command.location, events, getRepos(), config);
+
+    return events;
+}
+
+event_collection_ptr SystemClientEventRepository::getClientEvents(
+            const std::vector<NS_COBALT_SYSTEM::Result>& systemResults)
+{
+    URANIUM_PROFILE_FUNC;
+    event_collection_ptr events = boost::make_shared<event_collection>();
+
+    events->reserve(systemResults.size());
+
+    BOOST_FOREACH(const NS_COBALT_SYSTEM::Result& sysResult, systemResults)
+    {
+        boost::shared_ptr<SystemClientEvent> mevent =
+            boost::make_shared<SystemClientEvent>(getRepos(), sysResult);
+
+        events->push_back(mevent);
+    }
     return events;
 }
 
@@ -4774,11 +4877,13 @@ class SystemClientResult
 
 {from-cobalt}
 
+// this is old
+
 1. get a 'reference' to "Result" array from "Future". NO COPY. 
 
 std::vector<NS_COBALT_SYSTEM::Result>
 
-2. copy ctor "Result" from future Result.
+2. copy ctor "Result" from future Result. note: COPY COST
 
 3. populate SEWs with SP to ctored 'each' "Result" and construct vector< SP< SCE >> 
 
@@ -4786,6 +4891,26 @@ SystemEventWrapper ewrap(boost::make_shared<NS_COBALT_SYSTEM::Result>(sysResult)
 
 boost::shared_ptr<SystemClientEvent> mevent =
    boost::make_shared<SystemClientEvent>(getRepos(), ewrap);
+
+
+// this is new   
+
+1. get a 'reference' to array<cobalt::Result> from "Future". NO COPY. 
+
+std::vector<NS_COBALT_SYSTEM::Result>
+
+2. construct SCE for each result in the arrary. SCE uses &Result. NO copy.
+
+3. push SP<SCE> into vector< SP< SCE >> 
+
+ Future                    NO COPY via ref      SCER                    CMD
+ -----------------------------------------------------------------------------------------
+ vector<cobalt::result>       -->               vector<SP<SCE>>         <vector<SP<SCE>> 
+ [0]
+ [1]
+ ...
+
+ Q. Why copy a vector to a vector in window cmd?
 
 
 {from-iron}
@@ -5883,8 +6008,9 @@ box: /opt/zinc/devel/bin/textEPG
 ={============================================================================
 *kt_dev_uv_stack_116* stack: future
 
-<futurecontext>
+{futurecontext}
 
+<FCB>
 /**
  * This class provides context to a dispatcher about async function calls
  *
@@ -5897,24 +6023,95 @@ class ZINC_EXPORT FutureContextBase : boost::noncopyable
 {
 public:
 
+	virtual ~FutureContextBase();
+	virtual bool dispatchNextResult() = 0;
+
+	virtual void dispatchCancellation() = 0;
+
+	/**
+	 * Wait for this async op to complete
+	 */
+	void wait();
+
+	/**
+	 * Wait for this async op to complete, with a time out
+	 * specified with a time duration
+	 *
+	 * @see Future<T>::wait_for()
+	 */
+	template<typename duration_type>
+	bool wait_for(const duration_type &rel_time)
+	{
+		monotonic_clock::time_point abs_time = monotonic_clock::now() + rel_time;
+		return wait_until(abs_time);
+	}
+
+	/**
+	 * Wait for this async op to complete, with a time out
+	 * specified with a time point
+	 *
+	 * @see Future<T>::wait_until()
+	 */
+	template<typename time_point_type>
+	bool wait_until(const time_point_type &abs_time)
+	{
+		boost::mutex::scoped_lock lock(mutex);
+		while (!completed)
+		{
+			const bool signalled = cond.wait_until(lock, abs_time);
+			if (!signalled && !completed)
+				return false; // we timed out, without a completion and without a cancellation
+		}
+		return true;
+	}
+
+	/**
+	 * Does the moral equivalent to
+	 *     dispatcher.post(bind(FutureContextBase::dispatchNextResult, this));
+	 *
+	 * WARNING: dispatchNextResult may be called synchronously and
+	 *          re-entrantly by this function.
+	 */
+	void scheduleCallback();
+
+	void scheduleCancellationCallback();
+
 protected:
 
 	explicit FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_);
 
+	/**
+	 * Mark this future as having a completion handler
+	 *
+	 * Must be called with the future locked
+	 */
+	void markCallback();
+
+public:
+	boost::detail::atomic_count refCount;
+	boost::detail::atomic_count promiseCount;
 public:
 	bool completed;
 	FutureDispatcher* dispatcher;
 	FutureDispatcher* clientDispatcher;
 	static boost::condition_variable cond;
 	static boost::mutex mutex;
-
 private:
 	FutureContextBase(); // forbid default construction
 };
 
+FutureContextBase::FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_) :
+	refCount(0),
+	promiseCount(0),
+	completed(false),
+	dispatcher(dispatcher_),
+	clientDispatcher(dispatcher_)
+{}
 
+<FCCI>
 class ZINC_EXPORT FutureContextCommonImpl : public NS_ZINC::FutureContextBase
 {
+	explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_);
 
 	// The state of the promise and the future can evolve semi-independently
 	promise_state::Enum promiseState;
@@ -5922,7 +6119,17 @@ class ZINC_EXPORT FutureContextCommonImpl : public NS_ZINC::FutureContextBase
 	boost::function<void ()> cancellationCallback;
 };
 
+FutureContextCommonImpl::FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_)
+ : FutureContextBase(dispatcher_),
+   forDispatch(false),
+   futurevalueState(futurevalue_state::value_or_error),
+   shouldCallCompletionHandler(true),
+   promiseState(promise_state::incomplete),
+   callCancellationCallback(true)
+{
+}
 
+<FC>
 /**
  * A context object for Futures
  * FutureContext holds a single value passed from a providing Promise and the client Future
@@ -5932,6 +6139,37 @@ template <typename T>
 class FutureContext : public FutureContextCommonImpl
 {
 public:
+
+	explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_)
+		: FutureContextCommonImpl(dispatcher_)
+	{}
+
+	/**
+	 * Type specific completion code called from Promise::complete()
+	 *
+	 * Take a copy of the result from the Promise and stash it in FutureContext,
+	 * complete() marks this FutureContext as completed, and post() hands
+	 * it over to the dispatcher
+	 *
+	 * @see FutureContextBase::complete()
+	 * @see FutureContextBase::post()
+	 */
+	void set(const T & result)
+	{
+		boost::mutex::scoped_lock lock;
+		if (runPreSetChecksAndLock(lock)) {
+			value = result;
+		}
+		doPostSetActionsAndUnlock(lock);
+	}
+	
+	template <typename Handler>
+	void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
+		setCallbackHoisted(boost::function<void (FutureContextBase*)>(
+			makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))),
+			clientDispatcher_
+		);
+	}
 
 	T value;
 };
@@ -7275,7 +7513,7 @@ method return sender=:1.20 -> dest=:1.69 reply_serial=4682
 
 
 ={============================================================================
-*kt_dev_uv_stack_118* stack: sandbox
+*kt_dev_uv_stack_119* stack: sandbox
 
 
 /opt/zinc-trunk/lib/sandbox/application-yv.conf
@@ -8960,6 +9198,91 @@ OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7231.sh*
 OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh*
 OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-dn360t.sh*
 
+
+04.15
+======
+
+For all humax, have a insepct.deprecated only.
+
+OEM.Humax/OEM.Humax.3rdPartyStack/setvars-humax-db_t2200.sh
+OEM.Humax/OEM.Humax.3rdPartyStack/setvars-humax-dtr_t1000.sh
+OEM.Humax/OEM.Humax.3rdPartyStack/setvars-humax-dtr_t2100.sh
+OEM.Humax/OEM.Humax.3rdPartyStack/setvars-humax-dtr_t4000.sh
+
+OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7231.sh, (372) do not have both
+OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh  (370) inspect only
+OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-dn360t.sh*        do not have both
+
+
+Did a full build for hmax1000 and hwei370. For the rest, did run "listtarget".
+
+
+<commit-log>
+DEVARCH-8092: NexusInspect: Add join and uninit pair in the nexus-inspect.
+
+In order to support new API, Huawei introduce a new pair of calls in a user side to call these APIs
+and to use Nexus resources returned from these API. 
+
+This commit add the pair in nexus-inspect to have valid Nexus resource handles.
+
+
+DEVARCH-8092: NexusInspect: Add the previous nexus-inspect as a deprecated project in the build.
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+This commit add the previous nexus-inspect to the build as deprecated project.
+
+
+<hwei-372>
+DEVARCH-8092: NexusInspect: Add the exclude project for Huawei 372. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+<hwei-370>
+DEVARCH-8092: NexusInspect: Add the exclude project for Huawei 370. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+<hwei-360>
+DEVARCH-8092: NexusInspect: Add the exclude project for Huawei 360. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+<hmax-1000>
+DEVARCH-8092: NexusInspect: Add the exclude project for Humax 1000. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+<hmax-2100>
+DEVARCH-8092: NexusInspect: Add the exclude project for Humax 2100. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+<hmax-2200>
+DEVARCH-8092: NexusInspect: Add the exclude project for Humax 2200. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+<hmax-4000>
+DEVARCH-8092: NexusInspect: Add the exclude project for Humax 4000. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
