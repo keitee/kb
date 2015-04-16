@@ -176,11 +176,12 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_100| raii {factory-func} {auto-lock}
 |kt_dev_stl_101| smart pointer
-|kt_dev_stl_102| smart pointer internal: auto_ptr
-|kt_dev_stl_103| smart pointer internal: shared_ptr
-|kt_dev_stl_104| smart pointer examples
+|kt_dev_stl_102| smart pointer: internal: auto_ptr
+|kt_dev_stl_103| smart pointer: internal: shared_ptr
+|kt_dev_stl_104| smart pointer: examples
 |kt_dev_stl_105| make_shared
 |kt_dev_stl_106| when to use which containers
+|kt_dev_stl_107| smart pointers: deleter
 
 |kt_dev_stl_110| allocator
 |kt_dev_stl_111| gcc stl impl files
@@ -11256,8 +11257,10 @@ ABEntry::ABEntry(...)
 Why use constructor-initializers? From Primers p289 and EC++04.
 
 1. Efficient than initialization-and-assignment.
+
+<when-constructor-initializer-is-must> reference-member.
 2. By the time the body of ctor begins excuting, init is completed so there are 'three' cases that
-must use ctor-init: <quiz>
+must use ctor-init: 
 
 const, reference, and class member that do not have a default ctor.
 
@@ -11627,7 +11630,7 @@ class Rational {
 };
 
 
-{copy-assign} deleted-copy-controls
+{copy-assign} deleted-copy-controls. reference-member.
 As with copy constructor, cannot use syn version when there are reference and const member data.
 Why? because syn copy assign is defined as 'deleted' if the class has a const or reference member.
 C++P p508
@@ -17845,31 +17848,22 @@ template.
 
 note: member template may 'not' be virtual.
 
-<ordinary-class-example>
-The member function of ordinary class is itself template from p672. This example is similar to the
-default deleter and is a 'deleter' which prints out mesg when dtor runs.
-
-Like shared_ptr, unique_ptr can set deleter. See *kt_dev_stl_018* for more.
-
-unique_ptr< objT, delT > p ( new objT, fcn );
-
-delT is the deleter type. fcn is callable object of delT. callable objects are func, func
-ptr, lambda, object binded, and class overloaded the call op.
-
-unique_ptr< connection, decltype(end_connection)*> p ( &c, end_connection );
+<with-ordinary-class>
+The member template of ordinary class from C++P 672. This example is similar to the default
+unique_ptr and deleter since overloads operator(). To support any type, use template.
 
 // function object class as a replacement for delete
 class DebugDelete {
   public:
     DebugDelete( std::ostream& s = std::cerr) : os(s) {}
 
-    // this make it work for 'all' types by using member template.
     // note: as with any function template, the type of T is 'deduced'
+
     template <typename T> void operator() (T* p) const
     { os << "deleting unique_ptr" << std::endl; delete p; }
 
   private:
-    std::ostream& os;
+    std::ostream& os;               // note: reference-member
 };
 
 
@@ -17911,7 +17905,7 @@ deleting Pd, p = 0x9be7008
 deleting Pi, p = 0x9be7018
 end main
 
-Also can use it with unique_ptr:
+Since it uses delete internally, can be used with unique_ptr:
 
 unique_ptr<int, DebugDelete> p( new int, DebugDelete() );
 unique_ptr<string, DebugDelete> p( new string, DebugDelete() );
@@ -17922,19 +17916,14 @@ void DebugDelete::operator() (int*) const { delete p; }
 void DebugDelete::operator() (string*) const { delete p; }
 
 Why? Whenever unique_ptr's dtor is instantiated, DebugDelete's call operator will also be
-instantiated. See the following extract. 
-
-template<typename _Tp1, typename _Deleter> __shared_ptr(_Tp1* __p, _Deleter __d)    // from ctor
-  ...
-__d(__p); // Call _Deleter on __p.  // from other function
+instantiated.
 
 After all, whether it is for ordinary class or class template, member template is function template
 so compiler 'deduce' the type of func template when used(instantiated) so these will be instantiated
 to correct type when deleter is called.
 
 
-# for class template
-
+<with-template-class>
 Both the class and member have their own, independent, template parameters so must provide both.
 
 template <typename T> class Blob {
@@ -17949,6 +17938,8 @@ template <typename It>
 Blob<int> a1( begin(iarray), end(iarray));
 Blob<int> a1( ivec.begin(), ivec.end());
 Blob<string> a1( svec.begin(), svec.end());
+
+As with "with-ordinary-class", function parameter types are 'deducted' as it is function template.
 
 
 {variadic-templates}
@@ -27803,224 +27794,6 @@ shared_ptr<int> p (new int(42));
 p = new int(1024);                  // ERROR
 p.reset( new int(1024));
 
-<deletion-and-deleter>
-# set-deleter
-
-SP is exception safe. However, how can we make it sense when using resources which have own
-interfaces since default deleter is delete op.
-
-void f()
-{
-  shared_ptr<int> sp (new int(42) );
-  // use sp
-  // exception occur and no catch
-}
-
-void f()
-{
-  connection c = connect(&d);
-  // use connection
-  // if exception occur, no way to close conn
-}
-
-User can set deleter of shared_ptr rather than the default deleter, delete.
-
-note: this deleter must take a 'single' argument of type T*. otherwise, compile error
-void end_connection( connection *p ) { disconnect(*p); }
-
-void f()
-{
-  connection c = connect(&d);
-  shared_ptr<connection> p (&c, end_connection);
-  // use connection
-  // if exception occur
-}
-
-# when deletion happens
-
-Such a deletion does not necessarily have to happen at the end of the scope. For example, assigning
-the nullptr to pNico or resizing the vector so that it contains only the first two elements and
-would delete the last owner of the string initialized with nico.
-
-#include <iostream>
-#include <memory>
-#include <string>
-#include <vector>
-
-using namespace std;
-
-void delete_mesg( string *str )
-{
-  cout << "deleter called: " << *str << endl;
-}
-
-int main()
-{
-  shared_ptr<string> pNico(new string("nico"), delete_mesg );
-  shared_ptr<string> pJutta(new string("jutta"), delete_mesg);
-
-  // lambda
-  // shared_ptr<string> pJutta(new string("jutta"), 
-  //     [](string *p) {
-  //     cout << "delete " << *p << endl; 
-  //     delete p;
-  //     });
-
-  // capitalize the first char
-  (*pNico)[0] = 'N';
-  pJutta->replace(0,1,"J");
-
-  // put them multiple times in a container
-  vector<shared_ptr<string>> whoMadeCoffee;
-  whoMadeCoffee.push_back(pJutta);
-  whoMadeCoffee.push_back(pJutta);
-  whoMadeCoffee.push_back(pNico);
-  whoMadeCoffee.push_back(pJutta);
-  whoMadeCoffee.push_back(pNico);
-
-  // print all
-  for( auto ptr : whoMadeCoffee )
-    cout << "*ptr: " << *ptr << "    "; 
-
-  // overwrite a name
-  *pNico = "Nicolai";
-
-  cout << endl << "------------" << endl;
-
-  // print all again
-  for( auto ptr : whoMadeCoffee )
-    cout << "*ptr: " << *ptr << "    "; 
-
-  cout << endl;
-  cout << "use_count(jutta): " << whoMadeCoffee[0].use_count() << endl;
-
-  pJutta = nullptr;
-
-  cout << "use_count(jutta): " << whoMadeCoffee[0].use_count() << endl;
-  cout << "use_count(nico ): " << whoMadeCoffee[2].use_count() << endl;
-
-  whoMadeCoffee.resize(2);
-  cout << "resize to 2 " << endl;
-
-  pNico = nullptr;
-
-  cout << "use_count(jutta): " << pJutta.use_count() << endl;
-  cout << "use_count(nico ): " << pNico.use_count() << endl;
-}
-
-
-kt@kt-ub-vb:~/work$ ./a.out 
-*ptr: Jutta    *ptr: Jutta    *ptr: Nico    *ptr: Jutta    *ptr: Nico    
-------------
-*ptr: Jutta    *ptr: Jutta    *ptr: Nicolai    *ptr: Jutta    *ptr: Nicolai    
-use_count(jutta): 4
-use_count(jutta): 3              // after set nullptr
-use_count(nico ): 3
-resize to 2 
-deleter called: Nicolai          // when set nullptr
-use_count(jutta): 0              // <Q> why?
-use_count(nico ): 0
-deleter called: Jutta
-
-
-# delete with array (p80, revisit when necessary)
-
-
-# delete with other destruction policy 
-When resource cleaning up is more complicated than a single function call, needs destruction policy.
-note: this examples shows how function object is useful.
-note: the passed deleter is not allowed to throw exceptions.
-
-// first example: to ensure that a temporary file gets removed when the last reference to it gets
-// destroyed. see function object that handles more than a single argument passed in deleter.
-
-#include <string>
-#include <fstream>   // for ofstream
-#include <memory>    // for shared_ptr
-#include <cstdio>    // for remove()
-
-class FileDeleter
-{
-  private:
-    std::string filename;
-  public:
-    FileDeleter (const std::string& fn)
-      : filename(fn) {
-      }
-    void operator () (std::ofstream* fp) {      // T is ofstream and T*
-      fp->close();                              // close.file
-      std::remove(filename.c_str());            // delete file
-    }
-};
-
-int main()
-{
-  // create and open temporary file:
-  std::shared_ptr<std::ofstream> fp(new std::ofstream("tmpfile.txt"),
-      FileDeleter("tmpfile.txt"));
-  ...
-}
-
-// second example: to use shared_ptrs to deal with shared memory
-
-#include <memory> // for shared_ptr
-#include <sys/mman.h> // for shared memory
-#include <fcntl.h>
-#include <unistd.h>
-#include <cstring> // for strerror()
-#include <cerrno> // for errno
-#include <string>
-#include <iostream>
-
-class SharedMemoryDetacher
-{
-  public:
-    void operator () (int* p) {
-      std::cout << "unlink /tmp1234" << std::endl;
-      if (shm_unlink("/tmp1234") != 0) {
-        std::cerr << "OOPS: shm_unlink() failed" << std::endl;
-      }
-    }
-};
-
-std::shared_ptr<int> getSharedIntMemory (int num)
-{
-  void* mem;
-  int shmfd = shm_open("/tmp1234", O_CREAT|O_RDWR, S_IRWXU|S_IRWXG);
-  if (shmfd < 0) {
-    throw std::string(strerror(errno));
-  }
-  if (ftruncate(shmfd, num*sizeof(int)) == -1) {
-    throw std::string(strerror(errno));
-  }
-  mem = mmap(nullptr, num*sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0);
-  if (mem == MAP_FAILED) {
-    throw std::string(strerror(errno));
-  }
-
-  // note: here
-  return std::shared_ptr<int>(static_cast<int*>(mem), SharedMemoryDetacher());
-}
-
-int main()
-{
-  // get and attach shared memory for 100 ints:
-  std::shared_ptr<int> smp(getSharedIntMemory(100));
-
-  // init the shared memory
-  for (int i=0; i<100; ++i) {
-    smp.get()[i] = i*42;               // see get
-  }
-  // deal with shared memory somewhere else:
-  ...
-
-  std::cout << "<return>" << std::endl;
-  std::cin.get();
-
-  // release shared memory here:
-  smp.reset();
-  ...
-}
 
 <access-to-pointee>
 The SP provide 'only' operators * and ->. Pointer arithmetic and operator [ ] are not provided. 
@@ -28038,7 +27811,8 @@ Thus, get() provides an alternative of calling:
 shared_ptr<vector<T>> pvec;
 T var = (*pvec)[index];          // () is necessary since [] is higher than *
 
-<check-users>
+
+<check-users> do not rely on use_count()
 To check how many users are. Return bool on whether there is the only user of this sp.
 
 sp.unique();
@@ -28049,9 +27823,9 @@ if( !p.unique() )
    p.reset( new string(*p) );    // we are not alone. allocate a new copy
 *p += newValue;                  // we are the only pointer, okay to change
 
+note: Like example in when-deletion-happens, use_count() may not be reliable since C++P 453 reads
+"may be a slow operation, intended primarily for debugging purpose"
 
-From <Q> above example about use_count(), Primers, p453, reads "may be a slow operation, intended
-primarily for debugging purpose"
 
 # copy-shared-ptr
 
@@ -28535,7 +28309,7 @@ shared_ptr<int>(static_cast<int*>(sp.get())) // ERROR: undefined behavior
 static_pointer_cast<int*>(sp)                // OK
 
 
-{unique-ptr} # no copy support
+{unique-ptr} no copy support
 A pointer that implements the concept of 'exclusive' ownership and is a kind of a smart pointer that
 helps to avoid resource leaks when 'exceptions' are thrown. This was auto_ptr before C++11 and it has
 only one user because 'no' ordinary copy and assign are supported. Only 'one' unique_ptr at a time
@@ -28745,19 +28519,11 @@ note: You also have to implement the copy constructor and assignment operator. B
 would try to copy or assign the members, which isn't possible. If you don't provide them, ClassB
 also would provide only move semantics. <Q> by compiler? Here valuelike used.
 
+
 <use-with-containers>
 In auto_ptr, it is not possible to store an auto_ptr in a container, nor could we return one from a
 function. See *kt_dev_stl_100* ref: can store unique_ptr in a container?
 
-<deleter-form>
-As with shared_ptr, can set 'deleter' but use different form. p678 said that:
-
-By binding the deleter at compile time, unique_ptr avoids the run-time cost of an indirect call to
-its deleter. In contrast, by binding at run time, shared_ptr makes it easier for users to override
-the deleter. (significant cost?)
-
-shared_ptr<connection> p (&c, end_connection);
-unique_ptr<connection, decltype(end_connection)*> p ( &c, end_connection );
 
 <get-vs-conversion>
 EC++15. Have to provide access to raw underlying resource? There are two ways: implicit and explicit
@@ -28802,6 +28568,7 @@ FontHandle f2 = f1;     // oops. meant "Font f2=f1";
 Is this contrary to encapsulation? true but raii donesn't exist to encapsulate something. It exist
 to ensure that a particular action - release resource - takes place. Encapsulation is not for every
 classes.
+
 
 
 ={============================================================================
@@ -29712,6 +29479,300 @@ In practice, predicting which container type is the best is often difficult.
 The big 'advantage' of the STL is that you can try different versions 'without' much effort. The
 major work - implementing the different data structures and algorithms - is done. You have only to
 combine them in a way that is best for you.
+
+
+={============================================================================
+*kt_dev_stl_107* smart pointers: deleter
+
+{default-deleter}
+The deleter is callable and is called when is needed. Here the excerpt from stl unique_ptr.h. See
+default_delete is overload operator().
+
+/// Primary template, default_delete.
+template<typename _Tp>
+struct default_delete
+{
+    constexpr default_delete() noexcept = default;
+
+    template<typename _Up, typename = typename
+        std::enable_if<std::is_convertible<_Up*, _Tp*>::value>::type>
+        default_delete(const default_delete<_Up>&) noexcept { }
+
+    void
+        operator()(_Tp* __ptr) const
+        {
+            static_assert(sizeof(_Tp)>0, "can't delete pointer to incomplete type");
+
+            delete __ptr;
+        }
+};
+
+/// 20.7.12.2 unique_ptr for single objects.
+template <typename _Tp, typename _Dp = default_delete<_Tp> >
+class unique_ptr
+{
+    class _Pointer 
+    { 
+
+    };
+
+    typedef std::tuple<typename _Pointer::type, _Dp>  __tuple_type;
+    __tuple_type                                      _M_t;
+
+    explicit
+        unique_ptr(pointer __p) noexcept
+        : _M_t(__p, deleter_type())                      // note: default ctored deleter
+        { static_assert(!std::is_pointer<deleter_type>::value,
+                "constructed with null function pointer deleter"); }
+
+    // Destructor.
+    ~unique_ptr() noexcept
+    {
+        auto& __ptr = std::get<0>(_M_t);
+        if (__ptr != nullptr)
+            get_deleter()(__ptr);                        // note: call deleter()
+        __ptr = pointer();
+    }
+
+    deleter_type&
+        get_deleter() noexcept
+        { return std::get<1>(_M_t); }
+}
+
+
+{set-own-deleter}
+SP is exception safe. However, how can we make it sense when using resources which have own
+interfaces since default deleter is delete op.
+
+void f()
+{
+  shared_ptr<int> sp (new int(42) );
+  // use sp
+  // exception occur and no catch
+}
+
+void f()
+{
+  connection c = connect(&d);
+  // use connection
+  // if exception occur, no way to close conn
+}
+
+User can set deleter of shared_ptr rather than the default deleter, delete.
+
+note: this deleter must take a 'single' argument of type T*. otherwise, compile error
+void end_connection( connection *p ) { disconnect(*p); }
+
+void f()
+{
+  connection c = connect(&d);
+  shared_ptr<connection> p (&c, end_connection);
+  // use connection
+  // if exception occur
+}
+
+
+{when-deletion-happens}
+Such a deletion does not necessarily have to happen at the end of the scope. For example, assigning
+the nullptr to pNico or resizing the vector so that it contains only the first two elements and
+would delete when the last owner of the string set to nullptr, pNico.
+
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+using namespace std;
+
+void delete_mesg( string *str )
+{
+  cout << "deleter called: " << *str << endl;
+}
+
+int main()
+{
+  shared_ptr<string> pNico(new string("nico"), delete_mesg );
+  shared_ptr<string> pJutta(new string("jutta"), delete_mesg);
+
+  // lambda
+  // shared_ptr<string> pJutta(new string("jutta"), 
+  //     [](string *p) {
+  //     cout << "delete " << *p << endl; 
+  //     delete p;
+  //     });
+
+  // capitalize the first char
+  (*pNico)[0] = 'N';
+  pJutta->replace(0,1,"J");
+
+  // put them multiple times in a container
+  vector<shared_ptr<string>> whoMadeCoffee;
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pNico);
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pNico);
+
+  // print all
+  for( auto ptr : whoMadeCoffee )
+    cout << "*ptr: " << *ptr << "    "; 
+
+  // overwrite a name
+  *pNico = "Nicolai";
+
+  cout << endl << "------------" << endl;
+
+  // print all again
+  for( auto ptr : whoMadeCoffee )
+    cout << "*ptr: " << *ptr << "    "; 
+
+  cout << endl;
+  cout << "use_count(jutta): " << whoMadeCoffee[0].use_count() << endl;
+
+  pJutta = nullptr;
+
+  cout << "use_count(jutta): " << whoMadeCoffee[0].use_count() << endl;
+  cout << "use_count(nico ): " << whoMadeCoffee[2].use_count() << endl;
+
+  whoMadeCoffee.resize(2);
+  cout << "resize to 2 " << endl;
+
+  pNico = nullptr;
+
+  cout << "use_count(jutta): " << pJutta.use_count() << endl;
+  cout << "use_count(nico ): " << pNico.use_count() << endl;
+}
+
+
+kt@kt-ub-vb:~/work$ ./a.out 
+*ptr: Jutta    *ptr: Jutta    *ptr: Nico    *ptr: Jutta    *ptr: Nico    
+------------
+*ptr: Jutta    *ptr: Jutta    *ptr: Nicolai    *ptr: Jutta    *ptr: Nicolai    
+use_count(jutta): 4
+use_count(jutta): 3              // after set nullptr
+use_count(nico ): 3
+resize to 2 
+deleter called: Nicolai          // when set nullptr
+use_count(jutta): 0              // why? see "check-users"
+use_count(nico ): 0
+deleter called: Jutta
+
+
+# delete with array (p80, revisit when necessary)
+
+
+# delete with other destruction policy 
+When resource cleaning up is more complicated than a single function call, needs destruction policy.
+note: this examples shows how function object is useful.
+note: the passed deleter is not allowed to throw exceptions.
+
+// first example: to ensure that a temporary file gets removed when the last reference to it gets
+// destroyed. see function object that handles more than a single argument passed in deleter.
+
+#include <string>
+#include <fstream>   // for ofstream
+#include <memory>    // for shared_ptr
+#include <cstdio>    // for remove()
+
+class FileDeleter
+{
+  private:
+    std::string filename;
+  public:
+    FileDeleter (const std::string& fn)
+      : filename(fn) {
+      }
+    void operator () (std::ofstream* fp) {      // T is ofstream and T*
+      fp->close();                              // close.file
+      std::remove(filename.c_str());            // delete file
+    }
+};
+
+int main()
+{
+  // create and open temporary file:
+  std::shared_ptr<std::ofstream> fp(new std::ofstream("tmpfile.txt"),
+      FileDeleter("tmpfile.txt"));
+  ...
+}
+
+// second example: to use shared_ptrs to deal with shared memory
+
+#include <memory> // for shared_ptr
+#include <sys/mman.h> // for shared memory
+#include <fcntl.h>
+#include <unistd.h>
+#include <cstring> // for strerror()
+#include <cerrno> // for errno
+#include <string>
+#include <iostream>
+
+class SharedMemoryDetacher
+{
+  public:
+    void operator () (int* p) {
+      std::cout << "unlink /tmp1234" << std::endl;
+      if (shm_unlink("/tmp1234") != 0) {
+        std::cerr << "OOPS: shm_unlink() failed" << std::endl;
+      }
+    }
+};
+
+std::shared_ptr<int> getSharedIntMemory (int num)
+{
+  void* mem;
+  int shmfd = shm_open("/tmp1234", O_CREAT|O_RDWR, S_IRWXU|S_IRWXG);
+  if (shmfd < 0) {
+    throw std::string(strerror(errno));
+  }
+  if (ftruncate(shmfd, num*sizeof(int)) == -1) {
+    throw std::string(strerror(errno));
+  }
+  mem = mmap(nullptr, num*sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0);
+  if (mem == MAP_FAILED) {
+    throw std::string(strerror(errno));
+  }
+
+  // note: here
+  return std::shared_ptr<int>(static_cast<int*>(mem), SharedMemoryDetacher());
+}
+
+int main()
+{
+  // get and attach shared memory for 100 ints:
+  std::shared_ptr<int> smp(getSharedIntMemory(100));
+
+  // init the shared memory
+  for (int i=0; i<100; ++i) {
+    smp.get()[i] = i*42;               // see get
+  }
+  // deal with shared memory somewhere else:
+  ...
+
+  std::cout << "<return>" << std::endl;
+  std::cin.get();
+
+  // release shared memory here:
+  smp.reset();
+  ...
+}
+
+
+{deleter-form}
+As with shared_ptr, can set 'deleter' but use different form. p678 said that:
+
+By binding the deleter at compile time, unique_ptr avoids the run-time cost of an indirect call to
+its deleter. In contrast, by binding at run time, shared_ptr makes it easier for users to override
+the deleter. (significant cost?)
+
+shared_ptr<connection> p (&c, end_connection);
+unique_ptr<connection, decltype(end_connection)*> p ( &c, end_connection );
+
+note: Seems that it means that shared_ptr create deleter object at rumtime.
+
+template<typename _Tp1, typename _Deleter> __shared_ptr(_Tp1* __p, _Deleter __d)    // from ctor
+  ...
+__d(__p); // Call _Deleter on __p.  // from other function
 
 
 ={============================================================================
