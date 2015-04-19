@@ -114,11 +114,14 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_022| inheritance {static-type} {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
 |kt_dev_cpp_023| override {override-condition} {override-keyword}
 |kt_dev_cpp_024| abstract base class {refactoring}
-|kt_dev_cpp_025| template {debug-delete}
+|kt_dev_cpp_025| 
 |kt_dev_cpp_026| enum {enum-hack}
 |kt_dev_cpp_027| volatile
 |kt_dev_cpp_028| namespace {case-example} {unnamed-namespace}
 |kt_dev_cpp_029| nested class
+
+|kt_dev_cpp_050| template. debug-delete
+|kt_dev_cpp_051| template: type transformation
 
 |kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
 |kt_dev_cpp_101| ref: C++ under the hood, Scott Meyers
@@ -17401,734 +17404,7 @@ override. No when not use ABC and there are multiple overrides down the inherita
 
 
 ={============================================================================
-*kt_dev_cpp_025* template
-
-The types become known during complilation in generic programming whereas OOP deals with types that
-are not known until run times.
-
-The STL library algorithms are function template and containers are class template.
-
-
-{space-in-template-expression}
-The requirement to put a space between two closing template expressions has gone:
-
-vector<list<int> >;  // OK in each C++ version
-vector<list<int>>;   // OK since C++11
-
-
-{function-template}
-For function template, the compiler uses the argument of call to 'deduce' the template argument type
-which is to determine what type to 'bind' to the template parameter T.
-
-compare( 1, 0 );
-compare( vec1, vec2 );
-
-template <typename T>   // '<typename T>' is template param list
-int compare( const T& v1, const T& v2 )
-{
-  if( v1 < v2 ) return -1;
-  if( v2 < v1 ) return 1;
-  return 0;
-}
-
-<principle-to-write-generic-code>
-Here two important principles to write generic codes from this example:
-
-1. The function parameters in the templeate are reference to const.
-This makes the function runs faster and also it can be uses with types that cannot be copied such as
-unique_ptr. Why? do not need to copy.
-
-2. Used only < comparison. More genarally, reduce the requirement on underlying type. Type
-independence and portability. Can write it as:
-
-template <typename T>
-int compare( const T& v1, const T& v2 )
-{
-  if( v1 < v2 ) return -1;
-  if( v1 > v2 ) return 1;
-  return 0;
-}
-
-<example> 
-#include <iostream>
-#include <vector>
-
-template<typename T>
-void printElements( const T& col )
-{
-  for( const auto& elem : col )
-    std::cout << ":" << elem << std::endl;
-}
-
-int main()
-{
-  std::vector<int> v{ 1, 2, 3 };
-
-  for( auto ele : v )
-    std::cout << ":" << ele << std::endl;
-
-  printElements(v);
-}
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-# error case as should be 'typename U'
-template <typename T, U> inline T calc( const T&, const U& );
-
-# can use typename or class but recommands typename
-template <typename T, class U> inline T calc( const T&, const U& );
-
-
-<overloading-and-templates>
-function templetes can be overloaded by other templates or by ordinary nontemplate functions. The
-things to remember is:
-
-As shown function-matching, nontemplate and then the more speciailized function are preferred.
-
-
-{instantiation}
-Ordinarily, when call a function, the compiler needs to see only a declaration. Similarly, when use
-objects of class type, the class definition must be available but the definition of the member
-functions need not be present. As a result, put class definition and function declaration in header
-file and definition of ordinary and class member function is source files. 
-
-Templates are 'different' since the compiler generates code 'only' when use a template; instantiate
-a specific instance of the template. So to generate an instantiation, needs to have the code that
-defines a function and class template member function. As a result, headers includes definitions as
-well as declarations.
-
-Generic programming. 'instantiation' is a process that create a concrete 'independent' function or
-class from a template when compiling. Code generation and these compiler generated function or class
-are an 'instantiation' of the template. Must be defined in the same namespace that contains the
-original template. See p675 for C++ feature to control this.  note: what does it mean?
-
-
-{class-template}
-Unlike function-template, compiler 'cannot' deduce the type of parameter so user must provide
-'additional' information to instantiate it. That is an element type.
-
-Also it is up to the user to gurantee that the template argument support any operations that
-template uses, and that those operations behave correctly in the context in which the template uses
-them. Include headers for any type to instantiate that template.
-
-
-<example> 
-This is the original StrBlob class from C++P p455 which show how to implement a new collection type
-to share.
-
-This shows when shared_ptr is useful than own raii since this case don't have 'copy-controls' and
-use syn versions but not a problem as it has only one member which is shared_ptr.
-
-class StrBlob {
-  friend class StrBlobPtr;
-
-  public:
-    typedef std::vector<std::string>::size_type size_type;
-
-    StrBlob();
-    StrBlob( std::initializer_list<std::string> il );
-
-    size_type size() const { return data->size(); }
-    bool empty() const { return data->empty(); }
-
-    void push_back( const std::string &t ) { data->push_back(t); }
-    void pop_back();
-
-    std::string& front();
-    std::string& back();
-
-    // return a copy object like iterator. vector[0] and vector[size] that is off-the-end
-    //
-    // note: how the weak pointer in StrBlobPtr get set from *this
-    StrBlobPtr begin() { return StrBlobPtr(*this); }
-    StrBlobPtr end() { reutn StrBlobPtr(*this, data->size(); }
-
-  private:
-    std::shared_ptr<std::vector<std::string>> data;
-    void check( size_type i, const std::string &msg ) const;
-};
-
-# ctors
-
-StrBlob::StrBlob: data( make_shared<vector<string>> ()) {}
-StrBlob::StrBlob( initializer_list<string> il ) : data( make_shared<vector<string>> (il)) {}
-
-# see that return type is void when raise an exception.
-
-void StrBlob::check( size_type i, const string &msg ) const
-{
-  if( i >= data->size() )
-    throw out_of_range(msg);
-}
-
-string& StrBlob::front()
-{
-  check( 0, "front on empty StrBlob" );
-  return data->front();
-};
-
-string& StrBlob::back()
-{
-  check( 0, "back on empty StrBlob" );
-  return data->back();
-};
-
-string& StrBlob::pop_back()
-{
-  check( 0, "pop_back on empty StrBlob" );
-  return data->pop_back();
-};
-
-
-This is the template-version of the same. No longer specific to string.
-
-template<typename T>
-class Blob {
-  public:
-    typedef T value_type;
-    typedef typename std::vector<T>::size_type size_type; // <use-class-type-members>
-
-    Blob();
-    Blob( std::initializer_list<T> il );
-
-    size_type size() const { return data->size(); }
-    bool empty() const { return data->empty(); }
-
-    void push_back( const T &t ) { data->push_back(t); }
-    void pop_back();
-
-    T& front();
-    T& operator[](size_type i);
-
-  private:
-    std::shared_ptr< std::vector<T>> data;
-    void check( size_type i, const std::string &msg ) const;
-};
-
-
-<extra-information>
-Unlike function template, must provide the element type which is extra information and is template
-argument which binds to tempalte parameter. Use these argument to instantiate a 'specific' class
-from the template. constitutes an 'independent' class.  So 'specialization' is what compiler do.
-
-Blob<int> ia;
-Blob<int> ia2 = { 0, 1, 2, 3, 4 };
-Blob<string> names;
-
-These use the same "type-specific" version of Blob<int>. From these definitions, compiler will
-instantiate a class:
-
-template <> class Blob<int> {
-  typedef typename std::vector<int>::size_type size_type;
-  Blob();
-  Blob(std::initializer_list<int> il);
-  ...
-  private:
-    std::shared_ptr<std::vector<int>> data;
-    ...
-};
-
-
-<instantiated-type>
-A class template is used to instantiate a 'type' and an instantiated type always includes template
-arguments.
-
-shared_ptr< vector< T >>      -> shared_ptr< vector< string >>
-                                 shared_ptr< vector< int >>
-
-
-<template-member-function>
-For member functions of class template, it is instantiated 'only' if it is used and if not, it is
-not instantiated.
-
-To write a member function of class template in 'outside' of class definition, remember that the
-instantiated type is a new type and must say to which class the member belongs.
-
-template <typename T>
-void Blob<T>::check( size_type i, const std::string &msg ) const
-{
-  if( i >= data->size())
-    throw std::out_of_range(msg);
-}
-
-
-{template-friend}
-When a class contains a friend declaration, the class and the friend can independently be template
-or not.
-
-<one-to-one>
-The one-to-one friendship is the most common form of friendship from a class template to another
-template( class or function ).
-
-// forward declaration needed for friend declaration in Blob
-
-template <typename T> class BlobPtr;
-template <typename T> class Blob;
-template <typename T> bool operator==( const Blob<T> &, const Blob<T> & );
-
-template <typename T> class Blob {
-
-    // each intantiation of Blob grants access to the instantiation of BlobPtr and the equality
-    // operator with the same type. Use Blob's template parameter.
-
-    friend class BlobPt<T>;
-    friend bool operator==<T>( const Blob<T> &, const Blob<T> & );
-};
-
-note: Here intantiation means both intantiated type and objects.
-
-
-<one-to-many>
-Can also make every(all) instantiation(type) of another template its friend or may limit friendship
-to a specific instantiation.
-
-note: See C++P 665 for more.
-
-
-{template-static}
-As with a static in ordinary class, there must be exactly one definition of each static member. Each
-instantiation has its own instance of static members.
-
-template <typename T> class Foo {
-  public:
-    static std::size_t count() { return ctr; }
-    ...
-  private:
-      static std::size_t ctr;
-};
-
-template <typename T>
-size_t Foo<T>::ctr = 0;
-
-Foo<int> fi;
-
-auto ct = Foo<int>::count();     // via scope operator
-ct = fi.count();                 // via an object
-
-
-{use-class-type-members} <typename-keyword>
-Uses scope operator(::) to access both static member and type members. e.g., string::size_type. In
-nontemplate code, the compiler has access to the class definition and knows whether a name accessed
-through the scope operator is a type or static member.
-
-However, in template code, when it see code such as T::mem, won't know 'until' instantiation whether
-name is a type or a static member. By default, the language assumes that a name accessed through the
-scope operator is 'not' a type. So if want to use type member of template must 'explicitly' tell.
-
-template<typename T> 
-typename T::value_type top( const T& c )
-{
-  if( !c.empty() )
-    return c.book();
-  else
-    return typename T::value_type();      // "typename T::value_type" is a type
-}
-
-EC++42. This is called 'dependant' type names since it depends on the template parameter. This
-causes 'parsing' difficulty and this is why must tell it to compiler and use 'typename' but not
-class.
-
-template<typename T>
-void print2nd( const T& container )
-{
-  T::const_iterator iter( container.begin() );           // iter is dependant name
-  ...
-}
-
-template<typename T>
-void print2nd( const T& container )
-{
-  typename T::const_iterator iter( container.begin() );  // must use typename
-  ...
-}
-
-The exception to this is when typename is used in base class type. Suppose that if it have to use
-typename in this case, then how difficult it is to parse. Suppose Nested is a type(class) in this
-example.
-
-template<typename T>
-class Derived: public Base<T>::Nested {               // not use typename here
-  public:
-    explicit Derived(int x) : Base<T>::Nested(x) {    // not use typename here
-      typename Base<T>::Nested temp;                  // use as usual
-      ...
-    }
-    ...
-};
-
-
-Use typedef alias for a dependant name. This example is to create a local variable which is the type
-pointed by a iterator.
-
-template<typename iterT>
-void workWithIterator(iterT iter)
-{
-  typename std::iterator_traits<iterT>::value_type temp(*iter);
-  ...
-}
-
-template<typename iterT>
-void workWithIterator(iterT iter)
-{
-  typedef typename std::iterator_traits<iterT>::value_type value_type;
-  value_type temp(*iter);
-  ...
-}
-
-
-{template-default-argument}
-Under new standard, supports default argument for both function and class template while the earlier
-version support only for class.
-
-o function template
-
-The rewritten example of the previous example and see that F represent the type of a callable
-objects.
-
-template <typename T>
-int compare( const T& v1, const T& v2 )
-{
-  if( v1 < v2 ) return -1;
-  if( v2 < v1 ) return 1;
-  return 0;
-}
-
-template <typename T, typename F = less<T>>        // default template argument, the type of callable 
-int compare( const T &v1, const T &v2, F f = F())  // default function argument, F()
-{
-  if( f(v1, v2) ) return -1;
-  if( f(v2, v1) ) return 1;
-  return 0;
-}
-
-See what user can call.
-
-bool i = compare(0,42);
-
-Sales_data item1(cin), item2(cin);
-bool j = compare( item1, item2, compareIsbn );
-
-note: If type of item1 supports operator<() then the previous works and if not, this version using
-compareIsbn() works. Matter of choice?
-
-
-o class template
-
-template <typename T, typename container = vector<T>>
-class MyClass;
-
-template <typename T = int> 
-class Numbers {
-  public:
-    Numbers(T v = 0): val(v) {}
-  private:
-    T val;
-};
-
-Numbers<long double> lots_of_precision;
-
-The empty braket says we want the 'default' type to instantiate.
-
-Numbers<> average_precision;
-
-
-{member-template}
-Either an ordinary class or class template may have a member function that is itself a template;
-member template. See this word ordering since it summarise that it is member function and function
-template.
-
-note: member template may 'not' be virtual.
-
-<with-ordinary-class>
-The member template of ordinary class from C++P 672. This example is similar to the default
-unique_ptr and deleter since overloads operator(). To support any type, use template.
-
-// function object class as a replacement for delete
-class DebugDelete {
-  public:
-    DebugDelete( std::ostream& s = std::cerr) : os(s) {}
-
-    // note: as with any function template, the type of T is 'deduced'
-
-    template <typename T> void operator() (T* p) const
-    { os << "deleting unique_ptr" << std::endl; delete p; }
-
-  private:
-    std::ostream& os;               // note: reference-member
-};
-
-
-#include <iostream>
-#include <string>
-#include <typeinfo>
-
-using namespace std;
-
-class DebugDelete
-{
-  private:
-    ostream &os;
-
-  public:
-    DebugDelete(ostream &s = cerr) : os(s) {}
-
-    template<typename T>
-      void operator() (T* p) const
-      { os << "deleting " << typeid(p).name() << ", p = " << p << endl; delete p; }
-};
-
-int main()
-{
-  double *pd = new double();
-  int *pi = new int();
-  DebugDelete d;
-
-  cout << "in main" << endl;
-
-  d(pd); // now instantiated
-  d(pi); // now instantiated
-
-  cout << "end main" << endl;
-}
-
-in main
-deleting Pd, p = 0x9be7008
-deleting Pi, p = 0x9be7018
-end main
-
-Since it uses delete internally, can be used with unique_ptr:
-
-unique_ptr<int, DebugDelete> p( new int, DebugDelete() );
-unique_ptr<string, DebugDelete> p( new string, DebugDelete() );
-
-How will DebugDelete be instanticated for these cases? These are equivalent to:
-
-void DebugDelete::operator() (int*) const { delete p; }
-void DebugDelete::operator() (string*) const { delete p; }
-
-Why? Whenever unique_ptr's dtor is instantiated, DebugDelete's call operator will also be
-instantiated.
-
-After all, whether it is for ordinary class or class template, member template is function template
-so compiler 'deduce' the type of func template when used(instantiated) so these will be instantiated
-to correct type when deleter is called.
-
-
-<with-template-class>
-Both the class and member have their own, independent, template parameters so must provide both.
-
-template <typename T> class Blob {
-  template <typename It> Bolb(It b, It e);
-  ...
-};
-
-template <typename T>
-template <typename It>
-   Blob<T>::Blob(It b, It e): data(std::make_shared<std::vector<T>>(b,e)) {}
-
-Blob<int> a1( begin(iarray), end(iarray));
-Blob<int> a1( ivec.begin(), ivec.end());
-Blob<string> a1( svec.begin(), svec.end());
-
-As with "with-ordinary-class", function parameter types are 'deduced' as it is function template.
-
-
-{control-instantiation}
-The fact that instantiations are 'generated' when a template is used means that the same
-instantiation may appear in multiple object files. This overhead can become significant in large
-systems. Under new standard, can avoid this through explicit instantiation.
-
-That is to instruct compiler generate all members for specific type and to say there is somewhere in
-the program.
-
-// file1.cc
-
-// "instantiation declaration"
-extern template class Blob<string>;
-extern template int compare( const int&, const int& );
-
-// instantiation(code) will appear elsewhere
-Blob<string> sa1, sa2;
-
-// Blob<int>, initializer_list ctor, and copy ctor instantiated in this file.
-Blob<int> a1 = { 0, 1, 2, 3, 4 };
-Blob<int> a2(a1);
-
-// instantiation(code) will appear elsewhere
-int i = compare( a1[0], a2[0] );
-
-
-// file2.cc
-// compiler generate 'all' members when see "instantiation definition" and must link file1.o with
-// file2.o 
-
-template class Blob<string>;
-template int compare( const int&, const int& );
-
-Therefore, "instantiation definition" can be used only for types that can be used with every member
-function of a class template.
-
-
-{template-argument-deduction}
-For function template, this is process of determining the template arguments from the function arguments.
-
-<limited-conversion>
-Only allows two converison in a call to function template but not others such as derived-to-base,
-     arithmetic, and user defined conversion.
-
-o nonconst-to-const and array or function-to-pointer conversion.
-
-<more-than-one-type>
-The function template can have more than one type to allow normal conversion on the arguments.
-
-template <typename T>   // '<typename T>' is template param list
-int compare( const T& v1, const T& v2 )
-{
-  if( v1 < v2 ) return -1;
-  if( v2 < v1 ) return 1;
-  return 0;
-}
-
-long lng;
-compare( lng, 1024 );      // compare( long, int );
-
-This is an error since compare do not have the same type. To allow normal converison:
-
-template <typename A, typename B>
-int flexibleCompare( const A& v1, const B& v2 )
-{
-  if( v1 < v2 ) return -1;
-  if( v2 < v1 ) return 1;
-  return 0;
-}
-
-Of course, < operator must exist that can compare those types.
-
-<normal-conversion-for-ordinary-argument>
-template <typename T>
-ostream &print( ostream &os, const T &obj )
-{
-    return os << obj;
-}
-
-print( cout, 42 );         // print( ostream&, int )
-
-ofstream f("output");
-print( f, 10 );            // convert ofstream to ostream&
-
-
-{variadic-templates}
-A template function or class that can take varying number of parameters which is is called as a
-parameter pack. Two kinds: template parameter pack and function parameter pack(list).
-
-template <typename T, typename... Args>         // Args is template parameter pack
-void foo( const T &t, const Args& ... rest);    // rest is function parameter pack.
-
-int i = 0; double d = 3.14; string s = "how now brown cow";
-foo( i, s, 42, d );  // three parameters in the pack
-foo( s, 42, "hi" );  // two parameters in the pack
-foo( d, s );         // one parameters in the pack
-foo( "hi" );         // empty pack
-
-the compiler deduces the template parameter types and instantiate four different foo:
-
-void foo( const int&, const string&, const int&, const double&);
-void foo( const string&, const int&, const char[3]&);
-void foo( const double&, const string&);
-void foo( const char[3]&);
-
-<sizeof...-operator>
-C++11. Use the sizeof... operator to know how many elements are in a pack.
-
-template <typename ... Args> void g( Args ... args)
-{
-  cout << sizeof... (Args) << endl;    // number of type parameters
-  cout << sizeof... (args) << endl;    // number of function parameters
-}
-
-Determine what sizeof... (Args) and sizeof... (rest) return for all foo instances?
-
-Used GCC 4.6.3
-
-#include <iostream>
-#include <string>
-
-template <typename T, typename... Args>
-void foo(const T &t, const Args &... rest) 
-{
-  std::cout << "-------" << std::endl;
-  std::cout << sizeof... (Args) << std::endl;
-  std::cout << sizeof... (rest) << std::endl;
-}
-
-int main()
-{
-  int i = 0; double d = 3.14; std::string s = "how now brown cow";
-  foo( i, s, 42, d );  // three parameters in the pack
-  foo( s, 42, "hi" );  // two parameters in the pack
-  foo( d, s );         // one parameters in the pack
-  foo( "hi" );         // empty pack
-}
-
--------
-3
-3
--------
-2
-2
--------
-1
-1
--------
-0
-0
-
-<how-about-initializer-list>
-Can use an initializer-list to define a function that can take a varying number of arguments.
-However, the arguments must have the 'same' type.
-
-Variadic functions are used when we know neither the number nor the types of the arguments to
-process.
-
-<variadic-recursive>
-Variadic are often recursive on arguments in a pack. To stop the recustion, we also need nonvariadic
-funtion.
-
-template<typename T> 
-ostream &print( ostream &os, const T &t)
-{ return os << t; }
-
-template<typename T, typename... Args>
-ostream &print( ostream &os, const T &t, const Args& ... rest)
-{
-  os << t << ", ";            // print the first argument.
-  return print(os, rest...);  // recursive call; print the other arguments.
-}
-
-The key part is that the first argument in rest gets bound to t. That pops up a argument in the pack
-and the remaining in rest 'form' the pack for the next call until there is the last since variadic
-is only viable. 
-
-print( cout, i, s, 42 );
-...
-print( cout, s, 42 );
-print( cout, 42 );
-
-When the last remains, the variadic and the nonvariadic are viable and the nonvariadic gets called
-since it is more speciailized. Stop recursion.
-
-Note: The declaration of the nonvariadic version of print 'must' be before variadic version since be
-in scope when the variadic version is defined. Otherwise, the variadic will recurse indefinitely.
-
+*kt_dev_cpp_025* 
 
 {specialization}
 A specialization is a 'separate' defintion of the template in which one or more template parameters are
@@ -18735,6 +18011,829 @@ enclosing scope {
   }
 
 }
+
+
+={============================================================================
+*kt_dev_cpp_050* template. debug-delete
+
+The types become known during complilation in generic programming whereas OOP deals with types that
+are not known until run times.
+
+The STL library algorithms are function template and containers are class template.
+
+
+{space-in-template-expression}
+The requirement to put a space between two closing template expressions has gone:
+
+vector<list<int> >;  // OK in each C++ version
+vector<list<int>>;   // OK since C++11
+
+
+{function-template}
+For function template, the compiler uses the argument of call to 'deduce' the template argument type
+which is to determine what type to 'bind' to the template parameter T.
+
+compare( 1, 0 );
+compare( vec1, vec2 );
+
+template <typename T>   // '<typename T>' is template param list
+int compare( const T& v1, const T& v2 )
+{
+  if( v1 < v2 ) return -1;
+  if( v2 < v1 ) return 1;
+  return 0;
+}
+
+<principle-to-write-generic-code>
+Here two important principles to write generic codes from this example:
+
+1. The function parameters in the templeate are reference to const.
+This makes the function runs faster and also it can be uses with types that cannot be copied such as
+unique_ptr. Why? do not need to copy.
+
+2. Used only < comparison. More genarally, reduce the requirement on underlying type. Type
+independence and portability. Can write it as:
+
+template <typename T>
+int compare( const T& v1, const T& v2 )
+{
+  if( v1 < v2 ) return -1;
+  if( v1 > v2 ) return 1;
+  return 0;
+}
+
+<example> 
+#include <iostream>
+#include <vector>
+
+template<typename T>
+void printElements( const T& col )
+{
+  for( const auto& elem : col )
+    std::cout << ":" << elem << std::endl;
+}
+
+int main()
+{
+  std::vector<int> v{ 1, 2, 3 };
+
+  for( auto ele : v )
+    std::cout << ":" << ele << std::endl;
+
+  printElements(v);
+}
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+# error case as should be 'typename U'
+template <typename T, U> inline T calc( const T&, const U& );
+
+# can use typename or class but recommands typename
+template <typename T, class U> inline T calc( const T&, const U& );
+
+
+<overloading-and-templates>
+function templetes can be overloaded by other templates or by ordinary nontemplate functions. The
+things to remember is:
+
+As shown function-matching, nontemplate and then the more speciailized function are preferred.
+
+
+{instantiation}
+Ordinarily, when call a function, the compiler needs to see only a declaration. Similarly, when use
+objects of class type, the class definition must be available but the definition of the member
+functions need not be present. As a result, put class definition and function declaration in header
+file and definition of ordinary and class member function is source files. 
+
+Templates are 'different' since the compiler generates code 'only' when use a template; instantiate
+a specific instance of the template. So to generate an instantiation, needs to have the code that
+defines a function and class template member function. As a result, headers includes definitions as
+well as declarations.
+
+Generic programming. 'instantiation' is a process that create a concrete 'independent' function or
+class from a template when compiling. Code generation and these compiler generated function or class
+are an 'instantiation' of the template. Must be defined in the same namespace that contains the
+original template. See p675 for C++ feature to control this.  note: what does it mean?
+
+
+{class-template}
+Unlike function-template, compiler 'cannot' deduce the type of parameter so user must provide
+'additional' information to instantiate it. That is an element type.
+
+Also it is up to the user to gurantee that the template argument support any operations that
+template uses, and that those operations behave correctly in the context in which the template uses
+them. Include headers for any type to instantiate that template.
+
+
+<example> 
+This is the original StrBlob class from C++P p455 which show how to implement a new collection type
+to share.
+
+This shows when shared_ptr is useful than own raii since this case don't have 'copy-controls' and
+use syn versions but not a problem as it has only one member which is shared_ptr.
+
+class StrBlob {
+  friend class StrBlobPtr;
+
+  public:
+    typedef std::vector<std::string>::size_type size_type;
+
+    StrBlob();
+    StrBlob( std::initializer_list<std::string> il );
+
+    size_type size() const { return data->size(); }
+    bool empty() const { return data->empty(); }
+
+    void push_back( const std::string &t ) { data->push_back(t); }
+    void pop_back();
+
+    std::string& front();
+    std::string& back();
+
+    // return a copy object like iterator. vector[0] and vector[size] that is off-the-end
+    //
+    // note: how the weak pointer in StrBlobPtr get set from *this
+    StrBlobPtr begin() { return StrBlobPtr(*this); }
+    StrBlobPtr end() { reutn StrBlobPtr(*this, data->size(); }
+
+  private:
+    std::shared_ptr<std::vector<std::string>> data;
+    void check( size_type i, const std::string &msg ) const;
+};
+
+# ctors
+
+StrBlob::StrBlob: data( make_shared<vector<string>> ()) {}
+StrBlob::StrBlob( initializer_list<string> il ) : data( make_shared<vector<string>> (il)) {}
+
+# see that return type is void when raise an exception.
+
+void StrBlob::check( size_type i, const string &msg ) const
+{
+  if( i >= data->size() )
+    throw out_of_range(msg);
+}
+
+string& StrBlob::front()
+{
+  check( 0, "front on empty StrBlob" );
+  return data->front();
+};
+
+string& StrBlob::back()
+{
+  check( 0, "back on empty StrBlob" );
+  return data->back();
+};
+
+string& StrBlob::pop_back()
+{
+  check( 0, "pop_back on empty StrBlob" );
+  return data->pop_back();
+};
+
+
+This is the template-version of the same. No longer specific to string.
+
+template<typename T>
+class Blob {
+  public:
+    typedef T value_type;
+    typedef typename std::vector<T>::size_type size_type; // <use-class-type-members>
+
+    Blob();
+    Blob( std::initializer_list<T> il );
+
+    size_type size() const { return data->size(); }
+    bool empty() const { return data->empty(); }
+
+    void push_back( const T &t ) { data->push_back(t); }
+    void pop_back();
+
+    T& front();
+    T& operator[](size_type i);
+
+  private:
+    std::shared_ptr< std::vector<T>> data;
+    void check( size_type i, const std::string &msg ) const;
+};
+
+
+<extra-information>
+Unlike function template, must provide the element type which is extra information and is template
+argument which binds to tempalte parameter. Use these argument to instantiate a 'specific' class
+from the template. constitutes an 'independent' class.  So 'specialization' is what compiler do.
+
+Blob<int> ia;
+Blob<int> ia2 = { 0, 1, 2, 3, 4 };
+Blob<string> names;
+
+These use the same "type-specific" version of Blob<int>. From these definitions, compiler will
+instantiate a class:
+
+template <> class Blob<int> {
+  typedef typename std::vector<int>::size_type size_type;
+  Blob();
+  Blob(std::initializer_list<int> il);
+  ...
+  private:
+    std::shared_ptr<std::vector<int>> data;
+    ...
+};
+
+
+<instantiated-type>
+A class template is used to instantiate a 'type' and an instantiated type always includes template
+arguments.
+
+shared_ptr< vector< T >>      -> shared_ptr< vector< string >>
+                                 shared_ptr< vector< int >>
+
+
+<template-member-function>
+For member functions of class template, it is instantiated 'only' if it is used and if not, it is
+not instantiated.
+
+To write a member function of class template in 'outside' of class definition, remember that the
+instantiated type is a new type and must say to which class the member belongs.
+
+template <typename T>
+void Blob<T>::check( size_type i, const std::string &msg ) const
+{
+  if( i >= data->size())
+    throw std::out_of_range(msg);
+}
+
+
+{template-friend}
+When a class contains a friend declaration, the class and the friend can independently be template
+or not.
+
+<one-to-one>
+The one-to-one friendship is the most common form of friendship from a class template to another
+template( class or function ).
+
+// forward declaration needed for friend declaration in Blob
+
+template <typename T> class BlobPtr;
+template <typename T> class Blob;
+template <typename T> bool operator==( const Blob<T> &, const Blob<T> & );
+
+template <typename T> class Blob {
+
+    // each intantiation of Blob grants access to the instantiation of BlobPtr and the equality
+    // operator with the same type. Use Blob's template parameter.
+
+    friend class BlobPt<T>;
+    friend bool operator==<T>( const Blob<T> &, const Blob<T> & );
+};
+
+note: Here intantiation means both intantiated type and objects.
+
+
+<one-to-many>
+Can also make every(all) instantiation(type) of another template its friend or may limit friendship
+to a specific instantiation.
+
+note: See C++P 665 for more.
+
+
+{template-static}
+As with a static in ordinary class, there must be exactly one definition of each static member. Each
+instantiation has its own instance of static members.
+
+template <typename T> class Foo {
+  public:
+    static std::size_t count() { return ctr; }
+    ...
+  private:
+      static std::size_t ctr;
+};
+
+template <typename T>
+size_t Foo<T>::ctr = 0;
+
+Foo<int> fi;
+
+auto ct = Foo<int>::count();     // via scope operator
+ct = fi.count();                 // via an object
+
+
+{use-class-type-members} <typename-keyword>
+Uses scope operator(::) to access both static member and type members. e.g., string::size_type. In
+nontemplate code, the compiler has access to the class definition and knows whether a name accessed
+through the scope operator is a type or static member.
+
+However, in template code, when it see code such as T::mem, won't know 'until' instantiation whether
+name is a type or a static member. By default, the language assumes that a name accessed through the
+scope operator is 'not' a type. So if want to use type member of template must 'explicitly' tell.
+
+template<typename T> 
+typename T::value_type top( const T& c )
+{
+  if( !c.empty() )
+    return c.book();
+  else
+    return typename T::value_type();      // "typename T::value_type" is a type
+}
+
+EC++42. This is called 'dependant' type names since it depends on the template parameter. This
+causes 'parsing' difficulty and this is why must tell it to compiler and use 'typename' but not
+class.
+
+template<typename T>
+void print2nd( const T& container )
+{
+  T::const_iterator iter( container.begin() );           // iter is dependant name
+  ...
+}
+
+template<typename T>
+void print2nd( const T& container )
+{
+  typename T::const_iterator iter( container.begin() );  // must use typename
+  ...
+}
+
+The exception to this is when typename is used in base class type. Suppose that if it have to use
+typename in this case, then how difficult it is to parse. Suppose Nested is a type(class) in this
+example.
+
+template<typename T>
+class Derived: public Base<T>::Nested {               // not use typename here
+  public:
+    explicit Derived(int x) : Base<T>::Nested(x) {    // not use typename here
+      typename Base<T>::Nested temp;                  // use as usual
+      ...
+    }
+    ...
+};
+
+
+Use typedef alias for a dependant name. This example is to create a local variable which is the type
+pointed by a iterator.
+
+template<typename iterT>
+void workWithIterator(iterT iter)
+{
+  typename std::iterator_traits<iterT>::value_type temp(*iter);
+  ...
+}
+
+template<typename iterT>
+void workWithIterator(iterT iter)
+{
+  typedef typename std::iterator_traits<iterT>::value_type value_type;
+  value_type temp(*iter);
+  ...
+}
+
+
+{template-default-argument}
+Under new standard, supports default argument for both function and class template while the earlier
+version support only for class.
+
+o function template
+
+The rewritten example of the previous example and see that F represent the type of a callable
+objects.
+
+template <typename T>
+int compare( const T& v1, const T& v2 )
+{
+  if( v1 < v2 ) return -1;
+  if( v2 < v1 ) return 1;
+  return 0;
+}
+
+template <typename T, typename F = less<T>>        // default template argument, the type of callable 
+int compare( const T &v1, const T &v2, F f = F())  // default function argument, F()
+{
+  if( f(v1, v2) ) return -1;
+  if( f(v2, v1) ) return 1;
+  return 0;
+}
+
+See what user can call.
+
+bool i = compare(0,42);
+
+Sales_data item1(cin), item2(cin);
+bool j = compare( item1, item2, compareIsbn );
+
+note: If type of item1 supports operator<() then the previous works and if not, this version using
+compareIsbn() works. Matter of choice?
+
+
+o class template
+
+template <typename T, typename container = vector<T>>
+class MyClass;
+
+template <typename T = int> 
+class Numbers {
+  public:
+    Numbers(T v = 0): val(v) {}
+  private:
+    T val;
+};
+
+Numbers<long double> lots_of_precision;
+
+The empty braket says we want the 'default' type to instantiate.
+
+Numbers<> average_precision;
+
+
+{member-template}
+Either an ordinary class or class template may have a member function that is itself a template;
+member template. See this word ordering since it summarise that it is member function and function
+template.
+
+note: member template may 'not' be virtual.
+
+<with-ordinary-class>
+The member template of ordinary class from C++P 672. This example is similar to the default
+unique_ptr and deleter since overloads operator(). To support any type, use template.
+
+// function object class as a replacement for delete
+class DebugDelete {
+  public:
+    DebugDelete( std::ostream& s = std::cerr) : os(s) {}
+
+    // note: as with any function template, the type of T is 'deduced'
+
+    template <typename T> void operator() (T* p) const
+    { os << "deleting unique_ptr" << std::endl; delete p; }
+
+  private:
+    std::ostream& os;               // note: reference-member
+};
+
+
+#include <iostream>
+#include <string>
+#include <typeinfo>
+
+using namespace std;
+
+class DebugDelete
+{
+  private:
+    ostream &os;
+
+  public:
+    DebugDelete(ostream &s = cerr) : os(s) {}
+
+    template<typename T>
+      void operator() (T* p) const
+      { os << "deleting " << typeid(p).name() << ", p = " << p << endl; delete p; }
+};
+
+int main()
+{
+  double *pd = new double();
+  int *pi = new int();
+  DebugDelete d;
+
+  cout << "in main" << endl;
+
+  d(pd); // now instantiated
+  d(pi); // now instantiated
+
+  cout << "end main" << endl;
+}
+
+in main
+deleting Pd, p = 0x9be7008
+deleting Pi, p = 0x9be7018
+end main
+
+Since it uses delete internally, can be used with unique_ptr:
+
+unique_ptr<int, DebugDelete> p( new int, DebugDelete() );
+unique_ptr<string, DebugDelete> p( new string, DebugDelete() );
+
+How will DebugDelete be instanticated for these cases? These are equivalent to:
+
+void DebugDelete::operator() (int*) const { delete p; }
+void DebugDelete::operator() (string*) const { delete p; }
+
+Why? Whenever unique_ptr's dtor is instantiated, DebugDelete's call operator will also be
+instantiated.
+
+After all, whether it is for ordinary class or class template, member template is function template
+so compiler 'deduce' the type of func template when used(instantiated) so these will be instantiated
+to correct type when deleter is called.
+
+
+<with-template-class>
+Both the class and member have their own, independent, template parameters so must provide both.
+
+template <typename T> class Blob {
+  template <typename It> Bolb(It b, It e);
+  ...
+};
+
+template <typename T>
+template <typename It>
+   Blob<T>::Blob(It b, It e): data(std::make_shared<std::vector<T>>(b,e)) {}
+
+Blob<int> a1( begin(iarray), end(iarray));
+Blob<int> a1( ivec.begin(), ivec.end());
+Blob<string> a1( svec.begin(), svec.end());
+
+As with "with-ordinary-class", function parameter types are 'deduced' as it is function template.
+
+
+{control-instantiation}
+The fact that instantiations are 'generated' when a template is used means that the same
+instantiation may appear in multiple object files. This overhead can become significant in large
+systems. Under new standard, can avoid this through explicit instantiation.
+
+That is to instruct compiler generate all members for specific type and to say there is somewhere in
+the program.
+
+// file1.cc
+
+// "instantiation declaration"
+extern template class Blob<string>;
+extern template int compare( const int&, const int& );
+
+// instantiation(code) will appear elsewhere
+Blob<string> sa1, sa2;
+
+// Blob<int>, initializer_list ctor, and copy ctor instantiated in this file.
+Blob<int> a1 = { 0, 1, 2, 3, 4 };
+Blob<int> a2(a1);
+
+// instantiation(code) will appear elsewhere
+int i = compare( a1[0], a2[0] );
+
+
+// file2.cc
+// compiler generate 'all' members when see "instantiation definition" and must link file1.o with
+// file2.o 
+
+template class Blob<string>;
+template int compare( const int&, const int& );
+
+Therefore, "instantiation definition" can be used only for types that can be used with every member
+function of a class template.
+
+
+{function-template-explicit-arguments}
+To allow the user 'specify' the type of template arguments. Why? Since in some cases, not possible
+for the compiler to deduce the types and in others want to allow the user control it.
+
+<when-cannot-deduce>
+Since the resurn, T1, do not appear in the function parameter list, cannot be deduced. The caller
+'must' provide an "explicit template argument" on each call to sum. The user can choose whatever
+precision is approciate.
+
+template< typename T1, typename T2, typename T3 >
+T1 sum( T2, T3 );
+
+auto val3 = sum<long long>(i, lng);          // long long sum( int, long )
+
+
+<can-specify-all>
+The explicit template argument" matches from left to right and the below is poor design since to use
+T3, will have to specify all of them. BTW shows that it is possible to specify all of them.
+
+template< typename T1, typename T2, typename T3 >
+T3 alternative_sum( T2, T1 );
+
+alternative_sum<long long, int, long>(i, lng);
+
+
+<normal-conversion>
+As with <normal-conversion-for-ordinary-argument>, the same applies on "explicit arguments".
+
+long lng;
+
+compare( lng, 1024 );            // error since parameters do not match
+compare<long>( lng, 1024 );      // okay. compare( long, long )
+
+
+={============================================================================
+*kt_dev_cpp_051* template: type transformation
+
+In other cases, "explicit template argument" imposes a burden on the user. What's alternative?
+
+template< typename T > 
+??? &fcn( It beg, It end )
+{
+    // process the range
+    return *beg;  // return a reference to an element from the range
+}
+
+vector<int> vi = { 1, 2, 3, 4 };
+Blob<string> ca = { "hi", "bye" };
+
+auto &i = fcn( vi.begin(), vi.end() );    // should return int&
+auto &i = fcn( ca.begin(), ca.end() );    // should return string&
+
+Do not know the exact type to return but know that want that type to be a reference to the element
+type of the sequence.
+
+
+<trailing-return-type> C++11
+May use decltype(*beg) to get the type but beg don't exist until the parameter list has been seen.
+How to solve? The trailing return type allows us define the return type after the parameter list is
+seen.
+
+template< typename T > 
+auto &fcn( It beg, It end )    -> decltype(*beg)
+{
+    // process the range
+    return *beg;  // return a reference to an element from the range
+}
+
+
+<type-transformation>
+How to return value instead in this example? The problem is that we know almost nothing about the
+types we're passed. To obtain the element type (as opposed to reference to element), use "type
+transformation" template in the "type_traits" header.
+
+The remove_reference has one type parameter and public type memeber, type, which is the
+'referred-to-type'. 
+
+remove_reference<int&>     // type is int
+
+template< typename T > 
+auto &fcn( It beg, It end )    -> typename remove_reference<decltype(*beg)>::type
+{
+    // process the range
+    return *beg;  // return a reference to an element from the range
+}
+
+
+={============================================================================
+*kt_dev_cpp_052* template: argument deduction
+
+{template-argument-deduction}
+For function template, this is process of determining the template arguments from the function arguments.
+
+<limited-conversion>
+Only allows two converison in a call to function template but not others such as derived-to-base,
+     arithmetic, and user defined conversion.
+
+o nonconst-to-const and array or function-to-pointer conversion.
+
+<more-than-one-type>
+The function template can have more than one type to allow normal conversion on the arguments.
+
+template <typename T>   // '<typename T>' is template param list
+int compare( const T& v1, const T& v2 )
+{
+  if( v1 < v2 ) return -1;
+  if( v2 < v1 ) return 1;
+  return 0;
+}
+
+long lng;
+compare( lng, 1024 );      // compare( long, int );
+
+This is an error since compare do not have the same type. To allow normal converison:
+
+template <typename A, typename B>
+int flexibleCompare( const A& v1, const B& v2 )
+{
+  if( v1 < v2 ) return -1;
+  if( v2 < v1 ) return 1;
+  return 0;
+}
+
+Of course, < operator must exist that can compare those types.
+
+<normal-conversion-for-ordinary-argument>
+template <typename T>
+ostream &print( ostream &os, const T &obj )
+{
+    return os << obj;
+}
+
+print( cout, 42 );         // print( ostream&, int )
+
+ofstream f("output");
+print( f, 10 );            // convert ofstream to ostream&
+
+
+={============================================================================
+*kt_dev_cpp_052* template: type traits
+
+{variadic-templates}
+A template function or class that can take varying number of parameters which is is called as a
+parameter pack. Two kinds: template parameter pack and function parameter pack(list).
+
+template <typename T, typename... Args>         // Args is template parameter pack
+void foo( const T &t, const Args& ... rest);    // rest is function parameter pack.
+
+int i = 0; double d = 3.14; string s = "how now brown cow";
+foo( i, s, 42, d );  // three parameters in the pack
+foo( s, 42, "hi" );  // two parameters in the pack
+foo( d, s );         // one parameters in the pack
+foo( "hi" );         // empty pack
+
+the compiler deduces the template parameter types and instantiate four different foo:
+
+void foo( const int&, const string&, const int&, const double&);
+void foo( const string&, const int&, const char[3]&);
+void foo( const double&, const string&);
+void foo( const char[3]&);
+
+<sizeof...-operator>
+C++11. Use the sizeof... operator to know how many elements are in a pack.
+
+template <typename ... Args> void g( Args ... args)
+{
+  cout << sizeof... (Args) << endl;    // number of type parameters
+  cout << sizeof... (args) << endl;    // number of function parameters
+}
+
+Determine what sizeof... (Args) and sizeof... (rest) return for all foo instances?
+
+Used GCC 4.6.3
+
+#include <iostream>
+#include <string>
+
+template <typename T, typename... Args>
+void foo(const T &t, const Args &... rest) 
+{
+  std::cout << "-------" << std::endl;
+  std::cout << sizeof... (Args) << std::endl;
+  std::cout << sizeof... (rest) << std::endl;
+}
+
+int main()
+{
+  int i = 0; double d = 3.14; std::string s = "how now brown cow";
+  foo( i, s, 42, d );  // three parameters in the pack
+  foo( s, 42, "hi" );  // two parameters in the pack
+  foo( d, s );         // one parameters in the pack
+  foo( "hi" );         // empty pack
+}
+
+-------
+3
+3
+-------
+2
+2
+-------
+1
+1
+-------
+0
+0
+
+<how-about-initializer-list>
+Can use an initializer-list to define a function that can take a varying number of arguments.
+However, the arguments must have the 'same' type.
+
+Variadic functions are used when we know neither the number nor the types of the arguments to
+process.
+
+<variadic-recursive>
+Variadic are often recursive on arguments in a pack. To stop the recustion, we also need nonvariadic
+funtion.
+
+template<typename T> 
+ostream &print( ostream &os, const T &t)
+{ return os << t; }
+
+template<typename T, typename... Args>
+ostream &print( ostream &os, const T &t, const Args& ... rest)
+{
+  os << t << ", ";            // print the first argument.
+  return print(os, rest...);  // recursive call; print the other arguments.
+}
+
+The key part is that the first argument in rest gets bound to t. That pops up a argument in the pack
+and the remaining in rest 'form' the pack for the next call until there is the last since variadic
+is only viable. 
+
+print( cout, i, s, 42 );
+...
+print( cout, s, 42 );
+print( cout, 42 );
+
+When the last remains, the variadic and the nonvariadic are viable and the nonvariadic gets called
+since it is more speciailized. Stop recursion.
+
+Note: The declaration of the nonvariadic version of print 'must' be before variadic version since be
+in scope when the variadic version is defined. Otherwise, the variadic will recurse indefinitely.
 
 
 ={============================================================================
