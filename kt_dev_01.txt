@@ -121,7 +121,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_029| nested class
 
 |kt_dev_cpp_050| template. debug-delete
-|kt_dev_cpp_051| template: type transformation
+|kt_dev_cpp_051| template: explicit argument and type transformation
+|kt_dev_cpp_052| template: argument deduction
 
 |kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
 |kt_dev_cpp_101| ref: C++ under the hood, Scott Meyers
@@ -10925,16 +10926,16 @@ int* p2;
 ={============================================================================
 *kt_dev_lang_019* function pointer
 
-The function pointer points a particular 'type'. the type of pointer.
+{function-type}
+The function pointer points a particular 'type', function type.
 
 bool (*pf) ( const string &, const string & );
 
 bool bq = pf( "hello", "goodbye" );
 
-
-<function-type-and-function-pointer>
-The third parameter is "function-type" and is 'automatically' converted to function pointer which is
-a pointer to function type. So use lengthCompare fuction directly.
+<automatic-conversion>
+In this example, the third parameter is "function type" and when use function directly, it is
+'automatically' converted to function pointer. 
 
 void useBigger( const string &s1, const string &s2, bool pf( const string &, const string & ) );
 
@@ -10946,7 +10947,7 @@ The equivalent declaration but 'explicit'.
 
 void useBigger( const string &s1, const string &s2, bool (*pf)( const string &, const string & ) );
 
-So can use type alias and note that decltype() returns function type.
+Can use type alias and see that decltype() returns function type.
 
 typedef bool Func( const string &, const string & );
 typedef decltype( lengthCompare ) Func;                  // same
@@ -10958,10 +10959,30 @@ useBigger( s1, s2, Func );
 useBigger( s1, s2, FuncP );
 
 
-<member-function-pointer>
+{member-function-pointer}
 
 void (SystemClientEventRepository::*masCallback)
 (boost::shared_ptr<X>, const NS_ZINC::Value<Y> &) = &SystemClientEventRepository::eventsReceived;
+
+
+{function-template-pointer}
+The function pointer can points to the instantiation of function template.
+
+template <typename T> int compare( const T&, const T& );
+
+int (*pf1) ( const T&, const T& ) = compare;
+
+However, by looking at the function's parameter, not possible to determine a unique type for the
+template arguments.
+
+void func( int (*) (const string&, const string&) );
+void func( int (*) (const int&, const int&) );
+
+func( compare );     // error: which instantiation of compare?
+
+Can solve this ambiguity by using explicit template arguments.
+
+func( compare<int> );
 
 
 # ============================================================================
@@ -18591,14 +18612,17 @@ Therefore, "instantiation definition" can be used only for types that can be use
 function of a class template.
 
 
-{function-template-explicit-arguments}
+={============================================================================
+*kt_dev_cpp_051* template: type transformation
+
+{function-template-explicit-arguments} when use template type for a return
 To allow the user 'specify' the type of template arguments. Why? Since in some cases, not possible
 for the compiler to deduce the types and in others want to allow the user control it.
 
 <when-cannot-deduce>
 Since the resurn, T1, do not appear in the function parameter list, cannot be deduced. The caller
-'must' provide an "explicit template argument" on each call to sum. The user can choose whatever
-precision is approciate.
+'must' provide an "explicit template argument" on each call to sum. note: The user can choose
+whatever precision is approciate.
 
 template< typename T1, typename T2, typename T3 >
 T1 sum( T2, T3 );
@@ -18607,8 +18631,8 @@ auto val3 = sum<long long>(i, lng);          // long long sum( int, long )
 
 
 <can-specify-all>
-The explicit template argument" matches from left to right and the below is poor design since to use
-T3, will have to specify all of them. BTW shows that it is possible to specify all of them.
+The "explicit template argument" matches from left to right and the below is poor design since to
+use T3, will have to specify all of them. BTW shows that it is possible to specify all of them.
 
 template< typename T1, typename T2, typename T3 >
 T3 alternative_sum( T2, T1 );
@@ -18623,11 +18647,6 @@ long lng;
 
 compare( lng, 1024 );            // error since parameters do not match
 compare<long>( lng, 1024 );      // okay. compare( long, long )
-
-
-={============================================================================
-*kt_dev_cpp_051* template: type transformation
-
 In other cases, "explicit template argument" imposes a burden on the user. What's alternative?
 
 template< typename T > 
@@ -18677,12 +18696,15 @@ auto &fcn( It beg, It end )    -> typename remove_reference<decltype(*beg)>::typ
     return *beg;  // return a reference to an element from the range
 }
 
+note: See another example of explicit argument in template function pointer.
+
 
 ={============================================================================
 *kt_dev_cpp_052* template: argument deduction
 
 {template-argument-deduction}
-For function template, this is process of determining the template arguments from the function arguments.
+For function template, this is process of determining the template arguments from the function
+arguments. In other words, this is a binding from function parameter to template parameter.
 
 <limited-conversion>
 Only allows two converison in a call to function template but not others such as derived-to-base,
@@ -18727,6 +18749,63 @@ print( cout, 42 );         // print( ostream&, int )
 
 ofstream f("output");
 print( f, 10 );            // convert ofstream to ostream&
+
+
+{argument-deduction-and-reference}
+
+1. deduction from lvalue reference function parameters
+
+template <typename T> void f1( T& );
+
+f1(i);
+f1(ci);
+f1(5);      // error since & cannot bound to rvalue and must be an lvalue.
+
+template <typename T> void f1( const T& );
+
+f1(5);      // okay since const & can be bound to rvalue.
+
+so use "const T&" to pass 'any' type.
+
+
+2. deduction from rvalue reference function parameters
+
+template <typename T> void f1( const T&& );
+
+f3(5);      // T is int
+f3(i);      // T is int&
+
+In this case, T is deuced to "int &" due to collapising rule, C++P 688. (not understand fully). The
+important thing to remember is that can pass 'any' type of argument to T&& function parameter;
+rvalue or lvalue.
+
+<implication>
+This matters when write template.
+
+template <typename T> void f3( T&& val )
+{ 
+    T t = val;
+    t = fcn(t);
+    ...
+}
+
+o when call f3 on rvalue, T is int and "int t = val". so t and val is independant.
+o when call f3 on lvalue, T is int& and "int& t = val". so when change t, will change val as well.
+
+It is suprisingly difficult to write code that is correct when type is plain nonreference or
+reference type. In practice, rvlue reference used in one of two context: argument forwading or
+template overload.
+
+// const overloading
+Record lookup( account & );      // non-const version
+Record lookup( const account &); // const version
+
+// copy and move overloading
+void push_back( const X& );
+void push_back( X&& );
+
+template <typename T> void f( const T& );       // binds to lvalue and const rvalue
+template <typename T> void f( T&& );            // binds to nonconst rvalue
 
 
 ={============================================================================
