@@ -6693,6 +6693,136 @@ Future<typename boost::result_of<Functor(FutureValue<T>)>::type> Future<T>::then
 #endif                                                   
                                                         }
 
+
+<FB>
+NS_ZINC_OPEN
+
+class Dispatcher;
+typedef Dispatcher FutureDispatcher;
+
+namespace detail {
+    template <typename Functor> class BarrierWrapper;
+    class FutureBarrierImpl;
+}
+
+/**
+ * FutureBarrier is designed to aid synchronisation when making multiple
+ * asynchronous calls simultaneously.  FutureBarrier will call a given
+ * callback asynchronously once all the futures added to it have
+ * completed AND the FutureBarrier itself has gone out of scope.
+ *
+ * (NOTE: This means you must not keep a FutureBarrier alive after the method
+ * creating it returns; for example you must not pass around a shared_ptr to a
+ * FutureBarrier, and you must not make a FutureBarrier be a member of your
+ * class.)
+ *
+ * FutureBarrier is "FutureLike" in that it defines the functions setCallback
+ * and cancel() and thus can be used as an argument to
+ * Continuation::setCallback();
+ */
+class FutureBarrier : boost::noncopyable {
+public:
+    typedef void value_type;
+
+    /**
+     * Constructor
+     */
+    explicit FutureBarrier(FutureDispatcher& dispatcher);
+    ~FutureBarrier();
+
+    /**
+     * Add a Future to the barrier to delay the FutureBarrier from completing
+     * until the Future has completed.
+     *
+     * @param f The future to add. This can be any "FutureLike" object, such
+     *          as a Future, a Continuation, or even another FutureBarrier.
+     *
+     * @param c Callback to be called when the future "f" completes
+     *          *successfully*. It must have the signature:
+     *              void SuccessCallback(T);
+     *          where T is the value_type of the future "f".
+     *          Note that the parameter is T, not FutureValue<T>.
+     *          If the future "f" completes with an error, this callback will
+     *          not be called; and the "final" callback (set with setCallback)
+     *          will (eventually, once all other futures have completed) be
+     *          called with an error.
+     *
+     * Note: It is guaranteed that the callback given here will be called
+     * *before* the callback given in FutureBarrier::setCallback().
+     *
+     * Note: The FutureDispatcher you use should provide the guarantee that all
+     * callbacks will be dispatched on the same thread (which may be a
+     * different thread than the thread where you create the FutureBarrier and
+     * call addWithSuccessCallback). This way, the various callbacks you set
+     * with addWithSuccessCallback don't need to worry about synchronisation
+     * issues.
+     */
+    template <class FutureLike, typename SuccessCallback>
+    void addWithSuccessCallback(FutureLike f, SuccessCallback /* void (T) */ c);
+
+    /**
+     * Add a future to the barrier to delay the FutureBarrier callback until
+     * after the future has completed.
+     *
+     * This is distinct from addWithSuccessCallback in that this is called with a
+     * FutureValue<T> rather than just T, thus allowing finer grained control
+     * of error conditions.
+     *
+     * @param f The future to add.
+     *
+     * @param c The function to call once the future "f" is complete.
+     *          It must have the signature:
+     *              void Callback(FutureValue<T>);
+     *          where T is the value_type of the future "f".
+     *
+     * Note: It is guaranteed that the callback given here will be called
+     * *before* the callback given in FutureBarrier::setCallback().
+     */
+    template <class FutureLike, typename Callback>
+    void addWithCallback(FutureLike f, Callback /* void (FutureValue<T>) */ c);
+
+    /**
+     * Add a future to the barrier to delay the FutureBarrier callback until
+     * after the future has completed.
+     *
+     * The value returned by the completed future is ignored, as long as it is
+     * not an error. An error will cause this FutureBarrier to complete with
+     * the error, just like addWithSuccessCallback.
+     *
+     * @param f The future to add.
+     */
+    template <class FutureLike>
+    void add(FutureLike f);
+
+    /**
+     * Cancel the FutureBarrier.  The behaviour of this function depends on the
+     * template parameter CancellationPolicy.
+     */
+    void cancel(unsigned flags);
+
+    /**
+     * Set the "final" callback method to be invoked after all of the barrier's
+     * Futures have completed, successfully or otherwise.
+     *
+     * @param c The function to call once all the futures have completed.
+     *          This function should have the signature:
+     *              void (FutureValue<void>);
+     *          In this way FutureBarrier is interface compatible with
+     *          Future<void>.
+     */
+    template <typename Callback>
+    void setCallback(Callback c) const;
+
+    template <typename Callback>
+    void setCallback(FutureDispatcher& dispatcher, Callback c);
+private:
+    template <typename Functor, typename ValueType> friend class detail::BarrierWrapper;
+    detail::FutureBarrierImpl* impl;
+};
+
+NS_ZINC_CLOSE
+
+
 <promise>
 #ifndef ZINC_PROMISE_H_
 
@@ -7104,22 +7234,6 @@ private:
 EPG uses this:
 Package ctv.enhancedmetadata, Interface public interface EventRepository::getEventWindow
 
-// from textEPG
-//
-boost::shared_ptr<TextEPGEventWindowEventListener> listener = 
-   boost::make_shared<TextEPGEventWindowEventListener>();
-
-boost::shared_ptr<EventWindow>  EPG::createEventWindow( boost::shared_ptr<EventRepository> eventRepo)
-{
-    Future<boost::shared_ptr<EventWindow> > f = 
-        eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
-
-    boost::shared_ptr<EventWindow> newWindow = f.get();
-
-    return newWindow;
-}
-
-
 Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWindow(
         uint32_t startingServiceRow, uint32_t serviceCount,
         boost::posix_time::ptime startTime, int32_t seconds,
@@ -7132,6 +7246,8 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
     //
     // template<typename T>
     // inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
+    //
+    //   // note: 'new' FC
     //   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
     //   {}
     //
@@ -7166,6 +7282,34 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
     // {
     // 	return  *static_cast< detail::FutureContext<T>* >(context.get());
     // }
+}
+
+
+<1> call dbus call, set callback with that future, and add future and callback pair to future
+barrier. does it mean that FB copies future since fMasEvents is local?
+
+
+void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+{
+    NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
+
+    Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
+        metadataBroker->getEventSummariesByServices(recids, start, end);
+
+    bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
+}
+
+
+<2> calleb back from dbus for both fMasEvents and fDTTEvents?
+
+::FutureBar    <- from components on dbus?
+
+
+<3> 
+
+void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
+        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+{
 }
 
 
@@ -8414,6 +8558,58 @@ typedef struct                                                                ty
 } BcmNexus_Shared_Memory;
 
 
+04.20
+======
+
+#define NEXUS_INSPECT_NUM_ADECS       (2)
+#define NEXUS_INSPECT_NUM_PLAYBACKS   (2)
+#define NEXUS_INSPECT_NUM_PLAYPUMPS   (1)
+
+typedef struct {
+  NEXUS_AudioMixerHandle      mixer;
+  NEXUS_AudioPlaybackHandle   pcmPlayback[NEXUS_INSPECT_NUM_PLAYBACKS];
+  NEXUS_AudioDecoderHandle    audioDecoder[NEXUS_INSPECT_NUM_ADECS];
+  NEXUS_VideoDecoderHandle    videoDecoder;                                   // covered. both
+  NEXUS_StcChannelHandle      stcChannel;                                     // covered. both
+  NEXUS_Ac3EncodeHandle       ac3Encoder;                                     // covered. hmax
+  NEXUS_DmaHandle             dmaHandle;                                      // covered. hmax
+  NEXUS_VideoWindowHandle     videoWindow;                                    // covered. hmax
+  NEXUS_PlaypumpHandle        playpump[NEXUS_INSPECT_NUM_PLAYPUMPS];          // covered. both
+  pid_t                       resource_pid;              
+} NexusInspectCapsV0;
+
+1. if( caps_v0.videoDecoder ) : covered for both.
+
+static void printNexusManagerInfo( BcmNexus_Shared_Memory* sharedMem )
+{
+  // covered for both.
+  //
+  // NEXUS_PictureCtrlCommonSettings picture_settings;
+  // printf( "\tAc3EncodeHandle: 0x%x\n", (unsigned int)sharedMem->ac3Encoder );
+  // printf( "\tStcChannelHandle: 0x%x\n", (unsigned int)sharedMem->stcChannel );
+  // printf( "\tVideoDecoderHandle: 0x%x\n",(unsigned int)sharedMem->videoDecoder );
+  // printf( "\tVideoWindowHandle: 0x%x\n", (unsigned int)sharedMem->videoWindow );
+
+  // NEXUS_PictureCtrl_GetCommonSettings( sharedMem->videoWindow, &picture_settings );
+  // printf( "\t\tVideoDecoder contrast: %d\n", picture_settings.contrast );
+  // printf( "\t\tVideoDecoder brightness: %d\n", picture_settings.brightness );
+  // printf( "\t\tVideoDecoder saturation: %d\n", picture_settings.saturation );
+
+#ifdef NEXUS_DUAL_OUTPUT
+  printf( "\tSD DisplayHandle: 0x%x\n", (unsigned int)sharedMem->displaySD ) ;
+  printf( "\tSD VideoWindowHandle: 0x%x\n", (unsigned int)sharedMem->videoWindowSD );
+  NEXUS_PictureCtrl_GetCommonSettings( sharedMem->videoWindowSD, &picture_settings );
+  printf( "\t\tSD VideoDecoder contrast: %d\n", picture_settings.contrast );
+  printf( "\t\tSD VideoDecoder brightness: %d\n", picture_settings.brightness );
+  printf( "\t\tSD VideoDecoder saturation: %d\n", picture_settings.saturation );
+#endif // NEXUS_DUAL_OUTPUT
+  for(uint8_t i = 0; i < MAX_PUMP_NUM; ++i)
+  {
+    printf( "\tPlaypumpHandle[%d]: 0x%x\n", i, (unsigned int)sharedMem->playpump[i] );
+  }
+  printf( "\tDmaHandle: 0x%x\n", (unsigned int)sharedMem->dmaHandle );
+}
+
 02.24: (logs changes to rewrite git commits and commit history)
 ======
 1. OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh
@@ -9486,6 +9682,65 @@ Date:   Tue Mar 3 10:13:29 2015 +0000
 
 OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh
 
+04.21
+======
+<host>
+DEVARCH-8092: NexusInspect: Add the exclude project for PC host. 
+
+In order to support release of both OEMs when transition to new nexus tools is incomplete, this is a
+interim solution to pick up the previous for platforms that are not moved to the new approach yet
+and to pick up the new for platforms that already moved. 
+
+
+DEVARCH-8092: NexusInspect: Add more and the latest reports to the nexus-inspect. 
+
+Add all inspection reports from the previous implementation and also the
+latest from the architect group such as reports of audio decoder and STC.
+
+Here is the reports on Huawei 370 engineering release that implements the
+proposal.
+
+==================================================
+  Nexus inspect v0.1
+
+BKNI_Malloc(linuxuser): allocated:8788(39) freed:8788(39) peak:8788
+  StcChannelHandle         : 0xe12831e4
+  VideoDecoderHandle       : 0xe12850f8
+  Ac3EncodeHandle          : 0x0
+  VideoWindowHandle        : 0x0
+  DmaHandle                : 0x0
+  Pid                      : 0
+  PlaypumpHandle[0]        : 0x0
+  Started                  : 1
+  Coded                    : 1920 x 1088,  Display: 1920 x 1080
+  Current PTS              : 27953744
+  Num decoded frames       : 107242
+  Num displayed frames     : 214482
+  Started                  : 4201120
+  TSM                      : 4201156
+  Locked                   : 4201192
+  Sample rate              : 4201228
+  Num decoded frames       : 1
+  Current fifo depth       : 0.389481% (2042 of 524288)
+  PlaypumpHandle[0]        : 0x0
+  Started                  : 4201120
+  TSM                      : 4201156
+  Locked                   : 4201192
+  Sample rate              : 4201228
+  Num decoded frames       : 0
+  PlaypumpHandle[1]        : 0x0
+  STC timebase source      : NEXUS_TimebaseSourceType_ePcr
+  STC pid channel          : 0xcee16880
+  STC max PCR error        : 255
+  STC PCR track range      : NEXUS_TimebaseTrackRange_e61ppm
+  PID channel              : enabled
+  PID                      : 101
+  Transport type           : NEXUS_TransportType_eTs
+  Original transport type  : NEXUS_TransportType_eTs
+  Playback                 : false
+  CC errors                : 0
+BKNI_Malloc(linuxuser): allocated:8788(39) freed:8788(39) peak:8788
+==================================================
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
