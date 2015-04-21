@@ -208,6 +208,220 @@ int main()
   return 0;
 }
 
+template <class T>
+class MovingAverage
+{
+public:
+    MovingAverage(size_t initial_size=10)
+    {
+        resize(initial_size);
+    }
+
+    void reset()
+    {
+        accumulated_value = T();
+        head = 0;
+        tail = 0;
+    }
+
+    void resize(size_t new_size)
+    {
+        reset();
+        values.resize(new_size, T());
+    }
+
+    T add(T new_value)
+    {
+        const size_t max_size = values.size();
+        if((head + 1) % max_size == tail)
+        {
+            accumulated_value -= values[tail];
+            tail = (tail + 1) % max_size;
+        }
+        values[head] = new_value;
+        head = (head + 1) % max_size;
+        accumulated_value += new_value;
+
+        return value();
+    }
+
+    T value() const
+    {
+        return accumulated_value / size();
+    }
+
+    size_t size() const
+    {
+        return (head - tail + values.size()) % values.size();
+    }
+
+    size_t max_size() const
+    {
+        return values.empty() ? 0 : values.size() - 1; // there's always one empty slot
+    }
+
+private:
+    size_t head;
+    size_t tail;
+
+    std::vector<T> values;
+    T accumulated_value;
+};
+
+
+struct ProcStats
+{
+    long user;   // Time spent executing user applications (user mode).
+    long nice;   // Time spent executing user applications with low priority (nice).
+    long system; // Time spent executing system calls (system mode).
+    long idle;   // Idle time.
+    long iowait; // Time waiting for I/O operations to complete.
+    long irq;    // Time spent servicing interrupts.
+    long softirq;// Time spent servicing soft-interrupts.
+
+    ProcStats operator-(const ProcStats& other)
+    {
+        ProcStats res;
+        res.user    = other.user   - user;
+        res.nice    = other.nice   - nice;
+        res.system  = other.system - system;
+        res.idle    = other.idle   - idle;
+        res.iowait  = other.iowait - iowait;
+        res.irq     = other.irq    - irq;
+        res.softirq = other.softirq- softirq;
+
+        return res;
+    }
+
+    double cpu_utilisation() const
+    {
+        double cpu_total = user + nice + system + irq + softirq;
+        double cpu_idle  = idle + iowait;
+
+        return cpu_total / (cpu_total + cpu_idle) * 100; // in percentage
+    }
+};
+
+std::istream& operator>>(std::istream& in, ProcStats& st)
+{
+    std::string cpu;
+    if (in >> cpu)
+    {
+        in >> st.user >> st.nice >> st.system >> st.idle;
+        in >> st.iowait >> st.irq >> st.softirq;
+    }
+    return in;
+}
+
+
+class CpuProcStatsReader
+{
+public:
+    CpuProcStatsReader() : now_first(false)
+    {
+    }
+
+    ProcStats get()
+    {
+        std::string cpu;
+        std::ifstream f("/proc/stat");
+        ProcStats& st = curr();
+        f >> st;
+        now_first = !now_first;
+        return now_first ? stats.first - stats.second : stats.second - stats.first;
+    }
+
+private:
+    ProcStats& curr()
+    {
+        return now_first ? stats.first : stats.second;
+    }
+
+    std::pair<ProcStats, ProcStats> stats;
+    bool now_first;
+};
+
+
+int main(int argc, char **argv)
+{
+    unsigned int window_size = 20;
+    unsigned int sampling_period_ms = 100;
+    unsigned long timeout = 0;
+    double exit_treshold = 1.0;
+    std::string output_filename;
+
+    po::options_description desc("\nWaits until the system becomes idle and exits."
+                                 "\nOptions");
+    desc.add_options()
+            ("help,h", "Show this help")
+            ("window_size,w", po::value(&window_size), "Size of moving-average window (in number of values)")
+            ("sampling_period,s", po::value(&sampling_period_ms), "Number of milliseconds between each sample")
+            ("output,o", po::value(&output_filename), "File name to print the values to (default=stdout)")
+            ("exit_treshlod,e", po::value(&exit_treshold), "If specified specified (in %) - program will exit if "
+                                                           "CPU utilisation will fall below this value (default=1)")
+            ("timeout,t", po::value(&timeout), "Timeout in seconds (default=infinite)")
+            ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+    if (vm.count("help"))
+    {
+        std::cout << desc << std::endl;
+        return 0;
+    }
+
+    std::ofstream file;
+    std::ostream* os = &std::cout;
+    if(vm.count("output"))
+    {
+        file.open(output_filename.c_str());
+        os = &file;
+    }
+
+    *os << "sampling period: " << sampling_period_ms << " ms\n";
+    *os << "window size    : " << window_size << " samples\n";
+    *os << "exit threshold : " << exit_treshold << " %\n";
+    *os << "timeout        : " << timeout << " s" << std::endl;
+
+    MovingAverage<double> ma(window_size);
+    CpuProcStatsReader reader;
+
+    if(timeout)
+    {
+        timeout = timeout * 1000;      // convert timeout to ms
+        timeout += sampling_period_ms; // and add one sampling period
+    }
+
+    *os << std::setprecision(2) << std::fixed;
+    while(1)
+    {
+        const ProcStats& st = reader.get();
+        const double& avg = ma.add(st.cpu_utilisation());
+
+        *os << "CPU load (%)   : avg: " << avg;
+        *os << ", curr: " << st.cpu_utilisation() << "\r";
+        *os << std::flush;
+
+        if(avg < exit_treshold && ma.size() == ma.max_size())
+        {
+            *os << "\nexiting" << std::endl;
+            break;
+        }
+        usleep(sampling_period_ms * 1000);
+
+        if(timeout)
+        {
+            timeout -= sampling_period_ms;
+            if(timeout <= sampling_period_ms)
+            {
+                *os << "\ntimed-out" << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+    }
+    return EXIT_SUCCESS;
+}
 
 -------------------------------------------------------------------------------
 Copyright: see |ktkb|  vim:tw=100:ts=3:ft=help:norl:
