@@ -16164,7 +16164,7 @@ pair<string*, string*>
 StrVec::alloc_n_copy( const string *begin, const string *end )
 {
     // allocate space to hold as many elements as are in the range
-    auto data = alloc.allocate( end - begin );
+    auto data = alloc.allocate( end - begin );     // iterator-arithmetic
 
     // uninitialized_copy 'construct' copies of given elements in 'uninitialized' space.
     // return { begin, end }
@@ -16245,7 +16245,7 @@ void StrVec::reallocate()
     auto dest = newdata;      // start in the new array
     auto elem = elements;     // start in the old array
 
-    // note: construct() calls string's move ctor
+    // note: construct() calls string's move ctor. move existing elements.
     for( size_t i = 0; i != size(); ++i )
         alloc.construct( dest++, std::move(*elem++) );
 
@@ -16337,7 +16337,7 @@ for characters.
 
 <why-std-move>
 Since there is argument dependant lookup, if user defines move() then overloading rule picks up the
-right version. However, std::move is template and rvalue matches to any type so name collision are
+right version. However, std::move is template and rvalue matches to 'any' type so name collision are
 more likely but less likely to be intentional. Therefore, suggest fully qualified one, std::move().
 
 
@@ -18792,6 +18792,9 @@ template <typename T> void f3( T&& val )
 o when call f3 on rvalue, T is int and "int t = val". so t and val is independant.
 o when call f3 on lvalue, T is int& and "int& t = val". so when change t, will change val as well.
 
+note: In summary, when pass rvalue on rvalue reference parameter, T is "type" and when pass lvalue
+on rvalue parameter, T is "type &".
+
 It is suprisingly difficult to write code that is correct when type is plain nonreference or
 reference type. In practice, rvlue reference used in one of two context: argument forwading or
 template overload.
@@ -18806,6 +18809,31 @@ void push_back( X&& );
 
 template <typename T> void f( const T& );       // binds to lvalue and const rvalue
 template <typename T> void f( T&& );            // binds to nonconst rvalue
+
+
+<std-move-example>
+Again, copied from {copy-or-move}:
+
+Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in the second assign, both
+are viable but copy assign requires conversion to const. Hence move is used since it is exact match.
+
+In other words, cannot directly bind an rvalue reference to lvalue but can use move() to obtain an
+rvalue reference bound to an lvalue.
+
+The standard defines move() which is example that works on rvalue and lvalue arguments.
+
+template <typename T>
+typename remove_reference<T>::type&& move( T&& t )
+{
+    return static_cast<typename remove_reference<T>::type &&> (t);
+}
+
+string s1("hi!"), s2;
+
+s2 = std::move( string("bye") );       // temporary, rvalue.
+s2 = std::move( s1 );                  // lvalue.
+
+note: for more details on how this works, see C++P 690.
 
 
 ={============================================================================
