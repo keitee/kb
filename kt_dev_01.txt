@@ -123,6 +123,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_050| template. debug-delete
 |kt_dev_cpp_051| template: explicit argument and type transformation
 |kt_dev_cpp_052| template: argument deduction
+|kt_dev_cpp_053| template: variadic
+|kt_dev_cpp_060| template: how to initialize T member
 
 |kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
 |kt_dev_cpp_101| ref: C++ under the hood, Scott Meyers
@@ -14142,7 +14144,7 @@ error: cannot convert 'std::string' to 'std::string()' in assignment
 
 note: to make it as intended and this create a temporary and use copy initialzation. not useful.
 
-std::string source = source();
+std::string source = string();
 
 
 {initializer-list}
@@ -18837,7 +18839,7 @@ note: for more details on how this works, see C++P 690.
 
 
 ={============================================================================
-*kt_dev_cpp_052* template: type traits
+*kt_dev_cpp_053* template: variadic
 
 {variadic-templates}
 A template function or class that can take varying number of parameters which is is called as a
@@ -18859,12 +18861,13 @@ void foo( const string&, const int&, const char[3]&);
 void foo( const double&, const string&);
 void foo( const char[3]&);
 
-<sizeof...-operator>
+
+<variadic-sizeof-operator>
 C++11. Use the sizeof... operator to know how many elements are in a pack.
 
-template <typename ... Args> void g( Args ... args)
+template <typename... Args> void g( Args... args)
 {
-  cout << sizeof... (Args) << endl;    // number of type parameters
+  cout << sizeof... (Args) << endl;    // number of template parameters
   cout << sizeof... (args) << endl;    // number of function parameters
 }
 
@@ -18905,23 +18908,25 @@ int main()
 0
 0
 
-<how-about-initializer-list>
+
+<why-variadic> 
 Can use an initializer-list to define a function that can take a varying number of arguments.
 However, the arguments must have the 'same' type.
 
-Variadic functions are used when we know neither the number nor the types of the arguments to
-process.
+The point is that variadic functions are used when we know neither the number nor the types of the
+arguments to process.
+
 
 <variadic-recursive>
 Variadic are often recursive on arguments in a pack. To stop the recustion, we also need nonvariadic
 funtion.
 
-template<typename T> 
+template <typename T> 
 ostream &print( ostream &os, const T &t)
 { return os << t; }
 
-template<typename T, typename... Args>
-ostream &print( ostream &os, const T &t, const Args& ... rest)
+template <typename T, typename... Args>
+ostream &print( ostream &os, const T &t, const Args&... rest)
 {
   os << t << ", ";            // print the first argument.
   return print(os, rest...);  // recursive call; print the other arguments.
@@ -18929,7 +18934,7 @@ ostream &print( ostream &os, const T &t, const Args& ... rest)
 
 The key part is that the first argument in rest gets bound to t. That pops up a argument in the pack
 and the remaining in rest 'form' the pack for the next call until there is the last since variadic
-is only viable. 
+is only viable match. 
 
 print( cout, i, s, 42 );
 ...
@@ -18939,8 +18944,113 @@ print( cout, 42 );
 When the last remains, the variadic and the nonvariadic are viable and the nonvariadic gets called
 since it is more speciailized. Stop recursion.
 
-Note: The declaration of the nonvariadic version of print 'must' be before variadic version since be
-in scope when the variadic version is defined. Otherwise, the variadic will recurse indefinitely.
+note: The declaration of the nonvariadic version of print 'must' be 'before' variadic version, that
+is in scope, since be in scope when the variadic version is defined. Otherwise, the variadic will
+recurse indefinitely.
+
+
+<pack-expansion>
+Again, in the same example.
+
+template <typename T, typename... Args>
+ostream &print( ostream &os, const T &t, const Args&... rest)     // 1
+{
+  os << t << ", ";          
+  return print(os, rest...);                                      // 2
+}
+
+1, expand template pack to generate function pack
+2. expand function pack to call argument list of print()
+
+When expand function pack, can apply 'pattern' which applies on each elememt in the pack and
+'defines' the type of arguments.
+
+
+template <typename T> string debug_rep( const T &t );
+
+template <typename T, typename... Args>
+ostream &errorMsg( ostream &os, const Args&... rest)     // 1
+{
+  return print(os, debug_rep(rest)...);                  // pattern
+}
+
+This expands to:
+
+print( os, debug_rep(a1), debug_rep(a2), ... );
+
+This call expands:
+
+errorMsg( cerr, fcnName, code.num(), otherData, "other", item );
+
+print( cerr, debug_rep(fcnName), debug_rep(code.num()), 
+               debug_rep(otherData), debug_rep("other"), debug_rep(item) );
+
+note: debug_rep is function template and can be overloaded for many types.
+
+
+When write this:
+
+template <typename T, typename... Args>
+ostream &errorMsg( ostream &os, const Args&... rest)     // 1
+{
+  return print(os, debug_rep(rest...) );                 // pattern
+}
+
+print( cerr, fcnName, code.num(), otherData, "other", item );
+
+
+={============================================================================
+*kt_dev_cpp_054* template: specialization
+
+
+={============================================================================
+*kt_dev_cpp_060* template: how to initialize T member
+
+No problem to define T member when use template. How set initial value to them?
+
+1. Taken from the example of template default type
+
+template <typename T = int> 
+class Numbers {
+  public:
+    Numbers(T v = 0): val(v) {}
+  private:
+    T val;
+};
+
+However, it assumes that T would be integral type. How about user or class type?
+
+
+2. Uses copy assign with temporary, T().
+
+template <typename T>
+class MovingAverage
+{
+    public:
+        MovingAverage(size_t initial_size=10)
+        {
+            resize(initial_size);
+        }
+
+        void reset()
+        {
+            accumulated_value = T();
+            head = 0;
+            tail = 0;
+        }
+
+        void resize(size_t new_size)
+        {
+            reset();
+            values.resize(new_size, T());
+        }
+
+    private:
+        T accumulated_value;
+};
+
+
+3. Other way?
 
 
 ={============================================================================
