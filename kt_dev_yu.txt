@@ -4227,6 +4227,7 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
     
     boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents, hasStaleData);
 
+    // to say that EW creation is done?
     cmd.promise.complete(ew);
     cmd.promiseCompleted = true;
 
@@ -4234,8 +4235,7 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
     
     getEventsFromSystemAPI(cmd);
 
-    // note: return future
-    
+    // return future to EPG
     return p.getFuture();
 }
 
@@ -7295,6 +7295,8 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
     // 	}
     // }
 
+    getEventsFromSystemAPI(cmd);
+
     return p.getFuture();
 
     // note: ?? since there seems no Future<T>(FC&). HOW?
@@ -7317,13 +7319,18 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
 }
 
 
-<1> call dbus call, set callback with that future, and add future and callback pair to future
+<1> call dbus call, set callback with dbus call future, and add future and callback pair to future
 barrier. does it mean that FB copies future since fMasEvents is local?
-
 
 void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
 {
     NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
+
+    // 'cobalt' callback
+    void (SystemClientEventRepository::*masCallback)
+        (boost::shared_ptr<EventWindowCreateCommand>,
+         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
+        &SystemClientEventRepository::eventsReceived;
 
     Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
         metadataBroker->getEventSummariesByServices(recids, start, end);
@@ -7332,16 +7339,18 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
 }
 
 
-<2> calleb back from dbus for both fMasEvents and fDTTEvents?
+<2> when future is signaled from dbus
 
 ::FutureBar    <- from components on dbus?
 
 
-<3> 
+<3> calls registered callback from FB.
 
 void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCreateCommand> command,
         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
 {
+    // get reference of vector from a future   
+    const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
 }
 
 
