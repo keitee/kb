@@ -21853,12 +21853,14 @@ mock and to see if has expected initialize value and state.
 #1: See how to create mock object and use it for the rest using pointer.
 #2: Use setUp overloads
 
+// called by cppunit
 void setUp()
 {
     // this is a mock object
     mockEventRepo = boost::make_shared<NS_IRON_SYSTEM::MockEventRepositoryAsync>();
 }
 
+// each test calls this
 void setUp(MetadataSource source, bool useDTTHistory = true, bool skipPFCallsSetup = false, 
         bool enableEventCache = false, bool useBrokerMock = false)
 {
@@ -21910,6 +21912,7 @@ https://code.google.com/p/googlemock/
 
 https://code.google.com/p/googlemock/wiki/CookBook
 
+
 ={============================================================================
 *kt_dev_test_201* gmock: for dummies
 
@@ -21921,8 +21924,6 @@ When you write a prototype or test, often it's not feasible or wise to rely on r
 'entirely'. A mock object implements the same interface as a real object so it can be used as one,
 but lets you specify at run time how it will be used and what it should do; which methods will be
     called? in which order? how many times? with what arguments? what will they return? etc.
-
-note: rumtime?
 
 Note: It is easy to confuse the term fake objects with mock objects. Fakes and mocks actually mean
 very different things in the Test-Driven Development (TDD) community:
@@ -22163,7 +22164,7 @@ assertions. If a mock method is called more than expected or with wrong argument
 error immediately.
 
 5. When a mock is destructed, Google Mock will automatically check whether all expectations on it
-have been satisfied. 
+have been satisfied. note: this causes a test failure. 
 
 Here's an example: 
 
@@ -22195,14 +22196,15 @@ int main(int argc, char** argv)
 }
 
 As you might have guessed, this test checks that PenDown() is called at least once. If the painter
-object didn't call this method, your test will fail with a message like this:
+object didn't call this method, your test will 'fail' with a message like this:
 
 path/to/my_test.cc:119: Failure
 Actual function call count doesn't match this expectation:
 Actually: never called;
 Expected: called at least once.
 
-note: the painter object is one under test but not turtle.
+note: the painter object is one under test that uses a turtle. so here is mocking up "turtle" to
+test painter object.
 
 Tip 1: If you run the test from an Emacs buffer, you can hit <Enter> on the line number displayed in
 the error message to jump right to the failed expectation.
@@ -22302,7 +22304,8 @@ note: how does this macro expands?
 
 ** Matchers: What Arguments Do We Expect?
 
-When a mock function takes arguments, we must specify what arguments we are expecting; for example:
+When a mock function takes arguments, we 'must' specify what arguments we are expecting; for
+example:
 
 // Expects the turtle to move forward by 100 units.
 EXPECT_CALL(turtle, Forward(100));
@@ -22321,7 +22324,7 @@ using ::testing::_;
 // Expects the turtle to move forward.
 EXPECT_CALL(turtle, Forward(_));
 
-_ is an instance of what we call matchers. A matcher is like a predicate and can test whether an
+_ is an instance of what we call 'matchers'. A matcher is like a predicate and can test whether an
 argument is what we'd expect. You can use a matcher inside EXPECT_CALL() wherever a function
 argument is expected.
 
@@ -22369,7 +22372,7 @@ called four times?
 
 ** Actions: What Should It Do? <action-clause>
 
-Remember that a mock object doesn't really have a working implementation? We as users have to tell
+Remember that a mock object doesn't really have a working implementation? We as users have to 'tell'
 it "what to do when a method is invoked." This is easy in Google Mock.
 
 First, if the return type of a mock function is a built-in type or a pointer, the function has a
@@ -22409,6 +22412,7 @@ itself. What if the number you specified is larger than there are WillOnce() cla
 all WillOnce()s are used up, Google Mock will do the default action for the function every time
 (unless, of course, you have a WillRepeatedly().).
 
+<can-call-function>
 What can we do inside WillOnce() besides Return()? You can return a reference using
 ReturnRef(variable), or invoke a pre-defined function, among others.
 
@@ -22691,6 +22695,50 @@ You can also easily define actions overloaded on the number of parameters:
 
 ACTION_P(Plus, a) { ... }
 ACTION_P2(Plus, a, b) { ... }
+
+
+<example>
+/**
+ * These helper actions are for use with Google Mock objects.
+ *
+ * When returning a future from a mock object expectation, care is needed to
+ * make sure a new future is created each time the expectation is matched.
+ * This shows up as a problem when setCallback is called on the returned future.
+ *
+ * The problem is that when using something like:
+ *
+ * EXPECT_CALL( ... ).WillRepeatedly(Return(FunctionThatReturnsAFuture()));
+ *
+ * Google Mock will copy the future returned from `FunctionThatReturnsAFuture()`
+ * and always return the same future. This doesn't work for instance if you ever
+ * call setCallback() on that future, which will throw a
+ * DuplicateFutureCallback error on subsequent calls.
+ *
+ * Even this doesn't work, surprisingly:
+ *
+ * EXPECT_CALL( ... ).WillOnce(Return(FunctionThatReturnsAFuture()))
+ *                   .WillOnce(Return(FunctionThatReturnsAFuture()));
+ *
+ * Again, the same promise is returned. I'm not quite sure how that happens
+ * though.
+ *
+ * This can be used like this:
+ *
+ * EXPECT_CALL( ... ).WillOnce(returnNewCompletedFuture(someValue))
+ *
+ */
+
+ACTION(returnNewCompletedFuture) {
+    return completedFuture();
+}
+
+ACTION_P(returnNewCompletedFuture, value) {
+    return completedFuture<typename return_type::value_type>(value);
+}
+
+ACTION_P(returnNewExceptionalFuture, exception) {
+    return exceptionalFuture<typename return_type::value_type>(exception);
+}
 
 
 ={============================================================================

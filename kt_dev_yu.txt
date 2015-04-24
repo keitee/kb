@@ -42,8 +42,11 @@
 |kt_dev_uv_stack_113| stack: cal: metadata: summary data flow
 |kt_dev_uv_stack_114| stack: cal: metadata: wrapper and convert flow
 
+|kt_dev_uv_stack_200| stack: nickel: 
+|kt_dev_uv_stack_201| stack: nickel: 
+
 |kt_dev_uv_stack_120| stack: cal: future producer and event producer
-|kt_dev_uv_stack_121| stack: cal: test
+|kt_dev_uv_stack_121| stack: cal: unit test
 |kt_dev_uv_stack_114| stack: build pc target
 |kt_dev_uv_stack_115| stack: text epg
 |kt_dev_uv_stack_116| stack: future
@@ -51,7 +54,7 @@
 |kt_dev_uv_stack_118| stack: metadata and dbus
 |kt_dev_uv_stack_119| stack: sandbox
 
-|kt_dev_uv_stack_120| stack: cppunit
+|kt_dev_uv_stack_130| stack: cppunit
 
 |kt_dev_uv_stack_150| stack: network
 |kt_dev_uv_stack_200| stack: dbus
@@ -192,6 +195,8 @@ to close screen use Ctrl-A, k, y. Do not use Ctrl-C as it can kill processes run
 *kt_dev_uv_set_006* filegateway
 
 $ scp -r kit.park@filegateway.youview.co.uk:/export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP33_Eng_Release_20150331_for_YVHUAWEI-6751 ./
+
+$ ssh kit.park@filegateway.youview.co.uk ls -alR /export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP46_Release_20150424/
 
 
 ={============================================================================
@@ -5249,6 +5254,98 @@ Converter::operator()(const NS_COBALT_SYSTEM::Result& result,
 
 
 ={============================================================================
+*kt_dev_uv_stack_200* stack: nickel: 
+
+Media Playback 
+
+
+={============================================================================
+*kt_dev_uv_stack_201* stack: nickel: 
+
+class ZINC_LOCAL SystemMediaRecordCacheTest
+
+    void setUp()
+    {
+        systemLML = boost::make_shared< NS_NICKEL_SYSTEM::MockLocalMediaLibraryAsync >();
+        dispatcher = boost::make_shared< SingleThreadDispatcher >();
+        provisioningService = boost::make_shared<NS_COBALT_SYSTEM::MockProvisioningServiceAsync>();
+
+        <cache>
+        cache = MediaRecordCache::create( systemLML, provisioningService, dispatcher );
+    }
+
+    /**
+     * Set up expectations that are used by most tests. This won't return until
+     * the cache is populated.
+     *
+     * You can populate `systemMediaRecords` with a list of MediaRecords before
+     * calling this and that will be used to populate the cache.
+     */
+    void defaultSetUp()
+    {
+        EXPECT_CALL( *systemLML, getMediaRecords(_,_,_,_,_,_) )
+            .WillOnce( NS_ZINC::returnNewCompletedFuture( systemMediaRecords ) );
+
+        cache->populate().get(); // Wait for the cache to load.
+
+        // Avoid doing these sanity checks in every test.
+        if ( systemMediaRecords.size() )
+        {
+            CPPUNIT_ASSERT( !cache->empty() );
+        }
+        CPPUNIT_ASSERT_EQUAL( systemMediaRecords.size(), cache->size() );
+    }
+
+    void test_That_CacheRemainsConsistent_When_AMediaRecordIsUpdatedAtRoughlyTheSameTimeAsItIsDeleted()
+    {
+        systemMediaRecords = list_of( makeMR( "1" ) );
+
+        Promise< NS_NICKEL_SYSTEM::MediaRecord > p( *dispatcher );
+
+        EXPECT_CALL( *systemLML, getMediaRecord(_) )
+            .WillOnce( Return( p.getFuture() ) );
+
+        defaultSetUp();
+
+        CPPUNIT_ASSERT_EQUAL( size_t(1), cache->size() );
+
+        map<string, NS_NICKEL_SYSTEM::LibraryContentChangeType::Enum> changes;
+
+        changes["1"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::updated;
+        Future< boost::shared_ptr< map< string, LibraryContentChangeType::Enum > > >
+            updatedFuture = cache->applyUpdates( changes );
+
+        // At this point, the MediaRecordCache has made a request to
+        // getMediaRecord, which hasn't completed yet.
+
+        CPPUNIT_ASSERT_EQUAL( size_t(1), cache->size() );
+
+        changes.clear(); // Just to be sure, to be sure.
+        changes["1"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::deleted;
+        // Apply the deleted signal. This future shouldn't complete until after
+        // outstanding calls to getMediaRecord() have completed. It will be
+        // queued behind the in-flight processing of applyUpdates that we had
+        // before.
+        Future< boost::shared_ptr< map< string, LibraryContentChangeType::Enum > > >
+            deletedFuture = cache->applyUpdates( changes );
+
+        // Prove that the MediaRecord hasn't been deleted.
+        CPPUNIT_ASSERT_EQUAL( size_t(1), cache->size() );
+
+        p.complete( systemMediaRecords.at(0) );
+
+        deletedFuture.get();
+
+        // We can guarantee that we've always processed the updated notification
+        // before the deleted one.
+        CPPUNIT_ASSERT( updatedFuture.isComplete() );
+        // And we know that the cache is in a sensible state.
+        CPPUNIT_ASSERT_EQUAL( size_t(0), cache->size() );
+        CPPUNIT_ASSERT( cache->empty() );
+    }
+
+
+={============================================================================
 *kt_dev_uv_stack_120* stack: cal: future producer and event producer
 
 {future-dispatcher}
@@ -5608,47 +5705,40 @@ PASS: systemclientservicerepositorytest
 zb-make Uranium/Uranium.Client.System
 
 
-<test-cases>
-For enhanced metadata:
+{run-test}
+note: to run a single test and should match how it was built since it shall be run under virtual?
 
-test/metadata/SystemClientEventRepositoryTest.cpp
-454-        
-455-        CPPUNIT_ASSERT_MESSAGE("There should be an event returned", e);
-456-        
-457-        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].eventLocator, e->getIdentifier("locator"));
-458:        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].shortTitle["eng"], e->getTitle());
-459-        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].start, (uint32_t)to_time_t(e->getStart()));
-460-        CPPUNIT_ASSERT_EQUAL(getBBC1Events()[0].publishedDuration, (uint32_t)e->getDuration());
-461-    }
-462-    
+/data/builds/_virtual_/pc/zinc-build-root/debug-debian-7-x86_64/Uranium/Uranium.Client.System/test/metadata
 
+./systemclienteventrepositorytest --cases SystemClientEventRepositoryTest::testGetSynopsis
 
-test/metadata/StagedEventMetadataRetrievalTest.cpp
-222-        }
-223-        CPPUNIT_ASSERT_EQUAL(from_time_t(availabilityStart), ecli->getAvailabilityStart());
-224-        CPPUNIT_ASSERT_EQUAL(from_time_t(availabilityEnd), ecli->getAvailabilityEnd());
-225-        CPPUNIT_ASSERT_EQUAL(false, ecli->isAvailable());
-226:        CPPUNIT_ASSERT_EQUAL(edtt.shortTitle["eng"], ecli->getTitle());
-227-        CPPUNIT_ASSERT_EQUAL( (int32_t)edtt.publishedDuration, ecli->getDuration());
-228-        CPPUNIT_ASSERT_EQUAL(from_time_t(edtt.start), ecli->getStart());
-229-        CPPUNIT_ASSERT_EQUAL(edtt.programmeCrid, ecli->getIdentifier("progcrid"));
+itoryTest::testGetPresentEvent
+Metadata source is DTT_ONLY
+Overriding metadata source to DTT_ONLY
 
+.2015-03-16 14:18:31,062 INFO   140235723970336 iron
+/data/builds/_virtual_/pc/DEVARCH/Iron/IronReminders.System.Production/src/ProductionSystemFactory.cpp:43
+Using configuration file:
+/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/tests/uranium-client-system/share/copper-system-factory.plugin-config
 
-test/metadata/SystemClientEventWindowTestBase.h
-45-{
-46-
-47-    std::string eventTitleExtractor(boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> e)
-48-    {
-49:        return e->getTitle();
-50-    }
+2015-03-16 14:18:31,063 INFO   140235723970336 iron
+/data/builds/_virtual_/pc/DEVARCH/Iron/IronReminders.System.Production/src/ProductionSystemFactory.cpp:58
+Using configuration file:
+/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/tests/uranium-client-system/share/metadata/iron-system-factory.plugin-config
 
+2015-03-16 14:18:31,092 INFO   140235723970336 cadmium
+/data/builds/_virtual_/pc/DEVARCH/Cadmium/Cadmium.System.Fake/src/FakeLinearAcquisition.cpp:40 Using
+Cadmium DB file "/tmp/testmutabledatadir.6aPGJO/cadmium-system-fake/dvrdata.db"
 
-src/metadata/tools/textEPG.cpp
-92-    if(e->isPresent())
-93-    {
-94-        s = "*";
-95-    }
-96:    return s + e->getTitle();
+2015-03-16 14:18:31,092 INFO   140235723970336 cadmium
+/data/builds/_virtual_/pc/DEVARCH/Cadmium/Cadmium.System.Fake/src/FakeLinearAcquisition.cpp:44 Using
+Nickel DB file "/tmp/testmutabledatadir.6aPGJO/nickel-system-fake/lmldata.db"
+
+Caching media records...Caching services...done.
+Caching PF...done.
+done.
+
+OK (1)
 
 
 {xx}       
@@ -5661,9 +5751,10 @@ class ZINC_EXPORT InlineDispatcher : public Dispatcher
 
 typedef InlineDispatcher MultipleListenerEventDispatcher;
 
-{mock-er}
 
-<1> 
+{system-component-mocks}
+
+<1> system API
 /*
  *	include/EventRepositoryAsync.h
  *
@@ -5689,6 +5780,7 @@ public:
 
 	virtual NS_ZINC::Future< Event > getEvent(const std::string& eventLocator_in) = 0;
 
+   <getScheduleEvents>
 	virtual NS_ZINC::Future< std::vector< Event > > getScheduleEvents(
            const std::vector< std::string >& serviceLocators_in, 
            const uint32_t startTime_in, const uint32_t endTime_in) = 0;
@@ -5703,14 +5795,13 @@ protected:
 };
 
 
-<2> 
+<2>  system API mock
 
-MockEventRepositoryAsync.h from install root
+note: MockEventRepositoryAsync.h is from install root and see inheritance
 
 /*
  *	This file was automatically generated by dbusxx-xml2cpp; DO NOT EDIT!
  */
-
 namespace Zinc {
 namespace Metadata {
 
@@ -5725,6 +5816,7 @@ public:
 	typedef Event Mock_getEventRet;
 	MOCK_METHOD1(getEvent, NS_ZINC::Future< Mock_getEventRet > (const std::string&));
 
+   <getScheduleEvents>
 	typedef std::vector< Event > Mock_getScheduleEventsRet;
 	MOCK_METHOD3(getScheduleEvents, 
            NS_ZINC::Future< Mock_getScheduleEventsRet > 
@@ -5775,20 +5867,48 @@ public:
     }
 };
 
+
+{use-mock-in-test}
+
 note: this has overloads
 
 void setUp()
 {
     systemEventDispatcher = boost::make_shared<MultipleListenerEventDispatcher>();
 
-    // note this is mock object
+    // create mock ER
     mockEventRepo = boost::make_shared<NS_IRON_SYSTEM::MockEventRepositoryAsync>();
 
+    // this is not a mock function?
     mockEventRepo->setDispatcher(systemEventDispatcher);
 
+    // create mock SR
     mockServiceRepo = boost::make_shared<NS_COBALT_SYSTEM::MockUnifiedServiceRepositoryAsync>();
     mockServiceRepo->setDispatcher(systemEventDispatcher);
 }
+
+
+
+void setUpClientFactory()
+{
+    clientFactory = TestSupport::createCobaltClientFactory();
+}
+
+    /**
+     * Creates uranium::metadata::client::Factory and configures it for use in tests. 
+     * Note: this no longer uses the plugin mechanism to get the client factory.
+     * This is because the tests are linked with the static cobalt client system library.
+     */
+    SystemClientFactory* createCobaltClientFactory()
+    {
+        boost::shared_ptr<synchronisable_dispatcher> clientDispatcher = boost::make_shared<synchronisable_dispatcher>();
+        clientDispatcher->start();
+        
+        SystemClientFactory* clientFactory = new SystemClientFactory();
+        clientFactory->setDefaultDispatcher(clientDispatcher);
+        clientFactory->setFutureDispatcher(clientDispatcher);
+        return clientFactory;
+    }
 
 
 void setUp(MetadataSource source, bool useDTTHistory = true, bool skipPFCallsSetup = false, 
@@ -5884,41 +6004,7 @@ void testGetPresentEvent()
 }
 
 
-<test-run>
-note: to run a single test and should match how it was built since it shall be run under virtual?
-
-/data/builds/_virtual_/pc/zinc-build-root/debug-debian-7-x86_64/Uranium/Uranium.Client.System/test/metadata
-
-./systemclienteventrepositorytest --cases SystemClientEventRepositoryTest::testGetSynopsis
-
-itoryTest::testGetPresentEvent
-Metadata source is DTT_ONLY
-Overriding metadata source to DTT_ONLY
-
-.2015-03-16 14:18:31,062 INFO   140235723970336 iron
-/data/builds/_virtual_/pc/DEVARCH/Iron/IronReminders.System.Production/src/ProductionSystemFactory.cpp:43
-Using configuration file:
-/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/tests/uranium-client-system/share/copper-system-factory.plugin-config
-
-2015-03-16 14:18:31,063 INFO   140235723970336 iron
-/data/builds/_virtual_/pc/DEVARCH/Iron/IronReminders.System.Production/src/ProductionSystemFactory.cpp:58
-Using configuration file:
-/data/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/tests/uranium-client-system/share/metadata/iron-system-factory.plugin-config
-
-2015-03-16 14:18:31,092 INFO   140235723970336 cadmium
-/data/builds/_virtual_/pc/DEVARCH/Cadmium/Cadmium.System.Fake/src/FakeLinearAcquisition.cpp:40 Using
-Cadmium DB file "/tmp/testmutabledatadir.6aPGJO/cadmium-system-fake/dvrdata.db"
-
-2015-03-16 14:18:31,092 INFO   140235723970336 cadmium
-/data/builds/_virtual_/pc/DEVARCH/Cadmium/Cadmium.System.Fake/src/FakeLinearAcquisition.cpp:44 Using
-Nickel DB file "/tmp/testmutabledatadir.6aPGJO/nickel-system-fake/lmldata.db"
-
-Caching media records...Caching services...done.
-Caching PF...done.
-done.
-
-OK (1)
-
+{future-helpers-for-test}
 
 /**
  * File:   FutureMockActions.h
@@ -5982,6 +6068,46 @@ ACTION_P(returnNewExceptionalFuture, exception) {
 NS_ZINC_CLOSE
 
 #endif // ZINC_COMMON_FUTUREMOCKACTIONS_H
+
+
+<future-helpers>
+This simply complete a promise as if it's "really" completed.
+
+template<typename T>
+Future<T> completedFuture(const T& val);
+
+Future<void> completedFuture();
+
+/DEVARCH/Zinc/Zinc.Common/include/async/detail/async-helpers_Impl.h
+
+template<typename T>
+Future<T> completedFuture(const T& val) {
+    Promise<T> p;
+    p.complete(val);
+    return p.getFuture();
+}
+
+/DEVARCH/Zinc/Zinc.Common/src/async/async-helpers.cpp
+
+#include "../../include/async/async-helpers.h"
+
+NS_ZINC_OPEN
+
+Future<void> completedFuture(Dispatcher& dispatcher) {
+
+    Promise<void> p(dispatcher);
+    p.complete();
+    return p.getFuture();
+}
+
+Future<void> completedFuture() {
+
+    Promise<void> p;
+    p.complete();
+    return p.getFuture();
+}
+
+NS_ZINC_CLOSE
 
 
 ={============================================================================
@@ -7846,7 +7972,7 @@ root#
 
 
 ={============================================================================
-*kt_dev_uv_stack_120* stack: cppunit
+*kt_dev_uv_stack_130* stack: links with 3rd parties. cppunit, gmock and so on
 
 -DMACRO__pkgdatadir=\"/opt/zinc/share/uranium-client-system\" -m32 -I/opt/zinc/include  -isystem
 /opt/zinc/oss/include  -D_FORTIFY_SOURCE=2  -fstack-protector-all   -m32 -DNDEBUG -O3 -pipe -pthread
@@ -9367,7 +9493,7 @@ the related test cases to test getSynopsis() of various `SystemClientEvent` inst
 sources.
 
 
-DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+DEVARCH-9135: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
 
 The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
 
@@ -9383,7 +9509,7 @@ This commit fixes `SystemClientEvent` to use the right field for synopsis and to
 mappings between the Event Repository and SystemClientEvent for DTT and IP source. 
 
 
-DEVARCH-8092: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
+DEVARCH-9135: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
 
 The ctv.enhancedmetadata.Event.getSynopsis() doesn't return a value for DTT and IP source.
 
@@ -9868,6 +9994,9 @@ BKNI_Malloc(linuxuser): allocated:8788(39) freed:8788(39) peak:8788
 *kt_dev_uv_task_006* task:05: sort out test failures
 
 <f>
+
+DEVARCH/Uranium/Uranium.Client.System/test/local-media-library/SystemMediaRecordCacheTest.cpp
+
 15 Uranium/Uranium.Client.System (systemmediarecordcachetest)
 
 works okay on host:
