@@ -9156,7 +9156,7 @@ position, head points to the vacant and tail points to the last.
 init: head=tail=0;                       // can be any index
 empt: return head==tail;
 full: return (tail+1)%QSIZE == head;
-leng: length = (rear+QSIZE-front)%QSIZE;  // can get any time
+leng: length = (tail+QSIZE-head)%QSIZE;  // can get any time
 // do not think about this: haed: head = (front+1)%QSIZE;
 
 <do>
@@ -9230,41 +9230,6 @@ void DelQueue( Queue* queue, EntryType* pentry )
 //   std::cout << "del(" << queue->head << ")" << std::endl;
 }
 
-<manipulation-first-and-update-later>
-Unlike the above which update index first and get/set later, if change the order of operation then
-would it work?
-
-inQ
-{
-    queue->data[queue->tail+1] = entry; 
-    queue->tail = (queue->tail+1)%MAXSIZE;
-}
-
-deQ
-{
-    *pentry = queue->data[queue->head+1];
-    queue->head = (queue->head+1)%MAXSIZE;
-}
-
-NO since it cause out of index access and mangles structure. See:
-
-As this example, made it full and done three deletions then head, tail would be head(3) and tail(4).
-This means q has one item.
-
-0 1 2 3 4 -> 0 1 2 3 4 
-  * * * *          v * 
-                   h t
-
-Now calls add, q is not full and add three items: add [5] and set tail=0; this will access [5] which
-is out of range and overwrite queue->head because it is next to queue.entry. add [0] and set tail=1;
-add [1] and set tail=2; [5] is off-the-end access and mangles queue structure and causes a problem
-when delete items. 
-
-circular q with vacant                       circular q with count
-when t==3, t=4 from mod and inc; and [4]=x   when t==4, [4]=x; t=0 from mod and inc
-this is differnt from the straight line implementation
-
-
 void TraverseQueue( Queue* queue, void(*f)(int,int, EntryType))
 {
   int count=0, current=0;
@@ -9335,6 +9300,131 @@ int main()
 
   return 0;
 }
+
+<manipulation-first-and-update-later>
+Unlike the above which update index first and get/set later, if change the order of operation then
+would it work?
+
+inQ
+{
+    queue->data[queue->tail+1] = entry; 
+    queue->tail = (queue->tail+1)%MAXSIZE;
+}
+
+deQ
+{
+    *pentry = queue->data[queue->head+1];
+    queue->head = (queue->head+1)%MAXSIZE;
+}
+
+NO since it cause out of index access and mangles structure. See:
+
+As this example, made it full and done three deletions then head, tail would be head(3) and tail(4).
+This means q has one item.
+
+0 1 2 3 4 -> 0 1 2 3 4 
+  * * * *          v * 
+                   h t
+
+Now calls add, q is not full and add three items: add [5] and set tail=0; this will access [5] which
+is out of range and overwrite queue->head because it is next to queue.entry. add [0] and set tail=1;
+add [1] and set tail=2; [5] is off-the-end access and mangles queue structure and causes a problem
+when delete items. 
+
+circular q with vacant                       circular q with count
+when t==3, t=4 from mod and inc; and [4]=x   when t==4, [4]=x; t=0 from mod and inc
+this is differnt from the straight line implementation
+
+
+<with-moving-window>
+1. As with circular, has one vacant.
+
+0 1 2 3 4   : h == t == 0
+
+0 1 2 3 4   : h == 1
+*
+
+0 1 2 3 4   : h == 2
+* *
+
+0 1 2 3 4   : h == 3
+* * *
+
+0 1 2 3 4   : h == 4
+* * * *
+
+0 1 2 3 4   : full. t == 1, h == 0
+x * * * *
+
+0 1 2 3 4   : full. t == 2, h == 1
+* x * * * 
+
+2. No deQ interface and moves a window instead.
+
+3. Maintain average of window.
+
+template <class T>
+class MovingAverage
+{
+public:
+    MovingAverage(size_t initial_size=10)
+    {
+        resize(initial_size);
+    }
+
+    void reset()
+    {
+        accumulated_value = T();
+        head = 0;
+        tail = 0;
+    }
+
+    void resize(size_t new_size)
+    {
+        reset();
+        values.resize(new_size+1, T()); // since the actual size is 1 less (one empty slot)
+    }
+
+    T add(T new_value)
+    {
+        const size_t max_size = values.size();
+
+        // deQ. when full, do deQ rather than an error and by doing this, moves "widnows"
+        if((head + 1) % max_size == tail)
+        {
+            accumulated_value -= values[tail];
+            tail = (tail + 1) % max_size;
+        }
+        values[head] = new_value;
+        head = (head + 1) % max_size;
+        accumulated_value += new_value;
+
+        return value();
+    }
+
+    T value() const
+    {
+        return accumulated_value / size();
+    }
+
+    size_t size() const
+    {
+        return (head - tail + values.size()) % values.size();
+    }
+
+    size_t max_size() const
+    {
+        return values.empty() ? 0 : values.size() - 1; // there's always one empty slot
+    }
+
+private:
+    size_t head;
+    size_t tail;
+
+    std::vector<T> values;
+    T accumulated_value;
+};
+
 
 <example> use reference
 #include <iostream>
@@ -22112,7 +22202,7 @@ Actual function call count doesn't match this expectation:
 Actually: never called;
 Expected: called at least once.
 
-note: the painter object is one under test.
+note: the painter object is one under test but not turtle.
 
 Tip 1: If you run the test from an Emacs buffer, you can hit <Enter> on the line number displayed in
 the error message to jump right to the failed expectation.
@@ -22217,7 +22307,7 @@ When a mock function takes arguments, we must specify what arguments we are expe
 // Expects the turtle to move forward by 100 units.
 EXPECT_CALL(turtle, Forward(100));
 
-<right-expectation>
+<do-not-care-args>
 Sometimes you may not want to be too specific. Remember that talk about tests being too rigid? Over
 specification leads to brittle tests and obscures the intent of tests. Therefore we encourage you to
 specify only what's necessary - no more, no less. 
