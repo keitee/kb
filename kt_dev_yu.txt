@@ -45,7 +45,7 @@
 |kt_dev_uv_stack_200| stack: nickel: 
 |kt_dev_uv_stack_201| stack: nickel: 
 
-|kt_dev_uv_stack_120| stack: cal: future producer and event producer
+|kt_dev_uv_stack_120| stack: cal: dispatcher
 |kt_dev_uv_stack_121| stack: cal: unit test
 |kt_dev_uv_stack_114| stack: build pc target
 |kt_dev_uv_stack_115| stack: text epg
@@ -4170,26 +4170,26 @@ Package ctv.enhancedmetadata, Interface public interface EventRepository::getEve
 
 // from textEPG
 //
-boost::shared_ptr<TextEPGEventWindowEventListener> listener = 
-   boost::make_shared<TextEPGEventWindowEventListener>();
-
-boost::shared_ptr<EventWindow>  EPG::createEventWindow( boost::shared_ptr<EventRepository> eventRepo)
-{
-    Future<boost::shared_ptr<EventWindow> > f = 
-        eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
-
-    boost::shared_ptr<EventWindow> newWindow = f.get();
-
-    newWindow->addListener(listener);
-    return newWindow;
-}
+// boost::shared_ptr<TextEPGEventWindowEventListener> listener = 
+//    boost::make_shared<TextEPGEventWindowEventListener>();
+// 
+// boost::shared_ptr<EventWindow>  EPG::createEventWindow( boost::shared_ptr<EventRepository> eventRepo)
+// {
+//     Future<boost::shared_ptr<EventWindow> > f = 
+//         eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
+// 
+//     boost::shared_ptr<EventWindow> newWindow = f.get();
+// 
+//     newWindow->addListener(listener);
+//     return newWindow;
+// }
 
 <1>
 This scenario is to make a command to FD(future dispatcher) and to get response, events, back.
 
-/**
- * @brief A private struct capturing all the necessary data about the request to create a new EventWindow
- */
+// @brief A private struct capturing all the necessary data about the request to create a new
+// EventWindow
+
 struct EventWindowCreateCommand : public MetadataChangeListener {
 
     EventWindowCreateCommand(
@@ -4237,26 +4237,22 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
         event_collection_ptr intersectingEvents, Bounds missing,
         bool isMovingForward)
 {
-    // note: create Promise and set it with FD
-    
+    // note: create Promise(FD)
     NS_ZINC::Promise<boost::shared_ptr<EventWindow> > p(*getFutureDispatcher());
 
-    // note: Promise is copied to cmd
-
+    // note: create a cmd and Promise is copied to cmd that has *SCEW, and promise
     EventWindowCreateCommand cmd( p, newWindowLocation, newWindowLocation,
             intersectingEvents, microsec_clock::universal_time(),
             serviceRepo);
 
-    // note: create SCEW
-    
-    boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents, hasStaleData);
+    // create SCEW
+    boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents,
+            hasStaleData);
 
-    // to say that EW creation is done?
+    // note: this is to say that EW creation is done. so "promise" for EW creation.
     cmd.promise.complete(ew);
     cmd.promiseCompleted = true;
 
-    // note: this cmd has *SCEW, and promise
-    
     getEventsFromSystemAPI(cmd);
 
     // return future to EPG
@@ -4336,12 +4332,10 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
 }
 
 
-
-::FutureBar    <- from components on dbus?
+::FutureBar    <- from dbus and wait on future for calls?
 
 
 <callback-one>
-
 typedef std::vector<boost::shared_ptr<SystemClientEvent> > event_collection;
 typedef boost::shared_ptr<event_collection> event_collection_ptr;
 
@@ -4416,6 +4410,8 @@ void SystemClientEventRepository::eventsReceived(boost::shared_ptr<EventWindowCr
 
                 event_collection_ptr events = prepareEventsForNewEventWindow(*command, command->newMASEvents);
 
+                // note: signals "done"
+                
                 command->promise.complete(createEventWindow(*command, events));
                 command->promiseCompleted = true;
             }
@@ -5262,7 +5258,16 @@ Media Playback
 ={============================================================================
 *kt_dev_uv_stack_201* stack: nickel: 
 
-class ZINC_LOCAL SystemMediaRecordCacheTest
+class ZINC_LOCAL SystemMediaRecordCacheTest {
+
+    // test class defines its members as well
+private:
+
+    boost::shared_ptr< NS_NICKEL_SYSTEM::MockLocalMediaLibraryAsync >  systemLML;
+    boost::shared_ptr< Dispatcher >                                    dispatcher;
+    boost::shared_ptr<NS_COBALT_SYSTEM::MockProvisioningServiceAsync>  provisioningService;
+    boost::shared_ptr< MediaRecordCache >                              cache;
+    vector< NS_NICKEL_SYSTEM::MediaRecord >                            systemMediaRecords;
 
     void setUp()
     {
@@ -5296,57 +5301,116 @@ class ZINC_LOCAL SystemMediaRecordCacheTest
         CPPUNIT_ASSERT_EQUAL( systemMediaRecords.size(), cache->size() );
     }
 
-    void test_That_CacheRemainsConsistent_When_AMediaRecordIsUpdatedAtRoughlyTheSameTimeAsItIsDeleted()
+    /**
+     * Check if LibraryContentChange signals during getMediaRecords call are safe
+     */
+    void test_Update_during_Populate()
     {
-        systemMediaRecords = list_of( makeMR( "1" ) );
+        // makes an entry to SMR
 
-        Promise< NS_NICKEL_SYSTEM::MediaRecord > p( *dispatcher );
+        typedef vector< NS_NICKEL_SYSTEM::MediaRecord > MediaRecordsContainer;
+        MediaRecordsContainer
+        initialMediaRecords = list_of( makeMR( "1" ) ),
+        updatedMediaRecords = list_of( makeMR( "2", "contentId" ) )
+                                     ( makeMR( "3", "contentId" ) )
+                                     ( makeMR( "4", "anotherId" ) );
 
+        // Delay return of getMediaRecords
+        Promise< MediaRecordsContainer > delayedMediaRecords;
+
+        EXPECT_CALL( *systemLML, getMediaRecords(_,_,_,_,_,_) )
+            .WillOnce( Return( delayedMediaRecords.getFuture() ) );
+
+        // note: question is when and who calls getMediaRecord()?
+        
         EXPECT_CALL( *systemLML, getMediaRecord(_) )
-            .WillOnce( Return( p.getFuture() ) );
+            // event #1
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(0) ) )
+            // event #2
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(1) ) )
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(2) ) )
+            // event #3
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(2) ) );
 
-        defaultSetUp();
+        // /**
+        //  * Kick off a request to fetch all MediaRecords from the system. This call
+        //  * must be called by users of the MediaRecord cache.
+        //  *
+        //  * @return Future< void > A future that is completed as soon as the cache
+        //  *                        has been initially populated.
+        //  */
+        // NS_ZINC::Future< void > populate();
 
-        CPPUNIT_ASSERT_EQUAL( size_t(1), cache->size() );
+        // Will call getMediaRecords()
+        Future<void> cacheReady = cache->populate();
 
+        // Trigger MediaRecordCache::applyUpdatesSync()
+        // while getMediaRecords() hasn't returned yet
         map<string, NS_NICKEL_SYSTEM::LibraryContentChangeType::Enum> changes;
 
+        // Update event #1
         changes["1"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::updated;
+        changes["2"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::added;
+
+        // /**
+        //  * Asynchronously process the updates, possibly calling the system over
+        //  * dbus in order to fetch newly added / updated MediaRecords.
+        //  *
+        //  * This function won't block the calling thread but can block the dispatcher
+        //  * that is given to this cache.
+        //  *
+        //  * @return The future will be completed only when all of the updates have
+        //  *         been fully processed. The resulting map will contain a cleansed
+        //  *         list of changes that were actually applied.
+        //  */
+
         Future< boost::shared_ptr< map< string, LibraryContentChangeType::Enum > > >
             updatedFuture = cache->applyUpdates( changes );
 
-        // At this point, the MediaRecordCache has made a request to
-        // getMediaRecord, which hasn't completed yet.
+        // should return almost immediately
+        CPPUNIT_ASSERT( updatedFuture.wait_for(boost::posix_time::seconds(3)) );
 
-        CPPUNIT_ASSERT_EQUAL( size_t(1), cache->size() );
+        // shouldn't return any events
+        
+        // note: this is changes.size()
+        CPPUNIT_ASSERT_EQUAL( updatedFuture.get()->size(), 0);
 
-        changes.clear(); // Just to be sure, to be sure.
+
+        // Update event #2
+        changes.clear();
         changes["1"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::deleted;
-        // Apply the deleted signal. This future shouldn't complete until after
-        // outstanding calls to getMediaRecord() have completed. It will be
-        // queued behind the in-flight processing of applyUpdates that we had
-        // before.
-        Future< boost::shared_ptr< map< string, LibraryContentChangeType::Enum > > >
-            deletedFuture = cache->applyUpdates( changes );
+        changes["3"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::updated;
+        changes["4"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::added;
 
-        // Prove that the MediaRecord hasn't been deleted.
-        CPPUNIT_ASSERT_EQUAL( size_t(1), cache->size() );
+        updatedFuture = cache->applyUpdates( changes );
+        // should return almost immediately
+        CPPUNIT_ASSERT( updatedFuture.wait_for(boost::posix_time::seconds(3)) );
+        // shouldn't return any events
+        CPPUNIT_ASSERT_EQUAL( updatedFuture.get()->size(), 0);
 
-        p.complete( systemMediaRecords.at(0) );
+        // Let getMediaRecords() return which makes chacheReady promise complete
+        delayedMediaRecords.complete( initialMediaRecords);
 
-        deletedFuture.get();
+        // cacheReady future should not block infinitely
+        CPPUNIT_ASSERT( cacheReady.wait_for(boost::posix_time::seconds(3)) );
 
-        // We can guarantee that we've always processed the updated notification
-        // before the deleted one.
-        CPPUNIT_ASSERT( updatedFuture.isComplete() );
-        // And we know that the cache is in a sensible state.
-        CPPUNIT_ASSERT_EQUAL( size_t(0), cache->size() );
-        CPPUNIT_ASSERT( cache->empty() );
+        // Update event #3 - to make sure #1 and #2 have been already applied
+        changes.clear();
+        changes["4"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::updated;
+
+        updatedFuture = cache->applyUpdates( changes );
+        // should return in a reasonably time
+        CPPUNIT_ASSERT( updatedFuture.wait_for(boost::posix_time::seconds(3)) );
+        // should return a valid event
+        CPPUNIT_ASSERT_EQUAL( updatedFuture.get()->size(), 1);
+
+        // The cache should contain the updated records
+        CPPUNIT_ASSERT_EQUAL( updatedMediaRecords.size(), cache->size() );
     }
 
 
 ={============================================================================
-*kt_dev_uv_stack_120* stack: cal: future producer and event producer
+*kt_dev_uv_stack_120* stack: cal: dispatcher
 
 {future-dispatcher}
 
@@ -5427,6 +5491,77 @@ private: // Lockable concept
 };
 
 
+<worker-function>
+/*
+ * WorkerFunction.h
+ *
+ *  Created on: Oct 22, 2009
+ *      Author: john.sadler@bbc.co.uk
+ *
+ * Copyright (C) 2009 British Broadcasting Corporation
+ */
+
+#ifndef ZINC_WORKERFUNCTION_H_
+#define ZINC_WORKERFUNCTION_H_
+
+#include "macros.h"
+
+NS_ZINC_OPEN
+
+namespace detail {
+
+void maskSignals() ZINC_EXPORT;
+
+/**
+ * This functor is used to wrap any functor (or plain function) that will
+ * be executed by a worker thread. It's purpose is to ensure that the first
+ * thing the thread does is to ignore all signals delivered to the process.
+ *
+ * This is important, since posix does not define *which* thread a will
+ * receive a signal delivered to the process. It only says that the signal
+ * may be delivered to any thread that does not mask it. So, if we wish to have
+ * a sane signal handling strategy, then we should nominate a *single* specific
+ * thread to deal with all signals (and perhaps propagate them to other threads, as
+ * application events).
+ *
+ * Use this class like:
+ *
+ * boost::thread thread(WorkerFunction(myThreadFunctionOrFunctor));
+ *
+ */
+template <class NullaryFunctor>
+    class WorkerFunction {
+
+        public:
+            WorkerFunction(NullaryFunctor functor)
+                : workerFunction(functor)
+            {
+            }
+
+            void operator()() {
+                maskSignals();
+                workerFunction();
+            }
+
+        private:
+            NullaryFunctor workerFunction;
+    };
+
+}
+
+template <typename NullaryFunctor>
+detail::WorkerFunction<NullaryFunctor> makeWorkerFunction(NullaryFunctor fn)
+{
+    return detail::WorkerFunction<NullaryFunctor>(fn);
+}
+
+NS_ZINC_CLOSE
+
+
+#endif /* WORKERFUNCTION_H_ */
+
+
+<single-thread-dispatcher>
 /*
  * A Dispatcher implementation that 'owns' a single 'thread' on which it executes the
  * functors posted to it. Functors are executed strictly in the order that they are
@@ -5434,25 +5569,55 @@ private: // Lockable concept
  */
 class ZINC_EXPORT SingleThreadDispatcher : public Dispatcher
 {
-public:
-	SingleThreadDispatcher();
-	~SingleThreadDispatcher();
+    public:
+        SingleThreadDispatcher();
+        ~SingleThreadDispatcher();
 
-public: // from Dispatcher
-	virtual void post(boost::function<void ()> handler);
-	virtual int getPendingCount();
+    public: // from Dispatcher
+        virtual void post(boost::function<void ()> handler);
+        virtual int getPendingCount();
 
-private:
-	boost::asio::io_service io;
-	boost::thread thread;
+    private:
+        boost::asio::io_service io;
+        boost::thread thread;
 };
+
+SingleThreadDispatcher:: SingleThreadDispatcher()
+ : thread(makeWorkerFunction(boost::bind(&run, &io)))
+{
+}
+
+SingleThreadDispatcher::~SingleThreadDispatcher()
+{
+    io.stop();
+    thread.join();
+}
+
+static void run(boost::asio::io_service* io) 
+{
+    boost::asio::io_service::work work(*io);
+    while (1) {
+        try {
+            // because of the io_service::work above the only reason this
+            // will return is if io.stop() is called from ~SingleThreadDispatcher()
+            // destructor
+            io->run();
+            break;
+        }
+        catch (...) {
+            // Exceptions thrown in functors posted to the io_service are
+            // propogated up to the caller of run().  We wish to ignore them
+        }
+    }
+}
+
 
 /**
  * Post a functor to the dispatcher, and put it on the pending dispatch queue.
  */
 void SingleThreadDispatcher::post(boost::function<void ()> handler)
 {
-	io.post(handler);
+    io.post(handler);
 }
 
 
@@ -6338,6 +6503,16 @@ public:
 			value = result;
 		}
 		doPostSetActionsAndUnlock(lock);
+
+      // note: this will post functor to dispatcher thread
+      //
+      // void FutureContextBase::scheduleCallback()
+      // {
+      // 	assert(clientDispatcher);
+      // 	boost::intrusive_ptr<FutureContextBase> ip(this);
+      // 	clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+      // 	cond.notify_all();
+      // }
 	}
 	
 	template <typename Handler>
@@ -6350,6 +6525,42 @@ public:
 
 	T value;
 };
+
+
+void FutureContextCommonImpl::setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, 
+        FutureDispatcher* clientDispatcher_)
+{
+    // It is safe to read this->clientDispatcher without holding the lock because
+    // it is word sized and will only be assigned to at initialisation time and
+    // below (where it's guaranteed to be assigned to only once).
+    FutureDispatcher* d = clientDispatcher_ ? clientDispatcher_ : this->clientDispatcher;
+    if (!d) {
+        throw CallbackSetWithoutDispatcherException();
+    }
+    Dispatcher::work tryWork(*d);
+
+    boost::mutex::scoped_lock lock(this->mutex);
+
+    if (!shouldCallCompletionHandler)
+    {
+        throw NS_ZINC::CancelledFuture();
+    }
+    if (forDispatch)
+    {
+        throw DuplicateFutureCallback();
+    }
+    // Client can choose an alternate dispatcher when they call setCallback()
+    clientDispatcher = d;
+    this->work.swap(tryWork);
+    completionHandler = fn;
+    forDispatch = true; // we are responsible for dispatching the completion handler
+    bool oldCompleted = completed;
+    lock.unlock();
+    if (oldCompleted)
+    {
+        scheduleCallback();
+    }
+}
 
 
 <futurevalue>
@@ -6871,8 +7082,7 @@ Future<typename boost::result_of<Functor(FutureValue<T>)>::type> Future<T>::then
                                                         }
 
 
-<FB>
-NS_ZINC_OPEN
+<future-barrier>
 
 class Dispatcher;
 typedef Dispatcher FutureDispatcher;
@@ -6997,7 +7207,31 @@ private:
     detail::FutureBarrierImpl* impl;
 };
 
-NS_ZINC_CLOSE
+
+// Callback is a functor with the signature:
+//     void (FutureValue<T>);
+template <class FutureLike, typename Callback>
+inline void FutureBarrier::addWithCallback(FutureLike f, Callback c) {
+    typedef typename FutureLike::value_type T;
+    // Concept check for nicer error messages:
+    ZINC_CHECK_CONCEPT(( c(LValue<FutureValue<T> >()) ));
+
+    impl->continueOn(f, boost::bind(c, _2));
+}
+
+
+// Callback is a functor with the signature:
+//     void (FutureBarrierImpl&, FutureValue<T>);
+template <class FutureLike, typename Callback>
+void FutureBarrierImpl::continueOn(FutureLike f, Callback c) {
+    typedef typename FutureLike::value_type T;
+    // Concept check for nicer error messages:
+    ZINC_CHECK_CONCEPT(( c(*this, LValue<FutureValue<T> >()) ));
+
+    inc();
+    // FIXME: if Callback copy constructor fails we leak
+    f.setCallback(dispatcher, detail::barrierWrap(this, c));
+}
 
 
 <promise>
@@ -7404,7 +7638,6 @@ private:
 
 ={============================================================================
 *kt_dev_uv_stack_117* stack: future use
-
 
 <0> promise and future creation
 
