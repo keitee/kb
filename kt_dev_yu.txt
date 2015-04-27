@@ -54,7 +54,7 @@
 |kt_dev_uv_stack_118| stack: metadata and dbus
 |kt_dev_uv_stack_119| stack: sandbox
 
-|kt_dev_uv_stack_130| stack: cppunit
+|kt_dev_uv_stack_130| stack: links with 3rd parties. cppunit, gmock and so on
 
 |kt_dev_uv_stack_150| stack: network
 |kt_dev_uv_stack_200| stack: dbus
@@ -522,7 +522,7 @@ zb-virtual-slave zb-make
       }
 
       // [zb]
-      // 	build-dir = /data/builds
+      // build-dir = /data/builds
 
       do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
 
@@ -559,6 +559,10 @@ zb-virtual-slave zb-make
       ++ export ZINC_EXCLUDE_PROJECTS=Polonium.NexusInspect
       ++ ZINC_EXCLUDE_PROJECTS=Polonium.NexusInspect
    }
+
+   + /home/kpark/source/zinc-git-tools/zb/zb-exec-shell
+      source $(scriptDir)/zb-load-config.sh
+      source ${slave_dir}/DEVARCH/*/*/setvars-${ZB_HOST_CONFIG}.sh
 }
 
 
@@ -5256,7 +5260,12 @@ Media Playback
 
 
 ={============================================================================
-*kt_dev_uv_stack_201* stack: nickel: 
+*kt_dev_uv_stack_201* stack: nickel: tests
+
+export URANIUM_LOGGING_RULE="INFO,STDOUT"
+Uranium/Uranium.Client.System/test/local-media-library/systemmediarecordcachetest 
+
+DEVARCH/Uranium/Uranium.Client.System/test/local-media-library/SystemMediaRecordCacheTest.cpp
 
 class ZINC_LOCAL SystemMediaRecordCacheTest {
 
@@ -5311,9 +5320,9 @@ private:
         typedef vector< NS_NICKEL_SYSTEM::MediaRecord > MediaRecordsContainer;
         MediaRecordsContainer
         initialMediaRecords = list_of( makeMR( "1" ) ),
-        updatedMediaRecords = list_of( makeMR( "2", "contentId" ) )
-                                     ( makeMR( "3", "contentId" ) )
-                                     ( makeMR( "4", "anotherId" ) );
+        updatedMediaRecords = list_of( makeMR( "2", "contentId" ) )     // 0
+                                     ( makeMR( "3", "contentId" ) )     // 1
+                                     ( makeMR( "4", "anotherId" ) );    // 2
 
         // Delay return of getMediaRecords
         Promise< MediaRecordsContainer > delayedMediaRecords;
@@ -5325,12 +5334,12 @@ private:
         
         EXPECT_CALL( *systemLML, getMediaRecord(_) )
             // event #1
-            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(0) ) )
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(0) ) ) "2"
             // event #2
-            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(1) ) )
-            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(2) ) )
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(1) ) ) "3"
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(2) ) ) "4"
             // event #3
-            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(2) ) );
+            .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(2) ) ); "4"
 
         // /**
         //  * Kick off a request to fetch all MediaRecords from the system. This call
@@ -5340,14 +5349,38 @@ private:
         //  *                        has been initially populated.
         //  */
         // NS_ZINC::Future< void > populate();
+        //
+        // Get all the linear MediaRecords.
+        //
+        // Future< vector< NS_NICKEL_SYSTEM::MediaRecord > > future = lml->getMediaRecords();
+        //
+        // cacheReadyFuture.setCallback( *dispatcher,
+        //                          boost::bind( &MediaRecordCache::replayInitialUpdates,
+        //                            shared_from_this(), _1 ));
+        //
+        // void MediaRecordCache::replayInitialUpdates( const FutureValue< void >& fv )
+        //     applyUpdatesSync( initialUpdates );
+        //        updateCache( lml->getMediaRecord( change.first ).get() );
+        //
 
         // Will call getMediaRecords()
         Future<void> cacheReady = cache->populate();
+
+        // 
+        // void MediaRecordCache::replayInitialUpdates( const FutureValue< void >& fv )
+        //     applyUpdatesSync( initialUpdates );
+        //
+        // MediaRecordCache::applyUpdatesSync(
+        //  map< string, NS_NICKEL_SYSTEM::LibraryContentChangeType::Enum > const& changes )
+        //
+        // updateCache( lml->getMediaRecord( change.first ).get() );
+        //
 
         // Trigger MediaRecordCache::applyUpdatesSync()
         // while getMediaRecords() hasn't returned yet
         map<string, NS_NICKEL_SYSTEM::LibraryContentChangeType::Enum> changes;
 
+        <1>
         // Update event #1
         changes["1"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::updated;
         changes["2"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::added;
@@ -5363,8 +5396,21 @@ private:
         //  *         been fully processed. The resulting map will contain a cleansed
         //  *         list of changes that were actually applied.
         //  */
+        //
+        // ::applyUpdates
+        // {
+        //     return asyncInvoke( *dispatcher,
+        //                         boost::bind( &MediaRecordCache::queueOrApplyUpdates, shared_from_this(), changes ) );
+        // }
+        // 
+        // ::queueOrApplyUpdates(
+        // {
+        //     return applyUpdatesSync( changes );
+        //     -> updateCache( lml->getMediaRecord( change.first ).get() );
+        // }
+        //
 
-        Future< boost::shared_ptr< map< string, LibraryContentChangeType::Enum > > >
+        Future< boost::shared_ptr< map< string, LibraryContentChangeType::Enum > > >  
             updatedFuture = cache->applyUpdates( changes );
 
         // should return almost immediately
@@ -5375,7 +5421,7 @@ private:
         // note: this is changes.size()
         CPPUNIT_ASSERT_EQUAL( updatedFuture.get()->size(), 0);
 
-
+        <2>
         // Update event #2
         changes.clear();
         changes["1"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::deleted;
@@ -5383,22 +5429,26 @@ private:
         changes["4"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::added;
 
         updatedFuture = cache->applyUpdates( changes );
+
         // should return almost immediately
         CPPUNIT_ASSERT( updatedFuture.wait_for(boost::posix_time::seconds(3)) );
         // shouldn't return any events
         CPPUNIT_ASSERT_EQUAL( updatedFuture.get()->size(), 0);
 
+        // note: here "1" completed?
         // Let getMediaRecords() return which makes chacheReady promise complete
         delayedMediaRecords.complete( initialMediaRecords);
 
         // cacheReady future should not block infinitely
         CPPUNIT_ASSERT( cacheReady.wait_for(boost::posix_time::seconds(3)) );
 
+        <3>
         // Update event #3 - to make sure #1 and #2 have been already applied
         changes.clear();
         changes["4"] = NS_NICKEL_SYSTEM::LibraryContentChangeType::updated;
 
         updatedFuture = cache->applyUpdates( changes );
+
         // should return in a reasonably time
         CPPUNIT_ASSERT( updatedFuture.wait_for(boost::posix_time::seconds(3)) );
         // should return a valid event
@@ -5407,6 +5457,23 @@ private:
         // The cache should contain the updated records
         CPPUNIT_ASSERT_EQUAL( updatedMediaRecords.size(), cache->size() );
     }
+
+
+$ Uranium/Uranium.Client.System/test/local-media-library/systemmediarecordcachetest 
+.++ Logger: uranium - override provided in URANIUM_LOGGING_RULE, using that ++
+.....
+3,660 INFO   140259472475904 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:333 KT: call lml->getMediaRecord( 1 )
+lml::client::SystemMediaRecordCacheTest::test_Update_during_Populate()
+3,661 INFO   140259455690496 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:264 Queueing LibraryContentChange events
+3,661 INFO   140259455690496 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:264 Queueing LibraryContentChange events
+3,662 INFO   140259455690496 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:298 KT: from cacheReady: Replaying LibraryContentChange events
+3,662 INFO   140259455690496 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:333 KT: call lml->getMediaRecord( 2 )
+3,662 INFO   140259455690496 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:333 KT: call lml->getMediaRecord( 3 )
+3,662 INFO   140259455690496 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:333 KT: call lml->getMediaRecord( 4 )
+3,662 INFO   140259455690496 uranium /home/kpark/builds/_virtual_/pc/DEVARCH/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp:333 KT: call lml->getMediaRecord( 4 )
+} 
+
+OK (7)
 
 
 ={============================================================================
@@ -9725,6 +9792,7 @@ mappings between the Event Repository and SystemClientEvent for DTT and IP sourc
 the related test cases to test getSynopsis() of various `SystemClientEvent` instances for both
 sources.
 
+note: 2015.04.27. fix the jira number since it was 8092
 
 DEVARCH-9135: Uranium.Client.System: Fix ctv.enhancedmetadata.Event.getSynopsis()
 
@@ -10226,7 +10294,9 @@ BKNI_Malloc(linuxuser): allocated:8788(39) freed:8788(39) peak:8788
 ={============================================================================
 *kt_dev_uv_task_006* task:05: sort out test failures
 
-<f>
+<systemmediarecordcachetest>
+
+2015-04-20_03-28-00:
 
 DEVARCH/Uranium/Uranium.Client.System/test/local-media-library/SystemMediaRecordCacheTest.cpp
 
@@ -10303,7 +10373,35 @@ PASS: systemmediarecordtest
 FAIL: systemmediarecordcachetest
 
 
-<f>
+2015-04-27_03-28-01:
+
+10 Uranium/Uranium.Client.System (systemmediarecordcachetest)
+
+http://stimpy:8080/job/_Zinc.Build__master__release__debian-7-x86_64/905/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                                             
+http://stimpy:8080/job/_Zinc.Build__master__release__debian-7-x86_64/912/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                                             
+http://stimpy:8080/job/_Zinc.Build__master__release__debian-7-x86_64/917/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                                             
+http://stimpy:8080/job/_Zinc.Build__master__release__debian-7-x86_64/921/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                                             
+http://stimpy:8080/job/_Zinc.Build__master__release__debian-7-x86_64/922/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                                             
+http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/515/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                              
+http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/519/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                              
+http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/522/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                              
+http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/524/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                              
+http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/526/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                              
+ 
+
+<eventrepositorytest>
+note: this is different from 
+
+linear-metadata/EventRepositoryTest.cpp
+282:    CPPUNIT_TEST_SUITE(EventRepositoryTest);
+311:CPPUNIT_TEST_SUITE_REGISTRATION(EventRepositoryTest);
+
+602:    CPPUNIT_TEST_SUITE(SystemClientEventRepositoryTest);
+636:CPPUNIT_TEST_SUITE_REGISTRATION(SystemClientEventRepositoryTest);
+
+
+2015-04-20_03-28-00:
+
  5 Uranium/Uranium.Client.System (eventrepositorytest)
 
 works okay on host:
@@ -10331,7 +10429,26 @@ only seen on COS:
 49: http://zebedee:8080/job/_Zinc.Build__master__release__CentOS-6.4-x86_64/1239/artifact/error-logs - Uranium/Uranium.Client.System - eventrepositorytest
 46: http://zebedee:8080/job/_Zinc.Build__master__release__CentOS-6.4-x86_64/1242/artifact/error-logs - Uranium/Uranium.Client.System - eventrepositorytest
 33: http://zebedee:8080/job/_Zinc.Build__master__release__CentOS-6.4-x86_64/1255/artifact/error-logs - Uranium/Uranium.Client.System - eventrepositorytest
- 
+
+
+2015-04-27_03-28-01:
+
+  3 Uranium/Uranium.Client.System (eventrepositorytest)
+
+http://zebedee:8080/job/_Zinc.Build__master__release__CentOS-6.4-x86_64/1287/artifact/error-logs - Uranium/Uranium.Client.System - eventrepositorytest
+http://zebedee:8080/job/_Zinc.Build__master__release__CentOS-6.4-x86_64/1285/artifact/error-logs - Uranium/Uranium.Client.System - eventrepositorytest
+http://zebedee:8080/job/_Zinc.Build__master__release__CentOS-6.4-x86_64/1265/artifact/error-logs - Uranium/Uranium.Client.System - eventrepositorytest
+
+/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/source/Zinc/Zinc.Build/jenkins/cppunit2junit.sh: line 74: 16627 Segmentation fault      ZINC_CPPUNIT_XML=1 $test_exe 9> ${results}
+/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/test-results/uranium-client-system-eventrepositorytest-results.xml:1: parser error : Document is empty
+
+^
+/var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/test-results/uranium-client-system-eventrepositorytest-results.xml:1: parser error : Start tag expected, '<' not found
+
+^
+unable to parse /var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/test-results/uranium-client-system-eventrepositorytest-results.xml
+FAIL: eventrepositorytest
+
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
