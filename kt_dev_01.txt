@@ -11202,7 +11202,7 @@ as:
 Recommendation on initialization is to avoid syn version and do it explicitly: in-class init(C++11)
 or ctor init list. Why? because to avoid:
 
-1. Default-init for built-in types which means undefined value.
+1. Default-init for built-in types which means 'undefined' value.
 
 2. Compile error when there's a class member that don't have default ctor since compiler cannot syn
 default ctor for this class.
@@ -11212,7 +11212,7 @@ control in all cases.
 
 
 <constructor-and-const>
-note: The ctor cannot be a 'const' member func. Why? When create a const object of a class type, the
+The ctor cannot be a 'const' member func. Why? When create a const object of a class type, the
 object does not assume its 'constness' until after the ctor completes the object's initialisation.
 Thus, ctor can write to const objects during their construction.
 
@@ -11281,7 +11281,7 @@ ABEntry::ABEntry(...)
   numTimesConsulted = 0;
 }
 
-Why use constructor-initializers? From Primers p289 and EC++04.
+Why use constructor-initializers? From C++P 289 and EC++04.
 
 1. Efficient than initialization-and-assignment.
 
@@ -11326,8 +11326,9 @@ initializer always since:
 1. Avoid to remember which memebers may go uninitialized if they are omitted.
 2. Cover data members which are const or reference.
 
-<syntax> It seems that it must be done in class definition. NO since can be done in memeber
-definition, that is cpp file.
+<syntax> 
+It seems that it must be done in class definition. NO since can be done in memeber definition in cpp
+file.
 
 class Derived: public Base 
 { 
@@ -11339,7 +11340,7 @@ class Derived: public Base
 {default-arg}
 The default argument in function. If a parameter has a default argument, all the parameters that
 follow it 'must' also have default arguments. The default arguments are used from right most
-arguments.
+arguments that means that user provided arguments are used from left most.
 
 typedef string::size_type sz;
 string screen( sz ht = 24, sz wid = 80, char background = ' ' );
@@ -11391,38 +11392,84 @@ class Foo {
   Foo(const Foo&);   // okay
 };
 
-Used in 'four' context:
+Used in contexts:
 
-1. copy from of initialization
+1. copy form initialization
 2. function call pass by value. pass an object as an argument to a parameter of nonreference type.
 3. return an object by value, nonreference type. 
-4. implicit 'coversion' using temp object. 
+4. brace initialization.
+5. implicit 'coversion' using temp object. 
 
 For pass and return by value they are rightly non reference type, they are copy-inited. Hence called
 copy-ctor. In other words, defines how pass-by-value is implemented for that type.
 
 
-<direct-and-copy-form-initialization>
+{direct-and-copy-form-initialization}
 // default initialzation. empty
 string s1;                 
 
-// direct form of initialzation. use ordinary function matching in searching string ctor.
+// direct form of initialzation.
 string s2( s1 );           
 string dots(10, '.');
+string null_book( "9-999-99999-9" );
 
-// copy form of initialzation. use copy ctor but not assignment. see implicit conversion here
+// copy form of initialzation. 
 string null_book = "9-999-99999-9";
 string s2 = s1;
+
+<copy-initialization-use-copy-ctor>
+The direct form of initialization use ordinary function matching in searching string ctor and the
+copy form use copy ctor or move ctor if there is. In both cases, implicit conversion on arguments
+can happen.
+
+class MSTR
+{
+    public:
+        MSTR() : mesg() {}
+
+        // MSTR(const string &str) : mesg(str) {}
+        // explicit MSTR(const char *pchar) : mesg(pchar) {}
+
+        // copy ctor
+        MSTR( const MSTR &mstr )
+        {
+            cout << "mstr:copy ctor" << endl;
+            mesg = mstr.mesg;
+        }
+};
+
+MSTR m3("mstring three");
+
+: In function ‘int main()’:
+:75:28: error: no matching function for call to ‘MSTR::MSTR(const char [14])’
+:75:28: note: candidates are:
+:40:9: note: MSTR::MSTR(const MSTR&)
+:40:9: note:   no known conversion for argument 1 from ‘const char [14]’ to ‘const MSTR&’
+:35:9: note: MSTR::MSTR()
+:35:9: note:   candidate expects 0 arguments, 1 provided
+
+As you can see, compiler do "function matching" to find the best match. When a class has MSTR(const
+        string &) then use this and no errors.
+
+MSTR m3 = "mstring three";
+
+: In function ‘int main()’:
+:76:15: error: conversion from ‘const char [14]’ to non-scalar type ‘MSTR’ requested
+
+No function matching and simply use copy ctor but complains about type mismatch of argument.
+
 
 note:
 1. The copy ctor cannot be 'explicit' since used implicitly in cases mentioned above such as pass by
 value. 
 
-2. When 'converting' constructor is explicit, cannot use copy form of initialzation since copy form
-may use converting ctor. 
+2. The copy form uses implicit conversion and that means it uses 'converting' constructor to make a
+call succeed. If that converting constructor is explicit or is not defined, then cannot make it
+succeed and is in error. See "converting ctor" for more.
 
-// error: cannot use the copy form of initialization with an explicit converting constructor.
-Sales_data item2 = null_book;
+MSTR m3 = "mstring three";
+
+:78:15: error: conversion from ‘const char [14]’ to non-scalar type ‘MSTR’ requested
 
 The C++SLR says that you can't use the assignment notation here because that is considered to be an
 implicit conversion.
@@ -12383,20 +12430,16 @@ void doSomething( const Base& rb, Derived* pd );
 ={============================================================================
 *kt_dev_cpp_005* converting ctor
 
-See *kt_dev_lang_009* for built-in conversion. converting-ctor and conversion-op are called
-{class-type-conversion}. Two things.
-
-In sum, converting-ctor is a coversion 'to' class from other and conversion op is a conversion to
-other.
+{converting-ctor}
+The converting-ctor is a coversion 'to' class type from other type and conversion op is a conversion
+to the other.
 
 class T {       <- from other type to T. converting-ctor
    ...          -> from T to other types. conversion-op
 };
 
-
-{converting-ctor} <why-explicit-keyword>
-The converting ctor means ctor with single argument and do 'implicit' conversion from arg type to
-class type. 
+The converting ctor is 'every' ctor with single argument and do 'implicit' conversion from arg type
+to class type. 
 
 class Sale_data {
 
@@ -12411,16 +12454,32 @@ string null_book;
 item.combine(null_book);
 item.combine(cin);
 
-The combine() expect Sales_date type but it is given a string and istream. How does it work? The
+The combine() expect Sales_date type but it is given a string and istream. How can make it work? The
 compiler do implicit conversion to make a call succeed and creates a temporary Sales_data object. So
 this equates to:
 
 item.combine(Sales_data(str));
 
 
-<not-always-useful>
-However, it is not always useful. When combine finishes, temporary is gone and lost input. To avoid
-this, can use explicit-keyword:
+{implicit-conversion}
+See *kt_dev_lang_009* for built-in conversion. The converting-ctor and conversion-op are called
+"class-type-conversion".
+
+
+<only-single-conversion-allowed>
+The compiler will do only 'one' "implicit conversion" and the following is error.
+
+item.combine("9-999-99999-9");
+
+Since this requires two conversion to make it succeed.
+
+item.combine(string("9-999-99999-9"));
+item.combine(Sales_data("9-999-99999-9"));
+
+
+<why-explicit-keyword>
+Whether the conversion is desiable depends on how users wil use the conversion. Also, When combine
+finishes, temporary is gone and lost input. To avoid this, can use explicit-keyword:
 
 class Sales_data {
 
@@ -12429,18 +12488,20 @@ class Sales_data {
 
 };
 
-Now have to use:
+Now have to use it 'explicitly':
 
 item.combine( Sales_data(null_book) );                   // T()
 item.combine( static_cast<Sales_data>(cin) );
 
 
 note:
-The explicit-keyword is 'meaningful' only on constructors that can be called with a 'single'
+1. So explicit-keyward 'supress' conversion or use of constructor in a context that requires an
+implicit conversion.
+
+2. The explicit-keyword is 'meaningful' only on constructors that can be called with a 'single'
 arguments since constructors with more arguments are 'not' used to perform an implicit conversion.
 
-note:
-The explicit-keyword is used only in constructor 'declaration' inside a class.
+3. The explicit-keyword is used only in constructor 'declaration' inside a class.
 
 
 <errors>
