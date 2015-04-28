@@ -124,6 +124,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_051| template: explicit argument and type transformation
 |kt_dev_cpp_052| template: argument deduction
 |kt_dev_cpp_053| template: variadic
+|kt_dev_cpp_054| template: specialization
 |kt_dev_cpp_060| template: how to initialize T member
 
 |kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
@@ -13238,6 +13239,25 @@ Record lookup( account & );      // non-const version
 Record lookup( const account &); // const version
 
 
+{const-on-base-type}
+When use const with type alias, it can be surprising. For example,
+
+typedef char *pstring;
+
+const pstring cstr = 0;    // cstr is a const pointer to char
+const pstring *ps;         // ps is a pointer to const pointer to char
+
+The important thing is that type alias is not "replacing string" but it a type and const applies on
+base type.
+
+// wrong interpretation. base type is char and * is part of declarator. cstr is pointer to "const
+// char" 
+const char* cstr = 0;      
+
+// base type is "pstring" so const is on pstring type is a const pointer to char
+const pstring cstr = 0;    
+
+
 {const-on-iterators}
 In iterator, begin() has overloads: const and non-const version because if it has only const
 version, *this is const and any data member is also const. 
@@ -17429,236 +17449,6 @@ override. No when not use ABC and there are multiple overrides down the inherita
 ={============================================================================
 *kt_dev_cpp_025* 
 
-{specialization}
-A specialization is a 'separate' defintion of the template in which one or more template parameters are
-'speficied' to have particular 'type'.
-
-Why? At other times, may be able to take advantage of some specific knowledge to write more
-efficient code than the instantiated from the template. For example, compare function shown before.
-
-// template using type parameters
-template <typename T> int compare( const T&, const T& );
-
-// template using nontype(value) parameters such as literal or array
-template <size_t N, size_t M> int compare( const char (&)[N], const char (&)[M] );
-
-The problem is when like compare() to compare character pointers, the first, template version will
-be called which will compare the pointer values. However, would like to compare by calling strcmp().
-
-<how-to-speficialze>
-To indicate speficialization, use template followed by an empty angle brackets(<>). This indicate
-that arguments will be supplied for 'all' the template parameters of the original template.
-
-template <> int compare( const char* const &p1, const char* const &p2)
-{ return strcmp(p1, p2); }
-// int strcmp(const char *s1, const char *s2);
-
-The hard to understand is the function parameter types. In specialization, the function parameter
-type must match the corresponding type in the original template.
-
-This example is to define a specialization with T as const char* and reference to a const pointer to
-'const char'.
-
-<best-practice-for-specialization>
-To specialize, a declaration for the original template must be in scope and a declaration for a
-specialization must be in scope before any code uses that speciailized instantiation.
-
-Because the compiler can often instantiate the original template when a speficialization is missing,
-errors in declaration order between a template and its speciailzation are easy to make but hard to
-find. NOTE: the problem is that the specialised version will not get called when expected.
-
-It is an error for a program to use a speciailization and an instantiation of the original template
-with the same set of template arguments. However, it is an error that the compiler is unlikely to
-detect.
-
-So declare template and their speciailization in the same header file. Declare all the template
-first, followed by any speciailization of those template. 
-
-<class-specialization>
-As an example, specialize the library 'hash' template and can use to store user type, Sales_data in
-an unordered container. By default, unordered containers use hash<key_type> to organize their
-elements.
-
-p709. To use unordered map with our own data type, must define a specialization of the hash template
-and it must define:
-
-1. An overloaded call operator that return a size_t and takes an object of the container's key type.
-2. Two type members, result_type and argument_type, which are the return and argument types,
-  respectively, of the call operator.
-3. The default constructor and copy-assign operator.
-
-Template specialization must be defined in the same namespace that contains the original template.
-
-# one way
-
-namespace std {
-  template <> struct hash<Sales_data>
-  {
-    typedef sizt_t result_type;
-    typedef Sales_data argument_type;
-    size_t operator()(const Sales_data& s) const;
-  };
-
-  size_t hash<Sales_data>::operator() const Sales_data& s) const
-  {
-    return hash<string>() (s.bookNo) ^ hash<unsigned>() (s.units_sold) ^ hash<double>() (s.revenue);
-  }
-}  // no semicolon after the close curly
-
-
-Here, delegate the complexity of defining a good hash function to the library. Use unnamed
-hash<string> object to generate a hash code for bookNo and others for other members. Do XOR these to
-form an overall hash code for the given Sales_data object.
-
-Assuming this speciailization is in scope, use it:
-
-unordered_multiset<Sales_data> SDest;
-
-Since hash<Sales_data> uses the private members of Sales_data, must make this calss, the specific
-instantiation, a friend of Sales_data.
-
-template <class T> class std::hash;
-class Sales_data {
-  friend class std::hash<Sales_data>;
-  ...
-};
-
-# two way
-
-namespace std {
-   template <> struct hash< Sales_data >;
-}
-
-// Having added the declaration for the specialization to std namespce we can define the
-// specialization outside the std.
-template <> struct hash <Sales_data> 
-{
-  size_t operator() ( const Sales_data& s ) const
-  {
-    return hash<sring>()(s.bookNo);
-  }
-  // other members as before
-}
-
-<partial-specialization>
-Differently from function template, can specify some, but not all, of the template parameters of
-class template. Partial speciailization is itself a template.
-
-<member-specialization>
-Can speciailize specific member function(s). If Foo is a template with a member Bar.
-
-template <typename T> struct Foo {
-  Foo(const T &t = T()): mem(t) {}
-  void Bar() { /* ... */ }
-  T mem;
-  ...
-};
-
-template <> void Foo<int>::Bar()
-{
-  ...
-}
-
-Here specializing one member of the Foo<int> class.
-
-Foo<string> fs;   // instantiate Foo<string>::Foo(). Note
-fs.Bar();         // instantiate Foo<string>::Bar()
-
-Foo<int> fi;      // instantiate Foo<int>::Foo(). Note
-fi.Bar();         // use specialization of Foo<int>::Bar()
-
-
-{template-inheritance}
-Have got an error on GCC in following case:
-
-template <typename Entry>
-class Binary_tree 
-{
-  ...
-
-  protected:
-    Binary_node<Entry> *root;
-};
-
-
-template <typename Record>
-class Search_tree: public Binary_tree<Record>
-{
-  public:
-    ...
-    Error_code tree_search( Record &target ) const;
-};
-
-template <typename Record>
-Error_code Search_tree<Record>::tree_search( Record &target ) const
-{
-  Error_code result = success;
-
-  // <1> Binary_node<Record> *found = search_for_node( root, target );
-  // Binary_node<Record> *found = search_for_node( Search_tree<Record>::root, target );
-  // Binary_node<Record> *found = search_for_node( Binary_tree<Record>::root, target );
-  // Binary_node<Record> *found = search_for_node( this->root, target );
-  if( found == NULL )
-    return not_present;
-  else
-    target = found->data;
-
-  return result;
-}
-
-The <1> caues an error:
-bintree.cpp: In member function ‘Error_code Search_tree<Record>::tree_search(Record&) const’:
-bintree.cpp:107:49: error: ‘root’ was not declared in this scope
-
-Why? Googled and found:
-
-http://www.parashift.com/c++-faq-lite/nondependent-name-lookup-members.html
-[35.19] Why am I getting errors when my template-derived-class uses a member it inherits from its
-template-base-class? 
-
-Perhaps surprisingly, the following code is not valid C++, even though some compilers accept it:
-
-template<typename T>
-class B {
-  public:
-    void f() { }  // member of class B<T>
-};
-
-template<typename T>
-class D : public B<T> {
-  public:
-    void g()
-    {
-      f();        // bad (even though some compilers erroneously (temporarily?) accept it)
-    }
-};
-
-This might hurt your head; better if you sit down.
-
-Within D<T>::g(), the name f does not depend on template parameter T, so f is known as a
-nondependent name. On the other hand, B<T> is dependent on template parameter T so B<T> is called a
-dependent name.
-
-Here's the rule: the compiler does 'not' look in dependent base classes (like B<T>) when looking up
-nondependent names (like f).
-
-This doesn't mean that inheritance doesn't work. Class D<int> is still derived from class B<int>,
-the compiler still lets you implicitly do the is-a conversions (e.g., D<int>* to B<int>*),
-dynamic binding still works when virtual functions are invoked, etc. But there is an issue
-about how names are looked up.
-
-Workarounds:
-1) Change the call from f() to this->f(). <note> this is interesting. "Since this is always
-implicitly dependent in a template", this->f is dependent and the lookup is therefore deferred until
-the template is actually instantiated, at which point all base classes are considered.
-
-2) Insert using B<T>::f; just prior to calling f().
-
-3) Change the call from f() to B<T>::f(). Note however that this might not give you what you want if
-f() is virtual, since it inhibits the virtual dispatch mechanism.
-
-So in the above example, all other cases works other than <1>
-
 
 ={============================================================================
 *kt_dev_cpp_026* enum {enum-hack}
@@ -19001,6 +18791,274 @@ print( cerr, fcnName, code.num(), otherData, "other", item );
 
 ={============================================================================
 *kt_dev_cpp_054* template: specialization
+
+{why-specialization}
+When cannot or do not want to use the template version, can define a specialized version of the
+class or function template.
+
+o when the general template definition might not compile or might do the wrong thing.
+o when can take advantage of some specific knowledge to write more efficient code.
+
+
+{why-problem}
+Again, compare() is an example for which the general definition is not appropriate for a particular
+type, character pointers.
+
+// first version to compare any two types
+template <typename T> int compare( const T&, const T& );
+
+// second version to compare string literals
+template <size_t N, size_t M> int compare( const char (&) [N], const (&) [M] );
+
+
+If call compare() with character pointers, the first version will be called but want to compare
+pointers by strcmp() rather than by comparing the pointer values.
+
+const char *p1 = "hi", *p2 = "mom";
+
+compare( p1, p2 );
+compare( "hi", "mom" );
+
+
+{specialization}
+Is a separate definition, specific instantiation in which one or more template parameters are
+specified to have particular types.
+
+
+<function-template-specialization>
+Must supply arguments for every template parameter in the original template.
+
+// first version to compare any two types
+template <typename T> int compare( const T&, const T& );
+
+// specialization
+template <>
+int compare( const char* const &p1, const char* const &p2 )
+{ return strcmp( p1, p2 ); }
+
+The hard part is the function parameter type.
+
+const char *p1 = "hi", *p2 = "mom";
+
+compare( p1, p2 );
+
+Want to use T as "const char *" and our function requires "const" version of this type. As with 
+{const-on-base-type}, the type to use in specialization is "const char const *".
+
+
+<class-template-specialization>
+As an example, specialize the library hash template to store Sales_data object in an unordered
+container. Must do so in the same namespace in which the original template is defined.
+
+C++P 709. To use unordered map with our own data type, must define a specialization of the hash
+template and it must define:
+
+1. An overloaded call operator that return a size_t and takes an object of the container's key type.
+2. Two type members, result_type and argument_type, which are the return and argument types,
+  respectively, of the call operator.
+3. The default constructor and copy-assign operator.
+
+To add members to a namespace
+
+namespace std {
+    template <>
+        struct hash <Sales_data>
+        {
+            typedef size_t result_type;
+            typedef Sales_data argument_type;
+
+            size_t operator() ( const Sales_data& s ) constl
+        };
+
+    size_t hash<Sales_data>::operator() const Sales_data& s) const
+    {
+        return hash<string>() (s.bookNo) ^ hash<unsigned>() (s.units_sold) ^ hash<double>() (s.revenue);
+    }
+}  // no semicolon after the close curly
+
+Assuming this speciailization is in scope, use it:
+
+unordered_multiset<Sales_data> SDest;
+
+Since hash<Sales_data> uses the private members of Sales_data, must make this calss, the specific
+instantiation, a friend of Sales_data.
+
+template <class T> class std::hash;
+
+class Sales_data {
+  friend class std::hash<Sales_data>;
+  ...
+};
+
+
+The second way: Having added the declaration for the specialization to std namespce we can define
+the specialization outside the std.
+
+namespace std {
+   template <> struct hash< Sales_data >;
+}
+
+template <> struct hash <Sales_data> 
+{
+  size_t operator() ( const Sales_data& s ) const
+  {
+    return hash<sring>()(s.bookNo);
+  }
+  // other members as before
+}
+
+
+{partial-specialization}
+Differently from function template, can specify some, but not all, of the template parameters of
+class template. Partial speciailization is itself a template and user must supply arguments that are
+not specified.
+
+The library remove_reference template works through a series of specialization.
+
+template <typename T> struct remove_reference 
+{
+    typedef T type;
+};
+
+// partial specialization used for lvalue and rvalue reference
+
+template <typename T> struct remove_reference <T&> 
+{
+    typedef T type;
+};
+
+template <typename T> struct remove_reference <T&&> 
+{
+    typedef T type;
+};
+
+In this case, the specialization have the same number of parameters as the original but the
+parameter's type in the specialization 'differ' from the original.
+
+int i;
+
+remove_reference< decltype(42) >::type a;
+remove_reference< decltype(i) >::type b;
+remove_reference< decltype(std::move(i)) >::type c;
+
+All three, a, b, and c, have type int.
+
+
+{member-specialization}
+Rather then specialize the whole template, can specialize specific member function(s). If Foo is a
+template with a member Bar.
+
+template <typename T> struct Foo 
+{
+    Foo(const T &t = T()): mem(t) {}
+    void Bar() { /* ... */ }
+    T mem;
+};
+
+template <> void Foo<int>::Bar()
+{
+  ...
+}
+
+Here specializing one member of the Foo<int> class.
+
+Foo<string> fs;   // instantiate Foo<string>::Foo()
+fs.Bar();         // instantiate Foo<string>::Bar()
+
+Foo<int> fi;      // instantiate Foo<int>::Foo()
+fi.Bar();         // use specialization version of Foo<int>::Bar()
+
+
+{template-inheritance}
+Have got an error on GCC in following case:
+
+template <typename Entry>
+class Binary_tree 
+{
+  ...
+
+  protected:
+    Binary_node<Entry> *root;
+};
+
+
+template <typename Record>
+class Search_tree: public Binary_tree<Record>
+{
+  public:
+    ...
+    Error_code tree_search( Record &target ) const;
+};
+
+template <typename Record>
+Error_code Search_tree<Record>::tree_search( Record &target ) const
+{
+  Error_code result = success;
+
+  // <1> Binary_node<Record> *found = search_for_node( root, target );
+  // Binary_node<Record> *found = search_for_node( Search_tree<Record>::root, target );
+  // Binary_node<Record> *found = search_for_node( Binary_tree<Record>::root, target );
+  // Binary_node<Record> *found = search_for_node( this->root, target );
+  if( found == NULL )
+    return not_present;
+  else
+    target = found->data;
+
+  return result;
+}
+
+The <1> caues an error:
+bintree.cpp: In member function ‘Error_code Search_tree<Record>::tree_search(Record&) const’:
+bintree.cpp:107:49: error: ‘root’ was not declared in this scope
+
+Why? Googled and found:
+
+http://www.parashift.com/c++-faq-lite/nondependent-name-lookup-members.html
+[35.19] Why am I getting errors when my template-derived-class uses a member it inherits from its
+template-base-class? 
+
+Perhaps surprisingly, the following code is not valid C++, even though some compilers accept it:
+
+template<typename T>
+class B {
+  public:
+    void f() { }  // member of class B<T>
+};
+
+template<typename T>
+class D : public B<T> {
+  public:
+    void g()
+    {
+      f();        // bad (even though some compilers erroneously (temporarily?) accept it)
+    }
+};
+
+This might hurt your head; better if you sit down.
+
+Within D<T>::g(), the name f does not depend on template parameter T, so f is known as a
+nondependent name. On the other hand, B<T> is dependent on template parameter T so B<T> is called a
+dependent name.
+
+Here's the rule: the compiler does 'not' look in dependent base classes (like B<T>) when looking up
+nondependent names (like f).
+
+This doesn't mean that inheritance doesn't work. Class D<int> is still derived from class B<int>,
+the compiler still lets you implicitly do the is-a conversions (e.g., D<int>* to B<int>*),
+dynamic binding still works when virtual functions are invoked, etc. But there is an issue
+about how names are looked up.
+
+Workarounds:
+1) Change the call from f() to this->f(). <note> this is interesting. "Since this is always
+implicitly dependent in a template", this->f is dependent and the lookup is therefore deferred until
+the template is actually instantiated, at which point all base classes are considered.
+
+2) Insert using B<T>::f; just prior to calling f().
+
+3) Change the call from f() to B<T>::f(). Note however that this might not give you what you want if
+f() is virtual, since it inhibits the virtual dispatch mechanism.
+
+So in the above example, all other cases works other than <1>
 
 
 ={============================================================================
