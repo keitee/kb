@@ -521,8 +521,9 @@ zb-virtual-slave zb-make
       conf zb.humax.1000.host-config humax-dtr_t1000
       }
 
-      // [zb]
+      // [zb] ZB_BUILD_DIR
       // build-dir = /data/builds
+      // git config zb.build-dir /home/kpark/builds
 
       do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
 
@@ -536,6 +537,12 @@ zb-virtual-slave zb-make
   + virtual_path=/data/builds/_virtual_
 
   note: "bash -c string" execute string on the given shell.
+
+  note: when change ET using exports, this will not be passed subshell below.
+
+   echo "===================> \"ET=$ET ${program_to_run}\"" 
+   exec map-dir-and-exec \
+      "${real_path}:${virtual_path}" "ET=$ET ${program_to_run}" "$@"
 
   + exec map-dir-and-exec /data/builds/master:/data/builds/_virtual_ /bin/bash -c '"zb-make"  		
   2> >( sed -u "s|/data/builds/_virtual_|/data/builds/master|" >&2 ) \
@@ -10294,6 +10301,11 @@ BKNI_Malloc(linuxuser): allocated:8788(39) freed:8788(39) peak:8788
 ={============================================================================
 *kt_dev_uv_task_006* task:05: sort out test failures
 
+Use this as a mother ticket
+
+https://jira.youview.co.uk/browse/DEVARCH-4122
+
+
 <systemmediarecordcachetest>
 
 2015-04-20_03-28-00:
@@ -10388,6 +10400,70 @@ http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i
 http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/524/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                              
 http://moomintroll:8080/job/_Zinc.Build__master__release__Scientific-Linux-6.6-i686/526/artifact/error-logs - Uranium/Uranium.Client.System - systemmediarecordcachetest                                                              
  
+
+04.28
+======
+
+1. For a debug log:
+
+--- a/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp
++++ b/Uranium/Uranium.Client.System/src/local-media-library/SystemMediaRecordCache.cpp
+@@ -295,7 +295,7 @@ void MediaRecordCache::replayInitialUpdates( const FutureValue< void >& fv )
+     }
+     else
+     {
+-        URANIUM_INFO( "Replaying LibraryContentChange events" );
++        URANIUM_INFO( "KT: from cacheReady: Replaying LibraryContentChange events" );
+         applyUpdatesSync( initialUpdates );
+     }
+     initialUpdates.clear();
+@@ -330,6 +330,7 @@ MediaRecordCache::applyUpdatesSync(
+             {
+                 try
+                 {
++                    URANIUM_INFO( "KT: call lml->getMediaRecord( " <<  change.first << " )" );
+                     updateCache( cache,
+                                  propagatedClientChanges,
+                                  change.second,
+
+
+
+2. Suggested the generic approach to have timeout value rather than the fixed
+in tests.
+
+CPPUNIT_ASSERT( updatedFuture.wait_for(boost::posix_time::seconds(3)) );
+
+
+/** Defines time in milliseconds for which probes will be waiting for an event to occur. */
+
+Copper/CopperAnnouncement.Client.System/test/SystemClientAnnouncementServiceTest.cpp:   const int32_t TEST_TIMEOUT = 5000;
+
+
+ZINC_ASSERT_WITHIN_TIMEOUT(f.isComplete(), TEST_TIMEOUT);
+
+
+/**
+ * Unit test assertion macro to check that an expression becomes true in the
+ * given time.
+ *
+ * It polls every 100ms
+ */
+#define ZINC_ASSERT_WITHIN_TIMEOUT(expression, timeoutms) \
+    do { \
+        bool success = false; \
+        for (int _assert_within_timeout_i = 0; \
+             _assert_within_timeout_i < (timeoutms+99)/100; \        //
+             ++_assert_within_timeout_i) { \
+            if (expression) { \
+                success = true; \
+                break; \
+            } \
+            usleep(1000 * 100); \                                    // 100ms
+        } \
+        CPPUNIT_ASSERT_MESSAGE( #expression " did not happen within " #timeoutms "ms", success); \
+    } \
+    while (0);
+
 
 <eventrepositorytest>
 note: this is different from 
