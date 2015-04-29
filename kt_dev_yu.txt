@@ -15,7 +15,7 @@
 |kt_dev_uv_stack_000| stack: builds
 |kt_dev_uv_stack_001| stack: build examples
 |kt_dev_uv_stack_002| stack: build: deploy
-|kt_dev_uv_stack_003| stack: startup and tree
+|kt_dev_uv_stack_003| stack: startup and bootup
 |kt_dev_uv_stack_004| stack: oem configs
 |kt_dev_uv_stack_005| stack: brcm debug level
 |kt_dev_uv_stack_006| stack: netflix ps line
@@ -43,7 +43,7 @@
 |kt_dev_uv_stack_114| stack: cal: metadata: wrapper and convert flow
 
 |kt_dev_uv_stack_200| stack: nickel: 
-|kt_dev_uv_stack_201| stack: nickel: 
+|kt_dev_uv_stack_201| stack: nickel: tests
 
 |kt_dev_uv_stack_120| stack: cal: dispatcher
 |kt_dev_uv_stack_121| stack: cal: unit test
@@ -71,6 +71,7 @@
 |kt_dev_uv_task_004| task:03: DEVARCH-9135: uranium metadata
 |kt_dev_uv_task_005| task:01: nexus tools for both hmax and hwei
 |kt_dev_uv_task_006| task:05: sort out test failures
+|kt_dev_uv_task_007| task:06: playback audio only IP channel
 
 
 # ============================================================================
@@ -281,6 +282,15 @@ stack build env, then need to update staging as well before building.
 
 For example, inspect tool and this is link option: path when build inspect tool
 -L/opt/oem-staging/huawei-bcm7409/usr/local/lib
+
+
+https://wiki.youview.co.uk/display/canvas/OEM+Staging+and+Toolchains?src=search
+
+$ sudo apt-get install huawei-dn372t-staging
+$ sudo apt-get install huawei-dn372t-toolchain
+
+$ wget http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/pool/main/h/huawei-dn372t-staging/huawei-dn372t-staging_20150427-5_i386.deb
+$ sudo dpkg -i huawei-dn372t-staging_20150427-5_i386.deb
 
 
 ={============================================================================
@@ -1357,47 +1367,8 @@ linearsource-launch-and-sandbox      watcher
 linearsourced                        yv-mainui
 lsr-config                           yv-remote-booking-agent-activate
 nickelmediad                         yv-remote-booking-agent-watcher
-on-demand-launcher                   yv-start-services.sh
+on-demand-launcher                   yv-start-services.sh note:
 onscreenidd
-
-[root@HUMAX bin]# ls
-CopperDownloader*                 litaniumsystemmanagerd*
-airlauncher.sh*                   lsr-config*
-appfactoryreset*                  nexus-inspect*
-appstart*                         nickelmediad*
-appversion*                       on-demand-launcher*
-audiofeedbackd*                   onscreenidd*
-avahi-launcher*                   onscreenidd-launch*
-babysitterd*                      osmiumd*
-bronzemediad*                     pcmplaybackd*
-cadmiumcontentacquisitiond*       provisioninginformationparser*
-cobaltmetadatabrokerd*            purge-polipo-diskcache.sh*
-copperannouncementd*              python_launcher.sh*
-copperlocalstoragerepod*          queryNetworkManager*
-crbd*                             radiumairlauncher*
-dbusredirect*                     radiumd*
-dbussenddaemon*                   remindersd*
-dbuswaitbusname*                  run-stagecraft2-functions.sh*
-deleteTree*                       run-stagecraft2-with-cache.sh*
-device-manager-launcher*          runBrowser.sh*
-dial-server*                      runNetflix.sh*
-dial-server-launcher.sh*          runStagecraft2.sh*
-exec-then-cleanup-app*            sandbox-drop-privileges*
-exec-then-cleanup-app.sh*         setItem*
-exec-with-cache*                  setpgid-and-exec*
-formathdd*                        sodiumd*
-generate-http-user-agent*         splashScreen*
-getChildItems*                    start-service-over-dbus.sh*
-getItem*                          storagemanagementd*
-goldsystemtimed*                  tunerd*
-http-dbus-bridge*                 uimanagerd*
-http-dbus-bridge-launcher.sh*     w3cEngine*
-https-cache-proxy*                watcher*
-indiumd*                          yv-mainui*
-ironmetadatad*                    yv-remote-booking-agent-activate*
-linearsource-launch*              yv-remote-booking-agent-watcher*
-linearsource-launch-and-sandbox*  yv-start-services.sh*
-linearsourced*
 
 
 <lib-third-party>
@@ -1432,6 +1403,112 @@ libfusion-1.4.so.15        libpng14.so.14
 /opt/zinc/bin/start-service-over-dbus.sh Zinc.Metadata --requires Zinc.Broker
 /opt/zinc/bin/start-service-over-dbus.sh Zinc.Reminders
 /opt/zinc/bin/start-service-over-dbus.sh Zinc.Boot
+
+
+{zinc-boot}
+https://jira.youview.co.uk/browse/DEVARCH-8276
+Zinc.Boot service itself will be started from an OEM script.
+
+The new service introduces the "$prefix/bin/yv-start-services.sh" script,
+which it runs from a sandboxed environment. The script is meant to start
+other services using the DBus activation mechanism. In this initial
+version, it starts Zinc.DIAL only. When asking OEMs to start Zinc.Boot,
+we are going to simultaneously ask them to stop starting Zinc.DIAL.
+
+This implementation comes with an unfortunate side effect of producing
+the following message to the serial console:
+
+Error org.freedesktop.DBus.Error.NoReply: Did not receive a reply.
+Possible causes include: the remote application did not send a reply,
+the message bus security policy blocked the reply, the reply timeout
+expired, or the network connection was broken.
+
+This comes as a result of Zinc.Boot service not claiming the "Zinc.Boot"
+bus name, but is otherwise completely harmless. At this point we decided
+not to tackle this issue, as the cost/benefit ratio seems quite high in
+this case.
+
+~/src-dev/DEVARCH/Zinc/Zinc.Boot/data$ cat yv-start-services.sh.in 
+#!/bin/sh
+
+prefix="@prefix@"
+
+start() {
+    echo "Starting $1"
+    "${prefix}/bin/start-service-over-dbus.sh" "$@"
+}
+
+start Zinc.DIAL
+start Zinc.Crb
+start Zinc.DBusBridge
+
+exit 0
+
+This is going to be changed to use "staged" boot using wait-on-cpu-load:
+
+https://stash.dev.youview.co.uk/projects/DEVARCH/repos/devarch-mirror/commits/c57e81a58fc10dafe466b6e37b938fb5a5575880
+
+note: here bucket is stage or ring level
+
+This commit works best if OEM boot scripts only start Zinc.Boot
+(and their daemons) and let Zinc.Boot start the YouView services
+in an efficient manner.
+
+The commit makes Zinc.Boot start all necessary services in three
+buckets with delays between each. The idea is that some
+non-essential services can be started later so they don't steal
+precious CPU cycles or I/O / memory bandwidth.
+
+The delays between each bucket depend on the system load, and the
+idea is that the boot script waits until the load drops below a
+certain value. This can be configured with new LSR keys:
+
+platform.boot.delay-window-size
+platform.boot.step-1-delay-load-threshold
+platform.boot.step-2-delay-load-threshold
+
+There is no delay in "step 0" - where key services are started.
+
+The buckets look like:
+
+Step 0:
+- Start UI, metadata and media services
+
+Step 1:
+- Start second screen / remote control services
+
+Step 2:
+- Start CRB, Reminders, Usage Collection services
+
+
+~/src-dev/DEVARCH/Zinc/Zinc.Boot/data$ cat yv-start-services.sh.in 
+
+# Step 0: Start the minimal set of services to get into live
+#         TV / interactive UI fast.
+start Zinc.Metadata
+start Zinc.Broker
+start Zinc.Application
+start Zinc.LinearSource
+
+wait_for_idle $threshold1 30
+
+# params:
+#	cpu-threshold (percents)
+#	timeout (seconds)
+#	Note, that for the window size: 25 and sampling period 500ms
+#	it will wait for at least 12.5s (the avg window gets filled)
+wait_for_idle() {
+	$prefix/bin/yv-wait-for-idle -s 500 -w $window_size -e $1 -t $2
+}
+
+# from yv-wait-for-idle
+
+("exit_threshold,e", boost::program_options::value(&exit_threshold),
+   "If specified specified (in %) - program will exit if "
+   "CPU utilisation will fall below this value (default=1)")
+
+("timeout,t", boost::program_options::value(&timeout_seconds),
+   "Timeout in seconds (default=infinite)")
 
 
 ={============================================================================
@@ -5481,6 +5558,17 @@ lml::client::SystemMediaRecordCacheTest::test_Update_during_Populate()
 } 
 
 OK (7)
+
+
+={============================================================================
+*kt_dev_uv_stack_300* stack: IP: wikis
+
+1. IP Channel MediaRouter Device Manufacturer Integration
+https://wiki.youview.co.uk/display/IPCHAN/IP+Channel+MediaRouter+Device+Manufacturer+Integration?src=search
+
+o LinearSource component (linearsourced) via a DBus interface 
+
+o streaming sockets interface (zmp).
 
 
 ={============================================================================
@@ -10301,6 +10389,7 @@ BKNI_Malloc(linuxuser): allocated:8788(39) freed:8788(39) peak:8788
 ={============================================================================
 *kt_dev_uv_task_006* task:05: sort out test failures
 
+|kt_dev_uv_task_007| task:06: playback audio only IP channel
 Use this as a mother ticket
 
 https://jira.youview.co.uk/browse/DEVARCH-4122
@@ -10524,6 +10613,24 @@ http://zebedee:8080/job/_Zinc.Build__master__release__CentOS-6.4-x86_64/1265/art
 ^
 unable to parse /var/lib/jenkins/jobs/_Zinc.Build__master__release__CentOS-6.4-x86_64/workspace/test-results/uranium-client-system-eventrepositorytest-results.xml
 FAIL: eventrepositorytest
+
+
+04.29
+======
+Made a fix, ran an test under stressed env, worked okay, built okay, created
+JIRA for this. Ready to code review?
+
+
+={============================================================================
+*kt_dev_uv_task_007* task:06: playback audio only IP channel
+
+04.29
+======
+https://jira.youview.co.uk/browse/DEVARCH-8828
+
+We have audio-only IP channel 567 to test this. Currently, it works fine on Huawei but not on Humax. Seems to be an OEM issue.
+
+TODO: need to check this and to reproduce.
 
 
 ==============================================================================

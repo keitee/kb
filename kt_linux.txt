@@ -45,6 +45,8 @@
 |kt_linux_bash_031| bash: double dash
 |kt_linux_bash_032| bash: command line edit
 |kt_linux_bash_033| bash: true and false
+|kt_linux_bash_034| bash: wait
+|kt_linux_bash_035| bash: help
 
 |kt_linux_bash_100| bash: config: colour prompt
 |kt_linux_bash_101| bash: config: how to know shell nesting level
@@ -2236,6 +2238,46 @@ ths is non zero
 
 $ ZXXX= ./sample.sh 
 ths is zero
+
+
+={============================================================================
+*kt_linux_bash_034* bash: wait
+
+How to wait in a bash script for several subprocesses spawned from that script to finish?
+
+$ help wait
+wait: wait [id]
+    Wait for job completion and return exit status.
+    
+    Waits for the process identified by ID, which may be a process ID or a
+    job specification, and reports its termination status.  
+    
+    If ID is not given, waits for 'all' currently active child processes, and the return
+    status is zero.  
+    
+    If ID is a a job specification, waits for all processes in the job's pipeline.
+    
+    Exit Status:
+    Returns the status of ID; fails if ID is invalid or an invalid option is
+    given.
+
+
+={============================================================================
+*kt_linux_bash_035* bash: help
+
+$ help wait
+wait: wait [id]
+    Wait for job completion and return exit status.
+    
+    Waits for the process identified by ID, which may be a process ID or a
+    job specification, and reports its termination status.  If ID is not
+    given, waits for all currently active child processes, and the return
+    status is zero.  If ID is a a job specification, waits for all processes
+    in the job's pipeline.
+    
+    Exit Status:
+    Returns the status of ID; fails if ID is invalid or an invalid option is
+    given.
 
 
 ={============================================================================
@@ -20037,6 +20079,108 @@ Since Linux 2.6.24, there is a ninth column,
 
 9. guest, which is the time spent running a virtual CPU for guest operating systems under the
     control of the Linux kernel.
+
+
+<example>
+/**
+ * Abstraction of proc/stats file format to hold the data and to
+ *   allow calculation of the CPU utilisation based on it.
+ */
+struct ProcStats
+{
+    long user;   // Time spent executing user applications (user mode).
+    long nice;   // Time spent executing user applications with low priority (nice).
+    long system; // Time spent executing system calls (system mode).
+    long idle;   // Idle time.
+    long iowait; // Time waiting for I/O operations to complete.
+    long irq;    // Time spent servicing interrupts.
+    long softirq;// Time spent servicing soft-interrupts.
+
+    ProcStats operator-(const ProcStats& other)
+    {
+        ProcStats res;
+        res.user    = user   - other.user;
+        res.nice    = nice   - other.nice;
+        res.system  = system - other.system;
+        res.idle    = idle   - other.idle;
+        res.iowait  = iowait - other.iowait;
+        res.irq     = irq    - other.irq;
+        res.softirq = softirq- other.softirq;
+        return res;
+    }
+
+    /**
+     * Returns calculated total cpu utilisation in percentage.
+     */
+    double cpuUtilisation() const
+    {
+        double cpu_total = user + nice + system + irq + softirq;
+        double cpu_idle  = idle + iowait;
+        return cpu_total / (cpu_total + cpu_idle) * 100; // in percentage
+    }
+};
+
+inline std::istream& operator>>(std::istream& in, ProcStats& st)
+{
+    std::string cpu;
+    if (in >> cpu)
+    {
+        in >> st.user >> st.nice >> st.system >> st.idle;
+        in >> st.iowait >> st.irq >> st.softirq;
+    }
+    return in;
+}
+
+
+/**
+ * Objects of this type can read (repeatedly) cpu stats file and compare
+ * it against values read previously.
+ */
+class CpuProcStatsReader
+{
+public:
+    CpuProcStatsReader() :
+        stat_filename("/proc/stat"),
+        now_first(false)
+    {
+    }
+
+    /**
+     * Reads current value of /proc/stats and returns ProcStats with differences
+     * with values read during last call to get().
+     */
+    ProcStats get()
+    {
+        std::string cpu;
+        std::ifstream f(stat_filename.c_str());
+        ProcStats& st = curr();
+        f >> st;
+        now_first = !now_first;
+        return now_first ? stats.second - stats.first : stats.first - stats.second;
+    }
+
+    /**
+     * Helper function (useful rather for testing) to setup a location of
+     *   /proc/stat file.
+     */
+    void setupProcStatLocation(const std::string& filename)
+    {
+        stat_filename = filename;
+    }
+
+private:
+    /**
+     * Internal method to get the least recently used stats that is to be used/updated.
+     */
+    ProcStats& curr()
+    {
+        return now_first ? stats.first : stats.second;
+    }
+
+    std::pair<ProcStats, ProcStats> stats;
+    std::string stat_filename;
+    bool now_first;
+};
 
 
 # ============================================================================
