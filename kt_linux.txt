@@ -11902,20 +11902,77 @@ The pipe is 'unnamed' fifo and is an early form that can be used 'related'-proce
 and child. In other words, created using fork() call. Linux supports uni-directional pipe or
 half-duplex so need 'two' pipes for read and write.
 
-<limited-capacity> from LPI 44
-A pipe is simply a buffer maintained in kernel memory. This buffer has a maximum capacity. Once a
-pipe is full, further writes to the pipe block until the reader removes some data from the pipe.
-This means that pipe is kernel resource meaning that there is copy between kernel and process. Also
-there is <no-open-calinux-3.18.7.tar.xzlinux-3.18.7.tar.xzll>.
 
-<first> to-create-pipe
-Get two fds from a pipe() call. fd[0] for read and fd[1] for write. Create a child via fork() and
-close unused fds to create a single channel between parent and child. note: 0 for read and 1 for
-write which are fixed.
+<connect-two-process>
 
-parent                        child
-fd[1] write   pipe ->         fd[0] read
-fd[0] read                    fd[1] write
+$ ls | wc -l
+
+ls (stdout, fd 1)    ->             pipe: unidirectional byte stream    ->    (stdin, fd 0) wc
+                  write end                                             read end
+                  of pipe                                               of pipe
+
+
+<byte-stream-and-sequential> LPI 44.1
+When we say that a pipe is a byte stream, we mean that there is no concept of 'messages' or message
+boundaries when using a pipe. 
+
+The process reading from a pipe can read 'blocks' of data of any size, regardless of the size of
+blocks written by the writing process. Furthermore, the data passes through the pipe 'sequentially'
+- bytes are read from a pipe in exactly the order they were written. It is not possible to randomly
+access the data in a pipe using lseek().
+
+
+<block-on-read>
+Attempts to read from a pipe that is currently empty 'block' until at least one byte has been
+written to the pipe. If the write end of a pipe is closed, then a process reading from the pipe will
+see end-of-file (i.e., read() returns 0) once it has read all remaining data in the pipe.
+
+
+<limited-capacity> <block-on-write> LPI 44
+A pipe is simply a 'buffer' maintained in kernel memory. This buffer has a maximum capacity. Once a
+pipe is full, further writes to the pipe 'block' until the reader removes some data from the pipe.
+
+
+<use-large-buffer-size>
+SUSv3 makes no requirement about the capacity of a pipe. In Linux kernels before 2.6.11, the pipe
+capacity is the same as the system page size (e.g., 4096 bytes on x86-32); since Linux 2.6.11, the
+pipe capacity is 65,536 bytes. Other UNIX implementations have different pipe capacities.
+
+This means that pipe is kernel resource meaning that there is copy between kernel and process. In
+theory, there is no reason why a pipe couldn't operate with smaller capacities, even with a
+single-byte buffer. The reason for employing large buffer sizes is efficiency: each time a writer
+fills the pipe, the kernel must perform a context switch to allow the reader to be scheduled so that
+it can empty some data from the pipe. Employing a larger buffer size means that fewer context
+switches are required.
+
+
+<create-pipe-using-pipe-call>
+#include <unistd.h>
+
+int pipe(int filedes[2]);        Returns 0 on success, or -1 on error
+
+
+<use-read-and-write>
+As with any file descriptor, we can use the read() and write() system calls to perform I/O on the
+pipe.
+
+
+<set-up-pipe>
+Parent gets two fds from a pipe() call which are fd[0] for read and fd[1] for write. Create a child
+via fork() and the child process inherits copies of its parent's file descriptors. Close unused fds
+to create a single channel between parent and child. note: 0 for read and 1 for write which are
+fixed.
+
+            parent                 ->                    parent           
+                                             
+fd[1] write       fd[0] read                 fd[1] write
+                                             
+   [         pipe       ]                       [         pipe        ]
+                                             
+            child                                        child
+                                             
+fd[0] write       fd[0] read                                fd[0] read
+
 
 int filedes[2];
 
@@ -11938,6 +11995,55 @@ switch (fork()) { /* Create a child process */
    /* Parent now writes to pipe */
    break;
 }
+
+
+<needs-of-closing-for-reading-process>
+If the reading process doesn't close the write end of the pipe, then, after the other process closes
+its write descriptor, the reader won't see end-of-file, even after it has read all data from the
+pipe. Instead, a read() would block waiting for data, because the kernel knows that there is still
+at least one write descriptor open for the pipe. That this descriptor is held open by the reading
+process itself is irrelevant; in theory, that process could still write to the pipe, even if it is
+blocked trying to read. For example, the read() might be interrupted by a signal handler that writes
+data to the pipe. (This is a realistic scenario, as we’ll see in Section 63.5.2.)
+
+
+<broken-pipe>
+When a process tries to write to a pipe for which no process has an open read descriptor, the kernel
+sends the SIGPIPE signal to the writing process. By default, this signal kills a process. A process
+can instead arrange to catch or ignore this signal, in which case the write() on the pipe fails with
+the error EPIPE (broken pipe). Receiving the SIGPIPE signal or getting the EPIPE error is a useful
+indication about the status of the pipe, and this is why unused read descriptors for the pipe should
+be closed.
+
+
+<needs-of-closing-for-writing-process>
+If the writing process doesn't close the read end of the pipe, then, even after the other process
+closes the read end of the pipe, the writing process will still be able to write to the pipe.
+Eventually, the writing process will fill the pipe, and a further attempt to write will block
+indefinitely.
+
+
+<wary-of-deadlock>
+If employing two pipes for bi-directional buffer, then we need to be wary of deadlocks that may
+occur if both processes block while trying to read from empty pipes OR while trying to write to
+pipes that are already full.
+
+
+<pipe2>
+Starting with kernel 2.6.27, Linux supports a new, nonstandard system call, pipe2(). This system
+call performs the same task as pipe(), but supports an additional argument, flags, that can be used
+to modify the behavior of the system call. Two flags are supported. The O_CLOEXEC flag causes the
+kernel to enable the close-on-exec flag (FD_CLOEXEC) for the two new file descriptors. This flag is
+useful for the same reasons as the open() O_CLOEXEC flag described in Section 4.3.1. The O_NONBLOCK
+flag causes the kernel to mark both underlying open file descriptions as nonblocking, so that future
+I/O operations will be nonblocking. This saves additional calls to fcntl() to achieve the same
+result.
+
+
+<pipe-for-unrelated-process>
+There is an exception that pipes can be used to communicate only between related processes. Passing
+a file descriptor over a UNIX domain socket (a technique that described in Section 61.13.3) makes it
+possible to pass a file descriptor for a pipe to an unrelated process.
 
 
 <second> to-create-pipe
@@ -11965,11 +12071,6 @@ fgets(tmp,sizeof(tmp),p);
 pclose(p);
 
 After all, the reason that can use pipe between parent/child is that fds are shared.
-
-<broken-pipe>
-When 'write' to fifo that is not opened to read. Menas there is no reading process or reading process
-is killed because reading fd of pipe or file gets closed. SIGPIPE. Instead, there is no data to
-read, empty, reading thread or process is blocked.
 
 
 {fifo}

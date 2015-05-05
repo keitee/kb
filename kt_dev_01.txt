@@ -141,7 +141,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_303| case: inheritance {how-gcc-build-vtable}
 |kt_dev_cpp_304| case: overload
 
-#{ STL follow <what-container-consideration> for points to consider
+#{ stl follow <what-container-consideration> for points to consider
 |kt_dev_stl_000| useful links and gcc stl {stl-design-rationale}
 |kt_dev_stl_001| pair and tuple class
 |kt_dev_stl_002| traits
@@ -12614,17 +12614,22 @@ state; 0 or 1.
 0 or 1 << 42;
 
 
-<bool-conversion-in-condition> tip
+<conversion-to-bool>
 However, even if uses explicit, this explicit has no effect when used in condition such as:
 
 if, while, for and do statements. logical operators. conditional operators.
  
-This make its use useful in condition like:
+Why this exception? Conversion to bool is 'intended' for use in conditions and hence ordinarily
+should be defined as explicit to avoid problems in other uses:
 
 while( std::cin >> value )
 
-It reads into value and return cin. cin converted to bool depending on cin state. This bool
+It reads into value, 'return' cin, and  cin converted to bool depending on cin state. This bool
 conversion is the typical use of conversion-op.
+
+note: In earlier version of the library, the IO types defined a conversion to void and under the new
+standard, instead defines an explicit conversiton to bool.
+
 
 <class-state>
 note. Like cin, seems useful to have bool conversion when class has 'state'.
@@ -16736,7 +16741,15 @@ i = retVal();
 ={============================================================================
 *kt_dev_cpp_021* op overload
 
-For class type because cannot overload operations for built-in types.
+{two-considerations}
+When design a class, should think about what operations the class will provide and then two:
+
+o whether to define each operation as an ordinary function or overloaded operator?
+o if use overloaded operator then whether to be member or nonmember?
+
+{default-arguments}
+Except for overloaded function call operator, overloaded operator must not have default arguments.
+
 
 {member-or-non-member}
 Whether to implement op overloads as either a member or non-member?
@@ -16750,7 +16763,8 @@ arith, equality, relational or mixed-type arith that is commutative should be no
 Why? think string u = "hi" + s; since a literal do not have member operations.
 
 <io-op>
-IO ops(<<, >>) should be non-member and usually a friend. If these are member op then can use like:
+IO ops(<<, >>) should be non-member and usually a 'friend' since uses private members. If these are
+member op then can use like:
 
 Sales_data data;
 data << cout;
@@ -16786,6 +16800,34 @@ data1.operator+=(data2);
 
 Why not 'data2.operator+=(data1);' as these are the same type? because 'data2 = data1+data2' is
 different.
+
+
+{equal-and-relational} operator-less
+There is a subtle difference between equal and relational(operator <) as to define 'ordering'.
+
+<equal>
+bool operator==( const Sales_data *lhs, const Sales_data *rhs )
+{
+    return lhs.isbn() == rhs.isbn() &&
+        lhs.units_sold == rhs.units_sold &&
+        lhs.revenue == rhs.revenue;
+}
+
+bool operator!=( const Sales_data *lhs, const Sales_data *rhs )
+{
+    return !(lhs == rhs);
+}
+
+
+<operator-less>
+The relational should be consistent in both "strict weak ordering" and "equal". Suppose there are
+two Sales_data object which has the same ISBN but different other members. 
+
+Then operator==() treats them 'unequal' but compareIsbn() which is operator less and is used in
+ordered container, treats them 'equal' since neither of which is "less than" the other.
+
+So the ordering depends on how plan to use the class. For Sales_data class there is no single
+logical defintion of < so better not to define < at all.
 
 
 ={============================================================================
@@ -18302,6 +18344,12 @@ See what user can call.
 bool i = compare(0,42);
 
 Sales_data item1(cin), item2(cin);
+
+bool compareIsbn( const Sales_data &lhs, const Sales_data &rhs )
+{
+    return lhs.isbn() < rhs.isbn();
+}
+
 bool j = compare( item1, item2, compareIsbn );
 
 note: If type of item1 supports operator<() then the previous works and if not, this version using
@@ -21971,6 +22019,28 @@ elements. By default, this is the operator <, which is called by the less<> func
 
 4. For unordered containers, a hash function and an equivalence criterion must be provided for the
 elements. See Section 7.9.2, page 363, for details.
+
+
+{requirement-on-key-type-for-ordered-container} 
+C++P 425. The ordered container uses opearator-less(<) for ordering relation which defines so called
+"strick weak ordering":
+
+o Two keys cannot both be "less than" each other; if k1 is less than k2 then k2 must never be less
+than k1.
+
+o Neither two keys "less than" the other, then those are "equivalent"
+
+Here the library <template-less>
+
+namespace std {
+  template<typename _Tp>
+    struct less : public binary_function<_Tp, _Tp, bool>
+    {
+      bool
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x < __y; }
+    };
+};
 
 
 {value-reference-semantics}
@@ -26356,7 +26426,7 @@ and the element type of function-object? How function object gets the argument?
 These stl class generates a function object that invokes the corresponding operator of the
 underlying element type.
 
-# less<>
+# template-less
 
 namespace std {
   template<typename _Tp>
@@ -26473,7 +26543,7 @@ The second is in error since like any other object, a callable object has a type
 does not match the type of the values in the map.
 
 Can solve this using library 'type' named 'function' defined in functional header. This represent
-'any' callables that has this call signature.
+'any' callables that has the same call signature. This is additional information for a template.
 
 function<int(int,int)>
 
@@ -28658,7 +28728,7 @@ class StrBlobPtr {
     StrBlobPtr( StrBlob &a, size_t sz=0 ): wptr( a.data ), curr(sz) {}
 
     StrBlobPtr& incr();
-    StrBlobPtr& deref() const;
+    std::string& deref() const;
 
   private:
     std::shared_ptr<std::vector<std::string>> check( std::size_t, const std::string& ) const;
@@ -28666,9 +28736,9 @@ class StrBlobPtr {
     std::size_t curr;
 };
 
-# returns a shared_ptr to the vector if the check succeeds. Because a weak ptr does not participate
-# in the reference count of its corresponding shared ptr, the vector might have been deleted. If the
-# vector is gone, lock() will return a null pointer. 
+// returns a shared_ptr to the vector if the check succeeds. Because a weak ptr does not participate
+// in the reference count of its corresponding shared ptr, the vector might have been deleted. If
+// the vector is gone, lock() will return a null pointer. 
 
 std::shared_ptr<std::vector<std::string>>
 StrBlobPtr::check( std::size_t i, const std::string &msg ) const
@@ -28692,11 +28762,13 @@ std::string& StrBlobPtr::deref() const
   return (*p)[curr];    // () is necessary since [] is higher than *
 }
 
+// prefix: return a reference to the incremented object
 StrBlobPtr& StrBlobPtr::incr() const
 {
-  auto p = check( curr, "increment past end");
-  curr++;
-  return *this;
+    // if curr already points past the end of the container, can't increment it.
+    check( curr, "increment past end");
+    curr++;
+    return *this;
 }
 
 
