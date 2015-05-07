@@ -10787,7 +10787,141 @@ SCHED_RR are optional in POSIX, and only are supported for real time bound threa
 ={============================================================================
 *kt_linux_core_200* file io
 
-{open-flag} LPI, 4.3.1
+{descriptors} LPI 4
+All system calls for performing I/O refer to open files using a file descriptor, a (usually small)
+    nonnegative integer. File descriptors are used to refer to 'all' types of open files, including
+    pipes, FIFOs, sockets, terminals, devices, and regular files. 
+    
+
+<universality-of-io>
+One of the distinguishing features of the UNIX I/O model is the concept of universality of I/O. This
+means that the same four system calls - open(), read(), write(), and close() - are used to perform
+I/O on all types of files, including devices such as terminals. 
+
+$ ./copy test test.old           Copy a regular file
+$ ./copy a.txt /dev/tty          Copy a regular file to this terminal
+$ ./copy /dev/tty b.txt          Copy input from this terminal to a regular file
+$ ./copy /dev/pts/16 /dev/tty    Copy input from another terminal
+
+Universality of I/O is achieved by ensuring that each file system and device driver implements the
+'same' set of I/O system calls. Because details specific to the file system or device are handled
+within the kernel, we can generally ignore device-specific factors when writing application
+programs. When access to specific features of a file system or device is required, a program can use
+the catchall ioctl() system call (Section 4.8), which provides an interface to features that fall
+outside the universal I/O model.
+
+
+{descriptors-and-process}
+Each process has its own set of file descriptors.
+
+
+{four-key-calls}
+o fd = open(pathname, flags, mode) 
+
+opens the file identified by pathname, returning a file descriptor used to refer to the open file in
+subsequent calls. If the file doesn't exist, open() may create it, depending on the settings of the
+flags bit-mask argument. The flags argument also specifies whether the file is to be opened for
+reading, writing, or both. The mode argument specifies the permissions to be placed on the file if
+it is created by this call. If the open() call is not being used to create a file, this argument is
+ignored and can be omitted.
+
+o numread = read(fd, buffer, count) 
+
+reads at 'most' count bytes from the open file referred to by fd and stores them in buffer. The
+read() call returns the number of bytes 'actually' read. If no further bytes could be read (i.e.,
+        end-of-file was encountered), read() returns 0.  
+
+o numwritten = write(fd, buffer, count)
+
+writes up to count bytes from buffer to the open file referred to by fd. The write() call returns
+the number of bytes actually written, which may be less than count.  
+
+o status = close(fd)
+
+is called after all I/O has been completed, in order to release the file descriptor fd and its
+associated kernel resources.
+
+<code>
+/* Transfer data until we encounter end of input or an error */
+while ((numRead = read(inputFd, buf, BUF_SIZE)) > 0)
+   if (write(outputFd, buf, numRead) != numRead)
+      fatal("couldn't write whole buffer");
+
+if (numRead == -1)
+   errExit("read");
+
+
+{open-call}
+#include <sys/stat.h>
+#include <fcntl.h>
+
+int open(const char *pathname, int flags, ... /* mode_t mode */);
+
+Returns file descriptor on success, or –1 on error
+
+/* Open existing file for reading */
+
+fd = open("startup", O_RDONLY);
+if (fd == -1)
+errExit("open");
+
+/* Open new or existing file for reading and writing, truncating to zero bytes; file permissions
+ * read+write for owner, nothing for all others */
+
+fd = open("myfile", O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+if (fd == -1)
+errExit("open");
+
+/* Open new or existing file for writing; writes should always append to end of file */
+
+fd = open("w.log", O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
+
+
+<open-flags>
+Table 4-3 are divided into the following groups:
+
+o File access mode flags 
+These are the O_RDONLY, O_WRONLY, and O_RDWR flags described earlier. They can be retrieved using
+the fcntl() F_GETFL operation (Section 5.3).
+
+o File creation flags 
+These are the flags shown in the second part of Table 4-3. They control various aspects of the
+behavior of the open() call, as well as options for subsequent I/O operations. These flags can't be
+retrieved or changed.
+
+o Open file status flags
+These are the remaining flags in Table 4-3. They can be retrieved and modified using the fcntl()
+    F_GETFL and F_SETFL operations (Section 5.3). These flags are sometimes simply called the file
+    status flags.
+
+
+<proc-fdinfo>
+Since kernel 2.6.22, the Linux-specific files in the directory /proc/PID/fdinfo can be read to
+obtain information about the file descriptors of any process on the system. There is one file in
+this directory for each of the process's open file descriptors, with a name that matches the number
+of the descriptor. The pos field in this file shows the current file offset (Section 4.7). The flags
+field is an octal number that shows the file access mode flags and open file status flags.  (To
+        decode this number, we need to look at the numeric values of these flags in the C library
+        header files.)
+
+# cat /proc/847/fdinfo/71
+pos:	0
+flags:	0200
+
+
+O_CLOEXEC (since Linux 2.6.23)
+
+Enable the close-on-exec flag (FD_CLOEXEC) for the new file descriptor. We describe the FD_CLOEXEC
+flag in Section 27.4. Using the O_CLOEXEC flag allows a program to avoid additional fcntl() F_SETFD
+and F_SETFD operations to set the close-on-exec flag. It is also necessary in multithreaded programs
+to avoid the race conditions that could occur using the latter technique. These races can occur when
+one thread opens a file descriptor and then tries to mark it close-on-exec at the same time as
+another thread does a fork() and then an exec() of an arbitrary program. (Suppose that the second
+        thread manages to both fork() and exec() between the time the first thread opens the file
+        descriptor and uses fcntl() to set the close-on-exec flag.) Such races could result in open
+file descriptors being unintentionally passed to unsafe programs. (We say more about race conditions
+        in Section 5.1.)
+
 O_CREAT
 
 If the file doesn't already exist, it is created as a new, empty file. This flag is effective even
@@ -10795,11 +10929,74 @@ if the file is being opened only for reading. If we specify O_CREAT, then we mus
 argument in the open() call; otherwise, the permissions of the new file will be set to some random
 value from the stack.
 
+
 O_EXCL
 
-This flag is used in conjunction with O_CREAT to indicate that if the file already exists, it should
+This flag is used in conjunction with O_CREAT to indicate that if the file already 'exists', it should
 not be opened; instead, open() should fail, with errno set to EEXIST. In other words, this flag
 allows the caller to 'ensure' that it is the process creating the file. 
+
+
+<open-error>
+If an error occurs while trying to open the file, open() returns -1, and errno identifies the cause
+of the error. 
+
+
+{read-call}
+#include <unistd.h>
+
+ssize_t read(int fd, void *buffer, size_t count);
+
+Returns number of bytes read, 0 on EOF, or -1 on error
+
+The count argument specifies the maximum number of bytes to read. The size_t data type is an
+unsigned integer type. The buffer argument supplies the address of the memory buffer into which the
+input data is to be placed. This buffer must be at least count bytes long.
+
+A successful call to read() returns the number of bytes actually read, or 0 if EOF is encountered.
+On error, the usual -1 is returned. The ssize_t data type is a signed integer type used to hold a
+byte count or a -1 error indication.  
+
+A call to read() may read 'less' than the requested number of bytes. For a regular file, the
+probable reason for this is that we were close to the end of the file.
+
+
+<not-null-terminated>
+The output from read() is strange because read() doesn't place a terminating null byte at the end of
+the string that printf() is being asked to print. A moment's reflection leads us to realize that
+this must be so, since read() can be used to read 'any' sequence of bytes from a file. 
+
+In some cases, this input might be text, but in other cases, the input might be binary integers or C
+structures in binary form. There is no way for read() to tell the difference, and so it can't attend
+to the C convention of null terminating character strings. If a terminating null byte is required at
+the end of the input buffer, we must put it there explicitly:
+
+
+{write-call}
+#include <unistd.h>
+
+ssize_t write(int fd, void *buffer, size_t count);
+
+Returns number of bytes written, or -1 on error
+
+
+{ioctl-call}
+The ioctl() system call is a general-purpose mechanism for performing file and device operations
+that fall outside the universal I/O model described earlier in this chapter.
+
+#include <sys/ioctl.h>
+
+int ioctl(int fd, int request, ... /* argp */);
+
+Value returned on success depends on request, or -1 on error
+
+The fd argument is an open file descriptor for the device or file upon which the control operation
+specified by 'request' is to be performed. Device-specific header files define constants that can be
+passed in the request argument.
+
+
+={============================================================================
+*kt_linux_core_201* file io: futher details
 
 
 ={============================================================================
@@ -12117,6 +12314,36 @@ was designed as described below. This protocol is used in both FIFO and TCP/IP I
 {summary}
 When writes, if there is no reading process, broken-pipe. When reads, if there
 is no writing process, blocked.
+
+
+={============================================================================
+*kt_linux_core_102* ipc: way to check pipe status
+
+
+[root@HUMAX proc]# cd /proc/856
+
+[root@HUMAX 856]# ls
+auxv             coredump_filter  exe@             limits           mountinfo        net/             pagemap          smaps            status
+clear_refs       cwd@             fd/              maps             mounts           oom_adj          personality      stat             task/
+cmdline          environ          fdinfo/          mem              mountstats       oom_score        root@            statm            wchan
+
+[root@HUMAX 856]# ll fd
+...
+lr-x------    1 root     root          64 May  6 14:35 68 -> socket:[22102]=
+lrwx------    1 root     root          64 May  6 14:45 69 -> socket:[22104]=
+l-wx------    1 root     root          64 May  6 14:35 7 -> /var/opt-zinc-var/log/copper.log
+lrwx------    1 root     root          64 May  6 14:35 70 -> /var/tmp/zmp-log
+lrwx------    1 root     root          64 May  6 14:45 71 -> /var/tmp/zmp-log
+lr-x------    1 root     root          64 May  6 14:45 72 -> pipe:[22129]| // note:
+lrwx------    1 root     root          64 May  6 14:35 8 -> /dev/fusion0
+lrwx------    1 root     root          64 May  6 14:35 9 -> /dev/nexus_proxy
+
+[root@HUMAX 856]# lsof | grep 22129
+856	/opt/zinc/bin/bronzemediad.oem	pipe:[22129]
+1067	/run/youview/jail/daemons/linearsourced-S3kWYA/opt/zinc-trunk/bin/linearsourced	pipe:[22129]
+
+This shows 'two' ends of pipe.
+
 
 
 ={============================================================================
@@ -18912,8 +19139,11 @@ The localtime() function converts the calendar time timep to broken-down time re
 *kt_linux_core_602*  time: ms and us
 
 {how-to-get-ms-and-us}
-<gettimeofday>  # method 01
-To get ns(nano) from us(micro). 
+10-9 	1 nanosecond 	ns 	One billionth of one second
+10-6 	1 microsecond 	Âµs 	One millionth of one second
+10-3 	1 millisecond 	ms 	One thousandth of one second
+
+<gettimeofday>  from us(micro) to ns(nano)  
 
 #include <sys/time.h>
 
@@ -19010,9 +19240,6 @@ The CLOCK_REALTIME clock measures the amount of time that has elapsed 'since' 00
 int clock_gettime(clockid_t clock_id, struct timespec *tp); A return value of 0 shall
 indicate that the call succeeded.
 
-10-9 	1 nanosecond 	ns 	One billionth of one second
-10-6 	1 microsecond 	Âµs 	One millionth of one second
-10-3 	1 millisecond 	ms 	One thousandth of one second
 
 This struct increase 'sec' when 'nsec' nano sec passes. so to get the total nano:
 
