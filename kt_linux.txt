@@ -232,9 +232,12 @@
 |kt_linux_core_500| sandbox
 
 |kt_linux_core_500|  file io
-|kt_linux_core_600|  time
-|kt_linux_core_601|  time: curTime
-|kt_linux_core_602|  time: ms and us
+
+|kt_linux_core_600| time
+|kt_linux_core_601| time: conversion
+|kt_linux_core_602| time: resolution, jiffies
+|kt_linux_core_603| time: posix clock, realtime
+|kt_linux_core_604| time: ms timestamp
 
 |kt_linux_core_700| dbus
 |kt_linux_core_800| proc: /proc/mounts
@@ -19066,19 +19069,202 @@ Section 5.10.
 
 
 ={============================================================================
-*kt_linux_core_600*  time
+*kt_linux_core_600* time
 
-{abstime}
-The abstime is the system time - the number of seconds and nanoseconds past Jan. 1, 1970, UTC. The
-advantage in using the abstime, instead of a delta, is if the function prematurely returns ( perhaps
-because of a caught signal ): the function can be called again without having to change the timespec
-structure. 
+LPI 10.
+
+{two-kinds}
+Within a program, we may be interested in two kinds of time
+
+o Real time: This is the time as measured either from some standard point (calendar time) or from
+some fixed point (typically the start) in the life of a process (elapsed or wall clock time).
+Obtaining the calendar time is useful to programs that, for example, timestamp database records or
+files. Measuring elapsed time is useful for a program that takes periodic actions or makes regular
+measurements from some external input device.
+
+o Process time: This is the amount of CPU time used by a process. Measuring process time is useful
+for checking or optimizing the performance of a program or algorithm.
+
+
+{calender-time}
+Regardless of geographic location, UNIX systems represent time internally as a measure of seconds
+since the Epoch; that is, since midnight on the morning of 1 January 1970, Universal Coordinated
+Time (UTC, previously known as Greenwich Mean Time, or GMT). This is approximately the date when the
+UNIX system came into being. Calendar time is stored in variables of type time_t, an integer type
+specified by SUSv3.
+
+note: UTC == GMT
+
+
+{time-t-type}
+On 32-bit Linux systems, time_t, which is a signed integer, can represent dates in the range 13
+December 1901 20:45:52 to 19 January 2038 03:14:07. SUSv3 leaves the meaning of negative time_t
+values unspecified. 
+
+Thus, many current 32-bit UNIX systems face a theoretical Year 2038 problem, which they may
+encounter before 2038, if they do calculations based on dates in the future.  This problem will be
+significantly alleviated by the fact that by 2038, probably all UNIX systems will have long become
+64-bit and beyond. However, 32-bit embedded systems, which typically have a much longer lifespan
+than desktop hardware, may still be afflicted by the problem. Furthermore, the problem will remain
+for any legacy data and applications that maintain time in a 32-bit time_t format.
+
+note: Appears that 32bit also has 64 bits time_t? This is taken from debian 32 bits in VM.
+
+Linux debian-keitee 3.2.0-4-486 #1 Debian 3.2.63-2+deb7u2 i686 GNU/Linux
+
+__STD_TYPE __TIME_T_TYPE __time_t;	/* Seconds since the Epoch.  */
+
+__TIME_T_TYPE      50 i386-linux-gnu/bits/typesizes.h #define __TIME_T_TYPE	__SLONGWORD_TYPE
+
+__SLONGWORD_TYPE  103 i386-linux-gnu/bits/types.h #define __SLONGWORD_TYPE	long int
+
+
+{gettimeofday-time}
+The gettimeofday() system call returns the 'calendar' time in the buffer pointed to by tv.
+
+#include <sys/time.h>
+
+int gettimeofday(struct timeval *tv, struct timezone *tz);
+
+Returns 0 on success, or -1 on error
+
+struct timeval {
+    time_t tv_sec;         /* Seconds since 00:00:00, 1 Jan 1970 UTC */
+    suseconds_t tv_usec;   /* Additional microseconds (long int) */
+};
+
+The tz argument to gettimeofday() is a historical artifact. This argument is now obsolete and should
+always be specified as NULL.
+
+
+<time-call>
+The time() system call returns the number of seconds since the Epoch. i.e., the same value that
+gettimeofday() returns in the tv_sec field of its tv argument.
+
+#include <time.h>
+
+time_t time(time_t *timep);
+
+Returns number of seconds since the Epoch,or (time_t) -1 on error
+
+Since time() returns the same value in two ways, we often simply use the following call without
+error checking:
+
+t = time(NULL);
+
+note:
+The existence of time() as a system call is historical and now redundant; it could be implemented as
+a library function that calls gettimeofday().
 
 
 ={============================================================================
-*kt_linux_core_601*  time: currTime
+*kt_linux_core_601* time: conversion
 
-{implementation}
+Shows the functions used to convert between time_t values and other time formats, including
+printable representations. These functions shield us from the complexity brought to such conversions
+by timezones, daylight saving time (DST) regimes, and localization issues.
+
+* affected by TZ env variable
++ affected by locale 
+
+Kernel   -> time()               time_t               -> ctime()*    fixed-format string
+         <- stime()                                                  Tue Feb 1 21:39:46 2011\n\0
+
+         -> gettimeofday()       struct timeval
+         <- settimeofday()
+
+         -> gmtime()             struct tm            -> asctime()
+         -> localtime()*         (broken down time)
+         <- mktime()*            struct tm            -> strftime()*+   user-formatted,
+                                                      <- strptime()+    localized string
+
+
+{to-printable-form}
+The ctime() function provides a simple method of converting a time_t value into printable form. The
+ctime() function automatically accounts for local timezone and DST settings when performing the
+conversion.
+
+The returned string is statically allocated; future calls to ctime() will overwrite it.
+
+#include <time.h>
+
+char *ctime(const time_t *timep);
+
+Returns pointer to statically allocated string terminated by newline and \0 on success, or NULL on
+error
+
+<statically-allocated>
+SUSv3 states that calls to any of the functions ctime(), gmtime(), localtime(), or asctime() may
+overwrite the statically allocated structure that is returned by any of the other functions. In
+other words, these functions may share single copies of the returned character array and tm
+structure, and this is done in some versions of glibc. If we need to maintain the returned
+information across multiple calls to these functions, we must save local copies.
+
+
+{to-broken-down-from}
+The gmtime() and localtime() functions convert a time_t value into a so-called brokendown time. The
+broken-down time is placed in a statically allocated structure whose address is returned as the
+function result.
+
+#include <time.h>
+
+struct tm *gmtime(const time_t *timep);
+struct tm *localtime(const time_t *timep);
+
+Both return a pointer to a statically allocated broken-down time structure on success, or NULL on
+error
+
+Unlike gmtime(), localtime() takes into account timezone and DST settings to return a broken-down
+time corresponding to the system's local time.
+
+struct tm {
+    int tm_sec;      /* Seconds (0-60) */
+    int tm_min;      /* Minutes (0-59) */
+    int tm_hour;     /* Hours (0-23) */
+    int tm_mday;     /* Day of the month (1-31) */
+    int tm_mon;      /* Month (0-11) */
+    int tm_year;     /* Year since 1900 */   note: 1900 but not 1970
+    int tm_wday;     /* Day of the week (Sunday = 0)*/
+    int tm_yday;     /* Day in the year (0-365; 1 Jan = 0)*/
+    int tm_isdst;    /* Daylight saving time flag
+                     > 0: DST is in effect;
+                     = 0: DST is not effect;
+                     < 0: DST information not available */
+};
+
+
+{between-broken-down-and-printable-form}
+functions that convert a broken-down time to printable form, and vice versa.
+
+<no-control-format>
+#include <time.h>
+
+char *asctime(const struct tm *timeptr);
+
+Returns pointer to statically allocated string terminated by newline and \0 on success, or NULL on
+error
+
+By contrast with ctime(), local timezone settings have no effect on asctime(), since it is
+converting a broken-down time that is typically either already localized via localtime() or in UTC
+as returned by gmtime(). As with ctime(), we have no control over the format of the string produced
+by asctime().
+
+
+<to-control-format>
+The strftime() function provides us with more precise control when converting a broken-down time
+into printable form. Given a broken-down time pointed to by timeptr, strftime() places a
+corresponding null-terminated, date-plus-time string in the buffer pointed to by outstr.
+
+The string returned in outstr is formatted according to the specification in format.
+
+#include <time.h>
+
+size_t strftime(char *outstr, size_t maxsize, const char *format, const struct tm *timeptr);
+
+Returns number of bytes placed in outstr (excluding terminating null byte) on success, or 0 on error
+
+
+<example>
 #include <time.h>
 #include "curr_time.h" /* Declares function defined here */
 
@@ -19087,6 +19273,9 @@ structure.
 // Return a string containing the current time formatted according to the specification in 'format'
 // (see strftime(3) for specifiers). If 'format' is NULL, we use "%c" as a specifier (which gives
 // the date and time as for ctime(3), but without the trailing newline). Returns NULL on error.
+//
+// %c Date and time                       Tue Feb 1 21:39:46 2011
+// %T Time (same as %H:%M:%S)             21:39:46
 
 char * currTime(const char *format)
 {
@@ -19110,124 +19299,110 @@ time: Fri May  8 00:55:29 2015
 time: 00:55:29
 
 
-From CTIME(3)                   Linux Programmer's Manual                  CTIME(3)
+={============================================================================
+*kt_linux_core_602* time: resolution, jiffies
 
-struct tm *localtime(const time_t *timep);
+10-9  1 nanosecond   ns    one billionth of one second
+10-6  1 microsecond  us    one millionth of one second
+10-3  1 millisecond  ms    one thousandth of one second
 
-The ctime(), gmtime() and localtime() functions all take an argument of data type time_t which
-represents 'calendar' time. When interpreted as an absolute time value, it represents the number of
-seconds elapsed since the Epoch, 1970-01-01 00:00:00 +0000 (UTC).
+The accuracy of various time-related system calls described in this book is limited to the
+resolution of the system software clock, which measures time in units called jiffies.
 
-Broken-down time is stored in the structure tm which is defined in <time.h> as follows:
+The size of a jiffy is defined by the constant HZ within the kernel source code. This is the unit in
+which the kernel allocates the CPU to processes under the roundrobin time-sharing scheduling
+algorithm.
 
-struct tm {
-  int tm_sec;         /* seconds */
-  int tm_min;         /* minutes */
-  int tm_hour;        /* hours */
-  int tm_mday;        /* day of the month */
-  int tm_mon;         /* month */
-  int tm_year;        /* year */
-  int tm_wday;        /* day of the week */
-  int tm_yday;        /* day in the year */
-  int tm_isdst;       /* daylight saving time */
-};
+Because CPU speeds have greatly increased since Linux was first implemented, in kernel 2.6.0, the
+rate of the software clock was raised to 1000 hertz on Linux/ x86-32. The advantages of a higher
+software clock rate are that timers can operate with greater accuracy and time measurements can be
+made with greater precision.
 
-The localtime() function converts the calendar time timep to broken-down time representation,
-    expressed relative to the user's specified 'timezone'. The function acts as if it called
-    tzset(3) and sets the external variables tzname with information about the current timezone,
-    timezone with the difference between Coordinated Universal Time (UTC) and local standard time in
-    seconds, and daylight to a nonzero value if daylight savings time rules apply during some part
-    of the year. The return value points to a statically allocated struct which might be overwritten
-    by subsequent calls to any of the date and time functions.
+However, it isn't desirable to set the clock rate to arbitrarily high values, because each clock
+interrupt consumes a small amount of CPU time, which is time that the CPU can't spend executing
+processes.
+
+Debate among kernel developers eventually resulted in the software clock rate becoming a
+configurable kernel option (under Processor type and features, Timer frequency). Since kernel
+2.6.13, the clock rate can be set to 100, 250 (the default), or 1000 HZ, giving jiffy values of 10,
+4, and 1 milliseconds, respectively.
 
 
 ={============================================================================
-*kt_linux_core_602*  time: ms and us
+*kt_linux_core_603* time: posix clock, realtime
 
-{how-to-get-ms-and-us}
-10-9 	1 nanosecond 	ns 	One billionth of one second
-10-6 	1 microsecond 	Âµs 	One millionth of one second
-10-3 	1 millisecond 	ms 	One thousandth of one second
+LPI 23.5
 
-<gettimeofday>  from us(micro) to ns(nano)  
+POSIX clocks (originally defined in POSIX.1b) provide an API for accessing clocks that measure time
+with nanosecond precision. Nanosecond time values are represented using the same timespec structure
 
-#include <sys/time.h>
+The main system calls in the POSIX clocks API are clock_gettime(), which retrieves the current value
+of a clock; clock_getres(), which returns the resolution of a clock; and clock_settime(), which
+updates a clock.
 
-int gettimeofday(struct timeval *tv, struct timezone *tz);
+note:
+On Linux, programs using this API must be compiled with the -lrt option, in order to link against
+the librt (realtime) library.
 
-The  functions  gettimeofday()  and  settimeofday() can get and set the time as well as a timezone.
-The tv argument is a  struct  timeval  (as specified in <sys/time.h>):
 
-  struct timeval {
-    time_t      tv_sec;     /* seconds */
-    suseconds_t tv_usec;    /* microseconds */
-  };
+{clock-gettime}
+The time value is returned in the timespec structure pointed to by tp.
 
-and gives the number of seconds and microseconds since the Epoch (see time(2)). The use of the
-timezone structure is obsolete; the tz argument should normally be specified as NULL.
+Although the timespec structure affords nanosecond precision, the granularity of the time value
+returned by clock_gettime() may be coarser than this. The clock_getres() system call returns a
+pointer to a timespec structure containing the resolution of the clock specified in clockid.
 
-#include <iostream>
-#include <vector>
-#include <sys/time.h>
+#define _POSIX_C_SOURCE 199309
+#include <time.h>
 
-using namespace std;
+int clock_gettime(clockid_t clockid, struct timespec *tp);
+int clock_getres(clockid_t clockid, struct timespec *res);
 
-typedef uint64_t u64;
+Both return 0 on success, or -1 on error
 
-// return nano secs
-static u64 nsec() {
-  struct timeval tv;
-  if(gettimeofday(&tv, 0) < 0)
-    return -1;
-  return (u64)tv.tv_sec*1000*1000*1000 + tv.tv_usec*1000;
-}
+<clockid>
+The clockid_t data type is a type specified by SUSv3 for representing a clock identifier and
+supports for POSIX.1b timers, as defined in include/linux/time.h, are:
 
-int main()
-{
-  std::vector<int> ivec;
+CLOCK_REALTIME                Settable system-wide real-time clock
 
-  uint64_t be = nsec();
+The CLOCK_REALTIME clock is a system-wide clock that measures wall-clock time. By contrast with the
+CLOCK_MONOTONIC clock, the setting of this clock can be changed.
 
-  ivec.push_back(1);
-  ivec.push_back(2);
-  ivec.push_back(3);
-  ivec.push_back(4);
+CLOCK_MONOTONIC               Nonsettable monotonic clock
 
-  uint64_t af = nsec();
+SUSv3 specifies that the CLOCK_MONOTONIC clock measures time since some “unspecified point in the
+past” that doesn’t change after system startup. This clock is useful for applications that must not
+be affected by discontinuous changes to the system clock (e.g., a manual change to the system time).
+On Linux, this clock measures the time since system startup.
 
-  cout << "diff(ns): " << af-be << endl;
-  cout << "diff(ms): " << (af-be)/1000 << endl;
-}
+CLOCK_PROCESS_CPUTIME_ID      Per-process CPU-time clock (since Linux 2.6.12)
+CLOCK_THREAD_CPUTIME_ID       Per-thread CPU-time clock (since Linux 2.6.12)
 
-$ ./a.out 
-diff(ns): 59000
-diff(ms): 59
+The CLOCK_PROCESS_CPUTIME_ID clock measures the user and system CPU time consumed by the calling
+process. The CLOCK_THREAD_CPUTIME_ID clock performs the analogous task for an individual thread
+within a process.
 
-<clock_gettime> # method 02
-NAME
-       clock_gettime - Return the current timespec value of tp for the specified clock
+note:
+but only CLOCK_REALTIME is mandatory and widely supported on UNIX implementations.
 
-SYNOPSIS
-       long sys_clock_gettime (clockid_t which_clock, struct timespec *tp);
+<linux>
+Linux 2.6.28 adds a new clock type, CLOCK_MONOTONIC_RAW, to those listed in Table 23-1. This is a
+nonsettable clock that is similar to CLOCK_MONOTONIC, but it gives access to a pure hardware-based
+time that is unaffected by NTP adjustments.  This nonstandard clock is intended for use in
+specialized clocksynchronization applications.
 
-DESCRIPTION
-       clock_gettime  returns  the  current timespec value of tp for the specific clock,
-       which_clock.  The values that clockid_t currently supports for POSIX.1b timers, as defined in
-       include/linux/time.h, are:
+Linux 2.6.32 adds two more new clocks to those listed in Table 23-1: CLOCK_REALTIME_COARSE and
+CLOCK_MONOTIC_COARSE. These clocks are similar to CLOCK_REALTIME and CLOCK_MONOTONIC, but intended
+for applications that want to obtain lower-resolution timestamps at minimal cost. These nonstandard
+clocks don't cause any access to the hardware clock (which can be expensive for some hardware clock
+        sources), and the resolution of the returned value is the jiffy (Section 10.6).
 
-       CLOCK_REALTIME
-              Systemwide realtime clock.
 
-       CLOCK_MONOTONIC
-              Represents monotonic time. Cannot be set.
+={============================================================================
+*kt_linux_core_604* time: ms timestamp
 
-       CLOCK_PROCESS_CPUTIME_ID
-              High resolution per-process timer.
-
-       CLOCK_THREAD_CPUTIME_ID
-              Thread-specific timer.
-
-If clock has 1024 hz resolution, then
+If clock has 1024 HZ resolution, then
 
 1/1024 = 0.000.9765625 (the result is 976562.5 nanoseconds.)
 1/1000 = 0.001.
@@ -19237,75 +19412,43 @@ The unit is wider or shorter depending on a resolution.
 
 struct timespec {
   time_t   tv_sec;        /* seconds */
-  long     tv_nsec;       /* nanoseconds */     // note nano
+  long     tv_nsec;       /* 'nano'seconds */
 };
 
-The CLOCK_REALTIME clock measures the amount of time that has elapsed 'since' 00:00:00 January 1,
-1970 Greenwich Mean Time (GMT)
-
-int clock_gettime(clockid_t clock_id, struct timespec *tp); A return value of 0 shall
-indicate that the call succeeded.
+The CLOCK_REALTIME clock measures the amount of time that has elapsed since epoch. note: since uses
+time_t. The tv_nsec field specifies a nanoseconds value. It must be a number in the range 0 to
+999,999,999.
 
 
-This struct increase 'sec' when 'nsec' nano sec passes. so to get the total nano:
+To get nanos in total
 
 (tv_sec * 10+9) + tv_nsec nanoseconds
 
+and the following gets time in ms.
 
-the following gets time in ms.
+1 ms = 1 sec * 10+3        // multiply
+1 ms = 1 nsec * 10-6       // devide
 
-1 ms = 1 sec * 10+3
-1 ms = 1 nsec * 10-6
+So this is to get time in ms and us.
 
-Therfore, this is to get time in ms.
-
-static uint32_t get_time()
+static uint32_t get_time_ms()
 {
-  struct timespec time = {0, 0};
-  uint32_t msec = 0U;
-  clock_gettime(CLOCK_REALTIME, &time);
-
-  // 86400 is secs for a day. so care only about secs but not day and hours and convert to ms
-
-  msec = (time.tv_sec % 86400) * 1000;
-
-  // get ms from nano
-  msec += time.tv_nsec / 1000000;
-  return msec;
+    struct timespec ts = {0, 0};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (uint32_t)((ts.tv_sec * 1000) + (ts.tv_nsec / 1000000));
 }
 
-// get time in Âµs 
-//
-static uint32_t time_get_us(void)
-{
-	 struct	 timespec ts;
-	 xclock_gettime(CLOCK_REALTIME, &ts);
-	 return (uint32_t)((ts.tv_sec * 1000000) + (ts.tv_nsec / 10000));
-}
-
-// start time
-//
-static void time_init(void)
-{
-	tstart = time_get();
-}
-
-// get diff between 'start' and 'now' in ms
-//
-static uint32_t time_get(void)
+static uint32_t time_get_us()
 {
     struct	 timespec ts;
-#if __mips__
     xclock_gettime(CLOCK_REALTIME, &ts);
-#else
-	clock_gettime(CLOCK_REALTIME, &ts);
-#endif
-	return (uint32_t)((ts.tv_sec * 1000) + (ts.tv_nsec / 1000000)) - tstart;
+    return (uint32_t)((ts.tv_sec * 1000000) + (ts.tv_nsec / 10000));
 }
 
-// usuage
-//
-thi = time_get();
+
+<timpstamp-in-ms-example>
+1. Since start from 0, this makes timestamp in HH:MM:SS:MS since started but not shows days.
+2. Do math as below. So if wants to have timestamps with years and days then use other way.
 
 hour = (thi)/3600000; 				# hour in ms
 msec = (thi - (hour*3600000));	# ms remains 
@@ -19314,44 +19457,43 @@ msec = msec - (minute * 60000);	# ms remains
 sec = msec / 1000; 					# secs
 msec = msec - (sec * 1000); 		# ms remains
 
-fprintf(of, "start check at: %.3d:%.2d:%.2d.%.3d\n", hour, minute, sec, msec);
-
-
 /*
  * time in MIPS
  */
-#include<stdio.h>
-#include<unistd.h>
-#include<linux/unistd.h>
-#include<errno.h> 
+#include <stdio.h>
+#include <unistd.h>
+#include <linux/unistd.h>
+#include <errno.h> 
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 typedef unsigned int uint32_t;
+
+// note: starts from 0
 static uint32_t tstart = 0;
 
 #if __mips__ /* optimization for mips */
 static inline void xclock_gettime(unsigned int which_clock, struct timeval * tv);
-	
+
 #define _syscall_clock_gettimeX(type,name,atype,a,btype,b) \
 type x##name(atype a, btype b) \
 { \
-	register unsigned long __a0 asm("$4") = (unsigned long) a; \
-	register unsigned long __a1 asm("$5") = (unsigned long) b; \
-	register unsigned long __a3 asm("$7"); \
-	unsigned long __v0; \
-	\
-	__asm__ volatile ( \
-	".set\tnoreorder\n\t" \
-	"li\t$2, %4\t\t\t# " #name "\n\t" \
-	"syscall\n\t" \
-	"move\t%0, $2\n\t" \
-	".set\treorder" \
-	: "=&r" (__v0), "=r" (__a3) \
-	: "r" (__a0), "r" (__a1), "i" (__NR_##name) \
-	: "$2", "$8", "$9", "$10", "$11", "$12", "$13", "$14", "$15", "$24", \
-	  "memory"); \
+    register unsigned long __a0 asm("$4") = (unsigned long) a; \
+    register unsigned long __a1 asm("$5") = (unsigned long) b; \
+    register unsigned long __a3 asm("$7"); \
+    unsigned long __v0; \
+    \
+    __asm__ volatile ( \
+            ".set\tnoreorder\n\t" \
+            "li\t$2, %4\t\t\t# " #name "\n\t" \
+            "syscall\n\t" \
+            "move\t%0, $2\n\t" \
+            ".set\treorder" \
+            : "=&r" (__v0), "=r" (__a3) \
+            : "r" (__a0), "r" (__a1), "i" (__NR_##name) \
+            : "$2", "$8", "$9", "$10", "$11", "$12", "$13", "$14", "$15", "$24", \
+            "memory"); \
 }
 
 _syscall_clock_gettimeX(void, clock_gettime, unsigned int, which_clock, struct timeval *, tv);
@@ -19360,56 +19502,47 @@ _syscall_clock_gettimeX(void, clock_gettime, unsigned int, which_clock, struct t
 
 static uint32_t time_get(void)
 {
-    struct	 timespec ts;
+    struct timespec ts;
 #if __mips__
     xclock_gettime(CLOCK_REALTIME, &ts);
-	printf("call xclock_getttime: ts.tv_sec = %ld, ts.tv_nsec = %ld\n", ts.tv_sec, ts.tv_nsec);
+    printf("call xclock_getttime: ts.tv_sec = %ld, ts.tv_nsec = %ld\n", ts.tv_sec, ts.tv_nsec);
 #else
-	clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_REALTIME, &ts);
 #endif
-	return (uint32_t)((ts.tv_sec * 1000) + (ts.tv_nsec / 1000000)) - tstart;
+    return (uint32_t)((ts.tv_sec * 1000) + (ts.tv_nsec / 1000000)) - tstart;
 }
 
 void main(int argc, char* agrv[]) 
 {
-	int hour = 0, minute = 0, sec = 0, msec = 0;
-	uint32_t tlo =0, thi = 0;
+    int hour = 0, minute = 0, sec = 0, msec = 0;
+    uint32_t tlo =0, thi = 0;
 
-	tstart = time_get();
+    tstart = time_get();
 
-	thi = time_get();
-	hour = (thi)/3600000;
-	msec = (thi - (hour*3600000));
-	minute = msec / 60000;
-	msec = msec - (minute * 60000);
-	sec = msec / 1000;
-	msec = msec - (sec * 1000);
-	printf("thi:%ld, time: %.3d:%.2d:%.2d.%.3d\n", thi, hour, minute, sec, msec);  
+    thi = time_get();
+    hour = (thi)/3600000;
+    msec = (thi - (hour*3600000));
+    minute = msec / 60000;
+    msec = msec - (minute * 60000);
+    sec = msec / 1000;
+    msec = msec - (sec * 1000);
+    printf("thi:%ld, time: %.3d:%.2d:%.2d.%.3d\n", thi, hour, minute, sec, msec);  
 
-	sleep(2);
+    sleep(2);
 
-	thi = time_get();
-	hour = (thi)/3600000;
-	msec = (thi - (hour*3600000));
-	minute = msec / 60000;
-	msec = msec - (minute * 60000);
-	sec = msec / 1000;
-	msec = msec - (sec * 1000);
-	printf("thi:%ld, time: %.3d:%.2d:%.2d.%.3d\n", thi, hour, minute, sec, msec);  
+    thi = time_get();
+    hour = (thi)/3600000;
+    msec = (thi - (hour*3600000));
+    minute = msec / 60000;
+    msec = msec - (minute * 60000);
+    sec = msec / 1000;
+    msec = msec - (sec * 1000);
+    printf("thi:%ld, time: %.3d:%.2d:%.2d.%.3d\n", thi, hour, minute, sec, msec);  
 
-	thi = 0xFFFFFFFF;
-	hour = (thi)/3600000;
-	msec = (thi - (hour*3600000));
-	minute = msec / 60000;
-	msec = msec - (minute * 60000);
-	sec = msec / 1000;
-	msec = msec - (sec * 1000);
-	printf("thi:%ld, time: %.3d:%.2d:%.2d.%.3d\n", thi, hour, minute, sec, msec);  
-
-	return;
+    return;
 }
 
--sh-3.2# ./a.out 
+$ ./a.out 
 call xclock_getttime: ts.tv_sec = 946693753, ts.tv_nsec = 932727000
 call xclock_getttime: ts.tv_sec = 946693753, ts.tv_nsec = 932829000
 thi:   0, time: 000:00:00.000
@@ -19417,66 +19550,62 @@ thi:   0, time: 000:00:00.000
 call xclock_getttime: ts.tv_sec = 946693755, ts.tv_nsec = 933026000
 thi:2001, time: 000:00:02.001
 
-thi:  -1, time: 1193:02:47.295
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+
+typedef unsigned int uint32_t;
+
+static uint32_t tstart = 0;
+
+static time_get(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (uint32_t)((ts.tv_sec * 1000) + (ts.tv_nsec / 1000000)) - tstart;
+}
+
+static char* time_stamp(void)
+{
+    uint32_t tdiff = time_get();
+
+    static char buf[100];
+    int hour = 0, minute = 0, sec = 0, msec = 0;
+    hour = (tdiff)/3600000;
+    msec = (tdiff - (hour*3600000));
+    minute = msec / 60000;
+    msec = msec - (minute * 60000);
+    sec = msec / 1000;
+    msec = msec - (sec * 1000);
+    sprintf( buf, "%.2d:%.2d:%.2d.%.3d", hour, minute, sec, msec);
+
+    return buf;
+}
+
+int main(int argc, char** argv)
+{
+    tstart = time_get();
+
+    fprintf( stdout, "time: %s\n", time_stamp() );
+
+    int i, j;
+    for(i = 0; i < 1000000000; i++)
+    {
+        j = 30;
+        j = j++ % 10;
+    }
+
+    fprintf( stdout, "time: %s\n", time_stamp() );
+
+    exit(EXIT_SUCCESS);
+}
 
 
-{mktime} # localtime
-time_t is a sec used in timespec
-
-char *ctime(const time_t *timep);
-
-The call ctime(t) is equivalent to asctime(localtime(t)). It converts the calendar time t
-into a null-terminated string of the form
-
-"Wed Jun 30 21:49:08 1993\n"
-
-struct tm *localtime(const time_t *timep);
-
-The localtime() function converts the calendar time timep to broken-down time
-representation, expressed relative to the user's specified timezone.
-
-The ctime(), gmtime() and localtime() functions all take an argument of data type time_t
-which represents calendar time. When interpreted as an absolute time value, it represents
-the number of seconds elapsed since the Epoch, 1970-01-01 00:00:00 +0000 (UTC).
-
-time_t mktime(struct tm *tm);
-
-The mktime() function converts a broken-down time structure, expressed as local time, to
-calendar time representation.  The asctime() and mktime() functions both take an argument
-representing broken-down time which is a representation separated into year, month, day,
-etc.
-
-Broken-down time is stored in the structure tm which is defined in <time.h> as follows:
-this is the broken time is the local time based on time zone.
-
-struct tm {
-	int tm_sec;         /* seconds */
-	int tm_min;         /* minutes */
-	int tm_hour;        /* hours */
-	int tm_mday;        /* day of the month */
-	int tm_mon;         /* month */
-	int tm_year;        /* year */
-	int tm_wday;        /* day of the week */
-	int tm_yday;        /* day in the year */
-	int tm_isdst;       /* daylight saving time */
-};
-
-The members of the tm structure are:
-tm_year 	The number of years since 1900.
-tm_mon		The number of months since January, in the range 0 to 11.
-
-
-to convert local time to UTC
-
-t3=2011:12:15:13:5:5
-sscanf(t3,"%d:%d:%d:%d:%d:%d",&year,&month,&day,&hrs,&mins,&secs);
-mytime.tm_year=year - 1900;
-mytime.tm_mon=month-1;
-mytime.tm_mday=day;
-mytime.tm_hour=hrs;
-mytime.tm_min=mins;
-mytime.tm_sec=secs;
-mktime(&mytime)
+$ ./a.out 
+time: 00:00:00.000
+time: 00:00:04.648
 
 
 ={============================================================================
