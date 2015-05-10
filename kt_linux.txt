@@ -180,7 +180,10 @@
 |kt_linux_core_103| priority and schedule
 
 |kt_linux_core_200| file io
-|kt_linux_core_201| system resource limits
+|kt_linux_core_201| file io: further details
+|kt_linux_core_202| file io: non-blocking
+|kt_linux_core_203| file io: /dev/fd
+|kt_linux_core_204| system resource limits
 
 |kt_linux_core_200| ipc
 |kt_linux_core_201| ipc: system v <ipcs-command>
@@ -191,8 +194,11 @@
 
 |kt_linux_core_300| ipc: socket: LPI 56
 
-|kt_linux_core_101| ipc: pipe and fifo
-|kt_linux_core_103| ipc: which one to use {semaphores-versus-pthreads-mutexes}
+|kt_linux_core_101| ipc: pipe
+|kt_linux_core_102| ipc: way to check pipe fd and setup
+|kt_linux_core_103| ipc: fifo
+|kt_linux_core_104| ipc: semantics of read() and write() on pipes and fifo
+|kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
 |kt_linux_core_200| ipc: sync: semaphore 
 |kt_linux_core_201| ipc: sync: pthread mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
@@ -11001,9 +11007,126 @@ passed in the request argument.
 ={============================================================================
 *kt_linux_core_201* file io: futher details
 
+LPI 5.
+
+{automicity}
+All system calls are executed atomically. By this, we mean that the kernel guarantees that all of
+the steps in a system call are completed as a single operation, without being interrupted by another
+process or thread.
+
+<race-condition>
+Atomicity is essential to the successful completion of some operations. In particular, it allows us
+to avoid race conditions (sometimes known as race hazards). A race condition is a situation where
+the result produced by two processes (or threads) operating on shared resources depends in an
+unexpected way on the relative order in which the processes gain access to the CPU(s).
+
+
+{two-cases-when-needs-automicity}
+<in-creation>
+Creating a file exclusively
+
+Using a single open() call that specifies the O_CREAT and O_EXCL flags prevents this possibility by
+guaranteeing that the check and creation steps are carried out as a single atomic uninterruptible
+operation.
+
+See 5.1 for the problem description.
+
+<in-appending>
+When we have multiple processes appending data to the same file (e.g., a global log file).
+
+if (lseek(fd, 0, SEEK_END) == -1)
+   errExit("lseek");
+
+if (write(fd, buf, len) != len)
+   fatal("Partial/failed write");
+
+Again, this is a race condition because the results depend on the order of scheduling of the two
+processes. Avoiding this problem requires that the seek to the next byte past the end of the file
+and the write operation happen atomically. This is what opening a file with the O_APPEND flag
+guarantees.
+
+
+{file-control-operations}
+#include <fcntl.h>
+
+int fcntl(int fd, int cmd, ...);
+
+Return on success depends on cmd, or -1 on error
+
+Using fcntl() to modify open file status flags is particularly useful in the following cases:
+
+o The file was not opened by the calling program, so that it had no control over the flags used in
+the open() call. e.g., the file may be one of the three standard descriptors that are opened before
+the program is started.
+
+o The file descriptor was obtained from a system call other than open(). Examples of such system
+calls are pipe(), which creates a pipe and returns two file descriptors referring to either end of
+the pipe, and socket(), which creates a socket and returns a file descriptor referring to the
+socket.
+
 
 ={============================================================================
-*kt_linux_core_201* file attribute
+*kt_linux_core_202* file io: non-blocking
+
+LPI 5.9
+
+The O_NONBLOCK flag when opening a file serves two purposes:
+
+o If the file can't be opened immediately, then open() returns an error instead of blocking. One
+case where open() can block is with FIFOs (Section 44.7).
+
+o After a successful open(), 'subsequent' I/O operations are also nonblocking. If an I/O system call
+can't complete immediately, then either a partial data transfer is performed or the system call
+fails with one of the errors EAGAIN or EWOULDBLOCK. Which error is returned depends on the system
+call. On Linux, as on many UNIX implementations, these two error constants are synonymous.
+
+<nonblocking-pipe>
+Nonblocking mode can be used with devices (e.g., terminals and pseudoterminals), pipes, FIFOs, and
+sockets. Because file descriptors for pipes and sockets are not obtained using open(), we must
+enable this flag using the fcntl() F_SETFL operation.
+
+O_NONBLOCK is generally ignored for regular files, because the kernel buffer cache ensures that I/O
+on regular files does not block, as described in Section 13.1. However, O_NONBLOCK does have an
+effect for regular files when mandatory file locking is employed (Section 55.4).
+
+
+={============================================================================
+*kt_linux_core_203* file io: /dev/fd
+
+For each process, the kernel provides the special virtual directory /dev/fd. This directory contains
+filenames of the form /dev/fd/n, where n is a number corresponding to one of the open file
+descriptors for the process.
+
+note: which process?
+
+/dev/fd is actually a symbolic link to the Linux-specific /proc/self/fd directory. The latter
+directory is a special case of the Linux-specific /proc/PID/fd directories, each of which contains
+symbolic links corresponding to all of the files held open by a process.
+
+$ ll /dev/fd/
+total 0
+dr-x------ 2 keitee keitee  0 May 10 22:22 ./
+dr-xr-xr-x 8 keitee keitee  0 May 10 22:22 ../
+lrwx------ 1 keitee keitee 64 May 10 22:22 0 -> /dev/pts/1
+lrwx------ 1 keitee keitee 64 May 10 22:22 1 -> /dev/pts/1
+lrwx------ 1 keitee keitee 64 May 10 22:22 2 -> /dev/pts/1
+lr-x------ 1 keitee keitee 64 May 10 22:22 3 -> /proc/4122/fd/
+
+
+The files in the /dev/fd directory are rarely used within programs. To use standard input or output
+(as appropriate) for this filename argument.
+
+Using /dev/fd allows to use standard input, output, and error as filename arguments to any program
+requiring them. Thus, we can write the previous shell command as follows:
+
+$ ls | diff /dev/fd/0 oldfilelist
+
+As a convenience, the names /dev/stdin, /dev/stdout, and /dev/stderr are provided as symbolic links
+to, respectively, /dev/fd/0, /dev/fd/1, and /dev/fd/2.
+
+
+={============================================================================
+*kt_linux_core_204* file attribute
 
 LPI 15.
 
@@ -12273,6 +12396,30 @@ pclose(p);
 After all, the reason that can use pipe between parent/child is that fds are shared.
 
 
+={============================================================================
+*kt_linux_core_102* ipc: way to check pipe fd and setup
+
+[root@HUMAX 856]# ll /proc/846/fd
+...
+lr-x------    1 root     root          64 May  6 14:35 68 -> socket:[22102]=
+lrwx------    1 root     root          64 May  6 14:45 69 -> socket:[22104]=
+l-wx------    1 root     root          64 May  6 14:35 7 -> /var/opt-zinc-var/log/copper.log
+lrwx------    1 root     root          64 May  6 14:35 70 -> /var/tmp/zmp-log
+lrwx------    1 root     root          64 May  6 14:45 71 -> /var/tmp/zmp-log
+lr-x------    1 root     root          64 May  6 14:45 72 -> pipe:[22129]| // note:
+lrwx------    1 root     root          64 May  6 14:35 8 -> /dev/fusion0
+lrwx------    1 root     root          64 May  6 14:35 9 -> /dev/nexus_proxy
+
+[root@HUMAX 856]# lsof | grep 22129
+856	/opt/zinc/bin/bronzemediad.oem	pipe:[22129]
+1067	/run/youview/jail/daemons/linearsourced-S3kWYA/opt/zinc-trunk/bin/linearsourced	pipe:[22129]
+
+This shows 'two' ends of pipe.
+
+
+={============================================================================
+*kt_linux_core_103* ipc: fifo
+
 {fifo}
 To solve this, fifo was introduced and is called 'named'-pipe since has path name. Means that it
 is created in the filesystem as a file. Use usual read and write call. Fifo is either read-only or
@@ -12320,37 +12467,79 @@ is no writing process, blocked.
 
 
 ={============================================================================
-*kt_linux_core_102* ipc: way to check pipe status
+*kt_linux_core_104* ipc: nonblocking read() and write() on pipes and fifo
+
+LPI 44.10
+
+Summarizes the operation of read() for pipes and FIFOs, and includes the effect of the O_NONBLOCK
+flag.
+
+<on-read>
+The only difference between blocking and nonblocking reads occurs when no data is present and the
+write end is open. In this case, a normal read() blocks, while a nonblocking read() fails with the
+error EAGAIN.
+
+Table 44-2: Semantics of 'read'ing n bytes from a pipe or FIFO containing p bytes
+
+O_NONBLOCK  | Data bytes available in pipe or FIFO (p)
+enabled?    | p = 0, write end open    | p = 0, write end closed  | p < n        | p >= n
+----------------------------------------------------------------------------------------------- 
+No          | block                    | return 0 (EOF)           | read p bytes | read n bytes
+Yes         | fail (EAGAIN)            | return 0 (EOF)           | read p bytes | read n bytes
+
+note: read(n) gets n or p
 
 
-[root@HUMAX proc]# cd /proc/856
+<on-write>
+The impact of the O_NONBLOCK flag when writing to a pipe or FIFO is made complex by interactions
+with the PIPE_BUF limit. The write() behavior is summarized in Table 44-3.
 
-[root@HUMAX 856]# ls
-auxv             coredump_filter  exe@             limits           mountinfo        net/             pagemap          smaps            status
-clear_refs       cwd@             fd/              maps             mounts           oom_adj          personality      stat             task/
-cmdline          environ          fdinfo/          mem              mountstats       oom_score        root@            statm            wchan
+Table 44-3: Semantics of 'write'ing n bytes from a pipe or FIFO
 
-[root@HUMAX 856]# ll fd
-...
-lr-x------    1 root     root          64 May  6 14:35 68 -> socket:[22102]=
-lrwx------    1 root     root          64 May  6 14:45 69 -> socket:[22104]=
-l-wx------    1 root     root          64 May  6 14:35 7 -> /var/opt-zinc-var/log/copper.log
-lrwx------    1 root     root          64 May  6 14:35 70 -> /var/tmp/zmp-log
-lrwx------    1 root     root          64 May  6 14:45 71 -> /var/tmp/zmp-log
-lr-x------    1 root     root          64 May  6 14:45 72 -> pipe:[22129]| // note:
-lrwx------    1 root     root          64 May  6 14:35 8 -> /dev/fusion0
-lrwx------    1 root     root          64 May  6 14:35 9 -> /dev/nexus_proxy
+O_NONBLOCK  | read end open
+enabled?    | n <= PIFE_BUF
+----------------------------------------------------------------------------------------------- 
+No          | Atomically write n bytes; may block until sufficient data is read for write() to
+            | be performed
+Yes         | If sufficient space is available to immediately write n bytes, then write()
+            | succeeds atomically; otherwise, it fails (EAGAIN)
 
-[root@HUMAX 856]# lsof | grep 22129
-856	/opt/zinc/bin/bronzemediad.oem	pipe:[22129]
-1067	/run/youview/jail/daemons/linearsourced-S3kWYA/opt/zinc-trunk/bin/linearsourced	pipe:[22129]
+note: if there is no space to write, then either blocks or EAGAIN.
 
-This shows 'two' ends of pipe.
+O_NONBLOCK  | read end open
+enabled?    | n > PIPE_BUF
+----------------------------------------------------------------------------------------------- 
+No          | Write n bytes; may block until sufficient data read for write() to complete; 
+            | data may be interleaved with writes by other processes
+Yes         | If there is sufficient space to immediately write some bytes, then write between 1 
+            | and n bytes (which may be interleaved with data written by other processes);
+            | otherwise, write() fails (EAGAIN)
 
+            | read end closed
+              SIGPIPE + EPIPE
+
+The O_NONBLOCK flag causes a write() on a pipe or FIFO to fail (with the error EAGAIN) in any case
+where data can't be transferred immediately. 
+
+This means that if we are writing up to PIPE_BUF bytes, then the write() will fail if there is not
+sufficient space in the pipe or FIFO, because the kernel can't complete the operation immediately
+and can't perform a partial write, since that would break the requirement that writes of up to
+PIPE_BUF bytes are 'atomic'.
+
+When writing more than PIPE_BUF bytes at a time, a write is 'not' required to be atomic. For this
+reason, write() transfers as many bytes as possible (a partial write) to fill up the pipe or FIFO.
+In this case, the return value from write() is the number of bytes actually transferred, and the
+'caller' 'must' retry later in order to write the remaining bytes. 
+
+However, if the pipe or FIFO is full, so that not even one byte can be transferred, then write()
+fails with the error EAGAIN.
+
+Although blocks of data of any size can be written to a pipe, only writes that do not exceed
+PIPE_BUF bytes are guaranteed to be atomic. 
 
 
 ={============================================================================
-*kt_linux_core_103* ipc: which one to use
+*kt_linux_core_105* ipc: which one to use
 
 When performing interprocess synchronization, our choice of facility is typically determined by the
 functional requirements. When coordinating access to a file, file record locking is usually the best
