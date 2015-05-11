@@ -181,7 +181,7 @@
 
 |kt_linux_core_200| file io
 |kt_linux_core_201| file io: further details
-|kt_linux_core_202| file io: non-blocking
+|kt_linux_core_202| 
 |kt_linux_core_203| file io: /dev/fd
 |kt_linux_core_204| system resource limits
 
@@ -197,7 +197,7 @@
 |kt_linux_core_101| ipc: pipe
 |kt_linux_core_102| ipc: way to check pipe fd and setup
 |kt_linux_core_103| ipc: fifo
-|kt_linux_core_104| ipc: semantics of read() and write() on pipes and fifo
+|kt_linux_core_104| ipc: nonblocking read() and write() on pipes and fifo
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
 |kt_linux_core_200| ipc: sync: semaphore 
@@ -11064,30 +11064,11 @@ calls are pipe(), which creates a pipe and returns two file descriptors referrin
 the pipe, and socket(), which creates a socket and returns a file descriptor referring to the
 socket.
 
+note: fcntl.h defines O_XXX definitions.
+
 
 ={============================================================================
-*kt_linux_core_202* file io: non-blocking
-
-LPI 5.9
-
-The O_NONBLOCK flag when opening a file serves two purposes:
-
-o If the file can't be opened immediately, then open() returns an error instead of blocking. One
-case where open() can block is with FIFOs (Section 44.7).
-
-o After a successful open(), 'subsequent' I/O operations are also nonblocking. If an I/O system call
-can't complete immediately, then either a partial data transfer is performed or the system call
-fails with one of the errors EAGAIN or EWOULDBLOCK. Which error is returned depends on the system
-call. On Linux, as on many UNIX implementations, these two error constants are synonymous.
-
-<nonblocking-pipe>
-Nonblocking mode can be used with devices (e.g., terminals and pseudoterminals), pipes, FIFOs, and
-sockets. Because file descriptors for pipes and sockets are not obtained using open(), we must
-enable this flag using the fcntl() F_SETFL operation.
-
-O_NONBLOCK is generally ignored for regular files, because the kernel buffer cache ensures that I/O
-on regular files does not block, as described in Section 13.1. However, O_NONBLOCK does have an
-effect for regular files when mandatory file locking is employed (Section 55.4).
+*kt_linux_core_202* 
 
 
 ={============================================================================
@@ -11164,10 +11145,6 @@ if (-1 == stat(cleanup_exe, &sb))
   fprintf(stderr, "executable (%s) doesn't exist\n", cleanup_exe);
   return 0;
 }
-
-
-={============================================================================
-*kt_linux_core_202* 
 
 
 ={============================================================================
@@ -12255,18 +12232,98 @@ see end-of-file (i.e., read() returns 0) once it has read all remaining data in 
 A pipe is simply a 'buffer' maintained in kernel memory. This buffer has a maximum capacity. Once a
 pipe is full, further writes to the pipe 'block' until the reader removes some data from the pipe.
 
+On Linux 2.2, pipe writes of any size are atomic, unless interrupted by a signal handler. On Linux
+2.4 and later, any write greater than PIPE_BUF bytes may be interleaved with writes by other
+processes. 
 
-<use-large-buffer-size>
 SUSv3 makes no requirement about the capacity of a pipe. In Linux kernels before 2.6.11, the pipe
 capacity is the same as the system page size (e.g., 4096 bytes on x86-32); since Linux 2.6.11, the
 pipe capacity is 65,536 bytes. Other UNIX implementations have different pipe capacities.
 
+
+// embedded linux, 2.6.31
+PIPE_BUF           13 
+mipsel-linux-uclibc/sys-root/usr/include/linux/limits.h #define PIPE_BUF        
+4096	/* # bytes in atomic write to a pipe */
+
+// from stackoverflow
+One Linux pipe(7) man page says that pipe capacity is 65536 bytes since Linux 2.6.11 and a single
+system page prior to that (e.g. 4096 bytes on (32-bit) x86 systems). 
+
+The code (include/linux/pipe_fs_i.h, and fs/pipe.c) seems to use 16 system pages (i.e. 64 KiB if a
+        system page is 4 KiB), but the buffer for each pipe can be adjusted via a fcntl on the pipe
+(up to a maximum capacity which defaults to 1048576 bytes, but can be changed via
+ /proc/sys/fs/pipe-max-size)).
+
+Quote from include/linux/pipe_fs_i.h:
+
+/* Differs from PIPE_BUF in that PIPE_SIZE is the length of the actual
+   memory allocation, whereas PIPE_BUF makes atomicity guarantees.  */
+
+
+<use-large-buffer-size>
 This means that pipe is kernel resource meaning that there is copy between kernel and process. In
 theory, there is no reason why a pipe couldn't operate with smaller capacities, even with a
 single-byte buffer. The reason for employing large buffer sizes is efficiency: each time a writer
 fills the pipe, the kernel must perform a context switch to allow the reader to be scheduled so that
 it can empty some data from the pipe. Employing a larger buffer size means that fewer context
 switches are required.
+
+
+Starting with Linux 2.6.35, the capacity of a pipe can be modified. The Linux-specific call
+fcntl(fd, F_SETPIPE_SZ, size) changes the capacity of the pipe referred to by fd to be at least size
+bytes. An unprivileged process can change the pipe capacity to any value in the range from the
+system page size up to the value in /proc/sys/fs/pipe-max-size. The default value for pipe-max-size
+is 1,048,576 bytes. A privileged (CAP_SYS_RESOURCE) process can override this limit. When allocating
+space for the pipe, the kernel may round size up to some value convenient for the implementation.
+The fcntl(fd, F_GETPIPE_SZ) call returns the actual size allocated for the pipe.
+
+$ uname -a
+Linux wll1p04345 3.2.0-4-amd64 #1 SMP Debian 3.2.65-1+deb7u2 x86_64 GNU/Linux
+
+$ cat /proc/sys/fs/pipe-max-size 
+1048576
+
+
+note: from fcntl man page
+
+F_GETOWN_EX, F_SETOWN_EX, F_SETPIPE_SZ, F_GETPIPE_SZ, F_GETSIG, F_SETSIG, F_NOTIFY, F_GETLEASE, and
+F_SETLEASE are Linux-specific.  (Define the _GNU_SOURCE macro to obtain  these definitions.)
+
+#define _GNU_SOURCE
+
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <errno.h>
+
+void main()
+{
+    int fds[2] = {-1, -1};
+
+    if (pipe2(fds, O_NONBLOCK | O_CLOEXEC) != 0) 
+    {
+      fprintf( stderr, "pipe failed: %s", strerror(errno));
+      return EXIT_FAILURE;
+    }
+
+    long int cnt = fcntl(fds[1], F_GETPIPE_SZ);
+
+    fprintf( stdout, "pipe size?: cnt = %ld\n", cnt );
+}
+
+$ ./a.out 
+pipe size?: cnt = 65536
+
+note: suggest that max is different from current size?
+note: this F_GETPIPE_SZ is not defined in 2.6.31
+
+
+<partial-write>
+If such a blocked write() is interrupted by a signal handler, then the call unblocks and returns a
+count of the number of bytes successfully transferred, which will be less than was requested. a
+so-called partial write.
 
 
 <create-pipe-using-pipe-call>
@@ -12354,13 +12411,25 @@ pipes that are already full.
 
 <pipe2>
 Starting with kernel 2.6.27, Linux supports a new, nonstandard system call, pipe2(). This system
-call performs the same task as pipe(), but supports an additional argument, flags, that can be used
-to modify the behavior of the system call. Two flags are supported. The O_CLOEXEC flag causes the
-kernel to enable the close-on-exec flag (FD_CLOEXEC) for the two new file descriptors. This flag is
-useful for the same reasons as the open() O_CLOEXEC flag described in Section 4.3.1. The O_NONBLOCK
-flag causes the kernel to mark both underlying open file descriptions as nonblocking, so that future
-I/O operations will be nonblocking. This saves additional calls to fcntl() to achieve the same
-result.
+call performs the same task as pipe(), but supports an additional argument, 'flags', that can be
+used to modify the behavior of the system call. 
+
+Two flags are supported. 
+
+o The O_CLOEXEC flag causes the kernel to enable the close-on-exec flag (FD_CLOEXEC) for the two new
+file descriptors. This flag is useful for the same reasons as the open() O_CLOEXEC flag described in
+Section 4.3.1. 
+
+o The O_NONBLOCK flag causes the kernel to mark both underlying open file descriptions as
+nonblocking, so that future I/O operations will be nonblocking. This saves additional calls to
+fcntl() to achieve the same result.
+
+int fds[2] = {-1, -1};
+
+if (pipe2(fds, O_NONBLOCK | O_CLOEXEC) != 0) {
+    ERROR(zmp, RESOURCE, OPEN_READ_WRITE, (NULL), ("pipe failed: %s", strerror(errno)));
+    goto out;
+}
 
 
 <pipe-for-unrelated-process>
@@ -12416,6 +12485,27 @@ lrwx------    1 root     root          64 May  6 14:35 9 -> /dev/nexus_proxy
 
 This shows 'two' ends of pipe.
 
+[root@HUMAX /]# ll /proc/855/fd | grep pipe
+lr-x------    1 root     root          64 Jan  1  2000 4 -> pipe:[986]|
+lrwx------    1 root     root          64 Jan  1  2000 5 -> pipe:[986]|
+lr-x------    1 root     root          64 May 11 10:10 71 -> pipe:[83863]|
+
+[root@HUMAX /]# ll /proc/2241/fd | grep pipe
+l-wx------    1 root     root          64 May 11 12:04 38 -> pipe:[83863]|
+lr-x------    1 root     root          64 May 11 12:04 5 -> pipe:[30567]|
+l-wx------    1 root     root          64 May 11 12:04 6 -> pipe:[30567]|
+
+This shows the same and also shows that they are different fd.
+
+
+{check-size}
+
+LPI 44.2
+
+The call ioctl(fd, FIONREAD, &cnt) returns the number of 'unread' bytes in the pipe or FIFO referred
+to by the file descriptor fd. This feature is also available on some other implementations, but is
+not specified in SUSv3.
+
 
 ={============================================================================
 *kt_linux_core_103* ipc: fifo
@@ -12468,6 +12558,28 @@ is no writing process, blocked.
 
 ={============================================================================
 *kt_linux_core_104* ipc: nonblocking read() and write() on pipes and fifo
+
+LPI 5.9
+
+The O_NONBLOCK flag when opening a file serves two purposes:
+
+o If the file can't be opened immediately, then open() returns an error instead of blocking. One
+case where open() can block is with FIFOs (Section 44.7).
+
+o After a successful open(), 'subsequent' I/O operations are also nonblocking. If an I/O system call
+can't complete immediately, then either a partial data transfer is performed or the system call
+fails with one of the errors EAGAIN or EWOULDBLOCK. Which error is returned depends on the system
+call. On Linux, as on many UNIX implementations, these two error constants are synonymous.
+
+<nonblocking-pipe>
+Nonblocking mode can be used with devices (e.g., terminals and pseudoterminals), pipes, FIFOs, and
+sockets. Because file descriptors for pipes and sockets are not obtained using open(), we must
+enable this flag using the fcntl() F_SETFL operation.
+
+O_NONBLOCK is generally ignored for regular files, because the kernel buffer cache ensures that I/O
+on regular files does not block, as described in Section 13.1. However, O_NONBLOCK does have an
+effect for regular files when mandatory file locking is employed (Section 55.4).
+
 
 LPI 44.10
 
@@ -19531,7 +19643,7 @@ updates a clock.
 
 note:
 On Linux, programs using this API must be compiled with the -lrt option, in order to link against
-the librt (realtime) library.
+the librt (realtime) library. If not, link error on clock_gettime().
 
 
 {clock-gettime}
@@ -19749,7 +19861,7 @@ typedef unsigned int uint32_t;
 
 static uint32_t tstart = 0;
 
-static time_get(void)
+static uint32_t time_get(void)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
