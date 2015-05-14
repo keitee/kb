@@ -244,6 +244,7 @@
 |kt_linux_core_602| time: resolution, jiffies
 |kt_linux_core_603| time: posix clock, realtime
 |kt_linux_core_604| time: ms timestamp
+|kt_linux_core_605| time: ns timestamp
 
 |kt_linux_core_700| dbus
 |kt_linux_core_800| proc: /proc/mounts
@@ -19907,6 +19908,134 @@ int main(int argc, char** argv)
 $ ./a.out 
 time: 00:00:00.000
 time: 00:00:04.648
+
+
+={============================================================================
+*kt_linux_core_605* time: ns timestamp
+
+#include "PerfCounter.h"
+
+#include <iostream>
+#include <sstream>
+#include <boost/lexical_cast.hpp>
+
+int main(int argc,char** argv)
+{
+    PerfCounter counter;
+    
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        sscanf("42","%d",&out);
+    }
+    counter.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        std::stringstream ss("42");
+        ss >> out;
+    }
+    counter.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out = boost::lexical_cast<int>("42");
+    }
+    counter.snap("boost::lexical_cast<int>");
+    std::cout << counter.dump() << std::endl;
+}
+
+
+#include "PerfCounter.h"
+
+#include <time.h>
+#include <sstream>
+
+#include <cstdint>
+
+class PerfCounter::DataRec
+{
+public:
+    DataRec() : next(NULL) {}
+
+    struct timespec ts;
+    const char* name;
+
+    DataRec* next;
+};
+
+PerfCounter::PerfCounter()
+{
+    head = new DataRec;
+    lastRec = head;
+    head->name = "Start";
+    clock_gettime(CLOCK_MONOTONIC,&(head->ts));
+}
+
+PerfCounter::~PerfCounter()
+{
+    //delete our records
+    DataRec* toDel = head;
+    while(toDel)
+    {
+        head = toDel->next;
+        delete toDel;
+        toDel = head;
+    }
+}
+
+void PerfCounter::snap(const char* name)
+{
+    lastRec->next = new DataRec;
+    lastRec = lastRec->next;
+    lastRec->name = name;
+    clock_gettime(CLOCK_MONOTONIC,&(lastRec->ts));
+}
+
+std::string PerfCounter::dump()
+{
+    snap("end");
+    std::stringstream ss;
+
+    DataRec* current = head;
+
+    while(current && current->next)
+    {
+        //first calculate the number of us difference in the seconds part
+        int64_t usecDiff = (current->next->ts.tv_sec - current->ts.tv_sec)*1000000;
+        //now the nsec part
+        usecDiff += (current->next->ts.tv_nsec - current->ts.tv_nsec)/1000;
+        ss << current->name << " -> " << current->next->name << " took " << usecDiff << "us" << std::endl;
+        current = current->next;
+    }
+    return ss.str();
+}
+
+
+#ifndef PERFCOUNTER_H
+#define PERFCOUNTER_H
+
+#include <string>
+
+class PerfCounter
+{
+public:
+    PerfCounter();
+    ~PerfCounter();
+
+    void snap(const char* name);
+
+    std::string dump();
+
+private:
+    class DataRec;
+
+    DataRec* head;
+    DataRec* lastRec;
+};
+
+#endif
 
 
 ={============================================================================
