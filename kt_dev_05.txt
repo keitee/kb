@@ -8,6 +8,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_001| OIPF
 |kt_dev_bcast_002| CRB
 
+|kt_dev_bcast_100| mpeg: time sync
+|kt_dev_bcast_101| mpeg: ts view tool
+
 
 # ============================================================================
 #{
@@ -27,6 +30,208 @@ by major manufacturers.
 *kt_dev_bcast_002* CRB
 
 connected red button (CRB)
+
+
+# ============================================================================
+#{
+={============================================================================
+*kt_dev_bcast_100* mpeg: time sync
+
+{master-clock}
+STC(system time clock). The mpeg-2 encoder contains 27 MHz oscillator and 33 bits counter, called
+the STC. STC is a 33 bits value driven by 90 KHz clock, obtained by dividing the 27 MHz by 300. It
+belongs to a particular 'program' and is the master clock of the video and audio encoders for that
+program.
+
+
+{timing-model} 
+At the input of the encoder, Point A, the time of occurrence of an input video picture or audio
+block (and of the appearance of its coded version at the zero-delay encoder output) is noted by
+sampling the STC. A constant quantity equal to the sum of encoder and decoder buffer 'delays' is
+added, creating a Presentation Time Stamp (PTS), which is then inserted in the 'first' of the
+packet(s) representing that picture or audio block, at Point B in the diagram.
+
+
+<dts-and-pts>
+Also entered into the bitstream under certain conditions is a Decode Time Stamp (DTS), which
+represents the time at which the data should be taken instantaneously from the decoder buffer and
+decoded. Since the System Target Decoder delay is zero, the DTS and PTS are identical except in the
+case of picture reordering for B pictures. The DTS is only used where it is needed because of
+reordering. Whenever DTS is used, PTS is also coded.
+
+PTS (or DTS) is entered in the bitstream at intervals not exceeding 700 mS. ATSC further constrains
+PTS (or DTS) to be inserted at the beginning of each coded picture ( access unit ). 
+
+note: the both are generally the same, can decide whether to use PTS only or both in PES header.
+
+
+<pcr-and-scr>
+in addition, the output of the 'encoder' buffer (Point C) is time stamped with System Time Clock
+(STC) values, called Program Clock Reference (PCR) if the stamp is at the 'transport' packet level,
+    or System Clock Reference (SCR) at the PES level. PCR time stamps are required to occur at
+    maximum 100 mS 'intervals'. SCR time stamps are required to occur at maximum 700mS intervals.
+
+note: The PTS is stamped at encoder end and the PCR is stamped at packetizer end.
+
+note: MPEG says there should be 10 PCR a second at least and DVB says 25 a second.
+
+
+{clock-sync} clock-recovery, sync-decoders
+The Program Clock Reference (PCR) and/or the System Clock Reference (SCR) are used to synchronize
+the decoder STC with the encoder STC. (See Decoder STC Synchronization )
+
+PCR is a clock recovery mechanism for MPEG programs. When a program is encoded, a 27 MHz STC drives
+the encoding process. When the program is decoded (or multiplexed), the decoding process must be
+driven by a clock which is locked to the encoder's STC. The decoder uses the PCR to regenerate a
+local 27 MHz clock.
+
+When a program is inserted into the TS (packetized), 27 MHz timestamp is inserted - PCR. At the
+decoder end, it uses a Voltage Controlled Oscillator to generate 27 MHz clock. When PCR is received
+via PCR PID in a program, it is compared to a local counter which is driven by the VCXO to ensure
+that the 27 MHz clock is locked to the PCR. Get a diff and 'adjust' local clock.
+
+The filtered difference (times a proportionality constant) is the control voltage for a crystal VCO.
+This loop stabilizes with the correct frequency, but with an offset in STC that is proportional to
+the offset in frequency between the encoder 27 Mhz oscillator and decoder 27 MHz oscillator
+free-running frequency. This implies that the decoder should have a slightly larger buffer to
+absorb the offset timing.
+
+The PCR field is 42 bit field in the adaptation field of the TS. The PCR field consists of a 9 bit
+part that increments at a 27 MHz rate and a 33 bit part that increments at a 90 KHz rate.
+
+Not every TS packet containing the specific PID necessarily includes a PCR value. It is sufficient
+to insert a value into a TS packet every 40/100 ms. For this reason, the PCR value is transmitted in
+an optional field of the extendable header (adaptation field) in the TS packet.
+
+
+pcr base: 33 bits          pcr extension: 9 bits    : 42 bits
+0 to 2^33-1                0 to 299
+90 KHz                     27 MHz
+<---------- PTS --------->
+<--------------------- PCR ---------------->
+
+
+{av-sync} sync-frames
+This means that PTS is always higher than the current PCR. The difference between PCR and PTS
+represents the data dwell time in the receiver and is thus closely related to the buffer size of the
+receiver. According to MPEG-2, the dwell time must not exceed one second.
+
+
+{problems-caused-by-pcr}
+If decoding is too fast (pcr is faster) the buffer memory if the receiver might run empty because
+the receiver wants to process the data faster than it arrives at the receiver. In the second case,
+    the buffer might overflow because data is processed slower than it arrives at the receiver.
+
+
+{pcr-example}
+pcr base : 0x02B2E37AF  = 724449199
+pcr ext  : 0x009B       = 155
+pcr      : (724449199*300 + 155)/27 MHz = 8049.435550s = 2:14:09.435550
+
+
+{pts-example-from-pes-header}
+5 byte (40bits)
+     0x23 :      0x9A :      0x0F :      0x08 :      0x19
+0010 0011 : 1001 1010 : 0000 1111 : 0000 1000 : 0001 1001
+        X                       X                       X
+
+Remove the first 4 bits and each maker bit
+
+     001    1001 1010   0000 111    0000 1000   0001 100
+
+This becomes 33 bits:
+     001100110100000111000010000001100 (33 bits)
+     0-0110-0110-1000-0011-1000-0100-0000-1100 (0x6683840C)
+
+Converts it to decimal, and / 90K
+
+     19109.945022222222222222222222222 sec
+
+5 hours and 18 minuts is 19080 sec. 19109-19080 = 29. So 5:18:29.945.
+
+
+{pts-from-a-stream}
+Frame #        PTS (hex)        PTS (dec)        Diff
+1                29042690        688137872                
+2                29042d98        688139672        1800    << Frame 1s interpolated..so this is expected.
+3                29043ba8        688143272        3600    -> 0.04s = 40ms
+4                290449b8        688146872        3600
+
+Each 'frame' has a Presentation Time Stamp (PTS) note: can put PTS for each frame and GOP?
+
+I can't see any drift more than 20 milli seconds, which is a field period. Where ever you see
+INTERPOLTAED values, the PTS are 20 milli seconds ahead from the expected value, which shows that
+this PTS was read from the next vsync period.
+
+For example,for frame number 32,
+
+PTS in 1st run is 0x2905d378  CODED
+PTS is 2nd run is 0x2905da80 INTERP
+PTS in 3rd run is 0x2905d378 CODED
+
+The difference between 1st and 2nd run is 20 milli seonds. Similarly in all other cases the drift is
++/-20milli sec which is with in a frame period of 40 msec. This should not create issue of this
+sort.
+
+
+<interpolated-pts>
+There is no relation between gop boundaries and interpolation. If a PTS is not available for a
+frame/field, Display Manager (Software responsible for comparing PTS of frames and STC) willl
+generate a PTS based on the previous coded PTS value so that the PTS-STC compariosn is more
+accurate.
+
+
+{lip-sync-problem}
+The lip sync problem has nothing to do with the spec and is implementation issue. This happens when
+do not check PTS from a decoder.
+
+
+{clock-source}
+Use CDI term. For live, clock source is "Clock Filter", set PCR PID, get PCR. This CF is attached to
+"Clock Sync" device and CS is do clock recovery.
+
+For playback, clock source is decoder, that is uses the first video or audio PTS, set CS with PTS
+and do "free-running". That means there is no clock recovery (clock sync) for playback.
+
+When playback a different program, discontinuity happens and set new PTS to CS and do free run.
+
+
+{discontinuity}
+Under special circumstances, the PCR may contain an unavoidable discontinuity, which may be caused
+by a switchover from one decoder to another in the transmitter during program emission (contents are
+        obtained from another source). PCR discontinuity of this type must be marked in the program
+by means of discontinuity_indicator in the adaptation field.
+
+
+={============================================================================
+*kt_dev_bcast_101* mpeg: ts view tool
+
+http://dvbsnoop.sourceforge.net/
+
+// PID is 0x200, gives the filename, set ts format, show 10 items.
+$ dvbsnoop.exe 0x200 -if FOSH_Stream20.TS -s ts -n 10
+
+// -tssubdecode shows PES decoding and -ph 0 don't show data dump
+// note: to see PES, should give big counts
+$ dvbsnoop.exe 0x200 -ph 0 -if FOSH_Stream20.TS -s ts -tssubdecode -n 10000 > log.txt
+
+        program_clock_reference:
+            baseH: 0 (0x00)
+            baseL: 224777 (0x00036e09)
+            reserved: 63 (0x3f)
+            extension: 79 (0x004f)
+             ==> program_clock_reference: 67433179 (0x0404f2db)  [= PCR-Timestamp: 0:00:02.497525]
+
+            PTS: 
+               Fixed: 2 (0x02)
+               PTS:
+                  bit[32..30]: 0 (0x00)
+                  marker_bit: 1 (0x01)
+                  bit[29..15]: 7 (0x0007)
+                  marker_bit: 1 (0x01)
+                  bit[14..0]: 1579 (0x062b)
+                  marker_bit: 1 (0x01)
+                   ==> PTS: 230955 (0x0003862b)  [= 90 kHz-Timestamp: 0:00:02.5661]
 
 
 ==============================================================================
