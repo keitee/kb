@@ -42,14 +42,16 @@
 |kt_dev_uv_stack_113| stack: cal: metadata: summary data flow
 |kt_dev_uv_stack_114| stack: cal: metadata: wrapper and convert flow
 
-|kt_dev_uv_stack_200| stack: nickel: 
-|kt_dev_uv_stack_201| stack: nickel: tests
+|kt_dev_uv_stack_200| stack: 
+|kt_dev_uv_stack_201| stack: 
 
 |kt_dev_uv_stack_250| stack: binding and makefile 
 
 |kt_dev_uv_stack_300| stack: IP: wikis
 
 |kt_dev_uv_stack_350| stack: pump: gst
+|kt_dev_uv_stack_351| stack: pump: zmp
+|kt_dev_uv_stack_352| stack: pump: nickel
 
 |kt_dev_uv_stack_120| stack: cal: dispatcher
 |kt_dev_uv_stack_121| stack: cal: unit test
@@ -1536,6 +1538,10 @@ drwxr-xr-x    2 1024     1025        4.0K Apr 30 11:54 system-services/
 Name=Zinc.Media
 Exec=/opt/zinc/bin/bronzemediad
 User=root
+
+note: redirection do not work to get console from bronze
+
+Exec=/opt/zinc/bin/bronzemediad > x.log 2>&1
 
 
 ={============================================================================
@@ -5365,15 +5371,7 @@ Converter::operator()(const NS_COBALT_SYSTEM::Result& result,
 
 
 ={============================================================================
-*kt_dev_uv_stack_200* stack: nickel: 
-
-Media Playback    Zinc.Media 
-
-
-={============================================================================
-*kt_dev_uv_stack_200* stack: nickel: dbus command
-
-dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
+*kt_dev_uv_stack_200* 
 
 
 ={============================================================================
@@ -6025,9 +6023,8 @@ staticelements:  bin: Generic bin
 staticelements:  pipeline: Pipeline object
 
 
-
 ={============================================================================
-*kt_dev_uv_stack_351* stack: gst: log
+*kt_dev_uv_stack_351* stack: pump: zmp
 
 {zmpsink}
 libgstzmp.so.0.0.0
@@ -6084,6 +6081,7 @@ uridecodebin caps=video/mpegts name=src ! queue ! zmpsink name=sink tsshifterbin
 
 uridecodebin caps=video/mpegts name=src ! queue ! zmpsink name=sink tsshifterbin name=buffer 
 
+
 {buffer-size}
 get_vqe_buffer_size() {                                                                                           
         vqe_buffer_size="$(lsr-config --int platform.linearsource.vqebuffersize)"                                 
@@ -6100,6 +6098,72 @@ https://jira.youview.co.uk/browse/SPECWIP-3794
 
    IPC Linearsourced performance - taking up much CPU - affects IP Live & Recordings.
    https://jira.youview.co.uk/browse/DEVARCH-6269
+
+
+{interfaces}
+
+/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/humax-dtr_t1000
+/gstreamer/plugins/elements/gstfdsink.c
+
+fdsink:
+
+gst_fd_sink_render (GstBaseSink * sink, GstBuffer * buffer)
+{
+
+  gst_buffer_map (buffer, &info, GST_MAP_READ);
+
+  left = info.size;
+
+  // note: info.size
+  
+  GST_DEBUG_OBJECT (fdsink, "writing %" G_GSIZE_FORMAT " bytes to"
+      " file descriptor %d", info.size, fdsink->fd);
+
+  written = write (fdsink->fd, ptr, left);
+
+  /* short write, select and try to write the remainder */
+  if (G_UNLIKELY (left > 0))
+    goto again;
+}
+
+
+      zmp:                                               client:
+
+                                                      <- pass down two fds to zmp 
+
+      /** * 
+       * Create a ZMPStream object. 
+       * The two file descriptors should be UNIX domain sockets created with SOCK_SEQPACKET. The
+       * other ends of the file descriptors should be connected to the write end. */
+
+      ZMPStream* zmp_stream_new(int serialized_events_fd, int immediate_events_fd)
+      int zmp_stream_init(ZMPStream *s, int serialized_events_fd, int immediate_events_fd)
+
+         s->multiplex_fd = epoll_create1(EPOLL_CLOEXEC);
+         s->fd[FD_IMMEDIATE_EVENTS].fd = immediate_events_fd;
+         s->fd[FD_SERIALIZED_EVENTS].fd = serialized_events_fd;
+
+   <- int zmp_stream_get_listen_fd(ZMPStream* stream) <- zmp client calls to get fd to listen
+         return stream->multiplex_fd;
+                                                         poll(fd);
+
+                                                      <- zmp_stream_notify
+      int zmp_stream_notify(ZMPStream *stream)
+         poll( stream->multiplex_fd );
+
+         switch (events[i].data.u32) {
+            case FD_IMMEDIATE_EVENTS:
+i              zmp_handle_immediate_event(stream);
+
+            case FD_READ_READY:
+               while (stream->state == STATE_OK && zmp_handle_serial(stream)) 
+
+      // get pipe fd from socket
+      int zmp_handle_serial(ZMPStream* stream)
+
+          // pass up pipe fd to client
+          while ((bytes_read = stream->on_data(stream->user_data, stream,
+                          stream->fd[FD_DATA].fd)) > 0) {
 
 
 {on-read}
@@ -6170,6 +6234,25 @@ ssize_t onData( ZMPStream *, int infd)
 1497: KT-ZMP: reading blocked on data fd 0
 1498: KT-ZMP: reading blocked on data fd 0
 1499: KT-ZMP: reading blocked on data fd 0
+
+
+={============================================================================
+*kt_dev_uv_stack_352* stack: pump: nickel
+
+Media Playback    Zinc.Media 
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
+
+{run-ip-channel-without-oem}
+To playback ip channel using tsnexusbin instead of using zmp sink and oem mr:
+
+gst-inspect-1.0 uridecodebin ui=http://54.225.86.153/INT01_LCN_66.sdp caps=video/mpegts name=src ! queue ! tsnexusbin
+
+note: this DO NOT WORK!
+
+This is original pipeline.
+
+uridecodebin caps=video/mpegts name=src ! queue ! zmpsink name=sink tsshifterbin name=buffer
 
 
 ={============================================================================
