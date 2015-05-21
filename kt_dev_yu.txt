@@ -42,7 +42,7 @@
 |kt_dev_uv_stack_113| stack: cal: metadata: summary data flow
 |kt_dev_uv_stack_114| stack: cal: metadata: wrapper and convert flow
 
-|kt_dev_uv_stack_200| stack: 
+|kt_dev_uv_stack_200| stack: titanium
 |kt_dev_uv_stack_201| stack: 
 
 |kt_dev_uv_stack_250| stack: binding and makefile 
@@ -80,6 +80,7 @@
 |kt_dev_uv_task_005| task:01: nexus tools for both hmax and hwei
 |kt_dev_uv_task_006| task:05: sort out test failures
 |kt_dev_uv_task_007| task:06: playback audio only IP channel
+|kt_dev_uv_task_008| task:07: DEVARCH-9557: netflix launch issue
 
 
 # ============================================================================
@@ -297,8 +298,20 @@ https://wiki.youview.co.uk/display/canvas/OEM+Staging+and+Toolchains?src=search
 $ sudo apt-get install huawei-dn372t-staging
 $ sudo apt-get install huawei-dn372t-toolchain
 
+http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/pool/main/h/
+
 $ wget http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/pool/main/h/huawei-dn372t-staging/huawei-dn372t-staging_20150427-5_i386.deb
 $ sudo dpkg -i huawei-dn372t-staging_20150427-5_i386.deb
+
+
+<pkg-config>
+drwxr-xr-x 3 root root     4096 Apr 29 15:06 huawei-bcm7231/
+drwxr-xr-x 3 root root     4096 Apr 24 12:28 huawei-bcm7409/
+drwxr-xr-x 3 root root     4096 May 18 12:47 huawei-bcm7409-20150427-3/
+drwxr-xr-x 3 root root     4096 May 18 12:23 huawei-bcm7409-for-nexus-release-eng-rel/
+lrwxrwxrwx 1 root root       14 May 18 13:07 huawei-dn370t -> huawei-bcm7409/
+
+$PKG_CONFIG_PATH uses "huawei-bcm7409" rather than a sym link
 
 
 ={============================================================================
@@ -2388,6 +2401,16 @@ directories ending in ".log"
 #installTool mipsgdb-libthread.tar
 # Set up a useful symlink so "gdb" and "gdbserver" are on the usual PATH.
 #$ssh 'ln -sf /opt/zinc/oss/debugtools/bin/gdb* /usr/local/bin/'
+
+wget http://devnfs2.dev.youview.co.uk/DEVARCH/tools-huawei/huawei-bcm7409/mipsgdb.tar
+wget http://devnfs2.dev.youview.co.uk/DEVARCH/tools-huawei/huawei-bcm7409/mipsgdb-libthread.tar
+
+#/   -T <tools>    Install the given tool (or tools) on the box. Multiple tools
+#/                 can be passed by passing a comma-separated list:
+#/                     eg. '-T tool1,tool2'
+#/                 Tar files are also accepted (but not zipped tars).
+#/                 A full list of available tools can be seen at:
+#/                     http://devnfs/DEVARCH/tools-huawei/.
 
 kpark@wll1p04345:~/source/setup-huawei$ ./setup-huawei.sh -T mipsgdb.tar 172.20.33.192
 failed to create pid file /run/rsyncd.pid: File exists
@@ -5371,7 +5394,11 @@ Converter::operator()(const NS_COBALT_SYSTEM::Result& result,
 
 
 ={============================================================================
-*kt_dev_uv_stack_200* 
+*kt_dev_uv_stack_200* stack: titanium
+
+// on box
+lrwxrwxrwx    1 1024     1025            33 Apr 27 15:06 ./zinc-trunk/lib/libTitaniumCryptoLocking.so -> libTitaniumCryptoLocking.so.0.0.0
+lrwxrwxrwx    1 root     root            33 Jan  1  1970 ./zinc/lib/libTitaniumCryptoLocking.so -> libTitaniumCryptoLocking.so.0.0.0
 
 
 ={============================================================================
@@ -6253,6 +6280,17 @@ note: this DO NOT WORK!
 This is original pipeline.
 
 uridecodebin caps=video/mpegts name=src ! queue ! zmpsink name=sink tsshifterbin name=buffer
+
+<from-lance>
+#! /bin/sh
+
+dbus-send --print-reply --session --dest=Zinc.Tuner /Zinc/Tuner/TunerControl Zinc.Tuner.TunerControl.deactivate int32:0
+
+export GST_PLUGIN_PATH=/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/oss/lib/gstreamer-1.0
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/zinc-trunk/oss/lib/gstreamer-1.0
+
+LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so \
+           gst-launch-1.0 souphttpsrc location=http://54.225.86.153/INT01_LCN_66.sdp ! vqesdpdemux caps=video/mpegts ! queue ! tsshifterbin ! tsnexusbin
 
 
 ={============================================================================
@@ -11486,6 +11524,161 @@ On the PVR2, shows constant updates:
 [root@HUMAX hd1]# *** 134364:45:47.303 
 nexus_playpump: NEXUS_Playpump_OpenPidChannel: 0xc72ada00 detected duplicated pid 1002 (0x8df17e80:1) with non-compatible settings
 
+
+05.19
+======
+
+<humax>
+
+if (NEXUS_Playpump_GetBuffer(s_astFeederInst->playPumpHandle, &buffer,&buffer_size))
+{
+    PrintError("ERROR ::NEXUS_Playpump_GetBuffer\n\r",__FUNCTION__,__LINE__);
+    goto errout;
+}
+
+if (buffer_size == 0)
+{
+    PrintZMPDebug("[ %s (%d)] buffer_size == 0\n\r",__FUNCTION__,__LINE__);
+    errval = EAGAIN;
+    goto errout;
+}
+
+rc = read(infd, buffer, buffer_size);
+
+if (rc > 0)
+{
+    bytes_read = rc;
+
+    PrintZMPDebug("buffer_size(%d) rc(%d) \n\r",buffer_size, bytes_read);
+
+    err = NEXUS_Playpump_ReadComplete(s_astFeederInst->playPumpHandle, 0, bytes_read);
+
+    if (err)
+    {
+        rc = -1;
+        PrintError("NEXUS_Playpump_ReadComplete failed\n");
+    }
+}
+               
+
+local/include/refsw/nexus/modules/transport/7420/include/nexus_playpump.h 
+
+
+/**
+Summary: Settings used in NEXUS_Playpump_Open 
+**/
+typedef struct NEXUS_PlaypumpOpenSettings
+{
+    size_t fifoSize;            /* size of playpump's fifo in bytes */
+    unsigned alignment;         /* You may want to specify the alignment of the fifo allocation to prevent any wasted buffer because of memory alignment requirements.
+                                   See NEXUS_Playppump_ReadComplete and its skip parameter for more information about alignment requirements. */
+    unsigned numDescriptors;    /* More descriptors are needed to perform certain trick modes. See NEXUS_Playpump_GetBuffer for details. */
+    bool streamMuxCompatible;     /* If set to true,  this playpump could be used with the StreamMux module */
+
+    NEXUS_HeapHandle heap;      /* optional heap for fifo allocation */
+    NEXUS_HeapHandle boundsHeap; /* optional heap to bounds check all scatter-gather descriptors */
+} NEXUS_PlaypumpOpenSettings;
+
+
+/*
+Summary:
+Get a pointer and size for the next location in the buffer which can accept playpump data.
+
+Description:
+NEXUS_Playpump_GetBuffer is non-destructive. You can safely call it multiple times.
+
+The buffer and size returned by NEXUS_Playpump_GetBuffer are valid until you call
+NEXUS_Playpump_Flush or NEXUS_Playpump_WriteComplete.
+
+The size returned by NEXUS_Playpump_GetBuffer can be limited by two things: space in the ring buffer
+or free descriptors used to send data to the transport block. If you are performing trick modes with
+lots of small reads, you may find that NEXUS_Playpump_GetBuffer says there is no space available
+even though NEXUS_PlaypumpStatus reports free space. 
+
+The solution is to increase the number of descriptors in NEXUS_PlaypumpOpenSettings.
+
+*/
+
+NEXUS_Error NEXUS_Playpump_GetBuffer(
+    NEXUS_PlaypumpHandle playpump,
+    void **pBuffer,  /* [out] attr{memory=cached} pointer to memory mapped region that is ready for playback data */
+    size_t *pSize    /* [out] total number of writeable, contiguous bytes which buffer is pointing to */
+    );
+
+/**
+Summary:
+Notify Playpump of how much data was added into the buffer.
+
+Description:
+You can only call NEXUS_Playpump_WriteComplete once after a NEXUS_Playpump_GetBuffer call.
+After calling it, you must call NEXUS_Playpump_GetBuffer before adding more data.
+
+The skip parameter allows an application to copy data into the playpump buffer with whatever
+alignment it desired. This is needed for "direct I/O" from disk drives which requires all memory
+access to be page aligned (e.g. 4K). 
+*/
+
+NEXUS_Error NEXUS_Playpump_WriteComplete(
+    NEXUS_PlaypumpHandle playpump,
+    size_t skip,            /* skip is the number of bytes at the beginning of the current buffer pointer
+                               which Playpump should skip over. */
+    size_t amountUsed       /* amountUsed is the number of bytes, following any skip bytes,
+                               which Playpump should feed into transport. */
+    );
+
+/* backward compatibility */
+#define NEXUS_Playpump_ReadComplete NEXUS_Playpump_WriteComplete
+
+
+={============================================================================
+*kt_dev_uv_task_008* task:07: DEVARCH-9557: netflix launch issue
+
+scp root@172.20.33.192:/opt/zinc-trunk/bin/exec-then-cleanup-app .
+scp root@172.20.33.192:/opt/zinc-trunk/lib/libTitaniumCryptoLocking.so.0.0.0 .
+scp root@172.20.33.192:/opt/netflix/netflix .
+
+H1000
+      :  exec                    
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+
+      :  libTitaniumCryptoLocking
+ 0x00000001 (NEEDED)                     Shared library: [libTitaniumUtils.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+
+      :  netflix
+ 0x00000001 (NEEDED)                     Shared library: [libm.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libJavaScriptCore.so]
+ 0x00000001 (NEEDED)                     Shared library: [libWTF.so]
+ 0x00000001 (NEEDED)                     Shared library: [libdirectfb-1.4.so.15]
+ 0x00000001 (NEEDED)                     Shared library: [libz.so.1]
+ 0x00000001 (NEEDED)                     Shared library: [libfusion-1.4.so.15]
+ 0x00000001 (NEEDED)                     Shared library: [libdirect-1.4.so.15]
+ 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libdl.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libnexusMgr.so]
+ 0x00000001 (NEEDED)                     Shared library: [libinit.so]
+ 0x00000001 (NEEDED)                     Shared library: [libnexus.so]
+ 0x00000001 (NEEDED)                     Shared library: [libssl.so.1.0.0]
+ 0x00000001 (NEEDED)                     Shared library: [libcrypto.so.1.0.0]
+ 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+
+
+HWEI 370, PVR1. the same as H1000
+
+scp root@172.20.35.27:/opt/zinc-trunk/bin/exec-then-cleanup-app .
+scp root@172.20.35.27:/opt/zinc-trunk/lib/libTitaniumCryptoLocking.so.0.0.0 .
+scp root@172.20.35.27:/opt/netflix/netflix .
+
+/home/kpark/builds/master/huawei.372/zinc-build-root/release-huawei-bcm7231/Polonium/Polonium.NexusInspect/exec-then-cleanup-app
+/home/kpark/builds/master/huawei.372/zinc-build-root/release-huawei-bcm7231/Titanium/Titanium.Utils/src/.libs/libTitaniumCryptoLocking.so.0.0.0
+
+find /home/kpark/builds/master/huawei.372/zinc-build-root/release-huawei-bcm7231 -f {exec-then-cleanup-app|libTitaniumCryptoLocking.so.0.0.0}
+.
+scp root@172.20.35.27:/opt/netflix/netflix .
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:

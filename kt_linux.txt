@@ -225,15 +225,17 @@
 |kt_linux_core_303|  case: msg q between threads
 
 |kt_linux_core_400| shared library
-|kt_linux_core_401| shared library: ld --as-needed problem
+|kt_linux_core_401| shared library: ld --as-needed problem at link stage
 |kt_linux_core_402| shared library: search and resolve
-|kt_linux_core_403| shared library: dl and ABI
-|kt_linux_core_404| shared library: preload and monitor ld
-|kt_linux_core_405| shared library: further information
-|kt_linux_core_406| shared library: md5sum
-|kt_linux_core_407| shared library: inspect dynamic sections
-|kt_linux_core_408| shared library: check libraries that process uses
-|kt_linux_core_409| shared library: open failure case example
+|kt_linux_core_403| shared library: resolve real problem. 
+|kt_linux_core_404| shared library: resolve real problem. hang on running application
+|kt_linux_core_405| shared library: dl and ABI. visibility
+|kt_linux_core_406| shared library: preload and monitor ld
+|kt_linux_core_407| shared library: further information
+|kt_linux_core_408| shared library: md5sum
+|kt_linux_core_409| shared library: inspect dynamic sections
+|kt_linux_core_410| shared library: check libraries that process uses
+|kt_linux_core_411| shared library: open failure case example
 
 |kt_linux_core_500| sandbox
 
@@ -5096,6 +5098,12 @@ $ nm -A /usr/lib/lib*.so 2> /dev/null | grep ' crypt$'
 Precede each symbol by the name of the input file (or archive member) in which it was found, rather
 than identifying the input file once only, before all of its symbols.
 
+-D
+--dynamic
+Display the dynamic symbols rather than the normal symbols. This is only meaningful for dynamic
+objects, such as certain types of shared libraries.
+
+note: this shows only dynamic symbols and shows a smaller set than running it without option.
 
 Uppercase means global and lowercase means local. 
 
@@ -5104,6 +5112,13 @@ T/t      is text and means symbols defined in this object file.
 D        data
 A        is this address is absolute and is not subject to modification by an additional link stage
 U        is undefined meaning extern
+
+"W"
+"w" The symbol is a weak symbol that has not been specifically tagged as a weak object symbol. When
+a weak defined symbol is linked with a normal defined symbol, the normal defined symbol is used with
+no error. When a weak undefined symbol is linked and the symbol is not defined, the value of the
+symbol is determined in a system-specific manner without error. On some systems, uppercase indicates
+that a default value has been specified.
 
 Cannot use nm for a stripped object
 
@@ -8542,11 +8557,13 @@ Parent may perform other atcions here                 A
                                                       restarts parent.
                                                       2. Delivers SIGCHLD optionally.
 
+<pid-of-child>
+The PID of parent remains the same but child is not. Then when child pid is assigned and what pid 0
+check in the code is? 
+
 The following idiom is sometimes employed when calling fork():
 
 pid_t childPid; /* Used in parent after successful fork() to record PID of child */
-
-note: PID of parent remains the same but child is not
 
 switch (childPid = fork()) {
   case -1: /* fork() failed */
@@ -8556,6 +8573,21 @@ switch (childPid = fork()) {
   default: /* Parent comes here after successful fork() */
     /* Perform actions specific to parent */
 }
+
+note that child pid is assigned immediately after fork and has the same name in ps. So pid == 0
+check is to distinguish execution path in the same text.
+
+$ pid (26337): before fork:  
+pid (26337): in parent before sleep:  
+pid (26338): in child before sleep:  
+
+$ ps   
+  PID TTY          TIME CMD
+26131 pts/10   00:00:00 bash
+26337 pts/10   00:00:00 a.out
+26338 pts/10   00:00:00 a.out
+26339 pts/10   00:00:00 ps
+
 
 <sharing-between-parent-and-child>
 The child's stack, data, and heap segments are initially exact duplicates of the corresponding parts
@@ -9762,19 +9794,26 @@ note: this cmd comes from outside to specify the application to run.
 
    @ parent 'exec' $cmd to run the given application such as a browser.
 
-   same pid starting from the shell which runs a script
-<------------------------------------------------->
-$cmd    run script      exec           fork: exec
-      <------------> <------------> <------------->
-                     shell    wrapper_app    application
-                  
-                                       diff pid
-                                    <------------->
-                                       fork:
-                                    <------------->
-                                          child(wrapper_app that watches ppid)
+shell: exec(wrapper);
 
-note: see how exec used to replace application to run. the shell, parent, replace itself with given
+    wrapper: ppid = getpid();    // PPID is null. shell's pid and will become application's pid
+
+    wrapper: fork()              // PPID is null.
+               -> child: setenv(PPID);
+                  child: exec(wrapper);
+
+                        // now that env PPID is set before exec and this is <inter-program>
+                        // communication using envronment variable.
+
+                        // will have different pid from parent which comes from fork() but not exec.
+                        
+                        wrapper: do watch
+                        wrapper: if parent is died, exec(cleanup);
+
+               -> parent: exec(application);
+
+
+note: see how exec used to replace "program(text)" to run. the shell, parent, replace itself with given
 application and the chain of exec in the child.
 
 exec "$prefix/bin/exec-then-cleanup-app" "$prefix/bin/w3cEngine" \
@@ -9899,7 +9938,8 @@ int main(int argc, char** argv)
 
 
 {pass-arguments}
-To run "strace -e open /bin/ls", but was not straightforward. Why?
+To run "strace -e open /bin/ls" to see open system calls when ls runs, but was not straightforward.
+Why?
 
 ./a.out /usr/bin/strace
 
@@ -18502,7 +18542,7 @@ note: The above is convention but not mandatory so can have followings:
 
 
 ={============================================================================
-*kt_linux_core_401* shared library: ld --as-needed problem
+*kt_linux_core_401* shared library: ld --as-needed problem at link stage
 
 --as-needed 
 --no-as-needed
@@ -18549,8 +18589,8 @@ the other shard library. That is: application <- a.so <- b.so.
 
 The problem happens when simply changes application source file to use functions in a.so and statred
 to see "undefined symbols" of b.so from the linker. But those symbols are not used in that
-application at all and the call that applicaion uses don't have any reference as well. However other
-APIs of a.so does have reference to a.so. Why is this?
+application at all and the call that applicaion uses don't have any reference to b.so as well.
+However other APIs of a.so does have reference to b.so. Why is this?
 
 When looked at application and library dependancies for okay case, there was no reference to a.so
 library which has undefined symbols defined. Why was it okay before?
@@ -18564,6 +18604,28 @@ That's why cannot see dependancies.
 b.so. Since the application is the 'final' in the linking process and now see undefined symbols which
 used in a.so but in the b.so. The problem is that b.so is dropped to link of application by using
 as-needed option.
+
+application          libMgr                  libFb
+reference to Mgr  -> no reference to Fb
+                     reference to Fb      ->
+
+
+when fails:
+
+-Wl,--as-needed -lMgr -lFb ...
+
+/.../usr/local/lib/libMgr.so: undefined reference to `DirectFBSetOption' 
+/.../usr/local/lib/libMgr.so: undefined reference to `DirectFBCreate' 
+/.../usr/local/lib/libMgr.so: undefined reference to `DirectFBInit' collect2: ld returned 1 exit status
+
+when works:
+
+-o application application.o
+-lMgr -lFb ...
+-Wl,--as-needed ...
+
+So works fine when move --as-needed after necessary library.
+
 
 <useful>
 http://wiki.gentoo.org/wiki/Project:Quality_Assurance/As-needed#What_is_--as-needed.3F
@@ -18591,12 +18653,11 @@ package point of view is often an impossible task.
 
 How can --as-needed be useful?
 
+<improve-startup-time>
 The use of the --as-needed flag allows the linker to avoid linking extra libraries in a binary. This
 not only improves startup times (as the loader does not have to load all the libraries for every
     step) but might avoid the full initialization of things like KDE's KIO for a binary if it's not
 using the KIO framework. 
-
-note: The above seems wrong since it's for staic but this option is only for dynamic.
 
 More importantly, the use of --as-needed 'avoids' adding dependencies to a binary that are
 prerequisites of one of its direct or indirect dependencies. This is important because when a
@@ -18619,7 +18680,7 @@ This is the most common error that happens while using --as-needed. It happens d
 linking stage of an executable note: libraries don't create problems, because they are allowed to
 have undefined symbols. The executable linking stage dies because of an undefined symbol that is
 present in one of the libraries fed to the command line. However, the library is not used by the
-executable itself, thus it gets removed by --as-needed .
+executable itself, thus it gets removed by --as-needed.
 
 This usually means that a library was not linked to another library, but was using it, and then
 'relying' on the final executable to link them together. This behavior is also an extra encumbrance
@@ -18635,7 +18696,6 @@ to the first.
 *kt_linux_core_402* shared library: search and resolve
 
 {search-rules}
-
 note: >
 LD_LIBRARY_PATH is broken and should 'not' be used if at all possible since LD_LIBRARY_PATH is great
 for quick tests and for systems on which you don't have admin privileges. However, as a downside,
@@ -18706,9 +18766,9 @@ See that the definition of xyz() in the main program overrides the one in the sh
 
 The following semantics apply:
 
-@ A definition of a global symbol in the 'main' program 'overrides' a definition in a library.
+o A definition of a global symbol in the 'main' program 'overrides' a definition in a library.
 
-@ If a global symbol is defined in multiple libraries, then a reference to that symbol is bound to
+o If a global symbol is defined in multiple libraries, then a reference to that symbol is bound to
 the 'first' definition found by scanning libraries in the left-to-right 'order' in which they were
 listed on the static 'link' command line.
 
@@ -18720,7 +18780,10 @@ conflict with the model of a shared library as implementing a 'self'-contained s
 By default, a shared library can 'not' guarantee that a reference to one of its own global symbols
 will actually be bound to the library's definition of that symbol.
 
-<case-example>
+
+={============================================================================
+*kt_linux_core_403* shared library: search and resolve real problem
+
 03/07/2014. At samsung. 
 When moves application which was a process and uses static link to the shared library application to
 be used by other processes. The codes which works well before starts to fail since crash happens
@@ -18731,10 +18794,13 @@ linker picks up the wrong libaray since a debugger shows odd address when thread
 made and causes a crash? 
 
 Tried various directions and spent many days. Eventually, found out that PCThread::Create() is a
-problem and works fine when changes parameter orders. The problem was that the process loads a lot
-of shared library and one of those has the same PCThread class in it but different signature. When
-our library make a call, it picks it up from the other shared library in which has different
-signature so crashes. Sovled when wraps PCThread class with a namespace.
+problem and works fine when changes parameter orders which is different from the call the
+application believes to uses. 
+
+The problem was that the process loads a lot of shared library and one of those has the same
+PCThread class in it but different signature. When our library make a call, it picks it up from the
+other shared library in which has different signature so crashes. Sovled when wraps PCThread class
+with a namespace.
 
 note: So this was a problem of symbols between shared libraries.
 
@@ -18772,12 +18838,12 @@ $ gcc -shared -o libfoo.so foo.o
 $ gcc -o prog main.c libfoo.so 
 $ LD_LIBRARY_PATH=. ./prog
 main: this is foo...
+
 $ gcc -c -fpic foo.c
 $ gcc -shared -o libfoo.so foo.o
 $ gcc -o prog main.c libfoo.so 
 $ LD_LIBRARY_PATH=. ./prog
 main: this is foo...
-$ 
 
 note: Unlike the case-example, this is a problem between main and shared library.
 
@@ -18800,16 +18866,224 @@ case-example since it force to pick up the one in the same library.
 
 
 ={============================================================================
-*kt_linux_core_403* shared library: dl and ABI
+*kt_linux_core_404* shared library: resolve real problem. hang on running application
+
+{description}
+2015.05. YouView.
+When uses a wrapper process which in short exec application given, hangs on application launch and
+appears hang on this wrapper when looks at top and call stack from gdb. This wrapper has other works
+but not relavent in this problem. The odd thing is that it only happens on the different hardware
+platform with the same wrapper source.
+
+shell exec -> wrapper -> application      // fail and hang
+shell exec -> application                 // okay
+
+#0 0x2ab64fb0 in pthread_cond_init () from /lib/libc.so.0
+#1 0x2ae12d50 in global constructors keyed to FutureContextBase.cpp () from /opt/zinc-trunk/lib/libZincCommon.so.0
+#2 0x2ae35ed4 in __do_global_ctors_aux () from /opt/zinc-trunk/lib/libZincCommon.so.0
+#3 0x2adcc59c in ?? () from /opt/zinc-trunk/lib/libZincCommon.so.0
+
+
+<as-needed-problem>
+Since known that ptherd stub was used from call stack and found that works okay when specify pthread
+library in LD_PRELOAD explicitly, looked at library dependancy and found difference between two
+platforms:
+
+for not working platform
+: wrapper                    
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+
+: libxx which is preloaded before application
+ 0x00000001 (NEEDED)                     Shared library: [libTitaniumUtils.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+
+: application
+ ...
+ 0x00000001 (NEEDED)                     Shared library: [libdirect-1.4.so.15]
+ 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libdl.so.0]
+ ...
+
+for working platforms
+
+: libxx which is preloaded before application
+ ...
+ 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
+ 0x00000001 (NEEDED)                     Shared library: [libm.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+
+
+So "libxx" has libpthread for working case and thought this explains the problem since the stub was
+used for not working case. While having problem to mess with as-needed in the build system and
+libtool, eventually turned out that the problem happens regardless of pthread so in libxx.
+
+
+<ld-bug>
+The vendor investigation is:
+
+o dynamic loader for working platform is more powerful. for not working, ld-0.9.29.so, for working,
+  ld-0.9.32.1.so
+
+o libpthread in working platform is changed to meet the require of dynamic loader.
+
+When libpthread.so is not included in LD_PRELOAD and on working platform, 
+
+__dl_runtime_resolve will finish the relocation, for example before invoking pthread_cond_init, the
+symbol still belongs to libc, but we really invoking pthread_cont_init, the pthread_cond_init
+funciton will be relocated to libpthread.  this is implemented by __dl_runtime_resolve, of course
+__dl_runtime_resolve is invoked by dynamic loader.
+
+if open the log of dynamic loader, we can see this:
+
+resolve function: pthread_cond_init
+patched 0x77a313e0 ==> 0x77cbfa60 @ 0x77a6cef8 (reloacated)
+
+However, we can't see this log for not working platform.
+
+
+<conclusion>
+This is a problem of ld which fails to relocate symbols. This is vendor's conclusion but the same
+condition such as the same ld version and others works okay on the other vendor's platform. Believe
+that it's uclibc bug and it is fixed in the latest and the other vendor patched the old version.
+
+int __pthread_cond_init (pthread_cond_t *cond, const pthread_condattr_t *cond_attr) 
+{ 
+if (__libc_pthread_functions.ptr___pthread_cond_init == ((void *)0)) 
+	return 0; 
+
+// {
+// added by me to test if 
+if (__libc_pthread_functions.ptr___pthread_cond_init == __pthread_cond_init)
+	return 0;
+// }
+
+return __libc_pthread_functions.ptr___pthread_cond_init (cond, cond_attr); 
+}
+
+
+<question-from-stackoverflow>
+http://stackoverflow.com/questions/21092601/is-pthread-in-glibc-so-implemented-by-weak-symbol-to-provide-pthread-stub-functi
+
+I know there is pthread.so to provide the functions similar with pthread in glibc.so somebody said
+pthread in glibc provide stub only and will be replace when explicit linking to lpthread.
+So my question is how to support it? using weak symbol or other tech?
+
+
+Yes, glibc uses a stub implementation of various pthread functions, so that single threaded programs
+do not have to waste cycles doing things like locking and unlocking mutexes, and yet do not have to
+    link to a different C library (like what is done in the Microsoft world, for instance).
+
+For instance, according to POSIX, every time you call fputc(ch, stream), there is mutex lock and
+unlock. If you don't want that, you call fputc_unlocked. But when you do that, you're using a POSIX
+extension related to threading; it's not an appropriate workaround for programs that don't use POSIX
+or don't use the threading API.
+
+The overriding of the stub pthread functions with the real ones (in the dynamic glibc) is not based
+on weak symbols. The shared library mechanism makes it possible to override non-weak definitions.
+
+Weak symbols are a mechanism which allows for symbol overriding under 'static' linking.
+
+If you want a source for the above statement, here it is:
+
+"Note that a definition in a DSO being weak has no effects. Weak definitions only play a role in
+static linking." [Ulrich Drepper, "How To Write Shared Libraries"].
+http://www.akkadia.org/drepper/dsohowto.pdf
+
+If you run nm on the static glibc on your system (if you have one), libc.a, you will note that
+functions like pthread_mutex_lock are marked weak. In the dynamic version, libc.so.<whatetever>, the
+functions are not marked weak.
+
+Note: you should use nm -D or nm --dynamic to look at the symbols in a shared library. nm will not
+produce anything on a shared library that is stripped. If it does, you're looking at the debug
+symbols, not the dynamic symbols.
+
+
+<from-embedded-libc>
+root# ls -al /lib/libc.so.0
+lrwxrwxrwx    1 root     root            19 Jan  1  1970 /lib/libc.so.0 -> libuClibc-0.9.29.so
+
+$ nm -D libc.so.0 | ag pthread
+000574b0 T __libc_pthread_init
+00056d1c T __pthread_attr_init_2_1
+00056f58 T __pthread_cond_broadcast
+00056f84 T __pthread_cond_destroy
+00056fb0 T __pthread_cond_init
+00056fdc T __pthread_cond_signal
+00057034 T __pthread_cond_timedwait
+00057008 T __pthread_cond_wait
+0005730c T __pthread_exit
+         w __pthread_initialize_minimal
+         w __pthread_mutex_init
+         w __pthread_mutex_lock
+         w __pthread_mutex_trylock
+         w __pthread_mutex_unlock
+         w _pthread_cleanup_pop_restore
+         w _pthread_cleanup_push_defer
+00056cf0 T pthread_attr_destroy
+00056d48 T pthread_attr_getdetachstate
+00056da0 T pthread_attr_getinheritsched
+00056df8 T pthread_attr_getschedparam
+00056e50 T pthread_attr_getschedpolicy
+00056ea8 T pthread_attr_getscope
+00056d1c W pthread_attr_init
+00056d74 T pthread_attr_setdetachstate
+00056dcc T pthread_attr_setinheritsched
+00056e24 T pthread_attr_setschedparam
+00056e7c T pthread_attr_setschedpolicy
+00056ed4 T pthread_attr_setscope
+00056f58 W pthread_cond_broadcast
+00056f84 W pthread_cond_destroy
+00056fb0 W pthread_cond_init
+00056fdc W pthread_cond_signal
+00057034 W pthread_cond_timedwait
+00057008 W pthread_cond_wait
+00056f00 T pthread_condattr_destroy
+00056f2c T pthread_condattr_init
+00057060 T pthread_equal
+0005708c T pthread_getschedparam
+000570e4 T pthread_mutex_destroy
+00057110 T pthread_mutex_init
+00057168 T pthread_mutex_lock
+0005713c T pthread_mutex_trylock
+00057194 T pthread_mutex_unlock
+000571ec T pthread_mutexattr_destroy
+000571c0 T pthread_mutexattr_init
+00057218 T pthread_mutexattr_settype
+00057244 T pthread_self
+00057270 T pthread_setcancelstate
+0005729c T pthread_setcanceltype
+000570b8 T pthread_setschedparam
+
+={============================================================================
+*kt_linux_core_405* shared library: dl and ABI. visibility
 
 When an executable starts, the dynamic linker loads 'all' of the shared libraries in the program's
 dynamic dependency list. Sometimes, however, it can be useful to load libraries at a later time. For
 example, a plug-in is loaded only when it is needed. This functionality is provided by an API to the
 dynamic linker.
 
+
+{version-check}
+The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2, which is employed by
+every ELF executable that uses shared libraries.
+
+for host:
+$ ls -l /lib/ld-linux.so.2 
+lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
+
+for-embedded:
+root# ls -al /lib/ld-linux.so.2 
+lrwxrwxrwx    1 root     root            24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
+
+
 {symbol-name} from LPI 42.1
 The dlsym() function searches a library for a symbol (a string containing the 'name' of a function
     or variable) and returns its address.
+
 
 {link-option}
 To build programs that use the dlopen API on Linux, we must specify the -ldl option, in order to
@@ -18835,7 +19109,7 @@ main program.
 A well-designed shared library should make visible only those symbols (functions and variables) that
 form part of its specified application binary interface (ABI). The reasons for this are as follows:
 
-@ If the shared library designer accidentally exports unspecified interfaces, then authors of
+o If the shared library designer accidentally exports unspecified interfaces, then authors of
 applications that use the library may choose to employ these interfaces. This creates a
 'compatibility' problem for future upgrades of the shared library.
 
@@ -18843,21 +19117,21 @@ The library developer expects to be able to change or remove any interfaces 'oth
 the documented ABI, while the library user expects to continue using the same interfaces (with the
     same semantics) that they currently employ.
 
-@ During run-time symbol resolution, any symbols that are exported by a shared library might
+o During run-time symbol resolution, any symbols that are exported by a shared library might
 interpose definitions that are provided in other shared libraries.
 
-note: needs more about problems in other shared libraries.
+note: this is a problem as <resolve-real-problem>?
 
-@ Exporting unnecessary symbols increases the size of the dynamic symbol table that must be loaded
-at run time.
+o Exporting unnecessary symbols increases the size of the dynamic symbol table that must be loaded
+at runtime. note: also means 'faster' loading time?
 
 All of these problems can be minimized or avoided altogether if the library designer ensures that
 only the symbols required by the library's specified ABI are exported. 
 
 The following techniques can be used to control the export of symbols:
 
-@ In a C program, we can use the static keyword to make a symbol private to a source-code module,
-  thus rendering it unavailable for binding by other object files.
+In a C program, we can use the static keyword to make a symbol private to a source-code module, thus
+rendering it unavailable for binding by other object files.
 
 note:
 As well as making a symbol private to a source-code module, the static keyword also has a converse
@@ -18883,13 +19157,13 @@ hidden attribute makes the symbol available across all source code files that co
 library, but prevents it from being visible outside the library.
 
 As with the static keyword, the hidden attribute also has the converse effect of preventing symbol
-interposition at run time.
+interposition at runtime.
 
 note: there are more ways in LPI 42.3.
 
 
 ={============================================================================
-*kt_linux_core_404* shared library: preload and monitor ld
+*kt_linux_core_406* shared library: preload and monitor ld
 
 {ld-preload}
 For testing purposes, it can sometimes be useful to 'selectively' override functions and other symbols
@@ -18912,7 +19186,7 @@ Called mod1-x1 ALT                  # x1 in libalt.so and changed this only, sel
 Called mod2-x2 DEMO
 
 <process-and-system-wide>
-The LD_PRELOAD environment variable controls preloading on a per-process basis. Alternatively, the
+The LD_PRELOAD environment variable controls preloading on a <per-process> basis. Alternatively, the
 file /etc/ld.so.preload, which lists libraries separated by white space, can be used to perform the
 same task on a system-wide basis. Libraries specified by LD_PRELOAD are loaded before those
 specified in /etc/ld.so.preload. 
@@ -19020,7 +19294,7 @@ details on ELF. This document can be found online at http://refspecs.freestandar
 
 
 ={============================================================================
-*kt_linux_core_406* shared library: md5sum
+*kt_linux_core_408* shared library: md5sum
 
 {can-use-on-library-to-check-integrity}
 The idea is that can use md5sum on a library to confirm that it uses the exact same compile and link
@@ -19150,7 +19424,7 @@ e64fd5c673979f09360178f938e6e1b7  libfoo.so.old
 
 
 ={============================================================================
-*kt_linux_core_407* shared library: inspect dynamic sections
+*kt_linux_core_409* shared library: inspect dynamic sections
 
 $ readelf -d libgstnexus.so.from.huawei.box 
 
@@ -19237,7 +19511,7 @@ root#
 
 
 ={============================================================================
-*kt_linux_core_408* shared library: check libraries that  process uses
+*kt_linux_core_410* shared library: check libraries that  process uses
 
 cat /proc/NNNN/maps | awk '{print $6}' | grep '\.so' | sort | uniq
 
@@ -19247,7 +19521,7 @@ can use ldd.
 
 
 ={============================================================================
-*kt_linux_core_409* shared library: open failure case example
+*kt_linux_core_411* shared library: open failure case example
 
 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstnexus.so:     file format elf32-tradlittlemips
 
