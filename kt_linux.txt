@@ -156,16 +156,17 @@
 |kt_linux_core_051| signal: example: use signal as synchronization
 |kt_linux_core_052| signal: kill: checking for the existence of a process
 
-|kt_linux_core_100| thread vs. process
+|kt_linux_core_100| process
 |kt_linux_core_101| process: creation
 |kt_linux_core_102| process: termination
 |kt_linux_core_103| process: monitor child process
 |kt_linux_core_104| process: zombie
 |kt_linux_core_105| process: memory layout
-|kt_linux_core_106| process: virtual memory
-|kt_linux_core_107| process: group
-|kt_linux_core_108| process: deamon
-|kt_linux_core_109| process: execution <exec-wrapper-example>
+|kt_linux_core_106| process: virtual memory, user and kernel stack, stack frame
+|kt_linux_core_107| process: environment list
+|kt_linux_core_108| process: group
+|kt_linux_core_109| process: deamon
+|kt_linux_core_110| process: execution <exec-wrapper-example>
 
 |kt_linux_core_150| thread vs process. LPI 29
 |kt_linux_core_151| pthread and source
@@ -181,7 +182,7 @@
 
 |kt_linux_core_200| file io
 |kt_linux_core_201| file io: further details
-|kt_linux_core_202| 
+|kt_linux_core_202| file io: non-blocking
 |kt_linux_core_203| file io: /dev/fd
 |kt_linux_core_204| system resource limits
 
@@ -197,7 +198,7 @@
 |kt_linux_core_101| ipc: pipe
 |kt_linux_core_102| ipc: way to check pipe fd and setup
 |kt_linux_core_103| ipc: fifo
-|kt_linux_core_104| ipc: nonblocking read() and write() on pipes and fifo
+|kt_linux_core_104| ipc: semantics of read() and write() on pipes and fifo
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
 |kt_linux_core_200| ipc: sync: semaphore 
@@ -246,7 +247,6 @@
 |kt_linux_core_602| time: resolution, jiffies
 |kt_linux_core_603| time: posix clock, realtime
 |kt_linux_core_604| time: ms timestamp
-|kt_linux_core_605| time: ns timestamp
 
 |kt_linux_core_700| dbus
 |kt_linux_core_800| proc: /proc/mounts
@@ -8521,6 +8521,30 @@ process ID may, over time, refer to a different process.
 
 
 ={============================================================================
+*kt_linux_core_100* process
+
+LPI 6.
+
+{process}
+A process is an abstract entity, defined by the kernel, to which system resources are allocated in
+order to execute a program.
+
+
+{process-id}
+PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, the process ID
+counter is reset to 300, rather than 1. This is done because many low-numbered process IDs are in
+permanent use by system processes and daemons, and thus time would be wasted searching for an unused
+process ID in this range. 
+
+In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
+With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
+limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
+greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
+32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
+million), making it possible to accommodate very large numbers of processes.
+
+
+={============================================================================
 *kt_linux_core_101* process creation
 
 LPI 24.
@@ -8858,6 +8882,35 @@ eventually and can be removed by killing init process.
 
 LPI 6. This is a layout in virtual memory.
 
+<process-virtual-memory-address> figure 6.1
+The ** areas represent invalid ranges in the process's virtual address space; that is, areas for
+which page tables have 'not' been created.
+
+High           +----------------+
+                  ** kernel. mapped into process virtual memory but not accessible to program.
+               +----------------+                  0xC0000000
+                  argv, environ
+               +----------------+
+                  stack (grows down)
+top of stack   +----------------+
+                  ** unallocated
+               +----------------+
+                  heap (grows up)
+               +----------------+ < &end
+                  bss
+               +----------------+ < &edata
+                  inited data
+               +----------------+ < &etext
+                  text
+               +----------------+
+                  **
+Low            +----------------+                  0x00000000
+
+note: what's the kernel in this digram?
+
+/proc/kallsyms provides addresses of kernel symbols in this region. /proc/ksyms in kernel 2.4 and
+earlier.
+
 <text-segment> 
 The text segment contains the machine-language instructions of the program run by the process. The
 text segment is made 'read'-only so that a process doesn't accidentally modify its own instructions
@@ -8898,6 +8951,10 @@ terminology used in the now ubiquitous ELF specification for executable file for
 Three global symbols: etext, edata, and end. These symbols can be used from within a program to
 obtain the addresses of the next byte past, respectively, the end of the program text, the end of
 the initialized data segment, and the end of the uninitialized data segment.
+
+<size-command>
+The size(1) command displays the size of the text, initialized data, and uninitialized data (bss)
+segments of a binary executable.
 
 
 ={============================================================================
@@ -8949,31 +9006,249 @@ large ranges of the potential virtual address space are unused, so that it isn't
 maintain corresponding page-table entries. If a process tries to access an address for which
 there is 'no' corresponding page-table entry, it receives a SIGSEGV signal.
 
-<process-virtual-memory-address>
-The ** areas represent invalid ranges in the process's virtual address space; that is, areas for
-which page tables have not been created.
 
-High           +----------------+
-                  ** kernel. mapped into process virtual memory but not accessible to program.
-               +----------------+                  0xC0000000
-                  argv, environ
-               +----------------+
-                  stack (grows down)
-top of stack   +----------------+
-                  ** unallocated
-               +----------------+
-                  heap (grows up)
-               +----------------+ < &end
-                  bss
-               +----------------+ < &edata
-                  inited data
-               +----------------+ < &etext
-                  text
-               +----------------+
+{valid-virtual-addresses}
+A process's range of 'valid' virtual addresses can change over its lifetime, as the kernel allocates
+and deallocates pages (and page-table entries) for the process.
 
-Low            +----------------+                  0x00000000
+o as the stack grows downward beyond limits previously reached;
 
-note: what's the kernel in this digram?
+o when memory is allocated or deallocated on the heap, by raising the program break using brk(),
+  sbrk(), or the malloc family of functions
+
+o when System V shared memory regions are attached using shmat() and detached using shmdt()
+
+o when memory mappings are created using mmap() and unmapped using munmap()
+
+
+{advantages}
+o Processes are isolated from one another and from the kernel, so that one process can't read or
+modify the memory of another process or the kernel. This is accomplished by having the page-table
+entries for each process point to distinct sets of physical pages in RAM (or in the swap area).
+
+o Where appropriate, two or more processes can share memory. The kernel makes this possible by
+having page-table entries in different processes refer to the same pages of RAM. Memory sharing
+occurs in two common circumstances:
+
+- Multiple processes executing the same program can share a single (readonly) copy of the program
+code. This type of sharing is performed implicitly when multiple programs execute the same program
+file (or load the same shared library).
+
+- Processes can use the shmget() and mmap() system calls to explicitly request sharing of memory
+regions with other processes. This is done for the purpose of interprocess communication.
+
+o The implementation of memory protection schemes is facilitated; that is, pagetable entries can be
+marked to indicate that the contents of the corresponding page are readable, writable, executable,
+       or some combination of these protections. Where multiple processes share pages of RAM, it is
+       possible to specify that each process has different protections on the memory; for example,
+       one process might have read-only access to a page, while another has read-write access.  
+       
+o Programmers, and tools such as the compiler and linker, don't need to be concerned with the
+physical layout of the program in RAM.  
+       
+o Because only a part of a program needs to reside in memory, the program loads and runs faster.
+Furthermore, the memory footprint (i.e., virtual size) of a process can exceed the capacity of RAM.
+
+o One final advantage of virtual memory management is that since each process uses less RAM, more
+processes can simultaneously be held in RAM. This typically leads to better CPU utilization, since
+it increases the likelihood that, at any moment in time, there is at least one process that the CPU
+can execute.
+
+
+{kernel-stack}
+Sometimes, the term "user stack" is used to distinguish the stack we describe here from the "kernel
+stack". The kernel stack is a "per-process" memory region maintained in kernel memory that is used
+as the stack for execution of the functions called internally during the execution of a system call.
+The kernel can't employ the user stack for this purpose since it resides in unprotected user memory.
+
+
+{stack-frame}
+Each (user) stack frame contains the following information:
+
+o Function arguments and local variables: In C these are referred to as automatic variables, since
+they are automatically created when a function is called. These variables also automatically
+disappear when the function returns (since the stack frame disappears), and this forms the primary
+semantic distinction between automatic and static (and global) variables: the latter have a
+permanent existence independent of the execution of functions.
+
+o Call linkage information: Each function uses certain CPU registers, such as the program counter,
+  which points to the next machine-language instruction to be executed. Each time one function calls
+  another, a copy of these registers is saved in the called function’s stack frame so that when the
+  function returns, the appropriate register values can be restored for the calling function.
+
+Referring to Listing 6-1, during the execution of the function square(), the stack will contain
+frames as:
+
++----------------+
+ frames for c run-time startup functions  note:
++----------------+
+ frame for main
++----------------+
+ frame for doCalc()
++----------------+
+ frame for square() 
++----------------+      <- sp. grows down
+
+
+={============================================================================
+*kt_linux_core_107* process: environment list
+
+{in-process}
+As shown in Figure 6-1, the argv and environ arrays, as well as the 'strings' they initially point
+to, 'reside' in a single contiguous area of memory just above the process stack.
+
+
+{command-arguments}
+The command-line arguments of any process can be read via the Linux-specific /proc/PID/cmdline file,
+    with each argument being terminated by a null byte. A program can access its own command-line
+    arguments via /proc/self/cmdline.
+
+
+{name-value-pair}
+Each process has an associated array of strings called the environment list, or simply the
+environment. Each of these strings is a definition of the form name=value.
+
+
+{copied}
+When a new process is created, it inherits a copy of its parent's environment. This is a primitive
+    but frequently used form of interprocess communication; the environment provides a way to
+    transfer information from a parent process to its child(ren). Since the child gets a copy of its
+    parent's environment at the time it is created, this transfer of information is one-way and
+once-only. (since copied)
+
+
+{shell-export-command}
+A value can be added to the environment using the export command. The above commands permanently add
+a value to the shell's environment, and this environment is then inherited by all child processes
+that the shell creates. At any point, an environment variable can be removed with the unset command
+
+$ export SHELL=/bin/bash
+
+In the Bourne shell and its descendants, the following syntax can be used to add values to the
+environment used to execute a single program, 'without' affecting the parent shell (and subsequent
+        commands):
+
+$ NAME=value program
+
+This adds a definition to the environment of just the child process executing the named program. If
+desired, multiple assignments (delimited by white space) can precede the program name.
+
+
+{proc-pid-environ}
+The environment list of any process can be examined via the Linux-specific /proc/PID/environ file,
+    with each NAME=value pair being terminated by a null byte.
+
+
+{get-set-env-call}
+The getenv() function retrieves individual values from the 'process' environment.
+
+#include <stdlib.h>
+
+char *getenv(const char *name);
+
+Returns pointer to (value) string, or NULL if no such variable
+
+The setenv() function is an alternative to putenv() for adding a variable to the environment.
+
+int setenv(const char *name, const char *value, int overwrite);
+int unsetenv(const char *name);
+
+Returns 0 on success, or -1 on error
+
+int putenv(char *string);
+
+Returns 0 on success, or nonzero on error
+
+The string argument is a pointer to a string of the form name=value. After the putenv() call, this
+string is part of the environment. In other words, rather than duplicating the string pointed to by
+string, one of the elements of environ will be set to point to the same location as string.
+
+The setenv() function 'creates' a new environment variable by allocating a memory buffer for a
+string of the form name=value, and copying the strings pointed to by name and value into that
+buffer. note: this is why setenv() is preferable to putenv() since putenv() do not allocate.
+
+The setenv() function doesn't change the environment if the variable identified by name already
+exists and overwrite has the value 0. If overwrite is nonzero, the environment is always changed.
+
+The unsetenv() function removes the variable identified by name from the environment.
+note: from man page, The unsetenv() function 'deletes' the variable name from the environment. If
+name does not exist in the environment, then the function succeeds, and the environment is
+unchanged.
+
+On occasion, it is useful to erase the entire environment, and then rebuild it with selected values.
+For example, we might do this in order to execute set-user-ID programs in a secure manner (Section
+        38.8). We can erase the environment by assigning NULL to environ:
+
+environ = NULL;
+
+This is exactly the step performed by the clearenv() library function.
+
+#define _BSD_SOURCE /* Or: #define _SVID_SOURCE */
+#include <stdlib.h>
+
+int clearenv(void)
+
+Returns 0 on success, or a nonzero on error
+
+<memory-leaks>
+In some circumstances, the use of setenv() and clearenv() can lead to memory leaks in a program. We
+noted above that setenv() allocates a memory buffer that is then made part of the environment. When
+we call clearenv(), it doesn't free this buffer (it can't, since it doesn't know of the buffer's
+        existence). A program that repeatedly employed these two functions would steadily leak
+memory. 
+
+In practice, this is unlikely to be a problem, because a program typically calls clearenv() just
+once on startup, in order to remove all entries from the environment that it inherited from its
+predecessor (i.e., the program that called exec() to start this program).
+
+
+$ ./modify_env "GREET=Guten Tag" SHELL=/bin/bash BYE=Ciao
+GREET=Guten Tag
+SHELL=/bin/bash
+
+$ ./modify_env SHELL=/bin/sh BYE=byebye
+SHELL=/bin/sh
+GREET=Hello world
+
+
+#define _GNU_SOURCE /* To get various declarations from <stdlib.h> */
+#include <stdlib.h>
+#include "tlpi_hdr.h"
+
+extern char **environ;
+
+int main(int argc, char *argv[])
+{
+    int j;
+    char **ep;
+
+    // note: do not 'free' actually
+    clearenv(); /* Erase entire environment */
+
+    for (j = 1; j < argc; j++)
+        if (putenv(argv[j]) != 0)
+            errExit("putenv: %s", argv[j]);
+
+    // note: when no GREET in arguments, this will create one but no call to free it?
+    if (setenv("GREET", "Hello world", 0) == -1)
+        errExit("setenv");
+
+    // note: when BYE is from argv, how dose this free it if unsetenv() do delete it?
+    unsetenv("BYE");
+
+    for (ep = environ; *ep != NULL; ep++)
+        puts(*ep);
+
+    exit(EXIT_SUCCESS);
+}
+
+
+<inter-process-program>
+Sometimes, it is useful for a process to modify its environment. One reason is to make a change that
+is visible in all child processes subsequently created by that process.  Another possibility is that
+we want to set a variable that is visible to a new program to be loaded into the memory of this
+process (“execed”). In this sense, the environment is not just a form of interprocess communication,
+        but also a method of interprogram communication.
 
 
 ={============================================================================
@@ -9651,7 +9926,7 @@ error string correspond- ing to the current value of errno (i.e., the equivalent
 
 
 ={============================================================================
-*kt_linux_core_109* process: execution
+*kt_linux_core_110* process: execution
 
 LPI. 27
 
@@ -9706,7 +9981,7 @@ int main(int argc, char** argv)
   else
     argVec[0] = argv[1];
 
-  // note: ternimate with NULL and argVec[] is passed as a whole to exexed application.
+  // note: ternimate with NULL and argVec[] is passed as a whole to execed application.
 
   argVec[1] = "hello world";
   argVec[2] = "goodbye";
@@ -10077,19 +10352,6 @@ because shares resources; less protection. ST has more IPC but more protection.
 note: tradeoff between IPC and protection.
 
 
-{process}
-<pid> process-id
-From {ref-LPI} PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, 
-the process ID counter is reset to 300, rather than 1. This is done because many low-numbered
-process IDs are in permanent use by system processes and daemons, and thus time would be wasted
-searching for an unused process ID in this range. 
-
-In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
-With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
-limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
-greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
-32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
-million), making it possible to accommodate very large numbers of processes.
 
 
 {user-and-kernel-stack}
@@ -11105,11 +11367,135 @@ calls are pipe(), which creates a pipe and returns two file descriptors referrin
 the pipe, and socket(), which creates a socket and returns a file descriptor referring to the
 socket.
 
-note: fcntl.h defines O_XXX definitions.
+
+{file-descriptors-and-open-files}
+It is possible-and useful-to have multiple descriptors referring to the same open file. Three data
+structures maintained by the 'kernel':
+
+o the per-process open file descriptor table
+o the system-wide table of open file descriptions
+o the file system i-node table
+
+
+<open-file-descriptor-table>
+o a set of flags controlling the operation of the file descriptor (there is just one such flag, the
+        close-on-exec flag, which we describe in Section 27.4); and
+
+o a reference to the open file description.
+
+
+<open-file-description-table>
+An open file description stores all information relating to an open file, including:
+
+o the current file offset (as updated by read() and write(), or explicitly modified using lseek());
+o status flags specified when opening the file (i.e., the flags argument to open());
+o the file access mode (read-only, write-only, or read-write, as specified in open());
+o settings relating to signal-driven I/O (Section 63.3); and
+o a reference to the i-node object for this file.
+
+<inode-table>
+Each file system has a table of i-nodes for all files residing in the file system. The i-node for
+each file includes the following information:
+
+o file type (e.g., regular file, socket, or FIFO) and permissions;
+o a pointer to a list of locks held on this file; and
+o various properties of the file, including its size and timestamps relating to different types of
+file operations.
+
+From figure 5-2.
+
+<when-the-same-process-has-multiple-descriptors-for-the-same-file>
+In process A, descriptors 1 and 20 both refer to the same open file description (labeled 23). This
+situation may arise as a result of a call to dup(), dup2(), or fcntl() (see Section 5.5).
+
+<when-different-process-has-descriptor-for-the-same-file>
+Descriptor 2 of process A and descriptor 2 of process B refer to a single open file description
+(73). This scenario could occur after a call to fork() (i.e., process A is the parent of process B,
+        or vice versa), or if one process passed an open descriptor to another process using a UNIX
+domain socket (Section 61.13.3).
+
+<when-different-process-has-the-same-inode>
+Finally, we see that descriptor 0 of process A and descriptor 3 of process B refer to different open
+file descriptions, but that these descriptions refer to the same i-node table entry (1976)-in other
+words, to the same file. This occurs because each process independently called open() for the same
+file. A similar situation could occur if a single process opened the same file twice.
+
+
+{duplicating-descriptors}
+The case example of duplicating descriptors. The following informs the shell that we wish to have
+standard error (2) redirected to the same place to which standard output (1) is being sent.
+
+$ ./myscript > results.log 2>&1
+
+The shell achieves the redirection of standard error by duplicating file descriptor 2 so that it
+refers to the same open file description as file descriptor 1.
+
+Note that it is not sufficient for the shell simply to open the results.log file twice: once on
+descriptor 1 and once on descriptor 2. As shown above, this makes two descriptors and descriptions. 
+
+One reason for this is that the two file descriptors would not share a file offset pointer, and
+hence could end up overwriting each other's output. (Since uses different description)
+
+Another reason is that the file may not be a disk file. Consider the following command, which sends standard error down the
+same pipe as standard output: (Same problem of overwriting?)
+
+$ ./myscript 2>&1 | less
+
+
+<dup-call>
+The dup() call takes oldfd, an open file descriptor, and returns a new descriptor that refers to the
+same open file 'description'. The new descriptor is guaranteed to be the lowest unused file
+descriptor.
+
+#include <unistd.h>
+
+int dup(int oldfd);
+int dup2(int oldfd, int newfd);
+
+Returns (new) file descriptor on success, or -1 on error
+
+The dup2() system call makes a duplicate of the file descriptor given in oldfd using the descriptor
+number 'supplied' in newfd. If the file descriptor specified in newfd is already open, dup2()
+'closes' it first. Any error that occurs during this close is silently ignored; safer programming
+practice is to explicitly close() newfd if it is open before the call to dup2().
+
+We could simplify the preceding calls to close() and dup() to the following:
+
+dup2(1, 2);
+
+
+{on-threads}
+All of the threads in a process share the same file descriptor table. This means that the file
+offset for each open file is global to all threads. Using pread() or pwrite(), multiple threads can
+simultaneously perform I/O on the same file descriptor without being affected by changes made to the
+file offset by other threads.
 
 
 ={============================================================================
-*kt_linux_core_202* 
+*kt_linux_core_202* file io: non-blocking
+
+LPI 5.9
+
+The O_NONBLOCK flag when opening a file serves two purposes:
+
+o If the file can't be opened immediately, then open() returns an error instead of blocking. One
+case where open() can block is with FIFOs (Section 44.7).
+
+o After a successful open(), 'subsequent' I/O operations are also nonblocking. If an I/O system call
+can't complete immediately, then either a partial data transfer is performed or the system call
+fails with one of the errors EAGAIN or EWOULDBLOCK. Which error is returned depends on the system
+call. On Linux, as on many UNIX implementations, these two error constants are synonymous.
+
+<nonblocking-pipe>
+Nonblocking mode can be used with devices (e.g., terminals and pseudoterminals), pipes, FIFOs, and
+sockets. Because file descriptors for pipes and sockets are not obtained using open(), we must
+enable this flag using the fcntl() F_SETFL operation.
+
+note: This is why use pipe2-call.
+
+O_NONBLOCK is generally ignored for regular files, because the kernel buffer cache ensures that I/O
+on regular files does not block, as described in Section 13.1. However, O_NONBLOCK does have an
+effect for regular files when mandatory file locking is employed (Section 55.4).
 
 
 ={============================================================================
@@ -11186,6 +11572,10 @@ if (-1 == stat(cleanup_exe, &sb))
   fprintf(stderr, "executable (%s) doesn't exist\n", cleanup_exe);
   return 0;
 }
+
+
+={============================================================================
+*kt_linux_core_202* 
 
 
 ={============================================================================
@@ -12273,98 +12663,18 @@ see end-of-file (i.e., read() returns 0) once it has read all remaining data in 
 A pipe is simply a 'buffer' maintained in kernel memory. This buffer has a maximum capacity. Once a
 pipe is full, further writes to the pipe 'block' until the reader removes some data from the pipe.
 
-On Linux 2.2, pipe writes of any size are atomic, unless interrupted by a signal handler. On Linux
-2.4 and later, any write greater than PIPE_BUF bytes may be interleaved with writes by other
-processes. 
 
+<use-large-buffer-size>
 SUSv3 makes no requirement about the capacity of a pipe. In Linux kernels before 2.6.11, the pipe
 capacity is the same as the system page size (e.g., 4096 bytes on x86-32); since Linux 2.6.11, the
 pipe capacity is 65,536 bytes. Other UNIX implementations have different pipe capacities.
 
-
-// embedded linux, 2.6.31
-PIPE_BUF           13 
-mipsel-linux-uclibc/sys-root/usr/include/linux/limits.h #define PIPE_BUF        
-4096	/* # bytes in atomic write to a pipe */
-
-// from stackoverflow
-One Linux pipe(7) man page says that pipe capacity is 65536 bytes since Linux 2.6.11 and a single
-system page prior to that (e.g. 4096 bytes on (32-bit) x86 systems). 
-
-The code (include/linux/pipe_fs_i.h, and fs/pipe.c) seems to use 16 system pages (i.e. 64 KiB if a
-        system page is 4 KiB), but the buffer for each pipe can be adjusted via a fcntl on the pipe
-(up to a maximum capacity which defaults to 1048576 bytes, but can be changed via
- /proc/sys/fs/pipe-max-size)).
-
-Quote from include/linux/pipe_fs_i.h:
-
-/* Differs from PIPE_BUF in that PIPE_SIZE is the length of the actual
-   memory allocation, whereas PIPE_BUF makes atomicity guarantees.  */
-
-
-<use-large-buffer-size>
 This means that pipe is kernel resource meaning that there is copy between kernel and process. In
 theory, there is no reason why a pipe couldn't operate with smaller capacities, even with a
 single-byte buffer. The reason for employing large buffer sizes is efficiency: each time a writer
 fills the pipe, the kernel must perform a context switch to allow the reader to be scheduled so that
 it can empty some data from the pipe. Employing a larger buffer size means that fewer context
 switches are required.
-
-
-Starting with Linux 2.6.35, the capacity of a pipe can be modified. The Linux-specific call
-fcntl(fd, F_SETPIPE_SZ, size) changes the capacity of the pipe referred to by fd to be at least size
-bytes. An unprivileged process can change the pipe capacity to any value in the range from the
-system page size up to the value in /proc/sys/fs/pipe-max-size. The default value for pipe-max-size
-is 1,048,576 bytes. A privileged (CAP_SYS_RESOURCE) process can override this limit. When allocating
-space for the pipe, the kernel may round size up to some value convenient for the implementation.
-The fcntl(fd, F_GETPIPE_SZ) call returns the actual size allocated for the pipe.
-
-$ uname -a
-Linux wll1p04345 3.2.0-4-amd64 #1 SMP Debian 3.2.65-1+deb7u2 x86_64 GNU/Linux
-
-$ cat /proc/sys/fs/pipe-max-size 
-1048576
-
-
-note: from fcntl man page
-
-F_GETOWN_EX, F_SETOWN_EX, F_SETPIPE_SZ, F_GETPIPE_SZ, F_GETSIG, F_SETSIG, F_NOTIFY, F_GETLEASE, and
-F_SETLEASE are Linux-specific.  (Define the _GNU_SOURCE macro to obtain  these definitions.)
-
-#define _GNU_SOURCE
-
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <errno.h>
-
-void main()
-{
-    int fds[2] = {-1, -1};
-
-    if (pipe2(fds, O_NONBLOCK | O_CLOEXEC) != 0) 
-    {
-      fprintf( stderr, "pipe failed: %s", strerror(errno));
-      return EXIT_FAILURE;
-    }
-
-    long int cnt = fcntl(fds[1], F_GETPIPE_SZ);
-
-    fprintf( stdout, "pipe size?: cnt = %ld\n", cnt );
-}
-
-$ ./a.out 
-pipe size?: cnt = 65536
-
-note: suggest that max is different from current size?
-note: this F_GETPIPE_SZ is not defined in 2.6.31
-
-
-<partial-write>
-If such a blocked write() is interrupted by a signal handler, then the call unblocks and returns a
-count of the number of bytes successfully transferred, which will be less than was requested. a
-so-called partial write.
 
 
 <create-pipe-using-pipe-call>
@@ -12450,27 +12760,15 @@ occur if both processes block while trying to read from empty pipes OR while try
 pipes that are already full.
 
 
-<pipe2>
+<pipe2-call>
 Starting with kernel 2.6.27, Linux supports a new, nonstandard system call, pipe2(). This system
-call performs the same task as pipe(), but supports an additional argument, 'flags', that can be
-used to modify the behavior of the system call. 
-
-Two flags are supported. 
-
-o The O_CLOEXEC flag causes the kernel to enable the close-on-exec flag (FD_CLOEXEC) for the two new
-file descriptors. This flag is useful for the same reasons as the open() O_CLOEXEC flag described in
-Section 4.3.1. 
-
-o The O_NONBLOCK flag causes the kernel to mark both underlying open file descriptions as
-nonblocking, so that future I/O operations will be nonblocking. This saves additional calls to
-fcntl() to achieve the same result.
-
-int fds[2] = {-1, -1};
-
-if (pipe2(fds, O_NONBLOCK | O_CLOEXEC) != 0) {
-    ERROR(zmp, RESOURCE, OPEN_READ_WRITE, (NULL), ("pipe failed: %s", strerror(errno)));
-    goto out;
-}
+call performs the same task as pipe(), but supports an additional argument, flags, that can be used
+to modify the behavior of the system call. Two flags are supported. The O_CLOEXEC flag causes the
+kernel to enable the close-on-exec flag (FD_CLOEXEC) for the two new file descriptors. This flag is
+useful for the same reasons as the open() O_CLOEXEC flag described in Section 4.3.1. The O_NONBLOCK
+flag causes the kernel to mark both underlying open file descriptions as nonblocking, so that future
+I/O operations will be nonblocking. This saves additional calls to fcntl() to achieve the same
+result.
 
 
 <pipe-for-unrelated-process>
@@ -12526,27 +12824,6 @@ lrwx------    1 root     root          64 May  6 14:35 9 -> /dev/nexus_proxy
 
 This shows 'two' ends of pipe.
 
-[root@HUMAX /]# ll /proc/855/fd | grep pipe
-lr-x------    1 root     root          64 Jan  1  2000 4 -> pipe:[986]|
-lrwx------    1 root     root          64 Jan  1  2000 5 -> pipe:[986]|
-lr-x------    1 root     root          64 May 11 10:10 71 -> pipe:[83863]|
-
-[root@HUMAX /]# ll /proc/2241/fd | grep pipe
-l-wx------    1 root     root          64 May 11 12:04 38 -> pipe:[83863]|
-lr-x------    1 root     root          64 May 11 12:04 5 -> pipe:[30567]|
-l-wx------    1 root     root          64 May 11 12:04 6 -> pipe:[30567]|
-
-This shows the same and also shows that they are different fd.
-
-
-{check-size}
-
-LPI 44.2
-
-The call ioctl(fd, FIONREAD, &cnt) returns the number of 'unread' bytes in the pipe or FIFO referred
-to by the file descriptor fd. This feature is also available on some other implementations, but is
-not specified in SUSv3.
-
 
 ={============================================================================
 *kt_linux_core_103* ipc: fifo
@@ -12599,28 +12876,6 @@ is no writing process, blocked.
 
 ={============================================================================
 *kt_linux_core_104* ipc: nonblocking read() and write() on pipes and fifo
-
-LPI 5.9
-
-The O_NONBLOCK flag when opening a file serves two purposes:
-
-o If the file can't be opened immediately, then open() returns an error instead of blocking. One
-case where open() can block is with FIFOs (Section 44.7).
-
-o After a successful open(), 'subsequent' I/O operations are also nonblocking. If an I/O system call
-can't complete immediately, then either a partial data transfer is performed or the system call
-fails with one of the errors EAGAIN or EWOULDBLOCK. Which error is returned depends on the system
-call. On Linux, as on many UNIX implementations, these two error constants are synonymous.
-
-<nonblocking-pipe>
-Nonblocking mode can be used with devices (e.g., terminals and pseudoterminals), pipes, FIFOs, and
-sockets. Because file descriptors for pipes and sockets are not obtained using open(), we must
-enable this flag using the fcntl() F_SETFL operation.
-
-O_NONBLOCK is generally ignored for regular files, because the kernel buffer cache ensures that I/O
-on regular files does not block, as described in Section 13.1. However, O_NONBLOCK does have an
-effect for regular files when mandatory file locking is employed (Section 55.4).
-
 
 LPI 44.10
 
@@ -18165,7 +18420,7 @@ defined within the library.
 
 {further-advantages}
 o Because overall program size is smaller, in some cases, programs can be loaded into memory and
-started more quickly. This point holds true only for large shared libraries that are already in use
+started more 'quickly'. This point holds true only for large shared libraries that are already in use
 by another program.
 
 o Such changes can be carried out even while running programs are using an existing version of the
@@ -18173,11 +18428,11 @@ shared library.
 
 
 {cost-of-shared}
-o Shared libraries are more complex than static libraries, both at the conceptual level, and at the
+o Shared libraries are more 'complex' than static libraries, both at the conceptual level, and at the
 practical level of creating shared libraries and building the programs that use them.
 
 o Shared libraries must be compiled to use position-independent code, which has a performance
-overhead on most architectures because it requires the use of an extra register 
+'overhead' on most architectures because it requires the use of an extra register 
 
 o Symbol relocation must be performed at run time. During symbol relocation, references to each
 symbol (a variable or function) in a shared library need to be modified to correspond to the actual
@@ -18195,7 +18450,7 @@ check for the presence of the name _GLOBAL_OFFSET_TABLE_ in the object file's sy
 either of the following commands:
 
 $ nm mod1.o | grep _GLOBAL_OFFSET_TABLE_
-$ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_
+$ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_         // -s, --syms|--symbols
 
 note: as shown above, this not necessarily means 'shared' object. It's only tell -fPIC used.
 
@@ -18303,9 +18558,9 @@ $ readelf -s libfoo.so | grep _OFFSET_TA
 (standard input):14:    10: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND _GLOBAL_OFFSET_TABLE_
 
 $ file libfoo.so 
-libfoo.so: ELF 64-bit LSB relocatable, x86-64, version 1 (SYSV), not stripped
+libfoo.so: ELF 64-bit LSB 'relocatable', x86-64, version 1 (SYSV), not stripped
 
-note: what does it mean? same as static link?
+note: what does it mean? same as static link? looks like "libfoo.so" is not shared object.
 
 <used-static-build>
 ./thr:
@@ -18321,7 +18576,7 @@ $ ./thr
 foo: this is foo...
 
 $ file foo.o 
-foo.o: ELF 64-bit LSB relocatable, x86-64, version 1 (SYSV), not stripped
+foo.o: ELF 64-bit LSB 'relocatable', x86-64, version 1 (SYSV), not stripped
 
 $ readelf -s foo.o | grep _OFFSET_TA
 $ readelf -d thr | grep NEEDED
@@ -18338,24 +18593,26 @@ $ gcc -shared -o libfoo.so foo.o
 $ gcc -o one main.c libfoo.so          <embedding-the-name-of-lib>
 
 1. At 'linktime'. Since the executable file 'no' longer contains copies of the object files that it
-requires, must have some mechanism for identifying the shared library that it needs at run time.
+requires, must have some mechanism for identifying the shared library that it needs at runtime.
+
 This is done by 'embedding' the name of the shared library inside the executable during the link
 phase. DT_NEEDED tag in ELF.
 
 $ readelf -d one | grep NEED
- 0x00000001 (NEEDED)                     Shared library: [libfoo.so]
- 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+0x00000001 (NEEDED)                     Shared library: [libfoo.so]    // note: "libfoo"
+0x00000001 (NEEDED)                     Shared library: [libc.so.6]
 
-note: In order to make executable that use so, requires 'so' file in linking.
+note: In order to embed the shared library in a executable that use so, requires 'so' file in linking.
 
 
 2. At 'runtime', there must be some mechanism for 'resolving' the embedded library name-that is, for
 finding the shared library file corresponding to the name specified in the executable file-and then
 loading the library into memory, if it is not already present.
 
+
 <dynamic-linking>
-The dynamic linking, which is the task of resolving the embedded library name at run time. This task
-is performed by the dynamic linker (also called the dynamic linking loader or the run-time linker).
+The dynamic linking, which is the task of resolving the embedded library name at runtime. This task
+is performed by the dynamic linker (also called the dynamic linking loader or the runtime linker).
 The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2, which is employed by
 every ELF executable that uses shared libraries.
 
@@ -18395,7 +18652,7 @@ In the above example, libfoo is realname. As with a realname, soname is used in 
 embedded in the executable, and used by the linker at runtime.
 
 Why soname? The purpose of the soname is to provide a level of 'indirection' that permits an
-executable to use, at run time, a version of the shared library that is different from but
+executable to use, at runtime, a version of the shared library that is different from but
 compatible with the library against which it was linked.
 
 $ gcc -c -fpic foo.c
@@ -18420,8 +18677,8 @@ $ LD_LIBRARY_PATH=. ./one
 ./one: error while loading shared libraries: libbar.so: cannot open shared object file: No such file
 or directory
 
-note: So set soname in so itself and executable embeds it instead of realname. Now linker ld looks
-for libbar instead but not libfoo.
+note: Why fails this time? So set soname in so itself and executable embeds it instead of realname.
+Now linker ld looks for libbar instead but not libfoo.
 
 <indirection>
 When using a soname, one further step is required: we must create a symbolic link from the soname to
@@ -18463,12 +18720,12 @@ libdemo.so.2   -> libdemo.so.2.0.0
 
 Normally, the soname corresponding to each major library version points to the most recent 'minor'
 version within the major version. This setup allows for the correct versioning semantics during the
-run-time operation of shared libraries. 
+runtime operation of shared libraries. 
 
 Because the static-linking phase embeds a copy of the soname in the executable which has major, and
 the soname symbolic link may subsequently be modified to point to a newer (minor) version of the
 shared library, it is possible to ensure that an executable loads the most up-to-date minor version
-of the library at run time.
+of the library at runtime.
 
 Furthermore, since different major versions of a library have different sonames, they can happily
 coexist and be accessed by the programs that require them.
@@ -18485,7 +18742,7 @@ the correct version of the shared library.
 libdemo.so ->  libdemo.so.2
 
 
-real name          <-   soname                <-   linker name         
+real name(minor)   <-   soname(major)         <-   linker name         
 libdemo.so.1.0.1        libdemo.so.1               libdemo.so
 (regular file)          (symbolic link)            (symbolic link)
 lib name.so.maj.min     libname.so.maj
@@ -18507,9 +18764,10 @@ lrwxrwxrwx libdemo.so -> libdemo.so.1
 lrwxrwxrwx libdemo.so.1 -> libdemo.so.1.0.1
 -rwxr-xr-x libdemo.so.1.0.1
 
-use linkername when link. note: this is different step from when use soname only.
+$ gcc -g -Wall -o prog prog.c -L. -ldemo        
+$ gcc -g -Wall -o prog prog.c libdemo.so        // as with exmple $ gcc -o one main.c libfoo.so
 
-$ gcc -g -Wall -o prog prog.c -L. -ldemo
+note: -ldemo or libdemo.so is linkername and use is in static linking stage.
 
 $ LD_LIBRARY_PATH=. ./prog
 Called mod1-x1
@@ -18527,11 +18785,11 @@ above one example.
 
 Using two names and two indirections enable us to change major and minor libs to use. 
 
-When major changes, changes linkname link: 
+When major changes, changes linkname link: need to link again 
 
 libdemo.so -> libdemo.so.1          =>    libdemo.so -> libdemo.so.2
 
-When minor changes, change soname link:
+When minor changes, change soname link: no need to link.
 
 libdemo.so.1 -> libdemo.so.1.0.1    =>    libdemo.so.1 -> libdemo.so.1.0.1
 
@@ -19918,7 +20176,7 @@ updates a clock.
 
 note:
 On Linux, programs using this API must be compiled with the -lrt option, in order to link against
-the librt (realtime) library. If not, link error on clock_gettime().
+the librt (realtime) library.
 
 
 {clock-gettime}
@@ -20136,7 +20394,7 @@ typedef unsigned int uint32_t;
 
 static uint32_t tstart = 0;
 
-static uint32_t time_get(void)
+static time_get(void)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -20182,134 +20440,6 @@ int main(int argc, char** argv)
 $ ./a.out 
 time: 00:00:00.000
 time: 00:00:04.648
-
-
-={============================================================================
-*kt_linux_core_605* time: ns timestamp
-
-#include "PerfCounter.h"
-
-#include <iostream>
-#include <sstream>
-#include <boost/lexical_cast.hpp>
-
-int main(int argc,char** argv)
-{
-    PerfCounter counter;
-    
-    for(int i=0;i<10000;++i)
-    {
-        int out;
-        sscanf("42","%d",&out);
-    }
-    counter.snap("scanf int");
-
-    for(int i=0;i<10000;++i)
-    {
-        int out;
-        std::stringstream ss("42");
-        ss >> out;
-    }
-    counter.snap("stringstream int");
-
-    for(int i=0;i<10000;++i)
-    {
-        int out = boost::lexical_cast<int>("42");
-    }
-    counter.snap("boost::lexical_cast<int>");
-    std::cout << counter.dump() << std::endl;
-}
-
-
-#include "PerfCounter.h"
-
-#include <time.h>
-#include <sstream>
-
-#include <cstdint>
-
-class PerfCounter::DataRec
-{
-public:
-    DataRec() : next(NULL) {}
-
-    struct timespec ts;
-    const char* name;
-
-    DataRec* next;
-};
-
-PerfCounter::PerfCounter()
-{
-    head = new DataRec;
-    lastRec = head;
-    head->name = "Start";
-    clock_gettime(CLOCK_MONOTONIC,&(head->ts));
-}
-
-PerfCounter::~PerfCounter()
-{
-    //delete our records
-    DataRec* toDel = head;
-    while(toDel)
-    {
-        head = toDel->next;
-        delete toDel;
-        toDel = head;
-    }
-}
-
-void PerfCounter::snap(const char* name)
-{
-    lastRec->next = new DataRec;
-    lastRec = lastRec->next;
-    lastRec->name = name;
-    clock_gettime(CLOCK_MONOTONIC,&(lastRec->ts));
-}
-
-std::string PerfCounter::dump()
-{
-    snap("end");
-    std::stringstream ss;
-
-    DataRec* current = head;
-
-    while(current && current->next)
-    {
-        //first calculate the number of us difference in the seconds part
-        int64_t usecDiff = (current->next->ts.tv_sec - current->ts.tv_sec)*1000000;
-        //now the nsec part
-        usecDiff += (current->next->ts.tv_nsec - current->ts.tv_nsec)/1000;
-        ss << current->name << " -> " << current->next->name << " took " << usecDiff << "us" << std::endl;
-        current = current->next;
-    }
-    return ss.str();
-}
-
-
-#ifndef PERFCOUNTER_H
-#define PERFCOUNTER_H
-
-#include <string>
-
-class PerfCounter
-{
-public:
-    PerfCounter();
-    ~PerfCounter();
-
-    void snap(const char* name);
-
-    std::string dump();
-
-private:
-    class DataRec;
-
-    DataRec* head;
-    DataRec* lastRec;
-};
-
-#endif
 
 
 ={============================================================================
