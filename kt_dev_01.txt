@@ -248,6 +248,7 @@ KT KB. DEVELOPMENT.
 
 
 #{ c++ concurrent in action
+|kt_dev_ccon_000| std::thread build
 |kt_dev_ccon_001| data race and std::mutex
 |kt_dev_ccon_002| std::future
 
@@ -16398,11 +16399,17 @@ have the opposite. The important point is that can use lvalue when an rvalue is 
 use an rvalue when lvalue is required.
 
 int i = 42;
-int &r = i;
-int &&rr = i;           // error since cannot bind an rvalue reference to an lvalue
-int &r2 = i*42;         // error since i*42 is rvalue.
-const int &r3 = i*42;   // okay
-int &&r2 = i*42;        // okay
+
+int &r = i;             // okay  bind lvalue to lref
+int &&rr = i;           // error bind lvalue to rref
+                        // since cannot bind an rvalue reference to an lvalue.
+
+const int &r3 = i*42;   // okay  bind rvalue to 
+
+int &r2 = i*42;         // error bind rvalue to lref.
+int &&r2 = i*42;        // okay  bind rvalue to rref.
+
+note: NEEDs more understanding?
 
 
 <rvalue-is-temporary> implicit move sementics
@@ -16447,7 +16454,7 @@ in dtor and eventually free(). Otherwise, would delete the memory we have taken 
 StrVec::StrVec( StrVec&& s ) noexcept
 : elements(s.elements), first_free(s.first_free), cap(s.cap)
 {
-    // leave s in a state in which it is safe to tun the dtor
+    // leave s(moved-from) in a state in which it is safe to tun the dtor
     s.elements = s.first_free = s.cap = nullptr;
 }
 
@@ -16566,7 +16573,8 @@ Foo y(x);                  // copy ctor
 Foo z( std::move(x) );     // copy ctor
 
 Here copy initialization happens but std::move returns rvalue, Foo&&, but no move ctor. So can
-convert a Foo&& to const Foo&, copy ctor is viable and it is called.
+convert a Foo&& to const Foo&, copy ctor is viable and it is called. "can bind rvalue to
+lreference".
 
 
 <move-example>
@@ -16607,10 +16615,10 @@ argument, it uses either the copy ctor or the move ctor.
 
 HadPtr hp, hp2;
 
-hp = hp2;                        // copy ctor is viable
-hp = std::move(hp2);             // move ctor is exact match
+hp = hp2;                        // copy assign is viable
+hp = std::move(hp2);             // move assign is exact match
 
-In the second assignment, std::move return rvalue and move ctor used. Since copy-and-swap do
+In the second assignment, std::move return rvalue and move assign used. Since copy-and-swap do
 allocation and deallocation and allocation is done by move, there are no other thing to do to
 maintaion move assign behaviour. So no need to have move assign.
 
@@ -16721,7 +16729,7 @@ class Foo
 {
     public:
         // may assign only to modifiable lvalue
-        Foo &operator=( const Foo & ) &;
+        Foo &operator=( const Foo & ) &;           // note: "&"
 };
 
 Foo &Foo::operator=( const Foo &rhs ) &
@@ -21417,7 +21425,7 @@ swap(p1,p2) Same (as global function) (since C++11)
 
 make_pair(val1,val2) 
 Returns a pair with types and values of val1 and val2. The make_pair() function template enables you
-to create a value pair without writing the types explicitly.
+to create a value pair 'without' writing the types explicitly.
 
 std::pair<int,char>(42,’@’)
 std::make_pair(42,’@’)
@@ -25923,7 +25931,7 @@ Cannot be used sorting-criterion for associative containers and have state as fu
 
 {function-bind}
 C++11 from boost::bind. function adaptor. Defined in functional header and takes a collable objects
-and generate a new callable that 'adapt' the parameter list of the original.
+and generate a 'new' callable that 'adapt' the parameter list of the original.
 
 auto newCallable = bind( callable, arg_list );
 
@@ -25932,7 +25940,7 @@ When call newCallable, newCallable calls callable, 'passing' the arguments in ar
 In other words, bind(f, _1, 5)(x) is equivalent to f(x, 5);
 
 <arg_list>
-_n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. Thas is _1 is
+_n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. That is _1 is
 first parameter in newCallable.
 
 bool check_size( const string &s, string::size_type sz )
@@ -26065,7 +26073,7 @@ class Pred
         }
 };
 
-pos = find_if(coll.begin(), coll.end(), Pred(x,y) );
+pos = find_if(coll.begin(), coll.end(), Pred(x,y) );     // note T()
 
 note: 
 1. You have to scroll up to find out what find_if() exactly is looking for
@@ -26126,7 +26134,7 @@ int main()
 
   // print all elements
   for_each (coll.cbegin(), coll.cend(), // range
-      PrintInt());                      // operation
+      PrintInt());                      // operation note T()
 
   cout << endl;
 }
@@ -26191,7 +26199,7 @@ for_each(_InputIterator __first, _InputIterator __last, _Function __f)
 As with "function-type", involves automatic conversion to function type(pointer). When use a usual
 function, compiler converts it to function type and a function call is a operator() on this function
 pointer. When use a function object, do the same. So in for_each case, takes a pointer from a
-tempory function object and there is no object creation for function type template parameter.
+'tempory' function object and there is no object creation for function type template parameter.
 
 
 <advantages>
@@ -29012,7 +29020,7 @@ int main()
   unique_ptr<Foo> p2(new Foo(2));
   unique_ptr<Foo> p3(new Foo(3));
 
-  p2.reset( p3.release());
+  p2.reset( p3.release() );
 }
 
 $ ./a.out 
@@ -29059,22 +29067,28 @@ up2 = std::move(up1);   // assign the unique_ptr - transfers ownership from up1 
 
 <source-sink>
 # sink: when called, gets ownership
-#
-void sink(std::unique_ptr<ClassA> up) // sink() gets ownership. <Q> why not rvalue argument?
+
+void sink(std::unique_ptr<ClassA> up)  // sink() gets ownership. <Q> why not rvalue argument?
 {
 ...
 }
+
 std::unique_ptr<ClassA> up(new ClassA);
 ...
-sink(std::move(up)); // up loses ownership
+sink(std::move(up));                   // up loses ownership
+
+
+note: Q: why not rvalue argument? As with "copy-or-move", whether or not to use copy or move
+constructor depends on function matching and that's why std::move() is used in sink() call.
+
 
 # source: when exit, transfer ownership 
 
 std::unique_ptr<ClassA> source()
 {
-   std::unique_ptr<ClassA> ptr(new ClassA); // ptr owns the new object
+   std::unique_ptr<ClassA> ptr(new ClassA);  // ptr owns the new object
    ...
-   return ptr; // transfer ownership to calling function
+   return ptr;                               // transfer ownership to calling function
 }
 
 void g()
@@ -29090,7 +29104,8 @@ void g()
 In any case, 'no' resource leak is possible. Even if an exception is thrown, any unique_ptr that owns
 data ensures that this data is deleted.
 
-<Q> Why no std::move() in the return statement of source()?
+note: Q: Why no std::move() in the return statement of source()?
+
 <return-unique-ptr> move-operation
 One exception to the rule that cannot copy a unique_ptr; that according to the language rules of
 C++11, the compiler will try a 'move' automatically. 
@@ -35848,6 +35863,108 @@ class CustomerList {
 
 # ============================================================================
 #{ c++ concurrent in action
+={============================================================================
+*kt_dev_ccon_000* std::thread build
+
+Listing 1.1
+
+#include <iostream>
+#include <thread>
+
+using namespace std;
+
+void hello()
+{
+    std::cout << "Hello concurrent world\n";
+}
+
+int main(int argc, char** argv)
+{
+    std::thread t(hello);
+    t.join();
+}
+
+$ g++ -g -std=c++0x tthread.cpp 
+$ ./a.out 
+terminate called after throwing an instance of 'std::system_error'
+  what():  Operation not permitted
+Aborted
+
+$ g++ -g -std=c++0x -pthread tthread.cpp 
+$ ./a.out 
+Hello concurrent world
+
+
+{function-object-copied}
+class background_task
+{
+    public:
+        void operator()() const
+        {
+            do_something();
+            do_something_else();
+        }
+};
+
+background_task f;
+
+std::thread my_thread(f);
+
+In this case, the supplied function object is 'copied' into the storage belonging to the newly
+created thread of execution and invoked from there. It's therefore essential that the copy behave
+equivalently to the original, or the result may not be what's expected.
+
+Really?
+
+Can cause lifefime issue. For stl algorithms and predicates, use either usual function or temporary
+functional object and passes it as argument. Since the temporty object is self-contained and it is
+okay to use with stl algorithms. 
+
+from stl::thread
+
+/// thread
+class thread
+{
+    template<typename _Callable>
+        struct _Impl : public _Impl_base
+    {
+        _Callable    _M_func;          // note:
+
+        _Impl(_Callable&& __f) : _M_func(std::forward<_Callable>(__f))
+        { }
+
+        void
+            _M_run() { _M_func(); }
+    };
+
+    private:
+    void _M_start_thread(__shared_base_type);
+
+    public:
+
+    thread() noexcept = default;
+    thread(thread&) = delete;
+    thread(const thread&) = delete;
+
+    thread(thread&& __t) noexcept
+    { swap(__t); }
+    template<typename _Callable, typename... _Args>
+        explicit 
+        thread(_Callable&& __f, _Args&&... __args)
+        {
+            _M_start_thread(_M_make_routine(std::__bind_simple(
+                            std::forward<_Callable>(__f),
+                            std::forward<_Args>(__args)...)));
+        }
+
+    template<typename _Callable> shared_ptr<_Impl<_Callable>> _M_make_routine(_Callable&& __f)
+    {
+        // Create and allocate full data structure, not base.
+        return std::make_shared<_Impl<_Callable>>(std::forward<_Callable>(__f));
+    }
+};
+
+
 ={============================================================================
 *kt_dev_ccon_001* data race and std::mutex
 

@@ -5,13 +5,58 @@ kt.dev.boot
 /^[#=]{
 Use #{ for a group and ={ for a item
 
+|kt_dev_boost_000| install
 |kt_dev_boost_001| bind: to use member function
 |kt_dev_boost_002| program_options
 |kt_dev_boost_003| posix_time
+|kt_dev_boost_004| typeof
+|kt_dev_boost_005| is_same
+|kt_dev_boost_006| lexical_cast
 
 
 # ============================================================================
 #{
+={============================================================================
+*kt_dev_boost_000* install
+
+http://www.boost.org/doc/libs/1_58_0/more/getting_started/unix-variants.html
+
+1. download and untar
+2. build and install
+3. include in source:
+
+#include <boost/typeof/typeof.hpp>
+
+using namespace boost;
+
+// don't need if installed with defaults.
+// 4. specify include directory
+// $ g++ -g -std=c++0x -I /usr/local/boost_1_58_0 tboost.cpp 
+
+
+{build}
+If you want to use any of the separately-compiled Boost libraries, you'll need to acquire library
+binaries.
+
+Issue the following commands in the shell (don't type $; that represents the shell's prompt):
+
+$ cd path/to/boost_1_58_0
+$ ./bootstrap.sh --help
+
+Select your configuration options and invoke ./bootstrap.sh again without the --help option. Unless
+you have write permission in your system's /usr/local/ directory, you'll probably want to at least
+use
+
+$ sudo ./bootstrap.sh --prefix=path/to/installation/prefix
+$ sudo ./b2
+
+to install somewhere else. Also, consider using the --show-libraries and
+--with-libraries=library-name-list options to limit the long wait you'll experience if you build
+everything. Finally,
+
+$ ./b2 install
+
+
 ={============================================================================
 *kt_dev_boost_001* bind: to use member function
 
@@ -142,6 +187,244 @@ void parseProgramOptions(int argc, char** argv)
 *kt_dev_boost_003* posix_time
 
 #include <boost/date_time.hpp>
+
+
+={============================================================================
+*kt_dev_boost_004* typeof
+
+http://www.boost.org/doc/libs/1_58_0/doc/html/typeof.html
+
+Motivation
+
+<object-generator>
+Today many template libraries supply object generators to simplify object creation by utilizing the
+C++ template argument deduction facility. Consider std::pair. In order to instantiate this class
+template and create a temporary object of this instantiation, one has to supply template parameters,
+as well as parameters to the constructor:
+
+std::pair<int, double>(5, 3.14159);
+
+To avoid this 'duplication', STL supplies the std::make_pair object generator. When it is used, the
+    types of template parameters are deduced from supplied function arguments:
+
+std::make_pair(5, 3.14159);
+
+For the temporary objects it is enough. However, when a named object needs to be allocated, the
+    problem appears again:
+
+std::pair<int, double> p(5, 3.14159);
+
+The object generator no longer helps:
+
+std::pair<int, double> p = std::make_pair(5, 3.14159);
+
+It would be nice to deduce the type of the object (on the left) from the expression it is
+    initialized with (on the right), but the current C++ syntax does not allow for this.
+
+note: l
+
+The above example demonstrates the essence of the problem but does not demonstrate its scale. Many
+libraries, especially expression template libraries, create objects of really complex types, and go
+a long way to hide this complexity behind object generators. Consider a nit Boost.Lambda functor:
+
+_1 > 15 && _2 < 20
+
+If one wanted to allocate a named copy of such an innocently looking functor, she would have to
+specify something like this:
+
+lambda_functor<
+    lambda_functor_base<
+        logical_action<and_action>,
+        tuple<
+            lambda_functor<
+                lambda_functor_base<
+                    relational_action<greater_action>,
+                    tuple<
+                        lambda_functor<placeholder<1> >,
+                        int const
+                    >
+                >
+            >,
+            lambda_functor<
+                lambda_functor_base<
+                    relational_action<less_action>,
+                    tuple<
+                        lambda_functor<placeholder<2> >,
+                        int const
+                    >
+                >
+            >
+        >
+    >
+>
+f = _1 > 15 && _2 < 20;
+
+Not exactly elegant. To solve this problem (as well as some other problems), the C++ standard
+    committee is considering a few additions to the standard language, such as typeof/decltype and
+    auto (see http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2004/n1607.pdf).
+
+The typeof operator (or decltype, which is a slightly different flavor of typeof) allows one to
+determine the type of an expression at compile time. Using typeof, the above example can be
+simplified drastically:
+
+typeof(_1 > 15 && _2 < 20) f = _1 > 15 && _2 < 20;
+
+Much better, but some duplication still exists. The auto type solves the rest of the problem:
+
+auto f = _1 > 15 && _2 < 20;
+
+The purpose of the Boost.Typeof library is to provide a library-based solution, which could be used
+    until the language-based facility is added to the Standard and becomes widely available. 
+
+
+Tutorial
+
+The above examples are possible because the Typeof Library knows about primitive types, such as int,
+    double, char, etc. The Typeof Library also knows about most types and templates defined by the
+        Standard C++ Library, but the appropriate headers need to be included to take advantage of
+        this:
+
+
+#include <boost/typeof/std/utility.hpp>
+
+namespace ex3
+{
+    BOOST_AUTO(p, make_pair(1, 2));
+
+    BOOST_STATIC_ASSERT((is_same<BOOST_TYPEOF(p), pair<int, int> >::value));
+}
+
+Here <boost/typeof/std/utility.hpp> includes <utility> and contains knowledge about templates
+defined there. This naming convention applies in general, for example to let the Typeof Library
+handle std::vector, include <boost/typeof/std/vector.hpp>, etc
+
+
+={============================================================================
+*kt_dev_boost_005* is_same
+
+http://www.boost.org/doc/libs/1_50_0/libs/type_traits/doc/html/boost_typetraits/reference/is_same.html
+
+is_same
+
+template <class T, class U>
+struct is_same : public true_type-or-false_type {};
+
+Inherits: If T and U are the same types then inherits from true_type, otherwise inherits from
+              false_type.
+
+Header: #include <boost/type_traits/is_same.hpp> or #include <boost/type_traits.hpp>
+
+Compiler Compatibility: If the compiler does not support partial-specialization of class templates,
+         then this template can not be used with abstract, incomplete or function types.
+
+Examples:
+
+    is_same<int, int> inherits from true_type. 
+
+    is_same<int, int>::type is the type true_type. 
+
+    is_same<int, int>::value is an integral constant expression that evaluates to true. 
+
+    is_same<int const, int>::value is an integral constant expression that evaluates to false. 
+
+    is_same<int&, int>::value is an integral constant expression that evaluates to false. 
+
+    is_same<T, T>::value_type is the type bool. 
+
+
+#include <iostream>
+#include <boost/typeof/typeof.hpp>
+
+using namespace std;
+using namespace boost;
+
+int main(int argc, char** argv)
+{
+    int ival = 5;
+
+    std::cout << "is the same type? " << is_same<decltype(ival), int>::value << std::endl;
+}
+
+$ g++ -g -std=c++0x -I /usr/local/boost_1_58_0 tboost.cpp 
+$ ./a.out 
+is the same type? 1
+
+
+={============================================================================
+*kt_dev_boost_006* lexical_cast
+
+While we weren't looking Boost.Lexical_cast became "in most cases boost::lexical_cast is faster than
+scanf, printf, std::stringstream".  Yay for upgrades - now there's no reason to use scanf for
+performance reasons.
+
+http://www.boost.org/doc/libs/1_58_0/doc/html/boost_lexical_cast/performance.html#boost_lexical_cast.performance.tests_description
+
+
+#include "PerfCounter.h"
+
+#include <iostream>
+#include <sstream>
+#include <boost/lexical_cast.hpp>
+
+int main(int argc,char** argv)
+{
+    PerfCounter counter;
+    
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        sscanf("42","%d",&out);
+    }
+    counter.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        std::stringstream ss("42");
+        ss >> out;
+    }
+    counter.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out = boost::lexical_cast<int>("42");
+    }
+    counter.snap("boost::lexical_cast<int>");
+    std::cout << counter.dump() << std::endl;
+}
+
+// from a run on debian
+
+$ ./a.out 
+Start -> scanf int took 2112us
+scanf int -> stringstream int took 27859us
+stringstream int -> boost::lexical_cast<int> took 910us
+boost::lexical_cast<int> -> end took 0us
+
+
+<question>
+// about the above code
+
+> you're transforming the same value on every iteration, source of which is a const - might this be
+> a subject of some optimisation / cache related thing?
+
+Yeah, I was just thinking the same thing. I wouldn't be too surprised if the compiler replaces the
+lexical_cast call with a constant result. Try with a random number converted to a string.
+
+<result>
+Start -> scanf int took 22us
+scanf int -> stringstream int took 45us
+stringstream int -> boost::lexical_cast<int> took 3us
+boost::lexical_cast<int> -> end took 0us
+
+on the host and
+
+Start -> scanf int took 46us
+scanf int -> stringstream int took 392us
+stringstream int -> boost::lexical_cast<int> took 11us
+boost::lexical_cast<int> -> end took 4us
+
+on the device.
 
 
 ==============================================================================
