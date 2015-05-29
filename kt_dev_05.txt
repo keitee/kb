@@ -15,6 +15,13 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_201| mpeg: streaming: dash
 
 |kt_dev_bcast_300| gst:
+|kt_dev_bcast_301| gst: base elements
+|kt_dev_bcast_302| gst: time and seek
+|kt_dev_bcast_303| gst: pad cap. gstcap
+|kt_dev_bcast_304| gst: multi-thread
+|kt_dev_bcast_305| gst: buffers and interact with a pipeline
+|kt_dev_bcast_310| gst: debug
+
 
 # ============================================================================
 #{
@@ -419,6 +426,7 @@ When our source element finally has enough information to start producing data, 
 source pads, and trigger the “pad-added” signal. At this point our callback will be called:
 
 
+
 <status>
 You can only move between adjacent ones, this is, you can't go from NULL to PLAYING, you have to go
 through the intermediate READY and PAUSED states. If you set the pipeline to PLAYING, though,
@@ -456,6 +464,23 @@ case GST_MESSAGE_STATE_CHANGED:
 
 
 {build-pipeline}
+
+<automatic>
+Showed how to build a pipeline automatically. 
+
+/* Initialize GStreamer */
+gst_init (&argc, &argv);
+
+/* Build the pipeline */
+pipeline = gst_parse_launch ("playbin2 uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm", NULL);
+
+/* Start playing */
+gst_element_set_state (pipeline, GST_STATE_PLAYING);
+
+
+<manually>
+Now we are going to build a pipeline manually by instantiating each element and linking them all
+together. 
 
 1. create elements
 
@@ -549,7 +574,7 @@ do {
 } while (!terminate);
 
 
-{what-bus-and-message}
+{bus-and-message}
 GStreamer bus is the object responsible for delivering to the application the GstMessages generated
 by the elements, in order and to the application thread. This last point is important, because the
 actual streaming of media is done in another thread than the application.
@@ -559,7 +584,7 @@ siblings, or asynchronously, using signals (shown in the next tutorial). Your ap
 always keep an eye on the bus to be notified of errors and other playback-related issues.
 
 
-{what-bin}
+{bin}
 GstBin — Base class and element that can contain other elements
 
 Object Hierarchy
@@ -596,13 +621,42 @@ The "element-added" signal is fired whenever a new element is added to the bin. 
 
 
 ={============================================================================
-*kt_dev_bcast_301* gst: available elements
+*kt_dev_bcast_301* gst: base elements
 
-uridecodebin 
+gst-plugins-base Elements
+http://www.freedesktop.org/software/gstreamer-sdk/data/docs/2012.5/gst-plugins-base-plugins-0.10/index.html
 
+http://docs.gstreamer.com/display/GstSDK/Basic+tutorial+14%3A+Handy+elements
+
+{uridecodebin}
 will internally instantiate all the necessary elements (sources, demuxers and decoders) to turn a
 URI into raw audio and/or video streams. It does half the work that playbin2 does. Since it contains
 demuxers, its source pads are not initially available and we will need to link to them on the fly.
+
+This element decodes data from a URI into raw media. It selects a source element that can handle the
+given URI scheme and connects it to a decodebin2 element. Like a demuxer, so it offers as many
+source pads as streams are found in the media.
+
+gst-launch-0.10 uridecodebin uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! ffmpegcolorspace ! autovideosink
+gst-launch-0.10 uridecodebin uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! audioconvert ! autoaudiosink
+
+Decodes data from a URI into raw media. It selects a source element that can handle the given "uri" scheme and connects it to a decodebin2. 
+
+
+{decodebin2}
+http://www.freedesktop.org/software/gstreamer-sdk/data/docs/2012.5/gst-plugins-base-plugins-0.10/gst-plugins-base-plugins-decodebin2.html#decodebin2
+GstBin that auto-magically constructs a decoding pipeline using available decoders and demuxers via
+auto-plugging.
+
+decodebin2 is considered stable now and replaces the old decodebin element. uridecodebin uses
+decodebin2 internally and is often more convenient to use, as it creates a suitable source element
+as well. 
+
+
+appsrc, appsink
+
+The element used to inject application data into a GStreamer pipeline is appsrc, and its
+counterpart, used to extract GStreamer data back to the application is appsink.
 
 
 ={============================================================================
@@ -615,7 +669,6 @@ so we can print it on screen. This is similar to what a media player would do, u
 
 {gstquery}
 GstQuery is a mechanism that allows asking an element or pad for a piece of information.
-
 
 msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
         GST_MESSAGE_STATE_CHANGED | GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
@@ -653,7 +706,9 @@ directly provides us with the result.
 
 
 ={============================================================================
-*kt_dev_bcast_303* gst: pad cap
+*kt_dev_bcast_303* gst: pad cap. gstcap
+
+Basic tutorial 6: Media formats and Pad Capabilities
 
 Pads can support multiple Capabilities. In order for two elements to be linked together, they must
 share a common subset of Capabilities (Otherwise they could not possibly understand each other) via
@@ -723,6 +778,356 @@ tee element, which has one sink pad and no initial source pads: they need to be 
 tee adds them. In this way, an input stream can be replicated any number of times. The disadvantage
 is that linking elements with Request Pads is not as automatic.
 
+
+={============================================================================
+*kt_dev_bcast_305* gst: buffers and interact with a pipeline
+
+Basic tutorial 8: Short-cutting the pipeline
+
+Data 'travels' through a GStreamer pipeline in chunks called buffers. Since this example produces
+and consumes data, we need to know about GstBuffers.
+
+Source Pads produce buffers, that are consumed by Sink Pads; GStreamer takes these buffers and
+passes them from element to element.
+
+A buffer simply represents a piece of data, do not assume that all buffers will have the same size,
+or represent the same amount of time. Neither should you assume that if a single buffer enters an
+    element, a single buffer will come out. Elements are free to do with the received buffers as
+    they please.
+
+Every buffer has an attached 'GstCaps' structure that describes the kind of media contained in the
+buffer. Also, buffers have an attached 'time-stamp' and 'duration', that describe in which moment
+the content of the buffer should be rendered or displayed. Time stamping is a very complex and
+delicate subject, but this simplified vision should suffice for now.
+
+As an example, a filesrc (a GStreamer element that reads files) produces buffers with the "ANY" caps
+and no time-stamping information. After demuxing (see Basic tutorial 3: Dynamic pipelines) buffers
+can have some specific caps, for example “video/x-h264”. After decoding, each buffer will contain a
+single video frame with raw caps (for example, “video/x-raw-yuv”) and very precise time stamps
+indicating when should that frame be displayed.
+
+
+#define CHUNK_SIZE 1024   /* Amount of bytes we are sending in each buffer */
+#define SAMPLE_RATE 44100 /* Samples per second we are sending */
+#define AUDIO_CAPS "audio/x-raw-int,channels=1,rate=%d,signed=(boolean)true,width=16,depth=16,endianness=BYTE_ORDER"
+
+
+/* Configure appsrc */
+audio_caps_text = g_strdup_printf (AUDIO_CAPS, SAMPLE_RATE);
+audio_caps = gst_caps_from_string (audio_caps_text);
+g_object_set (data.app_source, "caps", audio_caps, NULL);
+g_signal_connect (data.app_source, "need-data", G_CALLBACK (start_feed), &data);
+g_signal_connect (data.app_source, "enough-data", G_CALLBACK (stop_feed), &data);
+
+The first property that needs to be set on the appsrc is caps. It specifies the kind of data that
+    the element is going to produce, so GStreamer can check if linking with downstream elements is
+    possible 
+
+We then 'connect' to the need-data and enough-data signals. These are fired 'by' appsrc when its
+internal queue of data is running low or almost full, respectively. We will use these signals to
+start and stop (respectively) our signal generation process.
+
+
+/* Configure appsink */
+g_object_set (data.app_sink, "emit-signals", TRUE, "caps", audio_caps, NULL);
+g_signal_connect (data.app_sink, "new-buffer", G_CALLBACK (new_buffer), &data);
+gst_caps_unref (audio_caps);
+g_free (audio_caps_text);
+
+Regarding the appsink configuration, we connect to the new-buffer signal, which is emitted every
+    time the sink 'receives' a buffer. Also, the signal emission needs to be enabled through the
+    emit-signals property, because, by default, it is disabled.
+
+note: why not to set emit-signals for appsrc given that it is disabled by default?
+
+
+/* Start playing the pipeline */
+gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
+   
+
+/* Create a GLib Main Loop and set it to run */
+data.main_loop = g_main_loop_new (NULL, FALSE);
+g_main_loop_run (data.main_loop);
+
+
+<pushing>
+/* This method is called by the idle GSource in the mainloop, to feed CHUNK_SIZE bytes into appsrc.
+ * The ide handler is added to the mainloop when appsrc requests us to start sending data (need-data signal)
+ * and is removed when appsrc has enough data (enough-data signal).
+ */
+static gboolean push_data (CustomData *data) {
+  GstBuffer *buffer;
+  GstFlowReturn ret;
+  int i;
+  gint16 *raw;
+  gint num_samples = CHUNK_SIZE / 2; /* Because each sample is 16 bits */
+  gfloat freq;
+   
+  /* Create a new empty buffer */                  note: alloc
+  buffer = gst_buffer_new_and_alloc (CHUNK_SIZE);
+   
+  /* Set its timestamp and duration */             note: set and timestamp buffer and duration means size
+  GST_BUFFER_TIMESTAMP (buffer) = gst_util_uint64_scale (data->num_samples, GST_SECOND, SAMPLE_RATE);
+  GST_BUFFER_DURATION (buffer) = gst_util_uint64_scale (CHUNK_SIZE, GST_SECOND, SAMPLE_RATE);
+   
+  /* Generate some psychodelic waveforms */
+  raw = (gint16 *)GST_BUFFER_DATA (buffer);        note: gst_buffer_'data'
+  data->c += data->d;
+  data->d -= data->c / 1000;
+  freq = 1100 + 1000 * data->d;
+  for (i = 0; i < num_samples; i++) {
+    data->a += data->b;
+    data->b -= data->a / freq;
+    raw[i] = (gint16)(500 * data->a);
+  }
+  data->num_samples += num_samples;
+   
+  /* Push the buffer into the appsrc */ note:
+  g_signal_emit_by_name (data->app_source, "push-buffer", buffer, &ret);
+   
+  /* Free the buffer now that we are done with it */ note:
+  gst_buffer_unref (buffer);
+   
+  if (ret != GST_FLOW_OK) {
+    /* We got some error, stop sending data */
+    return FALSE;
+  }
+   
+  return TRUE;
+}
+
+Once we have the buffer ready, we pass it to appsrc with the push-buffer action signal (see
+        information box at the end of Playback tutorial 1: Playbin2 usage), and then
+gst_buffer_unref() it since we no longer need it.
+
+note: why need to free if a buffer travels down in a pipeline?
+	
+
+<action-signal>
+This rather unintuitive way of retrieving the tag list is called an Action Signal. Action signals
+are emitted by the application to a specific element, which then performs an action and returns a
+result. They behave like a "dynamic function call", in which methods of a class are identified by
+their name (the signal's name) instead of their memory address. These signals are listed In the
+documentation along with the regular signals, and are tagged “Action”. See playbin2, for example.
+
+// appsrc signals
+Signals
+  "end-of-stream"                                  : Action
+  "enough-data"                                    : Run Last
+  "need-data"                                      : Run Last
+  "push-buffer"                                    : Action
+  "seek-data"                                      : Run Last
+
+
+/* This signal callback triggers when appsrc needs data. Here, we add an idle handler
+ * to the mainloop to start pushing data into the appsrc */
+static void start_feed (GstElement *source, guint size, CustomData *data) {
+  if (data->sourceid == 0) {
+    g_print ("Start feeding\n");
+    data->sourceid = g_idle_add ((GSourceFunc) push_data, data);
+  }
+}
+
+This function is called when the internal queue of appsrc is about to starve (run out of data). The
+only thing we do here is register a GLib idle function with g_idle_add() that feeds data to appsrc
+until it is full again. "A GLib idle function" is a method that GLib will call from its main loop
+whenever it is 'idle', this is, when it has no higher-priority tasks to perform. It requires a GLib
+GMainLoop to be instantiated and running, obviously.
+
+This is only one of the multiple approaches that appsrc allows. In particular, buffers do not need
+to be fed into appsrc from the main thread using GLib, and you do not need to use the need-data and
+enough-data signals to synchronize with appsrc (although this is allegedly the most convenient).
+
+
+/* The appsink has received a buffer */
+static void new_buffer (GstElement *sink, CustomData *data) {
+  GstBuffer *buffer;
+   
+  /* Retrieve the buffer */
+  g_signal_emit_by_name (sink, "pull-buffer", &buffer);
+  if (buffer) {
+    /* The only thing we do in this example is print a * to indicate a received buffer */
+    g_print ("*");
+    gst_buffer_unref (buffer);
+  }
+}
+
+// appsink
+Signals
+  "eos"                                            : Run Last
+  "new-buffer"                                     : Run Last
+  "new-preroll"                                    : Run Last
+  "pull-buffer"                                    : Action
+  "pull-preroll"                                   : Action
+  "new-buffer-list"                                : Run Last
+  "pull-buffer-list"                               : Action
+
+Finally, this is the function that gets called when the appsink receives a buffer. We use the
+pull-buffer action signal to 'retrieve' the buffer and then just print some indicator on the screen.
+
+We can retrieve the data pointer using the GST_BUFFER_DATA macro and the data size using the
+GST_BUFFER_SIZE macro in GstBuffer. Remember that this buffer does 'not' have to match the buffer
+that we produced in the push_data function, any element in the path could have altered the buffers
+in any way.
+
+note: no copying. what gst_buffer_unref() actually do?
+
+
+={============================================================================
+*kt_dev_bcast_306* gst: 
+
+={============================================================================
+*kt_dev_bcast_310* gst: debug
+
+To enable debug output, set the GST_DEBUG environment variable to the desired debug level. All
+levels below that will also be shown (i.e., if you set GST_DEBUG=2, you will get both ERROR and
+        WARNING messages).
+
+Furthermore, each plugin or part of the GStreamer defines its own category, so you can specify a
+debug level for each individual category. For example, GST_DEBUG=2,audiotestsrc:5, will use Debug
+Level 5 for the audiotestsrc element, and 2 for all the others.
+
+The '*' wildcard is also available. For example GST_DEBUG=2,audio*:5 will use Debug Level 5 for all
+categories starting with the word audio. GST_DEBUG=*:2 is equivalent to GST_DEBUG=2.
+
+Use gst-launch-0.10 --gst-debug-help to obtain the list of all registered categories. Bear in mind
+that each plugin registers its own categories, so, when installing or removing plugins, this list
+can change.
+
+
+The content of each line in the debug output is:
+
+0:00:00.868050000  1592   09F62420 WARN   filesrc gstfilesrc.c:1044:gst_file_src_start:<filesrc0> 
+                                          error: No such file "non-existing-file.webm"
+
+0:00:00.868050000	Time stamp in HH:MM:SS.sssssssss format since the start of the program
+
+1592	Process ID from which the message was issued. Useful when your problem involves multiple processes
+
+09F62420	Thread ID from which the message was issued. Useful when your problem involves multiple threads
+
+filesrc	Debug Category of the message
+
+<filesrc0>	Name of the object that issued the message. It can be an element, a Pad, or something
+else. Useful when you have multiple elements of the same kind and need to distinguish among them.
+
+Naming your elements with the name property will make this debug output more readable (otherwise,
+        GStreamer assigns each new element a unique name).
+
+
+<in-source>
+To do so, use the GST_ERROR(), GST_WARNING(), GST_INFO(), GST_LOG() and GST_DEBUG() macros. They
+accept the same parameters as printf, and they use the default category (default will be shown as
+        the Debug category in the output log).
+
+To change the category to something more meaningful, add these two lines at the top of your code:
+
+GST_DEBUG_CATEGORY_STATIC (my_category);
+#define GST_CAT_DEFAULT my_category
+
+And then this one after you have initialized GStreamer with gst_init():
+
+GST_DEBUG_CATEGORY_INIT (my_category, "my category", 0, "This is my very own");
+
+This registers a new category (this is, for the duration of your application: it is not stored in
+        any file), and sets it as the default category for your code. See the documentation for
+    GST_DEBUG_CATEGORY_INIT().
+
+
+={============================================================================
+*kt_dev_bcast_311* gst: tools
+
+{gst-launch}
+The command line for gst-launch consists of a list of options followed by a PIPELINE-DESCRIPTION.
+Some simplified instructions are given next, see the complete documentation at the reference page for
+gst-launch.
+
+In simple form, a PIPELINE-DESCRIPTION is a list of element types separated by exclamation marks
+(!). Go ahead and type in the following command:
+
+gst-launch-0.10 videotestsrc ! ffmpegcolorspace ! autovideosink
+
+
+<set-properties>
+Properties may be appended to elements, in the form property=value (multiple properties can be
+        specified, separated by spaces). Use the gst-inspect tool (explained next) to find out the
+available properties for an element.
+
+gst-launch-0.10 videotestsrc pattern=11 ! ffmpegcolorspace ! autovideosink
+
+
+<name-elements>
+Elements can be named using the name property, in this way complex pipelines involving branches can
+be created. Names allow linking to elements created previously in the description, and are
+indispensable to use elements with multiple output pads, like demuxers or tees, for example.
+
+Named elements are referred to using their name followed by a dot.
+
+gst-launch-0.10 videotestsrc ! ffmpegcolorspace ! tee name=t ! queue ! autovideosink t. ! queue ! autovideosink
+                                                                                     ^^
+
+The tee is named simply `t` (using the name property) and then linked to a queue and an
+autovideosink. The same tee is referred to using ‘t.’ (mind the dot) and then linked to a second
+queue and a second autovideosink.
+
+
+<cap-filters>
+When an element has more than one output pad, it might happen that the link to the next element is
+ambiguous: the next element may have more than one compatible input pad, or its input pad may be
+compatible with the Pad Caps of all the output pads. In these cases GStreamer will link using the
+first pad that is available, which pretty much amounts to saying that GStreamer will choose one
+output pad at random.
+
+Consider the following pipeline:
+
+gst-launch-0.10 souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! matroskademux ! filesink location=test
+
+This is the same media file and demuxer as in the previous example. The input Pad Caps of filesink
+are ANY, meaning that it can accept any kind of media. Which one of the two output pads of
+matroskademux will be linked against the filesink? video_00 or audio_00? You cannot know.
+
+You can remove this ambiguity, though, by using named pads, as in the previous sub-section, or by
+using Caps Filters:
+
+gst-launch-0.10 souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! matroskademux ! video/x-vp8 ! matroskamux ! filesink location=sintel_video.mkv
+
+A Caps Filter behaves like a pass-through element which does nothing and only accepts media with the
+given Caps, effectively resolving the ambiguity. In this example, between matroskademux and
+matroskamux we added a video/x-vp8 Caps Filter to specify that we are interested in the output pad
+of matroskademux which can produce this kind of video.
+
+
+{gst-inspect}
+This tool has three modes of operation:
+
+o Without arguments, it lists 'all' available elements types, this is, the types you can use to
+instantiate new elements.
+
+o With a file name as an argument, it treats the file as a GStreamer plugin, tries to open it, and
+lists all the elements described inside.
+
+o With a GStreamer 'element' name as an argument, it lists all information regarding that element.
+
+The most relevant sections are:
+
+o Pad Templates (line 25): This lists all the kinds of Pads this element can have, along with their
+                           capabilities. This is where you look to find out if an element can link
+                           with another one. In this case, it has only one sink pad template,
+                           accepting only video/x-vp8 (encoded video data in VP8 format) and only
+                           one source pad template, producing video/x-raw-yuv (decoded video data).
+
+o Element Properties (line 70): This lists the properties of the element, along with their type and
+                                accepted values.
+
+
+{gst-discoverer}
+This tool is a wrapper around the GstDiscoverer object shown in Basic tutorial 9: Media information
+gathering. It accepts a URI from the command line and prints all information regarding the media
+that GStreamer can extract. It is useful to find out what container and codecs have been used to
+produce the media, and therefore what elements you need to put in a pipeline to play it.
+
+Use gst-discoverer --help to obtain the list of available options, which basically control the
+amount of verbosity of the output.
 
 
 ==============================================================================
