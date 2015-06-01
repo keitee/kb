@@ -99,6 +99,7 @@
 |kt_linux_tool_039| mount
 |kt_linux_tool_040| install
 |kt_linux_tool_041| notify-send
+|kt_linux_tool_042| print multiple files with filename
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -4238,6 +4239,27 @@ wget URL && notify-send "Done" || notify-send "Failed"
 notify-send --hint=int:transient:1 -i
 /usr/share/icons/gnome/32x32/status/stock_dialog-warning.png 'Building
 zb/DEVARCH-8092-TEMP: failure'
+
+
+={============================================================================
+*kt_linux_tool_042* print multiple files with filename
+
+$ grep "" *-config
+default-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory
+http-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
+https-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
+
+$ tail -n +1 *-config
+==> default-proxy-config <==
+
+==> default-system-factory.plugin-config <==
+libNickelSystemDbusClient.so createDbusSystemFactory
+
+==> http-application%2Fdash%2Bxml.plugin-config <==
+libNickelSystemGstreamer.so createGstSystemFactory
+
+==> https-application%2Fdash%2Bxml.plugin-config <==
+libNickelSystemGstreamer.so createGstSystemFactory
 
 
 # ============================================================================
@@ -19321,9 +19343,9 @@ $ nm -D libc.so.0 | ag pthread
 *kt_linux_core_405* shared library: dl and ABI. visibility
 
 When an executable starts, the dynamic linker loads 'all' of the shared libraries in the program's
-dynamic dependency list. Sometimes, however, it can be useful to load libraries at a later time. For
-example, a plug-in is loaded only when it is needed. This functionality is provided by an API to the
-dynamic linker.
+dynamic dependency list. Sometimes, however, it can be useful to load libraries at a 'later' time.
+For example, a plug-in is loaded only when it is needed. This functionality is provided by an API to
+the dynamic linker.
 
 
 {version-check}
@@ -19339,12 +19361,60 @@ root# ls -al /lib/ld-linux.so.2
 lrwxrwxrwx    1 root     root            24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
 
 
-{symbol-name} from LPI 42.1
-The dlsym() function searches a library for a symbol (a string containing the 'name' of a function
-    or variable) and returns its address.
+{dlopen-apis} from LPI 42.1
+<dlopen>
+#include <dlfcn.h>
 
+void *dlopen(const char *libfilename, int flags);
 
-{link-option}
+Returns library handle on success, or NULL on error
+
+The dlopen() opens a shared library, returning a handle used by sub-sequent calls. Loads the shared
+library named in libfilename into the calling process's virtual address space and increments the
+count of open references to the library.
+
+If the shared library specified by libfilename contains dependencies on other shared libraries,
+   dlopen() also automatically loads those libraries. This procedure occurs recursively if
+   necessary. We refer to the set of such loaded libraries as this library's dependency tree.
+
+RTLD_LAZY
+
+Undefined function symbols in the library should be resolved only as the code is executed. If a
+piece of code requiring a particular symbol is not executed, that symbol is never resolved. Lazy
+resolution is performed only for function references; references to variables are always resolved
+immediately. Specifying the RTLD_LAZY flag provides behavior that corresponds to the normal
+operation of the dynamic linker when loading the shared libraries identified in an executable's
+dynamic dependency list.
+
+It is also possible to include further values in flags. The following flags are specified
+in SUSv3:
+
+RTLD_GLOBAL
+
+Symbols in this library and its dependency tree are made available for resolving references in other
+libraries loaded by this process and also for lookups via dlsym().
+
+<dlsym>
+#include <dlfcn.h>
+
+void *dlsym(void *handle, char *symbol);
+
+Returns address of symbol, or NULL if symbol is not found
+
+searches a library for a symbol (a string containing the name of a function or variable) and returns
+its address.
+
+The value of a symbol returned by dlsym() may be NULL, which is indistinguishable from the "symbol
+not found" return. In order to differentiate the two possibilities, we must call dlerror()
+    beforehand (to make sure that any previously held error string is cleared) and then if, after
+    the call to dlsym(), dlerror() returns a non-NULL value, we know that an error occurred.
+
+The dlclose() function closes a library previously opened by dlopen().
+
+The dlerror() function returns an error-message string, and is used after a fail- ure return from
+one of the preceding functions.
+
+<to-link>
 To build programs that use the dlopen API on Linux, we must specify the -ldl option, in order to
 link against the libdl library.
 
@@ -19528,7 +19598,7 @@ programs.
 
 
 ={============================================================================
-*kt_linux_core_405* shared library: further information
+*kt_linux_core_407* shared library: further information
 
 Further information
 
