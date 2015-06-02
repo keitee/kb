@@ -61,6 +61,10 @@
 |kt_dev_uv_stack_405| stack: media: zmp
 |kt_dev_uv_stack_406| stack: media: fr15: branch naming
 |kt_dev_uv_stack_407| stack: media: fr15: gst media router
+|kt_dev_uv_stack_408| stack: media: nickel: media router creation
+|kt_dev_uv_stack_409| stack: media: nickel: run dash stream
+
+|kt_dev_uv_stack_450| stack: dbus
 
 |kt_dev_uv_stack_120| stack: cal: dispatcher
 |kt_dev_uv_stack_114| stack: build pc target
@@ -71,7 +75,6 @@
 |kt_dev_uv_stack_130| stack: links with 3rd parties. cppunit, gmock and so on
 
 |kt_dev_uv_stack_150| stack: network
-|kt_dev_uv_stack_200| stack: dbus
 
 |kt_dev_uv_stack_200| commands TODO:
 
@@ -2679,6 +2682,28 @@ No code in source tree and these are generated.
 
 
 <system-factory> SF is DBUS SF
+
+All are generated in build root.
+
+// Cobalt/Cobalt.System.API/include/SystemFactory.h
+
+namespace Zinc { namespace Broker {
+
+struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
+    virtual ~SystemFactory();
+
+    virtual boost::shared_ptr<Zinc::Broker::MetadataBroker> createMetadataBroker() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::HiddenServicesStore> createHiddenServicesStore() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::UnifiedServiceRepository> createUnifiedServiceRepository() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::ProvisioningService> createProvisioningService() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::UnifiedEventRepository> createUnifiedEventRepository() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::LinearAcquisitionServiceResolver> createLinearAcquisitionServiceResolver() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::DeviceConfig> createDeviceConfig() = 0;
+
+};
+
+} //namespace
+} //namespace
 
 // Cobalt/Cobalt.System.DBusClient/src/unity.cpp
 
@@ -7313,7 +7338,194 @@ quite right.
 
 
 ={============================================================================
-*kt_dev_uv_stack_407* stack: media: fr15: gst media router
+*kt_dev_uv_stack_407* stack: media: nickel: system factory api
+
+namespace Zinc { namespace Media {
+
+struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
+    virtual ~SystemFactory();
+
+    virtual boost::shared_ptr<Zinc::Media::LocalMediaLibrary> createLocalMediaLibrary() = 0;
+    virtual boost::shared_ptr<Zinc::Media::MediaRouterFactory> createMediaRouterFactory() = 0;
+    virtual boost::shared_ptr<Zinc::Media::MediaSettings> createMediaSettings() = 0;
+    virtual boost::shared_ptr<Zinc::Media::OutputManager> createOutputManager() = 0;
+    virtual boost::shared_ptr<Zinc::Media::ServiceListBuilder> createServiceListBuilder() = 0;
+    virtual boost::shared_ptr<Zinc::Media::MediaRouter> createDefaultMediaRouter() = 0;
+
+};
+} //namespace
+} //namespace
+
+
+={============================================================================
+*kt_dev_uv_stack_408* stack: media: nickel: media router creation
+
+                     UI: { ClientSystem{ dbus client, copper }, ClientFactory }
+
+    <------------------------------------------- dbus -------->
+
+nickelmediad(server)
+{ dbus c, system factory, media proxy{gst factory} }
+
+
+{ui}
+Nickel.AIR.Client.API/data/client-factory.plugin-config
+1:libNickelClientSystem.so createSystemClientFactory
+
+
+{dbus-server}
+Nickel.System.DBusServer/
+   libNickelSystemDbus.so.0.0.0
+   nickelmediad
+
+note: config files are in install root.
+./opt/zinc-trunk/share/nickel-system-dbusserver/media-daemon.plugin-config
+
+Nickel.System.DBusServer/data/media-daemon.plugin-config
+1:libNickelSystemProxy.so createSystemFactory
+
+
+{dbus-client}
+Nickel.System.DBusClient/
+   libNickelSystemDbusClient.so.0.0.0
+
+
+{client-system}
+Nickel.Client.System/
+   libNickelClientSystem.so.0.0.0
+
+copper-system-factory.plugin-config:1:libCopperSystemDbusClient.so createDbusSystemFactory note: dbus client
+nickel-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory
+
+
+{media-router-proxy}
+Nickel.System.Proxy/libNickelSystemProxy.so.0.0.0
+
+default-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory note: dbus client
+http-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
+https-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
+
+
+<system-factory>
+libNickelSystemProxy.so createSystemFactory
+
+// Nickel/Nickel.System.Proxy/src/src/ProxySystemFactory.cpp
+
+// class ZINC_LOCAL ProxySystemFactory : public SystemFactory
+    
+extern "C" {
+	NS_NICKEL_SYSTEM::SystemFactory*  createSystemFactory() ZINC_EXPORT;
+	NS_NICKEL_SYSTEM::SystemFactory* createSystemFactory() {
+		return new NS_NICKEL_SYSTEM::ProxySystemFactory();
+	}
+}
+
+
+<gst-factory>
+libNickelSystemGStreamer.so.0.0.0
+libNickelSystemVirtualBin.so.0.0.0
+
+Nickel.System.Proxy/data/http-application%2Fdash%2Bxml.plugin-config
+1:libNickelSystemGstreamer.so createGstSystemFactory
+
+// Nickel/Nickel.System.GStreamer/src/GstSystemFactory.cpp
+
+// class GstSystemFactory : virtual public SystemFactory
+
+NS_ZINC::Plugin* createGstSystemFactory()
+{
+    try
+    {
+        return new GstSystemFactory(
+            boost::make_shared<NS_ZINC::SingleThreadDispatcher>());
+    }
+}
+
+
+{client-factory}
+// Nickel/Nickel.Client.API/include/ClientFactory.h
+
+struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
+
+	virtual boost::shared_ptr<NS_ZINC::EventDispatcher> getDefaultDispatcher() const = 0;
+
+	virtual void setDefaultDispatcher(boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher) = 0;
+
+	virtual boost::shared_ptr<Locator> createLocator() = 0;
+
+	virtual boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory() = 0;
+   ...
+};
+
+
+// Nickel/Nickel.Client.System/src/SystemClientFactory.cpp
+
+class SystemClientFactory : virtual public ClientFactory {
+
+    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> mediaRouterFactory;
+
+    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> SystemClientFactory::createMediaRouterFactory() 
+    {
+        boost::mutex::scoped_lock lock(mutex);
+
+        if(mediaRouterFactory == NULL) {
+            NICKEL_FUNC_TRACE;
+            boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactorySync> 
+                sysMRFactory( convertToSync( getSystemFactory().createMediaRouterFactory() ) );
+
+            boost::shared_ptr<NS_NICKEL_CLIENT::SystemMediaRouterFactory> cliMRFactory(
+               new NS_NICKEL_CLIENT::SystemMediaRouterFactory(sysMRFactory, defaultDispatcher, *this));
+
+            mediaRouterFactory = cliMRFactory;
+        }
+
+        return(mediaRouterFactory);
+    }
+};
+
+Plugin* createSystemClientFactory() {
+    return new NS_NICKEL_CLIENT::SystemClientFactory();
+}
+
+
+// Nickel/Nickel.Client.API/include/MediaRouterFactory.h
+
+struct ZINC_EXPORT MediaRouterFactory : virtual public NS_ZINC::Polymorphic {
+
+	/**
+	 * Creates an unconfigured MediaRouter instance.
+	 *
+	 * @return an unconfigured MediaRouter instance.
+	 *
+	 * @throws nickel::client::InsufficientResources There is not sufficient memory to allocate a
+	 *         new MediaRouter instance.
+	 *
+	 * @acl cp
+	 */
+    virtual boost::shared_ptr<MediaRouter> createMediaRouter() = 0;
+};
+
+// Nickel/Nickel.Client.System/src/SystemMediaRouterFactory.h
+
+class SystemMediaRouterFactory
+    : public virtual NS_NICKEL_CLIENT::MediaRouterFactory,
+      public boost::enable_shared_from_this<SystemMediaRouterFactory> {
+
+    virtual boost::shared_ptr<MediaRouter> createMediaRouter();
+      };
+
+boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> SystemMediaRouterFactory::createMediaRouter(void) {
+    NICKEL_FUNC_DEBUG;
+    try {
+        boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> p =
+                wrapSystemRouter(sysFactory->createMediaRouter(), dispatcher);
+        return p;
+
+    } catch (const NS_NICKEL_SYSTEM::InsufficientResources&) {
+        throw InsufficientResources();
+    }
+}
+
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouterFactory.cpp
 
@@ -7332,6 +7544,125 @@ boost::shared_ptr<MediaRouterAsync> createGstMediaRouter(
 {
     return boost::make_shared<GstMediaRouter>(dispatcher);
 }
+
+// Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
+
+void GstMediaRouter::init()
+{
+    NICKEL_FUNC_TRACE;
+
+    typefindBin =
+        boost::make_shared<VirtualBinTypefind>(
+            boost::shared_ptr<VirtualPadFactoryInProcess>(),
+            typefindPadFactory_sinkpads,
+            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+    srcBin =
+        boost::make_shared<VirtualBinSrc>(
+            srcPadFactory_srcpads,
+            srcPadFactory_sinkpads,
+            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+    sinkBin =
+        boost::make_shared<VirtualBinSink>(
+            sinkPadFactory_sinkpads,
+            boost::shared_ptr<VirtualPadFactoryInProcess>(),
+            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_409* stack: media: nickel: run dash stream
+
+Live: http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
+
+Test Card: http://rdmedia.bbc.co.uk/dash/ondemand/testcard/1/client_manifest-events.mpd
+
+
+={============================================================================
+*kt_dev_uv_stack_450* stack: dbus
+
+To get the list of active bus names. This is script in box: opt/zinc/devel/bin/lsdbus
+
+$lsdbus
+
+# dbus-send Emporium
+
+https://wiki.youview.co.uk/display/canvas/dbus-send+Emporium?src=contextnavpagetreemode
+
+<monitor>
+# to capture
+dbus-monitor > /mnt/hd1/mylogs.log &
+dbus-monitor | tee /mnt/hd1/mylogs.log &
+
+# To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the following command:
+dbus-monitor "interface=Zinc.Media.MediaRouter"
+
+# will only display MediaRouter SourceEvent messages:
+dbus-monitor | grep -C 2 "member=SourceEvent"
+
+dbus-monitor "type=method_call" "type=method_return" "type=error"
+
+dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
+   "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
+
+<introspect>
+
+Q: which is the start to build interface/method to build a hierarchy?
+
+kpark@wll1p04345:~/source/DEVARCH/Neon$ find . -name *.xml
+./Neon.System.API/data/introspection-xml/interface-NetworkManagerActiveConnection.xml
+./Neon.System.API/data/introspection-xml/interface-NetworkManagerSettings.xml
+./Neon.System.API/data/introspection-xml/enum-PingStatus.xml
+./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-settings.xml
+./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-device-ethernet.xml
+./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-active-connection.xml
+./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-manager.xml
+./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-device.xml
+./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-exported-connection.xml
+./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-ip4-config.xml
+./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_CAP.xml
+./Neon.System.API/data/introspection-xml/struct-PingResponse.xml
+./Neon.System.API/data/introspection-xml/enum-NM_ACTIVE_CONNECTION_STATE.xml
+./Neon.System.API/data/introspection-xml/enum-NM_STATE.xml
+./Neon.System.API/data/introspection-xml/interface-NetworkManagerIP4Config.xml
+./Neon.System.API/data/introspection-xml/service.xml
+./Neon.System.API/data/introspection-xml/interface-NetworkManagerDeviceWired.xml
+./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_TYPE.xml
+./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_STATE.xml
+./Neon.System.API/data/introspection-xml/interface-NetworkManagerDevice.xml
+./Neon.System.API/data/introspection-xml/interface-NetworkManager.xml
+./Neon.System.API/data/introspection-xml/interface-NetworkManagerSettingsConnection.xml
+./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_STATE_REASON.xml
+./Neon.System.API/data/introspection-xml/interface-IPNetwork.xml
+
+
+<interface-name>
+Cobalt.System.DBusClient/src/MetadataBrokerDBusToSyncAndAsync.cpp
+
+36-
+37-#include "MetadataBrokerDBusToSyncAndAsync.h"
+38-
+39-NS_ZINC_DBUS_BINDING_OPEN
+40:const char* const interface_name<Zinc::Broker::MetadataBrokerAsync>::value = "Zinc.Broker.MetadataBroker";
+41:const char* const interface_name<Zinc::Broker::MetadataBrokerSync>::value = "Zinc.Broker.MetadataBroker";
+42:const char* const interface_name<Zinc::Broker::MetadataBrokerDBusToSyncAndAsync>::value =
+       "Zinc.Broker.MetadataBroker";
+
+Iron.System.DBusClient/src/EventRepositoryDBusToSyncAndAsync.cpp
+
+35-
+36-#include "EventRepositoryDBusToSyncAndAsync.h"
+37-
+38-NS_ZINC_DBUS_BINDING_OPEN
+39:const char* const interface_name<Zinc::Metadata::EventRepositoryAsync>::value =
+"Zinc.Metadata.EventRepository";
+
+40:const char* const interface_name<Zinc::Metadata::EventRepositorySync>::value =
+       "Zinc.Metadata.EventRepository";
+
+41:const char* const interface_name<Zinc::Metadata::EventRepositoryDBusToSyncAndAsync>::value =
+       "Zinc.Metadata.EventRepository";
 
 
 ={============================================================================
@@ -9397,92 +9728,6 @@ Feb 17 14:33:06 syslog[785]: <info> Activation (eth0) Stage 5 of 5 (IP Configure
       )
    ]
 Feb 17 14:33:56 syslog[785]: <info> Trying to start the supplicant...
-
-
-={============================================================================
-*kt_dev_uv_stack_200* stack: dbus
-
-To get the list of active bus names. This is script in box: opt/zinc/devel/bin/lsdbus
-
-$lsdbus
-
-# dbus-send Emporium
-
-https://wiki.youview.co.uk/display/canvas/dbus-send+Emporium?src=contextnavpagetreemode
-
-<monitor>
-# to capture
-dbus-monitor > /mnt/hd1/mylogs.log &
-dbus-monitor | tee /mnt/hd1/mylogs.log &
-
-# To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the following command:
-dbus-monitor "interface=Zinc.Media.MediaRouter"
-
-# will only display MediaRouter SourceEvent messages:
-dbus-monitor | grep -C 2 "member=SourceEvent"
-
-dbus-monitor "type=method_call" "type=method_return" "type=error"
-
-dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
-   "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
-
-<introspect>
-
-Q: which is the start to build interface/method to build a hierarchy?
-
-kpark@wll1p04345:~/source/DEVARCH/Neon$ find . -name *.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerActiveConnection.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerSettings.xml
-./Neon.System.API/data/introspection-xml/enum-PingStatus.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-settings.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-device-ethernet.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-active-connection.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-manager.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-device.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-exported-connection.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-ip4-config.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_CAP.xml
-./Neon.System.API/data/introspection-xml/struct-PingResponse.xml
-./Neon.System.API/data/introspection-xml/enum-NM_ACTIVE_CONNECTION_STATE.xml
-./Neon.System.API/data/introspection-xml/enum-NM_STATE.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerIP4Config.xml
-./Neon.System.API/data/introspection-xml/service.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerDeviceWired.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_TYPE.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_STATE.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerDevice.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManager.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerSettingsConnection.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_STATE_REASON.xml
-./Neon.System.API/data/introspection-xml/interface-IPNetwork.xml
-
-
-<interface-name>
-Cobalt.System.DBusClient/src/MetadataBrokerDBusToSyncAndAsync.cpp
-
-36-
-37-#include "MetadataBrokerDBusToSyncAndAsync.h"
-38-
-39-NS_ZINC_DBUS_BINDING_OPEN
-40:const char* const interface_name<Zinc::Broker::MetadataBrokerAsync>::value = "Zinc.Broker.MetadataBroker";
-41:const char* const interface_name<Zinc::Broker::MetadataBrokerSync>::value = "Zinc.Broker.MetadataBroker";
-42:const char* const interface_name<Zinc::Broker::MetadataBrokerDBusToSyncAndAsync>::value =
-       "Zinc.Broker.MetadataBroker";
-
-Iron.System.DBusClient/src/EventRepositoryDBusToSyncAndAsync.cpp
-
-35-
-36-#include "EventRepositoryDBusToSyncAndAsync.h"
-37-
-38-NS_ZINC_DBUS_BINDING_OPEN
-39:const char* const interface_name<Zinc::Metadata::EventRepositoryAsync>::value =
-"Zinc.Metadata.EventRepository";
-
-40:const char* const interface_name<Zinc::Metadata::EventRepositorySync>::value =
-       "Zinc.Metadata.EventRepository";
-
-41:const char* const interface_name<Zinc::Metadata::EventRepositoryDBusToSyncAndAsync>::value =
-       "Zinc.Metadata.EventRepository";
 
 
 ={============================================================================

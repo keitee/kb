@@ -22,6 +22,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_305| gst: buffers and interact with a pipeline
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: tools
+|kt_dev_bcast_312| gst: sdk, tutorials
 
 |kt_dev_bcast_320| gst: plugin writer's guide
 
@@ -427,7 +428,6 @@ built specially for this purpose.
 
 When our source element finally has enough information to start producing data, it will create
 source pads, and trigger the “pad-added” signal. At this point our callback will be called:
-
 
 
 <status>
@@ -1134,6 +1134,12 @@ amount of verbosity of the output.
 
 
 ={============================================================================
+*kt_dev_bcast_312* gst: sdk and tutorials
+
+http://docs.gstreamer.com/display/GstSDK/Installing+on+Linux
+
+
+={============================================================================
 *kt_dev_bcast_320* gst: plugin writer's guide
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/index.html
@@ -1183,6 +1189,277 @@ smoothly.
 
 Another type of bin, called 'autoplugger' elements, automatically add other elements to the bin and
 links them together so that they act as a filter between two arbitrary stream types.
+
+
+<basic-type>
+GStreamer already supports many basic media types. Following is a table of a few of the basic types
+used for buffers in GStreamer. The table contains the name ("media type") and a description of the
+type, the properties associated with the type, and the meaning of each property. A full list of
+supported types is included in List of Defined Types.
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/section-types-definitions.html
+
+note: no subtitles yet.
+
+
+={============================================================================
+*kt_dev_bcast_321* gst: plugin writer's guide: plugin template
+
+Chapter 3. Constructing the Boilerplate
+
+The first step is to check out a copy of the gst-template git module to get an important tool and
+the source code template for a basic GStreamer plugin.
+
+$ git clone git://anongit.freedesktop.org/gstreamer/gst-template.git
+
+The following commands create the MyFilter plugin based on the plugin template and put the output
+files in the gst-template/gst-plugin/src directory: 
+
+$ cd gst-template/gst-plugin/src
+$ ../tools/make_element myfilter
+
+
+<element-metadata>
+The element details are registered with the plugin during the _class_init () function, which is part
+of the GObject system. The _class_init () function should be set for this GObject in the function
+where you register the type with GLib.
+
+static void
+gst_myfilter_class_init (GstmyfilterClass * klass)
+{
+  GObjectClass *gobject_class;
+  GstElementClass *gstelement_class;
+
+  gobject_class = (GObjectClass *) klass;
+  gstelement_class = (GstElementClass *) klass;
+
+  ...
+
+  gst_element_class_set_details_simple(gstelement_class,
+    "myfilter",
+    "FIXME:Generic",
+    "FIXME:Generic Template Element",
+    " <<user@hostname.org>>");
+
+}
+
+
+<constructor-functions>
+Each element has two functions which are used for construction of an element. The _class_init()
+    function, which is used to initialise the class only once (specifying what signals, arguments
+            and virtual functions the class has and setting up global state); 
+
+and the _init() function, which is used to initialise a specific instance of this type. 
+
+
+<plugin-init>
+This is a special function, which is called as soon as the plugin is loaded, and should return TRUE
+or FALSE depending on whether it loaded initialized any dependencies correctly. Also, in this
+function, any supported element type in the plugin should be registered.
+
+/* entry point to initialize the plug-in
+ * initialize the plug-in itself
+ * register the element factories and other features
+ */
+static gboolean
+myfilter_init (GstPlugin * myfilter)
+{
+  /* debug category for fltering log messages
+   *
+   * exchange the string 'Template myfilter' with your description
+   */
+  GST_DEBUG_CATEGORY_INIT (gst_myfilter_debug, "myfilter",
+      0, "Template myfilter");
+
+  return gst_element_register (myfilter, "myfilter", GST_RANK_NONE,
+      GST_TYPE_MYFILTER);
+}
+
+/* PACKAGE: this is usually set by autotools depending on some _INIT macro
+ * in configure.ac and then written into and defined in config.h, but we can
+ * just set it ourselves here in case someone doesn't use autotools to
+ * compile this code. GST_PLUGIN_DEFINE needs PACKAGE to be defined.
+ */
+#ifndef PACKAGE
+#define PACKAGE "myfirstmyfilter"
+#endif
+
+/* gstreamer looks for this structure to register myfilters
+ *
+ * exchange the string 'Template myfilter' with your myfilter description
+ */
+GST_PLUGIN_DEFINE (
+    GST_VERSION_MAJOR,
+    GST_VERSION_MINOR,
+    myfilter,
+    "Template myfilter",
+    myfilter_init,
+    VERSION,
+    "LGPL",
+    "GStreamer",
+    "http://gstreamer.net/"
+)
+
+
+Chapter 4. Specifying the pads
+
+<chain-function>
+In the element _init () function, you create the pad from the pad template that has been registered
+with the element class in the _class_init () function. After creating the pad, you have to set a
+_chain () function pointer that will 'receive' and process the input data on the sinkpad. You can
+optionally also set an _event () function pointer and a _query () function pointer.
+
+static void
+gst_myfilter_init (Gstmyfilter * filter)
+{
+  filter->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
+  gst_pad_set_event_function (filter->sinkpad,
+                              GST_DEBUG_FUNCPTR(gst_myfilter_sink_event));
+  gst_pad_set_chain_function (filter->sinkpad,
+                              GST_DEBUG_FUNCPTR(gst_myfilter_chain));
+  GST_PAD_SET_PROXY_CAPS (filter->sinkpad);
+  gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad);
+
+  filter->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
+  GST_PAD_SET_PROXY_CAPS (filter->srcpad);
+  gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
+
+  filter->silent = FALSE;
+}
+
+/* chain function
+ * this function does the actual processing
+ */
+static GstFlowReturn
+gst_myfilter_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
+{
+  Gstmyfilter *filter;
+
+  filter = GST_MYFILTER (parent);
+
+  if (filter->silent == FALSE)
+    g_print ("I'm plugged, therefore I'm in.\n");
+
+  /* just push out the incoming buffer without touching it */
+  return gst_pad_push (filter->srcpad, buf);
+}
+
+Remember, however, that buffers are not always writeable.
+
+In more advanced elements (the ones that do event processing), you may want to additionally specify
+an event handling function, which will be called when stream-events are sent (such as caps,
+        end-of-stream, newsegment, tags, etc.). 
+
+
+Chapter 6. The event function
+
+The event function notifies you of special events that happen in the datastream (such as caps,
+        end-of-stream, newsegment, tags, etc.). Events can 'travel' both upstream and downstream, so
+you can receive them on sink pads as well as source pads.
+
+Below follows a very simple event function that we install on the sink pad of our element. 
+
+static gboolean
+gst_my_filter_sink_event (GstPad *pad, GstObject *parent, GstEvent  *event)
+{
+  gboolean ret;
+  GstMyFilter *filter = GST_MY_FILTER (parent);
+
+  switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_CAPS:
+      /* we should handle the format here */
+
+      /* push the event downstream */
+      ret = gst_pad_push_event (filter->srcpad, event);
+      break;
+    case GST_EVENT_EOS:
+      /* end-of-stream, we should close down all stream leftovers here */
+      gst_my_filter_stop_processing (filter);
+
+      ret = gst_pad_event_default (pad, parent, event);
+      break;
+    default:
+      /* just call the default handler */
+      ret = gst_pad_event_default (pad, parent, event);
+      break;
+  }
+  return ret;
+}
+
+It is a good idea to call the default event handler gst_pad_event_default () for unknown events.
+
+'depending' on the event type, the default handler will forward the event or simply unref it. The CAPS
+event is by default not forwarded so we need to do this in the event handler ourselves. 
+
+
+Chapter 7. The query function
+
+Through the query function, your element will receive queries that it has to reply to. These are
+queries like position, duration but also about the supported formats and scheduling modes your
+element supports. Queries can 'travel' both upstream and downstream, so you can receive them on sink
+pads as well as source pads. 
+
+As with event, it is a good idea to call the default query handler gst_pad_query_default () for
+unknown queries. Depending on the query type, the default handler will forward the query or simply
+unref it. 
+
+
+Chapter 8. What are states?
+
+Table of Contents
+
+A state describes whether the element instance is initialized, whether it is ready to transfer data
+and whether it is currently handling data. There are four states defined in GStreamer:
+
+note: state is per element
+
+which will from now on be referred to simply as "NULL", "READY", "PAUSED" and "PLAYING".
+
+GST_STATE_NULL 
+is the default state of an element. In this state, it has not allocated any runtime resources, it
+has not loaded any runtime libraries and it can obviously not handle data.
+
+GST_STATE_READY 
+is the next state that an element can be in. In the READY state, an element has all default
+resources (runtime-libraries, runtime-memory) allocated. However, it has not yet allocated or
+defined anything that is stream-specific. 
+
+When going from NULL to READY state (GST_STATE_CHANGE_NULL_TO_READY), an element should allocate any
+'non'-stream-specific resources and should load runtime-loadable libraries (if any). When going the
+other way around (from READY to NULL, GST_STATE_CHANGE_READY_TO_NULL), an element should unload
+these libraries and free all allocated resources. Examples of such resources are hardware devices.
+Note that files are generally streams, and these should thus be considered as stream-specific
+resources; therefore, they should not be allocated in this state.
+
+GST_STATE_PAUSED 
+is the state in which an element is ready to accept and handle data. For most elements this state is
+the same as PLAYING. The only exception to this rule are sink elements. Sink elements only accept
+one single buffer of data and then block. At this point the pipeline is 'prerolled' and ready to
+render data immediately.
+
+GST_STATE_PLAYING 
+is the highest state that an element can be in. For most elements this state is exactly the same as
+PAUSED, they accept and process events and buffers with data. Only sink elements need to
+differentiate between PAUSED and PLAYING state. In PLAYING state, sink elements actually render
+incoming data, e.g. output audio to a sound card or render video pictures to an image sink.
+
+
+<managing-state>
+If at all possible, your element should derive from one of the new base classes (Pre-made base
+        classes). There are ready-made general purpose base classes for different types of sources,
+   sinks and filter/transformation elements. In addition to those, specialised base classes exist
+   for audio and video elements and others.
+
+If you use a base class, you will rarely have to handle state changes yourself. All you have to do
+is override the base class's start() and stop() virtual functions (might be called differently
+        depending on the base class) and the base class will take care of everything for you.
+
+If, however, you do not derive from a ready-made base class, but from GstElement or some other class
+not built on top of a base class, you will most likely have to implement your own state change
+function to be notified of state changes. 
+
+note: This is definitively necessary if your plugin is a demuxer or a muxer, as there are no base
+classes for muxers or demuxers yet. 
 
 
 ==============================================================================
