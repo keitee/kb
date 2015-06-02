@@ -249,6 +249,7 @@ KT KB. DEVELOPMENT.
 
 #{ c++ concurrent in action
 |kt_dev_ccon_000| std::thread build
+|kt_dev_ccon_001| std::thread join and detach
 |kt_dev_ccon_001| data race and std::mutex
 |kt_dev_ccon_002| std::future
 
@@ -35901,7 +35902,10 @@ $ ./a.out
 Hello concurrent world
 
 
-{function-object-copied}
+{must-be-copied}
+The std::thread object must be self-contained and this means initial function and its arguments
+should be copied into a thread object.
+
 class background_task
 {
     public:
@@ -35916,15 +35920,15 @@ background_task f;
 
 std::thread my_thread(f);
 
-In this case, the supplied function object is 'copied' into the storage belonging to the newly
-created thread of execution and invoked from there. It's therefore essential that the copy behave
-equivalently to the original, or the result may not be what's expected.
+If use callable object, it is 'copied' into the storage belonging to the newly created thread of
+execution and invoked from there. It's therefore essential that the copy behave equivalently to the
+original, or the result may not be what's expected.
 
 Really?
 
-Can cause lifefime issue. For stl algorithms and predicates, use either usual function or temporary
-functional object and passes it as argument. Since the temporty object is self-contained and it is
-okay to use with stl algorithms. 
+If not, can cause lifefime issue. For stl algorithms and predicates, use either usual function or
+temporary functional object and passes it as argument. Since the temporty object is self-contained
+and it is okay to use with stl algorithms. 
 
 from stl::thread
 
@@ -35969,6 +35973,42 @@ class thread
         return std::make_shared<_Impl<_Callable>>(std::forward<_Callable>(__f));
     }
 };
+
+
+={============================================================================
+*kt_dev_ccon_001* std::thread join and detach
+
+Once started a thread, need to explicitly decide whether to wait for it to finish by joining or
+leave it to run on its own by detaching.
+
+If don't decide before thread object is destoryed, then your program is terminated. the std::thread
+destructor calls std::terminate().
+
+If don't wait for a thread to finish, lifetime issues can happen and that's why must use
+self-contained approach.
+
+struct func
+{
+    int i;
+
+    func( int & i_ ): i(i_) {}
+
+    void operator()()
+    {
+        ...
+    }
+};
+
+void oops()
+{
+    int some_local_state = 0;
+
+    func my_func( some_local_state );
+
+    std::thread my_thread( my_func );  // new thread might still be running after oops()
+
+    my_thread.detach();                // should be my_thread.join();
+}
 
 
 ={============================================================================
