@@ -250,7 +250,9 @@ KT KB. DEVELOPMENT.
 #{ c++ concurrent in action
 |kt_dev_ccon_000| std::thread build
 |kt_dev_ccon_001| std::thread join and detach
-|kt_dev_ccon_001| data race and std::mutex
+|kt_dev_ccon_002| std::thread copy callables and arguments
+|kt_dev_ccon_003| race condition, data race and approaches
+|kt_dev_ccon_004| std::mutex
 |kt_dev_ccon_002| std::future
 
 
@@ -35902,7 +35904,45 @@ $ ./a.out
 Hello concurrent world
 
 
-{must-be-copied}
+={============================================================================
+*kt_dev_ccon_001* std::thread join and detach
+
+Once started a thread, need to explicitly decide whether to wait for it to finish by joining or
+leave it to run on its own by detaching.
+
+If don't decide before thread object is destoryed, then your program is terminated. the std::thread
+destructor calls std::terminate().
+
+If don't wait for a thread to finish, lifetime issues can happen and that's why must use
+self-contained approach.
+
+struct func
+{
+    int i;
+
+    func( int & i_ ): i(i_) {}
+
+    void operator()()
+    {
+        ...
+    }
+};
+
+void oops()
+{
+    int some_local_state = 0;
+
+    func my_func( some_local_state );
+
+    std::thread my_thread( my_func );  // new thread might still be running after oops()
+
+    my_thread.detach();                // should be my_thread.join();
+}
+
+
+={============================================================================
+*kt_dev_ccon_002* std::thread copy callables and arguments
+
 The std::thread object must be self-contained and this means initial function and its arguments
 should be copied into a thread object.
 
@@ -35924,14 +35964,101 @@ If use callable object, it is 'copied' into the storage belonging to the newly c
 execution and invoked from there. It's therefore essential that the copy behave equivalently to the
 original, or the result may not be what's expected.
 
+note: std::bind uses the same mechanism.
+
 Really?
 
 If not, can cause lifefime issue. For stl algorithms and predicates, use either usual function or
 temporary functional object and passes it as argument. Since the temporty object is self-contained
 and it is okay to use with stl algorithms. 
 
-from stl::thread
+When thread object is self-contained and is detached, no need to worry about lifetime issue. Really?
+See this example:
 
+void f( int i, std::string const& s );
+std::thread t( f, 3, "hello" );
+
+This creates a new thread which calls f( 3, "hello" ) and the second argument is passed as a "char
+const *" and converted to a std::string. This is particularly important when the argument supplied
+is a pointer to an automatic variable, as follows:
+
+void f( int i, std::string const& s );
+
+void oops( int some_param )
+{
+    char buffer[1024];
+
+    sprintf( buffer, "%i", some_param );
+    std::thread t( f, 3, buffer );
+    t.detach();
+}
+
+The problem is that there is a significance chance that the function oops will exit before the
+buffer has been converted to a std::string on the new thread, thus leading to undefined behavior
+because it relies on implicit conversion and it is copied.
+
+The solution is to do it explicitly before passing the buffer to the std::thread constructor:
+
+void oops( int some_param )
+{
+    char buffer[1024];
+
+    sprintf( buffer, "%i", some_param );
+    std::thread t( f, 3, std::string(buffer) );
+    t.detach();
+}
+
+The other problem is:
+
+void update_data_for_widget( widget_id w, widget_data& data );
+
+void oops_again( widget_id w )
+{
+    widget_data data;
+
+    std::thread t( update_data_for_widget, w, data );
+    display_status();
+    t.join();
+    process_widget_data(data);
+}
+
+Although passed by reference, still copied and has internal copy. The problem is that
+process_widget_data will be passed an unchanged data rather than a correctly updated version.
+
+The solution is to use:
+
+std::thread t( update_data_for_widget, w, std::ref(data) );
+
+Since it uses t.join() it is safe to use reference to local variable.
+
+<member-function-pointer>
+
+class X
+{
+    public:
+        void do_lengthy_work();
+};
+
+X my_x;
+
+std::thread t( &X::do_lengthy_work, &my_x );
+
+<noncopyable-arguments>
+Since unique_ptr is only moveable and not a temporary but named object, must be requested explicitly
+by std::move().
+
+void process_big_object( std::unique_ptr<big_object> );
+
+std::unique_ptr<big_object> p( new big_object );
+p->prepare_data(42);
+std::thread t( process_big_object, std::move(p) );
+
+<thread-movable>
+This means that std::thread is movable to ensure that only one thread object is associated with a
+particular thread of execution at any one time.
+
+
+<from-stl-code>
 /// thread
 class thread
 {
@@ -35976,58 +36103,35 @@ class thread
 
 
 ={============================================================================
-*kt_dev_ccon_001* std::thread join and detach
+*kt_dev_ccon_003* race condition, data race and approaches 
 
-Once started a thread, need to explicitly decide whether to wait for it to finish by joining or
-leave it to run on its own by detaching.
+{broken-invariant}
+There are problems with sharing data between threads due to the consequences of modifying data. The
+concept used is 'invariant' that is statement always true about a particular data structures.
+The problem is when the invariants of the system cannot be maintained. Broken invariants.
 
-If don't decide before thread object is destoryed, then your program is terminated. the std::thread
-destructor calls std::terminate().
-
-If don't wait for a thread to finish, lifetime issues can happen and that's why must use
-self-contained approach.
-
-struct func
-{
-    int i;
-
-    func( int & i_ ): i(i_) {}
-
-    void operator()()
-    {
-        ...
-    }
-};
-
-void oops()
-{
-    int some_local_state = 0;
-
-    func my_func( some_local_state );
-
-    std::thread my_thread( my_func );  // new thread might still be running after oops()
-
-    my_thread.detach();                // should be my_thread.join();
-}
-
-
-={============================================================================
-*kt_dev_ccon_001* data race and std::mutex
-
-{avoid-race-conditions}
+{race-conditions}
 A race condition is anything where the outcome depends on the relative ordering of execution of
-operations on two or more threads. In other words, The invariants of the system cannot be
-maintained. Broken invariants.
+operations on two or more threads. It is when the race condition leads to broken invariants that
+there is a problem.
 
+Such problems will show up at the most inconvenient time since the race conditions are "timing
+sensitive" and hard to find and duplicate because the window of opportunity is small.
+
+<data-race>
 The C++ Standard also defines the term data race to mean the specific type of race condition that
 arises because of concurrent modification to a single 'object'
 
+<approaches-to-solve>
 o The simplest option is to wrap your data structure with a protection mechanism
 
 o lock-free programming
 
 o software transactional memory (STM)
 
+
+={============================================================================
+*kt_dev_ccon_004* std::mutex
 
 {std-mutex}
 Mutexes are the most general of the data-protection mechanisms. But they're not a silver bullet;
