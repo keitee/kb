@@ -30,6 +30,7 @@
 |kt_dev_uv_stack_101| stack: client factory and client system binding
 |kt_dev_uv_stack_102| stack: system factory and dbus client
 |kt_dev_uv_stack_103| stack: binding and makefile 
+|kt_dev_uv_stack_104| stack: dbus
 
 |kt_dev_uv_stack_200| stack: uranium: stagecraft and air
 |kt_dev_uv_stack_201| stack: uranium: creation chain to other components via dbus and factory
@@ -64,7 +65,11 @@
 |kt_dev_uv_stack_408| stack: media: nickel: media router creation
 |kt_dev_uv_stack_409| stack: media: nickel: run dash stream
 
-|kt_dev_uv_stack_450| stack: dbus
+|kt_dev_uv_stack_440| stack: media: bronze
+
+|kt_dev_uv_stack_450| stack: cobalt
+
+|kt_dev_uv_stack_500| stack: iron
 
 |kt_dev_uv_stack_120| stack: cal: dispatcher
 |kt_dev_uv_stack_114| stack: build pc target
@@ -2339,6 +2344,8 @@ cat /opt/zinc/var/daemons/osmiumd/log/osmium.log
 {refs}
 https://wiki.youview.co.uk/display/canvas/Zinc+Logging+Framework
 
+vi /opt/zinc/share/nickel-common/nickel.props
+
 <config-and-use>
 
 /home/kpark/builds/master/pc/zinc-install-root/debug/debian-7-x86_64/share/uranium-common/uranium.props
@@ -2535,7 +2542,8 @@ struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {  // note: Pl
 
     virtual boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::Locator> createLinearMetadataLocator() = 0;
     virtual boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::EventRepository> createLinearEventRepository() = 0;
-    virtual boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::RelatedContentRepository> createRelatedContentRepository() = 0;
+    virtual boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::RelatedContentRepository>
+        createRelatedContentRepository() = 0;
     virtual boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::ReminderRepository> createReminderRepository() = 0;
 
     ...
@@ -2633,6 +2641,25 @@ class SystemClientLocator : virtual public Locator {
 ={============================================================================
 *kt_dev_uv_stack_102* stack: system factory and dbus client
 
+<uranium-case>
+/Uranium/Uranium.Client.System/data$
+cadmium-system-factory.plugin-config:1:libCadmiumSystemDbusClient.so createDbusSystemFactory
+
+cobalt-system-factory.plugin-config:1:libCobaltSystemDbusClient.so createDbusSystemFactory
+
+copper-system-factory.plugin-config:1:libCopperSystemDbusClient.so createDbusSystemFactory
+
+ironreminders-system-factory.plugin-config:1:libIronRemindersSystemDbusClient.so createDbusSystemFactory
+
+iron-system-factory.plugin-config:1:libIronSystemDbusClient.so createDbusSystemFactory(Zinc.MetadataProxy)
+
+note: why is this "MetadataProxy" but not "Metadata"?
+
+neon-client-factory.plugin-config:1:libNeonClientSystem.so createSystemClientFactory
+
+nickel-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory
+
+<>
 $ cat Uranium.Client.System/data/cobalt-system-factory.plugin-config
 libCobaltSystemDbusClient.so createDbusSystemFactory
 #libCobaltSystemFake.so createFakeSystemFactory
@@ -2697,7 +2724,8 @@ struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
     virtual boost::shared_ptr<Zinc::Broker::UnifiedServiceRepository> createUnifiedServiceRepository() = 0;
     virtual boost::shared_ptr<Zinc::Broker::ProvisioningService> createProvisioningService() = 0;
     virtual boost::shared_ptr<Zinc::Broker::UnifiedEventRepository> createUnifiedEventRepository() = 0;
-    virtual boost::shared_ptr<Zinc::Broker::LinearAcquisitionServiceResolver> createLinearAcquisitionServiceResolver() = 0;
+    virtual boost::shared_ptr<Zinc::Broker::LinearAcquisitionServiceResolver>
+        createLinearAcquisitionServiceResolver() = 0;
     virtual boost::shared_ptr<Zinc::Broker::DeviceConfig> createDeviceConfig() = 0;
 
 };
@@ -2749,6 +2777,8 @@ DbusSystemFactory::DbusSystemFactory(const char* args)
 {
 }
 
+note: can see the bus name for this this dbus object, application.
+
 static std::string getBusName(const char* overrideBusName)
 {
     const char* busName = NULL;
@@ -2768,15 +2798,17 @@ static std::string getBusName(const char* overrideBusName)
     return theBusName;
 }
 
-
-// Zinc/Zinc.DBus.BindingRuntime/include/dbus/DBusSystemFactoryImpl.h
+note: can see all 'interfaces' from this dbus object, application.
 
 boost::shared_ptr<Zinc::Broker::MetadataBroker> DbusSystemFactory::createMetadataBroker()
 {
-    // 'interface'
     return NS_ZINC_DBUS_BINDING::applyInterface<Zinc::Broker::MetadataBroker>(
             impl.getOrCreateObject(theMetadataBroker, "/Zinc/Broker/MetadataBroker"));
 }
+
+
+// MetadataProxy      15 ../Cobalt/Cobalt.System.DBusServer/src/BusName.cpp char const * const
+// BusName::LINEAR_METADATA = "Zinc.MetadataProxy";
 
 
 {map-between-library-and-factory}
@@ -2855,6 +2887,192 @@ all_client_api_headers:=$(shell find $(client_api_include_dir) -name \*.h)
 
 
 ={============================================================================
+*kt_dev_uv_stack_104* stack: dbus
+
+To get the list of active bus names. This is script in box: opt/zinc/devel/bin/lsdbus
+
+$lsdbus
+
+# dbus-send Emporium
+
+https://wiki.youview.co.uk/display/canvas/dbus-send+Emporium?src=contextnavpagetreemode
+
+<monitor>
+# to capture
+dbus-monitor > /mnt/hd1/mylogs.log &
+dbus-monitor | tee /mnt/hd1/mylogs.log &
+
+# To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the following command:
+dbus-monitor "interface=Zinc.Media.MediaRouter"
+
+# will only display MediaRouter SourceEvent messages:
+dbus-monitor | grep -C 2 "member=SourceEvent"
+
+dbus-monitor "type=method_call" "type=method_return" "type=error"
+
+dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
+   "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
+
+
+{dbus-call}
+Take Iron call which is getScheduleEvents() as an example.
+
+:~/source/DEVARCH/Iron/Iron.System.Minimal/scripts$ cat linearmetadata-getevents
+#!/bin/sh
+#
+# Get events out of linear metadata
+#
+
+if [ "$1" == "" ] ; then
+	echo "usage: $0 <service-locator> [date-time]"
+	exit 1
+fi
+
+t=$2
+if [ "$t" == "" ] ; then
+	echo "Showing events from NOW"
+	t=$(date "+%Y-%m-%d %H:%M:%S")
+fi
+t_sec=$(date +%s "$t")
+
+dbus-send --session --type=method_call --print-reply --dest=Zinc.Metadata /Zinc/Metadata/EventRepository Zinc.Metadata.EventRepository.getScheduleEvents array:string:"$1" uint32:"$t_sec" uint32:4294967295
+
+
+<to-get-detail-about-call>
+:~/source/DEVARCH/Iron/Iron.System.API/data/introspection-xml$ ll
+-rw-r--r-- 1 kpark kpark   794 Jan  7 15:55 enum-AspectRatio.xml
+-rw-r--r-- 1 kpark kpark  1038 Jan  7 15:55 enum-AudioMixType.xml
+-rw-r--r-- 1 kpark kpark   349 Jan  7 15:55 enum-SearchField.xml
+-rw-r--r-- 1 kpark kpark  3699 Jan  7 15:55 enum-ServiceType.xml
+-rw-r--r-- 1 kpark kpark   835 Jan  7 15:55 enum-SubtitlesFormat.xml
+-rw-r--r-- 1 kpark kpark  1022 Jan  7 15:55 enum-VideoFormat.xml
+-rw-r--r-- 1 kpark kpark   608 Jan  7 15:55 error-EventNotFound.xml
+-rw-r--r-- 1 kpark kpark   525 Jan  7 15:55 error-EventRepositoryUnavailable.xml
+-rw-r--r-- 1 kpark kpark   496 Jan  7 15:55 error-InvalidRegion.xml
+-rw-r--r-- 1 kpark kpark   595 Jan  7 15:55 error-RelatedContentRepositoryUnavailable.xml
+-rw-r--r-- 1 kpark kpark   622 Jan  7 15:55 error-ServiceNotFound.xml
+-rw-r--r-- 1 kpark kpark   389 Jan  7 15:55 error-ServiceRepositoryUnavailable.xml
+-rw-r--r-- 1 kpark kpark 11503 Jan  7 15:55 interface-EventRepository.xml
+-rw-r--r-- 1 kpark kpark  3540 Jan  7 15:55 interface-RelatedContentRepository.xml
+-rw-r--r-- 1 kpark kpark 10528 Jan  7 15:55 interface-ServiceRepository.xml
+-rw-r--r-- 1 kpark kpark   639 Jan  7 15:55 service.xml
+-rw-r--r-- 1 kpark kpark 32574 Jan  7 15:55 struct-Event.xml
+-rw-r--r-- 1 kpark kpark  2150 Jan  7 15:55 struct-NetworkChangeNotification.xml
+-rw-r--r-- 1 kpark kpark  3398 Jan  7 15:55 struct-RelatedContentLink.xml
+-rw-r--r-- 1 kpark kpark  7640 Jan  7 15:55 struct-Service.xml
+-rw-r--r-- 1 kpark kpark  3026 Jan  7 15:55 struct-TargetRegion.xml
+
+See a file for interface "EventRepository":
+
+-rw-r--r-- 1 kpark kpark 11503 Jan  7 15:55 interface-EventRepository.xml
+
+<method name="getScheduleEvents">
+  <yv:docstring>
+  <p>Allows retrieval of all events in a given time window on a specified Service. 
+  The data is sourced from EIT Schedule only (not EIT Present/Following).</p>
+  <p>Any invalid Service Locators are ignored: no Events are returned for
+  these Services but no error shall be generated. If one or more Services have
+  no schedule data, no Events for these Service(s) shall be included in the
+  <tt>events</tt> array.</p>
+  </yv:docstring>
+
+  <arg type="as" name="serviceLocators" direction="in">
+    <yv:docstring>
+    <p>The DVB Locator of the Service in question, as per ETSI TS&#160;102&#160;812 Clause&#160;14.1.</p>
+    <p>The <tt>transport_stream_id</tt> field is optional so may be excluded,
+    e.g. dvb://233a.1004.1084 or dvb://233a..1084 are both acceptable forms.
+    If supplied, the implementation should return a result only if the
+    <tt>transport_stream_id</tt> field matches. Otherwise, the appropriate
+    error is generated.</p> 
+    </yv:docstring>
+  </arg>
+
+  <arg type="u" name="startTime" direction="in">
+    <yv:docstring><p>The start of the window of time for which events are requested. Expressed in
+    seconds since midnight UTC on 1st January 1970.</p>
+    </yv:docstring>
+  </arg>
+
+  <arg type="u" name="endTime" direction="in">
+    <yv:docstring><p>The end of the window of time for which events are requested. Expressed in
+    seconds since midnight UTC on 1st January 1970.</p>
+    </yv:docstring>
+  </arg>
+
+  <arg type="a(ssuua{ss}a{ss}a{ss}asssasasasiia{sai}ba{sai}bsa{ss}asbba{sb})" yv:type="a[Event]" 
+      name="events" direction="out">
+    <yv:docstring><p>An array of <tt>Event</tt> structures, in which all Events for a particular Service form a contiguous block within the list, in which they are ordered by ascending <tt>start</tt>. The order in which these Service blocks appear is undefined.</p></yv:docstring>
+  </arg>
+
+  <yv:possible-errors>
+    <yv:error name="Zinc.Metadata.Error.EventRepositoryUnavailable">
+     <yv:docstring><p>Generated if this method is invoked during a Service scan.</p></yv:docstring>
+    </yv:error>
+  </yv:possible-errors>
+
+</method>
+
+Again, see three arguments are used which matches up with xml.
+
+dbus-send --session --type=method_call --print-reply --dest=Zinc.Metadata /Zinc/Metadata/EventRepository Zinc.Metadata.EventRepository.getScheduleEvents array:string:"$1" uint32:"$t_sec" uint32:4294967295
+
+
+<interfaces>
+// this is from build root but not show complete interfaces
+//
+// Iron.System.DBusClient/src/EventRepositoryDBusToSyncAndAsync.cpp
+// 
+// 35-
+// 36-#include "EventRepositoryDBusToSyncAndAsync.h"
+// 37-
+// 38-NS_ZINC_DBUS_BINDING_OPEN
+// 39:const char* const interface_name<Zinc::Metadata::EventRepositoryAsync>::value =
+// "Zinc.Metadata.EventRepository";
+// 
+// 40:const char* const interface_name<Zinc::Metadata::EventRepositorySync>::value =
+//        "Zinc.Metadata.EventRepository";
+// 
+// 41:const char* const interface_name<Zinc::Metadata::EventRepositoryDBusToSyncAndAsync>::value =
+//        "Zinc.Metadata.EventRepository";
+//
+
+
+// Iron.System.DBusClient/src/unity.cpp
+
+namespace Zinc { namespace Metadata {
+
+
+boost::shared_ptr<Zinc::Metadata::EventRepository> DbusSystemFactory::createEventRepository()
+{
+	return NS_ZINC_DBUS_BINDING::applyInterface<Zinc::Metadata::EventRepository>(
+		impl.getOrCreateObject(theEventRepository, "/Zinc/Metadata/EventRepository"));~
+}
+
+boost::shared_ptr<Zinc::Metadata::RelatedContentRepository> DbusSystemFactory::createRelatedContentRepository()
+{
+	return NS_ZINC_DBUS_BINDING::applyInterface<Zinc::Metadata::RelatedContentRepository>(
+		impl.getOrCreateObject(theRelatedContentRepository, "/Zinc/Metadata/RelatedContentRepository"));~
+}
+
+boost::shared_ptr<Zinc::Metadata::ServiceRepository> DbusSystemFactory::createServiceRepository()
+{
+	return NS_ZINC_DBUS_BINDING::applyInterface<Zinc::Metadata::ServiceRepository>(
+		impl.getOrCreateObject(theServiceRepository, "/Zinc/Metadata/ServiceRepository")); ~
+}
+
+} //namespace
+} //namespace
+
+
+<source>
+This is only place to implement this since Iron server is OEM object.
+
+Iron.System.DBusClient/src/getScheduledEvents.cpp
+113:    cout<<"Calling getScheduleEvents for service "<<serviceLocator<<" start "<<start<<" end "<<end<<endl;
+116:    vector<NS_IRON_SYSTEM::Event> events = eventRepository->getScheduleEvents(servs,start,end).get();
+
+
+={============================================================================
 *kt_dev_uv_stack_200* stack: uranium: stagecraft and air
 
 <air>
@@ -2895,7 +3113,8 @@ libIronSystemDbusClient.so createDbusSystemFactory(Zinc.MetadataProxy)
 NS_IRON_SYSTEM::SystemFactory& SystemClientFactory::getIronSystemFactory() 
 {
     URANIUM_PROFILE_FUNC;
-    const NS_ZINC::FilePluginConfig pluginConfig(PackageDataFinder().find( "iron-system-factory.plugin-config"));
+    const NS_ZINC::FilePluginConfig pluginConfig(PackageDataFinder().find( 
+                "iron-system-factory.plugin-config"));
 
     return PluginFactory::getInstance<NS_IRON_SYSTEM::SystemFactory>(pluginConfig);
 }
@@ -7368,7 +7587,7 @@ nickelmediad(server)
 { dbus c, system factory, media proxy{gst factory} }
 
 
-{ui}
+{ui} same as before
 Nickel.AIR.Client.API/data/client-factory.plugin-config
 1:libNickelClientSystem.so createSystemClientFactory
 
@@ -7384,13 +7603,23 @@ note: config files are in install root.
 Nickel.System.DBusServer/data/media-daemon.plugin-config
 1:libNickelSystemProxy.so createSystemFactory
 
+/Nickel/Nickel.System.Proxy/data$ cat Zinc.MediaProxy.service 
+
+[D-BUS Service]
+Name=Zinc.MediaProxy
+Exec=/opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy
+User=nickelmediad
+
+// from source
+("busname,b", po::value<std::string>(&busName)->default_value(defaultBusName), "DBus connection name")
+
 
 {dbus-client}
 Nickel.System.DBusClient/
    libNickelSystemDbusClient.so.0.0.0
 
 
-{client-system}
+{client-system} same as before
 Nickel.Client.System/
    libNickelClientSystem.so.0.0.0
 
@@ -7579,90 +7808,152 @@ Live: http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 Test Card: http://rdmedia.bbc.co.uk/dash/ondemand/testcard/1/client_manifest-events.mpd
 
 
+You cannot create MediaRouters and expect to hold on to them via dbus-send alone, as they are
+reference counted and will be recycled and their object path deleted when the dbus-send process
+terminates. Luckily, Will Manley wrote dbussenddaemon which holds into the references for you until
+you're done. Awesome.
+
+# stop oem bronze
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter \
+Zinc.Media.MediaRouter.stop
+
+dbussenddaemon &
+
+sleep 1
+
+MR=`dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DBusSendDaemon' \
+/Zinc/Media/MediaRouterFactory \
+Zinc.Media.MediaRouterFactory.createMediaRouter \
+string:Zinc.MediaProxy 2>/dev/null |grep "/Zinc/Media/MediaRouters/" |cut -d'"' -f2`
+
+BMR=`dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DBusSendDaemon' \
+/Zinc/Media/MediaRouterFactory \
+Zinc.Media.MediaRouterFactory.createMediaRouter string:Zinc.MediaProxy`
+
+// method return sender=:1.155 -> dest=:1.230 reply_serial=2 object path "/Zinc/Media/MediaRouters/1"
+
+echo $MR
+
+// echo $MR
+// /Zinc/Media/MediaRouters/1
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR \
+Zinc.Media.MediaRouter.setSource string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR \
+Zinc.Media.MediaRouter.setSink string:decoder://0
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR \
+Zinc.Media.MediaRouter.start
+
+sleep 10
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR \
+Zinc.Media.MediaRouter.stop
+
+killall dbussenddaemon
+
+[root@HUMAX 1365]# ls -al /opt/zinc/bin/nickelmediad*
+-rwxr-xr-x    1 root     root           215 Jun  2 16:13 /opt/zinc/bin/nickelmediad*
+-rwxr-xr-x    1 root     root        934340 May 27 02:15 /opt/zinc/bin/nickelmediad.oem*
+
+export LD_LIBRARY_PATH=/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/usr/local/lib:/opt/stagecraft-2.0/bin:/opt/zinc/tests/lib:
+
+LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0 /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy
+
+LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0 /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy > /var/tmp/nickelmediad.out 2>&1 &
+
+Src::newDecodebinPad(GstElement*, GstPad*)
+2015-06-03 16:52:52,084 TRACE  817616160 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBinSrc.cpp:26 EXIT:  static void nickel::system::VirtualBinSrc::newDecodebinPadCb(GstElement*, GstPad*, void*)
+2015-06-03 16:52:52,089 TRACE  809227552 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBinSink.cpp:31 ENTER: static void nickel::system::<unnamed>::makeMp4Element(nickel::system::<unnamed>::PlugFunc)::NewPadCallback::callback(GstElement*, GstPad*, void*)
+2015-06-03 16:52:52,091 TRACE  809227552 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBin.cpp:182 ENTER: RefObj<_GstPad> nickel::system::VirtualBin::plug_unlocked(const RefObj<_GstPad>&)
+2015-06-03 16:52:52,093 TRACE  809227552 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBin.cpp:204 Element has current caps, making element for: video/x-h264
+2015-06-03 16:52:52,094 TRACE  772130080 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:300 State transition READY -> PAUSED wanted PLAYING
+2015-06-03 16:52:52,110 TRACE  772130080 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
+2015-06-03 16:52:52,112 TRACE  763741472 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.Proxy/src/ProxyMediaRouter.cpp:1126 ENTER: virtual void nickel::system::ProxyMediaRouter::StatusEvent(Zinc::Media::StatusEventValue::Enum)
+2015-06-03 16:52:52,114 TRACE  763741472 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.Proxy/src/ProxyMediaRouter.cpp:1126 EXIT:  virtual void nickel::system::ProxyMediaRouter::StatusEvent(Zinc::Media::StatusEventValue::Enum)
+2015-06-03 16:52:52,202 TRACE  772130080 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:300 State transition PAUSED -> PAUSED wanted PAUSED
+2015-06-03 16:52:52,204 TRACE  809227552 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBin.cpp:182 EXIT:  RefObj<_GstPad> nickel::system::VirtualBin::plug_unlocked(const RefObj<_GstPad>&)
+2015-06-03 16:52:55,685 TRACE  809227552 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBinSink.cpp:31 EXIT:  static void nickel::system::<unnamed>::makeMp4Element(nickel::system::<unnamed>::PlugFunc)::NewPadCallback::callback(GstElement*, GstPad*, void*)
+2015-06-03 16:52:55,756 TRACE  772130080 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:300 State transition PAUSED -> PAUSED wanted PLAYING
+
+
+
+
+
+(!) DirectFBSetOption: DirectFBInit has to be called before DirectFBSetOption!
+commandline read: nickelmediad
+commandline read: -b
+commandline read: Zinc.MediaProxy
+
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~| DirectFB 1.4.15 Phase 1.5.2 |~~~~~~~~~~~~~~~~~~~~~~~~~~
+        (c) 2001-2010  The world wide DirectFB Open Source Community
+        (c) 2000-2004  Convergence (integrated media) GmbH
+      ----------------------------------------------------------------
+
+(*) DirectFB/Core: Multi Application Core. (2015-05-26 22:46) 
+(*) Fusion/SHM: Using MADV_REMOVE (forced)
+(*) Direct/Thread: Started 'Fusion Dispatch' (2287) [MESSAGING OTHER/OTHER 0/0] <8388608>...
+(*) DirectFB/Graphics: Broadcom Corporation Bcmnexus Packet Buffer GFX Driver 3.3 (Broadcom Corporation)
+(*) SaWMan/Config: Parsing config file '/usr/local/etc/sawmanrc'.
+2015-06-03 16:52:59,875 TRACE  772130080 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
+0:02:03.109739443  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
+0:02:03.123397888  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 0/0
+0:02:03.124254591  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Video size or aspect ratio changed to size=0x0 PAR=0/0
+0:02:03.323361665  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
+0:02:03.324853998  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
+0:02:25.811647590  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
+0:02:25.813106146  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
+0:02:25.814152332  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Video size or aspect ratio changed to size=512x288 PAR=1/1
+0:02:29.656465925  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
+0:02:29.657440147  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
+0:02:29.658166740  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Video size or aspect ratio changed to size=1280x720 PAR=1/1
+0:02:33.500689888  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
+0:02:33.501560369  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
+0:02:33.502778369  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Video size or aspect ratio changed to size=704x396 PAR=1/1
+0:03:00.370221073  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
+0:03:00.376730924  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
+0:03:00.377811925  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder
+
+
+
 ={============================================================================
-*kt_dev_uv_stack_450* stack: dbus
+*kt_dev_uv_stack_440* stack: bronze
 
-To get the list of active bus names. This is script in box: opt/zinc/devel/bin/lsdbus
-
-$lsdbus
-
-# dbus-send Emporium
-
-https://wiki.youview.co.uk/display/canvas/dbus-send+Emporium?src=contextnavpagetreemode
-
-<monitor>
-# to capture
-dbus-monitor > /mnt/hd1/mylogs.log &
-dbus-monitor | tee /mnt/hd1/mylogs.log &
-
-# To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the following command:
-dbus-monitor "interface=Zinc.Media.MediaRouter"
-
-# will only display MediaRouter SourceEvent messages:
-dbus-monitor | grep -C 2 "member=SourceEvent"
-
-dbus-monitor "type=method_call" "type=method_return" "type=error"
-
-dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
-   "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
-
-<introspect>
-
-Q: which is the start to build interface/method to build a hierarchy?
-
-kpark@wll1p04345:~/source/DEVARCH/Neon$ find . -name *.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerActiveConnection.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerSettings.xml
-./Neon.System.API/data/introspection-xml/enum-PingStatus.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-settings.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-device-ethernet.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-active-connection.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-manager.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-device.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-exported-connection.xml
-./Neon.System.API/data/introspection-xml/vendor/NetworkManager/NM_0_8/nm-ip4-config.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_CAP.xml
-./Neon.System.API/data/introspection-xml/struct-PingResponse.xml
-./Neon.System.API/data/introspection-xml/enum-NM_ACTIVE_CONNECTION_STATE.xml
-./Neon.System.API/data/introspection-xml/enum-NM_STATE.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerIP4Config.xml
-./Neon.System.API/data/introspection-xml/service.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerDeviceWired.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_TYPE.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_STATE.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerDevice.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManager.xml
-./Neon.System.API/data/introspection-xml/interface-NetworkManagerSettingsConnection.xml
-./Neon.System.API/data/introspection-xml/enum-NM_DEVICE_STATE_REASON.xml
-./Neon.System.API/data/introspection-xml/interface-IPNetwork.xml
+855   :1.6                     /opt/zinc/bin/bronzemediad.oem                  
+855   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
+855   Zinc.OEMSystem           /opt/zinc/bin/bronzemediad.oem                  
 
 
-<interface-name>
-Cobalt.System.DBusClient/src/MetadataBrokerDBusToSyncAndAsync.cpp
+={============================================================================
+*kt_dev_uv_stack_450* stack: cobalt
 
-36-
-37-#include "MetadataBrokerDBusToSyncAndAsync.h"
-38-
-39-NS_ZINC_DBUS_BINDING_OPEN
-40:const char* const interface_name<Zinc::Broker::MetadataBrokerAsync>::value = "Zinc.Broker.MetadataBroker";
-41:const char* const interface_name<Zinc::Broker::MetadataBrokerSync>::value = "Zinc.Broker.MetadataBroker";
-42:const char* const interface_name<Zinc::Broker::MetadataBrokerDBusToSyncAndAsync>::value =
-       "Zinc.Broker.MetadataBroker";
+Enhanced metadata (IP sourced) Zinc.Broker 
 
-Iron.System.DBusClient/src/EventRepositoryDBusToSyncAndAsync.cpp
+1050  :1.23                    /opt/zinc-trunk/bin/cobaltmetadatabrokerd        
+1050  :1.50                    /opt/zinc-trunk/bin/cobaltmetadatabrokerd        
+1050  Zinc.Broker              /opt/zinc-trunk/bin/cobaltmetadatabrokerd        
+1050  Zinc.MetadataProxy       /opt/zinc-trunk/bin/cobaltmetadatabrokerd
 
-35-
-36-#include "EventRepositoryDBusToSyncAndAsync.h"
-37-
-38-NS_ZINC_DBUS_BINDING_OPEN
-39:const char* const interface_name<Zinc::Metadata::EventRepositoryAsync>::value =
-"Zinc.Metadata.EventRepository";
 
-40:const char* const interface_name<Zinc::Metadata::EventRepositorySync>::value =
-       "Zinc.Metadata.EventRepository";
+={============================================================================
+*kt_dev_uv_stack_500* stack: iron
 
-41:const char* const interface_name<Zinc::Metadata::EventRepositoryDBusToSyncAndAsync>::value =
-       "Zinc.Metadata.EventRepository";
+Linear metadata (Broadcast sourced) Zinc.Metadata 
+
+1288  :1.68                    /opt/zinc/bin/ironmetadatad.oem                 
+1288  Zinc.Metadata            /opt/zinc/bin/ironmetadatad.oem                 
+
+{dbus-scripts}
+kpark@wll1p04345:~/source/DEVARCH/Iron/Iron.System.Minimal/scripts$ ll
+total 24
+drwxr-xr-x 2 kpark kpark 4096 Jan  7 15:55 ./
+drwxr-xr-x 7 kpark kpark 4096 Jan  7 15:55 ../
+-rwxr-xr-x 1 kpark kpark  240 Jan  7 15:55 linearmetadata-findbyprogrammecrid*
+-rwxr-xr-x 1 kpark kpark  463 Jan  7 15:55 linearmetadata-getevents*
+-rwxr-xr-x 1 kpark kpark  173 Jan  7 15:55 linearmetadata-getservice*
+-rwxr-xr-x 1 kpark kpark  165 Jan  7 15:55 linearmetadata-getservicelist*
 
 
 ={============================================================================

@@ -72,7 +72,7 @@
 |kt_linux_tool_012| make a empty file without touch
 |kt_linux_tool_013| xargs
 |kt_linux_tool_014| ssh and putty {scp}
-|kt_linux_tool_015| pidof
+|kt_linux_tool_015| pidof and pgrep
 |kt_linux_tool_016| screen
 |kt_linux_tool_017| ldd
 |kt_linux_tool_018| ls
@@ -100,6 +100,7 @@
 |kt_linux_tool_040| install
 |kt_linux_tool_041| notify-send
 |kt_linux_tool_042| print multiple files with filename
+|kt_linux_tool_043| tail
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -251,6 +252,12 @@
 |kt_linux_core_605| time: us timestamp
 
 |kt_linux_core_700| dbus
+|kt_linux_core_701| dbus: introspection
+|kt_linux_core_702| dbus: dbus-send tool
+|kt_linux_core_703| dbus: lsdbus tool
+|kt_linux_core_704| dbus: dbus-monitor tool
+|kt_linux_core_710| dbus: kdbus
+
 |kt_linux_core_800| proc: /proc/mounts
 |kt_linux_core_801| proc: /proc/PID/status
 |kt_linux_core_802| proc: /proc/PID/maps
@@ -3129,7 +3136,7 @@ $ ssh root@172.20.33.192 ls -al
 
 
 ={============================================================================
-*kt_linux_tool_015* pidof
+*kt_linux_tool_015* pidof and pgrep
 
 pidof -- find the process ID of a running program.
 
@@ -3138,6 +3145,52 @@ output.
 
 $ pidof getty
 2974 2973 2972 2971 2970 2969
+
+{pgrep}
+       pgrep, pkill - look up or signal processes based on name and other attributes
+
+SYNOPSIS
+       pgrep [options] pattern
+       pkill [options] pattern
+
+DESCRIPTION
+       pgrep looks through the currently running processes and lists the process IDs which match the
+       selection criteria to stdout.  All the criteria have to match.  For example,
+
+              $ pgrep -u root sshd
+
+       will only list the processes called sshd AND owned by root.  On the other hand,
+
+              $ pgrep -u root,daemon
+
+       will list the processes owned by root OR daemon.
+
+       pkill will send the specified signal (by default SIGTERM) to each process instead of listing
+       them on stdout.
+
+$ pgrep -h    
+pgrep: invalid option -- h
+BusyBox v1.21.0 (2015-06-02 11:02:10 BST) multi-call binary.
+
+Usage: pgrep [-flnovx] [-s SID|-P PPID|PATTERN]
+
+Display process(es) selected by regex PATTERN
+
+	-l	Show command name too
+	-f	Match against entire command line
+	-n	Show the newest process only
+	-o	Show the oldest process only
+	-v	Negate the match
+	-x	Match whole name (not substring)
+	-s	Match session ID (0 for current)
+	-P	Match parent process ID
+
+
+$ pgrep linearsourced
+1079
+
+$ pgrep -l linearsourced
+1079 /opt/zinc-trunk/bin/linearsourced
 
 
 ={============================================================================
@@ -4260,6 +4313,13 @@ libNickelSystemGstreamer.so createGstSystemFactory
 
 ==> https-application%2Fdash%2Bxml.plugin-config <==
 libNickelSystemGstreamer.so createGstSystemFactory
+
+
+={============================================================================
+*kt_linux_tool_043* tail
+
+-f, --follow[={name|descriptor}]
+   output appended data as the file grows; -f, --follow, and --follow=descriptor are equivalent
 
 
 # ============================================================================
@@ -20689,7 +20749,7 @@ libraries are the API most people should use, as they simplify the details of D-
 libdbus is intended to be a low-level backend for the higher level bindings. Much of the libdbus API
 is only useful for binding implementation. 
 
-
+<session-and-system>
 D-Bus applications. D-Bus is designed for 'two' specific 'cases':
 
 The bus daemon has 'multiple' instances on a typical computer. The first instance is a
@@ -20764,7 +20824,7 @@ the address unix:path=/tmp/abcdef specifies that the server will listen on a UNI
 the path /tmp/abcdef and the client will connect to that socket. An address can also specify TCP/IP
 sockets, or any other 'transport' defined in future iterations of the D-Bus specification. 
 
-<bus-name> for application
+<name> for application
 When each application connects to the bus daemon, the daemon immediately 'assigns' it a 'name'
 called the unique connection name. A unique name begins with a ':' (colon) character. These names
 are never reused during the lifetime of the bus daemon - that is, you know a given name will always
@@ -20787,10 +20847,10 @@ You could think of the unique names as IP addresses, and the well-known names as
 com.mycompany.TextEditor might map to something like :34-907 just as mycompany.com maps to something
 like 192.168.0.5. 
 
-note: lifecycle
+note: can monitor if application is live or not
 
 Names have a 'second' important 'use', other than routing messages. They are used to track
-'lifecycle'.  When an application exits (or crashes), its connection to the message bus will be
+'lifecycle'. When an application exits (or crashes), its connection to the message bus will be
 closed by the operating system kernel. The message bus then sends out 'notification' messages
 telling remaining applications that the application's names have lost their owner. By tracking these
 notifications, your application can reliably monitor the lifetime of other applications. 
@@ -20801,6 +20861,7 @@ example: java.lang.Object, GObject, QObject, python's base Object, or whatever. 
 native object. 
 
 The low-level D-Bus protocol, and corresponding libdbus API, does not care about native objects.
+
 However, it provides a concept called an object path. The idea of an object path is that
 higher-level bindings can 'name' native object instances, and allow remote applications to refer to
 them. 
@@ -21115,23 +21176,105 @@ method return sender=org.freedesktop.DBus -> dest=:1.255 reply_serial=2
 
 
 ={============================================================================
-*kt_linux_core_702* dbus tools
+*kt_linux_core_702* dbus: dbus-send tool
 
-{dbus-send}
 dbus-send, distributed with D-Bus, allows you to invoke methods on services from the command line.
 
-Usage: dbus-send [--help] [--system | --session | --address=ADDRESS] [--dest=NAME] [--type=TYPE]
-[--print-reply[=literal]] [--reply-timeout=MSEC] <destination object path> <message name> [contents
-...]
+http://dbus.freedesktop.org/doc/dbus-send.1.html
 
-From http://dbus.freedesktop.org/doc/dbus-send.1.html
-dbus-send [ --system | --session | --address=ADDRESS ] [--dest=NAME] [ --print-reply [=literal]]
-[--reply-timeout=MSEC] [--type=TYPE] OBJECT_PATH INTERFACE.MEMBER [CONTENTS...]
+dbus-send — Send a message to a message bus
+
+Synopsis
+
+dbus-send [ --system | --session | --address=ADDRESS ] [--dest=NAME] 
+   [ --print-reply [=literal]] [--reply-timeout=MSEC] [--type=TYPE] 
+   OBJECT_PATH INTERFACE.MEMBER [CONTENTS...]
+
+DESCRIPTION
+
+The dbus-send command is used to send a message to a D-Bus message bus. See
+http://www.freedesktop.org/software/dbus/ for more information about the big picture.
+
+There are two well-known message buses: the systemwide message bus (installed on many systems as the
+        "messagebus" service) and the per-user-login-session message bus (started each time a user
+            logs in). 
+
+The --system and --session options direct dbus-send to send messages to the system or session buses
+respectively. note: If neither is specified, dbus-send sends to the session bus.
+
+Nearly all uses of dbus-send must provide the --dest argument which is the name of a connection on
+the bus to send the message to. If --dest is omitted, no destination is set.
+
+The object path and the name of the message to send must always be specified. Following arguments,
+if any, are the message contents (message arguments). These are given as type-specified values and
+    may include containers (arrays, dicts, and variants) as described below.
+
+<contents>   ::= <item> | <container> [ <item> | <container>...]
+<item>       ::= <type>:<value>
+<container>  ::= <array> | <dict> | <variant>
+<array>      ::= array:<type>:<value>[,<value>...]
+<dict>       ::= dict:<type>:<type>:<key>,<value>[,<key>,<value>...]
+<variant>    ::= variant:<type>:<value>
+<type>       ::= string | int16 | uint 16 | int32 | uint32 | int64 | uint64 | double | byte | boolean | objpath
+
+D-Bus supports more types than these, but dbus-send currently does not. Also, dbus-send does not
+permit empty containers or nested containers (e.g. arrays of variants).
+
+Here is an example invocation:
+
+  dbus-send --dest=org.freedesktop.ExampleName               \
+            /org/freedesktop/sample/object/name              \
+            org.freedesktop.ExampleInterface.ExampleMethod   \
+            int32:47 string:'hello world' double:65.32       \
+            array:string:"1st item","next item","last item"  \
+            dict:string:int32:"one",1,"two",2,"three",3      \
+            variant:int32:-8                                 \
+            objpath:/org/freedesktop/sample/object/name
+
+Note that the interface is separated from a method or signal name by a dot, though in the actual
+protocol the interface and the interface member are separate fields.  
+
+OPTIONS
+
+The following options are supported:
+
+--dest=NAME
+    Specify the name of the connection to receive the message.
+
+--print-reply
+    Block for a reply to the message sent, and print any reply received in a human-readable form. It
+    also means the message type (--type=) is method_call.
+
+--print-reply=literal
+    Block for a reply to the message sent, and print the body of the reply. If the reply is an
+    object path or a string, it is printed literally, with no punctuation, escape characters etc.
+
+--reply-timeout=MSEC
+    Wait for a reply for up to MSEC milliseconds. The default is implementation-defined, typically 25 seconds.
+
+--system
+    Send to the system message bus.
+
+--session
+    Send to the session message bus. (This is the default.)
+
+--address=ADDRESS
+    Send to ADDRESS.
+
+--type=TYPE
+    Specify method_call or signal (defaults to "signal").
 
 
+={============================================================================
+*kt_linux_core_703* dbus: lsdbus
 
-<lsdbus> to find the owners of all dbus connections
-# dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.ListNames
+Get the list of activateable bus names
+dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' \
+/ org.freedesktop.DBus.ListActivatableNames
+
+to find the owners of all dbus connections
+dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' \
+/ org.freedesktop.DBus.ListNames
 
 note: org.freedesktop.Dbus means the dbus itself and ListNmaes to get the list of names on the bus
 
@@ -21243,7 +21386,11 @@ do
 done | sort -n
 
 
-{dbus-monitor}
+={============================================================================
+*kt_linux_core_704* dbus: dbus-monitor tool
+
+http://dbus.freedesktop.org/doc/dbus-monitor.1.html
+
 Distributed with D-Bus, prints out traffic on the bus. You can filter the output by passing match
 rules as arguments. 
 
@@ -21280,6 +21427,9 @@ dbus-monitor | tee /mnt/hd1/mylogs.log &
 # To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the following command:
 dbus-monitor "interface=Zinc.Media.MediaRouter"
 
+
+={============================================================================
+*kt_linux_core_710* dbus: kdbus
 
 {kdbus}
 https://github.com/gregkh/presentation-kdbus
