@@ -492,6 +492,20 @@ source = gst_element_factory_make ("videotestsrc", "source");
 sink = gst_element_factory_make ("autovideosink", "sink");
 
 
+GstElement *        gst_element_factory_make            (const gchar *factoryname,
+                                                         const gchar *name);
+
+Create a new element of the type defined by the given element factory. note: If name is NULL, then
+the element will receive a guaranteed unique name, consisting of the element factory name and a
+number. If name is given, it will be given the name supplied.
+
+factoryname : a named factory to instantiate
+
+name : name of new element, or NULL to automatically create a unique name.
+
+Returns : new GstElement or NULL if unable to create element.
+
+
 2. create pipeline
 All elements in GStreamer must typically be contained inside a pipeline before they can be used,
     because it takes care of some clocking and messaging functions.
@@ -507,15 +521,16 @@ if (gst_element_link (source, sink) != TRUE) {
     return -1;
 }
 
-A pipeline is a particular type of bin, which is the element used to contain other elements.
+A pipeline is a particular 'type' of bin, which is the element used to contain other elements.
 Therefore all methods which apply to bins also apply to pipelines. In our case, we call
 gst_bin_add_many() to add the elements to the pipeline (mind the cast). This function accepts a list
 of elements to be added, ending with NULL.
 
-These elements, however, are not linked with each other yet. For this, we need to use
+These elements, however, are not 'linked' with each other yet. For this, we need to use
 gst_element_link().
 
 
+{property}
 3. set properities
 Most GStreamer elements have customizable properties: named attributes that can be modified to
 change the element's behavior (writable properties) or inquired to find out about the element's
@@ -523,6 +538,17 @@ internal state (readable properties).
 
 /* Modify the source's properties */
 g_object_set (source, "pattern", 0, NULL);
+
+// from the reference
+Properties
+  "pattern"                  GstVideoTestSrcPattern  : Read / Write
+  "timestamp-offset"         gint64                : Read / Write
+  "is-live"                  gboolean              : Read / Write
+  "peer-alloc"               gboolean              : Read / Write
+  ...
+  "background-color"         guint                 : Read / Write
+  "foreground-color"         guint                 : Read / Write
+  "horizontal-speed"         gint                  : Read / Write
 
 
 4. start
@@ -655,12 +681,169 @@ decodebin2 is considered stable now and replaces the old decodebin element. urid
 decodebin2 internally and is often more convenient to use, as it creates a suitable source element
 as well. 
 
-
 appsrc, appsink
 
 The element used to inject application data into a GStreamer pipeline is appsrc, and its
 counterpart, used to extract GStreamer data back to the application is appsink.
 
+
+{decodebin}
+decodebin — Autoplug and decode to raw media
+
+[root@HUMAX /]# gst-inspect-1.0 decodebin
+Factory Details:
+  Rank                     none (0)
+  Long-name                Decoder Bin
+  Klass                    Generic/Bin/Decoder
+  Description              Autoplug and decode to raw media
+  Author                   Edward Hervey <edward.hervey@collabora.co.uk>, Sebastian DrÃ¶ge <sebastian.droege@collabora.co.uk>
+
+Plugin Details:
+  Name                     playback
+  Description              various playback elements
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstplayback.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gst-plugins-base
+  Source release date      2015-06-02 10:11 (UTC)
+  Binary package           GStreamer Base Plug-ins git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstBin
+                         +----GstDecodeBin
+
+Implemented Interfaces:
+  GstChildProxy
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      ANY
+
+  SRC template: 'src_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+
+Element Flags:
+  no flags set
+
+Bin Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_decode_bin_change_state
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "decodebin0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  async-handling      : The bin will handle Asynchronous state changes
+                        flags: readable, writable
+                        Boolean. Default: false
+  message-forward     : Forwards all children messages
+                        flags: readable, writable
+                        Boolean. Default: false
+  caps                : The caps on which to stop decoding.
+                        flags: readable, writable
+                           video/x-raw(ANY)
+                           audio/x-raw(ANY)
+                           text/x-raw
+                           subpicture/x-dvd
+                           subpicture/x-dvb
+                           subpicture/x-pgs
+
+  subtitle-encoding   : Encoding to assume if input subtitles are not in UTF-8 encoding. If not set, the GST_SUBTITLE_ENCODING environment variable will be checked for an encoding to use. If that is not set either, ISO-8859-15 will be assumed.
+                        flags: readable, writable
+                        String. Default: null
+  sink-caps           : The caps of the input data. (NULL = use typefind element)
+                        flags: readable, writable
+                        Caps (NULL)
+  use-buffering       : Emit GST_MESSAGE_BUFFERING based on low-/high-percent thresholds
+                        flags: readable, writable
+                        Boolean. Default: false
+  low-percent         : Low threshold for buffering to start
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 10 
+  high-percent        : High threshold for buffering to finish
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 99 
+  max-size-bytes      : Max. amount of bytes in the queue (0=automatic)
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  max-size-buffers    : Max. number of buffers in the queue (0=automatic)
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  max-size-time       : Max. amount of data in the queue (in ns, 0=automatic)
+                        flags: readable, writable
+                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 0 
+  post-stream-topology: Post stream-topology messages
+                        flags: readable, writable
+                        Boolean. Default: false
+  expose-all-streams  : Expose all streams, including those of unknown type or that don't match the 'caps' property
+                        flags: readable, writable
+                        Boolean. Default: true
+  connection-speed    : Network connection speed in kbps (0 = unknown)
+                        flags: readable, writable
+                        Unsigned Integer64. Range: 0 - 18446744073709551 Default: 0 
+
+Element Signals:
+  "pad-added" :  void user_function (GstElement* object,
+                                     GstPad* arg0,
+                                     gpointer user_data);
+  "pad-removed" :  void user_function (GstElement* object,
+                                       GstPad* arg0,
+                                       gpointer user_data);
+  "no-more-pads" :  void user_function (GstElement* object,
+                                        gpointer user_data);
+  "unknown-type" :  void user_function (GstElement* object,
+                                        GstPad* arg0,
+                                        GstCaps* arg1,
+                                        gpointer user_data);
+  "autoplug-continue" :  gboolean user_function (GstElement* object,
+                                                 GstPad* arg0,
+                                                 GstCaps* arg1,
+                                                 gpointer user_data);
+  "autoplug-factories" :  GValueArray * user_function (GstElement* object,
+                                                       GstPad* arg0,
+                                                       GstCaps* arg1,
+                                                       gpointer user_data);
+  "autoplug-sort" :  GValueArray * user_function (GstElement* object,
+                                                  GstPad* arg0,
+                                                  GstCaps* arg1,
+                                                  GValueArray* arg2,
+                                                  gpointer user_data);
+  "autoplug-select" :  GstAutoplugSelectResult user_function (GstElement* object,
+                                                              GstPad* arg0,
+                                                              GstCaps* arg1,
+                                                              GstElementFactory* arg2,
+                                                              gpointer user_data);
+  "autoplug-query" :  gboolean user_function (GstElement* object,
+                                              GstPad* arg0,
+                                              GstElement* arg1,
+                                              GstQuery* arg2,
+                                              gpointer user_data);
+  "drained" :  void user_function (GstElement* object,
+                                   gpointer user_data);
+
+Children:
+  typefind
 
 ={============================================================================
 *kt_dev_bcast_302* gst: time and seek
@@ -780,6 +963,43 @@ The third kind of pad is the "Request Pad", which is created on demand. The clas
 tee element, which has one sink pad and no initial source pads: they need to be requested and then
 tee adds them. In this way, an input stream can be replicated any number of times. The disadvantage
 is that linking elements with Request Pads is not as automatic.
+
+
+{pad-link}
+
+note: Linking elements is one thing and linking pads is the other once linking element is done.
+
+Basic tutorial 7: Multithreading and Pad Availability
+
+/* Manually link the Tee, which has "Request" pads */
+
+// request 'request pad' from tee for audio path
+tee_src_pad_template = gst_element_class_get_pad_template (GST_ELEMENT_GET_CLASS (tee), "src%d");
+tee_audio_pad = gst_element_request_pad (tee, tee_src_pad_template, NULL, NULL);
+g_print ("Obtained request pad %s for audio branch.\n", gst_pad_get_name (tee_audio_pad));
+
+// GstPad *            gst_element_get_static_pad          (GstElement *element,
+//                                                         const gchar *name);
+//
+// Retrieves a pad from element by name. This version only retrieves already-existing (i.e.
+// 'static') pads. 
+
+// get a pad from audio_queue element
+queue_audio_pad = gst_element_get_static_pad (audio_queue, "sink");
+
+// request 'request pad' from tee for video path
+tee_video_pad = gst_element_request_pad (tee, tee_src_pad_template, NULL, NULL);
+g_print ("Obtained request pad %s for video branch.\n", gst_pad_get_name (tee_video_pad));
+
+// get a pad from video_queue element
+queue_video_pad = gst_element_get_static_pad (video_queue, "sink");
+
+if (gst_pad_link (tee_audio_pad, queue_audio_pad) != GST_PAD_LINK_OK ||
+  gst_pad_link (tee_video_pad, queue_video_pad) != GST_PAD_LINK_OK) {
+  g_printerr ("Tee could not be linked.\n");
+  gst_object_unref (pipeline);
+  return -1;
+}
 
 
 ={============================================================================
@@ -1137,6 +1357,26 @@ amount of verbosity of the output.
 *kt_dev_bcast_312* gst: sdk and tutorials
 
 http://docs.gstreamer.com/display/GstSDK/Installing+on+Linux
+
+
+={============================================================================
+*kt_dev_bcast_313* gst: core apis reference
+
+http://www.freedesktop.org/software/gstreamer-sdk/data/docs/2012.5/gstreamer-0.10/libgstreamer.html
+
+guint               gst_bus_add_watch                   (GstBus *bus,
+                                                         GstBusFunc func,
+                                                         gpointer user_data);
+
+Adds a bus watch to the default main context with the default priority (G_PRIORITY_DEFAULT). Since
+    0.10.33 it is also possible to use a non-default main context set up using
+    g_main_context_push_thread_default() (before one had to create a bus watch source and attach it
+            to the desired main context 'manually').
+
+This function is used to receive asynchronous messages in the main loop. There can only be a single
+bus watch per bus, you must remove it before you can set a new one.
+
+The watch can be removed using g_source_remove() or by returning FALSE from func.
 
 
 ={============================================================================

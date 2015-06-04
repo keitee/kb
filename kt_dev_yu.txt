@@ -7203,6 +7203,22 @@ Media Playback    Zinc.Media
 
 dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
 
+// Nickel/Nickel.System.DBusServer/include/ObjectPath.h
+
+NS_NICKEL_SYSTEM_OPEN
+
+namespace ObjectPath {
+	const char* const LOCAL_MEDIA_LIBRARY = "/Zinc/Media/LocalMediaLibrary";
+	const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
+	const char* const DEFAULT_MEDIA_ROUTER = "/Zinc/Media/DefaultMediaRouter";
+	const char* const MEDIA_ROUTER = "/Zinc/Media/MediaRouter";
+	const char* const MEDIA_SETTINGS = "/Zinc/Media/MediaSettings";
+	const char* const OUTPUT_MANAGER = "/Zinc/Media/OutputManager";
+	const char* const SERVICE_LIST_BUILDER = "/Zinc/Media/ServiceListBuilder";
+}
+
+NS_NICKEL_SYSTEM_CLOSE
+
 
 ={============================================================================
 *kt_dev_uv_stack_404* stack: media: linearsourced
@@ -7585,6 +7601,9 @@ struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
 
 nickelmediad(server)
 { dbus c, system factory, media proxy{gst factory} }
+   - to bronze for forwaring
+   - to gst for mine type
+   - to gst for mine type
 
 
 {ui} same as before
@@ -7592,7 +7611,191 @@ Nickel.AIR.Client.API/data/client-factory.plugin-config
 1:libNickelClientSystem.so createSystemClientFactory
 
 
-{dbus-server}
+{dbus-client}
+Nickel.System.DBusClient/
+   libNickelSystemDbusClient.so.0.0.0
+
+
+{client-system} same as before
+Nickel.Client.System/
+   libNickelClientSystem.so.0.0.0
+
+copper-system-factory.plugin-config:1:libCopperSystemDbusClient.so createDbusSystemFactory note: dbus client
+nickel-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory note: dbus bronze
+
+
+{client-factory}
+// Nickel/Nickel.Client.API/include/ClientFactory.h
+
+struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
+
+	virtual boost::shared_ptr<NS_ZINC::EventDispatcher> getDefaultDispatcher() const = 0;
+
+	virtual void setDefaultDispatcher(boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher) = 0;
+
+	virtual boost::shared_ptr<Locator> createLocator() = 0;
+
+	virtual boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory() = 0;
+   ...
+};
+
+
+// Nickel/Nickel.Client.System/src/SystemClientFactory.cpp
+
+boost::shared_ptr<Locator> SystemClientFactory::createLocator() {
+    NICKEL_FUNC_TRACE;
+    static boost::shared_ptr<Locator> locator;
+    if(!locator)
+    {
+        locator.reset(
+            new SystemClientLocator(
+                createMediaRouterFactory(),
+                createMediaSettings(),
+                createOutputManager(),
+                createServiceListBuilder(),
+                createAudioFeedback()
+            )
+        );
+    }
+    return locator;
+}
+
+
+class SystemClientFactory : virtual public ClientFactory {
+
+    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> mediaRouterFactory;
+
+    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> SystemClientFactory::createMediaRouterFactory() 
+    {
+        boost::mutex::scoped_lock lock(mutex);
+
+        if(mediaRouterFactory == NULL) {
+            NICKEL_FUNC_TRACE;
+
+            // note: create MRF from bronze
+            
+            boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactorySync> 
+                sysMRFactory( convertToSync( getSystemFactory().createMediaRouterFactory() ) );
+
+            // note: SMRF
+
+            boost::shared_ptr<NS_NICKEL_CLIENT::SystemMediaRouterFactory> cliMRFactory(
+               new NS_NICKEL_CLIENT::SystemMediaRouterFactory(sysMRFactory, defaultDispatcher, *this));
+
+            mediaRouterFactory = cliMRFactory;
+        }
+
+        return(mediaRouterFactory);
+    }
+};
+
+Plugin* createSystemClientFactory() {
+    return new NS_NICKEL_CLIENT::SystemClientFactory();
+}
+
+// nickel-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory
+
+Zinc::Media::SystemFactory& SystemClientFactory::getSystemFactory() {
+    NICKEL_FUNC_TRACE;
+    static const NS_ZINC::FilePluginConfig 
+        SYSTEM_FACTORY_PLUGIN_CONFIG(PackageDataFinder().find("nickel-system-factory.plugin-config"));
+    return PluginFactory::getInstance<Zinc::Media::SystemFactory>(SYSTEM_FACTORY_PLUGIN_CONFIG);
+}
+
+
+// Nickel/Nickel.System.DBusClient/src/DbusSystemFactory.cpp
+
+    : theBusName("Zinc.Media") note: this is bronze
+
+
+Plugin *createDbusSystemFactory(const char* busName) {
+	return new DbusSystemFactory(busName);
+}
+
+shared_ptr<MediaRouterFactory> DbusSystemFactory::createMediaRouterFactory() {
+	NICKEL_FUNC_TRACE;
+
+	recursive_mutex::scoped_lock lock(mutex);
+	boost::shared_ptr<MediaRouterFactory> strong(theMediaRouterFactory.lock());
+	if (!strong) {
+	    DBus::Connection conn = getDBusSessionConnection();
+        if (!mediaRouterCollection) {
+            mediaRouterCollection = 
+                boost::make_shared<NS_ZINC_DBUS_BINDING::ProxyFactory<MediaRouterDBusToSyncAndAsync> >(
+                    NS_ZINC_DBUS_BINDING::ObjectWithEventsProxyFactory<MediaRouterDBusToSyncAndAsync>(
+                        getEventDispatcher(), getFutureDispatcher()));
+        }
+        strong = MediaRouterFactoryDBusToSyncAndAsync::create(conn,
+                                                      theBusName,
+                                                      NS_NICKEL_SYSTEM::ObjectPath::MEDIA_ROUTER_FACTORY,
+                                                      getFutureDispatcher(),
+                                                      mediaRouterCollection);
+		theMediaRouterFactory = strong;
+	}
+	return strong;
+}
+
+// Nickel/Nickel.Client.API/include/MediaRouterFactory.h
+
+struct ZINC_EXPORT MediaRouterFactory : virtual public NS_ZINC::Polymorphic {
+
+	/**
+	 * Creates an unconfigured MediaRouter instance.
+	 *
+	 * @return an unconfigured MediaRouter instance.
+	 *
+	 * @throws nickel::client::InsufficientResources There is not sufficient memory to allocate a
+	 *         new MediaRouter instance.
+	 *
+	 * @acl cp
+	 */
+    virtual boost::shared_ptr<MediaRouter> createMediaRouter() = 0;
+};
+
+// Nickel/Nickel.Client.System/src/SystemMediaRouterFactory.h
+
+class SystemMediaRouterFactory
+    : public virtual NS_NICKEL_CLIENT::MediaRouterFactory,
+    public boost::enable_shared_from_this<SystemMediaRouterFactory>
+{
+
+   virtual boost::shared_ptr<MediaRouter> createMediaRouter();
+    
+   SystemMediaRouterFactory::SystemMediaRouterFactory(
+        boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactorySync> sysFactory_,
+};
+
+boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> SystemMediaRouterFactory::createMediaRouter(void) {
+    NICKEL_FUNC_DEBUG;
+    try {
+
+         // note: after all, calls OEM one?
+         
+        boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> p =
+                wrapSystemRouter(sysFactory->createMediaRouter(), dispatcher);
+        return p;
+
+    } catch (const NS_NICKEL_SYSTEM::InsufficientResources&) {
+        throw InsufficientResources();
+    }
+}
+
+// Nickel/Nickel.Client.System/src/SystemMediaRouter.cpp
+// note: here "SystemMediaRouter" created
+
+boost::shared_ptr<MediaRouter> wrapSystemRouter(boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> sysRouter,
+                                                boost::shared_ptr<EventDispatcher> dispatcher)
+{
+    NICKEL_FUNC_DEBUG;
+    boost::shared_ptr<SystemMediaRouter> cliSysRouter = boost::make_shared<SystemMediaRouter>(sysRouter);
+    cliSysRouter->setDispatcher(dispatcher);
+    sysRouter->addListener(cliSysRouter);
+    NICKEL_DEBUG("cli "<<cliSysRouter<<" sys "<<sysRouter);
+    return cliSysRouter;
+}
+
+
+{nickelmediadd} bus-server
 Nickel.System.DBusServer/
    libNickelSystemDbus.so.0.0.0
    nickelmediad
@@ -7614,31 +7817,20 @@ User=nickelmediad
 ("busname,b", po::value<std::string>(&busName)->default_value(defaultBusName), "DBus connection name")
 
 
-{dbus-client}
-Nickel.System.DBusClient/
-   libNickelSystemDbusClient.so.0.0.0
-
-
-{client-system} same as before
-Nickel.Client.System/
-   libNickelClientSystem.so.0.0.0
-
-copper-system-factory.plugin-config:1:libCopperSystemDbusClient.so createDbusSystemFactory note: dbus client
-nickel-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory
-
-
 {media-router-proxy}
 Nickel.System.Proxy/libNickelSystemProxy.so.0.0.0
 
-default-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory note: dbus client
+default-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory note: dbus bronze
 http-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
 https-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
 
 
 <system-factory>
+note: this is equivalent to SystemClientFactory.cpp
+
 libNickelSystemProxy.so createSystemFactory
 
-// Nickel/Nickel.System.Proxy/src/src/ProxySystemFactory.cpp
+// Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp
 
 // class ZINC_LOCAL ProxySystemFactory : public SystemFactory
     
@@ -7648,6 +7840,53 @@ extern "C" {
 		return new NS_NICKEL_SYSTEM::ProxySystemFactory();
 	}
 }
+
+typedef std::pair<std::string, std::vector<MIMEMediaRouterFactory> > MIMEMediaRouterFactoryMap;
+typedef std::vector<MIMEMediaRouterFactoryMap> ProtocolMediaRouterFactoryMap;
+
+{
+	FilePluginConfig defaultPluginConfig(PackageDataFinder().find("default-system-factory.plugin-config"));
+	defaultImplementation = boost::addressof(PluginFactory::getInstance<SystemFactory>(defaultPluginConfig));
+
+   // for_each add {protocol, factory-function}
+   
+	proxyMediaRouterFactory = boost::make_shared<ProxyMediaRouterFactory>(getDispatcher(),
+            defaultMediaRouterFactory, protocolMediaRouterFactoryMap);
+}
+
+boost::shared_ptr<MediaRouterFactory> ProxySystemFactory::createMediaRouterFactory() {
+	NICKEL_FUNC_TRACE;
+	return proxyMediaRouterFactory;
+}
+
+
+// forwarding
+
+boost::shared_ptr<LocalMediaLibrary> ProxySystemFactory::createLocalMediaLibrary() {
+	NICKEL_FUNC_TRACE;
+	return defaultImplementation->createLocalMediaLibrary();
+}
+
+
+// Nickel/Nickel.System.Proxy/src/ProxyMediaRouterFactory.cpp
+
+NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::createMediaRouter() {
+	NICKEL_FUNC_TRACE;
+
+   // here pass a map
+
+	return NS_ZINC::completedFuture(
+            *dispatcher, boost::shared_ptr<MediaRouter>(new ProxyMediaRouter(
+                dispatcher, defaultMediaRouterFactory, protocolMediaRouterFactoryMap,
+                mimeTypes)));
+}
+
+
+// Nickel/Nickel.System.Proxy/src/ProxyMediaRouter.cpp
+
+// See spec A.1.1
+NS_ZINC::Future< void > ProxyMediaRouter::setSource(
+        const std::string& mediaLocator_in, const SetSourceReason::Enum reason_in) {
 
 
 <gst-factory>
@@ -7671,90 +7910,6 @@ NS_ZINC::Plugin* createGstSystemFactory()
 }
 
 
-{client-factory}
-// Nickel/Nickel.Client.API/include/ClientFactory.h
-
-struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
-
-	virtual boost::shared_ptr<NS_ZINC::EventDispatcher> getDefaultDispatcher() const = 0;
-
-	virtual void setDefaultDispatcher(boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher) = 0;
-
-	virtual boost::shared_ptr<Locator> createLocator() = 0;
-
-	virtual boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory() = 0;
-   ...
-};
-
-
-// Nickel/Nickel.Client.System/src/SystemClientFactory.cpp
-
-class SystemClientFactory : virtual public ClientFactory {
-
-    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> mediaRouterFactory;
-
-    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> SystemClientFactory::createMediaRouterFactory() 
-    {
-        boost::mutex::scoped_lock lock(mutex);
-
-        if(mediaRouterFactory == NULL) {
-            NICKEL_FUNC_TRACE;
-            boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactorySync> 
-                sysMRFactory( convertToSync( getSystemFactory().createMediaRouterFactory() ) );
-
-            boost::shared_ptr<NS_NICKEL_CLIENT::SystemMediaRouterFactory> cliMRFactory(
-               new NS_NICKEL_CLIENT::SystemMediaRouterFactory(sysMRFactory, defaultDispatcher, *this));
-
-            mediaRouterFactory = cliMRFactory;
-        }
-
-        return(mediaRouterFactory);
-    }
-};
-
-Plugin* createSystemClientFactory() {
-    return new NS_NICKEL_CLIENT::SystemClientFactory();
-}
-
-
-// Nickel/Nickel.Client.API/include/MediaRouterFactory.h
-
-struct ZINC_EXPORT MediaRouterFactory : virtual public NS_ZINC::Polymorphic {
-
-	/**
-	 * Creates an unconfigured MediaRouter instance.
-	 *
-	 * @return an unconfigured MediaRouter instance.
-	 *
-	 * @throws nickel::client::InsufficientResources There is not sufficient memory to allocate a
-	 *         new MediaRouter instance.
-	 *
-	 * @acl cp
-	 */
-    virtual boost::shared_ptr<MediaRouter> createMediaRouter() = 0;
-};
-
-// Nickel/Nickel.Client.System/src/SystemMediaRouterFactory.h
-
-class SystemMediaRouterFactory
-    : public virtual NS_NICKEL_CLIENT::MediaRouterFactory,
-      public boost::enable_shared_from_this<SystemMediaRouterFactory> {
-
-    virtual boost::shared_ptr<MediaRouter> createMediaRouter();
-      };
-
-boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> SystemMediaRouterFactory::createMediaRouter(void) {
-    NICKEL_FUNC_DEBUG;
-    try {
-        boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> p =
-                wrapSystemRouter(sysFactory->createMediaRouter(), dispatcher);
-        return p;
-
-    } catch (const NS_NICKEL_SYSTEM::InsufficientResources&) {
-        throw InsufficientResources();
-    }
-}
-
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouterFactory.cpp
 
@@ -7773,6 +7928,12 @@ boost::shared_ptr<MediaRouterAsync> createGstMediaRouter(
 {
     return boost::make_shared<GstMediaRouter>(dispatcher);
 }
+
+// Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
+
+
+={============================================================================
+*kt_dev_uv_stack_409* stack: media: nickel: run dash stream
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
 
@@ -7797,7 +7958,163 @@ void GstMediaRouter::init()
             sinkPadFactory_sinkpads,
             boost::shared_ptr<VirtualPadFactoryInProcess>(),
             boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+    RefObj<GstElement> elem = gst_pipeline_new("pipeline");
+
+    gst_bin_add_many(GST_BIN(elem.get()),
+                     typefindBin->getParent().retain(),
+                     srcBin->getParent().retain(),
+                     sinkBin->getParent().retain(), NULL);
+
+    const RefObj<GstBus> bus =
+        gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
+
+    watchId = gst_bus_add_watch(bus.get(), busCallback, this);
 }
+
+
+gboolean GstMediaRouter::busCallback(GstBus* bus, GstMessage* msg, gpointer data)
+{
+    return static_cast<GstMediaRouter*>(data)->handleBusCallback(bus, msg) ?
+        TRUE : FALSE;
+}
+
+bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    switch (GST_MESSAGE_TYPE(msg)) {
+
+    case GST_MESSAGE_EOS:
+        (void)stop_locked(StatusEventValue::complete);
+        break;
+
+    case GST_MESSAGE_ASYNC_DONE:
+        onAsyncEvent();
+        break;
+
+    case GST_MESSAGE_ERROR:
+        break;
+
+    case GST_MESSAGE_STATE_CHANGED:
+    {
+        GstState oldstate, newstate, pending;
+
+        gst_message_parse_state_changed(msg, &oldstate, &newstate, &pending);
+
+        // sink state changes can be usefull to determine tracks availability
+        if (pipeline == GST_ELEMENT(msg->src)) {
+            NICKEL_TRACE(
+                "State transition "
+                << gst_element_state_get_name(oldstate)
+                << " -> " << gst_element_state_get_name(newstate)
+                << " wanted " << gst_element_state_get_name(pending));
+
+            onStateChange(oldstate, newstate, pending);
+        }
+
+        break;
+    }
+
+    default:
+        // we ignore anything we don't explicitly want
+        break;
+    }
+
+    return true;
+}
+
+NS_ZINC::Future<void> GstMediaRouter::start()
+{
+   gst_element_set_state(pipeline.get(), GST_STATE_PLAYING)) {
+}
+
+
+<virtual-bin>
+
+class ZINC_EXPORT VirtualBin
+    : boost::noncopyable,
+      public boost::enable_shared_from_this<VirtualBin>
+{
+    typedef std::map<std::string,
+                     boost::function<RefObj<GstElement>()> > FactoryContainer;
+
+    FactoryContainer elementFactory;
+};
+
+class ZINC_EXPORT VirtualBinSrc : public VirtualBin
+{
+    RefObj<GstElement> VirtualBinSrc::makeAndSetupDecodebin(
+            const char* const outputCaps)
+    {
+        const RefObj<GstElement> decodebin = gst_element_factory_make("decodebin", NULL);
+
+        g_object_set(decodebin.get(),
+                "caps", gst_caps_from_string(outputCaps),
+                NULL);
+
+        g_signal_connect(decodebin.get(), "pad-added",
+                G_CALLBACK(newDecodebinPadCb),
+                static_cast<gpointer>(this));
+
+        return sink = decodebin;
+    }
+
+    VirtualBinSrc::VirtualBinSrc(
+            boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
+            boost::shared_ptr<VirtualPadFactory> srcPadFactory,
+            VirtualBin::CallbackType callback)
+        : VirtualBin(sinkPadFactory, srcPadFactory, "VirtualBinSrc", callback),
+        sink()
+    {
+        elementFactory["application/dash+xml"] =
+            boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
+                    "video/quicktime; audio/x-m4a; text/x-raw");
+    }
+};
+
+
+class ZINC_EXPORT VirtualBinSink : public VirtualBin
+{
+    VirtualBinSink::VirtualBinSink(
+            boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
+            boost::shared_ptr<VirtualPadFactory> srcPadFactory,
+            VirtualBin::CallbackType callback)
+        : VirtualBin(sinkPadFactory, srcPadFactory, "VirtualBinSink", callback)
+    {
+        elementFactory["video/quicktime"] =
+            boost::bind(makeMp4Element,
+                    PlugFunc(boost::bind(&VirtualBin::plug,
+                            static_cast<VirtualBin*>(this),
+                            _1)));
+        elementFactory["audio/x-m4a"] =  boost::bind(makeElementSimple, "fakesink");
+
+        if (const RefObj<GstElementFactory> nexusFactory =
+                gst_element_factory_find ("nexussink")) {
+            elementFactory["video/x-h264"] =
+                boost::bind(makeH264Element,
+                        "h264parse ! nexussink");
+        } else {
+            elementFactory["video/x-h264"] =
+                boost::bind(makeH264Element,
+                        "h264parse ! avdec_h264 ! autovideosink");
+        }
+    }
+};
+
+
+={============================================================================
+*kt_dev_uv_stack_409* stack: media: nickel: run dash stream
+
+:~/src-dev/DEVARCH/Zinc/Zinc.3rdPartyStack/packages$ ll gst*
+-rw-r--r-- 1 kpark kpark   315131 Apr 28 11:23 gst_fluendo_timeshift-1.0.3.tar.bz2
+-rw-r--r-- 1 kpark kpark 65738334 May 29 15:57 gst_libav-1.5.0.tar.bz2
+-rw-r--r-- 1 kpark kpark  6471312 May 29 15:57 gst_plugins_bad-1.5.0.tar.bz2
+-rw-r--r-- 1 kpark kpark  4318191 May 29 15:57 gst_plugins_base-1.5.0.tar.bz2
+-rw-r--r-- 1 kpark kpark  4869327 May 29 15:57 gst_plugins_good-1.5.0.tar.bz2
+-rw-r--r-- 1 kpark kpark  9487493 May 29 15:57 gst_plugins_ugly-1.5.0.tar.bz2
+-rw-r--r-- 1 kpark kpark 44459079 May 29 15:57 gstreamer-1.5.0.tar.bz2
+-rw-r--r-- 1 kpark kpark    23721 Apr 28 11:23 gst_vqe-1.1.0.tar.gz
 
 
 ={============================================================================
@@ -7806,7 +8123,6 @@ void GstMediaRouter::init()
 Live: http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 
 Test Card: http://rdmedia.bbc.co.uk/dash/ondemand/testcard/1/client_manifest-events.mpd
-
 
 You cannot create MediaRouters and expect to hold on to them via dbus-send alone, as they are
 reference counted and will be recycled and their object path deleted when the dbus-send process
@@ -7858,6 +8174,8 @@ killall dbussenddaemon
 -rwxr-xr-x    1 root     root           215 Jun  2 16:13 /opt/zinc/bin/nickelmediad*
 -rwxr-xr-x    1 root     root        934340 May 27 02:15 /opt/zinc/bin/nickelmediad.oem*
 
+note: LD_LIBRARY_PATH is local
+
 export LD_LIBRARY_PATH=/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/usr/local/lib:/opt/stagecraft-2.0/bin:/opt/zinc/tests/lib:
 
 LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0 /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy
@@ -7877,8 +8195,6 @@ Src::newDecodebinPad(GstElement*, GstPad*)
 2015-06-03 16:52:52,204 TRACE  809227552 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBin.cpp:182 EXIT:  RefObj<_GstPad> nickel::system::VirtualBin::plug_unlocked(const RefObj<_GstPad>&)
 2015-06-03 16:52:55,685 TRACE  809227552 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/VirtualBinSink.cpp:31 EXIT:  static void nickel::system::<unnamed>::makeMp4Element(nickel::system::<unnamed>::PlugFunc)::NewPadCallback::callback(GstElement*, GstPad*, void*)
 2015-06-03 16:52:55,756 TRACE  772130080 nickel /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:300 State transition PAUSED -> PAUSED wanted PLAYING
-
-
 
 
 
@@ -7905,17 +8221,22 @@ commandline read: Zinc.MediaProxy
 0:02:03.324853998  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
 0:02:25.811647590  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
 0:02:25.813106146  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
-0:02:25.814152332  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Video size or aspect ratio changed to size=512x288 PAR=1/1
-0:02:29.656465925  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
-0:02:29.657440147  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
-0:02:29.658166740  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Video size or aspect ratio changed to size=1280x720 PAR=1/1
-0:02:33.500689888  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
-0:02:33.501560369  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
-0:02:33.502778369  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Video size or aspect ratio changed to size=704x396 PAR=1/1
-0:03:00.370221073  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1687:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
-0:03:00.376730924  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1712:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Aspect ratio 1/1
-0:03:00.377811925  2247   0x568380 ERROR              nexussink /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1717:gst_nexus_sink_poll_decoder
 
+note:
+When kill nickelmediad loaded when boots up and manually launch it again, it will use /opt/zinc in
+LD_LIBRARY_PATH since it's local to a process as shown:
+
+LD_LIBRARY_PATH="/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:${LD_LIBRARY_PATH}" exec "${target}" "${@}"
+
+So need to run this and export it as shown above. If not, will use fake library and see OEM build
+path in log lines. So should see your build path in the log.
+
+note:
+Unlike humax 2000, directfb related libraries were not loaded on 1000 box and hence no AV although
+YV media router is up and running. Hence to run LD_PRELOAD line as shown above before launching a
+new nickel daemon.
+
+If all is okay, shall see directfb log in the log, nexus fds in /proc/XXX/fd.
 
 
 ={============================================================================
