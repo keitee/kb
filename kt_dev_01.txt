@@ -252,7 +252,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_ccon_001| std::thread join and detach
 |kt_dev_ccon_002| std::thread copy callables and arguments
 |kt_dev_ccon_003| race condition, data race and approaches
-|kt_dev_ccon_004| std::mutex
+|kt_dev_ccon_004| std::mutex and inherent race in thread-safe stack
 |kt_dev_ccon_002| std::future
 
 
@@ -36131,7 +36131,7 @@ o software transactional memory (STM)
 
 
 ={============================================================================
-*kt_dev_ccon_004* std::mutex
+*kt_dev_ccon_004* std::mutex and inherent race in thread-safe stack
 
 {std-mutex}
 Mutexes are the most general of the data-protection mechanisms. But they're not a silver bullet;
@@ -36163,12 +36163,11 @@ bool list_contains(int value_to_find)
     return std::find(some_list.begin(),some_list.end(),value_to_find) != some_list.end();
 }
 
-Can encapsulate the functionality and enforce the protection if follows that in the majority of
-cases it's common to group the mutex and the protected data together in a class rather than use
-global variables.
+Can encapsulate the functionality and enforce the protection and it's common to group the mutex and
+the protected data together in a class rather than use global variables.
 
 
-<careful-design>
+{design-considerations}
 If all the member functions of the class lock the mutex before accessing any other data members and
 unlock it when done, the data is nicely protected from all comers.
 
@@ -36178,16 +36177,17 @@ Well, that’s not quite true. If one of the member functions returns a pointer 
 protected data? doesn't matter that the member functions all lock the mutex
 
 Protecting data with a mutex therefore requires careful interface design, to ensure that the mutex
-is locked before there’s any access to the protected data and that there are no backdoors.
+is locked before there's any access to the protected data and that there are no backdoors.
 
 
-<dont-pass-into-function>
+<do-not-pass-protected-data>
 If do careful design, the data is safe now? No. If you dig a little deeper, it's not that
-straightforward-nothing ever is.
+straightforward. Nothing ever is.
 
-Important to check that they don’t pass such pointers or references in to functions they call that
-aren't under your control; functions that are supplied at runtime via a function argument or other
-means
+As well as checking that the member functions don't pass out pointers or references to their
+callers. also to check that they don't pass such pointers or references in to functions they call
+that aren't under your control; functions that are supplied at runtime via a function argument or
+other means
 
 Accidentally passing out a reference to protected data
 
@@ -36224,8 +36224,174 @@ data_wrapper x;
 void foo()
 {
     x.process_data(malicious_function);
-    unprotected->do_something();
+    unprotected->do_something();                // unprotected access to protected data
 }
+
+
+{race-condition-inherent-in-interface}
+Consider the doubly linked list example again. In order for a thread to safely delete a node, you
+need to ensure that you're preventing concurrent accesses to three nodes: the node being deleted and
+the nodes on either side. If you protected accesses to the pointers of each node individually, you'd
+be no better off than with code that used no mutexes, because the race condition could still happen:
+
+it's not the individual nodes that need protecting for the individual steps but the whole data
+structure, for the whole delete operation. The easiest solution in this case is to have a single
+mutex that protects the entire list.
+
+Just because individual operations on the list are safe, you can still get race conditions, even
+with a really simple interface since interface is not well designed. Consider std::stack<>.
+
+template< typename T, typename Container=std::deque<T> >
+class stack
+{
+    public:
+
+        // ...
+        
+        bool empty() const;
+        size_t size() const;
+        
+        T& top();
+        T const& top() const;
+
+        void push(const T& );
+        void push(T &&);
+
+        void pop();
+};
+
+The problem is not about mutex-based implementation. it's an interface problem so the race condition
+would still occur with a lock-free implementation. this interface is inherently subject to race.
+
+The problem is that the result of empty() and size() can't be relied on. 
+
+stack<int> s;
+
+if(!s.empty())                            <-
+{
+    int const value = s.top();      <-    <-
+    s.pop();                        <-
+    do_something(value);
+}
+
+1. empty-and-top sequence
+Calling top() on an empty stack is undefined. classic race.
+
+2. top-and-pop sequence
+One of the two values on the stack is discarded without ever having been read, whereas the other is
+processed twice. another race and far more 'insidious'. there's never anything obviously wrong going
+on and the consequence of the bug are far from the cause although depends on exactly what
+do_something really dose.
+
+<option-1> note: this is a discusssion in Exceptional C++
+one that combine the calls to top() and pop() under the mutex. that is pop() return the value as
+well as remove it from the stack. However, can leads to issue if the copy constructor for the
+objects on the stack can throw an exception.
+
+Consider stack<vector<int>>. Now, a vector is a dynamically sized container, so when you copy a
+vector the library has to allocate some more memory from the heap in order to copy the contents. If
+the system is heavily loaded, or there are significant resource constraints, this memory allocation
+can fail, so the copy constructor for vector might throw a std::bad_alloc exception. This is
+especially likely if the vector contains a lot of elements. If the pop() function was defined to
+return the value popped, as well as remove it from the stack, you have a potential problem: the
+value being popped is returned to the caller 'only' after the stack has been modified, but the
+process of copying the data to return to the caller might throw an exception. If this happens, the
+data just popped is lost; it has been removed from the stack, but the copy was unsuccessful! 
+    
+The designers of the std::stack interface helpfully split the operation in two: get the top element
+(top()) and then remove it from the stack (pop()), so that if you can't safely copy the data, it
+stays on the stack. If the problem was lack of heap memory, maybe the application can free some
+memory and try again. Unfortunately, it's precisely this split that you're trying to avoid in
+eliminating the race condition!
+
+<option-2>
+Pass a reference to receive the popped value.
+
+std::vector<int> result;
+some_stack.pop(result);
+
+Has the distinct disadvantage; the stored type is assignable which is restriction since many user
+type do not support it.
+
+<option-3>
+Use no-throw copy or move constructor. Limited since restrict the use of this thread-safe stack to
+those types that can safely be returned by value without an exception. note: may change as more type
+supports move semantics. 
+
+<option-4>
+Return a pointer to the popped item. That is to use dynamically allocated item and pass its pointer.
+The advantage here is that pointers can be freely copied without throwing an exception, so you've
+avoided Cargill’s exception problem.
+
+However, requiring that each object in the stack be allocated separately with new would impose quite
+an overhead compared to the original non-thread-safe version.
+
+<option-5>
+Provide both option 2 and either option 3 or 4. Flexibility should never be ruled out.
+
+<thread-safe-stack>
+This implements option 2 and 4.
+
+#include <exception>
+#include <memory>
+#include <mutex>
+#include <stack>
+
+struct empty_stack: std::exception
+{
+    const char* what() const throw();
+};
+
+template<typename T>
+class threadsafe_stack
+{
+    private:
+        std::stack<T> data;
+        mutable std::mutex m;             // <mutable>
+    public:
+        threadsafe_stack(){}
+        threadsafe_stack(const threadsafe_stack& other)
+        {
+            std::lock_guard<std::mutex> lock(other.m);
+            data=other.data;
+        }
+        threadsafe_stack& operator=(const threadsafe_stack&) = delete;
+
+        void push(T new_value)
+        {
+            std::lock_guard<std::mutex> lock(m);
+            data.push(new_value);
+        }
+        std::shared_ptr<T> pop()
+        {
+            std::lock_guard<std::mutex> lock(m);
+            if(data.empty()) throw empty_stack();
+            std::shared_ptr<T> const res(std::make_shared<T>(data.top()));
+            data.pop();
+            return res;
+        }
+        void pop(T& value)
+        {
+            std::lock_guard<std::mutex> lock(m);
+            if(data.empty()) throw empty_stack();
+            value=data.top();
+            data.pop();
+        }
+        bool empty() const
+        {
+            std::lock_guard<std::mutex> lock(m);
+            return data.empty();
+        }
+};
+
+note: when initializer-list is not useful
+This stack implementation is actually copyable; the copy constructor locks the mutex in the source
+object and then copies the internal stack. You do the copy in the constructor body rather than the
+member initializer list in order to ensure that the mutex is held across the copy.
+
+note: no need empty() since use exception.
+Your five stack operations have now become three: push(), pop(), and empty(). Even empty() is
+superfluous.
 
 
 ={============================================================================
