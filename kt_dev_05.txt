@@ -18,12 +18,13 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_301| gst: base elements
 |kt_dev_bcast_302| gst: time and seek
 |kt_dev_bcast_303| gst: pad cap. gstcap
-|kt_dev_bcast_304| gst: multi-thread
+|kt_dev_bcast_304| gst: multi-thread and pad types
 |kt_dev_bcast_305| gst: buffers and interact with a pipeline
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: tools
 |kt_dev_bcast_312| gst: sdk, tutorials
 
+|kt_dev_bcast_319| gst: mime and types
 |kt_dev_bcast_320| gst: plugin writer's guide
 
 
@@ -402,15 +403,6 @@ demux
 |           [video] |
 +===================+
 
-note: on demux
-The demuxers cannot produce any information until they have received some data and have had a chance
-to look at the container to see what is inside. So no source pads to which other elements can link.
-
-The solution is to build the pipeline from the source down to the demuxer, and set it to run (play).
-When the demuxer has received enough information to know about the number and kind of streams in the
-container, it will start creating source pads. This is the right time for us to finish building the
-pipeline and attach it to the newly added demuxer pads.
-
 
 <signal>
 GSignals are a crucial point in GStreamer. They allow you to be notified by means of a callback when
@@ -480,6 +472,42 @@ pipeline = gst_parse_launch ("playbin2 uri=http://docs.gstreamer.com/media/sinte
 /* Start playing */
 gst_element_set_state (pipeline, GST_STATE_PLAYING);
 
+<gst-parse-launch>
+In GStreamer you usually build the pipeline by manually assembling the individual elements, but,
+   when the pipeline is easy enough, and you do not need any advanced features, you can take the
+   shortcut: gst_parse_launch().
+
+This function takes a textual representation of a pipeline and turns it into an actual pipeline,
+     which is very handy. In fact, this function is so handy there is a tool built completely around
+     it which you will get very acquainted with (see Basic tutorial 10: GStreamer tools to learn
+             about gst-launch and the gst-launch syntax).
+
+gst_parse_bin_from_description ()
+
+GstElement *        gst_parse_bin_from_description      (const gchar *bin_description,
+                                                         gboolean ghost_unlinked_pads,
+                                                         GError **err);
+
+This is a convenience wrapper around gst_parse_launch() to create a GstBin from a gst-launch-style
+pipeline description. See gst_parse_launch() and the gst-launch man page for details about the
+syntax. Ghost pads on the bin for unlinked source or sink pads within the bin can automatically be
+created (but only a maximum of one ghost pad for each direction will be created; if you expect
+        multiple unlinked source pads or multiple unlinked sink pads and want them all ghosted, you
+        will have to create the ghost pads yourself).
+
+bin_description :
+	command line describing the bin
+
+ghost_unlinked_pads :
+	whether to automatically create ghost pads for unlinked source or sink pads within the bin
+
+err :
+	where to store the error message in case of an error, or NULL
+
+Returns :
+	a newly-created bin, or NULL if an error occurred. [transfer full]
+
+Since 0.10.3
 
 <manually>
 Now we are going to build a pipeline manually by instantiating each element and linking them all
@@ -653,7 +681,7 @@ The "element-added" signal is fired whenever a new element is added to the bin. 
 *kt_dev_bcast_301* gst: base elements
 
 gst-plugins-base Elements
-http://www.freedesktop.org/software/gstreamer-sdk/data/docs/2012.5/gst-plugins-base-plugins-0.10/index.html
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/
 
 http://docs.gstreamer.com/display/GstSDK/Basic+tutorial+14%3A+Handy+elements
 
@@ -845,6 +873,32 @@ Element Signals:
 Children:
   typefind
 
+
+{qtdemux}
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/gst-plugins-good-plugins-qtdemux.html
+
+qtdemux — Demultiplex a QuickTime file into audio and video streams
+
+Demuxes a .mov file into raw or compressed audio and/or video streams.
+
+This element supports both push and pull-based scheduling, depending on the capabilities of the
+upstream elements.
+
+Element Pads
+
+name sink
+
+direction sink
+
+presence always
+
+details
+	video/quicktime
+	video/mj2
+	audio/x-m4a
+	application/x-3g
+
+
 ={============================================================================
 *kt_dev_bcast_302* gst: time and seek
 
@@ -929,7 +983,7 @@ SRC template: 'src'
 
 
 ={============================================================================
-*kt_dev_bcast_304* gst: multi-thread
+*kt_dev_bcast_304* gst: multi-thread. pad types
 
 GStreamer is a multithreaded framework. This means that, internally, it creates and destroys threads
 as it needs them, for example, to decouple streaming from the application thread. 
@@ -964,9 +1018,70 @@ tee element, which has one sink pad and no initial source pads: they need to be 
 tee adds them. In this way, an input stream can be replicated any number of times. The disadvantage
 is that linking elements with Request Pads is not as automatic.
 
+<pad-added>
+The demuxers cannot produce any information until they have received some data and have had a chance
+to look at the container to see what is inside. So no source pads to which other elements can link.
+
+The solution is to build the pipeline from the source down to the demuxer, and set it to run (play).
+When the demuxer has received enough information to know about the number and kind of streams in the
+container, it will start creating source pads. This is the right time for us to finish building the
+pipeline and attach it to the newly added demuxer pads.
+
+/* Connect to the pad-added signal */
+g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
+
+In this line, we are attaching to the "pad-added" signal of our 'source' uridecodebin element.
+
+When our source element finally has enough information to start producing data, it will create
+source pads, and trigger the “pad-added” signal. At this point our callback will be called
+
+note: source pad will be created from source element. This callback is to 'link' this new source to
+sink in a pipeline.
+
+/* This function will be called by the pad-added signal */
+static void pad_added_handler (GstElement *src, GstPad *new_pad, CustomData *data) {
+  GstPad *sink_pad = gst_element_get_static_pad (data->convert, "sink");
+  GstPadLinkReturn ret;
+  GstCaps *new_pad_caps = NULL;
+  GstStructure *new_pad_struct = NULL;
+  const gchar *new_pad_type = NULL;
+   
+  g_print ("Received new pad '%s' from '%s':\n", GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
+   
+  /* If our converter is already linked, we have nothing to do here */
+  if (gst_pad_is_linked (sink_pad)) {
+    g_print ("  We are already linked. Ignoring.\n");
+    goto exit;
+  }
+   
+  /* Check the new pad's type */
+  new_pad_caps = gst_pad_get_caps (new_pad);
+  new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
+  new_pad_type = gst_structure_get_name (new_pad_struct);
+  if (!g_str_has_prefix (new_pad_type, "audio/x-raw")) {
+    g_print ("  It has type '%s' which is not raw audio. Ignoring.\n", new_pad_type);
+    goto exit;
+  }
+   
+  /* Attempt the link */
+  ret = gst_pad_link (new_pad, sink_pad);
+  if (GST_PAD_LINK_FAILED (ret)) {
+    g_print ("  Type is '%s' but link failed.\n", new_pad_type);
+  } else {
+    g_print ("  Link succeeded (type '%s').\n", new_pad_type);
+  }
+   
+exit:
+  /* Unreference the new pad's caps, if we got them */
+  if (new_pad_caps != NULL)
+    gst_caps_unref (new_pad_caps);
+   
+  /* Unreference the sink pad */
+  gst_object_unref (sink_pad);
+}
+	
 
 {pad-link}
-
 note: Linking elements is one thing and linking pads is the other once linking element is done.
 
 Basic tutorial 7: Multithreading and Pad Availability
@@ -1380,6 +1495,19 @@ The watch can be removed using g_source_remove() or by returning FALSE from func
 
 
 ={============================================================================
+*kt_dev_bcast_319* gst: mime and types
+
+GStreamer already supports many basic media types. Following is a table of a few of the basic types
+used for buffers in GStreamer. The table contains the name ("media type") and a description of the
+type, the properties associated with the type, and the meaning of each property. A full list of
+supported types is included in List of Defined Types.
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/section-types-definitions.html
+
+note: no subtitles yet.
+
+
+={============================================================================
 *kt_dev_bcast_320* gst: plugin writer's guide
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/index.html
@@ -1429,17 +1557,6 @@ smoothly.
 
 Another type of bin, called 'autoplugger' elements, automatically add other elements to the bin and
 links them together so that they act as a filter between two arbitrary stream types.
-
-
-<basic-type>
-GStreamer already supports many basic media types. Following is a table of a few of the basic types
-used for buffers in GStreamer. The table contains the name ("media type") and a description of the
-type, the properties associated with the type, and the meaning of each property. A full list of
-supported types is included in List of Defined Types.
-
-http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/section-types-definitions.html
-
-note: no subtitles yet.
 
 
 ={============================================================================

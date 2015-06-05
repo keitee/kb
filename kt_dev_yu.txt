@@ -63,7 +63,9 @@
 |kt_dev_uv_stack_406| stack: media: fr15: branch naming
 |kt_dev_uv_stack_407| stack: media: fr15: gst media router
 |kt_dev_uv_stack_408| stack: media: nickel: media router creation
-|kt_dev_uv_stack_409| stack: media: nickel: run dash stream
+|kt_dev_uv_stack_409| stack: media: nickel: pipeline in gst media router
+|kt_dev_uv_stack_410| stack: media: gst packages
+|kt_dev_uv_stack_411| stack: media: nickel: run dash stream
 
 |kt_dev_uv_stack_440| stack: media: bronze
 
@@ -7933,7 +7935,44 @@ boost::shared_ptr<MediaRouterAsync> createGstMediaRouter(
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* stack: media: nickel: run dash stream
+*kt_dev_uv_stack_409* stack: media: nickel: pipline in gst media router
+
+:~/src-dev/DEVARCH/Nickel/Nickel.System.GStreamer/src$ ag -s gst_ | ag -s "element|link"
+
+VirtualBinSrc.cpp:49:        gst_element_factory_make("decodebin", NULL);
+VirtualBinSink.cpp:34:            gst_pad_link(pad, sink.get());
+VirtualBinSink.cpp:41:        gst_element_factory_make("qtdemux", NULL);
+VirtualBinSink.cpp:75:    return gst_element_factory_make(elementName, NULL);
+VirtualBinSink.cpp:94:        gst_element_factory_find ("nexussink")) {
+VirtualBin.cpp:147:    if (gst_element_add_pad(GST_ELEMENT(bin.get()),
+VirtualBin.cpp:151:        NICKEL_ERROR("gst_element_add_pad failed!");
+VirtualBin.cpp:164:    const RefObj<GstPad> srcPad = gst_element_get_static_pad(element, "src");
+VirtualBin.cpp:166:        NICKEL_ERROR("gst_element_get_static_pad failed!");
+VirtualBin.cpp:172:    if (GST_PAD_LINK_OK != gst_pad_link(srcPad.get(),
+VirtualBin.cpp:174:        NICKEL_ERROR("gst_pad_link failed!");
+VirtualBin.cpp:225:                gst_element_get_static_pad(upstream.get(), "sink");
+VirtualBin.cpp:227:                NICKEL_ERROR("gst_element_get_static_pad failed!");
+VirtualBin.cpp:231:                gst_element_get_static_pad(upstream.get(), "src");
+VirtualBin.cpp:236:                if (!gst_pad_link(upstreamSrcPad.get(),
+VirtualBin.cpp:238:                    NICKEL_ERROR("gst_pad_link failed!");
+VirtualBin.cpp:248:        upstream = gst_element_factory_make("typefind", NULL);
+VirtualBin.cpp:251:            NICKEL_ERROR("gst_element_factory_make for typefind failed!");
+VirtualBin.cpp:266:                gst_element_get_static_pad(upstream.get(), "sink");
+VirtualBin.cpp:268:                NICKEL_ERROR("gst_element_get_static_pad failed!");
+VirtualBin.cpp:273:    if (!gst_element_sync_state_with_parent(upstream.get())) {
+VirtualBin.cpp:274:        NICKEL_ERROR("gst_element_sync_state_with_parent failed!");
+VirtualBin.cpp:310:    if (GST_PAD_LINK_OK != gst_pad_link_full(unwrappedSrcPad.get(),
+VirtualBinTypefind.cpp:19:    uridecodebin = gst_element_factory_make("uridecodebin", "uri-decoder");
+GstMediaRouter.cpp:298:                << gst_element_state_get_name(oldstate)
+GstMediaRouter.cpp:299:                << " -> " << gst_element_state_get_name(newstate)
+GstMediaRouter.cpp:300:                << " wanted " << gst_element_state_get_name(pending));
+GstMediaRouter.cpp:422:        gst_element_set_state(pipeline.get(), GST_STATE_NULL)) {
+GstMediaRouter.cpp:610:            gst_element_set_state(pipeline.get(), GST_STATE_PLAYING);
+GstMediaRouter.cpp:612:            gst_element_set_state(pipeline.get(), GST_STATE_PAUSED);
+GstMediaRouter.cpp:715:        gst_element_set_state(pipeline.get(), GST_STATE_PLAYING)) {
+GstMediaRouter.cpp:759:            gst_element_set_state(pipeline.get(), GST_STATE_PAUSED);
+GstMediaRouter.cpp:822:            gst_element_set_state(pipeline.get(), GST_STATE_PAUSED);
+
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
 
@@ -8030,7 +8069,7 @@ NS_ZINC::Future<void> GstMediaRouter::start()
 }
 
 
-<virtual-bin>
+<virtual-src>
 
 class ZINC_EXPORT VirtualBin
     : boost::noncopyable,
@@ -8044,6 +8083,14 @@ class ZINC_EXPORT VirtualBin
 
 class ZINC_EXPORT VirtualBinSrc : public VirtualBin
 {
+    void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
+            gpointer data)
+    {
+        NICKEL_FUNC_TRACE;
+        VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);
+        vbin->newDecodebinPad(element, pad);
+    }
+
     RefObj<GstElement> VirtualBinSrc::makeAndSetupDecodebin(
             const char* const outputCaps)
     {
@@ -8074,8 +8121,67 @@ class ZINC_EXPORT VirtualBinSrc : public VirtualBin
 };
 
 
+<virtual-sinc>
+
+typedef boost::function<RefObj<GstPad>(const RefObj<GstPad>&)> PlugFunc;
+
 class ZINC_EXPORT VirtualBinSink : public VirtualBin
 {
+    RefObj<GstElement> makeMp4Element(PlugFunc plug)
+    {
+        struct NewPadCallback{
+            static void callback(GstElement* elem, GstPad* pad, gpointer data)
+            {
+                NICKEL_FUNC_TRACE;
+                const PlugFunc* plugFunc = static_cast<PlugFunc*>(data);
+                const RefObj<GstPad> sink = (*plugFunc)(RefObj<GstPad>(pad, true));
+
+                // note: which element is
+                
+                gst_pad_link(pad, sink.get());
+                g_signal_handlers_disconnect_by_data(elem, data);
+                delete plugFunc;
+            }
+        };
+
+        const RefObj<GstElement> qtdemux =
+            gst_element_factory_make("qtdemux", NULL);
+
+        if (!qtdemux) {
+            NICKEL_ERROR("Couldn't create qtdemux!");
+        }
+
+        if (0 == g_signal_connect(qtdemux.get(), "pad-added",
+                    G_CALLBACK(&NewPadCallback::callback),
+                    static_cast<gpointer>(new PlugFunc(plug)))) {
+        }
+
+        return qtdemux;
+    }
+
+    RefObj<GstElement> makeH264Element(const std::string& desc)
+    {
+        GError *error = NULL;
+        const RefObj<GstElement> elem =
+            gst_parse_bin_from_description(desc.c_str(),
+                    TRUE, /* create ghost pads */
+                    &error);
+
+        if (error) {
+            const NS_ZINC::ScopedObj<GError> errorScoped(error, g_error_free);
+            NICKEL_ERROR("Failed to create element from description '"
+                    << desc << "': " << GST_STR_NULL(error->message));
+        }
+
+        return elem;
+    }
+
+    RefObj<GstElement> makeElementSimple(const char* const elementName)
+    {
+        return gst_element_factory_make(elementName, NULL);
+    }
+
+
     VirtualBinSink::VirtualBinSink(
             boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
             boost::shared_ptr<VirtualPadFactory> srcPadFactory,
@@ -8084,9 +8190,8 @@ class ZINC_EXPORT VirtualBinSink : public VirtualBin
     {
         elementFactory["video/quicktime"] =
             boost::bind(makeMp4Element,
-                    PlugFunc(boost::bind(&VirtualBin::plug,
-                            static_cast<VirtualBin*>(this),
-                            _1)));
+                    PlugFunc(boost::bind(&VirtualBin::plug, static_cast<VirtualBin*>(this), _1)) );
+
         elementFactory["audio/x-m4a"] =  boost::bind(makeElementSimple, "fakesink");
 
         if (const RefObj<GstElementFactory> nexusFactory =
@@ -8104,7 +8209,14 @@ class ZINC_EXPORT VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* stack: media: nickel: run dash stream
+*kt_dev_uv_stack_410* stack: media: nickel: pipeline in hls
+
+zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/
+qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+
+
+={============================================================================
+*kt_dev_uv_stack_410* stack: media: gst packages
 
 :~/src-dev/DEVARCH/Zinc/Zinc.3rdPartyStack/packages$ ll gst*
 -rw-r--r-- 1 kpark kpark   315131 Apr 28 11:23 gst_fluendo_timeshift-1.0.3.tar.bz2
@@ -8118,7 +8230,7 @@ class ZINC_EXPORT VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* stack: media: nickel: run dash stream
+*kt_dev_uv_stack_411* stack: media: nickel: run dash stream
 
 Live: http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 
