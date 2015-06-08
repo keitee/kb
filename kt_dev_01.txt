@@ -255,6 +255,12 @@ KT KB. DEVELOPMENT.
 |kt_dev_ccon_004| std::mutex and inherent race in thread-safe stack
 |kt_dev_ccon_005| deadlock prevention and std::lock_guard
 |kt_dev_ccon_006| std::unique_lock and deferred locking
+|kt_dev_ccon_007| std::unique_lock and transferring mutex
+|kt_dev_ccon_008| std::unique_lock and granulity
+|kt_dev_ccon_009| std::call_once and protecting during initialization
+|kt_dev_ccon_010| boost::shared_lock and read-write lock
+|kt_dev_ccon_011| recursive lock
+
 |kt_dev_ccon_002| std::future
 
 
@@ -36573,8 +36579,8 @@ class X
             if( &lhs == &rhs )
                 return;
 
-            std::lock_guard<std::mutex> lock_a( lhs.m, std::defer_lock );
-            std::lock_guard<std::mutex> lock_b( rhs.m, std::defer_lock );
+            std::unique_lock<std::mutex> lock_a( lhs.m, std::defer_lock );
+            std::unique_lock<std::mutex> lock_b( rhs.m, std::defer_lock );
 
             // lock two mutexes
             std::lock( lock_a, lock_b );
@@ -36582,6 +36588,348 @@ class X
             swap( lhs.some_detail, rhs.some_detail );
         }
 };
+
+
+={============================================================================
+*kt_dev_ccon_007* std::unique_lock and transferring mutex
+
+{flexible-unique-lock}
+Because unique_lock instances don't have to own their associated mutexes, the ownership of a mutex
+can be transferred between instances by moving the instances around.
+
+One possible use is to allow a function to lock a mutex and transfer ownership of that lock to the
+caller, so the caller can then perform additional actions under the protection of the same lock.
+
+std::unique_lock<std::mutex> get_lock()
+{
+    extern std::mutex some_mutex;
+
+    std::unique_lock<std::mutex> lk( some_mutex );
+    prepare_data();
+
+    return lk;
+}
+
+note: lk is local variable and can be returned without calling std::move since the compiler takes
+care of calling the move constructor.
+
+note: some_mutex is 'extern'
+
+void process_data()
+{
+    std::unique_lock<std::mutex> lk(get_lock());
+    do_something();
+}
+
+<gatweay-class>
+One such usage is where the lock isn't returned directly but is a data member of a gateway class
+used to ensure correctly locked access to some protected data. 
+
+In this case, all access to the data is through this gateway class; when you wish to access the
+data, you obtain an instance of the gateway class (by calling a function such as get_lock() in the
+        preceding example), which acquires the lock. You can then access the data through member
+functions of the gateway object. 
+        
+When you're finished, you destroy the gateway object, which releases the lock and allows other
+threads to access the protected data. Such a gateway object may well be movable so that it can be
+returned from a function, in which case the lock object data member also needs to be movable.
+
+<manual-option>
+The flexibility of std::unique_lock also allows instances to relinquish their locks before they're
+destroyed. You can do this with the unlock() member function, just like for a mutex:
+std::unique_lock supports the same basic set of member functions for locking and unlocking as a
+mutex does, in order that it can be used with generic functions such as std::lock.
+
+
+={============================================================================
+*kt_dev_ccon_008* std::unique_lock and granulity
+
+Not only is it important to choose a sufficiently coarse lock granularity to ensure the required
+data is protected, but it's also important to ensure that a lock is held only for the operations
+that actually require it since holding the lock will 'delay' other threads unnecessary. less
+contention.
+
+std::unique_lock works well in this situation, because you can call unlock() when the code no longer
+needs access to the shared data and then call lock() again if access is required later in the code:
+
+void get_and_process_data()
+{
+    std::unique_lock<std::mutex> my_lock(the_mutex);
+
+    some_class data_to_process = get_next_data_chunk();
+
+    my_lock.unlock();
+
+    retult_type result = process( data_to_process );
+
+    my_lock.lock();
+
+    write_result( data_to_process, result );
+}
+
+The previous swap examples using locks must lock both instance. If you were trying to compare a
+simple data member that is int and is cheap to copy compared to big_data in previous examples then
+can minimize locking time by holding single lock as below?
+
+// listing 3.10
+
+class Y
+{
+    private:
+        int some_detail;
+        mutable std::mutex m;
+        int get_detail() const
+        {
+            std::lock_guard<std::mutex> lock_a(m);
+            return some_detail;
+        }
+    public:
+        Y(int sd):some_detail(sd){}
+        friend bool operator==(Y const& lhs, Y const& rhs)
+        {
+            if(&lhs==&rhs)
+                return true;
+            int const lhs_value=lhs.get_detail();
+            int const rhs_value=rhs.get_detail();
+            return lhs_value==rhs_value;
+        }
+};
+
+NO. this has changed the semantics of operations since compare values from different point in time.
+So comparison is meaningless and race condition.
+
+To be careful that the semantics of the operation are not changed in a problematic fashion.
+
+
+={============================================================================
+*kt_dev_ccon_009* std::call_once and protecting during initialization
+
+One particularly extreme (but remarkably common) case is where the shared data needs protection only
+from concurrent access while it’s being initialized, but after that no explicit synchronization is
+required. This might be because the data is read-only once created, and so there are no possible
+synchronization issues, or it might be because the necessary protection is performed implicitly as
+part of the operations on the data.
+
+It's for this reason that the C++ Standard provides a mechanism purely for protecting shared data
+during initialization.
+
+Suppose you have a shared resource that's so expensive to construct that you want to do so only if
+it's actually required; maybe it opens a database connection or allocates a lot of memory. Lazy
+initialization such as this is common in single-threaded code
+
+std::shared_ptr<some_resource> resource_ptr;
+
+void foo()
+{
+    if(!resource_ptr)
+    {
+        resource_ptr.reset(new some_resource);
+    }
+    resource_ptr->do_something();
+}
+
+
+A naive translation to multithreaded code which cause unnecessary serialization of threads using the
+resource. This is because each thread must wait on the mutex in order to check whether the resource
+has already been initialized.
+
+
+std::shared_ptr<some_resource> resource_ptr;
+
+std::mutex resource_mutex;
+
+void foo()
+{
+    std::unique_lock<std::mutex> lk(resource_mutex);
+    if(!resource_ptr)
+    {
+        resource_ptr.reset(new some_resource);
+    }
+    lk.unlock();
+
+    resource_ptr->do_something();
+}
+
+
+<data-race>
+This so called "double-checked locking" is better?
+
+void undefined_behaviour_with_double_checked_locking()
+{
+    if(!resource_ptr)
+    {
+        std::lock_guard<std::mutex> lk(resource_mutex);
+        if(!resource_ptr)
+        {
+            resource_ptr.reset(new some_resource);
+        }
+    }
+    resource_ptr->do_something();
+}
+
+
+No it cause race condition since read to resource_ptr outside the lock and write inside the lock are
+not synchronized. May run on different instance. This is defined "data race".
+
+
+<std-once>
+C++ provides std::once_flag and std::call_once to handle this situation. Every thread can just use
+std::call_once and this do the same as "naive translation" but has a lower overhead.
+
+
+std::shared_ptr<some_resource> resource_ptr;
+
+std::once_flag resource_flag;
+
+void init_resource()
+{
+    resource_ptr.reset(new some_resource);
+}
+
+void foo()
+{
+    std::call_once(resource_flag,init_resource);      // is called exactly once
+    resource_ptr->do_something();
+}
+
+
+The example when used with a class:
+
+class X
+{
+    private:
+        connection_info connection_details;
+        connection_handle connection;
+        std::once_flag connection_init_flag;
+        void open_connection()
+        {
+            connection=connection_manager.open(connection_details);
+        }
+    public:
+        X(connection_info const& connection_details_):
+            connection_details(connection_details_)
+    {}
+
+        void send_data(data_packet const& data)
+        {
+            std::call_once(connection_init_flag,&X::open_connection,this);
+            connection.send_data(data);
+        }
+
+        data_packet receive_data()
+        {
+            std::call_once(connection_init_flag,&X::open_connection,this);
+            return connection.receive_data();
+        }
+};
+
+As with std::thread and std::bind, used additional argument to call_once.
+
+
+note:
+It's worth noting that, like std::mutex, std::once_flag instances can't be copied or moved, so if
+you use them as a class member like this, you'll have to explicitly define these special member
+functions should you require them.
+
+
+<alternative-to-call-once>
+One scenario where there's a potential race condition over initialization is that of a local
+variable declared with static.
+
+see <init-order-problem>
+
+In C++11 this problem is solved: the initialization is defined to happen on exactly one thread, and
+no other threads will proceed until that initialization is complete, so the race condition is just
+over which thread gets to do the initialization rather than anything more problematic. This can be
+used as an alternative to std::call_once for those cases where a single global instance is required:
+
+
+Protecting data only for initialization is a special case of a more general scenario: that of a
+rarely updated data structure. For most of the time, such a data structure is read-only and can
+therefore be merrily read by multiple threads concurrently.
+
+note: singleton is read-only
+
+
+={============================================================================
+*kt_dev_ccon_010* boost::shared_lock and read-write lock
+
+For most of the time, such a data structure is read-only and can therefore be merrily read by
+multiple threads concurrently, but on occasion the data structure may need updating?
+
+What's needed is a different kind of mutex. This new kind of mutex is typically called a
+reader-writer mutex, because it allows for two different kinds of usage: exclusive access by a
+single "writer" thread or shared, concurrent access by multiple "reader" threads.
+
+The new C++ Standard Library doesn't provide such a mutex out of the box and is provided by the
+boost library, which is based on the proposal.
+
+note: 
+The performance is dependent on the number of processors involved and the relative workloads of the
+reader and updater threads. therefore important to profile the performance of the code on the target
+system to ensure that there's actually a benefit to the additional complexity.
+
+Typically, a given DNS entry will remain unchanged for a long period of time in many cases DNS
+entries remain unchanged for years. Although new entries may be added to the table from time to time
+as users access different websites, this data will therefore remain largely unchanged throughout its
+life.
+
+Those threads that don't need to update the data structure can instead use
+boost::shared_lock<boost::shared_mutex> to obtain shared access. This is used just the same as
+std::unique_lock, except that multiple threads may have a shared lock on the same
+boost::shared_mutex at the same time. 
+
+#include <map>
+#include <string>
+#include <mutex>
+#include <boost/thread/shared_mutex.hpp>
+
+class dns_entry;
+
+class dns_cache
+{
+    std::map<std::string,dns_entry> entries;
+
+    mutable boost::shared_mutex entry_mutex;          // <mutable>
+
+    public:
+    dns_entry find_entry(std::string const& domain) const
+    {
+        boost::shared_lock<boost::shared_mutex> lk(entry_mutex);
+
+        std::map<std::string,dns_entry>::const_iterator const it= entries.find(domain);
+        return (it==entries.end()) ? dns_entry() : it->second;
+    }
+
+    void update_or_add_entry(std::string const& domain, dns_entry const& dns_details)
+    {
+        std::lock_guard<boost::shared_mutex> lk(entry_mutex);
+        entries[domain]=dns_details;
+    }
+};
+
+The only constraint is that if any thread has a shared lock, a thread that tries to acquire an
+exclusive lock will block until all other threads have relinquished their locks, and likewise if any
+thread has an exclusive lock, no other thread may acquire a shared or exclusive lock until the first
+thread has relinquished its lock.
+
+So update_or_add_entry() uses an instance of std::lock_guard<> to provide exclusive access while the
+table is updated; not only are other threads prevented from doing updates in a call
+update_or_add_entry(), but threads that call find_entry() are blocked too.
+
+
+={============================================================================
+*kt_dev_ccon_011* recursive lock
+
+With std::mutex, it's an error for a thread to try to lock a mutex it already owns, and attempting
+to do so will result in undefined behavior. However, in some circumstances it would be desirable for
+a thread to reacquire the same mutex several times without having first released it. For this
+purpose, the C++ Standard Library provides std::recursive_mutex.
+
+Most of the time, if you think you want a recursive mutex, you probably need to change your design
+instead.
+
+Since, in particular, the class invariants are typically broken while the lock is held.
 
 
 ={============================================================================
