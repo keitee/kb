@@ -66,6 +66,7 @@
 |kt_dev_uv_stack_409| stack: media: nickel: pipeline in gst media router
 |kt_dev_uv_stack_410| stack: media: gst packages
 |kt_dev_uv_stack_411| stack: media: nickel: run dash stream
+|kt_dev_uv_stack_412| stack: media: nickel: run hls stream
 
 |kt_dev_uv_stack_440| stack: media: bronze
 
@@ -7602,10 +7603,10 @@ struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
     <------------------------------------------- dbus -------->
 
 nickelmediad(server)
-{ dbus c, system factory, media proxy{gst factory} }
-   - to bronze for forwaring
-   - to gst for mine type
-   - to gst for mine type
+   - SCF (media router proxy)
+      - to bronze for forwaring (.so)
+      - to gst for mine type (.so) - gst.so, virtualbin.so
+      - to gst for mine type (.so)
 
 
 {ui} same as before
@@ -7626,7 +7627,7 @@ copper-system-factory.plugin-config:1:libCopperSystemDbusClient.so createDbusSys
 nickel-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory note: dbus bronze
 
 
-{client-factory}
+{SCF} 
 // Nickel/Nickel.Client.API/include/ClientFactory.h
 
 struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
@@ -7644,26 +7645,25 @@ struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
 
 // Nickel/Nickel.Client.System/src/SystemClientFactory.cpp
 
-boost::shared_ptr<Locator> SystemClientFactory::createLocator() {
-    NICKEL_FUNC_TRACE;
-    static boost::shared_ptr<Locator> locator;
-    if(!locator)
-    {
-        locator.reset(
-            new SystemClientLocator(
-                createMediaRouterFactory(),
-                createMediaSettings(),
-                createOutputManager(),
-                createServiceListBuilder(),
-                createAudioFeedback()
-            )
-        );
-    }
-    return locator;
-}
-
-
 class SystemClientFactory : virtual public ClientFactory {
+
+    boost::shared_ptr<Locator> createLocator() {
+        NICKEL_FUNC_TRACE;
+        static boost::shared_ptr<Locator> locator;
+        if(!locator)
+        {
+            locator.reset(
+                    new SystemClientLocator(
+                        createMediaRouterFactory(),
+                        createMediaSettings(),
+                        createOutputManager(),
+                        createServiceListBuilder(),
+                        createAudioFeedback()
+                        )
+                    );
+        }
+        return locator;
+    }
 
     boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> mediaRouterFactory;
 
@@ -7698,7 +7698,6 @@ Plugin* createSystemClientFactory() {
 // nickel-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory
 
 Zinc::Media::SystemFactory& SystemClientFactory::getSystemFactory() {
-    NICKEL_FUNC_TRACE;
     static const NS_ZINC::FilePluginConfig 
         SYSTEM_FACTORY_PLUGIN_CONFIG(PackageDataFinder().find("nickel-system-factory.plugin-config"));
     return PluginFactory::getInstance<Zinc::Media::SystemFactory>(SYSTEM_FACTORY_PLUGIN_CONFIG);
@@ -7797,19 +7796,15 @@ boost::shared_ptr<MediaRouter> wrapSystemRouter(boost::shared_ptr<NS_NICKEL_SYST
 }
 
 
-{nickelmediadd} bus-server
-Nickel.System.DBusServer/
+{youview-media-router} nickelmediadd which is a dbus-server
+
+1. these are files generated under this /Nickel.System.DBusServer/
    libNickelSystemDbus.so.0.0.0
    nickelmediad
 
-note: config files are in install root.
-./opt/zinc-trunk/share/nickel-system-dbusserver/media-daemon.plugin-config
+2. starts as a deamon
 
-Nickel.System.DBusServer/data/media-daemon.plugin-config
-1:libNickelSystemProxy.so createSystemFactory
-
-/Nickel/Nickel.System.Proxy/data$ cat Zinc.MediaProxy.service 
-
+// Nickel/Nickel.System.Proxy/data$ cat Zinc.MediaProxy.service 
 [D-BUS Service]
 Name=Zinc.MediaProxy
 Exec=/opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy
@@ -7818,8 +7813,55 @@ User=nickelmediad
 // from source
 ("busname,b", po::value<std::string>(&busName)->default_value(defaultBusName), "DBus connection name")
 
+3. load a SCF.
 
-{media-router-proxy}
+//config files are in install root.
+./opt/zinc-trunk/share/nickel-system-dbusserver/media-daemon.plugin-config
+
+Nickel.System.DBusServer/data/media-daemon.plugin-config
+1:libNickelSystemProxy.so createSystemFactory
+
+4. MediaDaemon.cpp
+	SystemFactory& factoryMediaRouter = 
+      NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigMediaRouter);
+	SystemFactory& factoryMediaRouterDefault = 
+      NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigMediaRouterDefault);
+	SystemFactory& factoryOutputmanager = 
+      NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigOutputmanager);
+	SystemFactory& factoryMediaSettings = 
+      NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigMediaSettings);
+	SystemFactory& factoryLocalMediaLibrary = 
+      NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigLocalMediaLibrary);
+	SystemFactory& factoryServiceListBuilder = 
+      NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigServiceListBuilder);
+
+   // namespace ObjectPath {
+   // 	const char* const LOCAL_MEDIA_LIBRARY = "/Zinc/Media/LocalMediaLibrary";
+   //
+   // 	const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
+   // 	const char* const DEFAULT_MEDIA_ROUTER = "/Zinc/Media/DefaultMediaRouter";
+   //
+   // 	const char* const MEDIA_ROUTER = "/Zinc/Media/MediaRouter";
+   // 	const char* const MEDIA_SETTINGS = "/Zinc/Media/MediaSettings";
+   // 	const char* const OUTPUT_MANAGER = "/Zinc/Media/OutputManager";
+   // 	const char* const SERVICE_LIST_BUILDER = "/Zinc/Media/ServiceListBuilder";
+   // }
+
+	if (mediaRoutersEnabled)
+	{
+		dbus.expose(ObjectPath::MEDIA_ROUTER_FACTORY, factoryMediaRouter.createMediaRouterFactory(),
+				boost::make_shared<NonInheritingAdaptorFactory<MediaRouter> >
+            (
+						NS_ZINC_DBUS_BINDING::RefCountedAdaptorFactory<MediaRouter>(*bnm), conn, 
+                  "/Zinc/Media/MediaRouters/")
+            );
+		dbus.expose(ObjectPath::DEFAULT_MEDIA_ROUTER, factoryMediaRouterDefault.createDefaultMediaRouter());
+	}
+
+
+<<SCF> media-router-proxy
+
+1. loads dependancies
 Nickel.System.Proxy/libNickelSystemProxy.so.0.0.0
 
 default-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory note: dbus bronze
@@ -7827,17 +7869,18 @@ http-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so create
 https-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
 
 
-<system-factory>
-note: this is equivalent to SystemClientFactory.cpp
+note: 
+1. this is equivalent to SystemClientFactory.cpp
+2. builds map<protocal, factory-function> 
+
 
 libNickelSystemProxy.so createSystemFactory
 
 // Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp
-
+//
 // class ZINC_LOCAL ProxySystemFactory : public SystemFactory
     
 extern "C" {
-	NS_NICKEL_SYSTEM::SystemFactory*  createSystemFactory() ZINC_EXPORT;
 	NS_NICKEL_SYSTEM::SystemFactory* createSystemFactory() {
 		return new NS_NICKEL_SYSTEM::ProxySystemFactory();
 	}
@@ -7846,6 +7889,11 @@ extern "C" {
 typedef std::pair<std::string, std::vector<MIMEMediaRouterFactory> > MIMEMediaRouterFactoryMap;
 typedef std::vector<MIMEMediaRouterFactoryMap> ProtocolMediaRouterFactoryMap;
 
+ProxySystemFactory::ProxySystemFactory() {
+	loadImplementations();
+}
+
+void ProxySystemFactory::loadImplementations()
 {
 	FilePluginConfig defaultPluginConfig(PackageDataFinder().find("default-system-factory.plugin-config"));
 	defaultImplementation = boost::addressof(PluginFactory::getInstance<SystemFactory>(defaultPluginConfig));
@@ -7856,13 +7904,16 @@ typedef std::vector<MIMEMediaRouterFactoryMap> ProtocolMediaRouterFactoryMap;
             defaultMediaRouterFactory, protocolMediaRouterFactoryMap);
 }
 
+
+// return PMRF
+
 boost::shared_ptr<MediaRouterFactory> ProxySystemFactory::createMediaRouterFactory() {
 	NICKEL_FUNC_TRACE;
 	return proxyMediaRouterFactory;
 }
 
 
-// forwarding
+// forwarding to bronze
 
 boost::shared_ptr<LocalMediaLibrary> ProxySystemFactory::createLocalMediaLibrary() {
 	NICKEL_FUNC_TRACE;
@@ -7870,12 +7921,14 @@ boost::shared_ptr<LocalMediaLibrary> ProxySystemFactory::createLocalMediaLibrary
 }
 
 
+<create-media-router>
+
 // Nickel/Nickel.System.Proxy/src/ProxyMediaRouterFactory.cpp
 
 NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::createMediaRouter() {
 	NICKEL_FUNC_TRACE;
 
-   // here pass a map
+   // note: here pass a map to "createMediaRouter()"
 
 	return NS_ZINC::completedFuture(
             *dispatcher, boost::shared_ptr<MediaRouter>(new ProxyMediaRouter(
@@ -7885,6 +7938,32 @@ NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::create
 
 
 // Nickel/Nickel.System.Proxy/src/ProxyMediaRouter.cpp
+
+note: implements "MediaRouter" interface
+
+class ZINC_LOCAL ProxyMediaRouter : public MediaRouter,
+    public boost::enable_shared_from_this<ProxyMediaRouter>,
+    public MediaRouterEventListener {
+    };
+
+ProxyMediaRouter::ProxyMediaRouter(
+			boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher_,
+			boost::shared_ptr<MediaRouterFactory> defaultMediaRouterFactory_,
+
+			ProtocolMediaRouterFactoryMap protocolMediaRouterFactoryMap_,
+         :
+         {}
+
+note: does it mean that create real media router when start() is called?
+
+void start(boost::shared_ptr<ProxyMediaRouter> proxy_, 
+    const std::string& source_, const SetSourceReason::Enum reason_) 
+{
+   // find function pointer depending on "source"
+   boost::shared_ptr<MediaRouterFactory> ProxyMediaRouter::findFactoryGivenSource(source);
+
+	continueOnSuccess(factory->createMediaRouter(), &SetSourceContinuation::onMediaRouterCreated);
+}
 
 // See spec A.1.1
 NS_ZINC::Future< void > ProxyMediaRouter::setSource(
@@ -7974,43 +8053,6 @@ GstMediaRouter.cpp:759:            gst_element_set_state(pipeline.get(), GST_STA
 GstMediaRouter.cpp:822:            gst_element_set_state(pipeline.get(), GST_STATE_PAUSED);
 
 
-// Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
-
-void GstMediaRouter::init()
-{
-    NICKEL_FUNC_TRACE;
-
-    typefindBin =
-        boost::make_shared<VirtualBinTypefind>(
-            boost::shared_ptr<VirtualPadFactoryInProcess>(),
-            typefindPadFactory_sinkpads,
-            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
-
-    srcBin =
-        boost::make_shared<VirtualBinSrc>(
-            srcPadFactory_srcpads,
-            srcPadFactory_sinkpads,
-            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
-
-    sinkBin =
-        boost::make_shared<VirtualBinSink>(
-            sinkPadFactory_sinkpads,
-            boost::shared_ptr<VirtualPadFactoryInProcess>(),
-            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
-
-    RefObj<GstElement> elem = gst_pipeline_new("pipeline");
-
-    gst_bin_add_many(GST_BIN(elem.get()),
-                     typefindBin->getParent().retain(),
-                     srcBin->getParent().retain(),
-                     sinkBin->getParent().retain(), NULL);
-
-    const RefObj<GstBus> bus =
-        gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
-
-    watchId = gst_bus_add_watch(bus.get(), busCallback, this);
-}
-
 
 gboolean GstMediaRouter::busCallback(GstBus* bus, GstMessage* msg, gpointer data)
 {
@@ -8069,24 +8111,85 @@ NS_ZINC::Future<void> GstMediaRouter::start()
 }
 
 
-<virtual-src>
+{creation}
+
+// Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
+
+class GstMediaRouter : public MediaRouterAsync
+{
+    // MediaRouter IFs
+    //
+
+    //
+    typefindPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
+
+    srcPadFactory_srcpads = boost::make_shared<VirtualPadFactoryInProcess>();
+    srcPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
+    sinkPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
+};
+
+
+void GstMediaRouter::init()
+{
+    NICKEL_FUNC_TRACE;
+
+    typefindBin =
+        boost::make_shared<VirtualBinTypefind>(
+            boost::shared_ptr<VirtualPadFactoryInProcess>(),
+            typefindPadFactory_sinkpads,
+            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+    srcBin =
+        boost::make_shared<VirtualBinSrc>(
+            srcPadFactory_srcpads,
+            srcPadFactory_sinkpads,
+            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+    sinkBin =
+        boost::make_shared<VirtualBinSink>(
+            sinkPadFactory_sinkpads,
+            boost::shared_ptr<VirtualPadFactoryInProcess>(),
+            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+    RefObj<GstElement> elem = gst_pipeline_new("pipeline");
+
+    gst_bin_add_many(GST_BIN(elem.get()),
+                     typefindBin->getParent().retain(),
+                     srcBin->getParent().retain(),
+                     sinkBin->getParent().retain(), NULL);
+
+    const RefObj<GstBus> bus =
+        gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
+
+    watchId = gst_bus_add_watch(bus.get(), busCallback, this);
+}
+
 
 class ZINC_EXPORT VirtualBin
     : boost::noncopyable,
       public boost::enable_shared_from_this<VirtualBin>
 {
+    typedef boost::function<
+        bool(VirtualBinCallbackAction::Enum,
+             boost::shared_ptr<VirtualBin>,
+             boost::shared_ptr<VirtualPad>)> CallbackType;
+
     typedef std::map<std::string,
                      boost::function<RefObj<GstElement>()> > FactoryContainer;
 
+   protected:
     FactoryContainer elementFactory;
+
+   private:
+    CallbackType callback;
 };
+
 
 class ZINC_EXPORT VirtualBinSrc : public VirtualBin
 {
     void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
             gpointer data)
     {
-        NICKEL_FUNC_TRACE;
         VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);
         vbin->newDecodebinPad(element, pad);
     }
@@ -8114,11 +8217,141 @@ class ZINC_EXPORT VirtualBinSrc : public VirtualBin
         : VirtualBin(sinkPadFactory, srcPadFactory, "VirtualBinSrc", callback),
         sink()
     {
+        // note: function< (void)>, no use of placeholder, and fixed parameter.
+
         elementFactory["application/dash+xml"] =
             boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
                     "video/quicktime; audio/x-m4a; text/x-raw");
     }
 };
+
+
+-> signal "pad-added"
+
+note:  How "pad-added" is called since it gets registered during this call chain?
+
+void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
+   void VirtualBinSrc::newDecodebinPad(GstElement*, GstPad* pad)
+
+      // note: this is VirtualBin:: and create a VirtualPadInProcess using a ghost pad
+      //
+      // boost::shared_ptr<VirtualPad> wrapSinkPad(GstPad* pad);
+      // {
+      //
+      //    // RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad, const RefObj<GstElement>& bin,
+      //    //   const char* padName = NULL);
+      //
+      //    return getSinkPadFactory()->wrap(
+      //       mirrorPad(RefObj<GstPad>(pad, true), container).retain());
+      // }
+      //
+      // class VirtualPadFactory
+      // class ZINC_EXPORT VirtualPadFactoryInProcess : public VirtualPadFactory
+      // {
+      //     boost::shared_ptr<VirtualPad> VirtualPadFactoryInProcess::wrap(GstPad* pad)
+      //     {
+      //        return boost::make_shared<VirtualPadInProcess>(pad, shared_from_this());
+      //     }
+      // };
+
+      const boost::shared_ptr<VirtualPad> wrappedPad = wrapSrcPad(pad);
+
+        parentCallback(
+            VirtualBinCallbackAction::RequestPadConnection,
+            shared_from_this(),
+            wrappedPad);
+
+
+            return callback(action, bin, pad);
+            
+            -> call member in parent class, VirtualBin and leads to 
+
+               ::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+
+
+bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
+    boost::shared_ptr<VirtualBin> bin,
+    boost::shared_ptr<VirtualPad> vpad)
+{
+    boost::lock_guard<boost::mutex> l(lock);
+
+    // note: sinkBin and srcBin are sp created in init()
+    // so when bin is srcBin and calls sink->autoplug
+
+    if (action == VirtualBinCallbackAction::RequestPadConnection) {
+        if (bin == typefindBin && srcBin->autoplug(vpad)) {
+            NICKEL_TRACE("connected typefindbin to srcbin!");
+
+        } else if (bin == srcBin && sinkBin->autoplug(vpad)) {
+            NICKEL_TRACE("srcbin requested connection");
+
+        } else if (bin == sinkBin) {
+            NICKEL_TRACE("sinkbin shouldn't request pad connection!");
+        } else {
+            NICKEL_ERROR("Pad linking failed!");
+            return false;
+        }
+    }
+    return true;
+}
+
+
+bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    RefObj<GstElement> unwrappedElem;
+    RefObj<GstPad> unwrappedSrcPad;
+
+    boost::tie(unwrappedSrcPad, unwrappedElem) = srcPad->unwrap();
+
+    // 
+    RefObj<GstPad> sinkpad = plug_unlocked(unwrappedSrcPad);
+
+    if (unwrappedElem) {
+        // we've got the element so this must be some IPC setup hence we just
+        // add the element to our bin and assume we don't need to ghost our pad
+        if (gst_bin_add(GST_BIN(container.get()), unwrappedElem.get())) {
+            unwrappedElem.retain();
+        } else {
+            NICKEL_ERROR("gst_bin_add failed!");
+        }
+    } else {
+        sinkpad = mirrorPad(sinkpad, container);
+    }
+
+    if (GST_PAD_LINK_OK != gst_pad_link_full(unwrappedSrcPad.get(),
+                                             sinkpad.get(),
+                                             GST_PAD_LINK_CHECK_NOTHING)) {
+        NICKEL_ERROR("Couldn't link pads");
+        return false;
+    } else {
+        NICKEL_INFO("Pads linked.");
+    }
+
+    return true;
+}
+
+
+RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad)
+{
+   FactoryContainer::iterator it = elementFactory.find(mediaType);
+
+   // note:
+   // it->second is function object and it->second() is call. So 
+   // this calls to RefObj<GstElement> VirtualBinSrc::makeAndSetupDecodebin()
+   // 
+   // note: 
+   // upstream is "decodebin"
+   
+   upstream = it->second();
+
+   if (gst_bin_add(GST_BIN(container.get()), upstream.get())) {
+
+   upstreamSinkPad =
+       gst_element_get_static_pad(upstream.get(), "sink");
+}
 
 
 <virtual-sinc>
@@ -8206,13 +8439,6 @@ class ZINC_EXPORT VirtualBinSink : public VirtualBin
         }
     }
 };
-
-
-={============================================================================
-*kt_dev_uv_stack_410* stack: media: nickel: pipeline in hls
-
-zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/
-qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
 
 
 ={============================================================================
@@ -8349,6 +8575,217 @@ YV media router is up and running. Hence to run LD_PRELOAD line as shown above b
 new nickel daemon.
 
 If all is okay, shall see directfb log in the log, nexus fds in /proc/XXX/fd.
+
+note:
+export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so
+
+export LD_LIBRARY_PATH=/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:${LD_LIBRARY_PATH}
+
+export GST_PLUGIN_PATH=/opt/zinc-trunk/oss/lib/gstreamer-1.0
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
+
+gst-launch-1.0 --gst-debug=souphttpsrc:5  -v souphttpsrc location="http://wll1p02380.dev.youview.co.uk/videos/dash/bigBunny2/yv_TestTRec.mpd" ! dashdemux name=dash dash.  ! qtdemux ! h264parse ! queue  ! nexussink
+
+
+={============================================================================
+*kt_dev_uv_stack_412* stack: media: nickel: run hls stream
+
+# webkit source where gst pipeline is implemented
+zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/
+qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+
+MediaPlayerPrivateGStreamer::createGSTHLSPipeline(const char *srcElementName)
+
+m_playBin = gst_pipeline_new ("hls-player");
+
+// gst_element_factory_make() returns a floating reference so we should not adopt.
+GRefPtr<GstElement> httpSrc = gst_element_factory_make (srcElementName, "http-source");
+GRefPtr<GstElement> hlsdemux = gst_element_factory_make ("hlsdemux", NULL);
+GRefPtr<GstElement> nexusSink = gst_element_factory_make ("tsnexusbin", NULL);
+
+gst_bin_add_many (GST_BIN (m_playBin.get()),
+                  GST_ELEMENT(gst_object_ref(httpSrc.get())),
+                  GST_ELEMENT(gst_object_ref(hlsdemux.get())),
+                  GST_ELEMENT(gst_object_ref(nexusSink.get())),
+                  NULL);
+
+g_signal_connect (hlsdemux.get(), "pad-added", G_CALLBACK (cb_new_hlsdemux_pad), this);
+
+if(!gst_element_link (httpSrc.get(), hlsdemux.get())){
+
+
+cb_new_hlsdemux_pad (GstElement *hlsdemuxElement,)
+   MediaPlayerPrivateGStreamer::hlsdemux_pad_added (GstElement *hlsdemux, GstPad *pad)
+      link_gst_element(hlsdemux, pad,"tsnexusbin");
+
+
+https://wiki.youview.co.uk/display/canvas/2014/05/30/playback+of+a+HLS+stream+from+the+command+line?src=search
+
+# on the box
+./run-gst.sh souphttpsrc location="http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8" ! hlsdemux ! tsnexusbin
+
+
+{hlsdemux}
+[root@HUMAX /]# gst-inspect-1.0 hlsdemux
+Factory Details:
+  Rank                     primary (256)
+  Long-name                HLS Demuxer
+  Klass                    Demuxer/URIList
+  Description              HTTP Live Streaming demuxer
+  Author                   Marc-Andre Lureau <marcandre.lureau@gmail.com>
+Andoni Morales Alastruey <ylatuya@gmail.com>
+
+Plugin Details:
+  Name                     fragmented
+  Description              Fragmented streaming plugins
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgsthlsdemux.so
+  Version                  0.1
+  License                  LGPL
+  Source module            gsthlsdemux
+  Binary package           gsthlsdemux
+  Origin URL               http://www.gstreamer.org/
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstHLSDemux
+
+Pad Templates:
+  SRC template: 'src_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      application/x-hls
+
+
+Element Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_hls_demux_change_state
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "hlsdemux0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  fragments-cache     : Number of fragments needed to be cached to start playing
+                        flags: readable, writable
+                        Unsigned Integer. Range: 2 - 4294967295 Default: 3 
+  bitrate-limit       : Limit of the available bitrate to use when switching to alternates.
+                        flags: readable, writable
+                        Float. Range:               0 -               1 Default:             0.8 
+  connection-speed    : Network connection speed in kbps (0 = unknown)
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967 Default: 0 
+  num-retries         : Number of fragment fetch retries befor error
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 1000 Default: 5 
+  retry-min-time      : Minimal time after a retry will be attempted in seconds
+                        flags: readable, writable
+                        Unsigned Integer. Range: 1 - 100 Default: 1 
+  retry-max-time      : Maximum time between retry attemptes in seconds
+                        flags: readable, writable
+                        Unsigned Integer. Range: 1 - 100 Default: 5 
+
+Element Signals:
+  "pad-added" :  void user_function (GstElement* object,
+                                     GstPad* arg0,
+                                     gpointer user_data);
+  "pad-removed" :  void user_function (GstElement* object,
+                                       GstPad* arg0,
+                                       gpointer user_data);
+  "no-more-pads" :  void user_function (GstElement* object,
+                                        gpointer user_data);
+
+
+{tsnexusbin}
+[root@HUMAX /]# gst-inspect-1.0 tsnexusbin
+Factory Details:
+  Rank                     none (0)
+  Long-name                TS parser + Nexus sink for MPEG TS streams
+  Klass                    Generic/Bin
+  Description              Provide decode of MPEG TS streams
+  Author                   Alex Ashley <alex.ashley@youview.com>
+
+Plugin Details:
+  Name                     nexus
+  Description              GStreamer elements that encapsulate Broadcom Nexus functionality
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstnexus.so
+  Version                  0.1
+  License                  Proprietary
+  Source module            gstnexus
+  Binary package           gst-nexus
+  Origin URL               http://youview.com/
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstBin
+                         +----GstTSNexusBin
+
+Implemented Interfaces:
+  GstChildProxy
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      video/mpegts
+           systemstream: true
+
+
+Element Flags:
+  no flags set
+
+Bin Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_bin_change_state_func
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "tsnexusbin0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  async-handling      : The bin will handle Asynchronous state changes
+                        flags: readable, writable
+                        Boolean. Default: false
+  message-forward     : Forwards all children messages
+                        flags: readable, writable
+                        Boolean. Default: false
+  videowindow         : Uses relative scheme of floats from 0.0 to 1.0, x1,y1,x2,y2 .  e.g. fullscreen 0.0,0.0,1.0,1.0, bottom right quarter 0.5,0.5,1.0,1.0
+                        flags: writable
+                        String. Default: "0.0,0.0,1.0,1.0" Write only
+
+Children:
+  nexussink
+  parser
 
 
 ={============================================================================
