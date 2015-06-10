@@ -12,6 +12,8 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_002| static fsm
 |kt_dev_code_003| static fsm demo in cpp
 
+|kt_dev_code_010| asyc: continuation
+
 |kt_dev_design_001| use state and if checks
 
 
@@ -8679,9 +8681,588 @@ Since it polls at 100ms, to normalize inputs.
 
 
 # ============================================================================
+*kt_dev_code_010* asyc: continuation
+
+////////////////////////////////////////
+#ifndef ZINC_CONTINUATION_H_
+#define ZINC_CONTINUATION_H_
+
+#include "../macros.h"
+#include "Future.h"
+#include "Promise.h"
+#include <boost/noncopyable.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/enable_shared_from_this.hpp>
+
+
+NS_ZINC_OPEN
+
+/// A CancellationPolicy is a policy of the Continuation.  It controls what
+/// happens when the Future produced by a Continuation is cancelled.  The
+/// Policy must fulfil the type requirements:
+///
+/// template <typename Derived>
+/// concept CancellationPolicy {
+///     // Called when creating the promise.  Should return a functor that
+///     // will be called when the promise is cancelled
+///     boost::function<void ()> getCancellationCallback(const boost::shared_ptr<Derived>&);
+///     // Will be called when any future is registered with the Continuation
+///     // via c.continueOnSuccess() or c.continueOn().
+///     template <typename FutureLike> void onAddFuture(const FutureLike&);
+///     // Called when any of the futures added with onAddFuture completes
+///     void onFutureComplete();
+/// };
+namespace CancellationPolicy {
+
+/// Cancel all outstanding Futures
+template <typename Derived> struct CancelOutstanding;
+/// The derived class must define an onCancel functor which will be called
+/// when the future is cancelled
+template <typename Derived> struct UserProvided;
+/// Do nothing.  This is the default and has the least overhead.
+template <typename Derived> struct Ignore;
+
+} // namespace CancellationPolicy
+
+/// note: good background. asyc calls, asyc callbacks from a thread which can
+/// be different for each call. that is, this provides series of calls and
+/// sharing data between them (different thread)
+///
+/// A Continuation simplifies the code you have to write to perform a
+/// series of asynchronous calls sequentially (maybe sharing data between the
+/// callbacks for each asynchronous call).
+///
+/// To use, you create a class that performs all the asynchronous requests in
+/// sequence. Each instance of your class will behave like a 'single' Future that
+/// completes after all of your asynchronous operations have completed. Your
+/// class must meet the following requirements:
+//
+/// note: acts like a sing future since be completed after all async have
+/// completed.
+//
+/// * Inherit from Continuation, providing 2 type parameters:
+///
+/// ** The return type -- your class will behave like a Future, so if this is
+///    string, your class will behave like a Future<string>.
+/// ** The type of your class (i.e. you pass the derived type as a type
+///    parameter to the base class, a pattern called CRTP).
+///
+///   note: CRTP?
+//
+/// * Use member variables to hold any data that needs to be shared between the
+///   various asynchronous calls.
+///
+/// * Implement a "start" method with the following signature:
+///     void start();
+///
+///   note: arguments of start() matches up with one of create() and create()
+///   calls starts(). create is 'static' function.
+///
+///   "start" must kick off the first asynchronous call by calling
+///   Continuation::continueOnSuccess, passing in a pointer-to-member to the
+///   method that will handle the 'result' (let's call it "next"). "next" MUST
+///   be a method belonging to this same class, taking a single parameter of
+///   the raw type "T" returned by the asynchronous call (NOT a
+///   FutureValue<T>). "next" will only be invoked if the asynchronous call was
+///   successful. "next" will, in turn, kick off another asynchronous call by
+///   calling Continuation::continueOnSuccess. See the example usage below.
+///
+/// * Implement an "onError" method with the following signature:
+///     void onError(const ErrorCode& err);
+///
+///   This will be called if *any* of the asynchronous calls return an error.
+///   Your implementation of this method can choose to end the whole future
+///   sequence by returning an error:
+///     promise.exception( ... );
+///
+///   note: means the derived use this protected member to end chain.
+///
+///   or it can carry on with an alternate asynchronous operation (just make
+///   sure that onError won't cause an infinite loop if all asynchronous
+///   operations continue to fail).
+///
+/// * Every callback (method of your class) that you register with
+///   Continuation::continueOnSuccess MUST EITHER kick off another
+///   asynchronous call (with another call to continueOnSuccess), OR call
+///   promise.complete OR promise.error OR promise.exception.
+///
+/// The user of your class will call "create", which returns a Future. The
+/// Promise tied to this Future is accessible to methods of your class, as the
+/// protected member "promise".
+///
+/// == Guarantees: ==
+///
+/// As long as there is an outstanding callback (set with
+/// Continuation::continueOnSuccess) to a method of your class, your class (and thus
+/// all its data members) will be kept alive (it won't be destructed). You
+/// don't need to hold a shared_ptr to the class yourself (in fact, it is
+/// impossible to do so because the Continuation constructor is protected).
+///
+/// note: ?? shared ptr needs to construct T?
+///
+/// == CancellationPolicy: ==
+///
+/// A CancellationPolicy describes what will happen when cancel is called on
+/// the future produced by the Continuation.  See
+/// CancellationPolicy::CancelOutstanding, CancellationPolicy::Ignore and
+/// CancellationPolicy::UserProvided for more information.
+///
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT = CancellationPolicy::Ignore >
+class Continuation :
+    boost::noncopyable,
+    public boost::enable_shared_from_this<Derived>,
+    public CancellationPolicyT<Derived>
+{
+public:
+    // Implementation note on ownership:
+    //
+    // 'create' creates an object of the Derived type using 'make_shared', so
+    // that subsequent calls to 'shared_from_this' are allowed. 'create' then
+    // calls 'start', which must register a callback using
+    // Continuation::continueOnSuccess. This creates a BoundCoroutine object
+    // that holds a shared_ptr to the Derived object ('this'). A shared_ptr to
+    // the BoundCoroutine object is held by the FutureDispatcher (because we
+    // passed it to Future::continueOnSuccess).
+    //
+    // So by the time we return from 'create', the FutureDispatcher is
+    // essentially holding a shared_ptr to 'this', ensuring 'this' isn't
+    // destructed until after all outstanding callbacks have been run.
+    //
+    static Future<FutureT> create(FutureDispatcher& dispatcher);
+
+    template <typename T1>
+    static Future<FutureT> create(FutureDispatcher& dispatcher,
+                                  const T1& val1);
+    template <typename T1, typename T2>
+    static Future<FutureT> create(FutureDispatcher& dispatcher,
+                                  const T1& val1,
+                                  const T2& val2);
+    template <typename T1, typename T2, typename T3>
+    static Future<FutureT> create(FutureDispatcher& dispatcher,
+                                  const T1& val1,
+                                  const T2& val2,
+                                  const T3& val3);
+    template <typename T1, typename T2, typename T3, typename T4>
+    static Future<FutureT> create(FutureDispatcher& dispatcher,
+                                  const T1& val1,
+                                  const T2& val2,
+                                  const T3& val3,
+                                  const T4& val4);
+    template <typename T1, typename T2, typename T3, typename T4, typename T5>
+    static Future<FutureT> create(FutureDispatcher& dispatcher,
+                                  const T1& val1,
+                                  const T2& val2,
+                                  const T3& val3,
+                                  const T4& val4,
+                                  const T5& val5);
+
+    // TODO: Make this protected:
+    void onErrorDefault(const ErrorCode& ec);
+protected:
+    Promise<FutureT> promise;
+
+    typedef Continuation super;
+    typedef Derived This;
+
+    /// @param future tied to an asynchronous operation that has already been
+    ///        kicked off
+    ///
+    /// @param callback to be called when the Future completes successfully.
+    ///        It must have the signature:
+    ///            void callback(Derived&, T)
+    ///        or equivalent where T is the value_type of the passed in future.
+    ///        Typically this should be a member function of the derived type.
+    ///
+    ///        If the Future completes with an error, by default the callback
+    ///        will not be called, instead the promise that the continuation
+    ///        represents be completed with that error (much like exception
+    ///        propagation).
+    ///
+    ///        To customise the behaviour of the error case the user can define
+    ///        a member in the derived class:
+    ///            void onError(const ErrorCode&);
+    ///        If finer grained control is required use Continuation::continueOn
+    ///        rather than continueOnSuccess
+    template <typename FutureLike, typename SuccessCallbackT>
+    void continueOnSuccess(FutureLike& future, SuccessCallbackT callback);
+
+    // Would really like C++0x support here for RValue references:
+    template <typename FutureLike, typename SuccessCallbackT>
+    void continueOnSuccess(const FutureLike& future, SuccessCallbackT callback);
+
+    /// @param future tied to an asynchronous operation that has already been
+    ///        kicked off
+    ///
+    /// @param callback to be called when the Future completes.
+    ///        It must have the signature:
+    ///            void callback(Derived&, FutureValue<T>)
+    ///
+    ///        This is distinct from continueOnSuccess above in that this is called
+    ///        with a FutureValue<T> rather than just T, thus allowing finer
+    ///        grained control of error conditions.
+    template <typename FutureLike, typename CallbackT>
+    void continueOn(FutureLike& future, CallbackT callback);
+
+    // Would really like C++0x support here for RValue references:
+    template <typename FutureLike, typename CallbackT>
+    void continueOn(const FutureLike& future, CallbackT callback);
+
+    /// Returns the dispatch used to initialise the promise.  Must not be used
+    /// in the derived constructor as the internal reference will not be
+    /// initialised
+    FutureDispatcher& getDispatcher() const;
+
+    explicit Continuation();
+private:
+    FutureDispatcher* dispatcher;
+};
+
+NS_ZINC_CLOSE
+
+#include "detail/Continuation_Impl.h"
+
+#endif // ZINC_CONTINUATION_H_
+
+
+////////////////////////////////////////
+#ifndef ZINC_SERIAL_FUTURE_GROUP_IMPL_H_
+#define ZINC_SERIAL_FUTURE_GROUP_IMPL_H_
+
+#include "ContinuationLike.h"
+#include <functional>
+#include <boost/foreach.hpp>
+#include <boost/make_shared.hpp>
+#include <deque>
+
+NS_ZINC_OPEN
+
+namespace {
+
+// Convenience functor adapter for Continuations.
+//
+// Instead of setting a callback that handles a FutureValue<RawValue>,
+// Continuations can use this to wrap a callback that handles a RawValue.
+//
+// The Continuations must implement the following method that will be called
+// if the FutureValue returns an error:
+//   void onError(const ErrorCode&);
+//
+// This object (let's call it f) holds a reference to the Continuation. Since f
+// is itself a callback object, as long as a FutureDispatcher holds a reference
+// to f as a registered callback, the Continuation won't be released.
+//
+template <typename ContinuationT, typename FutureT, typename CallbackT>
+struct BoundCoroutine
+{
+    typedef void result_type;
+    // CallbackT signature: void (ContinuationT*, FutureT);
+    BoundCoroutine(boost::shared_ptr<ContinuationT> fg, CallbackT cb)
+        : fg(fg), cb(cb)
+    {}
+    void operator()(FutureValue<FutureT>& val) {
+        try {
+            // So we can call ptr-to-member as if it were a functor
+            boost::bind(cb, _1, _2)(*fg, val);
+        }
+        catch (std::exception& e) {
+            detail::OnErrorHandler<ContinuationT>::call(*fg, copyException(e));
+        }
+    }
+    void operator()(const FutureValue<FutureT>& val) {
+        try {
+            // So we can call ptr-to-member as if it were a functor
+            boost::bind(cb, _1, _2)(*fg, val);
+        }
+        catch (std::exception& e) {
+            detail::OnErrorHandler<ContinuationT>::call(*fg, copyException(e));
+        }
+    }
+    boost::shared_ptr<ContinuationT> fg; // To keep it alive and to call onError.
+    CallbackT cb;
+};
+
+} // unnamed namespace
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+Future<FutureT> Continuation<FutureT, Derived, CancellationPolicyT>::create(
+    FutureDispatcher& dispatcher)
+{
+    // d must be created in a shared_ptr, so that shared_from_this() works
+    // correctly. By the time we return, as long as "start" called
+    // "continueOnSuccess" the FutureDispatcher will also hold a reference to d,
+    // so d won't be destroyed until all Futures have completed.
+    boost::shared_ptr<Derived> d = boost::make_shared<Derived>();
+    Continuation<FutureT, Derived, CancellationPolicyT>* This = d.get();
+    // Must set the cancellation handler
+    This->dispatcher = &dispatcher;
+    Promise<FutureT>(dispatcher, This->getCancellationCallback(d)).swap(This->promise);
+    d->start();
+    return This->promise.getFuture();
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename T1>
+Future<FutureT> Continuation<FutureT, Derived, CancellationPolicyT>::create(
+    FutureDispatcher& dispatcher,
+    const T1& val1)
+{
+    boost::shared_ptr<Derived> d = boost::make_shared<Derived>();
+    Continuation<FutureT, Derived, CancellationPolicyT>* This = d.get();
+    // Must set the cancellation handler
+    This->dispatcher = &dispatcher;
+    Promise<FutureT>(dispatcher, This->getCancellationCallback(d)).swap(This->promise);
+    d->start(val1);
+    return This->promise.getFuture();
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename T1, typename T2>
+Future<FutureT> Continuation<FutureT, Derived, CancellationPolicyT>::create(
+    FutureDispatcher& dispatcher,
+    const T1& val1,
+    const T2& val2)
+{
+    boost::shared_ptr<Derived> d = boost::make_shared<Derived>();
+    Continuation<FutureT, Derived, CancellationPolicyT>* This = d.get();
+    // Must set the cancellation handler
+    This->dispatcher = &dispatcher;
+    Promise<FutureT>(dispatcher, This->getCancellationCallback(d)).swap(This->promise);
+    d->start(val1, val2);
+    return This->promise.getFuture();
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename T1, typename T2, typename T3>
+Future<FutureT> Continuation<FutureT, Derived, CancellationPolicyT>::create(
+    FutureDispatcher& dispatcher,
+    const T1& val1,
+    const T2& val2,
+    const T3& val3)
+{
+    boost::shared_ptr<Derived> d = boost::make_shared<Derived>();
+    Continuation<FutureT, Derived, CancellationPolicyT>* This = d.get();
+    // Must set the cancellation handler
+    This->dispatcher = &dispatcher;
+    Promise<FutureT>(dispatcher, This->getCancellationCallback(d)).swap(This->promise);
+    d->start(val1, val2, val3);
+    return This->promise.getFuture();
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename T1, typename T2, typename T3, typename T4>
+Future<FutureT> Continuation<FutureT, Derived, CancellationPolicyT>::create(
+    FutureDispatcher& dispatcher,
+    const T1& val1,
+    const T2& val2,
+    const T3& val3,
+    const T4& val4)
+{
+    boost::shared_ptr<Derived> d = boost::make_shared<Derived>();
+    Continuation<FutureT, Derived, CancellationPolicyT>* This = d.get();
+    // Must set the cancellation handler
+    This->dispatcher = &dispatcher;
+    Promise<FutureT>(dispatcher, This->getCancellationCallback(d)).swap(This->promise);
+    d->start(val1, val2, val3, val4);
+    return This->promise.getFuture();
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename T1, typename T2, typename T3, typename T4, typename T5>
+Future<FutureT> Continuation<FutureT, Derived, CancellationPolicyT>::create(
+    FutureDispatcher& dispatcher,
+    const T1& val1,
+    const T2& val2,
+    const T3& val3,
+    const T4& val4,
+    const T5& val5)
+{
+    boost::shared_ptr<Derived> d = boost::make_shared<Derived>();
+    Continuation<FutureT, Derived, CancellationPolicyT>* This = d.get();
+    // Must set the cancellation handler
+    This->dispatcher = &dispatcher;
+    Promise<FutureT>(dispatcher, This->getCancellationCallback(d)).swap(This->promise);
+    d->start(val1, val2, val3, val4, val5);
+    return This->promise.getFuture();
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename FutureLike, typename CallbackT>
+void Continuation<FutureT, Derived, CancellationPolicyT>::continueOnSuccess(
+    FutureLike& future, CallbackT callback)
+{
+    continueOn(future, detail::adaptForHappyPath(callback));
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename FutureLike, typename CallbackT>
+void Continuation<FutureT, Derived, CancellationPolicyT>::continueOnSuccess(
+    const FutureLike& future, CallbackT callback)
+{
+    continueOn(future, detail::adaptForHappyPath(callback));
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename FutureLike, typename CallbackT>
+void Continuation<FutureT, Derived, CancellationPolicyT>::continueOn(
+    FutureLike& future, CallbackT callback)
+{
+    future.setCallback(
+        *dispatcher,
+        BoundCoroutine<Derived, typename FutureLike::value_type, CallbackT>(
+            boost::enable_shared_from_this<Derived>::shared_from_this(),
+            callback));
+    CancellationPolicyT<Derived>::onAddFuture(future);
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+template <typename FutureLike, typename CallbackT>
+void Continuation<FutureT, Derived, CancellationPolicyT>::continueOn(
+    const FutureLike& future, CallbackT callback)
+{
+    // Really it would be good if this took an RValue reference rather than
+    // const ref but we just have to rely on it either being an LValue or
+    // a copyable RValue :(
+    FutureLike mutableCopy = future;
+    continueOn(mutableCopy, callback);
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+Continuation<FutureT, Derived, CancellationPolicyT>::Continuation()
+ : dispatcher(NULL)
+{
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+void Continuation<FutureT, Derived, CancellationPolicyT>::onErrorDefault(const ErrorCode& ec)
+{
+    try {
+        promise.error(ec);
+    }
+    catch (PromiseAlreadyCompleted&) {
+    }
+}
+
+template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT>
+FutureDispatcher& Continuation<FutureT, Derived, CancellationPolicyT>::getDispatcher() const
+{
+    return *dispatcher;
+}
+
+namespace detail {
+
+/// Functor adaptor holding a weak reference to the bound argument.  The
+/// adapted functor will only be called if the argument is still alive. This
+/// is used to implement CancellationFunctors where you don't want completed
+/// futures keeping your continuation alive.
+///
+/// Use bindWeak(Functor, shared_ptr<T>) to use this class
+template <typename Functor, typename T>
+struct CallIfAlive {
+    CallIfAlive(Functor f_, boost::weak_ptr<T> p_)
+     : p(p_), f(f_) {
+    }
+    void operator()() {
+        boost::shared_ptr<T> strong = p.lock();
+        if (strong) {
+            f(strong.get());
+        }
+    }
+    boost::weak_ptr<T> p;
+    Functor f;
+};
+
+template <typename T, typename Functor>
+CallIfAlive<Functor, T> bindWeak(Functor f, boost::shared_ptr<T> p)
+{
+    return CallIfAlive<Functor, T>(f, p);
+}
+
+} // namespace detail
+
+namespace CancellationPolicy {
+
+template <typename Derived>
+struct CancelOutstanding {
+    static void callMostDerivedCancel(Derived* p) {
+        p->onCancel();
+    }
+    CancelOutstanding(unsigned flags_ =
+                                 cancel_flag::clear_callback |
+                                 cancel_flag::deep |
+                                 cancel_flag::immediately)
+     : flags(flags_)
+    {
+    }
+    boost::function<void ()> getCancellationCallback(const boost::shared_ptr<Derived>& derived) {
+        boost::shared_ptr<Derived> weakThis(derived);
+        return boost::function<void ()>(detail::bindWeak(callMostDerivedCancel, weakThis));
+    }
+    void onCancel() {
+        std::deque<boost::function<void (unsigned flags)> > stackFutures;
+        {
+            boost::mutex::scoped_lock lock(m);
+            stackFutures.swap(outstandingFutures);
+        }
+        BOOST_FOREACH(const boost::function<void (unsigned flags)>& fn, stackFutures) {
+            fn(flags);
+        }
+        stackFutures.clear();
+    }
+    template <typename FutureLike>
+    void onAddFuture(const FutureLike& f) {
+        boost::mutex::scoped_lock lock(m);
+        outstandingFutures.push_back(boost::bind(&FutureLike::cancel, f, _1));
+    }
+    void onFutureComplete() {
+        boost::mutex::scoped_lock lock(m);
+        if (outstandingFutures.size() == 1) {
+            outstandingFutures.clear();
+        }
+    }
+    boost::mutex m;
+    std::deque<boost::function<void (unsigned flags)> > outstandingFutures;
+    unsigned flags;
+};
+
+template <typename Derived>
+struct UserProvided {
+    boost::function<void ()> getCancellationCallback(const boost::shared_ptr<Derived>& derived) {
+        return boost::function<void ()>(detail::bindWeak(std::mem_fun(&Derived::onCancel), derived));
+    }
+    template <typename FutureLike>
+    void onAddFuture(const FutureLike&) {
+    }
+    void onFutureComplete() {
+    }
+};
+
+template <typename Derived>
+struct Ignore {
+    boost::function<void ()> getCancellationCallback(const boost::shared_ptr<Derived>&) {
+        // This is passed as the cancellationCallback parameter to the promises
+        // created by Continuation.  This works by relying on an implementation
+        // detail of Promise, namely that it will not call default initialised
+        // boost functors.
+        return boost::function<void ()>();
+    }
+    template <typename FutureLike>
+    void onAddFuture(const FutureLike&) {
+    }
+    void onFutureComplete() {
+    }
+};
+
+} // namespace CancellationPolicy
+
+NS_ZINC_CLOSE
+
+#endif // ZINC_SERIAL_FUTURE_GROUP_IMPL_H_
+
+
+# ============================================================================
 #{
 ={============================================================================
-*kt_dev_design_001* use state and if checks	
+*kt_dev_design_001* use state and if checks
 
 {example-one}
 
@@ -8691,47 +9272,47 @@ will generate a code to jump to the end. Check in assembly code?
 
 Also this approach has only one housekeeping code at the end unlike an approach below. 
 
-SYSTEM_STATUS PLAY_Start( const PLAY_PARAMS	*p_play_params, PLAY_HANDLE		*p_hPlay)
+SYSTEM_STATUS PLAY_Start( const PLAY_PARAMS *p_play_params, PLAY_HANDLE *p_hPlay)
 {
-	SYSTEM_STATUS stat = PLAY_STATUS_OK;
+    SYSTEM_STATUS stat = PLAY_STATUS_OK;
 
-  /* allocate a new playback - if playback already exists -  will return its play object */
-	if (SYSTEM_STATUS_IS_OK (stat)) {
+    /* allocate a new playback - if playback already exists -  will return its play object */
+    if (SYSTEM_STATUS_IS_OK (stat)) {
         stat = PlayAllocateNew (p_play_params, &pPlaySession);
-	}
+    }
 
-	/* send fsm input to start */
-	if (SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
-		stat = PlaySendFSMInput (pPlaySession, E_PLAY_INPUT_START, ASYNCHRONOUS);
-	}
+    /* send fsm input to start */
+    if (SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
+        stat = PlaySendFSMInput (pPlaySession, E_PLAY_INPUT_START, ASYNCHRONOUS);
+    }
 
-	if (!SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
-		DummyStatus = PlayFree (pPlaySession);
-	}
+    if (!SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
+        DummyStatus = PlayFree (pPlaySession);
+    }
 
-	/*  returned play handle */
-	if (SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
+    /*  returned play handle */
+    if (SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
         *p_hPlay = pPlaySession -> hPlay;
-	}
-	else {
-		stat = PLAY_STATUS_FAILURE;
-	}
+    }
+    else {
+        stat = PLAY_STATUS_FAILURE;
+    }
 
-	/* unlock the play module data */
-	if (SYSTEM_STATUS_IS_OK(lock_stat)) {
+    /* unlock the play module data */
+    if (SYSTEM_STATUS_IS_OK(lock_stat)) {
         lock_stat = PlayUnlock ();
-	}
+    }
 
-	if (SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
-		DIAG_LOG_RETURN (VRM_diag_segment_id, ("ended record_item_ID:0x%x, play handle:0x%x, stat:%s \n",
-			pPlaySession->record_item_ID, *p_hPlay, VRM_TYPE2STR_SystemStatus( stat )));
-	}
-	else {
-		DIAG_LOG_ERROR (VRM_diag_segment_id, ("ended record_item_ID:0x%x, play handle:0x%x, stat:%s \n",
-			0, *p_hPlay, VRM_TYPE2STR_SystemStatus( stat )));
-	}
+    if (SYSTEM_STATUS_IS_OK (stat) && (pPlaySession != NULL)) {
+        DIAG_LOG_RETURN (VRM_diag_segment_id, ("ended record_item_ID:0x%x, play handle:0x%x, stat:%s \n",
+                    pPlaySession->record_item_ID, *p_hPlay, VRM_TYPE2STR_SystemStatus( stat )));
+    }
+    else {
+        DIAG_LOG_ERROR (VRM_diag_segment_id, ("ended record_item_ID:0x%x, play handle:0x%x, stat:%s \n",
+                    0, *p_hPlay, VRM_TYPE2STR_SystemStatus( stat )));
+    }
 
-	return stat;
+    return stat;
 }
 
 
@@ -8807,10 +9388,6 @@ bool oob_fsm_dmx_get( oob_dmx_instance_t* p_dmx )
    return TRUE;
 }
 
-==============================================================================
-*kt_dev_code_ref*	references
-
-{ref-005} C++ primer, 5th Ed.
 
 ==============================================================================
-Copyright: see |ktkb|  vim:tw=100:ts=3:ft=help:norl:
+vim:tw=100:ts=3:ft=help:norl:
