@@ -260,6 +260,11 @@ KT KB. DEVELOPMENT.
 |kt_dev_ccon_009| std::call_once and protecting during initialization
 |kt_dev_ccon_010| boost::shared_lock and read-write lock
 |kt_dev_ccon_011| recursive lock
+|kt_dev_ccon_012| std::condition_variable
+|kt_dev_ccon_013| thread-safe queue
+|kt_dev_ccon_014| std::future and std::async
+|kt_dev_ccon_015| std::packaged_task
+|kt_dev_ccon_016| std::promise
 
 |kt_dev_ccon_002| std::future
 
@@ -36958,6 +36963,339 @@ Most of the time, if you think you want a recursive mutex, you probably need to 
 instead.
 
 Since, in particular, the class invariants are typically broken while the lock is held.
+
+
+={============================================================================
+*kt_dev_ccon_012* std::condition_variable
+
+Because std::condition_variable_any is more general, there's the potential for additional costs in
+terms of size, performance, or operating system resources, so std::condition_variable should be
+preferred unless the additional flexibility is required.
+
+std::mutex mut;
+std::queue<data_chunk> data_queue;
+std::condition_variable data_cond;
+
+void data_preparation_thread()
+{
+    while(more_data_to_prepare())
+    {
+        data_chunk const data=prepare_data();
+
+        std::lock_guard<std::mutex> lk(mut);                   // note
+
+        data_queue.push(data);
+        data_cond.notify_one();
+    }
+}
+
+void data_processing_thread()
+{
+    while(true)
+    {
+        std::unique_lock<std::mutex> lk(mut);                  // note
+
+        data_cond.wait(lk,[]{return !data_queue.empty();});    // note
+
+        data_chunk data=data_queue.front();
+        data_queue.pop();
+
+        lk.unlock();                                           // note
+
+        process(data);
+
+        if(is_last_chunk(data))
+            break;
+    }
+}
+
+note: condition and why unique_lock
+a lambda function that expresses the condition being waited for. checks to see if the data_queue is
+not empty() - that is, there's some data in the queue ready for processing.
+
+The implementation of wait() then checks the condition (by calling the supplied lambda function) and
+returns if the expression returned true. If the condition isn't satisfied, wait() unlocks the mutex
+and puts the thread in a blocked or waiting state.
+
+the thread wakes from its slumber (unblocks it), reacquires the lock on the mutex, and checks the
+condition again, returning from wait() with the mutex still locked if the condition has been
+satisfied. If the condition hasn't been satisfied, the thread unlocks the mutex and resumes waiting.
+This is 'why' you need the std::unique_lock rather than the std::lock_guard.
+
+The flexibility to unlock a std::unique_lock isn't just used for the call to wait(); it's also used
+once you have the data to process but before processing it
+
+<suprious-wake>
+When the waiting thread reacquires the mutex and checks the condition, if it isn't in direct
+response to a notification from another thread, it's called a spurious wake. Because the number and
+frequency of any such spurious wakes are by definition indeterminate, it is 'not' advisable to use a
+function with side effects for the condition check. If you do so, you must be prepared for the "side
+effects" to occur multiple times.
+
+
+={============================================================================
+*kt_dev_ccon_013* thread-safe queue
+
+TODO 4.1.2
+
+
+={============================================================================
+*kt_dev_ccon_014* std::future and std::async
+
+<one-off-event-and-asynchronous-result>
+The C++ Standard Library models this sort of one-off event with something called a future. Wait for
+the future to become ready. A future may have 'data' associated with it, or it may not. Once an
+event has happened (and the future has become ready), the future can't be 'reset'.
+
+<two-types>
+There are two sorts of futures in the C++ Standard Library, implemented as two class templates
+declared in the <future> library header: unique futures (std::future<>) and shared futures
+(std::shared_future<>). These are modeled after std::unique_ptr and std::shared_ptr. An instance of
+std::future is the one and only instance that refers to its associated event, whereas multiple
+instances of std::shared_future may refer to the same event. In the latter case, all the instances
+will become ready at the same time, and they may all access any data associated with the event. 
+
+This associated data is the reason these are templates; just like std::unique_ptr and
+std::shared_ptr, the template parameter is the type of the associated data.
+
+<no-data>
+The std:future<void>, std::shared_future<void> template specializations should be used where there's
+no associated data.
+
+
+{return-from-task}
+std::thread doesn't provide an easy means of returning a value from such a task. This is where the
+std::async function template (also declared in the <future> header) comes in.
+
+Use std::async to start an asynchronous task for which you don't need the result right away. Rather
+than giving you back a std::thread object to wait on, std::async returns a std::future object, which
+will eventually hold the return value of the function. 
+
+When you need the value, you just call get() on the future, and the thread blocks until the future
+is ready and then returns the value. 
+
+#include <future>
+#include <iostream>
+
+int find_the_answer_to_ltuae();
+
+void do_other_stuff();
+
+int main()
+{
+    std::future<int> the_answer = std::async( find_the_answer_to_ltuae );
+    do_other_stuff();
+    std::cout << "The answer is " << the_answer.get() << std::endl;
+}
+
+
+std::async allows you to pass additional arguments to the function by adding extra arguments to the
+call, in the same way that std::thread does. If the arguments are rvalues, the copies are created by
+moving the originals. This allows the use of move-only types as both the function object and the
+arguments.
+
+#include <string>
+#include <future>
+
+struct X
+{
+    void foo(int,std::string const&);
+    std::string bar(std::string const&);
+};
+
+X x;
+
+auto f1=std::async(&X::foo,&x,42,"hello"); // calls p->foo(42, "hello") where p is &x
+auto f2=std::async(&X::bar,x,"goodbye");   // calls tempx.bar("goodbye") where tempx is a copy of x
+
+struct Y
+{
+    double operator()(double);
+};
+
+Y y;
+
+auto f3=std::async(Y(),3.141);         // calls tempy(3.141) where tempy is move-constructed
+auto f4=std::async(std::ref(y),2.718); // calls y(2.718)
+
+X baz(X&);
+
+std::async(baz,std::ref(x));
+
+class move_only
+{
+    public:
+        move_only();
+        move_only(move_only&&);
+        move_only(const &move_only) = delete;
+        move_only& operator=(move_only&&);
+        move_only& operator=(const &move_only) = delete;
+        void operator()();
+};
+
+auto f5=std::async(move_only()); // calls tmp() where tmp is constructed from std::move(move_only())
+
+
+<specify-how-to-run>
+By default, it's up to the implementation whether std::async starts a new thread, or whether the
+task runs synchronously when the future is waited for. You can specify which to use with an
+additional parameter to std::async. 
+
+This parameter is of the type std::launch, and can either be std::launch::deferred to indicate that
+the function call is to be deferred until either wait() or get() is called on the future. If the
+function call is deferred, it may never actually run. note: this is sync call.
+
+std::launch::async to indicate that the function must be run on its own thread
+
+std::launch::deferred | std::launch::async to indicate that the implementation may choose. This last
+option is the 'default'. 
+
+auto f6=std::async(std::launch::async,Y(),1.2);
+auto f7=std::async(std::launch::deferred,baz,std::ref(x));
+
+auto f8=std::async(std::launch::deferred | std::launch::async, baz,std::ref(x));
+auto f9=std::async(baz,std::ref(x));
+
+f7.wait();
+
+f8 and f9 that implementation chooses and f7 is a sync call.
+
+
+{why-async}
+the use of std::async makes it easy to divide algorithms into tasks that can be run concurrently.
+
+
+={============================================================================
+*kt_dev_ccon_015* std::packaged_task
+
+However, std::async is not the only way to associate a std::future with a task; you can also do it
+by wrapping the task in an instance of the std::packaged_task<> class template which is a
+higher-level abstraction
+
+<how-works>
+When the std::packaged_task<> object is invoked, it calls the associated function or callable object
+and makes the future ready, with the return value stored as the associated data.
+
+
+<why-packaged-task>
+This can be used as a building block for thread pools or other task management schemes, such as
+running each task on its own thread, or running them all sequentially on a particular background
+thread. If a large operation can be divided into "self-contained sub-tasks", each of these can be
+wrapped in a std::packaged_task<> instance, and then that instance passed to the task scheduler or
+thread pool. This abstracts out the details of the tasks; the scheduler 'just' deals with
+std::packaged_ task<> instances rather than individual functions.
+
+
+{associate-a-task-with-future}
+The template parameter for the std::packaged_task<> class template is a function signature. The
+return type of the specified function signature identifies the type of the std::future<> returned
+from the get_future() member function, whereas the argument list of the function signature is used
+to specify the signature of the packaged task's function call operator.
+
+A partial class definition for std::packaged_task <std::string(std::vector<char>*,int)> would be: 
+
+template<>
+class packaged_task<std::string(std::vector<char>*,int)>
+{
+    public:
+        template<typename Callable>
+            explicit packaged_task(Callable&& f);
+
+        std::future<std::string> get_future();
+
+        void operator()(std::vector<char>*,int);
+};
+
+The std::packaged_task object is thus a 'callable' object, and it can be wrapped in a std::function
+object, passed to a std::thread as the thread function, passed to another function that requires a
+callable object, or even invoked directly. 
+
+note: packaged_task is itself callable object which is different from async.
+
+When the std::packaged_task is invoked as a function object, the arguments supplied to the function
+call operator are passed on to the contained function, and the return value is stored as the
+asynchronous result in the std::future obtained from get_future(). You can thus wrap a task in a
+std::packaged_task and retrieve the future before passing the std::packaged_task object elsewhere to
+be invoked in due course. When you need the result, you can wait for the future to become ready.
+
+
+<example>
+Many GUI frameworks require that updates to the GUI be done from specific threads, so if another
+thread needs to update the GUI, it must send a message to the right thread in order to do so.
+std:packaged_task provides one way of doing this without requiring a custom message for each and
+every GUI-related activity.
+
+#include <deque>
+#include <mutex>
+#include <future>
+#include <thread>
+#include <utility>
+
+std::mutex m;
+std::deque<std::packaged_task<void()> > tasks;
+
+bool gui_shutdown_message_received();
+void get_and_process_gui_message();
+
+the GUI thread loops until a message has been received telling the GUI to shut down, repeatedly
+'polling' for GUI messages to handle, such as user clicks, and for tasks on the task queue. If there
+are no tasks on the queue, it loops again; otherwise, it extracts the task from the queue, and then
+runs the task. The future associated with the task will then be made ready when the task completes.
+
+void gui_thread()
+{
+    while(!gui_shutdown_message_received())
+    {
+        get_and_process_gui_message();
+
+        std::packaged_task<void()> task;
+        {
+            std::lock_guard<std::mutex> lk(m);
+
+            if(tasks.empty())
+                continue;
+
+            task=std::move(tasks.front());
+
+            tasks.pop_front();
+        }
+
+        task();
+    }
+}
+
+std::thread gui_bg_thread(gui_thread);
+
+
+Posting a task on the queue is equally simple: a new packaged task is created from the supplied
+function, the future is obtained from that task by calling the get_future() member function, and the
+task is put on the list before the future is returned to the caller. The code that posted the
+message to the GUI thread can then wait for the future if it needs to know that the task has been
+completed, or it can discard the future if it doesn't need to know.
+
+note: this uses a future as a completion indicator since no associated data, future<void>.
+
+template<typename Func>
+std::future<void> post_task_for_gui_thread(Func f)
+{
+    std::packaged_task<void()> task(f);
+    std::future<void> res=task.get_future();
+    std::lock_guard<std::mutex> lk(m);
+    tasks.push_back(std::move(task));
+    return res;
+}
+
+std::packaged_task can also be used in more complex situations; by specifying a different function
+signature as the template parameter, can change the return type and thus the type of data stored in
+the future's associated state and also the argument types of the function call operator.
+
+
+={============================================================================
+*kt_dev_ccon_016* std::promise
+
+What about those tasks that can't be expressed as a simple function call or those tasks where the
+result may come from more than one place? These cases are dealt with by the third way of creating a
+future: using a std::promise to set the value 'explicitly'.
 
 
 ={============================================================================
