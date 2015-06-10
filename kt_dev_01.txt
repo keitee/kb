@@ -265,6 +265,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_ccon_014| std::future and std::async
 |kt_dev_ccon_015| std::packaged_task
 |kt_dev_ccon_016| std::promise
+|kt_dev_ccon_017| std::shared_future in multiple threads
 
 |kt_dev_ccon_002| std::future
 
@@ -37296,6 +37297,183 @@ the future's associated state and also the argument types of the function call o
 What about those tasks that can't be expressed as a simple function call or those tasks where the
 result may come from more than one place? These cases are dealt with by the third way of creating a
 future: using a std::promise to set the value 'explicitly'.
+
+std::promise<T> provides a means of setting a value (of type T), which can later be read through an
+associated std::future<T> object. A std::promise/std::future pair would provide one possible
+mechanism for this facility; the waiting thread could block on the future, while the thread
+providing the data could use the promise half of the pairing to set the associated value and make
+the future ready.
+
+You can obtain the std::future object associated with a given std::promise by calling the
+get_future() member function, just like with std::packaged_task. When the value of the promise is
+set (using the set_value() member function), the future becomes ready and can be used to retrieve
+the stored value. 
+
+If you destroy the std::promise without setting a value, an exception is stored instead.
+
+#include <future>
+
+void process_connections(connection_set& connections)
+{
+    while(!done(connections))
+    {
+        for(connection_iterator
+                connection=connections.begin(),end=connections.end();
+                connection!=end;
+                ++connection)
+        {
+            // This assumes that an incoming packet has some ID and a payload with the actual data
+            // in it. The ID is mapped to a std::promise
+            //
+            // For incoming packets, the data associated with the future is the 'payload' of the
+            // data packet.
+
+            if(connection->has_incoming_data())
+            {
+                data_packet data=connection->incoming();
+
+                std::promise<payload_type>& p = connection->get_promise(data.id);
+                p.set_value(data.payload);
+            }
+
+            // the promise associated with the outgoing data is set to true to indicate successful
+            // transmission
+
+            if(connection->has_outgoing_data())
+            {
+                outgoing_packet data = connection->top_of_outgoing_queue();
+
+                connection->send(data.payload);
+                data.promise.set_value(true);
+            }
+        }
+    }
+}
+
+
+{exception-for-future}
+If you pass in -1 to the square_root() function, it throws an exception, and this gets seen by the
+caller:
+
+double square_root(double x)
+{
+    if(x<0)
+    {
+        throw std::out_of_range(“x<0”);
+    }
+    return sqrt(x);
+}
+
+Now suppose that instead of just invoking square_root() from the current thread,
+
+double y=square_root(-1);
+
+you run the call as an asynchronous call:
+
+std::future<double> f=std::async(square_root,-1);
+double y=f.get();
+
+If the function call invoked as part of std::async throws an exception, that exception is stored in
+the future "in place of" a stored value, the future becomes ready, and a call to get() rethrows that
+stored exception. The same happens if you wrap the function in a std::packaged_task.
+
+If you wish to store an exception rather than a value, you call the set_exception() member function
+rather than set_value().
+
+extern std::promise<double> some_promise;
+
+try
+{
+    some_promise.set_value(calculate_value());
+}
+catch(...)
+{
+    some_promise.set_exception(std::current_exception());      // note: std::current_ex
+}
+
+the alternative here would be to use std::copy_exception() to store a new exception directly without
+throwing: some_promise.set_exception(std::copy_exception(std::logic_error("foo "))); This is much
+cleaner than using a try/catch block if the type of the exception is known, and it should be used in
+preference; not only does it simplify the code, but it also provides the compiler with greater
+opportunity to optimize the code.
+
+note: ?
+
+<broken-promise>
+Another way to store an exception in a future is to destroy the std::promise or std::packaged_task
+associated with the future 'without' calling either of the set functions on the promise or invoking
+the packaged task. In either case, the destructor of the std::promise or std::packaged_task will
+store a std::future_error exception with an error code of std::future_errc::broken_promise in the
+associated state if the future isn't already ready; by creating a future you make a promise to
+provide a value or exception, and by destroying the source of that value or exception without
+providing one, you break that promise.
+
+
+={============================================================================
+*kt_dev_ccon_017* std::shared_future in multiple threads
+
+std::future has its limitations, not the least of which being that only one thread can wait for the
+result. If you need to wait for the same event from more than one thread, you need to use
+std::shared_future instead.
+
+Although std::future handles all the 'synchronization' necessary to transfer data from one thread to
+another, calls to the member functions of a particular std::future instance are not synchronized
+with each other. If you access a single std::future object from multiple threads without additional
+synchronization, you have a data race and undefined behavior. This is by design: std::future models
+"unique ownership of the asynchronous result", and the one-shot nature of get() makes such
+concurrent access pointless anyway-only one thread can retrieve the value, because after the first
+call to get() there's no value left to retrieve.
+
+note: what will happen if do call get() more than once?
+
+<shared-is-copyable>
+Whereas std::future is only moveable, so ownership can be transferred between instances, but only
+one instance refers to a particular asynchronous result at a time, std::shared_future instances are
+copyable, so you can have multiple (future) objects referring to "the same associated state".
+
+
+<no-additional-sync>
+Now, with std::shared_future, member functions on an individual object are still unsynchronized, so
+to avoid data races when accessing a single future object from multiple threads, you must protect
+accesses with a lock. The preferred way to use it would be to take a copy of the object instead and
+have each thread access its own copy of future since accesses to the shared asynchronous state from
+multiple threads are 'safe' if each thread accesses that state through its own std::shared_future
+object.
+
+note: why safe? not sure about figure 4.1
+
+<constructed-from-future>
+std::shared_future that reference some asynchronous state are constructed 'from' instances of
+std::future that reference that state. Since std::future objects don't share ownership of the
+asynchronous state with any other object, the ownership 'must' be transferred into the
+std::shared_future using std::move, leaving the std::future in an empty state, as if it was default
+constructed.
+
+std::promise<int> p;
+std::future<int> f(p.get_future());
+assert(f.valid());
+
+std::shared_future<int> sf(std::move(f));
+assert(!f.valid());                             // f is no longer valid
+assert(sf.valid());
+
+can construct a std::shared_future 'directly' from the return value of the get_future() member
+    function of a std::promise object since transfer is implicit for rvalue.
+
+std::promise<std::string> p;
+std::shared_future<std::string> sf(p.get_future());
+
+The other eay that save a lot of typing and makes code easier to change since
+
+std::future also has an additional feature to automatically deducing the type of a variable from its
+initializer and has a share() member function that creates a new std::shared_future and transfers
+ownership to it directly.
+
+std::promise< std::map< SomeIndexType, SomeDataType, SomeComparator, SomeAllocator>::iterator> p;
+auto sf=p.get_future().share();
+
+If type of variable changes, you only need to change the type of the promise; the type of the future
+is automatically updated to match.
 
 
 ={============================================================================
