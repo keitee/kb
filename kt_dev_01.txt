@@ -172,7 +172,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_054| iterator: external and internal
 
 |kt_dev_stl_060| algorithm
-|kt_dev_stl_061| algorithm: predicate, lambda, function object, and function type
+|kt_dev_stl_061| algorithm: predicate and lambda
+|kt_dev_stl_062| algorithm: function object and function type
+|kt_dev_stl_063| algorithm: bind
 |kt_dev_stl_062| algorithm: nonmodifying: equal, is_permutation
 |kt_dev_stl_063| algorithm: nonmodifying: count
 
@@ -25572,8 +25574,8 @@ uniqie( beg, end, comp );
 To increase their flexibility and power, several algorithms allow the passing of user-defined
 auxiliary functions. This is 'callables' to change a default operator of algorithms. For example,
 
-1. sort() uses "<" on element to sort but if want to use different order
-2. use user defined type that don't support "<"
+*. sort() uses "<" on element to sort but want to use different order
+*. want to use user defined type that don't support "<"
 
 <example> algorithm-for_each
 #include <iostream>
@@ -25645,16 +25647,8 @@ void sort( RandomIt first, RandomIt last );
 template< class RandomIt, class Compare>
 void sort( RandomIt first, RandomIt last, Compare comp );
 
-bool isShorter( const string& s1, const string& s2 )
-{
-  return s1.size() < s2.size();
-}
 
-// sort by length
-sort( words.begin(), words.end(), isShorter );
-
-
-<example> algorithm-stable_sort, algorithm-unique
+<example> algorithm-stable-sort, algorithm-unique
 sort by length and also want to keep the order among the 'equal' elements.
 
 #include <iostream>
@@ -25675,13 +25669,13 @@ inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
   std::cout << std::endl;
 }
 
-// note: binary
+// binary predicate and sort by size
 bool isShorter(const string &s1, const string &s2)
 {
   return s1.size() < s2.size();
 }
 
-// sort by alphabet and remove dups
+// sort by alphabet and remove dups. unique() also move elements.
 void elimDups(vector<string> &words)
 {
   // sort( words.begin(), words.end(), isShorter );
@@ -25710,11 +25704,11 @@ int main()
 }
 
 initialized  : over quick red fox jumps red the slow turtle the 
-sorted       : fox jumps over quick red red slow the the turtle 
+sorted       : fox jumps over quick red red slow the the turtle      // sorted by alphabet
 eliminated   : fox jumps over quick red slow the turtle 
-stable sorted: fox red the over slow jumps quick turtle 
+stable sorted: fox red the over slow jumps quick turtle              // sorted by size
 
-<example> algorithm-find_if
+<example> algorithm-find-if
 #include <iostream>
 #include <list>
 #include <string>
@@ -25772,12 +25766,11 @@ int main()
 }
 
 
-{predicate-is-limited}
+<predicate-is-limited>
 Depending on algorithms to use, can use only unary and binary since the predicate only supports
 unary and binary which means must have one or two parameters. How to support more arguments?
 
-<problem>
-Revise the above algorithm-stable_sort example to report how many words are of a given size or
+Revise the above algorithm-stable-sort example to report how many words are of a given size or
 greater. (From Primers 10.3.2) The sketch is:
 
 void biggies( vector<string> &words, vector<string>::size_type sz )
@@ -25790,8 +25783,8 @@ void biggies( vector<string> &words, vector<string>::size_type sz )
   // 3. print words of the given size or longer
 }
 
-<1> Can use find_if to find the fist whose size is >= sz? However, find_if takes 'unary' predicate
-so cannot use f(elem, size_type). How to solve this?
+<1> Can use find_if to find the first whose size is >= sz? However, find_if takes 'unary' predicate
+so cannot use F(elem, size_type). How to solve this?
 
 
 {lambda}
@@ -25821,7 +25814,6 @@ int main()
   cout << f() << endl;
 }
 
-<example>
 Revise this with lambda.
 
 // stable_sort( coll.begin(), coll.end(), isShorter );
@@ -25829,14 +25821,14 @@ stable_sort( coll.begin(), coll.end(),
     [](const string &a, const string &b)
     { return a.size() < b.size(); } );
 
-<1> To solve the above problem, use lambda. note: Here the lambda is 'temporary' function objects.
+<2> To solve the above problem, use lambda. note: Here the lambda is 'temporary' function objects.
 
 auto wc = find_if( words.begin(), words.end(),
                [sz](const string &a)
                { return a.size() >= sz; } );
 
-Here [sz] use to capture a variable from enclosing function and has two; one from capture and one
-from parameter and return bool.
+Here [sz] is used to capture a variable from enclosing function and can use two arguments; one from
+capture and one from parameter and return bool.
 
 <putting-it-all-together>
 #include<iostream>
@@ -25974,91 +25966,6 @@ auto wc = find_if( words.begin(), words.end(),
 Cannot be used sorting-criterion for associative containers and have state as function object does.
 
 
-{function-bind}
-C++11 from boost::bind. function adaptor. Defined in functional header and takes a collable objects
-and generate a 'new' callable that 'adapt' the parameter list of the original.
-
-auto newCallable = bind( callable, arg_list );
-
-When call newCallable, newCallable calls callable, 'passing' the arguments in arg_list.
-
-In other words, bind(f, _1, 5)(x) is equivalent to f(x, 5);
-
-<arg_list>
-_n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. That is _1 is
-first parameter in newCallable.
-
-bool check_size( const string &s, string::size_type sz )
-{
-  return s.size() >= sz;
-}
-
-auto check6 = bind( check_size, _1, 6 );
-
-string s = "hello";
-bool b1 = check6(s);    // calls check_size(s, 6)
-
-auto wc = find_if( words.begin(), words.end(), 
-                     [sz] (const string &a)
-                     { return a.size() >= sz; } );
-
-auto wc = find_if( words.begin(), words.end(), 
-                     bind(check_size, _1, 6) );
-
-<placeholder-namespace>
-The placeholder is defined in std::placeholders namespace in functional header.
-
-sample.cpp:20:25: error: "_1" was not declared in this scope
-
-#include<iostream>
-#include<vector>
-#include<string>
-#include<algorithm>
-#include<functional>
-
-using namespace std;
-using namespace std::placeholders;
-
-bool check_size( const string &s, string::size_type sz )
-{
-  return s.size() >= sz;
-}
-
-int main()
-{
-  vector<string> coll{"over", "quick", "red", 
-    "fox", "jumps", "red", "the", "slow", "turtle", "the"};
-
-  sort( coll.begin(), coll.end() );
-
-  auto wc = find_if( coll.begin(), coll.end(),
-      bind( check_size, _1, 4 ));
-
-  cout << "wc = " << *wc << endl;
-}
-
-<rearrange-arguments>
-Can use bind to bind or rearrange the parameters in the given collable.
-
-auto g = bind( f, a, b, _2, c, _1 );      
-g(X, Y); // f( a, b, Y, c, X );
-
-As an example, invert the meaning of isShorter.
-
-bool isShorter(const string &s1, const string &s2)
-{
-  return s1.size() < s2.size();
-}
-
-sort( words.begin(), words.end(), isShorter );
-sort( words.begin(), words.end(), bind( isShorter, _2, _1 ));
-
-<reference>
-To use reference in bind:
-
-for_each( words.begin(), words.end(), bind( print, ref(os), _1, ' ' ));
-
-
 {lambda-vs-others} C++SLR 6.10
 Suppose that you search in a collection for the first element with a value that is between x and y.
 
@@ -26136,6 +26043,9 @@ To summarize, lambdas provide the first convenient, readable, fast, and maintain
 STL algorithms.
 
 
+={============================================================================
+*kt_dev_stl_062* algorithm: function object and function type
+
 {function-object}
 C++P p571. When overloads function call operator() then can use a object as if it's a func call and
 'call' a object. Hence function object. Must be a member and can have 'state' so more flexible than
@@ -26179,7 +26089,7 @@ int main()
 
   // print all elements
   for_each (coll.cbegin(), coll.cend(), // range
-      PrintInt());                      // operation note T()
+      PrintInt());                      // operation note: T() is temporary
 
   cout << endl;
 }
@@ -26199,28 +26109,29 @@ int main()
 }
 
 
-<example> algorithm-for_each.
+<how-function-copied> algorithm-for-each.
+The sample code:
 
 namespace std {
   template <typename Iterator, typename Operation>
     Operation for_each (Iterator act, Iterator end, Operation op)
     {
       while (act != end) {    // as long as not reached the end
-        op(*act);             // - call op() for actual element
-        ++act;                // - move iterator to the next element
+        op(*act);             // call op() on an element
+        ++act;                // move iterator to the next element
       }
       return op;
     }
 }
 
-From bits/stl_algo.h
+The code from bits/stl_algo.h:
 
 /**
 *  @brief Apply a function to every element of a sequence.
 *  @ingroup non_mutating_algorithms
 *  @param  __first  An input iterator.
 *  @param  __last   An input iterator.
-*  @param  __f      A unary function object.
+*  @param  __f      A unary function object.                   // note: speficy 'unary'
 *  @return   @p __f (std::move(@p __f) in C++0x).
 *
 *  Applies the function object @p __f to each element in the range
@@ -26241,10 +26152,60 @@ for_each(_InputIterator __first, _InputIterator __last, _Function __f)
     return _GLIBCXX_MOVE(__f);
 }
 
+<function-automatic-conversion>
 As with "function-type", involves automatic conversion to function type(pointer). When use a usual
 function, compiler converts it to function type and a function call is a operator() on this function
-pointer. When use a function object, do the same. So in for_each case, takes a pointer from a
-'tempory' function object and there is no object creation for function type template parameter.
+pointer. 
+
+When use a function object, do the same. So in for_each case, takes a 'pointer' from a 'temporary'
+function object and there is 'no' object creation for function type template parameter.
+
+note: really? should copied or moved when it is a temporary? Unlike std::thread case no copy is
+made.
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+class PrintInt
+{
+  public:
+      PrintInt() 
+      {
+          cout << "def ctor is called" << endl;
+      }
+
+      PrintInt(const PrintInt& rhs)
+      {
+          cout << "copy ctor is called" << endl;
+      }
+
+    void operator() (int elem) const
+    {
+      cout << elem << ' ';
+    }
+};
+
+int main()
+{
+  vector<int> coll;
+
+  // insert elements from 1 to 9
+  for (int i=1; i<=9; ++i) {
+    coll.push_back(i);
+  }
+
+  // print all elements
+  for_each (coll.cbegin(), coll.cend(), PrintInt());                      
+
+  cout << endl;
+}
+
+$ ./a.out 
+def ctor is called
+1 2 3 4 5 6 7 8 9 copy ctor is called
 
 
 <advantages>
@@ -26628,6 +26589,93 @@ And when index a map, get a reference to the associated value, use
 binops["+"](10,5);   // adds(10,5)
 binops["-"](10,5);   // minus<int>(10,5)
 ...
+
+
+={============================================================================
+*kt_dev_stl_062* algorithm: bind
+
+C++11 from boost::bind. function adaptor. Defined in functional header and takes a collable objects
+and generate a 'new' callable that 'adapt' the parameter list of the original.
+
+auto newCallable = bind( callable, arg_list );
+
+When call newCallable, newCallable calls callable, 'passing' the arguments in arg_list.
+
+In other words, bind(f, _1, 5)(x) is equivalent to f(x, 5);
+
+<arg_list>
+_n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. That is _1 is
+first parameter in newCallable.
+
+bool check_size( const string &s, string::size_type sz )
+{
+  return s.size() >= sz;
+}
+
+auto check6 = bind( check_size, _1, 6 );
+
+string s = "hello";
+bool b1 = check6(s);    // calls check_size(s, 6) and return bool since check6 calls check_size
+
+auto wc = find_if( words.begin(), words.end(), 
+                     [sz] (const string &a)
+                     { return a.size() >= sz; } );
+
+auto wc = find_if( words.begin(), words.end(), 
+                     bind(check_size, _1, 6) );
+
+<placeholder-namespace>
+The placeholder is defined in std::placeholders namespace in functional header.
+
+sample.cpp:20:25: error: "_1" was not declared in this scope
+
+#include<iostream>
+#include<vector>
+#include<string>
+#include<algorithm>
+#include<functional>
+
+using namespace std;
+using namespace std::placeholders;
+
+bool check_size( const string &s, string::size_type sz )
+{
+  return s.size() >= sz;
+}
+
+int main()
+{
+  vector<string> coll{"over", "quick", "red", 
+    "fox", "jumps", "red", "the", "slow", "turtle", "the"};
+
+  sort( coll.begin(), coll.end() );
+
+  auto wc = find_if( coll.begin(), coll.end(),
+      bind( check_size, _1, 4 ));
+
+  cout << "wc = " << *wc << endl;
+}
+
+<rearrange-arguments>
+Can use bind to bind or rearrange the parameters in the given collable.
+
+auto g = bind( f, a, b, _2, c, _1 );      
+g(X, Y); // f( a, b, Y, c, X );
+
+As an example, invert the meaning of isShorter.
+
+bool isShorter(const string &s1, const string &s2)
+{
+  return s1.size() < s2.size();
+}
+
+sort( words.begin(), words.end(), isShorter );
+sort( words.begin(), words.end(), bind( isShorter, _2, _1 ));
+
+<reference>
+To use reference in bind:
+
+for_each( words.begin(), words.end(), bind( print, std::ref(os), _1, ' ' ));
 
 
 ={============================================================================
