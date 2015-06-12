@@ -66,9 +66,13 @@
 |kt_dev_uv_stack_407| stack: media: fr15: gst media router
 |kt_dev_uv_stack_408| stack: media: nickel: media router creation
 |kt_dev_uv_stack_409| stack: media: nickel: pipeline in gst media router
-|kt_dev_uv_stack_410| stack: media: gst packages
-|kt_dev_uv_stack_411| stack: media: nickel: run dash stream
-|kt_dev_uv_stack_412| stack: media: nickel: run hls stream
+|kt_dev_uv_stack_410| stack: media: build dash pipeline from setsource to start
+|kt_dev_uv_stack_411| stack: media: gst packages
+|kt_dev_uv_stack_412| stack: media: dash play
+|kt_dev_uv_stack_413| stack: media: hls play
+
+|kt_dev_uv_stack_420| stack: media: gst: nexussink
+|kt_dev_uv_stack_421| stack: media: gst: tsnexusbin
 
 |kt_dev_uv_stack_440| stack: media: bronze
 
@@ -317,6 +321,12 @@ https://wiki.youview.co.uk/display/canvas/OEM+Staging+and+Toolchains?src=search
 
 $ sudo apt-get install huawei-dn372t-staging
 $ sudo apt-get install huawei-dn372t-toolchain
+
+$ sudo apt-cache search t2100         
+humax-dtr-t2100-nexus - Nexus headers and .inc files for HUMAX DTR-T2100 set-top box
+humax-dtr-t2100-staging - Staging environment for HUMAX DTR-T2100 set-top box
+humax-dtr-t2100-toolchain - Toolchain for HUMAX DTR-T2100 set-top box
+
 
 http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/pool/main/h/
 
@@ -764,6 +774,16 @@ zb-virtual-slave zb-make
 
                echo "Cross compiling. Host cfg: '${ZINC_HOST_CFG}' Build cfg: '${ZINC_BUILD_CFG}'"
             }
+
+           # ZINC_BUILD_TYPE note: this comes from git.config
+           #
+           # This allows selection between 'debug' and 'release' builds.
+           # The default is 'debug'. If you want release, 
+           # set ZINC_USER_BUILD_TYPE variable prior to sourcing the setvars script.
+           #
+           [[ -n "${ZINC_USER_BUILD_TYPE:-}" ]] \
+               && ZINC_BUILD_TYPE="${ZINC_USER_BUILD_TYPE}" || ZINC_BUILD_TYPE="debug"
+           export ZINC_BUILD_TYPE
 
            note: 'roots'
 
@@ -7901,10 +7921,7 @@ linearsource-launch &
 Some element names that you might need to use:
 
 name                 module
-
-nexussink	         YouView's Polonium sink element that connects to NexusMgr
 webkitmediaplayer	   Debug messages from MediaPlayerPrivateGstreamer.cpp
-tsnexusbin	         YouView's Polonium sink bin that uses tsparser to auto-detect the PIDs for nexussink
 hlsdemux	            The element that implements the HLS protocol
 webkitwebsrc	      Only used if YV_WEBKIT_USE_WEBSRC is defined. If
 YV_WEBKIT_USE_WEBSRC is defined, WebKit's networking stack is used to feed
@@ -7951,7 +7968,6 @@ isomp4:  qtmoovrecover: QT Moov Recover
 vqe:  vqesrc: RTP Receiver
 vqe:  vqesdpdemux: VQE SDP Demux
 nexus:  nexussink: Nexus sink
-nexus:  tsnexusbin: TS parser + Nexus sink for MPEG TS streams
 tstimeshift:  tsshifter: Time Shift for MPEG TS streams
 tstimeshift:  tsshifterbin: Time Shift + TS parser for MPEG TS streams
 tstimeshift:  tsseeker: Time-shift seeker
@@ -8020,10 +8036,6 @@ Polonium/Polonium.GSTHLSDemux/src/gstfragmentedplugin.c
 
 Polonium/Polonium.GSTTSPacer/src/gsttspacerelement.c
 35:  if (!gst_element_register (plugin, "tspacer", GST_RANK_NONE,
-
-Polonium/Polonium.GSTNexus/src/gstnexuselements.c
-36:  if (!gst_element_register (plugin, "nexussink", GST_RANK_NONE, GST_TYPE_NEXUS_SINK))  {
-40:  if (!gst_element_register (plugin, "tsnexusbin", /*GST_RANK_PRIMARY+1*/ GST_RANK_NONE,
 
 
 ={============================================================================
@@ -8794,22 +8806,37 @@ void ProxySystemFactory::loadImplementations()
     // save factories
     defaultMediaRouterFactory = defaultImplementation->createMediaRouterFactory();
 
+    // save to ProxySystemFactory::proxyMediaRouterFactory
     proxyMediaRouterFactory = boost::make_shared<ProxyMediaRouterFactory>(getDispatcher(),
             defaultMediaRouterFactory, protocolMediaRouterFactoryMap);
 }
 
 
-<media-router-factory>
+<proxy-media-router-factory>
+
+ProxyMediaRouterFactory::ProxyMediaRouterFactory(
+        boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher_,
+        boost::shared_ptr<MediaRouterFactory> defaultMediaRouterFactory_,
+        ProtocolMediaRouterFactoryMap protocolMediaRouterFactoryMap_) :
+
+    dispatcher(dispatcher_),
+    defaultMediaRouterFactory(defaultMediaRouterFactory_),
+
+    // copy a map
+    protocolMediaRouterFactoryMap(protocolMediaRouterFactoryMap_),
+
+    mimeTypes(boost::make_shared<mime::MIMETypes>())
+{
+    NICKEL_FUNC_TRACE;
+}
 
 // return PMRF
-
 boost::shared_ptr<MediaRouterFactory> ProxySystemFactory::createMediaRouterFactory() {
     return proxyMediaRouterFactory;
 }
 
 
 // forwarding to bronze
-
 boost::shared_ptr<LocalMediaLibrary> ProxySystemFactory::createLocalMediaLibrary() {
     return defaultImplementation->createLocalMediaLibrary();
 }
@@ -8840,10 +8867,19 @@ class ZINC_LOCAL ProxyMediaRouter : public MediaRouter,
 ProxyMediaRouter::ProxyMediaRouter(
         boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher_,
         boost::shared_ptr<MediaRouterFactory> defaultMediaRouterFactory_,
-
         ProtocolMediaRouterFactoryMap protocolMediaRouterFactoryMap_,
-        :
-        {}
+        boost::shared_ptr<mime::MIMETypes> mimeTypes_) :
+
+    dispatcher(dispatcher_),
+    defaultMediaRouterFactory(defaultMediaRouterFactory_),
+
+    // copy a map
+    protocolMediaRouterFactoryMap(protocolMediaRouterFactoryMap_),
+    sourcing(false),
+    mimeTypes(mimeTypes_)
+{
+    NICKEL_FUNC_TRACE;
+}
 
 note: does it mean that create real media router when start() is called?
 
@@ -9410,7 +9446,12 @@ class ZINC_EXPORT VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
-*kt_dev_uv_stack_410* stack: media: gst packages
+*kt_dev_uv_stack_410* stack: media: build dash pipeline from setsource to start
+
+dbus-send --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR
+Zinc.Media.MediaRouter.setSource 
+string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
+
 
 // See spec A.1.1
 NS_ZINC::Future< void > 
@@ -9446,12 +9487,12 @@ private:
         // This start() method will be called by the same thread that calls 
         // ProxyMediaRouter::setSource(), so I assume it is OK to access proxy state from 
         // here (as lock will already be held).
-        
-        note: property comes from ProxyMediaRouter
 
-		  properties = proxy->properties;
+        // note: property comes from ProxyMediaRouter
 
-        note: see uses of ProxyMediaRouter directly
+        properties = proxy->properties;
+
+        // note: see uses of ProxyMediaRouter directly
 
         else 
         {
@@ -9460,7 +9501,7 @@ private:
             // This covers the cases where we have no implementation MediaRouter, or
             // a recycled one that is not compatible with the source media.
             // In both cases, we create a new one of the appropriate type.
-            
+
             // note: <1> async call
             if (factory != proxy->lastFactory) {
                 continueOnSuccess(factory->createMediaRouter(), &SetSourceContinuation::onMediaRouterCreated);
@@ -9489,7 +9530,7 @@ private:
 
     void setProperties()
     {
-        note: <02> async call
+        // note: <2> async call
         continueOnSuccess(SetPropertiesContinuation::create(getDispatcher(),
                     proxy, impl, shared_from_this(), properties),
                 &SetSourceContinuation::onPropertiesSet);
@@ -9500,7 +9541,7 @@ private:
         // note: <6> async call.
         //
         // Future<void> GstMediaRouter::setSource(const std::string&, Zinc::Media::SetSourceReason::Enum);
-        
+
         continueOnSuccess(impl->setSource(source, reason), &SetSourceContinuation::complete);
     }
 
@@ -9643,10 +9684,10 @@ NS_ZINC::Future<void> GstMediaRouter::start()
     gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
 }
 
+//{{{
 note: -> call "pad-added" callback from uridecode. source
 
-void VirtualBinTypefind::newPadCb(GstElement* element, GstPad* pad,
-                                  gpointer data)
+void VirtualBinTypefind::newPadCb(GstElement* element, GstPad* pad, gpointer data)
 {
     VirtualBinTypefind* const vbin = static_cast<VirtualBinTypefind*>(data);
     vbin->newPad(element, pad);
@@ -9665,31 +9706,48 @@ void VirtualBinTypefind::newPad(GstElement*, GstPad* pad)
 
 boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
 
-note: [BinType, uridecode]
+note: (BinTypefind, pad from uridecode)
 
 bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
     boost::shared_ptr<VirtualBin> bin,
     boost::shared_ptr<VirtualPad> vpad)
 {
+   // note: scrBin->autoplug(srcPad from Typefind)
+   
    if (bin == typefindBin && srcBin->autoplug(vpad));
 }
 
-        
-BinType = "application/dash+xml;
-
-Since map has elementFactory["application/dash+xml"] = VirtualBinSrc::makeAndSetupDecodebin
-this retuns a decodebin.
+// note:
+// why "derived->autoplug()" although all uses base implementation?
+// 
+// VirtualBin::elementFactory
+// VirtualBin::autoplug
+//
+// because this map, elementfactory, is protected member in the base and each derived has its own
+// copy and add items in ctor. However, autoplug has common code but actually run on derived copy of
+// map.
 
 bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
-   gst_pad_link_full(unwrappedSrcPad.get();
+{
+    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
+    //
+    // Element has current caps, making element for: application/dash+xml
+    //
+    // BinTypefind has an entry in the map
+    //   ["application/dash+xml"] = VirtualBinSrc::makeAndSetupDecodebin
+    //
+    // VirtualBinSrc::makeAndSetupDecodebin
+    //   creates decodebin, set caps, and set pad-add handler
+    //
+    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
 
+    // *uridecodebin* -> *decodebin*
+    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
+}
 
+NICKEL_TRACE("connected typefindbin to srcbin!");
 
-note: make a link  "uridecodebin -> decodebin"
-   NICKEL_TRACE("connected typefindbin to srcbin!");
-
-
-
+//{{{
 note: -> call "pad-added" callback from decodebin. for video pad(video/quicktime)
 
 void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
@@ -9699,29 +9757,119 @@ void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
    vbin->newDecodebinPad(element, pad);
 }
 
-note: [BinSrc, uridecode]
+note: (BinSrc, pad from uridecode)
 
 bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
     boost::shared_ptr<VirtualBin> bin,
     boost::shared_ptr<VirtualPad> vpad)
 {
+   // note: sinkBin->autoplug(srcPad from BinSrc)
+
    else if (bin == srcBin && sinkBin->autoplug(vpad)) {
 }
 
-BinSrc = "video/quicktime; audio/x-m4a; text/x-raw");
+bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
+{
+    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
+    //
+    // Element has current caps, making element for: video/quicktime
+    //
+    // BinSrc = "video/quicktime; audio/x-m4a; text/x-raw");
+    // BinSrc has an entry in the map
+    //   elementFactory["video/quicktime"] = VirtualBinSink::makeMp4Element.
+    //
+    // VirtualBinSink::makeMp4Element
+    //   creates qtdemux, set caps, and set pad-add handler
+    //
+    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
 
-elementFactory["video/quicktime"] = makeMp4Element.
+    // *decodebin(video)* -> *qtdemux*
+    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
+}
+
+NICKEL_TRACE("srcbin requested connection");
 
 
-note: make a link  "uridecodebin -> decodebin -> qtdemux"
-   NICKEL_TRACE("srcbin requested connection");
-
-
+//{{{
 note: -> call "pad-added" callback from decodebin. for audio pad(audio/x-m4a)
+
+void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
+    gpointer data)
+{
+   VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);
+   vbin->newDecodebinPad(element, pad);
+}
+
+note: (BinSrc, pad from uridecode)
+
+bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
+    boost::shared_ptr<VirtualBin> bin,
+    boost::shared_ptr<VirtualPad> vpad)
+{
+   // note: sinkBin->autoplug(srcPad from BinSrc)
+
+   else if (bin == srcBin && sinkBin->autoplug(vpad)) {
+}
+
+bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
+{
+    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
+    //
+    // Element has current caps, making element for: audio/x-m4a
+    //
+    // BinSrc = "video/quicktime; audio/x-m4a; text/x-raw");
+    // BinSrc has an entry in the map
+    //   elementFactory["audio/x-m4a"] = VirtualBinSink::makeElementSimple;
+    //
+    // VirtualBinSink::makeElementSimple
+    //   creates fakesink
+    //
+    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
+
+    // *decodebin(audio)* -> *fakesink*
+    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
+}
+
+NICKEL_TRACE("srcbin requested connection");
+
+//{{{
+note: -> call "pad-added" callback from qtdemux. for video/x-h264
+
+NewPadCallback::callback(GstElement*, GstPad*, void*)
+{
+    // return sink
+    RefObj<GstPad> VirtualBin::plug(const RefObj<GstPad>& pad)
+    {
+        const boost::lock_guard<boost::mutex> l(lock);
+        return plug_unlocked(pad);
+    }
+
+    // plug_unlocked() returns *h264parse-nexussink* based on cap of srcPad since:
+    //
+    // Element has current caps, making element for: video/x-h264
+    //
+    // BinSrc has an entry in the map
+    //   elementFactory["video/x-h264"] = VirtualBinSink::makeH264Element;
+    //
+    // VirtualBinSink::makeH264Element
+    //   creates element(h264 ! nexussink)
+    //
+
+    // *qtdemux* -> *h264parse-nexussink*
+    gst_pad_link_full(pad.get(), sinkpad);
+}
+
+
+GstMediaRouter.cpp:300 State transition READY -> PAUSED wanted PLAYING
+GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
+
+
+<stop>
+ProxyMediaRouter.cpp:862 ENTER: virtual zinc::Future<void> nickel::system::ProxyMediaRouter::stop()
 
 
 ={============================================================================
-*kt_dev_uv_stack_410* stack: media: gst packages
+*kt_dev_uv_stack_411* stack: media: gst packages
 
 :~/src-dev/DEVARCH/Zinc/Zinc.3rdPartyStack/packages$ ll gst*
 -rw-r--r-- 1 kpark kpark   315131 Apr 28 11:23 gst_fluendo_timeshift-1.0.3.tar.bz2
@@ -9735,7 +9883,7 @@ note: -> call "pad-added" callback from decodebin. for audio pad(audio/x-m4a)
 
 
 ={============================================================================
-*kt_dev_uv_stack_411* stack: media: nickel: run dash stream
+*kt_dev_uv_stack_412* stack: media: dash play
 
 Live: http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 
@@ -9759,10 +9907,6 @@ MR=`dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zin
 /Zinc/Media/MediaRouterFactory \
 Zinc.Media.MediaRouterFactory.createMediaRouter \
 string:Zinc.MediaProxy 2>/dev/null |grep "/Zinc/Media/MediaRouters/" |cut -d'"' -f2`
-
-BMR=`dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DBusSendDaemon' \
-/Zinc/Media/MediaRouterFactory \
-Zinc.Media.MediaRouterFactory.createMediaRouter string:Zinc.MediaProxy`
 
 // method return sender=:1.155 -> dest=:1.230 reply_serial=2 object path "/Zinc/Media/MediaRouters/1"
 
@@ -9870,7 +10014,7 @@ gst-launch-1.0 --gst-debug=souphttpsrc:5  -v souphttpsrc location="http://wll1p0
 
 
 ={============================================================================
-*kt_dev_uv_stack_412* stack: media: nickel: run hls stream
+*kt_dev_uv_stack_413* stack: media: hls play
 
 # webkit source where gst pipeline is implemented
 zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/
@@ -9995,7 +10139,140 @@ Element Signals:
                                         gpointer user_data);
 
 
-{tsnexusbin}
+={============================================================================
+*kt_dev_uv_stack_420* stack: media: gst: nexussink
+
+nexussink YouView's Polonium sink element that connects to NexusMgr
+
+Polonium/Polonium.GSTNexus/src/gstnexuselements.c
+36:  if (!gst_element_register (plugin, "nexussink", GST_RANK_NONE, GST_TYPE_NEXUS_SINK))  {
+
+
+[root@HUMAX /]# gst-inspect-1.0 nexussink
+Factory Details:
+  Rank                     none (0)
+  Long-name                Nexus sink
+  Klass                    Sink/Video
+  Description              Demux, decode and display via Broadcom Nexus
+  Author                   Will Manley <william.manley@youview.com>, 
+   Chris Bass <chris.bass@rd.bbc.co.uk>, 
+   Atish Nazir <atish.nazir@youview.com>, Alex Ashley <alex.ashley@youview.com>
+
+Plugin Details:
+  Name                     nexus
+  Description              GStreamer elements that encapsulate Broadcom Nexus functionality
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstnexus.so
+  Version                  0.1
+  License                  Proprietary
+  Source module            gstnexus
+  Binary package           gst-nexus
+  Origin URL               http://youview.com/
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstBaseSink
+                         +----GstNexusSink
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      video/mpegts
+           systemstream: true
+      video/x-h264
+          stream-format: byte-stream
+              alignment: { au, nal }
+      video/mpeg
+            mpegversion: { 2, 4 }
+           systemstream: false
+      audio/mpeg
+            mpegversion: 1
+                  layer: { 1, 3 }
+      audio/mpeg
+            mpegversion: 4
+          stream-format: { adts, loas }
+
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "nexussink0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  sync                : Sync on the clock
+                        flags: readable, writable
+                        Boolean. Default: false
+  max-lateness        : Maximum number of nanoseconds that a buffer can be late before it is dropped (-1 unlimited)
+                        flags: readable, writable
+                        Integer64. Range: -1 - 9223372036854775807 Default: -1 
+  qos                 : Generate Quality-of-Service events upstream
+                        flags: readable, writable
+                        Boolean. Default: false
+  async               : Go asynchronously to PAUSED
+                        flags: readable, writable
+                        Boolean. Default: true
+  ts-offset           : Timestamp offset in nanoseconds
+                        flags: readable, writable
+                        Integer64. Range: -9223372036854775808 - 9223372036854775807 Default: 0 
+  enable-last-sample  : Enable the last-sample property
+                        flags: readable, writable
+                        Boolean. Default: false
+  last-sample         : The last sample received in the sink
+                        flags: readable
+                        Boxed pointer of type "GstSample"
+  blocksize           : Size in bytes to pull per buffer (0 = default)
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
+  render-delay        : Additional render delay of the sink in nanoseconds
+                        flags: readable, writable
+                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 160000000 
+  throttle-time       : The time to keep between rendered buffers (0 = disabled)
+                        flags: readable, writable
+                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 0 
+  max-bitrate         : The maximum bits per second to render (0 = disabled)
+                        flags: readable, writable
+                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 0 
+  pcrpid              : The PCR PID that will be  used for sync.
+                        flags: readable, writable
+                        Integer. Range: 16 - 8190 Default: 8191 
+  videopid            : The video PID that will be  decoded.
+                        flags: readable, writable
+                        Integer. Range: 16 - 8191 Default: 8191 
+  audiopid            : The audio PID that will be decoded.
+                        flags: readable, writable
+                        Integer. Range: 16 - 8191 Default: 8191 
+  videocodec          : The video codec (NONE=0, MPEG2=1, H264=2, MPEG4=3, HEVC=4)
+                        flags: readable, writable
+                        Integer. Range: 0 - 4 Default: 2 
+  audiocodec          : The audio codec (NONE=0, MP2=1, AAC_LOAS=2, AAC_ADTS=3, AAC=4, MP3=5)
+                        flags: readable, writable
+                        Integer. Range: 0 - 4 Default: 2 
+  videowindow         : Uses relative scheme of floats from 0.0 to 1.0, x1,y1,x2,y2 .  e.g. fullscreen 0.0,0.0,1.0,1.0, bottom right quarter 0.5,0.5,1.0,1.0
+                        flags: writable
+                        String. Default: "0.0,0.0,1.0,1.0" Write only
+  release             : Release the nexus resources when  in the paused state.
+                        flags: readable, writable
+                        Boolean. Default: false
+
+
+={============================================================================
+*kt_dev_uv_stack_421* stack: media: gst: tsnexusbin
+
+tsnexusbin YouView's Polonium sink bin that uses tsparser to auto-detect the PIDs for nexussink
+tsnexusbin: TS parser + Nexus sink for MPEG TS streams
+
+
+Polonium/Polonium.GSTNexus/src/gstnexuselements.c
+40:  if (!gst_element_register (plugin, "tsnexusbin", /*GST_RANK_PRIMARY+1*/ GST_RANK_NONE,
+
+
 [root@HUMAX /]# gst-inspect-1.0 tsnexusbin
 Factory Details:
   Rank                     none (0)
@@ -10028,21 +10305,9 @@ Pad Templates:
   SINK template: 'sink'
     Availability: Always
     Capabilities:
-      video/mpegts
+      video/mpegts                     // note: TS input
            systemstream: true
 
-
-Element Flags:
-  no flags set
-
-Bin Flags:
-  no flags set
-
-Element Implementation:
-  Has change_state() function: gst_bin_change_state_func
-
-Element has no clocking capabilities.
-Element has no URI handling capabilities.
 
 Pads:
   SINK: 'sink'
@@ -10064,7 +10329,7 @@ Element Properties:
                         flags: writable
                         String. Default: "0.0,0.0,1.0,1.0" Write only
 
-Children:
+Children:                              // note: embedded?
   nexussink
   parser
 
