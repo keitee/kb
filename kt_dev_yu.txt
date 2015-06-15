@@ -8792,13 +8792,28 @@ ProxySystemFactory::ProxySystemFactory() {
 // -rw-r--r--  1 kpark kpark   51 Jun  2 11:52 https-application%2Fdash%2Bxml.plugin-config
 //
 
+typedef std::pair<std::string, boost::shared_ptr<MediaRouterFactory> > MIMEMediaRouterFactory;
+typedef std::pair<std::string, std::vector<MIMEMediaRouterFactory> > MIMEMediaRouterFactoryMap;
+typedef std::vector<MIMEMediaRouterFactoryMap> ProtocolMediaRouterFactoryMap;
+
 void ProxySystemFactory::loadImplementations()
 {
     // get bronze
     FilePluginConfig defaultPluginConfig(PackageDataFinder().find("default-system-factory.plugin-config"));
     defaultImplementation = boost::addressof(PluginFactory::getInstance<SystemFactory>(defaultPluginConfig));
 
-    // for_each add {protocol, factory-function}
+    // "/opt/zinc-trunk/share/platform_data/mediarouter-plugin-config
+    // /http-application%2Fdash%2Bxml.plugin-config"
+    //
+    // protocol "http"
+    // mimeType "application%2Fdash%2Bxml"
+    // after decodedMimeType
+    // mimeType "application/dash+xml"
+    //
+    // for_each add {protocol, {mime, factory-function}} in vector
+    //   {"http", { "application/dash+xml", factory-function}} in vector
+    //   {"https", { "application/dash+xml", factory-function}} in vector
+    
       SystemFactory& factory(PluginFactory::getInstance<SystemFactory>(pluginConfig));
       protMapIter->second.push_back(std::make_pair(mimeType, factory.createMediaRouterFactory()));
 
@@ -8881,6 +8896,13 @@ ProxyMediaRouter::ProxyMediaRouter(
     NICKEL_FUNC_TRACE;
 }
 
+
+
+$ dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR \
+> Zinc.Media.MediaRouter.setSource 
+> string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
+
+
 note: does it mean that create real media router when start() is called?
 
 class ZINC_LOCAL SetSourceContinuation : public NS_ZINC::Continuation<void, SetSourceContinuation> 
@@ -8894,6 +8916,97 @@ class ZINC_LOCAL SetSourceContinuation : public NS_ZINC::Continuation<void, SetS
         continueOnSuccess(factory->createMediaRouter(), &SetSourceContinuation::onMediaRouterCreated);
     }
 };
+
+
+// source http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
+//
+boost::shared_ptr<MediaRouterFactory> ProxyMediaRouter::findFactoryGivenSource
+   (const std::string& source) const 
+{
+    std::string mediaExtension = "default";
+
+    if(source.empty())
+    {
+        throw InvalidLocatorException("Empty media locator");
+    }
+
+    boost::shared_ptr<SoupURI> sourceURI(soup_uri_new(source.c_str()), &SoupURIQuietFree);
+
+    if(!sourceURI.get() || !soup_uri_get_scheme(sourceURI.get()))
+    {
+        throw InvalidLocatorException("Invalid media locator");
+    }
+
+    sourceURI = decodeCompoundURI(sourceURI);
+
+    // protocol "http"
+    const std::string protocol(soup_uri_get_scheme(sourceURI.get()));
+
+    std::string mimeType(ProxySystemFactory::DEFAULT_MIME_TYPE);
+
+    ProtocolMediaRouterFactoryMap::const_iterator protIter = findInVectorOfPairs(
+            protocolMediaRouterFactoryMap, MIMEMediaRouterFactoryMap(protocol,
+                std::vector<MIMEMediaRouterFactory>()));
+
+    // We found an entry for this protocol, search by MIME type
+    if(protIter != protocolMediaRouterFactoryMap.end())
+    {
+        // If the URL has a query portion, take the file extension from that.
+        // Otherwise a URL of the form http://host/cms.jsp?media=film.ts would
+        // be parsed as having a .jsp extension rather than a .ts extension. Of
+        // course this approach only really works if there is just a single
+        // query parameter.
+        const char* mediaName = soup_uri_get_query(sourceURI.get());
+
+        // mediaName "/e/pseudolive/bbb/client_manifest.mpd"
+
+        if(!mediaName)
+        {
+            mediaName = soup_uri_get_path(sourceURI.get());
+        }
+
+        const std::string extension = getMediaExtension(mediaName ? mediaName : "");
+
+        // extension "mpd"
+
+        if(!extension.empty())
+        {
+            const std::string retrievedMIMEType = mimeTypes->getMIMEType(extension);
+            if(!retrievedMIMEType.empty())
+            {
+                // retrievedMIMEType "application/dash+xml"}}
+
+                mimeType = retrievedMIMEType;
+            }
+        }
+
+        std::vector<MIMEMediaRouterFactory>::const_iterator mimeIter = findInVectorOfPairs(
+                protIter->second, MIMEMediaRouterFactory(mimeType,
+                    boost::shared_ptr<MediaRouterFactory>()));
+
+        if(mimeIter != protIter->second.end())
+        {
+            // Found an exact match (protcol & MIME type)
+            return mimeIter->second;
+        }
+        else if(mimeType != ProxySystemFactory::DEFAULT_MIME_TYPE)
+        {
+            // Try searching for a protocol default
+            mimeIter = findInVectorOfPairs(
+                    protIter->second, MIMEMediaRouterFactory(
+                        ProxySystemFactory::DEFAULT_MIME_TYPE,
+                        boost::shared_ptr<MediaRouterFactory>()));
+
+            if(mimeIter != protIter->second.end())
+            {
+                return mimeIter->second;
+            }
+        }
+    }
+
+    // Return the default media router factory
+    return defaultMediaRouterFactory;
+}
 
 
 <gst-factory>
@@ -9496,6 +9609,8 @@ private:
 
         else 
         {
+            // note: this is where map used and get the corresponding factory.
+            //
             factory = proxy->findFactoryGivenSource(source);
 
             // This covers the cases where we have no implementation MediaRouter, or
@@ -9911,6 +10026,8 @@ string:Zinc.MediaProxy 2>/dev/null |grep "/Zinc/Media/MediaRouters/" |cut -d'"' 
 // method return sender=:1.155 -> dest=:1.230 reply_serial=2 object path "/Zinc/Media/MediaRouters/1"
 
 echo $MR
+
+note: if not okay, MR is empty
 
 // echo $MR
 // /Zinc/Media/MediaRouters/1
