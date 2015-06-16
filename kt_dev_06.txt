@@ -451,5 +451,208 @@ BOOST_FOREACH(const boost::filesystem::path& fullPath, configFiles)
 }
 
 
+={============================================================================
+*kt_dev_boost_008* asio
+
+http://www.boost.org/doc/libs/1_58_0/doc/html/boost_asio.html
+
+{overview}
+
+<basic>
+Basic Boost.Asio Anatomy
+
+<async>
+
+      Your Program
+
+I/O Object        Your Completion Handler
+eg. socket
+
+
+      io_service
+
+      OS
+
+When an asynchronous operation is used, a different sequence of events occurs. 
+
+1. Your program initiates the connect operation by calling the I/O object:
+
+socket.async_connect(server_endpoint, your_completion_handler);
+
+where your_completion_handler is a function or function object with the signature:
+
+void your_completion_handler(const boost::system::error_code& ec);
+
+The exact signature required depends on the asynchronous operation being performed. The reference
+    documentation indicates the appropriate form for each operation.
+
+2. The I/O object forwards the request to the io_service.
+
+3. The io_service signals to the operating system that it should start an asynchronous connect.
+
+Time passes. In the synchronous case this wait would have been contained entirely within the
+duration of the connect operation.
+
+
+4. The operating system indicates that the connect operation has completed by placing the result on
+a queue, ready to be picked up by the io_service.
+
+5. Your program must make a call to io_service::run() or to one of the similar io_service member
+functions in order for the result to be retrieved. A call to io_service::run() 'blocks' while there
+are unfinished asynchronous operations, so you would typically call it as soon as you have started
+your first asynchronous operation.
+
+6. While inside the call to io_service::run(), the io_service dequeues the result of the operation,
+    translates it into an error_code, and then passes it to your completion handler.
+
+This is a simplified picture of how Boost.Asio operates. You will want to delve further into the
+documentation if your needs are more advanced, such as extending Boost.Asio to perform other types
+of asynchronous operations. 
+
+
+<threads-and-boost-asio>
+Threads and Boost.Asio
+
+Thread Safety
+
+In general, it is safe to make concurrent use of distinct objects, but unsafe to make concurrent use
+of a single object. However, types such as io_service provide a stronger guarantee that it is safe
+to use a single object concurrently.
+
+
+Thread Pools
+
+Multiple threads may call io_service::run() to set up a pool of threads from which completion
+handlers may be invoked. This approach may also be used with io_service::post() to use a means to
+perform any computational tasks across a thread pool.
+
+Note that all threads that have joined an io_service's pool are considered equivalent, and the
+io_service may distribute work across them in an arbitrary fashion.  
+
+Internal Threads
+
+The implementation of this library for a particular platform may make use of one or more internal
+threads to emulate asynchronicity. As far as possible, these threads must be invisible to the
+library user. In particular, the threads:
+
+must not call the user's code directly; and
+must block all signals.
+
+This approach is complemented by the following guarantee:
+
+Asynchronous completion handlers will only be called from threads that are currently calling
+io_service::run(). 
+
+Consequently, it is the library user's responsibility to create and manage all threads to which the
+notifications will be delivered.
+
+The reasons for this approach include:
+
+By only calling io_service::run() from a single thread, the user's code can avoid the development
+complexity associated with synchronisation. For example, a library user can implement scalable
+servers that are single-threaded (from the user's point of view).
+
+A library user may need to perform initialisation in a thread shortly after the thread starts and
+before any other application code is executed. For example, users of Microsoft's COM must call
+CoInitializeEx before any other COM operations can be called from that thread.
+
+The library interface is decoupled from interfaces for thread creation and management, and permits
+implementations on platforms where threads are not available.
+
+
+<tutorial>
+
+Timer.2 - Using a timer asynchronously
+
+This tutorial program demonstrates how to use asio's asynchronous callback functionality by
+modifying the program from tutorial Timer.1 to perform an asynchronous wait on the timer.
+
+#include <iostream>
+#include <boost/asio.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+Using asio's asynchronous functionality means having a callback function that will be called *when* an
+asynchronous operation completes. In this program we define a function called print to be called
+when the asynchronous wait finishes.
+
+void print(const boost::system::error_code& /*e*/)
+{
+  std::cout << "Hello, world!" << std::endl;
+}
+
+int main()
+{
+    boost::asio::io_service io;
+
+    boost::asio::deadline_timer t(io, boost::posix_time::seconds(5));
+
+    // Next, instead of doing a blocking wait as in tutorial Timer.1, we call the
+    // deadline_timer::async_wait() function to perform an asynchronous wait. When calling this
+    // function we pass the print callback handler that was defined above.
+
+    t.async_wait(&print);
+
+    // Finally, we must call the io_service::run() member function on the io_service object.
+
+    // The asio library provides a guarantee that callback handlers will only be called from threads
+    // that are currently calling io_service::run(). Therefore unless the io_service::run() function
+    // is called the callback for the asynchronous wait completion will never be invoked.
+
+    // The io_service::run() function will also continue to run while there is still "work" to do.
+    // In this example, the work is the asynchronous wait on the timer, so the call will not return
+    // until the timer has expired and the callback has completed.
+
+    // It is important to remember to give the io_service some work to do before calling
+    // io_service::run(). For example, if we had omitted the above call to
+    // deadline_timer::async_wait(), the io_service would not have had any work to do, and
+    // consequently io_service::run() would have returned immediately.
+
+    io.run();
+
+    return 0;
+}
+
+
+<ref>
+io_service::post
+
+Request the io_service to invoke the given handler and return immediately.
+
+template<typename CompletionHandler>
+void-or-deduced post(CompletionHandler handler);
+
+This function is used to ask the io_service to execute the given handler, but without allowing the
+    io_service to call the handler from inside this function.
+
+The io_service guarantees that the handler will only be called in a thread in which the run(),
+    run_one(), poll() or poll_one() member functions is currently being invoked.  
+        
+Parameters
+
+handler
+
+The handler to be called. The io_service will make a copy of the handler object as required. The
+function signature of the handler must be:
+
+void handler();
+
+Remarks
+
+This function throws an exception only if:
+
+the handler's asio_handler_allocate function; or
+the handler's copy constructor
+
+throws an exception. 
+
+
+A free function as a completion handler:
+
+void completion_handler()
+{
+  ...
+}
+
+
 ==============================================================================
 Copyright: see |ktkb|                              vim:tw=100:ts=3:ft=help:norl:

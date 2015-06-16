@@ -13,6 +13,7 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_003| static fsm demo in cpp
 
 |kt_dev_code_010| asyc: continuation
+|kt_dev_code_011| asyc: dispatcher
 
 |kt_dev_design_001| use state and if checks
 
@@ -9257,6 +9258,181 @@ struct Ignore {
 NS_ZINC_CLOSE
 
 #endif // ZINC_SERIAL_FUTURE_GROUP_IMPL_H_
+
+
+# ============================================================================
+*kt_dev_code_011* asyc: dispatcher
+
+DP <- STDP <-
+
+////////////////////////////////////////
+#ifndef ZINC_DISPATCHER_H_
+#define ZINC_DISPATCHER_H_
+
+#include "../macros.h"
+#include <boost/function.hpp>
+#include <boost/thread/locks.hpp>
+#include <boost/utility.hpp>
+
+NS_ZINC_OPEN
+
+/*
+ * Interface for general functor dispatcher.
+ *
+ * Dispatchers are used to invoke callback functors (for events and futures for example).
+ *
+ */
+struct ZINC_EXPORT Dispatcher : boost::noncopyable
+{
+    /**
+     * Dispatcher::work is a RAII class.  An object of this type should exist
+     * for as long as there is the possibility of you calling post.  This is
+     * similar to an boost::io_service::work and will prevent the dispatcher
+     * from running down.
+     *
+     * Example: A Future will hold a work object after setCallback is called
+     *          as it knows it will be posting a functor at some point in the
+     *          future (but doesn't know when).  After the callback is called
+     *          the work object is destroyed so the dispatcher can run down.
+     */
+    typedef boost::unique_lock<Dispatcher> work;
+
+    virtual ~Dispatcher();
+
+    /**
+     * Post the supplied completion handler to the dispatcher for execution.
+     *
+     * The Dispatcher will hold a reference to the suppled functor until the
+     * it has been executed.
+     *
+     * @param handler the completion handler
+     */
+    virtual void post(boost::function<void ()> handler) = 0;
+
+    private:
+    /**
+     * These methods are called when a Dispatcher::work object is
+     * created/destroyed. Typically a dispatcher that is interested will treat
+     * these functions like a ref count inc/dec.
+     *
+     * It is not necessary to implement these functions.  The default
+     * implementations do nothing.
+     */
+    virtual void onWorkAdded() {};
+    virtual void onWorkRemoved() {};
+
+    private: // Lockable concept
+    // Implement the "lockable" concept so we can use unique_lock as our RAII
+    // "work" class
+    friend class boost::unique_lock<Dispatcher>;
+    void lock() ZINC_LOCAL { onWorkAdded(); };
+    void unlock() ZINC_LOCAL { onWorkRemoved(); };
+};
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_DISPATCHER_H_ */
+
+
+////////////////////////////////////////
+#ifndef ZINC_SINGLETHREADDISPATCHER_H_
+#define ZINC_SINGLETHREADDISPATCHER_H_
+
+#include "../macros.h"
+#include "Dispatcher.h"
+
+#include <boost/thread/thread.hpp>
+#include <boost/asio/io_service.hpp>
+
+NS_ZINC_OPEN
+
+/*
+ * A Dispatcher implementation that owns a single thread on which it executes the
+ * functors posted to it. Functors are executed strictly in the order that they are
+ * posted to the dispatcher.
+ */
+class ZINC_EXPORT SingleThreadDispatcher : public Dispatcher
+{
+    public:
+        SingleThreadDispatcher();
+        ~SingleThreadDispatcher();
+
+    public: // from Dispatcher
+        virtual void post(boost::function<void ()> handler);
+        virtual int getPendingCount();
+
+    private:
+        boost::asio::io_service io;
+        boost::thread thread;
+};
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_SINGLETHREADDISPATCHER_H_ */
+
+
+////////////////////////////////////////
+#include "../../include/macros.h"
+#include "../../include/WorkerFunction.h"
+#include "../../include/async/Future.h"
+#include "../../include/async/FutureContextBase.h"
+#include "../../include/async/SequentialFutureDispatcher.h"
+#include "../../include/MonotonicClock.h"
+#include <boost/thread.hpp>
+
+
+using namespace std;
+
+NS_ZINC_OPEN
+
+Dispatcher::~Dispatcher() {}
+
+static void run(boost::asio::io_service* io) {
+    boost::asio::io_service::work work(*io);
+    while (1) {
+        try {
+            // because of the io_service::work above the only reason this
+            // will return is if io.stop() is called from ~SingleThreadDispatcher()
+            // destructor
+            io->run();
+            break;
+        }
+        catch (...) {
+            // Exceptions thrown in functors posted to the io_service are
+            // propogated up to the caller of run().  We wish to ignore them
+        }
+    }
+}
+
+SingleThreadDispatcher:: SingleThreadDispatcher()
+   : thread(makeWorkerFunction(boost::bind(&run, &io)))
+{
+}
+
+SingleThreadDispatcher::~SingleThreadDispatcher()
+{
+    io.stop();
+    thread.join();
+}
+
+/**
+ * Post a functor to the dispatcher, and put it on the pending dispatch queue.
+ */
+void SingleThreadDispatcher::post(boost::function<void ()> handler)
+{
+    io.post(handler);
+}
+
+int SingleThreadDispatcher::getPendingCount()
+{
+    // This is not valid for SingleThreadDispatcher but is included
+    // as a legacy as the tests demand it.
+    //
+    // TODO: Fix the tests to not rely on getPendingCount
+    return 10000;
+}
+
+NS_ZINC_CLOSE
 
 
 # ============================================================================
