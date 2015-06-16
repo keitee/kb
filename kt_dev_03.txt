@@ -9260,8 +9260,788 @@ NS_ZINC_CLOSE
 #endif // ZINC_SERIAL_FUTURE_GROUP_IMPL_H_
 
 
-# ============================================================================
-*kt_dev_code_011* asyc: dispatcher
+={============================================================================
+*kt_dev_code_012* asyc: future
+
+class ZINC_EXPORT FutureContextBase : boost::noncopyable
+{
+};
+
+class ZINC_EXPORT FutureContextCommonImpl : public NS_ZINC::FutureContextBase
+{
+};
+
+template <typename T>
+class FutureContext : public FutureContextCommonImpl
+{
+
+};
+
+
+////////////////////////////////////////
+////////////////////////////////////////
+////////////////////////////////////////
+////////////////////////////////////////
+
+////////////////////////////////////////
+#ifndef ZINC_FUTURECONTEXTBASE_H_
+#define ZINC_FUTURECONTEXTBASE_H_
+
+#include "../macros.h"
+
+#include "../error/Error.h"
+#include "FutureDispatcher.h"
+#include <boost/intrusive_ptr.hpp>
+#include <boost/noncopyable.hpp>
+#include <boost/smart_ptr/detail/atomic_count.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/condition.hpp>
+#include <boost/function.hpp>
+#include "../MonotonicClock.h"
+
+NS_ZINC_OPEN
+
+/**
+ * This class provides context to a dispatcher about async function calls
+ *
+ * Intrusively reference counted by Futures, Promises, and FutureDispatchers
+ * The intrusive_ptr implementation keeps the size of client facing objects
+ * Future<T>, Promise<T>, FutureValue<T>, Chunk<T> small
+ *
+ */
+class ZINC_EXPORT FutureContextBase : boost::noncopyable
+{
+public:
+
+    virtual ~FutureContextBase();
+    virtual bool dispatchNextResult() = 0;
+
+    virtual void dispatchCancellation() = 0;
+
+    /**
+     * Wait for this async op to complete
+     */
+    void wait();
+
+    /**
+     * Wait for this async op to complete, with a time out
+     * specified with a time duration
+     *
+     * @see Future<T>::wait_for()
+     */
+    template<typename duration_type>
+        bool wait_for(const duration_type &rel_time)
+        {
+            monotonic_clock::time_point abs_time = monotonic_clock::now() + rel_time;
+            return wait_until(abs_time);
+        }
+
+    /**
+     * Wait for this async op to complete, with a time out
+     * specified with a time point
+     *
+     * @see Future<T>::wait_until()
+     */
+    template<typename time_point_type>
+        bool wait_until(const time_point_type &abs_time)
+        {
+            boost::mutex::scoped_lock lock(mutex);
+            while (!completed)
+            {
+                const bool signalled = cond.wait_until(lock, abs_time);
+                if (!signalled && !completed)
+                    return false; // we timed out, without a completion and without a cancellation
+            }
+            return true;
+        }
+
+    /**
+     * Does the moral equivalent to
+     *     dispatcher.post(bind(FutureContextBase::dispatchNextResult, this));
+     *
+     * WARNING: dispatchNextResult may be called synchronously and
+     *          re-entrantly by this function.
+     */
+    void scheduleCallback();
+
+    void scheduleCancellationCallback();
+
+protected:
+
+    explicit FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_);
+
+    /**
+     * Mark this future as having a completion handler
+     *
+     * Must be called with the future locked
+     */
+    void markCallback();
+
+public:
+    boost::detail::atomic_count refCount;
+    boost::detail::atomic_count promiseCount;
+public:
+    bool completed;
+    FutureDispatcher* dispatcher;
+    FutureDispatcher* clientDispatcher;
+    static boost::condition_variable cond;
+    static boost::mutex mutex;
+private:
+    FutureContextBase(); // forbid default construction
+};
+
+void intrusive_ptr_add_ref(NS_ZINC::FutureContextBase * p) ZINC_EXPORT;
+void intrusive_ptr_release(NS_ZINC::FutureContextBase * p) ZINC_EXPORT;
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_FUTURECONTEXTBASE_H_ */
+
+
+////////////////////////////////////////
+#include "../../include/macros.h"
+#include "../../include/async/FutureContextBase.h"
+#include "../../include/async/FutureDispatcher.h"
+#include "../../include/async/async-exceptions.h"
+#include "../../include/async/cancel_flag.h"
+
+#include <boost/bind.hpp>
+
+NS_ZINC_OPEN
+
+boost::mutex FutureContextBase::mutex;
+boost::condition_variable FutureContextBase::cond((zinc::monotonic_clock()));
+
+FutureContextBase::FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_) :
+	refCount(0),
+	promiseCount(0),
+	completed(false),
+	dispatcher(dispatcher_),
+	clientDispatcher(dispatcher_)
+{}
+
+FutureContextBase::~FutureContextBase()
+{
+	assert(refCount == 0);
+	assert(promiseCount == 0);
+}
+
+/**
+ * Block until this future is completed or it is cancelled
+ */
+void FutureContextBase::wait()
+{
+	boost::mutex::scoped_lock lock(mutex);
+	while (!completed)
+	{
+		cond.wait(lock);
+	}
+}
+
+void FutureContextBase::scheduleCallback()
+{
+	assert(clientDispatcher);
+	boost::intrusive_ptr<FutureContextBase> ip(this);
+	clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+	cond.notify_all();
+}
+
+void FutureContextBase::scheduleCancellationCallback()
+{
+	assert(dispatcher);
+	boost::intrusive_ptr<FutureContextBase> ip(this);
+	dispatcher->post(boost::bind(&FutureContextBase::dispatchCancellation, ip));
+}
+
+// NOTE: These two functions are deliberately out-of-line, so they can be overridden
+// by FutureMemoryTest
+//
+void intrusive_ptr_add_ref(NS_ZINC::FutureContextBase * p)
+{
+	++p->refCount;
+}
+
+void intrusive_ptr_release(NS_ZINC::FutureContextBase * p)
+{
+	int c = --p->refCount;
+	if (c == 0)
+	{
+		delete p;
+	}
+}
+
+NS_ZINC_CLOSE
+
+
+////////////////////////////////////////
+#ifndef ZINC_FUTURECONTEXT_H_
+#define ZINC_FUTURECONTEXT_H_
+
+#include "../FutureContextBase.h"
+#include "../FutureDispatcher.h"
+#include "future_enums.h"
+#include "../FutureDispatcher.h"
+
+#include <boost/function.hpp>
+#include <boost/bind.hpp>
+
+NS_ZINC_OPEN
+
+template <typename T> class FutureValue;
+
+namespace detail {
+
+template <typename T> class FutureContext;
+
+class ZINC_EXPORT FutureContextCommonImpl : public NS_ZINC::FutureContextBase
+{
+    public:
+        ~FutureContextCommonImpl();
+
+        explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_);
+        explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_);
+
+        void cancel(unsigned flags);
+        void completeError(const NS_ZINC::ErrorCode& error_);
+
+    protected:
+        void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, FutureDispatcher* clientDispatcher_);
+        bool runPreSetChecksAndLock(boost::mutex::scoped_lock& lock);
+        void doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock);
+
+        void doPost();
+    public:
+        /**
+         * This gets called by the FutureDispatcher implementation
+         *
+         * @return true if there are more values to come, or false if there are no more values
+         */
+        bool dispatchNextResult();
+
+        void dispatchCancellation();
+
+        bool forDispatch;
+        Dispatcher::work work;
+
+        // The state of the FutureValue is replicated here and in FutureValue
+        // itself.  This is to keep FutureValues immutable, but allow cancel()
+        // to override the value from calls to getFutureValue in the future.
+        futurevalue_state::Enum futurevalueState;
+
+        bool shouldCallCompletionHandler;
+        boost::function<void (FutureContextBase*)> completionHandler;
+        NS_ZINC::ErrorCode error;
+
+        // The state of the promise and the future can evolve semi-independently
+        promise_state::Enum promiseState;
+        bool callCancellationCallback;
+        boost::function<void ()> cancellationCallback;
+};
+
+/**
+ * This class is responsible for allowing type erasing the precise type of the
+ * callback passed to FutureContext<T>::setCallback such that it can be called
+ * from the base class FutureContextCommonImpl.  It down-casts the provided
+ * pointer from the base class to un-type-erase the hoisted base class.
+ *
+ * We don't want to bind a FutureValue into the callback when we get it as the
+ * FutureValue holds a reference to the FutureContext, creating a circular
+ * reference and thus memory leaks.  We use this wrapper to create the
+ * FutureValue at invocation time.  This has the pleasant side-effect of being
+ * more efficient also.
+ */
+template<typename T, typename Functor>
+struct ZINC_LOCAL CallbackHoistingWrapper {
+	typedef void result_type;
+	CallbackHoistingWrapper(Functor f_)
+	 : f(f_) {
+	}
+	void operator()(FutureContextBase* that) {
+		// We must compare by name rather than using a dynamic_cast because
+		// dynamic_cast can fail if the typeinfo for FutureContext<T> is in more
+		// than one .so
+		assert(std::strcmp(typeid(FutureContext<T>).name(), typeid(*that).name()) == 0);
+		f(FutureValue<T>(static_cast<FutureContext<T>*>(that)));
+	}
+	Functor f;
+};
+
+template<typename T, typename Functor>
+CallbackHoistingWrapper<T, Functor> makeCallbackHoistingWrapper(const Functor& f) {
+	return CallbackHoistingWrapper<T, Functor>(f);
+}
+
+/**
+ * A context object for Futures
+ * FutureContext holds a single value passed from a providing Promise and the client Future
+ * and (if set) a completionHandler that is called by the dispatcher when the value is available
+ */
+template <typename T>
+class FutureContext : public FutureContextCommonImpl
+{
+public:
+
+    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_)
+        : FutureContextCommonImpl(dispatcher_)
+    {}
+
+    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_)
+        : FutureContextCommonImpl(dispatcher_, cancellationCallback_)
+    {}
+
+    /**
+     * Type specific completion code called from Promise::complete()
+     *
+     * Take a copy of the result from the Promise and stash it in FutureContext,
+     * complete() marks this FutureContext as completed, and post() hands
+     * it over to the dispatcher
+     *
+     * @see FutureContextBase::complete()
+     * @see FutureContextBase::post()
+     */
+    void set(const T & result)
+    {
+        boost::mutex::scoped_lock lock;
+        if (runPreSetChecksAndLock(lock)) {
+            value = result;
+        }
+        doPostSetActionsAndUnlock(lock);
+    }
+
+    template <typename Handler>
+        void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
+            setCallbackHoisted(boost::function<void (FutureContextBase*)>(
+                        makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))),
+                    clientDispatcher_
+                    );
+        }
+
+    T value;
+};
+
+
+/**
+ * A context object for Future<void> objects
+ * FutureContext holds a single FutureValue<void> object containing any errors passed from Promise
+ * and a completion handler to be called when the asynchronous operation is complete
+ * No value is passed from Promise to Future
+ */
+template <>
+class FutureContext<void> : public FutureContextCommonImpl
+{
+public:
+
+    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_) : FutureContextCommonImpl(dispatcher_) {}
+    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_)
+        : FutureContextCommonImpl(dispatcher_, cancellationCallback_)
+    {}
+
+    /**
+     * Type specific completion code called from Promise::complete()
+     *
+     * complete() marks this FutureContext as completed, and post() hands
+     * it over to the dispatcher
+     *
+     * @see FutureContextBase::complete()
+     * @see FutureContextBase::post()
+     */
+    void set()
+    {
+        boost::mutex::scoped_lock lock;
+        runPreSetChecksAndLock(lock);
+        doPostSetActionsAndUnlock(lock);
+    }
+
+    template <typename Handler>
+        void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
+
+            setCallbackHoisted(
+
+                    boost::function<void (FutureContextBase*)>(
+                        makeCallbackHoistingWrapper<void>(boost::bind<void>(fn, _1))
+                        ),
+                    clientDispatcher_
+                    );
+        }
+};
+
+} // namespace detail
+
+NS_ZINC_CLOSE
+
+#endif
+
+
+={============================================================================
+*kt_dev_code_013* asyc: promise
+
+class PromiseBase : boost::noncopyable 
+
+template<typename T> class Promise : public PromiseBase
+{
+    explicit Promise(Dispatcher& dispatcher_);
+};
+
+typedef Dispatcher FutureDispatcher;
+
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
+   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
+{
+}
+
+
+////////////////////////////////////////
+#ifndef ZINC_PROMISE_H_
+#define ZINC_PROMISE_H_
+
+#include "../macros.h"
+
+#include "detail/Future_Decl.h"
+#include "FutureDispatcher.h"
+#include "detail/FutureContext.h"
+#include "async-exceptions.h"
+#include "../type-traits/call-traits.h"
+
+#include <boost/shared_ptr.hpp>
+#include <boost/make_shared.hpp>
+#include <boost/utility/enable_if.hpp>
+#include <boost/type_traits/is_void.hpp>
+
+NS_ZINC_OPEN
+
+namespace internal{
+class PolymorphicPromise;
+}
+
+/**
+ * Base class for Promises which contain different types.  This can be useful
+ * when hoisting to reduce object code size.
+ */
+class PromiseBase : boost::noncopyable 
+{
+    friend class internal::PolymorphicPromise;
+    public:
+    /**
+     * Complete this Promise with a zinc::ErrorCode
+     *
+     * @param error the error code value
+     *
+     * @throws PromiseAlreadyCompleted if this Promise has already been completed
+     */
+    void error(const NS_ZINC::ErrorCode& error);
+
+    /**
+     * Complete this Promise with an exception
+     *
+     * @param e the exception
+     *
+     * @throws PromiseAlreadyCompleted if this Promise has already been completed
+     */
+    void exception(const std::exception& e);
+
+    /**
+     * Ask if this async operation has been completed with a value
+     *
+     * @return true if the async operation associated with this Promise has been completed
+     */
+    bool isComplete() const;
+
+    protected:
+    // Destructor and Constructor are protected to prevent deletion through the
+    // base class.  If you want to store a Promise polymorphically use
+    // PolymorphicPromise.
+    ~PromiseBase() ZINC_EXPORT;
+    explicit PromiseBase(detail::FutureContextCommonImpl*) ZINC_EXPORT;
+    PromiseBase(const PromiseBase& other) ZINC_EXPORT;
+    boost::intrusive_ptr<detail::FutureContextCommonImpl> context;
+    void baseSwap(PromiseBase& other);
+};
+
+/**
+ * A Promise provides the API to set the result of an asynchronous operation,
+ * signal the caller, and trigger dispatch of any associated completion handlers
+ */
+template<typename T>
+class Promise : public PromiseBase
+{
+    public:
+        /**
+         * Construct a Promise for an asynchronous operation.
+         *
+         * If a dispatcher is passed the deprecated single-argument
+         * Future::setCallback which does not take a Dispatcher may be used on the
+         * Future returned from getFuture().  In this case the callback will be
+         * executed on the Dispatcher passed here.  This is a deprecated mode of
+         * use.
+         *
+         * Using the default Promise constructor and the two argument Future
+         * setCallback is strongly recommended in new code.  The single argument
+         * Promise constructor is likely to be deprecated in the future.
+         *
+         * If a cancellation callback is provided it will be executed on the
+         * dispatcher provided here.
+         */
+        Promise();
+        explicit Promise(Dispatcher& dispatcher_);
+        explicit Promise(Dispatcher& dispatcher_,
+                boost::function<void ()> cancelationCallback);
+
+        Promise(const Promise<T> & other);
+
+        Promise & operator=(const Promise<T> & other);
+
+        /**
+         * Swap this promise with the one provided
+         */
+        void swap(Promise<T> & other);
+
+        /**
+         * Create a Future for this Promise.
+         *
+         * The created Future can be used to access the result of this Promise.
+         *
+         * @return A Future used to access the result of this Promise
+         */
+        Future<T> getFuture();
+
+        /**
+         * Complete this Promise with a value and deliver the result to
+         * all associated Futures
+         *
+         * @param value the result to be delivered
+         *
+         * @throws PromiseAlreadyCompleted if this Promise has already been completed
+         */
+        void complete(typename const_param<T>::type);
+    private:
+        detail::FutureContext<T>& getContext();
+        // WARNING: DO NOT ADD MEMBERS HERE:
+        //     PolymorphicPromise depends on Promise<T> having no additional members
+        //     vs. PromiseBase
+};
+
+
+/**
+ * A Promise<void> provides the API to signal the caller of an asynchronous operation,
+ * and trigger dispatch of any associated completion handlers
+ *
+ * FIXME: It's a shame that we have to specialize the whole class for void, when complete()
+ * is really the only method that is different. But, to use sub-classing to do this
+ * would confuse the interface.
+ */
+template<>
+class Promise<void> : public PromiseBase
+{
+    public:
+
+        /**
+         * Construct a Promise for an asynchronous operation.
+         *
+         * If a dispatcher is passed the deprecated single-argument
+         * Future::setCallback which does not take a Dispatcher may be used on the
+         * Future returned from getFuture().  In this case the callback will be
+         * executed on the Dispatcher passed here.  This is a deprecated mode of
+         * use.
+         *
+         * Using the default Promise constructor and the two argument Future
+         * setCallback is strongly recommended in new code.  The single argument
+         * Promise constructor is likely to be deprecated in the future.
+         *
+         * If a cancellation callback is provided it will be executed on the
+         * dispatcher provided here.
+         */
+        Promise();
+        explicit Promise(Dispatcher& dispatcher_);
+        explicit Promise(Dispatcher& dispatcher_,
+                boost::function<void ()> cancelationCallback);
+
+        Promise(const Promise<void> &other);
+
+        Promise & operator=(const Promise<void> & other);
+
+        /**
+         * Swap this promise with the one provided
+         */
+        void swap(Promise<void> & other);
+
+        /**
+         * Create a Future for this Promise.
+         *
+         * The created Future can be used to synchronise on completion of this Promise,
+         * and retrieve any error conditions that may occur.
+         *
+         * @return A Future used to access the result of this Promise
+         */
+        Future<void> getFuture();
+
+        /**
+         * Complete this Promise and notify all associated Futures
+         *
+         * @throws PromiseAlreadyCompleted if this Promise has already been completed
+         */
+        void complete();
+
+    private:
+        detail::FutureContext<void>& getContext();
+        // WARNING: DO NOT ADD MEMBERS HERE:
+        //     PolymorphicPromise depends on Promise<T> having no additional members
+        //     vs. PromiseBase
+};
+
+NS_ZINC_CLOSE
+
+#include "detail/Promise_Impl.h"
+
+#endif /* ZINC_PROMISE_H_ */
+
+
+////////////////////////////////////////
+#ifndef ZINC_PROMISE_IMPL_H_
+#define ZINC_PROMISE_IMPL_H_
+
+#include "../Future.h"
+#include "../async-exceptions.h"
+
+NS_ZINC_OPEN
+
+inline void PromiseBase::baseSwap(PromiseBase& other)
+{
+	using std::swap;
+	swap(context, other.context);
+}
+
+inline void PromiseBase::error(const NS_ZINC::ErrorCode& error)
+{
+	context->completeError(error);
+}
+
+inline void PromiseBase::exception(const std::exception& e)
+{
+	error(zinc::copyException(e));
+}
+
+inline bool PromiseBase::isComplete() const
+{
+	return context->completed;
+}
+
+template<typename T>
+inline Promise<T>::Promise() :
+	PromiseBase( new detail::FutureContext<T>(NULL) )
+{
+}
+
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
+   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
+{
+}
+
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_, boost::function<void ()> cancellationCallback_) :
+	PromiseBase( new detail::FutureContext<T>(&dispatcher_, cancellationCallback_ ) )
+{
+}
+
+template<typename T>
+Promise<T>::Promise(const Promise<T> &other)
+ : PromiseBase(other.context.get())
+{
+}
+
+template<typename T>
+Promise<T>& Promise<T>::operator=(const Promise<T> & other)
+{
+	Promise<T>(other).swap(*this);
+	return *this;
+}
+
+template<typename T>
+inline Future<T> Promise<T>::getFuture()
+{
+	return Future<T>(&getContext());
+}
+
+template<typename T>
+inline void Promise<T>::complete(typename const_param<T>::type value)
+{
+	getContext().set(value);
+}
+
+template<typename T>
+inline void Promise<T>::swap(Promise<T> & other)
+{
+    baseSwap(other);
+}
+
+template<typename T>
+inline detail::FutureContext<T>& Promise<T>::getContext()
+{
+	return *static_cast<detail::FutureContext<T>* >(context.get());
+}
+
+// ** void specialization **
+
+// This is the only method that actually needs to be different.
+inline void Promise<void>::complete()
+{
+	getContext().set();
+}
+
+// But we have to repeat all these, because whole class is specialized.
+
+inline Promise<void>::Promise() :
+	PromiseBase( new detail::FutureContext<void>(NULL) )
+{
+}
+
+inline Promise<void>::Promise(FutureDispatcher& dispatcher_) :
+	PromiseBase( new detail::FutureContext<void>(&dispatcher_) )
+{
+}
+
+inline Promise<void>::Promise(FutureDispatcher & dispatcher_, boost::function<void ()> cancellationCallback_) :
+	PromiseBase( new detail::FutureContext<void>(&dispatcher_, cancellationCallback_) )
+{
+}
+
+inline Promise<void> & Promise<void>::operator=(const Promise<void> & other)
+{
+	Promise<void>(other).swap(*this);
+	return *this;
+}
+
+inline Promise<void>::Promise(const Promise<void> & other)
+ : PromiseBase(other.context.get())
+{
+}
+
+inline Future<void> Promise<void>::getFuture()
+{
+	return Future<void>(&getContext());
+}
+
+inline void Promise<void>::swap(Promise<void> & other)
+{
+    baseSwap(other);
+}
+
+inline detail::FutureContext<void>& Promise<void>::getContext()
+{
+	return *static_cast<detail::FutureContext<void>* >(context.get());
+}
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_PROMISE_IMPL_H_ */
+////////////////////////////////////////
+////////////////////////////////////////
+////////////////////////////////////////
+////////////////////////////////////////
+
+={============================================================================
+*kt_dev_code_014* asyc: dispatcher
 
 DP <- STDP <-
 
@@ -9278,9 +10058,7 @@ NS_ZINC_OPEN
 
 /*
  * Interface for general functor dispatcher.
- *
  * Dispatchers are used to invoke callback functors (for events and futures for example).
- *
  */
 struct ZINC_EXPORT Dispatcher : boost::noncopyable
 {
@@ -9380,7 +10158,6 @@ NS_ZINC_CLOSE
 #include "../../include/MonotonicClock.h"
 #include <boost/thread.hpp>
 
-
 using namespace std;
 
 NS_ZINC_OPEN
@@ -9404,7 +10181,7 @@ static void run(boost::asio::io_service* io) {
     }
 }
 
-SingleThreadDispatcher:: SingleThreadDispatcher()
+SingleThreadDispatcher::SingleThreadDispatcher()
    : thread(makeWorkerFunction(boost::bind(&run, &io)))
 {
 }
@@ -9434,6 +10211,372 @@ int SingleThreadDispatcher::getPendingCount()
 
 NS_ZINC_CLOSE
 
+
+////////////////////////////////////////
+#ifndef ZINC_WORKERFUNCTION_H_
+#define ZINC_WORKERFUNCTION_H_
+
+#include "macros.h"
+
+NS_ZINC_OPEN
+
+namespace detail {
+
+void maskSignals() ZINC_EXPORT;
+
+/**
+ * This functor is used to wrap any functor (or plain function) that will
+ * be executed by a worker thread. It's purpose is to ensure that the first
+ * thing the thread does is to ignore all signals delivered to the process.
+ *
+ * This is important, since posix does not define *which* thread a will
+ * receive a signal delivered to the process. It only says that the signal
+ * may be delivered to any thread that does not mask it. So, if we wish to have
+ * a sane signal handling strategy, then we should nominate a *single* specific
+ * thread to deal with all signals (and perhaps propagate them to other threads, as
+ * application events).
+ *
+ * Use this class like:
+ *
+ * boost::thread thread(WorkerFunction(myThreadFunctionOrFunctor));
+ *
+ */
+template <class NullaryFunctor>
+    class WorkerFunction {
+
+        public:
+            WorkerFunction(NullaryFunctor functor)
+                : workerFunction(functor)
+            {
+            }
+
+            void operator()() {
+                maskSignals();
+                workerFunction();
+            }
+
+        private:
+            NullaryFunctor workerFunction;
+    };
+
+}
+
+template <typename NullaryFunctor>
+detail::WorkerFunction<NullaryFunctor> makeWorkerFunction(NullaryFunctor fn)
+{
+    return detail::WorkerFunction<NullaryFunctor>(fn);
+}
+
+NS_ZINC_CLOSE
+
+#endif /* WORKERFUNCTION_H_ */
+
+////////////////////////////////////////
+#include "../include/WorkerFunction.h"
+#include <stdexcept>
+#include <cstring>
+#include <pthread.h>
+#include <signal.h>
+
+NS_ZINC_OPEN
+
+namespace detail {
+
+void maskSignals() {
+    // Explicitly mask all signals. We don't want to be the thread
+    // randomly selected for signal processing, thankyou.
+    
+    sigset_t sigs;
+    sigfillset(&sigs);
+    
+    int error = pthread_sigmask(SIG_SETMASK, &sigs, 0);
+    
+    if (error) {
+        throw std::runtime_error(std::strerror(error));
+    }
+}
+
+}
+
+NS_ZINC_CLOSE
+
+
+={============================================================================
+*kt_dev_code_012* asyc: dispatcher use
+
+EventProducer 
+   <- DispatchingEventProducer(Dispatcher)
+
+         virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
+
+         // forwards to impl
+         mutable detail::DispatchingEventProducerHoisted impl;
+
+      <- EventEindow
+          <- SystemClientEventWindow
+
+////////////////////////////////////////
+#ifndef ZINC_EVENTPRODUCER_H_
+#define ZINC_EVENTPRODUCER_H_
+
+#include "Event.h" // for convenience in derived classes.
+#include "Polymorphic.h"
+
+#include <boost/shared_ptr.hpp>
+
+NS_ZINC_OPEN
+
+// I'm deliberately using int here, rather than int32.
+// Want machine word size. I may change this type later, so don't rely on it.
+typedef int EventProducerId;
+
+
+/**
+ * An abstract producer of events matching a particular specification.
+ *
+ * Concrete producers should subclass a specialisation of this base.
+ *
+ * Please note: Although this implementation looks like it does
+ * not strictly need to be a template class, templating on the
+ * event listener specification is both instructive of the type of
+ * events produced, and is in fact required by the binding generator.
+ */
+template<class ListenerT>
+class ZINC_EXPORT EventProducer : virtual public Polymorphic {
+
+    public:
+        typedef ListenerT listener_type;
+
+        /**
+         * Add an event listener.
+         * The event listener methods will be invoked on the default dispatcher.
+         *
+         * @param listener the event listener.
+         *
+         * @throws std::invalid_argument if a <code>null</code> listener is given.
+         *
+         * @acl all
+         */
+        virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
+
+        /**
+         * @acl all
+         */
+        virtual void removeListener(boost::shared_ptr<ListenerT> listener) = 0;
+};
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_EVENTPRODUCER_H_ */
+
+
+////////////////////////////////////////
+#ifndef ZINC_EVENTDISPATCHER_H_
+#define ZINC_EVENTDISPATCHER_H_
+
+#include "macros.h"
+#include "async/Dispatcher.h"
+
+NS_ZINC_OPEN
+
+typedef Dispatcher EventDispatcher;
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_EVENTDISPATCHER_H_ */
+
+
+////////////////////////////////////////
+#ifndef ZINC_DISPATCHINGEVENTPRODUCER_H_
+#define ZINC_DISPATCHINGEVENTPRODUCER_H_
+
+#include "EventProducer.h"
+#include "detail/DispatchingEventProducerHoisted.h"
+#include "type-traits/check_concept.h"
+
+#include <iostream>
+
+NS_ZINC_OPEN
+
+/**
+ * EventProducer specialization that implements produceEvent() by delegating
+ * events to an EventDispatcher implementation.
+ */
+template<class ListenerT>
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> 
+{
+public:
+
+    DispatchingEventProducer() : impl(boost::shared_ptr<EventDispatcher>()) {}
+
+    /**
+     * Constructor
+     *
+     * @param dispatcher_ this dispatcher will be used to dispatch event listener callback
+     * methods, unless clients explicitly provide an alternative dispatcher in the
+     * call to addListener()
+     */
+    explicit DispatchingEventProducer(boost::shared_ptr<EventDispatcher> dispatcher_) : impl(dispatcher_) {}
+
+    /**
+     * Add an event listener.
+     * The event listener methods will be invoked on the default dispatcher.
+     *
+     * @param listener the event listener.
+     *
+     * @throws std::invalid_argument if a <code>null</code> listener is given.
+     *
+     * @acl all
+     */
+    virtual void addListener(boost::shared_ptr<ListenerT> listener) {
+        // Hoisting note: we cast to void* here, and cast back down in
+        // DowncastingCaller so everything is lovely and symmetrical
+        impl.addListener(listener);
+    }
+
+    /**
+     * Add an event listener and specify the dispatcher on which the event listener methods
+     * should be invoked.
+     *
+     * @param clientDispatcher the dispatcher on which the event listener callbacks will be
+     * invoked. This overrides the default dispatcher.
+     * @param listener the event listener.
+     *
+     * @throws std::invalid_argument if a <code>null</code> listener or clientDispatcher is
+     * provided.
+     *
+     * @acl all
+     */
+    virtual void addListener(boost::shared_ptr<EventDispatcher> clientDispatcher, boost::shared_ptr<ListenerT> listener) {
+
+        if (!clientDispatcher) {
+            throw std::invalid_argument("NULL dispatcher provided in call to addListener()!");
+        }
+
+        // Hoisting note: we cast to void* here, and cast back down in
+        // DowncastingCaller so everything is lovely and symmetrical
+        impl.addListener(listener, clientDispatcher);
+    }
+
+    /**
+     * @acl all
+     */
+    virtual void removeListener(boost::shared_ptr<ListenerT> listener) {
+        impl.removeListener(listener);
+    }
+
+    virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher) {
+        impl.setDispatcher(dispatcher);
+    }
+
+    virtual boost::shared_ptr<EventDispatcher> getDispatcher() const {
+        return impl.getDispatcher();
+    }
+
+    virtual size_t getListenerCount() const {
+        return impl.getListenerCount();
+    }
+
+protected:
+
+    /**
+     * Derived implementations can call this method to dispatch an event.
+     *
+     * NOTE: This overload is provided for backwards-compatibility only. New
+     * code should use the templated version, below, which accepts a functor
+     * directly, rather than requiring an intermediate BoundEvent object.
+     *
+     * @param event the event to be dispatched. This should be an instance of
+     * BoundEvent<ListenerT>
+     */
+    void produceEvent(boost::shared_ptr<Event> event) const {
+
+        // The vast majority of the time the actual derived type will be
+        // BoundEvent<ListenerT> so we optimise for this case, reaching in and
+        // pulling out the contained boost::function.
+        boost::shared_ptr<BoundEvent<ListenerT> > e = boost::dynamic_pointer_cast<BoundEvent<ListenerT> >(event);
+        if (e) {
+            produceEvent(e->listenerMethod);
+        }
+        else {
+            produceEvent(boost::bind(&Event::dispatchTo, event, _1));
+        }
+    }
+
+    void produceEvent(boost::shared_ptr<BoundEvent<ListenerT> > event) const {
+        produceEvent(static_cast<boost::shared_ptr<Event> >(event));
+    }
+
+    /**
+     * Derived implementations should call this method to dispatch an event.
+     *
+     * NOTE: This overload is preferred to the one above, as it is more efficient
+     * and offers greater clarity.
+     *
+     * It accepts a functor with the signature:
+     *
+     *     void f(ListenerT*)
+     *
+     * @param f a functor with the above signature, which can be a plain-old function,
+     * member-function, boost::function, or bind expression.
+     */
+    template <typename Functor>
+        void produceEvent(Functor f) const {
+
+            ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
+            impl.produceEvent(DowncastingCaller<Functor>(f));
+        }
+
+private:
+
+    template <typename Functor>
+        struct DowncastingCaller {
+            explicit DowncastingCaller(Functor f_) : f(f_) {}
+            void operator()(boost::shared_ptr<detail::hoisted_event_listener> listener) {
+                // We implicitly casted to void* in add/removeListener above so
+                // this is safe.
+                f(static_cast<ListenerT*>(listener.get()));
+            }
+            Functor f;
+        };
+
+    mutable detail::DispatchingEventProducerHoisted impl;
+};
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_DISPATCHINGEVENTPRODUCER_H_ */
+
+////////////////////////////////////////
+
+// A class that represents the Event Window, basically the EPG view.
+class ZINC_EXPORT EventWindow : 
+    virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> {
+
+        // define virtual interfaces for API so this is ABC.
+};
+
+
+// created from createEventWindow() and passed up to EPG
+
+class ZINC_EXPORT SystemClientEventWindow 
+                                 : virtual public EventWindow,
+                                   public boost::enable_shared_from_this<SystemClientEventWindow>,
+                                   virtual public MetadataChangeListener 
+{
+    // note: add f = bind() to listeners. so when called from listners, will lead to 
+    // EventWindowEventListener::EventsChanged(_1, events);
+    
+    notifyEventsChanged(std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> > events)
+    {
+        produceEvent(bind(&EventWindowEventListener::EventsChanged, _1, events));
+    }
+
+    notifyWindowChanged()
+    {
+        produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+    }
+};
 
 # ============================================================================
 #{
