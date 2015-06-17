@@ -11,9 +11,15 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_001| dynamic fsm
 |kt_dev_code_002| static fsm
 |kt_dev_code_003| static fsm demo in cpp
+*kt_dev_code_004* macro: wait on expression or timed out 
 
 |kt_dev_code_010| asyc: continuation
-|kt_dev_code_011| asyc: dispatcher
+*kt_dev_code_011* asyc: flow between future, promise, and io_service
+*kt_dev_code_012* asyc: future
+*kt_dev_code_013* asyc: promise
+*kt_dev_code_014* asyc: future barrier
+*kt_dev_code_015* asyc: dispatcher
+*kt_dev_code_016* asyc: dispatcher use
 
 |kt_dev_design_001| use state and if checks
 
@@ -8681,7 +8687,7 @@ TEST_TIMEOUT: 1   10    100   101   102   199   200   201
 Since it polls at 100ms, to normalize inputs.
 
 
-# ============================================================================
+={============================================================================
 *kt_dev_code_010* asyc: continuation
 
 ////////////////////////////////////////
@@ -9261,15 +9267,141 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
+*kt_dev_code_011* asyc: flow between future, promise, and io_service
+
+Future                                 Promise
+            FutureContext<T>           <- 2.
+
+1. when creates a promise, associated value, FC gets created with dispatcher
+
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
+   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
+{
+}
+
+
+2. set a pointer in promise which links to FC.
+
+PromiseBase::PromiseBase(detail::FutureContextCommonImpl* p)
+ : context(p)
+{
+    if (context.get())
+    {
+        ++context->promiseCount;
+    }
+}
+
+
+3. when complete() is called, calls set() on FC. see copy of value
+
+template<typename T>
+inline void Promise<T>::complete(typename const_param<T>::type value)
+{
+    getContext().set(value);
+}
+
+
+4. FC copy value from puture, call scheduleCallback().
+
+/**
+ * Type specific completion code called from Promise::complete()
+ *
+ * Take a copy of the result from the Promise and stash it in FutureContext,
+ * complete() marks this FutureContext as completed, and post() hands
+ * it over to the dispatcher
+ *
+ * @see FutureContextBase::complete()
+ * @see FutureContextBase::post()
+ */
+void set(const T & result)
+{
+    boost::mutex::scoped_lock lock;
+    if (runPreSetChecksAndLock(lock)) {
+        value = result;
+    }
+    doPostSetActionsAndUnlock(lock);
+}
+
+void FutureContextCommonImpl::doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock)
+{
+    assert(lock.owns_lock());
+    bool wasCompleted = completed;
+    bool oldForDispatch = forDispatch;
+    completed = true;
+    lock.unlock();
+    if (!wasCompleted) {
+        cond.notify_all();
+        if (oldForDispatch && clientDispatcher) {
+
+            scheduleCallback();
+        }
+    }
+}
+
+
+5. post to dispatcher.
+
+void FutureContextBase::scheduleCallback()
+{
+    assert(clientDispatcher);
+    boost::intrusive_ptr<FutureContextBase> ip(this);
+    clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+    cond.notify_all();
+}
+
+
+6. call back from io_service?
+
+bool FutureContextCommonImpl::dispatchNextResult()
+{
+    boost::mutex::scoped_lock lock(mutex);
+
+    // NOTE: We always want to come into this method and null the callback when we're done,
+    // even if canceled.
+
+    if (completed && shouldCallCompletionHandler && completionHandler)
+    {
+        // Release the work object at the end of this scope
+        Dispatcher::work w;
+        w.swap(this->work);
+
+        // Don't hold locks when calling user code
+        boost::function<void (FutureContextBase*)> stackCompletionHandler;
+        stackCompletionHandler.swap(completionHandler);
+        lock.unlock();
+        stackCompletionHandler(this);
+    }
+
+    return false;
+}
+
+
+={============================================================================
 *kt_dev_code_012* asyc: future
 
+// This class provides context to a dispatcher about async function calls
 class ZINC_EXPORT FutureContextBase : boost::noncopyable
 {
+    FutureDispatcher* dispatcher;
+    FutureDispatcher* clientDispatcher;
+
+    void FutureContextBase::scheduleCallback()
+    {
+        boost::intrusive_ptr<FutureContextBase> ip(this);
+        clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+        cond.notify_all();
+    }
 };
+
 
 class ZINC_EXPORT FutureContextCommonImpl : public NS_ZINC::FutureContextBase
 {
+   bool FutureContextCommonImpl::dispatchNextResult()
+   {
+   }
 };
+
 
 template <typename T>
 class FutureContext : public FutureContextCommonImpl
@@ -9314,6 +9446,8 @@ class ZINC_EXPORT FutureContextBase : boost::noncopyable
 public:
 
     virtual ~FutureContextBase();
+
+    // note:
     virtual bool dispatchNextResult() = 0;
 
     virtual void dispatchCancellation() = 0;
@@ -9413,17 +9547,17 @@ boost::mutex FutureContextBase::mutex;
 boost::condition_variable FutureContextBase::cond((zinc::monotonic_clock()));
 
 FutureContextBase::FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_) :
-	refCount(0),
-	promiseCount(0),
-	completed(false),
-	dispatcher(dispatcher_),
-	clientDispatcher(dispatcher_)
+    refCount(0),
+    promiseCount(0),
+    completed(false),
+    dispatcher(dispatcher_),
+    clientDispatcher(dispatcher_)
 {}
 
 FutureContextBase::~FutureContextBase()
 {
-	assert(refCount == 0);
-	assert(promiseCount == 0);
+    assert(refCount == 0);
+    assert(promiseCount == 0);
 }
 
 /**
@@ -9431,26 +9565,27 @@ FutureContextBase::~FutureContextBase()
  */
 void FutureContextBase::wait()
 {
-	boost::mutex::scoped_lock lock(mutex);
-	while (!completed)
-	{
-		cond.wait(lock);
-	}
+    boost::mutex::scoped_lock lock(mutex);
+    while (!completed)
+    {
+        cond.wait(lock);
+    }
 }
 
+// note:
 void FutureContextBase::scheduleCallback()
 {
-	assert(clientDispatcher);
-	boost::intrusive_ptr<FutureContextBase> ip(this);
-	clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
-	cond.notify_all();
+    assert(clientDispatcher);
+    boost::intrusive_ptr<FutureContextBase> ip(this);
+    clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+    cond.notify_all();
 }
 
 void FutureContextBase::scheduleCancellationCallback()
 {
-	assert(dispatcher);
-	boost::intrusive_ptr<FutureContextBase> ip(this);
-	dispatcher->post(boost::bind(&FutureContextBase::dispatchCancellation, ip));
+    assert(dispatcher);
+    boost::intrusive_ptr<FutureContextBase> ip(this);
+    dispatcher->post(boost::bind(&FutureContextBase::dispatchCancellation, ip));
 }
 
 // NOTE: These two functions are deliberately out-of-line, so they can be overridden
@@ -9495,47 +9630,47 @@ template <typename T> class FutureContext;
 
 class ZINC_EXPORT FutureContextCommonImpl : public NS_ZINC::FutureContextBase
 {
-    public:
-        ~FutureContextCommonImpl();
+public:
+    ~FutureContextCommonImpl();
 
-        explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_);
-        explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_);
+    explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_);
+    explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_);
 
-        void cancel(unsigned flags);
-        void completeError(const NS_ZINC::ErrorCode& error_);
+    void cancel(unsigned flags);
+    void completeError(const NS_ZINC::ErrorCode& error_);
 
-    protected:
-        void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, FutureDispatcher* clientDispatcher_);
-        bool runPreSetChecksAndLock(boost::mutex::scoped_lock& lock);
-        void doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock);
+protected:
+    void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, FutureDispatcher* clientDispatcher_);
+    bool runPreSetChecksAndLock(boost::mutex::scoped_lock& lock);
+    void doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock);
 
-        void doPost();
-    public:
-        /**
-         * This gets called by the FutureDispatcher implementation
-         *
-         * @return true if there are more values to come, or false if there are no more values
-         */
-        bool dispatchNextResult();
+    void doPost();
+public:
+    /**
+     * This gets called by the FutureDispatcher implementation
+     *
+     * @return true if there are more values to come, or false if there are no more values
+     */
+    bool dispatchNextResult();
 
-        void dispatchCancellation();
+    void dispatchCancellation();
 
-        bool forDispatch;
-        Dispatcher::work work;
+    bool forDispatch;
+    Dispatcher::work work;
 
-        // The state of the FutureValue is replicated here and in FutureValue
-        // itself.  This is to keep FutureValues immutable, but allow cancel()
-        // to override the value from calls to getFutureValue in the future.
-        futurevalue_state::Enum futurevalueState;
+    // The state of the FutureValue is replicated here and in FutureValue
+    // itself.  This is to keep FutureValues immutable, but allow cancel()
+    // to override the value from calls to getFutureValue in the future.
+    futurevalue_state::Enum futurevalueState;
 
-        bool shouldCallCompletionHandler;
-        boost::function<void (FutureContextBase*)> completionHandler;
-        NS_ZINC::ErrorCode error;
+    bool shouldCallCompletionHandler;
+    boost::function<void (FutureContextBase*)> completionHandler;
+    NS_ZINC::ErrorCode error;
 
-        // The state of the promise and the future can evolve semi-independently
-        promise_state::Enum promiseState;
-        bool callCancellationCallback;
-        boost::function<void ()> cancellationCallback;
+    // The state of the promise and the future can evolve semi-independently
+    promise_state::Enum promiseState;
+    bool callCancellationCallback;
+    boost::function<void ()> cancellationCallback;
 };
 
 /**
@@ -9585,10 +9720,13 @@ public:
         : FutureContextCommonImpl(dispatcher_)
     {}
 
-    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_)
+    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_, 
+            boost::function<void ()> cancellationCallback_)
         : FutureContextCommonImpl(dispatcher_, cancellationCallback_)
     {}
 
+    // note:
+    
     /**
      * Type specific completion code called from Promise::complete()
      *
@@ -9672,12 +9810,303 @@ NS_ZINC_CLOSE
 #endif
 
 
+////////////////////////////////////////
+#include "../../include/macros.h"
+#include "../../include/async/detail/FutureContext.h"
+#include "../../include/async/Promise.h"
+#include "../../include/async/cancel_flag.h"
+#include "../../include/async/async-exceptions.h"
+#include "../../include/async/FutureDispatcher.h"
+#include "../../include/async/ChunkedFuture.h"
+
+#include <boost/thread/mutex.hpp>
+#include <cassert>
+
+NS_ZINC_OPEN
+
+// note:
+PromiseBase::PromiseBase(detail::FutureContextCommonImpl* p)
+ : context(p)
+{
+    if (context.get())
+    {
+        ++context->promiseCount;
+    }
+}
+
+PromiseBase::PromiseBase(const PromiseBase& p)
+: boost::noncopyable(), context(p.context)
+{
+    if (context.get())
+    {
+        ++context->promiseCount;
+    }
+}
+
+PromiseBase::~PromiseBase()
+{
+	if (context.get() && --context->promiseCount == 0 && !context->completed)
+	{
+		// We have just dropped the last Promise
+		error(ErrorCode(error::BrokenPromiseCode, "Promise never completed"));
+	}
+}
+
+
+FutureValueBase::FutureValueBase(const boost::intrusive_ptr<detail::FutureContextCommonImpl> & context_) :
+	context(context_),
+	state(context_->futurevalueState)
+{
+
+}
+
+FutureValueBase::~FutureValueBase() {
+
+}
+
+
+FutureBase::FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context_) :
+	context(context_)
+{
+
+}
+
+FutureBase::FutureBase(const FutureBase& other) :
+	context(other.context)
+{
+
+}
+
+FutureBase::~FutureBase()
+{
+
+}
+
+
+
+ChunkedFutureBase::ChunkedFutureBase(boost::intrusive_ptr<FutureContextBase> context_ ) :
+	context(context_)
+{
+}
+
+ChunkedFutureBase::~ChunkedFutureBase()
+{
+}
+
+ChunkedFutureBase::ChunkedFutureBase(const ChunkedFutureBase& other) :
+	context(other.context)
+{
+}
+
+
+namespace detail {
+
+FutureContextCommonImpl::FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_)
+ : FutureContextBase(dispatcher_),
+   forDispatch(false),
+   futurevalueState(futurevalue_state::value_or_error),
+   shouldCallCompletionHandler(true),
+   promiseState(promise_state::incomplete),
+   callCancellationCallback(true)
+{
+}
+
+FutureContextCommonImpl::FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_)
+ : FutureContextBase(dispatcher_),
+   forDispatch(false),
+   futurevalueState(futurevalue_state::value_or_error),
+   shouldCallCompletionHandler(true),
+   promiseState(promise_state::incomplete),
+   callCancellationCallback(true),
+   cancellationCallback(cancellationCallback_)
+
+{
+}
+
+FutureContextCommonImpl::~FutureContextCommonImpl()
+{
+}
+
+void FutureContextCommonImpl::cancel(unsigned flags)
+{
+	bool shouldPost = false;
+	bool shouldPostCancellation = false;
+
+	boost::mutex::scoped_lock lock(this->mutex);
+	callCancellationCallback = flags & cancel_flag::deep;
+	if (flags & cancel_flag::clear_callback)
+	{
+		Dispatcher::work().swap(work);
+		shouldCallCompletionHandler = false;
+		completionHandler = 0;
+	}
+
+	// If there is a deep cancellation callback registered for this
+	// async operation then post it to the dispatch queue.
+	// Note it is possible that all promises have already gone out of scope
+	shouldPostCancellation = cancellationCallback && callCancellationCallback;
+	if (flags & cancel_flag::immediately)
+	{
+		futurevalueState = detail::futurevalue_state::cancelled;
+		if (!completed)
+		{
+			completed = true;
+			shouldPost = !!completionHandler;
+		}
+	}
+
+	// Must not hold the lock when calling post()
+	lock.unlock();
+
+	cond.notify_all();
+
+	if (shouldPostCancellation)
+	{
+		scheduleCancellationCallback();
+	}
+
+	if (shouldPost)
+	{
+		scheduleCallback();
+	}
+}
+
+void FutureContextCommonImpl::completeError(const NS_ZINC::ErrorCode& error_)
+{
+	boost::mutex::scoped_lock lock;
+	if (runPreSetChecksAndLock(lock)) {
+		error = error_;
+	}
+	doPostSetActionsAndUnlock(lock);
+}
+
+void FutureContextCommonImpl::setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, FutureDispatcher* clientDispatcher_)
+{
+	// It is safe to read this->clientDispatcher without holding the lock because
+	// it is word sized and will only be assigned to at initialisation time and
+	// below (where it's guaranteed to be assigned to only once).
+	FutureDispatcher* d = clientDispatcher_ ? clientDispatcher_ : this->clientDispatcher;
+	if (!d) {
+		throw CallbackSetWithoutDispatcherException();
+	}
+	Dispatcher::work tryWork(*d);
+
+	boost::mutex::scoped_lock lock(this->mutex);
+
+	if (!shouldCallCompletionHandler)
+	{
+		throw NS_ZINC::CancelledFuture();
+	}
+	if (forDispatch)
+	{
+		throw DuplicateFutureCallback();
+	}
+	// Client can choose an alternate dispatcher when they call setCallback()
+	clientDispatcher = d;
+	this->work.swap(tryWork);
+	completionHandler = fn;
+	forDispatch = true; // we are responsible for dispatching the completion handler
+	bool oldCompleted = completed;
+	lock.unlock();
+	if (oldCompleted)
+	{
+		scheduleCallback();
+	}
+}
+
+bool FutureContextCommonImpl::runPreSetChecksAndLock(boost::mutex::scoped_lock& lock)
+{
+	assert(!lock.owns_lock());
+	boost::mutex::scoped_lock(this->mutex).swap(lock);
+	if (promiseState == promise_state::completed)
+	{
+		throw PromiseAlreadyCompleted();
+	}
+	else
+	{
+		promiseState = promise_state::completed;
+	}
+	return !completed;
+}
+
+// note:
+void FutureContextCommonImpl::doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock)
+{
+    assert(lock.owns_lock());
+    bool wasCompleted = completed;
+    bool oldForDispatch = forDispatch;
+    completed = true;
+    lock.unlock();
+    if (!wasCompleted) {
+        cond.notify_all();
+        if (oldForDispatch && clientDispatcher) {
+
+            scheduleCallback();
+        }
+    }
+}
+
+
+void FutureContextCommonImpl::dispatchCancellation()
+{
+	boost::mutex::scoped_lock lock(mutex);
+
+	// NOTE: We always want to come into this method and null the callback when we're done,
+	// even if canceled.
+
+	boost::function<void ()> stackCancellationCallback;
+
+	if (callCancellationCallback)
+	{
+		stackCancellationCallback.swap(cancellationCallback);
+		callCancellationCallback = false;
+	}
+
+	lock.unlock();
+
+	if (stackCancellationCallback)
+	{
+		stackCancellationCallback();
+	}
+}
+
+
+// note:
+bool FutureContextCommonImpl::dispatchNextResult()
+{
+    boost::mutex::scoped_lock lock(mutex);
+
+    // NOTE: We always want to come into this method and null the callback when we're done,
+    // even if canceled.
+
+    if (completed && shouldCallCompletionHandler && completionHandler)
+    {
+        // Release the work object at the end of this scope
+        Dispatcher::work w;
+        w.swap(this->work);
+
+        // Don't hold locks when calling user code
+        boost::function<void (FutureContextBase*)> stackCompletionHandler;
+        stackCompletionHandler.swap(completionHandler);
+        lock.unlock();
+        stackCompletionHandler(this);
+    }
+
+    return false;
+}
+
+} //namespace detail
+
+NS_ZINC_CLOSE
+
+
 ={============================================================================
 *kt_dev_code_013* asyc: promise
 
 class PromiseBase : boost::noncopyable 
 
-template<typename T> class Promise : public PromiseBase
+template<typename T> 
+class Promise : public PromiseBase
 {
     explicit Promise(Dispatcher& dispatcher_);
 };
@@ -9720,8 +10149,8 @@ class PolymorphicPromise;
  */
 class PromiseBase : boost::noncopyable 
 {
-    friend class internal::PolymorphicPromise;
-    public:
+friend class internal::PolymorphicPromise;
+public:
     /**
      * Complete this Promise with a zinc::ErrorCode
      *
@@ -9747,7 +10176,7 @@ class PromiseBase : boost::noncopyable
      */
     bool isComplete() const;
 
-    protected:
+protected:
     // Destructor and Constructor are protected to prevent deletion through the
     // base class.  If you want to store a Promise polymorphically use
     // PolymorphicPromise.
@@ -9765,60 +10194,61 @@ class PromiseBase : boost::noncopyable
 template<typename T>
 class Promise : public PromiseBase
 {
-    public:
-        /**
-         * Construct a Promise for an asynchronous operation.
-         *
-         * If a dispatcher is passed the deprecated single-argument
-         * Future::setCallback which does not take a Dispatcher may be used on the
-         * Future returned from getFuture().  In this case the callback will be
-         * executed on the Dispatcher passed here.  This is a deprecated mode of
-         * use.
-         *
-         * Using the default Promise constructor and the two argument Future
-         * setCallback is strongly recommended in new code.  The single argument
-         * Promise constructor is likely to be deprecated in the future.
-         *
-         * If a cancellation callback is provided it will be executed on the
-         * dispatcher provided here.
-         */
-        Promise();
-        explicit Promise(Dispatcher& dispatcher_);
-        explicit Promise(Dispatcher& dispatcher_,
-                boost::function<void ()> cancelationCallback);
+public:
+    /**
+     * Construct a Promise for an asynchronous operation.
+     *
+     * If a dispatcher is passed the deprecated single-argument
+     * Future::setCallback which does not take a Dispatcher may be used on the
+     * Future returned from getFuture().  In this case the callback will be
+     * executed on the Dispatcher passed here.  This is a deprecated mode of
+     * use.
+     *
+     * Using the default Promise constructor and the two argument Future
+     * setCallback is strongly recommended in new code.  The single argument
+     * Promise constructor is likely to be deprecated in the future.
+     *
+     * If a cancellation callback is provided it will be executed on the
+     * dispatcher provided here.
+     */
+    Promise();
+    explicit Promise(Dispatcher& dispatcher_);
+    explicit Promise(Dispatcher& dispatcher_,
+            boost::function<void ()> cancelationCallback);
 
-        Promise(const Promise<T> & other);
+    Promise(const Promise<T> & other);
 
-        Promise & operator=(const Promise<T> & other);
+    Promise & operator=(const Promise<T> & other);
 
-        /**
-         * Swap this promise with the one provided
-         */
-        void swap(Promise<T> & other);
+    /**
+     * Swap this promise with the one provided
+     */
+    void swap(Promise<T> & other);
 
-        /**
-         * Create a Future for this Promise.
-         *
-         * The created Future can be used to access the result of this Promise.
-         *
-         * @return A Future used to access the result of this Promise
-         */
-        Future<T> getFuture();
+    /**
+     * Create a Future for this Promise.
+     *
+     * The created Future can be used to access the result of this Promise.
+     *
+     * @return A Future used to access the result of this Promise
+     */
+    Future<T> getFuture();
 
-        /**
-         * Complete this Promise with a value and deliver the result to
-         * all associated Futures
-         *
-         * @param value the result to be delivered
-         *
-         * @throws PromiseAlreadyCompleted if this Promise has already been completed
-         */
-        void complete(typename const_param<T>::type);
-    private:
-        detail::FutureContext<T>& getContext();
-        // WARNING: DO NOT ADD MEMBERS HERE:
-        //     PolymorphicPromise depends on Promise<T> having no additional members
-        //     vs. PromiseBase
+    /**
+     * Complete this Promise with a value and deliver the result to
+     * all associated Futures
+     *
+     * @param value the result to be delivered
+     *
+     * @throws PromiseAlreadyCompleted if this Promise has already been completed
+     */
+    void complete(typename const_param<T>::type);
+
+private:
+    detail::FutureContext<T>& getContext();
+    // WARNING: DO NOT ADD MEMBERS HERE:
+    //     PolymorphicPromise depends on Promise<T> having no additional members
+    //     vs. PromiseBase
 };
 
 
@@ -9833,60 +10263,59 @@ class Promise : public PromiseBase
 template<>
 class Promise<void> : public PromiseBase
 {
-    public:
+public:
+    /**
+     * Construct a Promise for an asynchronous operation.
+     *
+     * If a dispatcher is passed the deprecated single-argument
+     * Future::setCallback which does not take a Dispatcher may be used on the
+     * Future returned from getFuture().  In this case the callback will be
+     * executed on the Dispatcher passed here.  This is a deprecated mode of
+     * use.
+     *
+     * Using the default Promise constructor and the two argument Future
+     * setCallback is strongly recommended in new code.  The single argument
+     * Promise constructor is likely to be deprecated in the future.
+     *
+     * If a cancellation callback is provided it will be executed on the
+     * dispatcher provided here.
+     */
+    Promise();
+    explicit Promise(Dispatcher& dispatcher_);
+    explicit Promise(Dispatcher& dispatcher_,
+            boost::function<void ()> cancelationCallback);
 
-        /**
-         * Construct a Promise for an asynchronous operation.
-         *
-         * If a dispatcher is passed the deprecated single-argument
-         * Future::setCallback which does not take a Dispatcher may be used on the
-         * Future returned from getFuture().  In this case the callback will be
-         * executed on the Dispatcher passed here.  This is a deprecated mode of
-         * use.
-         *
-         * Using the default Promise constructor and the two argument Future
-         * setCallback is strongly recommended in new code.  The single argument
-         * Promise constructor is likely to be deprecated in the future.
-         *
-         * If a cancellation callback is provided it will be executed on the
-         * dispatcher provided here.
-         */
-        Promise();
-        explicit Promise(Dispatcher& dispatcher_);
-        explicit Promise(Dispatcher& dispatcher_,
-                boost::function<void ()> cancelationCallback);
+    Promise(const Promise<void> &other);
 
-        Promise(const Promise<void> &other);
+    Promise & operator=(const Promise<void> & other);
 
-        Promise & operator=(const Promise<void> & other);
+    /**
+     * Swap this promise with the one provided
+     */
+    void swap(Promise<void> & other);
 
-        /**
-         * Swap this promise with the one provided
-         */
-        void swap(Promise<void> & other);
+    /**
+     * Create a Future for this Promise.
+     *
+     * The created Future can be used to synchronise on completion of this Promise,
+     * and retrieve any error conditions that may occur.
+     *
+     * @return A Future used to access the result of this Promise
+     */
+    Future<void> getFuture();
 
-        /**
-         * Create a Future for this Promise.
-         *
-         * The created Future can be used to synchronise on completion of this Promise,
-         * and retrieve any error conditions that may occur.
-         *
-         * @return A Future used to access the result of this Promise
-         */
-        Future<void> getFuture();
+    /**
+     * Complete this Promise and notify all associated Futures
+     *
+     * @throws PromiseAlreadyCompleted if this Promise has already been completed
+     */
+    void complete();
 
-        /**
-         * Complete this Promise and notify all associated Futures
-         *
-         * @throws PromiseAlreadyCompleted if this Promise has already been completed
-         */
-        void complete();
-
-    private:
-        detail::FutureContext<void>& getContext();
-        // WARNING: DO NOT ADD MEMBERS HERE:
-        //     PolymorphicPromise depends on Promise<T> having no additional members
-        //     vs. PromiseBase
+private:
+    detail::FutureContext<void>& getContext();
+    // WARNING: DO NOT ADD MEMBERS HERE:
+    //     PolymorphicPromise depends on Promise<T> having no additional members
+    //     vs. PromiseBase
 };
 
 NS_ZINC_CLOSE
@@ -9897,6 +10326,9 @@ NS_ZINC_CLOSE
 
 
 ////////////////////////////////////////
+
+note: PromiseBase::PromiseBase() is defined in FutureContext.cpp
+
 #ifndef ZINC_PROMISE_IMPL_H_
 #define ZINC_PROMISE_IMPL_H_
 
@@ -9928,10 +10360,11 @@ inline bool PromiseBase::isComplete() const
 
 template<typename T>
 inline Promise<T>::Promise() :
-	PromiseBase( new detail::FutureContext<T>(NULL) )
+   PromiseBase( new detail::FutureContext<T>(NULL) )
 {
 }
 
+// note
 template<typename T>
 inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
    PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
@@ -9963,10 +10396,11 @@ inline Future<T> Promise<T>::getFuture()
 	return Future<T>(&getContext());
 }
 
+// note
 template<typename T>
 inline void Promise<T>::complete(typename const_param<T>::type value)
 {
-	getContext().set(value);
+    getContext().set(value);
 }
 
 template<typename T>
@@ -10035,13 +10469,14 @@ inline detail::FutureContext<void>& Promise<void>::getContext()
 NS_ZINC_CLOSE
 
 #endif /* ZINC_PROMISE_IMPL_H_ */
-////////////////////////////////////////
-////////////////////////////////////////
-////////////////////////////////////////
-////////////////////////////////////////
+
 
 ={============================================================================
-*kt_dev_code_014* asyc: dispatcher
+*kt_dev_code_014* asyc: future barrier
+
+
+={============================================================================
+*kt_dev_code_015* asyc: dispatcher
 
 DP <- STDP <-
 
@@ -10302,7 +10737,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_code_012* asyc: dispatcher use
+*kt_dev_code_016* asyc: dispatcher use
 
 EventProducer 
    <- DispatchingEventProducer(Dispatcher)

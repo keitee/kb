@@ -17,10 +17,11 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_bcast_300| gst:
 |kt_dev_bcast_302| gst: time and seek
-|kt_dev_bcast_303| gst: pad cap. gstcap
+|kt_dev_bcast_303| 
 |kt_dev_bcast_304| gst: multi-thread and pad types
 |kt_dev_bcast_305| gst: buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
+|kt_dev_bcast_302| gst: elements: uridecodebin
 
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: tools
@@ -31,6 +32,10 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_320| gst: plugin writer's guide
 
 |kt_dev_bcast_330| gst: man: 18: autoplug and typefind
+
+|kt_dev_bcast_400| gst: ref: gstcap
+
+|kt_dev_bcast_500| gnome: ref: gstcap
 
 # ============================================================================
 #{
@@ -379,6 +384,39 @@ http://mpeg.chiariglione.org/
 
 
 ={============================================================================
+*kt_dev_bcast_202* mpeg: streaming: mpd file
+
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD type="dynamic" xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-live:2011,urn:dvb:dash:profile:dvbdash:2014" minBufferTime="PT1.11S" minimumUpdatePeriod="PT1H" timeShiftBufferDepth="PT35M" availabilityStartTime="2014-08-06T11:00:00Z">
+<!-- MPEG DASH ISO BMFF test stream with avc3 -->
+<!-- BBC Research & Development -->
+<!-- For more information see http://rdmedia.bbc.co.uk -->
+<ProgramInformation>
+	<Title>Adaptive Bitrate Test Stream from BBC Research and Development - Full stream with separate initialisation segments</Title>
+	<Source>BBC Research and Development</Source>
+</ProgramInformation>
+<UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="http://time.akamai.com/?iso"/>
+<Period start="PT0S">
+	<AdaptationSet startWithSAP="2" segmentAlignment="true" id="1" scanType="progressive" mimeType="video/mp4" contentType="video">
+		<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+		<SegmentTemplate startNumber="1" timescale="1000" duration="3840" media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+		<Representation id="V1" codecs="avc3.4d4015" height="288" width="512" bandwidth="356296" />
+		<Representation id="V2" codecs="avc3.4d401e" height="396" width="704" bandwidth="619088" />
+		<Representation id="V3" codecs="avc3.64001f" height="504" width="896" bandwidth="1330608" />
+		<Representation id="V4" codecs="avc3.640020" height="720" width="1280" bandwidth="2501216" />
+		<Representation id="V5" codecs="avc3.640028" height="1080" width="1920" bandwidth="4487408" />
+	</AdaptationSet>
+	<AdaptationSet startWithSAP="2" segmentAlignment="true" id="2" audioSamplingRate="48000" lang="eng" mimeType="audio/mp4" contentType="audio">
+		<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+		<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+		<SegmentTemplate startNumber="1" timescale="1000" duration="3840" media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+		<Representation id="A1" codecs="mp4a.40.2" bandwidth="95792" />
+	</AdaptationSet>
+</Period>
+</MPD>
+
+
+={============================================================================
 *kt_dev_bcast_300* gst
 
 http://docs.gstreamer.com/display/GstSDK/Basic+tutorials
@@ -571,28 +609,6 @@ These elements, however, are not 'linked' with each other yet. For this, we need
 gst_element_link().
 
 
-{property}
-3. set properities
-
-Most GStreamer elements have 'customizable' properties: named attributes that can be modified to
-change the element's behavior (writable properties) or inquired to find out about the element's
-internal state (readable properties).
-
-/* Modify the source's properties */
-g_object_set (source, "pattern", 0, NULL);
-
-// from the reference
-Properties
-  "pattern"                  GstVideoTestSrcPattern  : Read / Write
-  "timestamp-offset"         gint64                : Read / Write
-  "is-live"                  gboolean              : Read / Write
-  "peer-alloc"               gboolean              : Read / Write
-  ...
-  "background-color"         guint                 : Read / Write
-  "foreground-color"         guint                 : Read / Write
-  "horizontal-speed"         gint                  : Read / Write
-
-
 4. start
 
 /* Start playing */
@@ -738,40 +754,53 @@ directly provides us with the result.
 
 
 ={============================================================================
-*kt_dev_bcast_303* gst: pad cap. gstcap
+*kt_dev_bcast_303* gst: cache
 
-Basic tutorial 6: Media formats and Pad Capabilities
 
-Pads can support multiple Capabilities. In order for two elements to be linked together, they must
-share a common subset of Capabilities (Otherwise they could not possibly understand each other) via
-a process known as negotiation. This is the main goal of Capabilities.
+gst-init can use a gst-registry cache that can store information about
+existing plugins. This greatly improves performance, as the discovery
+of plugins can be only done when gst-init() is ran for the first time.
+We configure this cache using runBrowser.sh script, and if it does not
+exist, with the use of gst-inspect tool we force it to be populted.
 
-You can use the gst-inspect-0.10 tool to learn about the Caps of any GStreamer element.
+Unfortunately, gstreamer performs a limited validation of this cache,
+checking only for it's version. This leads to potential problems, when
+plugins are changed / renamed. Such a problem was discovered by
+CANTST-16517 Error 02100 when playing iPlayer programmes.
+Between two affected releases name of one of the gst-plugins has
+changed (DEVARCH-9248), namely: libgstfragmented became
+ibgsthlsdemux.
 
-SINK template: 'sink'
-  Availability: Always
-  Capabilities:
-    audio/x-raw-int
-               signed: true
-                width: 16
-                depth: 16
-                 rate: [ 1, 2147483647 ]
-             channels: [ 1, 2 ]
-    audio/x-raw-int
-               signed: false
-                width: 8
-                depth: 8
-                 rate: [ 1, 2147483647 ]
-             channels: [ 1, 2 ]
+It appears that gst plugin (gstregistry.bin) was not automatically rebuilt
+by the gstreamer following the software upgrade, and non-existing plugins
+were refered to in attempt to build the playback pipeline.
 
-SRC template: 'src'
-  Availability: Always
-  Capabilities:
-    video/x-raw-yuv
-                width: [ 1, 2147483647 ]
-               height: [ 1, 2147483647 ]
-            framerate: [ 0/1, 2147483647/1 ]
-               format: { I420, NV12, NV21, YV12, YUY2, Y42B, Y444, YUV9, YVU9, Y41B, Y800, Y8  , GREY, Y16 , UYVY, YVYU, IYU1, v308, AYUV, A420 } 
+Ideally, the gstreamer could invalidate such a cache in such case,
+and it would have been re-built automatically to match the changes
+performed during the upgrade. As a quick solution, as part of DEVARCH-9643,
+runBrowser.sh script was updated to reflect that there were changes by using
+a new name for the cachefile (gstregistry.bin) appending a suffix with a version
+and deleting all of the previous versions if a cache-file of the latest version did
+not exist. This, however, would require updates to release validation process
+to make sure the version was increased whenever there was a need for it.
+
+This change should make it less error-prone and fully automated.
+
+# enable gstreamer plugin registy
+GST_INSPECT_CMD="${GST_INSPECT_CMD:-$prefix/oss/bin/gst-inspect-1.0}"
+gst_registry_file="$app_data_dir/gstregistry.bin"
+if [ ! -s "${gst_registry_file}" ]; then
+    GST_REGISTRY="$gst_registry_file" $GST_INSPECT_CMD &> /dev/null
+fi
+
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gst-running.html
+
+GST_REGISTRY, GST_REGISTRY_1_0.  
+
+Set this environment variable to make GStreamer use a different file for the plugin cache / registry
+than the default one. This is useful when operating in a separate environment which should not
+affect the default cache in the user's home directory. 
 
 
 ={============================================================================
@@ -800,90 +829,7 @@ block execution until all other sinks are ready, and they cannot get ready if th
 thread, being blocked by the first sink.
 
 
-{pad-types}
-We saw an element (uridecodebin) which had no pads to begin with, and they appeared as data started
-to flow and the element learned about the media. These are called "Sometimes Pads", and contrast
-with the regular pads which are always available and are called "Always Pads".
-
-The third kind of pad is the "Request Pad", which is created on demand. The classical example is the
-tee element, which has one sink pad and no initial source pads: they need to be requested and then
-tee adds them. In this way, an input stream can be replicated any number of times. The disadvantage
-is that linking elements with Request Pads is not as automatic.
-
-<pad-added>
-The demuxers cannot produce any information until they have received some data and have had a chance
-to look at the container to see what is inside. So no source pads to which other elements can link.
-
-The solution is to build the pipeline from the source down to the demuxer, and set it to run (play).
-When the demuxer has received enough information to know about the number and kind of streams in the
-container, it will start creating source pads. This is the right time for us to finish building the
-pipeline and attach it to the newly added demuxer pads.
-
-/* Connect to the pad-added signal */
-g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
-
-In this line, we are attaching to the "pad-added" signal of our 'source' uridecodebin element.
-
-When our source element finally has enough information to start producing data, it will create
-source pads, and trigger the “pad-added” signal. At this point our callback will be called
-
-note: source pad will be created from source element. This callback is to 'link' this new source to
-sink in a pipeline.
-
-/* This function will be called by the pad-added signal */
-static void pad_added_handler (GstElement *src, GstPad *new_pad, CustomData *data) {
-  GstPad *sink_pad = gst_element_get_static_pad (data->convert, "sink");
-  GstPadLinkReturn ret;
-  GstCaps *new_pad_caps = NULL;
-  GstStructure *new_pad_struct = NULL;
-  const gchar *new_pad_type = NULL;
-   
-  g_print ("Received new pad '%s' from '%s':\n", GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
-   
-  /* If our converter is already linked, we have nothing to do here */
-  if (gst_pad_is_linked (sink_pad)) {
-    g_print ("  We are already linked. Ignoring.\n");
-    goto exit;
-  }
-   
-  /* Check the new pad's type */
-  new_pad_caps = gst_pad_get_caps (new_pad);
-  new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
-  new_pad_type = gst_structure_get_name (new_pad_struct);
-  if (!g_str_has_prefix (new_pad_type, "audio/x-raw")) {
-    g_print ("  It has type '%s' which is not raw audio. Ignoring.\n", new_pad_type);
-    goto exit;
-  }
-   
-  /* Attempt the link */
-  ret = gst_pad_link (new_pad, sink_pad);
-  if (GST_PAD_LINK_FAILED (ret)) {
-    g_print ("  Type is '%s' but link failed.\n", new_pad_type);
-  } else {
-    g_print ("  Link succeeded (type '%s').\n", new_pad_type);
-  }
-   
-exit:
-  /* Unreference the new pad's caps, if we got them */
-  if (new_pad_caps != NULL)
-    gst_caps_unref (new_pad_caps);
-   
-  /* Unreference the sink pad */
-  gst_object_unref (sink_pad);
-}
 	
-
-{pad-cap}
-gst_pad_get_caps() retrieves the capabilities of the pad (this is, the kind of data it supports),
-    wrapped in a GstCaps structure. A pad can offer many capabilities, and hence GstCaps can contain
-    many GstStructure, 'each' representing a different capability.
-
-Since, in this case, we know that the pad we want only had one capability (audio), we retrieve the
-first GstStructure with gst_caps_get_structure().
-
-Finally, with gst_structure_get_name() we recover the name of the structure, which contains the main
-description of the format (its 'MIME' type, actually).
-
 
 {pad-link}
 note: Linking elements is one thing and linking pads is the other once linking element is done.
@@ -1329,6 +1275,157 @@ Element Signals:
 
 Children:
   typefind
+
+
+={============================================================================
+*kt_dev_bcast_302* gst: elements: uridecodebin
+
+[root@HUMAX /]# gst-inspect-1.0 uridecodebin
+Factory Details:
+  Rank                     none (0)
+  Long-name                URI Decoder
+  Klass                    Generic/Bin/Decoder
+  Description              Autoplug and decode an URI to raw media
+  Author                   Wim Taymans <wim.taymans@gmail.com>
+
+Plugin Details:
+  Name                     playback
+  Description              various playback elements
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstplayback.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gst-plugins-base
+  Source release date      2015-06-02 10:11 (UTC)
+  Binary package           GStreamer Base Plug-ins git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstBin
+                         +----GstURIDecodeBin
+
+Implemented Interfaces:
+  GstChildProxy
+
+Pad Templates:
+  SRC template: 'src_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+
+Element Flags:
+  no flags set
+
+Bin Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_uri_decode_bin_change_state
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  none
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "uridecodebin0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  async-handling      : The bin will handle Asynchronous state changes
+                        flags: readable, writable
+                        Boolean. Default: false
+  message-forward     : Forwards all children messages
+                        flags: readable, writable
+                        Boolean. Default: false
+  uri                 : URI to decode
+                        flags: readable, writable
+                        String. Default: null
+  source              : Source object used
+                        flags: readable
+                        Object of type "GstElement"
+  connection-speed    : Network connection speed in kbps (0 = unknown)
+                        flags: readable, writable
+                        Unsigned Integer64. Range: 0 - 18446744073709551 Default: 0 
+  caps                : The caps on which to stop decoding. (NULL = default)
+                        flags: readable, writable
+                           video/x-raw(ANY)
+                           audio/x-raw(ANY)
+                           text/x-raw
+                           subpicture/x-dvd
+                           subpicture/x-dvb
+                           subpicture/x-pgs
+
+  subtitle-encoding   : Encoding to assume if input subtitles are not in UTF-8 encoding. If not set, the GST_SUBTITLE_ENCODING environment variable will be checked for an encoding to use. If
+ that is not set either, ISO-8859-15 will be assumed.
+                        flags: readable, writable
+                        String. Default: null
+  buffer-size         : Buffer size when buffering streams (-1 default value)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2147483647 Default: -1 
+  buffer-duration     : Buffer duration when buffering streams (-1 default value)
+                        flags: readable, writable
+                        Integer64. Range: -1 - 9223372036854775807 Default: -1 
+  download            : Attempt download buffering when buffering network streams
+                        flags: readable, writable
+                        Boolean. Default: false
+  use-buffering       : Perform buffering on demuxed/parsed media
+                        flags: readable, writable
+                        Boolean. Default: false
+  expose-all-streams  : Expose all streams, including those of unknown type or that don't match the 'caps' property
+                        flags: readable, writable
+                        Boolean. Default: true
+  ring-buffer-max-size: Max. amount of data in the ring buffer (bytes, 0 = ring buffer disabled)
+                        flags: readable, writable
+                        Unsigned Integer64. Range: 0 - 4294967295 Default: 0 
+
+Element Signals:
+  "pad-added" :  void user_function (GstElement* object,
+                                     GstPad* arg0,
+                                     gpointer user_data);
+  "pad-removed" :  void user_function (GstElement* object,
+                                       GstPad* arg0,
+                                       gpointer user_data);
+  "no-more-pads" :  void user_function (GstElement* object,
+                                        gpointer user_data);
+  "unknown-type" :  void user_function (GstElement* object,
+                                        GstPad* arg0,
+                                        GstCaps* arg1,
+                                        gpointer user_data);
+  "autoplug-continue" :  gboolean user_function (GstElement* object,
+                                                 GstPad* arg0,
+                                                 GstCaps* arg1,
+                                                 gpointer user_data);
+  "autoplug-factories" :  GValueArray * user_function (GstElement* object,
+                                                       GstPad* arg0,
+                                                       GstCaps* arg1,
+                                                       gpointer user_data);
+  "autoplug-sort" :  GValueArray * user_function (GstElement* object,
+                                                  GstPad* arg0,
+                                                  GstCaps* arg1,
+                                                  GValueArray* arg2,
+                                                  gpointer user_data);
+  "autoplug-select" :  GstAutoplugSelectResult user_function (GstElement* object,
+                                                              GstPad* arg0,
+                                                              GstCaps* arg1,
+                                                              GstElementFactory* arg2,
+                                                              gpointer user_data);
+  "autoplug-query" :  gboolean user_function (GstElement* object,
+                                              GstPad* arg0,
+                                              GstElement* arg1,
+                                              GstQuery* arg2,
+                                              gpointer user_data);
+  "drained" :  void user_function (GstElement* object,
+                                   gpointer user_data);
+  "source-setup" :  void user_function (GstElement* object,
+                                        GstElement* arg0,
+                                        gpointer user_data);
 
 
 ={============================================================================
@@ -2493,6 +2590,453 @@ classes for muxers or demuxers yet.
 
 
 ={============================================================================
+*kt_dev_bcast_330* gst: element property 
+
+Basic tutorial 2: GStreamer concepts
+
+Most GStreamer elements have 'customizable' properties: named attributes that can be modified to
+change the element's behavior (writable properties) or inquired to find out about the element's
+internal state (readable properties).
+
+/* Modify the source's properties */
+g_object_set (source, "pattern", 0, NULL);
+
+Properties are read from with g_object_get() and written to with g_object_set().
+
+g_object_set() accepts a NULL-terminated 'list' of property-name, property-value pairs, so multiple
+properties can be changed in one go. 
+
+note: this is about element but not a pad and seems that's becuase it is GObject.
+
+GStreamer elements are all a particular kind of GObject, which is the entity offering property
+facilities: This is why the property handling methods have the g_ prefix.
+
+The line of code above changes the "pattern" property of videotestsrc, which controls the type of
+test video the element outputs. Try different values!
+
+basic-tutorial-15.c
+53:  g_object_set(timeline, "loop", TRUE, NULL);
+74:  g_object_set (sink, "texture", texture, NULL);
+77:  g_object_set (pipeline, "video-sink", sink, NULL);
+
+basic-tutorial-2.c
+33:  g_object_set (source, "pattern", 0, NULL);
+
+basic-tutorial-3.c
+47:  g_object_set (data.source, "uri", "http://docs.gstreamer.com/media/sintel_trailer-480p.webm", NULL);
+
+basic-tutorial-4.c
+40:  g_object_set (data.playbin2, "uri", "http://docs.gstreamer.com/media/sintel_trailer-480p.webm", NULL);
+
+basic-tutorial-5.c
+348:  g_object_set (data.playbin2, "uri", "http://docs.gstreamer.com/media/sintel_trailer-480p.webm", NULL);
+
+basic-tutorial-7.c
+37:  g_object_set (audio_source, "freq", 215.0f, NULL);
+38:  g_object_set (visual, "shader", 0, "style", 1, NULL);
+
+basic-tutorial-8.c
+
+  /* Configure wavescope */
+  g_object_set (data.visual, "shader", 0, "style", 0, NULL);
+   
+  /* Configure appsrc */
+  audio_caps_text = g_strdup_printf (AUDIO_CAPS, SAMPLE_RATE);
+  audio_caps = gst_caps_from_string (audio_caps_text);
+  g_object_set (data.app_source, "caps", audio_caps, NULL);
+  g_signal_connect (data.app_source, "need-data", G_CALLBACK (start_feed), &data);
+  g_signal_connect (data.app_source, "enough-data", G_CALLBACK (stop_feed), &data);
+   
+  /* Configure appsink */
+  g_object_set (data.app_sink, "emit-signals", TRUE, "caps", audio_caps, NULL);
+  g_signal_connect (data.app_sink, "new-buffer", G_CALLBACK (new_buffer), &data);
+  gst_caps_unref (audio_caps);
+  g_free (audio_caps_text);
+
+
+{example}
+
+[root@HUMAX /]# gst-inspect-1.0 uridecodebin
+
+Pad Templates:
+  SRC template: 'src_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+Element Properties:
+  caps                : The caps on which to stop decoding. (NULL = default)
+                        flags: readable, writable
+                           video/x-raw(ANY)
+                           audio/x-raw(ANY)
+                           text/x-raw
+                           subpicture/x-dvd
+                           subpicture/x-dvb
+                           subpicture/x-pgs
+
+
+={============================================================================
+*kt_dev_bcast_330* gst: man: 06: bins
+
+A bin is a container element. You can add elements to a bin. Since a bin is an element 'itself', a
+bin can be handled in the same way as any other element. Therefore, the whole previous chapter
+(Elements) applies to bins as well.
+
+
+6.1. What are bins
+
+Bins allow you to 'combine' a group of linked elements into one 'logical' element. You do not deal
+with the individual elements anymore but with just one element, the bin. We will see that this is
+extremely powerful when you are going to construct complex pipelines since it allows you to break up
+the pipeline in smaller chunks.
+
+The bin will also 'manage' the elements contained in it. It will perform state changes on the
+elements as well as collect and forward bus messages.
+
+
+There is one 'specialized' type of bin available to the GStreamer programmer:
+
+* A pipeline: a generic container that manages the synchronization and bus messages of the contained
+elements. The toplevel bin has to be a pipeline, every application thus needs at least one of these.
+
+
+6.2. Creating a bin
+
+Bins are created in the same way that other elements are created, i.e. using an element factory.
+There are also convenience functions available (gst_bin_new () and gst_pipeline_new ()). To add
+elements to a bin or remove elements from a bin, you can use gst_bin_add () and gst_bin_remove ().
+Note that the bin that you add an element to will take ownership of that element. 
+
+
+={============================================================================
+*kt_dev_bcast_330* gst: man: 08: pad and capability
+
+As we have seen in Elements, the pads are "the element's interface" to the outside world. Data
+streams from one element's source pad to another element’s sink pad. The specific type of media that
+the element can handle will be exposed by the pad's capabilities. 
+
+8.1. Pads
+
+A pad type is defined by two properties: its 'direction' and its 'availability'. As we’ve mentioned
+before, GStreamer defines two pad directions: source pads and sink pads. This terminology is defined
+from the view of within the element: elements receive data on their sink pads and generate data on
+their source pads. 
+
+Schematically, sink pads are drawn on the left side of an element, whereas source pads are drawn on
+the right side of an element. In such graphs, data flows from left to right. 1 Pad directions are
+very simple compared to pad availability. A pad can have any of three availabilities: always,
+sometimes and on request. 
+
+The meaning of those three types is exactly as it says: always pads always exist, sometimes pad
+exist only in certain cases (and can disappear randomly), and on-request pads appear only if
+explicitly requested by applications.
+
+8.1.1. Dynamic (or sometimes) pads
+
+Some elements might not have all of their pads when the element is created. This can happen, for
+example, with an Ogg demuxer element. The element will read the Ogg stream and create dynamic pads
+for 'each' contained elementary stream (vorbis, theora) when it detects such a stream in the Ogg
+    stream.  Likewise, it will delete the pad when the stream ends. This principle is very useful
+        for demuxer elements, for example.
+
+You can see this in the pad template because there is an "Exists: Sometimes" property. Depending on
+    the type of Ogg file you play, the pads will be created. We will see that this is very important
+    when you are going to create dynamic pipelines. You can attach a signal handler to an element to
+    inform you when the element has created a new pad from one of its "sometimes" pad templates. The
+    following piece of code is an example of how to do this:
+
+<snippet>
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      ANY
+
+  SRC template: 'src_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+<pad-added>
+The demuxers cannot produce any information until they have received some data and have had a chance
+to look at the container to see what is inside. So no source pads to which other elements can link.
+
+The solution is to build the pipeline from the source down to the demuxer, and set it to run (play).
+When the demuxer has received enough information to know about the number and kind of streams in the
+container, it will start creating source pads. This is the right time for us to finish building the
+pipeline and attach it to the newly added demuxer pads.
+
+/* Connect to the pad-added signal */
+g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
+
+In this line, we are attaching to the "pad-added" signal of our uridecodebin element. When our
+    element finally has enough information to start producing data, it will create source pads, and
+    trigger the "pad-added" signal. At this point our callback will be called
+
+note: source pad will be created from source element. This callback is to 'link' this new source to
+sink in a pipeline.
+
+/* This function will be called by the pad-added signal */
+static void pad_added_handler (GstElement *src, GstPad *new_pad, CustomData *data) {
+  GstPad *sink_pad = gst_element_get_static_pad (data->convert, "sink");
+  GstPadLinkReturn ret;
+  GstCaps *new_pad_caps = NULL;
+  GstStructure *new_pad_struct = NULL;
+  const gchar *new_pad_type = NULL;
+   
+  g_print ("Received new pad '%s' from '%s':\n", GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
+   
+  /* If our converter is already linked, we have nothing to do here */
+  if (gst_pad_is_linked (sink_pad)) {
+    g_print ("  We are already linked. Ignoring.\n");
+    goto exit;
+  }
+   
+  /* Check the new pad's type */
+  new_pad_caps = gst_pad_get_caps (new_pad);
+  new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
+  new_pad_type = gst_structure_get_name (new_pad_struct);
+  if (!g_str_has_prefix (new_pad_type, "audio/x-raw")) {
+    g_print ("  It has type '%s' which is not raw audio. Ignoring.\n", new_pad_type);
+    goto exit;
+  }
+   
+  /* Attempt the link */
+  ret = gst_pad_link (new_pad, sink_pad);
+  if (GST_PAD_LINK_FAILED (ret)) {
+    g_print ("  Type is '%s' but link failed.\n", new_pad_type);
+  } else {
+    g_print ("  Link succeeded (type '%s').\n", new_pad_type);
+  }
+   
+exit:
+  /* Unreference the new pad's caps, if we got them */
+  if (new_pad_caps != NULL)
+    gst_caps_unref (new_pad_caps);
+   
+  /* Unreference the sink pad */
+  gst_object_unref (sink_pad);
+}
+
+note:
+It is not uncommon to add elements to the pipeline only from within the "pad-added" callback. If you
+do this, don't forget to set the state of the newly-added elements to the target state of the
+pipeline using gst_element_set_state () or gst_element_sync_state_with_parent ().
+
+
+8.1.2. Request pads
+
+An element can also have request pads. These pads are not created automatically but are only created
+on demand. This is very useful for multiplexers, aggregators and tee elements. Aggregators are
+elements that merge the content of several input streams together into one output stream. Tee
+elements are the reverse: they are elements that have one input stream and copy this stream to each
+of their output pads, which are created on request. Whenever an application needs another copy of
+the stream, it can simply request a new output pad from the tee element.
+
+// skipped the rest
+
+
+8.2. Capabilities of a pad
+
+Since the pads play a very important role in how the element is viewed by the outside world, a
+mechanism is implemented to describe the data that can flow or currently flows through the pad by
+using capabilities. Here, we will briefly describe what capabilities are and how to use them, enough
+to get an understanding of the concept. For an in-depth look into capabilities and a list of all
+capabilities defined in GStreamer, see the Plugin Writers Guide
+(http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/index.html).
+
+Capabilities are attached to pad templates and to pads. For pad templates, it will describe the
+types of media that "may stream over" a pad created from this template. For pads, it can either be a
+list of possible caps (usually a copy of the pad template's capabilities), in which case the pad is
+not yet negotiated, or it is the type of media that currently streams over this pad, in which case
+the pad has been negotiated already.
+
+
+8.2.1. Dissecting capabilities
+
+note: capability is "media type"
+
+A pad's capabilities are described in a GstCaps object. Internally, a GstCaps
+(http://gstreamer.freedesktop.org/data/doc/gstreamer/stable/gstreamer/html/gstreamer-GstCaps.html)
+will contain one or more GstStructure
+(http://gstreamer.freedesktop.org/data/doc/gstreamer/stable/gstreamer/html/gstreamer-GstStructure.html)
+that will describe 'one' media type. A negotiated pad will have capabilities set that contain
+exactly one structure. Also, this structure will contain only fixed values. These constraints are
+not true for unnegotiated pads or pad templates.
+
+Pad Templates:
+   SRC template: ’src’
+      Availability: Always
+      Capabilities:
+         audio/x-raw
+            format: F32LE
+            rate: [ 1, 2147483647 ]
+            channels: [ 1, 256 ]
+
+The source pad will be used to send raw (decoded) audio samples to the next element, with a raw
+audio media type (in this case, "audio/x-raw"). The source pad will also contain 'properties' for the
+audio samplerate and the amount of channels, plus some more.
+
+// other example
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      video/mpegts
+           systemstream: true
+      video/x-h264
+          stream-format: byte-stream
+              alignment: { au, nal }
+      video/mpeg
+            mpegversion: { 2, 4 }
+           systemstream: false
+      audio/mpeg
+            mpegversion: 1
+                  layer: { 1, 3 }
+      audio/mpeg
+            mpegversion: 4
+          stream-format: { adts, loas }
+
+<code>
+  /* Check the new pad's type */
+  new_pad_caps = gst_pad_get_caps (new_pad);
+  new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
+  new_pad_type = gst_structure_get_name (new_pad_struct);
+  if (!g_str_has_prefix (new_pad_type, "audio/x-raw")) {
+    g_print ("  It has type '%s' which is not raw audio. Ignoring.\n", new_pad_type);
+    goto exit;
+  }
+
+gst_pad_get_caps() retrieves the capabilities of the pad wrapped in a GstCaps structure. A pad can
+offer many capabilities, and hence GstCaps can contain many GstStructure, 'each' representing a
+different capability.
+
+Since, in this case, we know that the pad we want only had one capability (audio), we retrieve the
+first GstStructure with gst_caps_get_structure().
+
+Finally, with gst_structure_get_name() we recover the name of the structure, which contains the main
+description of the format (its 'MIME' type, actually).
+
+
+8.2.2. Properties and values
+
+Properties are used to describe extra information for capabilities. A property consists of a key (a
+        string) and a value. There are different possible value types that can be used:
+
+* Basic types, this can be pretty much any GType registered with Glib. Those properties indicate a
+specific, non-dynamic value for this property. Examples include:
+
+** An integer value (G_TYPE_INT): the property has this exact value.
+** A boolean value (G_TYPE_BOOLEAN): the property is either TRUE or FALSE.
+** A float value (G_TYPE_FLOAT): the property has this exact floating point value.
+** A string value (G_TYPE_STRING): the property contains a UTF-8 string.
+** A fraction value (GST_TYPE_FRACTION): contains a fraction expressed by an integer numerator and
+denominator.
+
+// skipped the rest
+
+
+8.3. What capabilities are used for
+
+Capabilities (short: caps) describe the type of data that is streamed between two pads, or that one
+pad (template) supports. This makes them very useful for various purposes:
+
+* Autoplugging: automatically finding elements to link to a pad based on its capabilities. All
+autopluggers use this method.
+
+* Compatibility detection: when two pads are linked, GStreamer can verify if the two pads are
+talking about the same media type. The process of linking two pads and checking if they are
+compatible is called "caps negotiation".
+
+* Metadata: by reading the capabilities from a pad, applications can provide information about the
+type of media that is being streamed over the pad, which is information about the stream that is
+'currently' being played back.
+
+* Filtering: an application can use capabilities to limit the possible media types that can stream
+between two pads to a specific subset of their supported stream types. An application can, for
+example, use "filtered caps" to set a specific (fixed or non-fixed) video size that should stream
+between two pads.
+
+You will see an example of filtered caps later in this manual, in Section 19.2. You can do caps
+filtering by inserting a capsfilter element into your pipeline and setting its "caps" property. Caps
+filters are often placed after converter elements like audioconvert, audioresample, videoconvert or
+videoscale to force those converters to convert data to a specific output format at a certain point
+in a stream.
+
+note: from possible caps, allowed and negotiated cap
+
+Note that there is a distinct difference between the possible capabilities of a pad; ie. usually
+what you find as caps of pad templates as they are shown in gst-inspect; the allowed caps of a pad;
+can be the same as the pad's template caps or a subset of them, depending on the possible caps of
+the 'peer' pad; and lastly negotiated caps. these describe the exact format of a stream or buffer
+and contain "exactly one structure" and have no variable bits like ranges or lists, ie. they are
+fixed caps.
+
+<type-of-caps>
+Caps are called simple caps when they contain only one structure, and fixed caps when they contain
+only one structure and have no variable field types (like ranges or lists of possible values). Two
+other special types of caps are ANY caps and empty caps.
+
+
+8.4. Ghost pads
+
+You can see from Figure 8-1 how a bin has no pads of its own. This is where "ghost pads" come into
+play.
+
+note: From 06 GstBin, bin is an element itself but do not have pad. Make sence to have a ghost pad
+in thinking a data flow but perhaps in using APIs.
+
+
+bin
++==============================================+
+|           element 1            element 2     |
+|           [sink   src]   ->    [sink       ] |
+|                                              |
++==============================================+
+
+A ghost pad is a pad from some element in the bin that can be accessed directly from the bin as
+well. Compare it to a symbolic link in UNIX filesystems. Using ghost pads on bins, the bin also has
+a pad and can transparently be used as an element in other parts of your code.
+
+bin
++==============================================+
+|           element 1            element 2     |
+|sink]------[sink   src]   ->    [sink       ] |
+|                                              |
++==============================================+
+
+Figure 8-2 is a representation of a ghost pad. The sink pad of element one is now also a pad of the
+bin. Because ghost pads look and work like any other pads, they can be added to any type of
+elements, not just to a GstBin, just like ordinary pads.
+
+int
+main (int argc, char *argv[])
+{
+    GstElement *bin, *sink;
+    GstPad *pad;
+
+    /* init */
+    gst_init (&argc, &argv);
+
+    /* create element, add to bin */
+    sink = gst_element_factory_make ("fakesink", "sink");
+    bin = gst_bin_new ("mybin");
+    gst_bin_add (GST_BIN (bin), sink);
+
+    /* add ghostpad */
+    pad = gst_element_get_static_pad (sink, "sink");
+    gst_element_add_pad (bin, gst_ghost_pad_new ("sink", pad));
+    gst_object_unref (GST_OBJECT (pad));
+    [..]
+}
+
+In the above example, the bin now also has a pad: the pad called "sink" of the given element. The
+bin can, from here on, be used as a substitute for the sink element. You could, for example, link
+another element to the bin.
+
+
+={============================================================================
 *kt_dev_bcast_330* gst: man: 18: autoplug and typefind
 
 However, you would rather want to build an application that can automatically detect the media type
@@ -2512,6 +3056,7 @@ will see.
 
 note: media type means MIME type
 
+
 18.2. Media stream type detection
 
 Usually, when loading a media stream, the type of the stream is not known. This means that before we
@@ -2523,6 +3068,59 @@ unknown. During this period, it will provide data to all plugins that implement 
 one of the typefinders recognizes the stream, the typefind element will emit a signal and act as a
 passthrough module from that point on. If no type was found, it will emit an error and further media
 processing will stop.
+
+Once the typefind element has found a type, the application can use this to plug together a pipeline
+to decode the media stream.
+
+Plugins in GStreamer can, as mentioned before, implement typefinder functionality. A plugin
+implementing this functionality will submit a media type, optionally a set of file extensions
+commonly used for this media type, and a typefind function. Once this typefind function inside the
+plugin is called, the plugin will see if the data in this media stream matches a specific pattern
+that marks the media type identified by that media type. If it does, it will notify the typefind
+element of this fact, telling which mediatype was recognized and how certain we are that this stream
+is indeed that mediatype. Once this run has been completed for all plugins implementing a typefind
+functionality, the "typefind element" will tell the application what kind of media stream it thinks
+to have recognized.
+
+/* create file source and typefind element */
+filesrc = gst_element_factory_make ("filesrc", "source");
+g_object_set (G_OBJECT (filesrc), "location", argv[1], NULL);
+
+typefind = gst_element_factory_make ("typefind", "typefinder");
+g_signal_connect (typefind, "have-type", G_CALLBACK (cb_typefound), loop);
+fakesink = gst_element_factory_make ("fakesink", "sink");
+
+/* setup */
+gst_bin_add_many (GST_BIN (pipeline), filesrc, typefind, fakesink, NULL);
+gst_element_link_many (filesrc, typefind, fakesink, NULL);
+gst_element_set_state (GST_ELEMENT (pipeline), GST_STATE_PLAYING);
+g_main_loop_run (loop);
+
+Once a media type has been detected, you can plug an element (e.g. a demuxer or decoder) to the
+'source' pad of the typefind element, and decoding of the media stream will start right after.
+
+
+={============================================================================
+*kt_dev_bcast_400* gst: man: gstcap
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstCaps.html
+
+g_object_set(uridecodebin.transferNone(), "caps",
+    gst_caps_from_string(
+        "application/dash+xml; "
+        "application/sdp; "  
+        "video/mpegts; "
+        "application/hls; "
+        "video/x-matroska; "
+        "video/quicktime"
+        ), NULL);
+
+
+={============================================================================
+*kt_dev_bcast_500* gnome: glib
+
+GLib Reference Manual
+https://developer.gnome.org/glib/unstable/index.html
 
 
 ==============================================================================

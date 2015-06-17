@@ -7790,7 +7790,7 @@ root# ll /run/youview/jail/applications/1
 root# 
 
 
-However, do cd into root then shows:
+However, do cd from root then cah shows:
 
 root# cd root
 root# ll
@@ -7807,7 +7807,7 @@ drwxr-xr-x    4 root     root            80 Apr  2 16:48 run
 drwx------    2 16385    yv_signe      4096 Apr  2 16:49 tmp
 drwxr-xr-x    4 root     root            80 Apr  2 16:48 usr
 drwxr-xr-x    3 root     root            60 Apr  2 16:48 var
-root# 
+
 
 ={============================================================================
 *kt_dev_uv_stack_400* stack: media: wiki
@@ -9303,6 +9303,7 @@ VirtualBinTypefind::VirtualBinTypefind(
     if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get())) {
         uridecodebin.retain();
 
+        // *to-change*
     g_object_set(uridecodebin.get(), "caps",
         gst_caps_from_string("application/dash+xml; "), NULL);
 
@@ -9313,7 +9314,6 @@ VirtualBinTypefind::VirtualBinTypefind(
 
 
 <bin-src>
-
 typedef std::map<std::string,
                      boost::function<RefObj<GstElement>()> > FactoryContainer;
 
@@ -9827,8 +9827,9 @@ NS_ZINC::Future<void> GstMediaRouter::start()
     gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
 }
 
-//{{{
-note: -> call "pad-added" callback from uridecode. source
+// {{{
+// note: -> call "pad-added" callback from uridecodebin since it added into
+// the pipleline from TF(TypeFinder) ctor.
 
 void VirtualBinTypefind::newPadCb(GstElement* element, GstPad* pad, gpointer data)
 {
@@ -9855,6 +9856,7 @@ bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
     boost::shared_ptr<VirtualBin> bin,
     boost::shared_ptr<VirtualPad> vpad)
 {
+   // SRC AUTOPLUG
    // note: scrBin->autoplug(srcPad from Typefind)
    
    if (bin == typefindBin && srcBin->autoplug(vpad));
@@ -9874,13 +9876,14 @@ bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
 {
     // plug_unlocked() returns *decodebin* based on cap of srcPad since:
     //
-    // Element has current caps, making element for: application/dash+xml
+    // Element has current caps, get mime fro caps, get element for: application/dash+xml
     //
     // BinTypefind has an entry in the map
     //   ["application/dash+xml"] = VirtualBinSrc::makeAndSetupDecodebin
     //
-    // VirtualBinSrc::makeAndSetupDecodebin
-    //   creates decodebin, set caps, and set pad-add handler
+    // calls VirtualBinSrc::makeAndSetupDecodebin
+    //   creates decodebin, and set pad-add handler('this')
+    //   caps set: video/quicktime; audio/x-m4a; text/x-raw
     //
     sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
 
@@ -9890,13 +9893,13 @@ bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
 
 NICKEL_TRACE("connected typefindbin to srcbin!");
 
-//{{{
-note: -> call "pad-added" callback from decodebin. for video pad(video/quicktime)
+// {{{
+// note: -> call "pad-added" callback from decodebin. for video pad(video/quicktime)
 
 void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
     gpointer data)
 {
-   VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);
+   VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);    // BinSrc
    vbin->newDecodebinPad(element, pad);
 }
 
@@ -9906,6 +9909,7 @@ bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
     boost::shared_ptr<VirtualBin> bin,
     boost::shared_ptr<VirtualPad> vpad)
 {
+   // SIKN AUTOPLUG
    // note: sinkBin->autoplug(srcPad from BinSrc)
 
    else if (bin == srcBin && sinkBin->autoplug(vpad)) {
@@ -9921,8 +9925,9 @@ bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
     // BinSrc has an entry in the map
     //   elementFactory["video/quicktime"] = VirtualBinSink::makeMp4Element.
     //
-    // VirtualBinSink::makeMp4Element
-    //   creates qtdemux, set caps, and set pad-add handler
+    // calls VirtualBinSink::makeMp4Element
+    //   creates qtdemux, and set pad-add handler
+    //   no cap set
     //
     sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
 
@@ -9933,8 +9938,8 @@ bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
 NICKEL_TRACE("srcbin requested connection");
 
 
-//{{{
-note: -> call "pad-added" callback from decodebin. for audio pad(audio/x-m4a)
+// {{{
+// note: -> call "pad-added" callback from decodebin. for audio pad(audio/x-m4a)
 
 void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
     gpointer data)
@@ -9975,8 +9980,9 @@ bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
 
 NICKEL_TRACE("srcbin requested connection");
 
-//{{{
-note: -> call "pad-added" callback from qtdemux. for video/x-h264
+// {{{ 
+// note: -> call "pad-added" callback from qtdemux. for video/x-h264
+// note: THIS IS NOT A CAP REQUESTED
 
 NewPadCallback::callback(GstElement*, GstPad*, void*)
 {
@@ -9994,7 +10000,7 @@ NewPadCallback::callback(GstElement*, GstPad*, void*)
     // BinSrc has an entry in the map
     //   elementFactory["video/x-h264"] = VirtualBinSink::makeH264Element;
     //
-    // VirtualBinSink::makeH264Element
+    // calls VirtualBinSink::makeH264Element
     //   creates element(h264 ! nexussink)
     //
 
@@ -10196,6 +10202,46 @@ https://wiki.youview.co.uk/display/canvas/2014/05/30/playback+of+a+HLS+stream+fr
 ./run-gst.sh souphttpsrc location="http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8" ! hlsdemux ! tsnexusbin
 
 
+={============================================================================
+*kt_dev_uv_stack_414* stack: media: gst dash and hls mime 
+
+{dash}
+dash+xml application/dash+xml
+http://www.iana.org/assignments/media-types/application/dash+xml
+
+/zinc-build-root/debug-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src$ ag "application/dash"
+
+gst_plugins_bad-1.5.0/ext/dash/gstplugin.c
+74:/*** application/dash+xml typefind helper ***/
+76:static GstStaticCaps dash_caps = GST_STATIC_CAPS ("application/dash+xml");
+95:  if (!gst_type_find_register (plugin, "application/dash+xml",
+
+gst_plugins_bad-1.5.0/ext/dash/gstdashdemux.c
+171:    GST_STATIC_CAPS ("application/dash+xml"));
+
+gst_plugins_base-1.5.0/gst/playback/gsturidecodebin.c
+1293:  "application/dash+xml", NULL
+
+
+{hls}
+http://www.iana.org/assignments/media-types/application/vnd.apple.mpegurl
+vnd.apple.mpegurl application/vnd.apple.mpegurl
+
+Additional information :
+
+1. Magic number(s) : #EXTM3U
+2. File extension(s) : m3u, m3u8
+3. Macintosh file type code : none
+4. Object Identifiers: none
+
+
+/zinc-build-root/debug-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src$ ag GST_STATIC_CAPS | ag hls
+gst_plugins_bad-1.5.0/ext/hls/gsthlssink.c:68:    GST_STATIC_CAPS_ANY);
+gst_plugins_bad-1.5.0/ext/hls/gsthlsdemux.c:50:    GST_STATIC_CAPS_ANY);
+gst_plugins_bad-1.5.0/ext/hls/gsthlsdemux.c:55:    GST_STATIC_CAPS ("application/x-hls"));
+gst_plugins_base-1.5.0/gst/typefind/gsttypefindfunctions.c:427:static GstStaticCaps hls_caps = GST_STATIC_CAPS ("application/x-hls");
+
+
 {hlsdemux}
 [root@HUMAX /]# gst-inspect-1.0 hlsdemux
 Factory Details:
@@ -10282,47 +10328,6 @@ Element Signals:
                                        gpointer user_data);
   "no-more-pads" :  void user_function (GstElement* object,
                                         gpointer user_data);
-
-
-={============================================================================
-*kt_dev_uv_stack_414* stack: media: gst mime 
-
-{dash}
-dash+xml application/dash+xml
-http://www.iana.org/assignments/media-types/application/dash+xml
-
-/zinc-build-root/debug-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src$ ag "application/dash"
-
-gst_plugins_bad-1.5.0/ext/dash/gstplugin.c
-74:/*** application/dash+xml typefind helper ***/
-76:static GstStaticCaps dash_caps = GST_STATIC_CAPS ("application/dash+xml");
-95:  if (!gst_type_find_register (plugin, "application/dash+xml",
-
-gst_plugins_bad-1.5.0/ext/dash/gstdashdemux.c
-171:    GST_STATIC_CAPS ("application/dash+xml"));
-
-gst_plugins_base-1.5.0/gst/playback/gsturidecodebin.c
-1293:  "application/dash+xml", NULL
-
-
-{hls}
-http://www.iana.org/assignments/media-types/application/vnd.apple.mpegurl
-vnd.apple.mpegurl application/vnd.apple.mpegurl
-
-Additional information :
-
-1. Magic number(s) : #EXTM3U
-2. File extension(s) : m3u, m3u8
-3. Macintosh file type code : none
-4. Object Identifiers: none
-
-
-/zinc-build-root/debug-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src$ ag GST_STATIC_CAPS | ag hls
-gst_plugins_bad-1.5.0/ext/hls/gsthlssink.c:68:    GST_STATIC_CAPS_ANY);
-gst_plugins_bad-1.5.0/ext/hls/gsthlsdemux.c:50:    GST_STATIC_CAPS_ANY);
-gst_plugins_bad-1.5.0/ext/hls/gsthlsdemux.c:55:    GST_STATIC_CAPS ("application/x-hls"));
-gst_plugins_base-1.5.0/gst/typefind/gsttypefindfunctions.c:427:static GstStaticCaps hls_caps = GST_STATIC_CAPS ("application/x-hls");
-
 
 ={============================================================================
 *kt_dev_uv_stack_420* stack: media: gst: nexussink
