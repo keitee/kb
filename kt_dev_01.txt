@@ -26067,11 +26067,25 @@ STL algorithms.
 *kt_dev_stl_062* algorithm: function object and function type
 
 {function-object}
+C++SLR 6.10
+Functional arguments for algorithms don’t have to be functions. As seen with lambdas, functional
+arguments can be objects that behave like functions. Such an object is called a function object, or
+functor.
+
+Since C++11, the standard uses the term function object for every object that can be used as a
+function call. Thus, function pointers, objects of classes with operator () or with a conversion to
+a pointer to function, and lambdas are function objects. Here in this book, however, I use the term
+for objects of classes with operator() defined.
+
+So, what is the behavior of a function? A functional behavior is something that you can call by
+using parentheses and passing arguments. For example:
+
+function(arg1,arg2);       // a function call
+
 C++P p571. When overloads function call operator() then can use a object as if it's a func call and
 'call' a object. Hence function object. Must be a member and can have 'state' so more flexible than
 usual function.
 
-<example>
 struct absInt {
   int operator() (int val) const {
     return val < 0 ? -val : val;
@@ -26129,7 +26143,7 @@ int main()
 }
 
 
-<how-function-copied> algorithm-for-each.
+<is-copied> algorithm-for-each.
 The sample code:
 
 namespace std {
@@ -26229,7 +26243,7 @@ def ctor is called
 
 
 <advantages>
-function object have some advantages:
+The function object have advantages:
 
 1. "functions with state."
 They can be "smart functions" because may have other member functions and attributes. This means
@@ -26268,14 +26282,16 @@ int main()
   errors("errors");
 }
 
-2. Each function object has its own type. Ordinary functions have different types only when their
+
+2. Each function object has its own type. Ordinary functions have different types 'only' when their
 signatures differ. However, function objects can have different types even when their signatures are
-the same. In fact, each functional behavior defined by a function object has its own type. This is a
-significant improvement for generic programming using templates because you can pass functional
-behavior as a template parameter. Doing so enables containers of different types to use the same
-kind of function object as a sorting criterion, ensuring that you don’t assign, combine, or compare
-collections that have different sorting criteria. You can even design hierarchies of function
-objects so that you can, for example, have different, special kinds of one general criterion.
+the same. See function<> example below. In fact, each functional behavior defined by a function
+object has its own type. This is a significant improvement for generic programming using templates
+because you can pass functional behavior as a template parameter. Doing so enables containers of
+different types to use the same kind of function object as a sorting criterion, ensuring that you
+don't assign, combine, or compare collections that have different sorting criteria. You can even
+design hierarchies of function objects so that you can, for example, have different, special kinds
+of one general criterion.
 
 note: not sure since no example provided.
 In particular, Chapter 10 shows how to benefit from the ability to pass functional behavior as a
@@ -26285,57 +26301,20 @@ template parameter.
 allows better optimization because more details are defined at compile time. Thus, passing function
 objects instead of ordinary functions often results in better performance.
 
-<example>
-class PrintInt
-{
-  public:
-    void operator() (string elem) const   // note: string
-    {
-      cout << elem << ' ';
-    }
-};
-
-int main()
-{
-  vector<int> coll;
-
-  // insert elements from 1 to 9
-  for (int i=1; i<=9; ++i) {
-    coll.push_back(i);
-  }
-
-  // print all elements
-  for_each (coll.cbegin(), coll.cend(), // range
-      PrintInt());                      // operation
-
-  cout << endl;
-}
-
-$ ./cppbl.sh sample.cpp 
-In file included from /usr/include/c++/4.7/algorithm:63:0,
-                 from sample.cpp:3:
-/usr/include/c++/4.7/bits/stl_algo.h: In instantiation of ‘_Funct std::for_each(_IIter, _IIter,
-        _Funct) [with _IIter = __gnu_cxx::__normal_iterator<const int*, std::vector<int> >; _Funct =
-PrintInt]’:
-
-sample.cpp:27:17:   required from here
-/usr/include/c++/4.7/bits/stl_algo.h:4442:2: error: invalid conversion from ‘int’ to ‘const char*’
-[-fpermissive]
-In file included from /usr/include/c++/4.7/string:54:0,
-                 from /usr/include/c++/4.7/bits/locale_classes.h:42,
-                 from /usr/include/c++/4.7/bits/ios_base.h:43,
-                 from /usr/include/c++/4.7/ios:43,
-                 from /usr/include/c++/4.7/ostream:40,
-                 from /usr/include/c++/4.7/iostream:40,
-                 from sample.cpp:1:
-
-/usr/include/c++/4.7/bits/basic_string.h:487:7: error:   initializing argument 1 of
-‘std::basic_string<_CharT, _Traits, _Alloc>::basic_string(const _CharT*, const _Alloc&) [with _CharT
-= char; _Traits = std::char_traits<char>; _Alloc = std::allocator<char>]’ [-fpermissive]
 
 <example>
 Suppose that you want to add a certain value to all elements of a collection. If you know the value
-you want to add at 'compile' time, you could use an ordinary function, predicate.
+to add at 'compile' time, you could use an ordinary function, predicate.
+
+void add10 (int& elem)
+{
+    elem += 10;
+}
+
+for_each (coll.begin(), coll.end(), add10);
+
+
+If you know the different values to add at 'compile' time, you could use template.
 
 #include <iostream>
 #include <vector>
@@ -26371,7 +26350,21 @@ int main()
 
   PRINT_ELEMENTS(coll, "initialized: " );
 
-  // note: shall not .cbegin() sicne causes compile error. do you know why?
+  // note: when use cbegin() instead, causes compile error. however, works in previous examples?
+  //
+  // : error: invalid initialization of reference of type "int&" from expression of type "const int"
+  //
+  // The reason is that 
+  //
+  // 1. from for_each code:
+  //     __f(*__first);
+  //
+  // 2. from operation code:
+  //     void add( int& elem )
+  //
+  // Therefore, add(*__first) and this is "int& elem <- const int". For previous examples, the
+  // argument type was int and no problem.
+
   for_each (coll.begin(), coll.end(),   // range
       add<10>);                         // operation
 
@@ -26382,11 +26375,13 @@ int main()
 initialized: 1 2 3 4 5 6 7 8 9 
 added      : 11 12 13 14 15 16 17 18 19 
 
-If you process the value to add at runtime, things get complicated. Did you ever copy the definition
-of a function because it had a static variable to keep its state and you needed the same function
-with another state at the same time? This is exactly the same type of problem. You can't achieve
-this with one ordinary function. The below solves it by using two different function object but same
-type and functionality.
+If you process the value to add at runtime, things get complicated. This normally results in a
+global variable that is used both by the function that calls the algorithm and by the function that
+is called by the algorithm. Did you ever copy the definition of a function because it had a static
+variable to keep its state(the value to add) and you needed the same function with another state at
+the same time? This is exactly the same type of problem. You can't achieve this with one ordinary
+function. The below solves it by using two different function object but same type and
+functionality.
 
 #include <iostream>
 #include <vector>
@@ -26446,6 +26441,62 @@ initialized: 1 2 3 4 5 6 7 8 9
 added 10   : 11 12 13 14 15 16 17 18 19 
 added first: 22 23 24 25 26 27 28 29 30 
 
+
+<match-to-element-type>
+How relates to the element? Is it possible to have different type for the element type of container
+and the element type of function-object? How function object gets the argument?
+
+These stl class generates a function object that invokes the corresponding operator of the
+underlying element type.
+
+<example>
+class PrintInt
+{
+  public:
+    void operator() (string elem) const   // note: string
+    {
+      cout << elem << ' ';
+    }
+};
+
+int main()
+{
+  vector<int> coll;
+
+  // insert elements from 1 to 9
+  for (int i=1; i<=9; ++i) {
+    coll.push_back(i);
+  }
+
+  // print all elements
+  for_each (coll.cbegin(), coll.cend(), // range
+      PrintInt());                      // operation
+
+  cout << endl;
+}
+
+$ ./cppbl.sh sample.cpp 
+In file included from /usr/include/c++/4.7/algorithm:63:0,
+                 from sample.cpp:3:
+/usr/include/c++/4.7/bits/stl_algo.h: In instantiation of ‘_Funct std::for_each(_IIter, _IIter,
+        _Funct) [with _IIter = __gnu_cxx::__normal_iterator<const int*, std::vector<int> >; _Funct =
+PrintInt]’:
+
+sample.cpp:27:17:   required from here
+/usr/include/c++/4.7/bits/stl_algo.h:4442:2: error: invalid conversion from ‘int’ to ‘const char*’
+[-fpermissive]
+In file included from /usr/include/c++/4.7/string:54:0,
+                 from /usr/include/c++/4.7/bits/locale_classes.h:42,
+                 from /usr/include/c++/4.7/bits/ios_base.h:43,
+                 from /usr/include/c++/4.7/ios:43,
+                 from /usr/include/c++/4.7/ostream:40,
+                 from /usr/include/c++/4.7/iostream:40,
+                 from sample.cpp:1:
+
+/usr/include/c++/4.7/bits/basic_string.h:487:7: error:   initializing argument 1 of
+‘std::basic_string<_CharT, _Traits, _Alloc>::basic_string(const _CharT*, const _Alloc&) [with _CharT
+= char; _Traits = std::char_traits<char>; _Alloc = std::allocator<char>]’ [-fpermissive]
+
 <predefined-function-objects>
 The 'functional' header defines a set of function 'object' classes that represent the arithmetic,
 relational, and logical operations. 
@@ -26457,14 +26508,7 @@ it is expanded to
 set<int,less<int>> coll;      // sort elements with <
 
 From there, it is easy to sort elements in the opposite order:
-set<int,greater<int>> coll;   // sort elements with >
-
-
-How relates to the element? Is it possible to have different type for the element type of container
-and the element type of function-object? How function object gets the argument?
-
-These stl class generates a function object that invokes the corresponding operator of the
-underlying element type.
+set<int,greater<int>> coll;   // sort elements with > 
 
 # template-less
 
@@ -26623,6 +26667,21 @@ When call newCallable, newCallable calls callable, 'passing' the arguments in ar
 
 In other words, bind(f, _1, 5)(x) is equivalent to f(x, 5);
 
+
+<algorithm-find-if>
+/// bits/stl_algo.h
+///
+/// This is an overload used by find_if() for the Input Iterator case.
+template<typename _InputIterator, typename _Predicate>
+    inline _InputIterator
+    __find_if(_InputIterator __first, _InputIterator __last, _Predicate __pred, input_iterator_tag)
+    {
+        while (__first != __last && !bool(__pred(*__first)))
+            ++__first;
+        return __first;
+    }
+
+
 <arg_list>
 _n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. That is _1 is
 first parameter in newCallable.
@@ -26635,7 +26694,7 @@ bool check_size( const string &s, string::size_type sz )
 auto check6 = bind( check_size, _1, 6 );
 
 string s = "hello";
-bool b1 = check6(s);    // calls check_size(s, 6) and return bool since check6 calls check_size
+bool b1 = check6(s);    // bool check_size(s, 6)
 
 auto wc = find_if( words.begin(), words.end(), 
                      [sz] (const string &a)
@@ -26643,6 +26702,7 @@ auto wc = find_if( words.begin(), words.end(),
 
 auto wc = find_if( words.begin(), words.end(), 
                      bind(check_size, _1, 6) );
+
 
 <placeholder-namespace>
 The placeholder is defined in std::placeholders namespace in functional header.
@@ -26658,6 +26718,17 @@ sample.cpp:20:25: error: "_1" was not declared in this scope
 using namespace std;
 using namespace std::placeholders;
 
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
 bool check_size( const string &s, string::size_type sz )
 {
   return s.size() >= sz;
@@ -26670,11 +26741,17 @@ int main()
 
   sort( coll.begin(), coll.end() );
 
+  PRINT_ELEMENTS( coll, "sorted: " );
+
   auto wc = find_if( coll.begin(), coll.end(),
       bind( check_size, _1, 4 ));
 
   cout << "wc = " << *wc << endl;
 }
+
+sorted: fox jumps over quick red red slow the the turtle 
+wc = jumps
+
 
 <rearrange-arguments>
 Can use bind to bind or rearrange the parameters in the given collable.
@@ -26691,6 +26768,18 @@ bool isShorter(const string &s1, const string &s2)
 
 sort( words.begin(), words.end(), isShorter );
 sort( words.begin(), words.end(), bind( isShorter, _2, _1 ));
+
+
+<not-use-arguments>
+Possible not to use arguments at all. If changes the example above as:
+
+auto wc = find_if( coll.begin(), coll.end(),
+   bind( check_size, "bind", 4 ));
+
+
+sorted: fox jumps over quick red red slow the the turtle 
+wc = fox
+
 
 <reference>
 To use reference in bind:
