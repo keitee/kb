@@ -26143,7 +26143,7 @@ int main()
 }
 
 
-<is-copied> algorithm-for-each.
+{is-copied} algorithm-for-each.
 The sample code:
 
 namespace std {
@@ -26194,8 +26194,7 @@ pointer.
 When use a function object, do the same. So in for_each case, takes a 'pointer' from a 'temporary'
 function object and there is 'no' object creation for function type template parameter.
 
-note: really? should copied or moved when it is a temporary? Unlike std::thread case no copy is
-made.
+note: Really? The copy is made on "_Function __f" agrument.
 
 #include <iostream>
 #include <vector>
@@ -26203,24 +26202,36 @@ made.
 
 using namespace std;
 
-class PrintInt
+class AddValue
 {
+  private:
+    int theValue;
+
   public:
-      PrintInt() 
-      {
-          cout << "def ctor is called" << endl;
-      }
+    AddValue( int v ) : theValue(v) { }
 
-      PrintInt(const PrintInt& rhs)
-      {
-          cout << "copy ctor is called" << endl;
-      }
-
-    void operator() (int elem) const
+    AddValue(const AddValue& rhs)
     {
-      cout << elem << ' ';
+        cout << "copy ctor is called" << endl;
     }
+
+    // <Q> question. what might be the result when use this?
+    // void operator() (int elem) const
+
+    void operator() (int &elem) const
+    { elem += theValue; }
 };
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
 
 int main()
 {
@@ -26231,15 +26242,28 @@ int main()
     coll.push_back(i);
   }
 
-  // print all elements
-  for_each (coll.cbegin(), coll.cend(), PrintInt());                      
+  PRINT_ELEMENTS(coll, "initialized: " );
 
-  cout << endl;
+  for_each (coll.begin(), coll.end(),   // range
+      AddValue(10));                    // operation
+  cout << "-----------------------------" << endl;
+
+  PRINT_ELEMENTS(coll, "added 10   : " );
+
+  for_each (coll.begin(), coll.end(),   // range
+      AddValue(*coll.begin()));         // operation
+  cout << "-----------------------------" << endl;
+
+  PRINT_ELEMENTS(coll, "added first: " );
 }
 
-$ ./a.out 
-def ctor is called
-1 2 3 4 5 6 7 8 9 copy ctor is called
+initialized: 1 2 3 4 5 6 7 8 9 
+copy ctor is called
+-----------------------------
+added 10   : 11 12 13 14 15 16 17 18 19 
+copy ctor is called
+-----------------------------
+added first: 22 23 24 25 26 27 28 29 30 
 
 
 <advantages>
@@ -26442,6 +26466,89 @@ added 10   : 11 12 13 14 15 16 17 18 19
 added first: 22 23 24 25 26 27 28 29 30 
 
 
+<why>
+With this technique, two different function objects can solve the problem of having a function with
+two states at the same time. For example, you could simply declare two function objects and use them
+independently:
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+class AddValue
+{
+  private:
+    int theValue;
+
+  public:
+    AddValue( int v ) : theValue(v)
+    {
+        cout << "ctor is called: " << theValue << endl;
+    }
+
+    AddValue(const AddValue& rhs)
+    {
+        cout << "copy ctor is called: " << theValue << endl;
+    }
+
+    // <Q> question. what might be the result when use this?
+    // void operator() (int elem) const
+
+    void operator() (int &elem) const
+    { elem += theValue; }
+};
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  vector<int> coll;
+
+  // insert elements from 1 to 9
+  for (int i=1; i<=9; ++i) {
+    coll.push_back(i);
+  }
+
+  AddValue addx(10);
+  AddValue addy(20);
+
+  PRINT_ELEMENTS(coll, "initialized: " );
+
+  for_each (coll.begin(), coll.end(), addx);
+  cout << "-----------------------------" << endl;
+
+  PRINT_ELEMENTS(coll, "added 10   : " );
+
+  for_each (coll.begin(), coll.end(), addy); 
+  cout << "-----------------------------" << endl;
+
+  PRINT_ELEMENTS(coll, "added first: " );
+}
+
+ctor is called: 10
+ctor is called: 20
+initialized: 1 2 3 4 5 6 7 8 9 
+copy ctor is called: 0
+copy ctor is called: -1218374876
+-----------------------------
+added 10   : 1 2 3 4 5 6 7 8 9 
+copy ctor is called: 134519579
+copy ctor is called: -1218374876
+-----------------------------
+added first: 134519580 134519581 134519582 134519583 134519584 134519585 134519586 134519587 134519588 
+
+
 <match-to-element-type>
 How relates to the element? Is it possible to have different type for the element type of container
 and the element type of function-object? How function object gets the argument?
@@ -26497,6 +26604,7 @@ In file included from /usr/include/c++/4.7/string:54:0,
 ‘std::basic_string<_CharT, _Traits, _Alloc>::basic_string(const _CharT*, const _Alloc&) [with _CharT
 = char; _Traits = std::char_traits<char>; _Alloc = std::allocator<char>]’ [-fpermissive]
 
+
 <predefined-function-objects>
 The 'functional' header defines a set of function 'object' classes that represent the arithmetic,
 relational, and logical operations. 
@@ -26510,9 +26618,19 @@ set<int,less<int>> coll;      // sort elements with <
 From there, it is easy to sort elements in the opposite order:
 set<int,greater<int>> coll;   // sort elements with > 
 
-# template-less
 
+# template-less from bits/stl_function.h
 namespace std {
+
+  /// One of the @link arithmetic_functors math functors@endlink.
+  template<typename _Tp>
+    struct multiplies : public binary_function<_Tp, _Tp, _Tp>
+    {
+      _Tp
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x * __y; }
+    };
+
   template<typename _Tp>
     struct less : public binary_function<_Tp, _Tp, bool>
     {
@@ -26568,6 +26686,7 @@ int main()
 
   PRINT_ELEMENTS(coll, "multiplies : " );
 }
+
 
 <support-for-pointers> any real case which is useful?
 p575. Recall that comparing two unrelated pointers is undefined. However, might want to sort a
