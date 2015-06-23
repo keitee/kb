@@ -31,11 +31,14 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_319| gst: mime and types
 |kt_dev_bcast_320| gst: plugin writer's guide
 
+*kt_dev_bcast_330* gst: element property 
+*kt_dev_bcast_330* gst: man: 06: bins
+*kt_dev_bcast_330* gst: man: 08: pad and capability
 |kt_dev_bcast_330| gst: man: 18: autoplug and typefind
 
 |kt_dev_bcast_400| gst: ref: gstcap
 
-|kt_dev_bcast_500| gnome: ref: gstcap
+|kt_dev_bcast_500| gst: gnome: glib
 
 # ============================================================================
 #{
@@ -2781,6 +2784,158 @@ Element Properties:
 
 
 ={============================================================================
+*kt_dev_bcast_330* gst: man: introduction
+
+GStreamer is an extremely powerful and versatile framework for creating streaming media
+applications.  Many of the virtues of the GStreamer framework come from its modularity: GStreamer
+can seamlessly incorporate new plugin modules. But because modularity and power often come at a cost
+of greater complexity, writing new applications is not always easy.
+
+
+2. Preliminary reading
+
+In order to understand this manual, you need to have a basic understanding of the C language.  Since
+GStreamer adheres to the GObject programming model, this guide also assumes that you understand the
+basics of GObject (http://library.gnome.org/devel/gobject/stable/) and glib
+(http://library.gnome.org/devel/glib/stable/) programming. Especially, 
+
+
+* GObject instantiation 
+* GObject properties (set/get) 
+* GObject casting 
+* GObject referecing/dereferencing 
+* glib memory management 
+* glib signals and callbacks 
+* glib main loop
+
+
+1. What is GStreamer?
+
+Specifically, GStreamer core provides
+
+* an API for multimedia applications
+* a plugin architecture
+* a pipeline architecture
+* a mechanism for media type handling/negotiation
+* a mechanism for synchronization
+* over 250 plug-ins providing more than 1000 elements
+* a set of tools
+
+GStreamer plug-ins could be classified into
+
+* protocols handling
+* sources: for audio and video (involves protocol plugins)
+
+GStreamer is packaged into
+
+* gstreamer: the core package
+* gst-plugins-base: an essential exemplary set of elements
+* gst-plugins-good: a set of good-quality plug-ins under LGPL
+* gst-plugins-ugly: a set of good-quality plug-ins that might pose distribution problems
+* gst-plugins-bad: a set of plug-ins that need more quality
+* gst-libav: a set of plug-ins that wrap libav for decoding and encoding
+
+
+See Figure 1-1. Gstreamer overview
+
+
+2. Design principles
+
+2.1. Clean and powerful
+
+GStreamer provides a clean interface to:
+
+* The application programmer who wants to build a media pipeline. The programmer can use an
+extensive set of powerful tools to create media pipelines without writing a single line of code.
+Performing complex media manipulations becomes very easy.
+
+* The plugin programmer. Plugin programmers are provided a clean and simple API to create
+self-contained plugins. 
+
+2.2. Object oriented
+
+GStreamer uses the mechanism of signals and object properties.
+
+All objects can be queried at runtime for their various properties and capabilities.
+
+2.5. High performance
+
+High performance is obtained by:
+
+* extremely light-weight links between plugins. Data can travel the pipeline with minimal overhead.
+Data passing between plugins only involves a pointer dereference in a typical pipeline.
+
+* providing a mechanism to directly work on the target memory. A plugin can for example directly
+write to the X server's shared memory space. Buffers can also point to arbitrary memory, such as a
+sound card’s internal hardware buffer.
+
+* using a plugin registry with the specifications of the plugins so that the plugin loading can be
+delayed until the plugin is actually used.
+
+
+={============================================================================
+*kt_dev_bcast_330* gst: man: 03: foundations
+
+3.2. Pads
+
+Pads are element's input and output, where you can connect other elements. They are used to
+negotiate links and data flow between elements in GStreamer. A pad can be viewed as a “plug” or
+“port” on an element where links may be made with other elements, and through which data can flow to
+or from those elements. Pads have specific data handling capabilities: a pad can restrict the type
+of data that flows through it. Links are only allowed between two pads when the allowed data types
+of the two pads are compatible. Data types are negotiated between pads using a process called caps
+negotiation. Data types are described as a GstCaps.
+
+For the most part, all data in GStreamer flows one way through a link between elements. Data flows
+out of one element through one or more source pads, and elements accept incoming data through one or
+more sink pads. Source and sink elements have only source and sink pads, respectively. Data usually
+means buffers (described by the GstBuffer object) and events (described by the GstEvent)
+
+
+3.3. Bins and pipelines
+
+A pipeline is a top-level 'bin'. It provides a bus for the application and manages the
+synchronization for its children. As you set it to PAUSED or PLAYING state, data flow will start and
+media processing will take place. Once started, pipelines will run in a separate thread until you
+stop them or the end of the data stream is reached.
+
+
+3.4. Communication
+
+GStreamer provides several mechanisms for communication and data exchange between the application
+and the pipeline.
+
+* buffers are objects for passing streaming data "between elements" in the pipeline. Buffers always
+travel from sources to sinks (downstream).
+
+* events are objects sent between elements or "from the application to elements". Events can travel
+upstream and downstream. Downstream events can be synchronised to the data flow.
+
+* messages are objects posted by elements "on the pipeline's message bus", where they will be held
+for collection by the application. Messages can be intercepted synchronously from the streaming
+    thread context of the element posting the message, but are usually handled asynchronously by the
+        application from the application's main thread. 
+
+Messages are used to 'transmit' information such as errors, tags, state changes, buffering state,
+         redirects etc. "from elements to the application" in a thread-safe way.
+
+* queries allow applications to request information such as duration or current playback position from
+the pipeline. Queries are always answered synchronously. Elements can also use queries to request
+information from their peer elements (such as the file size or duration). They can be used both ways
+within a pipeline, but upstream queries are more common.
+
+
+={============================================================================
+*kt_dev_bcast_330* gst: man: initialize gst
+
+4.1. Simple initialization
+
+Before the GStreamer libraries can be used, gst_init has to be called from the 'main' application.
+This call will perform the necessary initialization of the library as well as parse the
+GStreamer-specific command line options.
+
+
+={============================================================================
 *kt_dev_bcast_330* gst: man: 06: bins
 
 A bin is a container element. You can add elements to a bin. Since a bin is an element 'itself', a
@@ -2811,6 +2966,30 @@ Bins are created in the same way that other elements are created, i.e. using an 
 There are also convenience functions available (gst_bin_new () and gst_pipeline_new ()). To add
 elements to a bin or remove elements from a bin, you can use gst_bin_add () and gst_bin_remove ().
 Note that the bin that you add an element to will take ownership of that element. 
+
+If you destroy the bin, the element will be dereferenced with it. If you remove an element from a
+bin, it will be dereferenced automatically.
+
+
+6.4. Bins manage states of their children
+
+Bins manage the state of all elements contained in them. If you set a bin (or a pipeline, which is a
+        special top-level type of bin) to a certain target state using gst_element_set_state (), it
+will make sure all elements contained within it will also be set to this state. This means it's
+usually only necessary to set the state of the top-level pipeline to start up the pipeline or shut
+it down.
+
+The bin will perform the state changes on all its children from the sink element to the source
+element.  This ensures that the downstream element is ready to receive data when the upstream
+element is brought to PAUSED or PLAYING. Similarly when shutting down, the sink elements will be set
+to READY or NULL first, which will cause the upstream elements to receive a FLUSHING error and stop
+the streaming threads before the elements are set to the READY or NULL state.
+
+Note, however, that if elements are added to a bin or pipeline that's already running, , e.g. from
+within a "pad-added" signal callback, its state will not automatically be brought in line with the
+current state or target state of the bin or pipeline it was added to. Instead, you have to need to
+set it to the desired target state yourself using gst_element_set_state () or
+gst_element_sync_state_with_parent () when adding elements to an already-running pipeline.
 
 
 ={============================================================================
@@ -3222,10 +3401,58 @@ g_object_set(uridecodebin.transferNone(), "caps",
 
 
 ={============================================================================
-*kt_dev_bcast_500* gnome: glib
+*kt_dev_bcast_500* gst: gnome: glib
 
 GLib Reference Manual
 https://developer.gnome.org/glib/unstable/index.html
+
+
+={============================================================================
+*kt_dev_bcast_501* gst: gnome: glib: debug
+
+gstreamer-1.5.0/docs/gst/running.xml
+
+<formalpara id="G_DEBUG">
+  <title><envar>G_DEBUG</envar></title>
+
+  <para>
+Useful GLib environment variable. Set G_DEBUG=fatal_warnings to make
+GStreamer programs abort when a critical warning such as an assertion failure
+occurs. This is useful if you want to find out which part of the code caused
+that warning to be triggered and under what circumstances. Simply set G_DEBUG
+as mentioned above and run the program in gdb (or let it core dump). Then get
+a stack trace in the usual way.
+  </para>
+
+
+https://developer.gnome.org/glib/stable/glib-running.html
+
+G_DEBUG.  
+This environment variable can be set to a list of debug options, which cause GLib to print out
+different types of debugging information.
+
+fatal-warnings
+Causes GLib to abort the program at the first call to g_warning() or g_critical().
+
+fatal-criticals
+Causes GLib to abort the program at the first call to g_critical().
+
+gc-friendly
+Newly allocated memory that isn't directly initialized, as well as memory being freed will be reset
+to 0. The point here is to allow memory checkers and similar programs that use Boehm GC alike
+algorithms to produce more accurate results.
+
+resident-modules
+All modules loaded by GModule will be made resident. This can be useful for tracking memory leaks in
+modules which are later unloaded; but it can also hide bugs where code is accessed after the module
+would have normally been unloaded.
+
+bind-now-modules
+All modules loaded by GModule will bind their symbols at load time, even when the code uses
+%G_MODULE_BIND_LAZY.
+
+The special value all can be used to turn on all debug options. The special value help can be used
+to print all available options. 
 
 
 ==============================================================================

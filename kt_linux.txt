@@ -17,7 +17,7 @@
 |kt_linux_bash_003| bash: if and test command primaries <string-comparison> <[[>
 |kt_linux_bash_004| bash: globbing (wildcard)
 |kt_linux_bash_005| bash: quoting <grep>
-|kt_linux_bash_006| bash: args <shift-operator> <while>
+|kt_linux_bash_006| bash: shell and special parameters <shift-operator> <while>
 |kt_linux_bash_007| bash: set var using other commands <dirname> <readlink> <if>
 |kt_linux_bash_008| bash: for
 |kt_linux_bash_009| bash: select
@@ -48,6 +48,8 @@
 |kt_linux_bash_034| bash: wait
 |kt_linux_bash_035| bash: help
 |kt_linux_bash_036| bash: shell and environment variable
+|kt_linux_bash_037| bash: builtin: command
+|kt_linux_bash_038| bash: builtin: prepare
 
 |kt_linux_bash_100| bash: config: colour prompt
 |kt_linux_bash_101| bash: config: how to know shell nesting level
@@ -478,8 +480,41 @@ echo "my const var is $CONST.."
 bash: CONST: readonly variable
 
 
-{array}
-<set>
+={============================================================================
+*kt_linux_bash_003* bash: array
+
+<indexed-and-associateive>
+Bash provides one-dimensional indexed and associative array variables. Indexed arrays are referenced
+using integers and are zero-based; associative arrays use arbitrary strings.
+
+An indexed array is created automatically if any variable is assigned to using the syntax
+
+name[subscript]=value
+
+The subscript is treated as an arithmetic expression that must 'evaluate' to a number. 
+note: evaluates which means subcript can be a variable.
+
+To explicitly declare an array, use
+
+declare -a name
+
+Associative arrays are created using
+
+declare -A name.
+
+Attributes may be specified for an array variable using the declare and readonly builtins. Each
+attribute applies to all members of an array.
+
+Arrays are assigned to using compound assignments of the form
+
+name=(value1 value2 ... )
+
+where each value is of the form [subscript]=string. Indexed array assignments do not require
+anything but string. When assigning to indexed arrays, if the optional subscript is supplied, that
+index is assigned to; otherwise the index of the element assigned is the last index assigned to by
+the statement plus one. Indexing starts at zero. 
+
+
 FRUIT[0]=apple
 FRUIT[1]=banana
 FRUIT[2]=orange
@@ -488,13 +523,43 @@ Or,
 
 FRUIT=(apple plum blackberry)
 
-<use>
+
+<reference>
+Any element of an array may be referenced using ${name[subscript]}. The braces are required to avoid
+conflicts with the shell's filename expansion operators. 
+
+If the subscript is ‘@’ or ‘*’, the word expands to all members of the array name. These subscripts
+differ 'only' when the word appears within double quotes. If the word is double-quoted, ${name[*]}
+expands to a single word with the value of each array member separated by the first character of the
+    IFS variable, and ${name[@]} expands each element of name to a separate word. 
+
+note: the difference is [*] uses IFS but [@] is not as with "special parameters"
+
+When there are no array members, ${name[@]} expands to nothing.
+If the double-quoted expansion occurs within a word, the expansion of the first parameter is joined
+with the beginning part of the original word, and the expansion of the last parameter is joined with
+the last part of the original word. This is analogous to the expansion of the special parameters ‘@’
+and ‘*’. ${#name[subscript]} expands to the length of ${name[subscript]}. If subscript is ‘@’ or
+‘*’, the expansion is the number of elements in the array. 
+
+Referencing an array variable without a subscript is equivalent to referencing with a subscript of 0. 
+
+If the subscript used to reference an element of an indexed array evaluates to a number less than
+zero, it is interpreted as relative to one greater than the maximum index of the array, so negative
+indices count back from the end of the array, and an index of -1 refers to the last element. 
+
+
 echo "idx 0 = ${FRUIT[0]}"    # idx 0 = apple. just a string
 echo "idx 1 = ${FRUIT[1]}"
 echo "idx 2 = ${FRUIT[2]}"
 
 echo "all = ${FRUIT[*]}"      # to reference all
 echo "all = ${FRUIT[@]}"      # same as above. note: this is to array'fy' from a long string.
+
+
+uri="$1"
+[[ $uri =~ [1-9][0-9]* ]] && uri="${urls[$uri]}"
+
 
 <example>
 farm_hosts=(web03 web04 web05 web06 web07)
@@ -842,11 +907,135 @@ $ grep '[0-9][0-9]*$' report2 report7
 
 
 ={============================================================================
-*kt_linux_bash_006* bash: args
+*kt_linux_bash_006* bash: shell parameters
 
-The args are special 'predefined' variables. 
+3.4 Shell Parameters
 
-<$0>
+A variable may be assigned to by a statement of the form
+
+name=[value]
+
+If value is not given, the variable is assigned the null string. All values undergo tilde
+'expansion', parameter and variable expansion, command substitution, arithmetic expansion, and quote
+removal. If the variable has its integer attribute set, then value is evaluated as an arithmetic
+expression even if the $((...)) expansion is not used (see Arithmetic Expansion). Word splitting is
+not performed, with the exception of "$@" as explained below. Filename expansion is not performed.
+Assignment statements may also appear as arguments to the alias, declare, typeset, export, readonly,
+and local builtin commands. When in POSIX mode (see Bash POSIX Mode), these builtins may appear in a
+    command after one or more instances of the command builtin and retain these assignment statement
+    properties.
+
+
+about "+=" operator:
+
+In the context where an assignment statement is assigning a value to a shell variable or array index
+(see Arrays), the ‘+=’ operator can be used to append to or add to the variable's previous value.
+When ‘+=’ is applied to a variable for which the integer attribute has been set, value is evaluated
+as an arithmetic expression and added to the variable's current value, which is also evaluated. When
+‘+=’ is applied to an array variable using compound assignment (see Arrays), the variable's value is
+not unset (as it is when using ‘=’), and new values are appended to the array beginning at one
+greater than the array's maximum index (for indexed arrays), or added as additional key-value pairs
+in an associative array. When applied to a string-valued variable, value is expanded and appended to
+the variable’s value.
+
+TODO: about nameref which is call by reference. 
+
+
+3.4.1 Positional Parameters
+
+The shell's command-line arguments.
+
+A positional parameter is a parameter denoted by one or more digits, other than the single digit 0.
+note: not use '0'.
+
+Positional parameters are assigned from the shell's arguments when it is invoked, and may be
+reassigned using the set builtin command. Positional parameter N may be referenced as ${N}, or as $N
+when N consists of a single digit. Positional parameters may not be assigned to with assignment
+statements. The set and shift builtins are used to set and unset them (see Shell Builtin Commands).
+The positional parameters are temporarily replaced when a shell function is executed (see Shell
+        Functions).
+
+When a positional parameter consisting of more than a single digit is expanded, it must be enclosed
+in braces. 
+
+
+<no-parameter-not-set>
+If not given in the command line, not set.
+
+#!/bin/bash
+echo $1 $2 $3 ' -> echo $1 $2 $3'
+
+$./runsh.sh 1 2
+1 2
+
+
+3.4.2 Special Parameters
+
+The shell treats several parameters specially. These parameters may only be referenced; assignment
+to them is not allowed. 
+
+
+*
+($*) Expands to the positional parameters, starting from one. When the expansion is not within
+double quotes, each positional parameter expands to a separate word. In contexts where it is
+performed, those words are subject to further word splitting and pathname expansion. 
+
+When the expansion occurs "within double quotes", it expands to a single word with the value of each
+parameter separated by the first character of the IFS special variable. That is, "$*" is equivalent
+to "$1c$2c..." where c is the first character of the value of the IFS variable. If IFS is unset, the
+parameters are separated by spaces. If IFS is null, the parameters are joined without intervening
+separators.
+
+note: "unset" is different from "null"
+
+<code>
+This function is to make a single line from a array(list) separated by ":".
+
+function list_join() {
+    local sep="$1"
+    shift
+
+    (
+        IFS="$sep"
+        echo "$*"
+    )
+}
+
+declare -ar preload_libs=(
+    /usr/local/lib/libdirectfb.so
+    /usr/local/lib/libdirect.so
+    /usr/local/lib/libinit.so
+    /lib/libpthread.so.0
+)
+
+vars+=(LD_PRELOAD=$(list_join ":" ${preload_libs[@]}))
+
+
+@
+($@) Expands to the positional parameters, starting from one.  When the expansion occurs "within
+double quotes", each parameter expands to a separate word. That is, "$@" is equivalent to "$1"
+"$2"... 
+
+If the double-quoted expansion occurs within a word, the expansion of the first parameter is joined
+with the beginning part of the original word, and the expansion of the last parameter is joined with
+the last part of the original word. When there are no positional parameters, "$@" and $@ expand to
+nothing (i.e., they are removed).
+
+<arrayfy>
+args=("$@");   # to get 'all' args and set it to array.
+echo ${args[0]} ${args[1]} ${args[2]}
+
+echo $@        # to print all args in a one go
+
+
+0
+($0) Expands to the name of the shell or shell script. This is set at shell initialization. If Bash
+is invoked with a file of commands (see Shell Scripts), $0 is set to the name of that file. If Bash
+is started with the -c option (see Invoking Bash), then $0 is set to the first argument after the
+string to be executed, if one is present. Otherwise, it is set to the filename used to invoke Bash,
+as given by argument zero.
+
+<code>
 This variable is commonly used to determine the behavior of scripts that can be invoked with more
 than one name.
 
@@ -862,23 +1051,14 @@ case $0 in
 esac
 tar $TARGS
 
-<not-set-when-not-given>
-If not given in the command line, not set.
 
-#!/bin/bash
-echo $1 $2 $3 ' -> echo $1 $2 $3'
+#
+($#) Expands to the number of positional parameters in decimal. the number of args passed in the
+command line. exclued 0th.
 
-$./runsh.sh 1 2
-1 2
 
-<$@> <$*>
-args=("$@");   # to get 'all' args and set it to array.
-echo ${args[0]} ${args[1]} ${args[2]}
-
-echo $@        # to print all args in a one go
-
-<$#>
-the number of args passed in the command line. exclued 0th.
+?
+($?) Expands to the exit status of the most recently executed foreground pipeline.
 
 
 {shift-operator}
@@ -2340,6 +2520,88 @@ expected.
 
 After all, the reason is that by setting env vars in the shell script and run commands outside of
 script then command don't see these settings done in the script. Use env vars with default settings.
+
+
+={============================================================================
+*kt_linux_bash_037* bash: builtin: command
+
+command
+
+command [-pVv] command [arguments …]
+
+Runs command with arguments 'ignoring' any shell function named command. Only shell builtin commands
+or commands found by 'searching' the PATH are executed. If there is a shell function named ls,
+running 'command ls' within the function will execute the external command ls instead of calling the
+    function recursively. The -p option means to use a default value for PATH that is guaranteed to
+    find all of the standard utilities. The return status in this case is 127 if command cannot be
+    found or an error occurred, and the exit status of command otherwise.
+
+If either the -V or -v option is supplied, a description of command is printed. The -v option causes
+a single word indicating the command or file name used to invoke command to be displayed; the -V
+option produces a more verbose description. In this case, the return status is zero if command is
+found, and non-zero if not.
+
+<code>
+if [ -x "$(command -v nexus-inspect)" ]; then
+    echo "Running on a Nexus enabled system"
+
+note: -v returns a full path
+
+++ command -v nexus-inspect
++ '[' -x /opt/zinc/bin/nexus-inspect ']'
++ echo 'Running on a Nexus enabled system'
+Running on a Nexus enabled system
+
+
+={============================================================================
+*kt_linux_bash_038* bash: builtin: prepare
+
+declare
+
+declare [-aAfFgilnrtux] [-p] [name[=value] ...]
+
+'declare' variables and give them attributes. If no names are given, then display the values of
+variables instead.
+
+    The -p option will display the attributes and values of each name. When -p is used with name arguments, additional options, other than -f and -F, are ignored.
+
+    When -p is supplied without name arguments, declare will display the attributes and values of all variables having the attributes specified by the additional options. If no other options are supplied with -p, declare will display the attributes and values of all shell variables. The -f option will restrict the display to shell functions.
+
+    The -F option inhibits the display of function definitions; only the function name and attributes are printed. If the extdebug shell option is enabled using shopt (see The Shopt Builtin), the source file name and line number where the function is defined are displayed as well. -F implies -f.
+
+    The -g option forces variables to be created or modified at the global scope, even when declare is executed in a shell function. It is ignored in all other cases.
+
+The following options can be used to restrict output to variables with the specified attributes or
+to give variables attributes: 
+
+-a
+Each name is an indexed array variable (see Arrays).
+
+-A
+Each name is an associative array variable (see Arrays).
+
+-r
+Make names readonly. These names cannot then be assigned values by subsequent assignment statements
+or unset.
+
+
+={============================================================================
+*kt_linux_bash_039* bash: builtin: export
+
+export
+
+export [-fn] [-p] [name[=value]]
+
+Mark each name to be passed to child processes in the environment. If the -f option is supplied, the
+names refer to shell functions; otherwise the names refer to shell variables. The -n option means to
+no longer mark each name for export. 
+
+If 'no' names are supplied, or if the -p option is given, a list of names of all exported variables
+is displayed. The -p option displays output in a form that may be reused as input. If a variable
+name is followed by =value, the value of the variable is set to value.
+
+The return status is zero unless an invalid option is supplied, one of the names is not a valid
+shell variable name, or -f is supplied with a name that is not a shell function.
 
 
 ={============================================================================
@@ -4387,6 +4649,31 @@ apt-get install mc
 sudo apt-get install graphviz
 
 dot -Tjpeg gst-launch.PLAYING_PAUSED.dot -o gst-launch.PLAYING_PAUSED.jpg
+
+
+={============================================================================
+*kt_linux_tool_046* mktemp
+
+Create  a  temporary  file  or  directory,  safely,  and  print its name.  TEMPLATE must contain at
+least 3 consecutive `X's in last component.  If TEMPLATE is not specified, use tmp.XXXXXXXXXX, and
+--tmpdir is implied.  Files are created u+rw, and directories u+rwx, minus umask restrictions.
+
+
+$ mktemp
+/tmp/tmp.eezueA0X5X
+
+
+={============================================================================
+*kt_linux_tool_047* env
+
+env - run a program in a modified environment
+
+LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so
+
+env ${LD_PRELOAD} nickelmediad \
+    --no-mediasettings --no-localmedialibrary \
+    --no-outputmanager --no-servicelistbuilder \
+    -b $BUS_NAME -f $cfg &
 
 
 # ============================================================================
