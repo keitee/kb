@@ -172,11 +172,14 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_054| iterator: external and internal
 
 |kt_dev_stl_060| algorithm
-|kt_dev_stl_061| algorithm: predicate and lambda
-|kt_dev_stl_062| algorithm: function object and function type
-|kt_dev_stl_063| algorithm: bind
-|kt_dev_stl_062| algorithm: nonmodifying: equal, is_permutation
-|kt_dev_stl_063| algorithm: nonmodifying: count
+|kt_dev_stl_061| algorithm: predicate
+|kt_dev_stl_062| algorithm: lambda
+|kt_dev_stl_063| algorithm: function object
+|kt_dev_stl_064| algorithm: function<>
+|kt_dev_stl_065| algorithm: bind
+|kt_dev_stl_065| algorithm: which is better?
+|kt_dev_stl_066| algorithm: nonmodifying: equal, is_permutation
+|kt_dev_stl_067| algorithm: nonmodifying: count
 
 |kt_dev_stl_070| string
 |kt_dev_stl_071| string: stringstream {inefficient-concatnation}
@@ -25588,7 +25591,7 @@ uniqie( beg, end, comp );
 
 
 ={============================================================================
-*kt_dev_stl_061* algorithm: predicate, lambda, function object, and function type
+*kt_dev_stl_061* algorithm: predicate
 
 {why-aux-functions-like-predicate}
 To increase their flexibility and power, several algorithms allow the passing of user-defined
@@ -25807,6 +25810,9 @@ void biggies( vector<string> &words, vector<string>::size_type sz )
 so cannot use F(elem, size_type). How to solve this?
 
 
+={============================================================================
+*kt_dev_stl_062* algorithm: lambda
+
 {lambda}
 Lambdas, introduced with C++11, define a way to specify functional behavior 'inside' an expression
 or statement. You can define 'objects' that represent functional behavior and pass these objects as
@@ -25986,89 +25992,14 @@ auto wc = find_if( words.begin(), words.end(),
 Cannot be used sorting-criterion for associative containers and have state as function object does.
 
 
-{lambda-vs-others} C++SLR 6.10
-Suppose that you search in a collection for the first element with a value that is between x and y.
-
-If need to use in more than one or two places, use function than a lambda. However, it is not easy
-to write function to replace a lambda that captures local variables. For example, find_if takes
-unary predicate and no way to pass more than one as this example.
-
-#include <algorithm>
-#include <deque>
-#include <iostream>
-
-using namespace std;
-
-int main()
-{
-  deque<int> coll = { 1, 3, 19, 5, 13, 7, 11, 2, 17 };
-
-  int x = 5;
-  int y = 12;
-
-  auto pos = find_if (coll.cbegin(), coll.cend(),  // range
-      [=](int i) {                                 // search criterion
-         return i > x && i < y;
-      });
-
-  cout << "first elem >5 and <12: " << *pos << endl;
-}
-
-Now compare this way to search for "the first element >5 and <12" with the 'other' approaches
-provided by C++ before lambdas were introduced
-
-<1> handwritten loop
-
-// find first element > x and < y
-
-vector<int>::iterator pos;
-
-for (pos = coll.begin() ; pos != coll.end(); ++pos) 
-{
-  if (*pos > x && *pos < y) {
-    break; // the loop
-  }
-}
-
-<2> predicate, function object
-
-class Pred
-{
-    private:
-        int x;
-        int y;
-    public:
-        Pred (int xx, int yy) : x(xx), y(yy) {
-        }
-        bool operator() (int i) const {
-            return i > x && i < y;
-        }
-};
-
-pos = find_if(coll.begin(), coll.end(), Pred(x,y) );     // note T()
-
-note: 
-1. You have to scroll up to find out what find_if() exactly is looking for
-2. C++ compilers 'optimize' lambdas better than they do ordinary functions.
-3. What's more, access to x and y becomes really ugly in this scenario.
-
-<3> bind
-
-pos = find_if (coll.begin(), coll.end(),  // range
-            bind(logical_and<bool>(),     // search criterion
-               bind(greater<int>(),_1,x), // _1 > x
-               bind(less<int>(),_1,y)));  // _1 < y
-
-To summarize, lambdas provide the first convenient, readable, fast, and maintainable approach to use
-STL algorithms.
-
-
 ={============================================================================
-*kt_dev_stl_062* algorithm: function object and function type
+*kt_dev_stl_063* algorithm: function object and function type
 
 {function-object}
+
 C++SLR 6.10
-Functional arguments for algorithms don’t have to be functions. As seen with lambdas, functional
+
+Functional arguments for algorithms don't have to be functions. As seen with lambdas, functional
 arguments can be objects that behave like functions. Such an object is called a function object, or
 functor.
 
@@ -26143,140 +26074,17 @@ int main()
 }
 
 
-{is-copied} algorithm-for-each.
-The sample code:
-
-namespace std {
-  template <typename Iterator, typename Operation>
-    Operation for_each (Iterator act, Iterator end, Operation op)
-    {
-      while (act != end) {    // as long as not reached the end
-        op(*act);             // call op() on an element
-        ++act;                // move iterator to the next element
-      }
-      return op;
-    }
-}
-
-The code from bits/stl_algo.h:
-
-/**
-*  @brief Apply a function to every element of a sequence.
-*  @ingroup non_mutating_algorithms
-*  @param  __first  An input iterator.
-*  @param  __last   An input iterator.
-*  @param  __f      A unary function object.                   // note: speficy 'unary'
-*  @return   @p __f (std::move(@p __f) in C++0x).
-*
-*  Applies the function object @p __f to each element in the range
-*  @p [first,last).  @p __f must not modify the order of the sequence.
-*  If @p __f has a return value it is ignored.
-*/
-template<typename _InputIterator, typename _Function>
-_Function
-for_each(_InputIterator __first, _InputIterator __last, _Function __f)
-{
-    // concept requirements
-    __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
-        __glibcxx_requires_valid_range(__first, __last);
-
-    for (; __first != __last; ++__first)
-        __f(*__first);
-
-    return _GLIBCXX_MOVE(__f);
-}
-
-<function-automatic-conversion>
-As with "function-type", involves automatic conversion to function type(pointer). When use a usual
-function, compiler converts it to function type and a function call is a operator() on this function
-pointer. 
-
-When use a function object, do the same. So in for_each case, takes a 'pointer' from a 'temporary'
-function object and there is 'no' object creation for function type template parameter.
-
-note: Really? The copy is made on "_Function __f" agrument.
-
-#include <iostream>
-#include <vector>
-#include <algorithm>
-
-using namespace std;
-
-class AddValue
-{
-  private:
-    int theValue;
-
-  public:
-    AddValue( int v ) : theValue(v) { }
-
-    AddValue(const AddValue& rhs)
-    {
-        cout << "copy ctor is called" << endl;
-    }
-
-    // <Q> question. what might be the result when use this?
-    // void operator() (int elem) const
-
-    void operator() (int &elem) const
-    { elem += theValue; }
-};
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-int main()
-{
-  vector<int> coll;
-
-  // insert elements from 1 to 9
-  for (int i=1; i<=9; ++i) {
-    coll.push_back(i);
-  }
-
-  PRINT_ELEMENTS(coll, "initialized: " );
-
-  for_each (coll.begin(), coll.end(),   // range
-      AddValue(10));                    // operation
-  cout << "-----------------------------" << endl;
-
-  PRINT_ELEMENTS(coll, "added 10   : " );
-
-  for_each (coll.begin(), coll.end(),   // range
-      AddValue(*coll.begin()));         // operation
-  cout << "-----------------------------" << endl;
-
-  PRINT_ELEMENTS(coll, "added first: " );
-}
-
-initialized: 1 2 3 4 5 6 7 8 9 
-copy ctor is called
------------------------------
-added 10   : 11 12 13 14 15 16 17 18 19 
-copy ctor is called
------------------------------
-added first: 22 23 24 25 26 27 28 29 30 
-
-
-<advantages>
+{advantages}
 The function object have advantages:
 
 1. "functions with state."
 They can be "smart functions" because may have other member functions and attributes. This means
 that function objects have a state.
 
-In fact, the same functionality, represented by two 'different' function objects of the same type,
-may have different states at the same time. This is not possible for ordinary functions. Another
-advantage of function objects is that you can initialize them at 'runtime' before you use/call
-them.
+In fact, the same functionality, represented by two 'different' function objects instances of the
+same class, may have different 'states' at the same time. This is not possible for ordinary
+functions. Another advantage of function objects is that you can initialize them at 'runtime' before
+you use/call them.
 
 #include <iostream>
 #include <vector>
@@ -26310,8 +26118,8 @@ int main()
 2. Each function object has its own type. Ordinary functions have different types 'only' when their
 signatures differ. However, function objects can have different types even when their signatures are
 the same. See function<> example below. In fact, each functional behavior defined by a function
-object has its own type. This is a significant improvement for generic programming using templates
-because you can pass functional behavior as a template parameter. Doing so enables containers of
+object has its own type. This is a significant improvement for generic programming using 'templates'
+because you can 'pass' functional behavior as a template parameter. Doing so enables containers of
 different types to use the same kind of function object as a sorting criterion, ensuring that you
 don't assign, combine, or compare collections that have different sorting criteria. You can even
 design hierarchies of function objects so that you can, for example, have different, special kinds
@@ -26321,9 +26129,10 @@ note: not sure since no example provided.
 In particular, Chapter 10 shows how to benefit from the ability to pass functional behavior as a
 template parameter.
 
-3. Function objects are usually faster than ordinary functions. The concept of templates usually
-allows better optimization because more details are defined at compile time. Thus, passing function
-objects instead of ordinary functions often results in better performance.
+
+3. Function objects are usually faster than ordinary functions; function pointer. The concept of
+templates usually allows better optimization because more details are defined at compile time. Thus
+passing function objects instead of ordinary functions often results in better performance.
 
 
 <example>
@@ -26421,9 +26230,6 @@ class AddValue
   public:
     AddValue( int v ) : theValue(v) { }
 
-    // <Q> question. what might be the result when use this?
-    // void operator() (int elem) const
-
     void operator() (int &elem) const
     { elem += theValue; }
 };
@@ -26466,9 +26272,9 @@ added 10   : 11 12 13 14 15 16 17 18 19
 added first: 22 23 24 25 26 27 28 29 30 
 
 
-<why>
+<why-is-this>
 With this technique, two different function objects can solve the problem of having a function with
-two states at the same time. For example, you could simply declare two function objects and use them
+two 'states' at the same time. For example, you could simply declare two function objects and use them
 independently:
 
 #include <iostream>
@@ -26493,7 +26299,7 @@ class AddValue
         cout << "copy ctor is called: " << theValue << endl;
     }
 
-    // <Q> question. what might be the result when use this?
+    // note: What might be the result when use this? there is no changes to a container.
     // void operator() (int elem) const
 
     void operator() (int &elem) const
@@ -26548,8 +26354,232 @@ copy ctor is called: -1218374876
 -----------------------------
 added first: 134519580 134519581 134519582 134519583 134519584 134519585 134519586 134519587 134519588 
 
+note: why this wrong result? since copy ctor is wrong and should be:
 
-<match-to-element-type>
+class AddValue
+{
+    AddValue(const AddValue& rhs)
+    {
+        cout << "copy ctor is called: " << rhs.theValue << endl;
+        theValue = rhs.theValue;
+    }
+};
+
+ctor is called: 10
+ctor is called: 20
+initialized: 1 2 3 4 5 6 7 8 9 
+copy ctor is called: 10
+copy ctor is called: 10
+-----------------------------
+added 10   : 11 12 13 14 15 16 17 18 19 
+copy ctor is called: 20
+copy ctor is called: 20
+-----------------------------
+added first: 31 32 33 34 35 36 37 38 39 
+
+
+note: why is copy ctor called two times? since for_each<> returns _Function and confirms that there
+is one copy ctor when changes its definition in stl_algo.h
+
+<algorithm-for-each>
+
+namespace std {
+  template <typename Iterator, typename Operation>
+    Operation for_each (Iterator act, Iterator end, Operation op)
+    {
+      while (act != end) {    // as long as not reached the end
+        op(*act);             // call op() on an element
+        ++act;                // move iterator to the next element
+      }
+      return op;
+    }
+}
+
+The code from bits/stl_algo.h:
+
+/**
+*  @brief Apply a function to every element of a sequence.
+*  @ingroup non_mutating_algorithms
+*  @param  __first  An input iterator.
+*  @param  __last   An input iterator.
+*  @param  __f      A unary function object.                   // note: speficy 'unary'
+*  @return   @p __f (std::move(@p __f) in C++0x).
+*
+*  Applies the function object @p __f to each element in the range
+*  @p [first,last).  @p __f must not modify the order of the sequence.
+*  If @p __f has a return value it is ignored.
+*/
+template<typename _InputIterator, typename _Function>
+_Function
+for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+{
+    // concept requirements
+    __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+        __glibcxx_requires_valid_range(__first, __last);
+
+    for (; __first != __last; ++__first)
+        __f(*__first);
+
+    return _GLIBCXX_MOVE(__f);
+}
+
+
+{function-automatic-conversion}
+As with "function-type", involves automatic conversion to function type(pointer). When use a usual
+function, compiler converts it to function type and a function call is a operator() on this function
+pointer. 
+
+When use a function object, do the same. So in for_each case, takes a 'pointer' from a 'temporary'
+function object and there is 'no' object creation for function type template parameter.
+
+note: this is wrong since as shown above, copy is made for argument and return.
+
+
+{function-object-passed-by-value} C++SLR 10.1.2, 3
+As with the same example, a function that may have more than one state at the same time.
+
+int main()
+{
+  vector<int> coll;
+
+  // insert elements from 1 to 9
+  for (int i=1; i<=9; ++i) {
+    coll.push_back(i);
+  }
+
+  PRINT_ELEMENTS(coll, "initialized: " );
+
+  for_each (coll.begin(), coll.end(), AddValue(10));
+
+  PRINT_ELEMENTS(coll, "added 10   : " );
+
+  for_each (coll.begin(), coll.end(), AddValue(20)); 
+
+  PRINT_ELEMENTS(coll, "added first: " );
+}
+
+By default, function objects are passed by value rather than by reference. Thus, the algorithm
+does not change the state of the function object.
+
+Passing function objects by value instead of by reference has the advantage that you can pass
+constant and temporary expressions. Otherwise, passing IntSequence(1) would not be possible. note:
+since a copy of temporary is safe to use.
+
+The disadvantage of passing the function object by value is that you can't benefit from
+modifications of the state of the function objects. However, access to the final state might be
+necessary.
+
+There are three ways to get a "result" from function objects passed to algorithms:
+
+1. You can keep the state externally and let the function object refer to it.
+2. You can pass the function objects by reference.
+3. You can use the return value of the for_each() algorithm.
+
+<2>
+To pass a function object by reference, you simply have to qualify the call of the algorithm so that
+the function object type is a reference.
+
+class IntSequence {
+    private:
+        int value;
+
+    public:
+
+        IntSequence (int initialValue)
+            : value(initialValue) { }
+
+        int operator() () 
+        {
+            return ++value;
+        }
+};
+
+int main()
+{
+    list<int> coll;
+    IntSequence seq(1); // integral sequence starting with 1
+
+    // insert values from 1 to 4
+    // - pass function object by reference so that it will continue with 5
+    generate_n<back_insert_iterator<list<int>>, int, IntSequence&>(     // note: see reference
+            back_inserter(coll),    // start
+            4,                      // number of elements
+            seq);                   // generates values
+
+    PRINT_ELEMENTS(coll);
+
+    // insert values from 42 to 45
+    generate_n ( back_inserter(coll),  // start
+                  4,                   // number of elements
+                  IntSequence(42));    // generates values
+
+    PRINT_ELEMENTS(coll);
+
+    // continue with first sequence
+    // - pass function object by value but it will continue with 5 again
+    generate_n ( back_inserter(coll),     // start
+                  4,                      // number of elements
+                  seq);                   // generates values
+
+    PRINT_ELEMENTS(coll);
+
+    // continue with first sequence again
+    generate_n ( back_inserter(coll),     // start
+                  4,                      // number of elements
+                  seq);                   // generates values
+
+    PRINT_ELEMENTS(coll);
+}
+
+2 3 4 5
+2 3 4 5 43 44 45 46
+2 3 4 5 43 44 45 46 6 7 8 9
+2 3 4 5 43 44 45 46 6 7 8 9 6 7 8 9
+
+
+<3>
+The passing a function object by reference in order to access its final state is not necessary if
+you use the for_each() algorithm. for_each() has the 'unique' ability to return its function object
+(no other algorithm can do this). Thus, you can query the state of your function object by checking
+the return value of for_each().
+
+The following program is a nice example of the use of the return value of for_each() and shows how
+to process the mean value of a sequence:
+
+// function object to process the mean value
+class MeanValue {
+    private:
+        long num; // number of elements
+        long sum; // sum of all element values
+
+    public:
+        MeanValue () : num(0), sum(0) {
+        }
+
+        void operator() (int elem) {
+            ++num; // increment count
+            sum += elem; // add value
+        }
+
+        // return mean value
+        double value () {
+            return static_cast<double>(sum) / static_cast<double>(num);
+        }
+};
+
+int main()
+{
+    vector<int> coll = { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+    // process and print mean value
+    MeanValue mv = for_each (coll.begin(), coll.end(),   // range
+                              MeanValue());              // operation
+
+    cout << "mean value: " << mv.value() << endl;
+}
+
+
+{match-to-element-type}
 How relates to the element? Is it possible to have different type for the element type of container
 and the element type of function-object? How function object gets the argument?
 
@@ -26605,50 +26635,46 @@ In file included from /usr/include/c++/4.7/string:54:0,
 = char; _Traits = std::char_traits<char>; _Alloc = std::allocator<char>]’ [-fpermissive]
 
 
-<predefined-function-objects>
-The 'functional' header defines a set of function 'object' classes that represent the arithmetic,
-relational, and logical operations. 
+{as-sorting-criteria} C++SLR 10.1.1
+Need a sorted collection of elements that have a class for example, a collection of Persons.
+However, can't use the usual operator < to sort the objects. How?
 
-Thus, if you declare
-set<int> coll;
-
-it is expanded to
-set<int,less<int>> coll;      // sort elements with <
-
-From there, it is easy to sort elements in the opposite order:
-set<int,greater<int>> coll;   // sort elements with > 
-
-
-# template-less from bits/stl_function.h
-namespace std {
-
-  /// One of the @link arithmetic_functors math functors@endlink.
-  template<typename _Tp>
-    struct multiplies : public binary_function<_Tp, _Tp, _Tp>
-    {
-      _Tp
-      operator()(const _Tp& __x, const _Tp& __y) const
-      { return __x * __y; }
-    };
-
-  template<typename _Tp>
-    struct less : public binary_function<_Tp, _Tp, bool>
-    {
-      bool
-      operator()(const _Tp& __x, const _Tp& __y) const
-      { return __x < __y; }
-    };
+class Person {
+    public:
+        string firstname() const;
+        string lastname() const;
+        ...
 };
 
+// class for function predicate
+// - operator () returns whether a person is less than another person
+class PersonSortCriterion {
+    public:
+        bool operator() (const Person& p1, const Person& p2) const {
+            // a person is less than another person
+            // - if the last name is less
+            // - if the last name is equal and the first name is less
+            return p1.lastname()<p2.lastname() ||
+                (p1.lastname()==p2.lastname() &&
+                 p1.firstname()<p2.firstname());
+        }
+};
 
-plus<T>, minus<T>, multiplies<T>, ...
-equal_to<T>, not_equal_to<T>, ...
-logical_and<T>, logical_or<T>, ...
+// create a set with special sorting criterion
+set<Person,PersonSortCriterion> coll;
 
-<example>
+Note that the sorting criterion PersonSortCriterion is a type. Thus, you can use it as a template
+argument for the set and can design function objects that represent different sorting criteria with
+the same type. This would not be possible if you implement the sorting criterion as a plain function
+
+
+{predicate-must-stateless} C++SLR 10.1.4
+Predicates are functions or function objects that return a Boolean value or a value that is
+convertible into bool. However, 'not' every function that returns a Boolean value is a valid
+predicate for the STL. This may lead to surprising behavior.
+
 #include <iostream>
-#include <deque>
-#include <functional>
+#include <list>
 #include <algorithm>
 
 using namespace std;
@@ -26664,28 +26690,94 @@ inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
   std::cout << std::endl;
 }
 
+class Nth { // function object that returns true for the nth call
+    private:
+        int nth; // call for which to return true
+        int count; // call counter
+    public:
+        Nth (int n) : nth(n), count(0) {
+        }
+        bool operator() (int) {
+            return ++count == nth;
+        }
+};
+
 int main()
 {
-  deque<int> coll{1,2,3,4,5,6,7,8,9};
+    list<int> coll = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+    PRINT_ELEMENTS(coll,"coll       : ");
 
-  PRINT_ELEMENTS(coll, "initialized: " );
+    // remove third element
+    list<int>::iterator pos;
+    pos = remove_if(coll.begin(),coll.end(), // range
+            Nth(3)); // remove criterion
 
-  // algorithm-transform
-  // If source and destination are equal, as in this case, the returned negated elements overwrite
-  // themselves.
-
-  transform( coll.cbegin(), coll.cend(),        // source
-              coll.begin(), negate<int>());     // destination, operation
-
-  PRINT_ELEMENTS(coll, "negated    : " );
-
-  transform( coll.cbegin(), coll.cend(),        // first source
-              coll.cbegin(),                    // second source 
-              coll.begin(),                     // destination
-              multiplies<int>());               // operation
-
-  PRINT_ELEMENTS(coll, "multiplies : " );
+    coll.erase(pos,coll.end());
+    PRINT_ELEMENTS(coll,"3rd removed: ");
 }
+
+// run under GCC 4.7.2
+coll       : 1 2 3 4 5 6 7 8 9 10 
+3rd removed: 1 2 4 5 7 8 9 10 
+
+Two elements, the third and sixth elements, are removed. This happens because the usual implementation
+of the algorithm copies the predicate internally during the algorithm:
+
+template <typename ForwIter, typename Predicate>
+ForwIter std::remove_if(ForwIter beg, ForwIter end, Predicate op)
+{
+    // copied here
+    beg = find_if(beg, end, op);
+
+    if (beg == end) {
+        return beg;
+    }
+    else {
+        ForwIter next = beg;
+
+        // copied again
+        return remove_copy_if(++next, end, beg, op);
+    }
+}
+
+However, the algorithm then uses a copy of the passed predicate op to process the remaining
+elements, if any. Here, Nth in its original state is used again and also removes the third element
+of the remaining elements, which is in fact the sixth element.
+
+The standard does not specify how often a predicate might be copied internally by an algorithm.
+Thus, to get the guaranteed behavior of the C++ standard library, you should not pass a function
+object for which the behavior depends on how often it is copied or called. In other words: A
+predicate should always be 'stateless'.
+
+<to-resolve>
+To ensure that you can't change the state of a predicate due to a function call, you should declare
+operator () as a constant member function. 
+
+Or possible to avoid this surprising behavior and to guarantee that this algorithm works as expected
+even for a function object such as Nth, without any performance penalties. You could implement
+remove_if() in such a way that the call of find_if() is replaced by its contents:
+
+
+template <typename ForwIter, typename Predicate>
+ForwIter std::remove_if(ForwIter beg, ForwIter end, Predicate op)
+{
+    while (beg != end && !op(*beg)) {
+        ++beg;
+    }
+    if (beg == end) {
+        return beg;
+    }
+    else {
+        ForwIter next = beg;
+        return remove_copy_if(++next, end, beg, op);
+    }
+}
+
+To my knowledge, this problem arises in current implementations only with the remove_if() algorithm.
+If you use remove_copy_if(), all works as expected. 
+
+However, for portability, you should never rely on this implementation detail. You should always
+declare the function call operator of predicates as being a constant member function.
 
 
 <support-for-pointers> any real case which is useful?
@@ -26719,6 +26811,9 @@ int compare( const T &v1, const T &v2, F f = F())
   return 0;
 }
 
+
+={============================================================================
+*kt_dev_stl_064* algorithm: function
 
 {function-type}
 Assume to build a simple desk calculator and to define a function table to store pointers to these
@@ -26775,7 +26870,7 @@ binops["-"](10,5);   // minus<int>(10,5)
 
 
 ={============================================================================
-*kt_dev_stl_062* algorithm: bind
+*kt_dev_stl_065* algorithm: bind
 
 C++11 from boost::bind. function adaptor. Defined in functional header and takes a collable objects
 and generate a 'new' callable that 'adapt' the parameter list of the original.
@@ -26872,6 +26967,226 @@ sorted: fox jumps over quick red red slow the the turtle
 wc = jumps
 
 
+{predefined-function-objects}
+#include <functional> defines a set of function 'object' classes.
+
+negate<type>()          - param
+plus<type>()            param1 + param2
+minus<type>()           param1 - param2
+multiplies<type>()      param1 * param2
+divides<type>()         param1 / param2
+modulus<type>()         param1 % param2
+equal_to<type>()        param1 == param2
+not_equal_to<type>()    param1 != param2
+less<type>()            param1 < param2
+greater<type>()         param1 > param2
+less_equal<type>()      param1 <= param2
+greater_equal<type>()   param1 >= param2
+logical_not<type>()     ! param
+logical_and<type>()     param1 && param2
+logical_or<type>()      param1 || param2
+bit_and<type>()         param1 & param2
+bit_or<type>()          param1 | param2
+bit_xor<type>()         param1 ^ param2
+
+
+set<int,less<int>> coll;      // = set<int> coll. sort elements with <
+set<int,greater<int>> coll;   // sort elements with > 
+
+
+# template-less from bits/stl_function.h
+namespace std {
+
+  /// One of the @link arithmetic_functors math functors@endlink.
+  template<typename _Tp>
+    struct multiplies : public binary_function<_Tp, _Tp, _Tp>
+    {
+      _Tp
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x * __y; }
+    };
+
+  template<typename _Tp>
+    struct less : public binary_function<_Tp, _Tp, bool>
+    {
+      bool
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x < __y; }
+    };
+};
+
+
+<example>
+#include <iostream>
+#include <deque>
+#include <functional>
+#include <algorithm>
+
+using namespace std;
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  deque<int> coll{1,2,3,4,5,6,7,8,9};
+
+  PRINT_ELEMENTS(coll, "initialized: " );
+
+  // algorithm-transform
+  // If source and destination are equal, as in this case, the returned negated elements overwrite
+  // themselves.
+
+  transform( coll.cbegin(), coll.cend(),        // source
+              coll.begin(), negate<int>());     // destination, operation
+
+  PRINT_ELEMENTS(coll, "negated    : " );
+
+  transform( coll.cbegin(), coll.cend(),        // first source
+              coll.cbegin(),                    // second source 
+              coll.begin(),                     // destination
+              multiplies<int>());               // operation
+
+  PRINT_ELEMENTS(coll, "multiplies : " );
+}
+
+
+{functional-composition} nested-bind
+This kind of programming results in functional composition. What is interesting is that all these
+function objects are usually declared 'inline'. Thus, use a function-like notation or abstraction
+but you get good performance.
+
+#include<iostream>
+#include<set>
+#include<deque>
+#include<string>
+#include<algorithm>
+#include<functional>
+
+using namespace std;
+using namespace std::placeholders;
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+bool check_size( const string &s, string::size_type sz )
+{
+  return s.size() >= sz;
+}
+
+int main()
+{
+    set<int, greater<int>> coll1 = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    deque<int> coll2;
+
+    PRINT_ELEMENTS( coll1, "initialized: " );
+
+    transform( coll1.cbegin(), coll1.cend(),        // source
+                back_inserter( coll2 ),             // destination
+                bind( multiplies<int>(), _1, 10 )); // operation
+
+    PRINT_ELEMENTS( coll2, "transformed: " );
+
+    replace_if( coll2.begin(), coll2.end(),         // range
+                bind( equal_to<int>(), _1, 70 ),    // criterion
+                42 );                               // new value
+
+    PRINT_ELEMENTS( coll2, "replaced   : " );
+
+    coll2.erase( remove_if( coll2.begin(), coll2.end(),
+                            bind( logical_and<bool>(),
+                                bind(greater_equal<int>(), _1, 50),
+                                bind(less_equal<int>(), _1, 80)) ),
+                    coll2.end());
+
+    PRINT_ELEMENTS( coll2, "removed    : " );
+}
+
+note: Specifies for a parameter x the unary predicate "x>=50&&x<=80." and see that is the same
+signature for greater_equal and less_equal so can be used in logical_and<>.
+
+
+initialized: 9 8 7 6 5 4 3 2 1 
+transformed: 90 80 70 60 50 40 30 20 10 
+replaced   : 90 80 42 60 50 40 30 20 10 
+removed    : 90 42 40 30 20 10 
+
+{
+  template<typename _ForwardIterator, typename _Predicate>
+    _ForwardIterator
+    remove_if(_ForwardIterator __first, _ForwardIterator __last,
+      _Predicate __pred)
+    {
+      // ...
+
+      __first = _GLIBCXX_STD_A::find_if(__first, __last, __pred);
+      if(__first == __last)
+        return __first;
+      _ForwardIterator __result = __first;
+      ++__first;
+      for(; __first != __last; ++__first)
+        if(!bool(__pred(*__first)))
+          {
+            *__result = _GLIBCXX_MOVE(*__first);
+            ++__result;
+          }
+      return __result;
+    }
+}
+
+# template-logical-and from bits/stl_function.h
+namespace std 
+{
+  template<typename _Tp>
+    struct logical_and : public binary_function<_Tp, _Tp, bool>
+    {
+      bool
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x && __y; }
+    };
+
+  template<typename _Tp>
+    struct greater_equal : public binary_function<_Tp, _Tp, bool>
+    {
+      bool
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x >= __y; }
+    };
+
+  template<typename _Tp>
+    struct less_equal : public binary_function<_Tp, _Tp, bool>
+    {
+      bool
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x <= __y; }
+    };
+};
+
+
+<use-member-function>
+For each element of the collection coll, the member function save() of class Person is called. Of
+course, this works only if the elements have type Person or a type derived from Person.
+
+for_each( coll.cbegin(), coll.cend(),     // range
+            bind( &Person::save, _1 ) );  // Person::save(elem)
+
+
 <rearrange-arguments>
 Can use bind to bind or rearrange the parameters in the given collable.
 
@@ -26907,7 +27222,100 @@ for_each( words.begin(), words.end(), bind( print, std::ref(os), _1, ' ' ));
 
 
 ={============================================================================
-*kt_dev_stl_062* algorithm: nonmodifying
+*kt_dev_stl_065* algorithm: which is better?
+
+C++SLR 6.10
+
+Suppose that you search in a collection for the first element with a value that is between x and y.
+
+If need to use in more than one or two places, use function than a lambda. However, it is not easy
+to write function to replace a lambda that captures local variables. For example, find_if takes
+unary predicate and no way to pass more than one as this example.
+
+#include <algorithm>
+#include <deque>
+#include <iostream>
+
+using namespace std;
+
+int main()
+{
+  deque<int> coll = { 1, 3, 19, 5, 13, 7, 11, 2, 17 };
+
+  int x = 5;
+  int y = 12;
+
+  auto pos = find_if (coll.cbegin(), coll.cend(),  // range
+      [=](int i) {                                 // search criterion
+         return i > x && i < y;
+      });
+
+  cout << "first elem >5 and <12: " << *pos << endl;
+}
+
+Now compare this way to search for "the first element >5 and <12" with the 'other' approaches
+provided by C++ before lambdas were introduced
+
+1. handwritten loop
+
+// find first element > x and < y
+
+vector<int>::iterator pos;
+
+for (pos = coll.begin() ; pos != coll.end(); ++pos) 
+{
+  if (*pos > x && *pos < y) {
+    break; // the loop
+  }
+}
+
+2. predicate, function object
+
+class Pred
+{
+    private:
+        int x;
+        int y;
+    public:
+        Pred (int xx, int yy) : x(xx), y(yy) {
+        }
+        bool operator() (int i) const {
+            return i > x && i < y;
+        }
+};
+
+pos = find_if(coll.begin(), coll.end(), Pred(x,y) );     // note T()
+
+note: 
+1. You have to scroll up to find out what find_if() exactly is looking for
+2. C++ compilers 'optimize' lambdas better than they do ordinary functions.
+3. What's more, access to x and y becomes really ugly in this scenario.
+
+3. bind
+
+pos = find_if (coll.begin(), coll.end(),  // range
+            bind(logical_and<bool>(),     // search criterion
+               bind(greater<int>(),_1,x), // _1 > x
+               bind(less<int>(),_1,y)));  // _1 < y
+
+
+Lambdas are a kind of implicitly defined function object. Thus lambdas usually provide the more
+intuitive approach to defining functional behavior of STL algorithms. In addition, lambdas should be
+as fast as function objects.
+
+However, there are also some drawbacks to lambdas:
+
+* You can't have a hidden internal state of such a function object. Instead, all data that defines a
+state is defined by the caller and passed as a capture.
+
+* The advantage of specifying the functional behavior where it is needed partially goes away when
+it is needed at 'multiple' places. You can define a lambda and assign it to an auto object then, but
+whether this is more readable than directly defining a function object is probably a matter of
+taste.
+
+
+={============================================================================
+*kt_dev_stl_066* algorithm: nonmodifying
 
 {comparing-ranges}
 
@@ -27105,7 +27513,7 @@ coll1 and coll3, even and odd elements correspond
 
 
 ={============================================================================
-*kt_dev_stl_063* algorithm: nonmodifying: count
+*kt_dev_stl_067* algorithm: nonmodifying: count
 
 {counting-elements}
 
