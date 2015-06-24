@@ -27158,20 +27158,26 @@ binops["-"](10,5);   // minus<int>(10,5)
 ={============================================================================
 *kt_dev_stl_065* algorithm: bind
 
-C++11 from boost::bind. function adaptor. Defined in functional header and takes a collable objects
-and generate a 'new' callable that 'adapt' the parameter list of the original.
+C++11 from boost::bind. function adaptor. Defined in functional header. 
+
+In general, bind() generates a new callable and binds parameters for callable objects. Thus, if a
+function, member function, function object, or lambda requires some parameters, you can bind them to
+specific or passed arguments. Specific arguments you simply name. For passed arguments, you can use
+the predefined placeholders _1, _2, ... defined in namespace std::placeholders.
 
 auto newCallable = bind( callable, arg_list );
 
-When call newCallable, newCallable calls callable, 'passing' the arguments in arg_list.
+In other words, bind(f, _1, 5)(x) is equivalent to f(x, 5). when f(arg1, arg2) and 'binds' args1 to
+    the passed x.
 
-In other words, bind(f, _1, 5)(x) is equivalent to f(x, 5);
 
+{arg-list}
+_n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. That is _1 is
+first parameter in newCallable.
 
 <algorithm-find-if>
-/// bits/stl_algo.h
-///
-/// This is an overload used by find_if() for the Input Iterator case.
+// bits/stl_algo.h
+// This is an overload used by find_if() for the Input Iterator case.
 template<typename _InputIterator, typename _Predicate>
     inline _InputIterator
     __find_if(_InputIterator __first, _InputIterator __last, _Predicate __pred, input_iterator_tag)
@@ -27181,10 +27187,6 @@ template<typename _InputIterator, typename _Predicate>
         return __first;
     }
 
-
-<arg_list>
-_n 'placeholder' where n is 'number' representing the parameters of 'newCallable'. That is _1 is
-first parameter in newCallable.
 
 bool check_size( const string &s, string::size_type sz )
 {
@@ -27252,6 +27254,32 @@ int main()
 sorted: fox jumps over quick red red slow the the turtle 
 wc = jumps
 
+<rearrange-arguments>
+Can use bind to bind or rearrange the parameters in the given collable.
+
+auto g = bind( f, a, b, _2, c, _1 );      
+g(X, Y); // f( a, b, Y, c, X );
+
+As an example, invert the meaning of isShorter.
+
+bool isShorter(const string &s1, const string &s2)
+{
+  return s1.size() < s2.size();
+}
+
+sort( words.begin(), words.end(), isShorter );
+sort( words.begin(), words.end(), bind( isShorter, _2, _1 ));
+
+<not-use-arguments>
+Possible not to use arguments at all. If changes the example above as:
+
+auto wc = find_if( coll.begin(), coll.end(),
+   bind( check_size, "bind", 4 ));
+
+
+sorted: fox jumps over quick red red slow the the turtle 
+wc = fox
+
 
 {predefined-function-objects}
 #include <functional> defines a set of function 'object' classes.
@@ -27283,7 +27311,14 @@ set<int,greater<int>> coll;   // sort elements with >
 # template-less from bits/stl_function.h
 namespace std {
 
-  /// One of the @link arithmetic_functors math functors@endlink.
+  template<typename _Tp>
+    struct negate : public unary_function<_Tp, _Tp>
+    {
+      _Tp
+      operator()(const _Tp& __x) const
+      { return -__x; }
+    };
+
   template<typename _Tp>
     struct multiplies : public binary_function<_Tp, _Tp, _Tp>
     {
@@ -27299,7 +27334,78 @@ namespace std {
       operator()(const _Tp& __x, const _Tp& __y) const
       { return __x < __y; }
     };
+
+  template<typename _Tp>
+    struct greater : public binary_function<_Tp, _Tp, bool>
+    {
+      bool
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x > __y; }
+    };
 };
+
+# algorithm-transform from bits/stl_algo.h
+namespace std {
+
+  /**
+   *  @brief Perform an operation on a sequence.
+   *  @ingroup mutating_algorithms                    // note: mutating
+   *  @param  __first     An input iterator.
+   *  @param  __last      An input iterator.
+   *  @param  __result    An output iterator.
+   *  @param  __unary_op  A unary operator.
+   *  @return   An output iterator equal to @p __result+(__last-__first).
+   *
+   *  Applies the operator to each element in the input range and assigns
+   *  the results to successive elements of the output sequence.
+   *  Evaluates @p *(__result+N)=unary_op(*(__first+N)) for each @c N in the
+   *  range @p [0,__last-__first).
+   *
+   *  @p unary_op must not alter its argument.
+  */
+  template<typename _InputIterator, typename _OutputIterator, typename _UnaryOperation>
+    _OutputIterator
+    transform(_InputIterator __first, _InputIterator __last,
+      _OutputIterator __result, _UnaryOperation __unary_op)
+    {
+      // ...
+      for (; __first != __last; ++__first, ++__result)
+         *__result = __unary_op(*__first);                  // note: write to output and unary
+      return __result;
+    }
+
+  /**
+   *  @brief Perform an operation on corresponding elements of two sequences.
+   *  @ingroup mutating_algorithms
+   *  @param  __first1     An input iterator.
+   *  @param  __last1      An input iterator.
+   *  @param  __first2     An input iterator.
+   *  @param  __result     An output iterator.
+   *  @param  __binary_op  A binary operator.
+   *  @return   An output iterator equal to @p result+(last-first).
+   *
+   *  Applies the operator to the corresponding elements in the two
+   *  input ranges and assigns the results to successive elements of the
+   *  output sequence.
+   *  Evaluates @p
+   *  *(__result+N)=__binary_op(*(__first1+N),*(__first2+N)) for each
+   *  @c N in the range @p [0,__last1-__first1).
+   *
+   *  @p binary_op must not alter either of its arguments.
+  */
+  template<typename _InputIterator1, typename _InputIterator2, 
+      typename _OutputIterator, typename _BinaryOperation>
+    _OutputIterator
+    transform(_InputIterator1 __first1, _InputIterator1 __last1,
+         _InputIterator2 __first2, _OutputIterator __result,
+         _BinaryOperation __binary_op)
+    {
+      // ...
+      for (; __first1 != __last1; ++__first1, ++__first2, ++__result)
+         *__result = __binary_op(*__first1, *__first2);
+      return __result;
+    }
+}
 
 
 <example>
@@ -27327,7 +27433,6 @@ int main()
 
   PRINT_ELEMENTS(coll, "initialized: " );
 
-  // algorithm-transform
   // If source and destination are equal, as in this case, the returned negated elements overwrite
   // themselves.
 
@@ -27404,15 +27509,33 @@ int main()
     PRINT_ELEMENTS( coll2, "removed    : " );
 }
 
-note: Specifies for a parameter x the unary predicate "x>=50&&x<=80." and see that is the same
-signature for greater_equal and less_equal so can be used in logical_and<>.
-
-
 initialized: 9 8 7 6 5 4 3 2 1 
 transformed: 90 80 70 60 50 40 30 20 10 
 replaced   : 90 80 42 60 50 40 30 20 10 
 removed    : 90 42 40 30 20 10 
 
+
+note: Specifies for a parameter x the unary predicate "x>=50&&x<=80." and see that is the same
+signature for greater_equal and less_equal so can be used in logical_and<>.
+
+note: As you can see, the expressions are evaluated from the inside to the outside. So inner
+callable returns bool type and outer callable uses that as element type. No function call involved.
+
+template<typename _Tp>
+struct logical_and : public binary_function<_Tp, _Tp, bool>
+{
+  bool
+  operator()(const _Tp& __x, const _Tp& __y) const
+  { return __x && __y; }
+};
+
+return bind(greater_equal<int>(), _1, 50) && bind(less_equal<int>(), _1, 80);
+
+__x is not bind(greater_equal<int>(), _1, 50) and __y is not bind(less_equal<int>(), _1, 80) but __x
+and __y are the returned type which is bool in this case.
+
+
+<algorithm-remove-if>
 {
   template<typename _ForwardIterator, typename _Predicate>
     _ForwardIterator
@@ -27465,46 +27588,103 @@ namespace std
 };
 
 
-<use-member-function>
-For each element of the collection coll, the member function save() of class Person is called. Of
-course, this works only if the elements have type Person or a type derived from Person.
+{dependant-on-original}
+Always have to specify the argument type of the predefined function object used. If the type doesn't
+match, a type conversion is forced, or the expression results in a compile-time error. 
 
-for_each( coll.cbegin(), coll.cend(),     // range
-            bind( &Person::save, _1 ) );  // Person::save(elem)
-
-
-<rearrange-arguments>
-Can use bind to bind or rearrange the parameters in the given collable.
-
-auto g = bind( f, a, b, _2, c, _1 );      
-g(X, Y); // f( a, b, Y, c, X );
-
-As an example, invert the meaning of isShorter.
-
-bool isShorter(const string &s1, const string &s2)
+int main()
 {
-  return s1.size() < s2.size();
+    multiplies<int> mt;
+    cout << mt(10,20) << endl;
+    cout << mt(20,10) << endl;
+
+    // note 1:
+    cout << bind(multiplies<int>(), _1, 10)(20) << endl;
+
+    cout << mt(10,40) << endl;
+
+    // note 2:
+    cout << mt(10) << endl;
 }
 
-sort( words.begin(), words.end(), isShorter );
-sort( words.begin(), words.end(), bind( isShorter, _2, _1 ));
+note 1:
+The return and element type are dependant on the original callable.
+
+note 2:
+The number of arguments are dependant on the original callable.
+
+t_functional.cpp:17:18: error: no match for call to ‘(std::multiplies<int>) (int)’
+
+/usr/include/c++/4.7/bits/stl_function.h:160:12: 
+      note: candidate is:
+/usr/include/c++/4.7/bits/stl_function.h:163:7: 
+      note: _Tp std::multiplies<_Tp>::operator()(const _Tp&, const _Tp&) const [with _Tp = int]
+/usr/include/c++/4.7/bits/stl_function.h:163:7: 
+      note:   candidate expects 2 arguments, 1 provided
 
 
-<not-use-arguments>
-Possible not to use arguments at all. If changes the example above as:
+{copy-arguments}
+bind() internally copies passed arguments. To let the function object use a reference to a passed
+argument, use ref() or cref() (see Section 5.4.3, page 132). For example:
 
-auto wc = find_if( coll.begin(), coll.end(),
-   bind( check_size, "bind", 4 ));
+void incr (int& i)
+{
+    ++i;
+}
+
+int i=0;
+
+bind(incr,i)();            // increments a copy of i, no effect for i
+bind(incr,ref(i))();       // increments i
 
 
-sorted: fox jumps over quick red red slow the the turtle 
-wc = fox
+{use-global-function}
+Can use it directly.
+
+char myToupper (char c)
+{
+    std::locale loc;
+    return std::use_facet<std::ctype<char> >(loc).toupper(c);
+}
+
+bind(myToupper,_1);
 
 
-<reference>
-To use reference in bind:
+{use-member-function}
+The bind() works with member function, modifying member function, and virtual function.
 
-for_each( words.begin(), words.end(), bind( print, std::ref(os), _1, ' ' ));
+For each element of the collection coll, the member function save() of class Person is called. Of
+course, this works only if the elements of the coll have type Person or a type derived from Person.
+
+class Person {
+    public:
+        Person (const string& n);
+        void print () const;
+        void print2 (const string& prefix) const;
+
+        void setName (const std::string& n) {
+            name = n;
+        }
+};
+
+// call member function print() for each person
+for_each (coll.begin(), coll.end(), bind(&Person::print,_1));
+
+// call member function print2() with additional argument for each person
+for_each (coll.begin(), coll.end(), bind(&Person::print2,_1,"Person: "));
+
+// call modifying member function setName()
+for_each (coll.begin(), coll.end(), bind(&Person::setName,_1,"Paul"));
+
+
+{use-pointers}
+The bind() works with pointers.
+
+vector<Person*> cp;
+for_each (cp.begin(), cp.end(), bind(&Person::print, _1));
+
+std::vector<std::shared_ptr<Person>> sp;
+for_each (sp.begin(), sp.end(), bind(&Person::print, _1));
 
 
 ={============================================================================
