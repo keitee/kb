@@ -50,6 +50,7 @@
 |kt_dev_uv_stack_250| stack: vanadium: runBrowser
 |kt_dev_uv_stack_251| stack: vanadium: binding
 |kt_dev_uv_stack_252| stack: vanadium: remote debug
+|kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
 
 |kt_dev_uv_stack_300| stack: copper: lsr (local storage repository)
 
@@ -7692,6 +7693,363 @@ https://wiki.youview.co.uk/display/YVDP/Debugging?src=search
 
 
 ={============================================================================
+*kt_dev_uv_stack_253* stack: vanadium: MediaRouter.WebKit.Plugin
+
+
+<0>
+Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/qtwebkit/
+Source/WebCore/platform/graphics/MediaPlayer.cpp
+
+static Vector<MediaPlayerFactory*>& installedMediaEngines() 
+{
+    DEFINE_STATIC_LOCAL(Vector<MediaPlayerFactory*>, installedEngines, ());
+    static bool enginesQueried = false;
+
+    if (!enginesQueried) {
+        enginesQueried = true;
+
+        MediaPlayerPrivateGStreamer::registerMediaEngine(addMediaEngine);
+        MediaPlayerPrivateMediaRouter::registerMediaEngine(addMediaEngine);
+
+    }
+
+    return installedEngines;
+}
+
+
+<0>
+zinc-build-root/release-humax-dtr_t1000$ gvim Zinc/Zinc.3rdPartyStack/src/
+qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics/gstreamer/
+
+-rw-r--r--  1 kpark kpark 143317 Jun 25 13:22 MediaPlayerPrivateGStreamer.cpp
+-rw-r--r--  1 kpark kpark 141339 Jun 25 13:22 MediaPlayerPrivateGStreamer.cpp.orig
+-rw-r--r--  1 kpark kpark  11157 Jun 25 13:22 MediaPlayerPrivateGStreamer.h
+
+
+gstreamer/MediaPlayerPrivateGStreamer.cpp
+
+
+class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface 
+
+
+void MediaPlayerPrivateGStreamer::load(const String& url)
+{
+    if(!m_playBin){
+        createGSTPlayBin(kurl);
+    }
+
+    g_object_set(G_OBJECT (httpSrc.get()), "uri", cleanUrl.utf8().data(), NULL);
+
+    commitLoad();
+}
+
+
+void MediaPlayerPrivateGStreamer::createGSTPlayBin(const KURL& url)
+{
+    if(path.endsWith(".m3u8", false)){
+        createGSTHLSPipeline(srcElement);
+
+    } else if(path.endsWith(".ts", false)) {
+        createGSTTSPipeline(srcElement);
+
+    } else if(path.endsWith(".mpd", false)) {
+        createDashPipeline(srcElement);
+    }        
+}
+
+
+void MediaPlayerPrivateGStreamer::createDashPipeline(const char *srcElementName) 
+{
+    GstElement *source, *dashdemux, *qtdemux, *h264parse, *nexussink;
+    
+    LOG_MEDIA_MESSAGE("\n\nMediaPlayerPrivateGStreamer::createDashPipeline()\n");    
+
+    m_playBin = gst_pipeline_new ("dash-player");
+
+    source = gst_element_factory_make (srcElementName,     "http-source");
+    dashdemux = gst_element_factory_make ("dashdemux",    "dash-demux");
+    qtdemux = gst_element_factory_make ("qtdemux",        "qt-demux");
+    h264parse = gst_element_factory_make ("h264parse",    "h264-parse");
+    nexussink = gst_element_factory_make ("nexussink",    NULL);
+}
+
+
+'static' void MediaPlayerPrivateGStreamer::registerMediaEngine(MediaEngineRegistrar registrar)
+{
+void VanadiumMediaPlayer::play()
+{
+    VANADIUM_FUNC_TRACE;
+
+    if(playbackPaused)
+    {
+        mediaRouter->setPlaySpeed(1.0);
+        playbackPaused = false;
+    }
+    if(!mediaRouterPresenting)
+    {
+        playerManager.playbackStarting(this);
+        mediaRouter->start();
+        mediaRouterPresenting = true;
+    }
+    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+}
+    if (isAvailable())
+        registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
+}
+
+PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateGStreamer::create(MediaPlayer* player)
+{
+    return adoptPtr(new MediaPlayerPrivateGStreamer(player));
+}
+
+MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
+    : m_player(player)
+{
+}
+
+MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const String& type, 
+        const String& codecs, const KURL&)
+{
+    if (type.isNull() || type.isEmpty())
+        return MediaPlayer::IsNotSupported;
+
+    if (mimeTypeCache().contains(type))
+    {
+        return MediaPlayer::IsSupported;
+    }
+    else
+    {
+        return MediaPlayer::IsNotSupported;
+    }
+}
+
+void MediaPlayerPrivateGStreamer::getSupportedTypes(HashSet<String>& types)
+{
+    types = mimeTypeCache();
+}
+
+static HashSet<String> mimeTypeCache()
+{
+    initializeGStreamerAndRegisterWebKitElements();
+
+    DEFINE_STATIC_LOCAL(HashSet<String>, cache, ());
+    static bool typeListInitialized = false;
+
+    if (typeListInitialized)
+        return cache;
+    const char* mimeTypes[] = { "application/vnd.apple.mpegurl" };
+
+    for (unsigned i = 0; i < (sizeof(mimeTypes) / sizeof(*mimeTypes)); ++i)
+        cache.add(String(mimeTypes[i]));
+
+    typeListInitialized = true;
+    return cache;
+}
+
+
+<0>
+Zinc/Zinc.3rdPartyStack/patches/qt-everywhere-opensource-src-5.1.0/
+   0071-DEVARCH-8972-Map-Video-Tag-to-MediaRouter-API.patch
+
+271:+    void* symbol = dlsym(handle, "createMediaPlayerImplementation");
+
+gstreamer/MediaPlayerPrivateMediaRouter.cpp
+
+
+void MediaPlayerPrivateMediaRouter::registerMediaEngine(MediaEngineRegistrar registrar)
+{
+    registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
+}
+
+
+PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateMediaRouter::create(MediaPlayer* player)
+{
+    const char* libraryName = getenv("ZINC_QMEDIA_PLAYER_LIB");
+    if(!libraryName)
+    {
+        ERROR_MEDIA_MESSAGE("ZINC_QMEDIA_PLAYER_LIB env var not defined");
+        return PassOwnPtr<MediaPlayerPrivateInterface>();
+    }
+
+    void* handle = dlopen(libraryName, RTLD_NOW);
+    if(!handle)
+    {
+        ERROR_MEDIA_MESSAGE("Failed to load library [%s]", libraryName);
+        return PassOwnPtr<MediaPlayerPrivateInterface>();
+    }
+
+    void* symbol = dlsym(handle, "createMediaPlayerImplementation");
+
+    typedef QMediaPlayerInterface* (*CreateFunction)(QMediaPlayerCallbackInterface*);
+    CreateFunction createFunction = reinterpret_cast<CreateFunction>(symbol);
+
+    std::auto_ptr<QMediaPlayerCallbackInterface> callbacks(
+            new MediaPlayerPrivateMediaRouterCallbacks(player));
+
+    std::auto_ptr<QMediaPlayerInterface> mediaRouterImpl(createFunction(callbacks.get()));
+
+    return adoptPtr(new MediaPlayerPrivateMediaRouter(mediaRouterImpl,
+                callbacks));
+}
+
+void MediaPlayerPrivateMediaRouter::getSupportedTypes(HashSet<String>& types)
+{
+    types = mimeTypeCache();
+}
+
+static HashSet<String> mimeTypeCache()
+{
+    DEFINE_STATIC_LOCAL(HashSet<String>, cache, ());
+    static bool typeListInitialized = false;
+
+    if (typeListInitialized)
+        return cache;
+    const char* mimeTypes[] = {
+                               "application/vnd.apple.mpegurl",
+                               "application/vnd.apple.mpegurl",
+                               "application/vnd.rn-realmedia",
+                               "application/x-3gp",
+                               "application/x-pn-realaudio",
+                               "application/x-mpegURL",
+                               "application/dash+xml",
+                               "audio/aac",
+                               "audio/mp3",
+                               "audio/mp4",
+                               "audio/mpeg",
+                               "audio/x-m4a",
+                               "audio/x-mp3",
+                               "audio/x-mpeg",
+                               "video/mp4",
+                               "video/mpeg",
+                               "video/mpegts",
+                               "video/mp2t",
+                               };
+
+    for (unsigned i = 0; i < (sizeof(mimeTypes) / sizeof(*mimeTypes)); ++i)
+        cache.add(String(mimeTypes[i]));
+
+    typeListInitialized = true;
+    return cache;
+}
+
+MediaPlayer::SupportsType MediaPlayerPrivateMediaRouter::supportsType(const String& type, 
+        const String& codecs, const KURL&)
+{
+    if (type.isNull() || type.isEmpty())
+        return MediaPlayer::IsNotSupported;
+
+    // spec says we should not return "probably" if the codecs string is empty
+    if (mimeTypeCache().contains(type))
+        return codecs.isEmpty() ? MediaPlayer::MayBeSupported : MediaPlayer::IsSupported;
+    return MediaPlayer::IsNotSupported;
+}
+
+
+note: mediaRouterImpl is set to m_mediaPlayerImpl so calls to be forwarded to VanadiumMediaPlayer
+
+      MediaPlayerPrivateMediaRouter -> VanadiumMediaPlayer
+
+
+void MediaPlayerPrivateMediaRouter::play()
+{
+   INFO_MEDIA_MESSAGE("MediaPlayerPrivateMediaRouter::play()");
+   m_mediaPlayerImpl->play();
+}
+
+
+<0>
+// Vanadium/Vanadium.MediaRouter.WebKit.Plugin/src/VanadiumMediaPlayer.h
+
+class ZINC_EXPORT VanadiumMediaPlayer : public WebCore::QMediaPlayerInterface
+
+// Vanadium/Vanadium.MediaRouter.WebKit.Plugin/src/VanadiumMediaPlayer.cpp
+
+extern "C"
+{
+WebCore::QMediaPlayerInterface* createMediaPlayerImplementation(
+        WebCore::QMediaPlayerCallbackInterface* callbacks)
+{
+    VANADIUM_FUNC_TRACE;
+    if(!callbacks)
+    {
+        // Return null immediately rather than crashing later
+        return NULL;
+    }
+
+    return new NS_VANADIUM::VanadiumMediaPlayer(*callbacks, playerManager);
+}
+}
+
+
+void VanadiumMediaPlayer::load(const std::string& url)
+{
+    VANADIUM_FUNC_TRACE;
+
+    mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
+    mediaRouter->setSink("decoder://0").get();
+    currentSource = url;
+
+    // WebKit expects the media player to start in the paused state
+    pause();
+
+    if(preloadPolicy != WebCore::QMediaPlayerInterface::NONE)
+    {
+        mediaRouter->startBuffering();
+        currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+    }
+}
+
+void VanadiumMediaPlayer::play()
+{
+    VANADIUM_FUNC_TRACE;
+
+    if(playbackPaused)
+    {
+        mediaRouter->setPlaySpeed(1.0);
+        playbackPaused = false;
+    }
+    if(!mediaRouterPresenting)
+    {
+        playerManager.playbackStarting(this);
+        mediaRouter->start();
+        mediaRouterPresenting = true;
+    }
+    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+}
+
+VanadiumMediaPlayer::VanadiumMediaPlayer(
+        QMediaPlayerCallbackInterface& callbacks_,
+        MediaPlayerManager& playerManager_)
+    : dispatcher(boost::make_shared<GlibEventDispatcher>()),
+    callbacks(callbacks_),
+    preloadPolicy(QMediaPlayerInterface::AUTO),
+    // Should really be NO_SOURCE but this is not exposed on the MediaPlayer API
+    currentNetworkState(QMediaPlayerInterface::NETWORK_EMPTY),
+    currentReadyState(QMediaPlayerInterface::HAVE_NOTHING),
+    seekCount(0),
+    listener(new MediaPlayerListener(*this)),
+    playbackPaused(false),
+    mediaRouterPresenting(false),
+    mediaRouterVolume(0.0),
+    playerManager(playerManager_)
+{
+    FilePluginConfig pluginConfig(PackageDataFinder().find("system-factory.plugin-config"));
+    NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
+        PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
+
+    boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactory> mediaRouterFactory
+        = nickelSystemFactory.createMediaRouterFactory();
+
+    mediaRouter = mediaRouterFactory->createMediaRouter().get();
+
+    mediaRouter->addListener(dispatcher, listener);
+    mediaRouterVolume = mediaRouter->getVolume().get();
+}
+
+boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
+
+
+={============================================================================
 *kt_dev_uv_stack_300* stack: copper: lsr (local storage repository)
 
 ./Copper/Copper.System.DBusClient/src/lsr-config.c
@@ -9852,6 +10210,8 @@ bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
     // BinTypefind has an entry in the map
     //   ["application/dash+xml"] = VirtualBinSrc::makeAndSetupDecodebin
     //
+    // plug_unlocked:: upstream = it->second();
+    //
     // calls VirtualBinSrc::makeAndSetupDecodebin
     //   creates decodebin, and set pad-add handler('this')
     //
@@ -10151,7 +10511,8 @@ m_playBin = gst_pipeline_new ("hls-player");
 
 // gst_element_factory_make() returns a floating reference so we should not adopt.
 GRefPtr<GstElement> httpSrc = gst_element_factory_make (srcElementName, "http-source");
-GRefPtr<GstElement> hlsdemux = gst_element_factory_make ("hlsdemux", NULL);
+GRefPtr<GstElement> hlsdemux = gst_element_facto
+    y_make ("hlsdemux", NULL);
 GRefPtr<GstElement> nexusSink = gst_element_factory_make ("tsnexusbin", NULL);
 
 gst_bin_add_many (GST_BIN (m_playBin.get()),
@@ -13129,7 +13490,8 @@ change name nexus-inspect to nexus-release
 ======
 
 <fail>
--O2 -pipe -rdynamic -Wl,-rpath-link
+-O2 -pipe -rdynamic -Wl,-rpath-link/opt/cds/bin/huaweidaemon
+
 -Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/lib
 -Wl,-rpath-link
 -Wl,/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/oss/lib
@@ -14889,7 +15251,10 @@ implementation.
 
 It should be pointed-out that the MIME type of HLS in this commit is
 "application/x-hls" which is different from "application/vnd.apple.mpegurl" in
-http::/www.iana.org since underlying hlsdemux uses the former. 
+http:://www.iana.org since underlying hlsdemux uses the former. 
+
+note: this is ticket to implement 9722.
+https://jira.youview.co.uk/browse/DEVARCH-9739
 
 
 DEVARCH-9723:Nickel.System.Proxy: Support HLS playback in MediaRouterProxy

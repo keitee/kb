@@ -177,6 +177,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_063| algorithm: function object
 |kt_dev_stl_064| algorithm: function<>
 |kt_dev_stl_065| algorithm: bind
+|kt_dev_stl_066| algorithm: bind: cases
 |kt_dev_stl_065| algorithm: which is better?
 |kt_dev_stl_066| algorithm: nonmodifying: equal, is_permutation
 |kt_dev_stl_067| algorithm: nonmodifying: count
@@ -13477,6 +13478,9 @@ The point is that it is compiler POV and for static type checking. To maintain c
 In other words, top-level restrics only what we can do 'through' that reference or pointer and says
 nothing about whether the underlying object itself. 
 
+note: not sure "through" since as seen in conversion below, low level should
+be kept whether it's through reference or pointer.
+
 int i = 42;
 const int ci = i;
 int j = ci;
@@ -13496,26 +13500,70 @@ r1 = 0;
 r2 = 0;              // error since r2 is reference-to-const
 
 
-<no-const-to-nonconst>
-This is an error because this is not a copy and 'no' const to non-const conversion.
+{no-const-to-nonconst-conversion}
+This is an error because this is not a copy and 'no' const to nonconst conversion.
 
 int main()
 {
-  const int ci = 100;
-  int &ri = ci;               // 6. 
-  // int &ri = (int&) ci;     // no error since uses cast
+    const int ci = 100;
+
+    // error: invalid initialisation of reference of type ‘int&’ from expression of type ‘const int’
+    int &ri = ci;
+    // int &ri = (int&) ci;     // no error since uses cast
+
+    int ival = 100;
+
+    const int *pci = &ival;
+    cout << "ival: " << ival << ", " << *pci << endl;
+    // error: invalid conversion from 'const int*' to 'int*' [-fpermissive]
+    int *pi = pci;
 }
 
-:6:13: error: invalid initialisation of reference of type ‘int&’ from expression of type ‘const int’
+<const-non-const-version>
+Why neeeds const and nonconst version? When use reference to const argument for better performance
+and clearer interface about constness, required to have both version. 
 
-const GstCaps *caps = gst_caps_from_string()
-GstCaps const *caps = gst_caps_from_string()
+The const matters when copying vars and func params. That is why copy-ctor is usded here.
+
+void fcn( const int i );
+fcn(j);     // const int i = j;
+fcn(cj);    // const int i = cj;
+
+void fcn( int i );
+fcn(j);     // int i = j;
+fcn(cj);    // int i = cj; ERROR
+
+These are all explained by the fact that fcn(const int i) can be used both fcn( const-pararm ) and
+fcn( non-const-param ) and in other words, top-level-const can be ignored.
+
+
+const GstCaps *caps = gst_caps_from_string();
+GstCaps const *caps = gst_caps_from_string();
 gst_caps_unref(GetCaps *caps);
 
 :44: error: invalid conversion from 'const GstCaps*' to 'GstCaps*'
 :44: error:   initializing argument 1 of 'void gst_caps_unref(GstCaps*)'
 
-<nonconst-to-const> type-match-exceptions. C++P p61
+
+<constness-and-overload> overload-condition
+Member functions differing only in their constness can be overloaded. Conditons for overloading
+
+1. Shall be the same 'name'
+2. Shall have different param list in the number or the type
+3. Shall be in the same 'scope'
+
+So don't see return type. See {virtual-copy-constructor} for override case.
+
+// int *const currErr : const pointer. read from right to left
+
+Record lookup( account * );      // pointer
+Record lookup( account *const ); // const pointer. re-define.
+
+Record lookup( account & );      // non-const version
+Record lookup( const account &); // const version
+
+
+<nonconst-to-const-conversion> type-match-exceptions. C++P p61
 As long as maintain constness, allow conversion and so two 'exceptions' to type match rule. If
 necessary, compiler make a temporary to allow conversion and maintain constness.
 
@@ -13528,9 +13576,9 @@ int i = ci;
 const int& r = ci;      // is 'always' low-level
 
 int i;
-const int &j = i;       // conversion from non-const to const
-const int *p = &i;
-int &r = j, *q = p;     // error since conversion from const to non-const
+const int &j = i;       // conversion from nonconst to const
+const int *p = &i;      // conversion from nonconst to const
+int &r = j, *q = p;     // error since conversion from const to nonconst
 
 const int &ri = 42;     // ok but int &ri = 42 is an error
 int &ri = 10;           // error
@@ -13622,31 +13670,13 @@ it makes:
 T *const this -> 'const' T *const this
 
 
-{constness-and-overload} overload-condition
-Member functions differing only in their constness can be overloaded. Conditons for overloading
-
-1. Shall be the same 'name'
-2. Shall have different param list in the number or the type
-3. Shall be in the same 'scope'
-
-So don't see return type. See {virtual-copy-constructor} for override case.
-
-// int *const currErr : const pointer. read from right to left
-
-Record lookup( account * );      // pointer
-Record lookup( account *const ); // const pointer. re-define.
-
-Record lookup( account & );      // non-const version
-Record lookup( const account &); // const version
-
-
 {const-on-base-type}
 When use const with type alias, it can be surprising. For example,
 
 typedef char *pstring;
 
-const pstring cstr = 0;    // cstr is a const pointer to char
-const pstring *ps;         // ps is a pointer to const pointer to char
+const pstring cstr = 0;    // cstr is a "const pointer to char"
+const pstring *ps;         // ps is a pointer to "const pointer to char"
 
 The important thing is that type alias is not "replacing string" but it a type and const applies on
 base type.
@@ -13688,24 +13718,6 @@ const std::vector<T>::iterator iter = vec.begin();
 
 // like 'const T*' and *iter is const
 std::vector<T>::const_iterator iter = vec.begin();
-
-
-<const-non-const-version>
-Why neeeds const and nonconst version? When use reference to const argument for better performance
-and clearer interface about constness, required to have both version. 
-
-The const matters when copying vars and func params. That is why copy-ctor is usded here.
-
-void fcn( const int i );
-fcn(j);     // const int i = j;
-fcn(cj);    // const int i = cj;
-
-void fcn( int i );
-fcn(j);     // int i = j;
-fcn(cj);    // int i = cj; ERROR
-
-These are all explained by the fact that fcn(const int i) can be used both fcn( const-pararm ) and
-fcn( non-const-param ) and in other words, top-level-const can be ignored.
 
 
 <const-reference-param>
@@ -27688,7 +27700,47 @@ for_each (sp.begin(), sp.end(), bind(&Person::print, _1));
 
 
 ={============================================================================
-*kt_dev_stl_065* algorithm: which is better?
+*kt_dev_stl_066* algorithm: bind: cases
+
+<1> Not use bind to map arguments
+
+note: use of this pointer in bind since it's called in the constructor.
+
+VirtualBinSrc::VirtualBinSrc()
+{
+    elementFactory["application/dash+xml"] =
+        boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
+            "video/quicktime; audio/x-m4a; text/x-raw");
+}
+
+note: f() that is 'f(void)'. How does the bind know? Perhaps use of
+placeholder.
+
+typedef std::map<std::string,
+                     boost::function<RefObj<GstElement>()> > FactoryContainer;
+
+FactoryContainer elementFactory;
+
+note: no uses of placeholder
+
+elementFactory["application/dash+xml"] =
+    boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
+            "video/quicktime; audio/x-m4a; text/x-raw");
+
+RefObj<GstElement> VirtualBinSrc::makeAndSetupDecodebin(const char* const outputCaps);
+
+FactoryContainer::iterator it = elementFactory.find(mediaType);
+
+upstream = it->second();
+
+This leads to:
+
+RefObj<GstElement> 
+VirtualBinSrc::makeAndSetupDecodebin("video/quicktime; audio/x-m4a; text/x-raw");
+
+
+={============================================================================
+*kt_dev_stl_067* algorithm: which is better?
 
 C++SLR 6.10
 
