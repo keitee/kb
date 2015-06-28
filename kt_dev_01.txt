@@ -143,8 +143,9 @@ KT KB. DEVELOPMENT.
 
 #{ stl follow <what-container-consideration> for points to consider
 |kt_dev_stl_000| useful links and gcc stl {stl-design-rationale}
-|kt_dev_stl_001| pair and tuple class
-|kt_dev_stl_002| traits
+|kt_dev_stl_001| std::pair and tuple class
+|kt_dev_stl_002| std::ref
+|kt_dev_stl_003| type and iterator traits
 
 |kt_dev_stl_006| stl concepts, error, exception handling
 |kt_dev_stl_007| containers
@@ -183,6 +184,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_067| algorithm: nonmodifying: count
 
 |kt_dev_stl_070| string
+|kt_dev_stl_071| string: operations
+|kt_dev_stl_071| string: search and find 
 |kt_dev_stl_071| string: stringstream {inefficient-concatnation}
 
 |kt_dev_stl_080| bitset
@@ -256,7 +259,7 @@ KT KB. DEVELOPMENT.
 #{ c++ concurrent in action
 |kt_dev_ccon_000| std::thread build
 |kt_dev_ccon_001| std::thread join and detach
-|kt_dev_ccon_002| std::thread copy callables and arguments
+|kt_dev_ccon_002| std::thread copy callables and arguments. lifetime issue
 |kt_dev_ccon_003| race condition, data race and approaches
 |kt_dev_ccon_004| std::mutex and inherent race in thread-safe stack
 |kt_dev_ccon_005| deadlock prevention and std::lock_guard
@@ -21724,26 +21727,47 @@ For example, less<T> in functional header is
 *kt_dev_stl_001* pair and turple
 
 {pair-class}
-The class pair treats two values as a 'single' unit. The pair is defined in "utility" header and the
-default pair ctor do value inits since it will use T(). As usual, pair class is dependant on type T;
-menas that dependant on operations provided by type T.
+The class pair treats two values as a 'single' unit. The pair is defined in
+"utility" header and the default pair ctor do value inits since it will use T().
+As usual, pair class is dependant on type T; menas that dependant on operations
+provided by type T.
 
 namespace std {
-  template <typename T1, typename T2>
-    struct pair {
-      // member
-      T1 first;
-      T2 second;
-      ...
-    };
+
+  /// Struct holding two objects of arbitrary type.
+  template<class _T1, class _T2>
+    struct pair
+    {
+      typedef _T1 first_type;    /// @c first_type is the first bound type
+      typedef _T2 second_type;   /// @c second_type is the second bound type
+
+      _T1 first;                 /// @c first is a copy of the first object
+      _T2 second;                /// @c second is a copy of the second object
+
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // 265.  std::pair::pair() effects overly restrictive
+      /** The default constructor creates @c first and @c second using their
+       *  respective default constructors.  */
+      _GLIBCXX_CONSTEXPR pair()
+      : first(), second() { }
+
+      /** Two objects may be passed to a @c pair constructor to be copied.  */
+      _GLIBCXX_CONSTEXPR pair(const _T1& __a, const _T2& __b)
+      : first(__a), second(__b) { }
+  };
+
+  template<class _T1, class _T2>
+    inline pair<_T1, _T2>
+    make_pair(_T1 __x, _T2 __y)
+    { return pair<_T1, _T2>(__x, __y); }
 }
 
-See that it is declared as struct instead of class so that all members are public. Here are some
-operations to see:
+See that it is declared as struct instead of class so that all members are
+public. Here are some operations to see:
 
 pair<T1,T2> p
-Default constructor; creates a pair of values of types T1 and T2, initialized with their default
-constructors
+Default constructor; creates a pair of values of types T1 and T2, initialized
+with their default constructors
 
 pair<T1,T2> p(val1,val1)
 Creates a pair of values of types T1 and T2, initialized with val1 and val1
@@ -21758,27 +21782,20 @@ p.second
 Yields the second value inside the pair (direct member access)
 
 p1 == p2 
-Returns whether p1 is equal to p2 (equivalent to p1.first==p2.first && p1.second==p2.second)
+Returns whether p1 is equal to p2 (equivalent to p1.first==p2.first &&
+        p1.second==p2.second)
 
 p1.swap(p2) Swaps the data of p1 and p2 (since C++11)
 swap(p1,p2) Same (as global function) (since C++11)
 
 make_pair(val1,val2) 
-Returns a pair with types and values of val1 and val2. The make_pair() function template enables you
-to create a value pair 'without' writing the types explicitly.
+Returns a pair with types and values of val1 and val2. The make_pair() function
+template enables you to create a value pair 'without' writing the types
+explicitly.
 
 std::pair<int,char>(42,’@’)
 std::make_pair(42,’@’)
 
-# code before C++11
-#
-namespace std {
-  // create value pair only by providing the values
-  template <template T1, template T2>
-    pair<T1,T2> make_pair (const T1& x, const T2& y) {   // note: see how to 'deduce' types
-      return pair<T1,T2>(x,y);
-    }
-}
 
 <example>
 note: no need to include "utility" and make_pair uses ().
@@ -21809,19 +21826,21 @@ int main()
 {55 ,88}
 
 <move-or-copy>
-You can influence the type make_pair() yields by forcing either move or reference semantics.
+You can influence the type make_pair() yields by forcing either move or
+reference semantics.
 
-For move semantics, you simply use std::move() to declare that the passed argument is no longer
-used:
+For move semantics, you simply use std::move() to declare that the passed
+argument is no longer used:
 
 std::string s, t;
 ...
 auto p = std::make_pair(std::move(s),std::move(t));
 ... // s and t are no longer used
 
-To force reference semantics, you have to use ref(), which forces a reference type, or cref(), which
-forces a constant reference type (both provided by <functional>). For example, in the following
-statements, a pair refers to an int twice so that, finally, i has the value 2:
+To force reference semantics, you have to use ref(), which forces a reference
+type, or cref(), which forces a constant reference type. For example, in the
+following statements, a pair refers to an int twice so that, finally, i has the
+value 2:
 
 #include <iostream>
 #include <functional>
@@ -21850,8 +21869,9 @@ namespace std {
     }
 }
 
-note: The first value has higher priority. Thus, if the first values of two pairs differ, the result
-of their comparison is used as the result of the overall comparison of the pairs.
+note: The first value has higher priority. Thus, if the first values of two
+pairs differ, the result of their comparison is used as the result of the
+overall comparison of the pairs.
 
 
 {tuple-class}
@@ -22032,7 +22052,43 @@ std::tie(i,std::ignore,s) = t; // assigns first and third value of t to i and s
 
 
 ={============================================================================
-*kt_dev_stl_002* type and iterator traits
+*kt_dev_stl_081* std::ref
+
+C++SLR 5.4.3 Reference Wrappers
+
+Class std::reference_wrapper<>, declared in <functional>, is used primarily to
+"feed" references to function templates that take their parameter by value. For
+a given type T, this class provides ref() for an implicit conversion to T& and
+cref() for an implicit conversion to const T&, which usually allows function
+templates to work on references without specialization.
+
+For example, after a declaration such as
+
+template <typename T>
+void foo (T val);
+
+by calling
+
+int x;
+foo (std::ref(x));
+
+T becomes int&, whereas by calling
+
+int x;
+foo (std::cref(x));
+
+T becomes const int&.
+
+This feature is used by the C++ standard library at various places. For example:
+
+* make_pair() uses this to be able to create a pair<> of references
+* make_tuple() uses this to be able to create a tuple<> of references
+* Binders use this to be able to bind references
+* Threads use this to pass arguments by reference
+
+
+={============================================================================
+*kt_dev_stl_003* type and iterator traits
 
 {type-traits}
 from the ref 5.4
@@ -28106,83 +28162,110 @@ number of elememts than 4         : 5
 ={============================================================================
 *kt_dev_stl_070* string
 
-In short, the string types of the C++ standard library are designed to behave as if they were a kind
-of fundamental data type that does not cause any trouble (at least in principle).
+C++ SLR 13.
 
-The usual interface for strings is not based on the concept of the STL. However, some iterator
-support for strings is provided
+{purpose}
+The string classes of the C++ standard library enable you to use strings as
+normal types that cause no problems for the user. Thus, you can copy, assign,
+       and compare strings as fundamental types without worrying about whether
+       there is enough memory or how long the internal memory is valid.
 
-The string classes are an example of the 'invasive' approach of writing STL containers. Strings can
-be considered containers of characters. The characters inside the string build a sequence over which
-you can iterate to process the individual characters. Thus, the standard string classes provide the
-container interface of the STL.
+The string types is designed to behave as if they were a kind of fundamental
+data type that does not cause any trouble at least in principle.
+
+
+The string classes are an example of the 'invasive' approach of writing STL
+containers. Strings can be considered containers of characters. The characters
+inside the string build a sequence over which you can iterate to process the
+individual characters. Thus, the standard string classes provide the container
+interface of the STL.
 
 
 {string-vs-vector}
-This is no surprise because both are containers that are typically implemented as dynamic arrays.
-Thus, you could consider a string as a special kind of a vector that has characters as elements.
+This is no surprise because both are containers that are typically implemented
+as dynamic arrays. Thus, you could consider a string as a special kind of a
+vector that has characters as elements.
 
-However, considering a string as a special kind of vector is dangerous because there are
-many fundamental differences between the two. Chief among these are their two primary goals:
+However, considering a string as a special kind of vector is dangerous because
+there are many fundamental differences between the two. Chief among these are
+their two primary goals:
 
-1. The primary goal of vectors is to handle and to manipulate the elements of the container, not the
-container as a whole. Thus, vector implementations are optimized to operate on elements inside the
-container.
+1. The primary goal of vectors is to handle and to manipulate the 'elements' of
+the container, not the container as a whole. Thus, vector implementations are
+optimized to operate on elements inside the container.
 
-2. The primary goal of strings is to handle and to manipulate the container (the string) as a whole.
-Thus, strings are optimized to reduce the costs of assigning and passing the whole container.
+2. The primary goal of strings is to handle and to manipulate the container, the
+string, as a whole. Thus, strings are optimized to reduce the costs of assigning
+and passing the whole container.
 
 These different goals typically result in completely different implementations.
 
 
 {sting-size-type-and-npos}
-The return type of all find functions is string::size_type, an 'unsigned' integral type that is
-defined inside the string class. 
+All these find functions return an index of the first matching position. the
+return value is an 'integer' and 'not' an iterator. The usual interface for
+strings is not based on the concept of the STL. However, some iterator support
+for strings is provided
 
-Be very 'careful' that you always use string::size_type, not int or unsigned, for the return type
-when you want to check the return value of a find function. Otherwise, the comparison with
-string::npos might not work.
+The return type of all find functions is string::size_type, an 'unsigned'
+integral type that is defined inside the string class. 
 
-<string-element-access>
-Accessing a single character of the string is done with operator[]
 
-1. An argument specifying the index must have a 'valid' value. That value must be less than the
-number of characters of the string. As usual, the first character has index 0, and the last
-character has index length()-1. In addition, the index of the position after the last character
-could be used to specify the end.
+{string-element-access}
+Accessing a single character of the string is done with operator[]. All these
+operations return a reference to the character
+
+1. An argument specifying the index must have a 'valid' value. That value must
+be less than the number of characters of the string. As usual, the first
+character has index 0, and the last character has index length()-1. 
+
+In addition, the index of the position after the last character could be used to
+specify the end.
 
 string s[s.length()];      // OK
-string s.at(s.length());   // ERROR. the current number of characters is 'not' a valid index.
+string s.at(s.length());   // ERROR. the # of characters is 'not' a valid index.
 
-The operator[] does 'not' check whether the index of the string is valid. Thus, a safer way to
-access a character is to use the at() member function. 
+The operator[] does 'not' check whether the index of the string is valid. Thus a
+safer way to access a character is to use the at() member since at() throws an
+out_of_range exception. 
 
-However, such a check costs runtime, so the check is 'not' provided for the usual accessing of
-characters of a string. A good way is to aviod subscripting altogether by using a range-for whenever
-possible. However not all compiler supports and see range-for
+However, such a check costs runtime, so the check is 'not' provided for the
+usual accessing of characters of a string. A good way is to aviod subscripting
+altogether by using a range-for whenever possible. However not all compiler
+supports and see range-for
 
-note: However, all functions that search for a character or a position allow any index. If the index
-exceeds the number of characters, these functions simply return string::npos ("not found").
+note: However, all functions that search for a character or a position allow any
+index. If the index exceeds the number of characters, these functions simply
+return string::npos ("not found").
 
-2. An argument specifying the number of characters could have 'any' value. If the size is greater
-than the remaining number of characters, all remaining characters are used. string::npos always
-works as a 'synonym' for "all remaining characters." or "until the end of the string". 
+2. An argument specifying the number of characters could have 'any' value. If
+the size is greater than the remaining number of characters, all remaining
+characters are used. string::npos always works as a 'synonym' for "all remaining
+characters." or "until the end of the string". 
 
-Why? -1, which because size_t is an unsigned integral type, it is the largest possible representable
-value for this type.
+Why? -1, which because size_t is an unsigned integral type, it is the largest
+possible representable value for this type.
 
 Thus, the following expression throws an exception if the period is not found:
 note: no exception under gcc 4.6.3.
 
+<front-and-back>
+Since C++11, front() and back() are provided to also access the first or last
+character, respectively. When called for an empty string, back() results in
+undefined behavior.
+
+
 filename.substr(filename.find(’.’))
 
-But the following expression does not throw an exception: If the period is not found, it results in
-the whole filename.
+But the following expression does not throw an exception: If the period is not
+found, it results in the whole filename.
 
 filename.substr(0, filename.find(’.’))
 
 
-example: string-find, string-substr, string-replace
+<example> string-find, string-substr, string-replace
+
+13.1.1 A First Example: Extracting a Temporary Filename
 
 #include <iostream>
 #include <string>
@@ -28202,9 +28285,9 @@ int main(int argc, char* argv[])
     // filename = argv[i];
     filename = *++argv;
 
-    // search period in filename
-    // note: searches for the 'first' occurrence of a period inside the string filename and return
-    // position. If the search fails, a special value is needed to return the failure. That value is
+    // search period in filename note: searches for the 'first' occurrence of a
+    // period inside the string filename and return position. If the search
+    // fails, a special value is needed to return the failure. That value is
     // npos.
 
     string::size_type idx = filename.find('.');
@@ -28216,9 +28299,10 @@ int main(int argc, char* argv[])
     else
     {
       // split filename into basename(before period) and extension(after period)
-      // note: The first parameter of the substr() function is the 'starting' index. The optional
-      // second argument is the 'number' of characters, not the end index. If the second argument is
-      // not used, all remaining characters of the string are returned as a substring.
+      // note: The first parameter of the substr() function is the 'starting'
+      // index. The optional second argument is the 'number' of characters, not
+      // the end index. If the second argument is not used, all remaining
+      // characters of the string are returned as a substring.
 
       basename  = filename.substr(0, idx);
       extname   = filename.substr(idx+1);
@@ -28256,19 +28340,25 @@ end.dat => end.tmp
 
 
 <example> string-find_first_of
+
+13.1.2 A Second Example: Extracting Words and Printing Them Backward
+
 #include <iostream>
 #include <string>
 
 using namespace std;
 
-// This example extracts single words from standard input and prints the characters of each word in
-// reverse order. The words are separated by the usual whitespaces (newline, space, and tab) and by
-// commas, periods, or semicolons:
+// This example extracts single words from standard input and prints the
+// characters of each word in reverse order. The words are separated by the
+// usual whitespaces (newline, space, and tab) and by commas, periods, or
+// semicolons:
 
 int main(int argc, char* argv[])
 {
-  // note: The newline character is also used as a delimiter. However, no special processing is
-  // necessary for it because the program reads line by line.
+  // note: The newline character is also used as a delimiter. However, no
+  // special processing is necessary for it because the program reads line by
+  // line.
+
   const string delims(" \t,.;");
   string line;
 
@@ -28276,15 +28366,17 @@ int main(int argc, char* argv[])
   {
     string::size_type begi, endi;
 
-    // The find_first_not_of() function returns the 'first' index of a character that is not part of
-    // the passed string argument.
+    // The find_first_not_of() function returns the 'first' index of a character
+    // that is not part of the passed string argument.
+
     begi = line.find_first_not_of(delims);
 
     // while beginning of a word found
     while( begi != string::npos )
     {
-      // searches for the end of the current word.
-      // an optional second argument is used that specifies where to 'start' the search in the string.
+      // searches for the end of the current word. an optional second argument
+      // is used that specifies where to 'start' the search in the string.
+
       endi = line.find_first_of( delims, begi ); 
       if( endi == string::npos )
       {
@@ -28293,7 +28385,13 @@ int main(int argc, char* argv[])
       }
 
       // print characters in reverse
-      // <careful>
+      // 
+      // "pots & pans"
+      //  ^   ^
+      //      endi
+      //  begi
+      
+      // note:
       for( int i = endi-1; i >= static_cast<int>(begi); --i )
         cout << line[i];
 
@@ -28318,15 +28416,39 @@ nametag on diaper
 gateman no repaid 
 
 
+note:
+If you omit the cast of begIdx to int, this program might run in an endless loop
+or might crash. The problem is that string::size_type is an unsigned integral
+type. Without the cast, the signed value i is converted automatically into an
+unsigned value because it is compared with a unsigned type. 
+
+In this case, the following expression always yields true if the current word
+starts at the beginning of the line: 
+
+i>=begIdx 
+
+The reason is that begIdx is then 0 and any unsigned value is greater than or
+equal to 0. So an endless loop. For this reason, I don't like the concept of
+string::size_type and string::npos. See <string-npos>
+
+note: Q?
+
+for( string::size_t i = endi-1; i >= begi; --i )
+
+
+={============================================================================
+*kt_dev_stl_070* string: operations
+
+C++ SLR 13.2
+
 {string-type}
+
 namespace std {
   template <typename charT,
            typename traits = char_traits<charT>,
            typename Allocator = allocator<charT> >
              class basic_string;
-}
 
-namespace std {
   typedef basic_string<char> string;
 }
 
@@ -28361,24 +28483,47 @@ const_iterator beg, const_iterator end
 initlist 
    All characters in initlist (since C++11)
 
+
+{string-and-c-string}
+In standard C++, the type of string literals was changed from char* to const
+char*. 
+
+1. There is an automatic type conversion from const char* into strings.
+
+2. strings do not provide a special meaning for the character ’\0’, which is
+used as a special character in an ordinary C-string to mark the end of the
+string. The character '\0' may be part of a string just like every other
+character.
+
+string s(cstr);
+Creates a string s that is initialized by the C-string cstr
+
+string s(chars,charslen);
+Creates a string s that is initialized by charslen characters of the character
+array chars
+
 std::string s1("nico");    // initializes s1 with: ’n’ ’i’ ’c’ ’o’
 std::string s2("nico",5);  // initializes s2 with: ’n’ ’i’ ’c’ ’o’ ’\0’
 std::string s3(5,’\0’);    // initializes s3 with: ’\0’ ’\0’ ’\0’ ’\0’ ’\0’
 
-s1.length() // yields 4
-s2.length() // yields 5
-s3.length() // yields 5
+s1.length();               // yields 4
+s2.length();               // yields 5
+s3.length();               // yields 5
 
 string s1;                 // default initialzation. empty
 
 string s2( s1 );           // direct form of initialzation.
 string s2 = s1;            // copy form of initialzation.
 
-string s3( "value" );
-string s3 = "value";
-
 string s4( n, 'c' );
 
+
+{string-nullptr} <caution>
+If you use an old-style null pointer (NULL) instead of nullptr or a char*
+parameter, strange behavior results. The reason is that NULL has an integral
+type and is interpreted as the number 0 or the character with value 0 if the
+operation is overloaded for a single integral type. So you should always use
+nullptr or char* pointers.
 
 <no-null> TODO: needs more to clarify
 
@@ -28391,36 +28536,34 @@ string s;
 s[s.length()] // yields ’\0’
 
 note: that only the single-argument version const char* handles the character ’\0’ as a special
-character that terminates the string. In all other cases, ’\0’ is not a special character: strings
-do not provide a special meaning for the character ’\0’, which is used as a special character in an
-ordinary C-string to mark the end of the string. The character ’\0’ may be part of a string just
-like every other character.
+character that terminates the string. In all other cases, ’\0’ is not a special character: 
 
-<string-nullptr> <caution>
-If you use an old-style null pointer (NULL) instead of nullptr or a char* parameter, strange
-behavior results. The reason is that NULL has an integral type and is interpreted as the number 0 or
-the character with value 0 if the operation is overloaded for a single integral type. So you should
-always use nullptr or char* pointers.
 
-<string-to-array>
+{string-to-cstring} 13.2.4 Strings and C-Strings
 const CharT* c_str() const;
 
 copy()            Copies or writes the contents to a character array
 data(), c_str()   Returns the value as C-string or character array
 
-data() and c_str() return the contents of the string as an array of characters. The array 'includes'
-the end-of-string character at position [size()]. note: that before C++11, the return type of data()
-was not a valid C-string, because 'no' ’\0’ character was guaranteed to get appended.
+data() and c_str() return the contents of the string as an array of characters.
+The array 'includes' the end-of-string character at position [size()]. 
 
-copy() copies the contents of the string 'into' a character array provided by the caller. An ’\0’
-character is not appended.
+note: use c_str() since before C++11, the return type of data() was not a valid
+C-string, because 'no' ’\0’ character was guaranteed to get appended.
 
-<caution> data() and c_str() return an array that is owned by the string. Thus, the caller must not
-modify or free the memory. note: seems not possible since it is const?
+copy() copies the contents of the string 'into' a character array provided by
+the caller. An ’\0’ character is 'not' appended.
 
-<caution> convert string into C-strings or character arrays only immediately before you need the
-contents as type char*. Since the return value of c_str() and data() is valid 'only' until the next
-call of a nonconstant member function for the same string:
+note: data() and c_str() return an array that is owned by the string. Thus, the
+caller must not modify or free the memory. note: seems not possible since it is
+const?
+
+
+{can-be-invalidated}
+Convert string into C-strings or character arrays only immediately before you
+need the contents as type char*. Since the return value of c_str() and data() is
+valid 'only' until the next call of a nonconstant member function for the same
+string. note: As with invalidated iterators.
 
 const char* p;
 p = s.c_str();    // p refers to the contents of s as a C-string
@@ -28428,28 +28571,36 @@ foo(p);           // OK (p is still valid)
 s += "ext";       // invalidates p
 foo(p);           // ERROR: argument p is not valid
 
-<string-capacity>
-As for vector, string has the same interfaces: size(), length(), max_size(), capacity(), and
-reserve().
 
-There is one big difference: Unlike with vectors, calling reserve() for strings might be a call to
-shrink the capacity. If the argument is less than the current number of characters, it is a
-'nonbinding' shrink-to-fit request.
+{string-capacity} 13.2.5 Size and Capacity
+As with vector, string has the same interfaces: size(), length(), max_size(),
+   capacity(), and reserve().
 
-So, a call of reserve() without any argument is always a nonbinding shrink-to-fit request:
-s.reserve();         // would like to shrink capacity to fit the current size
+1. empty() checks whether the string is empty. Because it might be faster, you
+should use empty() instead of length() or size().
+
+2. capacity() returns the number of characters a string could contain without
+having to reallocate its internal memory.
+
+The concept of capacity for strings is, in principle, the same as for vector
+containers. But one big difference: Unlike with vectors, calling reserve() for
+strings might be a call to shrink the capacity. If the argument is less than the
+current number of characters, it is a 'nonbinding' shrink-to-fit request meaning
+"no guarantee to happen".
+
+So, a call of reserve() without any argument is always a nonbinding
+shrink-to-fit request:
+
+// would like to shrink capacity to fit the current size
+s.reserve();
 
 Since C++11, shrink_to_fit() provides the same effect:
-s.shrink_to_fit();   // would like to shrink capacity to fit the current size (C++11)
+
+// would like to shrink capacity to fit the current size (C++11)
+s.shrink_to_fit();
 
 
-<string-back>
-Since C++11, front() and back() are provided to also access the first or last character,
-respectively.
-
-<caution> When called for an empty string, back() results in undefined behavior.
-
-<string-reallocation>
+{string-reallocation}
 std::string s("abcde");    // s contains: ’a’ ’b’ ’c’ ’d’ ’e’
 
 char& r = s[2];            // reference to third character
@@ -28463,7 +28614,8 @@ s = "new long value";      // 'reallocation' invalidates r and p
 r = ’X’;                   // ERROR: undefined behavior
 *p = ’Y’;                  // ERROR: undefined behavior
 
-{comparison}
+
+{sting-comparison}
 tquery.cpp:128: error: no match for 'operator==' in 's == 'q''
 
 shoule be:
@@ -28472,9 +28624,13 @@ string s;
 if( !(cin >> s) || s == "q" ) break;
 
 
-{modifiers}
+{string-modify}
+You can modify strings by using different member functions and operators.
+
 <assign>
 The assign() member functions provide more than operator=().
+
+const std::string aString("othello");
 
 s.assign(aString);                     // assign "othello" (equivalent to operator =)
 s.assign(aString,1,3);                 // assign "the"
@@ -28483,16 +28639,6 @@ s.assign(aString,2,std::string::npos); // assign "hello"
 s.assign("two\nlines");                // assign a C-string (equivalent to operator =)
 s.assign("nico",5);                    // assign the character array: ’n’ ’i’ ’c’ ’o’ ’\0’
 s.assign(5,’x’);                       // assign five characters: ’x’ ’x’ ’x’ ’x’ ’x’
-
-<swap>
-The specialization of swap() for strings guarantees constant complexity
-
-<empty>
-To remove all characters in a string:
-
-s = "";     // assign the empty string
-s.clear();  // clear contents
-s.erase();  // erase all characters
 
 <insert-and-remove>
 To append characters, you can use operator +=, append(), and push_back().
@@ -28513,8 +28659,8 @@ std::string s("p");
 s.insert(1,aString);    // s: page
 s.insert(1,"ersifl");   // s: persiflage
 
-Several erase() functions and pop_back() (since C++11) remove characters, and several replace()
-functions replace characters.
+Several erase() functions and pop_back() (since C++11) remove characters, and
+several replace() functions replace characters.
 
 std::string s = "i18n";                // s: i18n
 s.replace(1,2,"nternationalizatio");   // s: internationalization. note: change of size
@@ -28523,44 +28669,73 @@ s.erase(7,5);                          // s: internal
 s.pop_back();                          // s: interna (since C++11)
 s.replace(0,2,"ex");                   // s: externa
 
-Use resize() to change the number of characters. If the new size that is passed as an argument is
-less than the current number of characters, characters are removed from the end. If the new size is
-greater than the current number of characters, characters are appended at the end.  You can pass the
-character that is appended if the size of the string grows. If you don’t, the default constructor
-for the character type is used (which is the ’\0’ character for type char).
+Use resize() to change the number of characters. If the new size that is passed
+as an argument is less than the current number of characters, characters are
+removed from the end. If the new size is greater than the current number of
+characters, characters are appended at the end. You can pass the character that
+is appended if the size of the string grows. If don't, the default constructor
+for the character type is used which is the ’\0’ character for type char.
 
-<substring-and-concatenation>
+
+{string-swap}
+The specialization of swap() for strings guarantees constant complexity, so you
+should use it to swap the value of strings and to assign strings if you don't
+need the assigned string after the assignment.
+
+
+{string-empty}
+To remove all characters in a string:
+
+s = "";     // assign the empty string
+s.clear();  // clear contents
+s.erase();  // erase all characters
+
+
+{substring-and-concatenation}
+Extract a substring from any string by using the substr() member function.
+
 string substr (size_t pos = 0, size_t len = npos) const;
 
 std::string s("interchangeability");
+
+s.substr()              // returns a copy of s
+s.substr(11)            // returns string("ability")
+s.substr(5,6)           // returns string("change")
 s.substr(s.find(’c’))   // returns string("changeability")
 
-Use operator + to concatenate two strings or C-strings or one of those with single characters
+Use operator + to concatenate two strings or C-strings or one of those with
+single characters.
+
 
 <inefficient-concatenation>
-In JAVA, the following shows inefficient +. Assume that strings are all the same length, x and there
-are n strings. Just think about +. For 1st iteration, x copies char by char. Next iteration, 2x and
-so on. This reduces to O(xn^2) but not O((xn)^2)
+In JAVA, the following shows inefficient concatenation. Assume that strings are
+all the same length, x and there are n strings. Just think about concatenation.
+For the first iteration, x copies char by char. Next iteration, 2x and so on.
+This reduces to O(xn^2) but not O((xn)^2)
 
 String sentence = "";
 
 for( String w : words )
    sentence = sentence + w;
 
-This add string to sentence and copy the temp result to sentence for each loop. note: that there is
-no append() member in String class. Should be written
+This add string to sentence and copy the temp result to sentence for each loop.
+note: that there is no append() member in String class. Should be written
 
 StringBuffer sentence = new StringBuffer();
 
 for( String w : words )
    sentence.append(w);
 
-<use-append>
+
+How minimize this in C++?
+
+1. Use append
 As for the above, use append since string has append member function.
 
-<use-move>
-operator + is also overloaded for strings that are rvalue references to support the move semantics
-if a string argument passed to operator + is no longer needed afterward.
+2. Use move()
+Since C++11, operator + is also overloaded for strings that are rvalue
+references to support the move semantics. If a string argument passed to
+operator + is no longer needed afterward.
 
 string foo()
 {
@@ -28644,9 +28819,11 @@ find_last_not_of()   Finds the last character that is not part of value
 
 
 {string-npos}
-Should be 'careful' when using the string value npos and string::size_type. When you want to check
-the return value, 'always' use string::size_type, not int or unsigned for the type of the return
-value; otherwise, the comparison of the return value with string::npos might not work.
+If the search fails, a special value is needed to return the failure. The type
+and value of npos are a big pitfall for the use of strings. Be very 'careful'
+that you always use string::size_type, not int or unsigned, for the return type
+when you want to check the return value of a find function. Otherwise, the
+comparison with string::npos might not work.
 
 The reason is the result of the design decision that npos is defined as -1:
 
@@ -28983,6 +29160,36 @@ int main(int argc, char* argv[])
  ,?Haeehlloooruwy
 
 <Q> why still duplicates?
+
+
+={============================================================================
+*kt_dev_stl_071* string: search and find
+
+find a 'substring'
+
+size_type string::find (const string& str) const
+size_type string::find (const string& str, size_type idx) const
+size_type string::rfind (const string& str) const
+size_type string::rfind (const string& str, size_type idx) const
+
+* These functions search for the first/last substring str. starting at idx.
+* The find() functions search forward and return the first substring.
+* The rfind() functions search backward and return the last substring.
+* These functions return the index of the first character of the substring when
+* successful or string::npos if they fail.
+
+
+find first of different 'characters'
+
+size_type string::find_first_of (const string& str) const
+size_type string::find_first_of (const string& str, size_type idx) const
+size_type string::find_first_not_of (const string& str) const
+size_type string::find_first_not_of (const string& str, size_type idx) const
+
+* These functions search for the first character that is or is not also an
+element of the string str. starting at idx.
+* These functions return the index of that character or substring when
+* successful or string::npos if they fail.
 
 
 ={============================================================================
@@ -37151,14 +37358,14 @@ Hello concurrent world
 ={============================================================================
 *kt_dev_ccon_001* std::thread join and detach
 
-Once started a thread, need to explicitly decide whether to wait for it to finish by joining or
-leave it to run on its own by detaching.
+Once started a thread, need to explicitly decide whether to wait for it to
+finish by joining or leave it to run on its own by detaching.
 
-If don't decide before thread object is destoryed, then your program is terminated. the std::thread
-destructor calls std::terminate().
+If don't decide before thread object is destoryed, then your program is
+terminated. the std::thread destructor calls std::terminate().
 
-If don't wait for a thread to finish, lifetime issues can happen and that's why must use
-self-contained approach.
+If don't wait for a thread to finish, lifetime issues can happen and that's why
+must use self-contained approach.
 
 struct func
 {
@@ -37178,17 +37385,20 @@ void oops()
 
     func my_func( some_local_state );
 
-    std::thread my_thread( my_func );  // new thread might still be running after oops()
+    // new thread might still be running after oops()
+    std::thread my_thread( my_func );  
 
-    my_thread.detach();                // should be my_thread.join();
+    // should be my_thread.join();
+    my_thread.detach();                
 }
 
 
 ={============================================================================
-*kt_dev_ccon_002* std::thread copy callables and arguments
+*kt_dev_ccon_002* std::thread copy callables and arguments. lifetime issue
 
-The std::thread object must be self-contained and this means initial function and its arguments
-should be copied into a thread object.
+<lifetime-issue>
+The std::thread object must be self-contained and this means initial function
+and its arguments should be copied into a thread object.
 
 class background_task
 {
@@ -37204,27 +37414,28 @@ background_task f;
 
 std::thread my_thread(f);
 
-If use callable object, it is 'copied' into the storage belonging to the newly created thread of
-execution and invoked from there. It's therefore essential that the copy behave equivalently to the
-original, or the result may not be what's expected.
+If use callable object, it is 'copied' into the storage belonging to the newly
+created thread of execution and invoked from there. It's therefore essential
+that the copy is 'self-contained' or the result may not be what's expected.
 
 note: std::bind uses the same mechanism.
 
-Really?
+If not, can cause lifefime issue. For stl algorithms and predicates, use either
+usual function or temporary functional object and passes it as argument. Since
+the temporty object is self-contained and it is okay to use with stl algorithms. 
 
-If not, can cause lifefime issue. For stl algorithms and predicates, use either usual function or
-temporary functional object and passes it as argument. Since the temporty object is self-contained
-and it is okay to use with stl algorithms. 
+When thread object is self-contained and is detached, no need to worry about
+lifetime issue.
 
-When thread object is self-contained and is detached, no need to worry about lifetime issue. Really?
-See this example:
+<1> when not self-contained since has a reference to external
 
 void f( int i, std::string const& s );
 std::thread t( f, 3, "hello" );
 
-This creates a new thread which calls f( 3, "hello" ) and the second argument is passed as a "char
-const *" and converted to a std::string. This is particularly important when the argument supplied
-is a pointer to an automatic variable, as follows:
+This creates a new thread which calls f( 3, "hello" ) and the second argument is
+passed as a "char const *" and converted to a std::string. This is particularly
+important when the argument supplied is a pointer to an automatic variable, as
+follows:
 
 void f( int i, std::string const& s );
 
@@ -37237,11 +37448,14 @@ void oops( int some_param )
     t.detach();
 }
 
-The problem is that there is a significance chance that the function oops will exit before the
-buffer has been converted to a std::string on the new thread, thus leading to undefined behavior
-because it relies on implicit conversion and it is copied.
+The problem is that there is a significance chance that the function oops will
+exit before the buffer has been 'converted' to a std::string on the new thread.
+thus leading to undefined behavior because it relies on implicit conversion and
+a pointer of buffer is copied, no guarantee that buffer is available when a
+thread runs f() which requires a conversion from char* to string.
 
-The solution is to do it explicitly before passing the buffer to the std::thread constructor:
+The solution is to do it explicitly before passing the buffer to the std::thread
+constructor:
 
 void oops( int some_param )
 {
@@ -37252,7 +37466,11 @@ void oops( int some_param )
     t.detach();
 }
 
-The other problem is:
+note: is it okay if use t.join() instead? seems okay since t.join() will be
+blocked and opps() will not be exited.
+
+
+<2> always a copy is made
 
 void update_data_for_widget( widget_id w, widget_data& data );
 
@@ -37266,14 +37484,16 @@ void oops_again( widget_id w )
     process_widget_data(data);
 }
 
-Although passed by reference, still copied and has internal copy. The problem is that
-process_widget_data will be passed an unchanged data rather than a correctly updated version.
+Although passed by reference, 'still' copied and has internal copy. The problem
+is that process_widget_data will be passed an unchanged data rather than a
+correctly updated version.
 
 The solution is to use:
 
 std::thread t( update_data_for_widget, w, std::ref(data) );
 
 Since it uses t.join() it is safe to use reference to local variable.
+
 
 <member-function-pointer>
 
@@ -37287,9 +37507,10 @@ X my_x;
 
 std::thread t( &X::do_lengthy_work, &my_x );
 
+
 <noncopyable-arguments>
-Since unique_ptr is only moveable and not a temporary but named object, must be requested explicitly
-by std::move().
+Since unique_ptr is only moveable and not a temporary but named object, must be
+requested explicitly by std::move().
 
 void process_big_object( std::unique_ptr<big_object> );
 
@@ -37297,9 +37518,10 @@ std::unique_ptr<big_object> p( new big_object );
 p->prepare_data(42);
 std::thread t( process_big_object, std::move(p) );
 
+
 <thread-movable>
-This means that std::thread is movable to ensure that only one thread object is associated with a
-particular thread of execution at any one time.
+This means that std::thread is movable to ensure that only one thread object is
+associated with a particular thread of execution at any one time.
 
 
 <from-stl-code>
@@ -37338,12 +37560,20 @@ class thread
                             std::forward<_Args>(__args)...)));
         }
 
-    template<typename _Callable> shared_ptr<_Impl<_Callable>> _M_make_routine(_Callable&& __f)
+    template<typename _Callable> 
+        shared_ptr<_Impl<_Callable>> _M_make_routine(_Callable&& __f)
     {
         // Create and allocate full data structure, not base.
         return std::make_shared<_Impl<_Callable>>(std::forward<_Callable>(__f));
     }
 };
+
+
+<user-is-reponsible>
+When provide callable to thread whether it is global function, member function
+or callable via bind, it is different problem to make sure that this callable is
+self-contained that is there is no external reference. That is a user to make
+sure that when use thread object.
 
 
 ={============================================================================
