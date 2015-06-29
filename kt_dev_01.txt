@@ -146,6 +146,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_001| std::pair and tuple class
 |kt_dev_stl_002| std::ref
 |kt_dev_stl_003| type and iterator traits
+|kt_dev_stl_004| test in condition
 
 |kt_dev_stl_006| stl concepts, error, exception handling
 |kt_dev_stl_007| containers
@@ -22237,6 +22238,68 @@ namespace std {
 
 
 ={============================================================================
+*kt_dev_stl_004* test in condition
+
+{string-getline-example}
+The std::getline is declared as:
+
+istream& getline (istream& strm, string& str);
+
+All characters, including leading whitespaces, are extracted until any of the
+following happens:
+
+* strm.good() is false (which might cause an appropriate exception)
+* delim or strm.widen('\n') is extracted
+* str.max_size() characters are stored
+
+Then how can we use "while( getline(...))" to read multiple lines when see the
+new line and returns?
+
+From stackoverflow: It returns a stream so that we can chain the operation. But
+when you use an object in a boolean context the compiler looks for an conversion
+operator that can convert it into a type that can be used in the boolean
+context.
+
+In this case stream has operator void*(). As this results in a pointer it can be
+used in a boolean context. When called it checks the error flags. If either
+failbit or badbit are set then it returns NULL which is equivalent to FALSE
+otherwise it returns a pointer to self or something else valid though you should
+not use this fact.
+
+So you can use a stream in any context that would require a boolean test.
+
+// 4.7.2/bits/basic_ios.h
+//
+// 27.4.5  Template class basic_ios
+/**
+*  @brief  Virtual base class for all stream classes.
+*  @ingroup io
+*
+*  Most of the member functions called dispatched on stream objects
+*  (e.g., @c std::cout.foo(bar);) are consolidated in this class.
+*/
+template<typename _CharT, typename _Traits>
+class basic_ios : public ios_base
+{
+public:
+  //@{
+  /**
+   *  @brief  The quick-and-easy status check.
+   *
+   *  This allows you to write constructs such as
+   *  <code>if (!a_stream) ...</code> and <code>while (a_stream) ...</code>
+  */
+  operator void*() const
+  { return this->fail() ? 0 : const_cast<basic_ios*>(this); }
+
+  bool
+  operator!() const
+  { return this->fail(); }
+  //@}
+}
+
+
+={============================================================================
 *kt_dev_stl_006* stl concepts
 
 The concept of the STL is based on a 'separation' of data and operations. The data is managed by
@@ -28255,14 +28318,6 @@ character, respectively. When called for an empty string, back() results in
 undefined behavior.
 
 
-filename.substr(filename.find(’.’))
-
-But the following expression does not throw an exception: If the period is not
-found, it results in the whole filename.
-
-filename.substr(0, filename.find(’.’))
-
-
 <example> string-find, string-substr, string-replace
 
 13.1.1 A First Example: Extracting a Temporary Filename
@@ -28339,105 +28394,8 @@ oops.tmp => oops.xxx
 end.dat => end.tmp
 
 
-<example> string-find_first_of
-
-13.1.2 A Second Example: Extracting Words and Printing Them Backward
-
-#include <iostream>
-#include <string>
-
-using namespace std;
-
-// This example extracts single words from standard input and prints the
-// characters of each word in reverse order. The words are separated by the
-// usual whitespaces (newline, space, and tab) and by commas, periods, or
-// semicolons:
-
-int main(int argc, char* argv[])
-{
-  // note: The newline character is also used as a delimiter. However, no
-  // special processing is necessary for it because the program reads line by
-  // line.
-
-  const string delims(" \t,.;");
-  string line;
-
-  while( getline( cin, line ) )
-  {
-    string::size_type begi, endi;
-
-    // The find_first_not_of() function returns the 'first' index of a character
-    // that is not part of the passed string argument.
-
-    begi = line.find_first_not_of(delims);
-
-    // while beginning of a word found
-    while( begi != string::npos )
-    {
-      // searches for the end of the current word. an optional second argument
-      // is used that specifies where to 'start' the search in the string.
-
-      endi = line.find_first_of( delims, begi ); 
-      if( endi == string::npos )
-      {
-        // end of word is end of line
-        endi = line.length();
-      }
-
-      // print characters in reverse
-      // 
-      // "pots & pans"
-      //  ^   ^
-      //      endi
-      //  begi
-      
-      // note:
-      for( int i = endi-1; i >= static_cast<int>(begi); --i )
-        cout << line[i];
-
-      cout << ' ';
-
-      // search beginning of the next word
-      begi = line.find_first_not_of( delims, endi );
-    }
-
-    // to have next input on next getline
-    cout << endl;
-  }
-}
-
-pots & pans
-stop & snap 
-I saw a reed
-I was a deer 
-deliver no pets
-reviled on step 
-nametag on diaper
-gateman no repaid 
-
-
-note:
-If you omit the cast of begIdx to int, this program might run in an endless loop
-or might crash. The problem is that string::size_type is an unsigned integral
-type. Without the cast, the signed value i is converted automatically into an
-unsigned value because it is compared with a unsigned type. 
-
-In this case, the following expression always yields true if the current word
-starts at the beginning of the line: 
-
-i>=begIdx 
-
-The reason is that begIdx is then 0 and any unsigned value is greater than or
-equal to 0. So an endless loop. For this reason, I don't like the concept of
-string::size_type and string::npos. See <string-npos>
-
-note: Q?
-
-for( string::size_t i = endi-1; i >= begi; --i )
-
-
 ={============================================================================
-*kt_dev_stl_070* string: operations
+*kt_dev_stl_071* string: operations
 
 C++ SLR 13.2
 
@@ -28456,8 +28414,8 @@ namespace std {
 {operations}
 
 <initialization> operation-arg-scheme
-The operations that manipulate the value of a string have several overloaded versions that use the
-argument scheme:
+The operations that manipulate the value of a string have several overloaded
+versions that use the argument scheme:
 
 const string & str 
    The whole string str
@@ -28698,13 +28656,25 @@ string substr (size_t pos = 0, size_t len = npos) const;
 
 std::string s("interchangeability");
 
-s.substr()              // returns a copy of s
-s.substr(11)            // returns string("ability")
-s.substr(5,6)           // returns string("change")
-s.substr(s.find(’c’))   // returns string("changeability")
+s.substr();             // returns a copy of s
+s.substr(11);           // returns string("ability")
+s.substr(5,6);          // returns string("change")
+s.substr(s.find(’c’));  // returns string("changeability")
 
 Use operator + to concatenate two strings or C-strings or one of those with
 single characters.
+
+
+<example>
+If filename does not have '.' then find() returns string::npos and substr(npos)
+returns std::out_of_range exception.
+
+filename.substr(filename.find('.'))
+
+However, the following does not throw an exception since substr(0, npos);
+returns the whole string. 
+
+filename.substr(0, filename.find('.'))
 
 
 <inefficient-concatenation>
@@ -28749,20 +28719,33 @@ string foo()
 }
 
 
-{io-operation}
+{io-operators}
 <getline>
-This comes from string but do not need to qualify std:: due to ADL(argument dependent lookup).
+This comes from string class but do not need to qualify std:: due to argument
+dependent lookup.
 
-This function reads all characters, including leading whitespaces, until the line delimiter or
-end-of-file is reached. The line delimiter is extracted but 'not' appended. Means that not include a
-new line character.
+This function reads all characters, including leading whitespaces, until the
+line delimiter or end-of-file is reached. The line delimiter is extracted but
+'not' appended. Means that not include a new line character.
 
-// can set delimiter
-while (getline(std::cin,s,’:’)) { // for each token separated by ’:’
+while (getline(std::cin,s)) {       // for each line from cin
 ...
 }
 
-// can use stringstream
+
+// can set delimiter. Note that if you read token by token, the newline
+// character is not a special character. In this case, the tokens might contain
+// a newline character.
+
+while (getline(std::cin,s,’:’)) {   // for each token separated by ’:’
+...
+}
+
+// note: if useful, do further reading.
+// can use stringstream. Note also that since C++11, getline() is overloaded for
+// both lvalue and rvalue stream references, which allows using temporary string
+// streams. See Section 15.10, page 802, for details about string streams.
+
 void process (const std::string& filecontents)
 {
   // process first line of passed string:
@@ -28771,142 +28754,6 @@ void process (const std::string& filecontents)
       firstLine);
   ...
 }
-
-<Q> In the reference, is declared as:
-
-istream& getline (istream& strm, string& str)
-
-All characters, including leading whitespaces, are extracted until any of the following happens:
-- strm.good() is false (which might cause an appropriate exception)
-- delim or strm.widen(’\n’) is extracted
-- str.max_size() characters are stored
-
-Then how can we use "while( getline(...))" to read multiple lines when see the new line and returns?
-
-From stackoverflow: It returns a stream so that we can chain the operation. But when you use an
-object in a boolean context the compiler looks for an conversion operator that can convert it into a
-type that can be used in the boolean context.
-
-In this case stream has operator void*(). As this results in a pointer it can be used in a boolean
-context. When called it checks the error flags. If either failbit or badbit are set then it returns
-NULL which is equivalent to FALSE otherwise it returns a pointer to self (or something else valid
-though you should not use this fact)).
-
-So you can use a stream in any context that would require a boolean test:
-
-
-{search}
-There are three ways to search: by using member functions, the regex library, and STL algorithms.
-
-All search functions return the index of the first character of the character sequence that matches
-the search. If the search fails, they return npos.
-
-Unfortunately, following search argument scheme differs from that of the other string functions.
-
-1. The first argument is always the value that is searched for.
-2. The optional second value indicates an index at which to start the search in the string.
-3. The optional third argument is the number of characters of the value to search.
-
-note: value can be either character or string
-
-find()               Finds the first occurrence of value
-rfind()              Finds the last occurrence of value (reverse find)
-
-find_first_of()      Finds the first 'character' that is 'part' of value
-find_last_of()       Finds the last character that is part of value
-find_first_not_of()  Finds the first character that is not part of value
-find_last_not_of()   Finds the last character that is not part of value
-
-
-{string-npos}
-If the search fails, a special value is needed to return the failure. The type
-and value of npos are a big pitfall for the use of strings. Be very 'careful'
-that you always use string::size_type, not int or unsigned, for the return type
-when you want to check the return value of a find function. Otherwise, the
-comparison with string::npos might not work.
-
-The reason is the result of the design decision that npos is defined as -1:
-
-namespace std {
-  class basic_string {
-    public:
-      typedef typename Allocator::size_type size_type;   // note: allocator's type
-      ...
-      static const size_type npos = -1;
-      ...
-  };
-}
-
-<problem>
-From the above example: 
-
-string::size_type begi, endi;
-
-begi = line.find_first_not_of(delims);
-
-// <careful>
-for( int i = endi-1; i >= static_cast<int>(begi); --i )
-   cout << line[i];
-
-Again, be very 'careful' when you use string::size_type which is 'unsigned'.
-
-The nasty problem is, if you 'omit' the cast of begIdx to int, this program might run in an endless
-loop or might crash. The problem is that string::size_type is an 'unsigned' integral type. Without
-the cast, the signed value i is converted 'automatically' into an 'unsigned' value because it is
-compared with a unsigned type. 
-
-In this case, the following expression always yields true if the current word starts at the
-beginning of the line:
-
-i>=begIdx
-
-The reason is that begIdx is then 0, and any unsigned value is greater than or equal to 0. For
-example, when i == -1. So, an endless loop results that might get stopped by a crash due to an
-illegal memory access. For this reason, I don't like the concept of string::size_type and
-string::npos.
-
-note: see implicit conversion
-
-The size_type, which is defined by the allocator of the string, must be an unsigned integral type.
-The default allocator, allocator, uses type size_t as size_type. Because -1 is converted into an
-unsigned integral type, npos is the 'maximum' unsigned value of its type. 
-
-However, the exact value 'depends' on the exact definition of 'type' size_type: (unsigned long)-1
-differs from (unsigned short)-1 if the size of the types differs. so maximum values differ.
-
-int idx = s.find("xx");
-if (idx == std::string::npos) {
-  ...
-}
-
-might yield false if idx has the value -1 and idx and string::npos have 'different' types: <Q>
-really? not promoted to the bigger type? convertion done first or promotion?
-
-<solution>
-One way to avoid this error is to check whether the search fails directly:
-
-if (s.find("hi") == std::string::npos) {
-...
-}
-
-However, often you need the index of the matching character position. Thus, another simple solution
-is to define your own signed value for npos:
-
-const int NPOS = -1;
-
-if (idx == NPOS) { // works almost always
-...
-}
-
-Unfortunately, this solution is not perfect, because the comparison fails if either idx has type
-unsigned short or the index is greater than the maximum value of int. Because of these problems, the
-standard did not define it that way. 
-
-However, because both might happen very 'rarely', the solution works in most situations. To write
-portable code, however, you should always use string::size_type for any index of your string type.
-For a perfect solution, you'd need some overloaded functions that consider the exact type of
-string::size_type. I still hope the standard will provide a better solution in the future although
-with C++11 nothing changed.
 
 
 {numeric-conversion}
@@ -29165,7 +29012,28 @@ int main(int argc, char* argv[])
 ={============================================================================
 *kt_dev_stl_071* string: search and find
 
-find a 'substring'
+{search} 13.2.11 Searching and Finding
+There are three ways to search: by using member functions, the regex, and
+algorithms.
+
+All search functions return the index of the first character of the character
+sequence that matches the search. If the search fails, they return npos.
+
+1. The first argument is always the value that is searched for.
+
+2. The optional second value indicates an index at which to start the search in
+the string.
+
+3. The optional third argument is the number of characters of the value to
+search.
+
+Unfortunately, search argument scheme differs from that of the other string
+functions. With the other string functions, the starting index is the first
+argument, and the value and its length are adjacent arguments. 
+
+Each search function is overloaded with the following set of arguments
+
+Finds the first occurrence of value, char or substring
 
 size_type string::find (const string& str) const
 size_type string::find (const string& str, size_type idx) const
@@ -29178,8 +29046,7 @@ size_type string::rfind (const string& str, size_type idx) const
 * These functions return the index of the first character of the substring when
 * successful or string::npos if they fail.
 
-
-find first of different 'characters'
+Finds the first 'character' that is 'part' of value
 
 size_type string::find_first_of (const string& str) const
 size_type string::find_first_of (const string& str, size_type idx) const
@@ -29191,6 +29058,170 @@ element of the string str. starting at idx.
 * These functions return the index of that character or substring when
 * successful or string::npos if they fail.
 
+
+{string-npos}
+If the search fails, a special value is needed to return the failure. The type
+and value of npos are a big pitfall for the use of strings. Be very 'careful'
+that you always use string::size_type, not int or unsigned, for the return type
+when you want to check the return value of a find function. Otherwise, the
+comparison with string::npos might not work.
+
+The reason is the result of the design decision that npos is defined as -1:
+
+namespace std {
+  class basic_string {
+    public:
+      // note: allocator's type
+      typedef typename Allocator::size_type size_type;
+      ...
+      static const size_type npos = -1;
+      ...
+  };
+}
+
+
+<problem> string-find_first_of
+
+13.1.2 A Second Example: Extracting Words and Printing Them Backward
+
+#include <iostream>
+#include <string>
+
+using namespace std;
+
+// This example extracts single words from standard input and prints the
+// characters of each word in reverse order. The words are separated by the
+// usual whitespaces (newline, space, and tab) and by commas, periods, or
+// semicolons:
+
+int main(int argc, char* argv[])
+{
+  // note: The newline character is also used as a delimiter. However, no
+  // special processing is necessary for it because the program reads line by
+  // line.
+
+  const string delims(" \t,.;");
+  string line;
+
+  while( getline( cin, line ) )
+  {
+    string::size_type begi, endi;
+
+    // The find_first_not_of() function returns the 'first' index of a character
+    // that is not part of the passed string argument.
+
+    begi = line.find_first_not_of(delims);
+
+    // while beginning of a word found
+    while( begi != string::npos )
+    {
+      // searches for the end of the current word. an optional second argument
+      // is used that specifies where to 'start' the search in the string.
+
+      endi = line.find_first_of( delims, begi ); 
+      if( endi == string::npos )
+      {
+        // end of word is end of line
+        endi = line.length();
+      }
+
+      // print characters in reverse
+      // 
+      // "pots & pans"
+      //  ^   ^
+      //      endi
+      //  begi
+      
+      // note:
+      for( int i = endi-1; i >= static_cast<int>(begi); --i )
+        cout << line[i];
+
+      cout << ' ';
+
+      // search beginning of the next word
+      begi = line.find_first_not_of( delims, endi );
+    }
+
+    // to have next input on next getline
+    cout << endl;
+  }
+}
+
+pots & pans
+stop & snap 
+I saw a reed
+I was a deer 
+deliver no pets
+reviled on step 
+nametag on diaper
+gateman no repaid 
+
+
+note: implicit conversion
+If you omit the cast of begIdx to int, this program might run in an endless loop
+or might crash. The problem is that string::size_type is an 'unsigned' integral
+type. Without the cast, the signed value i is converted automatically into an
+unsigned value because it is compared with a unsigned type. 
+
+In this case, the following expression always yields true if the current word
+starts at the beginning of the line: 
+
+i>=begIdx 
+
+The reason is that begIdx is then 0, and any unsigned value is greater than or
+equal to 0. For example, when i == -1. So, an endless loop results that might
+get stopped by a crash due to an illegal memory access. For this reason, I don't
+like the concept of string::size_type and string::npos.
+
+The size_type, which is defined by the allocator of the string, must be an
+unsigned integral type.  The default allocator, allocator, uses type size_t as
+size_type. Because -1 is converted into an unsigned integral type, npos is the
+'maximum' unsigned value of its type. 
+
+However, the exact value 'depends' on the exact definition of 'type' size_type:
+(unsigned long)-1 differs from (unsigned short)-1 if the size of the types
+differs. so maximum values differ.
+
+int idx = s.find("xx");
+if (idx == std::string::npos) {
+  ...
+}
+
+Might yield false if idx has the value -1 and idx and string::npos have
+'different' types.
+
+
+<solution>
+One way to avoid this error is to check whether the search fails directly:
+
+if (s.find("hi") == std::string::npos) {
+...
+}
+
+However, often you need the index of the matching character position. Thus
+another simple solution is to define your own signed value for npos:
+
+const int NPOS = -1;
+
+if (idx == NPOS) { // works almost always
+...
+}
+
+Unfortunately, this solution is not perfect, because the comparison fails if
+either idx has type unsigned short or the index is greater than the maximum
+value of int. Because of these problems, the standard did not define it that
+way. 
+
+However, because both might happen very 'rarely', the solution works in most
+situations. To write portable code, however, you should always use
+string::size_type for any index of your string type.  For a perfect solution,
+    you'd need some overloaded functions that consider the exact type of
+    string::size_type. I still hope the standard will provide a better solution
+    in the future although with C++11 nothing changed.
+
+note: Q?
+
+for( string::size_t i = endi-1; i >= begi; --i )
 
 ={============================================================================
 *kt_dev_stl_071* string: stringstream and io stream
