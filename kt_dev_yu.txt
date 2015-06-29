@@ -7695,6 +7695,27 @@ https://wiki.youview.co.uk/display/YVDP/Debugging?src=search
 ={============================================================================
 *kt_dev_uv_stack_253* stack: vanadium: MediaRouter.WebKit.Plugin
 
+{previous-impl}
+
+<0>
+Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/qtwebkit/
+Source/WebCore/platform/graphics/MediaPlayer.cpp
+
+#if USE(GSTREAMER)
+#include "MediaPlayerPrivateGStreamer.h"
+#define PlatformMediaEngineClassName MediaPlayerPrivateGStreamer
+#endif
+
+static Vector<MediaPlayerFactory*>& installedMediaEngines() 
+{
+#if defined(PlatformMediaEngineClassName)
+        PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
+#endif
+    return installedEngines;
+}
+
+
+{current-impl}
 
 <0>
 Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/qtwebkit/
@@ -7717,7 +7738,7 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
 }
 
 
-<0>
+<gst>
 zinc-build-root/release-humax-dtr_t1000$ gvim Zinc/Zinc.3rdPartyStack/src/
 qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics/gstreamer/
 
@@ -7731,68 +7752,8 @@ gstreamer/MediaPlayerPrivateGStreamer.cpp
 
 class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface 
 
-
-void MediaPlayerPrivateGStreamer::load(const String& url)
-{
-    if(!m_playBin){
-        createGSTPlayBin(kurl);
-    }
-
-    g_object_set(G_OBJECT (httpSrc.get()), "uri", cleanUrl.utf8().data(), NULL);
-
-    commitLoad();
-}
-
-
-void MediaPlayerPrivateGStreamer::createGSTPlayBin(const KURL& url)
-{
-    if(path.endsWith(".m3u8", false)){
-        createGSTHLSPipeline(srcElement);
-
-    } else if(path.endsWith(".ts", false)) {
-        createGSTTSPipeline(srcElement);
-
-    } else if(path.endsWith(".mpd", false)) {
-        createDashPipeline(srcElement);
-    }        
-}
-
-
-void MediaPlayerPrivateGStreamer::createDashPipeline(const char *srcElementName) 
-{
-    GstElement *source, *dashdemux, *qtdemux, *h264parse, *nexussink;
-    
-    LOG_MEDIA_MESSAGE("\n\nMediaPlayerPrivateGStreamer::createDashPipeline()\n");    
-
-    m_playBin = gst_pipeline_new ("dash-player");
-
-    source = gst_element_factory_make (srcElementName,     "http-source");
-    dashdemux = gst_element_factory_make ("dashdemux",    "dash-demux");
-    qtdemux = gst_element_factory_make ("qtdemux",        "qt-demux");
-    h264parse = gst_element_factory_make ("h264parse",    "h264-parse");
-    nexussink = gst_element_factory_make ("nexussink",    NULL);
-}
-
-
 'static' void MediaPlayerPrivateGStreamer::registerMediaEngine(MediaEngineRegistrar registrar)
 {
-void VanadiumMediaPlayer::play()
-{
-    VANADIUM_FUNC_TRACE;
-
-    if(playbackPaused)
-    {
-        mediaRouter->setPlaySpeed(1.0);
-        playbackPaused = false;
-    }
-    if(!mediaRouterPresenting)
-    {
-        playerManager.playbackStarting(this);
-        mediaRouter->start();
-        mediaRouterPresenting = true;
-    }
-    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
-}
     if (isAvailable())
         registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
 }
@@ -7847,11 +7808,93 @@ static HashSet<String> mimeTypeCache()
 }
 
 
+
+void MediaPlayerPrivateGStreamer::load(const String& url)
+{
+    if(!m_playBin){
+        createGSTPlayBin(kurl);
+    }
+
+    g_object_set(G_OBJECT (httpSrc.get()), "uri", cleanUrl.utf8().data(), NULL);
+
+    commitLoad();
+}
+
+
+void MediaPlayerPrivateGStreamer::createGSTPlayBin(const KURL& url)
+{
+    if(path.endsWith(".m3u8", false)){
+        createGSTHLSPipeline(srcElement);
+
+    } else if(path.endsWith(".ts", false)) {
+        createGSTTSPipeline(srcElement);
+
+    } else if(path.endsWith(".mpd", false)) {
+        createDashPipeline(srcElement);
+    }        
+}
+
+
+void MediaPlayerPrivateGStreamer::createDashPipeline(const char *srcElementName) 
+{
+    GstElement *source, *dashdemux, *qtdemux, *h264parse, *nexussink;
+    
+    LOG_MEDIA_MESSAGE("\n\nMediaPlayerPrivateGStreamer::createDashPipeline()\n");    
+
+    m_playBin = gst_pipeline_new ("dash-player");
+
+    source = gst_element_factory_make (srcElementName,     "http-source");
+    dashdemux = gst_element_factory_make ("dashdemux",    "dash-demux");
+    qtdemux = gst_element_factory_make ("qtdemux",        "qt-demux");
+    h264parse = gst_element_factory_make ("h264parse",    "h264-parse");
+    nexussink = gst_element_factory_make ("nexussink",    NULL);
+}
+
+
+void VanadiumMediaPlayer::play()
+{
+    VANADIUM_FUNC_TRACE;
+
+    if(playbackPaused)
+    {
+        mediaRouter->setPlaySpeed(1.0);
+        playbackPaused = false;
+    }
+    if(!mediaRouterPresenting)
+    {
+        playerManager.playbackStarting(this);
+        mediaRouter->start();
+        mediaRouterPresenting = true;
+    }
+    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+}
+
 <0>
+
+DEVARCH/Zinc/Zinc.3rdPartyStack/patches/qt-everywhere-opensource-src-5.1.0/0071-DEVARCH-8972-Map-Video-Tag-to-MediaRouter-API.patch
+17:is specified in the environment variable ZINC_QMEDIA_PLAYER_LIB. This
+257:+    const char* libraryName = getenv("ZINC_QMEDIA_PLAYER_LIB");
+260:+        ERROR_MEDIA_MESSAGE("ZINC_QMEDIA_PLAYER_LIB env var not defined");
+
+DEVARCH/Vanadium/Vanadium.MediaRouter.WebKit.Plugin/test/js/test.in
+35:export ZINC_QMEDIA_PLAYER_LIB=${final_prefix}/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0
+
+
+DEVARCH/Vanadium/Vanadium.MediaRouter.WebKit.Plugin/Makefile.am
+
+
 Zinc/Zinc.3rdPartyStack/patches/qt-everywhere-opensource-src-5.1.0/
    0071-DEVARCH-8972-Map-Video-Tag-to-MediaRouter-API.patch
 
 271:+    void* symbol = dlsym(handle, "createMediaPlayerImplementation");
+
+
+$ cat system-factory.plugin-config 
+libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
+
+
+note: this makes a link to YM PROXY via DBUS
+
 
 gstreamer/MediaPlayerPrivateMediaRouter.cpp
 
@@ -7896,6 +7939,14 @@ void MediaPlayerPrivateMediaRouter::getSupportedTypes(HashSet<String>& types)
 {
     types = mimeTypeCache();
 }
+
+#define DEFINE_STATIC_LOCAL(type, name, arguments) \
+    static type* name##Ptr = new type arguments; \
+    type& name = *name##Ptr
+
+    DEFINE_STATIC_LOCAL(HashSet<String>, cache, ());
+
+    static HashSet<Strings> cache = new HashSet<Strings>
 
 static HashSet<String> mimeTypeCache()
 {
@@ -15245,7 +15296,7 @@ DEMO - HLS playback through YV MediaRouter - via command line
    note: this is ticket to implement 9722.
 
 
-DEVARCH-9722:Nickel.System.GStreamer: Support HLS playback 
+DEVARCH-9739:Nickel.System.GStreamer: Support HLS playback 
 
 The current YV MediaRouter don't support HSL playback and as a feature
 development required by DEVARCH-9718, this commit adds necessary changes to
