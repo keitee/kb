@@ -180,14 +180,17 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_064| algorithm: function<>
 |kt_dev_stl_065| algorithm: bind
 |kt_dev_stl_066| algorithm: bind: cases
-|kt_dev_stl_065| algorithm: which is better?
-|kt_dev_stl_066| algorithm: nonmodifying: equal, is_permutation
-|kt_dev_stl_067| algorithm: nonmodifying: count
+|kt_dev_stl_067| algorithm: address of member function
+|kt_dev_stl_068| algorithm: which is better?
+|kt_dev_stl_069| algorithm: nonmodifying: equal, is_permutation
+|kt_dev_stl_070| algorithm: nonmodifying: count
 
 |kt_dev_stl_070| string
 |kt_dev_stl_071| string: operations
-|kt_dev_stl_071| string: search and find 
-|kt_dev_stl_071| string: stringstream {inefficient-concatnation}
+|kt_dev_stl_072| string: search and find 
+|kt_dev_stl_073| string: numeric conversion
+|kt_dev_stl_074| string: iterator support
+|kt_dev_stl_075| string: stringstream {inefficient-concatnation}
 
 |kt_dev_stl_080| bitset
 
@@ -27859,7 +27862,92 @@ VirtualBinSrc::makeAndSetupDecodebin("video/quicktime; audio/x-m4a; text/x-raw")
 
 
 ={============================================================================
-*kt_dev_stl_067* algorithm: which is better?
+*kt_dev_stl_067* algorithm: address of member function
+
+#include<iostream>
+#include<string>
+#include<functional>
+
+using namespace std;
+using namespace std::placeholders;
+
+class TestClass
+{
+    public:
+        TestClass(std::string _mesg): mesg(_mesg) {}
+        ~TestClass() {}
+        void func1(std::string &)
+        {
+            cout << "this is func1.." << endl;
+        }
+
+    private:
+        std::string mesg;
+};
+
+// typedef void (*FUNCPTR)(std::string &);
+typedef void (TestClass::*FUNCP)(std::string &);
+//typedef void TestClass::FUNCP(std::string &);
+
+class Foo
+{
+    public:
+        Foo() {}
+        ~Foo() {}
+
+        template<typename T, typename S>
+            void printMember( void(T::*funcp)(S&), T& obj )
+            {
+                cout << "Foo1: mem address " << (void*)funcp << 
+                    " | obj address: " << (void*)&obj << endl;
+            }
+};
+
+int main()
+{
+    Foo x;
+    TestClass tc1(string("tc 1"));
+    TestClass tc2(string("tc 2"));
+
+    cout << "main: tc1: mem address " << (void*)&TestClass::func1 << 
+        " | obj address: " << (void*)&tc1 << endl;
+
+    cout << "main: tc2: mem address " << (void*)TestClass::func1 << 
+        " | obj address: " << (void*)&tc2 << endl;
+
+    // warning on conversion to void*
+    // $ ./a.out 
+    // main: tc1: mem address 0x8048c58 | obj address: 0xbf82e1e8
+    // main: tc2: mem address 0x8048c58 | obj address: 0xbf82e1e4
+    // Foo1: mem address 0x8048c58 | obj address: 0xbf82e1e8
+    // Foo1: mem address 0x8048c58 | obj address: 0xbf82e1e4
+
+    // the following is an error:
+    // error: invalid use of non-static member function 
+    // 'void TestClass::func1(std::string&)'
+    // 
+    // since this is a function call which is member function.
+    //
+    // cout << "main: mem address " << (void*)TestClass::func1 << 
+    //    " | obj address: " << (void*)&tc << endl;
+
+    x.printMember( &TestClass::func1, tc1 );
+    x.printMember( &TestClass::func1, tc2 );
+
+    // However, it is okay when uses it as parameter and the following is okay.
+    // x.printMember( TestClass::func1, tc );
+
+    // error: ISO C++ forbids taking the address of a bound member function 
+    // to form a pointer to member function.  
+    // Say ‘&TestClass::func1’ [-fpermissive]
+    //
+    // x.printMember( &tc1.func1, tc1 );
+    // x.printMember( &tc2.func1, tc2 );
+}
+
+
+={============================================================================
+*kt_dev_stl_068* algorithm: which is better?
 
 C++SLR 6.10
 
@@ -27952,7 +28040,7 @@ taste.
 
 
 ={============================================================================
-*kt_dev_stl_066* algorithm: nonmodifying
+*kt_dev_stl_069* algorithm: nonmodifying
 
 {comparing-ranges}
 
@@ -28150,7 +28238,7 @@ coll1 and coll3, even and odd elements correspond
 
 
 ={============================================================================
-*kt_dev_stl_067* algorithm: nonmodifying: count
+*kt_dev_stl_070* algorithm: nonmodifying: count
 
 {counting-elements}
 
@@ -28756,261 +28844,8 @@ void process (const std::string& filecontents)
 }
 
 
-{numeric-conversion}
-Since C++11, the C++ standard library provides convenience functions to convert strings into numeric
-values or to convert numeric values to strings. Only for types string and wstring, not u16string and
-u32string.
-
-stoi(str,idxRet=nullptr, base=10)      Converts str to an int
-stol(str,idxRet=nullptr, base=10)      Converts str to a long
-stoul(str,idxRet=nullptr, base=10)     Converts str to an unsigned long
-stoll(str,idxRet=nullptr, base=10)     Converts str to a long long
-stoull(str,idxRet=nullptr, base=10)    Converts str to an unsigned long long
-stof(str,idxRet=nullptr)               Converts str to a float
-stod(str,idxRet=nullptr)               Converts str to a double
-stold(str,idxRet=nullptr)              Converts str to a long double
-to_string(val)                         Converts val to a string
-to_wstring(val)                        Converts val to a wstring
-
-<example>
-#include <iostream>
-#include <string>
-#include <exception>
-#include <limits>
-
-using namespace std;
-
-int main(int argc, char* argv[])
-{
-  try {
-    // convert to numeric
-    cout << std::stoi("  77") << endl;
-    cout << std::stoi("  77.7") << endl;
-
-    // note that std::stoi("-0x77") yields 0 because it parses only -0, interpreting the x as the
-    // end of the numeric value found.
-    cout << std::stoi("-0x77") << endl;
-
-    // use index of chars not processed
-    size_t idx;
-
-    cout << std::stoi("  42 is the truth", &idx ) << endl;
-    cout << " idx of first unprocessed char: " << idx << endl;
-
-    // use base 16 and 8
-    cout << std::stoi("  42", nullptr, 16 ) << endl;
-
-    // note that std::stol("789",&idx,8) parses only the first character of the string because 8 is
-    // not a valid character for octal numbers.
-    cout << std::stoi("789", &idx, 8 ) << endl;
-    cout << " idx of first unprocessed char: " << idx << endl;
-
-    // convert numeric to string
-    long long ll = std::numeric_limits<long long>::max();
-    string s = std::to_string(ll);
-    cout << s << endl;
-
-    // try to convert back
-    cout << std::stoi(s) << endl; // throws out_of_range
-  }
-  catch( const std::exception& e ) {
-    cout << e.what() << endl;
-  }
-}
-
-77
-77
-0
-42
- idx of first unprocessed char: 4
-66
-7
- idx of first unprocessed char: 1
-9223372036854775807
-stoi
-
-
-{iterator-support}
-A string is an ordered collection of characters. As a consequence, the C++ standard library provides
-an interface for strings that lets you use them as STL containers. 
-
-String iterators are random-access iterators. The exact type is implementation defined, but string
-iterators are often defined simply as ordinary pointers.
-
-<example> algorithm-search, algorithm-transform
-#include <iostream>
-#include <string>
-#include <algorithm>
-
-using namespace std;
-
-int main(int argc, char* argv[])
-{
-  // create a string
-  string s("The zip code of Braunschweig in Germany is 38100");
-  cout << "original: " << s << endl;
-
-  // to lowercase
-  transform( s.cbegin(), s.cend(), s.begin(),
-      [] (char c) {
-        return tolower(c);
-        });
-  cout << "lowered : " << s << endl;
-
-  // to uppercase
-  transform( s.cbegin(), s.cend(), s.begin(),
-      [] (char c) {
-        return toupper(c);
-        });
-  cout << "uppered : " << s << endl;
-
-  // search case-insensitive
-  string g{"Germany"};
-  string::const_iterator pos;
-
-  pos = search( s.cbegin(), s.cend(),   // source string
-                g.cbegin(), g.cend(),   // string to search
-                [](char c1, char c2) {
-                  return toupper(c1) == toupper(c2);
-                  });
-  if( pos != s.cend() )
-  {
-    cout << "substring \"" << g << "\" found at index "
-      << pos - s.cbegin() << endl;
-  }
-}
-
-original: The zip code of Braunschweig in Germany is 38100
-lowered : the zip code of braunschweig in germany is 38100
-uppered : THE ZIP CODE OF BRAUNSCHWEIG IN GERMANY IS 38100
-substring "Germany" found at index 32
-
-<example> algorithm-unique
-#include <iostream>
-#include <string>
-#include <algorithm>
-
-using namespace std;
-
-int main(int argc, char* argv[])
-{
-  // create constant string
-  const string hello("Hello, how are you?");
-
-  string s( hello.cbegin(), hello.cend() );
-
-  for( char c : s )
-    cout << c;
-
-  cout << endl;
-
-  // reverse a string
-  reverse( s.begin(), s.end() );
-  cout << "reversed     : " << s << endl;
-
-  // sort
-  sort( s.begin(), s.end() );
-  cout << "sorted       : " << s << endl;
-
-  // remove duplicates
-  s.erase( unique( s.begin(), s.end() ), s.end() );
-  cout << "no duplicates: " << s << endl;
-}
-
-Hello, how are you?
-reversed     : ?uoy era woh ,olleH
-sorted       :    ,?Haeehlloooruwy
-no duplicates:  ,?Haehloruwy
-
-<example>
-algorithm-unique:
-ForwardIterator unique (ForwardIterator beg, ForwardIterator end) 
-ForwardIterator unique (ForwardIterator beg, ForwardIterator end, BinaryPredicate op)
-
-The first form removes from the range [beg,end) all elements that are equal to the previous
-elements. Thus, only when the elements in the sequence are 'sorted', or at least when all elements
-of the same value are adjacent, does it remove all duplicates.
-
-The second form removes all elements(elem) that follow an element e and for which the binary
-predicate op(e,elem) yields true. For example:
-
-#include <iostream>
-#include <list>
-#include <algorithm>
-
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-int main(int argc, char* argv[])
-{
-  // source data
-  list<int> coll{ 1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4 };
-
-  PRINT_ELEMENTS(coll);
-
-  // remove elements if there was a previous greater element
-  coll.erase (unique (coll.begin(), coll.end(),
-        greater<int>()),
-      coll.end());
-  PRINT_ELEMENTS(coll);
-}
-
-1 4 4 6 1 2 2 3 1 6 6 6 5 7 5 4 4
-1 4 4 6 6 6 6 7
-      ^
-The first 6(e) is greater than the following(elms) 1, 2, 2, 3, and 1, so all these elements are
-removed.
-
-In other words, the predicate is not used to compare an element with its predecessor; the element is
-compared with the previous element(e) that was not removed
-
-
-#include <iostream>
-#include <string>
-#include <algorithm>
-#include <iterator>
-#include <locale>
-
-using namespace std;
-
-int main(int argc, char* argv[])
-{
-
-  string input;
-
-  // do not skip whitespaces
-  cin.unsetf(ios::skipws);
-
-  // read all chars while compressing whitespaces
-  const locale &loc(cin.getloc());
-  unique_copy( istream_iterator<char>(cin), istream_iterator<char>(),
-      back_inserter(input),
-      [=] ( char c1, char c2 ) {
-        return isspace(c1, loc) && isspace(c2, loc);
-        });
-
-  cout << input;
-}
-
-
-   ,?Haeehlloooruwy
- ,?Haeehlloooruwy
-
-<Q> why still duplicates?
-
-
 ={============================================================================
-*kt_dev_stl_071* string: search and find
+*kt_dev_stl_072* string: search and find
 
 {search} 13.2.11 Searching and Finding
 There are three ways to search: by using member functions, the regex, and
@@ -29223,12 +29058,283 @@ note: Q?
 
 for( string::size_t i = endi-1; i >= begi; --i )
 
+
 ={============================================================================
-*kt_dev_stl_071* string: stringstream and io stream
+*kt_dev_stl_071* string: numeric conversion
+
+{numeric-conversion}
+Since C++11, the C++ standard library provides convenience functions to convert
+strings into numeric values or to convert numeric values to strings. Only for
+types string and wstring, not u16string and u32string.
+
+stoi(str,idxRet=nullptr, base=10)      Converts str to an int
+stol(str,idxRet=nullptr, base=10)      Converts str to a long
+stoul(str,idxRet=nullptr, base=10)     Converts str to an unsigned long
+stoll(str,idxRet=nullptr, base=10)     Converts str to a long long
+stoull(str,idxRet=nullptr, base=10)    Converts str to an unsigned long long
+stof(str,idxRet=nullptr)               Converts str to a float
+stod(str,idxRet=nullptr)               Converts str to a double
+stold(str,idxRet=nullptr)              Converts str to a long double
+to_string(val)                         Converts val to a string
+to_wstring(val)                        Converts val to a wstring
+
+<example>
+#include <iostream>
+#include <string>
+#include <exception>
+#include <limits>
+
+using namespace std;
+
+int main(int argc, char* argv[])
+{
+    try {
+        // convert to numeric
+        cout << std::stoi("  77") << endl;
+        cout << std::stoi("  77.7") << endl;
+
+        // std::stoi("-0x77") yields 0 because it parses only -0, interpreting
+        // the x as the end of the numeric value found.
+
+        cout << std::stoi("-0x77") << endl;
+
+        // use index of chars not processed
+
+        size_t idx;
+
+        cout << std::stoi("  42 is the truth", &idx ) << endl;
+        cout << " idx of first unprocessed char: " << idx << endl;
+
+        // use base 16 and 8
+
+        cout << std::stoi("  42", nullptr, 16 ) << endl;
+
+        // std::stol("789",&idx,8) parses only the first character of the string
+        // because 8 is not a valid character for octal numbers.
+
+        cout << std::stoi("789", &idx, 8 ) << endl;
+        cout << " idx of first unprocessed char: " << idx << endl;
+
+        // convert numeric to string
+        long long ll = std::numeric_limits<long long>::max();
+        string s = std::to_string(ll);
+        cout << s << endl;
+
+        // try to convert back and throws out_of_range
+        cout << std::stoi(s) << endl;
+    }
+    catch( const std::exception& e ) {
+        cout << e.what() << endl;
+    }
+}
+
+77
+77
+0
+42
+ idx of first unprocessed char: 4
+66
+7
+ idx of first unprocessed char: 1
+9223372036854775807
+stoi
+
+
+={============================================================================
+*kt_dev_stl_071* string: iterator support
+
+{iterator-support}
+A string is an ordered collection of characters. As a consequence, the C++
+standard library provides an interface for strings that lets you use them as STL
+containers. 
+
+String iterators are random-access iterators. The exact type is implementation
+defined, but string iterators are often defined simply as ordinary pointers.
+
+<example> algorithm-search, algorithm-transform
+#include <iostream>
+#include <string>
+#include <algorithm>
+
+using namespace std;
+
+int main(int argc, char* argv[])
+{
+    // create a string
+    string s("The zip code of Braunschweig in Germany is 38100");
+    cout << "original: " << s << endl;
+
+    // to lowercase
+    transform( s.cbegin(), s.cend(), s.begin(),
+            [] (char c) {
+            return tolower(c);
+            });
+    cout << "lowered : " << s << endl;
+
+    // to uppercase
+    transform( s.cbegin(), s.cend(), s.begin(),
+            [] (char c) {
+            return toupper(c);
+            });
+    cout << "uppered : " << s << endl;
+
+    // search case-insensitive
+    string g{"Germany"};
+    string::const_iterator pos;
+
+    pos = search( s.cbegin(), s.cend(),   // source string
+            g.cbegin(), g.cend(),         // string to search
+            [](char c1, char c2) {
+            return toupper(c1) == toupper(c2);
+            });
+    if( pos != s.cend() )
+    {
+        cout << "substring \"" << g << "\" found at index "
+            << pos - s.cbegin() << endl;
+    }
+}
+
+original: The zip code of Braunschweig in Germany is 38100
+lowered : the zip code of braunschweig in germany is 38100
+uppered : THE ZIP CODE OF BRAUNSCHWEIG IN GERMANY IS 38100
+substring "Germany" found at index 32
+
+
+<example> algorithm-unique
+#include <iostream>
+#include <string>
+#include <algorithm>
+
+using namespace std;
+
+int main(int argc, char* argv[])
+{
+    // create constant string
+    const string hello("Hello, how are you?");
+
+    string s( hello.cbegin(), hello.cend() );
+
+    for( char c : s )
+        cout << c;
+
+    cout << endl;
+
+    // reverse a string
+    reverse( s.begin(), s.end() );
+    cout << "reversed     : " << s << endl;
+
+    // sort
+    sort( s.begin(), s.end() );
+    cout << "sorted       : " << s << endl;
+
+    // remove duplicates
+    s.erase( unique( s.begin(), s.end() ), s.end() );
+    cout << "no duplicates: " << s << endl;
+}
+
+Hello, how are you?
+reversed     : ?uoy era woh ,olleH
+sorted       :    ,?Haeehlloooruwy
+no duplicates:  ,?Haehloruwy
+
+
+<example> algorithm-unique:
+
+ForwardIterator unique (ForwardIterator beg, ForwardIterator end) 
+ForwardIterator unique (ForwardIterator beg, ForwardIterator end, BinaryPredicate op)
+
+The first form removes from the range [beg,end) all elements that are equal to
+the previous elements. Thus, only when the elements in the sequence are
+'sorted', or at least when all elements of the same value are adjacent, does it
+remove all duplicates.
+
+The second form removes all elements(elem) that follow an element e and for
+which the binary predicate op(e,elem) yields true. 
+
+#include <iostream>
+#include <list>
+#include <algorithm>
+
+using namespace std;
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+int main(int argc, char* argv[])
+{
+  // source data
+  list<int> coll{ 1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4 };
+
+  PRINT_ELEMENTS(coll);
+
+  // remove elements if there was a previous greater element
+  coll.erase (unique (coll.begin(), coll.end(), greater<int>()),
+      coll.end());
+  PRINT_ELEMENTS(coll);
+}
+
+1 4 4 6 1 2 2 3 1 6 6 6 5 7 5 4 4
+1 4 4 6 6 6 6 7
+      ^
+
+The first 6(e) is greater than the following(elms) 1, 2, 2, 3, and 1, so all
+these elements are removed.
+
+In other words, the predicate is not used to compare an element with its
+predecessor; the element is compared with the previous element(e) that was not
+removed
+
+<example>
+Uses back inserters to read the standard input into a string:
+
+#include <iostream>
+#include <string>
+#include <algorithm>
+#include <iterator>
+#include <locale>
+
+using namespace std;
+
+int main(int argc, char* argv[])
+{
+  string input;
+
+  // do not skip whitespaces
+  cin.unsetf(ios::skipws);
+
+  // read all chars while compressing whitespaces
+  const locale &loc(cin.getloc());
+  unique_copy( istream_iterator<char>(cin), istream_iterator<char>(),
+      back_inserter(input),
+      [=] ( char c1, char c2 ) {
+        return isspace(c1, loc) && isspace(c2, loc);
+        });
+
+  cout << input;
+}
+
+
+   ,?Haeehlloooruwy
+ ,?Haeehlloooruwy
+
+<Q> why still duplicates?
+
+
+={============================================================================
+*kt_dev_stl_075* string: stringstream and io stream
 
 {stringstream}
-Supports in-memory IO and read from or write to a string as if the string were an IO stream. In
-other words, read(>>) and write(<<) to a stream are string manipulations. 
+Supports in-memory IO and read from or write to a string as if the string were
+an IO stream. In other words, read(>>) and write(<<) to a stream are string
+manipulations. 
 
 #include <sstream> add memebers as:
 
@@ -29293,8 +29399,8 @@ line: VOD.L 1 100 184.0 183.7
 { VOD.L, 1, 100, 184.000, 183.700 }
 
 <example> ostrringstream example
-ostringstream is useful when need to 'build up' our output a little at a time but do not want to print
-the output until later.
+ostringstream is useful when need to 'build up' our output a little at a time
+but do not want to print the output until later.
 
 for( const auto &entry : people ) 
 {
@@ -29312,9 +29418,11 @@ for( const auto &entry : people )
     }
 
     if( badNums.str().empty() )           // there are no bad numbers
-      os << entry.name << " " << formatted.str() << endl;   // print the name and reformatted numbers
+      // print the name and reformatted numbers
+      os << entry.name << " " << formatted.str() << endl;
     else
-      cerr << "input error: " << entry.name << " invalid numbers(s) " << badNums.str() << endl;
+      cerr << "input error: " << entry.name << " invalid numbers(s) " << 
+          badNums.str() << endl;
   }
 }
 
