@@ -72,6 +72,7 @@
 |kt_dev_uv_stack_412| stack: media: dash play
 |kt_dev_uv_stack_413| stack: media: hls play
 |kt_dev_uv_stack_414| stack: media: gst mime
+|kt_dev_uv_stack_415| stack: media: boot failure due to wrong lib name
 
 |kt_dev_uv_stack_420| stack: media: gst: uridecodebin
 |kt_dev_uv_stack_421| stack: media: gst: qtdemux
@@ -2986,13 +2987,13 @@ NS_ZINC_OPEN
 
 struct ZINC_EXPORT PluginConfig {
 
-	virtual const std::string& getLibraryName() const = 0;
+    virtual const std::string& getLibraryName() const = 0;
 
-	virtual const std::string& getCreateFunctionName() const = 0;
+    virtual const std::string& getCreateFunctionName() const = 0;
 
-	virtual const std::string& getCreateParameters() const = 0;
+    virtual const std::string& getCreateParameters() const = 0;
 
-	virtual ~PluginConfig();
+    virtual ~PluginConfig();
 };
 
 NS_ZINC_CLOSE
@@ -3162,21 +3163,19 @@ NS_ZINC_OPEN
 
 class ZINC_EXPORT FilePluginConfig : public AbstractPluginConfig {
 
-public:
+    public:
+        FilePluginConfig(const std::string& configFilePath);
+        virtual ~FilePluginConfig();
 
-	FilePluginConfig(const std::string& configFilePath);
-
-	virtual ~FilePluginConfig();
-
-protected:
-
-	std::string configFilePath ;
+    protected:
+        std::string configFilePath ;
 
 };
 
 NS_ZINC_CLOSE
 
 #endif /* ZINC_FILE_PLUGIN_CONFIG_H_ */
+
 
 // ---------
 // get "libraryName" and "createFunctionName"
@@ -3192,26 +3191,26 @@ using namespace NS_ZINC;
 NS_ZINC_OPEN
 
 FilePluginConfig::FilePluginConfig(const string& configFilePath) :
-	configFilePath(configFilePath) {
+   configFilePath(configFilePath) 
+{
+    ifstream configFile ;
+    configFile.open(configFilePath.c_str(), ios::in) ;
+    if (!configFile) {
+        throw PluginException("Failed to open plugin config file: "+configFilePath) ;
+    }
 
-	ifstream configFile ;
-	configFile.open(configFilePath.c_str(), ios::in) ;
-	if (!configFile) {
-		throw PluginException("Failed to open plugin config file: "+configFilePath) ;
-	}
+    string line;
+    getline (configFile,line);
+    FixedPluginConfig config(line);
+    configFile.close();
 
-	string line;
-	getline (configFile,line);
-	FixedPluginConfig config(line);
-	configFile.close();
+    libraryName = config.getLibraryName();
+    createFunctionName = config.getCreateFunctionName();
+    createParameters = config.getCreateParameters();
 
-	libraryName = config.getLibraryName();
-	createFunctionName = config.getCreateFunctionName();
-	createParameters = config.getCreateParameters();
-
-	if ((libraryName == "") || (createFunctionName == "")) {
-		throw PluginException("Plugin config file: "+configFilePath+" has invalid format.") ;
-	}
+    if ((libraryName == "") || (createFunctionName == "")) {
+        throw PluginException("Plugin config file: "+configFilePath+" has invalid format.") ;
+    }
 }
 
 FilePluginConfig::~FilePluginConfig() {
@@ -3312,8 +3311,8 @@ void* PluginReference::getLibHandle() {
 
 NS_ZINC_CLOSE
 
-// ---------
-// plugin factory
+
+// ============== plugin factory
 
 #ifndef ZINC_PLUGIN_FACTORY_H_
 #define ZINC_PLUGIN_FACTORY_H_
@@ -3334,29 +3333,29 @@ class PluginReference;
 
 class ZINC_EXPORT PluginFactory {
 
-	typedef std::map<const std::string, boost::shared_ptr<PluginReference> > instances_t;
-	typedef instances_t::iterator instances_iter_t;
+    typedef std::map<const std::string, boost::shared_ptr<PluginReference> > instances_t;
+    typedef instances_t::iterator instances_iter_t;
 
-public:
+    public:
 
-	template<class T>
-	static T& getInstance(const PluginConfig& config);
+    template<class T>
+        static T& getInstance(const PluginConfig& config);
 
-	static void clearInstance(const PluginConfig& config);
+    static void clearInstance(const PluginConfig& config);
 
-	static void clearAll();
+    static void clearAll();
 
-private:
+    private:
 
-	static Plugin* loadInstance(const PluginConfig& config);
+    static Plugin* loadInstance(const PluginConfig& config);
 
-	static std::string hashKey(const PluginConfig& config);
+    static std::string hashKey(const PluginConfig& config);
 
-	PluginFactory();
+    PluginFactory();
 
-	~PluginFactory();
+    ~PluginFactory();
 
-	static instances_t &getInstances(void);
+    static instances_t &getInstances(void);
 };
 
 extern "C" typedef Plugin* createFunction_t(const char *);
@@ -3365,25 +3364,25 @@ extern "C" typedef Plugin* createFunction_t(const char *);
 template<class T>
 T& PluginFactory::getInstance(const PluginConfig& config) {
 
-	Plugin* plugin = loadInstance(config);
+    // note: when fails throw PluginNotFoundException(e.what());
+    Plugin* plugin = loadInstance(config);
 
-	if (!plugin) throw PluginException(std::string("Plugin instance is NULL! Config: "+hashKey(config)));
+    if (!plugin) throw PluginException(std::string("Plugin instance is NULL! Config: "+hashKey(config)));
 
-	T* derived = dynamic_cast<T*>(plugin);
+    T* derived = dynamic_cast<T*>(plugin);
 
-	if (!derived) {
-		throw PluginException(std::string("Plugin instance is not of expected type. Expected: ")+
-              typeid(T).name()+", got: "+typeid(plugin).name());
-	}
+    if (!derived) {
+        throw PluginException(std::string("Plugin instance is not of expected type. Expected: ")+
+                typeid(T).name()+", got: "+typeid(plugin).name());
+    }
 
-	return *derived;
+    return *derived;
 }
 
 NS_ZINC_CLOSE
 
 #endif /* ZINC_PLUGIN_FACTORY_H_ */
 
-// ---------
 
 #include "../include/PluginFactory.h"
 #include "../include/Logger.h"
@@ -3396,10 +3395,8 @@ NS_ZINC_CLOSE
 #include <sys/stat.h>
 #include <unistd.h>
 
-//#include <iostream>	// Debug
-
 # ifndef NDEBUG
-#include <link.h>	// for dl_iterate_phdr
+#include <link.h>    // for dl_iterate_phdr
 # endif
 
 using namespace std ;
@@ -3545,121 +3542,311 @@ static bool checkLibraryNotAlreadyLoaded(const std::string& libPath) {
 
 # endif
 
-Plugin* PluginFactory::loadInstance(const PluginConfig& config) {
 
-	ZINC_COMMON_FUNC_TRACE;
+Plugin* PluginFactory::loadInstance(const PluginConfig& config) 
+{
+    string key = hashKey(config);
 
-	string key = hashKey(config);
+    ZINC_COMMON_TRACE("loadInstance: config=" << key);
 
-	ZINC_COMMON_TRACE("loadInstance: config=" << key);
+    boost::shared_ptr<PluginReference> instance ;
 
-	boost::shared_ptr<PluginReference> instance ;
-
-   // note:
-   // getInstances() is a singleton which creates a map and find key in the map and when not found,
-   // that is not loaded, then try to load
-   // typedef std::map<const std::string, boost::shared_ptr<PluginReference> > instances_t;
+    // note:
+    // getInstances() is a singleton which creates a map and find key in the
+    // map and when not found, that is not loaded, then try to load typedef
+    // std::map<const std::string, boost::shared_ptr<PluginReference> >
+    // instances_t;
    
-   instances_t &instances=getInstances(); 
-   instances_iter_t iter = instances.find(key);
+    instances_t &instances=getInstances(); 
+    instances_iter_t iter = instances.find(key);
 
-	if (iter == instances.end() || ! iter->second) {
+    if (iter == instances.end() || ! iter->second) {
 
-      // note: create a instance
-		instance = boost::shared_ptr<PluginReference>(new PluginReference()) ;
+        // note: create a instance
+        instance = boost::shared_ptr<PluginReference>(new PluginReference()) ;
 
-		void* libHandle = 0;
+        void* libHandle = 0;
 
-		// Support "loading" statically-linked plugins.
-		// Use special "library name" of "." to mean statically linked, otherwise
-		// assume it is a library to be dlopen'd
+        // Support "loading" statically-linked plugins.
+        // Use special "library name" of "." to mean statically linked, otherwise
+        // assume it is a library to be dlopen'd
 
-		if (config.getLibraryName() != ".") {
+        if (config.getLibraryName() != ".") {
 
-			try {
+            try {
 
-				const std::string libraryPath = 
-                SingletonLibFinderLocator::get().find(config.getLibraryName().c_str());
+                // note: try to find "library" file
+                const std::string libraryPath = 
+                    SingletonLibFinderLocator::get().find(config.getLibraryName().c_str());
 
 # ifndef NDEBUG
-				if (iter == instances.end()) {
-					// Don't do this check if we've loaded this plugin before.
-					checkLibraryNotAlreadyLoaded(libraryPath);
-				}
+                if (iter == instances.end()) {
+                    // Don't do this check if we've loaded this plugin before.
+                    checkLibraryNotAlreadyLoaded(libraryPath);
+                }
 # endif
 
-				ZINC_COMMON_TRACE("Loading plugin library: " << libraryPath);
+                ZINC_COMMON_TRACE("Loading plugin library: " << libraryPath);
 
-				libHandle = dlopen(libraryPath.c_str(), RTLD_GLOBAL|RTLD_LAZY);
+                libHandle = dlopen(libraryPath.c_str(), RTLD_GLOBAL|RTLD_LAZY);
 
-				instance->setLibHandle(libHandle) ;
+                instance->setLibHandle(libHandle) ;
 
-				if (!instance->getLibHandle()) {
+                if (!instance->getLibHandle()) {
 
-					const char* loadError = dlerror() ;
+                    const char* loadError = dlerror() ;
 
-					throw PluginNotFoundException(string("Failed to load plugin shared object '")+libraryPath+
-							"'. Error: "+loadError) ;
-				}
+                    throw PluginNotFoundException(
+                            string("Failed to load plugin shared object '")+libraryPath+
+                            "'. Error: "+loadError) ;
+                }
 
-			} catch (ResourceNotFoundException& e) {
-				throw PluginNotFoundException(e.what());
-			}
-		}
+            } catch (ResourceNotFoundException& e) {
+                throw PluginNotFoundException(e.what());
+            }
+        }
 
-		dlerror() ;	// clear any existing error
+        dlerror(); // clear any existing error
 
-      // note: got a create function
-		createFunction_t *createFunction = 
-          (createFunction_t*)dlsym(instance->getLibHandle(), config.getCreateFunctionName().c_str()) ;
+        // note: got a create function
+        createFunction_t *createFunction = 
+            (createFunction_t*)dlsym(instance->getLibHandle(), config.getCreateFunctionName().c_str()) ;
 
-		if (!createFunction) {
-		    std::string errorMessage(config.getLibraryName() 
-                  + " - " + config.getCreateFunctionName() + " - " + dlerror());
-		    throw PluginException(errorMessage) ;
-		}
+        if (!createFunction) {
+            std::string errorMessage(
+                    config.getLibraryName() + " - " + config.getCreateFunctionName() + " - " + dlerror());
+            throw PluginException(errorMessage) ;
+        }
 
-      // note:
-      // 1. each SCF derives from Plugin
-      // 2. calls a create function which returns SCF and set it to instance
-      //
-      // struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {  // note: Plugin
-      // class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable {
+        // note:
+        // 1. each SCF derives from Plugin
+        // 2. calls a create function which returns SCF and set it to instance
+        //
+        // struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {  // note: Plugin
+        // class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable {
 
-		instance->setPlugin(createFunction(config.getCreateParameters().c_str())) ;
+        instance->setPlugin(createFunction(config.getCreateParameters().c_str())) ;
 
-		if (!instance->getPlugin()) {
-			throw new 
-             PluginException(string("Plugin creation function returned NULL instance! Plugin config: ")+key) ;
-		}
+        if (!instance->getPlugin()) {
+            throw new PluginException(string(
+                        "Plugin creation function returned NULL instance! Plugin config: ")+key) ;
+        }
 
-		instances[key] = instance ;
+        instances[key] = instance ;
 
-	} else {
-		instance = (*iter).second ;
-	}
+    } else {
+        instance = (*iter).second ;
+    }
 
-   // note: return SCF instance
-	return instance->getPlugin() ;
+    // note: return SCF instance
+    return instance->getPlugin() ;
 }
 
+
 std::string PluginFactory::hashKey(const PluginConfig& config) {
-	std::string hashKey = config.getLibraryName() + "::" + config.getCreateFunctionName()+ 
-       "(" +  config.getCreateParameters() + ")" ;
-	return hashKey ;
+    std::string hashKey = config.getLibraryName() + "::" + config.getCreateFunctionName()+ 
+        "(" +  config.getCreateParameters() + ")" ;
+    return hashKey ;
 }
 
 // note: singleton
 PluginFactory::instances_t& PluginFactory::getInstances(void) {
-	static instances_t instances;
-	return(instances);
+    static instances_t instances;
+    return(instances);
 }
 
 NS_ZINC_CLOSE
 
 
-// ---------
-// package finder
+// ============== singleton lib finder
+
+#ifndef ZINC_SINGLETON_LIB_FINDER_LOCATOR_H_
+#define ZINC_SINGLETON_LIB_FINDER_LOCATOR_H_
+
+#include "ResourceFinder.h"
+
+NS_ZINC_OPEN
+
+/**
+ * Use this to get a singleton ResourceFinder that can be shared amongst all the components
+ * your application uses.
+ *
+ * Having a singleton enables the resource search paths to be configured for the whole
+ * application, in one place.
+ *
+ * In lieu of any DI container, we are using a nasty-old static singleton.
+ */
+class ZINC_EXPORT SingletonLibFinderLocator : boost::noncopyable {
+
+    public:
+        static ResourceFinder& get();
+
+    private:
+        SingletonLibFinderLocator(); // prevent instantiation
+};
+
+NS_ZINC_CLOSE
+
+
+#endif /* ZINC_SINGLETON_LIB_FINDER_LOCATOR_H_ */
+
+
+NS_ZINC_OPEN
+
+ResourceFinder& SingletonLibFinderLocator::get() {
+    static ResourceFinder theInstance(getProductionLibFinderSearchPath());
+    return theInstance;
+}
+
+NS_ZINC_CLOSE
+
+
+// ============== resource finder
+
+#ifndef ZINC_RESOURCEFINDER_H_
+#define ZINC_RESOURCEFINDER_H_
+
+#include "ResourceNotFoundException.h"
+#include "../PathList.h"
+#include <boost/noncopyable.hpp>
+#include <string>
+#include <vector>
+#include <list>
+#include <unistd.h>
+#include <stdlib.h>
+
+NS_ZINC_OPEN
+
+class ZINC_EXPORT ResourceFinder : boost::noncopyable {
+
+    public:
+        explicit ResourceFinder(const PathList& searchPath);
+
+        void setSearchPath(const PathList& searchPath);
+
+        const PathList& getSearchPath() const;
+
+        std::string find(const char* const relativePath, const char* const packageName=0) const;
+
+        std::string find(const std::string& relativePath, const std::string& packageName) const;
+
+    private:
+        PathList searchPath;
+};
+
+
+inline std::string ResourceFinder::find(const std::string& relativePath, const std::string& packageName) const {
+    return find(relativePath.c_str(), packageName.c_str());
+}
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_RESOURCEFINDER_H_ */
+
+
+using namespace std;
+
+NS_ZINC_OPEN
+
+ResourceFinder::ResourceFinder(const PathList& pathList) {
+   setSearchPath(pathList);
+}
+
+
+void ResourceFinder::setSearchPath(const PathList& pathList) {
+
+    PathList newSearchPath;
+
+    // I don't do a straight assignment here, because I want to filter-out empty paths.
+    BOOST_FOREACH(std::string path, pathList) {
+        if (!path.empty()) {
+            newSearchPath += path;
+        }
+    }
+
+    // Always include the empty path as the last resort.
+    // When we do a find(), the provided sub-path could actually be absolute.
+    // Also, for libs, we could just default back to letting the runtime linker
+    // search for the plain library name.
+
+    newSearchPath += "";
+
+    searchPath.swap(newSearchPath);
+}
+
+const PathList& ResourceFinder::getSearchPath() const {
+   return searchPath;
+}
+
+std::string ResourceFinder::find(const char* const relativePath, const char* const packageName) const {
+
+    ZINC_RF_DBG(cout << 
+            "find() Looking for: " << relativePath << ", package: " 
+            << (packageName?packageName:"none") << endl);
+
+    static const std::string EMPTY_PATH;
+
+    if (relativePath) {
+
+        std::string absPath;
+
+        const std::string relPathAsString(relativePath);
+
+        // The package name is optional. If it is supplied, then we prefix the
+        // relative path with it, and search for the resulting path, before
+        // searching for the plain relativePath.
+        //
+        // We need to do both to cater for the fact that the package name
+        // appears under some root paths, but not others. For example:
+        // $prefix/share/zinc-common/somepath vs:
+        // <path-to-source>/Zinc.Common/data/somepath
+
+        const std::string relPackageRelPathAsString(packageName?
+                Utilities::concatenatePaths(std::string(packageName), relPathAsString):
+                EMPTY_PATH
+                );
+
+        struct stat statbuf;
+
+        BOOST_FOREACH(std::string path, searchPath) {
+
+            // Search package-qualified first. This is the "right" structure.
+            if (packageName) {
+
+                absPath = Utilities::concatenatePaths(path, relPackageRelPathAsString);
+
+                ZINC_RF_DBG(cout << "Trying: " << absPath << endl);
+
+                if (!stat(absPath.c_str(), &statbuf)) {
+                    ZINC_RF_DBG(cout << "found." << endl);
+                    // Found the file. Don't search any further.
+                    return absPath;
+                }
+            }
+
+            // Search non-package-qualified.
+            absPath = Utilities::concatenatePaths(path, relPathAsString);
+
+            ZINC_RF_DBG(cout << "Trying: " << absPath << endl);
+
+            if (!stat(absPath.c_str(), &statbuf)) {
+                ZINC_RF_DBG(cout << "found." << endl);
+                // Found the file. Don't search any further.
+                return absPath;
+            }
+        }
+    }
+
+    std::stringstream errmsg;
+    errmsg << "Failed to find resource: '" << (relativePath?relativePath:NULL) << "' "
+        "in '" << searchPath.toString() << "'";
+    throw ResourceNotFoundException(errmsg.str());
+}
+
+NS_ZINC_CLOSE
+
+
+// ============== package finder
 
 #ifndef ZINC_PACKAGE_DATA_FINDER_H_
 #define ZINC_PACKAGE_DATA_FINDER_H_
@@ -9118,14 +9305,13 @@ User=nickelmediad
 ("busname,b", po::value<std::string>(&busName)->default_value(defaultBusName), "DBus connection name")
 
 
-3. load a SCF(media router proxy).
+3. load a SCF(media router proxy) via "media-daemon.plugin-config"
 
-Nickel.System.DBusServer/data/
-this is for media router proxy:
+Nickel.System.DBusServer/data
 media-daemon.plugin-config:1:libNickelSystemProxy.so createSystemFactory
 
-this is 'before':
-media-daemon.plugin-config:1:libNickelSystemFake.so createFakeSystemFactory
+// this is 'before':
+// media-daemon.plugin-config:1:libNickelSystemFake.so createFakeSystemFactory
 
 
 4. MediaDaemon.cpp
@@ -10646,6 +10832,48 @@ application%2Fx-hls
 
 
 ={============================================================================
+*kt_dev_uv_stack_415* stack: media: boot failure due to wrong lib name
+
+/opt/zinc/bin/nickelmediad 
+
+INFO   715850528 nickel /Nickel.System.DBusServer/src/MediaDaemon.cpp:207 Launching Fake Media Router Service Daemon...
+INFO   715850528 nickel /Nickel.System.DBusServer/src/MediaDaemon.cpp:200 Using configuration file: /opt/zinc-trunk/share/nickel-system-dbusserver/media-daemon.plugin-config
+
+DEBUG  715850528 nickel /Nickel.System.Proxy/src/ProxySystemFactory.cpp:156 KT: add {http, application/dash+xml}
+DEBUG  715850528 nickel /Nickel.System.Proxy/src/ProxySystemFactory.cpp:156 KT: add {https, application/dash+xml}
+
+Zinc.Media ERROR: Failed to find resource: 'libNickelSystemGstreamer.so' in '/opt/zinc-trunk/lib:/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:/opt/zinc/oss/lib:/opt/zinc/lib:/opt/zinc/devel/lib:/usr/local/lib:/opt/stagecraft-2.0/bin:/opt/zinc/tests/lib:'
+
+Failed to find resource: 'libNickelSystemGstreamer.so' in '/opt/zinc-trunk/lib:/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:/opt/zinc/oss/lib:/opt/zinc/lib:/opt/zinc/devel/lib:/usr/local/lib:/opt/stagecraft-2.0/bin:/opt/zinc/tests/lib:'
+
+INFO   715850528 nickel /Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:220 Fake Media Router Service Daemon shutting down...
+
+
+KT: configDir: /opt/zinc-trunk/share/platform_data/mediarouter-plugin-config
+
+KT: fullPath.string:
+/opt/zinc-trunk/share/platform_data/mediarouter-plugin-config/http-application%2Fdash%2Bxml.plugin-config
+KT: add {http, application/dash+xml}
+
+KT: fullPath.string:
+/opt/zinc-trunk/share/platform_data/mediarouter-plugin-config/https-application%2Fdash%2Bxml.plugin-config
+KT: add {https, application/dash+xml}
+
+KT: fullPath.string:
+/opt/zinc-trunk/share/platform_data/mediarouter-plugin-config/http-application%2Fx-hls.plugin-config
+
+Zinc.Media ERROR: Failed to find resource: 'libNickelSystemGstreamer.so' in '/opt/zinc-trunk/lib:/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:/opt/zinc/oss/lib:/opt/zinc/lib:/opt/zinc/devel/lib:/usr/local/lib:/opt/stagecraft-2.0/bin:/opt/zinc/tests/lib:'
+
+Failed to find resource: 'libNickelSystemGstreamer.so' in '/opt/zinc-trunk/lib:/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:/opt/zinc/oss/lib:/opt/zinc/lib:/opt/zinc/devel/lib:/usr/local/lib:/opt/stagecraft-2.0/bin:/opt/zinc/tests/lib:'
+
+http-application%2Fdash%2Bxml.plugin-config:libNickelSystemGStreamer.so createGstSystemFactory
+http-application%2Fx-hls.plugin-config:libNickelSystemGstreamer.so createGstSystemFactory
+https-application%2Fdash%2Bxml.plugin-config:libNickelSystemGStreamer.so createGstSystemFactory
+
+http-application%2Fx-hls.plugin-config:libNickelSystemGstreamer.so createGstSystemFactory
+                                                       *^*
+
+={============================================================================
 *kt_dev_uv_stack_420* stack: media: gst: uridecodebin
 
 /zinc-build-root/debug-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/gst_plugins_base-1.5.0/
@@ -11437,6 +11665,59 @@ drwxr-xr-x 7 kpark kpark 4096 Jan  7 15:55 ../
 -rwxr-xr-x 1 kpark kpark  463 Jan  7 15:55 linearmetadata-getevents*
 -rwxr-xr-x 1 kpark kpark  173 Jan  7 15:55 linearmetadata-getservice*
 -rwxr-xr-x 1 kpark kpark  165 Jan  7 15:55 linearmetadata-getservicelist*
+
+
+={============================================================================
+*kt_dev_uv_stack_600* stack: ui
+
+{fail-to-boot}
+
+/opt/zinc-trunk/var/applications/data/air/mainui/log/uranium.log
+
+// log before changes
+
+uranium
+/Uranium/Uranium.Client.System/src/tuner/SystemClientLinearPlaybackControl.cpp:275
+convertSetVideoWindowExceptions() - Unexpected exception: Launch helper exited
+with unknown return code 1
+
+
+// changed to print calling function using bind()
+
+void convertSetVideoWindowExceptions(const std::string& calling_function,
+                                     NS_ZINC::FutureValue< void > fv)
+{
+    try
+    {
+        fv.get();
+    }
+    catch (const NS_NICKEL_SYSTEM::OutOfBounds &)
+    {
+        URANIUM_ERROR("convertSetVideoWindowExceptions(" << calling_function
+                      << ") - Out of bounds");
+        throw NS_NICKEL_CLIENT::OutOfBounds();
+    }
+    catch (const std::exception &e)
+    {
+        URANIUM_ERROR("convertSetVideoWindowExceptions(" << calling_function
+                      << ") - Unexpected exception: " << e.what());
+        throw;
+    }
+}
+
+virtual NS_ZINC::Future< void > minimise()
+{
+    URANIUM_DEBUG("minimise()");
+    return systemLinearPlaybackControl->minimise().then(
+        boost::bind(&convertSetVideoWindowExceptions, __FUNCTION__, _1));
+}
+
+virtual NS_ZINC::Future< void > maximise()
+{
+    URANIUM_DEBUG("maximise()");
+    return systemLinearPlaybackControl->maximise().then(
+        boost::bind(&convertSetVideoWindowExceptions, __FUNCTION__, _1));
+}
 
 
 ={============================================================================
