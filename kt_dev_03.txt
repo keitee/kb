@@ -1,7 +1,5 @@
 *kt_dev_03*                                                             tw=100
 
-aThu 13 Feb 2014 13:38:09 GMT
-
 Keywords:
 {source} use this mark to go to each source file
 
@@ -10493,7 +10491,8 @@ NS_ZINC_OPEN
 
 /*
  * Interface for general functor dispatcher.
- * Dispatchers are used to invoke callback functors (for events and futures for example).
+ * Dispatchers are used to invoke callback functors (for events and futures for
+ * example).
  */
 struct ZINC_EXPORT Dispatcher : boost::noncopyable
 {
@@ -10560,9 +10559,9 @@ NS_ZINC_CLOSE
 NS_ZINC_OPEN
 
 /*
- * A Dispatcher implementation that owns a single thread on which it executes the
- * functors posted to it. Functors are executed strictly in the order that they are
- * posted to the dispatcher.
+ * A Dispatcher implementation that owns a single thread on which it executes
+ * the functors posted to it. Functors are executed strictly in the order that
+ * they are posted to the dispatcher.
  */
 class ZINC_EXPORT SingleThreadDispatcher : public Dispatcher
 {
@@ -10739,16 +10738,133 @@ NS_ZINC_CLOSE
 ={============================================================================
 *kt_dev_code_016* asyc: dispatcher use
 
+<use-case>
+
 EventProducer 
-   <- DispatchingEventProducer(Dispatcher)
+   : DispatchingEventProducer(Dispatcher)
+   {
+       virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
 
-         virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
+       // forwards to impl
+       mutable detail::DispatchingEventProducerHoisted impl;
+   };
+      // EventWindowEventListener is ListenerT which is base class that EPG
+      // derives from and EPG is Listener. Create a 'window' and add a self to
+      // it as a Listener.
+      
+      // EventWindow defines API
+      : EventEindow : DispatchingEventProducer<EventWindowEventListener>
 
-         // forwards to impl
-         mutable detail::DispatchingEventProducerHoisted impl;
+         : SystemClientEventWindow
 
-      <- EventEindow
-          <- SystemClientEventWindow
+
+// SystemClientFactory() creates two dispatches:
+//
+//    boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
+//    boost::shared_ptr<NS_ZINC::FutureDispatcher> futureDispatcher;
+//
+//    defaultDispatcher(boost::make_shared<InlineDispatcher>())
+//
+//    // this is SingleThreadDispatcher
+//    futureDispatcher(boost::make_shared<SequentialFutureDispatcher>())
+
+void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+{
+    // set future dispatcher to future barrier
+
+    NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
+
+    // add {future, member function pointer} pair to future barrier and these
+    // futures are futures associated to dbus call. suppose that future will be
+    // set when dbus call succeeds and when it is set, member function gets
+    // called.
+    //
+    // note: eventsReceived are overloaded
+    //
+    // therefore,
+    //
+    // fMASEvents -> SystemClientEventRepository::eventsReceived()
+    // fDTTEvents -> SystemClientEventRepository::eventsReceived()
+
+    void (SystemClientEventRepository::*masCallback)
+        (boost::shared_ptr<EventWindowCreateCommand>,
+         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
+        &SystemClientEventRepository::eventsReceived;
+
+    void (SystemClientEventRepository::*dttCallback)
+        (boost::shared_ptr<EventWindowCreateCommand>,
+         const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
+        &SystemClientEventRepository::eventsReceived;
+
+    bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
+    bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
+
+    // note: after all, eventWindowDataRetrievalComplete() has a notify chain up
+    // to a client. what's the relationship of these three callbacks? how future
+    // barrier works?
+    
+    bar.setCallback(
+          boost::bind
+            (&SystemClientEventRepository::eventWindowDataRetrievalComplete, 
+             shared_from_this(), sharedCmd)
+          );
+};
+
+
+void SystemClientEventRepository::eventsReceived(
+        boost::shared_ptr<EventWindowCreateCommand> command,
+        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+{
+    // get the returned data from eventsFV.get() and copy data to a vector.
+    //
+    // signal client(application) that data is ready by setting
+    // command->promise.complete(data);
+};
+
+void eventsReceived(
+   boost::shared_ptr<EventWindowCreateCommand> command,
+   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
+{
+   event_collection_ptr clientEvents = getClientEvents(systemEvents);
+}  
+
+
+note: goes up to a client via SystemClientEventWindow::produceEvent
+
+void SystemClientEventRepository::eventWindowDataRetrievalComplete(
+        boost::shared_ptr<EventWindowCreateCommand> command)
+{
+    notifyExistingWindowAboutNewData(command);
+}
+
+void SystemClientEventRepository::notifyExistingWindowAboutNewData(
+        boost::shared_ptr<EventWindowCreateCommand> command)
+{
+    boost::shared_ptr<SystemClientEventWindow> w = command->newWindow.lock();
+    w->ConfigChanged();
+}
+
+void SystemClientEventWindow::ConfigChanged()
+{
+    notifyWindowChanged();
+}
+
+// void SystemClientEventWindow::notifyWindowChanged()
+// {
+// 
+//     // ?? 
+//     // void SystemClientEventWindow::EventsChanged
+//     // (const std::vector<std::string> &eventIdentifiers)
+//     
+//     produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+// }
+
+void SystemClientEventWindow::notifyEventsChanged(
+        std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> > events)
+{
+    produceEvent(bind(&EventWindowEventListener::EventsChanged, _1, events));
+}
+
 
 ////////////////////////////////////////
 #ifndef ZINC_EVENTPRODUCER_H_
@@ -10847,11 +10963,13 @@ public:
     /**
      * Constructor
      *
-     * @param dispatcher_ this dispatcher will be used to dispatch event listener callback
-     * methods, unless clients explicitly provide an alternative dispatcher in the
-     * call to addListener()
+     * @param dispatcher_ this dispatcher will be used to dispatch event
+     * listener callback methods, unless clients explicitly provide an
+     * alternative dispatcher in the call to addListener()
      */
-    explicit DispatchingEventProducer(boost::shared_ptr<EventDispatcher> dispatcher_) : impl(dispatcher_) {}
+
+    explicit DispatchingEventProducer(boost::shared_ptr<EventDispatcher>
+            dispatcher_) : impl(dispatcher_) {}
 
     /**
      * Add an event listener.
@@ -10870,19 +10988,22 @@ public:
     }
 
     /**
-     * Add an event listener and specify the dispatcher on which the event listener methods
-     * should be invoked.
+     * Add an event listener and specify the dispatcher on which the event
+     * listener methods should be invoked.
      *
-     * @param clientDispatcher the dispatcher on which the event listener callbacks will be
-     * invoked. This overrides the default dispatcher.
+     * @param clientDispatcher the dispatcher on which the event listener
+     * callbacks will be invoked. This overrides the default dispatcher.  
+     *
      * @param listener the event listener.
      *
-     * @throws std::invalid_argument if a <code>null</code> listener or clientDispatcher is
-     * provided.
+     * @throws std::invalid_argument if a <code>null</code> listener or
+     * clientDispatcher is provided.
      *
      * @acl all
      */
-    virtual void addListener(boost::shared_ptr<EventDispatcher> clientDispatcher, boost::shared_ptr<ListenerT> listener) {
+
+    virtual void addListener(boost::shared_ptr<EventDispatcher> clientDispatcher, 
+            boost::shared_ptr<ListenerT> listener) {
 
         if (!clientDispatcher) {
             throw std::invalid_argument("NULL dispatcher provided in call to addListener()!");
@@ -10982,8 +11103,8 @@ NS_ZINC_CLOSE
 
 #endif /* ZINC_DISPATCHINGEVENTPRODUCER_H_ */
 
-////////////////////////////////////////
 
+////////////////////////////////////////
 // A class that represents the Event Window, basically the EPG view.
 class ZINC_EXPORT EventWindow : 
     virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> {
@@ -11012,6 +11133,7 @@ class ZINC_EXPORT SystemClientEventWindow
         produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
     }
 };
+
 
 # ============================================================================
 #{
