@@ -49,7 +49,7 @@
 
 |kt_dev_uv_stack_250| stack: vanadium: runBrowser
 |kt_dev_uv_stack_251| stack: vanadium: binding
-|kt_dev_uv_stack_252| stack: vanadium: remote debug
+|kt_dev_uv_stack_252| stack: vanadium: browser remote debug
 |kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
 
 |kt_dev_uv_stack_300| stack: copper: lsr (local storage repository)
@@ -7874,7 +7874,7 @@ NPError NP_Initialize(NPNetscapeFuncs* nFuncs, NPPluginFuncs* pFuncs)
 
 
 ={============================================================================
-*kt_dev_uv_stack_252* stack: vanadium: remote debug
+*kt_dev_uv_stack_252* stack: vanadium: browser remote debug
 
 https://wiki.youview.co.uk/display/YVDP/Debugging?src=search
 
@@ -7903,6 +7903,15 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
 
 
 {current-impl}
+
+note: the both files are in the third party source of build root
+
+:~/builds/tom.bailey/FR15-unicast-video-tag/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0$ find . -name MediaPlayerPrivateGStreamer.cpp
+./qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+
+:~/builds/tom.bailey/FR15-unicast-video-tag/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0$ find . -name MediaPlayerPrivateMediaRouter.cpp
+./qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateMediaRouter.cpp
+
 
 <0>
 Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/qtwebkit/
@@ -8056,7 +8065,9 @@ void VanadiumMediaPlayer::play()
     currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
 }
 
-<0>
+
+<private-media-router>
+/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateMediaRouter.cpp
 
 DEVARCH/Zinc/Zinc.3rdPartyStack/patches/qt-everywhere-opensource-src-5.1.0/0071-DEVARCH-8972-Map-Video-Tag-to-MediaRouter-API.patch
 17:is specified in the environment variable ZINC_QMEDIA_PLAYER_LIB. This
@@ -8271,6 +8282,14 @@ VanadiumMediaPlayer::VanadiumMediaPlayer(
     mediaRouterVolume(0.0),
     playerManager(playerManager_)
 {
+    // note: links to "MR PROXY"
+    // Vanadium/Vanadium.MediaRouter.WebKit.Plugin/data/system-factory.plugin-config
+    // libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
+
+    // [root@HUMAX zinc-trunk]# find . -name system-factory.plugin*
+    // ./share/vanadium-webkit-mediarouter-plugin/system-factory.plugin-config
+    // ./tests/vanadium-webkit-mediarouter-plugin/share/system-factory.plugin-config
+
     FilePluginConfig pluginConfig(PackageDataFinder().find("system-factory.plugin-config"));
     NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
         PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
@@ -8278,6 +8297,11 @@ VanadiumMediaPlayer::VanadiumMediaPlayer(
     boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactory> mediaRouterFactory
         = nickelSystemFactory.createMediaRouterFactory();
 
+    // note: this returns a future and future.get() returns a SP<MediaRouter>
+    //
+    // NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::createMediaRouter();
+    
+    
     mediaRouter = mediaRouterFactory->createMediaRouter().get();
 
     mediaRouter->addListener(dispatcher, listener);
@@ -9701,6 +9725,26 @@ NS_ZINC::Plugin* createGstSystemFactory()
 ===> from void nickel::system::SetSourceContinuation::start()
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouterFactory.cpp
+
+boost::shared_ptr<MediaRouterFactoryAsync> createGstMediaRouterFactory(
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher)
+{
+    return boost::make_shared<GstMediaRouterFactory>(dispatcher);
+}
+
+
+GstMediaRouterFactory::GstMediaRouterFactory(
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher) : dispatcher(dispatcher)
+{
+    NICKEL_FUNC_TRACE;
+
+    gst.glib.context = g_main_context_new();
+    gst.glib.loop = g_main_loop_new(gst.glib.context, FALSE);
+    gst.thread = g_thread_new("gst_loop_thread", gstThreadFunc, &gst.glib);
+
+    start();
+}
+
 
 NS_ZINC::Future<boost::shared_ptr<MediaRouterAsync> >
 GstMediaRouterFactory::createMediaRouter()
