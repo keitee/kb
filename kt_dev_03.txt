@@ -10849,15 +10849,15 @@ void SystemClientEventWindow::ConfigChanged()
     notifyWindowChanged();
 }
 
-// void SystemClientEventWindow::notifyWindowChanged()
-// {
+void SystemClientEventWindow::notifyWindowChanged()
+{
 // 
 //     // ?? 
 //     // void SystemClientEventWindow::EventsChanged
 //     // (const std::vector<std::string> &eventIdentifiers)
 //     
-//     produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
-// }
+   produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+}
 
 void SystemClientEventWindow::notifyEventsChanged(
         std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> > events)
@@ -11084,7 +11084,6 @@ protected:
         }
 
 private:
-
     template <typename Functor>
         struct DowncastingCaller {
             explicit DowncastingCaller(Functor f_) : f(f_) {}
@@ -11133,6 +11132,248 @@ class ZINC_EXPORT SystemClientEventWindow
         produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
     }
 };
+
+
+////////////////////////////////////////
+#ifndef ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_
+#define ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_
+
+#include "../EventDispatcher.h"
+
+#include <boost/thread/mutex.hpp>
+#include <boost/utility.hpp>
+#include <boost/noncopyable.hpp>
+
+#include <list>
+#include <stdexcept>
+
+
+NS_ZINC_OPEN
+
+namespace detail {
+
+// We are always careful to static_cast from the concrete ListenerT in
+// DispatchingEventProducer such that we know that we can do the inverse
+typedef void hoisted_event_listener;
+
+class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
+{
+    public:
+
+        explicit DispatchingEventProducerHoisted(boost::shared_ptr<EventDispatcher> dispatcher_);
+        ~DispatchingEventProducerHoisted();
+
+        void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
+                boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
+
+        void removeListener(boost::shared_ptr<hoisted_event_listener> listener);
+
+        void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher_);
+
+        boost::shared_ptr<EventDispatcher> getDispatcher() const;
+
+        void produceEvent(boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event);
+
+        size_t getListenerCount() const;
+
+    private:
+
+        typedef std::pair<boost::weak_ptr<hoisted_event_listener>, 
+                boost::shared_ptr<EventDispatcher> > listener_entry;
+
+        std::list<listener_entry> listeners;
+
+        /**
+         * This is the default dispatcher. Clients can provide their own in addListener().
+         */
+        boost::shared_ptr<EventDispatcher> dispatcher;
+
+        mutable boost::mutex mutex;
+};
+}
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_ */
+
+
+/*
+ * DispatchingEventProducer.cpp
+ *
+ *  Created on: Jan 5, 2012
+ *      Author: john.sadler@youview.com
+ */
+
+#include "../include/Event.h"
+#include "../include/DispatchingEventProducer.h"
+#include "../include/Logger.h"
+#include "../include/WeakFunctor.h"
+
+#include <boost/bind.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/foreach.hpp>
+
+NS_ZINC_OPEN
+
+namespace detail {
+
+bool operator==(const boost::weak_ptr<hoisted_event_listener> l, const boost::weak_ptr<hoisted_event_listener> r) {
+	return !(l < r || r < l);
+}
+
+DispatchingEventProducerHoisted::DispatchingEventProducerHoisted(boost::shared_ptr<EventDispatcher> dispatcher_) :
+		dispatcher(dispatcher_) {
+}
+
+DispatchingEventProducerHoisted::~DispatchingEventProducerHoisted() {
+	std::list<listener_entry> stackListeners;
+	{
+		boost::mutex::scoped_lock lock(mutex);
+		listeners.swap(stackListeners);
+	}
+	BOOST_FOREACH(const listener_entry& entry, stackListeners) {
+		// Call entry->second->onWorkRemoved()
+		Dispatcher::work(*entry.second, boost::adopt_lock_t());
+	}
+}
+
+void DispatchingEventProducerHoisted::addListener(boost::shared_ptr<hoisted_event_listener> listener, boost::shared_ptr<EventDispatcher> clientDispatcher) 
+{
+    if (!listener) {
+        throw std::invalid_argument("NULL listener provided in call to addListener()!");
+    }
+
+    ZINC_COMMON_DEBUG(std::string(__func__)+" Dispatcher: "+boost::lexical_cast<std::string>(static_cast<const EventDispatcher*>(clientDispatcher.get()))+
+            ", Producer: "+boost::lexical_cast<std::string>(this)+
+            ", Listener: "+boost::lexical_cast<std::string>(listener.get())
+            );
+
+    bool duplicate = false;
+
+    boost::mutex::scoped_lock lock(mutex);
+
+    if (!clientDispatcher) {
+        if (!dispatcher) {
+            throw std::logic_error("addListener() called, but event producer has no dispatcher set.");
+        }
+        clientDispatcher = dispatcher;
+    }
+    // Call entry->second->onWorkAdded()
+    Dispatcher::work work(*clientDispatcher);
+
+    listener_entry newEntry(listener, clientDispatcher);
+
+    BOOST_FOREACH(const listener_entry& entry, listeners) {
+
+        if (entry.first == newEntry.first) {
+            duplicate = true;
+            break;
+        }
+    }
+
+    if (!duplicate) {
+        work.release();
+        listeners.push_front(newEntry);
+    }
+}
+
+void DispatchingEventProducerHoisted::removeListener(boost::shared_ptr<hoisted_event_listener> listener) {
+
+	ZINC_COMMON_DEBUG(std::string(__func__)+
+			" Producer: "+boost::lexical_cast<std::string>(this)+
+			", Listener: "+boost::lexical_cast<std::string>(listener.get())
+	);
+
+	// This is for the comparisons below.
+	// It's better to do this than to call lock() on each of the weak_ptrs as
+	// doing this will fiddle with reference counts.
+	//
+	boost::weak_ptr<hoisted_event_listener> weak(listener);
+
+	std::list<listener_entry> forRemoval;
+	{
+		boost::mutex::scoped_lock lock(mutex);
+
+		// linear trawl to find listener, but n should be small.
+		for (std::list<listener_entry>::iterator i = listeners.begin(); i != listeners.end(); ++i) {
+			if (i->first == weak) {
+				// Avoid calling dispatcher destructors while the mutex is locked.
+				forRemoval.splice(forRemoval.end(), listeners, i);
+				break;
+			}
+		}
+	}
+	BOOST_FOREACH(listener_entry& entry, forRemoval) {
+		// Call entry->second->onWorkRemoved()
+		Dispatcher::work(*entry.second, boost::adopt_lock_t());
+	}
+}
+
+void DispatchingEventProducerHoisted::setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher_) 
+{
+    boost::mutex::scoped_lock lock(mutex);
+    dispatcher = dispatcher_;
+}
+
+
+boost::shared_ptr<EventDispatcher> DispatchingEventProducerHoisted::getDispatcher() const {
+	boost::mutex::scoped_lock lock(mutex);
+	return dispatcher;
+}
+
+void DispatchingEventProducerHoisted::produceEvent(
+        boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
+{
+    boost::mutex::scoped_lock lock(mutex);
+
+    size_t len = listeners.size();
+    // We copy listeners to this stack allocated array before dispatch so we
+    // don't have to hold the lock while calling user code.
+    listener_entry localListeners[len];
+    listener_entry* next = localListeners;
+
+    std::list<listener_entry>::iterator i = listeners.begin();
+
+    std::list<listener_entry> forRemoval;
+    while (i != listeners.end()) {
+
+        if (!i->first.expired()) {
+            *next++ = *i;
+            ++i;
+        } else {
+            // Listener or dispatcher instance may have been destroyed since it was registered.
+            // Detect this, and remove from collection.
+            // Avoid calling dispatcher destructors while the mutex is locked.
+            forRemoval.splice(forRemoval.end(), listeners, i++);
+            len--;
+        }
+    }
+
+    // Don't hold locks while running user code:
+    lock.unlock();
+
+    BOOST_FOREACH(listener_entry& l, forRemoval) {
+        // Call entry->second->onWorkRemoved()
+        Dispatcher::work(*l.second, boost::adopt_lock_t());
+    }
+    forRemoval.clear();
+
+    for (size_t i = 0; i < len; ++i) {
+
+        localListeners[i].second->post(
+                makeWeakFunctor(event, localListeners[i].first));
+    }
+}
+
+size_t DispatchingEventProducerHoisted::getListenerCount() const {
+
+	boost::mutex::scoped_lock lock(mutex);
+	return listeners.size();
+}
+
+}
+
+NS_ZINC_CLOSE
 
 
 # ============================================================================
