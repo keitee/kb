@@ -8088,7 +8088,10 @@ Zinc/Zinc.3rdPartyStack/patches/qt-everywhere-opensource-src-5.1.0/
 271:+    void* symbol = dlsym(handle, "createMediaPlayerImplementation");
 
 
+note: this is how linked to
+
 $ cat system-factory.plugin-config 
+// /opt/zinc-trunk/share/vanadium-webkit-mediarouter-plugin/system-factory.plugin-config
 libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
 
 
@@ -8335,6 +8338,11 @@ zb-copy libQt5WebKit.so.5.1.0
 
 libQt5WebKit.so.5.1.0
 
+scp ./libQt5WebKit.so.5.1.0 root@172.20.32.34:/opt/zinc-trunk/oss/lib
+
+$ pwd
+/home/kpark/builds/tom.bailey/FR15-unicast-video-tag/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/build/humax-dtr_t1000/qt-everywhere-opensource-src/qtwebkit/lib
+/opt/zinc-trunk/oss/lib
 
 GST_DEBUG=5 ZINC_QMEDIA_PLAYER_LIB=/opt/zinc-trunk/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0 \
     ./runBrowserStandalone.sh --url http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
@@ -8344,6 +8352,121 @@ GST_DEBUG=5 ZINC_QMEDIA_PLAYER_LIB=/opt/zinc-trunk/lib/libVanadiumMediaRouterWeb
 
 
 2015-07-02 08:49:10,244 TRACE  715849728 vanadium /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Vanadium/Vanadium.MediaRouter.WebKit.Plugin/src/VanadiumMediaPlayer.cpp:316 ENTER: virtual bool vanadium::VanadiumMediaPlayer::didLoadingProgress() const
+
+
+={============================================================================
+*kt_dev_uv_stack_255* stack: vanadium: run web server and client
+
+<server-side>
+kpark@wll1p04345:~$ ll /usr/share/nginx/www
+
+-rwxrwxrwx 1 root root  164 Jul  2 12:11 index.html*
+-rwxrwxrwx 1 root root  644 Jul  2 12:25 test.html*
+-rwxrwxrwx 1 root root 1408 Jul  2 14:41 test.js*
+-rwxrwxrwx 1 root root 1285 Jul  2 12:20 testplay.js*
+
+
+kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.html 
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+  <!--
+      A generic (default) HTML file for JS tests.
+
+      If you need a test specific HTML file, name it after the
+      JS test file
+  -->
+
+  <head>
+    <title>Welcome to nginx on Kit</title>
+    <script type="text/javascript" src="qunit-1.14.0.js"></script>
+    <script type="text/javascript" src="qunit-headless.js"></script>
+
+    <!-- This always has to be test.js due to the way the testing
+         framework works -->
+    <script type="text/javascript" src="test.js"></script>
+
+  </head>
+
+  <body>
+  <center><h1>Welcome to nginx on Kit!</h1></center>
+  </body>
+
+</html>
+
+
+kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.js   
+function beginTest(testID) {
+    var req = new XMLHttpRequest();
+    req.enctype = 'text\/plain';
+    // We use a GET request to tell the MockMediaRouterRepository that a new
+    // test case is starting, which is not very REST-ful but is nice and simple
+    req.open('GET', 'http://localhost:5555/' + testID, false);
+    req.setRequestHeader('Content-Type', 'text\/plain');
+    req.send();
+}
+
+function testCase(testName, testFunction) {
+    if(testName !== null)
+    {
+        beginTest(testName);
+    }
+}
+
+// Create a video element as the first thing we do. This causes the
+// libVanadiumVideoTagTest.so plugin to be loaded, which starts the embedded
+// web server. The media router factory returns a default mock media router
+// for this purpose
+function startTesting() {
+    video = document.createElement('video');
+    // video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
+    video.setAttribute('src', 'http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd');
+    video.setAttribute('autoplay', '');
+    video.setAttribute('controls', 'controls');
+    video.load();
+    video.play();
+}
+
+startTesting();
+
+/*test("CanPlayVideoElement", function() {*/
+    //beginTest("CanPlayVideoElement");
+    //video = document.createElement('video');
+    //video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
+    //video.load();
+    //ok(true, "video element created");
+/*});*/
+
+
+<client-side>
+
+ZINC_YV_MEDIA_ROUTER is a switch to use "PrivateMeidaRouter"
+
+[root@HUMAX /]# cat ./run-vtag.sh 
+#!/bin/sh
+
+ZINC_YV_MEDIA_ROUTER=1 ZINC_QMEDIA_PLAYER_LIB=/opt/zinc-trunk/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0 \
+    ./runBrowserStandalone.sh --url http://wll1p04345.dev.youview.co.uk/test.html
+
+<ee>
+
+// 
+2015-07-03 12:25:33,605 ERROR  1152333088 zinc /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken." in response to call to 
+
+/Zinc/Media/MediaRouterFactory
+
+terminate called after throwing an instance of 'DBus::ErrorNoReply'
+  what():  Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken.
+Aborted
+
+
+[root@HUMAX /]# dbus-monitor "interface=Zinc.Media.MediaRouterFactory"
+method call sender=:1.207 -> dest=Zinc.MediaProxy serial=14 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; member=createMediaRouter
+
+no response
+
+dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DBusSendDaemon' /Zinc/Media/MediaRouterFactory Zinc.Media.MediaRouterFactory.createMediaRouter \
+string:Zinc.MediaProxy 
 
 
 ={============================================================================
