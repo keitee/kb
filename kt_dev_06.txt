@@ -5,7 +5,7 @@ kt.dev.boost
 /^[#=]{
 Use #{ for a group and ={ for a item
 
-|kt_dev_boost_000| install
+|kt_dev_boost_000| install, build and run
 |kt_dev_boost_001| bind: to use member function
 |kt_dev_boost_002| program_options
 |kt_dev_boost_003| posix_time
@@ -23,7 +23,7 @@ Use #{ for a group and ={ for a item
 # ============================================================================
 #{
 ={============================================================================
-*kt_dev_boost_000* install
+*kt_dev_boost_000* install, build and run
 
 http://www.boost.org/doc/libs/1_58_0/more/getting_started/unix-variants.html
 
@@ -88,6 +88,17 @@ To solve this since The boost library you are using depends on the boost_system
 library. (Not all of them do.)
 
 $ g++ -g -lboost_system t_asio_01.cpp
+
+
+$ cat ./boobl.sh 
+#!/bin/bash
+g++ -g -std=c++0x -lboost_system $1
+
+$ ./a.out
+./a.out: error while loading shared libraries: libboost_system.so.1.58.0: cannot
+open shared object file: No such file or directory
+
+$ LD_LIBRARY_PATH=/usr/local/lib ./a.out 
 
 
 ={============================================================================
@@ -683,8 +694,8 @@ int main()
 
     // note: run() continue to run
     // The io_service::run() function will also continue to run while there is
-    // still "work" to do.  In this example, the work is the asynchronous wait
-    // on the timer, so the call will not return until the timer has expired and
+    // still work to do. In this example, the 'work' is the asynchronous wait on
+    // the timer, so the call will not return until the timer has expired and
     // the callback has completed.
 
     // It is important to remember to give the io_service some work to do before
@@ -723,6 +734,7 @@ ends...
 // * A counter so that we can stop the program when the timer fires for the
 // sixth time.
 // 
+// note: when to stop
 // However you will observe that there is no explicit call to ask the
 // io_service to stop. Recall that in tutorial Timer.2 we learnt that the
 // io_service::run() function completes when there is no more "work" to do. By
@@ -1010,7 +1022,8 @@ private:
 // do. The background thread will not exit until all asynchronous operations
 // have completed. 
 
-// note: two threads uses the same io
+// note: two threads uses the same io. bind(run, &io) where &io is this since
+// run() is member function but not run(io_service&).
 
 int main()
 {
@@ -1060,80 +1073,12 @@ void handler(
 Regardless of whether the asynchronous operation completes immediately or not,
 the handler will not be invoked from within this function.
 
+note: 
+See that 'hanlder' term means callback function and post() and aync_wait() add a
+work to io_service.
+
 Invocation of the handler will be performed in a manner equivalent to using
 boost::asio::io_service::post().
-
-
-={============================================================================
-*kt_dev_boost_102* asio: deadline_timer
-
-<ref>
-io_service::post
-
-Request the io_service to invoke the given handler and return immediately.
-
-template<typename CompletionHandler>
-void-or-deduced post(CompletionHandler handler);
-
-This function is used to ask the io_service to execute the given handler, but without allowing the
-    io_service to call the handler from inside this function.
-
-The io_service guarantees that the handler will only be called in a thread in which the run(),
-    run_one(), poll() or poll_one() member functions is currently being invoked.  
-        
-Parameters
-
-handler
-
-The handler to be called. The io_service will make a copy of the handler object as required. The
-function signature of the handler must be:
-
-void handler();
-
-Remarks
-
-This function throws an exception only if:
-
-the handler's asio_handler_allocate function; or
-the handler's copy constructor
-
-throws an exception. 
-
-<work-class>
-io_service::work
-
-Class to inform the io_service when it has work to do.
-
-Member Functions
-
-Name Description
-
-get_io_service Get the io_service associated with the work.
-
-explicit work(boost::asio::io_service & io_service);
-               Constructor notifies the io_service that work is starting.
-               Copy constructor notifies the io_service that work is starting.
-
-~work          Destructor notifies the io_service that the work is complete.
-
-The work class is used to 'inform' the io_service when work starts and finishes. This ensures that the
-io_service object's run() function will not exit while work is underway, and that it does exit when
-there is no unfinished work remaining.
-
-The work 'class' is copy-constructible so that it may be used as a data member in a handler class.
-It is not assignable. 
-
-<handler>
-A free function as a completion handler:
-
-void completion_handler()
-{
-  ...
-}
-
-
-={============================================================================
-*kt_dev_boost_102* asio: code
 
 // boost_1_58_0/boost/asio/detail/deadline_timer_service.hpp
 //
@@ -1170,6 +1115,262 @@ void completion_handler()
     return this->service.async_wait(this->implementation,
         BOOST_ASIO_MOVE_CAST(WaitHandler)(handler));
   }
+
+
+={============================================================================
+*kt_dev_boost_102* asio: io_service
+
+http://www.boost.org/doc/libs/1_58_0/doc/html/boost_asio/reference/io_service.html
+
+Provides core I/O functionality.
+
+class io_service : noncopyable
+
+
+* Synchronous and asynchronous operations
+
+Synchronous operations on I/O objects implicitly run the io_service object for
+an individual operation. The io_service functions run(), run_one(), poll() or
+poll_one() must be called for the io_service to perform asynchronous operations
+on behalf of a C++ program. 
+
+Notification that an asynchronous operation has completed is delivered by
+invocation of the associated handler. Handlers are invoked only by a thread that
+is currently calling any overload of run(), run_one(), poll() or poll_one() for
+the io_service. 
+
+
+* Effect of exceptions thrown from handlers
+
+If an exception is thrown from a handler, the exception is allowed to propagate
+through the throwing thread's invocation of run(), run_one(), poll() or
+poll_one(). No other threads that are calling any of these functions are
+affected. It is then the responsibility of the application to catch the
+exception.
+
+After the exception has been caught, the run(), run_one(), poll() or poll_one()
+call may be restarted without the need for an intervening call to reset(). This
+allows the thread to rejoin the io_service object's thread pool 'without'
+impacting any other threads in the pool.
+
+For example:
+
+boost::asio::io_service io_service;
+...
+for (;;)
+{
+  try
+  {
+    io_service.run();
+    break; // run() exited normally
+  }
+  catch (my_exception& e)
+  {
+    // Deal with exception as appropriate.
+  }
+}
+
+
+* Stopping the io_service from running out of work
+
+note: when work is needed
+
+Some applications may need to prevent an io_service object's run() call from
+returning when there is no more work to do. For example, the io_service may be
+being run in a background thread that is launched prior to the application's
+asynchronous operations. The run() call may be kept running by creating an
+object of type io_service::work:
+
+boost::asio::io_service io_service;
+boost::asio::io_service::work work(io_service);
+...
+
+To effect a shutdown, the application will then need to call the io_service
+object's stop() member function. This will cause the io_service run() call to
+return as soon as possible, abandoning unfinished operations and without
+permitting ready handlers to be dispatched.
+
+Alternatively, if the application requires that all operations and handlers be
+allowed to finish normally, the work object may be explicitly destroyed.
+
+boost::asio::io_service io_service;
+auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+...
+work.reset(); // Allow run() to exit. 
+
+
+* Member Functions
+
+<post>
+io_service::post
+
+Request the io_service to invoke the given handler and return immediately.
+
+template<typename CompletionHandler>
+void-or-deduced post(CompletionHandler handler);
+
+This function is used to ask the io_service to execute the given handler, but
+    'without' allowing the io_service to call the handler from inside this
+    function.
+
+The io_service guarantees that the handler will only be called in a thread in
+which the run(), run_one(), poll() or poll_one() member functions is currently
+being invoked.  
+        
+Parameters
+
+handler
+
+The handler to be called. The io_service will make a 'copy' of the handler object
+as required. The function signature of the handler must be:
+
+void handler();
+
+note: the signature of handler is different from one of deadline_timer.
+
+Remarks
+
+This function throws an exception only if:
+
+the handler's asio_handler_allocate function; or the handler's copy constructor
+throws an exception. 
+
+<run>
+io_service::run (1 of 2 overloads)
+
+Run the io_service object's event processing loop.
+
+std::size_t run();
+
+The run() function blocks until all work has finished and there are no more
+handlers to be dispatched, or until the io_service has been stopped.
+
+Multiple threads may call the run() function to set up a pool of threads from
+which the io_service may execute handlers. All threads that are waiting in the
+pool are equivalent and the io_service may choose any one of them to invoke a
+handler.
+
+note: no order?
+
+A normal exit from the run() function implies that the io_service object is
+stopped (the stopped() function returns true). Subsequent calls to run(),
+        run_one(), poll() or poll_one() will return immediately unless there is
+        a prior call to reset().  
+        
+Return Value
+The number of handlers that were executed.
+
+Exceptions
+boost::system::system_error. Thrown on failure. 
+
+Remarks
+The run() function must not be called from a thread that is currently calling
+one of run(), run_one(), poll() or poll_one() on the same io_service object.
+
+The poll() function may also be used to dispatch ready handlers, but without
+blocking. 
+
+note: here 'dispatch' means to get a handler from a io_service and calls it.
+that is dispatch a user code.
+
+
+* Types
+
+<work>
+io_service::work
+
+Class to inform the io_service when it has work to do.
+
+Member Functions
+
+get_io_service 
+Get the io_service associated with the work.
+
+explicit work(boost::asio::io_service & io_service);
+Constructor notifies the io_service that work is starting.
+Copy constructor notifies the io_service that work is starting.
+
+~work          
+Destructor notifies the io_service that the work is complete.
+
+The work class is used to 'inform' the io_service when work starts and finishes.
+This ensures that the io_service object's run() function will not exit while
+work is underway, and that it does exit when there is no unfinished work
+remaining.
+
+The work 'class' is copy-constructible so that it may be used as a data member
+in a handler class.  It is not assignable. 
+
+note: 'work object' and 'work'?
+In other words, as long as an io_service has a work object associated with it,
+   it will never run out of stuff to do.
+
+
+<handler>
+A free function as a completion handler:
+
+void completion_handler()
+{
+  ...
+}
+
+
+={============================================================================
+*kt_dev_boost_102* asio: A guide to getting started with boost::asio
+
+http://www.gamedev.net/blog/950/entry-2249317-a-guide-to-getting-started-with-boostasio/?pg=1
+
+A guide to getting started with boost::asio
+
+Example 1f
+
+#include <boost/asio.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/thread.hpp>
+#include <iostream>
+
+boost::asio::io_service io_service;
+
+void WorkerThread()
+{
+    std::cout << "Thread Start\n";
+    io_service.run();
+    std::cout << "Thread Finish\n";
+}
+
+int main( int argc, char * argv[] )
+{
+    boost::shared_ptr< boost::asio::io_service::work > work(
+            new boost::asio::io_service::work( io_service )
+            );
+
+    std::cout << "Press [return] to exit." << std::endl;
+
+    boost::thread_group worker_threads;
+    for( int x = 0; x < 4; ++x )
+    {
+        worker_threads.create_thread( WorkerThread );
+    }
+
+    std::cin.get();
+
+    io_service.stop();
+
+    worker_threads.join_all();
+
+    return 0;
+}
+
+What should really stand out is how simple and easy it is to make our threaded
+programs 'scale'. By simply adding more worker threads, we can support more and
+more concurrency for processing work through the io_service object. 
+
+As mentioned before, if we had associated a work object with the io_service and
+wanted to let all 'queued' work finish, we would not call stop but rather
+destroy the work object. Care has to be taken though. If we want all work to
+finish but keep giving the io_service more things to do, then it will never
+exit! In that case, at some point, we would want to call the stop function to
+ensure the system actually stops.
 
 
 ==============================================================================
