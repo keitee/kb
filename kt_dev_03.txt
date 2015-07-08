@@ -17,7 +17,8 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_013| asyc: promise
 |kt_dev_code_014| asyc: future barrier
 |kt_dev_code_015| asyc: dispatcher
-|kt_dev_code_016| asyc: dispatcher use
+|kt_dev_code_016| asyc: listener
+|kt_dev_code_017| asyc: dispatcher use
 
 |kt_dev_design_001| use state and if checks
 
@@ -10472,11 +10473,326 @@ NS_ZINC_CLOSE
 ={============================================================================
 *kt_dev_code_014* asyc: future barrier
 
+////////////////////////////////////////
+#ifndef ZINC_FUTUREBARRIER_H_
+#define ZINC_FUTUREBARRIER_H_
+
+#include "../macros.h"
+#include "FutureValue.h"
+#include "async-exceptions.h"
+
+#include "../type-traits/call-traits.h"
+#include "../Utilities.h"
+
+#include <boost/intrusive_ptr.hpp>
+#include <boost/function.hpp>
+#include <boost/bind.hpp>
+
+
+NS_ZINC_OPEN
+
+class Dispatcher;
+typedef Dispatcher FutureDispatcher;
+
+namespace detail {
+    template <typename Functor> class BarrierWrapper;
+    class FutureBarrierImpl;
+}
+
+/**
+ * FutureBarrier is designed to aid synchronisation when making multiple
+ * asynchronous calls simultaneously.  FutureBarrier will call a given
+ * callback asynchronously once all the futures added to it have
+ * completed AND the FutureBarrier itself has gone out of scope.
+ *
+ * (NOTE: This means you must not keep a FutureBarrier alive after the method
+ * creating it returns; for example you must not pass around a shared_ptr to a
+ * FutureBarrier, and you must not make a FutureBarrier be a member of your
+ * class.)
+ *
+ * FutureBarrier is "FutureLike" in that it defines the functions setCallback
+ * and cancel() and thus can be used as an argument to
+ * Continuation::setCallback();
+ */
+class FutureBarrier : boost::noncopyable {
+public:
+    typedef void value_type;
+
+    /**
+     * Constructor
+     */
+    explicit FutureBarrier(FutureDispatcher& dispatcher);
+    ~FutureBarrier();
+
+    /**
+     * Add a Future to the barrier to delay the FutureBarrier from completing
+     * until the Future has completed.
+     *
+     * @param f The future to add. This can be any "FutureLike" object, such
+     *          as a Future, a Continuation, or even another FutureBarrier.
+     *
+     * @param c Callback to be called when the future "f" completes
+     *          *successfully*. It must have the signature:
+     *              void SuccessCallback(T);
+     *          where T is the value_type of the future "f".
+     *          Note that the parameter is T, not FutureValue<T>.
+     *          If the future "f" completes with an error, this callback will
+     *          not be called; and the "final" callback (set with setCallback)
+     *          will (eventually, once all other futures have completed) be
+     *          called with an error.
+     *
+     * Note: It is guaranteed that the callback given here will be called
+     * *before* the callback given in FutureBarrier::setCallback().
+     *
+     * Note: The FutureDispatcher you use should provide the guarantee that all
+     * callbacks will be dispatched on the same thread (which may be a
+     * different thread than the thread where you create the FutureBarrier and
+     * call addWithSuccessCallback). This way, the various callbacks you set
+     * with addWithSuccessCallback don't need to worry about synchronisation
+     * issues.
+     */
+    template <class FutureLike, typename SuccessCallback>
+    void addWithSuccessCallback(FutureLike f, SuccessCallback /* void (T) */ c);
+
+    /**
+     * Add a future to the barrier to delay the FutureBarrier callback until
+     * after the future has completed.
+     *
+     * This is distinct from addWithSuccessCallback in that this is called with a
+     * FutureValue<T> rather than just T, thus allowing finer grained control
+     * of error conditions.
+     *
+     * @param f The future to add.
+     *
+     * @param c The function to call once the future "f" is complete.
+     *          It must have the signature:
+     *              void Callback(FutureValue<T>);
+     *          where T is the value_type of the future "f".
+     *
+     * Note: It is guaranteed that the callback given here will be called
+     * *before* the callback given in FutureBarrier::setCallback().
+     */
+    template <class FutureLike, typename Callback>
+    void addWithCallback(FutureLike f, Callback /* void (FutureValue<T>) */ c);
+
+    /**
+     * Add a future to the barrier to delay the FutureBarrier callback until
+     * after the future has completed.
+     *
+     * The value returned by the completed future is ignored, as long as it is
+     * not an error. An error will cause this FutureBarrier to complete with
+     * the error, just like addWithSuccessCallback.
+     *
+     * @param f The future to add.
+     */
+    template <class FutureLike>
+    void add(FutureLike f);
+
+    /**
+     * Cancel the FutureBarrier.  The behaviour of this function depends on the
+     * template parameter CancellationPolicy.
+     */
+    void cancel(unsigned flags);
+
+    /**
+     * Set the "final" callback method to be invoked after all of the barrier's
+     * Futures have completed, successfully or otherwise.
+     *
+     * @param c The function to call once all the futures have completed.
+     *          This function should have the signature:
+     *              void (FutureValue<void>);
+     *          In this way FutureBarrier is interface compatible with
+     *          Future<void>.
+     */
+    template <typename Callback>
+    void setCallback(Callback c) const;
+
+    template <typename Callback>
+    void setCallback(FutureDispatcher& dispatcher, Callback c);
+private:
+    template <typename Functor, typename ValueType> friend class detail::BarrierWrapper;
+    detail::FutureBarrierImpl* impl;
+};
+
+
+NS_ZINC_CLOSE
+
+#include "detail/FutureBarrier_Impl.h"
+
+#endif /* ZINC_FUTUREBARRIER_H_ */
+
+
+////////////////////////////////////////
+#ifndef ZINC_FUTUREBARRIER_IMPL_H_
+#define ZINC_FUTUREBARRIER_IMPL_H_
+
+#include "../Promise.h"
+#include "ContinuationLike.h"
+#include "../../type-traits/check_concept.h"
+
+NS_ZINC_OPEN
+
+namespace detail {
+
+// Model of ContinuationLike
+class FutureBarrierImpl : boost::noncopyable {
+public:
+    template <class FutureLike, typename Callback>
+    void continueOn(FutureLike f, Callback c);
+
+    void onError(const ErrorCode& ec) {
+        if (!error) {
+            error = ec;
+        }
+    }
+private:
+    template<typename Functor> friend class BarrierWrapper;
+    friend class NS_ZINC::FutureBarrier;
+
+    struct ScopedRef {
+        ScopedRef(FutureBarrierImpl* impl_) : impl(impl_) {}
+        ~ScopedRef() { impl->dec(); }
+        FutureBarrierImpl* impl;
+    };
+    explicit FutureBarrierImpl(FutureDispatcher& dispatcher_) 
+     // Start with a reference count of 1.  We should be owned by the
+     // FutureBarrier
+     : cnt(1), dispatcher(dispatcher_), p(dispatcher)
+    {
+    }
+    void inc() {
+        __sync_fetch_and_add(&cnt, 1);
+    }
+    void dec() {
+        if (__sync_add_and_fetch(&cnt, -1) == 0) {
+            if (error) {
+                p.error(error);
+            }
+            else {
+                p.complete();
+            }
+            delete this;
+        }
+    }
+    void onCancel() {
+        // TODO: Propagate cancellation to "child" functors
+        p.getFuture().cancel();
+    }
+    int cnt;
+    FutureDispatcher& dispatcher;
+    Promise<void> p;
+    ErrorCode error;
+};
+
+template <typename Functor>
+struct BarrierWrapper {
+    typedef void result_type;
+    BarrierWrapper(FutureBarrierImpl* impl_, Functor f_) : f(f_), impl(impl_) {}
+    template <typename ValueType>
+    void operator()(FutureValue<ValueType> vt) {
+        FutureBarrierImpl::ScopedRef refCountGuard(impl);
+        try {
+            f(*impl, vt);
+        }
+        catch (std::exception& e) {
+            impl->onError(copyException(e));
+        }
+    }
+    Functor f;
+    FutureBarrierImpl* impl;
+};
+
+template <typename Functor>
+BarrierWrapper<Functor> barrierWrap(FutureBarrierImpl* impl, Functor f) {
+    return BarrierWrapper<Functor>(impl, f);
+};
+
+// Callback is a functor with the signature:
+//     void (FutureBarrierImpl&, FutureValue<T>);
+template <class FutureLike, typename Callback>
+void FutureBarrierImpl::continueOn(FutureLike f, Callback c) {
+    typedef typename FutureLike::value_type T;
+    // Concept check for nicer error messages:
+    ZINC_CHECK_CONCEPT(( c(*this, LValue<FutureValue<T> >()) ));
+
+    inc();
+    // FIXME: if Callback copy constructor fails we leak
+    f.setCallback(dispatcher, detail::barrierWrap(this, c));
+}
+
+struct noop {
+    typedef void result_type;
+    template <typename ContinuationLike, typename T>
+    void operator()(ContinuationLike&, const T&) {
+    }
+    template <typename ContinuationLike>
+    void operator()(ContinuationLike&) {
+    }
+};
+
+} //namespace detail
+
+
+// Callback is a functor with the signature:
+//     void (FutureValue<T>);
+template <class FutureLike, typename Callback>
+inline void FutureBarrier::addWithCallback(FutureLike f, Callback c) {
+    typedef typename FutureLike::value_type T;
+    // Concept check for nicer error messages:
+    ZINC_CHECK_CONCEPT(( c(LValue<FutureValue<T> >()) ));
+
+    impl->continueOn(f, boost::bind(c, _2));
+}
+
+// Callback is a functor with the signature:
+//     void (T);
+template <class FutureLike, typename SuccessCallback>
+inline void FutureBarrier::addWithSuccessCallback(FutureLike f, SuccessCallback c) {
+    typedef typename FutureLike::value_type T;
+    // Concept check for nicer error messages:
+    ZINC_CHECK_CONCEPT(( c(LValue<T>()) ));
+
+    impl->continueOn(f, detail::adaptForHappyPath(boost::bind(c, _2)));
+}
+
+template <class FutureLike>
+inline void FutureBarrier::add(FutureLike f) {
+    impl->continueOn(f, detail::adaptForHappyPath(detail::noop()));
+}
+
+template <typename Callback>
+inline void FutureBarrier::setCallback(Callback c) const {
+    impl->p.getFuture().setCallback(c);
+}
+
+template <typename Callback>
+inline void FutureBarrier::setCallback(FutureDispatcher& dispatcher, Callback c) {
+    impl->p.getFuture().setCallback(dispatcher, c);
+}
+
+inline FutureBarrier::FutureBarrier(FutureDispatcher& dispatcher)
+ : impl(new detail::FutureBarrierImpl(dispatcher)) {
+}
+
+inline FutureBarrier::~FutureBarrier() {
+    impl->dec();
+}
+
+inline void FutureBarrier::cancel(unsigned flags) {
+    if (flags & cancel_flag::deep) {
+        impl->onCancel();
+    }
+}
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_FUTUREBARRIER_IMPL_H_ */
+
 
 ={============================================================================
 *kt_dev_code_015* asyc: dispatcher
 
-DP <- STDP <-
+DP <- STDP
 
 ////////////////////////////////////////
 #ifndef ZINC_DISPATCHER_H_
@@ -10834,142 +11150,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_code_016* asyc: dispatcher use
-
-<use-case>
-
-// this is listner inheritance
-
-EventProducer 
-   : DispatchingEventProducer(Dispatcher)
-   {
-       virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
-
-       // forwards to impl
-       mutable detail::DispatchingEventProducerHoisted impl;
-   };
-      // EventWindowEventListener is ListenerT which is base class that EPG
-      // derives from and EPG is Listener. Create a 'window' and add a self to
-      // it as a Listener.
-      
-      // EventWindow defines API
-      : EventEindow : DispatchingEventProducer<EventWindowEventListener>
-
-         : SystemClientEventWindow
-
-
-// SystemClientFactory() creates two dispatches:
-//
-//    boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
-//    boost::shared_ptr<NS_ZINC::FutureDispatcher> futureDispatcher;
-//
-//    defaultDispatcher(boost::make_shared<InlineDispatcher>())
-//
-//    // this is SingleThreadDispatcher
-//    futureDispatcher(boost::make_shared<SequentialFutureDispatcher>())
-
-
-// The client calls API which leads to this
-
-void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
-{
-    // set future dispatcher to future barrier
-
-    NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
-
-    // add {future, member function pointer} pair to future barrier and these
-    // futures are futures associated to dbus call. suppose that future will be
-    // set when dbus call succeeds and when it is set, member function gets
-    // called.
-    //
-    // note: eventsReceived are overloaded
-    //
-    // therefore,
-    //
-    // fMASEvents -> SystemClientEventRepository::eventsReceived()
-    // fDTTEvents -> SystemClientEventRepository::eventsReceived()
-
-    void (SystemClientEventRepository::*masCallback)
-        (boost::shared_ptr<EventWindowCreateCommand>,
-         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
-        &SystemClientEventRepository::eventsReceived;
-
-    void (SystemClientEventRepository::*dttCallback)
-        (boost::shared_ptr<EventWindowCreateCommand>,
-         const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
-        &SystemClientEventRepository::eventsReceived;
-
-    bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
-    bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
-
-    // note: after all, eventWindowDataRetrievalComplete() has a notify chain up
-    // to a client. what's the relationship of these three callbacks? how future
-    // barrier works?
-    
-    bar.setCallback(
-          boost::bind
-            (&SystemClientEventRepository::eventWindowDataRetrievalComplete, 
-             shared_from_this(), sharedCmd)
-          );
-};
-
-
-void SystemClientEventRepository::eventsReceived(
-        boost::shared_ptr<EventWindowCreateCommand> command,
-        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
-{
-    // get the returned data from eventsFV.get() and copy data to a vector.
-    //
-    // signal client(application) that data is ready by setting
-    // command->promise.complete(data);
-};
-
-void eventsReceived(
-   boost::shared_ptr<EventWindowCreateCommand> command,
-   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
-{
-   event_collection_ptr clientEvents = getClientEvents(systemEvents);
-}  
-
-
-note: goes up to a client via SystemClientEventWindow::produceEvent
-
-void SystemClientEventRepository::eventWindowDataRetrievalComplete(
-        boost::shared_ptr<EventWindowCreateCommand> command)
-{
-    notifyExistingWindowAboutNewData(command);
-}
-
-void SystemClientEventRepository::notifyExistingWindowAboutNewData(
-        boost::shared_ptr<EventWindowCreateCommand> command)
-{
-    boost::shared_ptr<SystemClientEventWindow> w = command->newWindow.lock();
-    w->ConfigChanged();
-}
-
-
-note: here moves from SCER line to SCEW line
-
-void SystemClientEventWindow::ConfigChanged()
-{
-    notifyWindowChanged();
-}
-
-void SystemClientEventWindow::notifyWindowChanged()
-{
-   produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
-}
-
-// Uses DispatchingEventProducer::produceEvent(Functor) which forwards
-// to impl, DispatchingEventProducerHoisted::produceEvent().
-//
-
-void SystemClientEventWindow::notifyEventsChanged(
-        std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> > events)
-{
-    produceEvent(bind(&EventWindowEventListener::EventsChanged, _1, events));
-}
-
+*kt_dev_code_016* asyc: listener
 
 ////////////////////////////////////////
 #ifndef ZINC_EVENTPRODUCER_H_
@@ -11024,22 +11205,6 @@ class ZINC_EXPORT EventProducer : virtual public Polymorphic {
 NS_ZINC_CLOSE
 
 #endif /* ZINC_EVENTPRODUCER_H_ */
-
-
-////////////////////////////////////////
-#ifndef ZINC_EVENTDISPATCHER_H_
-#define ZINC_EVENTDISPATCHER_H_
-
-#include "macros.h"
-#include "async/Dispatcher.h"
-
-NS_ZINC_OPEN
-
-typedef Dispatcher EventDispatcher;
-
-NS_ZINC_CLOSE
-
-#endif /* ZINC_EVENTDISPATCHER_H_ */
 
 
 ////////////////////////////////////////
@@ -11209,37 +11374,6 @@ NS_ZINC_CLOSE
 
 
 ////////////////////////////////////////
-// A class that represents the Event Window, basically the EPG view.
-class ZINC_EXPORT EventWindow : 
-    virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> {
-
-        // define virtual interfaces for API so this is ABC.
-};
-
-
-// created from createEventWindow() and passed up to EPG
-
-class ZINC_EXPORT SystemClientEventWindow 
-                                 : virtual public EventWindow,
-                                   public boost::enable_shared_from_this<SystemClientEventWindow>,
-                                   virtual public MetadataChangeListener 
-{
-    // note: add f = bind() to listeners. so when called from listners, will lead to 
-    // EventWindowEventListener::EventsChanged(_1, events);
-    
-    notifyEventsChanged(std::vector<boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Event> > events)
-    {
-        produceEvent(bind(&EventWindowEventListener::EventsChanged, _1, events));
-    }
-
-    notifyWindowChanged()
-    {
-        produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
-    }
-};
-
-
-////////////////////////////////////////
 #ifndef ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_
 #define ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_
 
@@ -11304,6 +11438,7 @@ NS_ZINC_CLOSE
 #endif /* ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_ */
 
 
+////////////////////////////////////////
 /*
  * DispatchingEventProducer.cpp
  *
@@ -11430,6 +11565,11 @@ DispatchingEventProducerHoisted::getDispatcher() const {
 	return dispatcher;
 }
 
+
+// note:
+// this is onc called from future chain coming up from dbus such as
+// notifyWindowChanged()
+
 void 
 DispatchingEventProducerHoisted::produceEvent(
         boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
@@ -11441,7 +11581,7 @@ DispatchingEventProducerHoisted::produceEvent(
     // We copy listeners to this stack allocated array before dispatch so we
     // don't have to hold the lock while calling user code.
 
-    // note: array of listener_entry pair
+    // note: array of listener_entry pair{wp<listener>, sp<event dispatcher>}
 
     listener_entry localListeners[len];
     listener_entry* next = localListeners;
@@ -11492,6 +11632,269 @@ size_t DispatchingEventProducerHoisted::getListenerCount() const {
 }
 
 NS_ZINC_CLOSE
+
+
+////////////////////////////////////////
+#ifndef ZINC_EVENTDISPATCHER_H_
+#define ZINC_EVENTDISPATCHER_H_
+
+#include "macros.h"
+#include "async/Dispatcher.h"
+
+NS_ZINC_OPEN
+
+typedef Dispatcher EventDispatcher;
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_EVENTDISPATCHER_H_ */
+
+
+={============================================================================
+*kt_dev_code_017* asyc: dispatcher use
+
+<use-case>
+
+// this is listner inheritance
+
+EventProducer 
+   : DispatchingEventProducer(Dispatcher)
+   {
+       virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
+
+       // forwards to impl
+       mutable detail::DispatchingEventProducerHoisted impl;
+   };
+      // EventWindowEventListener is ListenerT which is base class that EPG
+      // derives from and EPG is Listener. Create a 'window' and add a self to
+      // it as a Listener.
+      
+      // EventWindow defines API
+      : EventEindow : DispatchingEventProducer<EventWindowEventListener>
+
+         : SystemClientEventWindow
+         {
+            notifyWindowChanged()
+            {
+                produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+            }
+         }
+
+// SystemClientFactory() creates two dispatches:
+//
+//    boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
+//    boost::shared_ptr<NS_ZINC::FutureDispatcher> futureDispatcher;
+//
+//    defaultDispatcher(boost::make_shared<InlineDispatcher>())
+//
+//    // this is SingleThreadDispatcher
+//    futureDispatcher(boost::make_shared<SequentialFutureDispatcher>())
+
+// note: The application calls this API
+
+// The application calls this to have SCER:
+//  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() 
+//  {
+//    createConcreteEventRepository() create SCER 
+//    set dispatchers to SCER
+//
+//    concreteER->setDefaultDispatcher(getDefaultDispatcher());
+//    concreteER->setFutureDispatcher(futureDispatcher);
+//
+//    return SCER;
+//  }
+//
+// So DD is inline dispatcher and FD is single threaded dispatcher.
+//
+// The application calls SCER->getEventWindow();
+//
+
+/*
+ * DispatchingFutureProducer
+ *
+ * Provide an interface for injecting a future dispatcher
+ */
+class DispatchingFutureProducer : virtual public Polymorphic
+{
+public:
+    virtual void setFutureDispatcher(boost::shared_ptr<FutureDispatcher> dispatcher)
+    {
+        boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
+        this->dispatcher = dispatcher;
+    }
+    virtual void removeFutureDispatcher()
+    {
+        boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
+        dispatcher.reset();
+    }
+    virtual boost::shared_ptr<FutureDispatcher> getFutureDispatcher() const
+    {
+        boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
+        return dispatcher;
+    }
+private:
+    boost::shared_ptr<FutureDispatcher> dispatcher;
+    mutable boost::recursive_mutex dispatcherMutex;
+};
+
+
+class ZINC_EXPORT SystemClientEventRepository : 
+    public EventRepository,
+    public NS_ZINC::DispatchingFutureProducer,
+    public boost::enable_shared_from_this<SystemClientEventRepository>,
+    public MetadataChangeListener
+{
+    boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher;
+
+    void setDefaultDispatcher(boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher_)
+    {
+        dispatcher = dispatcher_;
+    }
+
+    /**
+     * Creates event window from events passed in.
+     * @note The method sanitizes the events, removes duplicates and joins
+     * adjacent null events 
+     * @note This method assumes that if there are duplicates inside events
+     * passed in, they'll be identical.
+     */
+    boost::shared_ptr<SystemClientEventWindow> SystemClientEventRepository::createEventWindow(
+            EventWindowCreateCommand& cmd,
+            event_collection_ptr events, bool hasStaleData)
+    {
+        boost::shared_ptr<SystemClientEventWindow> ew = 
+            boost::make_shared<SystemClientEventWindow>(cmd.location,
+                    sanitizedEvents, serviceRepo, shared_from_this(),
+                    (microsec_clock::universal_time() - cmd.dataRetrievalStartTime).total_milliseconds(),
+                    cmd.hasDataFromAllSources(), hasStaleData);
+
+        // note: set event dispatcher with DD.
+        ew->setDispatcher(dispatcher);
+
+        metadataObserver->addListener(ew);
+    }
+};
+
+Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWindow(
+        uint32_t startingServiceRow, uint32_t serviceCount,
+        boost::posix_time::ptime startTime, int32_t seconds,
+        event_collection_ptr intersectingEvents, Bounds missing,
+        bool isMovingForward)
+{
+    // note: create Promise(FD)
+    NS_ZINC::Promise<boost::shared_ptr<EventWindow> > p(*getFutureDispatcher());
+
+    // note: create a cmd and Promise is copied to cmd that has *SCEW, and promise
+    EventWindowCreateCommand cmd( p, newWindowLocation, newWindowLocation,
+            intersectingEvents, microsec_clock::universal_time(),
+            serviceRepo);
+
+    // create SCEW and set ED
+    boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents,
+            hasStaleData);
+
+    // note: this is to say that EW creation is done. so "promise" for EW creation.
+    cmd.promise.complete(ew);
+    cmd.promiseCompleted = true;
+
+    getEventsFromSystemAPI(cmd);
+
+    // return future to EPG
+    return p.getFuture();
+}
+
+
+void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+{
+    // set future dispatcher to future barrier
+
+    NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
+
+    // add {future, member function pointer} pair to future barrier and these
+    // futures are futures associated to dbus call. suppose that future will be
+    // set when dbus call succeeds and when it is set, member function gets
+    // called.
+    //
+    // note: eventsReceived are overloaded
+    //
+    // therefore,
+    //
+    // fMASEvents -> SystemClientEventRepository::eventsReceived()
+    // fDTTEvents -> SystemClientEventRepository::eventsReceived()
+
+    void (SystemClientEventRepository::*masCallback)
+        (boost::shared_ptr<EventWindowCreateCommand>,
+         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
+        &SystemClientEventRepository::eventsReceived;
+
+    void (SystemClientEventRepository::*dttCallback)
+        (boost::shared_ptr<EventWindowCreateCommand>,
+         const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
+        &SystemClientEventRepository::eventsReceived;
+
+    bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
+    bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
+
+    // note: after all, eventWindowDataRetrievalComplete() has a notify chain up
+    // to a client. what's the relationship of these three callbacks? how future
+    // barrier works?
+    
+    bar.setCallback(
+          boost::bind
+            (&SystemClientEventRepository::eventWindowDataRetrievalComplete, 
+             shared_from_this(), sharedCmd)
+          );
+};
+
+
+void SystemClientEventRepository::eventsReceived(
+        boost::shared_ptr<EventWindowCreateCommand> command,
+        const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+{
+    // get the returned data from eventsFV.get() and copy data to a vector.
+    //
+    // signal client(application) that data is ready by setting
+    // command->promise.complete(data);
+};
+
+void eventsReceived(
+   boost::shared_ptr<EventWindowCreateCommand> command,
+   const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
+{
+   event_collection_ptr clientEvents = getClientEvents(systemEvents);
+}  
+
+
+note: goes up to a client via SystemClientEventWindow::produceEvent
+
+void SystemClientEventRepository::eventWindowDataRetrievalComplete(
+        boost::shared_ptr<EventWindowCreateCommand> command)
+{
+    notifyExistingWindowAboutNewData(command);
+}
+
+void SystemClientEventRepository::notifyExistingWindowAboutNewData(
+        boost::shared_ptr<EventWindowCreateCommand> command)
+{
+    boost::shared_ptr<SystemClientEventWindow> w = command->newWindow.lock();
+    w->ConfigChanged();
+}
+
+
+note: here moves from SCER line to SCEW line
+
+void SystemClientEventWindow::ConfigChanged()
+{
+    notifyWindowChanged();
+}
+
+void SystemClientEventWindow::notifyWindowChanged()
+{
+   produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+}
+
+// Uses DispatchingEventProducer::produceEvent(Functor) which forwards
+// to impl, DispatchingEventProducerHoisted::produceEvent().
 
 
 # ============================================================================
