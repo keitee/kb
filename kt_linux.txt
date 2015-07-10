@@ -324,12 +324,15 @@
 ={============================================================================
 *kt_linux_bash_000* bash: reference
 
-
 http://www.gnu.org/software/bash/
 
 Advanced Bash-Scripting Guide
 https://wiki.kldp.org/HOWTO/html/Adv-Bash-Scr-HOWTO/
 http://www.tldp.org/LDP/abs/html/
+
+
+Bash Hackers Wiki Frontpage
+http://wiki.bash-hackers.org/start
 
 
 ={============================================================================
@@ -1602,7 +1605,13 @@ Function C via pass
 Function D.
 } fd
 
+
 {syntax}
+function function_C() {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
+}
 
 function function_C {
   echo "{ fc"
@@ -1630,6 +1639,16 @@ function_C {
 } fc
 ./sample.sh: line 27: syntax error near unexpected token `}'
 ./sample.sh: line 27: `}'
+
+
+{use-return-value}
+get_available_space() {
+    declare -a fs_info=( $(stat -f -c "%d %s" "$core_output_path") )
+    echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
+}
+
+# break the loop if the available space is above the threshold
+[ "$(get_available_space)" -lt "$threshold" ] || break
 
 
 ={============================================================================
@@ -2065,7 +2084,8 @@ An AND list has the form
 
 command1 && command2
 
-command2 is executed if, and only if, command1 returns an exit status of zero.
+command2 is executed if, and only if, command1 returns an exit status of
+zero(true).
 
 An OR list has the form
 
@@ -3385,6 +3405,12 @@ will be used, until that one is full or until there are no more arguments. The s
 xargs greatly speeds up your scripts and the performance of your machine.
 
 
+<without-xarg>
+
+$ ls -al $(find . -name "*.log")
+$ tar -cjf daemon-logs.tar.bz2 $(find /opt/zinc*/var/daemons/ -name "*.log")
+
+
 ={============================================================================
 *kt_linux_tool_014* ssh and putty
 
@@ -3757,6 +3783,8 @@ $ strace -f -o trace sh ./compile.sh
 When use to run a program:
 
 $ strace ./appname
+
+strace -ff -s 128 -v -o dbus-trace.log -p <dbus daemon PID>
 
 
 <how-to-run-app-with-strace>
@@ -7664,6 +7692,89 @@ sysctl.conf is the file controlling every configuration under /proc/sys
 
 Just wanted to say that there is no need to edit the file manually. simply run the sysctl command,
 which does the stuff
+
+
+<run-command-in-core-pattern>
+
+[root@HUMAX sandbox]# cat /proc/sys/kernel/core_pattern 
+|/bin/bash /usr/local/bin/core-dump /mnt/hd1/ %p
+
+#!/bin/bash
+
+##
+# This is meant to be used to:
+# - save the core dump piped to STDIN,
+# - capture process memory map (/proc/pid/maps)
+# - process the core dump (if gdb is installed)
+#   to produce a text file with the backtrace
+#   already demangled and info about threads.
+# See core (5) man page for more information.
+#
+# This script is meant to be executed by the Kernel if
+# /proc/sys/kernel/core_pattern references it.
+#
+# Usage:
+#         ulimit -c unlimited
+#         echo "|/bin/bash /path/to/core-dump /mnt/hd1/ %p" > /proc/sys/kernel/core_pattern
+#
+# Author: hubert.lacote@youview.com
+#         kris@youview.com
+##
+
+gdb_path=/mnt/hd1/opt/zinc/oss/debugtools/bin/gdb
+
+die() {
+    echo "[Error]: $1" >&2
+    exit 1
+}
+
+##
+# Produce a text file from the core dump with the backtrace
+# already demangled and info about threads... 
+##
+process_core_dump() {
+    local core_dump="$1"
+    local core_maps="$2"
+    local output_file="$3"
+
+    local first_maps_line="$(head -1 $core_maps)"
+    # Assume the executable is under /opt
+    local executable="/opt/${first_maps_line#*/opt/}"
+
+    [[ -e "$executable" ]] || die "Failed to extract executable from '$first_maps_line'." 2> $output_file
+
+    $gdb_path --batch \
+              --eval-command="info threads" \
+              --eval-command "bt" \
+              --eval-command "thread apply all bt" \
+              --eval-command 'info sharedlibrary' \
+              --eval-command 'info registers' \
+              --eval-command 'info locals' \
+              --eval-command 'info args' \
+              --eval-command 'x/100a $sp' \
+              --eval-command 'x/50i $pc' \
+              "$executable" "$core_dump" &> "$output_file"
+}
+
+
+[[ $# -eq 2 ]] || { echo "Error: script is not meant to be run manually." >&2; exit 1; }
+
+core_output_path=$1
+pid=$2
+
+cat /proc/$pid/maps > "${core_output_path}/core-maps.$pid"
+dd of="${core_output_path}/core.$pid" bs=1M
+
+[[ -x "$gdb_path" ]] &&
+    process_core_dump \
+        "${core_output_path}/core.$pid" \
+        "${core_output_path}/core-maps.$pid" \
+        "${core_output_path}/core-text.$pid"
+
+
+note:
+This means that when use command in the pattern then dump core on stdin.
+
 
 <conditions-to-check>
 0. configured for cross platform
@@ -21663,6 +21774,32 @@ write(2, "\n(w3cEngine:1641): GStreamer-WARN"..., 134
 
 note: Even though the real issue is that there is no Mgr.so which is the next
 so, the error suggest that failed to open the starting so.
+
+
+={============================================================================
+*kt_linux_core_412* shared library: ld.conf and ld.cache
+
+/etc/ld.so.cache
+
+/etc/ld.so.cache is required to run D-BUS daemon as non-root. This is due to
+the fact that LD_LIBRARY_PATH is ignored when it calls setuid
+yv-daemon-sandbox (this is intended behaviour). The dynamic linker does not
+resolve shared object dependencies properly in this situation. Using RPATH
+could help with that but it is generally not recommended and it is broken in
+uClibc.
+
+In order to create ld.so.cache you may create /etc/ld.so.conf with the
+following content:
+
+/opt/zinc/oss/lib
+/opt/zinc/lib
+/usr/local/lib
+/opt/stagecraft-2.0/bin
+
+and run ldconfig. You can get ldconfig as part of uClibc build or download
+MIPSEL rootfs from the uClibc site and extract it from there. Note that you
+should generate /etc/ld.so.cache with every build as the list of the shared
+libraries may differ.
 
 
 ={============================================================================

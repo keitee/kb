@@ -26,6 +26,7 @@
 |kt_dev_uv_stack_011| stack: log
 |kt_dev_uv_stack_012| stack: gdb
 |kt_dev_uv_stack_013| stack: platform data
+|kt_dev_uv_stack_014| stack: debug
 
 |kt_dev_uv_stack_100| stack: element names
 |kt_dev_uv_stack_101| stack: client factory and client system binding
@@ -1616,6 +1617,61 @@ Exec=/opt/zinc/bin/bronzemediad > x.log 2>&1
 
 
 ={============================================================================
+*kt_dev_uv_stack_003* stack: launch chain and appid
+
+https://wiki.youview.co.uk/display/YVDM/Application+Sandboxing?src=search
+
+Launching applications and identities database (informative)
+
+This section is informative only. There's nothing that Device Manufacturers need
+to do about it.
+
+The way it works is as follows:
+
+launch chain
+Main UI -> [D-BUS] -> UIME -> ((since C13) [D-BUS] -> BabySitter ->) [fork/exec]
+-> radiumairlauncher -> Titanium Verifier -> {input: application
+    capabilities/credentials} Titanium Container (sandbox)
+
+preparing a sandbox
+The Titanium Container prepares a sandbox for the application.
+
+
+As Titanium Container has to assume that the application might be launched for
+the first time it also has to be prepared to allocate and store some information
+(see Appendix B: Notes on installing vs. updating/launching an application on
+ this page).
+
+At the moment the application "database" is organised in a way that every
+application has its own <UID> sub-directory:
+
+/opt/zinc/oss/var/applications/identities
+                               `-- <UID>
+                                   |-- groups
+                                   |-- x-youview-appid
+                                   `-- User-Agent
+
+groups
+A file containing group identifiers (GID) of all groups that that the
+application belongs to. The first GID is the application primary group, all
+other are supplementary groups.
+
+x-youview-appid
+A file containing the application identifier prefixed with either "youview:" or
+"dev:". It is used both to generate x-youview-appid HTTP header (see Section
+        'Networking' of 2105-S Flash Presentation Engine Integration
+        specification), to look up the identities by the application identifier
+and to read the application identifier in the client API (mainly for the client
+        API access controls).
+
+User-Agent
+A file containing a value for the User-Agent HTTP header (see 1122-S User-Agent
+        specification. It is stored individually for each application as it has
+        to remain the same since the application particular version of the
+        application was launched for the first time.
+
+
+={============================================================================
 *kt_dev_uv_stack_004* stack: oem configs
 
 root# getChildItems oem
@@ -2372,17 +2428,6 @@ lrwx------    1 root     root          64 Feb 16 16:06 30 -> /dev/nexus_pwm
 
 cat /var/tmp/NetworkManager.log
 
-<when-in-sandbox>
-l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:14 10 -> /run/youview/jail/daemons/
-   osmiumd-N7HXTA/opt/zinc/var/log/litanium.log
-lrwx------    1 osmiumd  osmiumd       64 Feb 16 16:14 11 -> anon_inode:[eventpoll]
-lrwx------    1 osmiumd  osmiumd       64 Feb 16 16:14 12 -> anon_inode:[eventfd]
-l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 2 -> /dev/null
-l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 3 -> /run/youview/jail/daemons/
-   osmiumd-N7HXTA/opt/zinc/var/log/osmium.log
-
-cat /opt/zinc/var/daemons/osmiumd/log/osmium.log
-
 
 {refs}
 https://wiki.youview.co.uk/display/canvas/Zinc+Logging+Framework
@@ -2504,21 +2549,18 @@ EXIT:  std::vector<boost::filesystem::basic_path<std::basic_string<char, std::ch
 nickel::system::findMediaRouterPluginConfigFiles(const std::string&)
 
 
+{application-log}
 https://wiki.youview.co.uk/display/canvas/Debugging+Issues+on+a+Device+Emporium
 
 Applications like the main UI or OnDemand players live in a different place:
-
-# Main UI logs on a patch-o-tron build:
-/opt/zinc-trunk/var/applications/data/air/mainui/log/
-
 # Main UI logs on an integrated build:
 /opt/zinc/var/applications/data/air/mainui/log/
-
-To collect all application logs into a single tarball, you can run this command:
-tar -cjf application-logs.tar.bz2 $(find /opt/zinc*/var/applications/ -name "*.log")
-
-ie. create a bzipped tarball called "application-logs.tar.bz2" by finding all files in application
-directories ending in ".log"
+ 
+# BBC apps logs on an integrated build:
+/opt/zinc/var/applications/data/air/31c5e1725fb42bc769224449ebe0e6464cb6304acba079d0e5c4b59768cb9331/log/
+ 
+# Main UI logs on a patch-o-tron build:
+/opt/zinc-trunk/var/applications/data/air/mainui/log/
 
 
 ={============================================================================
@@ -2600,6 +2642,30 @@ drwxrwxr-x    3 1024     1025        4.0K Jun  2 12:03 sodium-air-client-api/
 drwxrwxr-x    5 1024     1025        4.0K Jun  2 12:00 stagecraft2-extensions/
 drwxrwxr-x    2 1024     1025        4.0K Jun  2 11:50 zinc-http/
 drwxrwxr-x    2 1024     1025        4.0K Jun  2 11:51 zinc-http-cache/
+
+
+={============================================================================
+*kt_dev_uv_stack_014* stack: debug
+
+https://wiki.youview.co.uk/display/canvas/Debugging+Issues+on+a+Device+Emporium
+
+Debugging webkit
+
+The script "configure-webkit" can be used to get more logging or core dumps out
+of webkit. More options may be added in future so check the help:
+
+[root@HUMAX tmp]# configure-webkit -h
+Usage: /usr/local/bin/configure-webkit [-u <URL>|-U] [-d|-D] [-g|-G] [-c]
+        -u: Hard-code a fixed URL in runBrowser script
+        -U: Revert to default URL
+        -d: Enable WebKit Remote Debugging [1]
+        -D: Disable WebKit Remote Debugging [1]
+        -g: Enable GStreamer debugging [1]
+        -G: Disable GStreamer debugging [1]
+        -c: Enable core dumps for HTML5 applications
+
+note:
+this is in /setup-humax/scripts/ and in /usr/local/bin on a box
 
 
 ={============================================================================
@@ -8511,35 +8577,28 @@ lrwxrwxrwx    1 root     root            33 Jan  1  1970 ./zinc/lib/libTitaniumC
 ={============================================================================
 *kt_dev_uv_stack_351* stack: titanium: sandbox
 
-[root@HUMAX /]# ll /opt/zinc-trunk/lib/sandbox/service-yv.d/            
-dr-x------    2 root     root        4.0K Jun 25 14:17 ./
-drwxrwxr-x    6 1024     1025        4.0K Jul  8 15:06 ../
--r--------    1 root     root          47 Jun 25 14:17 audiofeedbackd.conf
--r--------    1 root     root         126 Jun 25 14:17 avahid.conf
--r--------    1 root     root         119 Jul  8 15:06 babysitterd.conf
--r--------    1 root     root         101 Jun 25 14:17 cobaltmetadatabrokerd.conf
--r--------    1 root     root         192 Jun 25 14:17 dbusbridged.conf
--r--------    1 root     root          35 Jun 25 14:17 devicemanagerd.conf
--r--------    1 root     root         126 Jun 25 14:17 dialserverd.conf
--r--------    1 root     root         251 Jun 25 14:17 linearsourced.conf
--r--------    1 root     root         123 Jun 25 14:17 onscreenidd.conf
--r--------    1 root     root         685 Jun 25 14:17 radiumd.conf
--r--------    1 root     root         132 Jun 25 14:17 sodiumd.conf
--r--------    1 root     root          89 Jul  8 16:20 tunerd.conf
--r--------    1 root     root         322 Jul  8 15:06 uimanagerd.conf
-
-// add this line
-[root@HUMAX /]# cat /opt/zinc-trunk/lib/sandbox/service-yv.d/tunerd.conf 
-[directories]
-
-[options]                       
-StdOut=/dev/console
-StdErr=/dev/console
+{sandbox}
+Generally this is about what to import from a real file system in to "sandbox"
+that is applications view. sandbox is container.
 
 
-./Titanium.ApplicationContainer.Production/src/sandbox-drop-privileges.c
+{sandbox-files}
+[root@HUMAX sandbox]# pwd
+/opt/zinc-trunk/lib/sandbox
+[root@HUMAX sandbox]# ll
+drwxrwxr-x    6 1024     1025        4.0K Jul  9 13:43 ./
+drwxr-xr-x    8 1024     1025       28.0K Jul  6 12:14 ../
+-r--------    1 root     root         403 Jul  3 03:19 application-oem.conf
+dr-x------    2 root     root        4.0K Jun 25 14:17 application-oem.d/
+-r--------    1 root     root        1.1K Jul  9 13:43 application-yv.conf
+dr-x------    2 root     root        4.0K Jun 25 14:17 application-yv.d/
+-r--------    1 root     root         427 Jul  3 03:19 daemon-oem.conf
+-r--------    1 root     root        2.1K Jul  9 13:43 daemon-yv.conf
+dr-x------    2 root     root        4.0K Jul  9 13:43 service-oem.d/
+dr-x------    2 root     root        4.0K Jun 25 14:17 service-yv.d/
 
 
+{sandbox-application}
 /opt/zinc-trunk/lib/sandbox/application-yv.conf
 
 ##
@@ -8604,6 +8663,113 @@ StdErr=/dev/console
 [options]
 StdOut=/dev/console
 StdErr=/dev/console
+
+
+{sandbox-daemon}
+
+https://wiki.youview.co.uk/display/YVDM/Daemon+Sandboxing?src=contextnavpagetreemode
+
+If a daemon requires specific directories in the sandbox and/or specific
+capabilities (C11) All daemons share a common configuration file which lists
+directories that YouView considers as required to import into the sandbox:
+
+/opt/zinc/lib/sandbox/daemon.conf
+
+This file should NOT be modified. In order to add daemon specific
+directories/capabilities create a configuration file:
+
+/opt/zinc/lib/sandbox/service.d/<daemon>.conf
+
+Make sure that only root can read it (otherwise sandboxing the daemon may fail).
+
+
+[root@HUMAX /]# ll /opt/zinc-trunk/lib/sandbox/service-yv.d/            
+dr-x------    2 root     root        4.0K Jun 25 14:17 ./
+drwxrwxr-x    6 1024     1025        4.0K Jul  8 15:06 ../
+-r--------    1 root     root          47 Jun 25 14:17 audiofeedbackd.conf
+-r--------    1 root     root         126 Jun 25 14:17 avahid.conf
+-r--------    1 root     root         119 Jul  8 15:06 babysitterd.conf
+-r--------    1 root     root         101 Jun 25 14:17 cobaltmetadatabrokerd.conf
+-r--------    1 root     root         192 Jun 25 14:17 dbusbridged.conf
+-r--------    1 root     root          35 Jun 25 14:17 devicemanagerd.conf
+-r--------    1 root     root         126 Jun 25 14:17 dialserverd.conf
+-r--------    1 root     root         251 Jun 25 14:17 linearsourced.conf
+-r--------    1 root     root         123 Jun 25 14:17 onscreenidd.conf
+-r--------    1 root     root         685 Jun 25 14:17 radiumd.conf
+-r--------    1 root     root         132 Jun 25 14:17 sodiumd.conf
+-r--------    1 root     root          89 Jul  8 16:20 tunerd.conf
+-r--------    1 root     root         322 Jul  8 15:06 uimanagerd.conf
+
+
+<to-see-outputs-from-daemon-on-console>
+add this line to a daemon conf file.
+
+[options]                       
+StdOut=/dev/console
+StdErr=/dev/console
+
+
+<to-run-deamon-in-sandbox>
+Running yv-daemon-sandbox Daemon in Sandbox
+
+Ideally no daemon should run as root and all of them should be launched using
+D-BUS activation. Even if the daemon requires to run as root it should also be
+started via D-BUS (see the service files section below).  Service Files
+
+YouView configured the D-BUS in release C11-m4 to launch all services by using
+yv-daemon-sandbox setuid helper executable. This requires that every service
+file in /opt/zinc/oss/share/dbus-1/services has the User entry even if it's
+root, e. g.
+
+[D-BUS Service]
+Name=Zinc.Announcement
+Exec=/opt/zinc-trunk/bin/copperannouncementd
+User=copperannouncementd
+
+If your daemon is completely not ready for running in the sandbox then you may
+specify the User entry as User=root. This will 'disable' sandboxing for that
+daemon. If you can run your daemon in the sandbox but need to kep root
+privileges to set the capabilities and drop privileges in the daemon code then
+specify the User entry as your daemon's non-root user name and add KeepRootUser
+option to your daemon sandbox configuration files (see the sections above).
+
+
+{daemon-files}
+By default all file system writeable area is not shared between daemons. Hence
+/opt/zinc/var and as a consequence /opt/zinc/var/log are private to every
+daemon. You can find the private area in /opt/zinc/var/daemons/<daemon name>.
+Note that /tmp is not only private but also volatile and removed automatically
+when the daemon ceases to exist
+
+note: 
+depending on how run daemon, log will be made in different place. If run it as
+root like running it on command line, then see /opt/zinc/var/log/nickel.log. If
+run is over dbus then see /opt/zinc/var/daemons/<daemon name>/nickel.log
+
+<when-in-sandbox>
+l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:14 10 -> /run/youview/jail/daemons/
+   osmiumd-N7HXTA/opt/zinc/var/log/litanium.log
+lrwx------    1 osmiumd  osmiumd       64 Feb 16 16:14 11 -> anon_inode:[eventpoll]
+lrwx------    1 osmiumd  osmiumd       64 Feb 16 16:14 12 -> anon_inode:[eventfd]
+l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 2 -> /dev/null
+l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 3 -> /run/youview/jail/daemons/
+   osmiumd-N7HXTA/opt/zinc/var/log/osmium.log
+
+cat /opt/zinc/var/daemons/osmiumd/log/osmium.log
+
+
+<to-disable-daemon-sandbox>
+There is a helper script to additionally disable any sandboxing (both daemons
+        and applications):
+
+/opt/zinc-trunk/devel/share/titanium-applicationcontainer-production/switch-sbx.sh.
+
+Invoke it without any arguments to get the usage message. Note that it requires
+CDS to be installed on a read-write partition.
+
+
+{in-zinc}
+./Titanium.ApplicationContainer.Production/src/sandbox-drop-privileges.c
 
 
 <ex>
