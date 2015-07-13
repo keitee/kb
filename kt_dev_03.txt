@@ -14,6 +14,7 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_010| asyc: continuation
 |kt_dev_code_011| asyc: flow between future, promise, and io_service
 |kt_dev_code_012| asyc: future
+|kt_dev_code_013| asyc: future helper
 |kt_dev_code_013| asyc: promise
 |kt_dev_code_014| asyc: future barrier
 |kt_dev_code_015| asyc: dispatcher
@@ -10097,6 +10098,100 @@ bool FutureContextCommonImpl::dispatchNextResult()
 } //namespace detail
 
 NS_ZINC_CLOSE
+
+
+={============================================================================
+*kt_dev_code_013* asyc: future helper
+
+note: future helpers for unit test
+
+////////////////////////////////////////
+/**
+ * File:   FutureMockActions.h
+ *
+ * Created on 11 April 2013
+ *
+ * Copyright (c) 2013, YouView TV Ltd.
+ */
+#ifndef ZINC_COMMON_FUTUREMOCKACTIONS_H
+#define ZINC_COMMON_FUTUREMOCKACTIONS_H
+
+#include "../async/Promise.h"
+#include "../async/async-helpers.h"
+
+#include <gmock/gmock.h>
+
+NS_ZINC_OPEN
+
+/**
+ * These helper actions are for use with Google Mock objects.
+ *
+ * When returning a future from a mock object expectation, care is needed to
+ * make sure a new future is created each time the expectation is matched.
+ * This shows up as a problem when setCallback is called on the returned future.
+ *
+ * The problem is that when using something like:
+ *
+ * EXPECT_CALL( ... ).WillRepeatedly(Return(FunctionThatReturnsAFuture()));
+ *
+ * Google Mock will copy the future returned from `FunctionThatReturnsAFuture()`
+ * and always return the same future. This doesn't work for instance if you ever
+ * call setCallback() on that future, which will throw a
+ * DuplicateFutureCallback error on subsequent calls.
+ *
+ * Even this doesn't work, surprisingly:
+ *
+ * EXPECT_CALL( ... ).WillOnce(Return(FunctionThatReturnsAFuture()))
+ *                   .WillOnce(Return(FunctionThatReturnsAFuture()));
+ *
+ * Again, the same promise is returned. I'm not quite sure how that happens
+ * though.
+ *
+ * This can be used like this:
+ *
+ * EXPECT_CALL( ... ).WillOnce(returnNewCompletedFuture(someValue))
+ *
+ */
+
+ACTION(returnNewCompletedFuture) {
+    return completedFuture();
+}
+
+ACTION_P(returnNewCompletedFuture, value) {
+    return completedFuture<typename return_type::value_type>(value);
+}
+
+ACTION_P(returnNewExceptionalFuture, exception) {
+    return exceptionalFuture<typename return_type::value_type>(exception);
+}
+
+NS_ZINC_CLOSE
+
+#endif // ZINC_COMMON_FUTUREMOCKACTIONS_H
+
+
+<complete-helpers>
+
+// This simply complete a promise as if it's "really" completed.
+
+////////////////////////////////////////
+/Zinc/Zinc.Common/include/async/detail/async-helpers_Impl.h
+
+template<typename T>
+Future<T> completedFuture(Dispatcher& dispatcher, const T& val) {
+
+    Promise<T> p(dispatcher);
+    p.complete(val);
+    return p.getFuture();
+}
+
+template<typename T>
+Future<T> completedFuture(const T& val) {
+
+    Promise<T> p;
+    p.complete(val);
+    return p.getFuture();
+}
 
 
 ={============================================================================
