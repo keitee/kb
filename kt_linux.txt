@@ -1651,6 +1651,18 @@ get_available_space() {
 [ "$(get_available_space)" -lt "$threshold" ] || break
 
 
+function get_lsr_int_with_default() {
+    key_name="$1"
+    value="$(lsr-config "$key_name")"
+
+    if [ -z "$value" ]; then
+        value="$2"
+    fi
+
+    printf "$value"
+}
+
+
 ={============================================================================
 *kt_linux_bash_015* bash: basename
 
@@ -2143,6 +2155,34 @@ debugging.
 + [[ 1 = 1 ]]
 + [[ 1 = 1 ]]
 + [[ 0 = 1 ]]
+
+
+<example>
+The lsr-config returns "0/1" or "true/false" when use --bool and the problem
+is when a key is boolean and is not set in a database meaning 0, it still
+returns "0" which is not null string. So "if [ -z ]" check always becomes
+false.
+
+The solution is that use variable's value depending on key value to set actual
+variable.
+
+#!/bin/sh
+
+# when key is not set or returns "false" then enable_yv_media="".
+# when key set and returns "true" then enable_yv_media="true".
+
+enable_yv_media=""
+[ "false" = "$(lsr-config --bool platform.settings.enable-yv-media || echo false)" ] || {
+    enable_yv_media="true"
+}
+
+USE_YV_MEDIA_ROUTER="$enable_yv_media"
+
+if [ -z "$USE_YV_MEDIA_ROUTER" ]; then
+	echo "NOT SET. $USE_YV_MEDIA_ROUTER. WILL USE OEM MR"
+else
+	echo "SET. $USE_YV_MEDIA_ROUTER. WILL USE YV MR"
+fi
 
 
 ={============================================================================
@@ -23820,6 +23860,12 @@ char *getenv(const char *name);
 RETURN VALUE
 The getenv() function returns a pointer to the value in the environment, or NULL if there is no
 match.
+
+note:
+"no match" means when there is no env variable set so when "SAMPLE_ENV=" and
+it has null but is set, getenv returns "\0" null string but not null pointer.
+so need to use strcmp to cover if env variable is set or unset.
+
 
 <setenv>
 int setenv(const char *name, const char *value, int overwrite);
