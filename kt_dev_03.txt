@@ -11247,6 +11247,34 @@ NS_ZINC_CLOSE
 ={============================================================================
 *kt_dev_code_016* asyc: listener
 
+class ZINC_EXPORT EventProducer : virtual public Polymorphic 
+{}
+
+class ZINC_EXPORT EventWindow : virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> 
+{}
+
+// SystemClientEventRepository::createEventWindow() pass DD to
+// SystemClientEventWindow.
+//
+class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow 
+{
+    template <typename Functor>
+        void produceEvent(Functor f) const {
+            impl.produceEvent(DowncastingCaller<Functor>(f));
+        }
+}
+
+// Takes functor, send aync post to all listeners which are not expired and
+// registered before. dispatcher->post( functor, wp ). So uses dispatcher which
+// is registered with listener.
+//
+// Q: HOW is listner registered?
+
+// DispatchingEventProducerHoisted::produceEvent(
+//         boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
+// {
+// }
+
 ////////////////////////////////////////
 #ifndef ZINC_EVENTPRODUCER_H_
 #define ZINC_EVENTPRODUCER_H_
@@ -11662,7 +11690,7 @@ DispatchingEventProducerHoisted::getDispatcher() const {
 
 
 // note:
-// this is onc called from future chain coming up from dbus such as
+// this is one called from future chain coming up from dbus such as
 // notifyWindowChanged()
 
 void 
@@ -11728,6 +11756,110 @@ size_t DispatchingEventProducerHoisted::getListenerCount() const {
 
 NS_ZINC_CLOSE
 
+////////////////////////////////////////
+#ifndef ZINC_COMMON_WEAKFUNCTOR_H_
+#define ZINC_COMMON_WEAKFUNCTOR_H_
+
+#include "macros.h"
+
+#include <boost/shared_ptr.hpp>
+#include <boost/weak_ptr.hpp>
+#include <boost/utility/result_of.hpp>
+
+NS_ZINC_OPEN
+
+/** WeakFunctor
+ *
+ * When a member function is bound to an object by shared_ptr, the object is
+ * preserved for the lifetime of the returned functor.
+ *
+ * This is not always desirable, and WeakFunctor allows a bind to be made on
+ * a object using weak_ptr semantics. If the weak_ptr has expired at functor
+ * evaluation time, the WeakFunctor is a null function (ie: does nothing).
+ *
+ * WeakFunctors are intended to be passed by value.
+ *
+ * Typically it will be used like:
+ *     makeWeakFunctor(bind(&Class::ObjectMethod, _1, methodParams...), objectWeakPtr)
+ *
+ */
+template<typename Functor, typename T, typename ResultType = typename boost::result_of<Functor(boost::shared_ptr<T>)>::type>
+class WeakFunctor
+{
+public:
+    typedef ResultType result_type;
+
+    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_): f(f_), object(object_) {}
+
+    ~WeakFunctor() {}
+
+    result_type operator() ()
+    {
+        boost::shared_ptr<T> o = object.lock();
+        return o ? f(o) : result_type();
+    }
+
+private:
+    const Functor f;
+    const boost::weak_ptr<T> object;
+};
+
+/**
+ * Specialisation of WeakFunctor for void because you can't return a void value
+ * even in a statement in a function returning void, unfortunately.
+ */
+template<typename Functor, typename T>
+class WeakFunctor<Functor, T, void>
+{
+public:
+    typedef void result_type;
+
+    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_): f(f_), object(object_) {}
+
+    ~WeakFunctor() {}
+
+    void operator() ()
+    {
+        boost::shared_ptr<T> o = object.lock();
+        if (o)
+        {
+            f(o);
+        }
+    }
+
+private:
+    const Functor f;
+    const boost::weak_ptr<T> object;
+};
+
+/**
+ * Make a WeakFunctor given a functor and a weak_ptr.
+ */
+template <typename Functor, typename T>
+inline WeakFunctor<Functor,	T>
+makeWeakFunctor(Functor f, boost::weak_ptr<T> object)
+{
+    return WeakFunctor<Functor, T>(f, object);
+}
+
+/**
+ * Make a WeakFunctor given a functor and a shared_ptr.
+ */
+template <typename Functor, typename T>
+inline WeakFunctor<Functor,	T>
+makeWeakFunctor(Functor f, boost::shared_ptr<T> object)
+{
+    return WeakFunctor<Functor, T>(f, boost::weak_ptr<T>(object));
+}
+
+#define WEAK_FUNCTOR(f, p) WeakFunctor<typeof( ## f ## ), p::element_type>(f, p)
+
+#define ZINC_WEAKFUNCTOR_DEFINED_
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_COMMON_WEAKFUNCTOR_H_ */
+
 
 ////////////////////////////////////////
 #ifndef ZINC_EVENTDISPATCHER_H_
@@ -11750,59 +11882,56 @@ NS_ZINC_CLOSE
 
 <use-case>
 
-// this is listner inheritance
+1. APP calls SystemClientFactory
+   - create a system client factory, DD and FD
 
-EventProducer 
-   : DispatchingEventProducer(Dispatcher)
-   {
-       virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
+2. APP calls createEventRepository().
+   - create SystemClientEventReposity and pass DD and FD to it.
 
-       // forwards to impl
-       mutable detail::DispatchingEventProducerHoisted impl;
-   };
-      // EventWindowEventListener is ListenerT which is base class that EPG
-      // derives from and EPG is Listener. Create a 'window' and add a self to
-      // it as a Listener.
-      
-      // EventWindow defines API
-      : EventEindow : DispatchingEventProducer<EventWindowEventListener>
+3. APP calls  SCER->getEventWindow().
+   - create SystemClientEventWindow and pass DD. return future to APP and calls
+   getEventsFromSystemAPI.
 
-         : SystemClientEventWindow
-         {
-            notifyWindowChanged()
-            {
-                produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
-            }
-         }
+4. getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+   - use FD, register handler to be notified for dbus calls using future
+   barrier. 
 
-// SystemClientFactory() creates two dispatches:
-//
-//    boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
-//    boost::shared_ptr<NS_ZINC::FutureDispatcher> futureDispatcher;
-//
-//    defaultDispatcher(boost::make_shared<InlineDispatcher>())
-//
-//    // this is SingleThreadDispatcher
-//    futureDispatcher(boost::make_shared<SequentialFutureDispatcher>())
+5. FD calls SystemClientEventRepository::eventWindowDataRetrievalComplete(cmd)
+   - this is a registered handler and use EventWindow in cmd
 
-// note: The application calls this API
+6.
 
-// The application calls this to have SCER:
-//  boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() 
-//  {
-//    createConcreteEventRepository() create SCER 
-//    set dispatchers to SCER
-//
-//    concreteER->setDefaultDispatcher(getDefaultDispatcher());
-//    concreteER->setFutureDispatcher(futureDispatcher);
-//
-//    return SCER;
-//  }
-//
-// So DD is inline dispatcher and FD is single threaded dispatcher.
-//
-// The application calls SCER->getEventWindow();
-//
+
+<1> note: The application calls this API
+
+SystemClientFactory() creates two dispatches:
+
+   boost::shared_ptr<NS_ZINC::EventDispatcher> defaultDispatcher;
+   boost::shared_ptr<NS_ZINC::FutureDispatcher> futureDispatcher;
+
+   defaultDispatcher(boost::make_shared<InlineDispatcher>())
+
+   // this is SingleThreadDispatcher
+   futureDispatcher(boost::make_shared<SequentialFutureDispatcher>())
+
+
+<2> The application calls this to have SCER:
+boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() 
+{
+    createConcreteEventRepository() create SCER 
+    set dispatchers to SCER
+
+    // note: set DD
+    concreteER->setDefaultDispatcher(getDefaultDispatcher());
+    concreteER->setFutureDispatcher(futureDispatcher);
+
+    return SCER;
+}
+
+So DD is inline dispatcher and FD is single threaded dispatcher.
+
+
+<3> The application calls SCER->getEventWindow();
 
 /*
  * DispatchingFutureProducer
@@ -11832,7 +11961,6 @@ private:
     mutable boost::recursive_mutex dispatcherMutex;
 };
 
-
 class ZINC_EXPORT SystemClientEventRepository : 
     public EventRepository,
     public NS_ZINC::DispatchingFutureProducer,
@@ -11841,6 +11969,7 @@ class ZINC_EXPORT SystemClientEventRepository :
 {
     boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher;
 
+    // note: set DD
     void setDefaultDispatcher(boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher_)
     {
         dispatcher = dispatcher_;
@@ -11863,7 +11992,7 @@ class ZINC_EXPORT SystemClientEventRepository :
                     (microsec_clock::universal_time() - cmd.dataRetrievalStartTime).total_milliseconds(),
                     cmd.hasDataFromAllSources(), hasStaleData);
 
-        // note: set event dispatcher with DD.
+        // note: pass DD to EventWindow
         ew->setDispatcher(dispatcher);
 
         metadataObserver->addListener(ew);
@@ -11884,7 +12013,7 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
             intersectingEvents, microsec_clock::universal_time(),
             serviceRepo);
 
-    // create SCEW and set ED
+    // create SCEW and set ED(DD)
     boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents,
             hasStaleData);
 
@@ -11899,6 +12028,7 @@ Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWin
 }
 
 
+<4>
 void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
 {
     // set future dispatcher to future barrier
@@ -11926,6 +12056,10 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
         (boost::shared_ptr<EventWindowCreateCommand>,
          const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
         &SystemClientEventRepository::eventsReceived;
+
+    // note: dynamically created so that used later in bind object
+    boost::shared_ptr<EventWindowCreateCommand> 
+        sharedCmd = boost::make_shared<EventWindowCreateCommand>(cmd);
 
     bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
     bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
@@ -11960,7 +12094,7 @@ void eventsReceived(
 }  
 
 
-note: goes up to a client via SystemClientEventWindow::produceEvent
+<5> goes up to a client via SystemClientEventWindow::produceEvent
 
 void SystemClientEventRepository::eventWindowDataRetrievalComplete(
         boost::shared_ptr<EventWindowCreateCommand> command)
@@ -11976,7 +12110,8 @@ void SystemClientEventRepository::notifyExistingWindowAboutNewData(
 }
 
 
-note: here moves from SCER line to SCEW line
+<6> here moves from SCER line to SCEW line
+
 
 void SystemClientEventWindow::ConfigChanged()
 {
@@ -11988,9 +12123,44 @@ void SystemClientEventWindow::notifyWindowChanged()
    produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
 }
 
+// this is listner inheritance
 // Uses DispatchingEventProducer::produceEvent(Functor) which forwards
-// to impl, DispatchingEventProducerHoisted::produceEvent().
+// to impl, DispatchingEventProducerHoisted::produceEvent(f).
 
+EventProducer 
+   : DispatchingEventProducer(Dispatcher)
+   {
+       virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
+
+       // forwards to impl
+       mutable detail::DispatchingEventProducerHoisted impl;
+   };
+      // EventWindowEventListener is ListenerT which is base class that EPG
+      // derives from and EPG is Listener. Create a 'window' and add a self to
+      // it as a Listener.
+      
+      // EventWindow defines API
+      : EventEindow : DispatchingEventProducer<EventWindowEventListener>
+
+         : SystemClientEventWindow
+         {
+            notifyWindowChanged()
+            {
+                produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+            }
+         }
+
+
+    template <typename Functor>
+        struct DowncastingCaller {
+            explicit DowncastingCaller(Functor f_) : f(f_) {}
+            void operator()(boost::shared_ptr<detail::hoisted_event_listener> listener) {
+                // We implicitly casted to void* in add/removeListener above so
+                // this is safe.
+                f(static_cast<ListenerT*>(listener.get()));
+            }
+            Functor f;
+        };
 
 # ============================================================================
 #{
