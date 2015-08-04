@@ -11247,15 +11247,39 @@ NS_ZINC_CLOSE
 ={============================================================================
 *kt_dev_code_016* asyc: listener
 
+// defines abstract interface to add/remove listener
+template<class ListenerT>
 class ZINC_EXPORT EventProducer : virtual public Polymorphic 
-{}
+{
+   typedef ListenerT listener_type;
+}
 
-class ZINC_EXPORT EventWindow : virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> 
+template<class ListenerT>
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> 
+{
+   // implements produceEvent() by delegating events to an EventDispatcher
+   // implementation.
+   mutable detail::DispatchingEventProducerHoisted impl;
+
+   template <typename Functor>
+        void produceEvent(Functor f) const {
+
+            ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
+            impl.produceEvent(DowncastingCaller<Functor>(f));
+        }
+}
+
+
+// this defines APIs for application and also have 'producer' implementation
+// by deriving from EventProducer.
+
+class ZINC_EXPORT EventWindow : 
+    virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> 
 {}
 
 // SystemClientEventRepository::createEventWindow() pass DD to
 // SystemClientEventWindow.
-//
+
 class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow 
 {
     template <typename Functor>
@@ -11264,16 +11288,66 @@ class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow
         }
 }
 
-// Takes functor, send aync post to all listeners which are not expired and
-// registered before. dispatcher->post( functor, wp ). So uses dispatcher which
-// is registered with listener.
-//
-// Q: HOW is listner registered?
 
-// DispatchingEventProducerHoisted::produceEvent(
-//         boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
-// {
-// }
+////////////////////////////////////////
+#ifndef ZINC_EVENTLISTENER_H_
+#define ZINC_EVENTLISTENER_H_
+
+#include "Polymorphic.h"
+
+NS_ZINC_OPEN
+
+/**
+ *	Needed so that events can be handled polymorphically, such as by an EventDispatcher.
+ */
+class ZINC_EXPORT EventListener : virtual public Polymorphic {
+
+protected:
+   EventListener() {}
+   ~EventListener();
+};
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_EVENTLISTENER_H_ */
+
+
+////////////////////////////////////////
+#ifndef URANIUM_METADATA_CLIENT_EVENTWINDOWEVENTLISTENER_H_
+#define URANIUM_METADATA_CLIENT_EVENTWINDOWEVENTLISTENER_H_
+
+#include "Event.h"
+
+#include <zinc-common/EventListener.h>
+#include <zinc-common/macros.h>
+
+#include <boost/shared_ptr.hpp>
+#include <vector>
+
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+class ZINC_EXPORT EventWindowEventListener : public NS_ZINC::EventListener
+{
+public:
+
+    virtual ~EventWindowEventListener();
+
+    /**
+     * Indicates the Event Window has changed substantially. 
+     * To update the data call EventWindow::refresh.
+     */
+    virtual void EventWindowChanged() = 0;
+
+    /**
+     * Indicates that some of the events in the Event Window have changed.
+     * @param events the list of events that changed
+     */
+    virtual void EventsChanged(const std::vector<boost::shared_ptr<Event> > events) = 0;
+};
+
+NS_URANIUM_METADATA_CLIENT_CLOSE
+#endif /* URANIUM_METADATA_CLIENT_EVENTWINDOWEVENTLISTENER_H_ */
+
 
 ////////////////////////////////////////
 #ifndef ZINC_EVENTPRODUCER_H_
@@ -11692,6 +11766,8 @@ DispatchingEventProducerHoisted::getDispatcher() const {
 // note:
 // this is one called from future chain coming up from dbus such as
 // notifyWindowChanged()
+// 
+// typedef void hoisted_event_listener;
 
 void 
 DispatchingEventProducerHoisted::produceEvent(
@@ -12112,7 +12188,6 @@ void SystemClientEventRepository::notifyExistingWindowAboutNewData(
 
 <6> here moves from SCER line to SCEW line
 
-
 void SystemClientEventWindow::ConfigChanged()
 {
     notifyWindowChanged();
@@ -12123,34 +12198,36 @@ void SystemClientEventWindow::notifyWindowChanged()
    produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
 }
 
-// this is listner inheritance
-// Uses DispatchingEventProducer::produceEvent(Functor) which forwards
-// to impl, DispatchingEventProducerHoisted::produceEvent(f).
-
-EventProducer 
-   : DispatchingEventProducer(Dispatcher)
-   {
-       virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
-
-       // forwards to impl
-       mutable detail::DispatchingEventProducerHoisted impl;
-   };
-      // EventWindowEventListener is ListenerT which is base class that EPG
-      // derives from and EPG is Listener. Create a 'window' and add a self to
-      // it as a Listener.
-      
-      // EventWindow defines API
-      : EventEindow : DispatchingEventProducer<EventWindowEventListener>
-
-         : SystemClientEventWindow
-         {
-            notifyWindowChanged()
-            {
-                produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
-            }
-         }
+// EventWindowEventListener:: virtual void EventWindowChanged() = 0;
+//
+// creates functor and calls DispatchingEventProducerHoisted::produceEvent(f)
 
 
+<7> see "async: listener" for more of listener class
+
+
+DispatchingEventProducerHoisted
+{
+    /**
+     * Derived implementations should call this method to dispatch an event.
+     *
+     * NOTE: This overload is preferred to the one above, as it is more efficient
+     * and offers greater clarity.
+     *
+     * It accepts a functor with the signature:
+     *
+     *     void f(ListenerT*)
+     *
+     * @param f a functor with the above signature, which can be a plain-old function,
+     * member-function, boost::function, or bind expression.
+     */
+    template <typename Functor>
+        void produceEvent(Functor f) const {
+
+            ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
+            impl.produceEvent(DowncastingCaller<Functor>(f));
+        }
+    `
     template <typename Functor>
         struct DowncastingCaller {
             explicit DowncastingCaller(Functor f_) : f(f_) {}
@@ -12161,6 +12238,26 @@ EventProducer
             }
             Functor f;
         };
+}
+
+// delegated to impl.produceEvent.
+
+// Takes functor, send aync post to all listeners which are not expired and
+// registered before. dispatcher->post( functor, wp ). So uses dispatcher which
+// is registered with listener.
+//
+// Q: HOW is listner registered?
+
+void 
+DispatchingEventProducerHoisted::produceEvent(
+        boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
+{
+}
+
+// EventWindowEventListener is ListenerT which is base class that EPG derives
+// from and EPG is Listener. Create a 'window' and add a self to it as a
+// Listener.
+      
 
 # ============================================================================
 #{
