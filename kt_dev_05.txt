@@ -26,6 +26,7 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: tools
+|kt_dev_bcast_311| gst: tools: gst-launch
 |kt_dev_bcast_312| gst: sdk, tutorials
 |kt_dev_bcast_313| gst: core apis reference
 
@@ -34,6 +35,7 @@ Use #{ for a group and ={ for a item
 
 *kt_dev_bcast_330* gst: element property 
 *kt_dev_bcast_330* gst: man: 06: bins
+*kt_dev_bcast_330* gst: man: 07: bus
 *kt_dev_bcast_330* gst: man: 08: pad and capability
 |kt_dev_bcast_330| gst: man: 18: autoplug and typefind
 
@@ -338,6 +340,9 @@ necessary to ensure continuous playback or to improve the experience.
 
 
 {media-presentation-description-data-model}
+
+http://www.streamingmedia.com/Articles/Editorial/What-Is-.../What-is-MPEG-DASH-79041.aspx
+
 Figure 1. The Media Presentation Data Model. Taken from MPEG-DASH presentation
 at Streaming Media West, 2011.
 
@@ -640,56 +645,6 @@ if (ret == GST_STATE_CHANGE_FAILURE) {
 }
 
 
-<error-handling>
-5. check errors
-
-/* Wait until error or EOS */
-bus = gst_element_get_bus (pipeline);
-msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
-   
-/* Parse message */
-if (msg != NULL) {
-  GError *err;
-  gchar *debug_info;
-   
-  switch (GST_MESSAGE_TYPE (msg)) {
-    case GST_MESSAGE_ERROR:
-      gst_message_parse_error (msg, &err, &debug_info);
-      g_printerr ("Error received from element %s: %s\n", GST_OBJECT_NAME (msg->src), err->message);
-      g_printerr ("Debugging information: %s\n", debug_info ? debug_info : "none");
-      g_clear_error (&err);
-      g_free (debug_info);
-      break;
-    case GST_MESSAGE_EOS:
-      g_print ("End-Of-Stream reached.\n");
-      break;
-    default:
-      /* We should not reach here because we only asked for ERRORs and EOS */
-      g_printerr ("Unexpected message received.\n");
-      break;
-  }
-  gst_message_unref (msg);
-}
-
-Can have while on message:
-
-/* Listen to the bus */
-bus = gst_element_get_bus (data.pipeline);
-do {
-    msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
-            GST_MESSAGE_STATE_CHANGED | GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
-    ...
-} while (!terminate);
-
-
-{bus-and-message}
-GStreamer bus is the object responsible for delivering to the application the GstMessages generated
-by the elements, in order and to the application thread. This last point is important, because the
-actual streaming of media is done in another thread than the application.
-
-Messages can be extracted from the bus synchronously with gst_bus_timed_pop_filtered() and its
-siblings, or asynchronously, using signals (shown in the next tutorial). Your application should
-always keep an eye on the bus to be notified of errors and other playback-related issues.
 
 
 {bin}
@@ -1725,6 +1680,30 @@ produce the media, and therefore what elements you need to put in a pipeline to 
 
 Use gst-discoverer --help to obtain the list of available options, which basically control the
 amount of verbosity of the output.
+
+
+={============================================================================
+*kt_dev_bcast_311* gst: tools: sdk and tutorials
+
+gst-launch-1.0 souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+'!' 
+dashdemux name=dash dash. 
+'!' 
+video/quicktime 
+'!' 
+qtdemux 
+'!' 
+queue 
+'!' 
+cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+'!' 
+h264parse 
+'!' 
+video/x-h264,stream-format=byte-stream 
+'!' 
+nexussink dash. 
+'!' 
+audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
 
 
 ={============================================================================
@@ -3203,6 +3182,59 @@ applications in case the application needs to marshal information from some
 thread into the main thread. This is particularly useful when the application is
 making use of element signals (as those signals will be emitted in the context
         of the streaming thread).
+
+
+{error-handling}
+
+5. check errors
+
+/* Wait until error or EOS */
+bus = gst_element_get_bus (pipeline);
+msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
+   
+/* Parse message */
+if (msg != NULL) {
+  GError *err;
+  gchar *debug_info;
+   
+  switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_ERROR:
+      gst_message_parse_error (msg, &err, &debug_info);
+      g_printerr ("Error received from element %s: %s\n", GST_OBJECT_NAME (msg->src), err->message);
+      g_printerr ("Debugging information: %s\n", debug_info ? debug_info : "none");
+      g_clear_error (&err);
+      g_free (debug_info);
+      break;
+    case GST_MESSAGE_EOS:
+      g_print ("End-Of-Stream reached.\n");
+      break;
+    default:
+      /* We should not reach here because we only asked for ERRORs and EOS */
+      g_printerr ("Unexpected message received.\n");
+      break;
+  }
+  gst_message_unref (msg);
+}
+
+Can have while on message:
+
+/* Listen to the bus */
+bus = gst_element_get_bus (data.pipeline);
+do {
+    msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
+            GST_MESSAGE_STATE_CHANGED | GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
+    ...
+} while (!terminate);
+
+
+{bus-and-message}
+GStreamer bus is the object responsible for delivering to the application the GstMessages generated
+by the elements, in order and to the application thread. This last point is important, because the
+actual streaming of media is done in another thread than the application.
+
+Messages can be extracted from the bus synchronously with gst_bus_timed_pop_filtered() and its
+siblings, or asynchronously, using signals (shown in the next tutorial). Your application should
+always keep an eye on the bus to be notified of errors and other playback-related issues.
 
 
 ={============================================================================
