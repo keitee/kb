@@ -108,7 +108,9 @@
 
 |kt_dev_uv_hwei_001| stack: convert ro filesystem to rw
 
-|kt_dev_uv_task_001| task:01: nexusMgr
+|kt_dev_uv_oem_001| nexus mgr
+|kt_dev_uv_oem_002| playpump
+
 |kt_dev_uv_task_002| task:02: DEVARCH-8869: about IP connection.
 |kt_dev_uv_task_003| task:02: DEVARCH-7508: runBrowser-test.sh
 |kt_dev_uv_task_004| task:03: DEVARCH-9135: uranium metadata
@@ -117,6 +119,7 @@
 |kt_dev_uv_task_007| task:06: playback audio only IP channel
 |kt_dev_uv_task_008| task:07: DEVARCH-9557: netflix launch issue
 |kt_dev_uv_task_009| task:08: fr15: hls: DEVARCH-9722
+*kt_dev_uv_task_010* task:09: fr15: hls: DEVARCH-9861
 
 
 # ============================================================================
@@ -11157,6 +11160,7 @@ dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/M
 gst-launch-1.0 --gst-debug=souphttpsrc:5  -v souphttpsrc location="http://wll1p02380.dev.youview.co.uk/videos/dash/bigBunny2/yv_TestTRec.mpd" ! dashdemux name=dash dash.  ! qtdemux ! h264parse ! queue  ! nexussink
 
 gst-launch-1.0 --gst-debug=nexussink:4  -v souphttpsrc location="http://wll1p02380.dev.youview.co.uk/videos/dash/bigBunny2/yv_TestTRec.mpd" ! dashdemux name=dash dash.  ! qtdemux ! h264parse ! queue  ! nexussink
+gst-launch-1.0 souphttpsrc location="http://wll1p02380.dev.youview.co.uk/videos/dash/bigBunny2/yv_TestTRec.mpd" ! dashdemux name=dash dash.  ! qtdemux ! h264parse ! queue  ! nexussink
 
 
 ={============================================================================
@@ -13397,7 +13401,7 @@ zinc-production-stac 100% |*******************************| 58773k  0:00:00 ETA
 
 
 ={============================================================================
-*kt_dev_uv_task_001* task:01: nexusMgr
+*kt_dev_uv_oem_001* nexusMgr
 
 {inspect}
 used in wrapper:
@@ -14083,6 +14087,212 @@ previous for platforms that are not moved to the new approach yet and to pick
 up the new for platforms that already moved. This commit enables it for all
 Huawei platforms since they moved the new approach and made a official
 release.
+
+
+={============================================================================
+*kt_dev_uv_oem_002* playpump
+
+Hmax only provides 1 playpump.
+
+note: seems that stream types comes from gst when opens a sink and that means
+that below enums should match ones in gst?
+
+
+// gstnexusmgr.h
+
+enum NexusSinkContentType
+{
+    CTTransportStream=0,
+    CTVideoElementaryStream=1,
+    CTAudioElementaryStream=2,
+	CTNone=0xFF
+};
+
+
+gst_nexus_mgr_acquire_playpumps()
+{
+	BcmNexus_StreamPlayer_Resources_Config config;
+
+	config.numPlaypumps = 1;
+   
+   // video callback
+   config.videoDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
+   config.videoDataCallback.context = mgr->pes_writer;
+
+	mgr->resources = 
+       (BcmNexus_StreamPlayer_Resources*) BcmNexus_StreamPlayer_Resources_Acquire( &config );
+
+   // use gst_nexus_mgr_error_1st_level_cb for various errors and see two in
+   // particular.
+   
+   NEXUS_CALLBACKDESC_INIT( &video_decoder_settings.fifoEmpty);
+   video_decoder_settings.fifoEmpty.callback = &gst_nexus_mgr_error_1st_level_cb;
+   video_decoder_settings.fifoEmpty.context = &mgr->callback_contexts.video_error;
+   video_decoder_settings.fifoEmpty.param = EFifoEmpty;
+
+   NEXUS_CALLBACKDESC_INIT( &audio_decoder_settings.ptsError );
+   audio_decoder_settings.ptsError.callback = &gst_nexus_mgr_error_1st_level_cb;
+   audio_decoder_settings.ptsError.context = &mgr->callback_contexts.audio_error;
+   audio_decoder_settings.ptsError.param = EPtsError;
+}
+
+
+enum NexusSinkErrorReason
+{
+    EFifoEmpty = 0x0101,
+    EPtsError = 0x0206, /* PTS discontinuity error */
+}
+
+src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: AudioError: 0x0206
+src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: VideoError: 0x0101
+
+
+// nexusMgr
+
+const BcmNexus_StreamPlayer_Resources *
+BcmNexus_StreamPlayer_Resources_Acquire( const BcmNexus_StreamPlayer_Resources_Config *config)
+{
+    NEXUS_PlaypumpSettings playpumpSettings;
+
+    // Only 1 playpump and use videoDataCallbak only
+    playpumpSettings.dataCallback = config->videoDataCallback;
+
+    rc = NEXUS_Playpump_SetSettings(resources->playpump[i], &playpumpSettings);
+}
+
+typedef struct BcmNexus_StreamPlayer_Resources_Config {
+    ...
+    NEXUS_CallbackDesc                      videoDataCallback;
+    NEXUS_CallbackDesc                      audioDataCallback;
+} BcmNexus_StreamPlayer_Resources_Config;
+
+
+// nexus ref sw
+
+/**
+Summary:
+Function prototype used by NEXUS_CallbackDesc.
+**/
+typedef void (*NEXUS_Callback)(void *context, int param);
+
+/*
+Summary:
+Standard definition of a callback in Nexus.
+*/
+typedef struct NEXUS_CallbackDesc {
+    NEXUS_Callback callback; /* Function pointer */
+    void *context;           /* First parameter to callback function. */
+    int param;               /* Second parameter to callback function. */
+} NEXUS_CallbackDesc;
+
+
+/**
+Summary:
+Settings for playpump
+**/
+typedef struct NEXUS_PlaypumpSettings
+{
+    NEXUS_TransportType transportType;          /* Type of data stream going into playpump. Note that if the data must be packetized,
+                                                   you can get the resulting NEXUS_TransportType from NEXUS_PidChannelStatus. */
+
+    NEXUS_TransportType originalTransportType;  /* If the user packetizes intput to playpump, this describes the input. If there is no
+                                                   packetization, this is member should be set to NEXUS_TransportType_eUnknown. */
+
+    bool continuityCountEnabled;                /* If true, transport will check for correct continuity counters and discard bad packets.
+                                                   This must be set to false for trick modes. Default is false. */
+
+    /* Type of original transport stream */
+
+    NEXUS_PlaypumpMode mode;                    
+    /* Method of pushing data into playpump. This setting determines the format
+    of data the app will feed to playpump. */
+
+    // note:
+    NEXUS_CallbackDesc dataCallback;            
+    /* Callback when space becomes available. User should call NEXUS_Playpump_GetBuffer.
+    You will not receive another callback until NEXUS_Playpump_GetBuffer is called. */
+
+    NEXUS_CallbackDesc errorCallback;           
+    /* Callback called when error was detected in ptocessing of the stream data */
+
+    NEXUS_CallbackDesc ccError;                 
+    /* Continuity Count Error - raised when continuity counter of next packet
+    does not have the next counter value.  continuityCountEnabled must be set to
+    true. See NEXUS_PidChannelStatus.continuityCountErrors to get a count of
+    errors per pid. */
+
+    NEXUS_CallbackDesc teiError;                
+    /* Transport Error Indicator - error status from a demodulator */
+
+    int playRate;                               /* Rate in units of NEXUS_NORMAL_PLAY_SPEED. It's used for certain type of streams to control the direction of presentation time. */
+
+    NEXUS_DmaHandle securityDma;                /* Instance of DMA that is used for security processing, NULL if security processing is not required */
+    NEXUS_DmaDataFormat securityDmaDataFormat;
+    NEXUS_KeySlotHandle securityContext;
+
+    unsigned maxDataRate;                       /* Maximum data rate for the playback parser band in units of bits per second. Default is typically 108000000 (i.e. 108 Mbps).
+                                                   If you increase this, you need to analyze total transport bandwidth and overall system bandwidth. */
+    bool blindSync;                             /* Force transport to not look for sync bytes. */
+
+    /* all pass settings */
+    bool allPass;                               /* If true, NEXUS_Playpump_OpenPidChannel's pid param is ignored and the resulting pid channel can be used for all-pass record.
+                                                   Also set acceptNullPackets to true if you want to capture the entire stream.
+                                                   When opening the allPass pid channel, set NEXUS_PlaypumpOpenPidChannelSettings.pidSettings.pidChannelIndex = 16 + playpump index number. */
+    bool acceptNullPackets;                     /* If true and allPass is true, NULL packets are not discarded. */
+
+
+    struct {
+        NEXUS_TransportTimestampType type;      /* The type of timestamping in this stream. */
+        uint16_t pcrPacingPid;                  /* Some chips can pace playback using a PCR pid. Set timestamp.pcrPacingPid to a non-zero value and set timestamp.pacing = true. */
+
+        bool pacing;                            /* If true, pace this stream using embedded timestamp information or using pcr-based pacing.
+                                                   For timestamp-based pacing, set timestampType as well.
+                                                   For pcr-based pacing, set pcrPacingPid as well. */
+        unsigned pacingMaxError;                /* Set the maximum allowable timestamp error (TS_RANGE_ERROR) used during playback pacing. */
+        NEXUS_Timebase timebase;                /* Timebase used for timestamp. Use NEXUS_Timebase_eInvalid for freerun. */
+        bool parityCheckDisable;                /* Set true to disable timestamp parity check. */
+        bool pacingOffsetAdjustDisable;         /* Set true to adjust the pacing timestamps with the reference offset */
+        bool resetPacing;                       /* Set true if you want the pacing start bit reset when a TS_RANGE_ERROR interrupt occurs */
+        bool forceRestamping;                   /* Set true if you want to restamp the incoming timestamps or if you are recording and want to add timestamps */
+    } timestamp;
+
+} NEXUS_PlaypumpSettings;
+
+
+local/include/refsw/nexus/modules/core/7420/include/nexus_types.h
+
+/**
+Summary:
+The transport format, or stream type, of digital data.
+
+Description:
+This includes a variety of container classes and standard stream muxes.
+
+See Also:
+NEXUS_PidChannelSettings
+NEXUS_StcChannelSettings
+**/
+typedef enum NEXUS_TransportType {
+    NEXUS_TransportType_eUnknown,   /* Unknown stream format */
+    NEXUS_TransportType_eEs,        /* Elementary stream. No container or muxing. */
+    NEXUS_TransportType_eTs,        /* MPEG2 transport stream */
+    NEXUS_TransportType_eMpeg2Pes,  /* MPEG2 packetized elementary stream, this includes MPEG2 Program Stream  streams */
+    NEXUS_TransportType_eVob,       /* DVD VOB, this is subset of MPEG2 Program Stream, special processing is applied for VOB streams */
+    NEXUS_TransportType_eMpeg1Ps,   /* MPEG1 program stream */
+    NEXUS_TransportType_eDssEs,     /* DSS with ES payload (used for SD) */
+    NEXUS_TransportType_eDssPes,    /* DSS with PES payload (used for HD) */
+    NEXUS_TransportType_eAsf,       /* Advanced Systems Format */
+    NEXUS_TransportType_eAvi,       /* Audio Video Interleave */
+    NEXUS_TransportType_eMp4,       /* MP4 (MPEG-4 Part12) container */
+    NEXUS_TransportType_eFlv,       /* Flash video container */
+    NEXUS_TransportType_eMkv,       /* Matroska container */
+    NEXUS_TransportType_eWav,       /* WAVE audio container */
+    NEXUS_TransportType_eMp4Fragment,  /* separate 'moof' boxes from the MP4 (MPEG-4 Part12) container */
+    NEXUS_TransportType_eRmff,       /* RMFF container */
+    NEXUS_TransportType_eMax
+} NEXUS_TransportType;
+
+
 
 
 ={============================================================================
@@ -15685,13 +15895,7 @@ enables us to play HLS via DBus command line.
 
 
 ={============================================================================
-*kt_dev_uv_task_010* task:08: fr15: hls: DEVARCH-9722
-
-https://jira.youview.co.uk/browse/DEVARCH-9722
-DEMO - HLS playback through YV MediaRouter - via command line
-   https://jira.youview.co.uk/browse/DEVARCH-9739
-   note: this is ticket to implement 9722.
-
+*kt_dev_uv_task_010* task:09: fr15: hls: DEVARCH-9861
 
 DEVARCH-9861: Implement a selection switch between OEM and YV MR
 
@@ -15705,18 +15909,6 @@ To use YV media router, run:
 
 $ lsr-config platform.settings.enable-yv-media 1
 
-
-
-https://jira.youview.co.uk/browse/DEVARCH-9723
-DEMO - HLS playback via MediaRouterProxy - via command line
-   https://jira.youview.co.uk/browse/DEVARCH-9740
-
-DEVARCH-9740:Nickel.System.Proxy: Support HLS playback in MediaRouterProxy
-
-The current YV MediaRouterProxy don't support HSL playback and as DEVARCH-9722
-delivers HLS play in MediaRouter, this commit adds necessary changes to
-MediaRouterProxy in order to make a link to HLS playback in the proxy which
-enables us to play HLS via DBus command line.
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
