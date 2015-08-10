@@ -539,9 +539,8 @@ asynchronous connect.
 Time passes. In the synchronous case this wait would have been contained
 entirely within the duration of the connect operation.
 
-
 4. The operating system indicates that the connect operation has completed by
-placing the result on a queue, ready to be picked up by the io_service.
+placing the result on a 'queue', ready to be picked up by the io_service.
 
 5. Your program must make a call to io_service::run() or to one of the similar
 io_service member functions in order for the result to be retrieved. 
@@ -570,7 +569,7 @@ provide a stronger guarantee that it is safe to use a single object
 concurrently.
 
 
-Thread Pools
+Thread Pools note: scalable
 
 Multiple threads may call io_service::run() to set up a pool of threads from
 which completion handlers may be invoked. This approach may also be used with
@@ -680,6 +679,9 @@ int main()
     // wait. When calling this function we pass the print callback handler that
     // was defined above.
 
+    std::cout << "calls async wait..." << std::endl;
+
+    // post a work for asio to do
     t.async_wait(&print);
 
     // Finally, we must call the io_service::run() member function on the
@@ -704,7 +706,11 @@ int main()
     // work to do, and consequently io_service::run() would have returned
     // immediately.
 
+    std::cout << "calls io.run..." << std::endl;
+
     io.run();
+
+    std::cout << "ends..." << std::endl;
 
     return 0;
 }
@@ -734,7 +740,7 @@ ends...
 // * A counter so that we can stop the program when the timer fires for the
 // sixth time.
 // 
-// note: when to stop
+// note: when to stop - no more work to do
 // However you will observe that there is no explicit call to ask the
 // io_service to stop. Recall that in tutorial Timer.2 we learnt that the
 // io_service::run() function completes when there is no more "work" to do. By
@@ -806,6 +812,11 @@ callback: count: 3
 callback: count: 0xbfcf0650, t: 0xbfcf062c
 callback: count: 4
 main: final count is 5
+
+note: see that &count and &t are the same between main and callback since:
+
+Asynchronous completion handlers will only be called from threads that are
+currently calling io_service::run(). 
 
 
 <04> Timer.4 - Using a member function as a handler
@@ -981,6 +992,8 @@ public:
   // should be synchronised if they access shared resources. In this tutorial,
   // the shared resources used by the handlers (print1 and print2) are
   // std::'cout' and the count_ data member. 
+  //
+  // In this example, use asio::strand to sync than sync primitive.
 
   void print1()
   {
@@ -1035,6 +1048,20 @@ int main()
 
   return 0;
 }
+
+$ g++ -g -std=c++0x -lboost_system -lboost_thread t_asio_04-2.cpp
+$ LD_LIBRARY_PATH=/usr/local/lib ./a.out 
+Timer 1: 0
+Timer 2: 1
+Timer 1: 2
+Timer 2: 3
+Timer 1: 4
+Timer 2: 5
+Timer 1: 6
+Timer 2: 7
+Timer 1: 8
+Timer 2: 9
+Final count is 10
 
 
 ={============================================================================

@@ -274,6 +274,7 @@
 |kt_linux_core_603| time: posix clock, realtime
 |kt_linux_core_604| time: ms timestamp
 |kt_linux_core_605| time: us timestamp
+|kt_linux_core_606| time: sleep
 
 |kt_linux_core_700| dbus
 |kt_linux_core_701| dbus: introspection
@@ -17551,7 +17552,7 @@ int main()
 }
 
 
-==============================================================================
+={============================================================================
 *kt_linux_core_263*	sync: ref: lock-free code: a false sense of security
 
 {one}
@@ -18148,18 +18149,21 @@ your machine). <o> Also consider this code:
 
 usleep(1000);    // sleep 1 microsecond
 
-On the face of it, this line of code makes a thread sleep for 1 microsecond, and then continue. In
-reality, 1 microsecond is just a lower bound to the duration of the call.
+On the face of it, this line of code makes a thread sleep for 1 microsecond, and
+then continue. In reality, 1 microsecond is just a lower bound to the duration
+of the call.
 
-The man page for usleep() says, "The usleep() function suspends execution of the calling process for
-(at least) usec microseconds. The sleep may be lengthened slightly by any system activity or by the
-time spent processing the call or by the granularity of system timers," or if you use the
-nanosleep() function. "Therefore, nanosleep() always pauses for at least the specified time;
-however, it can take up to 10 ms longer than specified until the process becomes runnable again."
+The man page for usleep() says, "The usleep() function suspends execution of the
+calling process for (at least) usec microseconds. The sleep may be lengthened
+slightly by any system activity or by the time spent processing the call or by
+the granularity of system timers," or if you use the nanosleep() function.
+"Therefore, nanosleep() always pauses for at least the specified time; however,
+    it can take up to 10 ms longer than specified until the process becomes
+    runnable again."
 
-So if the process is not scheduled under a real-time policy, there's no guarantee when your thread
-will be running again. I've done some tests and (to my surprise) there are situations when code such
-as: 
+So if the process is not scheduled under a real-time policy, there's no
+guarantee when your thread will be running again. I've done some tests and (to
+        my surprise) there are situations when code such as: 
 
 cond.timed_wait(lock, x);    // x = e.g. 1 millisecond
 
@@ -22152,26 +22156,29 @@ time: 00:55:29
 10-6  1 microsecond  us    one millionth of one second
 10-3  1 millisecond  ms    one thousandth of one second
 
-The accuracy of various time-related system calls described in this book is limited to the
-resolution of the system software clock, which measures time in units called jiffies.
+The accuracy of various time-related system calls described in this book is
+limited to the resolution of the system software clock, which measures time in
+units called jiffies.
 
-The size of a jiffy is defined by the constant HZ within the kernel source code. This is the unit in
-which the kernel allocates the CPU to processes under the roundrobin time-sharing scheduling
-algorithm.
+The size of a jiffy is defined by the constant HZ within the kernel source code.
+This is the unit in which the kernel allocates the CPU to processes under the
+roundrobin time-sharing scheduling algorithm.
 
-Because CPU speeds have greatly increased since Linux was first implemented, in kernel 2.6.0, the
-rate of the software clock was raised to 1000 hertz on Linux/ x86-32. The advantages of a higher
-software clock rate are that timers can operate with greater accuracy and time measurements can be
-made with greater precision.
+Because CPU speeds have greatly increased since Linux was first implemented, in
+kernel 2.6.0, the rate of the software clock was raised to 1000 hertz on Linux/
+x86-32. The advantages of a higher software clock rate are that timers can
+operate with greater accuracy and time measurements can be made with greater
+precision.
 
-However, it isn't desirable to set the clock rate to arbitrarily high values, because each clock
-interrupt consumes a small amount of CPU time, which is time that the CPU can't spend executing
-processes.
+However, it isn't desirable to set the clock rate to arbitrarily high values,
+because each clock interrupt consumes a small amount of CPU time, which is time
+    that the CPU can't spend executing processes.
 
-Debate among kernel developers eventually resulted in the software clock rate becoming a
-configurable kernel option (under Processor type and features, Timer frequency). Since kernel
-2.6.13, the clock rate can be set to 100, 250 (the default), or 1000 HZ, giving jiffy values of 10,
-4, and 1 milliseconds, respectively.
+Debate among kernel developers eventually resulted in the software clock rate
+becoming a configurable kernel option (under Processor type and features, Timer
+        frequency). Since kernel 2.6.13, the clock rate can be set to 100, 250
+(the default), or 1000 HZ, giving jiffy values of 10, 4, and 1 milliseconds,
+respectively.
 
 
 ={============================================================================
@@ -22579,6 +22586,52 @@ int main(int argc,char** argv)
     }
     counter.snap("boost::lexical_cast<int>");
     std::cout << counter.dump() << std::endl;
+}
+
+
+={============================================================================
+*kt_linux_core_606* time: sleep
+
+{usleep}
+
+usleep - suspend execution for microsecond intervals
+
+#include <unistd.h>
+
+int usleep(useconds_t usec);
+
+note: copied from other article.
+
+Also consider this code: 
+
+usleep(1000);    // sleep 1 microsecond
+
+On the face of it, this line of code makes a thread sleep for 1 microsecond
+and then continue. In reality, 1 microsecond is just a lower bound to the
+duration of the call.
+
+The man page for usleep() says, "The usleep() function suspends execution of
+the calling process for (at least) usec microseconds. The sleep may be
+lengthened slightly by any system activity or by the time spent processing the
+call or by the granularity of system timers," or if you use the nanosleep()
+function. "Therefore, nanosleep() always pauses for at least the specified
+time; however, it can take up to 10 ms longer than specified until the process
+becomes runnable again."
+
+So if the process is not scheduled under a real-time policy, there's no
+guarantee when your thread will be running again. I've done some tests and (to
+        my surprise) there are situations when code such as: 
+
+cond.timed_wait(lock, x);    // x = e.g. 1 millisecond
+
+will actually wait for more than 1 second.
+
+
+{msleep}
+
+void msleep(size_t milliseconds)
+{
+    usleep(milliseconds * 1000);
 }
 
 
