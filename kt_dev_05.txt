@@ -36,13 +36,14 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_330* gst: man: 01: introduction
 *kt_dev_bcast_331* gst: man: 03: foundations
 *kt_dev_bcast_332* gst: man: 04: initialize gst
-*kt_dev_bcast_333* gst: man: 05: elements
+*kt_dev_bcast_333* gst: man: 05: elements. state
 *kt_dev_bcast_334* gst: man: 06: bins
 *kt_dev_bcast_335* gst: man: 07: bus
 *kt_dev_bcast_336* gst: man: 08: pad and capability
 *kt_dev_bcast_330* gst: man: 14: clocks and synchronization
 |kt_dev_bcast_330| gst: man: 18: autoplug and typefind
 
+|kt_dev_bcast_400| gst: preroll
 |kt_dev_bcast_400| gst: ref: gstcap
 
 *kt_dev_bcast_500* gnome: glib
@@ -2680,10 +2681,11 @@ Note that files are generally streams, and these should thus be considered as st
 resources; therefore, they should not be allocated in this state.
 
 GST_STATE_PAUSED 
-is the state in which an element is ready to accept and handle data. For most elements this state is
-the same as PLAYING. The only exception to this rule are sink elements. Sink elements only accept
-one single buffer of data and then block. At this point the pipeline is 'prerolled' and ready to
-render data immediately.
+is the state in which an element is ready to accept and handle data. For most
+elements this state is the same as PLAYING. The only exception to this rule are
+sink elements. Sink elements only accept one single buffer of data and then
+block. At this point the pipeline is 'prerolled' and ready to render data
+immediately.
 
 GST_STATE_PLAYING 
 is the highest state that an element can be in. For most elements this state is exactly the same as
@@ -3199,11 +3201,11 @@ should be closed in this state, and position, properties and such should be
 reset.
 
 * GST_STATE_PAUSED
-an element has opened the stream, but is not actively processing it.  An
-element is allowed to modify a stream’s position, read and process data and
-such to prepare for playback as soon as state is changed to PLAYING, but it is
-not allowed to play the data which would make the clock run. In summary,
-    PAUSED is the same as PLAYING but without a running clock.  
+an element has opened the stream, but is 'not' actively 'processing' it. An
+element is allowed to modify a stream's position, read and process data and
+such to 'prepare' for playback as soon as state is changed to PLAYING, but it
+is not allowed to play the data which would make the clock run. In summary,
+   PAUSED is the same as PLAYING but 'without' a running clock.  
     
 Elements going into the PAUSED state should prepare themselves for moving over
 to the PLAYING state as soon as possible. Video or audio outputs would, for
@@ -4022,6 +4024,28 @@ with a LATENCY event.
 All sink elements will delay playback by the value in the LATENCY event. Since
 all sinks delay with the same amount of time, they will be relative in sync.
 
+// void
+// gst_query_set_latency (GstQuery *query,
+//                        gboolean live,
+//                        GstClockTime min_latency,
+//                        GstClockTime max_latency);
+// 
+// 'answer' a latency query by setting the requested values in the given format.
+// 
+// live
+// if there is a live element upstream
+// 	 
+// min_latency
+// the minimal latency of the upstream elements
+// 	 
+// max_latency
+// the maximal latency of the upstream elements
+//
+// typedef guint64 GstClockTime;
+//
+// Q: does this mean to set MAX UINT as type is gunit64?
+// gst_query_set_latency (query, FALSE, 0, -1);
+
 
 14.6.2. Dynamic Latency
 
@@ -4095,6 +4119,78 @@ g_main_loop_run (loop);
 
 Once a media type has been detected, you can plug an element (e.g. a demuxer or decoder) to the
 'source' pad of the typefind element, and decoding of the media stream will start right after.
+
+
+={============================================================================
+*kt_dev_bcast_400* gst: preroll
+
+// from gnome mail archive
+
+In GStreamer terminology this describes the process of preparing a GStreamer
+pipeline for playback/recording. What happens is that audio/video data starts
+flowing through the pipeline until all elements have data (so that you could
+        start actually playing/outputting the video/audio immediately).
+
+note: when see gst log, preroll happens in the early part of playback.
+
+
+// copied from text about element state
+
+* GST_STATE_PAUSED
+an element has opened the stream, but is 'not' actively 'processing' it. An
+element is allowed to modify a stream's position, read and process data and
+such to 'prepare' for playback as soon as state is changed to PLAYING, but it
+is not allowed to play the data which would make the clock run. In summary,
+   PAUSED is the same as PLAYING but 'without' a running clock.  
+
+* GST_STATE_PAUSED 
+is the state in which an element is ready to accept and handle data. For most
+elements this state is the same as PLAYING. The only exception to this rule are
+sink elements. Sink elements only accept one single buffer of data and then
+block. At this point the pipeline is 'prerolled' and ready to render data
+immediately.
+
+Used in sink element code:
+
+rv = gst_base_sink_wait_preroll (GST_BASE_SINK(sink));
+
+From
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSink.html
+
+GstBaseSink will handle the prerolling correctly. This means that it will return
+GST_STATE_CHANGE_ASYNC from a state change to PAUSED until the first buffer
+arrives in this element. The base class will call the GstBaseSinkClass.preroll()
+vmethod with this preroll buffer and will then commit the state change to the
+next asynchronously pending state.
+
+When the element is set to PLAYING, GstBaseSink will synchronise on the clock
+using the times returned from GstBaseSinkClass.get_times(). If this function
+returns GST_CLOCK_TIME_NONE for the start time, no synchronisation will be done.
+Synchronisation can be disabled entirely by setting the object “sync” property
+to FALSE.
+
+After synchronisation the virtual method GstBaseSinkClass.render() will be
+called. Subclasses should minimally implement this method.
+
+Subclasses that synchronise on the clock in the GstBaseSinkClass.render() method
+are supported as well. These classes typically receive a buffer in the render
+method and can then potentially block on the clock while rendering. A typical
+example is an audiosink. These subclasses can use gst_base_sink_wait_preroll()
+to perform the blocking wait.
+
+gst_base_sink_wait_preroll ()
+
+GstFlowReturn
+gst_base_sink_wait_preroll (GstBaseSink *sink);
+
+If the GstBaseSinkClass.render() method performs its own synchronisation against
+    the clock it must unblock when going from PLAYING to the PAUSED state and
+    call this method before continuing to render the remaining data.
+
+This function will block until a state change to PLAYING happens (in which case
+        this function returns GST_FLOW_OK) or the processing must be stopped due
+to a state change to READY or a FLUSH event (in which case this function returns
+        GST_FLOW_FLUSHING).
 
 
 ={============================================================================
