@@ -9380,8 +9380,25 @@ bool FutureContextCommonImpl::dispatchNextResult()
 ={============================================================================
 *kt_dev_code_012* asyc: future
 
-// defined in futurebarrier.h
-// typedef Dispatcher FutureDispatcher;
+////////////////////////////////////////
+/*
+ * FutureDispatcher.h
+ */
+
+#ifndef ZINC_FUTUREDISPATCHER_H_
+#define ZINC_FUTUREDISPATCHER_H_
+
+#include "Dispatcher.h"
+
+NS_ZINC_OPEN
+
+// For backwards compatibility.
+typedef Dispatcher FutureDispatcher;
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_FUTUREDISPATCHER_H_ */
+
 
 // This class provides context to a dispatcher about async function calls
 class ZINC_EXPORT FutureContextBase : boost::noncopyable
@@ -9413,7 +9430,6 @@ class FutureContext : public FutureContextCommonImpl
 };
 
 
-////////////////////////////////////////
 ////////////////////////////////////////
 ////////////////////////////////////////
 ////////////////////////////////////////
@@ -9546,6 +9562,8 @@ NS_ZINC_CLOSE
 
 NS_ZINC_OPEN
 
+// note: Q: initialize public members outside of class?
+
 boost::mutex FutureContextBase::mutex;
 boost::condition_variable FutureContextBase::cond((zinc::monotonic_clock()));
 
@@ -9637,13 +9655,15 @@ public:
     ~FutureContextCommonImpl();
 
     explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_);
-    explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_);
+    explicit FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, 
+            boost::function<void ()> cancellationCallback_);
 
     void cancel(unsigned flags);
     void completeError(const NS_ZINC::ErrorCode& error_);
 
 protected:
-    void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, FutureDispatcher* clientDispatcher_);
+    void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, 
+            FutureDispatcher* clientDispatcher_);
     bool runPreSetChecksAndLock(boost::mutex::scoped_lock& lock);
     void doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock);
 
@@ -9652,7 +9672,8 @@ public:
     /**
      * This gets called by the FutureDispatcher implementation
      *
-     * @return true if there are more values to come, or false if there are no more values
+     * @return true if there are more values to come, or false if there are no
+     * more values
      */
     bool dispatchNextResult();
 
@@ -9667,6 +9688,8 @@ public:
     futurevalue_state::Enum futurevalueState;
 
     bool shouldCallCompletionHandler;
+
+    // note: 
     boost::function<void (FutureContextBase*)> completionHandler;
     NS_ZINC::ErrorCode error;
 
@@ -9711,9 +9734,11 @@ CallbackHoistingWrapper<T, Functor> makeCallbackHoistingWrapper(const Functor& f
 
 /**
  * A context object for Futures
- * FutureContext holds a single value passed from a providing Promise and the client Future
- * and (if set) a completionHandler that is called by the dispatcher when the value is available
+ * FutureContext holds a single value passed from a providing Promise and the
+ * client Future and (if set) a completionHandler that is called by the
+ * dispatcher when the value is available
  */
+
 template <typename T>
 class FutureContext : public FutureContextCommonImpl
 {
@@ -9749,6 +9774,7 @@ public:
         doPostSetActionsAndUnlock(lock);
     }
 
+    // note: setCallabck
     template <typename Handler>
         void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
             setCallbackHoisted(boost::function<void (FutureContextBase*)>(
@@ -9763,17 +9789,22 @@ public:
 
 /**
  * A context object for Future<void> objects
- * FutureContext holds a single FutureValue<void> object containing any errors passed from Promise
- * and a completion handler to be called when the asynchronous operation is complete
- * No value is passed from Promise to Future
+ * FutureContext holds a single FutureValue<void> object containing any errors
+ * passed from Promise and a completion handler to be called when the
+ * asynchronous operation is complete No value is passed from Promise to
+ * Future
  */
+
 template <>
 class FutureContext<void> : public FutureContextCommonImpl
 {
 public:
 
-    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_) : FutureContextCommonImpl(dispatcher_) {}
-    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_)
+    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_) 
+        : FutureContextCommonImpl(dispatcher_) {}
+
+    explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_, 
+            boost::function<void ()> cancellationCallback_)
         : FutureContextCommonImpl(dispatcher_, cancellationCallback_)
     {}
 
@@ -9814,6 +9845,9 @@ NS_ZINC_CLOSE
 
 
 ////////////////////////////////////////
+/*
+ * FutureContext.cpp
+ */
 #include "../../include/macros.h"
 #include "../../include/async/detail/FutureContext.h"
 #include "../../include/async/Promise.h"
@@ -9914,7 +9948,8 @@ FutureContextCommonImpl::FutureContextCommonImpl(NS_ZINC::FutureDispatcher* disp
 {
 }
 
-FutureContextCommonImpl::FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, boost::function<void ()> cancellationCallback_)
+FutureContextCommonImpl::FutureContextCommonImpl(NS_ZINC::FutureDispatcher* dispatcher_, 
+        boost::function<void ()> cancellationCallback_)
  : FutureContextBase(dispatcher_),
    forDispatch(false),
    futurevalueState(futurevalue_state::value_or_error),
@@ -9983,7 +10018,9 @@ void FutureContextCommonImpl::completeError(const NS_ZINC::ErrorCode& error_)
 	doPostSetActionsAndUnlock(lock);
 }
 
-void FutureContextCommonImpl::setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, FutureDispatcher* clientDispatcher_)
+void FutureContextCommonImpl::setCallbackHoisted(
+        boost::function<void (FutureContextBase*)> fn, 
+        FutureDispatcher* clientDispatcher_)
 {
 	// It is safe to read this->clientDispatcher without holding the lock because
 	// it is word sized and will only be assigned to at initialisation time and
@@ -10101,6 +10138,505 @@ bool FutureContextCommonImpl::dispatchNextResult()
 } //namespace detail
 
 NS_ZINC_CLOSE
+
+
+////////////////////////////////////////
+/*
+ * Future_Decl.h
+ */
+
+#ifndef ZINC_FUTURE_H_
+#define ZINC_FUTURE_H_
+
+#include "../../macros.h"
+#include "../cancel_flag.h"
+#include "../FutureValue.h"
+#include "../../type-traits/check_concept.h"
+#include "../../type-traits/call-traits.h"
+
+#include <boost/intrusive_ptr.hpp>
+#include <boost/utility/result_of.hpp>
+
+NS_ZINC_OPEN
+
+template <typename T> class Promise;
+
+namespace detail {
+template <typename T> class FutureContext;
+}
+
+namespace internal {
+class PolymorphicFuture;
+}
+
+class Dispatcher;
+
+class FutureBase {
+
+    friend class internal::PolymorphicFuture;
+
+    public:
+
+    /**
+     * Cancel the Future.
+     *
+     * This merely prevents the Future ever being fulfilled. If a callback
+     * has been set, and not called already, it will not be called.
+     *
+     * Cancellation may, or may not, cause the underlying asynchronous
+     * operation to be canceled. The client should not assume this to be the
+     * case.
+     *
+     * Cancellation may be modified with the flags argument.
+     *  * future.cancel(clear_callback) just prevents the
+     *    callback set with setCallback from being invoked.
+     *  * future.cancel(deep) calls the onCancel handler that may have been
+     *    provided promise-side
+     *  * future.cancel(immediately) has behaviour equivalent to the Promise
+     *    being immediately completed with a CancelledFuture exception.  If the
+     *    promise has already been completed calling get() will still cause a
+     *    CancelledFuture exception to be thrown.
+     *  * future.cancel(0) does nothing.
+     */
+    void cancel(unsigned flags = cancel_flag::clear_callback |
+            cancel_flag::deep |
+            cancel_flag::immediately);
+
+    /**
+     * Synchronously wait for the value to become available.
+     *
+     * This will block the calling thread until either the value is available,
+     * or an exception occurs.
+     *
+     * When the caller returns from this call, a subsequent call to get() will not
+     * block.
+     */
+    void wait();
+
+    /**
+     * Synchronously wait for the value to become available, with a timeout
+     * specified as a relative time duration
+     *
+     * eg
+     *		Future<int> f = fn_returning_a_future();
+     *		f.wait_for(boost::posix_time::milliseconds(500));
+     *
+     * @param rel_time specifies the time duration to wait for completion
+     * @return false if the given time period elapses without completion or cancellation
+     * @see wait()
+     */
+    template<typename duration_type>
+        bool wait_for(const duration_type &rel_time);
+
+    /**
+     * Synchronously wait for the value to become available, with a timeout
+     * specified as an absolute time point
+     *
+     * Use wait_for() in preference
+     *
+     * @param abs_time specifies the time point to stop waiting
+     * @return false if we reach the given time point without completion or cancellation
+     *
+     * @see wait()
+     * @see wait_for()
+     */
+    template<typename time_point_type>
+        bool wait_until(const time_point_type &abs_time);
+
+    /**
+     * Ask if the Future has been completed with a value provided by its Promise
+     *
+     * A positive response does not guarantee that the callback has yet been executed
+     *
+     * @return true if this Future has been completed
+     */
+    bool isComplete();
+
+    /**
+     * Has this Future been default constructed?  If so, then it is not useful
+     *
+     * @see Future<T>::swap
+     * @see Promise<T>::getFuture
+     *
+     * @return false if this Future is valid
+     */
+    bool isEmpty();
+
+
+protected:
+
+    explicit FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context) ZINC_EXPORT;
+
+    FutureBase(const FutureBase& other) ZINC_EXPORT;
+
+    FutureBase() {}
+
+    ~FutureBase() ZINC_EXPORT;
+
+    void baseSwap(FutureBase& other);
+
+    boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
+};
+
+
+/**
+ * A Future is a token for some value that will be delivered asynchronously.
+ *
+ * // note:
+ * The holder of the Future token may either wait for the value synchronously,
+ * (blocking the executing thread), or set a callback method that will be invoked
+ * either when the value becomes available, or will not become available due to
+ * some exception.
+ *
+ * The Future holder also has the option to cancel the Future, which will prevent
+ * the value from being delivered, assuming this hasn't happened already.
+ */
+
+// note: FutureBase is not template
+
+template <typename T>
+class Future : public FutureBase
+{
+    public:
+        typedef T value_type;
+
+        Future(const Future & other);
+
+        Future & operator=(const Future & other);
+
+        ~Future();
+
+        /**
+         * Provide a default constructor so we can put Futures in
+         * STL containers
+         *
+         * A Future without a Promise is not much use to you,
+         * so use Promise.getFuture() instead, or use swap(Future<T> & other)
+         * to swap in a valid future
+         *
+         * @see Promise<T>::getFuture()
+         * @see Future<T>::swap(Future<T> & other)
+         */
+        Future() {}
+
+        /**
+         * Set a callback method to be invoked when either the value becomes
+         * available, or an exception occurs.
+         *
+         * The callback will be executed on the dispatcher that was provided to
+         * the Promise constructor.
+         *
+         * @param fn A function that must accept a FutureValue<T> as it's single
+         *           argument.
+         *
+         * @throws DuplicateFutureCallback if a callback has already been set on
+         * this Future.
+         * @throws CallbackSetWithoutDispatcherException if the corresponding
+         *         wasn't initialized with a dispatcher.  Use the two argument
+         *         setCallback instead
+         */
+        template <typename Handler>
+            void setCallback(const Handler& fn) {
+                // fn(x) must be valid where x is a FutureValue<T>
+                ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+                static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, 0);
+            }
+
+        /**
+         * Set a callback method to be invoked when either the value becomes
+         * available, or an exception occurs.
+         *
+         * The callback will be executed on the provided dispatcher, rather than the
+         * dispatcher used by the Promise.
+         *
+         * // note:
+         * Explicitly providing the dispatcher gives the caller more control over
+         * which thread will execute their callback.
+         *
+         * @param dispatcher_ The dispatcher on which the callback should be executed.
+         *
+         * @param fn A function that must accept a FutureValue<T> as it's single
+         *           argument.
+         *
+         * @throws DuplicateFutureCallback if a callback has already been set on
+         * this Future.
+         */
+        template <typename Handler>
+            void setCallback(Dispatcher& dispatcher_, const Handler& fn) {
+                // fn(x) must be valid where x is a FutureValue<T>
+                ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+                static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, &dispatcher_);
+            }
+
+        /**
+         * then() allows specifying a Functor to be called once the Future is
+         * completed. It is much like Future.setCallback() but for a Future<T> if
+         * the functor has the form:
+         *
+         *     R Functor(FutureValue<T>)
+         *
+         * then then() will return a 'new' Future of type Future<R> which will be
+         * completed when the original Future completes and the functor has
+         * operated on the original value. The value/exception contained in the
+         * new future will be that returned/thrown from the functor. This makes
+         * then() very convenient for 'transforming' the value (and potentially the
+         * type) contained within a `Future`.
+         *
+         * If a dispatcher is provided the functor will be executed on that
+         * dispatcher. Otherwise it will be run inline at the point and in the
+         * context in which the `Promise` is completed or the setCallback is set
+         * (whichever comes later). As the environment in which the functor will
+         * be run is unknown and even non-deterministic it is only safe to do the
+         * simplest pure-functional transformations in these functors, e.g.
+         * translating between exceptions/enum types, etc. Anything dependent on
+         * some state may require locking a mutex of similar and to make it
+         * deterministic, safe and to avoid unexpected failures as changes are
+         * made to other parts of the code the callbacks should be run on a user
+         * specified `Dispatcher`.
+         *
+         * `Future.then()` is a proposed addition to the C++14 standard[1].
+         *
+         * [1]: http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2013/n3558.pdf
+         *
+         * Usage Example:
+         *
+         * @code
+         * string boolToYesNo(FutureValue<bool> b) {
+         *     try {
+         *         return (b.get()?"yes":"no");
+         *     } catch (const std::exception& e) {
+         *         // translating exception thrown from original future.
+         *         throw MyNewException(e.what());
+         *     }
+         * }
+         *
+         * Future<bool> answer = isCool();
+         *
+         * Future<string> answerAsString = answer.then(&boolToYesNo);
+         *
+         * cout << "Cool? " << answerAsString.get() << endl;
+         * @endcode
+         */
+        template<typename Functor>
+            Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+                    Dispatcher& dispatcher, Functor transformRtoT);
+        template<typename Functor>
+            Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+                    Functor transformRtoT);
+
+        /**
+         * Synchronously wait for and retrieve the value.
+         *
+         * This method may throw an exception of any type, in the event that the
+         * value could not be retrieved due to an exception in the asynchronous
+         * operation producing the value.
+         *
+         * Equivalent to f.getFutureValue().get();
+         *
+         * @return the value.
+         */
+        typename const_return<T>::type get();
+
+        /**
+         * Synchronously wait for and retrieve the value.
+         *
+         * Unlike get() this method does not throw if the promise has been completed
+         * with an exception.  This can be used to deal with errors without a try
+         * catch block.
+         *
+         * @return the value.
+         */
+        FutureValue<T> getFutureValue();
+
+        /**
+         * Swap this Future with the one provided
+         */
+        void swap(Future<T> & other);
+
+    private:
+        friend class Promise<T>; // only Promises can create a Future
+        explicit Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ );
+};
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_FUTURE_H_ */
+
+
+////////////////////////////////////////
+/*
+ * Future_Impl.h
+ */
+
+#ifndef ZINC_FUTURE_INL
+#define ZINC_FUTURE_INL
+
+#include "FutureContext.h"
+#include "../FutureValue.h"
+#include "../Dispatcher.h"
+#include "../Promise.h"
+#include "../InlineDispatcher.h"
+
+NS_ZINC_OPEN
+
+inline void FutureBase::wait()
+{
+	context->wait();
+}
+
+template<typename duration_type>
+inline bool FutureBase::wait_for(const duration_type &rel_time)
+{
+	return context->wait_for(rel_time);
+}
+
+template<typename time_point_type>
+inline bool FutureBase::wait_until(const time_point_type &abs_time)
+{
+	return context->wait_until(abs_time);
+}
+
+inline bool FutureBase::isComplete()
+{
+	return context->completed;
+}
+
+inline bool FutureBase::isEmpty()
+{
+	return (context.get() == NULL);
+}
+
+inline void FutureBase::cancel(unsigned flags)
+{
+	context->cancel(flags);
+}
+
+inline void FutureBase::baseSwap(FutureBase& other)
+{
+	using std::swap;
+	swap(context, other.context);
+}
+
+
+/**
+ * Generic Future definitions
+ */
+
+template<typename T>
+inline Future<T>::Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ ) : FutureBase(boost::static_pointer_cast<detail::FutureContextCommonImpl>(context_)) {}
+
+template<typename T>
+inline Future<T>::Future(const Future<T>& other) : FutureBase(other) {}
+
+template<typename T>
+inline Future<T>::~Future() {}
+
+template<typename T>
+inline Future<T>& Future<T>::operator=(const Future<T>& other)
+{
+	Future<T>(other).swap(*this);
+	return *this;
+}
+
+template<typename T>
+inline FutureValue<T> Future<T>::getFutureValue()
+{
+    wait();
+    return FutureValue<T>(boost::static_pointer_cast<detail::FutureContext<T> >(context));
+}
+
+template<typename T>
+inline typename const_return<T>::type Future<T>::get()
+{
+	return getFutureValue().get();
+}
+
+template<typename T>
+inline void Future<T>::swap(Future<T> & other)
+{
+	 baseSwap(other);
+}
+
+/**
+ * Future<void> definitions
+ */
+template<>
+inline void Future<void>::get()
+{
+	wait();
+	// get() may throw
+	FutureValue<void>(boost::static_pointer_cast<detail::FutureContext<void> >(context)).get();
+}
+
+namespace detail {
+
+template<typename T, typename R, typename Functor>
+struct DoTransformAndComplete {
+    static inline void apply(Promise<R>& promise, Functor& transform, const FutureValue<T>& fv) {
+        promise.complete(transform(fv));
+    }
+};
+
+template<typename T, typename Functor>
+struct DoTransformAndComplete<T, void, Functor> {
+    static inline void apply(Promise<void>& promise, Functor& transform, const FutureValue<T>& fv) {
+        transform(fv);
+        promise.complete();
+    }
+};
+
+template<typename T, typename Functor>
+struct TransformAndComplete {
+
+    typedef typename boost::result_of<Functor(FutureValue<T>)>::type R;
+
+    TransformAndComplete(const Functor& f)
+     : transform(f) {}
+
+    void operator()(const FutureValue<T>& fv) {
+        try {
+            DoTransformAndComplete<T, R, Functor>::apply(promise, transform, fv);
+        } catch (const std::exception& e) {
+            promise.exception(e);
+        } catch (...) {
+            promise.exception(std::runtime_error("Unknown exception."));
+        }
+    }
+
+    Promise<R> promise;
+    Functor transform;
+};
+
+template<typename FutureLike, typename Functor>
+Future<typename boost::result_of<Functor(FutureValue<typename FutureLike::value_type>)>::type> futureThen(
+        FutureLike& future, Dispatcher& dispatcher, Functor transformTtoR) {
+
+    detail::TransformAndComplete<typename FutureLike::value_type, Functor>
+        transformAndComplete(transformTtoR);
+    future.setCallback(dispatcher, transformAndComplete);
+    return transformAndComplete.promise.getFuture();
+}
+} // namespace detail
+
+template<typename T>
+template<typename Functor>
+Future<typename boost::result_of<Functor(FutureValue<T>)>::type> Future<T>::then(
+        Dispatcher& dispatcher, Functor transformTtoR) {
+
+    return detail::futureThen(*this, dispatcher, transformTtoR);
+}
+
+template<typename T>
+template<typename Functor>
+Future<typename boost::result_of<Functor(FutureValue<T>)>::type> Future<T>::then(
+        Functor transformTtoR) {
+
+    return then(InlineDispatcher::sharedInstance(), transformTtoR);
+}
+
+NS_ZINC_CLOSE
+
+#endif
 
 
 ={============================================================================
@@ -10599,7 +11135,7 @@ namespace detail {
 
 /**
  * FutureBarrier is designed to aid synchronisation when making multiple
- * asynchronous calls simultaneously.  FutureBarrier will call a given
+ * asynchronous calls simultaneously. FutureBarrier will call a given
  * callback asynchronously once all the futures added to it have
  * completed AND the FutureBarrier itself has gone out of scope.
  *
@@ -10634,6 +11170,7 @@ public:
      *              void SuccessCallback(T);
      *          where T is the value_type of the future "f".
      *          Note that the parameter is T, not FutureValue<T>.
+     *
      *          If the future "f" completes with an error, this callback will
      *          not be called; and the "final" callback (set with setCallback)
      *          will (eventually, once all other futures have completed) be
