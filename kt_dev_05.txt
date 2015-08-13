@@ -7,10 +7,12 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_bcast_001| OIPF
 |kt_dev_bcast_002| CRB
+|kt_dev_bcast_003| pdl
 
 |kt_dev_bcast_100| mpeg: time sync
 |kt_dev_bcast_101| mpeg: ts view tool
 |kt_dev_bcast_102| mpeg: locator
+|kt_dev_bcast_103| mpeg: es
 
 |kt_dev_bcast_200| mpeg: streaming: terms
 |kt_dev_bcast_201| mpeg: streaming: dash
@@ -62,10 +64,51 @@ The Open IPTV Forum¿s (OIPF) Declarative Application Environment (DAE), which o
 environment to network applications, is briefly reviewed. It is being implemented in many retail TVs
 by major manufacturers. 
 
+
 ={============================================================================
 *kt_dev_bcast_002* CRB
 
 connected red button (CRB)
+
+
+={============================================================================
+*kt_dev_bcast_003* PDL
+
+What is Progressive Download
+
+* Download of Movies and TV program content to STB over the IP connection.
+* VOD-like experience without allocating VOD bandwidths in the system.
+* Supports variable available bandwidth – over Internet.
+* Content servers (HTTP) much cheaper than VOD real time servers.
+* Progressive Download is where content viewing occurs while content is still
+being downloaded.
+* STB will only download if it has enough disk space available for the download
+content file.
+
+
+PDL vs. VOD
+
+VOD:
+* Content is streamed over the IP connection. Trick modes are controlled by the
+server according to the user request.
+
+* Expensive VOD servers are required.
+* Network Quality of Service is required.
+* No local disk needed.
+
+PDL:
+* The content downloaded over the IP connection into the local disk and played
+back like any other XTV content.
+
+* No need of expensive VOD servers.
+* No need of network Quality of Service.
+* Local disk required.
+
+PDL content is stored on the Content Distribution Network (CDN) in Network File
+Format (NFF), a file format defined by NDS specifically to support PDL and
+related applications. NFF defines a structure for content files including a
+Table of Contents (TOC) and containers for content in MPEG TS format, and
+optionally indexing and related metadata.
 
 
 # ============================================================================
@@ -315,6 +358,191 @@ ETSI TS 102 812 V1.3.1 (2012-05)
 
 14 System integration aspects
 14.1 Namespace mapping (DVB Locator)
+
+
+={============================================================================
+*kt_dev_bcast_103* mpeg: pes
+
+{ES}
+sequence layer    : SH | Sequence(GOP) | SH | GOP | SH | GOP | ...
+                         *
+SH {picture width, picture height, aspect ratio, bit rate, picture rate }
+
+GOP layer         : | I B B P B B P B B ... B P |
+                        *
+GOP { GOP header, FH, frame 1, FH, frame N }                    
+
+FH { frame type, ..., extension start code, frame structure }
+
+Picture layer     : slice | slice ...
+                            *
+Slice { SH(Slice Header), macro blocks 1 to N }
+
+Slice layer       : MB MB MB ...
+
+Macro block layer :
+
+Block layer       :
+
+The elementary stream is a 'continual' stream of encoded video frames. Though
+all the data required to reconstuct frames exists here. No timing information or
+systems data is contained. Thats the job of the MPEG-2 multiplexer
+
+
+<pictures-or-frames>
+I(Intra-coded)-picture 
+P(Predictive-coded)-picture
+B(Bi-directional Predictive-coded)-picture
+
+I-frames: contain full picture information
+P-frames: predicted from past I or P frames
+B-frames: use past and future I or P frames
+Transmit I frames every 12 frames or so.
+
+<picture-order>
+Pictures are coded and decoded in a different order than they are displayed.
+This is due to bidirectional prediction for B pictures. See example below which
+illustrates reordering for a 12 picture long GOP.
+
+Source order and encoder input order:
+I(1) B(2) B(3) P(4) B(5) B(6) P(7) B(8) B(9) P(10) B(11) B(12) I(13)
+ 
+Encoding order and order in the coded bitstream: DTS
+I(1) P(4) B(2) B(3) P(7) B(5) B(6) P(10) B(8) B(9) I(13) B(11) B(12)
+
+In order for a decoder to reconstruct a B-frame from the preceding I and
+following P frames, both these must arrive first. So the order of frame
+transmission must be different to the order they appear on the tv screen.
+
+Decoder output order and display order (same as input): PTS
+I(1) B(2) B(3) P(4) B(5) B(6) P(7) B(8) B(9) P(10) B(11) B(12) I(13)
+
+
+{PES}
+The PES packets can be of variable length, typically upto 64 kbytes, but they
+can be longer.
+
+| start | stream id | PES           | optional   | stuffing | PES data |
+  code    id          packet length   PES header 
+
+One of the most important parts of the structure, are the PTS and DTS, these
+allow the decoder to reconstruct the video stream from the I, B, P frames sent
+by the encoder.
+
+
+{packetization}
+
+VES |        I    | B | B |   P   | B | B |   P    | B | B | ...
+AES | frame 1 | frame 2 | ...
+
+    |        I    | B | B |   P   | B | frame 1  | B |   P    | B | B | ...
+PES <-packet-><-packet-><-packet    -> <-packet-> <-packet-><-packet->
+
+note: PES has audio and video? Maybe muxed PES stream from VPES and APES?
+
+note: How construct ES from PES? Use time?
+
+TS
+
+<pes-usuage-for-video>
+Except for ATSC, there is not defined mapping between an encoded picture and a
+PES packet, nor is there any alignment requirement between PES and pictures
+
+ATSC defines PES per Picture
+
+Tandberg (and some others) use a PES per GOP (additional picture timestamps are
+        inferred as required)
+
+A few others use a fixed size PES; the timestamp then applies to the first
+picture that starts in the PES packet, and is not always present
+
+PTS (Presentation Time Stamp) and DTS (Decode Time Stamp), when present, are
+used to synchronise streams, and control buffer usage
+
+<from-brcm-7401>
+
+note: PES parser
+
+The data transport processor is an MPEG-2/DIRECTV transport stream message/PES
+parser and demultiplexer. It can simultaneously process 256 PID filters via 128
+PID channels in up to five independent external transport stream inputs and two
+internal playback channels, with decryption for all 128 PID channels. 
+
+It supports message/PES parsing for 128 PID channels with storage to 128
+external DRAM buffers, and it provides 512 4-byte generic section filters that
+can be cascaded to provide effectively longer filters (up to 64-bytes or 128
+        filters of 16-bytes each). 
+
+The data transport module provides two sets of a two-channel remux output. 
+    
+The data transport module has a RAVE (record, audio and video interface engine)
+    function, which can be configured to support eight record channels for PVR
+    functionality and six AV channels to interface audio and video decoders.
+
+* PES packet extraction for up to 128 PID channels.
+* Supports parsing of Transport/PES data to ES and generate CDB/ ITBs for
+audio/video decoders.
+
+
+FUNCTIONAL OVERVIEW
+
+The Data Transport Processor is an MPEG-2/DIRECTV transport stream message/PES
+parser and demultiplexer. It is capable of simultaneously processing 256 PIDs
+via 128 PID channels in up to six independent transport streams using the six
+available parsers. These six streams are selected from five external serial
+transport stream inputs, and four internal playback channels. The data transport
+supports decryption for up to 128 PID channels in the six streams. All 128 PID
+channels can be used by RAVE (record, audio and video interface engine), PCR
+processors, message filter as well as for output via the high-speed transport or
+remux module.
+
+The data transport supports up to 128 PID channels for message or generic PES
+processing and storage in up to 128 external DRAM message buffers. There are 512
+4-byte generic filters supported for processing of MPEG/DVB sections or DIRECTV
+messages. A special addressing mode filter is included for up to 32 PID channels
+(PID channels 0-31), which filters MPEG and private stream messages.
+
+The data transport module supports RAVE (record, audio and video interface
+        engine) function, which can supports up to eight record channels with up
+to total 12 SCDs (configured 1-12 per record channel) and six AV channels to
+interface to the audio/video decoders.
+
+The data transport also provides two PCR recovery blocks and one serial STC
+broadcast block for transmitting the STC to the decoders
+
+Input Band 
+Refers to the five external transport stream inputs supported by this design
+(IB0-4).
+
+Parser Band 
+Refers to the transport streams that are selected as inputs to the five front
+end parsers or two playback channels to two playback parsers
+
+PES Parser
+
+The PES parser delineates PES packets and sends them to the message buffers. Any
+number of the PID channels 0-127 can be enabled for PES processing. When a
+complete PES packet is received, a data available interrupt is generated by the
+message buffer manager. 
+
+The PES parser checks for PES packet lengths and generates length error
+interrupts. PES Padding streams (i.e., PES messages with stream_id of 0xBE) are
+removed by default, or optionally retained. When stored to memory, padding bytes
+(0x55) are optionally added at the end of each PES packet to word align to
+32-bit boundaries in the message buffers. During data transport playback, the
+padding bytes are removed.
+
+The PES Parser checks for PES packet length and can generate length error
+interrupts if enabled. It uses the payload_unit_start_indicator bit in the
+transport packet to detect the beginning of the PES packet. A length error is
+generated whenever the end of a PES packet does not coincide with the end of a
+transport packet or the payload_unit start_indicator is received prior to the
+end of the current PES packet. Only PID channels 0 to 127 can be routed to PES
+parser.
+
+
+{TS}
+PUSI: Payload Unit Start Indicator which indicate if TS packet has PES header
 
 
 ={============================================================================
