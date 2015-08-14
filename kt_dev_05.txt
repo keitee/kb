@@ -25,6 +25,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_305| gst: buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
 |kt_dev_bcast_302| gst: elements: uridecodebin
+|kt_dev_bcast_302| gst: elements: queue
+|kt_dev_bcast_302| gst: elements: h264parse
 
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: tools
@@ -422,12 +424,47 @@ I(1) B(2) B(3) P(4) B(5) B(6) P(7) B(8) B(9) P(10) B(11) B(12) I(13)
 The PES packets can be of variable length, typically upto 64 kbytes, but they
 can be longer.
 
-| start | stream id | PES           | optional   | stuffing | PES data |
-  code    id          packet length   PES header 
+| start | stream | PES           | optional   | stuffing | PES data |
+  code    id       packet length   PES header 
 
 One of the most important parts of the structure, are the PTS and DTS, these
 allow the decoder to reconstruct the video stream from the I, B, P frames sent
 by the encoder.
+
+
+https://www.uic.edu/classes/ece/ece434/chapter_file/chapter7.htm
+
+The format of the PES header is defined by the stream ID (SID) used to identify
+the type of ES. The PES packet length (PESPL) indicates the number of bytes in
+the PES packet. The scrambling mode is represented by the scrambling control
+(SC). The PES header data length (PESHDL) indicates the number of bytes in the
+optional PES header (OPESH) fields, as well as stuffing bytes (SB) used to
+satisfy the communication network requirements.
+
+The PES header contains timestamps to allow for synchronization by the decoder.
+Two different timestamps are used: presentation timestamp (PTS) and decoding
+timestamp (DTS). The PTS specifies the time at which the access unit should be
+removed from the decoder buffer and presented. The DTS represents the time at
+which the access unit must be decoded. The DTS is optional and it is only used
+if the decoding time differs from the presentation time.[2]
+
+The elementary stream clock reference (ESCR) indicates the intended time of
+arrival of the packet at the system target decoder (STD). The rate at which the
+STD receives the PES is indicated by the elementary stream rate (ESR). Error
+checking is provided by the PES cyclic redundancy check (PESCRC).
+
+note: is it a way to reconstruct ES from PES?
+
+The pack header field (PHF) is a PS pack header. The program packet sequence
+counter (PPSC) indicates the number of system streams. The STD buffer size is
+specified by the P-STD buffer (PSTDB) field.
+
+Optional Fields 2
+PESPD Packetized Elementary Stream Private Data
+PHF   Pack Header Field
+PPSC  Program Packet Sequence Counter
+PSTDB P-STD Buffer
+PESEF Packetized Elementary Stream Extension Field
 
 
 {packetization}
@@ -1784,6 +1821,82 @@ Element Signals:
                                    gpointer user_data);
   "pushing" :  void user_function (GstElement* object,
                                    gpointer user_data);
+
+
+={============================================================================
+*kt_dev_bcast_302* gst: elements: h264parse
+
+[root@HUMAX /]# gst-inspect-1.0 video/x-h264
+video/x-h264: a typefind function
+[root@HUMAX /]# gst-inspect-1.0 h264parse   
+Factory Details:
+  Rank                     primary + 1 (257)
+  Long-name                H.264 parser
+  Klass                    Codec/Parser/Converter/Video
+  Description              Parses H.264 streams
+  Author                   Mark Nauwelaerts <mark.nauwelaerts@collabora.co.uk>
+
+Plugin Details:
+  Name                     videoparsersbad
+  Description              videoparsers
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstvideoparsersbad.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gst-plugins-bad
+  Source release date      2015-08-03 14:19 (UTC)
+  Binary package           GStreamer Bad Plug-ins git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstBaseParse
+                         +----GstH264Parse
+
+Pad Templates:
+  SRC template: 'src'
+    Availability: Always
+    Capabilities:
+      video/x-h264
+                 parsed: true
+          stream-format: { avc, avc3, byte-stream }
+              alignment: { au, nal }
+
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      video/x-h264
+
+
+Element Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_base_parse_change_state
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+  SRC: 'src'
+    Pad Template: 'src'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "h264parse0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  disable-passthrough : Force processing (disables passthrough)
+                        flags: readable, writable
+                        Boolean. Default: false
+  config-interval     : Send SPS and PPS Insertion Interval in seconds (sprop parameter sets will be multiplexed in the data stream when detected.) (0 = disabled)
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 3600 Default: 0 
 ={============================================================================
 *kt_dev_bcast_310* gst: debug
 
