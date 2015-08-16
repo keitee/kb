@@ -20,7 +20,7 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_bcast_300| gst:
 |kt_dev_bcast_302| gst: timer and query
-|kt_dev_bcast_303| 
+|kt_dev_bcast_303| gst: registry
 |kt_dev_bcast_304| gst: multi-thread and pad types
 |kt_dev_bcast_305| gst: buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
@@ -45,6 +45,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_335* gst: man: 07: bus
 *kt_dev_bcast_336* gst: man: 08: pad and capability
 *kt_dev_bcast_330* gst: man: 14: clocks and synchronization
+*kt_dev_bcast_330* gst: man: 15: buffering
 |kt_dev_bcast_330| gst: man: 18: autoplug and typefind
 
 |kt_dev_bcast_400| gst: preroll
@@ -1016,35 +1017,33 @@ query object and directly provides us with the result.
 
 
 ={============================================================================
-*kt_dev_bcast_303* gst: cache
+*kt_dev_bcast_303* gst: registry
 
+gst-init can use a gst-registry cache that can store information about existing
+plugins. This greatly improves performance, as the discovery of plugins can be
+only done when gst-init() is ran for the first time.  We configure this cache
+using runBrowser.sh script, and if it does not exist, with the use of
+gst-inspect tool we force it to be populted.
 
-gst-init can use a gst-registry cache that can store information about
-existing plugins. This greatly improves performance, as the discovery
-of plugins can be only done when gst-init() is ran for the first time.
-We configure this cache using runBrowser.sh script, and if it does not
-exist, with the use of gst-inspect tool we force it to be populted.
-
-Unfortunately, gstreamer performs a limited validation of this cache,
-checking only for it's version. This leads to potential problems, when
-plugins are changed / renamed. Such a problem was discovered by
-CANTST-16517 Error 02100 when playing iPlayer programmes.
-Between two affected releases name of one of the gst-plugins has
-changed (DEVARCH-9248), namely: libgstfragmented became
+Unfortunately, gstreamer performs a limited validation of this cache, checking
+only for it's version. This leads to potential problems, when plugins are
+changed / renamed. Such a problem was discovered by CANTST-16517 Error 02100
+when playing iPlayer programmes.  Between two affected releases name of one of
+the gst-plugins has changed (DEVARCH-9248), namely: libgstfragmented became
 ibgsthlsdemux.
 
-It appears that gst plugin (gstregistry.bin) was not automatically rebuilt
-by the gstreamer following the software upgrade, and non-existing plugins
-were refered to in attempt to build the playback pipeline.
+It appears that gst plugin (gstregistry.bin) was not automatically rebuilt by
+the gstreamer following the software upgrade, and non-existing plugins were
+refered to in attempt to build the playback pipeline.
 
-Ideally, the gstreamer could invalidate such a cache in such case,
-and it would have been re-built automatically to match the changes
-performed during the upgrade. As a quick solution, as part of DEVARCH-9643,
-runBrowser.sh script was updated to reflect that there were changes by using
-a new name for the cachefile (gstregistry.bin) appending a suffix with a version
-and deleting all of the previous versions if a cache-file of the latest version did
-not exist. This, however, would require updates to release validation process
-to make sure the version was increased whenever there was a need for it.
+Ideally, the gstreamer could invalidate such a cache in such case, and it would
+have been re-built automatically to match the changes performed during the
+upgrade. As a quick solution, as part of DEVARCH-9643, runBrowser.sh script was
+updated to reflect that there were changes by using a new name for the cachefile
+(gstregistry.bin) appending a suffix with a version and deleting all of the
+previous versions if a cache-file of the latest version did not exist. This,
+however, would require updates to release validation process to make sure the
+    version was increased whenever there was a need for it.
 
 This change should make it less error-prone and fully automated.
 
@@ -1060,9 +1059,10 @@ http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gst-runn
 
 GST_REGISTRY, GST_REGISTRY_1_0.  
 
-Set this environment variable to make GStreamer use a different file for the plugin cache / registry
-than the default one. This is useful when operating in a separate environment which should not
-affect the default cache in the user's home directory. 
+Set this environment variable to make GStreamer use a different file for the
+plugin cache / registry than the default one. This is useful when operating in a
+separate environment which should not affect the default cache in the user's
+home directory. 
 
 
 ={============================================================================
@@ -1897,6 +1897,8 @@ Element Properties:
   config-interval     : Send SPS and PPS Insertion Interval in seconds (sprop parameter sets will be multiplexed in the data stream when detected.) (0 = disabled)
                         flags: readable, writable
                         Unsigned Integer. Range: 0 - 3600 Default: 0 
+
+
 ={============================================================================
 *kt_dev_bcast_310* gst: debug
 
@@ -2178,7 +2180,7 @@ amount of verbosity of the output.
 
 
 ={============================================================================
-*kt_dev_bcast_311* gst: tools: sdk and tutorials
+*kt_dev_bcast_312* gst: example pipeline
 
 gst-launch-1.0 souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
 '!' 
@@ -4533,6 +4535,226 @@ pipeline by posting a LATENCY message on the bus. The application can then
 decide to query and redistribute a new latency or not. Changing the latency in a
 pipeline might cause visual or audible glitches and should therefore only be
 done by the application when it is allowed.
+
+
+={============================================================================
+*kt_dev_bcast_330* gst: man: 15: buffering
+
+Chapter 15. Buffering
+
+The purpose of buffering is to accumulate enough data in a pipeline so that
+playback can occur smoothly and without interruptions. It is typically done when
+reading from a (slow) and non-live network source but can also be used for live
+sources.
+
+GStreamer provides support for the following use cases:
+
+* Buffering up to a specific amount of data, in memory, before starting playback
+so that network fluctuations are minimized. See the section called "Stream
+buffering".
+
+* Download of the network file to a local disk with fast seeking in the
+downloaded data. This is similar to the quicktime/youtube players. See the
+section called "Download buffering".
+
+* Caching of (semi)-live streams to a local, on disk, ringbuffer with seeking in
+the cached area. This is similar to tivo-like timeshifting. See the section
+called "Timeshift buffering". 
+
+GStreamer can provide the application with progress reports about the current
+buffering state as well as let the application decide on how to buffer and when
+the buffering stops.
+
+In the most simple case, the application has to listen for BUFFERING messages on
+the bus. If the percent indicator inside the BUFFERING message is smaller than
+100, the pipeline is buffering. When a message is received with 100 percent,
+buffering is complete. In the buffering state, the application should keep the
+    pipeline in the PAUSED state. When buffering completes, it can put the
+    pipeline (back) in the PLAYING state.
+
+What follows is an example of how the message handler could deal with the
+BUFFERING messages. We will see more advanced methods in the section called
+"Buffering strategies". 
+
+ [...]
+
+  switch (GST_MESSAGE_TYPE (message)) {
+    case GST_MESSAGE_BUFFERING:{
+      gint percent;
+
+      /* no state management needed for live pipelines */
+      if (is_live)
+        break;
+
+      gst_message_parse_buffering (message, &percent);
+
+      if (percent == 100) {
+        /* a 100% message means buffering is done */
+        buffering = FALSE;
+        /* if the desired state is playing, go back */
+        if (target_state == GST_STATE_PLAYING) {
+          gst_element_set_state (pipeline, GST_STATE_PLAYING);
+        }
+      } else {
+        /* buffering busy */
+        if (!buffering && target_state == GST_STATE_PLAYING) {
+          /* we were not buffering but PLAYING, PAUSE  the pipeline. */
+          gst_element_set_state (pipeline, GST_STATE_PAUSED);
+        }
+        buffering = TRUE;
+      }
+      break;
+    case ...
+
+  [...]
+
+Stream buffering
+
+      +---------+     +---------+     +-------+
+      | httpsrc |     | buffer  |     | demux |
+      |        src - sink      src - sink     ....
+      +---------+     +---------+     +-------+
+    
+
+In this case we are reading from a slow network source into a buffer element
+(such as queue2).
+
+The buffer element has a low and high watermark expressed in bytes. The buffer
+uses the watermarks as follows:
+
+* The buffer element will post BUFFERING messages 'until' the high watermark is
+hit. This instructs the application to keep the pipeline PAUSED, which will
+eventually block the srcpad from pushing while data is prerolled in the sinks.
+
+* When the high watermark is hit, a BUFFERING message with 100% will be posted,
+which instructs the application to continue playback.
+
+* When during playback, the low watermark is hit, the queue will start posting
+BUFFERING messages again, making the application PAUSE the pipeline again until
+the high watermark is hit again. This is called the 'rebuffering' stage.
+
+* During playback, the queue level will fluctuate between the high and the low
+watermark as a way to compensate for network irregularities. 
+
+note: push mode
+
+This buffering method is usable when the demuxer operates in push mode. Seeking
+in the stream requires the seek to happen in the network source. It is mostly
+desirable when the total duration of the file is not known, such as in live
+streaming or when efficient seeking is not possible/required.
+
+The problem is configuring a good low and high watermark. Here are some ideas:
+
+* It is possible to measure the network bandwidth and configure the low/high
+watermarks in such a way that buffering takes a fixed amount of time.
+
+* The queue2 element in GStreamer core has the max-size-time property that,
+together with the use-rate-estimate property, does exactly that. Also the
+    playbin buffer-duration property uses the rate estimate to scale the amount
+    of data that is buffered.
+
+* Based on the codec bitrate, it is also possible to set the watermarks in such
+a way that a fixed amount of data is buffered before playback starts.  Normally,
+the buffering element doesn't know about the bitrate of the stream but it can
+    get this with a query.
+
+* Start with a fixed amount of bytes, measure the time between rebuffering and
+increase the queue size until the time between rebuffering is within the
+application's chosen limits. 
+
+The buffering element can be inserted anywhere in the pipeline. You could, for
+example, insert the buffering element before a decoder. This would make it
+possible to set the low/high watermarks based on time.
+
+note: pull mode
+
+The buffering flag on playbin, performs buffering on the parsed data. Another
+advantage of doing the buffering at a later stage is that you can let the
+demuxer operate in pull mode. When reading data from a slow network drive (with
+        filesrc) this can be an interesting way to buffer. 
+
+
+Download buffering
+
+      +---------+     +---------+     +-------+
+      | httpsrc |     | buffer  |     | demux |
+      |        src - sink      src - sink     ....
+      +---------+     +----|----+     +-------+
+                           V
+                          file
+    
+note: push or pull based?
+
+If we know the server is streaming a fixed length file to the client, the
+application can choose to download the entire file on disk. The buffer element
+will provide a push or pull based srcpad to the demuxer to navigate in the
+downloaded file.
+
+This mode is only suitable when the client can determine the length of the file
+on the server.
+
+In this case, buffering messages will be emitted as usual when the requested
+range is not within the downloaded area + buffersize. The buffering message will
+also contain an indication that incremental download is being performed. This
+flag can be used to let the application control the buffering in a more
+intelligent way, using the BUFFERING query, for example. See the section called
+"Buffering strategies". 
+
+
+Timeshift buffering
+
+      +---------+     +---------+     +-------+
+      | httpsrc |     | buffer  |     | demux |
+      |        src - sink      src - sink     ....
+      +---------+     +----|----+     +-------+
+                           V
+                       file-ringbuffer
+    
+
+note: seek in the buffered data
+
+In this mode, a fixed size ringbuffer is kept to download the server content.
+This allows for seeking in the buffered data. Depending on the size of the
+ringbuffer one can seek further back in time.
+
+This mode is suitable for all live streams. As with the incremental download
+mode, buffering messages are emitted along with an indication that timeshifting
+download is in progress. 
+
+
+Live buffering
+
+In live pipelines we usually introduce some fixed latency between the capture
+and the playback elements. This latency can be introduced by a queue (such as a
+        jitterbuffer) or by other means (in the audiosink).
+
+Buffering messages can be emitted in those live pipelines as well and serve as
+an indication to the user of the latency buffering. The application usually does
+not react to these buffering messages with a state change. 
+
+
+Buffering strategies
+
+What follows are some ideas for implementing different buffering strategies
+based on the buffering messages and buffering query.  
+
+No-rebuffer strategy
+
+We would like to buffer enough data in the pipeline so that playback continues
+without interruptions. What we need to know to implement this is know the total
+remaining playback time in the file and the total remaining download time. If
+the buffering time is less than the playback time, we can start playback without
+interruptions.
+
+We have all this information available with the DURATION, POSITION and BUFFERING
+queries. We need to periodically execute the buffering query to get the current
+buffering status. We also need to have a large enough buffer to hold the
+complete file, worst case. It is best to use this buffering strategy with
+download buffering (see the section called "Download buffering").
+
+This is what the code would look like: 
+
+note: skipped the code
 
 
 ={============================================================================
