@@ -9272,6 +9272,44 @@ NS_ZINC_CLOSE
 Future                                 Promise
             FutureContext<T>           <- 2.
 
+1. FutureValue<T> : class FutureValueBase
+
+2.
+
+
+    ^
+    |
+
+class FutureContextBase : noncopyable
+
++ FutureDispatcher* dispatcher;
++ void scheduleCallback()
++ virtual bool dispatchNextResult() = 0;
+
+class FutureContextCommonImpl: class FutureContextBase 
+
++ void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, 
+            FutureDispatcher* clientDispatcher_);
+
++ boost::function<void (FutureContextBase*)> completionHandler;
+
+class FutureContext<T> : public FutureContextCommonImpl
++ T value
++ template <typename Handler>
+   void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_);
+
+    ^
+    |
+
+class PromiseBase : boost::noncopyable
++ boost::intrusive_ptr<detail::FutureContextCommonImpl> context;
+
+class Promise<T> : public PromiseBase
++ Promise(); note create FutureContext<T>
++ Future<T> getFuture(); note create Future<T>(&FC);
++ void complete(typename const_param<T>::type);
+
+
 1. when creates a promise, associated value, FC gets created with dispatcher
 
 template<typename T>
@@ -9388,9 +9426,10 @@ bool FutureContextCommonImpl::dispatchNextResult()
  * Future_Impl.h
  * FutureValues.h
  * FutureValue_Impl.h
-* FutureDispatcher.h
-*
+ * FutureDispatcher.h
 
+
+<future-dispatcher>
 ////////////////////////////////////////
 /*
  * FutureDispatcher.h
@@ -9410,6 +9449,7 @@ NS_ZINC_CLOSE
 #endif /* ZINC_FUTUREDISPATCHER_H_ */
 
 
+<future-context>
 ////////////////////////////////////////
 /*
  * FutureContextBase.h
@@ -9439,13 +9479,16 @@ NS_ZINC_OPEN
  * Future<T>, Promise<T>, FutureValue<T>, Chunk<T> small
  *
  */
+
+// note:
+// has pure virtual functions and template functions which has implementations.
+
 class ZINC_EXPORT FutureContextBase : boost::noncopyable
 {
 public:
 
     virtual ~FutureContextBase();
 
-    // note:
     virtual bool dispatchNextResult() = 0;
 
     virtual void dispatchCancellation() = 0;
@@ -9575,7 +9618,7 @@ void FutureContextBase::wait()
     }
 }
 
-// note:
+// note: <set-callback>
 void FutureContextBase::scheduleCallback()
 {
     assert(clientDispatcher);
@@ -9759,7 +9802,7 @@ public:
         doPostSetActionsAndUnlock(lock);
     }
 
-    // note: setCallabck
+    // note: <set-callback>
     template <typename Handler>
         void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
             setCallbackHoisted(boost::function<void (FutureContextBase*)>(
@@ -10003,6 +10046,7 @@ void FutureContextCommonImpl::completeError(const NS_ZINC::ErrorCode& error_)
 	doPostSetActionsAndUnlock(lock);
 }
 
+// <set-callback>
 void FutureContextCommonImpl::setCallbackHoisted(
         boost::function<void (FutureContextBase*)> fn, 
         FutureDispatcher* clientDispatcher_)
@@ -10096,7 +10140,7 @@ void FutureContextCommonImpl::dispatchCancellation()
 }
 
 
-// note:
+// note: <set-callback>
 bool FutureContextCommonImpl::dispatchNextResult()
 {
     boost::mutex::scoped_lock lock(mutex);
@@ -10331,10 +10375,10 @@ class Future : public FutureBase
          * Set a callback method to be invoked when either the value becomes
          * available, or an exception occurs.
          *
-         * The callback will be executed on the provided dispatcher, rather than the
+         * The callback will be executed on "the provided dispatcher", rather than the
          * dispatcher used by the Promise.
          *
-         * // note:
+         * // note: <set-callback>
          * Explicitly providing the dispatcher gives the caller more control over
          * which thread will execute their callback.
          *
@@ -11098,6 +11142,7 @@ Future<T> completedFuture(const T& val) {
  * Promise.h
  * Promise_Impl.h
 
+<promise>
 ////////////////////////////////////////
 /*
  * Promise.h
