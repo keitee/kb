@@ -22,17 +22,16 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_300| gst:
 |kt_dev_bcast_302| gst: timer and query
 |kt_dev_bcast_303| gst: registry
-|kt_dev_bcast_304| gst: multi-thread and pad types
+|kt_dev_bcast_304| gst: queue, branch
 |kt_dev_bcast_305| gst: buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
 |kt_dev_bcast_302| gst: elements: uridecodebin
-|kt_dev_bcast_302| gst: elements: queue
 |kt_dev_bcast_302| gst: elements: h264parse
 
 |kt_dev_bcast_310| gst: debug
-|kt_dev_bcast_311| gst: tools
+|kt_dev_bcast_311| gst: gst-launch
+|kt_dev_bcast_311| gst: gst-inspect
 |kt_dev_bcast_312| gst: sdk, tutorials
-*kt_dev_bcast_312* gst: example pipeline
 |kt_dev_bcast_313| gst: core apis reference
 
 |kt_dev_bcast_319| gst: mime and types
@@ -50,6 +49,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_330* gst: man: 15: buffering
 |kt_dev_bcast_330| gst: man: 18: autoplug and typefind
 
+*kt_dev_bcast_400* gst: gst time and mpeg time
 |kt_dev_bcast_400| gst: preroll
 |kt_dev_bcast_400| gst: ref: gstcap
 
@@ -708,6 +708,8 @@ http://mpeg.chiariglione.org/
 
 http://cgit.freedesktop.org/gstreamer/
 
+http://cgit.freedesktop.org/gstreamer/gstreamer/tree/docs/design
+
 
 ={============================================================================
 *kt_dev_bcast_300* gst
@@ -1074,57 +1076,86 @@ home directory.
 
 
 ={============================================================================
-*kt_dev_bcast_304* gst: multi-thread. pad types
-
-GStreamer is a multithreaded framework. This means that, internally, it creates and destroys threads
-as it needs them, for example, to decouple streaming from the application thread. 
-
-Moreover, <plugins> are also free to create threads for their own processing, for example, a video
-decoder could create 4 threads to take full advantage of a CPU with 4 cores.
-
-
-{queue}
-An application can specify explicitly that a branch (a part of the pipeline) runs on a different
-thread (for example, to have the audio and video decoders executing simultaneously).
-
-This is accomplished using the queue element, which works as follows. The sink pad just enqueues
-data and returns control. On a different thread, data is dequeued and pushed downstream. This
-element is also used for buffering, as seen later in the streaming tutorials. The size of the queue
-can be controlled through properties.
-
-
-As seen in the picture, queues create a new thread, so this pipeline runs in 3 threads. Pipelines
-with more than one sink usually need to be multithreaded, because, to be synchronized, sinks usually
-block execution until all other sinks are ready, and they cannot get ready if there is only one
-thread, being blocked by the first sink.
-
-
-	
-
-{pad-link}
-note: Linking elements is one thing and linking pads is the other once linking element is done.
+*kt_dev_bcast_304* gst: queue, branch
 
 Basic tutorial 7: Multithreading and Pad Availability
 
-/* Manually link the Tee, which has "Request" pads */
+GStreamer is a multithreaded framework. This means that, internally, it creates
+and destroys threads as it needs them, for example, to decouple streaming from
+the application thread. 
 
+Moreover, 'plugins' are also free to create threads for their own processing,
+for example, a video decoder could create 4 threads to take full advantage of a
+    CPU with 4 cores.
+
+
+{queue-and-branch}
+An application can specify explicitly that a 'branch' (a part of the pipeline)
+runs on a different thread (for example, to have the audio and video decoders
+        executing simultaneously).
+
+This is accomplished using the queue element, which works as follows. The sink
+pad just enqueues data and returns control. On a different thread, data is
+dequeued and pushed downstream. This element is also used for 'buffering', as
+seen later in the streaming tutorials. The size of the queue can be controlled
+through properties.
+
+app source(thread1)    tee                     queue(thread2)       audio 
++=================+    +=================+     +=================+  resample
+|           [src] | -> |[sink]     [src] | ->  |[sink]     [src] |  [sink] ->
+|                 |    |           [src] |     |                 |
++=================+    +=================+     +=================+
+
+                                               queue(thread3)       video 
+                                               +=================+  convert
+                                               |[sink]     [src] |  [sink] ->
+                                               |                 |
+                                               +=================+ 
+
+As seen in the picture, queues create a new thread, so this pipeline runs in 3
+threads. Pipelines with more than one sink usually need to be multithreaded,
+    because, to be 'synchronized', sinks usually block execution until all
+    other sinks are ready, and they cannot get ready if there is only one
+    thread, being blocked by the first sink.
+
+
+{pad-link}
+note: Linking elements is one thing and linking pads is the other once linking
+element is done.
+
+/* Create the elements */
+audio_source = gst_element_factory_make ("audiotestsrc", "audio_source");
+tee = gst_element_factory_make ("tee", "tee");
+audio_queue = gst_element_factory_make ("queue", "audio_queue");
+video_queue = gst_element_factory_make ("queue", "video_queue");
+
+/* Manually link the Tee, which has "request" pads */
+
+<audio-branch>
 // request 'request pad' from tee for audio path
-tee_src_pad_template = gst_element_class_get_pad_template (GST_ELEMENT_GET_CLASS (tee), "src%d");
-tee_audio_pad = gst_element_request_pad (tee, tee_src_pad_template, NULL, NULL);
-g_print ("Obtained request pad %s for audio branch.\n", gst_pad_get_name (tee_audio_pad));
+tee_src_pad_template = 
+   gst_element_class_get_pad_template (GST_ELEMENT_GET_CLASS (tee), "src%d");
 
-// GstPad *            gst_element_get_static_pad          (GstElement *element,
-//                                                         const gchar *name);
+tee_audio_pad = 
+   gst_element_request_pad (tee, tee_src_pad_template, NULL, NULL);
+
+g_print ("Obtained request pad %s for audio branch.\n", 
+        gst_pad_get_name (tee_audio_pad));
+
+// GstPad* gst_element_get_static_pad (GstElement *element, const gchar *name);
 //
-// Retrieves a pad from element by name. This version only retrieves already-existing (i.e.
-// 'static') pads. 
+// Retrieves a pad from element by name. This version only retrieves
+// already-existing (i.e.  'static') pads. 
 
 // get a pad from audio_queue element
 queue_audio_pad = gst_element_get_static_pad (audio_queue, "sink");
 
+<video-branch>
 // request 'request pad' from tee for video path
-tee_video_pad = gst_element_request_pad (tee, tee_src_pad_template, NULL, NULL);
-g_print ("Obtained request pad %s for video branch.\n", gst_pad_get_name (tee_video_pad));
+tee_video_pad = 
+   gst_element_request_pad (tee, tee_src_pad_template, NULL, NULL);
+g_print ("Obtained request pad %s for video branch.\n", 
+        gst_pad_get_name (tee_video_pad));
 
 // get a pad from video_queue element
 queue_video_pad = gst_element_get_static_pad (video_queue, "sink");
@@ -1136,18 +1167,148 @@ if (gst_pad_link (tee_audio_pad, queue_audio_pad) != GST_PAD_LINK_OK ||
   return -1;
 }
 
-
-GstPadLinkReturn
-gst_pad_link_full (GstPad *srcpad,
-                   GstPad *sinkpad,
-                   GstPadLinkCheck flags);
-
-Links the source pad and the sink pad.
+// GstPadLinkReturn
+// gst_pad_link_full (GstPad *srcpad,
+//                    GstPad *sinkpad,
+//                    GstPadLinkCheck flags);
+//
+// Links the source pad and the sink pad.
 
 This variant of gst_pad_link provides a more granular control on the checks
 being done when linking. While providing some considerable speedups the caller
 of this method must be aware that wrong usage of those flags can cause severe
 issues. Refer to the documentation of GstPadLinkCheck for more information.
+
+
+<element>
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/gstreamer-plugins-queue.html
+
+// to give a delay
+! queue min-threshold-time=2000000000
+
+// to flush data more quickly
+! queue max-size-bytes=10000
+
+The “max-size-bytes” property
+
+“max-size-bytes”           guint
+
+Max. amount of data in the queue (bytes, 0=disable).
+
+Flags: Read / Write
+
+note: Default value: 10485760
+
+
+gst-inspect-1.0 queue
+
+Factory Details:
+  Rank                     none (0)
+  Long-name                Queue
+  Klass                    Generic
+  Description              Simple data queue
+  Author                   Erik Walthinsen <omega@cse.ogi.edu>
+
+Plugin Details:
+  Name                     coreelements
+  Description              GStreamer core elements
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcoreelements.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gstreamer
+  Source release date      2015-08-03 14:00 (UTC)
+  Binary package           GStreamer git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstQueue
+
+Pad Templates:
+  SRC template: 'src'
+    Availability: Always
+    Capabilities:
+      ANY
+
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      ANY
+
+
+Element Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_element_change_state_func
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+  SRC: 'src'
+    Pad Template: 'src'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "queue0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  current-level-buffers: Current number of buffers in the queue
+                        flags: readable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  current-level-bytes : Current amount of data in the queue (bytes)
+                        flags: readable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  current-level-time  : Current amount of data in the queue (in ns)
+                        flags: readable
+                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 0 
+  max-size-buffers    : Max. number of buffers in the queue (0=disable)
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 200 
+  max-size-bytes      : Max. amount of data in the queue (bytes, 0=disable)
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 10485760 
+  max-size-time       : Max. amount of data in the queue (in ns, 0=disable)
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 1000000000 
+  min-threshold-buffers: Min. number of buffers in the queue to allow reading (0=disable)
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  min-threshold-bytes : Min. amount of data in the queue to allow reading (bytes, 0=disable)
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  min-threshold-time  : Min. amount of data in the queue to allow reading (in ns, 0=disable)
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 0 
+  leaky               : Where the queue leaks, if at all
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Enum "GstQueueLeaky" Default: 0, "no"
+                           (0): no               - Not Leaky
+                           (1): upstream         - Leaky on upstream (new buffers)
+                           (2): downstream       - Leaky on downstream (old buffers)
+  silent              : Don't emit queue signals
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Boolean. Default: false
+  flush-on-eos        : Discard all data in the queue when an EOS event is received
+                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
+                        Boolean. Default: false
+
+Element Signals:
+  "underrun" :  void user_function (GstElement* object,
+                                    gpointer user_data);
+  "running" :  void user_function (GstElement* object,
+                                   gpointer user_data);
+  "overrun" :  void user_function (GstElement* object,
+                                   gpointer user_data);
+  "pushing" :  void user_function (GstElement* object,
+                                   gpointer user_data);
 
 
 ={============================================================================
@@ -1699,144 +1860,9 @@ Element Signals:
 
 
 ={============================================================================
-*kt_dev_bcast_302* gst: elements: queue
-
-http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/gstreamer-plugins-queue.html
-
-// to give a delay
-! queue min-threshold-time=2000000000
-
-// to flush data more quickly
-! queue max-size-bytes=10000
-
-The “max-size-bytes” property
-
-“max-size-bytes”           guint
-
-Max. amount of data in the queue (bytes, 0=disable).
-
-Flags: Read / Write
-
-note: Default value: 10485760
-
-
-gst-inspect-1.0 queue
-
-Factory Details:
-  Rank                     none (0)
-  Long-name                Queue
-  Klass                    Generic
-  Description              Simple data queue
-  Author                   Erik Walthinsen <omega@cse.ogi.edu>
-
-Plugin Details:
-  Name                     coreelements
-  Description              GStreamer core elements
-  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcoreelements.so
-  Version                  1.5.0.1
-  License                  LGPL
-  Source module            gstreamer
-  Source release date      2015-08-03 14:00 (UTC)
-  Binary package           GStreamer git
-  Origin URL               Unknown package origin
-
-GObject
- +----GInitiallyUnowned
-       +----GstObject
-             +----GstElement
-                   +----GstQueue
-
-Pad Templates:
-  SRC template: 'src'
-    Availability: Always
-    Capabilities:
-      ANY
-
-  SINK template: 'sink'
-    Availability: Always
-    Capabilities:
-      ANY
-
-
-Element Flags:
-  no flags set
-
-Element Implementation:
-  Has change_state() function: gst_element_change_state_func
-
-Element has no clocking capabilities.
-Element has no URI handling capabilities.
-
-Pads:
-  SINK: 'sink'
-    Pad Template: 'sink'
-  SRC: 'src'
-    Pad Template: 'src'
-
-Element Properties:
-  name                : The name of the object
-                        flags: readable, writable
-                        String. Default: "queue0"
-  parent              : The parent of the object
-                        flags: readable, writable
-                        Object of type "GstObject"
-  current-level-buffers: Current number of buffers in the queue
-                        flags: readable
-                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
-  current-level-bytes : Current amount of data in the queue (bytes)
-                        flags: readable
-                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
-  current-level-time  : Current amount of data in the queue (in ns)
-                        flags: readable
-                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 0 
-  max-size-buffers    : Max. number of buffers in the queue (0=disable)
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Unsigned Integer. Range: 0 - 4294967295 Default: 200 
-  max-size-bytes      : Max. amount of data in the queue (bytes, 0=disable)
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Unsigned Integer. Range: 0 - 4294967295 Default: 10485760 
-  max-size-time       : Max. amount of data in the queue (in ns, 0=disable)
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 1000000000 
-  min-threshold-buffers: Min. number of buffers in the queue to allow reading (0=disable)
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
-  min-threshold-bytes : Min. amount of data in the queue to allow reading (bytes, 0=disable)
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
-  min-threshold-time  : Min. amount of data in the queue to allow reading (in ns, 0=disable)
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Unsigned Integer64. Range: 0 - 18446744073709551615 Default: 0 
-  leaky               : Where the queue leaks, if at all
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Enum "GstQueueLeaky" Default: 0, "no"
-                           (0): no               - Not Leaky
-                           (1): upstream         - Leaky on upstream (new buffers)
-                           (2): downstream       - Leaky on downstream (old buffers)
-  silent              : Don't emit queue signals
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Boolean. Default: false
-  flush-on-eos        : Discard all data in the queue when an EOS event is received
-                        flags: readable, writable, changeable in NULL, READY, PAUSED or PLAYING state
-                        Boolean. Default: false
-
-Element Signals:
-  "underrun" :  void user_function (GstElement* object,
-                                    gpointer user_data);
-  "running" :  void user_function (GstElement* object,
-                                   gpointer user_data);
-  "overrun" :  void user_function (GstElement* object,
-                                   gpointer user_data);
-  "pushing" :  void user_function (GstElement* object,
-                                   gpointer user_data);
-
-
-={============================================================================
 *kt_dev_bcast_302* gst: elements: h264parse
 
-[root@HUMAX /]# gst-inspect-1.0 video/x-h264
-video/x-h264: a typefind function
-[root@HUMAX /]# gst-inspect-1.0 h264parse   
+$ gst-inspect-1.0 h264parse   
 Factory Details:
   Rank                     primary + 1 (257)
   Long-name                H.264 parser
@@ -1902,7 +1928,8 @@ Element Properties:
   disable-passthrough : Force processing (disables passthrough)
                         flags: readable, writable
                         Boolean. Default: false
-  config-interval     : Send SPS and PPS Insertion Interval in seconds (sprop parameter sets will be multiplexed in the data stream when detected.) (0 = disabled)
+  config-interval     : Send SPS and PPS Insertion Interval in seconds 
+  (sprop parameter sets will be multiplexed in the data stream when detected.) (0 = disabled)
                         flags: readable, writable
                         Unsigned Integer. Range: 0 - 3600 Default: 0 
 
@@ -2053,15 +2080,17 @@ dot -Tjpeg gst-launch.PLAYING_PAUSED.dot -o gst-launch.PLAYING_PAUSED.jpg
 
 
 ={============================================================================
-*kt_dev_bcast_311* gst: tools
+*kt_dev_bcast_311* gst: gst-launch
 
-{gst-launch}
-The command line for gst-launch consists of a list of options followed by a PIPELINE-DESCRIPTION.
-Some simplified instructions are given next, see the complete documentation at the reference page for
-gst-launch.
+Basic tutorial 10: GStreamer tools
+http://docs.gstreamer.com/display/GstSDK/Basic+tutorial+10%3A+GStreamer+tools
 
-In simple form, a PIPELINE-DESCRIPTION is a list of element types separated by exclamation marks
-(!). Go ahead and type in the following command:
+The command line for gst-launch consists of a list of options followed by a
+PIPELINE-DESCRIPTION.  Some simplified instructions are given next, see the
+complete documentation at the reference page for gst-launch.
+
+In simple form, a PIPELINE-DESCRIPTION is a list of element types separated by
+exclamation marks (!). Go ahead and type in the following command:
 
 gst-launch-0.10 videotestsrc ! ffmpegcolorspace ! autovideosink
 
@@ -2079,16 +2108,27 @@ GStreamer Options
   --gst-version                     Print the GStreamer version
   --gst-fatal-warnings              Make all warnings fatal
   --gst-debug-help                  Print available debug categories and exit
-  --gst-debug-level=LEVEL           Default debug level from 1 (only error) to 5 (anything) or 0 for no output
-  --gst-debug=LIST                  Comma-separated list of category_name:level pairs to set specific levels for the individual categories. Example: GST_AUTOPLUG:5,GST_ELEMENT_*:3
+
+  --gst-debug-level=LEVEL           Default debug level from 1 (only error) to 
+                                    5 (anything) or 0 for no output
+
+  --gst-debug=LIST                  Comma-separated list of category_name:level 
+                                    pairs to set specific levels for the 
+                                    individual categories. 
+                                    Example: GST_AUTOPLUG:5,GST_ELEMENT_*:3
+
   --gst-debug-no-color              Disable coloured debugging output
   --gst-debug-disable               Disable debugging
   --gst-plugin-spew                 Enable verbose plugin loading diagnostics
   --gst-plugin-path=PATHS           Colon-separated paths containing plugins
-  --gst-plugin-load=PLUGINS         Comma-separated list of plugins to preload in addition to the list stored in environment variable GST_PLUGIN_PATH
-  --gst-disable-segtrap             Disable trapping of segmentation faults during plugin loading
+  --gst-plugin-load=PLUGINS         Comma-separated list of plugins to preload 
+                                    in addition to the list stored in environment 
+                                    variable GST_PLUGIN_PATH
+  --gst-disable-segtrap             Disable trapping of segmentation faults 
+                                    during plugin loading
   --gst-disable-registry-update     Disable updating the registry
-  --gst-disable-registry-fork       Disable spawning a helper process while scanning the registry
+  --gst-disable-registry-fork       Disable spawning a helper process while 
+                                    scanning the registry
 
 Application Options:
   -t, --tags                        Output tags (also known as metadata)
@@ -2105,56 +2145,104 @@ Application Options:
   --version                         Print version information and exit
 
 
-<set-properties>
-Properties may be appended to elements, in the form property=value (multiple properties can be
-        specified, separated by spaces). Use the gst-inspect tool (explained next) to find out the
-available properties for an element.
+{set-properties}
+Properties may be appended to elements, in the form property=value (multiple
+        properties can be specified, separated by spaces). Use the gst-inspect
+tool (explained next) to find out the available properties for an element.
 
 gst-launch-0.10 videotestsrc pattern=11 ! ffmpegcolorspace ! autovideosink
 
 
-<name-elements>
-Elements can be named using the name property, in this way complex pipelines involving branches can
-be created. Names allow linking to elements created previously in the description, and are
-indispensable to use elements with multiple output pads, like demuxers or tees, for example.
+{name-elements-named-pad}
+Elements can be named using the name property, in this way complex pipelines
+involving branches can be created. Names allow linking to elements created
+previously in the description, and are indispensable to use elements with
+multiple output pads, like demuxers or tees, for example.
 
 Named elements are referred to using their name followed by a dot.
 
-gst-launch-0.10 videotestsrc ! ffmpegcolorspace ! tee name=t ! queue ! autovideosink t. ! queue ! autovideosink
+gst-launch-0.10 \
+   videotestsrc ! ffmpegcolorspace ! tee name=t ! queue ! autovideosink t. ! queue ! autovideosink
                                                                                      ^^
+   videotestsrc ! ffmpegcolorspace ! tee ! queue ! autovideosink 
+                                     tee ! queue ! autovideosink
 
-The tee is named simply `t` (using the name property) and then linked to a queue and an
-autovideosink. The same tee is referred to using ‘t.’ (mind the dot) and then linked to a second
-queue and a second autovideosink.
+You should see two video windows, showing the same sample video pattern.
+
+The tee is named simply 't' (using the name property) and then linked to a
+queue and an autovideosink. The same tee is referred to using 't.' (mind the
+        dot) and then linked to a second queue and a second autovideosink.
 
 
-<cap-filters>
-When an element has more than one output pad, it might happen that the link to the next element is
-ambiguous: the next element may have more than one compatible input pad, or its input pad may be
-compatible with the Pad Caps of all the output pads. In these cases GStreamer will link using the
-first pad that is available, which pretty much amounts to saying that GStreamer will choose one
-output pad at random.
+{cap-filters}
+When an element has more than one output pad, it might happen that the link to
+the next element is ambiguous: the next element may have more than one
+compatible input pad, or its input pad may be compatible with the Pad Caps of
+all the output pads. In these cases GStreamer will link using the first pad
+that is available, which pretty much amounts to saying that GStreamer will
+choose one output pad at random.
 
 Consider the following pipeline:
 
-gst-launch-0.10 souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! matroskademux ! filesink location=test
+gst-launch-0.10 
+   souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
+   ! matroskademux ! filesink location=test
 
-This is the same media file and demuxer as in the previous example. The input Pad Caps of filesink
-are ANY, meaning that it can accept any kind of media. Which one of the two output pads of
-matroskademux will be linked against the filesink? video_00 or audio_00? You cannot know.
+This is the same media file and demuxer as in the previous example. The input
+Pad Caps of filesink are ANY, meaning that it can accept any kind of media.
+Which one of the two output pads of matroskademux will be linked against the
+filesink? video_00 or audio_00? You cannot know.
 
-You can remove this ambiguity, though, by using named pads, as in the previous sub-section, or by
-using Caps Filters:
+You can remove this ambiguity, though, by using named pads, as in the previous
+sub-section, or by using Caps Filters:
 
-gst-launch-0.10 souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! matroskademux ! video/x-vp8 ! matroskamux ! filesink location=sintel_video.mkv
+gst-launch-0.10 
+   souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
+   ! matroskademux ! video/x-vp8 ! matroskamux ! filesink location=sintel_video.mkv
 
-A Caps Filter behaves like a pass-through element which does nothing and only accepts media with the
-given Caps, effectively resolving the ambiguity. In this example, between matroskademux and
-matroskamux we added a video/x-vp8 Caps Filter to specify that we are interested in the output pad
-of matroskademux which can produce this kind of video.
+A Caps Filter behaves like a pass-through element which does nothing and only
+accepts media with the given Caps, effectively resolving the ambiguity. In
+this example, between matroskademux and matroskamux we added a video/x-vp8
+Caps Filter to specify that we are interested in the output pad of
+matroskademux which can produce this kind of video.
 
 
-{gst-inspect}
+{example}
+gst-launch-1.0 
+   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! dashdemux name=dash dash. 
+   ! video/quicktime 
+   ! qtdemux 
+   ! queue 
+   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! h264parse 
+   ! video/x-h264,stream-format=byte-stream 
+   ! nexussink dash. 
+   ! audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
+
+   souphttpsrc 
+   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue ! cencdec ! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink dash. 
+                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! nexussink
+
+gst-launch-1.0 
+   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! dashdemux name=dash dash. 
+   ! video/quicktime 
+   ! qtdemux 
+   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2 
+   ! h264parse 
+   ! mpegtsmux name=m 
+   ! tsnexusbin dash. 
+   ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! m.
+
+   souphttpsrc 
+   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! cencdec ! h264parse ! mpegtsmux name=m ! tsnexusbin dash. 
+                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! mpegtsmux
+
+
+={============================================================================
+*kt_dev_bcast_311* gst: gst-inspect
+
 This tool has three modes of operation:
 
 o Without arguments, it lists 'all' available elements types, this is, the types you can use to
@@ -2185,36 +2273,6 @@ produce the media, and therefore what elements you need to put in a pipeline to 
 
 Use gst-discoverer --help to obtain the list of available options, which basically control the
 amount of verbosity of the output.
-
-
-={============================================================================
-*kt_dev_bcast_312* gst: example pipeline
-
-gst-launch-1.0 
-souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-'!' 
-dashdemux name=dash dash. 
-'!' video/quicktime 
-'!' qtdemux 
-'!' queue 
-'!' cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-'!' h264parse 
-'!' video/x-h264,stream-format=byte-stream 
-'!' nexussink dash. 
-'!' audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
-
-
-gst-launch-1.0 
-souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-! 
-dashdemux name=dash dash. 
-! video/quicktime 
-! qtdemux 
-! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2 
-! h264parse 
-! mpegtsmux name=m 
-! tsnexusbin dash. 
-! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! m.
 
 
 ={============================================================================
@@ -4836,7 +4894,7 @@ Once a media type has been detected, you can plug an element (e.g. a demuxer or 
 
 
 ={============================================================================
-*kt_dev_bcast_400* gst: time print
+*kt_dev_bcast_400* gst: gst time and mpeg time
 
 /**
  * GstSegment:
@@ -4890,7 +4948,8 @@ GST_DEBUG_OBJECT (sink,
 >>> 362833194666/(60*60)
 100786998 hours?
 
-what happened? The reason is gst uses nano so:
+what happened? The reason is gst uses 'nanosecond' so usage of the GST_SECOND
+or GST_MSECOND macros is highly recommended.
 
 >>> 32654987520000000/(1000000000)
 32654987
