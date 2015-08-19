@@ -18,6 +18,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_201| mpeg: streaming: dash
 |kt_dev_bcast_202| mpeg: streaming: mpd file
 
+|kt_dev_bcast_300| gst: git web
 |kt_dev_bcast_300| gst:
 |kt_dev_bcast_302| gst: timer and query
 |kt_dev_bcast_303| gst: registry
@@ -31,6 +32,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: tools
 |kt_dev_bcast_312| gst: sdk, tutorials
+*kt_dev_bcast_312* gst: example pipeline
 |kt_dev_bcast_313| gst: core apis reference
 
 |kt_dev_bcast_319| gst: mime and types
@@ -699,6 +701,12 @@ http://mpeg.chiariglione.org/
 	</AdaptationSet>
 </Period>
 </MPD>
+
+
+={============================================================================
+*kt_dev_bcast_300* gst: git web
+
+http://cgit.freedesktop.org/gstreamer/
 
 
 ={============================================================================
@@ -2182,25 +2190,31 @@ amount of verbosity of the output.
 ={============================================================================
 *kt_dev_bcast_312* gst: example pipeline
 
-gst-launch-1.0 souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+gst-launch-1.0 
+souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
 '!' 
 dashdemux name=dash dash. 
-'!' 
-video/quicktime 
-'!' 
-qtdemux 
-'!' 
-queue 
-'!' 
-cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-'!' 
-h264parse 
-'!' 
-video/x-h264,stream-format=byte-stream 
-'!' 
-nexussink dash. 
-'!' 
-audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
+'!' video/quicktime 
+'!' qtdemux 
+'!' queue 
+'!' cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+'!' h264parse 
+'!' video/x-h264,stream-format=byte-stream 
+'!' nexussink dash. 
+'!' audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
+
+
+gst-launch-1.0 
+souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+! 
+dashdemux name=dash dash. 
+! video/quicktime 
+! qtdemux 
+! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2 
+! h264parse 
+! mpegtsmux name=m 
+! tsnexusbin dash. 
+! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! m.
 
 
 ={============================================================================
@@ -4819,6 +4833,168 @@ g_main_loop_run (loop);
 
 Once a media type has been detected, you can plug an element (e.g. a demuxer or decoder) to the
 'source' pad of the typefind element, and decoding of the media stream will start right after.
+
+
+={============================================================================
+*kt_dev_bcast_400* gst: time print
+
+/**
+ * GstSegment:
+ * @flags: flags for this segment
+ * @rate: the rate of the segment
+ * @applied_rate: the already applied rate to the segment
+ * @format: the format of the segment values
+ * @base: the base of the segment
+ * @offset: the offset to apply to @start or @stop
+ * @start: the start of the segment
+ * @stop: the stop of the segment
+ * @time: the stream time of the segment
+ * @position: the position in the segment
+ * @duration: the duration of the segment
+ *
+ * A helper structure that holds the configured region of
+ * interest in a media file.
+ */
+struct _GstSegment {
+  /*< public >*/
+  GstSegmentFlags flags;
+
+  gdouble         rate;
+  gdouble         applied_rate;
+
+  GstFormat       format;
+  guint64         base;
+  guint64         offset;
+  guint64         start;
+  guint64         stop;
+  guint64         time;
+
+  guint64         position;
+  guint64         duration;
+
+  /* < private > */
+  gpointer        _gst_reserved[GST_PADDING];
+};
+
+GST_DEBUG_OBJECT (sink, 
+        "Segment event: %" GST_TIME_FORMAT " -> %" GST_TIME_FORMAT, 
+        GST_TIME_ARGS(segment->start),GST_TIME_ARGS(segment->stop));
+
+:gst_nexus_sink_event_locked: KT: Segment start: 32654987520000000
+:gst_nexus_sink_event_locked:<nexussink1> Segment event: 9070:49:47.520000000 -> 99:99:99.999999999
+
+
+<gst-time-vs-pts-time>
+32654987520000000/90K = 362833194666 sec
+
+>>> 362833194666/(60*60)
+100786998 hours?
+
+what happened? The reason is gst uses nano so:
+
+>>> 32654987520000000/(1000000000)
+32654987
+>>> 32654987/(60*60)
+9070
+
+
+/**
+ * GST_SECOND:
+ *
+ * Constant that defines one GStreamer second.
+ *
+ * Value: 1000000000
+ * Type: GstClockTime
+ */
+#define GST_SECOND  (G_USEC_PER_SEC * G_GINT64_CONSTANT (1000))
+
+
+/* microseconds per second */
+typedef struct _GTimer		GTimer;
+
+#define G_USEC_PER_SEC 1000000
+
+/**
+ * GstClockTime:
+ *
+ * A datatype to hold a time, measured in nanoseconds.
+ */
+typedef guint64 GstClockTime;
+
+
+/* timestamp debugging macros */
+/**
+ * GST_TIME_FORMAT:
+ *
+ * A string that can be used in printf-like format strings to display a
+ * #GstClockTime value in h:m:s format.  Use GST_TIME_ARGS() to construct
+ * the matching arguments.
+ *
+ * Example:
+ * |[
+ * printf("%" GST_TIME_FORMAT "\n", GST_TIME_ARGS(ts));
+ * ]|
+ */
+#define GST_TIME_FORMAT "u:%02u:%02u.%09u"
+/**
+ * GST_TIME_ARGS:
+ * @t: a #GstClockTime
+ *
+ * Format @t for the #GST_TIME_FORMAT format string. Note: @t will be
+ * evaluated more than once.
+ */
+#define GST_TIME_ARGS(t) \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) (((GstClockTime)(t)) / (GST_SECOND * 60 * 60)) : 99, \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) ((((GstClockTime)(t)) / (GST_SECOND * 60)) % 60) : 99, \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) ((((GstClockTime)(t)) / GST_SECOND) % 60) : 99, \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) (((GstClockTime)(t)) % GST_SECOND) : 999999999
+
+
+<gst-buffer>
+GST_BUFFER_PTS(stream->buf);
+
+/**
+ * GstBuffer:
+ * @mini_object: the parent structure
+ * @pool: pointer to the pool owner of the buffer
+ * @pts: presentation timestamp of the buffer, can be #GST_CLOCK_TIME_NONE when the
+ *     pts is not known or relevant. The pts contains the timestamp when the
+ *     media should be presented to the user.
+ * @dts: decoding timestamp of the buffer, can be #GST_CLOCK_TIME_NONE when the
+ *     dts is not known or relevant. The dts contains the timestamp when the
+ *     media should be processed.
+ * @duration: duration in time of the buffer data, can be #GST_CLOCK_TIME_NONE
+ *     when the duration is not known or relevant.
+ * @offset: a media specific offset for the buffer data.
+ *     For video frames, this is the frame number of this buffer.
+ *     For audio samples, this is the offset of the first sample in this buffer.
+ *     For file data or compressed data this is the byte offset of the first
+ *       byte in this buffer.
+ * @offset_end: the last offset contained in this buffer. It has the same
+ *     format as @offset.
+ *
+ * The structure of a #GstBuffer. Use the associated macros to access the public
+ * variables.
+ */
+struct _GstBuffer {
+  GstMiniObject          mini_object;
+
+  /*< public >*/ /* with COW */
+  GstBufferPool         *pool;
+
+  /* timestamp */
+  GstClockTime           pts;
+  GstClockTime           dts;
+  GstClockTime           duration;
+
+  /* media specific offset */
+  guint64                offset;
+  guint64                offset_end;
+};
 
 
 ={============================================================================
