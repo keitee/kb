@@ -27,6 +27,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_301| gst: base elements
 |kt_dev_bcast_302| gst: elements: uridecodebin
 |kt_dev_bcast_302| gst: elements: h264parse
+*kt_dev_bcast_302* gst: elements: tsparse
 
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: gst-launch
@@ -53,7 +54,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_400| gst: preroll
 |kt_dev_bcast_400| gst: ref: gstcap
 
-*kt_dev_bcast_500* gnome: glib
+*kt_dev_bcast_500* gst: man: gstcap
+*kt_dev_bcast_500* gst: gstbasesink
+
 
 # ============================================================================
 #{
@@ -153,11 +156,48 @@ note: the both are generally the same, can decide whether to use PTS only or bot
 in addition, the output of the 'encoder' buffer (Point C) is time stamped with System Time Clock
 (STC) values, called Program Clock Reference (PCR) if the stamp is at the 'transport' packet level,
     or System Clock Reference (SCR) at the PES level. PCR time stamps are required to occur at
-    maximum 100 mS 'intervals'. SCR time stamps are required to occur at maximum 700mS intervals.
+    maximum 100 mS 'intervals'. SCR time stamps are required to occur at maximum 700ms intervals.
 
 note: The PTS is stamped at encoder end and the PCR is stamped at packetizer end.
 
 note: MPEG says there should be 10 PCR a second at least and DVB says 25 a second.
+
+
+<mpeg-spec-says>
+D.0.2 Audio and Video Presentation Synchronization
+
+A PTS indicates the time that the PU(Presentation Unit) which results from
+decoding the AU(Access Unit) which is associated with the PTS should be
+presented to the user. 
+
+So AU is coded stream and PU is decoded stream.
+
+Since PTS and DTS values are not required for every AAU and VAU, the decoder may
+choose to interpolate values which are not coded. PTS values are required with
+intervals not exceeding 700ms in each elementary audio and video stream. These
+time intervals are measured in presentation time, that is, in the same context
+as the values of the fields, not in terms of the times that the fields are
+transmitted and received. 
+
+
+<dash-example>
+Usually, the audio ES chunk comes first with later DTS and the video comes later
+with sooner DTS. This varies to make sure there is no big difference between
+them.
+
+The difference between audio chunks : 21ms
+The difference between video chunks : 40ms
+The difference between video and audio chunks : 808ms
+
+Shows that DTS and PTS are differenct for some chunks and believe that it is
+owing to reordering. 
+
+// from MPEG spec. So when I and P is too far from each other.
+Since the audio and video elementary stream decoders are instantaneous in the
+STD, the decoding time and presentation time are identical in most cases; the
+only exception occurs with video pictures which have undergone re-ordering
+within the coded bit stream, i.e. I and P pictures in the case of non-low-delay
+video sequences. 
 
 
 {clock-sync} clock-recovery, sync-decoders
@@ -1935,6 +1975,204 @@ Element Properties:
 
 
 ={============================================================================
+*kt_dev_bcast_302* gst: elements: mpegtsmux
+
+gst-inspect-1.0 mpegtsmux
+
+Factory Details:
+  Rank                     primary (256)
+  Long-name                MPEG Transport Stream Muxer
+  Klass                    Codec/Muxer
+  Description              Multiplexes media streams into an MPEG Transport Stream
+  Author                   Fluendo <contact@fluendo.com>
+
+Plugin Details:
+  Name                     mpegtsmux
+  Description              MPEG-TS muxer
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstmpegtsmux.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gst-plugins-bad
+  Source release date      2015-08-03 14:19 (UTC)
+  Binary package           GStreamer Bad Plug-ins git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----MpegTsMux
+
+Pad Templates:
+  SRC template: 'src'
+    Availability: Always
+    Capabilities:
+      video/mpegts
+           systemstream: true
+             packetsize: { 188, 192 }
+
+  SINK template: 'sink_%d'
+    Availability: On request
+      Has request_new_pad() function: 0x76e8ca70
+    Capabilities:
+      video/mpeg
+                 parsed: true
+            mpegversion: { 1, 2, 4 }
+           systemstream: false
+      video/x-dirac
+      video/x-h264
+          stream-format: byte-stream
+              alignment: { au, nal }
+      audio/mpeg
+                 parsed: true
+            mpegversion: { 1, 2 }
+      audio/mpeg
+                 framed: true
+            mpegversion: 4
+          stream-format: { raw, adts }
+      audio/x-lpcm
+                  width: { 16, 20, 24 }
+                   rate: { 48000, 96000 }
+               channels: [ 1, 8 ]
+          dynamic_range: [ 0, 255 ]
+               emphasis: { false, true }
+                   mute: { false, true }
+      audio/x-ac3
+                 framed: true
+      audio/x-dts
+                 framed: true
+      subpicture/x-dvb
+      application/x-teletext
+
+
+Element Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: 0x76e8c804
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SRC: 'src'
+    Pad Template: 'src'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "mpegtsmux0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  prog-map            : A GstStructure specifies the mapping from elementary streams to programs
+                        flags: readable, writable
+                        Boxed pointer of type "GstStructure"
+  m2ts-mode           : Set to TRUE to output Blu-Ray disc format with 192 byte packets. FALSE for standard TS format with 188 byte packets.
+                        flags: readable, writable
+                        Boolean. Default: false
+  pat-interval        : Set the interval (in ticks of the 90kHz clock) for writing out the PAT table
+                        flags: readable, writable
+                        Unsigned Integer. Range: 1 - 4294967295 Default: 9000 
+  pmt-interval        : Set the interval (in ticks of the 90kHz clock) for writing out the PMT table
+                        flags: readable, writable
+                        Unsigned Integer. Range: 1 - 4294967295 Default: 9000 
+  alignment           : Number of packets per buffer (padded with dummy packets on EOS) (-1 = auto, 0 = all available packets)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2147483647 Default: -1 
+  si-interval         : Set the interval (in ticks of the 90kHz clock) for writing out the ServiceInformation tables
+                        flags: readable, writable
+                        Unsigned Integer. Range: 1 - 4294967295 Default: 9000 
+
+
+={============================================================================
+*kt_dev_bcast_302* gst: elements: tsparse
+
+$gst-inspect-1.0 tsparse   
+Factory Details:
+  Rank                     none (0)
+  Long-name                MPEG transport stream parser
+  Klass                    Codec/Parser
+  Description              Parses MPEG2 transport streams
+  Author                   Alessandro Decina <alessandro@nnva.org>, 
+                           Zaheer Abbas Merali <zaheerabbas at merali dot org>
+
+Plugin Details:
+  Name                     mpegtsdemux
+  Description              MPEG TS demuxer
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstmpegtsdemux.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gst-plugins-bad
+  Source release date      2015-08-03 14:19 (UTC)
+  Binary package           GStreamer Bad Plug-ins git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----MpegTSBase
+                         +----MpegTSParse2
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      video/mpegts
+           systemstream: true
+
+  SRC template: 'src'
+    Availability: Always
+    Capabilities:
+      video/mpegts
+           systemstream: true
+
+  SRC template: 'program_%u'
+    Availability: On request
+      Has request_new_pad() function: 0x772c67c4
+    Capabilities:
+      video/mpegts
+           systemstream: true
+
+
+Element Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: 0x772c0864
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+  SRC: 'src'
+    Pad Template: 'src'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "mpegtsparse2-0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  parse-private-sections: Parse private sections
+                        flags: readable, writable
+                        Boolean. Default: false
+  set-timestamps      : If set, timestamps will be set on the output buffers using PCRs and smoothed over the smoothing-latency period
+                        flags: readable, writable
+                        Boolean. Default: false
+  smoothing-latency   : Additional latency in microseconds for smoothing jitter in input timestamps on live capture
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  pcr-pid             : Set the PID to use for PCR values (-1 for auto)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2147483647 Default: -1 
+
+
+={============================================================================
 *kt_dev_bcast_310* gst: debug
 
 http://docs.gstreamer.com/display/GstSDK/Basic+tutorial+11%3A+Debugging+tools
@@ -2237,7 +2475,7 @@ gst-launch-1.0
 
    souphttpsrc 
    ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! cencdec ! h264parse ! mpegtsmux name=m ! tsnexusbin dash. 
-                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! mpegtsmux
+                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse      ! mpegtsmux
 
 
 ={============================================================================
@@ -5145,11 +5383,17 @@ https://developer.gnome.org/glib/unstable/index.html
 ={============================================================================
 *kt_dev_bcast_400* gst: log lines
 
+{pipeline}
+INFO            GST_PIPELINE gstparse.c:323:gst_parse_launch_full: parsing pipeline description 'souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd ! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! nexussink '
 
-501:0:00:00.864341482  1514   0x41fa00 INFO            GST_PIPELINE gstparse.c:323:gst_parse_launch_full: parsing pipeline description 'souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd ! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! nexussink '
+
+{loading}
+DEBUG GST_PLUGIN_LOADING gstplugin.c:709:gst_plugin_load_file: attempt to load plugin "/opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcenccrypto.so"
+INFO  GST_PLUGIN_LOADING gstplugin.c:835:gst_plugin_load_file: plugin "/opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstdashdemux.so" loaded
 
 
-965:0:00:01.104384704  1514   0x41fa00 DEBUG     GST_PLUGIN_LOADING gstplugin.c:709:gst_plugin_load_file: attempt to load plugin "/opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcenccrypto.so"
+{caps}
+DEBUG GST_CAPS gstpad.c:2114:gst_pad_link_check_compatible_unlocked:<nexussink1:sink> sink caps video/mpegts, systemstream=(boolean)true; video/x-h264, stream-format=(string)byte-stream, alignment=(string){ au }; video/mpeg, mpegversion=(int){ 2, 4 }, systemstream=(boolean)false; audio/mpeg, mpegversion=(int)1, layer=(int){ 1, 3 }; audio/mpeg, mpegversion=(int)4, stream-format=(string){ adts, loas }
 
 
 ={============================================================================
@@ -5189,6 +5433,145 @@ a string to convert to GstCaps
 	 
 Returns
 a newly 'allocated' GstCaps. 
+
+
+={============================================================================
+*kt_dev_bcast_500* gst: gstbasesink
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSink.html
+
+GstBaseSink is the base class for sink elements in GStreamer, such as
+xvimagesink or filesink. It is a layer on top of GstElement that provides a
+simplified interface to plugin writers. GstBaseSink handles many details for
+you, for example: preroll, clock 'synchronization', state changes, activation in
+push or pull mode, and queries.
+
+In most cases, when writing sink elements, there is no need to implement class
+methods from GstElement or to set functions on pads, because the GstBaseSink
+infrastructure should be sufficient.
+
+GstBaseSink provides support for exactly one sink pad, which should be named
+"sink". A sink implementation (subclass of GstBaseSink) should install a pad
+template in its class_init function, like so:
+
+GstBaseSink will handle the prerolling correctly. This means that it will return
+GST_STATE_CHANGE_ASYNC from a state change to PAUSED until the first buffer
+arrives in this element. The base class will call the GstBaseSinkClass.preroll()
+vmethod with this preroll buffer and will then commit the state change to the
+next asynchronously pending state.
+
+When the element is set to PLAYING, GstBaseSink will synchronise on the clock
+using the times returned from GstBaseSinkClass.get_times(). If this function
+returns GST_CLOCK_TIME_NONE for the start time, no synchronisation will be done.
+Synchronisation can be disabled entirely by setting the object “sync” property
+to FALSE.
+
+After synchronisation the virtual method GstBaseSinkClass.render() will be
+called. Subclasses should minimally implement this method.
+
+Subclasses that synchronise on the clock in the GstBaseSinkClass.'render'()
+method are supported as well. These classes typically receive a 'buffer' in the
+render method and can then potentially block on the clock while rendering. A
+typical example is an audiosink. These subclasses can use
+gst_base_sink_wait_preroll() to perform the blocking wait.
+
+Upon receiving the EOS event in the PLAYING state, GstBaseSink will wait for the
+clock to reach the time indicated by the stop time of the last
+GstBaseSinkClass.get_times() call before posting an EOS message. When the
+element receives EOS in PAUSED, preroll completes, the event is queued and an
+EOS message is posted when going to PLAYING.
+
+GstBaseSink will internally use the GST_EVENT_SEGMENT events to schedule
+synchronisation and clipping of buffers. Buffers that fall completely outside of
+the current segment are dropped. Buffers that fall partially in the segment are
+rendered (and prerolled). Subclasses should do any subbuffer clipping themselves
+when needed.
+
+GstBaseSink will by default report the current playback 'position' in
+GST_FORMAT_TIME based on the current clock time and segment information. If no
+clock has been set on the element, the query will be forwarded upstream.
+
+The GstBaseSinkClass.set_caps() function will be called when the subclass should
+configure itself to process a specific media type.
+
+The GstBaseSinkClass.start() and GstBaseSinkClass.stop() virtual methods will be
+called when resources should be allocated. Any GstBaseSinkClass.preroll(),
+GstBaseSinkClass.render() and GstBaseSinkClass.set_caps() function will be
+    called between the GstBaseSinkClass.start() and GstBaseSinkClass.stop()
+    calls.
+
+The GstBaseSinkClass.event() virtual method will be called when an event is
+received by GstBaseSink. Normally this method should only be overridden by very
+specific elements (such as file sinks) which need to handle the newsegment event
+specially.
+
+The GstBaseSinkClass.unlock() method is called when the elements should unblock
+any blocking operations they perform in the GstBaseSinkClass.render() method.
+This is mostly useful when the GstBaseSinkClass.render() method performs a
+blocking write on a file descriptor, for example.
+
+The “max-lateness” property affects how the sink deals with buffers that arrive
+too late in the sink. A buffer arrives too late in the sink when the
+presentation time (as a combination of the last segment, buffer timestamp and
+        element base_time) plus the duration is before the current time of the
+clock. If the frame is later than max-lateness, the sink will drop the buffer
+'without' calling the render method. 
+
+This feature is disabled if sync is disabled, the GstBaseSinkClass.get_times()
+method does not return a valid start time or max-lateness is set to -1 (the
+        default). Subclasses can use gst_base_sink_set_max_lateness() to
+configure the max-lateness value.
+
+The “qos” property will enable the quality-of-service features of the basesink
+which gather statistics about the real-time performance of the clock
+synchronisation. For each buffer received in the sink, statistics are gathered
+and a QOS event is sent upstream with these numbers. This information can then
+be used by upstream elements to reduce their processing rate, for example.
+
+The “async” property can be used to instruct the sink to never perform an ASYNC
+state change. This feature is mostly usable when dealing with non-synchronized
+streams or sparse streams.
+
+
+{time}
+// for video, nexussink0 and for audio nexussink1
+
+0:00:46.502164232  2134   0x4a0230 DEBUG               basesink gstbasesink.c:3347:gst_base_sink_chain_unlocked:<nexussink0> got times start: 0:00:49.880000000, end: 0:00:49.890000000
+0:00:46.502503454  2134   0x4a0230 DEBUG               basesink gstbasesink.c:1906:gst_base_sink_get_sync_times:<nexussink0> got times start: 0:00:49.880000000, stop: 0:00:49.890000000, do_sync 1
+
+0:00:46.504891528  2134   0x4a0230 DEBUG               basesink gstbasesink.c:2479:gst_base_sink_do_sync:<nexussink0> reset rc_time to time 0:00:49.720000000
+
+0:00:46.503935084  2134   0x5b8690 DEBUG               basesink gstbasesink.c:3347:gst_base_sink_chain_unlocked:<nexussink1> got times start: 0:00:45.354666666, end: 2962:58:31.854666666
+0:00:46.505535677  2134   0x5b8690 DEBUG               basesink gstbasesink.c:1906:gst_base_sink_get_sync_times:<nexussink1> got times start: 0:00:45.354666666, stop: 2962:58:31.854666666, do_sync 1
+
+0:00:46.505868676  2134   0x5b8690 DEBUG               basesink gstbasesink.c:2479:gst_base_sink_do_sync:<nexussink1> reset rc_time to time 0:00:45.194666666
+
+0:00:46.506050492  2134   0x5b8690 DEBUG               basesink gstbasesink.c:2491:gst_base_sink_do_sync:<nexussink1> possibly waiting for clock to reach 0:00:45.354666666, adjusted 0:00:45.194666666
+
+// note: debug line time is not in order.
+0:00:46.505080269  2134   0x4a0230 DEBUG               basesink gstbasesink.c:2491:gst_base_sink_do_sync:<nexussink0> possibly waiting for clock to reach 0:00:49.880000000, adjusted 0:00:49.720000000
+
+0:00:46.507354232  2134   0x4a0230 DEBUG               basesink gstbasesink.c:3429:gst_base_sink_chain_unlocked:<nexussink0> rendering object 0x5f9c90
+0:00:46.508270343  2134   0x4a0230 DEBUG                default /concurrent_pes_writer.c:478:pes_data_source_produce_data: => 
+KT: q:0x45ee60: venq: was_empty: 1, tb(13730), dts: 0:00:49.880000000 dts-diff: 0:00:00.040000000 dts-es-diff: 0:00:04.546666667 dts-abs: 0:00:00.251699371
+
+
+<clear-stream-that-works>
+// video
+DEBUG basesink gstbasesink.c:3347:gst_base_sink_chain_unlocked:<nexussink0> got times start: 9074:24:57.720000000, end: 9074:24:57.730000000
+DEBUG basesink gstbasesink.c:1906:gst_base_sink_get_sync_times:<nexussink0> got times start: 9074:24:57.720000000, stop: 9074:24:57.730000000, do_sync 1
+
+// audio
+DEBUG basesink gstbasesink.c:3347:gst_base_sink_chain_unlocked:<nexussink1> got times start: 9074:24:57.664000000, end: 99:99:99.999999999
+DEBUG basesink gstbasesink.c:1906:gst_base_sink_get_sync_times:<nexussink1> got times start: 9074:24:57.664000000, stop: 99:99:99.999999999, do_sync 1
+
+
+../../../../gtags-target/Zinc.3rdPartyStack/gstreamer-1.5.0/libs/gst/base/gstbasesink.c
+
+// gets time from buf
+  GST_DEBUG_OBJECT (basesink, "got times start: %" GST_TIME_FORMAT
+      ", stop: %" GST_TIME_FORMAT ", do_sync %d", GST_TIME_ARGS (start),
+      GST_TIME_ARGS (stop), *do_sync);
 
 
 ={============================================================================
