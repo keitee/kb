@@ -26,8 +26,10 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_305| gst: buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
 |kt_dev_bcast_302| gst: elements: uridecodebin
+*kt_dev_bcast_302* gst: elements: qtdemux
 |kt_dev_bcast_302| gst: elements: h264parse
 *kt_dev_bcast_302* gst: elements: tsparse
+*kt_dev_bcast_302* gst: elements: identity
 
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: gst-launch
@@ -1916,6 +1918,103 @@ Element Signals:
 
 
 ={============================================================================
+*kt_dev_bcast_302* gst: elements: qtdemux
+
+gst-inspect-1.0 qtdemux
+
+Factory Details:
+  Rank                     primary (256)
+  Long-name                QuickTime demuxer
+  Klass                    Codec/Demuxer
+  Description              Demultiplex a QuickTime file into audio and video streams
+  Author                   David Schleef <ds@schleef.org>, Wim Taymans <wim@fluendo.com>
+
+Plugin Details:
+  Name                     isomp4
+  Description              ISO base media file format support (mp4, 3gpp, qt, mj2)
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstisomp4.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gst-plugins-good
+  Source release date      2015-08-03 14:07 (UTC)
+  Binary package           GStreamer Good Plug-ins git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstQTDemux
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      video/quicktime
+      video/mj2
+      audio/x-m4a
+      application/x-3gp
+
+  SRC template: 'video_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+  SRC template: 'audio_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+  SRC template: 'subtitle_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+
+Element Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_qtdemux_change_state
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "qtdemux0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+
+Element Signals:
+  "pad-added" :  void user_function (GstElement* object,
+                                     GstPad* arg0,
+                                     gpointer user_data);
+  "pad-removed" :  void user_function (GstElement* object,
+                                       GstPad* arg0,
+                                       gpointer user_data);
+  "no-more-pads" :  void user_function (GstElement* object,
+                                        gpointer user_data);
+
+
+// where seems to put pts from stream
+//
+gst_plugins_good-1.5.0/gst/isomp4/qtdemux.c
+
+GST_DEBUG_OBJECT (demux, "stream : %" GST_FOURCC_FORMAT,
+   GST_FOURCC_ARGS (stream->fourcc));
+
+          dts = QTSAMPLE_DTS (stream, sample);
+          pts = QTSAMPLE_PTS (stream, sample);
+
+
+={============================================================================
 *kt_dev_bcast_302* gst: elements: h264parse
 
 $ gst-inspect-1.0 h264parse   
@@ -2186,6 +2285,137 @@ Element Properties:
   pcr-pid             : Set the PID to use for PCR values (-1 for auto)
                         flags: readable, writable
                         Integer. Range: -1 - 2147483647 Default: -1 
+
+
+={============================================================================
+*kt_dev_bcast_302* gst: elements: identity
+
+note: this affects performance of pipeline and have to use gst-launch -v to see
+output. direct output to a file to minimize this.
+
+note: use name to distinguish branches.
+
+! identity name=video silent=false check-imperfect-timestamp=true
+! identity name=audio silent=false check-imperfect-timestamp=true
+
+/GstPipeline:pipeline0/GstIdentity:video: last-message = chain   ******* (video:sink) 
+   (37076 bytes, dts: 0:02:57.640000000, pts:0:02:57.760000000, duration: 0:00:00.040000000, offset: -1, offset_end: -1, flags: 00002000 delta-unit ) 0x5fbac0
+
+/GstPipeline:pipeline0/GstIdentity:video: last-message = chain   ******* (video:sink) 
+   (8259 bytes, dts: 0:02:57.680000000, pts:0:02:57.680000000, duration: 0:00:00.040000000, offset: -1, offset_end: -1, flags: 00002000 delta-unit ) 0x69e728
+
+/GstPipeline:pipeline0/GstIdentity:audio: last-message = chain   ******* (audio:sink) 
+   (425 bytes, dts: 0:01:44.618666666, pts:0:01:44.618666666, duration: 0:00:00.021333334, offset: -1, offset_end: -1, flags: 00004000 tag-memory ) 0x73e680
+
+/GstPipeline:pipeline0/GstIdentity:audio: last-message = chain   ******* (audio:sink) 
+   (415 bytes, dts: 0:01:44.640000000, pts:0:01:44.640000000, duration: 0:00:00.021333333, offset: -1, offset_end: -1, flags: 00004000 tag-memory ) 0x603100
+
+
+gst-inspect-1.0 identity
+
+Factory Details:
+  Rank                     none (0)
+  Long-name                Identity
+  Klass                    Generic
+  Description              Pass data without modification
+  Author                   Erik Walthinsen <omega@cse.ogi.edu>
+
+Plugin Details:
+  Name                     coreelements
+  Description              GStreamer core elements
+  Filename                 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcoreelements.so
+  Version                  1.5.0.1
+  License                  LGPL
+  Source module            gstreamer
+  Source release date      2015-08-03 14:00 (UTC)
+  Binary package           GStreamer git
+  Origin URL               Unknown package origin
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstBaseTransform
+                         +----GstIdentity
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      ANY
+
+  SRC template: 'src'
+    Availability: Always
+    Capabilities:
+      ANY
+
+
+Element Flags:
+  no flags set
+
+Element Implementation:
+  Has change_state() function: gst_identity_change_state
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+  SRC: 'src'
+    Pad Template: 'src'
+
+Element Properties:
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "identity0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  qos                 : Handle Quality-of-Service events
+                        flags: readable, writable
+                        Boolean. Default: false
+  sleep-time          : Microseconds to sleep between processing
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0 
+  error-after         : Error after N buffers
+                        flags: readable, writable
+                        Integer. Range: -2147483648 - 2147483647 Default: -1 
+  drop-probability    : The Probability a buffer is dropped
+                        flags: readable, writable
+                        Float. Range:               0 -               1 Default:               0 
+  datarate            : (Re)timestamps buffers with number of bytes per second (0 = inactive)
+                        flags: readable, writable
+                        Integer. Range: 0 - 2147483647 Default: 0 
+  silent              : silent
+                        flags: readable, writable
+                        Boolean. Default: true
+  single-segment      : Timestamp buffers and eat segments so as to appear as one segment
+                        flags: readable, writable
+                        Boolean. Default: false
+  last-message        : last-message
+                        flags: readable
+                        String. Default: null
+  dump                : Dump buffer contents to stdout
+                        flags: readable, writable
+                        Boolean. Default: false
+  sync                : Synchronize to pipeline clock
+                        flags: readable, writable
+                        Boolean. Default: false
+  check-imperfect-timestamp: Send element messages if timestamps and durations do not match up
+                        flags: readable, writable
+                        Boolean. Default: false
+  check-imperfect-offset: Send element messages if offset and offset_end do not match up
+                        flags: readable, writable
+                        Boolean. Default: false
+  signal-handoffs     : Send a signal before pushing the buffer
+                        flags: readable, writable
+                        Boolean. Default: true
+
+Element Signals:
+  "handoff" :  void user_function (GstElement* object,
+                                   GstBuffer* arg0,
+                                   gpointer user_data);
 
 
 ={============================================================================
@@ -4728,6 +4958,15 @@ before synchronizing to the pipeline clock.
 Non-live sources 'timestamp' buffers with a running-time starting from 0. After
 a flushing seek, they will produce buffers again from a running-time of 0.
 
+note: source in a pipeline do timestamp on buffers. For example:
+
+! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue 
+                                              ^1        ^2
+
+When put identity element at 1, no PTS is printed.
+When put identity element at 2, PTS is printed.
+
+
 <live>
 Live sources need to timestamp buffers with a running-time matching the pipeline
 running-time when the first byte of the buffer was captured.
@@ -5588,6 +5827,15 @@ DEBUG basesink gstbasesink.c:1906:gst_base_sink_get_sync_times:<nexussink1> got 
   GST_DEBUG_OBJECT (basesink, "got times start: %" GST_TIME_FORMAT
       ", stop: %" GST_TIME_FORMAT ", do_sync %d", GST_TIME_ARGS (start),
       GST_TIME_ARGS (stop), *do_sync);
+
+
+DEBUG              GST_EVENT gstpad.c:5242:gst_pad_send_event_unchecked:<nexussink0:sink> have event type segment event: 0x5a51c8, time 99:99:99.999999999, seq-num 114, GstEventSegment, segment=(GstSegment)"GstSegment, flags=(GstSegmentFlags)GST_SEGMENT_FLAG_NONE, rate=(double)1, applied-rate=(double)1, format=(GstFormat)GST_FORMAT_TIME, base=(guint64)0, offset=(guint64)0, start=(guint64)0, stop=(guint64)18446744073709551615, time=(guint64)0, position=(guint64)0, duration=(guint64)18446744073709551615;";
+
+DEBUG               basesink gstbasesink.c:3175:gst_base_sink_event:<nexussink0> received event 0x5a51c8 segment event: 0x5a51c8, time 99:99:99.999999999, seq-num 114, GstEventSegment, segment=(GstSegment)"GstSegment, flags=(GstSegmentFlags)GST_SEGMENT_FLAG_NONE, rate=(double)1, applied-rate=(double)1, format=(GstFormat)GST_FORMAT_TIME, base=(guint64)0, offset=(guint64)0, start=(guint64)0, stop=(guint64)18446744073709551615, time=(guint64)0, position=(guint64)0, duration=(guint64)18446744073709551615;";
+
+DEBUG              nexussink /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:979:gst_nexus_sink_event_locked:<nexussink0> Event segment
+
+DEBUG              nexussink /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:982:gst_nexus_sink_event_locked:<nexussink0> Segment event: 0:00:00.000000000 -> 99:99:99.999999999
 
 
 ={============================================================================
