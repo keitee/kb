@@ -9269,46 +9269,60 @@ NS_ZINC_CLOSE
 ={============================================================================
 *kt_dev_code_011* asyc: flow between future, promise, and io_service
 
-Future                                 Promise
-            FutureContext<T>           <- 2.
+Client
 
-1. FutureValue<T> : class FutureValueBase
+    ^
+    |
 
-2.
+class FutureValueBase
+   + boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
 
+class FutureValue<T> : class FutureValueBase
+
+    ^
+    |
+
+// Since Future is from Promise::getFuture, Future has FC from Promise.
+
+class FutureBase
+   + boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
+
+class Future<T> : public FutureBase
+   + void setCallback(Dispatcher& dispatcher_, const Handler& fn);
+   + FutureValue<T> getFutureValue();
 
     ^
     |
 
 class FutureContextBase : noncopyable
-
-+ FutureDispatcher* dispatcher;
-+ void scheduleCallback()
-+ virtual bool dispatchNextResult() = 0;
+   + FutureDispatcher* dispatcher;
+   + void scheduleCallback()
+   + virtual bool dispatchNextResult() = 0;
 
 class FutureContextCommonImpl: class FutureContextBase 
-
-+ void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, 
+   + void setCallbackHoisted(boost::function<void (FutureContextBase*)> fn, 
             FutureDispatcher* clientDispatcher_);
 
-+ boost::function<void (FutureContextBase*)> completionHandler;
+   + boost::function<void (FutureContextBase*)> completionHandler;
 
 class FutureContext<T> : public FutureContextCommonImpl
-+ T value
-+ template <typename Handler>
-   void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_);
+   + T value
+   + template <typename Handler>
+      void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_);
 
     ^
     |
 
 class PromiseBase : boost::noncopyable
-+ boost::intrusive_ptr<detail::FutureContextCommonImpl> context;
+   + boost::intrusive_ptr<detail::FutureContextCommonImpl> context;
 
 class Promise<T> : public PromiseBase
-+ Promise(); note create FutureContext<T>
-+ Future<T> getFuture(); note create Future<T>(&FC);
-+ void complete(typename const_param<T>::type);
+   + Promise(); note create FutureContext<T>
+   + Future<T> getFuture(); note create Future<T>(&FC);
+   + void complete(typename const_param<T>::type);
 
+
+<how-it-works>
 
 1. when creates a promise, associated value, FC gets created with dispatcher
 
@@ -12200,48 +12214,64 @@ NS_ZINC_CLOSE
 *kt_dev_code_016* asyc: listener
 
 // defines abstract interface to add/remove listener
-template<class ListenerT>
-class ZINC_EXPORT EventProducer : virtual public Polymorphic 
-{
-   typedef ListenerT listener_type;
-}
 
-template<class ListenerT>
-class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> 
-{
+class ZINC_EXPORT EventProducer<T> : virtual public Polymorphic 
+   + typedef ListenerT listener_type;
+   + virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
+
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<T> 
    // implements produceEvent() by delegating events to an EventDispatcher
    // implementation.
-   mutable detail::DispatchingEventProducerHoisted impl;
+   + mutable detail::DispatchingEventProducerHoisted impl;
 
-   template <typename Functor>
+   + template <typename Functor>
         void produceEvent(Functor f) const {
-
             ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
             impl.produceEvent(DowncastingCaller<Functor>(f));
         }
-}
 
+   + virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
+         impl.setDispatcher(dispatcher);
+
+// 1. have std::list<listener> which has entry:
+//    listener_entry pair{wp<listener>, sp<event dispatcher>}
+//
+// 2. produceEvent calls user code(listener) with event using the dispatcher
+// registered with the listener or default dispatcher.
+
+class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
+   + void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
+         boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
+   + void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher_);
+   + void produceEvent(boost::function<void (
+           boost::shared_ptr<hoisted_event_listener>)> event);
 
 // this defines APIs for application and also have 'producer' implementation
 // by deriving from EventProducer.
 
 class ZINC_EXPORT EventWindow : 
     virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> 
-{}
 
-// SystemClientEventRepository::createEventWindow() pass DD to
-// SystemClientEventWindow.
+// SystemClientEventRepository::createEventWindow() creates SCEW and pass DD,
+// inline diapatcher, to SystemClientEventWindow.
+//
+// SystemClientEventWindow->setDispatcher(DD);
+
+<produce-event>
+// creates functor and calls DispatchingEventProducerHoisted::produceEvent(f)
 
 class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow 
-{
-    template <typename Functor>
+   + template <typename Functor>
         void produceEvent(Functor f) const {
             impl.produceEvent(DowncastingCaller<Functor>(f));
         }
-}
 
 
+<event-listener>
 ////////////////////////////////////////
+/*
+ * EventListener.h
+ */
 #ifndef ZINC_EVENTLISTENER_H_
 #define ZINC_EVENTLISTENER_H_
 
@@ -12249,8 +12279,8 @@ class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow
 
 NS_ZINC_OPEN
 
-/**
- *	Needed so that events can be handled polymorphically, such as by an EventDispatcher.
+/** Needed so that events can be handled polymorphically, such as by an
+ * EventDispatcher.
  */
 class ZINC_EXPORT EventListener : virtual public Polymorphic {
 
@@ -12265,6 +12295,9 @@ NS_ZINC_CLOSE
 
 
 ////////////////////////////////////////
+/*
+ * EventWindowEventListener.h
+ */
 #ifndef URANIUM_METADATA_CLIENT_EVENTWINDOWEVENTLISTENER_H_
 #define URANIUM_METADATA_CLIENT_EVENTWINDOWEVENTLISTENER_H_
 
@@ -12301,7 +12334,11 @@ NS_URANIUM_METADATA_CLIENT_CLOSE
 #endif /* URANIUM_METADATA_CLIENT_EVENTWINDOWEVENTLISTENER_H_ */
 
 
+<event-producer>
 ////////////////////////////////////////
+/*
+ * EventProducer.h
+ */
 #ifndef ZINC_EVENTPRODUCER_H_
 #define ZINC_EVENTPRODUCER_H_
 
@@ -12357,6 +12394,9 @@ NS_ZINC_CLOSE
 
 
 ////////////////////////////////////////
+/*
+ * DispatchingEventProducer.h
+ */
 #ifndef ZINC_DISPATCHINGEVENTPRODUCER_H_
 #define ZINC_DISPATCHINGEVENTPRODUCER_H_
 
@@ -12386,7 +12426,6 @@ public:
      * listener callback methods, unless clients explicitly provide an
      * alternative dispatcher in the call to addListener()
      */
-
     explicit DispatchingEventProducer(boost::shared_ptr<EventDispatcher>
             dispatcher_) : impl(dispatcher_) {}
 
@@ -12482,6 +12521,7 @@ protected:
         produceEvent(static_cast<boost::shared_ptr<Event> >(event));
     }
 
+    <produce-event>
     /**
      * Derived implementations should call this method to dispatch an event.
      *
@@ -12523,6 +12563,9 @@ NS_ZINC_CLOSE
 
 
 ////////////////////////////////////////
+/*
+ * DispatchingEventProducerHoisted.h
+ */
 #ifndef ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_
 #define ZINC_DISPATCHINGEVENTPRODUCERHOISTED_H_
 
@@ -12590,11 +12633,7 @@ NS_ZINC_CLOSE
 ////////////////////////////////////////
 /*
  * DispatchingEventProducer.cpp
- *
- *  Created on: Jan 5, 2012
- *      Author: john.sadler@youview.com
  */
-
 #include "../include/Event.h"
 #include "../include/DispatchingEventProducer.h"
 #include "../include/Logger.h"
@@ -12628,7 +12667,8 @@ DispatchingEventProducerHoisted::~DispatchingEventProducerHoisted() {
 	}
 }
 
-void DispatchingEventProducerHoisted::addListener(boost::shared_ptr<hoisted_event_listener> listener, boost::shared_ptr<EventDispatcher> clientDispatcher) 
+void DispatchingEventProducerHoisted::addListener(
+        boost::shared_ptr<hoisted_event_listener> listener, boost::shared_ptr<EventDispatcher> clientDispatcher) 
 {
     if (!listener) {
         throw std::invalid_argument("NULL listener provided in call to addListener()!");
@@ -12719,6 +12759,10 @@ DispatchingEventProducerHoisted::getDispatcher() const {
 // this is one called from future chain coming up from dbus such as
 // notifyWindowChanged()
 // 
+// Takes functor, send aync post to all listeners which are not expired and
+// registered before. dispatcher->post( functor, wp ). So uses dispatcher which
+// is registered with listener.
+//
 // typedef void hoisted_event_listener;
 
 void 
@@ -12741,7 +12785,7 @@ DispatchingEventProducerHoisted::produceEvent(
 
     std::list<listener_entry> forRemoval;
 
-    // note: copies ones not expired to array and moves ones expired to a
+    // note: copies ones not expired to locak array and moves ones expired to a
     // remove list
 
     while (i != listeners.end()) {
@@ -12946,8 +12990,8 @@ SystemClientFactory() creates two dispatches:
 <2> The application calls this to have SCER:
 boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() 
 {
-    createConcreteEventRepository() create SCER 
-    set dispatchers to SCER
+    // createConcreteEventRepository() create SCER 
+    // set dispatchers to SCER
 
     // note: set DD
     concreteER->setDefaultDispatcher(getDefaultDispatcher());
@@ -13027,6 +13071,10 @@ class ZINC_EXPORT SystemClientEventRepository :
     }
 };
 
+
+// note: this means that client will get shared_ptr<EventWindow> when Future is
+// ready.
+
 Future<boost::shared_ptr<EventWindow> > SystemClientEventRepository::getEventWindow(
         uint32_t startingServiceRow, uint32_t serviceCount,
         boost::posix_time::ptime startTime, int32_t seconds,
@@ -13095,7 +13143,8 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
     //   void Callback(FutureValue<T>);
     //   T is "vector < NS_COBALT_SYSTEM::Result>"
     //
-    // The eventReceived is overloaded and see that it receives that &FV.
+    // The eventReceived is overloaded and see that it receives that &FV. When
+    // one of eventsReceived is called, set a promise completed.
     //
     // void SystemClientEventRepository::eventsReceived(
     //   boost::shared_ptr<EventWindowCreateCommand> command,
@@ -13130,8 +13179,7 @@ void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateComman
     bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
 
     // note: after all, eventWindowDataRetrievalComplete() has a notify chain up
-    // to a client. what's the relationship of these three callbacks? how future
-    // barrier works?
+    // to a client. 
     
     bar.setCallback(
           boost::bind
@@ -13168,66 +13216,38 @@ void SystemClientEventWindow::notifyWindowChanged()
    produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
 }
 
-// EventWindowEventListener:: virtual void EventWindowChanged() = 0;
-//
-// creates functor and calls DispatchingEventProducerHoisted::produceEvent(f)
 
+<7> The client which is a listener will get called. 
 
-<7> see "async: listener" for more of listener class
+note: After all, client do not provide a dispatcher and will use the default
+inline dispatcher and this leads to use future dispacther when future barrier is
+completed.
 
-
-DispatchingEventProducerHoisted
+class TextEPGEventWindowEventListener : public EventWindowEventListener
 {
-    /**
-     * Derived implementations should call this method to dispatch an event.
-     *
-     * NOTE: This overload is preferred to the one above, as it is more efficient
-     * and offers greater clarity.
-     *
-     * It accepts a functor with the signature:
-     *
-     *     void f(ListenerT*)
-     *
-     * @param f a functor with the above signature, which can be a plain-old function,
-     * member-function, boost::function, or bind expression.
-     */
-    template <typename Functor>
-        void produceEvent(Functor f) const {
+    virtual void EventWindowChanged()
+    {
+    	printDebug("EventWindowChanged.");
+        actionProcessor->post(boost::bind(&doRefreshWindowAndPrintStats));
+    }
+};
 
-            ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
-            impl.produceEvent(DowncastingCaller<Functor>(f));
-        }
-    `
-    template <typename Functor>
-        struct DowncastingCaller {
-            explicit DowncastingCaller(Functor f_) : f(f_) {}
-            void operator()(boost::shared_ptr<detail::hoisted_event_listener> listener) {
-                // We implicitly casted to void* in add/removeListener above so
-                // this is safe.
-                f(static_cast<ListenerT*>(listener.get()));
-            }
-            Functor f;
-        };
+// global
+boost::shared_ptr<TextEPGEventWindowEventListener> listener = 
+   boost::make_shared<TextEPGEventWindowEventListener>();
+
+boost::shared_ptr<EventWindow>  createEventWindow(boost::shared_ptr<EventRepository> eventRepo)
+{
+    Future<boost::shared_ptr<EventWindow> > f = 
+        eventRepo->getEventWindow(0, dimensions.numServices, start, dimensions.duration.total_seconds());
+
+    // note: see what f.get returns
+    boost::shared_ptr<EventWindow> newWindow = f.get();
+
+    newWindow->addListener(listener);
+    return newWindow;
 }
 
-// delegated to impl.produceEvent.
-
-// Takes functor, send aync post to all listeners which are not expired and
-// registered before. dispatcher->post( functor, wp ). So uses dispatcher which
-// is registered with listener.
-//
-// Q: HOW is listner registered?
-
-void 
-DispatchingEventProducerHoisted::produceEvent(
-        boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
-{
-}
-
-// EventWindowEventListener is ListenerT which is base class that EPG derives
-// from and EPG is Listener. Create a 'window' and add a self to it as a
-// Listener.
-      
 
 # ============================================================================
 #{
