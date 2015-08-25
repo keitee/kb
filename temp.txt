@@ -6,6 +6,78 @@ aWed 18 Dec 2013 09:47:23 GMT
 
 KT KB. Linux
 
+={============================================================================
+*kt_linux_core_107* 
+
+// called from static gboolean gst_nexus_sink_open_locked( GstNexusSink * sink)
+// means each sink has Mgr*?
+//
+GstNexusMgr * gst_nexus_mgr_new ()
+{
+	gmgr = g_slice_new (GstNexusMgr);
+
+   // note: this is uses in sink_init as well?
+	gst_context_init_stream_setting(&gmgr->settings);
+   {
+       // note: <null>
+       settings->callbacks.error=NULL;
+       settings->callbacks.context=NULL;
+   }
+
+	memset(&gmgr->callback_contexts, 0, sizeof(gmgr->callback_contexts));
+}
+
+// sink calls this to access "resource"
+//
+BcmNexus_StreamPlayer_Resources* 
+gst_nexus_mgr_get_resources(GstNexusMgr * mgr, const GstNexusStreamSetting * settings)
+{
+  if(gst_nexus_mgr_acquire_playpumps(mgr, settings)){
+	return mgr->resources;
+  }
+  return NULL;
+}
+
+// this is called two times for each sink
+gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
+								const GstNexusStreamSetting * settings)
+{
+    // only use video for "delegate_callback" <null>
+    mgr->callback_contexts.video_error.delegate_callback = mgr->settings.callbacks.error;
+    mgr->callback_contexts.video_error.delegate_context = mgr->settings.callbacks.context;
+
+    // use video and audio context
+    video_decoder_settings.decodeError.callback = &gst_nexus_mgr_error_1st_level_cb;
+    video_decoder_settings.decodeError.context = &mgr->callback_contexts.video_error;
+
+    audio_decoder_settings.ptsError.callback = &gst_nexus_mgr_error_1st_level_cb;
+    audio_decoder_settings.ptsError.context = &mgr->callback_contexts.audio_error;
+}
+
+
+// use registered "delegate_callback" if it is not null
+//
+static void gst_nexus_mgr_error_1st_level_cb(void* context, int reason)
+{
+  GstNexusMgrCallbackInfo* cb = context;
+  if (cb->delegate_callback) {
+    cb->delegate_callback(cb->delegate_context, reason);
+  }
+  else{
+    const char* error_type = cb->callback_id == CB_VIDEO_ERROR
+        ? "VideoError" : "AudioError";
+    GST_WARNING("=> KT: VAudioError: %s: 0x%04x", error_type, reason);
+  }
+}
+
+
+// no one calls this???
+//
+static void gst_nexus_sink_init( GstNexusSink * sink )
+{
+  sink->settings.callbacks.error = gst_nexus_sink_on_error;
+}
+
 
 ={============================================================================
 *kt_linux_core_107* 

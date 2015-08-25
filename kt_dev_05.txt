@@ -3615,26 +3615,103 @@ links them together so that they act as a filter between two arbitrary stream ty
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst: plugin writer's guide: plugin template
+*kt_dev_bcast_321* gst: plugin: 03. Building a Plugin
 
 Chapter 3. Constructing the Boilerplate
 
-The first step is to check out a copy of the gst-template git module to get an important tool and
-the source code template for a basic GStreamer plugin.
+The first step is to check out a copy of the gst-template git module to get an
+important tool and the source code template for a basic GStreamer plugin.
 
 $ git clone git://anongit.freedesktop.org/gstreamer/gst-template.git
 
-The following commands create the MyFilter plugin based on the plugin template and put the output
-files in the gst-template/gst-plugin/src directory: 
+The following commands create the MyFilter plugin based on the plugin template
+and put the output files in the gst-template/gst-plugin/src directory: 
 
 $ cd gst-template/gst-plugin/src
 $ ../tools/make_element myfilter
 
 
-<element-metadata>
-The element details are registered with the plugin during the _class_init () function, which is part
-of the GObject system. The _class_init () function should be set for this GObject in the function
-where you register the type with GLib.
+Examining the Basic Code
+
+First we will examine the code you would be likely to place in a header file
+(although since the interface to the code is entirely defined by the plugin
+ system, and doesn't depend on reading a header file, this is not crucial.)
+The code here can be found in
+examples/pwg/examplefilter/boiler/gstexamplefilter.h.
+
+
+Example 3.1. Example Plugin Header File
+
+#include <gst/gst.h>
+
+/* Definition of structure storing data for this element. */
+typedef struct _GstMyFilter {
+
+  GstElement element;
+
+  GstPad *sinkpad, *srcpad;
+
+  gboolean silent;
+
+} GstMyFilter;
+
+/* Standard definition defining a class for this element. */
+typedef struct _GstMyFilterClass {
+  GstElementClass parent_class;
+} GstMyFilterClass;
+
+/* Standard macros for defining types for this element.  */
+#define GST_TYPE_MY_FILTER (gst_my_filter_get_type())
+#define GST_MY_FILTER(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_MY_FILTER,GstMyFilter))
+#define GST_MY_FILTER_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_MY_FILTER,GstMyFilterClass))
+#define GST_IS_MY_FILTER(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_MY_FILTER))
+#define GST_IS_MY_FILTER_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_MY_FILTER))
+
+/* Standard function returning type information. */
+GType gst_my_filter_get_type (void);
+      
+
+Using this header file, you can use the following macro to setup the GObject
+basics in your source file so that all functions will be called appropriately:
+
+#include "filter.h"
+
+G_DEFINE_TYPE (GstMyFilter, gst_my_filter, GST_TYPE_ELEMENT);
+    
+
+Element metadata
+----------------
+The Element metadata provides extra element information. It is configured with
+gst_element_class_set_metadata or gst_element_class_set_static_metadata which
+takes the following parameters:
+
+A long, English, name for the element.
+
+The type of the element, see the docs/design/draft-klass.txt document in the
+GStreamer core source tree for details and examples.
+
+A brief description of the purpose of the element.
+
+The name of the author of the element, optionally followed by a contact email
+address in angle brackets. 
+
+For example:
+
+gst_element_class_set_static_metadata (klass,
+  "An example plugin",
+  "Example/FirstExample",
+  "Shows the basic structure of a plugin",
+  "your name <your.name@your.isp>");
+    
+
+The element details are registered with the plugin during the _class_init ()
+function, which is part of the GObject system. The _class_init () function
+should be set for this GObject in the function where you register the type with
+GLib.
 
 static void
 gst_myfilter_class_init (GstmyfilterClass * klass)
@@ -3656,18 +3733,117 @@ gst_myfilter_class_init (GstmyfilterClass * klass)
 }
 
 
-<constructor-functions>
-Each element has two functions which are used for construction of an element. The _class_init()
-    function, which is used to initialise the class only once (specifying what signals, arguments
-            and virtual functions the class has and setting up global state); 
+GstStaticPadTemplate
+--------------------
+A GstStaticPadTemplate is a description of a pad that the element will (or
+        might) create and use. It contains:
 
-and the _init() function, which is used to initialise a specific instance of this type. 
+A short name for the pad.
+
+Pad direction.
+
+Existence property. This indicates whether the pad exists always (an “always”
+        pad), only in some cases (a “sometimes” pad) or only if the
+application requested such a pad (a “request” pad).
+
+Supported types by this element (capabilities).
+
+For example:
+
+static GstStaticPadTemplate sink_factory =
+GST_STATIC_PAD_TEMPLATE (
+  "sink",
+  GST_PAD_SINK,
+  GST_PAD_ALWAYS,
+  GST_STATIC_CAPS ("ANY")
+);
 
 
-<plugin-init>
-This is a special function, which is called as soon as the plugin is loaded, and should return TRUE
-or FALSE depending on whether it loaded initialized any dependencies correctly. Also, in this
-function, any supported element type in the plugin should be registered.
+Those pad templates are registered during the _class_init () function with the
+gst_element_class_add_pad_template (). For this function you need a handle the
+GstPadTemplate which you can create from the static pad template with
+gst_static_pad_template_get (). See below for more details on this.
+
+Pads are created from these static templates in the element's _init ()
+function using gst_pad_new_from_static_template (). In order to create a new
+pad from this template using gst_pad_new_from_static_template (), you will
+need to declare the pad template as a global variable. More on this subject in
+Chapter 4, Specifying the pads.
+
+static GstStaticPadTemplate sink_factory = [..],
+    src_factory = [..];
+
+static void
+gst_my_filter_class_init (GstMyFilterClass * klass)
+{
+  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+[..]
+
+  gst_element_class_add_pad_template (element_class,
+	gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_pad_template (element_class,
+	gst_static_pad_template_get (&sink_factory));
+}
+
+The last argument in a template is its type or list of supported types. In
+this example, we use 'ANY', which means that this element will accept all
+input. In real-life situations, you would set a media type and optionally a
+set of properties to make sure that only supported input will come in. This
+representation should be a string that starts with a media type, then a set of
+comma-separates properties with their supported values. In case of an audio
+filter that supports raw integer 16-bit audio, mono or stereo at any
+samplerate, the correct template would look like this:
+
+
+static GstStaticPadTemplate sink_factory =
+GST_STATIC_PAD_TEMPLATE (
+  "sink",
+  GST_PAD_SINK,
+  GST_PAD_ALWAYS,
+  GST_STATIC_CAPS (
+    "audio/x-raw, "
+      "format = (string) " GST_AUDIO_NE (S16) ", "
+      "channels = (int) { 1, 2 }, "
+      "rate = (int) [ 8000, 96000 ]"
+  )
+);
+
+Values surrounded by curly brackets (“{” and “}”) are lists, values surrounded
+by square brackets (“[” and “]”) are ranges. Multiple sets of types are
+supported too, and should be separated by a semicolon (“;”). Later, in the
+chapter on pads, we will see how to use types to know the exact format of a
+stream: Chapter 4, Specifying the pads. 
+
+
+Constructor Functions
+---------------------
+Each element has two functions which are used for construction of an element.
+
+1. The _class_init() function, which is used to initialise the class only once
+(specifying what signals, arguments and virtual functions the class has and
+ setting up global state); 
+
+2. The _init() function, which is used to initialise a specific instance of this
+type. 
+
+
+The plugin_init function
+------------------------
+This is a special function, which is called as soon as the plugin is loaded, and
+should return TRUE or FALSE depending on whether it loaded initialized any
+dependencies correctly. Also, in this function, any supported element type in
+the plugin should be registered.
+
+Note that the information returned by the plugin_init() function will be cached
+in a central registry. For this reason, it is important that the same
+information is always returned by the function: for example, it must not make
+element factories available based on runtime conditions. 
+
+If an element can only work in certain conditions (for example, if the soundcard
+        is not being used by some other process) this must be reflected by the
+element being unable to enter the READY state if unavailable, rather than the
+plugin attempting to deny existence of the plugin. 
+
 
 /* entry point to initialize the plug-in
  * initialize the plug-in itself
@@ -3712,6 +3888,9 @@ GST_PLUGIN_DEFINE (
     "http://gstreamer.net/"
 )
 
+
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 04. Building a Plugin
 
 Chapter 4. Specifying the pads
 
@@ -3873,6 +4052,134 @@ function to be notified of state changes.
 
 note: This is definitively necessary if your plugin is a demuxer or a muxer, as there are no base
 classes for muxers or demuxers yet. 
+
+
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 23. Pre-made base classes
+
+So far, we've been looking at low-level concepts of creating any type of
+GStreamer element. Now, let's assume that all you want is to create an simple
+audiosink that works exactly the same as, say, “esdsink”, or a filter that
+simply normalizes audio volume. Such elements are very general in concept and
+since they do nothing special, they should be easier to code than to provide
+your own scheduler activation functions and doing complex caps negotiation. For
+this purpose, GStreamer provides base classes that simplify some types of
+elements. Those base classes will be discussed in this chapter.
+
+
+Writing a sink
+
+Sinks are special elements in GStreamer. This is because sink elements have to
+take care of preroll, which is the process that takes care that elements going
+into the GST_STATE_PAUSED state will have buffers ready after the state change.
+
+The result of this is that such elements can start processing data immediately
+after going into the GST_STATE_PLAYING state, without requiring to take some
+time to initialize outputs or set up decoders; all that is done already before
+the state-change to GST_STATE_PAUSED successfully completes.
+
+Preroll, however, is a complex process that would require the same code in many
+elements. Therefore, sink elements can derive from the GstBaseSink base-class,
+which does preroll and a few other utility functions automatically. The derived
+    class only needs to implement a bunch of virtual functions and will work
+    automatically.
+
+The base class implement much of the synchronization logic that a sink has to
+perform.
+
+The GstBaseSink base-class specifies some limitations on elements, though:
+
+* It requires that the sink only has one sinkpad. Sink elements that need more
+* than one sinkpad, must make a manager element with multiple GstBaseSink
+* elements inside. 
+
+Sink elements can derive from GstBaseSink using the usual GObject convenience
+macro G_DEFINE_TYPE ():
+
+G_DEFINE_TYPE (GstMySink, gst_my_sink, GST_TYPE_BASE_SINK);
+
+[..]
+
+static void
+gst_my_sink_class_init (GstMySinkClass * klass)
+{
+  klass->set_caps = [..];
+  klass->render = [..];
+[..]
+}
+    
+
+The advantages of deriving from GstBaseSink are numerous:
+
+* Derived implementations barely need to be aware of preroll, and do not need to
+* know anything about the technical implementation requirements of preroll. The
+* base-class does all the hard work.
+
+* Less code to write in the derived class, shared code (and thus shared
+* bugfixes). 
+
+There are also specialized base classes for audio and video, let's look at those
+a bit.
+
+
+Writing an audio sink
+
+Essentially, audio sink implementations are just a special case of a general
+sink. An audio sink has the added complexity that it needs to schedule playback
+of samples. It must match the clock selected in the pipeline against the clock
+of the audio device and calculate and compensate for drift and jitter.
+
+There are two audio base classes that you can choose to derive from, depending
+on your needs: GstAudioBasesink and GstAudioSink. The audiobasesink provides
+full control over how synchronization and scheduling is handled, by using a
+ringbuffer that the derived class controls and provides. The audiosink
+base-class is a derived class of the audiobasesink, implementing a standard
+ringbuffer implementing default synchronization and providing a standard
+audio-sample clock. Derived classes of this base class merely need to provide a
+_open (), _close () and a _write () function implementation, and some optional
+functions. This should suffice for many sound-server output elements and even
+most interfaces. More demanding audio systems, such as Jack, would want to
+implement the GstAudioBaseSink base-class.
+
+The GstAudioBaseSink has little to no limitations and should fit virtually every
+implementation, but is hard to implement. 
+
+The GstAudioSink, on the other hand, only fits those systems with a simple open
+() / close () / write () API (which practically means pretty much all of them),
+    but has the advantage that it is a lot easier to implement. 
+    
+The benefits of this second base class are large:
+
+* Automatic synchronization, without any code in the derived class.
+
+* Also automatically provides a clock, so that other sinks (e.g. in case of
+* audio/video playback) are synchronized.
+
+* Features can be added to all audiosinks by making a change in the base class,
+* which makes maintenance easy.
+
+* Derived classes require only three small functions, plus some GObject
+* boilerplate code. 
+
+In addition to implementing the audio base-class virtual functions, derived
+classes can (should) also implement the GstBaseSink set_caps () and get_caps ()
+    virtual functions for negotiation.  
+    
+
+Writing a video sink
+
+Writing a videosink can be done using the GstVideoSink base-class, which derives
+from GstBaseSink internally. Currently, it does nothing yet but add another
+compile dependency, so derived classes will need to implement all base-sink
+virtual functions. When they do this correctly, this will have some positive
+effects on the end user experience with the videosink:
+
+* Because of preroll (and the preroll () virtual function), it is possible to
+* display a video frame already when going into the GST_STATE_PAUSED state.
+
+* By adding new features to GstVideoSink, it will be possible to add extensions
+* to videosinks that affect all of them, but only need to be coded once, which
+* is a huge maintenance benefit. 
 
 
 ={============================================================================
@@ -6289,6 +6596,7 @@ arrives in this element. The base class will call the GstBaseSinkClass.preroll()
 vmethod with this preroll buffer and will then commit the state change to the
 next asynchronously pending state.
 
+note: get_times
 When the element is set to PLAYING, GstBaseSink will synchronise on the clock
 using the times returned from GstBaseSinkClass.get_times(). If this function
 returns GST_CLOCK_TIME_NONE for the start time, no synchronisation will be done.
@@ -6360,6 +6668,33 @@ be used by upstream elements to reduce their processing rate, for example.
 The “async” property can be used to instruct the sink to never perform an ASYNC
 state change. This feature is mostly usable when dealing with non-synchronized
 streams or sparse streams.
+
+
+GstElementClass 
+---------------
+parent_class; 
+Element parent class
+	 
+get_caps () 
+Called to get sink pad caps from the subclass
+	 
+set_caps () 
+Notify subclass of changed caps
+	 
+fixate () 
+Only useful in pull mode. Implement if you have ideas about what should be the
+default values for the caps you support.
+	 
+activate_pull () 
+Subclasses should override this when they can provide an alternate method of
+spawning a thread to drive the pipeline in pull mode. Should start or stop the
+pulling thread, depending on the value of the "active" argument. Called after
+actually activating the sink pad in pull mode. The default implementation
+starts a task on the sink pad.
+	 
+get_times ()
+Called to get the start and end times for synchronising the passed buffer to
+the clock
 
 
 {time}
