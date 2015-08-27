@@ -40,6 +40,13 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_bcast_319| gst: mime and types
 |kt_dev_bcast_320| gst: plugin writer's guide
+*kt_dev_bcast_320* gst: plugin: 02 Foundations
+*kt_dev_bcast_321* gst: plugin: 03 Building a Plugin
+*kt_dev_bcast_321* gst: plugin: 04 Building a Plugin
+*kt_dev_bcast_321* gst: plugin: 05 The chain function
+*kt_dev_bcast_321* gst: plugin: 06 The event function
+*kt_dev_bcast_321* gst: plugin: 07 The query function
+*kt_dev_bcast_321* gst: plugin: 08 What are states?
 
 *kt_dev_bcast_330* gst: element property 
 *kt_dev_bcast_330* gst: man: 01: introduction
@@ -3727,59 +3734,147 @@ this document.
 
 
 ={============================================================================
-*kt_dev_bcast_320* gst: plugin writer's guide
-
+*kt_dev_bcast_320* gst: plugin: 02 Foundations
+    
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/index.html
 
 GStreamer Plugin Writer's Guide (1.5.0.1)
 
-<pluggable>
-Its main advantages are that the pluggable components can be mixed and matched into arbitrary
-pipelines so that it's possible to write a full-fledged video or audio editing application.
+Its main advantages are that the pluggable components can be mixed and matched
+into arbitrary pipelines so that it's possible to write a full-fledged video or
+audio editing application.
 
-The framework is based on plugins that will provide the various codec and other functionality. The
-plugins can be linked and arranged in a pipeline. This pipeline defines the flow of the data.
+The framework is based on plugins that will provide the various codec and other
+functionality. The plugins can be linked and arranged in a pipeline. This
+pipeline defines the flow of the data.
 
-The GStreamer core function is to provide a framework for plugins, data flow, synchronization and
-media type handling/negotiation. It also provides an API to write applications using the various
-plugins. 
+The GStreamer core function is to provide a framework for plugins, data flow,
+synchronization and media type handling/negotiation. It also provides an API to
+    write applications using the various plugins. 
 
 
 Preliminary Reading
+-------------------
 
-This guide assumes that you are somewhat familiar with the basic workings of GStreamer. For a gentle
-introduction to programming concepts in GStreamer, you may wish to read the GStreamer Application
-Development Manual first. Also check out the other documentation available on the GStreamer web
-site.
+This guide assumes that you are somewhat familiar with the basic workings of
+GStreamer. For a gentle introduction to programming concepts in GStreamer, you
+may wish to read the GStreamer Application Development Manual first. Also check
+out the other documentation available on the GStreamer web site.
 
-In order to understand this manual, you will need to have a basic understanding of the C language.
-Since GStreamer adheres to the GObject programming model, this guide also assumes that you
-understand the basics of GObject programming. You may also want to have a look at Eric Harlow's book
-Developing Linux Applications with GTK+ and GDK. 
+In order to understand this manual, you will need to have a basic understanding
+of the C language. Since GStreamer adheres to the GObject programming model,
+this guide also assumes that you understand the basics of GObject programming.
+    You may also want to have a look at Eric Harlow's book Developing Linux
+    Applications with GTK+ and GDK. 
 
 
-CH2.
+Elements and Plugins
+--------------------
+Just writing a new element is not entirely enough, however: You will need to
+encapsulate your element in a plugin to enable GStreamer to use it. 
 
-<element-and-plugin>
-Just writing a new element is not entirely enough, however: You will need to encapsulate your
-element in a plugin to enable GStreamer to use it. 
+A plugin is essentially a loadable block of 'code', usually called a shared
+object file or a dynamically linked library. A single plugin may contain the
+implementation of several elements, or just a single one. For simplicity, this
+guide concentrates primarily on plugins containing one element. 
 
-A plugin is essentially a loadable block of code, usually called a shared object file or a
-dynamically linked library. A single plugin may contain the implementation of several elements, or
-just a single one. For simplicity, this guide concentrates primarily on plugins containing one
-element. 
+A filter is an important type of element that processes a stream of data.
+Producers and consumers of data are called source and sink elements,
+respectively. Bin elements contain other elements. One type of bin is
+    responsible for synchronization of the elements that they contain so that
+    data flows smoothly. 
 
-A filter is an important type of element that processes a stream of data. Producers and consumers of
-data are called source and sink elements, respectively. Bin elements contain other elements. One
-type of bin is responsible for synchronization of the elements that they contain so that data flows
-smoothly. 
+Another type of bin, called 'autoplugger' elements, automatically add other
+elements to the bin and links them together so that they act as a filter
+between two arbitrary stream types.
 
-Another type of bin, called 'autoplugger' elements, automatically add other elements to the bin and
-links them together so that they act as a filter between two arbitrary stream types.
+
+GstMiniObject, Buffers and Events
+---------------------------------
+All streams of data in GStreamer are chopped up into 'chunks' that are passed
+from a source pad on one element to a sink pad on another element.
+GstMiniObject is the structure used to hold these chunks of data.
+
+GstMiniObject contains the following important types:
+
+   An exact type indicating what type of data (event, buffer, ...) this
+   GstMiniObject is.
+
+   A reference count indicating the number of elements currently holding a
+   reference to the miniobject. When the reference count falls to zero, the
+   miniobject will be disposed, and its memory will be freed in some sense
+   (see below for more details). 
+
+For data transport, there are two types of GstMiniObject defined: 'events'
+(control) and 'buffers' (content).
+
+Buffers may contain any sort of data that the two linked pads know how to
+handle. Normally, a buffer contains a chunk of some sort of audio or video
+data that flows from one element to another.
+
+Buffers also contain metadata describing the buffer's contents. Some of the
+important types of metadata are:
+
+   Pointers to one or more GstMemory objects. GstMemory objects are refcounted
+   objects that encapsulate a region of memory.
+
+   A timestamp indicating the preferred display timestamp of the content in
+   the buffer. 
+
+Events contain information on the state of the stream flowing between the two
+linked pads. Events will only be sent if the element explicitly supports them,
+else the core will (try to) handle the events automatically. Events are used
+    to indicate, for example, a media type, the end of a media stream or that
+        the cache should be flushed.
+
+Events may contain several of the following items:
+
+    A subtype indicating the type of the contained event.
+
+    The other contents of the event depend on the specific event type. 
+
+
+Buffer Allocation
+-----------------
+Buffers are able to store chunks of memory of several different types. The
+most generic type of buffer contains memory allocated by malloc(). Such
+buffers, although convenient, are not always very fast, since data often needs
+to be specifically copied into the buffer.
+
+Many specialized elements create buffers that point to special memory. For
+example, the filesrc element usually maps a file into the address space of the
+application (using mmap()), and creates buffers that point into that address
+range. These buffers created by filesrc act exactly like generic buffers,
+    except that they are read-only. 
+        
+The buffer freeing code automatically determines the correct method of freeing
+the underlying memory. Downstream elements that receive these kinds of buffers
+do not need to do anything special to handle or unreference it.
+
+Another way an element might get specialized buffers is to request them from a
+    downstream peer through a GstBufferPool or GstAllocator. Elements can ask
+    a GstBufferPool or GstAllocator from the downstream peer element. If
+    downstream is able to provide these objects, upstream can use them to
+    allocate buffers. See more in Memory allocation.
+
+Many sink elements have accelerated methods for copying data to hardware, or
+have direct access to hardware. It is common for these elements to be able to
+create a GstBufferPool or GstAllocator for their upstream peers. One such
+example is ximagesink. It creates buffers that contain XImages. Thus, when an
+upstream peer copies data into the buffer, it is copying directly into the
+XImage, enabling ximagesink to draw the image directly to the screen instead
+of having to copy data into an XImage first.
+
+Filter elements often have the opportunity to either work on a buffer
+in-place, or work while copying from a source buffer to a destination buffer.
+It is optimal to implement both algorithms, since the GStreamer framework can
+choose the fastest algorithm as appropriate. Naturally, this only makes sense
+for strict filters -- elements that have exactly the same format on source and
+    sink pads. 
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst: plugin: 03. Building a Plugin
+*kt_dev_bcast_321* gst: plugin: 03 Building a Plugin
 
 Chapter 3. Constructing the Boilerplate
 
@@ -3796,10 +3891,12 @@ $ ../tools/make_element myfilter
 
 
 Examining the Basic Code
+------------------------
 
 First we will examine the code you would be likely to place in a header file
 (although since the interface to the code is entirely defined by the plugin
  system, and doesn't depend on reading a header file, this is not crucial.)
+
 The code here can be found in
 examples/pwg/examplefilter/boiler/gstexamplefilter.h.
 
@@ -3840,7 +3937,8 @@ GType gst_my_filter_get_type (void);
       
 
 Using this header file, you can use the following macro to setup the GObject
-basics in your source file so that all functions will be called appropriately:
+basics in your source file so that all functions will be 'called'
+appropriately:
 
 #include "filter.h"
 
@@ -3877,22 +3975,16 @@ function, which is part of the GObject system. The _class_init () function
 should be set for this GObject in the function where you register the type with
 GLib.
 
-static void
-gst_myfilter_class_init (GstmyfilterClass * klass)
+static void gst_my_filter_class_init (GstMyFilterClass * klass)
 {
-  GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
+    GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  gobject_class = (GObjectClass *) klass;
-  gstelement_class = (GstElementClass *) klass;
-
-  ...
-
-  gst_element_class_set_details_simple(gstelement_class,
-    "myfilter",
-    "FIXME:Generic",
-    "FIXME:Generic Template Element",
-    " <<user@hostname.org>>");
+    [..]
+        gst_element_class_set_static_metadata (element_klass,
+                "An example plugin",
+                "Example/FirstExample",
+                "Shows the basic structure of a plugin",
+                "your name <your.name@your.isp>");
 
 }
 
@@ -3928,11 +4020,12 @@ gst_element_class_add_pad_template (). For this function you need a handle the
 GstPadTemplate which you can create from the static pad template with
 gst_static_pad_template_get (). See below for more details on this.
 
+note: gst_pad_new_from_static_template()
+
 Pads are created from these static templates in the element's _init ()
-function using gst_pad_new_from_static_template (). In order to create a new
+function using gst_pad_new_from_static_template(). In order to create a new
 pad from this template using gst_pad_new_from_static_template (), you will
-need to declare the pad template as a global variable. More on this subject in
-Chapter 4, Specifying the pads.
+need to declare the pad template as a global variable. 
 
 static GstStaticPadTemplate sink_factory = [..],
     src_factory = [..];
@@ -3940,16 +4033,17 @@ static GstStaticPadTemplate sink_factory = [..],
 static void
 gst_my_filter_class_init (GstMyFilterClass * klass)
 {
-  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
-[..]
+    GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+    [..]
 
-  gst_element_class_add_pad_template (element_class,
-	gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (element_class,
-	gst_static_pad_template_get (&sink_factory));
+    gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&src_factory));
+
+    gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&sink_factory));
 }
 
-The last argument in a template is its type or list of supported types. In
+The last argument in a template is its type or list of supported 'types'. In
 this example, we use 'ANY', which means that this element will accept all
 input. In real-life situations, you would set a media type and optionally a
 set of properties to make sure that only supported input will come in. This
@@ -3972,11 +4066,9 @@ GST_STATIC_PAD_TEMPLATE (
   )
 );
 
-Values surrounded by curly brackets (“{” and “}”) are lists, values surrounded
-by square brackets (“[” and “]”) are ranges. Multiple sets of types are
-supported too, and should be separated by a semicolon (“;”). Later, in the
-chapter on pads, we will see how to use types to know the exact format of a
-stream: Chapter 4, Specifying the pads. 
+Values surrounded by curly brackets (“{” and “}”) are 'lists', values
+surrounded by square brackets (“[” and “]”) are 'ranges'. Multiple sets of
+types are supported too, and should be separated by a semicolon (“;”). 
 
 
 Constructor Functions
@@ -3987,19 +4079,41 @@ Each element has two functions which are used for construction of an element.
 (specifying what signals, arguments and virtual functions the class has and
  setting up global state); 
 
-2. The _init() function, which is used to initialise a specific instance of this
-type. 
+2. The _init() function, which is used to initialise a specific 'instance' of
+this type. 
 
 
 The plugin_init function
 ------------------------
-This is a special function, which is called as soon as the plugin is loaded, and
-should return TRUE or FALSE depending on whether it loaded initialized any
-dependencies correctly. Also, in this function, any supported element type in
-the plugin should be registered.
+This is a special function, which is called as soon as the plugin is 'loaded',
+     and should return TRUE or FALSE depending on whether it loaded
+     initialized any dependencies correctly. Also, in this function, any
+     supported element type in the plugin should be registered.
 
-Note that the information returned by the plugin_init() function will be cached
-in a central registry. For this reason, it is important that the same
+
+static gboolean
+plugin_init (GstPlugin *plugin)
+{
+    return gst_element_register (plugin, "my_filter",
+            GST_RANK_NONE,
+            GST_TYPE_MY_FILTER);
+}
+
+GST_PLUGIN_DEFINE (
+  GST_VERSION_MAJOR,
+  GST_VERSION_MINOR,
+  my_filter,
+  "My filter plugin",
+  plugin_init,
+  VERSION,
+  "LGPL",
+  "GStreamer",
+  "http://gstreamer.net/"
+)
+
+
+Note that the information returned by the plugin_init() function will be
+cached in a central 'registry'. For this reason, it is important that the same
 information is always returned by the function: for example, it must not make
 element factories available based on runtime conditions. 
 
@@ -4054,33 +4168,53 @@ GST_PLUGIN_DEFINE (
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst: plugin: 04. Building a Plugin
+*kt_dev_bcast_321* gst: plugin: 04 Building a Plugin
 
 Chapter 4. Specifying the pads
 
-<chain-function>
-In the element _init () function, you create the pad from the pad template that has been registered
-with the element class in the _class_init () function. After creating the pad, you have to set a
-_chain () function pointer that will 'receive' and process the input data on the sinkpad. You can
-optionally also set an _event () function pointer and a _query () function pointer.
+note: set functions >
+
+In the element _init () function, you create the pad from the pad template
+that has been registered with the element class in the _class_init ()
+function. After creating the pad, you have to set a _chain () function pointer
+that will 'receive' and process the input data on the sinkpad. You can
+optionally also set an _event () function pointer and a _query () function
+pointer.
+
+After that, you have to 'register' the pad with the element. This happens like
+this:
 
 static void
 gst_myfilter_init (Gstmyfilter * filter)
 {
   filter->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
+
+  // note: event
   gst_pad_set_event_function (filter->sinkpad,
                               GST_DEBUG_FUNCPTR(gst_myfilter_sink_event));
+  // note: chain
   gst_pad_set_chain_function (filter->sinkpad,
                               GST_DEBUG_FUNCPTR(gst_myfilter_chain));
   GST_PAD_SET_PROXY_CAPS (filter->sinkpad);
+
   gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad);
 
   filter->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
   GST_PAD_SET_PROXY_CAPS (filter->srcpad);
+
   gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
 
   filter->silent = FALSE;
 }
+
+
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 05 The chain function
+
+The chain function is the function in which all data 'processing' takes place.
+In the case of a simple filter, _chain () functions are mostly linear
+functions - so for each incoming buffer, one buffer will go out, too. Below is
+a very simple implementation of a chain function: 
 
 /* chain function
  * this function does the actual processing
@@ -4088,31 +4222,37 @@ gst_myfilter_init (Gstmyfilter * filter)
 static GstFlowReturn
 gst_myfilter_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
-  Gstmyfilter *filter;
+    Gstmyfilter *filter;
 
-  filter = GST_MYFILTER (parent);
+    // note: parent is a filter element which has pads in it.
+    filter = GST_MYFILTER (parent);
 
-  if (filter->silent == FALSE)
-    g_print ("I'm plugged, therefore I'm in.\n");
+    if (!filter->silent)
+        g_print ("Have data of size %" G_GSIZE_FORMAT" bytes!\n",
+                gst_buffer_get_size (buf));
 
-  /* just push out the incoming buffer without touching it */
-  return gst_pad_push (filter->srcpad, buf);
+    /* just push out the incoming buffer without touching it */
+    return gst_pad_push (filter->srcpad, buf);
 }
 
-Remember, however, that buffers are not always writeable.
+Instead of printing that the data is in, you would normally process the data
+there. Remember, however, that buffers are 'not' always writeable.
 
-In more advanced elements (the ones that do event processing), you may want to additionally specify
-an event handling function, which will be called when stream-events are sent (such as caps,
-        end-of-stream, newsegment, tags, etc.). 
+In more advanced elements (the ones that do event processing), you may want to
+additionally specify an event handling function, which will be called when
+stream-events are sent (such as caps, end-of-stream, newsegment, tags, etc.). 
 
 
-Chapter 6. The event function
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 06 The event function
 
-The event function notifies you of special events that happen in the datastream (such as caps,
-        end-of-stream, newsegment, tags, etc.). Events can 'travel' both upstream and downstream, so
-you can receive them on sink pads as well as source pads.
+The event function notifies you of special events that happen in the
+datastream (such as caps, end-of-stream, newsegment, tags, etc.). Events can
+'travel' both upstream and downstream, so you can receive them on sink pads as
+well as source pads.
 
-Below follows a very simple event function that we install on the sink pad of our element. 
+Below follows a very simple event function that we install on the sink pad of
+our element. 
 
 static gboolean
 gst_my_filter_sink_event (GstPad *pad, GstObject *parent, GstEvent  *event)
@@ -4127,12 +4267,14 @@ gst_my_filter_sink_event (GstPad *pad, GstObject *parent, GstEvent  *event)
       /* push the event downstream */
       ret = gst_pad_push_event (filter->srcpad, event);
       break;
+
     case GST_EVENT_EOS:
       /* end-of-stream, we should close down all stream leftovers here */
       gst_my_filter_stop_processing (filter);
 
       ret = gst_pad_event_default (pad, parent, event);
       break;
+
     default:
       /* just call the default handler */
       ret = gst_pad_event_default (pad, parent, event);
@@ -4141,25 +4283,59 @@ gst_my_filter_sink_event (GstPad *pad, GstObject *parent, GstEvent  *event)
   return ret;
 }
 
-It is a good idea to call the default event handler gst_pad_event_default () for unknown events.
+It is a good idea to call the 'default' event handler gst_pad_event_default ()
+for unknown events.
 
-'depending' on the event type, the default handler will forward the event or simply unref it. The CAPS
-event is by default not forwarded so we need to do this in the event handler ourselves. 
-
-
-Chapter 7. The query function
-
-Through the query function, your element will receive queries that it has to reply to. These are
-queries like position, duration but also about the supported formats and scheduling modes your
-element supports. Queries can 'travel' both upstream and downstream, so you can receive them on sink
-pads as well as source pads. 
-
-As with event, it is a good idea to call the default query handler gst_pad_query_default () for
-unknown queries. Depending on the query type, the default handler will forward the query or simply
-unref it. 
+'depending' on the event type, the default handler will forward the event or
+simply unref it. The CAPS event is by default not forwarded so we need to do
+this in the event handler ourselves. 
 
 
-Chapter 8. What are states?
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 07 The query function
+
+Through the query function, your element will receive queries that it has to
+reply to. These are queries like position, duration but also about the
+supported formats and scheduling modes your element supports. Queries can
+'travel' both upstream and downstream, so you can receive them on sink pads as
+well as source pads. 
+
+static gboolean
+gst_my_filter_src_query (GstPad    *pad,
+		         GstObject *parent,
+		         GstQuery  *query)
+{
+    gboolean ret;
+    GstMyFilter *filter = GST_MY_FILTER (parent);
+
+    switch (GST_QUERY_TYPE (query)) {
+        case GST_QUERY_POSITION:
+            /* we should report the current position */
+            [...]
+                break;
+        case GST_QUERY_DURATION:
+            /* we should report the duration here */
+            [...]
+                break;
+        case GST_QUERY_CAPS:
+            /* we should report the supported caps here */
+            [...]
+                break;
+        default:
+            /* just call the default handler */
+            ret = gst_pad_query_default (pad, parent, query);
+            break;
+    }
+    return ret;
+}
+
+As with event, it is a good idea to call the default query handler
+gst_pad_query_default () for unknown queries. Depending on the query type, the
+default handler will forward the query or simply unref it. 
+
+
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 08 What are states?
 
 Table of Contents
 
