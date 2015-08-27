@@ -11754,6 +11754,23 @@ Element Properties:
                         flags: readable, writable
                         Boolean. Default: false
 
+{changes}
+1. change qlist in writer
+
+from:
+ QList{ elem1     , elem2 }
+         -> queue    -> queue
+
+each source(2 sinks) points to each list elem
+
+to:
+ QList{ elem1     , elem2 }
+         -> source    -> source
+            -> queue
+            
+each source points to queue since writer need to access both source to
+implement pumping based on fifo level checks.
+
 
 ={============================================================================
 *kt_dev_uv_stack_423* stack: media: gst: souphttpsrc
@@ -14404,6 +14421,47 @@ typedef enum NEXUS_StcChannelAutoModeBehavior
 
 	  /* Change the STC settings to use the video stream as the STC master */
 	  stcChannelSettings.modeSettings.Auto.behavior = NEXUS_StcChannelAutoModeBehavior_eVideoMaster;
+
+
+/*
+Summary:
+Change the rate of the STC. Rate is calculated as: rate = (increment) / (prescale + 1).
+
+Description:
+The following are some examples of how the increment and prescale parameters
+map to some typical rates:
+
+    1, 0 = 1x (normal speed)
+    0, X = 0.0x (paused)
+    1, 1 = 0.5x (slow motion)
+    2, 0 = 2x (fast forward)
+    8, 9 = 0.8x (slow motion, audio trick mode may be possible)
+    12, 9 = 1.2x (fast forward, audio trick mode may be possible)
+
+Be aware that the audio and video decoders may not be able to decoder at faster than 1.0x speeds.
+They are limited by overall memory bandwidth and RTS (real time scheduler) programming.
+Also, speeds that may work for low bitrate (SD) streams or low-complexity streams may not work for
+high bitrate (HD) streams or high-complexity streams.
+
+If a decoder cannot keep up with the STC rate, it will drop data. This will result in
+video drops or audio pops. Video drops may be acceptable because it will be similar to a host trick mode.
+Audio pops are usually not acceptable.
+
+Some versions of the audio decoder support 0.8x and 1.2x audio trick modes.
+For any other STC trick mode, the audio decoder should be muted (for fast resumption to normal play) or stopped.
+If you are using the Nexus Playback module, this will be done automatically if NEXUS_PlaybackSettings.stcTrick is true.
+
+There is no reverse stc rate.
+*/
+NEXUS_Error NEXUS_StcChannel_SetRate(
+    NEXUS_StcChannelHandle stcChannel,
+    unsigned increment,
+    unsigned prescale
+    );
+
+
+={============================================================================
+*kt_dev_uv_oem_005* gstnexussink
 
 
 ={============================================================================
