@@ -14461,6 +14461,98 @@ NEXUS_Error NEXUS_StcChannel_SetRate(
 
 
 ={============================================================================
+*kt_dev_uv_oem_005* brcm audio
+
+// 1. use audio decoder handle that got from nexus-manager.
+// 2. stop decoder before changes settings.
+// 3. use to change callback registration to nexus since _AudioDecoderSettings
+//    do not have "rate" field.
+
+NEXUS_AudioDecoder_Stop( mgr->resources->audioDecoder[0] );
+
+NEXUS_AudioDecoder_SetSettings( mgr->resources->audioDecoder[0], &audio_decoder_settings );
+
+
+// 1. use audio decoder handle that got from nexus-manager.
+
+note: no rates
+
+typedef struct NEXUS_AudioDecoderStartSettings
+{
+    NEXUS_PidChannelHandle pidChannel;  /* Input from transport */
+
+    // note: codec
+    NEXUS_AudioCodec codec;             /* Format of data coming from the pid channel */
+    NEXUS_StcChannelHandle stcChannel;  /* Connection to clock for TSM and lipsync with VideoDecoder. If NULL, decode in vsync mode. */
+
+    bool targetSyncEnabled;             /* If true, normal frame sync operation will be used (default).  This flag can be set to false
+                                           for certification applications that require the last frame of the input buffer to be consumed
+                                           without the audio decoder finding the start of the successive frame.  */
+    ...
+
+} NEXUS_AudioDecoderStartSettings;
+
+
+gst_nexus_mgr_start_audio_locked(GstNexusMgr * mgr, gboolean start_decoder)
+{
+    NEXUS_AudioDecoderStartSettings audioProgram;
+    NEXUS_AudioDecoder_GetDefaultStartSettings( &audioProgram );
+
+    // note: codec
+    audioProgram.codec = gst_nexus_mgr_convert_audio_codec(&mgr->settings);
+
+    audioProgram.pidChannel = mgr->resources->audioPidChannel;
+    audioProgram.stcChannel = mgr->resources->stcChannel;
+
+    NEXUS_AudioDecoder_Start( mgr->resources->audioDecoder[0], &audioProgram );
+}
+
+<Representation audioSamplingRate="24000" bandwidth="32000" codecs="mp4a.40.5" id="audio_eng=32000">
+
+static NEXUS_AudioCodec
+gst_nexus_mgr_convert_audio_codec(const GstNexusStreamSetting * settings)
+{
+  switch( settings->audio_codec ) {
+  case ACODEC_AAC_LOAS:
+	return NEXUS_AudioCodec_eAacPlusLoas;
+	break;
+  case ACODEC_AAC_ADTS:
+	return NEXUS_AudioCodec_eAacAdts;
+	break;
+  case ACODEC_AAC:
+	return NEXUS_AudioCodec_eAac;
+	break;
+  case ACODEC_MP2:
+	return NEXUS_AudioCodec_eMpeg;
+	break;	  
+  case ACODEC_MP3:
+	return NEXUS_AudioCodec_eMp3; 
+	break;	  
+  default:
+	break;
+  }
+  return NEXUS_AudioCodec_eUnknown;
+}
+
+
+BcmNexus_StreamPlayer_Resources_Acquire( const BcmNexus_StreamPlayer_Resources_Config *config)
+   BcmNexus_Audio_Set_Default_Path();
+		NEXUS_AudioPlayback_Start(BcmNexus_State.sharedMem->pcmPlayback[0], &BcmNexus_State.sharedMem->audioStartSettings);
+
+
+$ pkg-config --cflags-only-other nexusMgr | ag AUDIO_DSP
+
+-DCONFIG_BCM_FIX_AUDIO_DSP_MIXER
+
+#if !defined(CONFIG_BCM_FIX_AUDIO_DSP_MIXER)
+   /* After re-connected to mixer, all modules have to be started. */
+   NEXUS_AudioPlayback_Start(BcmNexus_State.sharedMem->pcmPlayback[0], &BcmNexus_State.sharedMem->audioStartSettings);
+#endif
+
+note: So not used.
+
+
+={============================================================================
 *kt_dev_uv_oem_005* gstnexussink
 
 

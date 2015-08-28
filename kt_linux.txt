@@ -112,6 +112,7 @@
 |kt_linux_tool_047| env
 |kt_linux_tool_048| term: gnome-terminal
 *kt_linux_tool_049* term: terminator
+|kt_linux_tool_050| watch
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -310,6 +311,7 @@
 |kt_linux_sete_008| ubuntu: change default application setting
 
 |kt_linux_sete_100| gnome: windows
+|kt_linux_sete_101| gnome: workspace
 |kt_linux_sete_102| win xserver
 |kt_linux_sete_103| firefox key shortcuts
 |kt_linux_sete_104| solarized color for ls and gnome
@@ -4987,6 +4989,34 @@ reset_clear
 Reset the terminal state and clear the terminal window.  Default value: <Ctrl><Shift>G
 
 
+={============================================================================
+*kt_linux_tool_050* watch
+
+$watch -n1 -d ccache -s
+
+NAME
+       watch - execute a program periodically, showing output fullscreen
+
+SYNOPSIS
+       watch [options] command
+
+DESCRIPTION
+       watch runs command repeatedly, displaying its output and errors (the
+               first screenfull).  This allows you to watch the program output
+       change over time.  By default, the program is run every 2 seconds.  By
+       default, watch will run until interrupted.
+
+OPTIONS
+       -d, --differences [permanent] Highlight the differences between
+       successive updates.  Option will read optional argument that changes
+       highlight to be permanent, allowing to see what has changed at least once
+       since first iteration.
+
+       -n, --interval seconds Specify update interval.  The command will not
+       allow quicker than 0.1 second interval, in which the smaller values are
+       converted.
+
+
 # ============================================================================
 #{
 ={============================================================================
@@ -5466,6 +5496,96 @@ and binary locations, enabling cache hits across different git branches. zb-virt
 map-dir-and-exec tool internally, which you will have to build and install yourself.
 
 note: need to install map-dir-and-exec package
+
+CCACHE_DIR
+
+The CCACHE_DIR environment variable specifies where ccache will keep its cached
+compiler output. The default is $HOME/.ccache.
+
+You can monitor the current usage of ccache by executing
+
+CCACHE_DIR=.. $watch -n1 -d ccache -s
+
+
+={============================================================================
+*kt_linux_tool_161* icecream
+
+icecream is a better version of distcc - a tool for distributing build jobs
+across multiple machines.
+
+It has a central scheduler (running `icecc-scheduler`) which runs on some server
+and one or more nodes (machines running `iceccd`). The scheduler distributes
+jobs depending on the load and speed of nodes - always picking the fastest and
+least-loaded (preferring localhost when load is low).
+
+One nice thing is it lets you specify what toolchain you are using and icecream
+will distribute your toolchain for you so the remote machine can build
+compatible object files.
+
+ 
+note: do all as a root
+
+Building icecream
+-----------------
+To build icecream the following worked for me, putting all files under
+/opt/icecream
+
+
+darren@djg-ubuntu:/data/software/icecream/build$ cat /data/documents/recipes/icecream.sh
+
+#!/bin/bash
+ 
+# Get source
+git clone https://github.com/icecc/icecream.git
+cd icecream
+ 
+# Get dependencies
+sudo apt-get install -y libcap-ng-dev liblzo2-dev docbook2x
+
+or
+
+sudo apt-get install -y --force-yes libcap-ng-dev liblzo2-dev docbook2x
+ 
+# Build it
+mkdir build
+cd build
+../autogen.sh
+../configure --with-pic --prefix=/opt/icecream
+make -j8
+sudo make install
+
+note: should run build on /opt/icecream but not /opt/icecream/build since fails
+to search headers when building.
+
+
+Preparing the Toolchain
+-----------------------
+toolchainTarball=$(/opt/icecream/bin/icecc --build-native | grep creating | cut -d' ' -f2)
+sudo mkdir -p /opt/icecream/etc/
+sudo cp -a $toolchainTarball /opt/icecream/etc/gcc-native.tar.gz
+
+
+Preparing the Scheduler Node
+-----------------------
+Just pick a fast server for this. The scheduler doesn't appear to use much in
+the way of resources. Then run: 
+
+/opt/icecream/sbin/icecc-scheduler -d
+
+
+Preparing Client Nodes
+-----------------------
+
+Add the icecc user (`sudo useradd icecc`).
+Run the iceccd daemon (`sudo /opt/icecream/sbin/iceccd -d`). Note that it drops
+privileges after chrooting.
+
+If you're on Debian, this should work for you:
+
+sudo apt-get install liblzo2-d libcap-ng-dev
+curl devnfs2/~darren.garvey/icecream-debian.tar.bz2 | sudo tar -C / -xjf - && sudo useradd icecc && sudo /opt/icecream/sbin/iceccd -d
+
+note: For debian whiz: sudo apt-get install liblzo2-2 libcap-ng-dev
 
 
 ={============================================================================
@@ -24147,10 +24267,11 @@ Change a map between file type and default application in:
 *kt_linux_sete_100* gnome: windows
 
 {activate-button}
-To access your windows and applications, click the Activities button, or just move your mouse
-pointer to the top-left hot corner. You can also press the Super key on your keyboard. You can see
-your windows and applications in the overview. You can also just start typing to search your
-applications, files, folders and the web. note: this is window key.
+To access your windows and applications, click the Activities button, or just
+move your mouse pointer to the top-left hot corner. You can also press the Super
+key on your keyboard. You can see your windows and applications in the overview.
+You can also just start typing to search your applications, files, folders and
+the web. note: this is window key.
 
 
 {tile-windows}
@@ -24163,19 +24284,27 @@ Supaer+Down    " back to original size
 Super-L
 
 
-{workspace}
-Open the Activities overview.
-
-Click and drag the window toward the right of the screen.
-
-The workspace selector will appear.
-
-Drop the window onto an empty workspace. This workspace now contains the window you have dropped,
-and a new empty workspace appears at the bottom of the workspace selector.
-
-
 {keyboard-shortcuts}
 https://help.gnome.org/users/gnome-help/stable/shell-keyboard-shortcuts.html.en
+
+To change key maps:
+
+System Setting -> Keyboard -> Shortcuts
+
+
+={============================================================================
+*kt_linux_sete_101* gnome: workspace
+
+https://help.gnome.org/users/gnome-help/stable/shell-workspaces.html.en
+
+To add a workspace, drag and drop a window from an existing workspace onto the
+empty workspace in the workspace selector. This workspace now contains the
+window you have dropped, and a new empty workspace will appear below it.
+
+default keymap:
+
+Cult-Alt-Up       move to workspace above
+Cult-Alt-Down     move to workspace below
 
 
 ={============================================================================
