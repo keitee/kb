@@ -14,6 +14,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_101| mpeg: ts view tool
 |kt_dev_bcast_102| mpeg: locator
 |kt_dev_bcast_103| mpeg: es
+|kt_dev_bcast_104| mpeg: audio frame
 
 |kt_dev_bcast_200| mpeg: streaming: terms
 |kt_dev_bcast_201| mpeg: streaming: dash
@@ -858,6 +859,64 @@ parser.
 
 {TS}
 PUSI: Payload Unit Start Indicator which indicate if TS packet has PES header
+
+
+={============================================================================
+*kt_dev_bcast_104* mpeg: audio frame
+
+http://www.datavoyage.com/mpgscript/mpeghdr.htm
+
+MPEG Audio Frame Header
+
+An MPEG audio file is built up from smaller parts called frames. Generally,
+frames are independent items. Each frame has its own header and audio
+    informations. There is no file header. Therefore, you can cut any part of
+    MPEG file and play it correctly (this should be done on frame boundaries but
+            most applications will handle incorrect headers). 
+    
+
+For Layer III, this is not 100% correct. Due to internal data organization in
+MPEG version 1 Layer III files, frames are often dependent of each other and
+they cannot be cut off just like that.
+
+
+When you want to read info about an MPEG file, it is usually enough to find the
+first frame, read its header and assume that the other frames are the same This
+may not be always the case. Variable bitrate MPEG files may use so called
+bitrate switching, which means that bitrate changes according to the content of
+each frame. This way lower bitrates may be used in frames where it will not
+reduce sound quality. This allows making better compression while keeping high
+quality of sound.
+
+
+The frame header is constituted by the very first four bytes (32bits) in a
+frame. The first eleven bits (or first twelve bits, see below about frame sync)
+of a frame header are always set and they are called "frame sync". Therefore,
+you can search through the file for the first occurence of frame sync (meaning
+        that you have to find a byte with a value of 255, and followed by a byte
+        with its three (or four) most significant bits set). Then you read the
+    whole header and check if the values are correct. You will see in the
+    following table the exact meaning of each bit in the header, and which
+    values may be checked for validity. Each value that is specified as
+    reserved, invalid, bad, or not allowed should indicate an invalid header.
+    Remember, this is not enough, frame sync can be easily (and very frequently)
+    found in any binary file. Also it is likely that MPEG file contains garbage
+    on it's beginning which also may contain false sync. Thus, you have to check
+    two or more frames in a row to assure you are really dealing with MPEG audio
+    file.
+
+
+Frames may have a CRC check. The CRC is 16 bits long and, if it exists, it
+follows the frame header. After the CRC comes the audio data. You may calculate
+the length of the frame and use it if you need to read other headers too or just
+want to calculate the CRC of the frame, to compare it with the one you read from
+the file. This is actually a very good method to check the MPEG header validity.
+
+Here is "graphical" presentation of the header content. Since at the time I
+created this document there were no such information publicly available, I've
+creted notation to explain content and meaning of data within mpeg file.
+Characters from A to M are used to indicate different fields. In the table, you
+can see details about the content of each field. 
 
 
 ={============================================================================
@@ -4352,28 +4411,38 @@ default handler will forward the query or simply unref it.
 
 Table of Contents
 
-A state describes whether the element instance is initialized, whether it is ready to transfer data
-and whether it is currently handling data. There are four states defined in GStreamer:
+A state describes whether the element instance is initialized, whether it is
+ready to transfer data and whether it is currently handling data. There are four
+states defined in GStreamer:
 
 note: state is per element
 
-which will from now on be referred to simply as "NULL", "READY", "PAUSED" and "PLAYING".
+which will from now on be referred to simply as "NULL", "READY", "PAUSED" and
+"PLAYING".
+
 
 GST_STATE_NULL 
-is the default state of an element. In this state, it has not allocated any runtime resources, it
-has not loaded any runtime libraries and it can obviously not handle data.
+is the default state of an element. In this state, it has not allocated any
+runtime resources, it has not loaded any runtime libraries and it can obviously
+not handle data.
+
 
 GST_STATE_READY 
-is the next state that an element can be in. In the READY state, an element has all default
-resources (runtime-libraries, runtime-memory) allocated. However, it has not yet allocated or
-defined anything that is stream-specific. 
+is the next state that an element can be in. In the READY state, an element has
+all 'default' resources (runtime-libraries, runtime-memory) allocated. However,
+it has not yet allocated or defined anything that is stream-specific. 
 
-When going from NULL to READY state (GST_STATE_CHANGE_NULL_TO_READY), an element should allocate any
-'non'-stream-specific resources and should load runtime-loadable libraries (if any). When going the
-other way around (from READY to NULL, GST_STATE_CHANGE_READY_TO_NULL), an element should unload
-these libraries and free all allocated resources. Examples of such resources are hardware devices.
-Note that files are generally streams, and these should thus be considered as stream-specific
-resources; therefore, they should not be allocated in this state.
+When going from NULL to READY state (GST_STATE_CHANGE_NULL_TO_READY), an element
+should allocate any 'non'-stream-specific resources and should load
+runtime-loadable libraries (if any). When going the other way around (from READY
+        to NULL, GST_STATE_CHANGE_READY_TO_NULL), an element should unload these
+libraries and free all allocated resources. Examples of such resources are
+hardware devices. 
+
+Note that files are generally streams, and these should thus be considered as
+stream-specific resources; therefore, they should not be allocated in this
+state.
+
 
 GST_STATE_PAUSED 
 is the state in which an element is ready to accept and handle data. For most
@@ -4382,29 +4451,254 @@ sink elements. Sink elements only accept one single buffer of data and then
 block. At this point the pipeline is 'prerolled' and ready to render data
 immediately.
 
+
 GST_STATE_PLAYING 
-is the highest state that an element can be in. For most elements this state is exactly the same as
-PAUSED, they accept and process events and buffers with data. Only sink elements need to
-differentiate between PAUSED and PLAYING state. In PLAYING state, sink elements actually render
-incoming data, e.g. output audio to a sound card or render video pictures to an image sink.
+is the highest state that an element can be in. For most elements this state is
+exactly the same as PAUSED, they accept and process events and buffers with
+data. Only 'sink' elements need to differentiate between PAUSED and PLAYING
+state.  In PLAYING state, sink elements actually render incoming data, e.g.
+output audio to a sound card or render video pictures to an image sink.
 
 
 <managing-state>
-If at all possible, your element should derive from one of the new base classes (Pre-made base
-        classes). There are ready-made general purpose base classes for different types of sources,
-   sinks and filter/transformation elements. In addition to those, specialised base classes exist
-   for audio and video elements and others.
+If at all possible, your element should derive from one of the new base classes
+(Pre-made base classes). There are ready-made general purpose base classes for
+different types of sources, sinks and filter/transformation elements. In
+addition to those, specialised base classes exist for audio and video elements
+and others.
 
-If you use a base class, you will rarely have to handle state changes yourself. All you have to do
-is override the base class's start() and stop() virtual functions (might be called differently
-        depending on the base class) and the base class will take care of everything for you.
+If you use a base class, you will rarely have to handle state changes yourself.
+All you have to do is 'override' the base class's start() and stop() virtual
+functions (might be called differently depending on the base class) and the base
+class will take care of everything for you.
 
-If, however, you do not derive from a ready-made base class, but from GstElement or some other class
-not built on top of a base class, you will most likely have to implement your own state change
-function to be notified of state changes. 
+If, however, you do not derive from a ready-made base class, but from GstElement
+or some other class not built on top of a base class, you will most likely have
+to implement your own state change function to be notified of state changes. 
 
-note: This is definitively necessary if your plugin is a demuxer or a muxer, as there are no base
-classes for muxers or demuxers yet. 
+note: This is definitively necessary if your plugin is a demuxer or a muxer, as
+there are no base classes for muxers or demuxers yet. 
+
+An element can be notified of state changes through a virtual function pointer.
+Inside this function, the element can initialize any sort of specific data
+needed by the element, and it can optionally fail to go from one state to
+another.
+
+Do not g_assert for unhandled state changes; this is taken care of by the
+GstElement base class.
+
+static GstStateChangeReturn
+gst_my_filter_change_state (GstElement *element, GstStateChange transition);
+
+static void
+gst_my_filter_class_init (GstMyFilterClass *klass)
+{
+  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+
+  element_class->change_state = gst_my_filter_change_state;
+}
+
+static GstStateChangeReturn
+gst_my_filter_change_state (GstElement *element, GstStateChange transition)
+{
+  GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
+  GstMyFilter *filter = GST_MY_FILTER (element);
+
+  switch (transition) {
+    case GST_STATE_CHANGE_NULL_TO_READY:
+      if (!gst_my_filter_allocate_memory (filter))
+        return GST_STATE_CHANGE_FAILURE;
+      break;
+    default:
+      break;
+  }
+
+  ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+  if (ret == GST_STATE_CHANGE_FAILURE)
+    return ret;
+
+  switch (transition) {
+    case GST_STATE_CHANGE_READY_TO_NULL:
+      gst_my_filter_free_memory (filter);
+      break;
+    default:
+      break;
+  }
+
+  return ret;
+}
+
+Note that upwards (NULL=>READY, READY=>PAUSED, PAUSED=>PLAYING) and downwards
+(PLAYING=>PAUSED, PAUSED=>READY, READY=>NULL) state changes are handled in 'two'
+separate blocks with the downwards state change handled only after we have
+'chained' up to the parent class's state change function. This is necessary in
+order to safely handle concurrent access by multiple threads.
+
+The reason for this is that in the case of downwards state changes you don't
+want to destroy allocated resources 'while' your plugin's chain function (for
+        example) is still accessing those resources in another thread. Whether
+your chain function might be running or not depends on the state of your
+plugin's pads, and the state of those pads is closely linked to the state of the
+element. Pad states are handled in the GstElement class's state change function,
+    including proper locking, that's why it is essential to chain up before
+    destroying allocated resources. 
+
+
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 09 Adding Properties
+
+The primary and most important way of controlling how an element behaves, is
+through GObject properties. GObject properties are defined in the _class_init ()
+function. The element optionally implements a _get_property () and a
+_set_property () function. These functions will be notified if an application
+changes or requests the value of a property, and can then fill in the value or
+take action required for that property to change value internally.
+
+You probably also want to keep an instance variable around with the currently
+configured value of the property that you use in the get and set functions. Note
+that GObject will not automatically set your instance variable to the default
+value, you will have to do that in the _init () function of your element.
+
+
+/* properties */
+enum {
+  PROP_0,
+  PROP_SILENT
+  /* FILL ME */
+};
+
+static void	gst_my_filter_set_property	(GObject      *object,
+						 guint         prop_id,
+						 const GValue *value,
+						 GParamSpec   *pspec);
+static void	gst_my_filter_get_property	(GObject      *object,
+						 guint         prop_id,
+						 GValue       *value,
+						 GParamSpec   *pspec);
+
+static void
+gst_my_filter_class_init (GstMyFilterClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  /* define virtual function pointers */
+  object_class->set_property = gst_my_filter_set_property;
+  object_class->get_property = gst_my_filter_get_property;
+
+  /* define properties */
+  g_object_class_install_property (object_class, PROP_SILENT,
+    g_param_spec_boolean ("silent", "Silent",
+			  "Whether to be very verbose or not",
+			  FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+}
+
+static void
+gst_my_filter_set_property (GObject      *object,
+			    guint         prop_id,
+			    const GValue *value,
+			    GParamSpec   *pspec)
+{
+  GstMyFilter *filter = GST_MY_FILTER (object);
+
+  switch (prop_id) {
+    case PROP_SILENT:
+      filter->silent = g_value_get_boolean (value);
+      g_print ("Silent argument was changed to %s\n",
+	       filter->silent ? "true" : "false");
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
+gst_my_filter_get_property (GObject    *object,
+			    guint       prop_id,
+			    GValue     *value,
+			    GParamSpec *pspec)
+{
+  GstMyFilter *filter = GST_MY_FILTER (object);
+                                                                                
+  switch (prop_id) {
+    case PROP_SILENT:
+      g_value_set_boolean (value, filter->silent);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+
+The above is a very simple example of how properties are used. Graphical
+applications will use these properties and will display a user-controllable
+widget with which these properties can be changed. This means that - for the
+property to be as user-friendly as possible - you should be as exact as possible
+in the definition of the property. Not only in defining ranges in between which
+valid properties can be located (for integers, floats, etc.), but also in using
+very descriptive (better yet: internationalized) strings in the definition of
+the property, and if possible using enums and flags instead of integers. The
+GObject documentation describes these in a very complete way, but below, we'll
+give a short example of where this is useful. Note that using integers here
+would probably completely confuse the user, because they make no sense in this
+context. The example is stolen from videotestsrc.
+
+typedef enum {
+  GST_VIDEOTESTSRC_SMPTE,
+  GST_VIDEOTESTSRC_SNOW,
+  GST_VIDEOTESTSRC_BLACK
+} GstVideotestsrcPattern;
+
+[..]
+
+#define GST_TYPE_VIDEOTESTSRC_PATTERN (gst_videotestsrc_pattern_get_type ())
+
+static GType
+gst_videotestsrc_pattern_get_type (void)
+{
+  static GType videotestsrc_pattern_type = 0;
+
+  if (!videotestsrc_pattern_type) {
+    static GEnumValue pattern_types[] = {
+      { GST_VIDEOTESTSRC_SMPTE, "SMPTE 100% color bars",    "smpte" },
+      { GST_VIDEOTESTSRC_SNOW,  "Random (television snow)", "snow"  },
+      { GST_VIDEOTESTSRC_BLACK, "0% Black",                 "black" },
+      { 0, NULL, NULL },
+    };
+
+    videotestsrc_pattern_type =
+	g_enum_register_static ("GstVideotestsrcPattern",
+				pattern_types);
+  }
+
+  return videotestsrc_pattern_type;
+}
+
+[..]
+
+static void
+gst_videotestsrc_class_init (GstvideotestsrcClass *klass)
+{
+[..]
+  g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_PATTERN,
+    g_param_spec_enum ("pattern", "Pattern",
+		       "Type of test pattern to generate",
+                       GST_TYPE_VIDEOTESTSRC_PATTERN, GST_VIDEOTESTSRC_SMPTE,
+                       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+[..]
+}
+  
+
+={============================================================================
+*kt_dev_bcast_321* gst: plugin: 10 Signals
+
+GObject signals can be used to notify applications of events specific to this
+object. Note, however, that the application needs to be aware of signals and
+their meaning, so if you're looking for a generic way for application-element
+interaction, signals are probably not what you're looking for. In many cases,
+however, signals can be very useful. See the GObject documentation for all
+    internals about signals. 
 
 
 ={============================================================================
