@@ -73,6 +73,7 @@
 |kt_dev_uv_stack_409| stack: nickel: gst media router creation
 |kt_dev_uv_stack_410| stack: nickel: build dash pipeline using gst media router
 |kt_dev_uv_stack_411| stack: nickel: qt and media router interface
+*kt_dev_uv_stack_411* stack: nickel: get natual size
 
 |kt_dev_uv_stack_411| stack: media: gst packages
 |kt_dev_uv_stack_412| stack: media: dash play
@@ -113,9 +114,11 @@
 
 |kt_dev_uv_oem_001| nexusmgr
 *kt_dev_uv_oem_002* nexusmgr build issue and proposal
-|kt_dev_uv_oem_002| playpump
+|kt_dev_uv_oem_002| nexus callback and playpump
 |kt_dev_uv_oem_003| brcm reference sw
 |kt_dev_uv_oem_004| brcm stc
+|kt_dev_uv_oem_005| brcm audio
+|kt_dev_uv_oem_006| brcm video
 
 |kt_dev_uv_task_002| task:02: DEVARCH-8869: about IP connection.
 |kt_dev_uv_task_003| task:02: DEVARCH-7508: runBrowser-test.sh
@@ -10939,6 +10942,53 @@ class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface
 
 
 ={============================================================================
+*kt_dev_uv_stack_411* stack: nickel: get natual size
+
+{
+    NEXUS_Error rc = NEXUS_VideoDecoder_GetStatus( sharedMem->videoDecoder, &vidStatus );
+
+    printf( "KT: _source_changed: "
+            "source{ %d, %d }, code{ %d, %d}, disp{ %d, %d },"
+            "ar: %d, frate: %d, format:%d \n", 
+            vidStatus.source.width, vidStatus.source.height, 
+            vidStatus.coded.width, vidStatus.coded.height, 
+            vidStatus.display.width, vidStatus.display.height,
+            vidStatus.aspectRatio, vidStatus.frameRate, vidStatus.format);
+
+    NEXUS_VideoDecoderStreamInformation vsi;
+    rc = NEXUS_VideoDecoder_GetStreamInformation( sharedMem->videoDecoder, &vsi );
+    printf("KT: _stream_changed: "
+            "source{ h: %d, v: %d }, code{ h: %d, v: %d}, disp{ h: %d, v: %d },"
+            "ar: %d, { %d, %d }, frate: %d \n", 
+            vsi.sourceHorizontalSize, vsi.sourceVerticalSize, 
+            vsi.codedSourceHorizontalSize, vsi.codedSourceVerticalSize, 
+            vsi.displayHorizontalSize, vsi.displayVerticalSize,
+            vsi.aspectRatio, vsi.sampleAspectRatioX, vsi.sampleAspectRatioY, vsi.frameRate);
+}
+
+
+NEXUS_AspectRatio_eSar     (6)
+
+/* Sample aspect ratio - aspect ratio of the source calculated as the ratio of
+ * two numbers reported by the decoder. See
+ * NEXUS_VideoDecoderStreamInformation.sampleAspectRatioX and
+ * sampleAspectRatioY for an example.  This aspect ratio is applied to the
+ * picture's source size (i.e. coded size), not the picture's display size. */
+
+NEXUS_VideoFrameRate_e25   (3)
+
+
+NEXUS_VideoFormat_e1080p60hz  (35),       /* HD 1080 Progressive, 60hz */
+
+
+KT: _source_changed: 
+   source{ 1280, 720 }, code{ 1280, 720}, disp{ 1280, 720 },ar: 6, frate: 3, format:35 
+
+KT: _stream_changed: 
+   source{ h: 1280, v: 720 }, code{ h: 1280, v: 720}, disp{ h: 1280, v: 720 },ar: 6, { 1, 1 }, frate: 3 
+
+
+={============================================================================
 *kt_dev_uv_stack_411* stack: media: gst packages
 
 :~/src-dev/DEVARCH/Zinc/Zinc.3rdPartyStack/packages$ ll gst*
@@ -14325,7 +14375,7 @@ https://git-dev.dev.youview.co.uk/?p=nexusMgr.git;a=shortlog;h=refs/heads/propos
 
 
 ={============================================================================
-*kt_dev_uv_oem_002* playpump
+*kt_dev_uv_oem_002* nexus callback and playpump
 
 Hmax only provides 1 playpump.
 
@@ -14344,39 +14394,72 @@ enum NexusSinkContentType
 };
 
 
-gst_nexus_mgr_acquire_playpumps()
+<sink-settings>
+
+struct _GstNexusCallbacks {
+  /**
+   * Fires when space becomes available, but only when writing transport stream.
+   * For elementary streams, use gst_nexus_mgr_get_pes_writer() and
+   * ConcurrentPesWriter API.
+   */
+  NEXUS_Callback data;
+
+  /**
+   * Fires when Nexus resources are acquired.
+   *
+   * @note If there are multiple clients using the same instance of GstNexusMgr,
+   *       only one of them (an arbitrary one) will receive this callback.
+   */
+  NEXUS_Callback resourcesAcquired;
+
+  /**
+   * Fires when Nexus resources are released. When we release Nexus resources
+   * to immediately re-acquire them (we do that for re-configuration purposes),
+   * we don't emit resourcesReleased followed by resourcesAcquired callbacks.
+   * If re-acquiring fails though, we do emit a single resourcesReleased callback.
+   *
+   * @note If there are multiple clients using the same instance of GstNexusMgr,
+   *       only one of them (an arbitrary one) will receive this callback.
+   */
+  NEXUS_Callback resourcesReleased;
+
+  NEXUS_Callback firstPts;  /* Fires when the decoder receives the first PTS after start. */
+  NEXUS_Callback streamChange; /* Fires when stream format has changed or the first time
+								the decoder has parsed the codec format after start. */
+  NEXUS_Callback error; /* Fires when an error occurs */
+  void* context; /* passed as the first parameter to the callback functions */
+};
+
+struct {
+  NexusSinkContentType contentType;
+  NexusSinkVideoCodec video_codec;
+  NexusSinkAudioCodec audio_codec;
+
+  GstNexusCallbacks callbacks;
+
+  int video_pid;
+  int audio_pid;
+} GstNexusStreamSetting;
+
+struct {
+  ...
+  GstNexusStreamSetting settings;
+} GstNexusSink;
+
+
+static void gst_nexus_sink_init( GstNexusSink * sink )
 {
-	BcmNexus_StreamPlayer_Resources_Config config;
+  sink->settings.callbacks.data = gst_nexus_sink_space_available;
+  sink->settings.callbacks.resourcesAcquired = gst_nexus_sink_resources_acquired;
+  sink->settings.callbacks.resourcesReleased = gst_nexus_sink_resources_released;
 
-	config.numPlaypumps = 1;
-   
-   // video callback
-   config.videoDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
-   config.videoDataCallback.context = mgr->pes_writer;
+  // *callback* handles custom Exxx errors
+  sink->settings.callbacks.error = gst_nexus_sink_on_error;
 
-	mgr->resources = 
-       (BcmNexus_StreamPlayer_Resources*) BcmNexus_StreamPlayer_Resources_Acquire( &config );
-
-   // use gst_nexus_mgr_error_1st_level_cb for various errors and see two in
-   // particular.
-   
-
-   NEXUS_CALLBACKDESC_INIT( &video_decoder_settings.fifoEmpty);
-   video_decoder_settings.fifoEmpty.callback = &gst_nexus_mgr_error_1st_level_cb;
-   video_decoder_settings.fifoEmpty.context = &mgr->callback_contexts.video_error;
-   video_decoder_settings.fifoEmpty.param = EFifoEmpty;
-
-	NEXUS_AudioDecoderSettings audio_decoder_settings;
-
-   NEXUS_CALLBACKDESC_INIT( &audio_decoder_settings.ptsError );
-   audio_decoder_settings.ptsError.callback = &gst_nexus_mgr_error_1st_level_cb;
-   audio_decoder_settings.ptsError.context = &mgr->callback_contexts.audio_error;
-   audio_decoder_settings.ptsError.param = EPtsError;
-
-	if(NEXUS_SUCCESS != NEXUS_AudioDecoder_SetSettings( mgr->resources->audioDecoder[0],
-														  &audio_decoder_settings ))
+  sink->settings.callbacks.firstPts = gst_nexus_sink_first_pts;
+  sink->settings.callbacks.streamChange = gst_nexus_sink_stream_change;
+  sink->settings.callbacks.context = sink;
 }
-
 
 enum NexusSinkErrorReason
 {
@@ -14388,27 +14471,157 @@ src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: AudioError: 0x02
 src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: VideoError: 0x0101
 
 
-// nexusMgr
+<nexusmgr-callback>
+
+typedef struct
+{
+  GstNexusMgrCallbackInfo audio_buffer_available;
+  GstNexusMgrCallbackInfo video_buffer_available;
+  GstNexusMgrCallbackInfo audio_first_pts;
+  GstNexusMgrCallbackInfo video_first_pts;
+  GstNexusMgrCallbackInfo audio_error;
+  GstNexusMgrCallbackInfo video_error;
+} GstNexusMgrCallbackContexts;
+
+
+struct _GstNexusMgr
+{
+  ...
+  GstNexusMgrCallbackContexts callback_contexts;
+
+  GstNexusCallbacks audioCallbacks;
+}
+
+gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
+								const GstNexusStreamSetting * settings)
+{
+   // mgr callbacks -> sink
+	mgr->settings.callbacks = settings->callbacks;
+
+   // only for audio type
+	mgr->audioCallbacks = settings->callbacks;
+
+   // set *context* to pass a/v errors to video sink
+	mgr->callback_contexts.video_error.delegate_callback = mgr->settings.callbacks.error;
+	mgr->callback_contexts.audio_error.delegate_callback = mgr->settings.callbacks.error;
+
+   // set *context* to pass a/v errors to audio sink
+	mgr->callback_contexts.video_error.delegate_callback = mgr->settings.callbacks.error;
+   mgr->callback_contexts.audio_error.delegate_callback = mgr->audioCallbacks.error;
+
+   // note: don't see why use audioCallbacks
+   
+
+	BcmNexus_StreamPlayer_Resources_Config config;
+
+	config.numPlaypumps = 1;
+   
+
+   // note: *callback* to *playpump* 
+
+   config.videoDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
+
+   or when TS type
+
+   config.audioDataCallback.callback = &gst_nexus_mgr_generic_1st_level_cb;
+   config.videoDataCallback.callback = &gst_nexus_mgr_generic_1st_level_cb;
+
+	mgr->resources = 
+       (BcmNexus_StreamPlayer_Resources*) BcmNexus_StreamPlayer_Resources_Acquire( &config );
+
+   // use *context*
+   NEXUS_CallbackDesc playpumpErrorCallbackConfiguration = {
+       gst_nexus_mgr_error_1st_level_cb, &mgr->callback_contexts.audio_error, EStreamError
+   };
+
+   NEXUS_Playpump_GetSettings( mgr->resources->playpump[mgr->audio.playpump_num], &playpump_settings );
+
+   playpump_settings.errorCallback = playpumpErrorCallbackConfiguration;
+
+	NEXUS_Playpump_SetSettings( mgr->resources->playpump[mgr->video.playpump_num], &playpump_settings );
+
+
+   // note: *callback* to *video-decoder*
+   
+   // typedef struct NEXUS_CallbackDesc {
+   //     NEXUS_Callback callback; /* Function pointer */
+   //     void *context;           /* First parameter to callback function. */
+   //     int param;               /* Second parameter to callback function. */
+   // } NEXUS_CallbackDesc;
+   //
+   // static void gst_nexus_mgr_error_1st_level_cb(void* context, int reason)
+   // {
+   //   GstNexusMgrCallbackInfo* cb = context;
+   //   if (cb->delegate_callback) {
+   //     cb->delegate_callback(cb->delegate_context, reason);
+   //   }
+   // }
+
+	video_decoder_settings.firstPtsPassed.callback = &gst_nexus_mgr_generic_1st_level_cb;
+
+   video_decoder_settings.fifoEmpty.callback = &gst_nexus_mgr_error_1st_level_cb;
+   video_decoder_settings.fifoEmpty.param = EFifoEmpty;
+
+	video_decoder_settings.decodeError.callback = &gst_nexus_mgr_error_1st_level_cb;
+	video_decoder_settings.decodeError.context = &mgr->callback_contexts.video_error;
+	video_decoder_settings.decodeError.param = EVideoDecode;
+
+   if(mgr->settings.callbacks.streamChange){
+       NEXUS_CALLBACKDESC_INIT( &video_decoder_settings.streamChanged );
+       video_decoder_settings.streamChanged.callback = mgr->settings.callbacks.streamChange;
+       video_decoder_settings.streamChanged.context = mgr->settings.callbacks.context;
+   }
+
+	NEXUS_VideoDecoder_SetSettings( mgr->resources->videoDecoder, 
+           &video_decoder_settings );
+
+
+   // note: *callback* to *audio-decoder*
+   
+	NEXUS_AudioDecoderSettings audio_decoder_settings;
+
+	audio_decoder_settings.firstPts.callback = &gst_nexus_mgr_generic_1st_level_cb;
+   audio_decoder_settings.ptsError.callback = &gst_nexus_mgr_error_1st_level_cb;
+
+   if(mgr->audioCallbacks.streamChange){
+       NEXUS_CALLBACKDESC_INIT( &audio_decoder_settings.streamStatusAvailable );
+       audio_decoder_settings.streamStatusAvailable.callback = mgr->audioCallbacks.streamChange;
+       audio_decoder_settings.streamStatusAvailable.context = mgr->audioCallbacks.context;
+   }
+
+	NEXUS_AudioDecoder_SetSettings( mgr->resources->audioDecoder[0], 
+           &audio_decoder_settings );
+}
+
+
+<nesuxmgr>
+typedef struct BcmNexus_StreamPlayer_Resources_Config {
+    NEXUS_VideoCodec                        videoCodec;
+    NEXUS_AudioCodec                        audioCodec;
+    uint16_t                                audioPid;
+    uint16_t                                videoPid;
+    uint16_t                                numPlaypumps;
+    NEXUS_TransportType                     transportType;
+    NEXUS_CallbackDesc                      videoDataCallback;
+    NEXUS_CallbackDesc                      audioDataCallback;
+    NEXUS_KeySlotHandle                     decryptContext;
+    NEXUS_CallbackDesc                      videoSourceCallback;
+    NEXUS_CallbackDesc                      fifoEmptyCallback;
+} BcmNexus_StreamPlayer_Resources_Config;
 
 const BcmNexus_StreamPlayer_Resources *
 BcmNexus_StreamPlayer_Resources_Acquire( const BcmNexus_StreamPlayer_Resources_Config *config)
 {
     NEXUS_PlaypumpSettings playpumpSettings;
 
-    // Only 1 playpump and use videoDataCallbak only
+    // *callback* only use this 
     playpumpSettings.dataCallback = config->videoDataCallback;
 
     rc = NEXUS_Playpump_SetSettings(resources->playpump[i], &playpumpSettings);
 }
 
-typedef struct BcmNexus_StreamPlayer_Resources_Config {
-    ...
-    NEXUS_CallbackDesc                      videoDataCallback;
-    NEXUS_CallbackDesc                      audioDataCallback;
-} BcmNexus_StreamPlayer_Resources_Config;
 
-
-// nexus ref sw
+<playpump> nexus ref sw
 
 /**
 Summary:
@@ -14448,13 +14661,15 @@ typedef struct NEXUS_PlaypumpSettings
     /* Method of pushing data into playpump. This setting determines the format
     of data the app will feed to playpump. */
 
-    // note:
+    // *callbacks*
     NEXUS_CallbackDesc dataCallback;            
-    /* Callback when space becomes available. User should call NEXUS_Playpump_GetBuffer.
-    You will not receive another callback until NEXUS_Playpump_GetBuffer is called. */
+    /* Callback when space becomes available. User should call
+     * NEXUS_Playpump_GetBuffer. You will not receive another callback until
+     * NEXUS_Playpump_GetBuffer is called. */
 
     NEXUS_CallbackDesc errorCallback;           
-    /* Callback called when error was detected in ptocessing of the stream data */
+    /* Callback called when error was detected in ptocessing of the stream data
+     */
 
     NEXUS_CallbackDesc ccError;                 
     /* Continuity Count Error - raised when continuity counter of next packet
@@ -14464,6 +14679,7 @@ typedef struct NEXUS_PlaypumpSettings
 
     NEXUS_CallbackDesc teiError;                
     /* Transport Error Indicator - error status from a demodulator */
+
 
     int playRate;                               /* Rate in units of NEXUS_NORMAL_PLAY_SPEED. It's used for certain type of streams to control the direction of presentation time. */
 
@@ -14536,23 +14752,36 @@ typedef enum NEXUS_TransportType {
 
 /*
 Summary:
-Get a pointer and size for the next location in the buffer which can accept playpump data.
+Get a pointer and size for the next location in the buffer which can accept
+playpump data.
 
 Description:
-NEXUS_Playpump_GetBuffer is non-destructive. You can safely call it multiple times.
+NEXUS_Playpump_GetBuffer is non-destructive. You can safely call it multiple
+times.
 
-The buffer and size returned by NEXUS_Playpump_GetBuffer are valid until you call NEXUS_Playpump_Flush or NEXUS_Playpump_WriteComplete.
+The buffer and size returned by NEXUS_Playpump_GetBuffer are valid until you
+call NEXUS_Playpump_Flush or NEXUS_Playpump_WriteComplete.
 
-The size returned by NEXUS_Playpump_GetBuffer can be limited by two things: space in the ring buffer or free descriptors
-used to send data to the transport block. If you are performing trick modes with lots of small reads,
-you may find that NEXUS_Playpump_GetBuffer says there is no space available even though
-NEXUS_PlaypumpStatus reports free space. The solution is to increase the number of descriptors
-in NEXUS_PlaypumpOpenSettings.
+The size returned by NEXUS_Playpump_GetBuffer can be limited by two things:
+space in the ring buffer or free descriptors
+
+used to send data to the transport block. If you are performing trick modes with
+lots of small reads, you may find that NEXUS_Playpump_GetBuffer says there is no
+space available even though NEXUS_PlaypumpStatus reports free space. The
+solution is to increase the number of descriptors in NEXUS_PlaypumpOpenSettings.
 */
+
 NEXUS_Error NEXUS_Playpump_GetBuffer(
+
     NEXUS_PlaypumpHandle playpump,
-    void **pBuffer, /* [out] attr{memory=cached} pointer to memory mapped region that is ready for playback data */
-    size_t *pSize /* [out] total number of writeable, contiguous bytes which buffer is pointing to */
+
+    void **pBuffer, 
+    /* [out] attr{memory=cached} pointer to memory mapped region that is ready
+     * for playback data */
+
+    size_t *pSize 
+    /* [out] total number of writeable, contiguous bytes which buffer is
+     * pointing to */
     );
 
 /**
@@ -14560,25 +14789,50 @@ Summary:
 Notify Playpump of how much data was added into the buffer.
 
 Description:
-You can only call NEXUS_Playpump_WriteComplete once after a NEXUS_Playpump_GetBuffer call.
-After calling it, you must call NEXUS_Playpump_GetBuffer before adding more data.
+You can only call NEXUS_Playpump_WriteComplete once after a
+NEXUS_Playpump_GetBuffer call.  After calling it, you must call
+NEXUS_Playpump_GetBuffer before adding more data.
 
-The skip parameter allows an application to copy data into the playpump buffer with
-whatever alignment it desired. This is needed for "direct I/O" from disk drives which requires
-all memory access to be page aligned (e.g. 4K).
+The skip parameter allows an application to copy data into the playpump buffer
+with whatever alignment it desired. This is needed for "direct I/O" from disk
+drives which requires all memory access to be page aligned (e.g. 4K).  
 **/
+
 NEXUS_Error NEXUS_Playpump_WriteComplete(
+
     NEXUS_PlaypumpHandle playpump,
-    size_t skip,            /* skip is the number of bytes at the beginning of the current buffer pointer
-                               which Playpump should skip over. */
-    size_t amountUsed       /* amountUsed is the number of bytes, following any skip bytes,
-                               which Playpump should feed into transport. */
+
+    size_t skip,            
+    /* skip is the number of bytes at the beginning of the current buffer
+     * pointer which Playpump should skip over. */
+
+    size_t amountUsed       
+    /* amountUsed is the number of bytes, following any skip bytes, which
+     * Playpump should feed into transport. */
+
     );
 
 
 src/refsw/nexus/modules/audio/include/nexus_audio_decoder_types.h
 
-NEXUS_CallbackDesc ptsError;            /* Fires on any PTS discontinuity. This callback is used for application notification. No response is required for TSM. */
+NEXUS_CallbackDesc ptsError;            
+
+/* Fires on any PTS discontinuity. This callback is used for application
+ * notification. No response is required for TSM. 
+ */
+
+
+<callback-handlers>
+gst_nexus_mgr_generic_1st_level_cb;
+   uses two level callback which means to use callback thread to decouple
+   callbacks from NEXUS and pass it over to client sinks.
+
+gst_nexus_mgr_error_1st_level_cb;
+   calls client sink directly.
+
+   if (cb->delegate_callback) {
+     cb->delegate_callback(cb->delegate_context, reason);
+   }
 
 
 ={============================================================================
@@ -14769,6 +15023,267 @@ $ pkg-config --cflags-only-other nexusMgr | ag AUDIO_DSP
 
 note: So not used.
 
+
+={============================================================================
+*kt_dev_uv_oem_006* brcm video
+
+/opt/oem-staging/humax-dtr_t1000/usr/local/include/refsw/nexus/modules/
+video_decoder/7420/include/nexus_video_decoder.h
+
+/**
+Summary:
+Picture information for the currently displayed picture or the first decoded
+picture for a new decode.
+
+Description:
+NEXUS_VideoDecoderStreamInformation picture information differs from
+NEXUS_VideoDecoderStatus information in that NEXUS_VideoDecoderStatus returns
+information on the 'currently' displayed picture. When starting a new decode,
+this could be the last picture from the previous decode.
+
+NEXUS_VideoDecoderStreamInformation always gives picture information from this
+decode.  When starting decode, after the first picture is decoded, it will be
+held until its PTS matures.  NEXUS_VideoDecoderStreamInformation will have
+information about that first picture, before it is displayed.  After the first
+picture is displayed, NEXUS_VideoDecoderStreamInformation will return the same
+picture information as NEXUS_VideoDecoderStatus.
+
+Because this information is available 'before' display, it is similar to the old
+MPEG sequence header interrupt. However, after that first picture is displayed,
+it does not provided any advance warning like a sequence header interrupt.
+
+note:
+Any changes in this information will generate a
+NEXUS_VideoDecoderSettings.streamChanged callback.
+
+Used in NEXUS_VideoDecoder_GetStreamInformation
+**/
+
+typedef struct NEXUS_VideoDecoderStreamInformation
+{
+    uint32_t sourceHorizontalSize; 
+    /* width of active area. possibly clipped from coded size. */
+
+    uint32_t sourceVerticalSize; 
+    /* height of active area. possibly clipped from coded size. */
+
+    uint32_t codedSourceHorizontalSize; /* coded width */
+    uint32_t codedSourceVerticalSize; /* coded height */
+
+    uint32_t displayHorizontalSize; 
+    /* intended display width of active area needed to preserve correct aspect
+     * ratio. this is not the actual display width used. */
+    
+
+    uint32_t displayVerticalSize; 
+    /* intended display height of active area needed to preserve correct aspect
+     * ratio. this is not the actual display height used. */
+
+    NEXUS_AspectRatio aspectRatio;
+
+    uint16_t sampleAspectRatioX; 
+    /* Only valid if aspectRatio is NEXUS_AspectRatio_eSar.
+     * NEXUS_AspectRatio_eSar is only used for some codecs.
+                                    If used, the source's aspect ratio is
+                                    calculated as the ratio of
+                                    sampleAspectRatioX/sampleAspectRatioY.
+                                    sampleAspectRatioX and sampleAspectRatioY
+                                    should not be used except as a ratio. */
+
+
+    uint16_t sampleAspectRatioY; /* See comments for sampleAspectRatioX */
+
+    NEXUS_VideoFrameRate frameRate;
+    NEXUS_ColorPrimaries colorPrimaries;
+    NEXUS_TransferCharacteristics transferCharacteristics;
+    NEXUS_MatrixCoefficients matrixCoefficients;
+    bool frameProgressive;
+    bool streamProgressive;
+    int32_t horizontalPanScan;
+    int32_t verticalPanScan;
+
+    uint32_t lowDelayFlag;       /* delay flag from the sequence extension */
+    uint32_t fixedFrameRateFlag; /* fixed_frame_rate_flag from AVC VUI (video usability info) */
+} NEXUS_VideoDecoderStreamInformation;
+
+
+/opt/oem-staging/humax-dtr_t1000/usr/local/include/refsw/nexus/modules/
+video_decoder/7420/include/nexus_video_decoder_types.h
+
+/**
+Summary:
+Current status of the video decoder.
+
+Description:
+The picture format information comes from the picture currently being fed to the
+Display.
+
+note:
+See NEXUS_VideoDecoderSettings.sourceChanged for notification when the picture
+format changes.
+
+**/
+
+typedef struct NEXUS_VideoDecoderStatus
+{
+    bool started;           /* true if decoder was started */
+
+    struct
+    {
+        unsigned width, height; /* dimensions in pixels */
+    } source, coded, display; 
+
+    /* source is the active area size. coded is the coded area. it could be
+     * greater than the active area because of clipping. display is the display
+     * size needed to preserve aspect ratio. the actual display size is
+     * determined by the NEXUS_VideoWindowSettings. 
+     */
+
+
+    NEXUS_AspectRatio aspectRatio;  
+    /* aspect ratio of the source */
+
+    NEXUS_VideoFrameRate frameRate; 
+    /* frame rate of the source */
+
+    bool interlaced;          
+    /* true if the source is interlaced, regardless of scanout requirements.
+                                 Note that VideoInputStatus.videoFormat will
+                                 report interlaced or progressive based on
+                                 scanout, which is not necessarily the source
+                                 coding. Some progressive streams must be
+                                 scanned out as fields. */
+
+    NEXUS_VideoFormat format; 
+    /* The video format is derived from source.height, frameRate and interlaced
+     * fields. 
+     */
+
+
+    NEXUS_VideoProtocolLevel protocolLevel;
+    NEXUS_VideoProtocolProfile protocolProfile;
+
+    bool muted;               /* VideoDecoder is feeding muted pictures to Display */
+    NEXUS_VideoDecoderTimeCode timeCode; /* last encoded timecode found in the stream */
+    unsigned long pictureTag; /* last picture tag found in the stream */
+    
+    /* TSM status */                                 
+    bool tsm;                 /* VideoDecoder is in TSM (time stamp managed) mode. TSM may be not applicable (e.g. ES streams), may be disabled directly
+                                 by the user (setting stcChannel = NULL) or indirectly by other API's (e.g. trick modes, ASTM, etc.) */
+    uint32_t pts;             /* Current PTS of the video decoder
+                                 Note: the stc is available from NEXUS_StcChannel_GetStc */
+    int32_t  ptsStcDifference; /* Current PTS-STC difference including lipsync adjustments */
+    NEXUS_PtsType ptsType;    /* Type of the current PTS */
+    bool firstPtsPassed;      /* The first PTS for this stream has passed. This means that the information in this status structure is for pictures currently being displayed.
+                                 See NEXUS_VideoDecoderSettings.firstPtsPassed for a callback related to this status. */
+
+    /* buffer status */                                 
+    unsigned fifoDepth;       /* depth in bytes of the compressed buffer */
+    unsigned fifoSize;        /* size in bytes of the compressed buffer */
+    unsigned queueDepth;      /* the number of decoded pictures currently ready to be displayed */
+    unsigned cabacBinDepth;   /* depth in bytes of the cabac bin buffer */
+    unsigned enhancementFifoDepth; /* depth in bytes of the enhancement compressed buffer */
+    unsigned enhancementFifoSize; /* size in bytes of the enhancement compressed buffer */
+
+    /* cumulative status */
+    unsigned numDecoded;      /* total number of decoded pictures since Start */
+    unsigned numDisplayed;    /* total number of display pictures since Start */
+    unsigned numDecodeErrors; /* total number of decoder errors since Start */
+    unsigned numDecodeOverflows; /* total number of overflows of the input to the decoder since Start */
+    unsigned numDisplayErrors;/* total number of display manager errors since Start. This includes parity mismatches which may result in glitching on the display. */
+    unsigned numDecodeDrops;  /* total number of pictures dropped by the decoder since Start */
+    unsigned numPicturesReceived; /* total number of pictures which the decoder has received since Start. This includes pictures which are skipped due to TSM, NEXUS_VideoDecoderDecodeMode,
+                                     or other factors. */
+    unsigned numDisplayDrops; /* total number of pictures dropped by the display manager due to TSM failures since Start */
+    unsigned numDisplayUnderflows;  /* total number of times the display manager was unable to deliver a new picture since Start */
+    unsigned ptsErrorCount;   /* counter for number of PTS error interrupts since Start */
+    unsigned avdStatusBlock;  /* snap shot of the AVD channel status. See NEXUS_CHANNELSTATUS_AVD_XXX macros for possible values. */
+    unsigned numWatchdogs;    /* total number of watchdog events for the device since NEXUS_VideoDecoderModule_Init. the count is per AVD device, not per VideoDecoder channel. */
+    uint64_t numBytesDecoded; /* total number of ES bytes decoded since last start or flush */
+} NEXUS_VideoDecoderStatus;
+
+
+/opt/oem-staging/humax-dtr_t1000/usr/local/include/refsw/nexus/modules/
+video_decoder/7420/include/nexus_video_decoder.h
+
+/*
+Summary:
+Video decoder settings.
+
+Description:
+These settings can be changed before or after NEXUS_VideoDecoder_Start.
+
+Used in NEXUS_VideoDecoder_GetSettings and NEXUS_VideoDecoder_SetSettings.
+*/
+
+typedef struct NEXUS_VideoDecoderSettings
+{
+    bool freeze;            /* hold current picture. decoder can discard incoming data. */
+    bool mute;              /* black out video, but keep decoding */
+    bool userDataEnabled;   /* Enable raw userdata capture with NEXUS_VideoDecoder_GetUserDataBuffer */
+
+    bool panScanEnabled;    /* Allow decoder to process panscan vectors if present. */
+
+    NEXUS_VideoDecoder_ChannelChangeMode channelChangeMode;
+
+    unsigned fifoThreshold; /* If set, this can limit the maximum FIFO depth to a value <= the value specified
+                               in NEXUS_VideoDecoderOpenSettings.fifoSize.  If 0, the entire FIFO can fill.  */
+
+    int ptsOffset;  /* Add an offset used in the decoder's TSM equation. Measured in PTS units (45KHz for MPEG2TS, 27MHz for DSS).
+                       This is added to any PTS offset also set by SyncChannel. */
+
+    unsigned discardThreshold; /* in PTS units. defaults to 0, which allows Nexus to set the default discard threshold based on codec and trick mode state.
+                                  if PTS-STC is greater than the discard threshold, the picture is dropped. */
+
+    // note:
+    NEXUS_CallbackDesc sourceChanged; 
+    /* Fires when the format (e.g. size, framerate) of pictures being fed to
+     * Display changes. Call NEXUS_VideoDecoder_GetStatus to get the current
+     * format information. 
+     */
+
+    NEXUS_CallbackDesc streamChanged; 
+    /* Fires when the format (e.g. size, framerate) of pictures being decoded
+     * changes. This is similar to an MPEG sequence header interrupt, but with
+     * some important differences. See NEXUS_VideoDecoderStreamInformation for a
+     * complete description. Call NEXUS_VideoDecoder_GetStreamInformation to
+     * get the new video format information.
+     */
+
+    NEXUS_CallbackDesc appUserDataReady; /* Fires when application userdata is available. userDataEnabled must be true. */
+    NEXUS_CallbackDesc ptsError;         /* Fires on any PTS discontinuity. This callback is used for application notification. No response is required for TSM. */
+    NEXUS_CallbackDesc firstPts;         /* Fires when the decoder receives the first PTS after Start.
+                                            This event is also called "request STC" because the decoder needs StcChannel to set the STC in Auto mode.
+                                            This callback is used for application notification. No response is required for TSM. */
+    NEXUS_CallbackDesc firstPtsPassed;   /* Fires when the decoder allows the first picture to pass to the display after TSM pass.
+                                            This callback is used for application notification. No response is required for TSM. */
+    NEXUS_CallbackDesc fifoEmpty;        /* Fires when the source FIFO becomes empty during normal decode, usually because of the loss of the source. */
+
+    NEXUS_CallbackDesc afdChanged;       /* Fires when the NEXUS_VideoDecoderUserDataStatus.afdValue (active format description) changes. */
+
+    NEXUS_CallbackDesc decodeError;      /* Fires when the decoder reports an error. Call NEXUS_VideoDecoder_GetStatus and check numDecodeErrors. */
+
+    bool preferredUserDataFormat;        /* Whatever format is set by NEXUS_VideoDecoder_SetUserDataFormatFilter is treated as the preferred format, but
+                                            until that format is detected, VideoDecoder will operate in NEXUS_UserDataFormat_eAny mode.
+                                            When the preferred format is detected, VideoDecoder will switch to the preferred mode until decode is stopped. */
+    bool dropFieldMode;                  /* By default, if VideoDecoder needs to drop pictures because of TSM, it will drop field pairs. This prevents
+                                            any jitter from the deinterlacer. However, for 60->50Hz conversion dropping field pairs may result in motion judder.
+                                            By setting dropFieldMode to true, VideoDecoder will drop only single fields and 60->50Hz conversion will only have slight jitter instead. */
+    bool manualPowerState;               /* If true, internal hardware state will be left up, even when VideoDecoder is disconnected.
+                                            See NEXUS_VideoDecoder_SetPowerState for manual control if manualPowerState = true.
+                                            If false (default), internal HW state will be automatically brought up on NEXUS_VideoWindow_AddInput and down on NEXUS_VideoWindow_RemoveInput.
+                                            Bringing down internal HW state results in reduced power consumption. */
+    NEXUS_StillContentInterpolationMode stillContentInterpolationMode;
+    NEXUS_MovingContentInterpolationMode movingContentInterpolationMode;
+    NEXUS_VideoDecoderScanMode scanMode; /* Must be set before calling NEXUS_VideoWindow_AddInput. */
+    bool customSourceOrientation; /* allows application to override sources orientation derived by the decoder */
+    NEXUS_VideoDecoderSourceOrientation sourceOrientation; /* video orientation for 3D sources, ignored if customSourceOrientation is false */
+    NEXUS_VideoDecoderHorizontalOverscanMode horizontalOverscanMode;
+
+    NEXUS_VideoCodec supportedCodecs[NEXUS_VideoCodec_eMax]; /* List of codecs that can be decoded. Use eNone for unfilled slots.
+        This is defaulted by NEXUS_VideoDecoderModuleSettings.supportedCodecs[].
+        You must set this before your first NEXUS_VideoDecoder_Start or after a NEXUS_VideoInput_Shutdown to take effect. */
+} NEXUS_VideoDecoderSettings;
 
 ={============================================================================
 *kt_dev_uv_oem_005* gstnexussink
