@@ -76,8 +76,10 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst: gstbuffer
 *kt_dev_bcast_500* gst: gstevent
 
-*kt_dev_bcast_600* glib: debug
-*kt_dev_bcast_600* glib: signal
+*kt_dev_bcast_600* glib: gdebug
+*kt_dev_bcast_600* glib: gsignal
+*kt_dev_bcast_600* glib: gatomic
+*kt_dev_bcast_600* glib: gthread
 
 
 # ============================================================================
@@ -8154,7 +8156,7 @@ functions.
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib: atomic
+*kt_dev_bcast_600* glib: gatomic
 
 https://developer.gnome.org/glib/stable/glib-Atomic-Operations.html#
 
@@ -8197,6 +8199,289 @@ newval the value to conditionally replace with
 	 
 Returns
 TRUE if the exchange took place
+
+
+={============================================================================
+*kt_dev_bcast_600* glib: gthread
+
+https://developer.gnome.org/glib/stable/glib-Threads.html
+
+The aim of the thread-related functions in GLib is to provide a 'portable' means
+for writing multi-threaded software. There are primitives for mutexes to protect
+    the access to portions of memory (GMutex, GRecMutex and GRWLock). There is a
+        facility to use individual bits for locks (g_bit_lock()). There are
+        primitives for condition variables to allow synchronization of threads
+        (GCond). There are primitives for thread-private data - data that every
+        thread has a private instance of (GPrivate). There are facilities for
+        one-time initialization (GOnce, g_once_init_enter()). Finally, there are
+        primitives to create and manage threads (GThread).
+
+Since version 2.32, the GLib threading system is automatically initialized at
+the start of your program, and all thread-creation functions and synchronization
+primitives are available right away.
+
+Note that it is not safe to assume that your program has no threads even if you
+don't call g_thread_new() yourself. GLib and GIO can and will create threads for
+their own purposes in some cases, such as when using g_unix_signal_source_new()
+or when using GDBus.
+
+Originally, UNIX did not have threads, and therefore some traditional UNIX APIs
+are problematic in threaded programs. Some notable examples are
+
+C library functions that return data in statically allocated buffers, such as
+strtok() or strerror(). For many of these, there are thread-safe variants with a
+_r suffix, or you can look at corresponding GLib APIs (like g_strsplit() or
+        g_strerror()).
+
+The functions setenv() and unsetenv() manipulate the process environment in a
+not thread-safe way, and may interfere with getenv() calls in other threads.
+Note that getenv() calls may be hidden behind other APIs. For example, GNU
+gettext() calls getenv() under the covers. In general, it is best to treat the
+environment as readonly. If you absolutely have to modify the environment, do it
+early in main(), when no other threads are around yet.
+
+The setlocale() function changes the locale for the entire process, affecting
+all threads. Temporary changes to the locale are often made to change the
+behavior of string scanning or formatting functions like scanf() or printf().
+GLib offers a number of string APIs (like g_ascii_formatd() or g_ascii_strtod())
+that can often be used as an alternative. Or you can use the uselocale()
+function to change the locale only for the current thread.
+
+The fork() function only takes the calling thread into the child's copy of the
+process image. If other threads were executing in critical sections they could
+have left mutexes locked which could easily cause deadlocks in the new child.
+For this reason, you should call exit() or exec() as soon as possible in the
+child and only make signal-safe library calls before that.
+
+The daemon() function uses fork() in a way contrary to what is described above.
+It should not be used with GLib programs.
+
+GLib itself is internally completely thread-safe (all global data is
+        automatically locked), but individual data structure instances are not
+automatically locked for performance reasons. For example, you must coordinate
+accesses to the same GHashTable from multiple threads. The two notable
+exceptions from this rule are GMainLoop and GAsyncQueue, which are thread-safe
+and need no further application-level locking to be accessed from multiple
+threads. Most refcounting functions such as g_object_ref() are also thread-safe.
+g_thread_new ()
+
+
+
+GThread * g_thread_new (const gchar *name, GThreadFunc func, gpointer data);
+
+This function creates a new thread. The new thread starts by invoking func with
+    the argument data. The thread will run until func returns or until
+    g_thread_exit() is called from the new thread. The return value of func
+    becomes the return value of the thread, which can be obtained with
+    g_thread_join().
+
+The name can be useful for discriminating threads in a debugger. It is not used
+for other purposes and does not have to be unique. Some systems restrict the
+    length of name to 16 bytes.
+
+If the thread can not be created the program aborts. See g_thread_try_new() if
+you want to attempt to deal with failures.
+
+To free the struct returned by this function, use g_thread_unref(). Note that
+g_thread_join() implicitly unrefs the GThread as well.  
+
+
+Parameters
+
+name an (optional) name for the new thread.  [allow-none]
+func a function to execute in the new thread
+data an argument to supply to the new thread
+	 
+Returns
+
+the new GThread
+
+
+union GMutex
+------------
+
+The GMutex struct is an opaque data structure to represent a mutex (mutual
+        exclusion). It can be used to protect data against shared access.
+
+Take for example the following function:
+
+int give_me_next_number (void)
+{
+  static int current_number = 0;
+
+  // now do a very complicated calculation to calculate the new
+  // number, this might for example be a random number generator
+  current_number = calc_next_number (current_number);
+
+  return current_number;
+}
+
+It is easy to see that this won't work in a multi-threaded application. There
+current_number must be protected against shared access. A GMutex can be used as
+a solution to this problem:
+
+int give_me_next_number (void)
+{
+  static GMutex mutex;
+  static int current_number = 0;
+  int ret_val;
+
+  g_mutex_lock (&mutex);
+  ret_val = current_number = calc_next_number (current_number);
+  g_mutex_unlock (&mutex);
+
+  return ret_val;
+}
+
+Notice that the GMutex is not initialised to any particular value. Its placement
+in static storage ensures that it will be initialised to all-zeros, which is
+appropriate.
+
+If a GMutex is placed in other contexts (eg: embedded in a struct) then it must
+be explicitly initialised using g_mutex_init().
+
+A GMutex should only be accessed via g_mutex_ functions.
+
+
+={============================================================================
+*kt_dev_bcast_600* glib: gmain
+
+https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#
+
+Includes
+
+#include <glib.h>
+
+Description
+-----------
+The main event loop manages all the available 'sources' of events for GLib and
+GTK+ applications. These events can come from any number of different types of
+sources such as file descriptors (plain files, pipes or sockets) and timeouts.
+New types of event sources can also be added using g_source_attach().
+
+To allow multiple independent sets of sources to be handled in different
+threads, each source is associated with a GMainContext. A GMainContext can only
+be running in a single thread, but sources can be 'added' to it and 'removed'
+from it from other threads.
+
+Each event source is assigned a priority. The default priority,
+G_PRIORITY_DEFAULT, is 0. Values less than 0 denote higher priorities. Values
+    greater than 0 denote lower priorities. Events from high priority sources
+    are always processed before events from lower priority sources.
+
+Idle functions can also be added, and assigned a priority. These will be run
+whenever no events with a higher priority are ready to be processed.
+
+The GMainLoop data type represents a main event loop. A GMainLoop is created
+with g_main_loop_new(). After adding the initial event sources,
+g_main_loop_run() is called. This continuously checks for new events from each
+    of the event sources and dispatches them. Finally, the processing of an
+    event from one of the sources leads to a call to g_main_loop_quit() to exit
+    the main loop, and g_main_loop_run() returns.
+
+It is possible to create new instances of GMainLoop recursively. This is often
+used in GTK+ applications when showing modal dialog boxes. Note that event
+sources are associated with a particular GMainContext, and will be checked and
+dispatched for all main loops associated with that GMainContext.
+
+GTK+ contains wrappers of some of these functions, e.g. gtk_main(),
+gtk_main_quit() and gtk_events_pending().
+
+Creating new source types
+-------------------------
+One of the unusual features of the GMainLoop functionality is that new types of
+event source can be created and used in addition to the builtin type of event
+source. A new event source type is used for handling GDK events. A new source
+type is created by "deriving" from the GSource structure. The derived type of
+source is represented by a structure that has the GSource structure as a first
+element, and other elements specific to the new source type. To create an
+instance of the new source type, call g_source_new() passing in the size of the
+derived structure and a table of functions. These GSourceFuncs determine the
+behavior of the new source type.
+
+New source types basically interact with the main context in two ways. Their
+prepare function in GSourceFuncs can set a timeout to determine the maximum
+amount of time that the main loop will sleep before checking the source again.
+In addition, or as well, the source can add file descriptors to the set that the
+main context checks using g_source_add_poll().  
+
+Customizing the main loop iteration
+--------------------------
+
+Single iterations of a GMainContext can be run with g_main_context_iteration().
+In some cases, more detailed control of exactly how the details of the main loop
+work is desired, for instance, when integrating the GMainLoop with an external
+main loop. In such cases, you can call the component functions of
+g_main_context_iteration() directly. These functions are
+g_main_context_prepare(), g_main_context_query(), g_main_context_check() and
+g_main_context_dispatch().  
+
+State of a Main Context
+--------------------------
+
+The operation of these functions can best be seen in terms of a state diagram,
+as shown in this image.
+
+On UNIX, the GLib mainloop is incompatible with fork(). Any program using the
+mainloop must either exec() or exit() from the child without returning to the
+mainloop.
+
+
+g_idle_add ()
+--------------------------
+guint g_idle_add (GSourceFunc function, gpointer data);
+
+Adds a function to be called whenever there are no higher priority events
+    pending to the default main loop. The function is given the default idle
+    priority, G_PRIORITY_DEFAULT_IDLE. If the function returns FALSE it is
+    automatically removed from the list of event sources and will not be called
+    again.
+
+This internally creates a main loop 'source' using g_idle_source_new() and
+attaches it to the global GMainContext using g_source_attach(), so the callback
+will be invoked in whichever thread is running that main context. You can do
+these steps manually if you need greater control or to use a custom main
+context.
+
+Parameters
+
+function function to call
+data data to pass to function .
+	 
+Returns
+the ID (greater than 0) of the event source.
+
+
+g_source_remove ()
+--------------------------
+gboolean g_source_remove (guint tag);
+
+Removes the source with the given id from the default main context.
+
+The id of a GSource is given by g_source_get_id(), or will be returned by the
+functions g_source_attach(), g_idle_add(), g_idle_add_full(), g_timeout_add(),
+          g_timeout_add_full(), g_child_watch_add(), g_child_watch_add_full(),
+          g_io_add_watch(), and g_io_add_watch_full().
+
+See also g_source_destroy(). You must use g_source_destroy() for sources added
+to a non-default main context.
+
+It is a programmer error to attempt to remove a non-existent source.
+
+More specifically: source IDs can be reissued after a source has been destroyed
+and therefore it is never valid to use this function with a source ID which may
+have already been removed. 
+
+An example is when scheduling an idle to run in another thread with
+g_idle_add(). the idle may already have run and been removed by the time this
+function is called on its (now invalid) source ID. This source ID may have been
+reissued, leading to the operation being performed against the wrong source.
+
+Parameters
+tag the ID of the source to remove.
+	 
+Returns
+For historical reasons, this function always returns TRUE
 
 
 ==============================================================================

@@ -14420,7 +14420,7 @@ https://git-dev.dev.youview.co.uk/?p=nexusMgr.git;a=shortlog;h=refs/heads/propos
 
 
 ={============================================================================
-*kt_dev_uv_oem_002* nexus callback and playpump
+*kt_dev_uv_oem_002* nexus and nexussink callback
 
 Hmax only provides 1 playpump.
 
@@ -14592,7 +14592,7 @@ gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr,
 	BcmNexus_StreamPlayer_Resources_Config config;
 	config.numPlaypumps = 1;
 
-   // use two level callback when not TS type. no use when TS type.
+   // use two level callback when TS type. use direct callback when ES type.
    config.audioDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
    config.audioDataCallback.context = mgr->pes_writer;
 
@@ -14637,7 +14637,13 @@ gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr,
    //     print("messges");
    // }
 
-   // not used
+   // used and maps to
+   // gst_nexus_mgr_video_first_pts_2nd_level_cb,  /* CB_VIDEO_FIRST_PTS */
+   //
+   // and leads to sink callback
+   //
+   // note "firstPtsPassed"
+   //
 	video_decoder_settings.firstPtsPassed.callback = &gst_nexus_mgr_generic_1st_level_cb;
 	video_decoder_settings.firstPtsPassed.context = &mgr->callback_contexts.video_first_pts;
 
@@ -14667,7 +14673,11 @@ gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr,
    //
 	NEXUS_AudioDecoderSettings audio_decoder_settings;
 
-   // not used
+   // used and maps to
+   // gst_nexus_mgr_audio_first_pts_2nd_level_cb,  /* CB_AUDIO_FIRST_PTS */
+   //
+   // and leads to sink callback
+   //
 	audio_decoder_settings.firstPts.callback = &gst_nexus_mgr_generic_1st_level_cb;
 	audio_decoder_settings.firstPts.context = &mgr->callback_contexts.audio_first_pts;
 
@@ -14691,22 +14701,21 @@ gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr,
 
 
 {issue-when-eos-is-broken}
-After all, callback_contexts comes from sink settings and when callback_context
-is not set, then there is no map from mgr to sink.
+The problem is that as shown, eos is received at sink and need to populate it to
+the pipeline which is to be done in sink_on_error callback. However, this
+callback link do not work.
+
+nexussink /gstnexussink.c:999:gst_nexus_sink_event_locked:<nexussink0> End of stream
+nexussink /gstnexussink.c:999:gst_nexus_sink_event_locked:<nexussink1> End of stream
+nexussink /gstnexusmgr.c:1795:gst_nexus_mgr_error_1st_level_cb: VideoError: 0x0101
+
+After all, registered callback to NEXUS will use context from sink settings even
+when there is no resource locked since callback happens regardless of resource
+acquired/released. So mgr settings *must* remain vaild when releasing resource
+is done. This is the fix which excluding setting init when releasing resource.
 
 // new one which fixes the broken callback link causing eos issue
 //
-gst_nexus_mgr_acquire_playpumps()
-{
-  if(need_reset){
-      /* perform the reset before setting the callbacks, as
-         gst_nexus_mgr_release_playpumps_locked() can cause pending
-         callbacks to be fired.
-      */
-    gst_nexus_mgr_release_playpumps_locked(mgr,false);
-  }
-}
-
 static void
 gst_nexus_mgr_release_playpumps_locked(GstNexusMgr *mgr, gboolean mute)
 {
@@ -14744,8 +14753,12 @@ gst_nexus_mgr_release_playpumps_locked(GstNexusMgr *mgr, gboolean mute)
 <callback-handlers>
 gst_nexus_mgr_generic_1st_level_cb;
    uses two level callback which means to use callback thread to decouple
-   callbacks from NEXUS and only used for buffer avail in ES case.
+   callbacks from NEXUS
+   
+   used for buffer avail in TS case and first pts for in ES
 
+   use id(index) in GstNexusMgr2ndLevelCallback 
+      gst_nexus_mgr_2nd_level_cb_table[] = {}
 
 gst_nexus_mgr_error_1st_level_cb;
    calls client sink directly if it's set and if not stops here
@@ -14754,6 +14767,112 @@ gst_nexus_mgr_error_1st_level_cb;
      cb->delegate_callback(cb->delegate_context, reason);
    }
 
+
+{resouce-lock}
+
+// where it used and only from sink
+
+gst_nexus_sink_render_locked( GstNexusSink * sink, GstBuffer * buf );
+gst_nexus_sink_play_locked ( GstNexusSink * sink);
+gst_nexus_sink_get_times_locked (GstNexusSink * sink, ...);
+
+
+// note: must be used as a pair. get resource and release it when finishes.
+
+BcmNexus_StreamPlayer_Resources*
+gst_nexus_mgr_get_resources(GstNexusMgr * mgr, 
+							const GstNexusStreamSetting * settings)
+{
+  if (gst_nexus_mgr_acquire_playpumps(mgr, settings)) {
+	return mgr->resources;
+  }
+  return NULL;
+}
+
+gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
+								const GstNexusStreamSetting * settings)
+{
+  g_mutex_lock(&mgr->resource_lock);
+  ...
+}
+
+// res is used to check args
+void gst_nexus_mgr_release_resources(GstNexusMgr * mgr, 
+        BcmNexus_StreamPlayer_Resources* res)
+{
+  if(!mgr->video.decoder_active && !mgr->video.playpump_active &&
+     !mgr->audio.decoder_active && !mgr->audio.playpump_active){
+    GST_TRACE ("no decoders or playpumps active, releasing Nexus resources");
+
+    // true is for mute
+    gst_nexus_mgr_release_playpumps_locked(mgr, true);
+
+    gst_nexus_mgr_signal_resources_released_locked(mgr);
+  }
+
+  g_mutex_unlock( &mgr->resource_lock );
+}
+
+note: locking between sink elements and pes writer
+
+All uses mgr->resource_lock. The point is that it is to protect mgr structure
+which has handles and states. However not to guard to NEXUS calls. So can make a
+NEXUS calls without locking.
+
+GMutex resource_lock;
+
+
+{stream-changed}
+When plays DASH and see many stream changes for video, sink0. This shows that
+there are many representation? True the number of changes matches to the num of
+representation in mpd file.
+
+$ ag "call sink|stream change|first PTS" 01-dash.log 
+
+nexussink /gstnexusmgr.c:1937:gst_nexus_mgr_audio_first_pts_2nd_level_cb: KT: call sink audio first pts
+nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink1> KT: first PTS
+nexussink /gstnexusmgr.c:1937:gst_nexus_mgr_audio_first_pts_2nd_level_cb: KT: call sink audio first pts
+nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink1> KT: first PTS
+
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink1> KT: stream change
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+
+nexussink /gstnexusmgr.c:1914:gst_nexus_mgr_video_first_pts_2nd_level_cb: KT: call sink video first pts
+nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink0> KT: first PTS
+
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+
+
+from mpd file:
+
+<Representation id="V1" codecs="avc3.4d4015" height="288" width="512" bandwidth="356296" />
+<Representation id="V2" codecs="avc3.4d401e" height="396" width="704" bandwidth="619088" />
+<Representation id="V3" codecs="avc3.64001f" height="504" width="896" bandwidth="1330608" />
+<Representation id="V4" codecs="avc3.640020" height="720" width="1280" bandwidth="2501216" />
+<Representation id="V5" codecs="avc3.640028" height="1080" width="1920" bandwidth="4487408" />
+
+
+note: see that less changed callback and ratio change than mpd file
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
+KT: Video size or aspect ratio changed to size=0x0 PAR=0/0
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
+KT: Video size or aspect ratio changed to size=512x288 PAR=1/1
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
+KT: Video size or aspect ratio changed to size=1280x720 PAR=1/1
+
+
+={============================================================================
+*kt_dev_uv_oem_003* brcm playpump
 
 <nesuxmgr>
 typedef struct BcmNexus_StreamPlayer_Resources_Config {
@@ -14981,40 +15100,6 @@ NEXUS_CallbackDesc ptsError;
 /* Fires on any PTS discontinuity. This callback is used for application
  * notification. No response is required for TSM. 
  */
-
-
-{resouce-lock}
-
-BcmNexus_StreamPlayer_Resources*
-gst_nexus_mgr_get_resources(GstNexusMgr * mgr, 
-							const GstNexusStreamSetting * settings)
-{
-  if (gst_nexus_mgr_acquire_playpumps(mgr, settings)) {
-	return mgr->resources;
-  }
-  return NULL;
-}
-
-gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
-								const GstNexusStreamSetting * settings)
-{
-  g_mutex_lock(&mgr->resource_lock);
-  ...
-}
-
-
-void gst_nexus_mgr_release_resources(GstNexusMgr * mgr, 
-        BcmNexus_StreamPlayer_Resources* res)
-{
-  if(!mgr->video.decoder_active && !mgr->video.playpump_active &&
-     !mgr->audio.decoder_active && !mgr->audio.playpump_active){
-    GST_TRACE ("no decoders or playpumps active, releasing Nexus resources");
-    gst_nexus_mgr_release_playpumps_locked(mgr, true);
-    gst_nexus_mgr_signal_resources_released_locked(mgr);
-  }
-
-  g_mutex_unlock( &mgr->resource_lock );
-}
 
 
 ={============================================================================
@@ -15573,13 +15658,28 @@ typedef struct NEXUS_VideoDecoderSettings
      * get the new video format information.
      */
 
-    NEXUS_CallbackDesc appUserDataReady; /* Fires when application userdata is available. userDataEnabled must be true. */
-    NEXUS_CallbackDesc ptsError;         /* Fires on any PTS discontinuity. This callback is used for application notification. No response is required for TSM. */
-    NEXUS_CallbackDesc firstPts;         /* Fires when the decoder receives the first PTS after Start.
-                                            This event is also called "request STC" because the decoder needs StcChannel to set the STC in Auto mode.
-                                            This callback is used for application notification. No response is required for TSM. */
-    NEXUS_CallbackDesc firstPtsPassed;   /* Fires when the decoder allows the first picture to pass to the display after TSM pass.
-                                            This callback is used for application notification. No response is required for TSM. */
+    NEXUS_CallbackDesc appUserDataReady; 
+    /* Fires when application userdata is available. userDataEnabled must be
+     * true. */
+
+    NEXUS_CallbackDesc ptsError;         
+    /* Fires on any PTS discontinuity. This callback is used for application
+     * notification. No response is required for TSM. */
+
+
+    NEXUS_CallbackDesc firstPts;         
+    /* Fires when the decoder receives the first PTS after Start.  This event is
+     * also called "request STC" because the decoder needs StcChannel to set the
+     * STC in Auto mode. This callback is used for application notification. No
+     * response is required for TSM. */
+
+
+    NEXUS_CallbackDesc firstPtsPassed;   
+    /* Fires when the decoder allows the first picture to pass to the display
+     * after TSM pass.  This callback is used for application notification. No
+     * response is required for TSM. */
+
+
     NEXUS_CallbackDesc fifoEmpty;        /* Fires when the source FIFO becomes empty during normal decode, usually because of the loss of the source. */
 
     NEXUS_CallbackDesc afdChanged;       /* Fires when the NEXUS_VideoDecoderUserDataStatus.afdValue (active format description) changes. */
