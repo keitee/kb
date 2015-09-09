@@ -37,7 +37,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_311| gst: gst-launch
 |kt_dev_bcast_311| gst: gst-inspect
 |kt_dev_bcast_312| gst: sdk, tutorials
-|kt_dev_bcast_313| gst: core apis reference
 
 |kt_dev_bcast_319| gst: mime and types
 |kt_dev_bcast_320| gst: plugin writer's guide
@@ -68,13 +67,16 @@ Use #{ for a group and ={ for a item
 
 
 *kt_dev_bcast_400* gst: gst time and mpeg time
-|kt_dev_bcast_400| gst: preroll
 |kt_dev_bcast_400| gst: ref: gstcap
 
 *kt_dev_bcast_500* gst: man: gstcap
-*kt_dev_bcast_500* gst: gstbasesink
+*kt_dev_bcast_500* gst: gstbasesink and preroll
 *kt_dev_bcast_500* gst: gstbuffer
 *kt_dev_bcast_500* gst: gstevent
+*kt_dev_bcast_500* gst: gstvideo
+*kt_dev_bcast_500* gst: gstelement
+*kt_dev_bcast_500* gst: gstmessage
+*kt_dev_bcast_500* gst: gstbus
 
 *kt_dev_bcast_600* glib: gdebug
 *kt_dev_bcast_600* glib: gsignal
@@ -3435,26 +3437,6 @@ amount of verbosity of the output.
 *kt_dev_bcast_312* gst: sdk and tutorials
 
 http://docs.gstreamer.com/display/GstSDK/Installing+on+Linux
-
-
-={============================================================================
-*kt_dev_bcast_313* gst: core apis reference
-
-http://www.freedesktop.org/software/gstreamer-sdk/data/docs/2012.5/gstreamer-0.10/libgstreamer.html
-
-guint               gst_bus_add_watch                   (GstBus *bus,
-                                                         GstBusFunc func,
-                                                         gpointer user_data);
-
-Adds a bus watch to the default main context with the default priority (G_PRIORITY_DEFAULT). Since
-    0.10.33 it is also possible to use a non-default main context set up using
-    g_main_context_push_thread_default() (before one had to create a bus watch source and attach it
-            to the desired main context 'manually').
-
-This function is used to receive asynchronous messages in the main loop. There can only be a single
-bus watch per bus, you must remove it before you can set a new one.
-
-The watch can be removed using g_source_remove() or by returning FALSE from func.
 
 
 ={============================================================================
@@ -7430,78 +7412,6 @@ struct _GstBuffer {
 
 
 ={============================================================================
-*kt_dev_bcast_400* gst: preroll
-
-// from gnome mail archive
-
-In GStreamer terminology this describes the process of preparing a GStreamer
-pipeline for playback/recording. What happens is that audio/video data starts
-flowing through the pipeline until all elements have data (so that you could
-        start actually playing/outputting the video/audio immediately).
-
-note: when see gst log, preroll happens in the early part of playback.
-
-
-// copied from text about element state
-
-* GST_STATE_PAUSED
-an element has opened the stream, but is 'not' actively 'processing' it. An
-element is allowed to modify a stream's position, read and process data and
-such to 'prepare' for playback as soon as state is changed to PLAYING, but it
-is not allowed to play the data which would make the clock run. In summary,
-   PAUSED is the same as PLAYING but 'without' a running clock.  
-
-* GST_STATE_PAUSED 
-is the state in which an element is ready to accept and handle data. For most
-elements this state is the same as PLAYING. The only exception to this rule are
-sink elements. Sink elements only accept one single buffer of data and then
-block. At this point the pipeline is 'prerolled' and ready to render data
-immediately.
-
-Used in sink element code:
-
-rv = gst_base_sink_wait_preroll (GST_BASE_SINK(sink));
-
-From
-http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSink.html
-
-GstBaseSink will handle the prerolling correctly. This means that it will return
-GST_STATE_CHANGE_ASYNC from a state change to PAUSED until the first buffer
-arrives in this element. The base class will call the GstBaseSinkClass.preroll()
-vmethod with this preroll buffer and will then commit the state change to the
-next asynchronously pending state.
-
-When the element is set to PLAYING, GstBaseSink will synchronise on the clock
-using the times returned from GstBaseSinkClass.get_times(). If this function
-returns GST_CLOCK_TIME_NONE for the start time, no synchronisation will be done.
-Synchronisation can be disabled entirely by setting the object “sync” property
-to FALSE.
-
-After synchronisation the virtual method GstBaseSinkClass.render() will be
-called. Subclasses should minimally implement this method.
-
-Subclasses that synchronise on the clock in the GstBaseSinkClass.render() method
-are supported as well. These classes typically receive a buffer in the render
-method and can then potentially block on the clock while rendering. A typical
-example is an audiosink. These subclasses can use gst_base_sink_wait_preroll()
-to perform the blocking wait.
-
-gst_base_sink_wait_preroll ()
-
-GstFlowReturn
-gst_base_sink_wait_preroll (GstBaseSink *sink);
-
-If the GstBaseSinkClass.render() method performs its own synchronisation against
-    the clock it must unblock when going from PLAYING to the PAUSED state and
-    call this method before continuing to render the remaining data.
-
-This function will block until a state change to PLAYING happens (in which case
-        this function returns GST_FLOW_OK) or the processing must be stopped due
-to a state change to READY or a FLUSH event (in which case this function returns
-        GST_FLOW_FLUSHING).
-
-
-={============================================================================
 *kt_dev_bcast_400* gnome: glib
 
 Basics of GObject
@@ -7571,7 +7481,32 @@ a newly 'allocated' GstCaps.
 
 
 ={============================================================================
-*kt_dev_bcast_500* gst: gstbasesink
+*kt_dev_bcast_500* gst: gstbasesink and preroll
+
+{preroll}
+
+// from gnome mail archive
+In GStreamer terminology this describes the process of preparing a GStreamer
+pipeline for playback/recording. What happens is that audio/video data starts
+flowing through the pipeline until all elements have data (so that you could
+        start actually playing/outputting the video/audio immediately).
+
+note: when see gst log, preroll happens in the early part of playback.
+
+* GST_STATE_PAUSED
+an element has opened the stream, but is 'not' actively 'processing' it. An
+element is allowed to modify a stream's position, read and process data and
+such to 'prepare' for playback as soon as state is changed to PLAYING, but it
+is not allowed to play the data which would make the clock run. In summary,
+   PAUSED is the same as PLAYING but 'without' a running clock.  
+
+* GST_STATE_PAUSED 
+is the state in which an element is ready to accept and handle data. For most
+elements this state is the same as PLAYING. The only exception to this rule are
+sink elements. Sink elements only accept one single buffer of data and then
+block. At this point the pipeline is 'prerolled' and ready to render data
+immediately.
+
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSink.html
 
@@ -7589,6 +7524,7 @@ GstBaseSink provides support for exactly one sink pad, which should be named
 "sink". A sink implementation (subclass of GstBaseSink) should install a pad
 template in its class_init function, like so:
 
+note: preroll
 GstBaseSink will handle the prerolling correctly. This means that it will return
 GST_STATE_CHANGE_ASYNC from a state change to PAUSED until the first buffer
 arrives in this element. The base class will call the GstBaseSinkClass.preroll()
@@ -7597,17 +7533,17 @@ next asynchronously pending state.
 
 note: get_times
 When the element is set to PLAYING, GstBaseSink will synchronise on the clock
-using the times returned from GstBaseSinkClass.get_times(). If this function
+'using' the times returned from GstBaseSinkClass.get_times(). If this function
 returns GST_CLOCK_TIME_NONE for the start time, no synchronisation will be done.
 Synchronisation can be disabled entirely by setting the object “sync” property
 to FALSE.
 
-After synchronisation the virtual method GstBaseSinkClass.render() will be
+'after' synchronisation the virtual method GstBaseSinkClass.render() will be
 called. Subclasses should minimally implement this method.
 
 Subclasses that synchronise on the clock in the GstBaseSinkClass.'render'()
 method are supported as well. These classes typically receive a 'buffer' in the
-render method and can then potentially block on the clock while rendering. A
+render method and can then potentially 'block' on the clock while rendering. A
 typical example is an audiosink. These subclasses can use
 gst_base_sink_wait_preroll() to perform the blocking wait.
 
@@ -7669,9 +7605,59 @@ state change. This feature is mostly usable when dealing with non-synchronized
 streams or sparse streams.
 
 
+gst_base_sink_wait_preroll ()
+--------------------------
+GstFlowReturn
+gst_base_sink_wait_preroll (GstBaseSink *sink);
+
+note: own synchronisation
+
+If the GstBaseSinkClass.render() method performs its own synchronisation against
+the clock it must unblock when going from PLAYING to the PAUSED state and call
+this method before continuing to render the remaining data.
+
+This function will block 'until' a state change to PLAYING happens (in which
+    case this function returns GST_FLOW_OK) or the processing must be stopped
+due to a state change to READY or a FLUSH event (in which case this function
+    returns GST_FLOW_FLUSHING).
+
+This function should only be called with the PREROLL_LOCK held, like in the
+render function.
+
+Parameters
+sink
+the sink
+	 
+Returns
+GST_FLOW_OK if the preroll completed and processing can continue. Any other
+return value should be returned from the render vmethod.
+
+Used in sink element code:
+rv = gst_base_sink_wait_preroll (GST_BASE_SINK(sink));
+
+
+gst_base_sink_set_sync ()
+--------------------------
+void gst_base_sink_set_sync (GstBaseSink *sink, gboolean sync);
+
+Configures sink to synchronize on the clock or not. When sync is FALSE, incoming
+samples will be played as fast as possible. If sync is TRUE, the timestamps of
+the incoming buffers will be used to schedule the exact render time of its
+contents.  
+
+Parameters
+sink 
+the sink
+
+sync
+the new sync value.
+
+note:
+If sync is FALSE, use "own" synchronisation?
+
+
 GstElementClass 
 ---------------
-
 struct GstBaseSinkClass {
   GstElementClass parent_class;
 
@@ -8067,6 +8053,210 @@ GST_VIDEO_INFO_WIDTH()
 
 
 ={============================================================================
+*kt_dev_bcast_500* gst: gstelement
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html
+
+Object Hierarchy
+    GObject
+    ╰── GInitiallyUnowned
+        ╰── GstObject
+            ╰── GstElement
+                ╰── GstBin
+
+gst_element_post_message ()
+-----------------
+gboolean
+gst_element_post_message (GstElement *element, GstMessage *message);
+
+Post a message on the element's GstBus. This function takes ownership of the
+  message; if you want to access the message after this call, you should add an
+  additional reference before calling.  
+  
+Parameters
+
+element
+a GstElement 'posting' the message
+	 
+message
+a GstMessage to post.  [transfer full]
+
+Returns
+
+TRUE if the message was successfully posted. The function returns FALSE if the
+element did not have a bus.
+
+MT safe.
+
+<ex>
+
+  GstStructure * str = gst_structure_new(
+          "video-changed",
+          "height", G_TYPE_UINT, sink->height,
+          "width", G_TYPE_UINT, sink->width,
+          "aspect", GST_TYPE_FRACTION, sink->aspect_ratio_n, sink->aspect_ratio_d,
+          NULL);
+
+  GstMessage *msg = gst_message_new_element(GST_OBJECT_CAST(sink), str);
+
+  if(!gst_element_post_message(GST_ELEMENT_CAST(sink), msg)) {
+      GST_ERROR_OBJECT (sink, "Unable to post message." );
+  }
+
+<log-when-post-message>
+DEBUG                GST_BUS gstbus.c:784:gst_bus_source_dispatch:<bus3> 
+source 0x500550 calling dispatch with element message: 0x500178, time
+99:99:99.999999999, seq-num 402, element 'nexussink0', video-changed,
+  height=(uint)1080, width=(uint)1920, aspect=(fraction)1/1;
+
+
+={============================================================================
+*kt_dev_bcast_500* gst: gstmessage
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstMessage.html
+
+gst_message_new_element ()
+-----------------
+GstMessage *
+gst_message_new_element (GstObject *src, GstStructure *structure);
+
+Create a new element-'specific' message. This is meant as a generic way of
+  allowing one-way communication from an element to an application, for example
+  "the firewire cable was unplugged". The format of the message should be
+  documented in the element's documentation. The structure field can be NULL.
+
+Parameters
+src The object originating the message.  [transfer none][allow-none]
+
+structure
+The structure for the message. The message will take ownership of the structure.
+[transfer full] 
+
+Returns
+The new element message.
+
+MT safe. [transfer full]
+
+
+={============================================================================
+*kt_dev_bcast_500* gst: gstbus
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstBus.html
+
+Object Hierarchy
+    GObject
+    ╰── GInitiallyUnowned
+        ╰── GstObject
+            ╰── GstBus
+
+
+The GstBus is an object responsible for delivering GstMessage packets in a
+first-in first-out way from the streaming threads (see GstTask) to the
+'application'.
+
+Since the application typically only wants to deal with delivery of these
+messages from one thread, the GstBus will marshall the messages between
+different threads. This is important since the actual streaming of media is done
+in another thread than the application.
+
+The GstBus provides support for GSource based notifications. This makes it
+possible to handle the delivery in the glib mainloop.
+
+The GSource callback function gst_bus_async_signal_func() can be used to convert
+all bus messages into signal emissions.
+
+A message is posted on the bus with the gst_bus_post() method. With the
+gst_bus_peek() and gst_bus_pop() methods one can look at or retrieve a
+previously posted message.
+
+The bus can be polled with the gst_bus_poll() method. This methods blocks up to
+the specified timeout value until one of the specified messages types is posted
+on the bus. The application can then gst_bus_pop() the messages from the bus to
+handle them. 
+
+<the-second-way>
+Alternatively the application can register an asynchronous bus function using
+gst_bus_add_watch_full() or gst_bus_add_watch(). This function will 'install' a
+GSource in the default glib main loop and will deliver messages a short while
+after they have been posted. Note that the main loop should be running for the
+asynchronous callbacks.
+
+It is also possible to get messages from the bus without any thread marshalling
+with the gst_bus_set_sync_handler() method. This makes it possible to react to a
+message in the same thread that posted the message on the bus. This should only
+be used if the application is able to deal with messages from different threads.
+
+Every GstPipeline has one bus.
+
+Note that a GstPipeline will set its bus into flushing state when changing from
+READY to NULL state.
+
+
+gst_bus_add_watch ()
+-----------------
+guint
+gst_bus_add_watch (GstBus *bus,
+                   GstBusFunc func,
+                   gpointer user_data);
+
+Adds a bus watch to the default main context with the default priority
+  (G_PRIORITY_DEFAULT). It is also possible to use a non-default main context
+  set up using g_main_context_push_thread_default() (before one had to create a
+      bus watch source and attach it to the desired main context 'manually').
+
+This function is used to 'receive' asynchronous messages in the main loop. There
+can only be a single bus watch per bus, you must remove it before you can set a
+new one.
+
+The bus watch will only work if a GLib main loop is being run.
+
+The watch can be removed using gst_bus_remove_watch() or by returning FALSE from
+func. If the watch was added to the default main context it is also possible to
+remove the watch using g_source_remove().
+
+[skip]
+
+Parameters
+bus 
+a GstBus to create the watch for
+
+func 
+A function to call when a message is received.
+
+user_data 
+user data passed to func.
+	 
+Returns
+The event source id or 0 if bus already got an event source.
+
+MT safe.
+
+
+gst_bus_add_signal_watch ()
+-----------------
+void
+gst_bus_add_signal_watch (GstBus *bus);
+
+Adds a bus signal watch to the default main context with the default priority
+  (G_PRIORITY_DEFAULT). It is also possible to use a non-default main context
+  set up using g_main_context_push_thread_default() (before one had to create a
+      bus watch source and attach it to the desired main context 'manually').
+
+After calling this statement, the bus will emit the "message" signal for each
+message posted on the bus.
+
+This function may be called multiple times. To clean up, the caller is
+responsible for calling gst_bus_remove_signal_watch() as many times as this
+function is called.
+
+MT safe.
+
+Parameters
+bus
+a GstBus on which you want to receive the "message" signal
+
+
+={============================================================================
 *kt_dev_bcast_600* glib: debug
 
 gstreamer-1.5.0/docs/gst/running.xml
@@ -8414,6 +8604,10 @@ Includes
 
 #include <glib.h>
 
+note:
+The source is the source of event or action. think source as functor and
+mainloop as dispatcher?
+
 Description
 -----------
 The main event loop manages all the available 'sources' of events for GLib and
@@ -8458,10 +8652,11 @@ event source can be created and used in addition to the builtin type of event
 source. A new event source type is used for handling GDK events. A new source
 type is created by "deriving" from the GSource structure. The derived type of
 source is represented by a structure that has the GSource structure as a first
-element, and other elements specific to the new source type. To create an
-instance of the new source type, call g_source_new() passing in the size of the
-derived structure and a table of functions. These GSourceFuncs determine the
-behavior of the new source type.
+element, and other elements specific to the new source type. 
+
+To create an instance of the new source type, call g_source_new() passing in the
+size of the derived structure and a table of functions. These GSourceFuncs
+determine the behavior of the new source type.
 
 New source types basically interact with the main context in two ways. Their
 prepare function in GSourceFuncs can set a timeout to determine the maximum
@@ -8553,14 +8748,13 @@ Adds a function to be called whenever there are no higher priority events
 If the function returns FALSE it is automatically removed from the list of
 event sources and will not be called again.
 
-This internally creates a main loop 'source' using g_idle_source_new() and
+This 'internally' creates a main loop 'source' using g_idle_source_new() and
 attaches it to the global GMainContext using g_source_attach(), so the callback
 will be invoked in whichever thread is running that main context. You can do
 these steps manually if you need greater control or to use a custom main
 context.
 
 Parameters
-
 function function to call
 data data to pass to function .
 	 

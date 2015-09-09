@@ -146,6 +146,8 @@
 |kt_linux_tool_305| gdb: run and env, args, and tty
 |kt_linux_tool_306| gdb: debug already running process
 |kt_linux_tool_307| gdb: debug with multiple threads
+*kt_linux_tool_308* gdb: call trace
+*kt_linux_tool_309* gdb: tip: get a call trace promatically
 
 |kt_linux_tool_320| gdb: examine sources and source path
 |kt_linux_tool_321| gdb: sources and machine code
@@ -5064,16 +5066,17 @@ OPTIONS
 ={============================================================================
 *kt_linux_tool_051* font
 
-copy a font file in the directory /usr/local/share/fonts (for all users) or
+Copy a font file in the directory /usr/share/fonts/truetype (for all users) or
 ~/.fonts (for a specific user). 
 
 Remember to verify font's permissions on disk (777); if you save your fonts in
-/usr/local/share/fonts: 
 
 $ chmod -R 777 /usr/local/share/fonts
 
 fc-list – lists fonts
 fc-cache -fv – rebuilds cached list of fonts 
+
+http://sourcefoundry.org/hack/
 
 
 # ============================================================================
@@ -6722,6 +6725,8 @@ from gdb control. Detaching the process continues its execution. After the detac
 process and gdb become completely independent once more, and you are ready to attach another process
 or start one with run.
 
+$ gdb gst-launch-1.0 11476
+
 
 ={============================================================================
 *kt_linux_tool_307* gdb: debug with multiple threads
@@ -6779,6 +6784,122 @@ numbers of the threads that you want affected with the command argument threadno
 thread number, one of the numbers shown in the first field of the 'info threads' display; or it
 could be a range of thread numbers, as in 2-4. To apply a command to all threads, type thread apply
 all command.
+
+
+={============================================================================
+*kt_linux_tool_308* gdb: call trace
+
+When see call traces using bt, it does not show:
+
+1. function calls which is completed along the call tree.
+2. function calls which do "sleep()" call in an atempt to see if call traces
+up to this point when attaching gdb.
+
+Q: how to put some code to provide a point to use gdb?
+
+
+={============================================================================
+*kt_linux_tool_309* gdb: tip: get a call trace promatically
+
+In running gst-launch, see the call traces made automatically as shown.
+
+Caught SIGSEGV
+#0  0x7753cd1c in __lll_lock_wait () from /lib/libpthread.so.0
+#1  0x775446fc in pthread_mutex_lock () from /lib/libpthread.so.0
+#2  0x772c4fcc in g_mutex_lock () from /opt/zinc-trunk/oss/lib/libglib-2.0.so.0
+#3  0x75b6f2ac in gst_nexus_mgr_set_rate (mgr=0x48e0b0, settings=0x47ff18, res=0x0, rate=1) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexusmgr.c:1097
+#4  0x75b74aa0 in gst_nexus_sink_play_locked (sink=0x47fd18) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1531
+#5  gst_nexus_sink_change_state_locked (transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING, sink=0x47fd18) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1354
+#6  gst_nexus_sink_change_state (element=<optimized out>, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1326
+#7  0x77464ed8 in gst_element_change_state (element=0x47fd18, transition=<optimized out>) at gstelement.c:2602
+#8  0x77465aac in gst_element_set_state_func (element=0x47fd18, state=<optimized out>) at gstelement.c:2558
+#9  0x7743a954 in gst_bin_element_set_state (next=GST_STATE_PLAYING, current=GST_STATE_PAUSED, start_time=0, base_time=592515640814054, element=0x47fd18, bin=0x489078) at gstbin.c:2328
+#10 gst_bin_change_state_func (element=0x489078, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at gstbin.c:2665
+#11 0x77490e24 in gst_pipeline_change_state (element=0x489078, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at gstpipeline.c:474
+#12 0x77464ed8 in gst_element_change_state (element=0x489078, transition=<optimized out>) at gstelement.c:2602
+#13 0x77465aac in gst_element_set_state_func (element=0x489078, state=<optimized out>) at gstelement.c:2558
+#14 0x00404c5c in main (argc=28, argv=0x7f9c2c94) at gst-launch.c:1095
+Spinning.  Please run 'gdb gst-launch-1.0 15054' to continue debugging, Ctrl-C to quit, or Ctrl-\ to dump core.
+
+
+gstreamer-1.5.0/tools/gst-launch.c
+
+static void
+fault_handler_sighandler (int signum)
+{
+  fault_restore ();
+
+  /* printf is used instead of g_print(), since it's less likely to
+   * deadlock */
+  switch (signum) {
+    case SIGSEGV:
+      fprintf (stderr, "Caught SIGSEGV\n");
+      break;
+    case SIGQUIT:
+      if (!quiet)
+        printf ("Caught SIGQUIT\n");
+      break;
+    default:
+      fprintf (stderr, "signo:  %d\n", signum);
+      break;
+  }
+
+  fault_spin ();
+}
+
+static void
+fault_spin (void)
+{
+  int spinning = TRUE;
+
+  glib_on_error_halt = FALSE;
+  g_on_error_stack_trace ("gst-launch-" GST_API_VERSION);
+
+  wait (NULL);
+
+  /* FIXME how do we know if we were run by libtool? */
+  fprintf (stderr,
+      "Spinning.  Please run 'gdb gst-launch-" GST_API_VERSION " %d' to "
+      "continue debugging, Ctrl-C to quit, or Ctrl-\\ to dump core.\n",
+      (gint) getpid ());
+  while (spinning)
+    g_usleep (1000000);
+}
+
+static void
+fault_restore (void)
+{
+  struct sigaction action;
+
+  memset (&action, 0, sizeof (action));
+  action.sa_handler = SIG_DFL;
+
+  sigaction (SIGSEGV, &action, NULL);
+  sigaction (SIGQUIT, &action, NULL);
+}
+
+static void
+fault_setup (void)
+{
+  struct sigaction action;
+
+  memset (&action, 0, sizeof (action));
+  action.sa_handler = fault_handler_sighandler;
+
+  sigaction (SIGSEGV, &action, NULL);
+  sigaction (SIGQUIT, &action, NULL);
+}
+
+int
+main (int argc, char *argv[])
+{
+  ...
+
+#ifdef G_OS_UNIX
+    fault_setup ();
+#endif
+
+}
 
 
 ={============================================================================
