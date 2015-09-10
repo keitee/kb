@@ -245,6 +245,8 @@
 |kt_linux_core_262|  sync: ref: always use a lightweight mutex {mutex-vs-semaphore}
 |kt_linux_core_263|  conc: ref: lock-free code: a false sense of security
 |kt_linux_core_264|  conc: ref: the free lunch is over 
+*kt_linux_core_265* sync: case: subtle race
+*kt_linux_core_266* sync: case: sync with no lock
 
 |kt_linux_core_290|  ref: concurrency in C++. ch01
 |kt_linux_core_291|  ref: concurrency in C++. ch02 {std::thread}
@@ -18786,7 +18788,7 @@ InterlockedCompareExchange for compare-and-swap) or platform-specific explicit m
 fences/barriers (for example, Linux mb).
 
 
-==============================================================================
+={============================================================================
 *kt_linux_core_264*	conc: ref: the free lunch is over 
 http://www.gotw.ca/publications/concurrency-ddj.htm
 
@@ -19288,6 +19290,117 @@ still on the menu, but now it costs extraâextra development effort, extra c
 testing effort. The good news is that for many classes of applications the extra effort will be
 worthwhile, because concurrency will let them fully exploit the continuing exponential gains in
 processor throughput.
+
+
+={============================================================================
+*kt_linux_core_265* sync: case: subtle race
+
+This is to make sure that callback is called exactly once when there is an event
+which calls code below. Thing is that if not remove it, it will keep adding
+callbacks. So if there is callabck which is already in a queue, then remove the
+new. The assumption was that the same events happens more but need to call
+callback once asynchronously.
+
+{
+  // this add a callback to the glib main thread which is different from the
+  // current thread.
+  guint task_handle = g_idle_add( video_changed_message_callback, sink);
+
+  // this set sink->task_handle atomic variable with new tast_handle when it
+  // is 0 and return TRUE when it succeed.
+  if (0 != g_atomic_int_compare_and_exchange(&sink->task_handle, 0,
+        task_handle))
+  {
+    // There is already a task waiting to run, so we can cancel this one.
+    g_source_remove(temporary_change_task_handle);
+  }
+}
+
+The first problem is the wrong interpretation of the return value of
+g_atomic_int_compare_and_exchange(). It doesn't return the old value of the
+atomic variable. It returns TRUE if exchange took place and FALSE otherwise.
+Because of that, we were proceeding to g_source_remove() when the atomic
+variable went from zero to a non-zero value and it returns TRUE, which is wrong. 
+
+This cause a race:
+
+1. If the main thread managed to execute the newly added idle callback before
+the background thread reached g_source_remove(), we were getting the following
+error from g_source_remove():
+
+GLib-CRITICAL **: Source ID 3 was not found when attempting to remove it
+
+2. Otherwise, the idle callback wasn't executed at all!
+
+3. When tried out, saw that both g_source_remove and callback works okay.
+
+All in all, this is racy.
+
+Even after changing the code above to:
+
+{
+  guint task_handle = g_idle_add( video_changed_message, sink);
+  if (!g_atomic_int_compare_and_exchange(&sink->task_handle, 0,
+        task_handle))
+  {
+    // There is already a task waiting to run, so we can cancel this one.
+    g_source_remove(task_handle);
+  }
+}
+
+
+There are still a subtle race condition. Consider the following sequence of
+events:
+
+1. One instance of this particular idle callback is queued. The atomic variable
+   becomes non-zero.
+
+2. Another instance is queued. Because the atomic variable is non-zero, we go
+   inside the if.
+
+3. Another thread (the one running GLib main loop) executes both of the queued
+   callbacks.
+
+4. The thread that entered the "if" finally reached g_source_remove(), which now
+   acts on a non-existing source.
+
+It turns out we don't have to execute the callback on the main thread, as all it
+does is posting a message on GstBus, which does asynchronous delivery anyway. So
+remove callback and do what it does in the current function.
+
+Q: What if still needs callback approach?
+
+
+={============================================================================
+*kt_linux_core_266* sync: case: sync with no lock
+
+  obj1                    obj2
+
+    \                   /
+
+  // callback called by external thread
+  callback_func( object* obj, ... )
+  {
+    // access and set obj but no lock on objs
+    deq_from_q_of_callbaks();
+    run_callback();
+  }
+
+  ^
+  |
+
+  callback_to_hw()
+  {
+    enq_to_q_of_callbacks();
+  }
+  
+  thread1             thread2
+
+This callback is registered to two threads with different obj pointer. When gets
+  called, picks up the obj and use it. But why no locks?
+
+Since callback thread use queue, it's serialized and no need to have lock on
+objects.
 
 
 # ============================================================================

@@ -8088,6 +8088,11 @@ element did not have a bus.
 
 MT safe.
 
+note:
+It turns out we don't have to execute gst_element_post_message() on the main
+thread, as all it does is posting a message on GstBus, which does asynchronous
+delivery anyway (apart from gst_bus_set_sync_handler() that we don't use).
+
 <ex>
 
   GstStructure * str = gst_structure_new(
@@ -8104,6 +8109,12 @@ MT safe.
   }
 
 <log-when-post-message>
+
+DEBUG                GST_BUS gstbus.c:309:gst_bus_post:<bus3> 
+[msg 0x4d39c8] posting on bus element message: 0x4d39c8, time 99:99:99.999999999, 
+seq-num 210, element 'nexussink0', video-changed, height=(uint)288,
+width=(uint)512, aspect=(fraction)1/1;
+
 DEBUG                GST_BUS gstbus.c:784:gst_bus_source_dispatch:<bus3> 
 source 0x500550 calling dispatch with element message: 0x500178, time
 99:99:99.999999999, seq-num 402, element 'nexussink0', video-changed,
@@ -8175,12 +8186,13 @@ on the bus. The application can then gst_bus_pop() the messages from the bus to
 handle them. 
 
 <the-second-way>
-Alternatively the application can register an asynchronous bus function using
+Alternatively the application can register an 'asynchronous' bus function using
 gst_bus_add_watch_full() or gst_bus_add_watch(). This function will 'install' a
 GSource in the default glib main loop and will deliver messages a short while
 after they have been posted. Note that the main loop should be running for the
 asynchronous callbacks.
 
+<synchronous>
 It is also possible to get messages from the bus without any thread marshalling
 with the gst_bus_set_sync_handler() method. This makes it possible to react to a
 message in the same thread that posted the message on the bus. This should only
@@ -8204,9 +8216,9 @@ Adds a bus watch to the default main context with the default priority
   set up using g_main_context_push_thread_default() (before one had to create a
       bus watch source and attach it to the desired main context 'manually').
 
-This function is used to 'receive' asynchronous messages in the main loop. There
-can only be a single bus watch per bus, you must remove it before you can set a
-new one.
+This function is used to 'receive' asynchronous 'messages' in the main loop.
+There can only be a single bus watch per bus, you must remove it before you can
+set a new one.
 
 The bus watch will only work if a GLib main loop is being run.
 
@@ -8412,6 +8424,7 @@ functions.
 
 https://developer.gnome.org/glib/stable/glib-Atomic-Operations.html#
 
+---------------
 void
 g_atomic_int_set (volatile gint *atomic, gint newval);
 
@@ -8423,6 +8436,8 @@ atomic a pointer to a gint or guint
 newval a new value to store
 
 
+g_atomic_int_compare_and_exchange
+---------------
 gboolean
 g_atomic_int_compare_and_exchange (volatile gint *atomic,
                                    gint oldval,
@@ -8595,6 +8610,20 @@ be explicitly initialised using g_mutex_init().
 A GMutex should only be accessed via g_mutex_ functions.
 
 
+g_mutex_lock ()
+------------
+void
+g_mutex_lock (GMutex *mutex);
+
+Locks mutex. If mutex is already locked by another thread, the current thread
+will block until mutex is unlocked by the other thread.
+
+GMutex is 'neither' guaranteed to be recursive nor to be non-recursive. As such,
+       calling g_mutex_lock() on a GMutex that has already been locked by the
+       same thread results in undefined behaviour (including but not limited to
+           deadlocks).
+
+
 ={============================================================================
 *kt_dev_bcast_600* glib: gmain
 
@@ -8760,6 +8789,11 @@ data data to pass to function .
 	 
 Returns
 the ID (greater than 0) of the event source.
+
+
+note:
+The source is to be removed either when the function returns FALSE or when
+g_source_remove() is called.
 
 
 g_source_remove ()
