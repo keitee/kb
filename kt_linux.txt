@@ -232,7 +232,10 @@
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
 |kt_linux_core_200| ipc: sync: semaphore 
-|kt_linux_core_201| ipc: sync: pthread mutex and cond-var {race-condition} {deadlock-condition} {mutex-ownership} {mutex-types} 
+*kt_linux_core_201* sync: mutex
+*kt_linux_core_202* sync: deadlock
+*kt_linux_core_202* sync: condition variable to consumer and producer problem
+*kt_linux_core_202* sync: between processes
 |kt_linux_core_220| sync: read-write lock
 
 |kt_linux_core_230|  sync: file-lock
@@ -13921,10 +13924,6 @@ if (-1 == stat(cleanup_exe, &sb))
 
 
 ={============================================================================
-*kt_linux_core_202* 
-
-
-={============================================================================
 *kt_linux_core_200* ipc
 
 CH43, Fig 43-1 in {ref-LPI} which says that the 'general' term IPC is often used to describe them all;
@@ -15463,154 +15462,253 @@ are no longer required). note: real example? useful?
 
 
 ={============================================================================
-*kt_linux_core_201* ipc: sync: pthread mutex and cond var
+*kt_linux_core_201* sync: mutex
 
-From #07 in {ref-UNP} and #30 in {ref-LPI}
+LPI-30
 
-This is to sync for data or critial region. It is about critial region but what
-    is really protected is the 'data' being manipulated within the critical
-    region. This is posix.1 standard.
+The term critical section is used to refer to a section of 'code' that accesses
+a shared resource and whose execution should be 'atomic'; that is, its execution
+should not be interrupted by another thread that simultaneously accesses the
+same shared resource.
 
-As with semaphore, mutex and cond-var uses 'global' structure and if these are
-shared in a shared memory, these can be used between processes. If not, it is
-for threads in a process.
+In the below problem, two threads shares the same code. It is about critial
+region but what is really protected is the 'data' being manipulated within the
+critical region.
 
+
+Problem
+-------------------------------
+The kind of problems that can occur when shared resources are not accessed
+atomically.
+
+This program creates two threads, each of which executes the same function. The
+function executes a loop that repeatedly increments a global variable, glob, by
+copying glob into the local variable loc.
+
+
+Since loc is an automatic variable allocated on the per-thread stack, each
+thread has its 'own' copy of this variable.
+
+The vagaries of the kernel's CPU scheduling decisions:
+The scheduler time slice for thread 1 expires, and thread 2 commences execution.
+
+In complex programs, this 'nondeterministic' behavior means that such errors may
+occur only rarely, be hard to reproduce, and therefore be difficult to find.
+
+static int glob = 0;
+
+staic void threadFunc()
+{
+  int loc, j;
+
+  for(j=0; j < loops; j++)
+  {
+    loc = glob;
+    loc++;
+    glob = loc;
+  }
+}
+
+
+Solution?
+-------------------------------
+It might seem that we could eliminate the problem by replacing the three statements
+inside the for loop with a single statement. Looks atomic?
+
+staic void threadFunc()
+{
+  int loc, j;
+
+  for(j=0; j < loops; j++)
+  {
+    glob++; /* or: ++glob; */
+  }
+}
+
+However, on many hardware architectures (e.g., RISC architectures), the compiler
+would still need to convert this single statement into machine code whose steps
+are equivalent to the three statements inside the loop. In other words, despite
+its simple appearance, even a C increment operator may 'not' be atomic.
+
+
+Mutex
+-------------------------------
 More generally, mutexes can be used to ensure atomic access to any shared
-    resource, but protecting shared variables is the most common use.
-
-In {ref-LPI} p881, process-shared mutexes and condition variables. They are
-'not' available on all UNIX systems, and so are not commonly employed for
-process synchronization.
-
-note: As said, if share mutex structure in shared memory, then what is
-process-shared mutex?
+resource, but protecting shared variables is the most common use.
 
 
-{why-need-sync}
-Because of 'race' condition. Like {ref-LPI}, when run two threads without sync,
-        task-switching happens based on time-slot given and yield
-        'non''determistic' result.
-
-threadFunc()
-{
-  for(j=0; j < loops; j++)
-  {
-    local = global;
-    local++;
-    global = local;
-  }
-}
-
-If we change this like below, do not need to sync because inc looks atomic?
-
-threadFunc()
-{
-  for(j=0; j < loops; j++)
-  {
-    global++;
-  }
-}
-
-NO because this single inc operator may result in 'multiple' machine code which
-are equivalent to the before. See *kt_linux_core_107* for more about atomic and
-race-condition.
-
-
-{ownership} mutex-deadlock
-A mutex has two states: locked and unlocked. At any moment, at most one thread
+Mutex Ownership
+-------------------------------
+A mutex has two states: locked and unlocked. At any moment, *at-most* one thread
 may hold the lock on a mutex. Attempting to lock a mutex that is already locked
 either blocks or fails with an error depending on the method used to place the
 lock.
 
-When a thread locks a mutex, it becomes the 'owner' of that mutex. Only the
-mutex owner can 'unlock' the mutex. This property 'improves' the structure of
-code that uses mutexes and also allows for some optimizations in the
-implementation of mutexes.
-
-1. Locking. If try to lock what is already locked by self, two may happen for
-'default' type of mutex: mutex-'deadlock' or EDEADLK for error check type. On
-Linux, deadlock by default from {ref-LPI}. Why deadlock?  Because blocked trying
-to lock a mutex that it already owns.
-
-2. Unlocking. Unlocking a mutex that is not locked or that is locked by another
-thread 'undefined' result.
-
-note: ownership matters when unlock and semaphore do not have ownership.
+When a thread locks a mutex, it becomes the 'owner' of that mutex. 'only' the
+mutex owner can unlock the mutex. Because of this ownership property, the terms
+'acquire' and 'release' are sometimes used synonymously for lock and unlock.
 
 
-{cooperative-lock}
-This means that mutex locking is advisory, rather than mandatory; nothing can
-prevent one thread from manipulating the data without first obtaining the mutex.
-For example, threads not participating a mutex circle can.
-
+Mutex protocol
+-------------------------------
 Each thread employs the following protocol for accessing a resource:
 1. lock the mutex for the shared resource;
 2. access the shared resource; and
 3. unlock the mutex.
 
 
-{implicit-sync}
-This is synchronization handled by kernel not by applicaion. Such as pipe and
-message-q. For example,
-
-grep pattern chapters.* | wc -l
-
-Writing by producer and reading by consumer are handled by kernel. Does it mean
-that grep and wc runs at the same time? not one after one.
+Cooperative lock
+-------------------------------
+This means that mutex locking is advisory, rather than mandatory; nothing can
+prevent one thread from manipulating the data without first obtaining the mutex.
+For example, threads not participating a mutex circle can.
 
 
-{mutex-apis} {explicit-sync}
-Unlike semaphore and file locks, mutex only requires system call for lock
-contention since on Linux, mutexes are implemented using futexes (an acronym
-        derived from fast user space mutexes), and lock contentions are dealt
-with using the futex() system call. So less expensive. from 30.1.3 in {ref-LPI}
+Statically Allocated Mutexes
+-------------------------------
+A mutex can either be allocated as a static variable or be created dynamically
+at run time. Before it can be used, a mutex must always be initialized.
 
-If it is 'statically' allocated for default attributes, should use:
-
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-
-If it is dymamically allocated such as malloc or shared-mem, should use. When?
-mutex can be part of structure or object on the heap.
-
-1. The mutex was dynamically allocated on the heap. For example, suppose that we
-create a dynamically allocated linked list of structures, and each structure in
-the list includes a pthread_mutex_t field that holds a mutex that is used to
-protect access to that structure.
-
-2. The mutex is an automatic variable allocated on the stack.
-
-3. We want to initialize a statically allocated mutex with attributes other than
-the defaults.
-
-int pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t* attr);
-int pthread_mutex_destory(pthread_mutex_t* mutex);
+pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 
 
-This is blocking call.
-
-int pthread_mutex_lock( pthread_mutex_t *mptr); 
-int pthread_mutex_unlock( pthread_mutex_t *mptr);
-
-
-This is non-blocking and returns EBUSY if the mutex is already locked. If the
-time interval specified by its abstime argument expires without the caller
-becoming the owner of the mutex pthread_mutex_timedlock() returns the error
-ETIMEDOUT.
-
-These are less used because need to poll and risks being starved. Well designed
-one can avoid this.  In most well-designed applications, a thread should hold a
-mutex for only a short time, so that other threads are not prevented from
-executing in parallel.
-
-int pthread_mutex_trylock( pthread_mutex_t *mptr);
-int pthread_mutex_timedlock( pthread_mutex_t *mptr);
+Dynamically Initializing a Mutex
+-------------------------------
+See LPI-30.1.5, 6
 
 
-{deadlock-condition}
-A deadlock is a situation waiting for something never happens or where two or
-more process are blocked because each is waiting on the other process(es) to
-complete some action. Unrequited love?
+Locking and Unlocking a Mutex
+-------------------------------
+After initialization, a mutex is unlocked.
 
+#include <pthread.h>
+
+int pthread_mutex_lock(pthread_mutex_t *mutex);
+int pthread_mutex_unlock(pthread_mutex_t *mutex);
+
+Both return 0 on success, or a positive error number on error
+
+If the mutex is currently locked by another thread, then pthread_mutex_lock()
+  blocks 'until' the mutex is unlocked, at which point it locks the mutex and
+  'returns'.
+
+If more than one other thread is waiting to acquire the mutex unlocked by a call
+to pthread_mutex_unlock(), it is 'indeterminate' which thread will succeed in
+acquiring it.
+
+
+Mutex Types
+-------------------------------
+o May not lock the same mutex twice. If do, two may happen for 'default'
+type of mutex: mutex-'deadlock' or EDEADLK for error check type. On Linux,
+     deadlock by default from {ref-LPI}. Why deadlock?  Because blocked trying
+     to lock a mutex that it already owns.
+
+o Unlocking a mutex that is not owned(locked) or that is locked by another
+thread 'undefined' result. note: ownership matters when unlock and semaphore do
+not have ownership.
+
+Precisely what happens in each of these cases depends on the type of the mutex.
+
+
+PTHREAD_MUTEX_NORMAL
+
+(Self-)deadlock detection is not provided for this type of mutex. If a thread
+tries to lock a mutex that it has already locked, then 'deadlock' results.
+Unlocking a mutex that is not locked or that is locked by another thread
+produces 'undefined' results. 
+
+On Linux, both of these operations 'succeed' for this mutex type and this is
+PTHREAD_MUTEX_DEFAULT
+
+
+PTHREAD_MUTEX_ERRORCHECK
+
+All three of the above scenarios cause the relevant Pthreads function to return
+an error than blocking or deadlock but 'slower' than a normal so debugging
+purpose.
+
+
+PTHREAD_MUTEX_RECURSIVE
+
+A recursive mutex maintains the concept of a *lock-count* When a thread first
+acquires the mutex, the lock count is set to 1. Each subsequent lock operation
+by the same thread increments the lock count, and each unlock operation
+decrements the count. The mutex is released (i.e., made available for other
+    threads to acquire) only when the lock count falls to 0. 
+
+When is it useful?
+
+Still have ownership notion but there is no mutex deadlock or undefined result
+as NOMAL type has.
+
+
+Locking Variants
+-------------------------------
+Two variants of the pthread_mutex_lock() function which are much less frequently
+used:
+
+The pthread_mutex_trylock() function is the same as pthread_mutex_lock(), except
+that if the mutex is currently locked, pthread_mutex_trylock() fails, returning
+the error EBUSY.
+
+The pthread_mutex_timedlock() function is the same as pthread_mutex_lock(),
+    except that the caller can specify an additional argument, abstime, that
+    places a limit on the time that the thread will sleep while waiting to
+    acquire the mutex. If the time interval specified by its abstime argument
+    expires without the caller becoming the owner of the mutex,
+    pthread_mutex_timedlock() returns the error ETIMEDOUT.
+
+note: Why less used?
+
+In most well-designed applications, a thread should hold a mutex for only a
+short time, so that other threads are not prevented from executing in parallel. 
+
+A thread that uses pthread_mutex_trylock() to periodically poll the mutex to see
+if it can be locked risks being starved of access to the mutex while other
+queued threads are successively granted to the mutex via pthread_mutex_lock().
+
+
+Performance of Mutexes
+-------------------------------
+This is relatively cheap and the performance impact of using a mutex is not
+significant in most applications.
+
+The problem with file locks and semaphores is that they always require a system
+call for the lock and unlock operations, and each system call has a small, but
+appreciable, cost (Section 3.1). By contrast, mutexes are implemented using
+atomic machine-language operations (performed on memory locations visible to all
+    threads) and require system calls only in case of lock contention.
+
+
+On Linux, mutexes are implemented using futexes (derived from fast user space
+    mutexes), and lock contentions are dealt with using the futex() system call.
+
+We don't describe futexes in this book (they are not intended for direct use in
+    user-space applications), but details can be found in [Drepper, 2004 (a)],
+   which also describes how mutexes are implemented using futexes. [Franke et
+   al., 2002] is a (now outdated) paper written by the developers of futexes,
+   which describes the early futex implementation and looks at the performance
+   gains derived from futexes.
+
+
+={============================================================================
+*kt_linux_core_202* sync: deadlock
+
+Deadlocks. LPI-30.1.4
+-------------------------------
+A deadlock is a situation where more than one thread is locking the same set of
+mutexes and will remain blocked indefinitely. Waiting for something never
+happens. Unrequited love?
+
+Thread A                            Thread B
+1. pthread_mutex_lock(mutex1);      1. pthread_mutex_lock(mutex2);
+2. pthread_mutex_lock(mutex2);      2. pthread_mutex_lock(mutex1);
+blocks                              blocks
+
+
+Deadlock Examples
+-------------------------------
 <1> from pipe
 If employing this bidirectional communication using two pipes, then we need to
 be wary of deadlocks that may occur if both processes block while trying to read
@@ -15659,60 +15757,46 @@ when Produce() is called between line A and line B in Listing One. Then wait()
             or if the Produce() call actually waits for Consume() to return),
     there's a deadlock.
 
-<6> from {ref-LPI}, deadlock happens that is the same as mutex-deadlock
+<6> mutex-deadlock
 
 Thead A             Thread B
 lock(mutex1)        lock(mutex2)
-lock(mutex2)        lock(mutex1)
-
-Both tries to lock the mutex that the other thread has already locked. Both threads will remain
-blocked indefinitely.
+lock(mutex1)        lock(mutex2)
 
 
-{to-avoid-deadklock}
-1. mutex-hierarchy-or-order
-Less flexible. Use locks in the same set of mutexs in the same order.
+Deadlock Avoid
+-------------------------------
 
-2. try-and-back-off
-Flexible. If try_lock fails, release all and try again later. This is less
-efficient than hierarchy approach but can be more 'flexible' since no need rigid
-hierarchy.
+o Mutex hierarchy or order
 
+The simplest way to avoid such deadlocks is to define a mutex hierarchy. When
+threads can lock the same set of mutexes, they should always lock them in the
+same order. Less flexible.
 
-{mutex-types} from {ref-LPI} 30.1.7:
-PTHREAD_MUTEX_NORMAL
-// no deadlock detection. On Linux, this is PTHREAD_MUTEX_DEFAULT
-
-PTHREAD_MUTEX_ERRORCHECK
-// reports errors when fails than blocking or deadlock but 'slower' than a normal so debugging
-// purpose.
-
-PTHREAD_MUTEX_RECURSIVE
-// A recursive mutex maintains the concept of a lock-'count'. When a thread first acquires the mutex,
-// the lock count is set to 1. Each subsequent lock operation by the same thread increments the lock
-// count, and each unlock operation decrements the count. The mutex is released (i.e., made
-// available for other threads to acquire) only when the lock count falls to 0. 
-//
-// When is it useful?
-//
-// Unlocking an unlocked mutex fails, as does unlocking a mutex that is currently locked by another
-// thread. 
-//
-// note: Still have ownership notion but there is no mutex deadlock or undefined result as NOMAL
-// type has.
+o Try and back off
+An alternative strategy that is 'less' frequently used is "try, and then back
+off." See above on why try_lock is less used. If try_lock fails, release 'all'
+and try again later. This is less efficient than hierarchy approach but can be
+more 'flexible' since no need rigid hierarchy.
 
 
-{consumer-producer-example-one}
-From {ref-UNP}. Multiple producer(writing) and one consumer(reading). Once writing finishs, consumer
-get started. No need to sync between producer and consumer. Only sync between producers. So use
-mutex and no cond var. 
+={============================================================================
+*kt_linux_core_202* sync: condition variable to consumer and producer problem
 
-No need to have a sync for reading? NO. Need to have reading in sync if want to
-have right result.  For this example, reaading starts after writing. Hence no
-need.
+UNP-XX
 
-<code-example>
+Consumer and Producer 
+-------------------------------
+Multiple producer(writing) and one consumer(reading). Once writing finishs,
+consumer get started. No sync between producer and consumer and only sync for
+  producers. So use mutex. 
 
+No sync for reading? NO for this example since reaading starts after writing.
+However, need to sync reading if want to have right result while writing
+happens.  
+
+
+<ex>
 #include <stdio.h>
 #include <pthread.h>
 #include <sys/errno.h>
@@ -15723,8 +15807,9 @@ need.
 #define	min(a,b)	((a) < (b) ? (a) : (b))
 #define	max(a,b)	((a) > (b) ? (a) : (b))
 
-//
-void Pthread_create(pthread_t* tid, const pthread_attr_t* attr, void *(*func)(void*), void*arg)
+void 
+Pthread_create
+(pthread_t* tid, const pthread_attr_t* attr, void *(*func)(void*), void*arg)
 {
 	int n;
 
@@ -16082,6 +16167,33 @@ really is something to do by rechecking the predicate.
 may be woken up even though no other thread actually signaled the condition variable. Such spurious
 wake-ups are a (rare) consequence of the techniques required for efficient implementation on some
 multiprocessor systems, and are explicitly permitted by SUSv3.
+
+
+
+={============================================================================
+*kt_linux_core_202* sync: between processes
+
+As with semaphore, mutex and cond-var uses 'global' structure and if these are
+shared in a shared memory, these can be used between processes. If not, it is
+for threads in a process.
+
+In {ref-LPI} p881, process-shared mutexes and condition variables. They are
+'not' available on all UNIX systems, and so are not commonly employed for
+process synchronization.
+
+note: As said, if share mutex structure in shared memory, then what is
+process-shared mutex?
+
+
+
+{implicit-sync}
+This is synchronization handled by kernel not by applicaion. Such as pipe and
+message-q. For example,
+
+grep pattern chapters.* | wc -l
+
+Writing by producer and reading by consumer are handled by kernel. Does it mean
+that grep and wc runs at the same time? not one after one.
 
 
 ==============================================================================
