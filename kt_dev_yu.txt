@@ -17,7 +17,7 @@
 |kt_dev_uv_stack_002| stack: build: deploy
 |kt_dev_uv_stack_003| stack: build: debug or release
 |kt_dev_uv_stack_003| stack: startup and bootup
-|kt_dev_uv_stack_004| stack: oem configs
+|kt_dev_uv_stack_004| stack: oem version and configs
 |kt_dev_uv_stack_005| stack: brcm debug level
 |kt_dev_uv_stack_006| stack: netflix ps line
 |kt_dev_uv_stack_007| stack: virtual rcu
@@ -1230,7 +1230,7 @@ ag 'error:'
 
 
 ={============================================================================
-*kt_dev_uv_stack_002* stack: build: deploy
+*kt_dev_uv_stack_002* stack: build: zb-deploy
 
 <setup-xx-sh>
 
@@ -1328,24 +1328,142 @@ zb-deploy -o huawei.370 -- -r
     ++ which /home/kpark/source/setup-humax/setup-humax.sh
     + '[' '!' -x /home/kpark/source/setup-humax/setup-humax.sh ']'
     + vendor=humax
-    +
+    
     patch_a_tron_script=
       /data/builds/_virtual_/humax.1000/DEVARCH/OEM.Humax/OEM.Humax.Scripts/patch-host-for-yv-zinc.sh
     
     
-    note: call setup-xx-sh <setup-xx-sh>
-    + /home/kpark/source/setup-humax/setup-humax.sh -z
-        /data/builds/_virtual_/humax.1000/zinc-install-root/release/humax-dtr_t1000/opt/zinc-trunk
-        -P
-        file:///data/builds/_virtual_/humax.1000/DEVARCH/OEM.Humax/OEM.Humax.Scripts/patch-host-for-yv-zinc.sh
-        humax-0873
+    # note: call setup-xx-sh <setup-xx-sh>
+    # 
+    #/   -z <zincdir>  Local build to deploy
+    #/                 (e.g. $ZINC_INSTALL_ROOT/debug/huawei-dtr_t1000/opt).
+    #    
+    #/   -P <patchatron url>  Use the specified patch-a-tron.
+
+    + /home/kpark/source/setup-humax/setup-humax.sh 
+    -z /home/kpark/builds-src-dev/_virtual_/humax.2100/zinc-install-root/
+          release/humax-dtr_t2100/opt/zinc-trunk 
+    -P file:///home/kpark/builds-src-dev/_virtual_/humax.2100/
+          DEVARCH/OEM.Humax/OEM.Humax.Scripts/patch-host-for-yv-zinc.sh humax-04535
 }
 
 
-#/   -z <zincdir>  Local build to deploy
-#/                 (e.g. $ZINC_INSTALL_ROOT/debug/huawei-dtr_t1000/opt).
+setup-humax:main
+{
+  + zincdir=/home/kpark/builds-src-dev/_virtual_/humax.2100/
+      zinc-install-root/release/humax-dtr_t2100/opt/zinc-trunk
 
-#/   -P <patchatron url>  Use the specified patch-a-tron.
+  + ssh='ssh -i /home/kpark/.ssh/id_rsa root@humax-04535'
+
+  + scratchdir=/tmp/setup-humax.sh.27595
+  + mkdir /tmp/setup-humax.sh.27595
+
+  # By running a trivial ssh command in batch mode, we can know if
+  # passwordless login is already set up. If it isn't, we assume
+  # the first time setup needs to be run.
+  ! ssh -oBatchMode=yes ${privatekey:+-i $privatekey} root@$humaxip ls &>/dev/null
+
+  # We still need to start up the rsync daemon every time the box boots.
+  # This command can fail, let's assume that means the daemon is up.
+  $ssh "rsync --daemon --ipv4"
+  export RSYNC_PASSWORD=zinc
+
+  + ssh -oBatchMode=yes -i /home/kpark/.ssh/id_rsa root@humax-04535 ls
+  + ssh -i /home/kpark/.ssh/id_rsa root@humax-04535 'rsync --daemon --ipv4'
+  + export RSYNC_PASSWORD=zinc
+  
+  + installPatchATron
+
+  debug "Downloading patch-a-tron to localhost..."
+  patchatronfile="$scratchdir/patch-host-for-yv-zinc.sh"
+  # download source target
+  download "$patchatron" "$patchatronfile"
+
+  + download 
+      file:///home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/OEM.Humax/
+        OEM.Humax.Scripts/patch-host-for-yv-zinc.sh 
+        /tmp/setup-humax.sh.27595/patch-host-for-yv-zinc.sh
+
+  + curl --silent --show-error -o 
+    /tmp/setup-humax.sh.27595/patch-host-for-yv-zinc.sh 
+    file:///home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/OEM.Humax/
+      OEM.Humax.Scripts/patch-host-for-yv-zinc.sh
+  + debug 'Installing patch-a-tron from /tmp/setup-humax.sh.27595/patch-host-for-yv-zinc.sh ...'
+
+  Installing patch-a-tron from /tmp/setup-humax.sh.27595/patch-host-for-yv-zinc.sh ...
+  + tput sgr0
+  + chmod a+x /tmp/setup-humax.sh.27595/patch-host-for-yv-zinc.sh
+  + rsync -av /tmp/setup-humax.sh.27595/patch-host-for-yv-zinc.sh zinc@humax-04535::Root/usr/local/bin/
+  
+  # this is message from rsync since are not from scripts
+  {
+  sending incremental file list
+  patch-host-for-yv-zinc.sh
+  
+  sent 216 bytes  received 201 bytes  834.00 bytes/sec
+  total size is 20199  speedup is 48.44
+  }
+
+  if [ -n "$zincdir" ]; then
+      # We want to always install the latest patch-a-tron
+      installPatchATron
+      # better off with no process holding any resources
+      [[ $dontkillzincdaemons = 1 ]] || killZincDaemons
+      installZinc
+  fi
+
+  + installZinc
+
+  local excludedFiles="$ET/Zinc/Zinc.Build/excluded-files-production.txt"
+  debug "Updating Rsync filter rules from $excludedFiles"
+  debug "Keeping in devel and tests folders"
+
+  # Preserve the applications directory. This is kept in normal upgrades
+  # of the box. In fact only factory reset will delete this directory.
+  # We want to keep it around so that application's persistent data is kept
+  # like it is in the real world.
+  echo "P var/applications/" \
+      > "$thisDir/rsync.filter"
+      >
+  # We keep in the devel and tests folders because they are generally
+  # useful to have when developing or testing on the box. You can just
+  # modify the grep expression if you want to rsync more.
+  cat $excludedFiles | egrep -v "devel|tests|terminfo" | sed 's|opt/\*/||' \
+      >> "$thisDir/rsync.filter"
+  
+
+  debug "Rsyncing $zincdir to Humax device..."
+  rsync -av $rsyncdelete --filter "merge $thisDir/rsync.filter" \
+      $zincdir zinc@$humaxip::Root/opt/
+
+  + rsync -av --delete --delete-excluded --filter 'merge /home/kpark/source/setup-humax/rsync.filter' 
+    /home/kpark/builds-src-dev/_virtual_/humax.2100/zinc-install-root/
+    release/humax-dtr_t2100/opt/zinc-trunk zinc@humax-04535::Root/opt/
+
+  sending incremental file list
+  zinc-trunk/lib/sandbox/
+  zinc-trunk/lib/sandbox/application-oem.conf
+  zinc-trunk/lib/sandbox/application-yv.conf
+  zinc-trunk/lib/sandbox/daemon-oem.conf
+  zinc-trunk/lib/sandbox/daemon-yv.conf
+  ...
+  
+  
+  Installing dbus-send tab-completion script...
+  + tput sgr0
+  + rsync -av /home/kpark/builds-src-dev/_virtual_/humax.2100/zinc-install-root/
+    release/humax-dtr_t2100/opt/zinc-trunk/oss/etc/bash_completion.d/dbus-bash-completion.sh 
+    zinc@humax-04535::Root/usr/local/share/dbus-send-completion
+  
+  Running patch-a-tron with /opt/zinc-trunk
+  + ssh -i /home/kpark/.ssh/id_rsa root@humax-04535 
+  '/usr/local/bin/patch-host-for-yv-zinc.sh /opt/zinc-trunk'
+  
+  Finished successfully.
+  + tput sgr0
+  + rm -rf /tmp/setup-humax.sh.27595
+  + tput sgr0
+}
 
 
 ={============================================================================
@@ -7534,11 +7652,12 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
 
 note: the both files are in the third party source of build root
 
-/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0$
+/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/
+src/qt-everywhere-opensource-src-5.1.0$
+
 find . -name MediaPlayerPrivateGStreamer.cpp
 ./qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
 
-/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0$
 find . -name MediaPlayerPrivateMediaRouter.cpp
 ./qtwebkit/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateMediaRouter.cpp
 
@@ -7635,8 +7754,6 @@ static HashSet<String> mimeTypeCache()
     return cache;
 }
 
-
-
 void MediaPlayerPrivateGStreamer::load(const String& url)
 {
     if(!m_playBin){
@@ -7647,7 +7764,6 @@ void MediaPlayerPrivateGStreamer::load(const String& url)
 
     commitLoad();
 }
-
 
 void MediaPlayerPrivateGStreamer::createGSTPlayBin(const KURL& url)
 {
@@ -7661,7 +7777,6 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const KURL& url)
         createDashPipeline(srcElement);
     }        
 }
-
 
 void MediaPlayerPrivateGStreamer::createDashPipeline(const char *srcElementName) 
 {
@@ -10983,26 +11098,57 @@ class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface
             vsi.aspectRatio, vsi.sampleAspectRatioX, vsi.sampleAspectRatioY, vsi.frameRate);
 }
 
+o get AR from streaminto
 
-NEXUS_AspectRatio_eSar     (6)
+typedef struct NEXUS_VideoDecoderStreamInformation
+{
+  NEXUS_AspectRatio_eSar     (6)
 
-/* Sample aspect ratio - aspect ratio of the source calculated as the ratio of
- * two numbers reported by the decoder. See
- * NEXUS_VideoDecoderStreamInformation.sampleAspectRatioX and
- * sampleAspectRatioY for an example.  This aspect ratio is applied to the
- * picture's source size (i.e. coded size), not the picture's display size. */
+  /* Sample aspect ratio - aspect ratio of the source calculated as the ratio of
+   * two numbers reported by the decoder. See
+   * NEXUS_VideoDecoderStreamInformation.sampleAspectRatioX and
+   * sampleAspectRatioY for an example.  This aspect ratio is applied to the
+   * picture's source size (i.e. coded size), not the picture's display size. */
 
-NEXUS_VideoFrameRate_e25   (3)
+  NEXUS_AspectRatio aspectRatio;
 
+  uint16_t sampleAspectRatioX; 
 
-NEXUS_VideoFormat_e1080p60hz  (35),       /* HD 1080 Progressive, 60hz */
+  /* Only valid if aspectRatio is NEXUS_AspectRatio_eSar.
+   * NEXUS_AspectRatio_eSar is only used for some codecs. If used, the
+   * source's aspect ratio is calculated as the ratio of
+   * sampleAspectRatioX/sampleAspectRatioY. sampleAspectRatioX and
+   * sampleAspectRatioY should not be used except as a ratio. */
 
+  uint16_t sampleAspectRatioY; /* See comments for sampleAspectRatioX */
+}
 
-KT: _source_changed: 
-   source{ 1280, 720 }, code{ 1280, 720}, disp{ 1280, 720 },ar: 6, frate: 3, format:35 
+o set AR values in the sink
+
+switch(streamInformation.aspectRatio){
+  case NEXUS_AspectRatio_e16x9:
+    new_aspect_ratio_d = 9;
+    new_aspect_ratio_n = 16;
+    break;
+  case NEXUS_AspectRatio_e4x3:
+    new_aspect_ratio_d = 3;
+    new_aspect_ratio_n = 4;
+    break;
+  case NEXUS_AspectRatio_eSar:
+    new_aspect_ratio_d = streamInformation.sampleAspectRatioY;
+    new_aspect_ratio_n = streamInformation.sampleAspectRatioX;
+    break;
+    // Default to 1:1
+  case NEXUS_AspectRatio_eSquarePixel:
+
 
 KT: _stream_changed: 
    source{ h: 1280, v: 720 }, code{ h: 1280, v: 720}, disp{ h: 1280, v: 720 },ar: 6, { 1, 1 }, frate: 3 
+
+note: 
+Here, "eSar" and square AR
+
+ar: 6, { 1, 1 }
 
 
 ={============================================================================
@@ -14912,6 +15058,15 @@ BcmNexus_StreamPlayer_Resources_Acquire( const BcmNexus_StreamPlayer_Resources_C
     // *callback* only use this 
     playpumpSettings.dataCallback = config->videoDataCallback;
 
+    if (!config->transportType) {
+      playpumpSettings.transportType = NEXUS_TransportType_eMpeg2Pes;
+#if BCMEXUS_STREAM_VIDEO_ES || BCMEXUS_STREAM_AUDIO_ES
+      playpumpSettings.transportType = NEXUS_TransportType_eEs;
+#endif
+    } else {
+      playpumpSettings.transportType = config->transportType;
+    }
+
     rc = NEXUS_Playpump_SetSettings(resources->playpump[i], &playpumpSettings);
 }
 
@@ -14941,20 +15096,39 @@ Settings for playpump
 **/
 typedef struct NEXUS_PlaypumpSettings
 {
-    NEXUS_TransportType transportType;          /* Type of data stream going into playpump. Note that if the data must be packetized,
-                                                   you can get the resulting NEXUS_TransportType from NEXUS_PidChannelStatus. */
+    NEXUS_TransportType transportType;          
+    /* Type of data stream going into playpump. Note that if the data must be
+     * packetized, you can get the resulting NEXUS_TransportType from
+     * NEXUS_PidChannelStatus. */
 
-    NEXUS_TransportType originalTransportType;  /* If the user packetizes intput to playpump, this describes the input. If there is no
-                                                   packetization, this is member should be set to NEXUS_TransportType_eUnknown. */
+    NEXUS_TransportType originalTransportType;  
+    /* If the user packetizes intput to playpump, this describes the input. If
+     * there is no packetization, this is member should be set to
+     * NEXUS_TransportType_eUnknown. */ 
 
-    bool continuityCountEnabled;                /* If true, transport will check for correct continuity counters and discard bad packets.
-                                                   This must be set to false for trick modes. Default is false. */
+    bool continuityCountEnabled;                
+    /* If true, transport will check for correct continuity counters and
+     * discard bad packets.  This must be set to false for trick modes.
+     * Default is false. */ 
 
     /* Type of original transport stream */
 
+    // /**
+    // Summary:
+    // Determines method of feeding data into playpump.
+    // **/
+    // typedef enum NEXUS_PlaypumpMode
+    // {
+    //     NEXUS_PlaypumpMode_eFifo,         
+    //     /* Playpump allocates a block of memory which serves as the
+    //     playback fifo.  The user must copy data into this buffer with the
+    //     CPU or DMA. */
+    //
+    // } NEXUS_PlaypumpMode;
+    
     NEXUS_PlaypumpMode mode;                    
-    /* Method of pushing data into playpump. This setting determines the format
-    of data the app will feed to playpump. */
+    /* Method of pushing data into playpump. This setting determines the
+     * format of data the app will feed to playpump. */
 
     // *callbacks*
     NEXUS_CallbackDesc dataCallback;            
@@ -14976,7 +15150,14 @@ typedef struct NEXUS_PlaypumpSettings
     /* Transport Error Indicator - error status from a demodulator */
 
 
-    int playRate;                               /* Rate in units of NEXUS_NORMAL_PLAY_SPEED. It's used for certain type of streams to control the direction of presentation time. */
+    int playRate;                               
+    /* Rate in units of NEXUS_NORMAL_PLAY_SPEED. It's used for certain type of
+     * streams to control the direction of presentation time. */
+    // /**
+    // Summary:
+    // Base rate for normal play used in NEXUS_PlaypumpSettings.playRate.
+    // **/
+    // #define NEXUS_NORMAL_PLAY_SPEED 1000
 
     NEXUS_DmaHandle securityDma;                /* Instance of DMA that is used for security processing, NULL if security processing is not required */
     NEXUS_DmaDataFormat securityDmaDataFormat;
@@ -14987,25 +15168,56 @@ typedef struct NEXUS_PlaypumpSettings
     bool blindSync;                             /* Force transport to not look for sync bytes. */
 
     /* all pass settings */
-    bool allPass;                               /* If true, NEXUS_Playpump_OpenPidChannel's pid param is ignored and the resulting pid channel can be used for all-pass record.
-                                                   Also set acceptNullPackets to true if you want to capture the entire stream.
-                                                   When opening the allPass pid channel, set NEXUS_PlaypumpOpenPidChannelSettings.pidSettings.pidChannelIndex = 16 + playpump index number. */
-    bool acceptNullPackets;                     /* If true and allPass is true, NULL packets are not discarded. */
+    bool allPass;                               
+    /* If true, NEXUS_Playpump_OpenPidChannel's pid param is ignored and the
+     * resulting pid channel can be used for all-pass record.  Also set
+     * acceptNullPackets to true if you want to capture the entire stream.
+     * When opening the allPass pid channel, set
+     * NEXUS_PlaypumpOpenPidChannelSettings.pidSettings.pidChannelIndex = 16 +
+     * playpump index number. */ bool acceptNullPackets;
+    /* If true and allPass is true, NULL packets are not discarded.  */
 
+
+note: TS but shows no difference when TS and ES type play
 
     struct {
-        NEXUS_TransportTimestampType type;      /* The type of timestamping in this stream. */
-        uint16_t pcrPacingPid;                  /* Some chips can pace playback using a PCR pid. Set timestamp.pcrPacingPid to a non-zero value and set timestamp.pacing = true. */
+        NEXUS_TransportTimestampType type;      
+        /* The type of timestamping in this stream. */
+        
+        uint16_t pcrPacingPid;                  
+        /* Some chips can pace playback using a PCR pid. Set
+         * timestamp.pcrPacingPid to a non-zero value and set timestamp.pacing
+         * = true. */
 
-        bool pacing;                            /* If true, pace this stream using embedded timestamp information or using pcr-based pacing.
-                                                   For timestamp-based pacing, set timestampType as well.
-                                                   For pcr-based pacing, set pcrPacingPid as well. */
-        unsigned pacingMaxError;                /* Set the maximum allowable timestamp error (TS_RANGE_ERROR) used during playback pacing. */
-        NEXUS_Timebase timebase;                /* Timebase used for timestamp. Use NEXUS_Timebase_eInvalid for freerun. */
-        bool parityCheckDisable;                /* Set true to disable timestamp parity check. */
-        bool pacingOffsetAdjustDisable;         /* Set true to adjust the pacing timestamps with the reference offset */
-        bool resetPacing;                       /* Set true if you want the pacing start bit reset when a TS_RANGE_ERROR interrupt occurs */
-        bool forceRestamping;                   /* Set true if you want to restamp the incoming timestamps or if you are recording and want to add timestamps */
+        bool pacing;                            
+        /* If true, pace this stream using embedded timestamp information or
+         * using pcr-based pacing.  For timestamp-based pacing, set
+         * timestampType as well.  For pcr-based pacing, set pcrPacingPid as
+         * well. */
+
+        unsigned pacingMaxError;                
+        /* Set the maximum allowable timestamp error (TS_RANGE_ERROR) used
+         * during playback pacing. */
+
+        NEXUS_Timebase timebase;                
+        /* Timebase used for timestamp. Use NEXUS_Timebase_eInvalid for
+         * freerun. */
+
+        bool parityCheckDisable;                
+        /* Set true to disable timestamp parity check. */
+
+        bool pacingOffsetAdjustDisable;         
+        /* Set true to adjust the pacing timestamps with the reference offset
+         * */
+
+        bool resetPacing;                       
+        /* Set true if you want the pacing start bit reset when a
+         * TS_RANGE_ERROR interrupt occurs */
+
+        bool forceRestamping;                   
+        /* Set true if you want to restamp the incoming timestamps or if you
+         * are recording and want to add timestamps */
+
     } timestamp;
 
 } NEXUS_PlaypumpSettings;
@@ -15027,8 +15239,13 @@ NEXUS_StcChannelSettings
 typedef enum NEXUS_TransportType {
     NEXUS_TransportType_eUnknown,   /* Unknown stream format */
     NEXUS_TransportType_eEs,        /* Elementary stream. No container or muxing. */
+
     NEXUS_TransportType_eTs,        /* MPEG2 transport stream */
-    NEXUS_TransportType_eMpeg2Pes,  /* MPEG2 packetized elementary stream, this includes MPEG2 Program Stream  streams */
+
+    NEXUS_TransportType_eMpeg2Pes,  
+    /* MPEG2 packetized elementary stream, this includes MPEG2 Program Stream
+     * streams */
+
     NEXUS_TransportType_eVob,       /* DVD VOB, this is subset of MPEG2 Program Stream, special processing is applied for VOB streams */
     NEXUS_TransportType_eMpeg1Ps,   /* MPEG1 program stream */
     NEXUS_TransportType_eDssEs,     /* DSS with ES payload (used for SD) */
@@ -15043,6 +15260,32 @@ typedef enum NEXUS_TransportType {
     NEXUS_TransportType_eRmff,       /* RMFF container */
     NEXUS_TransportType_eMax
 } NEXUS_TransportType;
+
+
+/**
+Summary:
+Status returned by NEXUS_Playpump_GetStatus
+**/
+typedef struct NEXUS_PlaypumpStatus
+{
+    bool started;               /* Has NEXUS_Playpump_Start been called? */
+    size_t fifoDepth;           /* Depth in bytes of the playback buffer */
+    size_t fifoSize;            /* Size in bytes of the playback buffer */
+    size_t descFifoDepth;       /* Number of active (i.e. busy) descriptors */
+    size_t descFifoSize;        /* Number of allocated descriptors */
+    void *bufferBase;           /* attr{memory=cached} Pointer to the base of the playback buffer.
+                                   This can be used for calculating your exact position
+                                   in the buffer for alignment considerations. */
+    uint64_t bytesPlayed;       /* Total number of bytes played since starting */
+    unsigned index;             /* Index of this playpump */
+
+    unsigned pacingTsRangeError; /* Number of TS_RANGE_ERROR's if pacing is activated. */
+    unsigned syncErrors;         /* count of sync errors found in the stream */
+    unsigned resyncEvents;       /* count of resync handled in the stream */
+    unsigned streamErrors;       /* count of other errors found in the stream */
+    NEXUS_PtsType mediaPtsType;    /* Type of the current PTS */
+    uint32_t mediaPts;    /* if playpump does inline media streeam conversion (i.e. AVI to PES), then this is the last known PTS (in units of 45KHz) for the first converted pid (track) */
+} NEXUS_PlaypumpStatus;
 
 
 /*
@@ -15505,16 +15748,13 @@ typedef struct NEXUS_VideoDecoderStreamInformation
     NEXUS_AspectRatio aspectRatio;
 
     uint16_t sampleAspectRatioX; 
-    /* Only valid if aspectRatio is NEXUS_AspectRatio_eSar.
-     * NEXUS_AspectRatio_eSar is only used for some codecs.
-                                    If used, the source's aspect ratio is
-                                    calculated as the ratio of
-                                    sampleAspectRatioX/sampleAspectRatioY.
-                                    sampleAspectRatioX and sampleAspectRatioY
-                                    should not be used except as a ratio. */
-
-
     uint16_t sampleAspectRatioY; /* See comments for sampleAspectRatioX */
+
+    /* Only valid if aspectRatio is NEXUS_AspectRatio_eSar.
+     * NEXUS_AspectRatio_eSar is only used for some codecs. If used, the
+     * source's aspect ratio is calculated as the ratio of
+     * sampleAspectRatioX/sampleAspectRatioY. sampleAspectRatioX and
+     * sampleAspectRatioY should not be used except as a ratio. */
 
     NEXUS_VideoFrameRate frameRate;
     NEXUS_ColorPrimaries colorPrimaries;

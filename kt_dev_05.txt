@@ -15,6 +15,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_102| mpeg: locator
 |kt_dev_bcast_103| mpeg: es
 |kt_dev_bcast_104| mpeg: audio frame
+|kt_dev_bcast_105| mpeg: aspect ratio
 
 |kt_dev_bcast_200| mpeg: streaming: terms
 |kt_dev_bcast_201| mpeg: streaming: dash
@@ -77,6 +78,8 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst: gstelement
 *kt_dev_bcast_500* gst: gstmessage
 *kt_dev_bcast_500* gst: gstbus
+
+*kt_dev_bcast_500* gst: gstutil
 
 *kt_dev_bcast_600* glib: gdebug
 *kt_dev_bcast_600* glib: gsignal
@@ -930,6 +933,85 @@ can see details about the content of each field.
 
 
 ={============================================================================
+*kt_dev_bcast_105* mpeg: aspect ratio
+
+https://en.wikipedia.org/wiki/Pixel_aspect_ratio
+
+Pixel Aspect Ratio is often confused with different types of image aspect
+ratios; the ratio of the image width and height. Due to non-squareness of pixels
+in Standard-definition TV, there are two types of such aspect ratios: Storage
+Aspect Ratio (SAR) and Display Aspect Ratio (abbreviated DAR, also known as
+    Image Aspect Ratio and Picture Aspect Ratio).
+
+note:
+In short, PAR is conceptual model in digital video since there are difference
+between coded size and display size.
+
+
+http://www.lurkertech.com/lg/pixelaspect/#nonsqaspect
+
+What Are They?
+
+Pixels in the graphics world are square. A 100 pixel vertical line is the same
+length as a 100 pixel horizontal line on a graphics monitor.
+
+Some pixels in the standard-def video world (specifically, the digital
+    electrical signals universally used in studios for 480i and 576i production,
+    as defined by the infamous ITU-R BT.601-4 or "Rec. 601") are non-square. A
+100 pixel vertical line may be longer or shorter than a 100 pixel horizontal
+line on a video monitor, depending on the video system.
+
+Pixels in the HD (e.g. 1080i and 720p) video world are, fortunately, square.
+
+The term which describes this squareness or non-squareness is pixel aspect
+ratio, expressed as a fraction of horizontal (x) pixel size divided by vertical
+(y) pixel size. The pixel aspect ratio for square pixels is 1/1.
+
+
+<case>
+
+  16 (width)
+  ================  9 (height)
+  ================
+  ================
+  ================
+
+In case 16:9 stream:
+
+pixelAspectRatioNumerator   = 16;
+pixelAspectRatioDenominator = 9;
+    
+
+In case other stream:
+
+originalSize.width          = 
+  uint32_t stream.displayHorizontalSize; 
+
+originalSize.height         = 
+  uint32_t stream.displayVerticalSize; 
+
+  /* 'intended' display width of active area needed to preserve correct aspect
+   * ratio. this is not the actual display width used. */
+
+pixelAspectRatioNumerator   = 
+  uint16_t sampleAspectRatioX; 
+
+pixelAspectRatioDenominator =
+  uint16_t sampleAspectRatioY;
+
+  /* Sample aspect ratio - aspect ratio of the source calculated as the ratio of
+   * two numbers reported by the 'decoder'.  This aspect ratio is applied to the
+   * picture's source size (i.e. coded size), not the picture's display size. */
+
+// Calculate DAR based on PAR and video size. note: NO base on SAR
+int displayWidth = originalSize.width() * pixelAspectRatioNumerator;
+int displayHeight = originalSize.height() * pixelAspectRatioDenominator;
+
+This case uses that SAR (source AR) from stream and makes DAR out of it. Is it
+  true? Where does these values come from? From video ES?
+
+
+={============================================================================
 *kt_dev_bcast_200* mpeg: streaming: terms
 
 o RTMP
@@ -1496,6 +1578,14 @@ Set this environment variable to make GStreamer use a different file for the
 plugin cache / registry than the default one. This is useful when operating in a
 separate environment which should not affect the default cache in the user's
 home directory. 
+
+
+<blacklist>
+ERROR     GST_PLUGIN_LOADING gstpluginloader.c:277:plugin_loader_replay_pending: 
+Plugin file /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcenccrypto.so failed to load. Blacklisting
+
+[root@HUMAX /]# ls .cache/gstreamer-1.0/registry.mipsel.bin 
+.cache/gstreamer-1.0/registry.mipsel.bin
 
 
 ={============================================================================
@@ -8266,6 +8356,33 @@ MT safe.
 Parameters
 bus
 a GstBus on which you want to receive the "message" signal
+
+
+={============================================================================
+*kt_dev_bcast_500* gst: gstutil
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-GstUtils.html
+
+gst_util_uint64_scale_int ()
+-----------------
+guint64
+gst_util_uint64_scale_int (guint64 val,
+                           gint num,
+                           gint denom);
+
+Scale val by the rational number num / denom, avoiding overflows and underflows
+  and without loss of precision. num must be non-negative and denom must be
+  positive.  
+  
+Parameters
+val guint64 (such as a GstClockTime) to scale.
+num numerator of the scale factor.
+denom denominator of the scale factor.
+	 
+Returns
+val * num / denom . In the case of an overflow, this function returns
+G_MAXUINT64. If the result is not exactly representable as an integer, it is
+truncated.
 
 
 ={============================================================================
