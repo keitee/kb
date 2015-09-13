@@ -15787,7 +15787,7 @@ more 'flexible' since no need rigid hierarchy.
 
 UNP-XX
 
-Consumer and Producer 
+Consumer and Producer: 01
 -------------------------------
 Multiple producer(writing) and one consumer(reading). Once writing finishs,
 consumer get started. No sync between producer and consumer and only sync for
@@ -15797,8 +15797,8 @@ No sync for reading? NO for this example since reaading starts after writing.
 However, need to sync reading if want to have right result while writing
 happens.  
 
-
 <ex>
+
 #include <stdio.h>
 #include <pthread.h>
 #include <sys/errno.h>
@@ -15813,105 +15813,108 @@ void
 Pthread_create
 (pthread_t* tid, const pthread_attr_t* attr, void *(*func)(void*), void*arg)
 {
-	int n;
+  int n;
 
-	if(( n = pthread_create( tid, attr, func, arg )) == 0 )
-		return;
-	
-	errno = n;
-	fprintf( stderr, "pthread_create error(%d)", n );
+  if(( n = pthread_create( tid, attr, func, arg )) == 0 )
+    return;
+
+  errno = n;
+  fprintf( stderr, "pthread_create error(%d)", n );
 }
 
 // shared by all threads
 int nitems;
 
 struct {
-	pthread_mutex_t mutex;
-	int				buff[MAXNITEMS];
-	int				nput;				// next index to write
-	int				nval;				// next val to write
+  pthread_mutex_t mutex;
+  int buff[MAXNITEMS];
+  int nput;                     // next index to write
+  int nval;                     // next val to write
 } shared = { PTHREAD_MUTEX_INITIALIZER };
 
 void *produce(void *), *consume(void *);
 
 int main( int argc, char** argv )
 {
-	int i, nthreads, count[MAXNTHREADS]={0};
-	pthread_t tid_produce[MAXNTHREADS]={0}, tid_consume;
+  int i, nthreads, count[MAXNTHREADS]={0};
+  pthread_t tid_produce[MAXNTHREADS]={0}, tid_consume;
 
-	if( argc != 3 )
-	{
-		fprintf( stderr, "usuage: prodcons2 <#items> <#threads>\n");
-		exit(1);
-	}
+  if( argc != 3 )
+  {
+    fprintf( stderr, "usuage: prodcons2 <#items> <#threads>\n");
+    exit(1);
+  }
 
-	nitems = min( atoi( argv[1] ), MAXNITEMS );
-	nthreads = min( atoi( argv[2] ), MAXNTHREADS );
+  nitems = min( atoi( argv[1] ), MAXNITEMS );
+  nthreads = min( atoi( argv[2] ), MAXNTHREADS );
 
-	// start all producer threads
-	for( i=0; i < nthreads; ++i )
-	{
-		count[i] = 0;
-		Pthread_create( &tid_produce[i], NULL, produce, &count[i] );
-	}
+  // start all producer threads
+  for( i=0; i < nthreads; ++i )
+  {
+    count[i] = 0;
+    Pthread_create( &tid_produce[i], NULL, produce, &count[i] );
+  }
 
-	// wait for all the producer threads
-	for( i=0; i < nthreads; ++i ) 
-	{
-		pthread_join( tid_produce[i], NULL );
-		printf("tid[%d] count[%d] = %d\n", tid_produce[i], i, count[i] );
-	}
+  // wait for all the producer threads
+  for( i=0; i < nthreads; ++i ) 
+  {
+    pthread_join( tid_produce[i], NULL );
+    printf("tid[%d] count[%d] = %d\n", tid_produce[i], i, count[i] );
+  }
 
-	// start, then wait for the consumer thread
-	Pthread_create(&tid_consume, NULL, consume, NULL );
-	pthread_join(tid_consume, NULL );
+  // start, then wait for the consumer thread
+  Pthread_create(&tid_consume, NULL, consume, NULL );
+  pthread_join(tid_consume, NULL );
 
-	exit(0);
+  exit(0);
 }
 
 void* produce(void* arg)
 {
-	printf("run tid[%d] \n", pthread_self());
+  printf("run tid[%d] \n", pthread_self());
 
-	for(;;) 
-	{
-		pthread_mutex_lock( &shared.mutex );
-		if( shared.nput >= nitems )  // buff is full, we are done.
-		{
-			printf("done tid[%d] \n", pthread_self());
-			pthread_mutex_unlock(&shared.mutex);
-			return NULL;
-		}
+  for(;;) 
+  {
+    pthread_mutex_lock( &shared.mutex );
 
-		shared.buff[ shared.nput ] = shared.nval;
-		shared.nput++;
-		shared.nval++;
+    // nitems is the max num of shared.buff. When buff is full, we are done.
+    if( shared.nput >= nitems )
+    {
+      printf("done tid[%d] \n", pthread_self());
+      pthread_mutex_unlock(&shared.mutex);
+      return NULL;
+    }
 
-		pthread_mutex_unlock( &shared.mutex );
+    shared.buff[ shared.nput ] = shared.nval;
+    shared.nput++;
+    shared.nval++;
 
-		// inc of the count is not part of the CR because each thread has its own
-		*((int*)arg) += 1;
-	}
+    pthread_mutex_unlock( &shared.mutex );
+
+    // inc(count[i]) is the num of items that this thread wrote. Why not in
+    // the critical section? Because each thread has its own
+    *((int*)arg) += 1;
+  }
 }
 
 void* consume(void* arg)
 {
-	int i;
+  int i;
 
-	// see use of global vars; nitems and shared.buff
-	for( i=0; i < nitems; i++ )
-	{
-		if( shared.buff[i] != i )
-			printf("con: err: buff[%d] = %d\n", i, shared.buff[i] );
-	}
+  // see use of global vars; nitems and shared.buff
+  for( i=0; i < nitems; i++ )
+  {
+    if( shared.buff[i] != i )
+      printf("con: err: buff[%d] = %d\n", i, shared.buff[i] );
+  }
 
-	printf("consume done\n" );
+  printf("consume done\n" );
 
-	return NULL;
+  return NULL;
 }
 
 
-kit@kit-VirtualBox:~/work$ ./a.out 1000000 5
+$ ./a.out 1000000 5
 run tid[-1252185280] 
 run tid[-1243792576] 
 run tid[-1235399872] 
@@ -15930,102 +15933,86 @@ tid[-1252185280] count[4] = 163767
 consume done
 
 
-{consumer-producer-example-two} 
+Consumer and Producer: 02
+-------------------------------
+Now consumer runs at the same time and runs when there is data to read. All is
+accessing the same data and are in the same mutex group. Problem is that
+consumer do busy loop to check data, <polling> or <spinning> 
 
-Now consumer runs at the same time and runs when there is data to read. All is accessing the same
-data and are in the same mutex group. Problem is that consumer do busy loop to check data, <polling>
-or <spinning> 
-
-<code-example>
-
-The changes from the previous is:
+<ex>
+Uses shared mutex between producers and consumer. If items to read are ready
+then returns. Otherwise, do loops. The changes from the previous is:
 
 int main()
 {
-	...
+  // ...
 
-	// start all producer threads
-	for( i=0; i < nthreads; ++i )
-	{
-		count[i] = 0;
-		Pthread_create( &tid_produce[i], NULL, produce, &count[i] );
-	}
+  // start all producer threads
+  for( i=0; i < nthreads; ++i )
+  {
+    count[i] = 0;
+    Pthread_create( &tid_produce[i], NULL, produce, &count[i] );
+  }
 
-	// moved here. start, then wait for the consumer thread
-	Pthread_create(&tid_consume, NULL, consume, NULL );
+  // do not waits for producers to finish off and starts consumer right away
+  Pthread_create(&tid_consume, NULL, consume, NULL );
 
-	...
+  // ...
 }
-
-Uses shared mutex between producers and consumer. If items to read are ready then call returns.
-Otherwise, do loops. 
 
 void consume_wait(int i)
 {
-  for(;;) {
+  for(;;) 
+  {
     pthread_mutex_lock(&shared.mutex);
+
     if( i < shared.nput ) {
       pthread_mutex_unlock(&shared.mutex);
-      return; /* item is ready */
+
+      // item is ready
+      return; 
     }
+
+    // item is not ready so continue waiting
     pthread_mutex_unlock(&shared.mutex);
   }
 }
 
 void* consume(void* arg)
 {
-	int i;
+  // reading index
+  int i;
 
-	// see use of global vars; nitems and shared.buff
-	for( i=0; i < nitems; i++ )
-	{ >
-		// polling until item is ready
-		consume_wait(i);
-<
-		if( shared.buff[i] != i )
-			printf("con: err: buff[%d] = %d\n", i, shared.buff[i] );
-	}
+  // see use of global vars; nitems and shared.buff
+  for( i=0; i < nitems; i++ )
+  { >
+    // polling until item i is ready
+    consume_wait(i);
 
-	printf("con: done\n" );
+    if( shared.buff[i] != i )
+      printf("con: err: buff[%d] = %d\n", i, shared.buff[i] );
+  }
 
-	return NULL;
+  printf("con: done\n" );
+
+  return NULL;
 }
 
 
-{consumer-producer-example-three} {cond-var}
+Consumer and Producer: 03
+-------------------------------
+For producers, do not need to wait since when have a lock meaning that it is
+time for it to do write what it need to do is to write blindly. However, for
+consumers, it is not the same as producers since it have to chceck if items are
+available to read to to its work.
 
-The polling is a waste of cpu time. How to solve? A mutex is for locking and a cond-var is for
-waiting. The mutex provides mutual exclusion for accessing the shared variable, while the condition
-variable is used to signal changes in the variableâs state.
+That is why it has polling to check but The polling is a waste of cpu time. How
+to solve? A mutex is for locking and a cond-var is for waiting. The mutex
+provides mutual exclusion for accessing the shared variable, while the condition
+variable is used to signal changes in the variable's state.
 
-<cond-wait>
-// This is blocking on condition and ALWAYS has an associated mutex. Why? because both producer and
-// consumer accesses to the shared state variable which is linked to that condition so should be
-// synced. In other words, there is a natural association of a muext with a condition varaible.
-//
-// pthread_cond_wait( &nready.cond, &nready.mutex );
-//
-// Do three things: unlock a mutex, block a calling thread until signaled, and relock mutex when
-// signaled. 
-//
-// A condition variable holds no state information. It is simply a mechanism for communicating
-// information about the application's state.
 
-int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
-
-<cond-can-be-lost>
-// Guaranteede that at least one of the blocked thread is woken up. If no thread is waiting, the
-// signal is lost since condition variable holds no state information.
-
-int pthread_cond_signal( pthread_cond_t *cptr );
-int pthread_cond_broadcast( pthread_cond_t *cptr );
-int pthread_cond_timedwait( ... );
-
-The {ref-LPI} said that _signal is for the case where all waiting threads do the same task since it
-do not care which should woken up and _broadcast is for case where waiting threads do different task.
-Real examples?
-
-<code-example>
+<ex>
 
 {Q} Is it possible to implement this using two mutex than using a muext and a cond-var?
 
@@ -16040,6 +16027,27 @@ struct {
 	int				nval;				// next val to write
 } put = { PTHREAD_MUTEX_INITIALIZER };
 
+
+// note::w
+// l
+// // shared by all threads
+// int nitems;
+// 
+// struct {
+//   pthread_mutex_t mutex;
+//   int buff[MAXNITEMS];
+//   int nput;                     // next index to write
+//   int nval;                     // next val to write
+// } shared = { PTHREAD_MUTEX_INITIALIZER };
+
+int nitems;
+int buff[MAXNITEMS];
+
+struct {
+  pthread_mutex_t mutex;
+  int nput;                     // next index to write
+  int nval;                     // next val to write
+} shared = { PTHREAD_MUTEX_INITIALIZER };
 struct {
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
@@ -16108,6 +16116,33 @@ void* consume(void* arg)
 
 	return NULL;
 }
+
+<cond-wait>
+// This is blocking on condition and ALWAYS has an associated mutex. Why? because both producer and
+// consumer accesses to the shared state variable which is linked to that condition so should be
+// synced. In other words, there is a natural association of a muext with a condition varaible.
+//
+// pthread_cond_wait( &nready.cond, &nready.mutex );
+//
+// Do three things: unlock a mutex, block a calling thread until signaled, and relock mutex when
+// signaled. 
+//
+// A condition variable holds no state information. It is simply a mechanism for communicating
+// information about the application's state.
+
+int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
+
+<cond-can-be-lost>
+// Guaranteede that at least one of the blocked thread is woken up. If no thread is waiting, the
+// signal is lost since condition variable holds no state information.
+
+int pthread_cond_signal( pthread_cond_t *cptr );
+int pthread_cond_broadcast( pthread_cond_t *cptr );
+int pthread_cond_timedwait( ... );
+
+The {ref-LPI} said that _signal is for the case where all waiting threads do the same task since it
+do not care which should woken up and _broadcast is for case where waiting threads do different task.
+Real examples?
 
 
 {the-order-of-call}
