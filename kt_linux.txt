@@ -234,7 +234,8 @@
 |kt_linux_core_200| ipc: sync: semaphore 
 *kt_linux_core_201* sync: mutex
 *kt_linux_core_202* sync: deadlock
-*kt_linux_core_202* sync: condition variable to consumer and producer problem
+*kt_linux_core_202* sync: why condition variable using cons and prod problem
+*kt_linux_core_202* sync: condition variable
 *kt_linux_core_202* sync: between processes
 |kt_linux_core_220| sync: read-write lock
 
@@ -15594,6 +15595,7 @@ If the mutex is currently locked by another thread, then pthread_mutex_lock()
   blocks 'until' the mutex is unlocked, at which point it locks the mutex and
   'returns'.
 
+<indeterminate>
 If more than one other thread is waiting to acquire the mutex unlocked by a call
 to pthread_mutex_unlock(), it is 'indeterminate' which thread will succeed in
 acquiring it.
@@ -15783,7 +15785,7 @@ more 'flexible' since no need rigid hierarchy.
 
 
 ={============================================================================
-*kt_linux_core_202* sync: condition variable to consumer and producer problem
+*kt_linux_core_202* sync: why condition variable using cons and prod problem
 
 UNP-XX
 
@@ -15803,11 +15805,11 @@ happens.
 #include <pthread.h>
 #include <sys/errno.h>
 
-#define MAXNITEMS 	1000000
-#define MAXNTHREADS	100
+#define MAXNITEMS     1000000
+#define MAXNTHREADS   100
 
-#define	min(a,b)	((a) < (b) ? (a) : (b))
-#define	max(a,b)	((a) > (b) ? (a) : (b))
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#define max(a,b) ((a) > (b) ? (a) : (b))
 
 void 
 Pthread_create
@@ -15936,8 +15938,14 @@ consume done
 Consumer and Producer: 02
 -------------------------------
 Now consumer runs at the same time and runs when there is data to read. All is
-accessing the same data and are in the same mutex group. Problem is that
-consumer do busy loop to check data, <polling> or <spinning> 
+accessing the same data and are in the 'same' mutex group. Problem is that
+when consumer has a lock and wakes up, consumer do polling or spinning to
+check data.
+
+note:
+The consumer and producer has the equal opportunity to run since it is
+'indeterminate' which thread will succeed in acquiring a lock.
+
 
 <ex>
 Uses shared mutex between producers and consumer. If items to read are ready
@@ -16011,25 +16019,26 @@ to solve? A mutex is for locking and a cond-var is for waiting. The mutex
 provides mutual exclusion for accessing the shared variable, while the condition
 variable is used to signal changes in the variable's state.
 
+note:
+1. This example uses two mutex group: produce or write and consume or read.
+
+2. In write mutex group, only producers compete and in read mutex group, both
+producers and consumer compete.
+
+3. In read group, it is the same in that all competes and has equal chance to
+run. However, differently from the example 02, when consumer runs, there is a
+item to process. In example 02, requires check and if there is no item, then
+blocks again. 
+
+After all, codition variable is to reduce such waste of polling and blocking.
 
 <ex>
 
-{Q} Is it possible to implement this using two mutex than using a muext and a cond-var?
+{Q} Is it possible to implement this using two mutex than using a muext and a
+cond-var?
 
-//
-int nitems;
-int buff[MAXNITEMS];
-
-// shared by all threads
-struct {
-	pthread_mutex_t mutex;
-	int				nput;				// next index to write
-	int				nval;				// next val to write
-} put = { PTHREAD_MUTEX_INITIALIZER };
-
-
-// note::w
-// l
+// note: previously
+// 
 // // shared by all threads
 // int nitems;
 // 
@@ -16047,75 +16056,176 @@ struct {
   pthread_mutex_t mutex;
   int nput;                     // next index to write
   int nval;                     // next val to write
-} shared = { PTHREAD_MUTEX_INITIALIZER };
+} put = { PTHREAD_MUTEX_INITIALIZER };
+
 struct {
-	pthread_mutex_t mutex;
-	pthread_cond_t cond;
-	int ready;						// [KT] this is state information linked to condition.
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+
+  // note:
+  int ready;
+
 } nready = { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER };
 
 void* produce(void* arg)
 {
-	printf("pro: run tid[%d] \n", pthread_self());
+  printf("pro: run tid[%d] \n", pthread_self());
 
-	for(;;) 
-	{
-		pthread_mutex_lock( &put.mutex );
-		if( put.nput >= nitems )  // buff is full, we are done.
-		{
-			printf("pro: no more. done tid[%d] \n", pthread_self());
-			pthread_mutex_unlock(&put.mutex);
-			return NULL;
-		}
+  for(;;) 
+  {
+    pthread_mutex_lock( &put.mutex );
 
-		buff[ put.nput ] = put.nval;
-		put.nput++;
-		put.nval++;
+    // buff is full, we are done.
+    if( put.nput >= nitems )
+    {
+      printf("pro: no more. done tid[%d] \n", pthread_self());
+      pthread_mutex_unlock(&put.mutex);
+      return NULL;
+    }
 
-		pthread_mutex_unlock( &put.mutex );
->
-		// { signal cond-var saying some has been written
-		pthread_mutex_lock( &nready.mutex );
-		if( nready.ready == 0 )
-			pthread_cond_signal( &nready.cond );
+    buff[ put.nput ] = put.nval;
+    put.nput++;
+    put.nval++;
 
-		nready.ready++;
+    pthread_mutex_unlock( &put.mutex );
 
-		pthread_mutex_unlock( &nready.mutex );
-		// }
-		
-		// inc of the count is not part of the CR because each thread has its own
-		*((int*)arg) += 1;
-	}
+    // note: changed to use cond-var 
+    // {
+    
+    pthread_mutex_lock( &nready.mutex );
+
+    // "ready" is 0 and means there is no items to read. Now there is one item
+    // produced and signal cond-var. So "ready" is the number of items
+    // avaialbe to read.
+    if( nready.ready == 0 )
+      pthread_cond_signal( &nready.cond );
+
+    nready.ready++;
+
+    pthread_mutex_unlock( &nready.mutex );
+    // }
+
+    // inc(count[i]) is the num of items that this thread wrote. Why not in
+    // the critical section? Because each thread has its own
+    *((int*)arg) += 1;
+  }
 }
 
 void* consume(void* arg)
 {
-	int i;
+  int i;
 
-	// see use of global vars; nitems and shared.buff
-	for( i=0; i < nitems; i++ )
-	{ >
-		// receieve cond-var
-		pthread_mutex_lock( &nready.mutex );
+  // see use of global vars; nitems and shared.buff
+  for( i=0; i < nitems; i++ )
+  { >
+    // receieve cond-var
+    pthread_mutex_lock( &nready.mutex );
 
-		// Always test the condition again when wakes up because [spurious-wakeups] can occur.
-		// Unlock and wait. When returns from pthread_cond_wait, lock in again.
-		while( nready.ready == 0 )
-			pthread_cond_wait( &nready.cond, &nready.mutex );
+    // Always test the condition again when wakes up because
+    // *spurious-wakeups* can occur. Unlock "nready.ready" and wait. 
 
-		nready.ready--;
+    while( nready.ready == 0 ) 
+      pthread_cond_wait( &nready.cond, &nready.mutex);
 
-		pthread_mutex_unlock( &nready.mutex );
-<
-		if( buff[i] != i )
-			printf("con: err: buff[%d] = %d\n", i, buff[i] );
-	}
+    // When returns from pthread_cond_wait, "nready.ready" is locked
+    // automatically and there is a item to read.
+    
+    nready.ready--;
 
-	printf("con: done\n" );
+    pthread_mutex_unlock( &nready.mutex );
 
-	return NULL;
+    if( buff[i] != i )
+      printf("con: err: buff[%d] = %d\n", i, buff[i] );
+  }
+
+  printf("con: done\n" );
+
+  return NULL;
 }
+
+
+={============================================================================
+*kt_linux_core_202* sync: condition variable example
+
+typedef struct
+{
+  GstNexusMgr* mgr;
+
+  GstNexusCallbackId callback_id;
+
+  int reason;
+
+  /* The members below are specific to callback_id. */
+  int playpump_num;
+  EXUS_Callback delegate_callback;
+  void* delegate_context;
+} GstNexusMgrCallbackInfo;
+
+
+typedef struct
+{
+  GstNexusMgrCallbackInfo audio_buffer_available;
+  GstNexusMgrCallbackInfo video_buffer_available;
+  GstNexusMgrCallbackInfo audio_first_pts;
+  GstNexusMgrCallbackInfo video_first_pts;
+  GstNexusMgrCallbackInfo audio_error;
+  GstNexusMgrCallbackInfo video_error;
+} GstNexusMgrCallbackContexts;
+
+
+// callback from hardware
+static void gst_nexus_mgr_generic_1st_level_cb(void* context, int reason)
+{
+  /* ctx points to a member of mgr->callback_contexts, which we can read
+   * but not write from this thread.
+   */
+  const GstNexusMgrCallbackInfo* ctx = context;
+
+  GstNexusMgrCallbackInfo* posted_cb = g_malloc(sizeof(GstNexusMgrCallbackInfo));
+  memcpy(posted_cb, ctx, sizeof(GstNexusMgrCallbackInfo));
+  posted_cb->reason = reason;
+
+  gst_nexus_mgr_enqueue_callback(mgr, posted_cb);
+
+  /* mgr->callback_cond is associated with mgr->resource_lock rather than
+   * with mgr->pending_callbacks_mutex. We are not allowed to lock
+   * mgr->resource_lock in 1st level callbacks. Fortunately, signalling
+   * a condition variable doesn't require locking the corresponding mutex.
+   */
+  g_cond_signal(&mgr->callback_cond);
+}
+
+static gpointer mgr_callback_thread(gpointer context)
+{
+  GstNexusMgr* mgr = context;
+
+  g_mutex_lock(&mgr->resource_lock);
+
+  while(!mgr->callback_thread_exiting) {
+
+    // deque cb item
+    GstNexusMgrCallbackInfo* cb = mgr_dequeue_callback(mgr);
+
+    // no item in the queue to process. wait and release a lock
+    if (!cb){
+      g_cond_wait(&mgr->callback_cond, &mgr->resource_lock);
+      continue;
+    }
+
+    // use cb item
+    mgr_2nd_level_cb_table[cb->callback_id](cb);
+    g_free(cb);
+  }
+
+  g_mutex_unlock(&mgr->resource_lock);
+
+  return NULL;
+}
+
+
+={============================================================================
+*kt_linux_core_202* sync: condition variable example
+
 
 <cond-wait>
 // This is blocking on condition and ALWAYS has an associated mutex. Why? because both producer and
