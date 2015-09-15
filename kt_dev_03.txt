@@ -12101,7 +12101,8 @@ template <class NullaryFunctor>
 }
 
 template <typename NullaryFunctor>
-detail::WorkerFunction<NullaryFunctor> makeWorkerFunction(NullaryFunctor fn)
+detail::WorkerFunction<NullaryFunctor> 
+  makeWorkerFunction(NullaryFunctor fn)
 {
     return detail::WorkerFunction<NullaryFunctor>(fn);
 }
@@ -12242,14 +12243,20 @@ typedef InlineDispatcher MultipleListenerEventDispatcher;
 
 // defines abstract interface to add/remove listener
 
-class ZINC_EXPORT EventProducer<T> : virtual public Polymorphic 
+class ZINC_EXPORT EventProducer<ListenerT> : virtual public Polymorphic 
    + typedef ListenerT listener_type;
    + virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
 
 class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<T> 
+
    // implements produceEvent() by delegating events to an EventDispatcher
    // implementation.
+
    + mutable detail::DispatchingEventProducerHoisted impl;
+
+   // It accepts a functor with the signature:
+   //
+   // void f(ListenerT*)
 
    + template <typename Functor>
         void produceEvent(Functor f) const {
@@ -12270,8 +12277,9 @@ class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable
    + void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
          boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
    + void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher_);
-   + void produceEvent(boost::function<void (
-           boost::shared_ptr<hoisted_event_listener>)> event);
+
+   + void produceEvent(
+       boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event);
 
 // this defines APIs for application and also have 'producer' implementation
 // by deriving from EventProducer.
@@ -12288,10 +12296,31 @@ class ZINC_EXPORT EventWindow :
 // creates functor and calls DispatchingEventProducerHoisted::produceEvent(f)
 
 class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow 
+
    + template <typename Functor>
         void produceEvent(Functor f) const {
             impl.produceEvent(DowncastingCaller<Functor>(f));
         }
+
+
+virtual void EventWindowChanged();
+
+produceEvent(
+    bind(&EventWindowEventListener::EventWindowChanged, _1)
+    );
+
+1. DowncastingCaller:
+  operator() (boost::shared_ptr<detail::hoisted_event_listener> listener) 
+  {
+    f( static_cast<ListenerT*>(listener.get()) );
+  }
+
+2. DispatchingEventProducerHoisted:
+  produceEvent(
+      boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event
+      ) 
+
+3. makeWeakFunctor(event, localListeners[i].first));
 
 
 <event-listener>
@@ -12338,9 +12367,10 @@ NS_ZINC_CLOSE
 
 NS_URANIUM_METADATA_CLIENT_OPEN
 
-class ZINC_EXPORT EventWindowEventListener : public NS_ZINC::EventListener
+class ZINC_EXPORT EventWindowEventListener 
+  : public NS_ZINC::EventListener
 {
-public:
+  public:
 
     virtual ~EventWindowEventListener();
 
@@ -12354,7 +12384,8 @@ public:
      * Indicates that some of the events in the Event Window have changed.
      * @param events the list of events that changed
      */
-    virtual void EventsChanged(const std::vector<boost::shared_ptr<Event> > events) = 0;
+    virtual void 
+      EventsChanged(const std::vector<boost::shared_ptr<Event> > events) = 0;
 };
 
 NS_URANIUM_METADATA_CLIENT_CLOSE
@@ -12394,25 +12425,25 @@ typedef int EventProducerId;
 template<class ListenerT>
 class ZINC_EXPORT EventProducer : virtual public Polymorphic {
 
-    public:
-        typedef ListenerT listener_type;
+  public:
+    typedef ListenerT listener_type;
 
-        /**
-         * Add an event listener.
-         * The event listener methods will be invoked on the default dispatcher.
-         *
-         * @param listener the event listener.
-         *
-         * @throws std::invalid_argument if a <code>null</code> listener is given.
-         *
-         * @acl all
-         */
-        virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
+    /**
+     * Add an event listener.
+     * The event listener methods will be invoked on the default dispatcher.
+     *
+     * @param listener the event listener.
+     *
+     * @throws std::invalid_argument if a <code>null</code> listener is given.
+     *
+     * @acl all
+     */
+    virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
 
-        /**
-         * @acl all
-         */
-        virtual void removeListener(boost::shared_ptr<ListenerT> listener) = 0;
+    /**
+     * @acl all
+     */
+    virtual void removeListener(boost::shared_ptr<ListenerT> listener) = 0;
 };
 
 NS_ZINC_CLOSE
@@ -12440,9 +12471,10 @@ NS_ZINC_OPEN
  * events to an EventDispatcher implementation.
  */
 template<class ListenerT>
-class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<ListenerT> 
+class ZINC_LOCAL DispatchingEventProducer 
+  : virtual public EventProducer<ListenerT> 
 {
-public:
+  public:
 
     DispatchingEventProducer() : impl(boost::shared_ptr<EventDispatcher>()) {}
 
@@ -12454,7 +12486,7 @@ public:
      * alternative dispatcher in the call to addListener()
      */
     explicit DispatchingEventProducer(boost::shared_ptr<EventDispatcher>
-            dispatcher_) : impl(dispatcher_) {}
+        dispatcher_) : impl(dispatcher_) {}
 
     /**
      * Add an event listener.
@@ -12467,9 +12499,9 @@ public:
      * @acl all
      */
     virtual void addListener(boost::shared_ptr<ListenerT> listener) {
-        // Hoisting note: we cast to void* here, and cast back down in
-        // DowncastingCaller so everything is lovely and symmetrical
-        impl.addListener(listener);
+      // Hoisting note: we cast to void* here, and cast back down in
+      // DowncastingCaller so everything is lovely and symmetrical
+      impl.addListener(listener);
     }
 
     /**
@@ -12488,37 +12520,37 @@ public:
      */
 
     virtual void addListener(boost::shared_ptr<EventDispatcher> clientDispatcher, 
-            boost::shared_ptr<ListenerT> listener) {
+        boost::shared_ptr<ListenerT> listener) {
 
-        if (!clientDispatcher) {
-            throw std::invalid_argument("NULL dispatcher provided in call to addListener()!");
-        }
+      if (!clientDispatcher) {
+        throw std::invalid_argument("NULL dispatcher provided in call to addListener()!");
+      }
 
-        // Hoisting note: we cast to void* here, and cast back down in
-        // DowncastingCaller so everything is lovely and symmetrical
-        impl.addListener(listener, clientDispatcher);
+      // Hoisting note: we cast to void* here, and cast back down in
+      // DowncastingCaller so everything is lovely and symmetrical
+      impl.addListener(listener, clientDispatcher);
     }
 
     /**
      * @acl all
      */
     virtual void removeListener(boost::shared_ptr<ListenerT> listener) {
-        impl.removeListener(listener);
+      impl.removeListener(listener);
     }
 
     virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher) {
-        impl.setDispatcher(dispatcher);
+      impl.setDispatcher(dispatcher);
     }
 
     virtual boost::shared_ptr<EventDispatcher> getDispatcher() const {
-        return impl.getDispatcher();
+      return impl.getDispatcher();
     }
 
     virtual size_t getListenerCount() const {
-        return impl.getListenerCount();
+      return impl.getListenerCount();
     }
 
-protected:
+  protected:
 
     /**
      * Derived implementations can call this method to dispatch an event.
@@ -12532,54 +12564,57 @@ protected:
      */
     void produceEvent(boost::shared_ptr<Event> event) const {
 
-        // The vast majority of the time the actual derived type will be
-        // BoundEvent<ListenerT> so we optimise for this case, reaching in and
-        // pulling out the contained boost::function.
-        boost::shared_ptr<BoundEvent<ListenerT> > e = boost::dynamic_pointer_cast<BoundEvent<ListenerT> >(event);
-        if (e) {
-            produceEvent(e->listenerMethod);
-        }
-        else {
-            produceEvent(boost::bind(&Event::dispatchTo, event, _1));
-        }
+      // The vast majority of the time the actual derived type will be
+      // BoundEvent<ListenerT> so we optimise for this case, reaching in and
+      // pulling out the contained boost::function.
+      boost::shared_ptr<BoundEvent<ListenerT> > e = boost::dynamic_pointer_cast<BoundEvent<ListenerT> >(event);
+      if (e) {
+        produceEvent(e->listenerMethod);
+      }
+      else {
+        produceEvent(boost::bind(&Event::dispatchTo, event, _1));
+      }
     }
 
     void produceEvent(boost::shared_ptr<BoundEvent<ListenerT> > event) const {
-        produceEvent(static_cast<boost::shared_ptr<Event> >(event));
+      produceEvent(static_cast<boost::shared_ptr<Event> >(event));
     }
 
     <produce-event>
-    /**
-     * Derived implementations should call this method to dispatch an event.
-     *
-     * NOTE: This overload is preferred to the one above, as it is more efficient
-     * and offers greater clarity.
-     *
-     * It accepts a functor with the signature:
-     *
-     *     void f(ListenerT*)
-     *
-     * @param f a functor with the above signature, which can be a plain-old function,
-     * member-function, boost::function, or bind expression.
-     */
-    template <typename Functor>
-        void produceEvent(Functor f) const {
+      /**
+       * Derived implementations should call this method to dispatch an event.
+       *
+       * NOTE: This overload is preferred to the one above, as it is more
+       * efficient and offers greater clarity.
+       *
+       * It accepts a functor with the signature:
+       *
+       *     void f(ListenerT*)
+       *
+       * @param f a functor with the above signature, which can be a plain-old
+       * function, member-function, boost::function, or bind expression.
+       */
+      template <typename Functor>
+      void produceEvent(Functor f) const {
 
-            ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
-            impl.produceEvent(DowncastingCaller<Functor>(f));
+        ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
+        impl.produceEvent(DowncastingCaller<Functor>(f));
+      }
+
+  private:
+    template <typename Functor>
+      struct DowncastingCaller {
+        explicit DowncastingCaller(Functor f_) : f(f_) {}
+
+        void 
+          operator()(boost::shared_ptr<detail::hoisted_event_listener> listener) {
+          // We implicitly casted to void* in add/removeListener above so
+          // this is safe.
+          f(static_cast<ListenerT*>(listener.get()));
         }
 
-private:
-    template <typename Functor>
-        struct DowncastingCaller {
-            explicit DowncastingCaller(Functor f_) : f(f_) {}
-            void operator()(boost::shared_ptr<detail::hoisted_event_listener> listener) {
-                // We implicitly casted to void* in add/removeListener above so
-                // this is safe.
-                f(static_cast<ListenerT*>(listener.get()));
-            }
-            Functor f;
-        };
+        Functor f;
+      };
 
     mutable detail::DispatchingEventProducerHoisted impl;
 };
@@ -12794,55 +12829,62 @@ DispatchingEventProducerHoisted::getDispatcher() const {
 
 void 
 DispatchingEventProducerHoisted::produceEvent(
-        boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
+  boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event) 
 {
-    boost::mutex::scoped_lock lock(mutex);
+  boost::mutex::scoped_lock lock(mutex);
 
-    size_t len = listeners.size();
+  size_t len = listeners.size();
 
-    // We copy listeners to this stack allocated array before dispatch so we
-    // don't have to hold the lock while calling user code.
+  // We copy listeners to this stack allocated array before dispatch so we don't
+  // have to hold the lock while calling user code.
 
-    // note: array of listener_entry pair{wp<listener>, sp<event dispatcher>}
+  // note: array of listener_entry pair{wp<listener>, sp<event dispatcher>}
 
-    listener_entry localListeners[len];
-    listener_entry* next = localListeners;
+  listener_entry localListeners[len];
+  listener_entry* next = localListeners;
 
-    std::list<listener_entry>::iterator i = listeners.begin();
+  std::list<listener_entry>::iterator i = listeners.begin();
 
-    std::list<listener_entry> forRemoval;
+  std::list<listener_entry> forRemoval;
 
-    // note: copies ones not expired to locak array and moves ones expired to a
-    // remove list
+  // note: copies ones not expired to locak array and moves ones expired to a
+  // remove list
 
-    while (i != listeners.end()) {
+  while (i != listeners.end()) {
 
-        if (!i->first.expired()) {
-            *next++ = *i;
-            ++i;
-        } else {
-            // Listener or dispatcher instance may have been destroyed since it was registered.
-            // Detect this, and remove from collection.
-            // Avoid calling dispatcher destructors while the mutex is locked.
-            forRemoval.splice(forRemoval.end(), listeners, i++);
-            len--;
-        }
+    if (!i->first.expired()) {
+      *next++ = *i;
+      ++i;
+    } else {
+      // Listener or dispatcher instance may have been destroyed since it was registered.
+      // Detect this, and remove from collection.
+      // Avoid calling dispatcher destructors while the mutex is locked.
+      forRemoval.splice(forRemoval.end(), listeners, i++);
+      len--;
     }
+  }
 
-    // Don't hold locks while running user code:
-    lock.unlock();
+  // Don't hold locks while running user code:
+  lock.unlock();
 
-    BOOST_FOREACH(listener_entry& l, forRemoval) {
-        // Call entry->second->onWorkRemoved()
-        Dispatcher::work(*l.second, boost::adopt_lock_t());
-    }
-    forRemoval.clear();
+  BOOST_FOREACH(listener_entry& l, forRemoval) {
+    // Call entry->second->onWorkRemoved()
+    Dispatcher::work(*l.second, boost::adopt_lock_t());
+  }
+  forRemoval.clear();
 
-    for (size_t i = 0; i < len; ++i) {
+  for (size_t i = 0; i < len; ++i) {
 
-        localListeners[i].second->post(
-                makeWeakFunctor(event, localListeners[i].first));
-    }
+    // note: 
+    // 1. As with asio.io.post, post accepts "viod f()"
+    // 2. The makeWeakFunctor has () operator with no arg.
+    // 3. When asio calls makeWeakFunctor instance(functor), this call leads
+    // to "return f(wp<listener>)" 
+    // 4. This is the same as bind.
+
+    localListeners[i].second->post(
+        makeWeakFunctor(event, localListeners[i].first));
+  }
 }
 
 size_t DispatchingEventProducerHoisted::getListenerCount() const {
@@ -12879,16 +12921,18 @@ NS_ZINC_OPEN
  * WeakFunctors are intended to be passed by value.
  *
  * Typically it will be used like:
- *     makeWeakFunctor(bind(&Class::ObjectMethod, _1, methodParams...), objectWeakPtr)
  *
+ * makeWeakFunctor(bind(&Class::ObjectMethod, _1, methodParams...), objectWeakPtr)
  */
-template<typename Functor, typename T, typename ResultType = typename boost::result_of<Functor(boost::shared_ptr<T>)>::type>
+template<typename Functor, typename T, 
+  typename ResultType = typename boost::result_of<Functor(boost::shared_ptr<T>)>::type>
 class WeakFunctor
 {
 public:
     typedef ResultType result_type;
 
-    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_): f(f_), object(object_) {}
+    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_)
+      : f(f_), object(object_) {}
 
     ~WeakFunctor() {}
 
@@ -13521,4 +13565,4 @@ bool oob_fsm_dmx_get( oob_dmx_instance_t* p_dmx )
 
 
 ==============================================================================
-vim:tw=100:ts=3:ft=help:norl:
+vim:tw=100:ts=2:ft=help:norl:
