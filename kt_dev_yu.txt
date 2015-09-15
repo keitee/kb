@@ -107,7 +107,7 @@
 
 |kt_dev_uv_stack_200| commands TODO:
 
-|kt_dev_uv_wiki_001| dbus-monitor
+|kt_dev_uv_wiki_001| dbus-monitor-spy
 |kt_dev_uv_wiki_100| mpeg-dash
 
 |kt_dev_uv_hwei_001| stack: convert ro filesystem to rw
@@ -9769,7 +9769,6 @@ ProxyMediaRouter::ProxyMediaRouter(
 }
 
 
-
 $ dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR \
 > Zinc.Media.MediaRouter.setSource 
 > string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
@@ -10100,6 +10099,7 @@ class ZINC_EXPORT VirtualBin
 
    private:
     CallbackType callback;
+    const RefObj<GstElement> container;
 };
 
 VirtualBin::VirtualBin(boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
@@ -10128,7 +10128,7 @@ class ZINC_EXPORT VirtualBinTypefind : public VirtualBin
             VirtualBin::CallbackType callback)
         : VirtualBin(sinkPadFactory, srcPadFactory, "VirtualBinTypefind", callback)
     {
-        // uridecodebin is member data
+        // 'uridecodebin' is member data
         uridecodebin = gst_element_factory_make("uridecodebin", "uri-decoder");
 
         if (!uridecodebin) {
@@ -10145,7 +10145,7 @@ class ZINC_EXPORT VirtualBinTypefind : public VirtualBin
                         ), NULL);
 
             if (0 == g_signal_connect(uridecodebin.get(), "pad-added",
-                        G_CALLBACK(newPadCb),
+                        G_CALLBACK(newPadCb),             // *newPadCb*
                         static_cast<gpointer>(this))) {
             }
         }
@@ -10182,35 +10182,36 @@ gst_bin_add(GST_BIN(container.get()), upstream.get());
 class ZINC_EXPORT VirtualBinSrc : public VirtualBin
 {
 
-    RefObj<GstElement> VirtualBinSrc::makeAndSetupDecodebin(
-            const char* const outputCaps)
-    {
-        const RefObj<GstElement> decodebin = gst_element_factory_make("decodebin", NULL);
+  RefObj<GstElement> VirtualBinSrc::makeAndSetupDecodebin(
+      const char* const outputCaps)
+  {
+    // 'decodebin'
+    const RefObj<GstElement> decodebin = gst_element_factory_make("decodebin", NULL);
 
-        g_object_set(decodebin.get(),
-                "caps", gst_caps_from_string(outputCaps),
-                NULL);
+    g_object_set(decodebin.get(),
+        "caps", gst_caps_from_string(outputCaps),
+        NULL);
 
-        g_signal_connect(decodebin.get(), "pad-added",
-                G_CALLBACK(newDecodebinPadCb),
-                static_cast<gpointer>(this));
+    g_signal_connect(decodebin.get(), "pad-added",
+        G_CALLBACK(newDecodebinPadCb),
+        static_cast<gpointer>(this));
 
-        return sink = decodebin;
-    }
+    return sink = decodebin;
+  }
 
-    VirtualBinSrc::VirtualBinSrc(
-            boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
-            boost::shared_ptr<VirtualPadFactory> srcPadFactory,
-            VirtualBin::CallbackType callback)
-        : VirtualBin(sinkPadFactory, srcPadFactory, "VirtualBinSrc", callback),
-        sink()
-    {
-        // note: function< (void)>, no use of placeholder, and fixed parameter.
+  VirtualBinSrc::VirtualBinSrc(
+      boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
+      boost::shared_ptr<VirtualPadFactory> srcPadFactory,
+      VirtualBin::CallbackType callback)
+    : VirtualBin(sinkPadFactory, srcPadFactory, "VirtualBinSrc", callback),
+    sink()
+  {
+    // note: function< (void)>, no use of placeholder, and fixed parameter.
 
-        elementFactory["application/dash+xml"] =
-            boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
-                    "video/quicktime; audio/x-m4a; text/x-raw");
-    }
+    elementFactory["application/dash+xml"] =
+      boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
+          "video/quicktime; audio/x-m4a; text/x-raw");
+  }
 };
 
 
@@ -10342,7 +10343,7 @@ RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad)
 }
 
 
-<virtual-sinc>
+<virtual-sink>
 
 typedef boost::function<RefObj<GstPad>(const RefObj<GstPad>&)> PlugFunc;
 
@@ -10432,17 +10433,17 @@ class ZINC_EXPORT VirtualBinSink : public VirtualBin
 ={============================================================================
 *kt_dev_uv_stack_410* stack: nickel: build dash pipeline using media router
 
-
 *uridecodebin* -> *decodebin(video)* -> *qtdemux* -> *h264parse-nexussink*
-                  *decodebin(audio)* -> *fakesink*
-
+                *decodebin(audio)* -> *fakesink*
 
 dbus-send --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR
 Zinc.Media.MediaRouter.setSource 
 string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
 
 
+// Nickel/Nickel.System.Proxy/src/ProxyMediaRouter.cpp
 // See spec A.1.1
+
 NS_ZINC::Future< void > 
    ProxyMediaRouter::setSource(const std::string& mediaLocator_in, 
            const SetSourceReason::Enum reason_in) 
@@ -10462,101 +10463,109 @@ NS_ZINC::Future< void >
 }
 
 
-class ZINC_LOCAL SetSourceContinuation : public NS_ZINC::Continuation<void, SetSourceContinuation> 
+class ZINC_LOCAL SetSourceContinuation 
+  : public NS_ZINC::Continuation<void, SetSourceContinuation> 
 {
-    friend class NS_ZINC::Continuation<void, SetSourceContinuation>;
+  friend class NS_ZINC::Continuation<void, SetSourceContinuation>;
 
-public:
+  public:
 
-private:
+  private:
 
-    void start(boost::shared_ptr<ProxyMediaRouter> proxy_, 
-            const std::string& source_, const SetSourceReason::Enum reason_) 
+  // note:
+  // Why start()? This is from Contiunation since create() creates an object
+  // then calls start().
+
+  void start(boost::shared_ptr<ProxyMediaRouter> proxy_, 
+      const std::string& source_, const SetSourceReason::Enum reason_) 
+  {
+    // I take copies of the proxy state, in case it is modified before the continuation
+    // completes.
+    //
+    // This start() method will be called by the same thread that calls 
+    // ProxyMediaRouter::setSource(), so I assume it is OK to access proxy state from 
+    // here (as lock will already be held).
+
+    // note: property comes from ProxyMediaRouter
+
+    properties = proxy->properties;
+
+    // note: see uses of ProxyMediaRouter directly
+
+    else 
     {
-        // I take copies of the proxy state, in case it is modified before the continuation
-        // completes.
-        //
-        // This start() method will be called by the same thread that calls 
-        // ProxyMediaRouter::setSource(), so I assume it is OK to access proxy state from 
-        // here (as lock will already be held).
+      // note: this is where map used and get the corresponding factory.
+      //
+      factory = proxy->findFactoryGivenSource(source);
 
-        // note: property comes from ProxyMediaRouter
+      // This covers the cases where we have no implementation MediaRouter, or
+      // a recycled one that is not compatible with the source media.
+      // In both cases, we create a new one of the appropriate type.
 
-        properties = proxy->properties;
-
-        // note: see uses of ProxyMediaRouter directly
-
-        else 
-        {
-            // note: this is where map used and get the corresponding factory.
-            //
-            factory = proxy->findFactoryGivenSource(source);
-
-            // This covers the cases where we have no implementation MediaRouter, or
-            // a recycled one that is not compatible with the source media.
-            // In both cases, we create a new one of the appropriate type.
-
-            // note: <1> async call
-            if (factory != proxy->lastFactory) {
-                continueOnSuccess(factory->createMediaRouter(), &SetSourceContinuation::onMediaRouterCreated);
-                return;
-            }
-        }
-
-        // We only reach here if we have a recycled MediaRouter implementation already,
-        // or we have an existing dvb MediaRouter and we are setting another dvb source.
-        //
-        // In these cases, we do not have to create a new MediaRouter implementation, so
-        // we move straight on to setting the properties.
-        //
-        setProperties();
+      // note: <1> async call
+      if (factory != proxy->lastFactory) {
+        continueOnSuccess(
+            factory->createMediaRouter(), 
+            &SetSourceContinuation::onMediaRouterCreated);
+        return;
+      }
     }
 
-    void onMediaRouterCreated(boost::shared_ptr<MediaRouter> impl_) {
+    // We only reach here if we have a recycled MediaRouter implementation already,
+    // or we have an existing dvb MediaRouter and we are setting another dvb source.
+    //
+    // In these cases, we do not have to create a new MediaRouter implementation, so
+    // we move straight on to setting the properties.
+    //
+    setProperties();
+  }
 
-        NICKEL_FUNC_TRACE;
+  void onMediaRouterCreated(boost::shared_ptr<MediaRouter> impl_) {
 
-        // note: save up gst media router
-        impl = impl_;
-        impl->addListener(proxy);
-        setProperties();
-    }
+    NICKEL_FUNC_TRACE;
 
-    void setProperties()
-    {
-        // note: <2> async call
-        continueOnSuccess(SetPropertiesContinuation::create(getDispatcher(),
-                    proxy, impl, shared_from_this(), properties),
-                &SetSourceContinuation::onPropertiesSet);
-    }
+    // note: save up gst media router
+    impl = impl_;
+    impl->addListener(proxy);
+    setProperties();
+  }
 
-    void onPropertiesSet()
-    {
-        // note: <6> async call.
-        //
-        // Future<void> GstMediaRouter::setSource(const std::string&, Zinc::Media::SetSourceReason::Enum);
+  void setProperties()
+  {
+    // note: <2> async call
+    continueOnSuccess(SetPropertiesContinuation::create(getDispatcher(),
+          proxy, impl, shared_from_this(), properties),
+        &SetSourceContinuation::onPropertiesSet);
+  }
 
-        continueOnSuccess(impl->setSource(source, reason), &SetSourceContinuation::complete);
-    }
+  void onPropertiesSet()
+  {
+    // note: <6> async call.
+    //
+    // Future<void> GstMediaRouter::setSource(const std::string&, Zinc::Media::SetSourceReason::Enum);
 
-    void complete() {
+    continueOnSuccess(impl->setSource(source, reason), &SetSourceContinuation::complete);
+  }
 
-        NICKEL_FUNC_TRACE;
+  void complete() {
 
-        promise.complete();
+    NICKEL_FUNC_TRACE;
 
-        proxy->setSourceComplete(source, impl, factory);
-    }
+    promise.complete();
 
-    boost::shared_ptr<ProxyMediaRouter> proxy;
-    ProxyMediaRouter::UnsourcedProperties properties;
-    boost::shared_ptr<MediaRouter> impl;
-    std::string source;
-    SetSourceReason::Enum reason;
+    // note: set-source-complete
+    proxy->setSourceComplete(source, impl, factory);
+  }
 
-    boost::shared_ptr<MediaRouterFactory> factory;
+  boost::shared_ptr<ProxyMediaRouter> proxy;
+  ProxyMediaRouter::UnsourcedProperties properties;
+  boost::shared_ptr<MediaRouter> impl;
+  std::string source;
+  SetSourceReason::Enum reason;
 
-    boost::optional<std::string> setPropertiesFailureMessage;
+  boost::shared_ptr<MediaRouterFactory> factory;
+
+  boost::optional<std::string> setPropertiesFailureMessage;
 };
 
 
@@ -11149,6 +11158,8 @@ note:
 Here, "eSar" and square AR
 
 ar: 6, { 1, 1 }
+
+dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
 
 
 ={============================================================================
@@ -13406,10 +13417,7 @@ root# ls /opt/zinc-trunk/share/Zinc.Binaries.*
 
 
 ={============================================================================
-*kt_dev_uv_wiki_001* dbus-monitor
-
-dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.ListNames
-dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
+*kt_dev_uv_wiki_001* dbus-monitor-spy
 
 {dbus-spy}
 https://wiki.youview.co.uk/display/YVDP/How+to+inspect+MediaRouter+activity
@@ -13418,6 +13426,11 @@ This is a python script and run on the box.
 MediaRouter Dbus Spy is a tool that prints all the MediaRouter dbus communications in a more
 readable format than the raw output. It also reports when a new application is launched or killed
 and any MediaRouter crash.
+
+https://wiki.youview.co.uk/pages/viewpage.action?pageId=75305458
+
+
+dbus-monitor.oem
 
 
 ={============================================================================
@@ -17569,7 +17582,7 @@ enables us to play HLS via DBus command line.
 
 
 ={============================================================================
-*kt_dev_uv_task_010* task:09: fr15: hls: DEVARCH-9861
+*kt_dev_uv_task_010* task:09: fr15: yv meadia router switch
 
 DEVARCH-9861: Implement a selection switch between OEM and YV MR
 
@@ -17582,6 +17595,58 @@ platform.settings.enable-yv-media
 To use YV media router, run:
 
 $ lsr-config platform.settings.enable-yv-media 1
+
+
+={============================================================================
+*kt_dev_uv_task_011* task:09: fr15: video resize support
+
+https://jira.youview.co.uk/browse/DEVARCH-10262
+
+HTML 5 defines the read-only properties videoHeight and videoWidth, which
+contain "the intrinsic height of the resource in CSS pixels, taking into
+account the dimensions, aspect ratio, clean aperture, resolution, and so
+forth, as defined for the format used by the resource".
+
+These correspond to the naturalSize API on VanadiumMediaPlayer
+
+daren's commit:
+gitk cd68d5775af9aae433ff9bf044a62971640642b3 &
+
+DEVARCH-8992: nexussink: Notify video resolution changes using "video-changed" message.
+
+This is part of a commit series that fixes video resizing in the browser.
+These commits fix the `videoHeight` and `videoWidth` properties on an
+HTML <video> element, which allows WebKit to correctly size video while
+maintaining aspect ratio.
+
+When the video resolution changes, send a "video-changed" message
+with details of the video resolution and display aspect ratio.
+
+This is required by WebKit in order to be able to populate the
+videoWidth and videoHeight properties of the HTML5 video element.
+
+When playing MP4 files, WebKit can find out the video size by
+inspecting the caps set on nexussink, but when playing transport
+streams, it needs nexussink to provide this information.
+
+This commit is largely taken from one on the alex.ashley/DEVARCH-8992
+branch, with the main modification of posting the "video-changed"
+message on the main thread when it is idle.
+
+
+DEVARCH-10262: Fix video resolution changes delivery and implement plumbing to
+the YV media router.
+
+This is a commit to support fixes video resizing in the browser since HTML 5
+defines the read-only properties `videoHeight` and `videoWidth` on an video
+element and which allows WebKit to correctly size video while maintaining
+aspect ratio.
+
+This commit examined various commits started from alex.ashley/DEVARCH-8992 and
+different approach as to callback to use to get stream details and reached to
+this commit through fixing race and locking between sink and Nexus. Also this
+implements plumbing up to the YV media router to pass video size based on DAR
+and will end up to the WebKit to support resizing video.
 
 
 ==============================================================================

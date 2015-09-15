@@ -13,7 +13,7 @@ KT KB. DEVELOPMENT. CODE.
 
 |kt_dev_code_010| asyc: continuation
 |kt_dev_code_011| asyc: flow between future, promise, and io_service
-|kt_dev_code_012| asyc: future
+|kt_dev_code_012| asyc: future and futuer-then
 |kt_dev_code_013| asyc: future helper
 |kt_dev_code_013| asyc: promise
 |kt_dev_code_014| asyc: future barrier
@@ -8814,7 +8814,8 @@ template <typename Derived> struct Ignore;
 /// CancellationPolicy::CancelOutstanding, CancellationPolicy::Ignore and
 /// CancellationPolicy::UserProvided for more information.
 ///
-template <typename FutureT, typename Derived, template<typename> class CancellationPolicyT = CancellationPolicy::Ignore >
+template <typename FutureT, typename Derived, 
+         template<typename> class CancellationPolicyT = CancellationPolicy::Ignore >
 class Continuation :
     boost::noncopyable,
     public boost::enable_shared_from_this<Derived>,
@@ -10340,165 +10341,168 @@ protected:
 template <typename T>
 class Future : public FutureBase
 {
-    public:
-        typedef T value_type;
+  public:
+    typedef T value_type;
 
-        Future(const Future & other);
+    Future(const Future & other);
 
-        Future & operator=(const Future & other);
+    Future & operator=(const Future & other);
 
-        ~Future();
+    ~Future();
 
-        /**
-         * Provide a default constructor so we can put Futures in
-         * STL containers
-         *
-         * A Future without a Promise is not much use to you,
-         * so use Promise.getFuture() instead, or use swap(Future<T> & other)
-         * to swap in a valid future
-         *
-         * @see Promise<T>::getFuture()
-         * @see Future<T>::swap(Future<T> & other)
-         */
-        Future() {}
+    /**
+     * Provide a default constructor so we can put Futures in
+     * STL containers
+     *
+     * A Future without a Promise is not much use to you,
+     * so use Promise.getFuture() instead, or use swap(Future<T> & other)
+     * to swap in a valid future
+     *
+     * @see Promise<T>::getFuture()
+     * @see Future<T>::swap(Future<T> & other)
+     */
+    Future() {}
 
-        /**
-         * Set a callback method to be invoked when either the value becomes
-         * available, or an exception occurs.
-         *
-         * The callback will be executed on the dispatcher that was provided to
-         * the Promise constructor.
-         *
-         * @param fn A function that must accept a FutureValue<T> as it's single
-         *           argument.
-         *
-         * @throws DuplicateFutureCallback if a callback has already been set on
-         * this Future.
-         * @throws CallbackSetWithoutDispatcherException if the corresponding
-         *         wasn't initialized with a dispatcher.  Use the two argument
-         *         setCallback instead
-         */
-        template <typename Handler>
-            void setCallback(const Handler& fn) {
-                // fn(x) must be valid where x is a FutureValue<T>
-                ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
-                static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, 0);
-            }
+    /**
+     * Set a callback method to be invoked when either the value becomes
+     * available, or an exception occurs.
+     *
+     * The callback will be executed on the dispatcher that was provided to
+     * the Promise constructor.
+     *
+     * @param fn A function that must accept a FutureValue<T> as it's single
+     *           argument.
+     *
+     * @throws DuplicateFutureCallback if a callback has already been set on
+     * this Future.
+     * @throws CallbackSetWithoutDispatcherException if the corresponding
+     *         wasn't initialized with a dispatcher.  Use the two argument
+     *         setCallback instead
+     */
+    template <typename Handler>
+      void setCallback(const Handler& fn) {
+        // fn(x) must be valid where x is a FutureValue<T>
+        ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+        static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, 0);
+      }
 
-        /**
-         * Set a callback method to be invoked when either the value becomes
-         * available, or an exception occurs.
-         *
-         * The callback will be executed on "the provided dispatcher", rather than the
-         * dispatcher used by the Promise.
-         *
-         * // note: <set-callback>
-         * Explicitly providing the dispatcher gives the caller more control over
-         * which thread will execute their callback.
-         *
-         * @param dispatcher_ The dispatcher on which the callback should be executed.
-         *
-         * @param fn A function that must accept a FutureValue<T> as it's single
-         *           argument.
-         *
-         * @throws DuplicateFutureCallback if a callback has already been set on
-         * this Future.
-         */
-        template <typename Handler>
-            void setCallback(Dispatcher& dispatcher_, const Handler& fn) {
-                // fn(x) must be valid where x is a FutureValue<T>
-                ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
-                static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, &dispatcher_);
-            }
+    /**
+     * Set a callback method to be invoked when either the value becomes
+     * available, or an exception occurs.
+     *
+     * The callback will be executed on "the provided dispatcher", rather than the
+     * dispatcher used by the Promise.
+     *
+     * // note: <set-callback>
+     * Explicitly providing the dispatcher gives the caller more control over
+     * which thread will execute their callback.
+     *
+     * @param dispatcher_ The dispatcher on which the callback should be executed.
+     *
+     * @param fn A function that must accept a FutureValue<T> as it's single
+     *           argument.
+     *
+     * @throws DuplicateFutureCallback if a callback has already been set on
+     * this Future.
+     */
+    template <typename Handler>
+      void setCallback(Dispatcher& dispatcher_, const Handler& fn) {
+        // fn(x) must be valid where x is a FutureValue<T>
+        ZINC_CHECK_CONCEPT(LValue<Handler>()(RValue<FutureValue<T> >()));
+        static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, &dispatcher_);
+      }
 
-        /**
-         * then() allows specifying a Functor to be called once the Future is
-         * completed. It is much like Future.setCallback() but for a Future<T> if
-         * the functor has the form:
-         *
-         *     R Functor(FutureValue<T>)
-         *
-         * then then() will return a 'new' Future of type Future<R> which will be
-         * completed when the original Future completes and the functor has
-         * operated on the original value. The value/exception contained in the
-         * new future will be that returned/thrown from the functor. This makes
-         * then() very convenient for 'transforming' the value (and potentially the
-         * type) contained within a `Future`.
-         *
-         * If a dispatcher is provided the functor will be executed on that
-         * dispatcher. Otherwise it will be run inline at the point and in the
-         * context in which the `Promise` is completed or the setCallback is set
-         * (whichever comes later). As the environment in which the functor will
-         * be run is unknown and even non-deterministic it is only safe to do the
-         * simplest pure-functional transformations in these functors, e.g.
-         * translating between exceptions/enum types, etc. Anything dependent on
-         * some state may require locking a mutex of similar and to make it
-         * deterministic, safe and to avoid unexpected failures as changes are
-         * made to other parts of the code the callbacks should be run on a user
-         * specified `Dispatcher`.
-         *
-         * `Future.then()` is a proposed addition to the C++14 standard[1].
-         *
-         * [1]: http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2013/n3558.pdf
-         *
-         * Usage Example:
-         *
-         * @code
-         * string boolToYesNo(FutureValue<bool> b) {
-         *     try {
-         *         return (b.get()?"yes":"no");
-         *     } catch (const std::exception& e) {
-         *         // translating exception thrown from original future.
-         *         throw MyNewException(e.what());
-         *     }
-         * }
-         *
-         * Future<bool> answer = isCool();
-         *
-         * Future<string> answerAsString = answer.then(&boolToYesNo);
-         *
-         * cout << "Cool? " << answerAsString.get() << endl;
-         * @endcode
-         */
-        template<typename Functor>
-            Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
-                    Dispatcher& dispatcher, Functor transformRtoT);
-        template<typename Functor>
-            Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
-                    Functor transformRtoT);
+    /** <future-then>
+     * then() allows specifying a Functor to be called once the Future is
+     * completed. It is much like Future.setCallback() but for a Future<T>
+     * if the functor has the form:
+     *
+     *     R Functor(FutureValue<T>)
+     *
+     * then then() will return a 'new' Future of type Future<R> which will
+     * be completed when the original Future completes and the functor has
+     * operated on the original value. The value/exception contained in the
+     * new future will be that returned/thrown from the functor. This makes
+     * then() very convenient for 'transforming' the value (and potentially
+     * the type) contained within a `Future`.
+     *
+     * If a dispatcher is provided the functor will be executed on that
+     * dispatcher. Otherwise it will be run inline at the point and in the
+     * context in which the `Promise` is completed or the setCallback is set
+     * (whichever comes later). As the environment in which the functor will
+     * be run is unknown and even non-deterministic it is only safe to do
+     * the simplest pure-functional transformations in these functors, e.g.
+     * translating between exceptions/enum types, etc. Anything dependent on
+     * some state may require locking a mutex of similar and to make it
+     * deterministic, safe and to avoid unexpected failures as changes are
+     * made to other parts of the code the callbacks should be run on a user
+     * specified `Dispatcher`.
+     *
+     * `Future.then()` is a proposed addition to the C++14 standard[1].
+     *
+     * [1]: http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2013/n3558.pdf
+     *
+     * Usage Example:
+     *
+     * @code
+     * string boolToYesNo(FutureValue<bool> b) {
+     *     try {
+     *         return (b.get()?"yes":"no");
+     *     } catch (const std::exception& e) {
+     *         // translating exception thrown from original future.
+     *         throw MyNewException(e.what());
+     *     }
+     * }
+     *
+     * Future<bool> answer = isCool();
+     *
+     * // string boolToYesNo( FutureValue<bool> b)
+     * // R      boolToYesNo( FutureValue<T> )
+     *
+     * Future<string> answerAsString = answer.then(&boolToYesNo);
+     *
+     * cout << "Cool? " << answerAsString.get() << endl;
+     * @endcode
+     */
+    template<typename Functor>
+      Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+          Dispatcher& dispatcher, Functor transformRtoT);
+    template<typename Functor>
+      Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
+          Functor transformRtoT);
 
-        /**
-         * Synchronously wait for and retrieve the value.
-         *
-         * This method may throw an exception of any type, in the event that the
-         * value could not be retrieved due to an exception in the asynchronous
-         * operation producing the value.
-         *
-         * Equivalent to f.getFutureValue().get();
-         *
-         * @return the value.
-         */
-        typename const_return<T>::type get();
+    /**
+     * Synchronously wait for and retrieve the value.
+     *
+     * This method may throw an exception of any type, in the event that the
+     * value could not be retrieved due to an exception in the asynchronous
+     * operation producing the value.
+     *
+     * Equivalent to f.getFutureValue().get();
+     *
+     * @return the value.
+     */
+    typename const_return<T>::type get();
 
-        /**
-         * Synchronously wait for and retrieve the value.
-         *
-         * Unlike get() this method does not throw if the promise has been completed
-         * with an exception.  This can be used to deal with errors without a try
-         * catch block.
-         *
-         * @return the value.
-         */
-        FutureValue<T> getFutureValue();
+    /**
+     * Synchronously wait for and retrieve the value.
+     *
+     * Unlike get() this method does not throw if the promise has been completed
+     * with an exception.  This can be used to deal with errors without a try
+     * catch block.
+     *
+     * @return the value.
+     */
+    FutureValue<T> getFutureValue();
 
-        /**
-         * Swap this Future with the one provided
-         */
-        void swap(Future<T> & other);
+    /**
+     * Swap this Future with the one provided
+     */
+    void swap(Future<T> & other);
 
-    private:
-        friend class Promise<T>; // only Promises can create a Future
-        explicit Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ );
+  private:
+    friend class Promise<T>; // only Promises can create a Future
+    explicit Future(boost::intrusive_ptr<detail::FutureContext<T> > context_ );
 };
 
 NS_ZINC_CLOSE
@@ -13269,6 +13273,120 @@ boost::shared_ptr<EventWindow>  createEventWindow(boost::shared_ptr<EventReposit
 
     newWindow->addListener(listener);
     return newWindow;
+}
+
+
+={============================================================================
+*kt_dev_code_017* asyc: dispatcher use
+
+mutable boost::ptr_deque<AbstractDeferredCall> deferredCalls;
+
+NS_ZINC::Future<std::map<std::string, std::string> >
+GstMediaRouter::getSourceInformation() const
+{
+  return deferForwardOrDefault(
+      boost::bind(&MediaRouter::getSourceInformation, _1),
+      std::map< std::string, std::string >()
+      );
+}
+
+// note:
+// sourcing = true; when setSource() is called
+
+template<typename Functor>
+typename Functor::result_type ProxyMediaRouter::deferForwardOrDefault(
+  Functor f,
+  const typename returned_future_type<Functor>::type& defaultValue) const
+{
+  typedef typename returned_future_type<Functor>::type T;
+
+  scoped_lock lock(mutex);
+
+  if (sourcing) {
+    return deferCall(f);
+  }
+
+  if (!isSourced())
+  {
+    return NS_ZINC::completedFuture<T>(*dispatcher, defaultValue);
+  }
+
+  return f(impl.get());
+}
+
+template<typename Functor>
+typename Functor::result_type ProxyMediaRouter::deferCall(Functor f) const 
+{
+  typedef typename returned_future_type<Functor>::type T;
+
+  std::auto_ptr<DeferredCall<Functor, T> > deferred(new DeferredCall<Functor, T>(dispatcher, f));
+  NS_ZINC::Future<T> future(deferred->getFuture());
+
+  deferredCalls.push_back(deferred);
+
+  return future;
+}
+
+template<typename Functor, typename T>
+class DeferredCall : public AbstractDeferredCall {
+
+  public:
+
+    DeferredCall(boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher, Functor method_) :
+      promise(*dispatcher),
+      method(method_) {}
+
+    NS_ZINC::Future<T> getFuture() {
+      return promise.getFuture();
+    }
+
+    void operator()(const MediaRouter* mediaRouter) {
+      method(const_cast<MediaRouter*>(mediaRouter))
+        .then(boost::bind(&chainedComplete<T>, promise, _1));
+    }
+
+  private:
+    NS_ZINC::Promise<T> promise;
+    Functor method;
+};
+
+
+struct AbstractDeferredCall {
+
+  virtual ~AbstractDeferredCall() {}
+
+  virtual void operator()(const MediaRouter* mediaRouter) = 0;
+};
+
+/**
+ * This is called by SetSourceContinuation::complete(). The idea is to contain all the
+ * state manipulation in one place.
+ */
+void ProxyMediaRouter::setSourceComplete(
+    const std::string& newSource, boost::shared_ptr<MediaRouter> newImpl, 
+    boost::shared_ptr<MediaRouterFactory> newFactory) 
+{
+  scoped_lock lock(mutex);
+
+  lastSource = newSource;
+  impl = newImpl;
+
+  if (newFactory) {
+    lastFactory = newFactory;
+  }
+
+  properties = UnsourcedProperties();
+
+  sourcing = false;
+
+  // Some calls may have been deferred whilst we were setting the source.
+  // process those now, but stop if one of them is a call to setSource().
+  // FIXME Does not check for setSource() - should it?
+
+  while (!deferredCalls.empty() && !sourcing) {
+    deferredCalls.front()(this);
+    deferredCalls.pop_front();
+  }
 }
 
 
