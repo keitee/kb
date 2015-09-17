@@ -976,39 +976,103 @@ ratio, expressed as a fraction of horizontal (x) pixel size divided by vertical
   ================
   ================
 
-In case 16:9 stream:
+  Sample(Source) AR
 
-pixelAspectRatioNumerator   = 16;
-pixelAspectRatioDenominator = 9;
-    
+  SAR x PAR = DAR
 
-In case other stream:
+  W     1     DW
+  -   x -   = -
+  H     1     DH
 
-originalSize.width          = 
-  uint32_t stream.displayHorizontalSize; 
 
-originalSize.height         = 
-  uint32_t stream.displayVerticalSize; 
+note: W, H from hardware
 
-  /* 'intended' display width of active area needed to preserve correct aspect
-   * ratio. this is not the actual display width used. */
+uint32_t displayHorizontalSize; 
+uint32_t displayVerticalSize; 
+/* 'intended' display height of active area needed to preserve correct aspect
+ * ratio. this is 'not' the actual display height used. */
 
-pixelAspectRatioNumerator   = 
-  uint16_t sampleAspectRatioX; 
+note: AR from hardware
 
-pixelAspectRatioDenominator =
-  uint16_t sampleAspectRatioY;
+NEXUS_AspectRatio aspectRatio;
+/* Sample aspect ratio - aspect ratio of the source calculated as the ratio of
+* two numbers reported by the 'decoder'.  This aspect ratio is applied to the
+* picture's source size (i.e. coded size), not the picture's display size. */
 
-  /* Sample aspect ratio - aspect ratio of the source calculated as the ratio of
-   * two numbers reported by the 'decoder'.  This aspect ratio is applied to the
-   * picture's source size (i.e. coded size), not the picture's display size. */
+uint16_t sampleAspectRatioX; 
+uint16_t sampleAspectRatioY; /* See comments for sampleAspectRatioX */
+/* Only valid if aspectRatio is NEXUS_AspectRatio_eSar.
+ * NEXUS_AspectRatio_eSar is only used for some codecs. If used, the
+ * source's aspect ratio is calculated as the ratio of
+ * sampleAspectRatioX/sampleAspectRatioY. sampleAspectRatioX and
+ * sampleAspectRatioY should not be used except as a ratio. */
 
-// Calculate DAR based on PAR and video size. note: NO base on SAR
-int displayWidth = originalSize.width() * pixelAspectRatioNumerator;
-int displayHeight = originalSize.height() * pixelAspectRatioDenominator;
 
-This case uses that SAR (source AR) from stream and makes DAR out of it. Is it
-  true? Where does these values come from? From video ES?
+:964 Returned W x H video size: 512 x 288
+:965 Returned sampleAspectRatioX and sampleAspectRatioY : 1 / 1
+
+// Calculate DAR based on PAR and video size.
+// int displayWidth = W * sampleAspectRatioX;
+// int displayHeight = H * sampleAspectRatioY;
+
+// Divide display width and height by their GCD to avoid possible overflows.
+// int displayAspectRatioGCD = greatestCommonDivisor(displayWidth, displayHeight);
+// displayWidth /= displayAspectRatioGCD;
+// displayHeight /= displayAspectRatioGCD;
+
+:976 displayWidth: 16, displayHeight: 9
+
+// if (!( H % displayHeight)) {
+//     ERROR("Keeping video original height: sh: " << size.height << " dh: " << displayHeight );
+//
+//     288 x 16 / 9  = 4608 / 9 = 512
+//
+//     width = gst_util_uint64_scale_int(size.height, displayWidth, displayHeight);
+//     height = static_cast<guint64>(size.height);
+//
+//     ERROR("Keeping video original height: w: " << width << " h: " << height );
+// } else if (!(size.width % displayWidth)) {
+
+:985 Keeping video original height: sh: 288 dh: 9
+:988 Keeping video original height: w: 512 h: 288
+:1009 Changed size: 512 x 288
+
+
+512    1    16
+ -  x  -  = -    -> 512(x) = 288 * 16 / 9
+288    1    9
+
+SAR x PAR = DAR(from SAR)
+
+512    16    16
+ -  x  -   = -    -> 352(x) = 288 * 11 * 16 / (16 *9)
+288    11    9
+
+This assumes that hardware reports pixel aspect ratio other than 1:1. Really? 
+
+Yes, there are when play amazon dash stream.
+
+:964 Returned video size: 512 x 216
+:965 Returned AR: 1269 / 1280
+
+
+:964 Returned video size: 512 x 216
+:965 Returned AR: 1269 / 1280
+:976 dw: 47 dh: 20
+
+
+double ret_round1 = round(size.width*ratioNumerator/ratioDenominator);
+double ret_round2 = 16*floor(size.width*ratioNumerator/ratioDenominator/16);
+ERROR("Rounded size: " <<  ret_round1 << "," << ret_round2);
+
+:1014 Rounded size: 507,496
+:1016 Changed size: 507 x 216
+
+:964 Returned video size: 640 x 272
+:965 Returned AR: 1 / 1
+:976 dw: 40 dh: 17
+:1014 Rounded size: 640,640
+:1016 Changed size: 640 x 272
 
 
 ={============================================================================
@@ -8212,6 +8276,134 @@ source 0x500550 calling dispatch with element message: 0x500178, time
 
 
 ={============================================================================
+*kt_dev_bcast_500* gst: gststructure
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstStructure.html
+
+A GstStructure is a collection of key/value 'pairs'. The keys are expressed as
+GQuarks and the values can be of any GType.
+
+In addition to the key/value pairs, a GstStructure also has a name. The name
+starts with a letter and can be filled by letters, numbers and any of "/-_.:".
+
+GstStructure is used by various GStreamer subsystems to store information in a
+flexible and extensible way. A GstStructure does 'not' have a refcount because
+it usually is part of a higher level object such as GstCaps, GstMessage,
+GstEvent, GstQuery. It provides a means to enforce mutability using the refcount
+  of the parent with the gst_structure_set_parent_refcount() method.
+
+A GstStructure can be created with gst_structure_new_empty() or
+gst_structure_new(), which both take a name and an optional set of key/value
+pairs along with the types of the values.
+
+Field values can be changed with gst_structure_set_value() or
+gst_structure_set().
+
+Field values can be retrieved with gst_structure_get_value() or the more
+convenient gst_structure_get_*() functions.
+
+Fields can be removed with gst_structure_remove_field() or
+gst_structure_remove_fields().
+
+Strings in structures must be ASCII or UTF-8 encoded. Other encodings are not
+allowed. Strings may be NULL however.
+
+Be aware that the current GstCaps / GstStructure serialization into string has
+limited support for nested GstCaps / GstStructure fields. It can only support
+one level of nesting. Using more levels will lead to unexpected behavior when
+using serialization features, such as gst_caps_to_string() or
+gst_value_serialize() and their counterparts.
+
+
+GstStructure * str = gst_structure_new(
+    "video-changed",
+    "height", G_TYPE_UINT, sink->height,
+    "width", G_TYPE_UINT, sink->width,
+    "aspect", GST_TYPE_FRACTION, sink->aspect_ratio_n, sink->aspect_ratio_d,
+    NULL);
+
+GstMessage *msg = gst_message_new_element(GST_OBJECT_CAST(sink), str);
+
+if (!gst_element_post_message(GST_ELEMENT_CAST(sink), msg)) {
+  GST_ERROR_OBJECT (sink, "Unable to post video-changed message." );
+}
+
+
+gst_structure_has_field_typed ()
+-----------------
+gboolean
+gst_structure_has_field_typed (const GstStructure *structure,
+                               const gchar *fieldname,
+                               GType type);
+
+Check if structure contains a field named fieldname and with GType type.
+
+Parameters
+structure a GstStructure
+fieldname the name of a field
+type the type of a value
+
+Returns
+TRUE if the structure contains a field with the given name and type
+
+
+gst_structure_get_uint ()
+-----------------
+gboolean
+gst_structure_get_uint (const GstStructure *structure,
+                        const gchar *fieldname,
+                        guint *value);
+
+Sets the uint pointed to by value corresponding to the value of the given field.
+Caller is responsible for making sure the field exists and has the correct type.
+
+Parameters
+structure a GstStructure
+fieldname the name of a field
+value a pointer to a uint to set. [out]
+
+Returns
+TRUE if the value could be set correctly. If there was no field with fieldname
+or the existing field did not contain a uint, this function returns FALSE.
+
+note:
+Is there case when gst_structure_get_uint fails when
+gst_structure_has_field_typed succeed?
+
+if (gst_structure_has_field_typed(str,"height",G_TYPE_UINT)) {
+  guint height = size.height();
+  if(gst_structure_get_uint(str,"height",&height)){
+    size.setHeight(height);
+  }
+}
+
+
+gst_structure_new ()
+-----------------
+
+GstStructure *
+gst_structure_new (const gchar *name,
+                   const gchar *firstfield,
+                   ...);
+
+Creates a new GstStructure with the given name. Parses the list of variable
+arguments and sets fields to the values listed. Variable arguments should be
+passed as field name, field type, and value. Last variable argument should be
+NULL.
+
+Free-function: gst_structure_free
+
+Parameters
+
+name name of new structure
+firstfield name of first field to set
+...  additional arguments
+
+Returns
+a new GstStructure. 
+
+
+={============================================================================
 *kt_dev_bcast_500* gst: gstmessage
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstMessage.html
@@ -8358,107 +8550,6 @@ bus
 a GstBus on which you want to receive the "message" signal
 
 
-={============================================================================
-*kt_dev_bcast_500* gst: gststructure
-
-http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstStructure.html
-
-A GstStructure is a collection of key/value 'pairs'. The keys are expressed as
-GQuarks and the values can be of any GType.
-
-In addition to the key/value pairs, a GstStructure also has a name. The name
-starts with a letter and can be filled by letters, numbers and any of "/-_.:".
-
-GstStructure is used by various GStreamer subsystems to store information in a
-flexible and extensible way. A GstStructure does not have a refcount because it
-usually is part of a higher level object such as GstCaps, GstMessage, GstEvent,
-GstQuery. It provides a means to enforce mutability using the refcount of the
-  parent with the gst_structure_set_parent_refcount() method.
-
-A GstStructure can be created with gst_structure_new_empty() or
-gst_structure_new(), which both take a name and an optional set of key/value
-pairs along with the types of the values.
-
-Field values can be changed with gst_structure_set_value() or
-gst_structure_set().
-
-Field values can be retrieved with gst_structure_get_value() or the more
-convenient gst_structure_get_*() functions.
-
-Fields can be removed with gst_structure_remove_field() or
-gst_structure_remove_fields().
-
-Strings in structures must be ASCII or UTF-8 encoded. Other encodings are not
-allowed. Strings may be NULL however.
-
-Be aware that the current GstCaps / GstStructure serialization into string has
-limited support for nested GstCaps / GstStructure fields. It can only support
-one level of nesting. Using more levels will lead to unexpected behavior when
-using serialization features, such as gst_caps_to_string() or
-gst_value_serialize() and their counterparts.
-
-
-GstStructure * str = gst_structure_new(
-    "video-changed",
-    "height", G_TYPE_UINT, sink->height,
-    "width", G_TYPE_UINT, sink->width,
-    "aspect", GST_TYPE_FRACTION, sink->aspect_ratio_n, sink->aspect_ratio_d,
-    NULL);
-
-GstMessage *msg = gst_message_new_element(GST_OBJECT_CAST(sink), str);
-
-if (!gst_element_post_message(GST_ELEMENT_CAST(sink), msg)) {
-  GST_ERROR_OBJECT (sink, "Unable to post video-changed message." );
-}
-
-
-gst_structure_has_field_typed ()
------------------
-gboolean
-gst_structure_has_field_typed (const GstStructure *structure,
-                               const gchar *fieldname,
-                               GType type);
-
-Check if structure contains a field named fieldname and with GType type.
-
-Parameters
-structure a GstStructure
-fieldname the name of a field
-type the type of a value
-
-Returns
-TRUE if the structure contains a field with the given name and type
-
-
-gst_structure_get_uint ()
------------------
-gboolean
-gst_structure_get_uint (const GstStructure *structure,
-                        const gchar *fieldname,
-                        guint *value);
-
-Sets the uint pointed to by value corresponding to the value of the given field.
-Caller is responsible for making sure the field exists and has the correct type.
-
-Parameters
-structure a GstStructure
-fieldname the name of a field
-value a pointer to a uint to set. [out]
-
-Returns
-TRUE if the value could be set correctly. If there was no field with fieldname
-or the existing field did not contain a uint, this function returns FALSE.
-
-note:
-Is there case when gst_structure_get_uint fails when
-gst_structure_has_field_typed succeed?
-
-if (gst_structure_has_field_typed(str,"height",G_TYPE_UINT)) {
-  guint height = size.height();
-  if(gst_structure_get_uint(str,"height",&height)){
-    size.setHeight(height);
-  }
-}
 
 
 ={============================================================================
@@ -8481,7 +8572,7 @@ Parameters
 val guint64 (such as a GstClockTime) to scale.
 num numerator of the scale factor.
 denom denominator of the scale factor.
-	 
+
 Returns
 val * num / denom . In the case of an overflow, this function returns
 G_MAXUINT64. If the result is not exactly representable as an integer, it is
@@ -8603,7 +8694,7 @@ instance             the instance to connect to.
 detailed_signal      a string of the form "signal-name::detail".
 c_handler            the GCallback to connect.
 data                 data to pass to c_handler calls.
-	 
+
 Returns
 
 the handler id (always greater than 0 for successful connections)
