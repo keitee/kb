@@ -8025,7 +8025,68 @@ boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
 
 
 ={============================================================================
-*kt_dev_uv_stack_254* stack: vanadium: log lines
+*kt_dev_uv_stack_254* stack: vanadium: listener
+
+class ZINC_EXPORT VanadiumMediaPlayer : public WebCore::QMediaPlayerInterface
+{
+  private:
+    class MediaPlayerListener : boost::noncopyable,
+    public NS_NICKEL_SYSTEM::MediaRouterEventListener
+  {
+    public:
+      MediaPlayerListener(VanadiumMediaPlayer* player)
+        : player(player)
+      {}
+
+      /**
+       * Sever the link between this listener and its VanadiumMediaPlayer instance.
+       *
+       * This will cause the listener to stop forwarding events.
+       */
+      void unlinkListener();
+
+      //@{
+      /**
+       * MediaRouter callbacks.
+       */
+      void BufferStatusEvent(const NS_NICKEL_SYSTEM::BufferStatusEventValue::Enum event);
+
+      void DrmEvent(const NS_NICKEL_SYSTEM::DrmEventValue::Enum resultRef,
+          const std::string& drmMediaIdentifier,
+          const std::string& rightsIssuerUrl);
+
+      void PositionChangeEvent(const NS_NICKEL_SYSTEM::Position& position);
+
+      void SourceEvent(const NS_NICKEL_SYSTEM::SourceEventValue::Enum event,
+          const NS_NICKEL_SYSTEM::SetSourceReason::Enum reason);
+
+      void SpeedChangeEvent();
+
+      void StatusEvent(const NS_NICKEL_SYSTEM::StatusEventValue::Enum event);
+
+      void ErrorEvent(const NS_NICKEL_SYSTEM::ErrorEventValue::Enum error,
+          const NS_NICKEL_SYSTEM::ErrorEventContext::Enum context,
+          const std::string& info);
+      //@}
+    private:
+      VanadiumMediaPlayer* player;
+  };
+};
+
+VanadiumMediaPlayer::VanadiumMediaPlayer(
+        QMediaPlayerCallbackInterface& callbacks)
+    : dispatcher(makeGlibEventDispatcher()),
+    listener(boost::make_shared<MediaPlayerListener>(this)),
+  {
+    ...
+    mediaRouterFactory = nickelSystemFactory.createMediaRouterFactory();
+    mediaRouter = mediaRouterFactory->createMediaRouter().get();
+    mediaRouter->addListener(dispatcher, listener);
+  }
+
+
+={============================================================================
+*kt_dev_uv_stack_255* stack: vanadium: log lines
 
 {to-build-qt}
 
@@ -14726,7 +14787,7 @@ typedef struct
   int playpump_num;
   NEXUS_Callback delegate_callback;
   void* delegate_context;
-}
+} GstNexusMgrCallbackInfo;
 
 typedef struct
 {
@@ -14771,7 +14832,8 @@ gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr,
   // set callback_contexts with cb id
   gst_nexus_mgr_callback_contexts_init(&mgr->callback_contexts, mgr);
 
-  //{{ set *mgr_callback_contexts_delegate* to forward them to *sink-on-error*
+  // { set *mgr_callback_contexts_delegate* to forward them to *sink-on-error*
+  // note: make a callback link from mgr to sink without 2nd level callback
   
   // set context to pass a/v errors to video sink
   mgr->callback_contexts.video_error.delegate_callback = mgr->settings.callbacks.error;
@@ -17702,18 +17764,19 @@ branch, with the main modification of posting the "video-changed"
 message on the main thread when it is idle.
 
 <log>
-DEVARCH-10262: Fix video resolution changes delivery in nexussink and implement
-plumbing to the YV media router.
+DEVARCH-10262: Fix video resolution changes delivery in nexussink and
+implement plumbing to the YV media router.
 
-This is a commit to provide video size changes from Nexus when stream changes
+This is a commit to provide new video size from Nexus when stream changes
 using video size and aspect ratio in order to support video resizing in the
 browser since HTML 5 defines the read-only properties `videoHeight` and
 `videoWidth` on an video element and which allows WebKit to correctly size
 video while maintaining aspect ratio.
 
 This commit examined various commits started from DEVARCH-8992 and different
-approach as to Nexus callback to use to obtain stream details reliably and
-fixed the delivery of video resolution changes. 
+approach as to Nexus callback to use to obtain stream details reliably. To
+that end, do the delivery of video resolution changes via two-level callback
+approach and uses simplified math to calculate video size. 
 
 Also this commit implements plumbing up to the YV media router to pass
 calculated video size.
