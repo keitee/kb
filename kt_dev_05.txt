@@ -86,6 +86,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_600* glib: gatomic
 *kt_dev_bcast_600* glib: gthread
 *kt_dev_bcast_600* glib: gmain
+*kt_dev_bcast_600* glib: gerror
 
 
 # ============================================================================
@@ -8408,6 +8409,33 @@ a new GstStructure.
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstMessage.html
 
+Messages are implemented as a subclass of GstMiniObject with a generic
+GstStructure as the content. This allows for writing custom messages without
+requiring an API change while allowing a wide range of different types of
+messages.
+
+Messages are posted by objects in the pipeline and are passed to the
+application using the GstBus.
+
+The basic use pattern of posting a message on a GstBus is as follows:
+
+gst_bus_post (bus, gst_message_new_eos());
+
+A GstElement usually posts messages on the bus provided by the parent
+  container using gst_element_post_message().
+
+
+-----------------
+struct GstMessage {
+  GstMiniObject   mini_object;
+
+  GstMessageType  type;
+  guint64         timestamp;
+  GstObject      *src;
+  guint32         seqnum;
+};
+
+
 gst_message_new_element ()
 -----------------
 GstMessage *
@@ -8429,6 +8457,68 @@ Returns
 The new element message.
 
 MT safe. [transfer full]
+
+
+gst_message_new_error ()
+-----------------
+GstMessage *
+gst_message_new_error (GstObject *src,
+                       GError *error,
+                       const gchar *debug);
+
+Create a new error message. The message will copy error and debug. This
+  message is posted by element when a fatal event occurred. The pipeline will
+  probably (partially) stop. The application receiving this message should
+  stop the pipeline.
+
+Parameters
+src The object originating the message.  [transfer none][allow-none]
+
+error The GError for this message.  [transfer none]
+
+debug A debugging string.
+
+Returns
+the new error message.
+
+MT safe. 
+
+
+gst_message_parse_error ()
+-----------------
+void
+gst_message_parse_error (GstMessage *message,
+                         GError **gerror,
+                         gchar **debug);
+
+Extracts the GError and debug string from the GstMessage. The values returned
+  in the output arguments are copies; the caller must free them when done.
+
+...
+switch (GST_MESSAGE_TYPE (msg)) {
+  case GST_MESSAGE_ERROR: {
+    GError *err = NULL;
+    gchar *dbg_info = NULL;
+    
+    gst_message_parse_error (msg, &err, &dbg_info);
+    g_printerr ("ERROR from element %s: %s\n",
+        GST_OBJECT_NAME (msg->src), err->message);
+    g_printerr ("Debugging info: %s\n", (dbg_info) ? dbg_info : "none");
+    g_error_free (err);
+    g_free (dbg_info);
+    break;
+  }
+  ...
+}
+...
+
+MT safe.
+
+Parameters
+
+message A valid GstMessage of type GST_MESSAGE_ERROR.
+gerror location for the GError. [out][allow-none][transfer full]
+debug location for the debug message, or NULL. [out][allow-none][transfer full]
 
 
 ={============================================================================
@@ -8575,6 +8665,66 @@ Returns
 val * num / denom . In the case of an overflow, this function returns
 G_MAXUINT64. If the result is not exactly representable as an integer, it is
 truncated.
+
+
+gst_util_uint64_scale_round ()
+-----------------
+guint64
+gst_util_uint64_scale_round (guint64 val,
+                             guint64 num,
+                             guint64 denom);
+
+Scale val by the rational number num / denom, avoiding overflows and
+  underflows and without loss of precision.
+
+This function can potentially be very slow if val and num are both greater
+than G_MAXUINT32.
+
+Parameters
+
+val the number to scale
+num the numerator of the scale ratio
+denom the denominator of the scale ratio
+
+Returns
+
+val * num / denom. In the case of an overflow, this function returns
+G_MAXUINT64. If the result is not exactly representable as an integer, it is
+rounded to the nearest integer (half-way cases are rounded 'up'). See also
+gst_util_uint64_scale(), gst_util_uint64_scale_ceil(),
+  gst_util_uint64_scale_int(), gst_util_uint64_scale_int_round(),
+  gst_util_uint64_scale_int_ceil().
+
+note:
+This function seems to be odd since it's round the value up and
+gst_util_uint64_scale_ceil () do the same.
+
+954 Returned video size: 512 x 216
+955 Returned AR: 1269 / 1280
+
+width = static_cast<guint>(16*
+  floor(size.width*ratioNumerator/ratioDenominator/16));
+
+val = 
+  gst_util_uint64_scale_round(size.width, ratioNumerator, ratioDenominator * 16);
+
+xxwidth = static_cast<guint>(16*
+  gst_util_uint64_scale_round(size.width, ratioNumerator, ratioDenominator * 16));
+
+954 Returned video size: 512 x 216
+955 Returned AR: 1269 / 1280
+
+// 496 comes from floor(), 31x16 = 496
+967 Changed size: 496 x 216 
+
+// 512 comes from gst_ 32x16 = 512
+968 gst util width size: 512, val: 32
+954 Returned video size: 640 x 272
+
+>>> 507.0/16.0
+31.6875
+
+31 or 32
 
 
 ={============================================================================
@@ -9132,9 +9282,94 @@ reissued, leading to the operation being performed against the wrong source.
 
 Parameters
 tag the ID of the source to remove.
-	 
+
 Returns
 For historical reasons, this function always returns TRUE
+
+
+={============================================================================
+*kt_dev_bcast_600* glib: gerror
+
+https://developer.gnome.org/glib/unstable/glib-Error-Reporting.html#GError
+
+GLib provides a standard method of reporting errors from a called function to
+the calling code. This is the same problem solved by exceptions in other
+languages. 
+    
+It's important to understand that this method is both a data type (the GError
+    struct) and a set of rules. If you use GError incorrectly, then your code
+will not properly interoperate with other code that uses GError, and users of
+your API will probably get confused.
+
+First and foremost: 
+GError should only be used to report recoverable 'runtime' errors, never to
+report programming errors. If the programmer has screwed up, then you should
+use g_warning(), g_return_if_fail(), g_assert(), g_error(), or some similar
+facility. (Incidentally, remember that the g_error() function should only be
+    used for programming errors, it should not be used to print any error
+    reportable via GError.)
+
+Examples of recoverable runtime errors are "file not found" or "failed to
+parse input." Examples of programming errors are "NULL passed to strcmp()" or
+"attempted to free the same pointer twice." These two kinds of errors are
+fundamentally different: runtime errors should be handled or reported to the
+user, programming errors should be eliminated by fixing the bug in the
+program. This is why most functions in GLib and GTK+ do not use the GError
+facility.
+
+Functions that can fail take a return location for a GError as their last
+argument. On error, a new GError instance will be allocated and returned to
+the caller via this argument. For example:
+
+
+struct GError {
+  GQuark       domain;
+  gint         code;
+  gchar       *message;
+};
+
+The GError structure contains information about an error that has occurred.
+
+Members
+
+GQuark  domain; error domain, e.g. G_FILE_ERROR
+gint    code; error code, e.g. G_FILE_ERROR_NOENT
+gchar   *message; human-readable informative error message
+
+
+={============================================================================
+*kt_dev_bcast_600* glib: gquark
+
+https://developer.gnome.org/glib/unstable/glib-Quarks.html#GQuark
+
+Quarks are associations between strings and integer identifiers. Given either
+the string or the GQuark identifier it is possible to retrieve the other.
+
+Quarks are used for both datasets and keyed data lists.
+
+To create a new quark from a string, use g_quark_from_string() or
+g_quark_from_static_string().
+
+To find the string corresponding to a given GQuark, use g_quark_to_string().
+
+To find the GQuark corresponding to a given string, use g_quark_try_string().
+
+Another use for the string pool maintained for the quark functions is string
+interning, using g_intern_string() or g_intern_static_string(). An interned
+string is a canonical representation for a string. One important advantage of
+interned strings is that they can be compared for equality by a simple pointer
+comparison, rather than using strcmp().
+
+
+Functions
+
+#define G_DEFINE_QUARK()
+GQuark g_quark_from_string ()
+GQuark g_quark_from_static_string ()
+const gchar *g_quark_to_string ()
+GQuark g_quark_try_string ()
+const gchar * g_intern_string ()
+const gchar * g_intern_static_string ()
 
 
 ==============================================================================
