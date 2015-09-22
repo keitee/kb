@@ -53,7 +53,8 @@
 |kt_dev_uv_stack_251| stack: vanadium: binding
 |kt_dev_uv_stack_252| stack: vanadium: browser remote debug
 |kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
-|kt_dev_uv_stack_254| stack: vanadium: log lines
+|kt_dev_uv_stack_254| stack: vanadium: listener
+*kt_dev_uv_stack_255* stack: vanadium: log lines
 
 |kt_dev_uv_stack_300| stack: copper: lsr (local storage repository)
 |kt_dev_uv_stack_301| stack: copper: client factory
@@ -8083,6 +8084,132 @@ VanadiumMediaPlayer::VanadiumMediaPlayer(
     mediaRouter = mediaRouterFactory->createMediaRouter().get();
     mediaRouter->addListener(dispatcher, listener);
   }
+
+
+GstMediaRouter::
+
+produceEvent(
+    boost::bind(&MediaRouterEventListener::SourceEvent,
+            _1,
+            event,
+            reason));
+
+produceEvent(
+      boost::bind(&MediaRouterEventListener::ErrorEvent, _1,
+        errVal, errContext, text_msg));
+
+
+void VanadiumMediaPlayer::SourceEvent(const SourceEventValue::Enum event,
+            const SetSourceReason::Enum)
+{
+}
+
+void VanadiumMediaPlayer::ErrorEvent(const ErrorEventValue::Enum error,
+            const ErrorEventContext::Enum,
+            const std::string&)
+{
+  // pass up to WebKit
+
+  currentReadyState = QMediaPlayerInterface::HAVE_NOTHING;
+  currentNetworkState = QMediaPlayerInterface::NETWORK_ERROR;
+  callbacks.networkStateChanged();
+  callbacks.readyStateChanged();
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_255* stack: vanadium: error handle
+
+https://html.spec.whatwg.org/multipage/embedded-content.html#media-data
+
+4.8.13.16 Event summary
+
+This section is non-normative.
+
+The following events fire on media elements as part of the processing model
+described above: 
+
+Event name 	Interface 	Fired when... 	
+error 	   Event 	   An error occurs while fetching the media data. 	
+
+Preconditions 
+error is an object with the code MEDIA_ERR_NETWORK or higher. networkState
+equals either NETWORK_EMPTY or NETWORK_IDLE, depending on when the download
+was aborted. 
+
+
+4.8.13.1 Error codes
+
+media.error
+
+Returns a MediaError object representing the current error state of the element.
+
+Returns null if there is no error.
+
+All 'media' elements have an associated error status, which records the 'last'
+error the element encountered since its resource selection algorithm was last
+invoked. The error attribute, on getting, must return the MediaError object
+created for this last error, or null if there has not been an error.
+
+interface MediaError {
+  const unsigned short MEDIA_ERR_ABORTED = 1;
+  const unsigned short MEDIA_ERR_NETWORK = 2;
+  const unsigned short MEDIA_ERR_DECODE = 3;
+  const unsigned short MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+  readonly attribute unsigned short code;
+};
+
+
+media.erro.code
+
+Returns the current error's error code, from the list below.
+
+The code attribute of a MediaError object must return the code for the error,
+    which must be one of the following:
+
+MEDIA_ERR_ABORTED (numeric value 1)
+    The fetching process for the media resource was aborted by the user agent
+    at the user's request.
+
+MEDIA_ERR_NETWORK (numeric value 2)
+    A network error of some description caused the user agent to stop fetching
+    the media resource, after the resource was established to be usable.
+
+MEDIA_ERR_DECODE (numeric value 3)
+    An error of some description occurred while decoding the media resource,
+    after the resource was established to be usable.
+
+MEDIA_ERR_SRC_NOT_SUPPORTED (numeric value 4)
+    The media resource indicated by the src attribute or assigned media
+    provider object was not suitable.
+
+
+class QMediaPlayerInterface
+{
+public:
+    virtual ~QMediaPlayerInterface()
+    {}
+
+    enum NetworkState
+    {
+        NETWORK_EMPTY,
+        NETWORK_IDLE,
+        NETWORK_LOADING,
+        NETWORK_ERROR,
+        NETWORK_LOADED,
+        DECODE_ERROR,
+        FORMAT_ERROR
+    };
+
+    enum ReadyState
+    {
+        HAVE_NOTHING,
+        HAVE_METADATA,
+        HAVE_CURRENT_DATA,
+        HAVE_FUTURE_DATA,
+        HAVE_ENOUGH_DATA
+    };
+}
 
 
 ={============================================================================
