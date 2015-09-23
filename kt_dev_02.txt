@@ -113,10 +113,12 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_test_200| gmock:
 |kt_dev_test_201| gmock: for dummies
-|kt_dev_test_202| gmock: cookbook
-|kt_dev_test_203| gmock: cheat: cardinality
-|kt_dev_test_204| gmock: cheat: using a function as action
-|kt_dev_test_204| gmock: real examples
+|kt_dev_test_202| gmock: example
+|kt_dev_test_203| gmock: cook: write action
+|kt_dev_test_204| gmock: cheat: cardinality
+|kt_dev_test_205| gmock: cheat: using a function as action
+*kt_dev_test_206* gmock: cheat: combine actions
+*kt_dev_test_207* gmock: cook: nice mock
 
 
 # ============================================================================
@@ -22729,7 +22731,43 @@ advance your level of enjoyment and testing bliss.
 
 
 ={============================================================================
-*kt_dev_test_202* gmock: write action
+*kt_dev_test_202* gmock: example
+
+<1> use gmock and cppunit
+
+class X {
+
+class RepositoryTest : public CppUnit::TestFixture 
+{
+
+    void setUp()
+    {
+        // note: 
+        // Create a mock object once and use it throughout tests
+        mockMB = boost::make_shared<NS_IRON_SYSTEM::MockEventRepositoryAsync>();
+    }
+
+    void testGetScheduleEventFull()
+    {
+        NS_X_SYSTEM::Result result;
+        result.recordIdentifier = "id12";
+
+        // note: <custom-action>
+        EXPECT_CALL(*mockMB, getEvent("abc"))
+            .WillOnce(returnNewCompletedFuture(result));
+
+        // note: Broker is from setUp()
+        NS_Z::Future<FullEventPtr> f = Broker->getFullEvent("abc");
+        boost::shared_ptr<FullEvent> fe(f.get());
+
+        CPPUNIT_ASSERT(fe);
+        CPPUNIT_ASSERT_EQUAL(result.recordIdentifier, fe->getRecordIdentifier());
+    }
+};
+
+
+={============================================================================
+*kt_dev_test_203* gmock: cook: write action
 
 https://code.google.com/p/googlemock/wiki/CookBook#Writing_New_Actions_Quickly
 
@@ -22875,7 +22913,7 @@ ACTION_P(returnNewExceptionalFuture, exception) {
 
 
 ={============================================================================
-*kt_dev_test_203* gmock: cheat: cardinality
+*kt_dev_test_204* gmock: cheat: cardinality
 
 https://code.google.com/p/googlemock/wiki/CheatSheet
 
@@ -22901,7 +22939,7 @@ happen when n is 0.
 
 
 ={============================================================================
-*kt_dev_test_204* gmock: cheat: using a function as action
+*kt_dev_test_205* gmock: cheat: using a function as action
 
 Using a Function or a Functor as an Action
 
@@ -22943,39 +22981,145 @@ value, and foo by reference.
 
 
 ={============================================================================
-*kt_dev_test_203* gmock: real example
+*kt_dev_test_206* gmock: cheat: combine actions
 
-<1> use gmock and cppunit
+Combining Actions
 
-class X {
+Want to do more than one thing when a function is called? That's fine. DoAll()
+allow you to do sequence of actions every time. Only the return value of the
+'last' action in the sequence will be used.
 
-class RepositoryTest : public CppUnit::TestFixture 
-{
+using ::testing::DoAll;
 
-    void setUp()
-    {
-        // note: 
-        // Create a mock object once and use it throughout tests
-        mockMB = boost::make_shared<NS_IRON_SYSTEM::MockEventRepositoryAsync>();
-    }
-
-    void testGetScheduleEventFull()
-    {
-        NS_X_SYSTEM::Result result;
-        result.recordIdentifier = "id12";
-
-        // note: <custom-action>
-        EXPECT_CALL(*mockMB, getEvent("abc"))
-            .WillOnce(returnNewCompletedFuture(result));
-
-        // note: Broker is from setUp()
-        NS_Z::Future<FullEventPtr> f = Broker->getFullEvent("abc");
-        boost::shared_ptr<FullEvent> fe(f.get());
-
-        CPPUNIT_ASSERT(fe);
-        CPPUNIT_ASSERT_EQUAL(result.recordIdentifier, fe->getRecordIdentifier());
-    }
+class MockFoo : public Foo {
+ public:
+  MOCK_METHOD1(Bar, bool(int n));
 };
+...
+
+  EXPECT_CALL(foo, Bar(_))
+      .WillOnce(DoAll(action_1,
+                      action_2,
+                      ...
+                      action_n));
+
+
+={============================================================================
+*kt_dev_test_207* gmock: cook: nice and strict mock
+
+Some of the mocks are called quite often and are expected to have some default
+reaction which is expressed with WillByDefault() statement in setUp(). This
+still results is "Uninteresting mock call" warning generated pointing at the
+default value defined in setUp().
+
+To make output less verbose and avoid warning for mocks which are know to
+return some default, NiceMock template can be used. This commit wraps to of
+the mock objects known to have default value returned with NiceMock. This
+reduces the noise in the output while running the test. 
+
+https://code.google.com/p/googlemock/wiki/CookBook
+
+The Nice, the Strict, and the Naggy
+
+If a mock method has no EXPECT_CALL spec but is called, Google Mock will print
+a warning about the "uninteresting call". The 'rationale' is:
+
+New methods may be added to an interface after a test is written. We shouldn't
+fail a test just because a method it doesn't know about is called. However,
+this may also mean there's a bug in the test, so Google Mock shouldn't be
+  silent either. If the user believes these calls are harmless, he can add an
+  EXPECT_CALL() to suppress the warning. 
+
+However, sometimes you may want to suppress all "uninteresting call" warnings,
+while sometimes you may want the opposite, i.e. to treat all of them as
+  errors. Google Mock lets you make the decision on a per-mock-object basis.
+
+Suppose your test uses a mock class MockFoo:
+
+TEST(...) {
+  MockFoo mock_foo;
+  EXPECT_CALL(mock_foo, DoThis());
+  ... code that uses mock_foo ...
+}
+
+If a method of mock_foo other than DoThis() is called, it will be reported by
+Google Mock as a warning. However, if you rewrite your test to use
+NiceMock<MockFoo> instead, the warning will be 'gone', resulting in a cleaner
+test output:
+
+using ::testing::NiceMock;
+
+TEST(...) {
+  NiceMock<MockFoo> mock_foo;
+  EXPECT_CALL(mock_foo, DoThis());
+  ... code that uses mock_foo ...
+}
+
+NiceMock<MockFoo> is a subclass of MockFoo, so it can be used wherever MockFoo
+is accepted.
+
+It also works if MockFoo's constructor takes some arguments, as
+NiceMock<MockFoo> "inherits" MockFoo's constructors:
+
+using ::testing::NiceMock;
+
+TEST(...) {
+  NiceMock<MockFoo> mock_foo(5, "hi");  // Calls MockFoo(5, "hi").
+  EXPECT_CALL(mock_foo, DoThis());
+  ... code that uses mock_foo ...
+}
+
+
+The usage of StrictMock is similar, except that it makes all uninteresting
+calls failures:
+
+using ::testing::StrictMock;
+
+TEST(...) {
+  StrictMock<MockFoo> mock_foo;
+  EXPECT_CALL(mock_foo, DoThis());
+  ... code that uses mock_foo ...
+
+  // The test will fail if a method of mock_foo other than DoThis()
+  // is called.
+}
+
+There are some caveats though (I don't like them just as much as the next guy,
+    but sadly they are side effects of C++'s limitations):
+
+NiceMock<MockFoo> and StrictMock<MockFoo> only work for mock methods defined
+using the MOCK_METHOD* family of macros directly in the MockFoo class. If a
+mock method is defined in a base class of MockFoo, the "nice" or "strict"
+modifier may not affect it, depending on the compiler. In particular, nesting
+NiceMock and StrictMock (e.g. NiceMock<StrictMock<MockFoo> >) is not
+supported.
+
+The constructors of the base mock (MockFoo) cannot have arguments passed by
+non-const reference, which happens to be banned by the Google C++ style guide.
+
+During the constructor or destructor of MockFoo, the mock object is not nice
+or strict. This may cause surprises if the constructor or destructor calls a
+mock method on this object. 
+
+This behavior, however, is consistent with C++'s general rule: if a
+constructor or destructor calls a virtual method of this object, that method
+is treated as non-virtual. In other words, to the base class's constructor or
+destructor, this object behaves like an instance of the base class, not the
+derived class. This rule is required for safety. Otherwise a base constructor
+may use members of a derived class before they are initialized, or a base
+destructor may use members of a derived class after they have been destroyed. 
+
+Finally, you should be very cautious about when to use naggy or strict mocks,
+  as they tend to make tests more brittle and harder to maintain. When you
+  refactor your code without changing its externally visible behavior, ideally
+  you should't need to update any tests. If your code interacts with a naggy
+  mock, however, you may start to get spammed with warnings as the result of
+  your change. Worse, if your code interacts with a strict mock, your tests
+  may start to fail and you'll be forced to fix them. 
+  
+Our general recommendation is to use nice mocks (not yet the default) most of
+the time, use naggy mocks (the current default) when developing or debugging
+tests, and use strict mocks only as the last resort. 
 
 
 # ============================================================================
