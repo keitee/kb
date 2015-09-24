@@ -262,12 +262,13 @@
 |kt_linux_core_303|  case: msg q between threads
 
 |kt_linux_core_400| shared library
+*kt_linux_core_400* shared library: dynamic linker
 |kt_linux_core_401| shared library: ld --as-needed problem at link stage
 |kt_linux_core_402| shared library: search and resolve
 |kt_linux_core_403| shared library: resolve real problem. 
 |kt_linux_core_404| shared library: resolve real problem. hang on running application
 |kt_linux_core_405| shared library: dl and ABI. visibility
-|kt_linux_core_406| shared library: preload and monitor ld
+|kt_linux_core_406| shared library: preload, debug and monitor ld
 |kt_linux_core_407| shared library: further information
 |kt_linux_core_408| shared library: md5sum
 |kt_linux_core_409| shared library: inspect dynamic sections
@@ -5725,6 +5726,36 @@ diverted. From this directory it is easy to review which files are being
 installed where, and finally copy them to their final location by some means. 
 
 
+2.2.12 Automatic Dependency Tracking
+
+Dependency tracking is performed as a side-effect of compilation. Each time the
+build system compiles a source file, it computes its list of dependencies (in C
+    these are the header files included by the source being compiled). Later,
+any time make is run and a dependency appears to have changed, the dependent
+  files will be rebuilt.
+
+Automake generates code for automatic dependency tracking by default, unless the
+developer chooses to override it; for more information, see Dependencies.
+
+When configure is executed, you can see it probing each compiler for the
+dependency mechanism it supports (several mechanisms can be used):
+
+~/amhello-1.0 % ./configure --prefix /usr
+...
+checking dependency style of gcc... gcc3
+...
+
+Because dependencies are only computed as a side-effect of the compilation, no
+dependency information exists the first time a package is built. This is OK
+because all the files need to be built anyway: make does not have to decide
+which files need to be rebuilt. In fact, dependency tracking is completely
+useless for one-time builds and there is a configure option to disable this:
+
+--disable-dependency-tracking
+
+    Speed up one-time builds. 
+
+
 ={============================================================================
 *kt_linux_tool_150* automake: distcheck
 
@@ -5804,6 +5835,210 @@ mechanism. Note that distcheck-hook as well as AM_DISTCHECK_CONFIGURE_FLAGS and
 DISTCHECK_CONFIGURE_FLAGS are not honored in a subpackage Makefile.am, but the
 flags from AM_DISTCHECK_CONFIGURE_FLAGS and DISTCHECK_CONFIGURE_FLAGS are passed
 down to the configure script of the subpackage. 
+
+
+={============================================================================
+*kt_linux_tool_150* automake: example
+
+2.4 A Small Hello World
+
+In this section we recreate the amhello-1.0 package from scratch. The first
+subsection shows how to call the Autotools to instantiate the GNU Build System,
+while the second explains the meaning of the configure.ac and Makefile.am files
+  read by the Autotools. 
+
+
+2.4.1 Creating amhello-1.0.tar.gz
+
+Create the following files in an empty directory.
+
+    src/main.c is the source file for the hello program. We store it in the src/
+    subdirectory, because later, when the package evolves, it will ease the
+    addition of a man/ directory for man pages, a data/ directory for data
+    files, etc.
+
+    <1>
+    ~/amhello % cat src/main.c
+    #include <config.h>
+    #include <stdio.h>
+
+    int
+    main (void)
+    {
+      puts ("Hello World!");
+      puts ("This is " PACKAGE_STRING ".");
+      return 0;
+    }
+
+    <2>
+    README contains some very limited documentation for our little package.
+
+    ~/amhello % cat README
+    This is a demonstration package for GNU Automake.
+    Type 'info Automake' to read the Automake manual.
+
+    <3>
+    Makefile.am and src/Makefile.am contain Automake instructions for these two directories.
+
+    ~/amhello % cat src/Makefile.am
+    bin_PROGRAMS = hello
+    hello_SOURCES = main.c
+
+    <4>
+    ~/amhello % cat Makefile.am
+    SUBDIRS = src
+    dist_doc_DATA = README
+
+    <5>
+    Finally, configure.ac contains Autoconf instructions to create the configure script.
+
+    ~/amhello % cat configure.ac
+    AC_INIT([amhello], [1.0], [bug-automake@gnu.org])
+    AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+    AC_PROG_CC
+    AC_CONFIG_HEADERS([config.h])
+    AC_CONFIG_FILES([
+     Makefile
+     src/Makefile
+    ])
+    AC_OUTPUT
+
+Once you have these five files, it is time to run the Autotools to instantiate
+the build system. Do this using the autoreconf command as follows:
+
+~/amhello % autoreconf --install
+configure.ac: installing './install-sh'
+configure.ac: installing './missing'
+configure.ac: installing './compile'
+src/Makefile.am: installing './depcomp'
+
+At this point the build system is complete. 
+
+In addition to the three scripts mentioned in its output, you can see that
+autoreconf 'created' four other files: configure, config.h.in, Makefile.in, and
+src/Makefile.in. The latter three files are templates that will be adapted to
+the system by configure under the names config.h, Makefile, and src/Makefile.
+
+
+$ ls -alR
+.:
+total 36
+drwxr-xr-x 3 kpark kpark  4096 Sep 24 13:47 .
+drwxr-xr-x 8 kpark kpark  4096 Sep 23 17:14 ..
+-rw-r--r-- 1 kpark kpark   188 Sep 24 13:47 configure.ac
+-rw-r--r-- 1 kpark kpark    36 Sep 23 15:39 Makefile.am
+-rw-r--r-- 1 kpark kpark    56 Sep 23 15:36 README
+drwxr-xr-x 2 kpark kpark  4096 Sep 23 15:39 src
+
+./src:
+total 16
+drwxr-xr-x 2 kpark kpark 4096 Sep 23 15:39 .
+drwxr-xr-x 3 kpark kpark 4096 Sep 24 13:47 ..
+-rw-r--r-- 1 kpark kpark  133 Sep 23 15:35 main.c
+-rw-r--r-- 1 kpark kpark   45 Sep 23 15:39 Makefile.am
+
+
+
+$ ls -alR
+.:
+total 292
+drwxr-xr-x 4 kpark kpark   4096 Sep 24 13:49 .
+drwxr-xr-x 8 kpark kpark   4096 Sep 23 17:14 ..
+-rw-r--r-- 1 kpark kpark  34939 Sep 24 13:49 aclocal.m4
+drwxr-xr-x 2 kpark kpark   4096 Sep 24 13:49 autom4te.cache
+-rw-r--r-- 1 kpark kpark    625 Sep 24 13:49 config.h.in
+-rwxr-xr-x 1 kpark kpark 139386 Sep 24 13:49 configure
+-rw-r--r-- 1 kpark kpark    188 Sep 24 13:47 configure.ac
+-rwxr-xr-x 1 kpark kpark  20899 Sep 24 13:49 depcomp
+-rwxr-xr-x 1 kpark kpark  13998 Sep 24 13:49 install-sh
+-rw-r--r-- 1 kpark kpark     36 Sep 23 15:39 Makefile.am
+-rw-r--r-- 1 kpark kpark  17822 Sep 24 13:49 Makefile.in
+-rwxr-xr-x 1 kpark kpark  10346 Sep 24 13:49 missing
+-rw-r--r-- 1 kpark kpark     56 Sep 23 15:36 README
+drwxr-xr-x 2 kpark kpark   4096 Sep 24 13:49 src
+
+./autom4te.cache:
+total 352
+drwxr-xr-x 2 kpark kpark   4096 Sep 24 13:49 .
+drwxr-xr-x 4 kpark kpark   4096 Sep 24 13:49 ..
+-rw-r--r-- 1 kpark kpark 139847 Sep 24 13:49 output.0
+-rw-r--r-- 1 kpark kpark 139847 Sep 24 13:49 output.1
+-rw-r--r-- 1 kpark kpark   6687 Sep 24 13:49 requests
+-rw-r--r-- 1 kpark kpark  34070 Sep 24 13:49 traces.0
+-rw-r--r-- 1 kpark kpark  20296 Sep 24 13:49 traces.1
+
+./src:
+total 32
+drwxr-xr-x 2 kpark kpark  4096 Sep 24 13:49 .
+drwxr-xr-x 4 kpark kpark  4096 Sep 24 13:49 ..
+-rw-r--r-- 1 kpark kpark   133 Sep 23 15:35 main.c
+-rw-r--r-- 1 kpark kpark    45 Sep 23 15:39 Makefile.am
+-rw-r--r-- 1 kpark kpark 14732 Sep 24 13:49 Makefile.in
+
+
+Let's do this:
+
+~/amhello % ./configure
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking for gawk... no
+checking for mawk... mawk
+checking whether make sets $(MAKE)... yes
+...
+
+
+$ ls -alR
+.:
+total 364
+drwxr-xr-x 4 kpark kpark   4096 Sep 24 13:57 .
+drwxr-xr-x 8 kpark kpark   4096 Sep 23 17:14 ..
+-rw-r--r-- 1 kpark kpark  34939 Sep 24 13:49 aclocal.m4
+drwxr-xr-x 2 kpark kpark   4096 Sep 24 13:49 autom4te.cache
+-rw-r--r-- 1 kpark kpark    774 Sep 24 13:57 config.h ~
+-rw-r--r-- 1 kpark kpark    625 Sep 24 13:49 config.h.in
+-rw-r--r-- 1 kpark kpark   8255 Sep 24 13:57 config.log
+-rwxr-xr-x 1 kpark kpark  32599 Sep 24 13:57 config.status
+-rwxr-xr-x 1 kpark kpark 139386 Sep 24 13:49 configure
+-rw-r--r-- 1 kpark kpark    188 Sep 24 13:47 configure.ac
+-rwxr-xr-x 1 kpark kpark  20899 Sep 24 13:49 depcomp
+-rwxr-xr-x 1 kpark kpark  13998 Sep 24 13:49 install-sh
+-rw-r--r-- 1 kpark kpark  17972 Sep 24 13:57 Makefile ~
+-rw-r--r-- 1 kpark kpark     36 Sep 23 15:39 Makefile.am
+-rw-r--r-- 1 kpark kpark  17822 Sep 24 13:49 Makefile.in
+-rwxr-xr-x 1 kpark kpark  10346 Sep 24 13:49 missing
+-rw-r--r-- 1 kpark kpark     56 Sep 23 15:36 README
+drwxr-xr-x 3 kpark kpark   4096 Sep 24 13:57 src
+-rw-r--r-- 1 kpark kpark     23 Sep 24 13:57 stamp-h1
+
+./autom4te.cache:
+total 352
+drwxr-xr-x 2 kpark kpark   4096 Sep 24 13:49 .
+drwxr-xr-x 4 kpark kpark   4096 Sep 24 13:57 ..
+-rw-r--r-- 1 kpark kpark 139847 Sep 24 13:49 output.0
+-rw-r--r-- 1 kpark kpark 139847 Sep 24 13:49 output.1
+-rw-r--r-- 1 kpark kpark   6687 Sep 24 13:49 requests
+-rw-r--r-- 1 kpark kpark  34070 Sep 24 13:49 traces.0
+-rw-r--r-- 1 kpark kpark  20296 Sep 24 13:49 traces.1
+
+./src:
+total 52
+drwxr-xr-x 3 kpark kpark  4096 Sep 24 13:57 .
+drwxr-xr-x 4 kpark kpark  4096 Sep 24 13:57 ..
+drwxr-xr-x 2 kpark kpark  4096 Sep 24 13:57 .deps
+-rw-r--r-- 1 kpark kpark   133 Sep 23 15:35 main.c
+-rw-r--r-- 1 kpark kpark 14541 Sep 24 13:57 Makefile
+-rw-r--r-- 1 kpark kpark    45 Sep 23 15:39 Makefile.am
+-rw-r--r-- 1 kpark kpark 14732 Sep 24 13:49 Makefile.in
+
+./src/.deps:
+total 12
+drwxr-xr-x 2 kpark kpark 4096 Sep 24 13:57 .
+drwxr-xr-x 3 kpark kpark 4096 Sep 24 13:57 ..
+-rw-r--r-- 1 kpark kpark    8 Sep 24 13:57 main.Po
+
+You can see Makefile, src/Makefile, and config.h being created at the end after
+configure has probed the system. It is now possible to run all the targets we
+wish 
 
 
 ={============================================================================
@@ -6589,6 +6824,8 @@ $ nm -A /usr/lib/lib*.so 2> /dev/null | grep ' crypt$'
 
 <help>
 % man nm
+
+nm -C -U to get a demangled list of all undefined references
 
 -A
 -o
@@ -21414,6 +21651,158 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
     return res;
 }
 
+={============================================================================
+*kt_linux_core_400* uclibc
+
+http://www.uclibc.org/
+http://git.uclibc.org/uClibc/
+
+
+={============================================================================
+*kt_linux_core_400* uclibc: config ld_debug
+
+http://git.uclibc.org/uClibc/plain/extra/Configs/Config.in
+
+config SUPPORT_LD_DEBUG
+	bool "Build the shared library loader with debugging support"
+	depends on HAVE_SHARED
+	help
+	  Answer Y here to enable all the extra code needed to debug the uClibc
+	  native shared library loader.  The level of debugging noise that is
+	  generated depends on the LD_DEBUG environment variable...  Just set
+	  LD_DEBUG to something like: 'LD_DEBUG=token1,token2,..  prog' to
+	  debug your application.  Diagnostic messages will then be printed to
+	  the stderr.
+
+	  For now these debugging tokens are available:
+	    detail        provide more information for some options
+	    move          display copy processing
+	    symbols       display symbol table processing
+	    reloc         display relocation processing; detail shows the
+	                  relocation patch
+	    nofixups      never fixes up jump relocations
+	    bindings      displays the resolve processing (function calls);
+	                  detail shows the relocation patch
+	    all           Enable everything!
+
+	  The additional environment variable:
+	    LD_DEBUG_OUTPUT=file
+	  redirects the diagnostics to an output file created using
+	  the specified name and the process id as a suffix.
+
+	  An excellent start is simply:
+	    $ LD_DEBUG=binding,move,symbols,reloc,detail ./appname
+	  or to log everything to a file named 'logfile', try this
+	    $ LD_DEBUG=all LD_DEBUG_OUTPUT=logfile ./appname
+
+	  If you are doing development and want to debug uClibc's shared library
+	  loader, answer Y.  Mere mortals answer N.
+
+
+={============================================================================
+*kt_linux_core_400* uclibc: fail to find symbol
+
+Q: HOW to check if linker finds a symbols? 
+
+<1>
+Another unfortunate consequence of this situation, together with poor
+implementation of uClibc dynamic linker [2], is that some libraries fail to
+load. This can happen in a scenario when a C program loads a C library which
+loads another C library that depends on some C++ libraries. uClibc dynamic
+linker in some of such cases doesn't resolve symbols in the right order,
+especially for global C++ objects with constructors!
+
+[2] It's been proved many times that uClibc dynamic linker implementation
+available on devices is broken as it doesn't resolve symbols properly when their
+dependencies are complex enough. Possibly upstream implementation works better
+but the one available from Broadcom is a mix of a very old version and some
+random backported patches.
+
+This libgstcencdec.so is a C library which depends on another C library:
+libdrm.so. The latter one depends on several C++ libraries, with one being
+SystemAPI.so. Because SystemAPI.so now depends on dbus-c++-1, the dynamic linker
+tries to load it. But due some unfortunate library and symbol ordering, it gets
+it wrong which results in a SEGFAULT while scanning for plug-ins:
+
+Program received signal SIGSEGV, Segmentation fault.
+
+[Switching to Thread 0x77ff4000 (LWP 1548)]
+0x00000000 in ?? ()
+(gdb) bt
+#0 0x00000000 in ?? ()
+#1 0x7661d180 in global constructors keyed to eventloop_integration.cpp () 
+  from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+
+#2 0x7661d558 in __do_global_ctors_aux () from 
+  /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+
+
+<2>
+During development, works okay but suddenly failed to start during code
+management.
+
+After all, found that there is one function which thought was deleted but was in
+the code to be called. However, there is no function definition since it was
+removed but only calls to that function remained.
+
+How could that possible without linking error? Since it was so file and run nm:
+
+U        is undefined meaning extern
+
+This was undefined and supposed to be linked when loaded. So when run
+application, failed to find symbol and crashes. 
+
+root        1.1M Sep 18 15:16 core.gst-plugin-scan.8785.HUMAX.1442585817
+root        1.1M Sep 18 15:16 core.gst-plugin-scan.8786.HUMAX.1442585817
+root      171.9M Sep 18 15:17 core.multiqueue1:src.8775.HUMAX.1442585819
+
+
+<3>
+http://stackoverflow.com/questions/1617286/easy-check-for-unresolved-symbols-in-shared-libraries
+
+Q: To check if there are undefined symbol at compile time than dynamic loading
+time?
+
+A: (not checked yet)
+
+Check out the linker option -z defs / --no-undefined. When creating a shared
+object, it will cause the link to fail if there are unresolved symbols.
+
+If you are using gcc to invoke the linker, you'll use the compiler -Wl option to
+pass the option to the linker:
+
+gcc -shared ... -Wl,-z,defs
+
+As an example, consider the following file:
+
+#include <stdio.h>
+
+void forgot_to_define(FILE *fp);
+
+void doit(const char *filename)
+{
+    FILE *fp = fopen(filename, "r");
+    if (fp != NULL)
+    {
+        forgot_to_define(fp);
+        fclose(fp);
+    }
+}
+
+Now, if you build that into a shared object, it will succeed:
+
+> gcc -shared -fPIC -o libsilly.so silly.c && echo succeeded || echo failed
+succeeded
+
+But if you add -z defs, the link will fail and tell you about your missing symbol:
+
+> 
+gcc -shared -fPIC -o libsilly.so silly.c -Wl,-z,defs && echo succeeded || echo failed
+/tmp/cccIwwbn.o: In function `doit':
+silly.c:(.text+0x2c): undefined reference to `forgot_to_define'
+collect2: ld returned 1 exit status
+failed
+
 
 ={============================================================================
 *kt_linux_core_400* shared library
@@ -21646,45 +22035,62 @@ $ readelf -d thr | grep NEEDED
 (standard input):4: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 
 
-{dynamic-linker}
-note: From GCC doc, the dynamic loader is not part of GCC; it is part of the operating system.
+={============================================================================
+*kt_linux_core_400* shared library: dynamic linker
 
-Two steps must occur that are not required for programs that use static libraries:
+{dynamic-linker}
+note: From GCC doc, the dynamic loader is not part of GCC; it is part of the
+operating system.
+
+Two steps must occur that are not required for programs that use static
+libraries:
 
 $ gcc -c -fpic foo.c 
 $ gcc -shared -o libfoo.so foo.o
 $ gcc -o one main.c libfoo.so          <embedding-the-name-of-lib>
 
-1. At 'linktime'. Since the executable file 'no' longer contains copies of the object files that it
-requires, must have some mechanism for identifying the shared library that it needs at runtime.
+1. At 'linktime'. Since the executable file 'no' longer contains copies of the
+object files that it requires, must have some mechanism for identifying the
+shared library that it needs at runtime.
 
-This is done by 'embedding' the name of the shared library inside the executable during the link
-phase. DT_NEEDED tag in ELF.
+This is done by 'embedding' the name of the shared library inside the executable
+during the link phase. DT_NEEDED tag in ELF.
 
 $ readelf -d one | grep NEED
 0x00000001 (NEEDED)                     Shared library: [libfoo.so]    // note: "libfoo"
 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
 
-note: In order to embed the shared library in a executable that use so, requires 'so' file in linking.
+note: In order to embed the shared library in a executable that use so, requires
+'so' file in linking.
 
 
-2. At 'runtime', there must be some mechanism for 'resolving' the embedded library name-that is, for
-finding the shared library file corresponding to the name specified in the executable file-and then
-loading the library into memory, if it is not already present.
+2. At 'runtime', there must be some mechanism for 'resolving' the embedded
+library name-that is, for finding the shared library file corresponding to the
+name specified in the executable file-and then loading the library into memory,
+     if it is not already present.
 
 
-<dynamic-linking>
-The dynamic linking, which is the task of resolving the embedded library name at runtime. This task
-is performed by the dynamic linker (also called the dynamic linking loader or the runtime linker).
-The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2, which is employed by
-every ELF executable that uses shared libraries.
+{dynamic-linking}
+The dynamic linking, which is the task of resolving the embedded library name at
+runtime. This task is performed by the dynamic linker (also called the dynamic
+    linking loader or the runtime linker). The dynamic linker is 'itself' a
+'shared' library, named /lib/ld-linux.so.2, which is employed by every ELF
+executable that uses shared libraries.
 
+<host>
 $ ls -l /lib/ld-linux.so.2 
 lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
 
+<target>
+# ls -al /lib/ld-uClibc*
+-rwxr-xr-x    1 root     root         31760 Jul 31 11:10 /lib/ld-uClibc-0.9.32.1.so*
+lrwxrwxrwx    1 root     root            21 Aug  5 08:50 /lib/ld-uClibc.so -> ld-uClibc-0.9.32.1.so*
+lrwxrwxrwx    1 root     root            21 Aug  5 08:50 /lib/ld-uClibc.so.0 -> ld-uClibc-0.9.32.1.so*
+
 note:
-Every program-including those that use shared libraries-goes through a static-linking phase. At run
-time, a program that employs shared libraries additionally undergoes dynamic linking.
+Every program-including those that use shared libraries-goes through a
+static-linking phase. At run time, a program that employs shared libraries
+additionally undergoes dynamic linking.
 
 
 {ld-library-path}
@@ -22386,29 +22792,6 @@ $ nm -D libc.so.0 | ag pthread
 
 
 ={============================================================================
-*kt_linux_core_404* shared library: crash since not found symbol
-
-The problem:
-During development, works okay but suddenly failed to start during code
-management.
-
-After all, found that there is one function which thought was deleted but was in
-the code to be called. However, there is no function definition since it was
-removed but only calls to that function remained.
-
-How could that possible without linking error? Since it was so file and run nm:
-
-U        is undefined meaning extern
-
-This was undefined and supposed to be linked when loaded. So when run
-application, failed to find symbol and crashes. 
-
--rw-------    1 root     root        1.1M Sep 18 15:16 core.gst-plugin-scan.8785.HUMAX.1442585817
--rw-------    1 root     root        1.1M Sep 18 15:16 core.gst-plugin-scan.8786.HUMAX.1442585817
--rw-------    1 root     root      171.9M Sep 18 15:17 core.multiqueue1:src.8775.HUMAX.1442585819
-
-
-={============================================================================
 *kt_linux_core_405* shared library: dl and ABI. visibility
 
 When an executable starts, the dynamic linker loads 'all' of the shared libraries in the program's
@@ -22561,7 +22944,7 @@ note: there are more ways in LPI 42.3.
 
 
 ={============================================================================
-*kt_linux_core_406* shared library: preload and monitor ld
+*kt_linux_core_406* shared library: preload, debug and monitor ld
 
 {ld-preload}
 For testing purposes, it can sometimes be useful to 'selectively' override functions and other symbols

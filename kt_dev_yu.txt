@@ -54,6 +54,7 @@
 |kt_dev_uv_stack_252| stack: vanadium: browser remote debug
 |kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
 |kt_dev_uv_stack_254| stack: vanadium: listener
+*kt_dev_uv_stack_255* stack: vanadium: error handle
 *kt_dev_uv_stack_255* stack: vanadium: log lines
 
 |kt_dev_uv_stack_300| stack: copper: lsr (local storage repository)
@@ -2046,6 +2047,20 @@ int main(int argc, char *argv[]) {
 
 
 ={============================================================================
+*kt_dev_uv_stack_009* stack: lsr keys
+
+[root@HUMAX /]# getItem oem.device.model.variant    
+oem.device.model.variant=80B07002
+
+[From wiki]
+CTK = 80B07001
+ATK = 80B07002
+
+[root@HUMAX /]# getItem oem.device.duid
+oem.device.duid=DCD321-DTRT1000-0102bb
+
+
+={============================================================================
 *kt_dev_uv_stack_010* stack: commit
 
 DEVARCH-XXX: Single line brief description of what this does or fixes.
@@ -2161,7 +2176,7 @@ problem when links with nexusMgr shared library.
 
 
 <stash>
-kpark@wll1p04345:~/source/DEVARCH$ git push origin DEVARCH-9135:review/DEVARCH-9135/0
+~/source/DEVARCH$ git push origin DEVARCH-9135:review/DEVARCH-9135/0
 
 
 ={============================================================================
@@ -2170,8 +2185,8 @@ kpark@wll1p04345:~/source/DEVARCH$ git push origin DEVARCH-9135:review/DEVARCH-9
 {from-proc}
 As an example, can work out log file from fd info:
 
-root       793  0.7  1.0  25528  4176 ?        Sl   16:04   0:00 /opt/zinc/oss/sbin/NetworkManager 
-   --no-daemon --log-level=INFO
+root       793  0.7  1.0  25528  4176 ?        Sl   16:04   0:00 
+  /opt/zinc/oss/sbin/NetworkManager --no-daemon --log-level=INFO
 
 # ll /proc/793/fd
 fd/     fdinfo/ 
@@ -7630,10 +7645,59 @@ https://wiki.youview.co.uk/display/YVDP/Debugging?src=search
 {previous-impl}
 
 <0>
+
+WebCore/html/HTMLMediaElement.cpp
+
+void HTMLMediaElement::mediaPlayerNetworkStateChanged(MediaPlayer*)
+{
+    beginProcessingMediaPlayerCallback();
+    setNetworkState(m_player->networkState());
+    endProcessingMediaPlayerCallback();
+}
+
+void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
+{
+  // calles subroutines to translate 
+  // MediaPlayer::xxx such as FormatError to MEDIA_ERR_xxx
+}
+
+
 /humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/
 qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics
 
 MediaPlayer.cpp
+
+// Client callbacks.
+void MediaPlayer::networkStateChanged()
+{
+  // If more than one media engine is installed and this one failed before finding metadata,
+  // let the next engine try.
+  if (m_private->networkState() >= FormatError
+      && m_private->readyState() < HaveMetadata
+      && installedMediaEngines().size() > 1) 
+  {
+    if (m_contentMIMEType.isEmpty() || 
+        bestMediaEngineForTypeAndCodecs(m_contentMIMEType, 
+          m_contentTypeCodecs, m_keySystem, m_url, m_currentMediaEngine)) 
+    {
+      m_reloadTimer.startOneShot(0);
+      return;
+    }
+  }
+  if (m_mediaPlayerClient)
+    m_mediaPlayerClient->mediaPlayerNetworkStateChanged(this);
+}
+
+
+void MediaPlayerPrivateGStreamer::loadingFailed(MediaPlayer::NetworkState error)
+{
+  m_errorOccured = true;
+  if (m_networkState != error) {
+    m_networkState = error;
+    m_player->networkStateChanged();
+  }
+}
+
 
 #if USE(GSTREAMER)
 #include "MediaPlayerPrivateGStreamer.h"
@@ -8239,6 +8303,33 @@ supported by the element.
 GST_STREAM_ERROR_DECRYPT_NOKEY
 used when the stream is encrypted and can't be decrypted because no suitable key
 is available.
+
+
+<old-way>
+/qtwebkit/Source/WebCore/platform/graphics/MediaPlayer.h
+
+enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
+enum ReadyState  { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
+
+Use two channels and use networkstate for network and decode errors
+
+m_player->networkStateChanged();
+m_player->readyStateChanged();
+
+
+This is only place to use SRC_NOT_SUPPORTED
+
+WebCore/html/HTMLMediaElement.cpp
+
+else if (
+    (error == MediaPlayer::FormatError || error == MediaPlayer::NetworkError) 
+    && m_loadState == LoadingFromSrcAttr)
+{
+    noneSupported();
+    {
+      m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
+    }
+}
 
 
 ={============================================================================
@@ -13619,10 +13710,6 @@ root# dbus-monitor "interface=Zinc.Application.ApplicationManager"
 
 # what is it? LSR?
 root# getChildItems oem
-
-# what?
-export GST_PLUGIN_PATH=/opt/zinc/oss/lib:/opt/zinc/oss/lib/gstreamer-1.0
-export LD_LIBRARY_PATH=/lib:/usr/local/lib:/opt/zinc/oss/lib/gstreamer-1.0:/opt/zinc/oss/lib:/opt/zinc/oss/lib/python2.6
 
 LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so gst-launch-1.0 souphttpsrc location=http://54.225.86.153/INT01_LCN_551.sdp ! vqesdpdemux caps=video/mpegts ! queue ! tsnexusbin 
 
