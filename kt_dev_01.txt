@@ -203,6 +203,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_100| raii {factory-func} {auto-lock}
 |kt_dev_stl_101| smart pointer: shared
 |kt_dev_stl_102| smart pointer: weak
+*kt_dev_stl_103* smart pointer: unique
+*kt_dev_stl_104* smart pointer: points not to misuse
+*kt_dev_stl_105* smart pointer: gotw #102: exception safety
 |kt_dev_stl_102| smart pointer: internal: auto_ptr
 |kt_dev_stl_103| smart pointer: internal: shared_ptr
 |kt_dev_stl_104| smart pointer: examples
@@ -30717,7 +30720,7 @@ resource is transfered.
 
 
 ={============================================================================
-*kt_dev_stl_101* smart pointers
+*kt_dev_stl_101* smart pointer: shared
 
 {shared-ptr}
 A pointer that implements the concept of 'shared' ownership so that the object
@@ -30820,6 +30823,9 @@ new resource? Think that operator=() is to decrease a reference counter of
 left and to increase the one of right. However, cannot increase a count of new
 objects. 
 
+note: This is when set shared pointer with new resource and assignment works
+between shared pointers.
+
 To assign a new pointer to a sp, reset 'updates' reference count of sp. If sp is
 the only sp pointing at its object, reset frees sp's existing object. If q is
 passed, makes sp points to q otherwise makes sp nullptr. 
@@ -30832,7 +30838,7 @@ sp.reset(); or sp.reset(q);
 This is used to alloc a SP first and 'bind' it later.
 
 shared_ptr<string> pNico4;
-pNico4 = new string("nico");        // ERROR: no assignment for ordinary pointers
+pNico4 = new string("nico");        // ERROR
 pNico4.reset(new string("nico"));   // OK
 
 shared_ptr<int> p (new int(42));
@@ -30891,10 +30897,22 @@ r = q;
 cout << "q: " << q.use_count() << ", p: " << p.use_count() << ", r: " << r.use_count() << endl;
 
 
-<example> # StrBlob from p455 which show how to implement a new collection type to share.
+<cast>
+note that using the ordinary cast operators is not possible, because it results
+in undefined behavior:
 
-This shows when shared_ptr is useful than own raii since this case don't have 'copy-controls' and
-use syn versions but not a problem as it has only one member which is shared_ptr.
+shared_ptr<void> sp(new int);                // shared pointer holds a void* internally
+...
+shared_ptr<int>(static_cast<int*>(sp.get())) // ERROR: undefined behavior
+static_pointer_cast<int*>(sp)                // OK
+
+
+<ex> 
+StrBlob from p455 which show how to implement a new collection type to share.
+
+This shows when shared_ptr is useful than own raii since this case don't have
+'copy-controls' and use syn versions but not a problem as it has only one member
+which is shared_ptr.
 
 class StrBlob {
   friend class StrBlobPtr;
@@ -30956,13 +30974,13 @@ string& StrBlob::pop_back()
   return data->pop_back();
 };
 
-{Q} are these all operation on vector? what will happen when calls on empty vector?
+{Q} are these all operation on vector? what will happen when calls on empty
+vector?
 
 
 ={============================================================================
-*kt_dev_stl_102* smart pointers: weak_ptr
+*kt_dev_stl_102* smart pointer: weak
 
-{weak-ptr}
 The major reason to use shared_ptrs is to avoid taking care of the resources a
 pointer refers to. Two points:
 
@@ -31166,8 +31184,9 @@ class StrBlobPtr {
 std::shared_ptr<std::vector<std::string>>
 StrBlobPtr::check( std::size_t i, const std::string &msg ) const
 {
-  // note: lock returns 'shared' pointer when the vector is still around. If it's gone, lock()
-  // returns null.
+  // note: lock returns 'shared' pointer when the vector is still around. If
+  // it's gone, lock() returns null.
+
   auto ret = wptr.lock();
   if(!ret)
     throw std::runtime_error("unbounded StrBlobPtr");
@@ -31307,87 +31326,22 @@ corresponding shared_ptr constructor. If there is no valid referenced object,
 3. Use use_count(). Not recommended since it is slow and not reliable.
 
 
-<mis-use-shared-pointer> group notion
-1. Cyclic reference shown above.
-
-2. double delete. Have to ensure that only one 'group' of shared pointers owns
-an object.
-
-int* p = new int;
-shared_ptr<int> sp1(p);
-shared_ptr<int> sp2(p);   // no compile error but error in double delete.
-
-For this reason, you should always directly initialize a smart pointer the
-moment you create the object with its associated resource:
-
-shared_ptr<int> sp1(new int);
-shared_ptr<int> sp2(sp1);  // OK
-
-3. Indirectly double delete.
-Suppose that we want to introduce a member function for a Person that creates both the reference
-from a kid to the parent and a corresponding reference back:
-
-// shared_ptr<Person> initFamily (const string& name)
-// {
-//   shared_ptr<Person> mom(new Person(name+"'s mom"));
-//   shared_ptr<Person> dad(new Person(name+"'s dad"));
-//   shared_ptr<Person> kid(new Person(name,mom,dad));
-//   mom->kids.push_back(kid);
-//   dad->kids.push_back(kid);
-//   return kid;                                 // return kid
-// }
-
-shared_ptr<Person> initFamily (const string& name)
-{
-  shared_ptr<Person> mom(new Person(name+"'s mom"));
-  shared_ptr<Person> dad(new Person(name+"'s dad"));
-  shared_ptr<Person> kid(new Person(name));
-  kid->setParentsAndTheirKids(mom,dad);
-  return kid;                                 // return kid
-}
-
-void setParentsAndTheirKids (shared_ptr<Person> m = nullptr, shared_ptr<Person> f = nullptr) 
-{
-  mother = m;
-  father = f;
-  if (m != nullptr) {
-    m->kids.push_back(shared_ptr<Person>(this)); // ERROR 
-  }
-  if (f != nullptr) {
-    f->kids.push_back(shared_ptr<Person>(this)); // ERROR
-  }
-}
-
-The problem is the creation of a shared pointer out of this pointer. Want to set the kids of members
-mother and father. But to do that, we need a shared pointer to the kid, which we don't have at hand
-since this pointer is not shared pointer. This then creates a 'new' group of owners which is
-temporary. Two 'temporary' to kids and double delete in the end.
-
-One way to deal with this problem is to pass the shared pointer to the kid as a third argument. But
-the C++ standard library provides another option: class std::enable_shared_from_this<>.
-
-<further-details>
-2. cast operation
-note that using the ordinary cast operators is not possible, because it results in undefined
-behavior:
-
-shared_ptr<void> sp(new int);                // shared pointer holds a void* internally
-...
-shared_ptr<int>(static_cast<int*>(sp.get())) // ERROR: undefined behavior
-static_pointer_cast<int*>(sp)                // OK
-
+={============================================================================
+*kt_dev_stl_103* smart pointer: unique
 
 {unique-ptr} no copy support
-A pointer that implements the concept of 'exclusive' ownership and is a kind of a smart pointer that
-helps to avoid resource leaks when 'exceptions' are thrown. This was auto_ptr before C++11 and it has
-only one user because 'no' ordinary copy and assign are supported. Only 'one' unique_ptr at a time
-can point to a given object. So limit the use and it transfer ownerships.
+A pointer that implements the concept of 'exclusive' ownership and is a kind of
+a smart pointer that helps to avoid resource leaks when 'exceptions' are thrown.
+This was auto_ptr before C++11 and it has only one user because 'no' ordinary
+copy and assign are supported. Only 'one' unique_ptr at a time can point to a
+given object. So limit the use and it transfer ownerships.
 
-note: In contrast to shared pointers, a 'minimum' space and time overhead is the focus of this class.
+note: In contrast to shared pointers, a 'minimum' space and time overhead is the
+focus of this class.
 
 <why>
-The unique_ptr tries to solve the exactly same problem of raii. Say that unique_ptr is one of raii
-implementations.
+The unique_ptr tries to solve the exactly same problem of raii. Say that
+unique_ptr is one of raii implementations.
 
 <uses>
 Pretty much same as shared_ptr.
@@ -31644,6 +31598,241 @@ Is this contrary to encapsulation? true but raii donesn't exist to encapsulate s
 to ensure that a particular action - release resource - takes place. Encapsulation is not for every
 classes.
 
+
+={============================================================================
+*kt_dev_stl_104* smart pointer: points not to misuse
+
+CLR 5.2.3
+
+1. Cyclic reference shown above.
+
+
+2. Double delete. 
+Have to ensure that only one 'group' of shared pointers owns an object.
+
+int* p = new int;
+shared_ptr<int> sp1(p);
+shared_ptr<int> sp2(p);   // no compile error but error in double delete.
+
+For this reason, you should always directly initialize a smart pointer the
+moment you create the object with its associated resource:
+
+shared_ptr<int> sp1(new int);
+shared_ptr<int> sp2(sp1);  // OK
+
+
+3. Indirect double delete.
+Suppose that we want to introduce a member function for a Person that creates
+both the reference from a kid to the parent and a corresponding reference back:
+
+// shared_ptr<Person> initFamily (const string& name)
+// {
+//   shared_ptr<Person> mom(new Person(name+"'s mom"));
+//   shared_ptr<Person> dad(new Person(name+"'s dad"));
+//   shared_ptr<Person> kid(new Person(name,mom,dad));
+//   mom->kids.push_back(kid);
+//   dad->kids.push_back(kid);
+//   return kid;                                 // return kid
+// }
+
+shared_ptr<Person> initFamily (const string& name)
+{
+  shared_ptr<Person> mom(new Person(name+"'s mom"));
+  shared_ptr<Person> dad(new Person(name+"'s dad"));
+  shared_ptr<Person> kid(new Person(name));
+  kid->setParentsAndTheirKids(mom,dad);
+  return kid;                                 // return kid
+}
+
+void setParentsAndTheirKids (shared_ptr<Person> m = nullptr, 
+    shared_ptr<Person> f = nullptr) 
+{
+  mother = m;
+  father = f;
+  if (m != nullptr) {
+    m->kids.push_back(shared_ptr<Person>(this)); // ERROR 
+  }
+  if (f != nullptr) {
+    f->kids.push_back(shared_ptr<Person>(this)); // ERROR
+  }
+}
+
+The problem is the creation of a shared pointer out of `this` pointer. 
+
+Want to pass kid's shared pointer to mother and father but to do that, need a
+shared pointer to the kid, which we don't have at hand since this pointer is not
+shared pointer. So this creates temporary shared pointer from this which is
+'new' group of shared pointer. Two shared pointer group to the kid and when mom
+and dad go free, will do double delete.
+
+One way to deal with this problem is to pass the shared pointer to the kid as a
+third argument. But the C++ standard library provides another option: class
+std::enable_shared_from_this<>.
+
+
+<enable_shared_from_this>
+Can use class std::enable_shared_from_this<> to derive your class, representing
+objects managed by shared pointers, with your class name passed as template
+argument. Doing so allows you to use a derived member function
+shared_from_this() to create a correct shared_ptr out of `this`
+
+
+class Person : public std::enable_shared_from_this<Person> {
+  public:
+    ...
+      void setParentsAndTheirKids (shared_ptr<Person> m = nullptr,
+          shared_ptr<Person> f = nullptr) {
+        mother = m;
+        father = f;
+        if (m != nullptr) {
+          m->kids.push_back(shared_from_this()); // OK
+        }
+        if (f != nullptr) {
+          f->kids.push_back(shared_from_this()); // OK
+        }
+      }
+    ...
+};
+
+
+={============================================================================
+*kt_dev_stl_105* smart pointer: gotw #102: exception safety
+
+GotW #102: Exception-Safe Function Calls (Difficulty: 7/10)
+
+3. As you continue to root through the archives, you see that someone must not
+have liked Example 2 because later versions of the files in question were
+changed as follows:
+
+// Example 3
+ 
+// In some header file:
+void f( std::unique_ptr<T1>, std::unique_ptr<T2> );
+ 
+// At some call site:
+f( std::unique_ptr<T1>{ new T1 }, std::unique_ptr<T2>{ new T2 } );
+
+What improvements does this version offer over Example 2, if any? Do any
+  exception safety problems remain? Explain.
+
+This code attempts to “throw unique_ptr at the problem.” Many people believe
+that a smart pointer is an exception-safety panacea, a touchstone or amulet that
+by its mere presence somewhere nearby can help ward off compiler indigestion.
+
+It is not. Nothing has changed. Example 3 is still not exception-safe, for
+exactly the same reasons as before.
+
+Specifically, the problem is that the resources are safe only if they really
+make it into a managing unique_ptr, but the same problems already noted can
+still occur before either unique_ptr constructor is ever 'reached'. This is
+because both of the two problematic execution orders mentioned earlier are still
+possible, but now with the unique_ptr constructors tacked onto the end before
+invoking f. For one example:
+
+    allocate memory for the T1
+    construct the T1
+    allocate memory for the T2
+    construct the T2
+    construct the unique_ptr<T1>
+    construct the unique_ptr<T2>
+    call f
+
+In the above case, the same problems are still present if either of steps 3 or 4
+throws. Similarly with:
+
+    allocate memory for the T1
+    allocate memory for the T2
+    construct the T1
+    construct the T2
+    construct the unique_ptr<T1>
+    construct the unique_ptr<T2>
+    call f
+
+Again, the same problems are present if either of steps 3 or 4 throws.
+
+Fortunately, though, this is not a problem with unique_ptr; it’s just being used
+the wrong way, that’s all. Let’s see how to use it better.
+
+
+Enter make_unique
+
+4. Demonstrate how to write a make_unique facility that solves the safety
+problems in Example 3 and can be invoked as follows:
+
+// Example 4
+ 
+// In some header file:
+void f( std::unique_ptr<T1>, std::unique_ptr<T2> );
+ 
+// At some call site:
+f( make_unique<T1>(), make_unique<T2>() );
+
+The basic idea is:
+
+    We want to leverage the fact that functions called from the same thread
+    won't interleave, so we want to provide a function that does the work of
+    allocation and construction of the object and construction of the
+    unique_ptr.
+
+    Because the function should be able to work with any type, we want to
+    express it as a function template.
+
+    Because the caller will want to pass constructor parameters from outside
+    make_unique, we’ll use the C++11 perfect forwarding style to pass those
+    along to the new-expression inside make_unique.
+
+    Because shared_ptr already has an analogous std::make_shared, for
+    consistency we’ll call this one make_unique. (That C++11 doesn’t include
+        make_unique is partly an oversight, and it will almost certainly be
+        added in the future. In the meantime, use the one provided below.)
+
+Putting the ingredients together, we get:
+
+template<typename T, typename ...Args>
+std::unique_ptr<T> make_unique( Args&& ...args )
+{
+    return std::unique_ptr<T>( new T( std::forward<Args>(args)... ) );
+}
+
+This solves the exception safety problems. No sequence of generated code can
+cause resources to be leaked, because now all we have is two functions, and we
+know that one must be executed entirely before the other. Consider the following
+evaluation order:
+
+    call make_unique<T1>
+    call make_unique<T2>
+    call f
+
+If step 1 throws, there are no leaks because make_unique is itself strongly
+exception-safe.
+
+If step 2 throws, then is the temporary unique_ptr<T1> created by step 1
+guaranteed to be cleaned up? Yes, it is. One might wonder: Isn't this pretty
+much the same as the new T1 object created in the corresponding case in Example
+2, which isn't correctly cleaned up? No, this time it's not quite the same,
+  because here the unique_ptr<T1> is actually a temporary object, and cleanup of
+  temporary objects is correctly specified in the standard. From the standard,
+  in 12.2/3 (unchanged from C++98):
+
+  "" Temporary objects are destroyed as the last step in evaluating the
+  full-expression that (lexically) contains the point where they were created.
+  This is true even if that evaluation ends in throwing an exception.
+
+Guidelines:
+
+    Prefer to allocate objects to be managed by a shared_ptr using make_shared,
+    and objects to be managed by a unique_ptr with make_unique.
+
+    Although Standard C++ does not yet have make_unique, this is mostly an
+    oversight and it will almost certainly eventually be added. In the meantime,
+    use the version shown above, and your code will be forward-compatible with
+    the likely direction of the C++ standard.
+
+    Avoid using plain new or other raw unmanaged allocation directly. Instead,
+    use a factory like make_unique that wraps the raw allocation and immediately
+    passes it to another object that will own the resource. Often that owning
+    object will be a smart pointer, but it can be a scope guard or any other
+    kind of owning object whose destructor will deallocate the resource safely.
 
 
 ={============================================================================
