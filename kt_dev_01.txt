@@ -43,10 +43,11 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_005| error: expected '}' at end of input
 |kt_dev_gcc_006| error: expected specifier-qualifier-list before 'X' or error: 'X' does not name a type 
 |kt_dev_gcc_007| error: expected '=', ',', ';', 'asm' or '__attribute__' before
-|kt_dev_gcc_008| warning: deprecated conversion from string constant to 'char*' [-Wwrite-strings]
+|kt_dev_gcc_008| warn: deprecated conversion from string constant to 'char*' [-Wwrite-strings]
 |kt_dev_gcc_009| error: jump to case label and crosses initialisation of 
 |kt_dev_gcc_010| error: dereferencing pointer to incomplete type
 *kt_dev_gcc_011* error: void value not ignored as it ought to be
+*kt_dev_gcc_012* warn: may be used uninitialized in this function -Wmaybe-uninitialized
 
 |kt_dev_gcc_100| gcc and c++11 {how-to-use-gcc-optimisation} {gcc-profiling} {gcc-options}
 |kt_dev_gcc_101| gcc typeof
@@ -4235,6 +4236,91 @@ void N_Playpump_GetSettings(
     N_PlaypumpHandle playpump,
     N_PlaypumpSettings *pSettings /* [out] */
     );
+
+
+={============================================================================
+*kt_dev_gcc_012* warn: may be used uninitialized in this function -Wmaybe-uninitialized
+
+error: 'value' may be used uninitialized in this function 
+  [-Werror=maybe-uninitialized]
+
+This is promoted to error since -Wall used. However, coundn't find easily why
+it emited this warning in the code below:
+
+
+else {
+  ErrorEventValue::Enum errVal = ErrorEventValue::other;
+  ErrorEventContext::Enum errContext = ErrorEventContext::other;
+
+  if (...) {
+    boost::tie(errVal, errContext) =
+      mapGStreamerToMediaRouterError_src(error, text_msg, msg->src) ;
+
+  } else if (...) {
+    boost::tie(errVal, errContext) =
+      mapGStreamerToMediaRouterError_sink(error);
+
+  } else {
+    errVal = ErrorEventValue::other;
+    errContext = ErrorEventContext::other;
+  }
+
+  // ERROR:
+  produceEvent(
+      boost::bind(&MediaRouterEventListener::ErrorEvent, _1,
+        errVal, errContext, text_msg));
+
+  // OK: when use enum directly
+  // produceEvent(
+  //     boost::bind(&MediaRouterEventListener::ErrorEvent, _1,
+  //                 ErrorEventValue::other, ErrorEventContext::other, test_msg));
+}
+
+
+From GCC:
+
+-Wmaybe-uninitialized
+    For an automatic variable, if there exists a path from the function entry
+    to a use of the variable that is initialized, but there exist some other
+    paths for which the variable is not initialized, the compiler emits a
+    warning if it cannot prove the uninitialized paths are not executed at run
+    time. These warnings are made optional because GCC is not smart enough to
+    see all the reasons why the code might be correct in spite of appearing to
+    have an error. Here is one example of how this can happen:
+
+              {
+                int x;
+                switch (y)
+                  {
+                  case 1: x = 1;
+                    break;
+                  case 2: x = 4;
+                    break;
+                  case 3: x = 5;
+                  }
+                foo (x);
+              }
+
+    If the value of y is always 1, 2 or 3, then x is always initialized, but
+    GCC doesn't know this. To suppress the warning, you need to provide a
+    default case with assert(0) or similar code. 
+
+Cannot see path which goes with unitialized variable. Worse, didn't change
+this function. WTF?
+
+https://gcc.gnu.org/wiki/Better_Uninitialized_Warnings
+
+
+The cause is this: This check applies to not only the current function but
+also sub function calls. The 'value' variable in the message is one from
+called one and there it is not initialized. When initialize it, error goes
+away.
+
+std::pair<> mapGStreamerToMediaRouterError_src(error, text_msg, msg->src)
+{
+    ErrorEventValue::Enum value;
+    ...
+}
 
 
 ={============================================================================

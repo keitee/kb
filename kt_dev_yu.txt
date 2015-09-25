@@ -1,5 +1,7 @@
 *kt_dev_uv*                                                             tw=100
 
+|kt_dev_uv_set_000| tvos-chat
+
 |kt_dev_uv_set_001| setup printer
 |kt_dev_uv_set_002| setup email
 |kt_dev_uv_set_003| setup: humax build the stack
@@ -132,6 +134,34 @@
 |kt_dev_uv_task_008| task:07: DEVARCH-9557: netflix launch issue
 |kt_dev_uv_task_009| task:08: fr15: hls: DEVARCH-9722
 *kt_dev_uv_task_010* task:09: fr15: hls: DEVARCH-9861
+
+
+# ============================================================================
+#{
+={============================================================================
+*kt_dev_uv_set_000* tvos-chat
+
+Fri Sep 25 11:22:31 BST 2015
+
+Kris Konopko·9:55 AM
+all if you pull from master and want to use YouView MR, you need to edit the
+following file on the device:
+
+/opt/zinc-trunk/share/nickel-system-gstreamer/titaniumdeviceauthority-system-factory.plugin-config
+
+or get your device's DUID listed in the authorisation service under
+"yv-mediarouter" feature if you choose the first method, put this as the first
+line in the plugin-config file:
+
+libTitaniumDeviceAuthoritySystemOff.so createOffSystemFactory
+
+(no need to delete the original line which becomes the second one) unfortunately
+this needs to be done manually now each time you deploy your device... you could
+use `-D` option for patch-a-tron script but that would disable all authorisation
+and you'd end up enabling NextGen UI which may or may not launch any ideas for
+this to make it all easier are welcome also `gstmr-play.sh` now accepts `-n`
+option which will use the already running (sandboxed) nickelmediad (or activate
+    it) instead of launching a new one locally on the command line
 
 
 # ============================================================================
@@ -7662,10 +7692,11 @@ void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
 }
 
 
-/humax.1000/zinc-build-root/release-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/
-qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics
+/qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics/
+MediaPlayer.h, cpp
 
-MediaPlayer.cpp
+enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
+enum ReadyState  { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
 
 // Client callbacks.
 void MediaPlayer::networkStateChanged()
@@ -7687,6 +7718,12 @@ void MediaPlayer::networkStateChanged()
   if (m_mediaPlayerClient)
     m_mediaPlayerClient->mediaPlayerNetworkStateChanged(this);
 }
+
+
+Use two channels and use networkstate for network and decode errors
+
+m_player->networkStateChanged();
+m_player->readyStateChanged();
 
 
 void MediaPlayerPrivateGStreamer::loadingFailed(MediaPlayer::NetworkState error)
@@ -8259,8 +8296,11 @@ public:
         NETWORK_EMPTY,
         NETWORK_IDLE,
         NETWORK_LOADING,
+
         NETWORK_ERROR,
+
         NETWORK_LOADED,
+
         DECODE_ERROR,
         FORMAT_ERROR
     };
@@ -8274,6 +8314,13 @@ public:
         HAVE_ENOUGH_DATA
     };
 }
+
+
+source:
+"GstSoupHTTPSrc" "GstTypeFindElement" "uri-decoder"
+
+sink:
+"videodecoder", "audiodecoder"
 
 
 enum GstStreamError
@@ -8306,30 +8353,97 @@ is available.
 
 
 <old-way>
-/qtwebkit/Source/WebCore/platform/graphics/MediaPlayer.h
 
-enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
-enum ReadyState  { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
+/qtwebkit/Source/WebCore/html/MediaError.h
+namespace WebCore {
 
-Use two channels and use networkstate for network and decode errors
-
-m_player->networkStateChanged();
-m_player->readyStateChanged();
-
-
-This is only place to use SRC_NOT_SUPPORTED
+class MediaError : public RefCounted<MediaError> {
+public:
+    enum Code {
+        MEDIA_ERR_ABORTED = 1,
+        MEDIA_ERR_NETWORK,
+        MEDIA_ERR_DECODE,
+        MEDIA_ERR_SRC_NOT_SUPPORTED
+#if ENABLE(ENCRYPTED_MEDIA)
+        , MEDIA_ERR_ENCRYPTED
+#endif
+    };
+};
 
 WebCore/html/HTMLMediaElement.cpp
 
+<1>
 else if (
     (error == MediaPlayer::FormatError || error == MediaPlayer::NetworkError) 
     && m_loadState == LoadingFromSrcAttr)
 {
+    // This is only place to use SRC_NOT_SUPPORTED
     noneSupported();
     {
       m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
     }
 }
+
+
+<2>
+else if (error == MediaPlayer::DecodeError)
+  mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_DECODE));
+
+<3>
+if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
+  mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
+
+<4> not in any of the above domain
+error = MediaPlayer::Empty;
+
+
+{mapping}
+
+<1> check error code only
+
+MediaPlayerPrivateGStreamer.cpp:
+
+if (err->code == GST_STREAM_ERROR_CODEC_NOT_FOUND
+    || err->code == GST_STREAM_ERROR_WRONG_TYPE
+    || err->code == GST_STREAM_ERROR_FAILED
+    || err->code == GST_CORE_ERROR_MISSING_PLUGIN
+    || err->code == GST_RESOURCE_ERROR_NOT_FOUND
+    || err->code == GST_RESOURCE_ERROR_BUSY
+    || err->code == GST_RESOURCE_ERROR_SETTINGS) {
+
+  if (m_readyState == MediaPlayer::HaveMetadata) {
+    MediaPlayer::FormatError;
+  else if (m_readyState > MediaPlayer::HaveMetadata) {
+    MediaPlayer::DecodeError;
+
+  m_player->networkStateChanged();
+
+->
+
+HTMLMediaElement.cpp:
+
+    MediaPlayer::FormatError || MediaPlayer::NetworkError
+      m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
+
+
+<2>
+else if (err->domain == GST_STREAM_ERROR) {
+
+  if (err->code == GST_STREAM_ERROR_TYPE_NOT_FOUND) {
+    ERROR_MEDIA_MESSAGE("Decode error, let the Media element emit a stalled event.\n");
+    g_free(err);
+    g_free(debug);
+    break;
+  }
+
+  error = MediaPlayer::DecodeError;
+
+<3>
+else if (err->domain == GST_RESOURCE_ERROR)
+  error = MediaPlayer::NetworkError;
+
+<4>
+  error = MediaPlayer::Empty; -> NETWORK_EMPTY
 
 
 ={============================================================================
@@ -11468,6 +11582,16 @@ Here, "eSar" and square AR
 ar: 6, { 1, 1 }
 
 dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
+
+
+={============================================================================
+*kt_dev_uv_stack_411* stack: media:
+
+ls -al /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstnexus.so.0.0.0
+374351 Sep 23 16:42 /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstnexus.so.0.0.0*
+
+ls -al /opt/zinc-trunk/lib/gstreamer-1.0/libgstcenccrypto.so.0.0.0
+29423 Sep 24 08:27 /opt/zinc-trunk/lib/gstreamer-1.0/libgstcenccrypto.so.0.0.0*
 
 
 ={============================================================================
