@@ -140,12 +140,13 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 
 |kt_dev_env_git_029| recover and dangling
 |kt_dev_env_git_030| git-stash
-|kt_dev_env_git_032| list
+|kt_dev_env_git_032| git-list
 |kt_dev_env_git_033| git-add: rm, mv
 *kt_dev_env_git_033* git-clean
 |kt_dev_env_git_034| git-diff, difftool
 |kt_dev_env_git_035| git-show
-|kt_dev_env_git_036| commit
+|kt_dev_env_git_036| git-commit
+*kt_dev_env_git_037* git-blame
 
 |kt_dev_env_git_100| case: determine what is introduced. commit ranges.
 |kt_dev_env_git_038| grep
@@ -160,7 +161,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_152| git-fetch
 |kt_dev_env_git_153| git-pull: --rebase
 |kt_dev_env_git_154| git-push: refspec
-|kt_dev_env_git_155| 
+*kt_dev_env_git_155* git-push: hook and pre-push check
 |kt_dev_env_git_156| 
 |kt_dev_env_git_157| remote: branch inspect, show, and ls-remote
 |kt_dev_env_git_158| remote: push errors. bare
@@ -6064,53 +6065,6 @@ generally preceded by double dashes (--) to separate the paths from the options.
 
 $ git log -- Polonium/Polonium.GSTNexus
 
-<use-string> 
-
-note: some says it is to search function
-
-Another really helpful filter is the -S option which takes a string and only
-shows the commits that introduced a change to the code that added or removed
-that string. For instance, if you wanted to find the last commit that added or
-removed a reference to a specific function, you could call:
-
-$ git log -S function_name
-
-// -S<string>
-// 
-//     Look for differences that change the number of occurrences of the
-//     specified string (i.e. addition/deletion) in a file. Intended for the
-//     scripter’s use.
-// 
-//     It is useful when you’re looking for an exact block of code (like a
-//     struct), and want to know the history of that block since it first came
-//     into being: use the feature iteratively to feed the interesting block in
-//     the preimage back into -S, and keep going until you get the very first
-//     version of the block.
-
-
-note: how differ with git-grep
-
-$ git grep pes_stream_get_duration
-src/concurrent_pes_writer.c:    chunk->duration = pes_stream_get_duration(data);
-src/pes.c:GstClockTime pes_stream_get_duration(PesStream *stream)
-src/pes.h:GstClockTime pes_stream_get_duration(PesStream* stream);
-
-$ git log -S pes_stream_get_duration
-commit 23b5d6607917a3fb8613cf31f37b234767b9c3e0
-Author: xxx 
-Date:   Tue Apr 21 10:36:25 2015 +0100
-
-    Even though STB hardware supports several playpumps (see DEVARCH-8872),
-    OEMs only make one playpump available to YouView. If we write each
-    elementary stream into its own playpump, by the time we need to support
-    audio description with DASH playback, we would need a total of 3
-    playpumps. Therefore we implemented software-based multiplexing of
-    multiple elementary streams to a single playpump.
-    
-    This commit introduces such multiplexing mechanism. Note that transport
-    streams (including HLS) will still use the old code path.
-
-$ git log -p -S pes_stream_get_duration
 
 <use-author>
 --author option allows you to filter on a specific author
@@ -8541,7 +8495,7 @@ Shows difference from the parent where stash was made.
 
 
 ={============================================================================
-*kt_dev_env_git_032* git list
+*kt_dev_env_git_032* git-list
 
 {list}
 Lists all the files being tracked by your git repo.
@@ -9006,22 +8960,235 @@ Date:   Tue Feb 17 09:08:44 2015 +0000
        
 
 ={============================================================================
-*kt_dev_env_git_036* commit
+*kt_dev_env_git_036* git-commit
+
+git-commit - Record changes to the repository
+
+DESCRIPTION
+
+Stores the current contents of the index in a new commit along with a log
+message from the user describing the changes.
+
 
 $ git commit
 [master 312e37a] Stroy 182: fix benchmarks for speed
  1 file changed, 1 insertion(+)
 
+-v
 --verbose
+
+    Show unified diff between the HEAD commit and what would be committed at the
+    bottom of the commit message template to help the user describe the commit
+    by reminding what changes the commit has. Note that this diff output doesn't
+    have its lines prefixed with #. This diff will not be a part of the commit
+    message.
+
+    If specified twice, show in addition the unified diff between what would be
+    committed and the worktree files, i.e. the unstaged changes to tracked
+    files.
+
 $ git commit -v
+
+-m <msg>
+--message=<msg>
+
+    Use the given <msg> as the commit message. If multiple -m options are given,
+    their values are concatenated as separate paragraphs.
 
 $ git commit -m "Stroy 182: fix benchmarks for speed"
 
 <a-option>
-the -a option to the git commit command makes Git automatically stage every file that is already
-tracked 'before' doing the commit, letting you skip the git add part:
+the -a option to the git commit command makes Git automatically stage every file
+that is already tracked 'before' doing the commit, letting you skip the git add
+part:
+
+-a
+--all
+
+    Tell the command to automatically stage files that have been modified and
+    deleted, but new files you have not told Git about are not affected.
 
 $ git commit -am 'added new benchmarks'
+
+
+={============================================================================
+*kt_dev_env_git_037* git-blame
+
+Debugging with Git: File Annotation
+
+If you track down a bug in your code and want to know when it was introduced and
+why, file annotation is often your best tool. It shows you what commit was the
+'last' to 'modify' each line of any file. So, if you see that a method in your
+code is buggy, you can annotate the file with git blame to see when each line of
+the method was last edited and by whom. This example uses the -L option to limit
+the output to lines 12 through 22:
+
+
+DESCRIPTION
+
+Annotates each line in the given file with information from the revision which
+last modified the line. Optionally, start annotating from the given revision.
+
+When specified one or more times, -L restricts annotation to the requested
+lines.
+
+-L <start>,<end>
+-L :<funcname>
+
+    Annotate only the given line range. May be specified multiple times.
+    Overlapping ranges are allowed.
+
+    <start> and <end> are optional. “-L <start>” or “-L <start>,” spans from
+    <start> to end of file. “-L ,<end>” spans from start of file to <end>.
+
+The report does not tell you anything about lines which have been deleted or
+replaced; you need to use a tool such as git diff or the "pickaxe" interface
+briefly mentioned in the following paragraph.
+
+
+<ex>
+
+$ git blame -L 12,22 simplegit.rb
+^4832fe2 (Scott Chacon 2008-03-15 10:31:28 -0700 12) def show(tree = 'master')
+^4832fe2 (Scott Chacon 2008-03-15 10:31:28 -0700 13) command("git show #{tree}")
+^4832fe2 (Scott Chacon 2008-03-15 10:31:28 -0700 14) end
+^4832fe2 (Scott Chacon 2008-03-15 10:31:28 -0700 15)
+9f6560e4 (Scott Chacon 2008-03-17 21:52:20 -0700 16) def log(tree = 'master')
+79eaf55d (Scott Chacon 2008-04-06 10:15:08 -0700 17) command("git log #{tree}")
+9f6560e4 (Scott Chacon 2008-03-17 21:52:20 -0700 18) end
+...
+
+Also note the ^4832fe2 commit lines, which designate that those lines were in
+this file's original commit. That commit is when this file was first added to
+this project, and those lines have been unchanged since. This is a tad
+confusing, because now you've seen at least three different ways that Git uses
+the ^ to modify a commit SHA-1, but that is what it means here.
+
+
+{moved-or-removed}
+
+One of the interesting features of this is that you can ask it to figure out all
+sorts of code movement as well. If you pass -C to git blame, Git analyzes the
+file you're annotating and tries to figure out where snippets of code within it
+originally came from if they were copied from elsewhere. For example, say you
+are refactoring a file named GITServerHandler.m into multiple files, one of
+which is GITPackUpload.m. By blaming GITPackUpload.m with the -C option, you can
+see where sections of the code originally came from:
+
+$ git blame -C -L 141,153 GITPackUpload.m
+f344f58d GITServerHandler.m (Scott 2009-01-04 141)
+f344f58d GITServerHandler.m (Scott 2009-01-04 142) - (void) gatherObjectShasFromC
+f344f58d GITServerHandler.m (Scott 2009-01-04 143) {
+70befddd GITServerHandler.m (Scott 2009-03-22 144) //NSLog(@"GATHER COMMI
+ad11ac80 GITPackUpload.m (Scott 2009-03-24 145)
+ad11ac80 GITPackUpload.m (Scott 2009-03-24 146) NSString *parentSha;
+ad11ac80 GITPackUpload.m (Scott 2009-03-24 147) GITCommit *commit = [g
+ad11ac80 GITPackUpload.m (Scott 2009-03-24 148)
+ad11ac80 GITPackUpload.m (Scott 2009-03-24 149) //NSLog(@"GATHER COMMI
+ad11ac80 GITPackUpload.m (Scott 2009-03-24 150)
+56ef2caf GITServerHandler.m (Scott 2009-01-05 151) if(commit) {
+56ef2caf GITServerHandler.m (Scott 2009-01-05 152) [refDict setOb
+56ef2caf GITServerHandler.m (Scott 2009-01-05 153)
+
+This is really useful. Normally, you get as the original commit the commit where
+you copied the code over, because that is the first time you touched those lines
+in this file. Git tells you the original commit where you wrote those lines,
+   even if it was in another file.
+
+
+{git-pickaxe}
+
+It's also possible to search for commits that introduce or remove a particular
+line of source code. This is called a pickaxe, and it takes the form of
+-S"<string>". For example, if you want to know when the string Hello, World! was
+added to any file in the project, you would use the following command:
+
+git log -S"Hello, World!"
+
+If you want to search using a regular expression instead of a string, you can
+use the -G"<regex>" flag instead.
+
+This is a very powerful debugging tool, as it lets you locate all of the commits
+that affect a particular line of code. It can even show you when a line was
+copied or moved to another file.
+
+// from git-log
+
+-S<string>
+
+    Look for differences that change the number of occurrences of the specified
+    string (i.e. addition/deletion) in a file. Intended for the scripter’s use.
+
+    It is useful when you’re looking for an exact block of code (like a struct),
+    and want to know the history of that block since it first came into being:
+    use the feature iteratively to feed the interesting block in the preimage
+    back into -S, and keep going until you get the very first version of the
+    block.  
+    
+-G<regex>
+
+    Look for differences whose patch text contains added/removed lines that
+    match <regex>.
+
+    To illustrate the difference between -S<regex> --pickaxe-regex and
+    -G<regex>, consider a commit with the following diff in the same file:
+
+    +    return !regexec(regexp, two->ptr, 1, &regmatch, 0);
+    ...
+    -    hit = !regexec(regexp, mf2.ptr, 1, &regmatch, 0);
+
+    While git log -G"regexec\(regexp" will show this commit, git log
+    -S"regexec\(regexp" --pickaxe-regex will not (because the number of
+          occurrences of that string did not change).
+
+    See the pickaxe entry in gitdiffcore[7] for more information.
+
+
+<ex> see difference between git-grep
+
+$ git grep pes_stream_get_duration
+src/concurrent_pes_writer.c:    chunk->duration = pes_stream_get_duration(data);
+src/pes.c:GstClockTime pes_stream_get_duration(PesStream *stream)
+src/pes.h:GstClockTime pes_stream_get_duration(PesStream* stream);
+
+$ git log -S pes_stream_get_duration
+commit 23b5d6607917a3fb8613cf31f37b234767b9c3e0
+Author: xxx 
+Date:   Tue Apr 21 10:36:25 2015 +0100
+
+    Even though STB hardware supports several playpumps (see DEVARCH-8872),
+    OEMs only make one playpump available to YouView. If we write each
+    elementary stream into its own playpump, by the time we need to support
+    audio description with DASH playback, we would need a total of 3
+    playpumps. Therefore we implemented software-based multiplexing of
+    multiple elementary streams to a single playpump.
+    
+
+The -S option which takes a string and only shows the commits that introduced a
+change to the code that added or removed that string. For instance, if you
+wanted to find the last commit that added or removed a reference to a specific
+function, you could call:
+
+$ git log -S function_name
+
+note: git log -S shows a commit.
+
+
+<ex>
+
+https://gitfu.wordpress.com/2008/06/03/the-pickaxe-finding-changes-was-never-easier/
+
+Because tig supports all the git options, running tig -Sgit-diff shows you the
+list of commits and lets you see the diffs by hitting enter.
+
+The pickaxe can help find code that's been deleted or moved, git blame won't
+tell you about those lines at all. Any time you want to find out more about a
+piece of code than just who touched it last, the pickaxe is a good little tool
+to reach for.
+
+
+Q:
+Difference between "git blame -C" and "git log -S"?
 
 
 ={============================================================================
