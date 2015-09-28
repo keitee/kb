@@ -47,7 +47,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_vim_113| command mode: ex commands
 |kt_dev_env_vim_114| command mode: normal commands
 |kt_dev_env_vim_115| command completion, history, and command line window
-|kt_dev_env_vim_116| current filename
+|kt_dev_env_vim_116| vim-cmdline: current filename
 |kt_dev_env_vim_117| exit, file and buffer
 |kt_dev_env_vim_118| window and tab
 |kt_dev_env_vim_119| display and real line
@@ -64,7 +64,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_vim_129| global command {power}
 
 |kt_dev_env_vim_130| spell
-|kt_dev_env_vim_131| vimdiff
+|kt_dev_env_vim_131| vim-vimdiff
 |kt_dev_env_vim_132| yank current filename to a register. expand
 
 |kt_dev_env_vim_140| shell: run external program and bang(!) 
@@ -997,7 +997,230 @@ Q: seems that vim gets blocked while a brower is running.
 ={============================================================================
 *kt_dev_env_vim_014* plugins: git: fugitive
 
+<1>
 http://vimcasts.org/episodes/fugitive-vim---a-complement-to-command-line-git/
+
+Using the :Git command, you can run any arbitrary git command from inside Vim.
+
+I prefer to switch to the shell for anything that generates a log of output,
+such as git log for example. But commands that generate little or no output
+  are fair game for running from inside Vim. :Git checkout -b experimental for
+  example.
+
+At Vim's command line, the % symbol has a special meaning: it expands to the
+full path of the current file. You can use this to run any git command that
+expects a filepath as an argument, making the command act on the current file.
+But fugitive also provides a few convenience methods, some of which are
+summarized in this table:
+
+git                     fugitive    action
+
+:Git add %              :Gwrite     Stage the current file to the index
+
+:Gwrite                 Write to the current file's path and stage the results.
+                        When run in a work tree file, it is effectively git
+                        add.  Elsewhere, it is effectively git-checkout.  A
+                        great deal of effort is expended to behave sensibly
+                        when the work tree or index version of the file is
+                        open in another buffer.
+
+
+:Git checkout %         :Gread      Revert current file to last checked in 
+                                    version
+
+:Gread [revision]       'empty' the buffer and |:read| a |fugitive-revision|.
+                        When the argument is omitted, this is similar to
+                        git-checkout on a work tree file or git-add on a stage
+                        file, but without writing anything to disk.
+
+note: See that "but 'without' writing anything to disk" which is different
+from :Git checkout %
+
+
+:Git rm %               :Gremove    Delete the current file and the 
+                                    corresponding Vim buffer
+
+:Git mv %               :Gmove      Rename the current file and the 
+                                    corresponding Vim buffer
+
+:Git mv % target_path   :Gmove target_path 
+
+
+The :Gcommit command opens up a commit window in a split window. One advantage
+to using this, rather than running git commit in the shell, is that you can
+use Vim's keyword autocompletion when composing your commit message.
+
+note: :h complete
+
+:Gcommit [args]         A wrapper around git-commit.  If there is nothing
+                        to commit, |:Gstatus| is called instead.  Unless the
+                        arguments given would skip the invocation of an editor
+                        (e.g., -m), a split window will be used to obtain a
+                        commit message, or a new tab if -v is given.  Write
+                        and close that window (:wq or |:Gwrite|) to finish the
+                        commit.  Unlike when running the actual git-commit
+                        command, it is possible (but unadvisable) to alter the
+                        index with commands like git-add and git-reset while a
+                        commit message is pending.
+
+
+The :Gblame command opens a vertically split window containing annotations for
+each line of the file: the last commit reference, with author and timestamp.
+The split windows are bound, so that when you scroll one, the other window
+will follow.
+
+:Gblame [flags]         Run git-blame on the file and open the results in a
+                        scroll bound vertical split.  You can give any of
+                        ltfnsewMC as flags and they will be passed along to
+                        git-blame.  The following maps, which work on the
+                        cursor line commit where sensible, are provided:
+
+                        g?    show this help
+                        A     resize to end of author column
+                        C     resize to end of commit column
+                        D     resize to end of date/time column
+                        q     close blame and return to blamed window
+                        gq    q, then |:Gedit| to return to work tree version
+                        <CR>  q, then open commit
+                        o     open commit in horizontal split
+                        O     open commit in new tab
+                        -     reblame at commit
+                        ~     reblame at [count]th first grandparent
+                        P     reblame at [count]th parent (like HEAD^[count])
+
+:[range]Gblame [flags]  Run git-blame on the given range.
+
+
+<2>
+http://vimcasts.org/episodes/fugitive-vim-working-with-the-git-index/
+
+The fugitive plugin provides an interactive status window, where you can
+easily stage and review your changes for the next commit. The :Gdiff command
+visualizes the changes made to a file, by comparing the working copy with the
+index. In this episode, we’ll learn how to stage hunks of changes to the index
+without using the git add --patch command.
+
+
+The Gstatus window
+
+The :Gstatus command opens a status window. The contents closely resemble the
+output from running git status in the shell, but fugitive makes the window
+interactive. You can jump directly between files with ctrl-n and ctrl-p.
+
+
+:Gstatus                Bring up the output of git-status in the preview
+                        window.  The following maps, which work on the cursor
+                        line file where sensible, are provided:
+
+                        g?    show this help
+                        <C-N> next file
+                        <C-P> previous file
+                        <CR>  |:Gedit|
+                        -     |:Git| add
+                        -     |:Git| reset (staged files)
+                        cA    |:Gcommit| --amend --reuse-message=HEAD
+                        ca    |:Gcommit| --amend
+                        cc    |:Gcommit|
+                        cva   |:Gcommit| --amend --verbose
+                        cvc   |:Gcommit| --verbose
+                        D     |:Gdiff|
+                        ds    |:Gsdiff|
+                        dp    |:Git!| diff (p for patch; use :Gw to apply)
+                        dp    |:Git| add --intent-to-add (untracked files)
+                        dv    |:Gvdiff|
+                        O     |:Gtabedit|
+                        o     |:Gsplit|
+                        p     |:Git| add --patch
+                        p     |:Git| reset --patch (staged files)
+                        q     close status
+                        r     reload status
+                        S     |:Gvsplit|
+
+note:
+"-" add/reset file (works in 'visual' mode too)
+C   invoke :Gcommit
+
+note:
+While this status window is open, it gets updated when make changes to files
+in the working directory and can use the commands above.
+
+
+Working with the git index
+
+The git index is where you put changes that you want to be included in the
+next commit. If you are used to working with the command line git client, you
+might think of the index as an abstract concept. But with fugitive, you can
+actually read the index version of a file into a buffer by running:
+
+:Gedit :path/to/file
+
+If you run :Gedit with no arguments from a working tree file, it will open the
+index version of that file. You can always open the index version of the
+current file by running any one of the following:
+
+:Gedit
+:Gedit :0
+:Gedit :%
+
+It helps to understand the lifecycle of the index file between two commits. To
+begin with, the contents of the index and working copy files will be exactly
+the same as the most recent commit. As you make changes to your working copy,
+its contents begin to diverge from those of the index file. Staging a file
+  updates the contents of the index file to match those of the working copy.
+  When you commit your work, it is the contents of the index file that are
+  saved with that commit object.
+
+
+Comparing working copy with index version using :Gdiff
+
+When you run:
+
+:Gdiff
+
+on a work tree file without any arguments, fugitive performs a vimdiff against
+the index version of the file. This opens a vertical split window, with the
+'index' file on the 'left' and the working 'copy' on the 'right'. The files
+always appear in that order, so you can commit that to memory.  
+
+
+:Gdiff [revision]       Perform a |vimdiff| against the current file in the
+                        given revision.  With no argument, the version in the
+                        index is used (which means a three-way diff during a
+                        merge conflict, making it a git-mergetool
+                        alternative).  The newer of the two files is placed
+                        to the 'right' or bottom, depending on 'diffopt' and
+                        the width of the window relative to 'textwidth'.  Use
+                        |do| and |dp| and write to the index file to simulate
+                        "git add --patch".
+
+
+Wholesale reconciliation
+
+The :Gread and :Gwrite commands can either add a file to the index or reset
+the file, depending on where they are called from. The following table and
+diagrams summarize the possibilities:
+
+command     active window     affect
+
+:Gwrite     working copy      stage file
+:Gread      working copy      checkout file
+:Gwrite     index             checkout file
+:Gread      index             stage file
+
+
+Piecemeal reconciliation
+
+Vim's built in :diffget and :diffput commands work a bit like :Gread and
+:Gwrite, except that they are more granular. Whereas :Gread will completely
+overwrite the current buffer with the contents of the other buffer, :diffget
+will only pull in a patch at a time.
+
+command   active window   affect
+:diffput  working copy    stage hunk
+:diffget  working copy    checkout hunk
+:diffput  index           checkout hunk
+:diffget  index           stage hunk
+
 
 *fugitive.txt*  A Git wrapper so awesome, it should be illegal
 
@@ -1030,51 +1253,7 @@ that are part of Git repositories).
                                                 *fugitive-:Glcd*
 :Glcd [directory]       |:lcd| relative to the repository.
 
-:Gstatus                Bring up the output of git-status in the preview
-                        window.  The following maps, which work on the cursor
-                        line file where sensible, are provided:
 
-                        g?    show this help
-                        <C-N> next file
-                        <C-P> previous file
-                        <CR>  |:Gedit|
-                        -     |:Git| add
-                        -     |:Git| reset (staged files)
-                        cA    |:Gcommit| --amend --reuse-message=HEAD
-                        ca    |:Gcommit| --amend
-                        cc    |:Gcommit|
-                        cva   |:Gcommit| --amend --verbose
-                        cvc   |:Gcommit| --verbose
-                        D     |:Gdiff|
-                        ds    |:Gsdiff|
-                        dp    |:Git!| diff (p for patch; use :Gw to apply)
-                        dp    |:Git| add --intent-to-add (untracked files)
-                        dv    |:Gvdiff|
-                        O     |:Gtabedit|
-                        o     |:Gsplit|
-                        p     |:Git| add --patch
-                        p     |:Git| reset --patch (staged files)
-                        q     close status
-                        r     reload status
-                        S     |:Gvsplit|
-
-
-note:
-While this status window is open, it gets updated when make changes to files
-in the working directory and can use the commands above.
-
-:Gcommit [args]         A wrapper around git-commit.  If there is nothing
-                        to commit, |:Gstatus| is called instead.  Unless the
-                        arguments given would skip the invocation of an editor
-                        (e.g., -m), a split window will be used to obtain a
-                        commit message, or a new tab if -v is given.  Write
-                        and close that window (:wq or |:Gwrite|) to finish the
-                        commit.  Unlike when running the actual git-commit
-                        command, it is possible (but unadvisable) to alter the
-                        index with commands like git-add and git-reset while a
-                        commit message is pending.
-
-                                                *fugitive-:Gmerge*
 :Gmerge [args]          Calls git-merge and loads errors and conflicted files
                         into the quickfix list.  Opens a |:Gcommit| style
                         split window for the commit message if the merge
@@ -1137,11 +1316,6 @@ in the working directory and can use the commands above.
 :Gtabedit! [args]       Like |:Git!|, but open the resulting temp file in a
 :Gpedit! [args]         split, tab, or preview window.
 
-                                                *fugitive-:Gread*
-:Gread [revision]       Empty the buffer and |:read| a |fugitive-revision|.
-                        When the argument is omitted, this is similar to
-                        git-checkout on a work tree file or git-add on a stage
-                        file, but without writing anything to disk.
 
 :{range}Gread [revision]
                         |:read| in a |fugitive-revision| after {range}.
@@ -1151,14 +1325,6 @@ in the working directory and can use the commands above.
                         command.  For example, :Gread! show HEAD:%.
 
 :{range}Gread! [args]  |:read| the output of a Git command after {range}.
-
-                                        *fugitive-:Gw* *fugitive-:Gwrite*
-:Gwrite                 Write to the current file's path and stage the results.
-                        When run in a work tree file, it is effectively git
-                        add.  Elsewhere, it is effectively git-checkout.  A
-                        great deal of effort is expended to behave sensibly
-                        when the work tree or index version of the file is
-                        open in another buffer.
 
 :Gwrite {path}          You can give |:Gwrite| an explicit path of where in
                         the work tree to write.  You can also give a path like
@@ -1173,17 +1339,6 @@ in the working directory and can use the commands above.
                         succeeded.
 
 
-:Gdiff [revision]       Perform a |vimdiff| against the current file in the
-                        given revision.  With no argument, the version in the
-                        index is used (which means a three-way diff during a
-                        merge conflict, making it a git-mergetool
-                        alternative).  The newer of the two files is placed
-                        to the 'right' or bottom, depending on 'diffopt' and
-                        the width of the window relative to 'textwidth'.  Use
-                        |do| and |dp| and write to the index file to simulate
-                        "git add --patch".
-
-                                                *fugitive-:Gsdiff*
 :Gsdiff [revision]      Like |:Gdiff|, but always split horizontally.
 
                                                 *fugitive-:Gvdiff*
@@ -1191,39 +1346,21 @@ in the working directory and can use the commands above.
 
 
 :Gmove {destination}    Wrapper around git-mv that renames the buffer
-                        afterward.  The destination is relative to the current
+                        afterward. The destination is relative to the current
                         directory except when started with a /, in which case
-                        it is relative to the work tree.  Add a ! to pass -f.
+                        it is relative to the work tree. Add a ! to pass -f.
 
-                                                *fugitive-:Gremove*
-:Gremove                Wrapper around git-rm that deletes the buffer
-                        afterward.  When invoked in an index file, --cached is
-                        passed.  Add a ! to pass -f and forcefully discard the
+note: this wipes out old buffer and renames a buffer.
+
+
+:Gremove                Wrapper around git-rm that 'deletes' the buffer
+                        afterward. When invoked in an index file, --cached is
+                        passed. Add a ! to pass -f and forcefully discard the
                         buffer.
 
+note: this wipes out the buffer which is different from ":Git rm %"
+
                                                 *fugitive-:Gblame*
-:Gblame [flags]         Run git-blame on the file and open the results in a
-                        scroll bound vertical split.  You can give any of
-                        ltfnsewMC as flags and they will be passed along to
-                        git-blame.  The following maps, which work on the
-                        cursor line commit where sensible, are provided:
-
-                        g?    show this help
-                        A     resize to end of author column
-                        C     resize to end of commit column
-                        D     resize to end of date/time column
-                        q     close blame and return to blamed window
-                        gq    q, then |:Gedit| to return to work tree version
-                        <CR>  q, then open commit
-                        o     open commit in horizontal split
-                        O     open commit in new tab
-                        -     reblame at commit
-                        ~     reblame at [count]th first grandparent
-                        P     reblame at [count]th parent (like HEAD^[count])
-
-:[range]Gblame [flags]  Run git-blame on the given range.
-
-                                                *fugitive-:Gbrowse*
 :[range]Gbrowse         If the remote for the current branch is on GitHub,
                         open the current file, blob, tree, commit, or tag
                         (with git-web--browse) on GitHub.  Otherwise, open the
@@ -1304,6 +1441,8 @@ Fugitive revisions are similar to Git revisions as defined in the "SPECIFYING
 REVISIONS" section in the git-rev-parse man page.  For commands that accept an
 optional revision, the default is the file in the index for work tree files
 and the work tree file for everything else.  Example revisions follow.
+
+note: "work tree" means git repository
 
 Revision        Meaning ~
 HEAD            .git/HEAD
@@ -3074,18 +3213,20 @@ forth by word. Do you know if that's available? Ethan Jan 16 '10 at 0:23
 
 
 ={============================================================================
-*kt_dev_env_vim_116* current filename
+*kt_dev_env_vim_116* vim-cmdline: current filename
 
-6. Ex special characters. *cmdline-special*
+6. Ex special characters. :h cmdline-special
 
-Note: These are special characters in the executed command line. If you want to insert special
-things while typing you can use the CTRL-R command. For example, "%" stands for the current file
-name, while CTRL-R % inserts the current file name right away. See |c_CTRL-R|.
+Note: These are special characters in the executed command line. If you want
+to insert special things while typing you can use the CTRL-R command. For
+example, "%" stands for the current file name, while CTRL-R % inserts the
+current file name right away in insert mode. See |c_CTRL-R|.
 
-In Ex commands, at places where a file name can be used, the following characters have a special
-meaning. These can also be used in the expression function expand() |expand()|.
+In Ex commands, at places where a file name can be used, the following
+characters have a special meaning. These can also be used in the expression
+function expand() |expand()|.
 
-% Is replaced with the current file name.
+The % Is replaced with the current file name.
 
 :!ls "%"
 :r !spell "%"
@@ -4032,7 +4173,7 @@ words, this file gets bigger. So To clean up the comment lines in all ".add" spe
 
 
 ={============================================================================
-*kt_dev_env_vim_131* vimdiff
+*kt_dev_env_vim_131* vim-vimdiff
 
 gvimdiff file1 file2
 
@@ -4040,21 +4181,58 @@ gvimdiff file1 file2
 [c       " move back to next change
 
 <diff-between-buffers>
-Diffs are local to the current tab page |tab-page|. You can't see diffs with a window in another tab
-page. This does make it possible to have several
+Diffs are local to the current tab page |tab-page|. You can't see diffs with a
+window in another tab page. This does make it possible to have several
 
-The differences shown are actually the differences in the buffer. Thus if you make changes after
-loading a file, these will be included in the displayed diffs. You might have to do ":diffupdate"
-now and then, not all changes are immediately taken into account.
+The differences shown are actually the differences in the buffer. Thus if you
+make changes after loading a file, these will be included in the displayed
+diffs. You might have to do ":diffupdate" now and then, not all changes are
+immediately taken into account.
 
 :difft[his]
-Make the current window part of the diff windows.  This sets the options like for "vimdiff".
+
+Make the current window part of the diff windows. This sets the options like
+for "vimdiff".
 
 :diffo[ff]
-Switch off diff mode for the current window.  Resets related options also when 'diff' was not set.
 
-The workflow is that two windows; one for old and the other for the latest and diff both by running
-the following that means to add these to <diff-mode>:
+Switch off diff mode for the current window.  Resets related options also when
+'diff' was not set.
+
+*:diffu* *:diffupdate*
+
+:diffu[pdate][!] Update the diff highlighting and folds.
+
+Vim attempts to keep the differences updated when you make changes to the
+text. This mostly takes care of inserted and deleted lines. Changes within a
+line and more complicated changes do not cause the differences to be updated.
+To force the differences to be updated use: >
+
+:diffupdate
+
+*do*
+
+[count]do     Same as ":diffget" without range.
+
+The "o" stands for "obtain" ("dg" can't be used, it could be the start of
+    "dgg"!). Note: this doesn't work in Visual mode.  If you give a [count],
+    it is used as the [bufspec] argument for ":diffget".
+
+*dp*
+
+[count]dp     Same as ":diffput" without range.
+
+Note: this doesn't work in Visual mode.  If you give a [count], it is used as
+the [bufspec] argument for ":diffput".
+
+:help :diffget
+:help :diffput
+:help do
+:help dp
+
+
+The workflow is that two windows; one for old and the other for the latest and
+diff both by running the following that means to add these to <diff-mode>:
 
 +------------------- the same tab ----------------------+
 +--- buffer from file ---+--- temp buffer from paste ---+
@@ -6839,6 +7017,25 @@ git log <branch1> <branch2> <branch3>
 ={============================================================================
 *kt_dev_env_git_008* git-checkout 
 
+git-checkout - Switch branches or restore working tree files
+
+DESCRIPTION
+
+Updates files in the working tree to match the version in the index or the
+specified tree. If no paths are given, git checkout will also update HEAD to
+set the specified branch as the current branch.
+
+git checkout [-p|--patch] [<tree-ish>] [--] <pathspec>...
+
+    When <paths> or --patch are given, git checkout does not switch branches.
+    It updates the named paths in the working tree from the index file or from
+    a named <tree-ish> (most often a commit). In this case, the -b and --track
+    options are meaningless and giving either of them results in an error. The
+    <tree-ish> argument can be used to specify a specific tree-ish (i.e.
+        commit, tag or tree) to update the index for the given paths before
+    updating the working tree.  
+    
+    
 {what-checkout-do}
 
 From git-reset:
@@ -9226,11 +9423,15 @@ git ls-tree --full-tree -r HEAD
 ={============================================================================
 *kt_dev_env_git_033* git-add: rm and mv
 
-{add}
+{add-variants}
+
 See differences between "add .", "add -u", "add -A".
 
-add .  : add untracked *new file* and tracked *modified file* to the stage but not removed one.
+add .  :  add untracked 'new' and tracked 'modified' file to the stage but
+          'not' removed one.
+
 add -u : add only tracked files.
+
 add -A : is a handy shortcut for doing both.
 
 <1> git add .
@@ -9312,6 +9513,20 @@ $ git status
 #   (use "git add <file>..." to include in what will be committed)
 #
 #    add-me
+
+
+{add-patch}
+-p
+--patch
+
+    Interactively choose hunks of patch between the index and the work tree
+    and add them to the index. This gives the user a chance to review the
+    difference before adding modified contents to the index.
+
+    This effectively runs add --interactive, but bypasses the initial command
+    menu and directly jumps to the patch subcommand. See “Interactive mode”
+    for details.
+
 
 {rm}
 When accidentally staged it, like a large log file or a bunch of .a compiled files. To do this, use
