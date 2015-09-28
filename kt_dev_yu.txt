@@ -57,7 +57,8 @@
 |kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
 |kt_dev_uv_stack_254| stack: vanadium: listener
 *kt_dev_uv_stack_255* stack: vanadium: error handle
-*kt_dev_uv_stack_255* stack: vanadium: log lines
+*kt_dev_uv_stack_256* stack: vanadium: log lines
+*kt_dev_uv_stack_257* stack: vanadium: run web server and client
 
 |kt_dev_uv_stack_300| stack: copper: lsr (local storage repository)
 |kt_dev_uv_stack_301| stack: copper: client factory
@@ -7318,20 +7319,23 @@ OK (7)
 
 Vanadium provides:
 
-Support for Remote Debugging Webkit provides a protocol that allows remote access to the browser.
-See https://www.webkit.org/blog/1620/webkit-remote-debugging/ It adds a "-debug" option to the
-command line for w3cEngine that will enable the remote debug on port 9222. Once enabled, you can
-access the remote debug information by connecting to port 9222 on the STB using Chrome.
+Support for Remote Debugging Webkit provides a protocol that allows remote
+access to the browser.  See
+https://www.webkit.org/blog/1620/webkit-remote-debugging/ It adds a "-debug"
+option to the command line for w3cEngine that will enable the remote debug on
+port 9222. Once enabled, you can access the remote debug information by
+connecting to port 9222 on the STB using Chrome.
 
-Support for client-side disk cache, i.e. support for storing data on the client in a directory that
-is specified by the "-cache" command line. Specifically, it adds support for:
+Support for client-side disk cache, i.e. support for storing data on the
+client in a directory that is specified by the "-cache" command line.
+Specifically, it adds support for:
 
-Client-side caching of resources requested by the w3cEngine
-Usage of the LocalStorage HTML5 API
-Usage of the application cache HTML5 feature
+Client-side caching of resources requested by the w3cEngine Usage of the
+LocalStorage HTML5 API Usage of the application cache HTML5 feature
 
-Support for persistent storage of cookies It adds a CookieJar class that uses the QSettings API to
-persist cookies. The file used to store cookies is specified by the "-jar" command line option.
+Support for persistent storage of cookies It adds a CookieJar class that uses
+the QSettings API to persist cookies. The file used to store cookies is
+specified by the "-jar" command line option.
 
 
 # from terminal
@@ -7695,6 +7699,10 @@ void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
 /qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics/
 MediaPlayer.h, cpp
 
+
+<media-player-error>
+class MediaPlayer {
+
 enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
 enum ReadyState  { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
 
@@ -7912,8 +7920,11 @@ libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
 
 void MediaPlayerPrivateMediaRouter::registerMediaEngine(MediaEngineRegistrar registrar)
 {
-    registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
+  // note: create
+  
+  registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
 }
+
 
 note: here make a link to Vanadium
 
@@ -7941,6 +7952,10 @@ PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateMediaRouter::create(Me
     typedef QMediaPlayerInterface* (*CreateFunction)(QMediaPlayerCallbackInterface*);
     CreateFunction createFunction = reinterpret_cast<CreateFunction>(symbol);
 
+    // note:
+    // MediaPlayerPrivateMediaRouterCallbacks simply forwards callbacks to
+    // MediaPlayer.
+    //
     std::auto_ptr<QMediaPlayerCallbackInterface> callbacks(
             new MediaPlayerPrivateMediaRouterCallbacks(player));
 
@@ -8285,37 +8300,6 @@ MEDIA_ERR_SRC_NOT_SUPPORTED (numeric value 4)
     provider object was not suitable.
 
 
-class QMediaPlayerInterface
-{
-public:
-    virtual ~QMediaPlayerInterface()
-    {}
-
-    enum NetworkState
-    {
-        NETWORK_EMPTY,
-        NETWORK_IDLE,
-        NETWORK_LOADING,
-
-        NETWORK_ERROR,
-
-        NETWORK_LOADED,
-
-        DECODE_ERROR,
-        FORMAT_ERROR
-    };
-
-    enum ReadyState
-    {
-        HAVE_NOTHING,
-        HAVE_METADATA,
-        HAVE_CURRENT_DATA,
-        HAVE_FUTURE_DATA,
-        HAVE_ENOUGH_DATA
-    };
-}
-
-
 source:
 "GstSoupHTTPSrc" "GstTypeFindElement" "uri-decoder"
 
@@ -8352,7 +8336,7 @@ used when the stream is encrypted and can't be decrypted because no suitable key
 is available.
 
 
-<old-way>
+{old-way}
 
 /qtwebkit/Source/WebCore/html/MediaError.h
 namespace WebCore {
@@ -8372,32 +8356,51 @@ public:
 
 WebCore/html/HTMLMediaElement.cpp
 
-<1>
-else if (
-    (error == MediaPlayer::FormatError || error == MediaPlayer::NetworkError) 
-    && m_loadState == LoadingFromSrcAttr)
+note: Get state explicitly. See below
+
+void HTMLMediaElement::mediaPlayerNetworkStateChanged(MediaPlayer*)
 {
-    // This is only place to use SRC_NOT_SUPPORTED
-    noneSupported();
-    {
-      m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
-    }
+    beginProcessingMediaPlayerCallback();
+    setNetworkState(m_player->networkState());
+    endProcessingMediaPlayerCallback();
+}
+
+void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
+{
+  // From mediaLoadingFailed(state); and evntually
+  
+  <1>
+  else if (
+      (error == MediaPlayer::FormatError || error == MediaPlayer::NetworkError) 
+      && m_loadState == LoadingFromSrcAttr)
+  {
+      // This is only place to use SRC_NOT_SUPPORTED
+      noneSupported();
+      {
+        m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
+      }
+  }
+
+  <2>
+  else if (error == MediaPlayer::DecodeError)
+    mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_DECODE));
+
+  <3>
+  if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
+    mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
+
+  <4> not in any of the above domain
+  if (state == MediaPlayer::Empty) {
+    // Just update the cached state and leave, we can't do anything.
+    m_networkState = NETWORK_EMPTY;
+    return;
+  }
+
+  error = MediaPlayer::Empty;
 }
 
 
-<2>
-else if (error == MediaPlayer::DecodeError)
-  mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_DECODE));
-
-<3>
-if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
-  mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
-
-<4> not in any of the above domain
-error = MediaPlayer::Empty;
-
-
-{mapping}
+<mapping>
 
 <1> check error code only
 
@@ -8416,15 +8419,16 @@ if (err->code == GST_STREAM_ERROR_CODEC_NOT_FOUND
   else if (m_readyState > MediaPlayer::HaveMetadata) {
     MediaPlayer::DecodeError;
 
+  // void MediaPlayer::networkStateChanged()
   m_player->networkStateChanged();
 
-->
+    m_mediaPlayerClient->mediaPlayerNetworkStateChanged(this);
+
 
 HTMLMediaElement.cpp:
 
     MediaPlayer::FormatError || MediaPlayer::NetworkError
       m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
-
 
 <2>
 else if (err->domain == GST_STREAM_ERROR) {
@@ -8436,18 +8440,214 @@ else if (err->domain == GST_STREAM_ERROR) {
     break;
   }
 
+  // this handles all other stream errors
   error = MediaPlayer::DecodeError;
 
-<3>
+<3> all resource errors
 else if (err->domain == GST_RESOURCE_ERROR)
   error = MediaPlayer::NetworkError;
 
-<4>
+<4> all any other erros:
   error = MediaPlayer::Empty; -> NETWORK_EMPTY
 
 
+<new-mapping>
+
+GST_CORE_ERROR_MISSING_PLUGIN:
+GST_RESOURCE_ERROR_NOT_FOUND:
+GST_RESOURCE_ERROR_BUSY:
+GST_RESOURCE_ERROR_SETTINGS:
+GST_STREAM_ERROR_CODEC_NOT_FOUND:
+GST_STREAM_ERROR_WRONG_TYPE
+GST_STREAM_ERROR_FAILED:
+GST_STREAM_all_others:
+
+  -> ErrorEventValue::data;
+
+GST_RESOURCE_all_others:
+
+  -> ErrorEventValue::network;
+
+ALL_ANY_OTHER:
+
+  -> ErrorEventValue::other;
+
+
+<may-be-a-bug>
+
+class MediaPlayer {
+enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
+enum ReadyState  { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
+};
+
+class QMediaPlayerInterface
+{
+public:
+
+    enum NetworkState
+    {
+        NETWORK_EMPTY,
+        NETWORK_IDLE,
+        NETWORK_LOADING,
+        NETWORK_ERROR,
+        NETWORK_LOADED,
+        DECODE_ERROR,
+        FORMAT_ERROR
+    };
+
+    enum ReadyState
+    {
+        HAVE_NOTHING,
+        HAVE_METADATA,
+        HAVE_CURRENT_DATA,
+        HAVE_FUTURE_DATA,
+        HAVE_ENOUGH_DATA
+    };
+}
+
+
+1. The interface to get state from client to media player uses a translation
+to map enums:
+
+MediaPlayer::ReadyState translateReadyState(QMediaPlayerInterface::ReadyState state)
+{
+    switch(state)
+    {
+    case QMediaPlayerInterface::HAVE_NOTHING:
+        return MediaPlayer::HaveNothing;
+    case QMediaPlayerInterface::HAVE_METADATA:
+        return MediaPlayer::HaveMetadata;
+    case QMediaPlayerInterface::HAVE_CURRENT_DATA:
+        return MediaPlayer::HaveCurrentData;
+    case QMediaPlayerInterface::HAVE_FUTURE_DATA:
+        return MediaPlayer::HaveFutureData;
+    case QMediaPlayerInterface::HAVE_ENOUGH_DATA:
+        return MediaPlayer::HaveEnoughData;
+    };
+    return static_cast<MediaPlayer::ReadyState>(-1);
+}
+
+MediaPlayer::NetworkState MediaPlayerPrivateMediaRouter::networkState() const
+{
+    return translateNetworkState(m_mediaPlayerImpl->networkState());
+}
+
+
+2. However, callbacks to media player simply forwards values. May cause a
+problem in the client that is HTMLMediaElement.cpp ???
+
+NO since client explicitly make a call to get state when callback is fired.
+
+class MediaPlayerPrivateMediaRouterCallbacks : public QMediaPlayerCallbackInterface
+{
+    void networkStateChanged()
+    {
+        m_mediaPlayer->networkStateChanged();
+    }
+
+    void readyStateChanged()
+    {
+        m_mediaPlayer->readyStateChanged();
+    }
+}
+
+void VanadiumMediaPlayer::ErrorEvent(const ErrorEventValue::Enum error,
+            const ErrorEventContext::Enum,
+            const std::string&)
+{
+    switch(error)
+    {
+        case ErrorEventValue::other:
+            currentNetworkState = QMediaPlayerInterface::NETWORK_EMPTY;
+            callbacks.networkStateChanged();
+            break;
+    }
+};
+
+
 ={============================================================================
-*kt_dev_uv_stack_255* stack: vanadium: log lines
+*kt_dev_uv_stack_255* stack: vanadium: qunit test
+
+
+/builds/topic/pc/zinc-build-root/release-debian-7-x86_64/Nickel/
+  Nickel.System.API/include/mock/MockMediaRouterAsync.h
+
+namespace Zinc {
+namespace Media {
+
+class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
+{
+  public:
+
+    /* ============================== Methods ================================== */
+
+    typedef void Mock_setSourceRet;
+    MOCK_METHOD2(setSource, NS_ZINC::Future< Mock_setSourceRet > 
+        (const std::string&, const SetSourceReason::Enum));
+
+    typedef std::string Mock_getSourceRet;
+    MOCK_CONST_METHOD0(getSource, NS_ZINC::Future< Mock_getSourceRet > ());
+
+    ...
+};
+
+
+/Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
+
+class ZINC_LOCAL MockMediaRouterRepository
+{
+  ...
+  registerMockForErrorHandlingSink();
+};
+
+
+void registerMockForErrorHandlingSink()
+{
+  boost::shared_ptr<MockMediaRouter> mock = makeMock(
+      "http://bbc.co.uk/ErrorHandlingSink.mpd",
+      "ONDEMAND.ABR");
+
+  EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+      Return(completedFuture(Position(0, 0, 1000000))));
+
+  EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+      Return(makeCompletedFuture(1000000)));
+
+  EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+      Return(makeCompletedFuture()));
+
+  EXPECT_CALL(*mock, start()).WillOnce(
+      DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::data,
+            ErrorEventContext::other, std::string())),
+        Return(makeCompletedFuture())));
+
+  registerMock("ErrorHandlingSink", mock);
+}
+
+
+/Vanadium/Vanadium.WebKit.VideoElement/js/testplay.js
+
+asyncTestCase("ErrorHandlingSink", function() {
+    expect(1);
+    video = document.createElement('video');
+
+    video.addEventListener("error", function() {
+        console.log("error event");
+        equal(video.error.code, MediaError.MEDIA_ERR_DECODE, "Expected MEDIA_ERR_DECODE");
+        start();
+    });
+
+    video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingSink.mpd');
+    video.load();
+    video.play();
+});
+
+
+How those two get 'linked' together? Use "ErrorHandlingSink" sting?
+
+
+={============================================================================
+*kt_dev_uv_stack_256* stack: vanadium: log lines
 
 {to-build-qt}
 
@@ -8533,7 +8733,7 @@ $ scp $BLD/qtwebkit/lib/libQt5WebKit.so root@humax-01351:/opt/zinc-trunk/oss/lib
 
 
 ={============================================================================
-*kt_dev_uv_stack_255* stack: vanadium: run web server and client
+*kt_dev_uv_stack_257* stack: vanadium: run web server and client
 
 <server-side>
 kpark@wll1p04345:~$ ll /usr/share/nginx/www
