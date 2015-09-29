@@ -2393,6 +2393,14 @@ Applications like the main UI or OnDemand players live in a different place:
 /opt/zinc-trunk/var/applications/data/air/mainui/log/
 
 
+{pc-build-log}
+
+/home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/share/vanadium-common/
+vanadium.props
+
+/home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/var/log
+
+
 ={============================================================================
 *kt_dev_uv_stack_012* stack: gdb
 
@@ -8367,28 +8375,6 @@ void HTMLMediaElement::mediaPlayerNetworkStateChanged(MediaPlayer*)
 
 void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
 {
-  // From mediaLoadingFailed(state); and evntually
-  
-  <1>
-  else if (
-      (error == MediaPlayer::FormatError || error == MediaPlayer::NetworkError) 
-      && m_loadState == LoadingFromSrcAttr)
-  {
-      // This is only place to use SRC_NOT_SUPPORTED
-      noneSupported();
-      {
-        m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
-      }
-  }
-
-  <2>
-  else if (error == MediaPlayer::DecodeError)
-    mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_DECODE));
-
-  <3>
-  if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
-    mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
-
   <4> not in any of the above domain
   if (state == MediaPlayer::Empty) {
     // Just update the cached state and leave, we can't do anything.
@@ -8396,7 +8382,28 @@ void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
     return;
   }
 
-  error = MediaPlayer::Empty;
+  mediaLoadingFailed(state)
+  {
+    <1>
+      else if (
+          (error == MediaPlayer::FormatError || error == MediaPlayer::NetworkError) 
+          && m_loadState == LoadingFromSrcAttr)
+      {
+        // This is only place to use SRC_NOT_SUPPORTED
+        noneSupported();
+        {
+          m_error = MediaError::create(MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED);
+        }
+      }
+
+    <2>
+      else if (error == MediaPlayer::DecodeError)
+        mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_DECODE));
+
+    <3>
+      if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
+        mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
+  }
 }
 
 
@@ -8405,25 +8412,25 @@ void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
 <1> check error code only
 
 MediaPlayerPrivateGStreamer.cpp:
+{
+  if (err->code == GST_STREAM_ERROR_CODEC_NOT_FOUND
+      || err->code == GST_STREAM_ERROR_WRONG_TYPE
+      || err->code == GST_STREAM_ERROR_FAILED
+      || err->code == GST_CORE_ERROR_MISSING_PLUGIN
+      || err->code == GST_RESOURCE_ERROR_NOT_FOUND
+      || err->code == GST_RESOURCE_ERROR_BUSY
+      || err->code == GST_RESOURCE_ERROR_SETTINGS) {
 
-if (err->code == GST_STREAM_ERROR_CODEC_NOT_FOUND
-    || err->code == GST_STREAM_ERROR_WRONG_TYPE
-    || err->code == GST_STREAM_ERROR_FAILED
-    || err->code == GST_CORE_ERROR_MISSING_PLUGIN
-    || err->code == GST_RESOURCE_ERROR_NOT_FOUND
-    || err->code == GST_RESOURCE_ERROR_BUSY
-    || err->code == GST_RESOURCE_ERROR_SETTINGS) {
+    if (m_readyState == MediaPlayer::HaveMetadata) 
+      error = MediaPlayer::FormatError;
+    else if (m_readyState > MediaPlayer::HaveMetadata)
+      error = MediaPlayer::DecodeError;
 
-  if (m_readyState == MediaPlayer::HaveMetadata) {
-    MediaPlayer::FormatError;
-  else if (m_readyState > MediaPlayer::HaveMetadata) {
-    MediaPlayer::DecodeError;
-
-  // void MediaPlayer::networkStateChanged()
-  m_player->networkStateChanged();
-
+    // void MediaPlayer::networkStateChanged()
+    m_player->networkStateChanged();
     m_mediaPlayerClient->mediaPlayerNetworkStateChanged(this);
-
+  }
+}
 
 HTMLMediaElement.cpp:
 
@@ -8443,7 +8450,7 @@ else if (err->domain == GST_STREAM_ERROR) {
   // this handles all other stream errors
   error = MediaPlayer::DecodeError;
 
-<3> all resource errors
+<3> all other resource errors
 else if (err->domain == GST_RESOURCE_ERROR)
   error = MediaPlayer::NetworkError;
 
@@ -8461,16 +8468,83 @@ GST_STREAM_ERROR_CODEC_NOT_FOUND:
 GST_STREAM_ERROR_WRONG_TYPE
 GST_STREAM_ERROR_FAILED:
 GST_STREAM_all_others:
-
   -> ErrorEventValue::data;
 
 GST_RESOURCE_all_others:
-
   -> ErrorEventValue::network;
 
-ALL_ANY_OTHER:
+note:
+Since this changes states
 
+  void VanadiumMediaPlayer::SourceEvent() {
+    currentReadyState = HAVE_FUTURE_DATA;
+    callbacks.readyStateChanged();
+    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+    callbacks.networkStateChanged();
+  }
+
+This maps to ERR_NETWORK from HTML code:
+
+if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
+  mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
+
+
+ALL_ANY_OTHER:
   -> ErrorEventValue::other;
+
+
+<Q>
+When add this to MOCK MR and run Qunit, it loops forever in MR showing the
+below debug line and why?
+
+DEBUG  Vanadium.WebKit.VideoElement/src/VanadiumMediaPlayer.cpp:219 Position: 0
+
+    void registerMockForErrorHandlingOther()
+    {
+        boost::shared_ptr<MockMediaRouter> mock = makeMock(
+                "http://bbc.co.uk/ErrorHandlingSink.mpd",
+                "ONDEMAND.ABR");
+
+        EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+                Return(completedFuture(Position(0, 0, 1000000))));
+
+        EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+                Return(makeCompletedFuture(1000000)));
+
+        EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+                    Return(makeCompletedFuture()));
+
+        EXPECT_CALL(*mock, start()).WillOnce(
+            DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::other,
+                            ErrorEventContext::other, std::string())),
+                Return(makeCompletedFuture())));
+
+        registerMock("ErrorHandlingOther", mock);
+    }
+
+
+<Q>
+When have this test, fails on but not always:
+
+Waiting for all video elements to be garbage collected
+Media router [ErrorsBeforePlayAreReported] stopped
+Media router [CanPlayAndPauseVideo] stopped
+
+// asyncTestCase("ErrorHandlingNetwork", function() {
+//     expect(1);
+//     video = document.createElement('video');
+// 
+//     video.addEventListener("error", function() {
+//         console.log("network error");
+//         equal(video.error.code, MediaError.MEDIA_ERR_NETWORK, 
+//             "Expected MEDIA_ERR_NETWORK");
+//         start();
+//     });
+// 
+//     video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingSink.mpd');
+//     video.load();
+//     video.play();
+// });
 
 
 <may-be-a-bug>
@@ -8488,7 +8562,7 @@ public:
     {
         NETWORK_EMPTY,
         NETWORK_IDLE,
-        NETWORK_LOADING,
+        NETWORK_LOADING, (2)
         NETWORK_ERROR,
         NETWORK_LOADED,
         DECODE_ERROR,
@@ -8500,7 +8574,7 @@ public:
         HAVE_NOTHING,
         HAVE_METADATA,
         HAVE_CURRENT_DATA,
-        HAVE_FUTURE_DATA,
+        HAVE_FUTURE_DATA, (3)
         HAVE_ENOUGH_DATA
     };
 }
@@ -8563,6 +8637,12 @@ void VanadiumMediaPlayer::ErrorEvent(const ErrorEventValue::Enum error,
             break;
     }
 };
+
+
+<tickets>
+https://jira.youview.co.uk/browse/CANPDE-4113
+https://jira.youview.co.uk/browse/SOLDES-547
+https://jira.youview.co.uk/browse/SOLDES-584
 
 
 ={============================================================================
