@@ -8,7 +8,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_001| OIPF
 |kt_dev_bcast_002| CRB
 |kt_dev_bcast_003| pdl
-|kt_dev_bcast_004| wasabi
+|kt_dev_bcast_004| marlin
 
 |kt_dev_bcast_100| mpeg: clock and sync
 |kt_dev_bcast_101| mpeg: ts view tool
@@ -22,7 +22,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_202| mpeg: streaming: mpd file
 
 |kt_dev_bcast_300| gst: git web
-|kt_dev_bcast_300| gst: tutorial: 01
+|kt_dev_bcast_300| gst: tutorial: 02: concept
+|kt_dev_bcast_300| gst: tutorial: 03: signal
+|kt_dev_bcast_300| gst: tutorial: 04: seeking
 |kt_dev_bcast_302| gst: timer and query
 |kt_dev_bcast_303| gst: registry
 |kt_dev_bcast_304| gst: queue, branch
@@ -34,6 +36,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_302* gst: elements: tsparse
 *kt_dev_bcast_302* gst: elements: identity
 
+*kt_dev_bcast_310* gst-registry
 |kt_dev_bcast_310| gst: debug
 |kt_dev_bcast_311| gst: gst-launch
 |kt_dev_bcast_311| gst: gst-inspect
@@ -70,6 +73,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_400* gst: gst time and mpeg time
 |kt_dev_bcast_400| gst: ref: gstcap
 
+*kt_dev_bcast_500* gst: gstbin
 *kt_dev_bcast_500* gst: man: gstcap
 *kt_dev_bcast_501* gst: gstbasesink and preroll
 *kt_dev_bcast_502* gst: gstbuffer
@@ -94,14 +98,14 @@ Use #{ for a group and ={ for a item
 ={============================================================================
 *kt_dev_bcast_001* OIPF, DAE
 
-As of 16 June 2014, the Open IPTV Forum has transferred its technical activities to the HbbTV
-Association.
+As of 16 June 2014, the Open IPTV Forum has transferred its technical activities
+to the HbbTV Association.
 
 http://www.oipf.tv/specifications/
 
-The Open IPTV Forum¿s (OIPF) Declarative Application Environment (DAE), which offers a browser
-environment to network applications, is briefly reviewed. It is being implemented in many retail TVs
-by major manufacturers. 
+The Open IPTV Forum¿s (OIPF) Declarative Application Environment (DAE), which
+offers a browser environment to network applications, is briefly reviewed. It is
+being implemented in many retail TVs by major manufacturers. 
 
 
 ={============================================================================
@@ -161,7 +165,7 @@ entertainment and media content (including, audio, video, ebooks, and games)
 distributed over mobile, broadband, broadcast, and all other popular channels.
 Since Marlin is not a proprietary DRM, it is able to deliver content over any
 network or physical media. It seamlessly ports licensed content across devices
-and services in a consumer’s home or personal domain and supports a large and
+and services in a consumer's home or personal domain and supports a large and
 flexible set of business models for content distribution, including
 yet-to-be-defined business models.
 
@@ -1282,11 +1286,103 @@ http://cgit.freedesktop.org/gstreamer/gstreamer/tree/docs/design
 
 
 ={============================================================================
-*kt_dev_bcast_300* gst: tutorial: 01
+*kt_dev_bcast_300* gst: tutorial: 02
 
 http://docs.gstreamer.com/display/GstSDK/Basic+tutorials
 
+<ex> basic-tutorial-2.c
+
+#include <gst/gst.h>
+  
+int main(int argc, char *argv[]) {
+  GstElement *pipeline, *source, *sink;
+  GstBus *bus;
+  GstMessage *msg;
+  GstStateChangeReturn ret;
+
+  /* Initialize GStreamer */
+  gst_init (&argc, &argv);
+
+  /* Create the elements */
+  source = gst_element_factory_make ("videotestsrc", "source");
+  sink = gst_element_factory_make ("autovideosink", "sink");
+
+  /* Create the empty pipeline */
+  pipeline = gst_pipeline_new ("test-pipeline");
+
+  if (!pipeline || !source || !sink) {
+    g_printerr ("Not all elements could be created.\n");
+    return -1;
+  }
+
+  /* Build the pipeline */
+  gst_bin_add_many (GST_BIN (pipeline), source, sink, NULL);
+  if (gst_element_link (source, sink) != TRUE) {
+    g_printerr ("Elements could not be linked.\n");
+    gst_object_unref (pipeline);
+    return -1;
+  }
+
+  /* Modify the source's properties */
+  g_object_set (source, "pattern", 0, NULL);
+
+  /* Start playing */
+  ret = gst_element_set_state (pipeline, GST_STATE_PLAYING);
+  if (ret == GST_STATE_CHANGE_FAILURE) {
+    g_printerr ("Unable to set the pipeline to the playing state.\n");
+    gst_object_unref (pipeline);
+    return -1;
+  }
+
+  /* Wait until error or EOS */
+  bus = gst_element_get_bus (pipeline);
+  msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE, GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
+
+  /* Parse message */
+  if (msg != NULL) {
+    GError *err;
+    gchar *debug_info;
+
+    switch (GST_MESSAGE_TYPE (msg)) {
+      case GST_MESSAGE_ERROR:
+        gst_message_parse_error (msg, &err, &debug_info);
+        g_printerr ("Error received from element %s: %s\n", GST_OBJECT_NAME (msg->src), err->message);
+        g_printerr ("Debugging information: %s\n", debug_info ? debug_info : "none");
+        g_clear_error (&err);
+        g_free (debug_info);
+        break;
+      case GST_MESSAGE_EOS:
+        g_print ("End-Of-Stream reached.\n");
+        break;
+      default:
+        /* We should not reach here because we only asked for ERRORs and EOS */
+        g_printerr ("Unexpected message received.\n");
+        break;
+    }
+    gst_message_unref (msg);
+  }
+
+  /* Free resources */
+  gst_object_unref (bus);
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  gst_object_unref (pipeline);
+  return 0;
+}
+
+
 {pipeline}
+All elements in GStreamer must typically be contained inside a pipeline before
+they can be used, because it takes care of some clocking and messaging
+functions.
+
+A pipeline is a particular 'type' of bin, which is the element used to contain
+other elements. Therefore all methods which apply to bins also apply to
+pipelines. In our case, we call gst_bin_add_many() to add the elements to the
+pipeline (mind the cast) which accepts a list of elements to be added, ending
+with NULL.
+
+These elements, however, are not 'linked' with each other yet. For this, we need
+to use gst_element_link().
 
 <element-and-pipeline>
 GStreamer is a framework designed to handle multimedia flows. Media travels from
@@ -1321,26 +1417,6 @@ demux
 +===================+
 
 
-<signal>
-GSignals are a crucial point in GStreamer. They allow you to be notified by
-means of a 'callback' when something interesting has happened. Signals are
-identified by a 'name', and each GObject has its own signals.
-
-/* Connect to the pad-added signal */
-g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
-
-In this line, we are attaching to the "pad-added" signal of our source
-uridecodebin element. To do so, we use g_signal_connect() and provide the
-callback function to be used (pad_added_handler) and a data pointer. GStreamer
-does nothing with this data pointer, it just forwards it to the callback so we
-can share information with it. In this case, we pass a pointer to the CustomData
-structure we built specially for this purpose.
-
-When our source element finally has enough information to start producing data,
-     it will create source pads, and trigger the "pad-added" signal. At this
-     point our callback will be called:
-
-
 {build-pipeline}
 
 <automatic>
@@ -1356,35 +1432,37 @@ pipeline = gst_parse_launch ("playbin2 uri=http://docs.gstreamer.com/media/sinte
 gst_element_set_state (pipeline, GST_STATE_PLAYING);
 
 <gst-parse-launch>
-In GStreamer you usually build the pipeline by manually assembling the individual elements, but,
-   when the pipeline is easy enough, and you do not need any advanced features, you can take the
-   shortcut: gst_parse_launch().
+In GStreamer you usually build the pipeline by manually assembling the
+individual elements, but, when the pipeline is easy enough, and you do not need
+any advanced features, you can take the shortcut: gst_parse_launch().
 
-This function takes a textual representation of a pipeline and turns it into an actual pipeline,
-     which is very handy. In fact, this function is so handy there is a tool built completely around
-     it which you will get very acquainted with (see Basic tutorial 10: GStreamer tools to learn
-             about gst-launch and the gst-launch syntax).
+This function takes a textual representation of a pipeline and turns it into an
+actual pipeline, which is very handy. In fact, this function is so handy there
+is a tool built completely around it which you will get very acquainted with
+(see Basic tutorial 10: GStreamer tools to learn about gst-launch and the
+ gst-launch syntax).
 
-gst_parse_bin_from_description ()
-
-GstElement *        gst_parse_bin_from_description      (const gchar *bin_description,
-                                                         gboolean ghost_unlinked_pads,
-                                                         GError **err);
+GstElement *        
+gst_parse_bin_from_description( const gchar *bin_description,
+                                gboolean ghost_unlinked_pads,
+                                GError **err);
 
 This is a convenience wrapper around gst_parse_launch() to create a GstBin from
 a gst-launch-style pipeline description. See gst_parse_launch() and the
-gst-launch man page for details about the syntax. Ghost pads on the bin for
-unlinked source or sink pads within the bin can automatically be created (but
-        only a maximum of one ghost pad for each direction will be created; if
-        you expect multiple unlinked source pads or multiple unlinked sink pads
-        and want them all ghosted, you will have to create the ghost pads
-        yourself).
+gst-launch man page for details about the syntax. 
+
+Ghost pads on the bin for unlinked source or sink pads within the bin can
+automatically be created (but only a maximum of one ghost pad for each direction
+    will be created; if you expect multiple unlinked source pads or multiple
+    unlinked sink pads and want them all ghosted, you will have to create the
+    ghost pads yourself).
 
 bin_description :
 	command line describing the bin
 
 ghost_unlinked_pads :
-	whether to automatically create ghost pads for unlinked source or sink pads within the bin
+   whether to automatically create ghost pads for unlinked source or sink pads
+   within the bin
 
 err :
 	where to store the error message in case of an error, or NULL
@@ -1392,73 +1470,25 @@ err :
 Returns :
 	a newly-created bin, or NULL if an error occurred. [transfer full]
 
-Since 0.10.3
-
 <manually>
 Now we are going to build a pipeline manually by instantiating each element and
 linking them all together. 
-
-1. create elements
 
 /* Create the elements */
 source = gst_element_factory_make ("videotestsrc", "source");
 sink = gst_element_factory_make ("autovideosink", "sink");
 
-
-GstElement *        gst_element_factory_make            (const gchar *factoryname,
-                                                         const gchar *name);
+GstElement *
+gst_element_factory_make( const gchar *factoryname,
+                          const gchar *name);
 
 Create a new element of the type defined by the given element factory. note: If
 name is NULL, then the element will receive a guaranteed unique name, consisting
 of the element factory name and a number. If name is given, it will be given the
 name supplied.
 
-factoryname : a named factory to instantiate
-
-name : name of new element, or NULL to automatically create a unique name.
-
-Returns : new GstElement or NULL if unable to create element.
-
-
-2. create pipeline
-All elements in GStreamer must typically be contained inside a pipeline before
-they can be used, because it takes care of some clocking and messaging
-functions.
-
-/* Create the empty pipeline */
-pipeline = gst_pipeline_new ("test-pipeline");
-
-/* Build the pipeline */
-gst_bin_add_many (GST_BIN (pipeline), source, sink, NULL);
-if (gst_element_link (source, sink) != TRUE) {
-    g_printerr ("Elements could not be linked.\n");
-    gst_object_unref (pipeline);
-    return -1;
-}
-
-A pipeline is a particular 'type' of bin, which is the element used to contain
-other elements.  Therefore all methods which apply to bins also apply to
-pipelines. In our case, we call gst_bin_add_many() to add the elements to the
-pipeline (mind the cast). This function accepts a list of elements to be added,
-         ending with NULL.
-
-These elements, however, are not 'linked' with each other yet. For this, we need
-to use gst_element_link().
-
-
-4. start
-
-/* Start playing */
-ret = gst_element_set_state (pipeline, GST_STATE_PLAYING);
-if (ret == GST_STATE_CHANGE_FAILURE) {
-    g_printerr ("Unable to set the pipeline to the playing state.\n");
-    gst_object_unref (pipeline);
-    return -1;
-}
-
 
 <error-handling>
-5. check errors
 
 /* Wait until error or EOS */
 bus = gst_element_get_bus (pipeline);
@@ -1500,178 +1530,508 @@ do {
 
 
 {bus-and-message}
-GStreamer bus is the object responsible for delivering to the application the GstMessages generated
-by the elements, in order and to the application thread. This last point is important, because the
-actual streaming of media is done in another thread than the application.
+GStreamer bus is the object responsible for delivering to the application the
+GstMessages generated by the elements, in 'order' and to the application
+'thread'. This last point is important, because the actual streaming of media
+is done in another thread than the application.
 
-Messages can be extracted from the bus synchronously with gst_bus_timed_pop_filtered() and its
-siblings, or asynchronously, using signals (shown in the next tutorial). Your application should
-always keep an eye on the bus to be notified of errors and other playback-related issues.
-
-
-{bin}
-GstBin — Base class and element that can contain other elements
-
-Object Hierarchy
-
-  GObject
-   +----GstObject
-         +----GstElement
-               +----GstBin *
-                     +----GstPipeline
-
-Description
-
-GstBin is an element that can contain other GstElement, allowing them to be managed as a group. Pads
-from the child elements can be ghosted to the bin, see GstGhostPad. This makes the bin look like any
-other elements and enables creation of higher-level abstraction elements.
-
-A new GstBin is created with gst_bin_new(). Use a GstPipeline instead if you want to create a
-toplevel bin because a normal bin doesn't have a bus or handle clock distribution of its own.
-
-After the bin has been created you will typically add elements to it with gst_bin_add(). You can
-remove elements with gst_bin_remove().
-
-An element can be retrieved from a bin with gst_bin_get_by_name(), using the elements name.
-gst_bin_get_by_name_recurse_up() is mainly used for internal purposes and will query the parent bins
-when the element is not found in the current bin.
-
-An iterator of elements in a bin can be retrieved with gst_bin_iterate_elements(). Various other
-iterators exist to retrieve the elements in a bin.
-
-gst_object_unref() is used to drop your reference to the bin.
-
-The "element-added" signal is fired whenever a new element is added to the bin. Likewise the
-"element-removed" signal is fired whenever an element is removed from the bin. 
+Messages can be extracted from the bus 'synchronously' with
+gst_bus_timed_pop_filtered() and its siblings, or 'asynchronously', using
+signals. Your application should always keep an eye on the bus to be notified of
+errors and other playback-related issues.
 
 
 ={============================================================================
-*kt_dev_bcast_302* gst: timer and query
+*kt_dev_bcast_300* gst: tutorial: 03
 
-Here we modify this function to periodically wake up and query the pipeline
-for the stream position, so we can print it on screen. This is similar to what
-    a media player would do, updating the User Interface on a periodic basis.
+Basic tutorial 3: Dynamic pipelines
 
+This tutorial shows the rest of the basic concepts required to use GStreamer,
+which allow building the pipeline "on the fly", as information becomes
+  available, instead of having a monolithic pipeline defined at the beginning of
+  your application.
 
-{gstquery}
-GstQuery is a mechanism that allows asking an element or pad for a piece of
-information.
+As you are about to see, the pipeline in this tutorial is not completely built
+before it is set to the playing state.
 
-msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
+The main complexity when dealing with demuxers is that they cannot produce any
+information until they have received some data and have had a chance to look at
+the container to see what is inside. This is, demuxers start with no source pads
+to which other elements can link, and thus the pipeline must necessarily
+terminate at them.
+
+The solution is to build the pipeline from the source down to the demuxer, and
+set it to run (play). When the demuxer has received enough information to know
+about the number and kind of streams in the container, it will start creating
+source pads. This is the right time for us to finish building the pipeline and
+attach it to the newly added demuxer pads.
+
+<ex> basic-tutorial-3.c
+
+#include <gst/gst.h>
+   
+/* Structure to contain all our information, so we can pass it to callbacks */
+typedef struct _CustomData {
+  GstElement *pipeline;
+  GstElement *source;
+  GstElement *convert;
+  GstElement *sink;
+} CustomData;
+   
+/* Handler for the pad-added signal */
+static void pad_added_handler (GstElement *src, GstPad *pad, CustomData *data);
+   
+int main(int argc, char *argv[]) {
+  CustomData data;
+  GstBus *bus;
+  GstMessage *msg;
+  GstStateChangeReturn ret;
+  gboolean terminate = FALSE;
+   
+  /* Initialize GStreamer */
+  gst_init (&argc, &argv);
+    
+  /* Create the elements */
+
+  // We create the elements as usual. uridecodebin will internally instantiate
+  // all the necessary elements (sources, demuxers and decoders) to turn a URI
+  // into raw audio and/or video streams. Since it contains demuxers, its source
+  // pads are not initially available and we will need to link to them on the
+  // fly.
+
+  data.source = gst_element_factory_make ("uridecodebin", "source");
+  data.convert = gst_element_factory_make ("audioconvert", "convert");
+  data.sink = gst_element_factory_make ("autoaudiosink", "sink");
+   
+  /* Create the empty pipeline */
+  data.pipeline = gst_pipeline_new ("test-pipeline");
+    
+  if (!data.pipeline || !data.source || !data.convert || !data.sink) {
+    g_printerr ("Not all elements could be created.\n");
+    return -1;
+  }
+   
+  /* Build the pipeline. Note that we are NOT linking the source at this
+   * point. We will do it later. */
+
+  // Here we link the converter element to the sink, but we DO NOT link them
+  // with the source, since at this point it contains no source pads. We just
+  // leave this branch (converter + sink) unlinked, until later on.
+
+  gst_bin_add_many (GST_BIN (data.pipeline),
+      data.source, data.convert , data.sink, NULL);
+
+  if (!gst_element_link (data.convert, data.sink)) {
+    g_printerr ("Elements could not be linked.\n");
+    gst_object_unref (data.pipeline);
+    return -1;
+  }
+   
+  /* Set the URI to play */
+  g_object_set (data.source, "uri",
+      "http://docs.gstreamer.com/media/sintel_trailer-480p.webm", NULL);
+   
+  /* Connect to the pad-added signal */
+  g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler),
+      &data);
+   
+  /* Start playing */
+  ret = gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
+  if (ret == GST_STATE_CHANGE_FAILURE) {
+    g_printerr ("Unable to set the pipeline to the playing state.\n");
+    gst_object_unref (data.pipeline);
+    return -1;
+  }
+   
+  /* Listen to the bus */
+  bus = gst_element_get_bus (data.pipeline);
+  do {
+    msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
         GST_MESSAGE_STATE_CHANGED | GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
+   
+    /* Parse message */
+    if (msg != NULL) {
+      GError *err;
+      gchar *debug_info;
+       
+      switch (GST_MESSAGE_TYPE (msg)) {
+        case GST_MESSAGE_ERROR:
+          gst_message_parse_error (msg, &err, &debug_info);
+          g_printerr ("Error received from element %s: %s\n",
+              GST_OBJECT_NAME (msg->src), err->message);
+          g_printerr ("Debugging information: %s\n",
+              debug_info ? debug_info : "none");
+          g_clear_error (&err);
+          g_free (debug_info);
+          terminate = TRUE;
+          break;
 
-Previously we did not provide a timeout to gst_bus_timed_pop_filtered(), meaning
-that it didn't return until a message was received. 
+        case GST_MESSAGE_EOS:
+          g_print ("End-Of-Stream reached.\n");
+          terminate = TRUE;
+          break;
 
-Now we use a timeout of 100 milliseconds, so, if no message is received, 10
-times per second the function will return with a NULL instead of a GstMessage.
-We are going to use this to update our “UI”. Note that the timeout period is
-specified in nanoseconds, so usage of the GST_SECOND or GST_MSECOND macros is
-highly recommended.
+        case GST_MESSAGE_STATE_CHANGED:
+          /* We are only interested in state-changed messages from the pipeline */
+          if (GST_MESSAGE_SRC (msg) == GST_OBJECT (data.pipeline)) {
+            GstState old_state, new_state, pending_state;
+            gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
+            g_print ("Pipeline state changed from %s to %s:\n",
+                gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
+          }
+          break;
 
-msg = gst_bus_timed_pop_filtered (bus, 100 * GST_MSECOND,
-        GST_MESSAGE_STATE_CHANGED | GST_MESSAGE_ERROR 
-        | GST_MESSAGE_EOS | GST_MESSAGE_DURATION);
-
-
-This leads to code that can do something on every timeout.
-
-/* Parse message */
-if (msg != NULL) {
-    handle_message (&data, msg);
-} else {
-    /* We got no message, this means the timeout expired */
-    if (data.playing) {
-
-         /* We get here approximately 10 times per second, a good enough
-          * refresh rate for our UI. We are going to print on screen the
-          * current media position, which we can learn be querying the
-          * pipeline.
-          */
-    } 
+        default:
+          /* We should not reach here */
+          g_printerr ("Unexpected message received.\n");
+          break;
+      }
+      gst_message_unref (msg);
+    }
+  } while (!terminate);
+   
+  /* Free resources */
+  gst_object_unref (bus);
+  gst_element_set_state (data.pipeline, GST_STATE_NULL);
+  gst_object_unref (data.pipeline);
+  return 0;
+}
+   
+/* This function will be called by the pad-added signal */
+static 
+void pad_added_handler (GstElement *src, GstPad *new_pad, CustomData *data) {
+  GstPad *sink_pad = gst_element_get_static_pad (data->convert, "sink");
+  GstPadLinkReturn ret;
+  GstCaps *new_pad_caps = NULL;
+  GstStructure *new_pad_struct = NULL;
+  const gchar *new_pad_type = NULL;
+   
+  g_print ("Received new pad '%s' from '%s':\n",
+      GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
+   
+  /* If our converter is already linked, we have nothing to do here */
+  if (gst_pad_is_linked (sink_pad)) {
+    g_print ("  We are already linked. Ignoring.\n");
+    goto exit;
+  }
+   
+  /* Check the new pad's type */
+  new_pad_caps = gst_pad_get_caps (new_pad);
+  new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
+  new_pad_type = gst_structure_get_name (new_pad_struct);
+  if (!g_str_has_prefix (new_pad_type, "audio/x-raw")) {
+    g_print ("  It has type '%s' which is not raw audio. Ignoring.\n",
+        new_pad_type);
+    goto exit;
+  }
+   
+  /* Attempt the link */
+  ret = gst_pad_link (new_pad, sink_pad);
+  if (GST_PAD_LINK_FAILED (ret)) {
+    g_print ("  Type is '%s' but link failed.\n", new_pad_type);
+  } else {
+    g_print ("  Link succeeded (type '%s').\n", new_pad_type);
+  }
+   
+exit:
+  /* Unreference the new pad's caps, if we got them */
+  if (new_pad_caps != NULL)
+    gst_caps_unref (new_pad_caps);
+   
+  /* Unreference the sink pad */
+  gst_object_unref (sink_pad);
 }
 
-gst_element_query_position() is helper function and hides the management of the
-query object and directly provides us with the result.
+
+<signal>
+GSignals are a crucial point in GStreamer. They allow you to be notified by
+means of a 'callback' when something interesting has happened. Signals are
+identified by a 'name', and each GObject has its own signals.
+
+/* Connect to the pad-added signal */
+g_signal_connect (data.source, "pad-added", 
+    G_CALLBACK (pad_added_handler), &data);
+
+In this line, we are attaching to the "pad-added" signal of our source
+uridecodebin element. To do so, use g_signal_connect() and provide the callback
+function to be used and a data pointer. GStreamer does nothing with this data
+pointer, it just forwards it to the callback so we can share information with
+it. In this case, we pass a pointer to the CustomData structure we built
+specially for this purpose.
+
+When source element finally has enough information to start producing data, it
+will create source pads, and trigger the "pad-added" signal. At this point our
+callback will be called:
 
 
 ={============================================================================
-*kt_dev_bcast_303* gst: registry
+*kt_dev_bcast_302* gst: tutorial: 04
 
-gst-init can use a gst-registry cache that can store information about existing
-plugins. This greatly improves performance, as the discovery of plugins can be
-only done when gst-init() is ran for the first time.  We configure this cache
-using runBrowser.sh script, and if it does not exist, with the use of
-gst-inspect tool we force it to be populted.
+Basic tutorial 4: Time management
 
-Unfortunately, gstreamer performs a limited validation of this cache, checking
-only for it's version. This leads to potential problems, when plugins are
-changed / renamed. Such a problem was discovered by CANTST-16517 Error 02100
-when playing iPlayer programmes.  Between two affected releases name of one of
-the gst-plugins has changed (DEVARCH-9248), namely: libgstfragmented became
-ibgsthlsdemux.
+GstQuery is a mechanism that allows asking an element or pad for a piece of
+information. In this example we ask the pipeline if seeking is allowed (some
+    sources, like live streams, do not allow seeking). If it is allowed, then,
+once the movie has been running for ten seconds, we skip to a different position
+  using a seek.
 
-It appears that gst plugin (gstregistry.bin) was not automatically rebuilt by
-the gstreamer following the software upgrade, and non-existing plugins were
-refered to in attempt to build the playback pipeline.
+In the previous tutorials, once we had the pipeline setup and running, our main
+function just sat and waited to receive an ERROR or an EOS through the bus. Here
+we modify this function to periodically wake up and query the pipeline for the
+stream position, so we can print it on screen. This is similar to what a media
+player would do, updating the User Interface on a periodic basis.
 
-Ideally, the gstreamer could invalidate such a cache in such case, and it would
-have been re-built automatically to match the changes performed during the
-upgrade. As a quick solution, as part of DEVARCH-9643, runBrowser.sh script was
-updated to reflect that there were changes by using a new name for the cachefile
-(gstregistry.bin) appending a suffix with a version and deleting all of the
-previous versions if a cache-file of the latest version did not exist. This,
-however, would require updates to release validation process to make sure the
-    version was increased whenever there was a need for it.
-
-This change should make it less error-prone and fully automated.
-
-# enable gstreamer plugin registy
-GST_INSPECT_CMD="${GST_INSPECT_CMD:-$prefix/oss/bin/gst-inspect-1.0}"
-gst_registry_file="$app_data_dir/gstregistry.bin"
-if [ ! -s "${gst_registry_file}" ]; then
-    GST_REGISTRY="$gst_registry_file" $GST_INSPECT_CMD &> /dev/null
-fi
+Finally, the stream duration is queried and updated whenever it changes.  Here
+we modify this function to periodically wake up and query the pipeline for the
+stream position, so we can print it on screen. This is similar to what a media
+player would do, 'updating' the User Interface on a periodic basis.
 
 
-http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gst-running.html
+<ex> basic-tutorial-4.c
 
-GST_REGISTRY, GST_REGISTRY_1_0.  
+#include <gst/gst.h>
+   
+/* Structure to contain all our information, so we can pass it around */
+typedef struct _CustomData {
+  GstElement *playbin2;  /* Our one and only element */
+  gboolean playing;      /* Are we in the PLAYING state? */
+  gboolean terminate;    /* Should we terminate execution? */
+  gboolean seek_enabled; /* Is seeking enabled for this media? */
+  gboolean seek_done;    /* Have we performed the seek already? */
+  gint64 duration;       /* How long does this media last, in nanoseconds */
+} CustomData;
+   
+/* Forward definition of the message processing function */
+static void handle_message (CustomData *data, GstMessage *msg);
+   
+int main(int argc, char *argv[]) {
+  CustomData data;
+  GstBus *bus;
+  GstMessage *msg;
+  GstStateChangeReturn ret;
+   
+  data.playing = FALSE;
+  data.terminate = FALSE;
+  data.seek_enabled = FALSE;
+  data.seek_done = FALSE;
+  data.duration = GST_CLOCK_TIME_NONE;
+   
+  /* Initialize GStreamer */
+  gst_init (&argc, &argv);
+    
+  /* Create the elements */
 
-Set this environment variable to make GStreamer use a different file for the
-plugin cache / registry than the default one. This is useful when operating in a
-separate environment which should not affect the default cache in the user's
-home directory. 
+  // However, playbin2 is in itself a pipeline, and in this case it is the only
+  // element in the pipeline, so we use directly the playbin2 element.
+
+  data.playbin2 = gst_element_factory_make ("playbin2", "playbin2");
+   
+  if (!data.playbin2) {
+    g_printerr ("Not all elements could be created.\n");
+    return -1;
+  }
+   
+  /* Set the URI to play */
+  g_object_set (data.playbin2, "uri",
+      "http://docs.gstreamer.com/media/sintel_trailer-480p.webm", NULL);
+   
+  /* Start playing */
+  ret = gst_element_set_state (data.playbin2, GST_STATE_PLAYING);
+  if (ret == GST_STATE_CHANGE_FAILURE) {
+    g_printerr ("Unable to set the pipeline to the playing state.\n");
+    gst_object_unref (data.playbin2);
+    return -1;
+  }
+   
+  /* Listen to the bus */
+  bus = gst_element_get_bus (data.playbin2);
+  do {
+
+    // Previously we did not provide a timeout to gst_bus_timed_pop_filtered(),
+    // meaning that it didn't return until a message was received. 
+    //
+    // msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE, ... );
+    //
+    // Now we use a timeout of 100 milliseconds, so, if no message is received,
+    // 10 times per second the function will return with a NULL instead of a
+    // GstMessage.
+
+    msg = gst_bus_timed_pop_filtered (bus, 100 * GST_MSECOND,
+        GST_MESSAGE_STATE_CHANGED | GST_MESSAGE_ERROR |
+        GST_MESSAGE_EOS | GST_MESSAGE_DURATION);
+   
+    /* Parse message */
+    if (msg != NULL) {
+      handle_message (&data, msg);
+    } else {
+      /* We got 'no' message, this means the timeout expired */
+
+      // We get here approximately 10 times per second, a good enough refresh
+      // rate for our UI. We are going to print on screen the current media
+      // position, which we can learn be querying the pipeline.
+          
+      if (data.playing) {
+        GstFormat fmt = GST_FORMAT_TIME;
+        gint64 current = -1;
+         
+        /* Query the current position of the stream */
+        if (!gst_element_query_position (data.playbin2, &fmt, &current)) {
+          g_printerr ("Could not query current position.\n");
+        }
+         
+        /* If we didn't know it yet, query the stream duration */
+        if (!GST_CLOCK_TIME_IS_VALID (data.duration)) {
+          if (!gst_element_query_duration (data.playbin2, &fmt, &data.duration)) {
+            g_printerr ("Could not query current duration.\n");
+          }
+        }
+         
+        /* Print current position and total duration */
+        g_print ("Position %" GST_TIME_FORMAT " / %" GST_TIME_FORMAT "\r",
+            GST_TIME_ARGS (current), GST_TIME_ARGS (data.duration));
+         
+        /* If seeking is enabled, we have not done it yet,
+         * and the time is right, seek 
+         */
+        if (data.seek_enabled && !data.seek_done && current > 10 * GST_SECOND) {
+          g_print ("\nReached 10s, performing seek...\n");
+          gst_element_seek_simple (data.playbin2, GST_FORMAT_TIME,
+              GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT, 30 * GST_SECOND);
+          data.seek_done = TRUE;
+        }
+      } // end if 
+    }
+  } while (!data.terminate);
+   
+  /* Free resources */
+  gst_object_unref (bus);
+  gst_element_set_state (data.playbin2, GST_STATE_NULL);
+  gst_object_unref (data.playbin2);
+  return 0;
+}
+   
+static void handle_message (CustomData *data, GstMessage *msg) {
+  GError *err;
+  gchar *debug_info;
+   
+  switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_ERROR:
+      gst_message_parse_error (msg, &err, &debug_info);
+      g_printerr ("Error received from element %s: %s\n", GST_OBJECT_NAME (msg->src), err->message);
+      g_printerr ("Debugging information: %s\n", debug_info ? debug_info : "none");
+      g_clear_error (&err);
+      g_free (debug_info);
+      data->terminate = TRUE;
+      break;
+    case GST_MESSAGE_EOS:
+      g_print ("End-Of-Stream reached.\n");
+      data->terminate = TRUE;
+      break;
+
+    case GST_MESSAGE_DURATION:
+      /* The duration has changed, mark the current one as invalid */
+      data->duration = GST_CLOCK_TIME_NONE;
+      break;
+
+    case GST_MESSAGE_STATE_CHANGED: {
+      GstState old_state, new_state, pending_state;
+      gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
+      if (GST_MESSAGE_SRC (msg) == GST_OBJECT (data->playbin2)) {
+        g_print ("Pipeline state changed from %s to %s:\n",
+            gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
+         
+        /* Remember whether we are in the PLAYING state or not */
+        data->playing = (new_state == GST_STATE_PLAYING);
+         
+        // Seeks and time queries work 'better' when in the PAUSED or PLAYING
+        // state, since all elements have had a chance to receive information
+        // and configure themselves. Here we take note of whether we are in the
+        // PLAYING state or not with the playing variable.
+
+        if (data->playing) {
+          /* We just moved to PLAYING. Check if seeking is possible */
+          GstQuery *query;
+          gint64 start, end;
+
+          // gst_query_new_seeking() creates a new query object of the "seeking"
+          // type, with GST_FORMAT_TIME format. This indicates that we are
+          // interested in seeking by specifying the new time to which we want
+          // to move. We could also ask for GST_FORMAT_BYTES, and then seek to a
+          // particular byte position inside the source file, but this is
+          // normally less useful.
+          //
+          // This query object is then passed to the pipeline with
+          // gst_element_query(). The result is stored in the same query, and
+          // can be easily retrieved with gst_query_parse_seeking(). It extracts
+          // a boolean indicating if seeking is allowed, and the range in which
+          // seeking is possible.
+
+          query = gst_query_new_seeking (GST_FORMAT_TIME);
+          if (gst_element_query (data->playbin2, query)) {
+
+            gst_query_parse_seeking (query, NULL,
+                &data->seek_enabled, &start, &end);
+
+            if (data->seek_enabled) {
+              g_print ("Seeking is ENABLED from %" GST_TIME_FORMAT
+                  " to %" GST_TIME_FORMAT "\n",
+                  GST_TIME_ARGS (start), GST_TIME_ARGS (end));
+            } else {
+              g_print ("Seeking is DISABLED for this stream.\n");
+            }
+
+          }
+          else {
+            g_printerr ("Seeking query failed.");
+          }
+          gst_query_unref (query);
+        }
+
+      }
+    } break;
+    default:
+      /* We should not reach here */
+      g_printerr ("Unexpected message received.\n");
+      break;
+  }
+  gst_message_unref (msg);
+}
 
 
-DEBUG           GST_REGISTRY gstregistry.c:476:gst_registry_add_plugin:<registry0> 
-  adding plugin 0x44dd60 for filename 
-  "/opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstvideotestsrc.so"
+Now we perform the seek, “simply” by calling gst_element_seek_simple() on the
+pipeline. A lot of the intricacies of seeking are hidden in this method, which
+is a good thing!
 
+GST_FORMAT_TIME indicates that we are specifying the destination in time, as
+opposite to bytes (and other more obscure mechanisms).
 
-<blacklist>
+Then come the GstSeekFlags, let's review the most common:
 
-// when there is no lib file in the search path
+GST_SEEK_FLAG_FLUSH: This discards all data currently in the pipeline before
+doing the seek. Might pause a bit while the pipeline is refilled and the new
+data starts to show up, but greatly increases the “responsiveness” of the
+application. If this flag is not provided, “stale” data might be shown for a
+while until the new position appears at the end of the pipeline.
 
-gst-inspect-1.0 cencdec
-No such element or plugin 'cencdec'
+GST_SEEK_FLAG_KEY_UNIT: Most encoded video streams cannot seek to arbitrary
+positions, only to certain frames called Key Frames. When this flag is used, the
+seek will actually move to the closest key frame and start producing data
+straight away. If this flag is not used, the pipeline will move internally to
+the closest key frame (it has no other alternative) but data will not be shown
+until it reaches the requested position. Not providing the flag is more
+accurate, but might take longer to react.
 
-// when there is a lib file in the search path but failed to load
+GST_SEEK_FLAG_ACCURATE: Some media clips do not provide enough indexing
+information, meaning that seeking to arbitrary positions is time-consuming. In
+these cases, GStreamer usually estimates the position to seek to, and usually
+works just fine. If this precision is not good enough for your case (you see
+    seeks not going to the exact time you asked for), then provide this flag. Be
+warned that it might take longer to calculate the seeking position (very long,
+    on some files).
 
-gst-inspect-1.0 cencdec
-ERROR     GST_PLUGIN_LOADING gstpluginloader.c:277:plugin_loader_replay_pending: 
-  Plugin file /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcenccrypto.so failed to load. Blacklisting
-No such element or plugin 'cencdec'
-
-// after blackedlisted
-
-gst-inspect-1.0 cencdec
-No such element or plugin 'cencdec'
-
-// to reset blacklist, rm it.
-
-ls .cache/gstreamer-1.0/registry.mipsel.bin 
-.cache/gstreamer-1.0/registry.mipsel.bin
+And finally we provide the position to seek to. Since we asked for
+GST_FORMAT_TIME, this position is in nanoseconds, so we use the GST_SECOND macro
+for simplicity.
 
 
 ={============================================================================
@@ -3266,6 +3626,85 @@ Element Signals:
   "handoff" :  void user_function (GstElement* object,
                                    GstBuffer* arg0,
                                    gpointer user_data);
+
+
+={============================================================================
+*kt_dev_bcast_310* gst-registry
+
+gst-init can use a gst-registry cache that can store information about existing
+plugins. This greatly improves performance, as the discovery of plugins can be
+only done when gst-init() is ran for the first time.  We configure this cache
+using runBrowser.sh script, and if it does not exist, with the use of
+gst-inspect tool we force it to be populted.
+
+Unfortunately, gstreamer performs a limited validation of this cache, checking
+only for it's version. This leads to potential problems, when plugins are
+changed / renamed. Such a problem was discovered by CANTST-16517 Error 02100
+when playing iPlayer programmes.  Between two affected releases name of one of
+the gst-plugins has changed (DEVARCH-9248), namely: libgstfragmented became
+ibgsthlsdemux.
+
+It appears that gst plugin (gstregistry.bin) was not automatically rebuilt by
+the gstreamer following the software upgrade, and non-existing plugins were
+refered to in attempt to build the playback pipeline.
+
+Ideally, the gstreamer could invalidate such a cache in such case, and it would
+have been re-built automatically to match the changes performed during the
+upgrade. As a quick solution, as part of DEVARCH-9643, runBrowser.sh script was
+updated to reflect that there were changes by using a new name for the cachefile
+(gstregistry.bin) appending a suffix with a version and deleting all of the
+previous versions if a cache-file of the latest version did not exist. This,
+however, would require updates to release validation process to make sure the
+    version was increased whenever there was a need for it.
+
+This change should make it less error-prone and fully automated.
+
+# enable gstreamer plugin registy
+GST_INSPECT_CMD="${GST_INSPECT_CMD:-$prefix/oss/bin/gst-inspect-1.0}"
+gst_registry_file="$app_data_dir/gstregistry.bin"
+if [ ! -s "${gst_registry_file}" ]; then
+    GST_REGISTRY="$gst_registry_file" $GST_INSPECT_CMD &> /dev/null
+fi
+
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gst-running.html
+
+GST_REGISTRY, GST_REGISTRY_1_0.  
+
+Set this environment variable to make GStreamer use a different file for the
+plugin cache / registry than the default one. This is useful when operating in a
+separate environment which should not affect the default cache in the user's
+home directory. 
+
+
+DEBUG           GST_REGISTRY gstregistry.c:476:gst_registry_add_plugin:<registry0> 
+  adding plugin 0x44dd60 for filename 
+  "/opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstvideotestsrc.so"
+
+
+<blacklist>
+
+// when there is no lib file in the search path
+
+gst-inspect-1.0 cencdec
+No such element or plugin 'cencdec'
+
+// when there is a lib file in the search path but failed to load
+
+gst-inspect-1.0 cencdec
+ERROR     GST_PLUGIN_LOADING gstpluginloader.c:277:plugin_loader_replay_pending: 
+  Plugin file /opt/zinc-trunk/oss/lib/gstreamer-1.0/libgstcenccrypto.so failed to load. Blacklisting
+No such element or plugin 'cencdec'
+
+// after blackedlisted
+
+gst-inspect-1.0 cencdec
+No such element or plugin 'cencdec'
+
+// to reset blacklist, rm it.
+
+ls .cache/gstreamer-1.0/registry.mipsel.bin 
+.cache/gstreamer-1.0/registry.mipsel.bin
 
 
 ={============================================================================
@@ -7634,6 +8073,49 @@ INFO  GST_PLUGIN_LOADING gstplugin.c:835:gst_plugin_load_file:
 
 {caps}
 DEBUG GST_CAPS gstpad.c:2114:gst_pad_link_check_compatible_unlocked:<nexussink1:sink> sink caps video/mpegts, systemstream=(boolean)true; video/x-h264, stream-format=(string)byte-stream, alignment=(string){ au }; video/mpeg, mpegversion=(int){ 2, 4 }, systemstream=(boolean)false; audio/mpeg, mpegversion=(int)1, layer=(int){ 1, 3 }; audio/mpeg, mpegversion=(int)4, stream-format=(string){ adts, loas }
+
+
+={============================================================================
+*kt_dev_bcast_500* gst: gstbin
+
+GstBin — Base class and element that can contain other elements
+
+Object Hierarchy
+
+  GObject
+   +----GstObject
+         +----GstElement
+               +----GstBin *
+                     +----GstPipeline
+
+Description
+
+GstBin is an element that can contain other GstElement, allowing them to be
+managed as a group. Pads from the child elements can be 'ghosted' to the bin,
+see GstGhostPad. This makes the bin look like any other elements and enables
+  creation of higher-level abstraction elements.
+
+A new GstBin is created with gst_bin_new(). Use a GstPipeline instead if you
+want to create a toplevel bin because a normal bin doesn't have a bus or handle
+clock distribution of its own.
+
+After the bin has been created you will typically add elements to it with
+gst_bin_add(). You can remove elements with gst_bin_remove().
+
+An element can be retrieved from a bin with gst_bin_get_by_name(), using the
+elements name.  gst_bin_get_by_name_recurse_up() is mainly used for internal
+purposes and will query the parent bins when the element is not found in the
+current bin.
+
+An iterator of elements in a bin can be retrieved with
+gst_bin_iterate_elements(). Various other iterators exist to retrieve the
+elements in a bin.
+
+gst_object_unref() is used to drop your reference to the bin.
+
+The "element-added" signal is fired whenever a new element is added to the bin.
+Likewise the "element-removed" signal is fired whenever an element is removed
+from the bin. 
 
 
 ={============================================================================
