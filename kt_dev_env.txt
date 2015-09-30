@@ -72,6 +72,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_vim_141| shell: foreground and background
 
 |kt_dev_env_vim_150| format, wrap, tw
+|kt_dev_env_vim_150| vim-textwidth
 |kt_dev_env_vim_151| encoding and utf8
 *kt_dev_env_vim_152* how: how to change word between '_'
 
@@ -127,6 +128,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_git_012* git-branch: list
 *kt_dev_env_git_013* git-branch: checkout and tracking
 *kt_dev_env_git_014* git-branch: merge or rebase
+*kt_dev_env_git_015* git-branch: check if a branch has a commit 
 |kt_dev_env_git_011| merge workflow. mergetool
 |kt_dev_env_git_012| generate patch and apply
 |kt_dev_env_git_013| merge: undo merge attempt
@@ -140,7 +142,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_023| git-reset
 *kt_dev_env_git_024* git-reset: try out topic branches
 
-|kt_dev_env_git_029| recover and dangling
+|kt_dev_env_git_029| git-recover
 |kt_dev_env_git_030| git-stash
 |kt_dev_env_git_032| git-list
 |kt_dev_env_git_033| git-add: rm, mv
@@ -149,6 +151,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_035| git-show
 |kt_dev_env_git_036| git-commit
 *kt_dev_env_git_037* git-blame
+*kt_dev_env_git_037* git-blame: pickaxe
 
 |kt_dev_env_git_100| case: determine what is introduced. commit ranges.
 |kt_dev_env_git_038| git-grep
@@ -4373,12 +4376,59 @@ To insert the elipsis, press ctrl-vu followed by the numeric code for elipsis: 2
 covers unicode character insertion in a little more detail. ctrl-v u2026
 
 
-{textwidth}
+={============================================================================
+*kt_dev_env_vim_150* vim-textwidth
 
+{local-to-buffer}
+This is "local to buffer" and even when set it in vimrc as global, still don't
+have it applied. Why?
+
+Vim has this covered with the global vs. buffer-local options. As you describe,
+    you're supposed to :set a global default in your ~/.vimrc, and some
+    filetypes may override the global default with :setlocal.
+
+For troubleshooting, try
+
+:verbose set tw?
+
+This should tell you the last place that modified the option value.
+
+  textwidth=78
+      Last set from ~/share/vim/vim74/ftplugin/help.vim
+
+
+/share/vim/vim74/ftplugin/help.vim
+
+" Vim filetype plugin file
+" Language:         Vim help file
+" Maintainer:       Nikolai Weibull <now@bitwi.se>
+" Latest Revision:  2008-07-09
+
+if exists("b:did_ftplugin")
+  finish
+endif
+let b:did_ftplugin = 1
+
+let s:cpo_save = &cpo
+set cpo&vim
+
+let b:undo_ftplugin = "setl fo< tw< cole< cocu<"
+
+setlocal formatoptions+=tcroql textwidth=78
+if has("conceal")
+  setlocal cole=2 cocu=nc
+endif
+
+let &cpo = s:cpo_save
+unlet s:cpo_save
+
+
+{format}
 :set tw=xxx
 
-when use 'textwidth' it works well when typing in VIM but when copy text from external source then
-it doesn't work; that's don't fit into textwidth setting of the current file. 
+when use 'textwidth' it works well when typing in VIM but when copy text from
+external source then it doesn't work; that's don't fit into textwidth setting of
+the current file. 
 
 two solution to this:
 
@@ -4388,8 +4438,8 @@ gqG                     # formats the text starting from the current and to the 
                         # It will automatically join consecutive lines when possible.
 
 Note: 
-A blank line, which contains white space, does NOT separate paragraphs. This is hard to
-notice!
+A blank line, which contains white space, does NOT separate paragraphs. This is
+hard to notice!
 
 set formatoptions+=a    # vim to do it automatically. help auto-format
 
@@ -7243,7 +7293,7 @@ git branch -m oldname newname
 $ git branch -d hotfix
 Deleted branch hotfix (3a0874c).
 
-<remote>
+<delete-remote-branch>
 You can delete a remote branch using the --delete option to git push. If you
 want to delete your serverfix branch from the 'server', you run the following:
 
@@ -7496,6 +7546,17 @@ note:
 It's important to remember when you're doing all this that these branches are
 completely local. When you're branching and merging, everything is being done
 only in your local repository. NO server communication is happening.
+
+
+={============================================================================
+*kt_dev_env_git_015* git-branch: check if a branch has a commit 
+
+{to-check}
+$ git commit -v 96c6af219a3d019c9353db261f8c0ecbb378602c
+error: pathspec '96c6af219a3d019c9353db261f8c0ecbb378602c' did not match any file(s) known to git.
+
+$ git branch --contains 96c6af219a3d019c9353db261f8c0ecbb378602c
+$ note: shows nothing
 
 
 ={============================================================================
@@ -9047,15 +9108,7 @@ This essentially moves around HEAD to whatever to try in the repo.
 
 
 ={============================================================================
-*kt_dev_env_git_029* recover and dangling
-
-{to-check}
-$ git commit -v 96c6af219a3d019c9353db261f8c0ecbb378602c
-error: pathspec '96c6af219a3d019c9353db261f8c0ecbb378602c' did not match any file(s) known to git.
-
-$ git branch --contains 96c6af219a3d019c9353db261f8c0ecbb378602c
-$ note: shows nothing
-
+*kt_dev_env_git_029* git-recover
 
 {recover-stash}
 Recover dropped stash in git
@@ -9096,21 +9149,24 @@ interested in. After that, you can do whatever you want with them with all the n
 you're done, just blow those branches away 
 
 
-{dangling}
+{restore-last-commit}
 http://gitready.com/advanced/2009/01/17/restoring-lost-commits.html
 
-So, you just did a git reset --hard HEAD^ and threw out your last commit. Well, it turns out you
-really did need those changes. Don't fear, git should still have your commit. When you do a reset, the
-commit you threw out goes to a 'dangling' state. It’s still in git's datastore, waiting for the next
-garbage collection to clean it up. So unless you've ran a git gc since you tossed it, you should be
-in the clear to restore it.
+So you just did a git reset --hard HEAD^ and threw out your last commit and it
+turns out you really did need those changes. Don't fear, git should still have
+your commit. When you do a reset, the commit you threw out goes to a 'dangling'
+state. It's still in git's datastore, waiting for the next garbage collection to
+clean it up. So unless you've ran a git gc since you tossed it, you should be in
+the clear to restore it.
 
-For these examples, I'm working with the code for this blog. From the top, we just ran:
+For these examples, I'm working with the code for this blog. From the top, we
+just ran:
 
 $ git show-ref -h HEAD
   7c61179cbe51c050c5520b4399f7b14eec943754 HEAD
 
 note: the below is real output when run tha above.
+
 $ git show-ref --head HEAD
 53c849344458f858c75cd50ab924d61b867822fd HEAD
 e3abcd196ed42eef28831c70c099a76ee0c273be refs/remotes/origin/HEAD
@@ -9121,10 +9177,10 @@ $ git reset --hard HEAD^
 $ git show-ref -h HEAD
   39ba87bf28b5bb223feffafb59638f6f46908cac HEAD
 
-So our HEAD has been backed up by one commit. At this point if we wanted it back we could just git
-pull, but we're assuming that only our local repository knows about the commit. We need the SHA1 of
-the commit so we can bring it back. We can prove that git 'knows' about the commit still with the
-fsck command:
+So our HEAD has been backed up by one commit. At this point if we wanted it back
+we could just git pull, but we're assuming that only our local repository knows
+about the commit. We need the SHA1 of the commit so we can bring it back. We can
+prove that git 'knows' about the commit still with the fsck command:
 
 $ git fsck --lost-found
   [... some blobs omitted ...]
@@ -9148,15 +9204,16 @@ dangling commit 8e5fc3451a2778aad439266b290885611ccf995e
 dangling commit 686983d96f27cb54067e0cd87c38b20e49d8603e
 ...
 
-You can also see the that git knows about the commit still by using the reflog command:
+You can also see the that git knows about the commit still by using the reflog
+command:
 
 $ git reflog
   39ba87b... HEAD@{0}: HEAD~1: updating HEAD
   7c61179... HEAD@{1}: pull origin master: Fast forward
   [... lots of other refs ...]
 
-So, we now have our SHA1: 7c61179. If we want to get immediately apply it back onto our current
-branch, doing a git merge will recover the commit:
+So, we now have our SHA1: 7c61179. If we want to get immediately apply it back
+'onto' our current branch, doing a git merge will recover the commit:
 
 $ git merge 7c61179
   Updating 39ba87b..7c61179
@@ -9167,14 +9224,16 @@ $ git merge 7c61179
 
 note: can use cherry-pick than merge
 
-This command will bring your lost changes back and make sure that HEAD is pointing at the commit.
+This command will bring your lost changes back and make sure that HEAD is
+pointing at the commit.
 
-From here you can continue to work as normal! You could also checkout the SHA1 'into' a new branch,
-     but really a merge is the fastest and easiest way to restore that lost commit once you have the
-     hash. If you have other ways let us know in the comments!
+From here you can continue to work as normal! You could also checkout the SHA1
+'into' a new branch, but really a merge is the fastest and easiest way to
+restore that lost commit once you have the hash. If you have other ways let us
+know in the comments!
 
-If you want some more options on what to do in this situation, Mathieu Martin's illustrated guide to
-recovering lost commits with Git has plenty for you.
+If you want some more options on what to do in this situation, Mathieu Martin's
+illustrated guide to recovering lost commits with Git has plenty for you.
 
 http://www.programblings.com/2008/06/07/the-illustrated-guide-to-recovering-lost-commits-with-git/
 
@@ -10034,6 +10093,9 @@ in this file. Git tells you the original commit where you wrote those lines,
    even if it was in another file.
 
 
+={============================================================================
+*kt_dev_env_git_037* git-blame: pickaxe
+
 {git-pickaxe}
 
 It's also possible to search for commits that introduce or remove a particular
@@ -10046,18 +10108,19 @@ git log -S"Hello, World!"
 If you want to search using a regular expression instead of a string, you can
 use the -G"<regex>" flag instead.
 
-This is a very powerful debugging tool, as it lets you locate all of the commits
-that affect a particular line of code. It can even show you when a line was
-copied or moved to another file.
+This is a very powerful debugging tool, as it lets you locate 'all' of the
+commits that affect a particular line of code. It can even show you when a line
+was copied or moved to another file.
 
-// from git-log
+
+git-log:
 
 -S<string>
 
     Look for differences that change the number of occurrences of the specified
     string (i.e. addition/deletion) in a file. Intended for the scripter’s use.
 
-    It is useful when you’re looking for an exact block of code (like a struct),
+    It is useful when you're looking for an exact block of code (like a struct),
     and want to know the history of that block since it first came into being:
     use the feature iteratively to feed the interesting block in the preimage
     back into -S, and keep going until you get the very first version of the
@@ -10102,8 +10165,8 @@ Date:   Tue Apr 21 10:36:25 2015 +0100
     multiple elementary streams to a single playpump.
     
 
-The -S option which takes a string and only shows the commits that introduced a
-change to the code that added or removed that string. For instance, if you
+The -S option which takes a string and only shows the 'commits' that introduced
+a change to the code that added or removed that string. For instance, if you
 wanted to find the last commit that added or removed a reference to a specific
 function, you could call:
 
@@ -10116,6 +10179,11 @@ note: git log -S shows a commit.
 
 https://gitfu.wordpress.com/2008/06/03/the-pickaxe-finding-changes-was-never-easier/
 
+To use the pickaxe, just pass the -S option. 
+
+git log -Sgit-diff --pretty=oneline --abbrev-commit 
+note: do not work!?
+
 Because tig supports all the git options, running tig -Sgit-diff shows you the
 list of commits and lets you see the diffs by hitting enter.
 
@@ -10123,7 +10191,6 @@ The pickaxe can help find code that's been deleted or moved, git blame won't
 tell you about those lines at all. Any time you want to find out more about a
 piece of code than just who touched it last, the pickaxe is a good little tool
 to reach for.
-
 
 Q:
 Difference between "git blame -C" and "git log -S"?
@@ -11042,10 +11109,11 @@ merge <src> into <dst>. See EXAMPLES below for details.
 
 tag <tag> means the same as refs/tags/<tag>:refs/tags/<tag>.
 
-note: this is how to delete remote branch
 
-// can use this form to delete a remote branch:
-// $ git push origin :review/DEVARCH-10262
+<delete-remote-branch>
+this is why the below delete remote branch
+
+$ git push origin :review/DEVARCH-10262
 
 Pushing an empty <src> allows you to delete the <dst> ref from the remote
 repository.
@@ -11564,6 +11632,8 @@ validate_subject() {
         exit 1;
     }
 }
+
+echo -e "\E[1;31mThe git hook pre-push runs\E[m";
 
 while read local_ref local_sha remote_ref remote_sha
 do

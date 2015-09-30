@@ -135,6 +135,8 @@
 |kt_dev_uv_task_008| task:07: DEVARCH-9557: netflix launch issue
 |kt_dev_uv_task_009| task:08: fr15: hls: DEVARCH-9722
 *kt_dev_uv_task_010* task:09: fr15: hls: DEVARCH-9861
+*kt_dev_uv_task_011* task:09: fr15: video resize support
+*kt_dev_uv_task_011* task:09: fr15: dash error handling
 
 
 # ============================================================================
@@ -8073,23 +8075,32 @@ WebCore::QMediaPlayerInterface* createMediaPlayerImplementation(
 }
 
 
+class VanadiumMediaPlayer 
+{
+    boost::shared_ptr<MediaPlayerListener> listener;
+};
+
 void VanadiumMediaPlayer::load(const std::string& url)
 {
-    VANADIUM_FUNC_TRACE;
+  VANADIUM_FUNC_TRACE;
 
-    // *set-source* 
-    mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
-    mediaRouter->setSink("decoder://0").get();
-    currentSource = url;
+  // this makes a dbus event link to the media proxy via addListener
+  // *system-api*
+  mediaRouter->addListener(dispatcher, listener);
 
-    // WebKit expects the media player to start in the paused state
-    pause();
+  // *set-source* 
+  mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
+  mediaRouter->setSink("decoder://0").get();
+  currentSource = url;
 
-    if(preloadPolicy != WebCore::QMediaPlayerInterface::NONE)
-    {
-        mediaRouter->startBuffering();
-        currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
-    }
+  // WebKit expects the media player to start in the paused state
+  pause();
+
+  if(preloadPolicy != WebCore::QMediaPlayerInterface::NONE)
+  {
+    mediaRouter->startBuffering();
+    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+  }
 }
 
 void VanadiumMediaPlayer::play()
@@ -8120,30 +8131,31 @@ VanadiumMediaPlayer::VanadiumMediaPlayer(
     currentNetworkState(QMediaPlayerInterface::NETWORK_EMPTY),
     currentReadyState(QMediaPlayerInterface::HAVE_NOTHING),
     seekCount(0),
-    listener(new MediaPlayerListener(*this)),
+
+    listener(boost::make_shared<MediaPlayerListener>(this)),
+
     playbackPaused(false),
     mediaRouterPresenting(false),
     mediaRouterVolume(0.0),
     playerManager(playerManager_)
 {
-    // note: links to "MR PROXY"
-    
-    FilePluginConfig pluginConfig(PackageDataFinder().find("system-factory.plugin-config"));
-    NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
-        PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
+  // note:
+  // 1. this makes a dbus link to the media proxy
 
-    boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactory> mediaRouterFactory
-        = nickelSystemFactory.createMediaRouterFactory();
+  // Vanadium/Vanadium.WebKit.VideoElement/data$ cat system-factory.plugin-config 
+  //  libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
 
-    // note: this returns a future and future.get() returns a SP<MediaRouter>
-    //
-    // NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::createMediaRouter();
-    
-    
-    mediaRouter = mediaRouterFactory->createMediaRouter().get();
+  FilePluginConfig pluginConfig(PackageDataFinder().find("system-factory.plugin-config"));
+  NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
+    PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
 
-    mediaRouter->addListener(dispatcher, listener);
-    mediaRouterVolume = mediaRouter->getVolume().get();
+  boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactory> mediaRouterFactory
+    = nickelSystemFactory.createMediaRouterFactory();
+
+  // note: this returns a future and future.get() returns a SP<MediaRouter>
+  // NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::createMediaRouter();
+
+  mediaRouter = mediaRouterFactory->createMediaRouter().get();
 }
 
 boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
@@ -9992,22 +10004,23 @@ https://jira.youview.co.uk/browse/SPECWIP-3703
                              - to gst for dash mine type (.so)
 
 
-{ui} same as before. gets SCF and MR factory via SCF.
+{ui} same as before. gets SCF and then MR factory via SCF.
+
 Nickel.AIR.Client.API/data/client-factory.plugin-config
-1:libNickelClientSystem.so createSystemClientFactory
+  libNickelClientSystem.so createSystemClientFactory
 
 
-{client-factory} same as before
+{client-factory}
+SCF is the same as before and comes from:
+
 Nickel.Client.System/
    libNickelClientSystem.so.0.0.0
 
 copper-system-factory.plugin-config:
 libCopperSystemDbusClient.so createDbusSystemFactory note: dbus client
 
-nickel-system-factory.plugin-config:
-libNickelSystemDbusClient.so createDbusSystemFactory note: dbus bronze
 
-
+note: new *system-client-factory*
 Plugin* createSystemClientFactory() {
     return new NS_NICKEL_CLIENT::SystemClientFactory();
 }
@@ -10032,59 +10045,60 @@ struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
 
 // Nickel/Nickel.Client.System/src/SystemClientFactory.cpp
 
-SystemClientFactory::SystemClientFactory() 
-    : defaultDispatcher(new MultipleListenerEventDispatcher()) {
-}
-
 class SystemClientFactory : virtual public ClientFactory {
 
-    boost::shared_ptr<Locator> createLocator() {
-        NICKEL_FUNC_TRACE;
-        static boost::shared_ptr<Locator> locator;
-        if(!locator)
-        {
-            locator.reset(
-                    new SystemClientLocator(
-                        createMediaRouterFactory(),
-                        createMediaSettings(),
-                        createOutputManager(),
-                        createServiceListBuilder(),
-                        createAudioFeedback()
-                        )
-                    );
-        }
-        return locator;
+  note: new *dispatcher*
+  SystemClientFactory::SystemClientFactory() 
+    : defaultDispatcher(new MultipleListenerEventDispatcher()) {
     }
 
-    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> mediaRouterFactory;
-
-    // note: create SMRF and return.
-    
-    boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> createMediaRouterFactory() 
+  boost::shared_ptr<Locator> createLocator() {
+    NICKEL_FUNC_TRACE;
+    static boost::shared_ptr<Locator> locator;
+    if(!locator)
     {
-        boost::mutex::scoped_lock lock(mutex);
-
-        if(mediaRouterFactory == NULL) {
-
-            // note: create MRF from bronze
-            
-            boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactorySync> 
-                sysMRFactory( convertToSync( getSystemFactory().createMediaRouterFactory() ) );
-
-            // note: SMRF and defaultDispatcher is inlineDP
-             
-            boost::shared_ptr<NS_NICKEL_CLIENT::SystemMediaRouterFactory> cliMRFactory(
-               new NS_NICKEL_CLIENT::SystemMediaRouterFactory(sysMRFactory, defaultDispatcher, *this));
-
-            mediaRouterFactory = cliMRFactory;
-        }
-
-        return(mediaRouterFactory);
+      locator.reset(
+          new SystemClientLocator(
+            createMediaRouterFactory(),
+            createMediaSettings(),
+            createOutputManager(),
+            createServiceListBuilder(),
+            createAudioFeedback()
+            )
+          );
     }
+    return locator;
+  }
+
+  boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> mediaRouterFactory;
+
+  // note: create SMRF and return.
+
+  boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouterFactory> createMediaRouterFactory() 
+  {
+    boost::mutex::scoped_lock lock(mutex);
+
+    if(mediaRouterFactory == NULL) {
+
+      // note: create MRF from bronze
+
+      boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactorySync> 
+        sysMRFactory( convertToSync( getSystemFactory().createMediaRouterFactory() ) );
+
+      // note: pass bronze MRF, defaultDispatcher(inlineDP) and get SMRF
+
+      boost::shared_ptr<NS_NICKEL_CLIENT::SystemMediaRouterFactory> cliMRFactory(
+          new NS_NICKEL_CLIENT::SystemMediaRouterFactory(sysMRFactory, defaultDispatcher, *this));
+
+      mediaRouterFactory = cliMRFactory;
+    }
+
+    return(mediaRouterFactory);
+  }
 };
 
 
-<system-factory>
+{system-factory} client factory vs. (dbus) system factory
 
 // SCF provides this API which retuns a system factory of bronze OEM component.
 //
@@ -10096,47 +10110,49 @@ class SystemClientFactory : virtual public ClientFactory {
 // This factory function uses "Zinc.Media" which is bronze.
 
 Zinc::Media::SystemFactory& SystemClientFactory::getSystemFactory() {
-    static const NS_ZINC::FilePluginConfig 
-        SYSTEM_FACTORY_PLUGIN_CONFIG(PackageDataFinder().find("nickel-system-factory.plugin-config"));
-    return PluginFactory::getInstance<Zinc::Media::SystemFactory>(SYSTEM_FACTORY_PLUGIN_CONFIG);
-}
 
+    static const NS_ZINC::FilePluginConfig 
+        SYSTEM_FACTORY_PLUGIN_CONFIG(PackageDataFinder().find(
+              "nickel-system-factory.plugin-config"
+              ));
+
+    return PluginFactory::getInstance<Zinc::Media::SystemFactory>
+      (SYSTEM_FACTORY_PLUGIN_CONFIG);
+}
 
 // Nickel/Nickel.System.DBusClient/src/DbusSystemFactory.cpp
 // Nickel/Nickel.System.DBusClient/src/DbusSystemFactory.h
 
     : theBusName("Zinc.Media") note: this is bronze
 
-
 Plugin *createDbusSystemFactory(const char* busName) {
     return new DbusSystemFactory(busName);
 }
 
-
 namespace Zinc { namespace Media {
 
-struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
+  struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
     virtual ~SystemFactory();
 
     virtual boost::shared_ptr<Zinc::Media::LocalMediaLibrary> 
-        createLocalMediaLibrary() = 0;
+      createLocalMediaLibrary() = 0;
 
     virtual boost::shared_ptr<Zinc::Media::MediaRouterFactory> 
-        createMediaRouterFactory() = 0;
+      createMediaRouterFactory() = 0;
 
     virtual boost::shared_ptr<Zinc::Media::MediaSettings> 
-        createMediaSettings() = 0;
+      createMediaSettings() = 0;
 
     virtual boost::shared_ptr<Zinc::Media::OutputManager> 
-        createOutputManager() = 0;
+      createOutputManager() = 0;
 
     virtual boost::shared_ptr<Zinc::Media::ServiceListBuilder> 
-        createServiceListBuilder() = 0;
+      createServiceListBuilder() = 0;
 
     virtual boost::shared_ptr<Zinc::Media::MediaRouter> 
-        createDefaultMediaRouter() = 0;
+      createDefaultMediaRouter() = 0;
 
-};
+  };
 } //namespace
 } //namespace
 
@@ -10144,31 +10160,34 @@ struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
 class ZINC_EXPORT DbusSystemFactory : 
     public NS_ZINC_DBUS_BINDING::AbstractDbusSystemFactory<SystemFactory> 
 {
-    shared_ptr<MediaRouterFactory> DbusSystemFactory::createMediaRouterFactory() 
-    {
-        recursive_mutex::scoped_lock lock(mutex);
-        boost::shared_ptr<MediaRouterFactory> strong(theMediaRouterFactory.lock());
-        if (!strong) {
-            DBus::Connection conn = getDBusSessionConnection();
-            if (!mediaRouterCollection) {
-                mediaRouterCollection = 
-                    boost::make_shared<NS_ZINC_DBUS_BINDING::ProxyFactory<MediaRouterDBusToSyncAndAsync> >(
-                        NS_ZINC_DBUS_BINDING::ObjectWithEventsProxyFactory<MediaRouterDBusToSyncAndAsync>(
-                                getEventDispatcher(), getFutureDispatcher()));
-            }
+  shared_ptr<MediaRouterFactory> DbusSystemFactory::createMediaRouterFactory() 
+  {
+    recursive_mutex::scoped_lock lock(mutex);
+    boost::shared_ptr<MediaRouterFactory> strong(theMediaRouterFactory.lock());
+    if (!strong) {
+      DBus::Connection conn = getDBusSessionConnection();
+      if (!mediaRouterCollection) {
+        mediaRouterCollection = 
+          boost::make_shared<NS_ZINC_DBUS_BINDING::ProxyFactory<MediaRouterDBusToSyncAndAsync> >(
+              NS_ZINC_DBUS_BINDING::ObjectWithEventsProxyFactory<MediaRouterDBusToSyncAndAsync>(
+                getEventDispatcher(), getFutureDispatcher()));
+      }
 
-            //   const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
-            
-            strong = MediaRouterFactoryDBusToSyncAndAsync::create(conn,
-                    theBusName,
-                    NS_NICKEL_SYSTEM::ObjectPath::MEDIA_ROUTER_FACTORY,
-                    getFutureDispatcher(),
-                    mediaRouterCollection);
-            theMediaRouterFactory = strong;
-        }
-        return strong;
+      //   const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
+
+      strong = MediaRouterFactoryDBusToSyncAndAsync::create(conn,
+          theBusName,
+          NS_NICKEL_SYSTEM::ObjectPath::MEDIA_ROUTER_FACTORY,
+          getFutureDispatcher(),
+          mediaRouterCollection);
+      theMediaRouterFactory = strong;
     }
+    return strong;
+  }
 }
+
+
+<system-media-router-factory>
 
 // Nickel/Nickel.Client.API/include/MediaRouterFactory.h
 
@@ -10195,17 +10214,16 @@ class SystemMediaRouterFactory : public virtual NS_NICKEL_CLIENT::MediaRouterFac
 
    virtual boost::shared_ptr<MediaRouter> createMediaRouter();
     
+   note: ctor
    SystemMediaRouterFactory::SystemMediaRouterFactory():
         sysFactory(sysFactory_), clientFactory(&clientFactory_), dispatcher(dispatcher) {}
 };
-
 
 boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> SystemMediaRouterFactory::createMediaRouter(void) 
 {
     try 
     {
         // note: after all, calls OEM one.
-
         boost::shared_ptr<NS_NICKEL_CLIENT::MediaRouter> p =
         wrapSystemRouter(sysFactory->createMediaRouter(), dispatcher);
         return p;
@@ -10228,6 +10246,41 @@ boost::shared_ptr<MediaRouter> wrapSystemRouter(boost::shared_ptr<NS_NICKEL_SYST
     sysRouter->addListener(cliSysRouter);
     NICKEL_DEBUG("cli "<<cliSysRouter<<" sys "<<sysRouter);
     return cliSysRouter;
+}
+
+
+{how-events-get-delivered-on-dbus}
+
+Nickel.System.API/include/MediaRouterEventListener.h
+
+/**
+ * Inherit from MediaRouterEventListener and register with
+ * MediaRouter::addListener() to receive signals sent by
+ * MediaRouter.
+ */
+struct ZINC_EXPORT MediaRouterEventListener : public NS_ZINC::EventListener
+{
+	virtual ~MediaRouterEventListener();
+	virtual void BufferStatusEvent(const BufferStatusEventValue::Enum event) = 0;
+	virtual void DrmEvent(const DrmEventValue::Enum event, 
+       const std::string& drmMediaIdentifier, 
+       const std::string& rightsIssuerUrl) = 0;
+	virtual void PositionChangeEvent(const Position& position) = 0;
+	virtual void SourceEvent(const SourceEventValue::Enum event, 
+       const SetSourceReason::Enum reason) = 0;
+	virtual void SpeedChangeEvent() = 0;
+	virtual void StatusEvent(const StatusEventValue::Enum event) = 0;
+	virtual void ErrorEvent(const ErrorEventValue::Enum error, 
+       const ErrorEventContext::Enum context, const std::string& info) = 0;
+
+};
+
+Nickel.System.API/include/MediaRouterAsync.h
+
+class MediaRouterEventListener;
+
+class ZINC_EXPORT MediaRouterAsync : public virtual NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>
+{
 }
 
 
@@ -10264,64 +10317,57 @@ libNickelSystemProxy.so createSystemFactory
 note: nore sure how pluginConfigMediaRouter gets value
 
 void MediaDaemon::start(int argc, char *argv[])
+{
+  // note: these all are use this single media-daemon.plugin-config and loads
+  // proxy so.
 
-    // note: these all are use this single media-daemon.plugin-config and loads
-    // proxy so.
+  SystemFactory& factoryMediaRouter = 
+    NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigMediaRouter);
 
-    SystemFactory& factoryMediaRouter = 
-      NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigMediaRouter);
-
-    SystemFactory& factoryMediaRouterDefault = 
+  SystemFactory& factoryMediaRouterDefault = 
     NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigMediaRouterDefault);
-    SystemFactory& factoryOutputmanager = 
+  SystemFactory& factoryOutputmanager = 
     NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigOutputmanager);
-    SystemFactory& factoryMediaSettings = 
+  SystemFactory& factoryMediaSettings = 
     NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigMediaSettings);
-    SystemFactory& factoryLocalMediaLibrary = 
+  SystemFactory& factoryLocalMediaLibrary = 
     NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigLocalMediaLibrary);
-    SystemFactory& factoryServiceListBuilder = 
+  SystemFactory& factoryServiceListBuilder = 
     NS_ZINC::PluginFactory::getInstance<SystemFactory>(pluginConfigServiceListBuilder);
 
-    // namespace ObjectPath {
-    //   const char* const LOCAL_MEDIA_LIBRARY = "/Zinc/Media/LocalMediaLibrary";
-    //
-    //   const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
-    //   const char* const DEFAULT_MEDIA_ROUTER = "/Zinc/Media/DefaultMediaRouter";
-    //
-    //   const char* const MEDIA_ROUTER = "/Zinc/Media/MediaRouter";
-    //   const char* const MEDIA_SETTINGS = "/Zinc/Media/MediaSettings";
-    //   const char* const OUTPUT_MANAGER = "/Zinc/Media/OutputManager";
-    //   const char* const SERVICE_LIST_BUILDER = "/Zinc/Media/ServiceListBuilder";
-    // }
+  // namespace ObjectPath {
+  //   const char* const LOCAL_MEDIA_LIBRARY = "/Zinc/Media/LocalMediaLibrary";
+  //
+  //   const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
+  //   const char* const DEFAULT_MEDIA_ROUTER = "/Zinc/Media/DefaultMediaRouter";
+  //
+  //   const char* const MEDIA_ROUTER = "/Zinc/Media/MediaRouter";
+  //   const char* const MEDIA_SETTINGS = "/Zinc/Media/MediaSettings";
+  //   const char* const OUTPUT_MANAGER = "/Zinc/Media/OutputManager";
+  //   const char* const SERVICE_LIST_BUILDER = "/Zinc/Media/ServiceListBuilder";
+  // }
 
-    if (mediaRoutersEnabled)
-    {
-        dbus.expose(ObjectPath::MEDIA_ROUTER_FACTORY, factoryMediaRouter.createMediaRouterFactory(),
-                boost::make_shared<NonInheritingAdaptorFactory<MediaRouter> >
-                (
-                 NS_ZINC_DBUS_BINDING::RefCountedAdaptorFactory<MediaRouter>(*bnm), conn, 
-                 "/Zinc/Media/MediaRouters/")
-                );
-        dbus.expose(ObjectPath::DEFAULT_MEDIA_ROUTER, factoryMediaRouterDefault.createDefaultMediaRouter());
-    }
+  if (mediaRoutersEnabled)
+  {
+    dbus.expose(ObjectPath::MEDIA_ROUTER_FACTORY, factoryMediaRouter.createMediaRouterFactory(),
+        boost::make_shared<NonInheritingAdaptorFactory<MediaRouter> >
+        (
+         NS_ZINC_DBUS_BINDING::RefCountedAdaptorFactory<MediaRouter>(*bnm), conn, 
+         "/Zinc/Media/MediaRouters/")
+        );
+    dbus.expose(ObjectPath::DEFAULT_MEDIA_ROUTER, factoryMediaRouterDefault.createDefaultMediaRouter());
+  }
+}
 
 
-<<SCF> media-router-proxy
-
-1. loads dependancies
-Nickel.System.Proxy/libNickelSystemProxy.so.0.0.0
-
-default-system-factory.plugin-config:1:libNickelSystemDbusClient.so createDbusSystemFactory note: dbus bronze
-http-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
-https-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
-
+<system-factory> media-router-proxy
 
 note: 
 1. this is equivalent to SystemClientFactory.cpp
 2. builds map<protocal, factory-function> 
 
-
-libNickelSystemProxy.so createSystemFactory
+Nickel.System.Proxy/libNickelSystemProxy.so.0.0.0
+  libNickelSystemProxy.so createSystemFactory
 
 // Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp
 //
@@ -10363,7 +10409,6 @@ ProxySystemFactory::ProxySystemFactory() {
 // total 16
 // -rw-r--r--  1 kpark kpark   51 Jun  2 11:52 http-application%2Fdash%2Bxml.plugin-config
 // -rw-r--r--  1 kpark kpark   51 Jun  2 11:52 https-application%2Fdash%2Bxml.plugin-config
-//
 
 typedef std::pair<std::string, boost::shared_ptr<MediaRouterFactory> > MIMEMediaRouterFactory;
 typedef std::pair<std::string, std::vector<MIMEMediaRouterFactory> > MIMEMediaRouterFactoryMap;
@@ -10371,32 +10416,38 @@ typedef std::vector<MIMEMediaRouterFactoryMap> ProtocolMediaRouterFactoryMap;
 
 void ProxySystemFactory::loadImplementations()
 {
-    // get bronze
-    FilePluginConfig defaultPluginConfig(PackageDataFinder().find("default-system-factory.plugin-config"));
-    defaultImplementation = boost::addressof(PluginFactory::getInstance<SystemFactory>(defaultPluginConfig));
+  // get bronze
+  // default-system-factory.plugin-config
+  //  libNickelSystemDbusClient.so createDbusSystemFactory
 
-    // "/opt/zinc-trunk/share/platform_data/mediarouter-plugin-config
-    // /http-application%2Fdash%2Bxml.plugin-config"
-    //
-    // protocol "http"
-    // mimeType "application%2Fdash%2Bxml"
-    // after decodedMimeType
-    // mimeType "application/dash+xml"
-    //
-    // for_each add {protocol, {mime, factory-function}} in vector
-    //   {"http", { "application/dash+xml", factory-function}} in vector
-    //   {"https", { "application/dash+xml", factory-function}} in vector
-    
-      SystemFactory& factory(PluginFactory::getInstance<SystemFactory>(pluginConfig));
-      protMapIter->second.push_back(std::make_pair(mimeType, factory.createMediaRouterFactory()));
+  FilePluginConfig defaultPluginConfig(PackageDataFinder().find("default-system-factory.plugin-config"));
+  defaultImplementation = boost::addressof(PluginFactory::getInstance<SystemFactory>(defaultPluginConfig));
+
+  // http-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
+  // https-application%2Fdash%2Bxml.plugin-config:1:libNickelSystemGstreamer.so createGstSystemFactory
+
+  // "/opt/zinc-trunk/share/platform_data/mediarouter-plugin-config
+  // /http-application%2Fdash%2Bxml.plugin-config"
+  //
+  // protocol "http"
+  // mimeType "application%2Fdash%2Bxml"
+  // after decodedMimeType
+  // mimeType "application/dash+xml"
+  //
+  // for_each add {protocol, {mime, factory-function}} in vector
+  //   {"http", { "application/dash+xml", factory-function}} in vector
+  //   {"https", { "application/dash+xml", factory-function}} in vector
+
+  SystemFactory& factory(PluginFactory::getInstance<SystemFactory>(pluginConfig));
+  protMapIter->second.push_back(std::make_pair(mimeType, factory.createMediaRouterFactory()));
 
 
-    // save factories
-    defaultMediaRouterFactory = defaultImplementation->createMediaRouterFactory();
+  // save factories
+  defaultMediaRouterFactory = defaultImplementation->createMediaRouterFactory();
 
-    // save to ProxySystemFactory::proxyMediaRouterFactory
-    proxyMediaRouterFactory = boost::make_shared<ProxyMediaRouterFactory>(getDispatcher(),
-            defaultMediaRouterFactory, protocolMediaRouterFactoryMap);
+  // save to ProxySystemFactory::proxyMediaRouterFactory
+  proxyMediaRouterFactory = boost::make_shared<ProxyMediaRouterFactory>(getDispatcher(),
+      defaultMediaRouterFactory, protocolMediaRouterFactoryMap);
 }
 
 
@@ -18412,7 +18463,6 @@ This commit is largely taken from one on the alex.ashley/DEVARCH-8992
 branch, with the main modification of posting the "video-changed"
 message on the main thread when it is idle.
 
-
 <log>
 DEVARCH-10262: Fix video resolution changes delivery in nexussink and
 implement plumbing to the YV media router.
@@ -18432,23 +18482,31 @@ Also this commit implements plumbing up to the YV media router to pass
 calculated video size.
 
 
-<log>
-DEVARCH-10262: Fix video resolution changes delivery in nexussink and
-implement plumbing to the YV media router.
+={============================================================================
+*kt_dev_uv_task_011* task:09: fr15: dash error handling
 
-This is a commit to provide new video size from Nexus when stream changes
-using video size and aspect ratio in order to support video resizing in the
-browser since HTML 5 defines the read-only properties `videoHeight` and
-`videoWidth` on an video element and which allows WebKit to correctly size
-video while maintaining aspect ratio.
+DASH error handling: Hooking up errors through YV MR
+https://jira.youview.co.uk/browse/DEVARCH-9698
 
-This commit examined various commits started from DEVARCH-8992 and different
-approach as to Nexus callback to use to obtain stream details reliably. To
-that end, do the delivery of video resolution changes via two-level callback
-approach and uses simplified math to calculate video size. 
+DEMO - VOD error handling (source, output controls, etc)
+https://jira.youview.co.uk/browse/DEVARCH-10097
 
-Also this commit implements plumbing up to the YV media router to pass
-calculated video size.
+DEVARCH-10097: YV MediaRouter: DASH error support
+
+The YV MediaRouter allows the client application to receive errors for DASH
+unicast play in case there are errors reported during play and defines
+ErrorEventValue and ErrorEventContext to support reporting errors to the
+client.
+
+This commit enables video tag in HTML application to receive those errors
+through WebKit and implements translation and mapping of play errors between
+GStreamer and YV MediaRouter according to the YV MediaRouter [1] and the
+MediaPlayerPrivateGStreamer implementation.
+
+This commit comes with corresponding test in Vanadium test harness.
+
+[1] 1125-S Media Router Specification v1.3
+
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:
