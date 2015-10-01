@@ -7708,7 +7708,7 @@ various degrees of sophistication and customization; in particular, it allows
 for concurrent execution of test scripts, use of established test protocols such
   as TAP, and definition of custom test drivers and test runners.
 
-In either case, the testsuite is invoked via ‘make check’.
+In either case, the testsuite is 'invoked' via ‘make check’.
 
 
 15.2.1 Scripts-based Testsuites
@@ -7784,30 +7784,28 @@ resort to the use of ‘AM_COLOR_TESTS=always’ in order to have the testsuite
 output colorized.
 
 
-   Test programs that need data files should look for them in ‘srcdir’
-(which is both a make variable and an environment variable made
-available to the tests), so that they work when building in a separate
-directory (*note Build Directories: (autoconf)Build Directories.), and
-in particular for the ‘distcheck’ rule (*note Checking the
-Distribution::).
+Test programs that need data files should look for them in ‘srcdir’ (which is
+    both a make variable and an environment variable made available to the
+    tests), so that they work when building in a separate directory (*note Build
+      Directories: (autoconf)Build Directories.), and in particular for the
+    ‘distcheck’ rule (*note Checking the Distribution::).
 
-   The ‘AM_TESTS_ENVIRONMENT’ and ‘TESTS_ENVIRONMENT’ variables can be
-used to run initialization code and set environment variables for the
-test scripts.  The former variable is developer-reserved, and can be
-defined in the ‘Makefile.am’, while the latter is reserved for the user,
-which can employ it to extend or override the settings in the former;
-for this to work portably, however, the contents of a non-empty
-‘AM_TESTS_ENVIRONMENT’ _must_ be terminated by a semicolon.
+The ‘AM_TESTS_ENVIRONMENT’ and ‘TESTS_ENVIRONMENT’ variables can be used to run
+initialization code and set environment variables for the test scripts.  The
+former variable is developer-reserved, and can be defined in the ‘Makefile.am’,
+       while the latter is reserved for the user, which can employ it to extend
+         or override the settings in the former; for this to work portably,
+            however, the contents of a non-empty ‘AM_TESTS_ENVIRONMENT’ _must_
+              be terminated by a semicolon.
 
-   The ‘AM_TESTS_FD_REDIRECT’ variable can be used to define file
-descriptor redirections for the test scripts.  One might think that
-‘AM_TESTS_ENVIRONMENT’ could be used for this purpose, but experience
-has shown that doing so portably is practically impossible.  The main
-hurdle is constituted by Korn shells, which usually set the
-close-on-exec flag on file descriptors opened with the ‘exec’ builtin,
-thus rendering an idiom like ‘AM_TESTS_ENVIRONMENT = exec 9>&2;’
-ineffectual.  This issue also affects some Bourne shells, such as the
-HP-UX’s ‘/bin/sh’,
+The ‘AM_TESTS_FD_REDIRECT’ variable can be used to define file descriptor
+redirections for the test scripts.  One might think that ‘AM_TESTS_ENVIRONMENT’
+could be used for this purpose, but experience has shown that doing so portably
+is practically impossible.  The main hurdle is constituted by Korn shells, which
+usually set the close-on-exec flag on file descriptors opened with the ‘exec’
+builtin, thus rendering an idiom like ‘AM_TESTS_ENVIRONMENT = exec 9>&2;’
+ineffectual.  This issue also affects some Bourne shells, such as the HP-UX’s
+‘/bin/sh’,
 
      AM_TESTS_ENVIRONMENT = \
      ## Some environment initializations are kept in a separate shell
@@ -7825,35 +7823,204 @@ HP-UX’s ‘/bin/sh’,
      ## before executing them.
      AM_TESTS_FD_REDIRECT = 9>&2
 
-Note however that ‘AM_TESTS_ENVIRONMENT’ is, for historical and
-implementation reasons, _not_ supported by the serial harness (*note
-Serial Test Harness::).
+Note however that ‘AM_TESTS_ENVIRONMENT’ is, for historical and implementation
+reasons, _not_ supported by the serial harness (*note Serial Test Harness::).
 
-   Automake ensures that each file listed in ‘TESTS’ is built before it
-is run; you can list both source and derived programs (or scripts) in
-‘TESTS’; the generated rule will look both in ‘srcdir’ and ‘.’.  For
-instance, you might want to run a C program as a test.  To do this you
-would list its name in ‘TESTS’ and also in ‘check_PROGRAMS’, and then
-specify it as you would any other program.
+Automake ensures that each file listed in ‘TESTS’ is built 'before' it is run;
+     you can list both source and derived programs (or scripts) in ‘TESTS’; the
+       generated rule will look both in ‘srcdir’ and ‘.’.  For instance, you
+       might want to run a C program as a test.  To do this you would list its
+       name in ‘TESTS’ and also in ‘check_PROGRAMS’, and then specify it as you
+       would any other program.
 
-   Programs listed in ‘check_PROGRAMS’ (and ‘check_LIBRARIES’,
-‘check_LTLIBRARIES’...)  are only built during ‘make check’, not during
-‘make all’.  You should list there any program needed by your tests that
-does not need to be built by ‘make all’.  Note that ‘check_PROGRAMS’ are
-_not_ automatically added to ‘TESTS’ because ‘check_PROGRAMS’ usually
-lists programs used by the tests, not the tests themselves.  Of course
-you can set ‘TESTS = $(check_PROGRAMS)’ if all your programs are test
-cases.
+Programs listed in ‘check_PROGRAMS’ (and ‘check_LIBRARIES’,
+    ‘check_LTLIBRARIES’...)  are only built 'during' ‘make check’, not during
+‘make all’.  You should list there any program needed by your tests that does
+'not' need to be built by ‘make all’.  Note that ‘check_PROGRAMS’ are _not_
+automatically added to ‘TESTS’ because ‘check_PROGRAMS’ usually lists programs
+used by the tests, not the tests themselves.  Of course you can set ‘TESTS =
+$(check_PROGRAMS)’ if all your programs are test cases.
+
+
+15.2.3 Parallel Test Harness
+----------------------------
+
+By default, Automake generated a parallel (concurrent) test harness.  It
+features automatic collection of the test scripts output in ‘.log’ files,
+         concurrent execution of tests with ‘make -j’, specification of
+           inter-test dependencies, lazy reruns of tests that have not completed
+           in a prior run, and hard errors for exceptional failures.
+
+The parallel test harness operates by defining a set of ‘make’ rules that run
+the test scripts listed in ‘TESTS’, and, for each such script, save its output
+in a corresponding ‘.log’ file and its results (and other “metadata”, *note API
+    for Custom Test Drivers::) in a corresponding ‘.trs’ (as in Test ReSults)
+file.  The ‘.log’ file will contain all the output emitted by the test on its
+standard output and its standard error.  The ‘.trs’ file will contain, among the
+other things, the results of the test cases run by the script.
+
+The parallel test harness will also create a summary log file, ‘TEST_SUITE_LOG’,
+which defaults to ‘test-suite.log’ and requires a ‘.log’ suffix.  This file
+  depends upon all the ‘.log’ and ‘.trs’ files created for the test scripts
+  listed in ‘TESTS’.
+
+As with the serial harness above, by default one status line is printed per
+completed test, and a short summary after the suite has completed.  However,
+standard output and standard error of the test are redirected to a per-test log
+  file, so that parallel execution does not produce intermingled output.  The
+  output from failed tests is collected in the ‘test-suite.log’ file.  If the
+  variable ‘VERBOSE’ is set, this file is output after the summary.
+
+Each couple of ‘.log’ and ‘.trs’ files is created when the corresponding test
+has completed.  The set of log files is listed in the read-only variable
+‘TEST_LOGS’, and defaults to ‘TESTS’, with the executable extension if any
+(*note EXEEXT::), as well as any suffix listed in ‘TEST_EXTENSIONS’ removed, and
+‘.log’ appended.  Results are undefined if a test file name ends in several
+concatenated suffixes.  ‘TEST_EXTENSIONS’ defaults to ‘.test’; it can be
+overridden by the user, in which case any extension listed in it must be
+constituted by a dot, followed by a non-digit alphabetic character, followed by
+any number of alphabetic characters.  For example, ‘.sh’, ‘.T’ and ‘.t1’ are
+valid extensions, while ‘.x-y’, ‘.6c’ and ‘.t.1’ are not.
+
+It is important to note that, due to current limitations (unlikely to be
+    lifted), configure substitutions in the definition of ‘TESTS’ can only work
+if they will expand to a list of tests that have a suffix listed in
+  ‘TEST_EXTENSIONS’.
+
+For tests that match an extension ‘.EXT’ listed in ‘TEST_EXTENSIONS’, you can
+provide a custom “test runner” using the variable ‘EXT_LOG_COMPILER’ (note the
+    upper-case extension) and pass options in ‘AM_EXT_LOG_FLAGS’ and allow the
+user to pass options in ‘EXT_LOG_FLAGS’.  It will cause all tests with this
+extension to be called with this runner.  For all tests without a registered
+extension, the variables ‘LOG_COMPILER’, ‘AM_LOG_FLAGS’, and ‘LOG_FLAGS’ may be
+used.  For example,
+
+     TESTS = foo.pl bar.py baz
+     TEST_EXTENSIONS = .pl .py
+     PL_LOG_COMPILER = $(PERL)
+     AM_PL_LOG_FLAGS = -w
+     PY_LOG_COMPILER = $(PYTHON)
+     AM_PY_LOG_FLAGS = -v
+     LOG_COMPILER = ./wrapper-script
+     AM_LOG_FLAGS = -d
+
+will invoke ‘$(PERL) -w foo.pl’, ‘$(PYTHON) -v bar.py’, and ‘./wrapper-script -d
+baz’ to produce ‘foo.log’, ‘bar.log’, and ‘baz.log’, respectively.  The
+‘foo.trs’, ‘bar.trs’ and ‘baz.trs’ files will be automatically produced as a
+side-effect.
+
+It’s important to note that, differently from what we’ve seen for the serial
+test harness (*note Serial Test Harness::), the ‘AM_TESTS_ENVIRONMENT’ and
+‘TESTS_ENVIRONMENT’ variables _cannot_ be use to define a custom test runner;
+     the ‘LOG_COMPILER’ and ‘LOG_FLAGS’ (or their extension-specific
+         counterparts) should be used instead:
+
+     ## This is WRONG!
+     AM_TESTS_ENVIRONMENT = PERL5LIB='$(srcdir)/lib' $(PERL) -Mstrict -w
+
+     ## Do this instead.
+     AM_TESTS_ENVIRONMENT = PERL5LIB='$(srcdir)/lib'; export PERL5LIB;
+     LOG_COMPILER = $(PERL)
+     AM_LOG_FLAGS = -Mstrict -w
+
+By default, the test suite harness will run all tests, but there are several
+ways to 'limit' the set of tests that are run:
+
+• You can set the ‘TESTS’ variable.  For example, you can use a command like
+this to run only a subset of the tests:
+
+          env TESTS="foo.test bar.test" make -e check
+
+Note however that the command above will unconditionally overwrite the
+‘test-suite.log’ file, thus clobbering the recorded results of any previous
+testsuite run.  This might be undesirable for packages whose testsuite takes
+long time to execute.  Luckily, this problem can easily be avoided by overriding
+also ‘TEST_SUITE_LOG’ at runtime; for example,
+
+          env TEST_SUITE_LOG=partial.log TESTS="..." make -e check
+
+will write the result of the partial testsuite runs to the ‘partial.log’,
+without touching ‘test-suite.log’.
+
+• You can set the ‘TEST_LOGS’ variable.  By default, this variable is computed
+at ‘make’ run time from the value of ‘TESTS’ as described above.  For example,
+you can use the following:
+
+          set x subset*.log; shift
+          env TEST_LOGS="foo.log $*" make -e check
+
+The comments made above about ‘TEST_SUITE_LOG’ overriding applies here too.
+
+• By default, the test harness removes all old per-test ‘.log’ and ‘.trs’ files
+before it starts running tests to regenerate them.  The variable ‘RECHECK_LOGS’
+contains the set of ‘.log’ (and, by implication, ‘.trs’) files which are
+removed.  ‘RECHECK_LOGS’ defaults to ‘TEST_LOGS’, which means all tests need to
+be rechecked.  By overriding this variable, you can choose which tests need to
+be reconsidered.  For example, you can lazily rerun only those tests which are
+outdated, i.e., older than their prerequisite test files, by setting this
+variable to the empty value:
+
+          env RECHECK_LOGS= make -e check
+
+• You can ensure that all tests are rerun which have failed or passed
+unexpectedly, by running ‘make recheck’ in the test directory.  This convenience
+target will set ‘RECHECK_LOGS’ appropriately before invoking the main test
+harness.
+
+In order to guarantee an ordering between tests even with ‘make -jN’,
+dependencies between the corresponding ‘.log’ files may be specified through
+  usual ‘make’ dependencies.  For example, the following snippet lets the test
+  named ‘foo-execute.test’ depend upon completion of the test
+  ‘foo-compile.test’:
+
+     TESTS = foo-compile.test foo-execute.test
+     foo-execute.log: foo-compile.log
+
+Please note that this ordering ignores the _results_ of required tests, thus the
+test ‘foo-execute.test’ is run even if the test ‘foo-compile.test’ failed or was
+skipped beforehand.  Further, please note that specifying such dependencies
+currently works only for tests that end in one of the suffixes listed in
+‘TEST_EXTENSIONS’.
+
+Tests without such specified dependencies may be run concurrently with parallel
+‘make -jN’, so be sure they are prepared for concurrent execution.
+
+The combination of lazy test execution and correct dependencies
+between tests and their sources may be exploited for efficient unit
+testing during development.  To further speed up the edit-compile-test
+cycle, it may even be useful to specify compiled programs in
+‘EXTRA_PROGRAMS’ instead of with ‘check_PROGRAMS’, as the former allows
+intertwined compilation and test execution (but note that
+‘EXTRA_PROGRAMS’ are not cleaned automatically, *note Uniform::).
+
+The variables ‘TESTS’ and ‘XFAIL_TESTS’ may contain conditional parts as well as
+configure substitutions.  In the latter case, however, certain restrictions
+apply: substituted test names must end with a nonempty test suffix like ‘.test’,
+so that one of the inference rules generated by ‘automake’ can apply.  For
+  literal test names, ‘automake’ can generate per-target rules to avoid this
+  limitation.
+
+Please note that it is currently not possible to use ‘$(srcdir)/’ or
+‘$(top_srcdir)/’ in the ‘TESTS’ variable.  This technical limitation is
+necessary to avoid generating test logs in the source tree and has the
+unfortunate consequence that it is not possible to specify distributed tests
+that are themselves generated by means of explicit rules, in a way that is
+portable to all ‘make’ implementations (*note (autoconf)Make Target Lookup::,
+    the semantics of FreeBSD and OpenBSD ‘make’ conflict with this).  In case of
+doubt you may want to require to use GNU ‘make’, or work around the issue with
+inference rules to generate the tests.
+
 
 ={============================================================================
 *kt_linux_tool_160* ccache
 
-The ccache tool tries to speed up a build by taking object files from cache when the preprocessed
-source didn't change. In addition, it can often avoid preprocessing, as a cache lookup on the source
-file path and compiler options returns a list of include files and their modification times. If
-those weren't updated, that counts as a 'direct hit'. Otherwise it falls back to preprocessing the
-source and trying to look-up its hash in the cache. If successful, that counts as a 'preprocessed
-hit'.
+The ccache tool tries to speed up a build by taking object files from cache when
+the preprocessed source didn't change. In addition, it can often avoid
+preprocessing, as a cache lookup on the source file path and compiler options
+returns a list of include files and their modification times. If those weren't
+updated, that counts as a 'direct hit'. Otherwise it falls back to preprocessing
+the source and trying to look-up its hash in the cache. If successful, that
+counts as a 'preprocessed hit'.
 
 <problem>
 The main barrier preventing cache sharing across git branches has to do with the fact we create
