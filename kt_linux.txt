@@ -130,6 +130,7 @@
 |kt_linux_tool_144| cmake: link group
 
 |kt_linux_tool_150| automake:
+*kt_linux_tool_150* automake: standard targets
 *kt_linux_tool_150* automake: directory variable
 *kt_linux_tool_150* automake: distcheck
 *kt_linux_tool_150* automake: example
@@ -137,8 +138,10 @@
 *kt_linux_tool_150* automake: 03: 
 *kt_linux_tool_150* automake: 04: example packages
 *kt_linux_tool_150* automake: 08: building programs and libraries
-*kt_linux_tool_150* automake: 09: SCRIPTS
-|kt_linux_tool_150| automake: LDADD vs LDFLAGS
+*kt_linux_tool_150* automake: 08: program variables
+*kt_linux_tool_150* automake: 08: program variables: case issue
+*kt_linux_tool_150* automake: 09: scripts
+*kt_linux_tool_150* automake: 15: test and make check
 |kt_linux_tool_160| ccache
 
 |kt_linux_tool_200| binutil:
@@ -5586,6 +5589,9 @@ of installcheck is little known, and its usefulness is neglected. Our little toy
 package is no better: make installcheck does nothing. 
 
 
+={============================================================================
+*kt_linux_tool_150* automake: standard targets
+
 2.2.2 Standard Makefile Targets
 
 So far we have come across four ways to run make in the GNU Build System: make,
@@ -5623,6 +5629,318 @@ make installcheck
 
 make dist
     Recreate package-version.tar.gz from all the source files. 
+
+
+From GNU Coding Standards
+
+http://www.gnu.org/prep/standards/html_node/Standard-Targets.html#Standard-Targets
+
+7.2.6 Standard Targets for Users
+
+All GNU programs should have the following targets in their Makefiles:
+
+‘all’
+
+    Compile the entire program. This should be the default target. This target
+    need not rebuild any documentation files; Info files should normally be
+    included in the distribution, and DVI (and other documentation format) files
+    should be made only when explicitly asked for.
+
+    By default, the Make rules should compile and link with ‘-g’, so that
+    executable programs have debugging symbols. Otherwise, you are essentially
+    helpless in the face of a crash, and it is often far from easy to reproduce
+    with a fresh build.  
+    
+‘install’
+
+    Compile the program and copy the executables, libraries, and so on to the
+    file names where they should reside for actual use. If there is a simple
+    test to verify that a program is properly installed, this target should run
+    that test.
+
+    Do not strip executables when installing them. This helps eventual debugging
+    that may be needed later, and nowadays disk space is cheap and dynamic
+    loaders typically ensure debug sections are not loaded during normal
+    execution. Users that need stripped binaries may invoke the install-strip
+    target to do that.
+
+    If possible, write the install target rule so that it does not modify
+    anything in the directory where the program was built, provided ‘make all’
+    has just been done. This is convenient for building the program under one
+    user name and installing it under another.
+
+    The commands should create all the directories in which files are to be
+    installed, if they don’t already exist. This includes the directories
+    specified as the values of the variables prefix and exec_prefix, as well as
+    all subdirectories that are needed. One way to do this is by means of an
+    installdirs target as described below.
+
+    Use ‘-’ before any command for installing a man page, so that make will
+    ignore any errors. This is in case there are systems that don’t have the
+    Unix man page documentation system installed.
+
+    The way to install Info files is to copy them into $(infodir) with
+    $(INSTALL_DATA) (see Command Variables), and then run the install-info
+    program if it is present. install-info is a program that edits the Info dir
+    file to add or update the menu entry for the given Info file; it is part of
+    the Texinfo package.
+
+    Here is a sample rule to install an Info file that also tries to handle some
+    additional situations, such as install-info not being present.
+
+    do-install-info: foo.info installdirs
+            $(NORMAL_INSTALL)
+    # Prefer an info file in . to one in srcdir.
+            if test -f foo.info; then d=.; \
+             else d="$(srcdir)"; fi; \
+            $(INSTALL_DATA) $$d/foo.info \
+              "$(DESTDIR)$(infodir)/foo.info"
+    # Run install-info only if it exists.
+    # Use 'if' instead of just prepending '-' to the
+    # line so we notice real errors from install-info.
+    # Use '$(SHELL) -c' because some shells do not
+    # fail gracefully when there is an unknown command.
+            $(POST_INSTALL)
+            if $(SHELL) -c 'install-info --version' \
+               >/dev/null 2>&1; then \
+              install-info --dir-file="$(DESTDIR)$(infodir)/dir" \
+                           "$(DESTDIR)$(infodir)/foo.info"; \
+            else true; fi
+
+    When writing the install target, you must classify all the commands into
+      three categories: normal ones, pre-installation commands and
+      post-installation commands. See Install Command Categories.
+
+‘install-html’
+‘install-dvi’
+‘install-pdf’
+‘install-ps’
+
+    These targets install documentation in formats other than Info; they’re
+    intended to be called explicitly by the person installing the package, if
+    that format is desired. GNU prefers Info files, so these must be installed
+    by the install target.
+
+    When you have many documentation files to install, we recommend that you
+    avoid collisions and clutter by arranging for these targets to install in
+    subdirectories of the appropriate installation directory, such as htmldir.
+    As one example, if your package has multiple manuals, and you wish to
+    install HTML documentation with many files (such as the “split” mode output
+        by makeinfo --html), you’ll certainly want to use subdirectories, or two
+    nodes with the same name in different manuals will overwrite each other.
+
+    Please make these install-format targets invoke the commands for the format
+    target, for example, by making format a dependency.
+
+‘uninstall’
+
+    Delete all the installed files—the copies that the ‘install’ and ‘install-*’
+    targets create.
+
+    This rule should not modify the directories where compilation is done, only
+    the directories where files are installed.
+
+    The uninstallation commands are divided into three categories, just like the
+    installation commands. See Install Command Categories.  
+    
+‘install-strip’
+
+    Like install, but strip the executable files while installing them. In
+    simple cases, this target can use the install target in a simple way:
+
+    install-strip:
+            $(MAKE) INSTALL_PROGRAM='$(INSTALL_PROGRAM) -s' \
+                    install
+
+    But if the package installs scripts as well as real executables, the
+    install-strip target can’t just refer to the install target; it has to strip
+    the executables but not the scripts.
+
+    install-strip should not strip the executables in the build directory which
+    are being copied for installation. It should only strip the copies that are
+    installed.
+
+    Normally we do not recommend stripping an executable unless you are sure the
+    program has no bugs. However, it can be reasonable to install a stripped
+    executable for actual execution while saving the unstripped executable
+    elsewhere in case there is a bug.
+
+‘clean’
+
+    Delete all files in the current directory that are normally created by
+    building the program. Also delete files in other directories if they are
+    created by this makefile. However, don’t delete the files that record the
+    configuration. Also preserve files that could be made by building, but
+    normally aren’t because the distribution comes with them. There is no need
+    to delete parent directories that were created with ‘mkdir -p’, since they
+    could have existed anyway.
+
+    Delete .dvi files here if they are not part of the distribution.
+
+‘distclean’
+
+    Delete all files in the current directory (or created by this makefile) that
+    are created by configuring or building the program. If you have unpacked the
+    source and built the program without creating any other files, ‘make
+    distclean’ should leave only the files that were in the distribution.
+    However, there is no need to delete parent directories that were created
+    with ‘mkdir -p’, since they could have existed anyway.
+
+‘mostlyclean’
+
+    Like ‘clean’, but may refrain from deleting a few files that people normally
+    don’t want to recompile. For example, the ‘mostlyclean’ target for GCC does
+    not delete libgcc.a, because recompiling it is rarely necessary and takes a
+    lot of time.  
+
+‘maintainer-clean’
+
+    Delete almost everything that can be reconstructed with this Makefile. This
+    typically includes everything deleted by distclean, plus more: C source
+    files produced by Bison, tags tables, Info files, and so on.
+
+    The reason we say “almost everything” is that running the command ‘make
+    maintainer-clean’ should not delete configure even if configure can be
+    remade using a rule in the Makefile. More generally, ‘make maintainer-clean’
+    should not delete anything that needs to exist in order to run configure and
+    then begin to build the program. Also, there is no need to delete parent
+    directories that were created with ‘mkdir -p’, since they could have existed
+    anyway. These are the only exceptions; maintainer-clean should delete
+    everything else that can be rebuilt.
+
+    The ‘maintainer-clean’ target is intended to be used by a maintainer of the
+    package, not by ordinary users. You may need special tools to reconstruct
+    some of the files that ‘make maintainer-clean’ deletes. Since these files
+    are normally included in the distribution, we don’t take care to make them
+    easy to reconstruct. If you find you need to unpack the full distribution
+    again, don’t blame us.
+
+    To help make users aware of this, the commands for the special
+    maintainer-clean target should start with these two:
+
+    @echo 'This command is intended for maintainers to use; it'
+    @echo 'deletes files that may need special tools to rebuild.'
+
+‘TAGS’
+
+    Update a tags table for this program.
+
+‘info’
+
+    Generate any Info files needed. The best way to write the rules is as
+    follows:
+
+    info: foo.info
+
+    foo.info: foo.texi chap1.texi chap2.texi
+            $(MAKEINFO) $(srcdir)/foo.texi
+
+    You must define the variable MAKEINFO in the Makefile. It should run the
+    makeinfo program, which is part of the Texinfo distribution.
+
+    Normally a GNU distribution comes with Info files, and that means the Info
+    files are present in the source directory. Therefore, the Make rule for an
+    info file should update it in the source directory. When users build the
+    package, ordinarily Make will not update the Info files because they will
+    already be up to date.
+
+‘dvi’
+‘html’
+‘pdf’
+‘ps’
+
+    Generate documentation files in the given format. These targets should
+    always exist, but any or all can be a no-op if the given output format
+    cannot be generated. These targets should not be dependencies of the all
+    target; the user must manually invoke them.
+
+    Here’s an example rule for generating DVI files from Texinfo:
+
+    dvi: foo.dvi
+
+    foo.dvi: foo.texi chap1.texi chap2.texi
+            $(TEXI2DVI) $(srcdir)/foo.texi
+
+    You must define the variable TEXI2DVI in the Makefile. It should run the
+    program texi2dvi, which is part of the Texinfo distribution. (texi2dvi uses
+        TeX to do the real work of formatting. TeX is not distributed with
+        Texinfo.) Alternatively, write only the dependencies, and allow GNU make
+    to provide the command.
+
+    Here’s another example, this one for generating HTML from Texinfo:
+
+    html: foo.html
+
+    foo.html: foo.texi chap1.texi chap2.texi
+            $(TEXI2HTML) $(srcdir)/foo.texi
+
+    Again, you would define the variable TEXI2HTML in the Makefile; for example,
+  it might run makeinfo --no-split --html (makeinfo is part of the Texinfo
+      distribution).
+
+‘dist’
+
+    Create a distribution tar file for this program. The tar file should be set
+    up so that the file names in the tar file start with a subdirectory name
+    which is the name of the package it is a distribution for. This name can
+    include the version number.
+
+    For example, the distribution tar file of GCC version 1.40 unpacks into a
+    subdirectory named gcc-1.40.
+
+    The easiest way to do this is to create a subdirectory appropriately named,
+    use ln or cp to install the proper files in it, and then tar that
+      subdirectory.
+
+    Compress the tar file with gzip. For example, the actual distribution file
+    for GCC version 1.40 is called gcc-1.40.tar.gz. It is ok to support other
+      free compression formats as well.
+
+    The dist target should explicitly depend on all non-source files that are in
+    the distribution, to make sure they are up to date in the distribution. See
+    Making Releases.
+
+‘check’
+
+    Perform self-tests (if any). The user must build the program before running
+    the tests, but need not install the program; you should write the self-tests
+    so that they work when the program is built but not installed. 
+
+The following targets are suggested as conventional names, for programs in which
+they are useful.
+
+installcheck
+
+    Perform installation tests (if any). The user must build and install the
+    program before running the tests. You should not assume that $(bindir) is in
+    the search path.  
+    
+installdirs
+
+    It’s useful to add a target named ‘installdirs’ to create the directories
+    where files are installed, and their parent directories. There is a script
+    called mkinstalldirs which is convenient for this; you can find it in the
+    Gnulib package. You can use a rule like this:
+
+    # Make sure all installation directories (e.g. $(bindir))
+    # actually exist by making them if necessary.
+    installdirs: mkinstalldirs
+            $(srcdir)/mkinstalldirs $(bindir) $(datadir) \
+                                    $(libdir) $(infodir) \
+                                    $(mandir)
+
+    or, if you wish to support DESTDIR (strongly encouraged),
+
+    # Make sure all installation directories (e.g. $(bindir))
+    # actually exist by making them if necessary.
+    installdirs: mkinstalldirs
+            $(srcdir)/mkinstalldirs \
+                $(DESTDIR)$(bindir) $(DESTDIR)$(datadir) \
+                $(DESTDIR)$(libdir) $(DESTDIR)$(infodir) \
+                $(DESTDIR)$(mandir)
+
+    This rule should not modify the directories where compilation is done. It
+    should do nothing but create installation directories. 
 
 
 ={============================================================================
@@ -6796,119 +7114,112 @@ modify how that program is built.  There is a similar list of such variables for
 each library.  The canonical name of the program (or library) is used as a base
 for naming these variables.
 
-In the list below, we use the name “maude” to refer to the program or library.
-In your ‘Makefile.am’ you would replace this with the canonical name of your
-program.  This list also refers to “maude” as a program, but in general the same
-rules apply for both static and dynamic libraries; the documentation below notes
-situations where programs and libraries differ.
+In the list below, we use the name “maude” to refer to the 'program' or
+'library'.  In your ‘Makefile.am’ you would replace this with the canonical name
+of your program.  This list also refers to “maude” as a program, but in general
+the same rules apply for both static and dynamic libraries; the documentation
+below notes situations where programs and libraries differ.
 
 ‘maude_SOURCES’
-     This variable, if it exists, lists all the source files that are
-     compiled to build the program.  These files are added to the
-     distribution by default.  When building the program, Automake will
-     cause each source file to be compiled to a single ‘.o’ file (or
-     ‘.lo’ when using libtool).  Normally these object files are named
-     after the source file, but other factors can change this.  If a
-     file in the ‘_SOURCES’ variable has an unrecognized extension,
-     Automake will do one of two things with it.  If a suffix rule
-     exists for turning files with the unrecognized extension into ‘.o’
-     files, then ‘automake’ will treat this file as it will any other
-     source file (*note Support for Other Languages::).  Otherwise, the
-     file will be ignored as though it were a header file.
+     This variable, if it exists, lists all the source files that are compiled
+     to build the program.  These files are added to the distribution by
+     default.  When building the program, Automake will cause each source file
+     to be compiled to a single ‘.o’ file (or ‘.lo’ when using libtool).
+     Normally these object files are named after the source file, but other
+     factors can change this.  If a file in the ‘_SOURCES’ variable has an
+     unrecognized extension, Automake will do one of two things with it.  If a
+     suffix rule exists for turning files with the unrecognized extension into
+     ‘.o’ files, then ‘automake’ will treat this file as it will any other
+     source file.  Otherwise, the file will be ignored as though it were a
+     header file.
 
-     The prefixes ‘dist_’ and ‘nodist_’ can be used to control whether
-     files listed in a ‘_SOURCES’ variable are distributed.  ‘dist_’ is
-     redundant, as sources are distributed by default, but it can be
-     specified for clarity if desired.
+     The prefixes ‘dist_’ and ‘nodist_’ can be used to control whether files
+     listed in a ‘_SOURCES’ variable are distributed.  ‘dist_’ is 'redundant',
+            as sources are distributed by default, but it can be specified for
+              clarity if desired.
 
-     It is possible to have both ‘dist_’ and ‘nodist_’ variants of a
-     given ‘_SOURCES’ variable at once; this lets you easily distribute
-     some files and not others, for instance:
+     It is possible to have both ‘dist_’ and ‘nodist_’ variants of a given
+     ‘_SOURCES’ variable at once; this lets you easily distribute some files and
+     not others, for instance:
 
           nodist_maude_SOURCES = nodist.c
           dist_maude_SOURCES = dist-me.c
 
-     By default the output file (on Unix systems, the ‘.o’ file) will be
-     put into the current build directory.  However, if the option
-     ‘subdir-objects’ is in effect in the current directory then the
-     ‘.o’ file will be put into the subdirectory named after the source
-     file.  For instance, with ‘subdir-objects’ enabled,
-     ‘sub/dir/file.c’ will be compiled to ‘sub/dir/file.o’.  Some people
-     prefer this mode of operation.  You can specify ‘subdir-objects’ in
-     ‘AUTOMAKE_OPTIONS’ (*note Options::).
+     By default the output file (on Unix systems, the ‘.o’ file) will be put
+     into the current 'build' directory.  However, if the option
+     ‘subdir-objects’ is in effect in the current directory then the ‘.o’ file
+     will be put into the subdirectory named after the source file.  For
+     instance, with ‘subdir-objects’ enabled, ‘sub/dir/file.c’ will be compiled
+     to ‘sub/dir/file.o’.  Some people prefer this mode of operation.  You can
+     specify ‘subdir-objects’ in ‘AUTOMAKE_OPTIONS’ (*note Options::).
 
 ‘EXTRA_maude_SOURCES’
      Automake needs to know the list of files you intend to compile
-     _statically_.  For one thing, this is the only way Automake has of
-     knowing what sort of language support a given ‘Makefile.in’
-     requires.  (1) This means that, for example, you can’t put a
-     configure substitution like ‘@my_sources@’ into a ‘_SOURCES’
-     variable.  If you intend to conditionally compile source files and
-     use ‘configure’ to substitute the appropriate object names into,
-     e.g., ‘_LDADD’ (see below), then you should list the corresponding
-     source files in the ‘EXTRA_’ variable.
+     _statically_.  For one thing, this is the only way Automake has of knowing
+     what sort of language support a given ‘Makefile.in’ requires.  (1) This
+     means that, for example, you can’t put a configure substitution like
+     ‘@my_sources@’ into a ‘_SOURCES’ variable.  If you intend to conditionally
+     compile source files and use ‘configure’ to substitute the appropriate
+     object names into, e.g., ‘_LDADD’ (see below), then you should list the
+     corresponding source files in the ‘EXTRA_’ variable.
 
-     This variable also supports ‘dist_’ and ‘nodist_’ prefixes.  For
-     instance, ‘nodist_EXTRA_maude_SOURCES’ would list extra sources
-     that may need to be built, but should not be distributed.
+     This variable also supports ‘dist_’ and ‘nodist_’ prefixes.  For instance,
+‘nodist_EXTRA_maude_SOURCES’ would list extra sources that may need to be built,
+but should not be distributed.
 
 ‘maude_AR’
-     A static library is created by default by invoking ‘$(AR)
-     $(ARFLAGS)’ followed by the name of the library and then the
-     objects being put into the library.  You can override this by
-     setting the ‘_AR’ variable.  This is usually used with C++; some
-     C++ compilers require a special invocation in order to instantiate
-     all the templates that should go into a library.  For instance, the
-     SGI C++ compiler likes this variable set like so:
-          libmaude_a_AR = $(CXX) -ar -o
+     A static library is created by default by invoking ‘$(AR) $(ARFLAGS)’
+     followed by the name of the library and then the objects being put into the
+     library.  You can override this by setting the ‘_AR’ variable.  This is
+     usually used with C++; some C++ compilers require a special invocation in
+     order to instantiate all the templates that should go into a library.  For
+     instance, the SGI C++ compiler likes this variable set like so:
+
+     libmaude_a_AR = $(CXX) -ar -o
 
 ‘maude_LIBADD’
-     Extra objects can be added to a _library_ using the ‘_LIBADD’
-     variable.  For instance, this should be used for objects determined
-     by ‘configure’ (*note A Library::).
+     Extra objects can be added to a _library_ using the ‘_LIBADD’ variable.
+     For instance, this should be used for objects determined by ‘configure’
+     (*note A Library::).
 
-     In the case of libtool libraries, ‘maude_LIBADD’ can also refer to
-     other libtool libraries.
+     In the case of libtool libraries, ‘maude_LIBADD’ can also refer to other
+     libtool libraries.
 
 ‘maude_LDADD’
-     Extra objects (‘*.$(OBJEXT)’) and libraries (‘*.a’, ‘*.la’) can be
-     added to a _program_ by listing them in the ‘_LDADD’ variable.  For
-     instance, this should be used for objects determined by ‘configure’
-     (*note Linking::).
+     Extra objects (‘*.$(OBJEXT)’) and libraries (‘*.a’, ‘*.la’) can be added to
+     a _program_ by listing them in the ‘_LDADD’ variable.  For instance, this
+     should be used for objects determined by ‘configure’ (*note Linking::).
 
-     ‘_LDADD’ and ‘_LIBADD’ are inappropriate for passing
-     program-specific linker flags (except for ‘-l’, ‘-L’, ‘-dlopen’ and
-     ‘-dlpreopen’).  Use the ‘_LDFLAGS’ variable for this purpose.
+     ‘_LDADD’ and ‘_LIBADD’ are 'inappropriate' for passing program-'specific'
+     linker flags (except for ‘-l’, ‘-L’, ‘-dlopen’ and ‘-dlpreopen’).  Use the
+     ‘_LDFLAGS’ variable for this purpose.
 
-     For instance, if your ‘configure.ac’ uses ‘AC_PATH_XTRA’, you could
-     link your program against the X libraries like so:
+     For instance, if your ‘configure.ac’ uses ‘AC_PATH_XTRA’, you could link
+     your program against the X libraries like so:
 
           maude_LDADD = $(X_PRE_LIBS) $(X_LIBS) $(X_EXTRA_LIBS)
 
-     We recommend that you use ‘-l’ and ‘-L’ only when referring to
-     third-party libraries, and give the explicit file names of any
-     library built by your package.  Doing so will ensure that
-     ‘maude_DEPENDENCIES’ (see below) is correctly defined by default.
+     We recommend that you use ‘-l’ and ‘-L’ only when referring to third-party
+     libraries, and give the explicit file names of any library built by your
+     package.  Doing so will ensure that ‘maude_DEPENDENCIES’ (see below) is
+     correctly defined by default.
 
 ‘maude_LDFLAGS’
-     This variable is used to pass extra flags to the link step of a
-     program or a shared library.  It overrides the ‘AM_LDFLAGS’
-     variable.
+     This variable is used to pass 'extra''flags' to the link step of a program
+     or a shared library.  It overrides the ‘AM_LDFLAGS’ variable.
 
 ‘maude_LIBTOOLFLAGS’
-     This variable is used to pass extra options to ‘libtool’.  It
-     overrides the ‘AM_LIBTOOLFLAGS’ variable.  These options are output
-     before ‘libtool’’s ‘--mode=MODE’ option, so they should not be
-     mode-specific options (those belong to the compiler or linker
-     flags).  *Note Libtool Flags::.
+     This variable is used to pass extra options to ‘libtool’.  It overrides the
+     ‘AM_LIBTOOLFLAGS’ variable.  These options are output before ‘libtool’’s
+     ‘--mode=MODE’ option, so they should not be mode-specific options (those
+         belong to the compiler or linker flags).  *Note Libtool Flags::.
 
 ‘maude_DEPENDENCIES’
 ‘EXTRA_maude_DEPENDENCIES’
-     It is also occasionally useful to have a target (program or
-     library) depend on some other file that is not actually part of
-     that target.  This can be done using the ‘_DEPENDENCIES’ variable.
-     Each target depends on the contents of such a variable, but no
-     further interpretation is done.
+     It is also occasionally useful to have a target (program or library) depend
+     on some other file that is not actually part of that target.  This can be
+     done using the ‘_DEPENDENCIES’ variable.  Each target depends on the
+     contents of such a variable, but no further interpretation is done.
 
      Since these dependencies are associated to the link rule used to
      create the programs they should normally list files used by the
@@ -6966,33 +7277,34 @@ situations where programs and libraries differ.
 ‘maude_RFLAGS’
 ‘maude_UPCFLAGS’
 ‘maude_YFLAGS’
-     Automake allows you to set compilation flags on a per-program (or
-     per-library) basis.  A single source file can be included in
-     several programs, and it will potentially be compiled with
-     different flags for each program.  This works for any language
-     directly supported by Automake.  These "per-target compilation
-     flags" are ‘_CCASFLAGS’, ‘_CFLAGS’, ‘_CPPFLAGS’, ‘_CXXFLAGS’,
-     ‘_FFLAGS’, ‘_GCJFLAGS’, ‘_LFLAGS’, ‘_OBJCFLAGS’, ‘_OBJCXXFLAGS’,
-     ‘_RFLAGS’, ‘_UPCFLAGS’, and ‘_YFLAGS’.
+     Automake allows you to set 'compilation' flags on a per-program (or
+         per-library) basis.  A single source file can be included in several
+     programs, and it will potentially be compiled with different flags for each
+     program.  This works for any language directly supported by Automake.
 
-     When using a per-target compilation flag, Automake will choose a
-     different name for the intermediate object files.  Ordinarily a
-     file like ‘sample.c’ will be compiled to produce ‘sample.o’.
-     However, if the program’s ‘_CFLAGS’ variable is set, then the
-     object file will be named, for instance, ‘maude-sample.o’.  (See
-     also *note Renamed Objects::).
+     These "per-target compilation flags" are 
+     ‘_CCASFLAGS’, ‘_CFLAGS’, ‘_CPPFLAGS’, ‘_CXXFLAGS’, ‘_FFLAGS’, ‘_GCJFLAGS’, 
+     ‘_LFLAGS’, ‘_OBJCFLAGS’, ‘_OBJCXXFLAGS’, ‘_RFLAGS’, ‘_UPCFLAGS’,
+     and ‘_YFLAGS’.
 
-     In compilations with per-target flags, the ordinary ‘AM_’ form of
-     the flags variable is _not_ automatically included in the
-     compilation (however, the user form of the variable _is_ included).
+     When using a per-target compilation flag, Automake will choose a different
+     name for the intermediate object files.  Ordinarily a file like ‘sample.c’
+     will be compiled to produce ‘sample.o’.  However, if the program’s
+     ‘_CFLAGS’ variable is set, then the object file will be named, for
+     instance, ‘maude-sample.o’.  (See also *note Renamed Objects::).
+
+     In compilations with per-target flags, the ordinary ‘AM_’ form of the flags
+     variable is _not_ automatically included in the compilation (however, the
+         user form of the variable _is_ included).
+
      So for instance, if you want the hypothetical ‘maude’ compilations
      to also use the value of ‘AM_CFLAGS’, you would need to write:
 
-          maude_CFLAGS = … your flags … $(AM_CFLAGS)
+          maude_CFLAGS = … your flags ... $(AM_CFLAGS)
 
-     *Note Flag Variables Ordering::, for more discussion about the
-     interaction between user variables, ‘AM_’ shadow variables, and
-     per-target variables.
+     *Note Flag Variables Ordering::, for more discussion about the interaction
+     between 'user' variables, ‘AM_’ 'shadow' variables, and per-'target'
+     variables.
 
 ‘maude_SHORTNAME’
      On some platforms the allowable file names are very short.  In
@@ -7014,34 +7326,33 @@ situations where programs and libraries differ.
 
    ---------- Footnotes ----------
 
-   (1) There are other, more obscure reasons for this limitation as
-well.
+   (1) There are other, more obscure reasons for this limitation as well.
 
 
 8.7 Variables used when building a program
 ==========================================
 
 Occasionally it is useful to know which ‘Makefile’ variables Automake uses for
-compilations, and in which order (*note Flag Variables Ordering::); for
-instance, you might need to do your own compilation in some special cases.
+compilations, and in which 'order'; for instance, you might need to do your own
+compilation in some special cases.
 
-   Some variables are inherited from Autoconf; these are ‘CC’, ‘CFLAGS’,
-‘CPPFLAGS’, ‘DEFS’, ‘LDFLAGS’, and ‘LIBS’.
+   Some variables are 'inherited' from Autoconf; these are 
+
+   ‘CC’, ‘CFLAGS’, ‘CPPFLAGS’, ‘DEFS’, ‘LDFLAGS’, and ‘LIBS’.
 
    There are some additional variables that Automake defines on its own:
 
 ‘AM_CPPFLAGS’
-     The contents of this variable are passed to every compilation that
-     invokes the C preprocessor; it is a list of arguments to the
-     preprocessor.  For instance, ‘-I’ and ‘-D’ options should be listed
-     here.
+     The contents of this variable are passed to every compilation that invokes
+     the C 'preprocessor'; it is a list of arguments to the preprocessor.  For
+     instance, ‘-I’ and ‘-D’ options should be listed here.
 
-     Automake already provides some ‘-I’ options automatically, in a
-     separate variable that is also passed to every compilation that
-     invokes the C preprocessor.  In particular it generates ‘-I.’,
-     ‘-I$(srcdir)’, and a ‘-I’ pointing to the directory holding
-     ‘config.h’ (if you’ve used ‘AC_CONFIG_HEADERS’).  You can disable
-     the default ‘-I’ options using the ‘nostdinc’ option.
+     Automake already provides some ‘-I’ options automatically, in a separate
+     variable that is also passed to every compilation that invokes the C
+     preprocessor.  In particular it generates ‘-I.’, ‘-I$(srcdir)’, and a ‘-I’
+     pointing to the directory holding ‘config.h’ (if you’ve used
+         ‘AC_CONFIG_HEADERS’).  You can disable the default ‘-I’ options using
+     the ‘nostdinc’ option.
 
      When a file to be included is generated during the build and not
      part of a distribution tarball, its location is under
@@ -7058,33 +7369,33 @@ instance, you might need to do your own compilation in some special cases.
      ‘AM_CPPFLAGS’ is ignored in preference to a per-executable (or
      per-library) ‘_CPPFLAGS’ variable if it is defined.
 
-‘INCLUDES’
-     This does the same job as ‘AM_CPPFLAGS’ (or any per-target
-     ‘_CPPFLAGS’ variable if it is used).  It is an older name for the
-     same functionality.  This variable is deprecated; we suggest using
-     ‘AM_CPPFLAGS’ and per-target ‘_CPPFLAGS’ instead.
+// ‘INCLUDES’
+//      This does the same job as ‘AM_CPPFLAGS’ (or any per-target
+//      ‘_CPPFLAGS’ variable if it is used).  It is an older name for the
+//      same functionality.  This variable is 'deprecated'; we suggest using
+//      ‘AM_CPPFLAGS’ and per-target ‘_CPPFLAGS’ instead.
 
 ‘AM_CFLAGS’
-     This is the variable the ‘Makefile.am’ author can use to pass in
-     additional C compiler flags.  In some situations, this is not used,
-     in preference to the per-executable (or per-library) ‘_CFLAGS’.
+     This is the variable the ‘Makefile.am’ author can use to pass in additional
+     C compiler flags.  In some situations, this is not used, in preference to
+     the per-executable (or per-library) ‘_CFLAGS’.
 
 ‘COMPILE’
-     This is the command used to actually compile a C source file.  The
-     file name is appended to form the complete command line.
+     This is the command used to actually compile a C source file.  The file
+     name is appended to form the complete command line.
 
 ‘AM_LDFLAGS’
-     This is the variable the ‘Makefile.am’ author can use to pass in
-     additional linker flags.  In some situations, this is not used, in
-     preference to the per-executable (or per-library) ‘_LDFLAGS’.
+     This is the variable the ‘Makefile.am’ author can use to pass in additional
+     linker flags.  In some situations, this is not used, in preference to the
+     per-executable (or per-library) ‘_LDFLAGS’.
 
 ‘LINK’
-     This is the command used to actually link a C program.  It already
-     includes ‘-o $@’ and the usual variable references (for instance,
-     ‘CFLAGS’); it takes as “arguments” the names of the object files
-     and libraries to link in.  This variable is not used when the
-     linker is overridden with a per-target ‘_LINK’ variable or
-     per-target flags cause Automake to define such a ‘_LINK’ variable.
+     This is the command used to actually link a C program.  It already includes
+     ‘-o $@’ and the usual variable references (for instance, ‘CFLAGS’); it
+     takes as “arguments” the names of the object files and libraries to link
+     in.  This variable is not used when the linker is overridden with a
+     per-target ‘_LINK’ variable or per-target flags cause Automake to define
+     such a ‘_LINK’ variable.
 
 
 8.9 C++ Support
@@ -7092,13 +7403,11 @@ instance, you might need to do your own compilation in some special cases.
 
 Automake includes full support for C++.
 
-   Any package including C++ code must define the output variable ‘CXX’
-in ‘configure.ac’; the simplest way to do this is to use the
-‘AC_PROG_CXX’ macro (*note Particular Program Checks:
-(autoconf)Particular Programs.).
+Any package including C++ code 'must' define the output variable ‘CXX’ in
+‘configure.ac’; the simplest way to do this is to use the ‘AC_PROG_CXX’ macro
+(*note Particular Program Checks: (autoconf)Particular Programs.).
 
-   A few additional variables are defined when a C++ source file is
-seen:
+A few additional variables are defined when a C++ source file is seen:
 
 ‘CXX’
      The name of the C++ compiler.
@@ -7110,8 +7419,8 @@ seen:
      The maintainer’s variant of ‘CXXFLAGS’.
 
 ‘CXXCOMPILE’
-     The command used to actually compile a C++ source file.  The file
-     name is appended to form the complete command line.
+     The command used to actually compile a C++ source file.  The file name is
+     appended to form the complete command line.
 
 ‘CXXLINK’
      The command used to actually link a C++ program.
@@ -7120,39 +7429,36 @@ seen:
 27.6 Flag Variables Ordering
 ============================
 
-     What is the difference between ‘AM_CFLAGS’, ‘CFLAGS’, and
-     ‘mumble_CFLAGS’?
+What is the difference between ‘AM_CFLAGS’, ‘CFLAGS’, and ‘mumble_CFLAGS’?
 
-     Why does ‘automake’ output ‘CPPFLAGS’ after
-     ‘AM_CPPFLAGS’ on compile lines?  Shouldn’t it be the converse?
+Why does ‘automake’ output ‘CPPFLAGS’ after ‘AM_CPPFLAGS’ on compile lines?
+Shouldn’t it be the converse?
 
-     My ‘configure’ adds some warning flags into ‘CXXFLAGS’.  In
-     one ‘Makefile.am’ I would like to append a new flag, however if I
-     put the flag into ‘AM_CXXFLAGS’ it is prepended to the other
-     flags, not appended.
+My ‘configure’ adds some warning flags into ‘CXXFLAGS’.  In one ‘Makefile.am’ I
+would like to append a new flag, however if I put the flag into ‘AM_CXXFLAGS’ it
+is prepended to the other flags, not appended.
 
 Compile Flag Variables
 ----------------------
 
-This section attempts to answer all the above questions.  We will mostly
-discuss ‘CPPFLAGS’ in our examples, but actually the answer holds for
-all the compile flags used in Automake: ‘CCASFLAGS’, ‘CFLAGS’,
-‘CPPFLAGS’, ‘CXXFLAGS’, ‘FCFLAGS’, ‘FFLAGS’, ‘GCJFLAGS’, ‘LDFLAGS’,
-‘LFLAGS’, ‘LIBTOOLFLAGS’, ‘OBJCFLAGS’, ‘OBJCXXFLAGS’, ‘RFLAGS’,
-‘UPCFLAGS’, and ‘YFLAGS’.
+This section attempts to answer all the above questions.  We will mostly discuss
+‘CPPFLAGS’ in our examples, but actually the answer holds for 'all' the compile
+flags used in Automake: ‘CCASFLAGS’, ‘CFLAGS’, ‘CPPFLAGS’, ‘CXXFLAGS’,
+‘FCFLAGS’, ‘FFLAGS’, ‘GCJFLAGS’, ‘LDFLAGS’, ‘LFLAGS’, ‘LIBTOOLFLAGS’,
+‘OBJCFLAGS’, ‘OBJCXXFLAGS’, ‘RFLAGS’, ‘UPCFLAGS’, and ‘YFLAGS’.
 
-   ‘CPPFLAGS’, ‘AM_CPPFLAGS’, and ‘mumble_CPPFLAGS’ are three variables
-that can be used to pass flags to the C preprocessor (actually these
-variables are also used for other languages like C++ or preprocessed
-Fortran).  ‘CPPFLAGS’ is the user variable (*note User Variables::),
-‘AM_CPPFLAGS’ is the Automake variable, and ‘mumble_CPPFLAGS’ is the
-variable specific to the ‘mumble’ target (we call this a per-target
-variable, *note Program and Library Variables::).
+‘CPPFLAGS’, ‘AM_CPPFLAGS’, and ‘mumble_CPPFLAGS’ are three variables that can be
+used to pass flags to the C preprocessor (actually these variables are also used
+    for other languages like C++ or preprocessed Fortran).  ‘CPPFLAGS’ is the
+user variable (*note User Variables::), ‘AM_CPPFLAGS’ is the Automake variable,
+and ‘mumble_CPPFLAGS’ is the variable specific to the ‘mumble’ target (we call
+    this a per-target variable, *note Program and Library Variables::).
 
-   Automake always uses two of these variables when compiling C sources
-files.  When compiling an object file for the ‘mumble’ target, the first
-variable will be ‘mumble_CPPFLAGS’ if it is defined, or ‘AM_CPPFLAGS’
-otherwise.  The second variable is always ‘CPPFLAGS’.
+<use-order>
+Automake always uses two of these variables when compiling C sources files.
+When compiling an object file for the ‘mumble’ target, the first variable will
+be ‘mumble_CPPFLAGS’ if it is defined, or ‘AM_CPPFLAGS’ otherwise.  The second
+variable is always ‘CPPFLAGS’.
 
    In the following example,
 
@@ -7162,129 +7468,156 @@ otherwise.  The second variable is always ‘CPPFLAGS’.
      foo_CPPFLAGS = -DFOO
      AM_CPPFLAGS = -DBAZ
 
-‘xyz.o’ will be compiled with ‘$(foo_CPPFLAGS) $(CPPFLAGS)’, (because
-‘xyz.o’ is part of the ‘foo’ target), while ‘main.o’ will be compiled
-with ‘$(AM_CPPFLAGS) $(CPPFLAGS)’ (because there is no per-target
-variable for target ‘bar’).
+‘xyz.o’ will be compiled with ‘$(foo_CPPFLAGS) $(CPPFLAGS)’, (because ‘xyz.o’ is
+    part of the ‘foo’ target), while ‘main.o’ will be compiled with
+‘$(AM_CPPFLAGS) $(CPPFLAGS)’ (because there is no per-target variable for target
+    ‘bar’).
 
-   The difference between ‘mumble_CPPFLAGS’ and ‘AM_CPPFLAGS’ being
-clear enough, let’s focus on ‘CPPFLAGS’.  ‘CPPFLAGS’ is a user variable,
-i.e., a variable that users are entitled to modify in order to compile
-the package.  This variable, like many others, is documented at the end
-of the output of ‘configure --help’.
+The difference between ‘mumble_CPPFLAGS’ and ‘AM_CPPFLAGS’ being clear enough,
+let’s focus on ‘CPPFLAGS’.  ‘CPPFLAGS’ is a user variable, i.e., a variable that
+  users are entitled to modify in order to compile the package.  This variable,
+like many others, is documented at the end of the output of ‘configure --help’.
 
-   For instance, someone who needs to add ‘/home/my/usr/include’ to the
-C compiler’s search path would configure a package with
+For instance, someone who needs to add ‘/home/my/usr/include’ to the C
+compiler’s search path would configure a package with
 
      ./configure CPPFLAGS='-I /home/my/usr/include'
 
-and this flag would be propagated to the compile rules of all
-‘Makefile’s.
+and this flag would be 'propagated' to the compile rules of all ‘Makefile’s.
 
-   It is also not uncommon to override a user variable at ‘make’-time.
-Many installers do this with ‘prefix’, but this can be useful with
-compiler flags too.  For instance, if, while debugging a C++ project,
-you need to disable optimization in one specific object file, you can
-run something like
+<make-time-change>
+It is also not uncommon to override a user variable at ‘make’-time.  Many
+installers do this with ‘prefix’, but this can be useful with compiler flags
+too.  For instance, if, while debugging a C++ project, you need to 'disable'
+optimization in one specific object file, you can run something like
 
      rm file.o
      make CXXFLAGS=-O0 file.o
      make
 
-   The reason ‘$(CPPFLAGS)’ appears after ‘$(AM_CPPFLAGS)’ or
-‘$(mumble_CPPFLAGS)’ in the compile command is that users should always
-have the last say.  It probably makes more sense if you think about it
-while looking at the ‘CXXFLAGS=-O0’ above, which should supersede any
-other switch from ‘AM_CXXFLAGS’ or ‘mumble_CXXFLAGS’ (and this of course
-replaces the previous value of ‘CXXFLAGS’).
+The reason ‘$(CPPFLAGS)’ appears after ‘$(AM_CPPFLAGS)’ or ‘$(mumble_CPPFLAGS)’
+in the compile command is that users should always have the last say.  It
+probably makes more sense if you think about it while looking at the
+‘CXXFLAGS=-O0’ above, which should 'supersede' any other switch from
+‘AM_CXXFLAGS’ or ‘mumble_CXXFLAGS’ (and this of course replaces the previous
+    value of ‘CXXFLAGS’).
 
-   You should never redefine a user variable such as ‘CPPFLAGS’ in
-‘Makefile.am’.  Use ‘automake -Woverride’ to diagnose such mistakes.
+You should never redefine a user variable such as ‘CPPFLAGS’ in ‘Makefile.am’.
+Use ‘automake -Woverride’ to diagnose such mistakes.
+
 Even something like
 
      CPPFLAGS = -DDATADIR=\"$(datadir)\" @CPPFLAGS@
 
-is erroneous.  Although this preserves ‘configure’’s value of
-‘CPPFLAGS’, the definition of ‘DATADIR’ will disappear if a user
-attempts to override ‘CPPFLAGS’ from the ‘make’ command line.
+is erroneous.  Although this preserves ‘configure’’s value of ‘CPPFLAGS’, the
+definition of ‘DATADIR’ will disappear if a user attempts to override ‘CPPFLAGS’
+from the ‘make’ command line.
 
      AM_CPPFLAGS = -DDATADIR=\"$(datadir)\"
 
 is all that is needed here if no per-target flags are used.
 
-   You should not add options to these user variables within ‘configure’
-either, for the same reason.  Occasionally you need to modify these
-variables to perform a test, but you should reset their values
-afterwards.  In contrast, it is OK to modify the ‘AM_’ variables within
-‘configure’ if you ‘AC_SUBST’ them, but it is rather rare that you need
-to do this, unless you really want to change the default definitions of
-the ‘AM_’ variables in all ‘Makefile’s.
+You should not add options to these user variables within ‘configure’ either,
+for the same reason.  Occasionally you need to modify these variables to perform
+  a test, but you should reset their values afterwards.  In contrast, it is OK
+    to modify the ‘AM_’ variables within ‘configure’ if you ‘AC_SUBST’ them, but
+    it is rather rare that you need to do this, unless you really want to change
+    the default definitions of the ‘AM_’ variables in all ‘Makefile’s.
 
-   What we recommend is that you define extra flags in separate
-variables.  For instance, you may write an Autoconf macro that computes
-a set of warning options for the C compiler, and ‘AC_SUBST’ them in
-‘WARNINGCFLAGS’; you may also have an Autoconf macro that determines
-which compiler and which linker flags should be used to link with
-library ‘libfoo’, and ‘AC_SUBST’ these in ‘LIBFOOCFLAGS’ and
-‘LIBFOOLDFLAGS’.  Then, a ‘Makefile.am’ could use these variables as
-follows:
+What we recommend is that you define extra flags in separate variables.  For
+instance, you may write an Autoconf macro that computes a set of warning options
+for the C compiler, and ‘AC_SUBST’ them in ‘WARNINGCFLAGS’; you may also have an
+  Autoconf macro that determines which compiler and which linker flags should be
+    used to link with library ‘libfoo’, and ‘AC_SUBST’ these in ‘LIBFOOCFLAGS’
+    and ‘LIBFOOLDFLAGS’.  Then, a ‘Makefile.am’ could use these variables as
+    follows:
 
      AM_CFLAGS = $(WARNINGCFLAGS)
      bin_PROGRAMS = prog1 prog2
-     prog1_SOURCES = …
-     prog2_SOURCES = …
+     prog1_SOURCES = ...
+     prog2_SOURCES = ...
      prog2_CFLAGS = $(LIBFOOCFLAGS) $(AM_CFLAGS)
      prog2_LDFLAGS = $(LIBFOOLDFLAGS)
 
-   In this example both programs will be compiled with the flags
-substituted into ‘$(WARNINGCFLAGS)’, and ‘prog2’ will additionally be
-compiled with the flags required to link with ‘libfoo’.
+In this example both programs will be compiled with the flags substituted into
+‘$(WARNINGCFLAGS)’, and ‘prog2’ will additionally be compiled with the flags
+required to link with ‘libfoo’.
 
-   Note that listing ‘AM_CFLAGS’ in a per-target ‘CFLAGS’ variable is a
-common idiom to ensure that ‘AM_CFLAGS’ applies to every target in a
-‘Makefile.in’.
+Note that listing ‘AM_CFLAGS’ in a per-target ‘CFLAGS’ variable is a common
+idiom to ensure that ‘AM_CFLAGS’ applies to every target in a ‘Makefile.in’.
 
-   Using variables like this gives you full control over the ordering of
-the flags.  For instance, if there is a flag in $(WARNINGCFLAGS) that
-you want to negate for a particular target, you can use something like
-‘prog1_CFLAGS = $(AM_CFLAGS) -no-flag’.  If all of these flags had been
-forcefully appended to ‘CFLAGS’, there would be no way to disable one
-flag.  Yet another reason to leave user variables to users.
+Using variables like this gives you full control over the ordering of the flags.
+For instance, if there is a flag in $(WARNINGCFLAGS) that you want to negate for
+a particular target, you can use something like ‘prog1_CFLAGS = $(AM_CFLAGS)
+-no-flag’.  If all of these flags had been forcefully appended to ‘CFLAGS’,
+  there would be no way to disable one flag.  Yet another reason to leave user
+    variables to users.
 
-   Finally, we have avoided naming the variable of the example
-‘LIBFOO_LDFLAGS’ (with an underscore) because that would cause Automake
-to think that this is actually a per-target variable (like
-‘mumble_LDFLAGS’) for some non-declared ‘LIBFOO’ target.
+Finally, we have avoided naming the variable of the example ‘LIBFOO_LDFLAGS’
+(with an underscore) because that would cause Automake to think that this is
+actually a per-target variable (like ‘mumble_LDFLAGS’) for some non-declared
+‘LIBFOO’ target.
 
 Other Variables
 ---------------
 
-There are other variables in Automake that follow similar principles to
-allow user options.  For instance, Texinfo rules (*note Texinfo::) use
-‘MAKEINFOFLAGS’ and ‘AM_MAKEINFOFLAGS’.  Similarly, DejaGnu tests (*note
-DejaGnu Tests::) use ‘RUNTESTDEFAULTFLAGS’ and ‘AM_RUNTESTDEFAULTFLAGS’.
-The tags and ctags rules (*note Tags::) use ‘ETAGSFLAGS’,
-‘AM_ETAGSFLAGS’, ‘CTAGSFLAGS’, and ‘AM_CTAGSFLAGS’.  Java rules (*note
-Java::) use ‘JAVACFLAGS’ and ‘AM_JAVACFLAGS’.  None of these rules
-support per-target flags (yet).
+There are other variables in Automake that follow similar principles to allow
+user options.  For instance, Texinfo rules (*note Texinfo::) use ‘MAKEINFOFLAGS’
+and ‘AM_MAKEINFOFLAGS’.  Similarly, DejaGnu tests (*note DejaGnu Tests::) use
+‘RUNTESTDEFAULTFLAGS’ and ‘AM_RUNTESTDEFAULTFLAGS’.  The tags and ctags rules
+(*note Tags::) use ‘ETAGSFLAGS’, ‘AM_ETAGSFLAGS’, ‘CTAGSFLAGS’, and
+‘AM_CTAGSFLAGS’.  Java rules (*note Java::) use ‘JAVACFLAGS’ and
+‘AM_JAVACFLAGS’.  None of these rules support per-target flags (yet).
 
-   To some extent, even ‘AM_MAKEFLAGS’ (*note Subdirectories::) obeys
-this naming scheme.  The slight difference is that ‘MAKEFLAGS’ is passed
-to sub-‘make’s implicitly by ‘make’ itself.
+To some extent, even ‘AM_MAKEFLAGS’ (*note Subdirectories::) obeys this naming
+scheme.  The slight difference is that ‘MAKEFLAGS’ is passed to sub-‘make’s
+implicitly by ‘make’ itself.
 
-   ‘ARFLAGS’ (*note A Library::) is usually defined by Automake and has
-neither ‘AM_’ nor per-target cousin.
+‘ARFLAGS’ (*note A Library::) is usually defined by Automake and has neither
+‘AM_’ nor per-target cousin.
 
-   Finally you should not think that the existence of a per-target
-variable implies the existence of an ‘AM_’ variable or of a user
-variable.  For instance, the ‘mumble_LDADD’ per-target variable
-overrides the makefile-wide ‘LDADD’ variable (which is not a user
-variable), and ‘mumble_LIBADD’ exists only as a per-target variable.
-*Note Program and Library Variables::.
+Finally you should not think that the existence of a per-target variable implies
+the existence of an ‘AM_’ variable or of a user variable.  For instance, the
+‘mumble_LDADD’ per-target variable overrides the makefile-wide ‘LDADD’ variable
+(which is not a user variable), and ‘mumble_LIBADD’ exists only as a per-target
+variable.  *Note Program and Library Variables::.
 
 
 ={============================================================================
-*kt_linux_tool_150* automake: 09: SCRIPTS
+*kt_linux_tool_150* automake: 08: program variables: case issue
+
+In short LDFLAGS is added before the object files on the command line and LDADD
+is added afterwards.
+
+<fail-case>
+nexus_inspect_LDADD = \
+   @NEXUS_LIBS@            note: this has -Wl,--as-needed
+
+nexus_inspect_LDFLAGS = \
+   -lpthread \
+   -linit \
+   -rdynamic
+
+-Wl,--as-needed -L/zinc-install-root/release/huawei-bcm7409/lib
+...
+-lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread
+
+<okay-case>
+nexus_inspect_LDFLAGS = @NEXUS_LIBS@
+
+So -lxxx and then --as-needed
+
+-lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread
+...
+-Wl,--as-needed -L/zinc-install-root/release/huawei-bcm7409/lib
+
+So not sure how automake combines all but it makes different order. This caues
+the problem because shared libraries after as-needed may not linked at the time
+of linking and cause undefined symbol when making executable binary.
+
+
+={============================================================================
+*kt_linux_tool_150* automake: 09: scripts
 
 9 Other Derived Objects
 ***********************
@@ -7362,48 +7695,155 @@ other directory variables.
 
 
 ={============================================================================
-*kt_linux_tool_150* automake: LDADD vs LDFLAGS
+*kt_linux_tool_150* automake: 15: test and make check
 
-In short LDFLAGS is added before the object files on the command line and LDADD is added afterwards.
+15 Support for test suites
+**************************
 
-<fail-case>
-nexus_inspect_LDADD = \
-   @NEXUS_LIBS@            note: this has -Wl,--as-needed
+Automake can generate code to handle two kinds of test suites.  One is based on
+integration with the ‘dejagnu’ framework.  The other (and most used) form is
+based on the use of generic test scripts, and its 'activation' is triggered by
+the definition of the special ‘TESTS’ variable.  This second form allows for
+various degrees of sophistication and customization; in particular, it allows
+for concurrent execution of test scripts, use of established test protocols such
+  as TAP, and definition of custom test drivers and test runners.
 
-nexus_inspect_LDFLAGS = \
-   -lpthread \
-   -linit \
-   -rdynamic
-
--Wl,--as-needed -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
-...
--lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread
-
-<okay-case>
-nexus_inspect_LDFLAGS = @NEXUS_LIBS@
-
-So -lxxx and then --as-needed
-
--lnexusMgr -ldirectfb -lfusion -ldirect -linit -lnexus -lz -lpthread
-...
--Wl,--as-needed -L/data/builds/DEVARCH-8092/huawei.370/zinc-install-root/release/huawei-bcm7409/lib
-
-So not sure how automake combines all but it makes different order. This caues the problem because
-shared libraries after as-needed may not linked at the time of linking and cause undefined symbol
-when making executable binary.
+In either case, the testsuite is invoked via ‘make check’.
 
 
-8.7 Variables used when building a program
+15.2.1 Scripts-based Testsuites
+-------------------------------
 
-http://www.gnu.org/software/automake/manual/html_node/Program-Variables.html
+If the 'special' variable ‘TESTS’ is defined, its value is taken to be a list of
+'programs' or 'scripts' to 'run' in order to do the testing.  Under the
+appropriate circumstances, it’s possible for ‘TESTS’ to list also data files to
+be passed to one or more test scripts defined by different means (the so-called
+    “log compilers”, *note Parallel Test Harness::).
 
-AM_CFLAGS
+Test scripts can be executed serially or concurrently.  Automake supports both
+these kinds of test execution, with the 'parallel' test harness being the
+'default'.  The concurrent test harness relies on the concurrence capabilities
+(if any) offered by the underlying ‘make’ implementation, and can thus only be
+as good as those are.
 
-Some variables are inherited from Autoconf; these are CC, CFLAGS, CPPFLAGS, DEFS, LDFLAGS, and LIBS. 
+By default, only the exit statuses of the test scripts are considered when
+determining the testsuite outcome.  But Automake allows also the use of more
+complex test protocols, either standard (*note Using the TAP test protocol::) or
+custom (*note Custom Test Drivers::). In the rest of this section we are going
+to concentrate mostly on protocol-less tests, since we cover test protocols in a
+later section (again, *note Custom Test Drivers::).
 
-This is the variable the Makefile.am author can use to pass in additional C compiler flags. In some
-situations, this is not used, in preference to the per-executable (or per-library) _CFLAGS.
+<return-value>
+When no test protocol is in use, an exit status of 0 from a test script will
+denote a success, an exit status of 77 a skipped test, an exit status of 99 an
+hard error, and any other exit status will denote a failure.
 
+You may define the variable ‘XFAIL_TESTS’ to a list of tests (usually a subset
+    of ‘TESTS’) that are expected to fail; this will effectively reverse the
+result of those tests (with the provision that skips and hard errors remain
+    untouched).  You may also instruct the testsuite harness to treat hard
+errors like simple failures, by defining the ‘DISABLE_HARD_ERRORS’ make variable
+to a nonempty value.
+
+Note however that, for tests based on more complex test protocols, the exact
+effects of ‘XFAIL_TESTS’ and ‘DISABLE_HARD_ERRORS’ might change, or they might
+even have no effect at all (for example, in tests using TAP, there is not way to
+    disable hard errors, and the ‘DISABLE_HARD_ERRORS’ variable has no effect on
+    them).
+
+The result of each test case run by the scripts in ‘TESTS’ will be 'printed' on
+standard output, along with the test name.  For test protocols that allow more
+test cases per test script (such as TAP), a number, identifier and/or brief
+description specific for the single test case is expected to be printed in
+addition to the name of the test script.  The possible results (whose meanings
+    should be clear from the previous *note Generalities about Testing::) are
+‘PASS’, ‘FAIL’, ‘SKIP’, ‘XFAIL’, ‘XPASS’ and ‘ERROR’.  Here is an example of
+output from an hypothetical testsuite that uses both plain and TAP tests:
+
+     PASS: foo.sh
+     PASS: zardoz.tap 1 - Daemon started
+     PASS: zardoz.tap 2 - Daemon responding
+     SKIP: zardoz.tap 3 - Daemon uses /proc # SKIP /proc is not mounted
+     PASS: zardoz.tap 4 - Daemon stopped
+     SKIP: bar.sh
+     PASS: mu.tap 1
+     XFAIL: mu.tap 2 # TODO frobnication not yet implemented
+
+A testsuite summary (expected to report at least the number of run, skipped and
+    failed tests) will be printed at the end of the testsuite run.
+
+If the standard output is connected to a capable terminal, then the test results
+and the summary are colored appropriately.  The developer and the user can
+disable colored output by setting the ‘make’ variable ‘AM_COLOR_TESTS=no’; the
+user can in addition force colored output even without a connecting terminal
+with ‘AM_COLOR_TESTS=always’.  It’s also worth noting that some ‘make’
+implementations, when used in parallel mode, have slightly different semantics
+(*note (autoconf)Parallel make::), which can break the automatic detection of a
+connection to a capable terminal.  If this is the case, the user will have to
+resort to the use of ‘AM_COLOR_TESTS=always’ in order to have the testsuite
+output colorized.
+
+
+   Test programs that need data files should look for them in ‘srcdir’
+(which is both a make variable and an environment variable made
+available to the tests), so that they work when building in a separate
+directory (*note Build Directories: (autoconf)Build Directories.), and
+in particular for the ‘distcheck’ rule (*note Checking the
+Distribution::).
+
+   The ‘AM_TESTS_ENVIRONMENT’ and ‘TESTS_ENVIRONMENT’ variables can be
+used to run initialization code and set environment variables for the
+test scripts.  The former variable is developer-reserved, and can be
+defined in the ‘Makefile.am’, while the latter is reserved for the user,
+which can employ it to extend or override the settings in the former;
+for this to work portably, however, the contents of a non-empty
+‘AM_TESTS_ENVIRONMENT’ _must_ be terminated by a semicolon.
+
+   The ‘AM_TESTS_FD_REDIRECT’ variable can be used to define file
+descriptor redirections for the test scripts.  One might think that
+‘AM_TESTS_ENVIRONMENT’ could be used for this purpose, but experience
+has shown that doing so portably is practically impossible.  The main
+hurdle is constituted by Korn shells, which usually set the
+close-on-exec flag on file descriptors opened with the ‘exec’ builtin,
+thus rendering an idiom like ‘AM_TESTS_ENVIRONMENT = exec 9>&2;’
+ineffectual.  This issue also affects some Bourne shells, such as the
+HP-UX’s ‘/bin/sh’,
+
+     AM_TESTS_ENVIRONMENT = \
+     ## Some environment initializations are kept in a separate shell
+     ## file 'tests-env.sh', which can make it easier to also run tests
+     ## from the command line.
+       . $(srcdir)/tests-env.sh; \
+     ## On Solaris, prefer more POSIX-compliant versions of the standard
+     ## tools by default.
+       if test -d /usr/xpg4/bin; then \
+         PATH=/usr/xpg4/bin:$$PATH; export PATH; \
+       fi;
+     ## With this, the test scripts will be able to print diagnostic
+     ## messages to the original standard error stream, even if the test
+     ## driver redirects the stderr of the test scripts to a log file
+     ## before executing them.
+     AM_TESTS_FD_REDIRECT = 9>&2
+
+Note however that ‘AM_TESTS_ENVIRONMENT’ is, for historical and
+implementation reasons, _not_ supported by the serial harness (*note
+Serial Test Harness::).
+
+   Automake ensures that each file listed in ‘TESTS’ is built before it
+is run; you can list both source and derived programs (or scripts) in
+‘TESTS’; the generated rule will look both in ‘srcdir’ and ‘.’.  For
+instance, you might want to run a C program as a test.  To do this you
+would list its name in ‘TESTS’ and also in ‘check_PROGRAMS’, and then
+specify it as you would any other program.
+
+   Programs listed in ‘check_PROGRAMS’ (and ‘check_LIBRARIES’,
+‘check_LTLIBRARIES’...)  are only built during ‘make check’, not during
+‘make all’.  You should list there any program needed by your tests that
+does not need to be built by ‘make all’.  Note that ‘check_PROGRAMS’ are
+_not_ automatically added to ‘TESTS’ because ‘check_PROGRAMS’ usually
+lists programs used by the tests, not the tests themselves.  Of course
+you can set ‘TESTS = $(check_PROGRAMS)’ if all your programs are test
+cases.
 
 ={============================================================================
 *kt_linux_tool_160* ccache

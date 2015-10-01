@@ -57,6 +57,7 @@
 |kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
 |kt_dev_uv_stack_254| stack: vanadium: listener
 *kt_dev_uv_stack_255* stack: vanadium: error handle
+*kt_dev_uv_stack_255* stack: vanadium: flow error handle
 *kt_dev_uv_stack_256* stack: vanadium: log lines
 *kt_dev_uv_stack_257* stack: vanadium: run web server and client
 
@@ -79,6 +80,7 @@
 |kt_dev_uv_stack_410| stack: nickel: build dash pipeline using gst media router
 |kt_dev_uv_stack_411| stack: nickel: qt and media router interface
 *kt_dev_uv_stack_411* stack: nickel: get natual size
+*kt_dev_uv_stack_411* stack: nickel: gstmediaroutertest
 
 |kt_dev_uv_stack_411| stack: media: gst packages
 |kt_dev_uv_stack_412| stack: media: dash play
@@ -7188,7 +7190,7 @@ private:
             // event #3
             .WillOnce( returnNewCompletedFuture( updatedMediaRecords.at(2) ) ); "4"
 
-        // /**
+        // /*enummarshallingtest*
         //  * Kick off a request to fetch all MediaRecords from the system. This call
         //  * must be called by users of the MediaRecord cache.
         //  *
@@ -8164,6 +8166,26 @@ boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
 ={============================================================================
 *kt_dev_uv_stack_254* stack: vanadium: listener
 
+// Nickel/Nickel.Client.API/include/MediaRouterEventListener.h
+/**
+ * The defined interface for a MediaRouter event-listener.
+ *
+ * <p>To receive events the object must be set up to listen to the MediaRouter using
+ * <code>MediaRouter.addListener()</code>. </p>
+ *
+ * @see nickel::client::MediaRouter#addListener()
+ */
+struct ZINC_EXPORT MediaRouterEventListener : public NS_ZINC::EventListener {
+
+}
+
+// this is auto-generated and get built.
+
+Nickel.System.DBusServer/src/MediaRouterAsyncToDBus.h class MediaRouterAsyncToDBus : private boost::noncopyable , public MediaRouterEventListener
+
+Nickel.System.DBusServer/src/MediaRouterAsyncToDBus.cpp
+
+
 class ZINC_EXPORT VanadiumMediaPlayer : public WebCore::QMediaPlayerInterface
 {
   private:
@@ -8495,7 +8517,7 @@ Since this changes states
     callbacks.networkStateChanged();
   }
 
-This maps to ERR_NETWORK from HTML code:
+This maps network to ERR_NETWORK from HTML code but not SRC_NOT_SUPPORTED:
 
 if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
   mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
@@ -8652,9 +8674,119 @@ void VanadiumMediaPlayer::ErrorEvent(const ErrorEventValue::Enum error,
 
 
 <tickets>
-https://jira.youview.co.uk/browse/CANPDE-4113
 https://jira.youview.co.uk/browse/SOLDES-547
 https://jira.youview.co.uk/browse/SOLDES-584
+https://jira.youview.co.uk/browse/CANPDE-4113
+
+
+https://jira.youview.co.uk/browse/CANDEL-3601
+https://jira.youview.co.uk/browse/CANPDE-4190
+PF735.11 - Errors launching HTML Players with encrypted VoD assets (PDL-MS3) -
+from Players page or deep-linking 
+
+https://wiki.youview.co.uk/display/CANPDE/Legacy+Error+Messages?src=search
+
+
+={============================================================================
+*kt_dev_uv_stack_255* stack: vanadium: flow error handle
+
+commit 0c4b989fe8d287edb89d202e0e4104ab506fd16c
+Author: Alex Ashley <alex.ashley@youview.com>
+Date:   Fri Mar 28 11:15:11 2014 +0000
+
+    DEVARCH-7251: send meaningful warnings and errors from gst_nexus_sink_on_error
+    
+    Rather than sending an error number from nexussink using a private
+    message structure, this commit replaces this with meaningful error
+    or warning messages using the gstreamer defined message structures.
+
+static void gst_nexus_sink_on_error( void* context, int reason )
+{
+  case EFifoEmpty:
+    if ( g_atomic_int_get(&sink->eos_received) ) {
+      GST_TRACE_OBJECT(sink, "FIFO empty, sending EOS");
+      GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )->event( &sink->parent, gst_event_new_eos() );
+    }
+    else {
+      GST_TRACE_OBJECT(sink, "FIFO empty");
+      msg = gst_nexus_sink_create_warning(sink, &err,
+          GST_STREAM_ERROR, GST_STREAM_ERROR_FAILED,
+          "FIFO empty");
+    }
+    break;
+}
+
+bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
+{
+  case GST_MESSAGE_WARNING:
+    {
+
+      gchar  *debug = NULL;
+      GError *error = NULL;
+
+      gst_message_parse_warning (msg, &error, &debug);
+
+      const NS_ZINC::ScopedObj<GError> error_owner(error, g_error_free);
+      const NS_ZINC::ScopedObj<gchar> debug_owner(debug, g_free);
+
+      if (!seekInFlight && !underflow && error->code == GST_STREAM_ERROR_FAILED) {
+        underflow = true;
+        underflowTime = sinkBin->getPresentationTime(GST_FORMAT_TIME);
+        produceStatusEvent(StatusEventValue::underflow);
+      }
+
+      break;
+    }
+}
+
+void VanadiumMediaPlayer::BufferStatusEvent(
+        const BufferStatusEventValue::Enum event)
+{
+    VANADIUM_FUNC_TRACE;
+
+    if(event == BufferStatusEventValue::buffering_started)
+    {
+        currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+        callbacks.networkStateChanged();
+    }
+    if(event == BufferStatusEventValue::buffering_complete)
+    {
+        currentNetworkState = QMediaPlayerInterface::NETWORK_LOADED;
+        callbacks.networkStateChanged();
+    }
+}
+
+
+<old-private-gst>
+
+if (err && err->code == GST_STREAM_ERROR_FAILED && 
+    g_strrstr(debug, "FIFO empty") && !m_stallTimerHandler)
+{
+    m_stallTimerHandler = 
+      g_timeout_add_seconds(1, reinterpret_cast<GSourceFunc>(
+            MediaPlayerPrivateGStreamer::stallTimeoutCallback), this);
+}
+
+gboolean MediaPlayerPrivateGStreamer::stallTimeoutCallback(MediaPlayerPrivateGStreamer* player)
+{
+  // This is the callback for a timeout following a FIFO empty message from Nexus
+  ASSERT(isMainThread());
+  if(players.find(player)!=players.end()){
+    if(!player->m_paused && !player->m_seeking && !player->m_isEndReached && !player->m_resetPipeline){
+      LOG_MEDIA_MESSAGE ("Media pipeline has stalled");
+      player->m_readyState = MediaPlayer::HaveCurrentData;
+      player->m_player->readyStateChanged();
+    }
+  }
+  return FALSE;
+}
+
+// qtwebkit/Source/WebCore/platform/graphics/qt/MediaPlayerPrivateQt.cpp
+
+    } else if (currentStatus == QMediaPlayer::StalledMedia) {
+        m_networkState = MediaPlayer::Loading;
+        m_readyState = MediaPlayer::HaveCurrentData;
+    } else if (currentStatus == QMediaPlayer::BufferedMedia
 
 
 ={============================================================================
@@ -11913,6 +12045,51 @@ Here, "eSar" and square AR
 ar: 6, { 1, 1 }
 
 dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
+
+
+={============================================================================
+*kt_dev_uv_stack_411* stack: nickel: gstmediaroutertest
+
+Nickel/Nickel.System.GStreamer/test/GstMediaRouterTest.cpp
+
+void uriDecoderErrorHarness(const GstStreamError error,
+    const ErrorEventValue::Enum mrEventVal = ErrorEventValue::data);
+
+void GstMediaRouterTest::uriDecoderErrorHarness(const GstStreamError error,
+    const ErrorEventValue::Enum mrEventVal)
+{
+  RefObj<GstElement>  element = gst_element_factory_make("queue","uri-decoder");
+
+  GstMessage *msg =
+    gst_message_new_error(GST_OBJECT_CAST (element.get()),
+        g_error_new_literal(GST_STREAM_ERROR, error, ""),
+        "(no debug)");
+
+  errorEventHarness(msg, mrEventVal, ErrorEventContext::source);
+}
+
+
+void GstMediaRouterTest::test_thatUriDecoderErrorIsProcessedForStreamErrorCodeWrongType()
+{
+  uriDecoderErrorHarness(GST_STREAM_ERROR_WRONG_TYPE);
+}
+
+
+void GstMediaRouterTest::errorEventHarness(GstMessage *msg, const ErrorEventValue::Enum errorVal,
+    const ErrorEventContext::Enum context)
+{
+  NS_ZINC::AtomicBool done;
+
+  EXPECT_CALL(
+      *listener, ErrorEvent(errorVal, context, _))
+    .WillOnce(InvokeWithoutArgs(boost::function<void(void)>(
+            boost::bind(&NS_ZINC::AtomicBool::set,
+              boost::ref(done), true))));
+
+  CPPUNIT_ASSERT(gst_element_post_message(pipeline.get(), msg));
+
+  ZINC_ASSERT_WITHIN_TIMEOUT(done.get(), DEFAULT_TIMEOUT);
+}
 
 
 ={============================================================================
