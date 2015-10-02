@@ -57,7 +57,7 @@
 |kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
 |kt_dev_uv_stack_254| stack: vanadium: listener
 *kt_dev_uv_stack_255* stack: vanadium: error handle
-*kt_dev_uv_stack_255* stack: vanadium: flow error handle
+*kt_dev_uv_stack_255* stack: vanadium: underflow error handle
 *kt_dev_uv_stack_256* stack: vanadium: log lines
 *kt_dev_uv_stack_257* stack: vanadium: run web server and client
 
@@ -8350,6 +8350,37 @@ used when the stream is encrypted and can't be decrypted because no suitable key
 is available.
 
 
+class MediaPlayer {
+enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
+enum ReadyState  { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
+};
+
+class QMediaPlayerInterface
+{
+public:
+
+    enum NetworkState
+    {
+        NETWORK_EMPTY,
+        NETWORK_IDLE,
+        NETWORK_LOADING, (2)
+        NETWORK_ERROR,
+        NETWORK_LOADED,
+        DECODE_ERROR,
+        FORMAT_ERROR
+    };
+
+    enum ReadyState
+    {
+        HAVE_NOTHING,
+        HAVE_METADATA,
+        HAVE_CURRENT_DATA,
+        HAVE_FUTURE_DATA, (3)
+        HAVE_ENOUGH_DATA
+    };
+}
+
+
 {old-way}
 
 /qtwebkit/Source/WebCore/html/MediaError.h
@@ -8391,6 +8422,8 @@ void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
   mediaLoadingFailed(state)
   {
     <1>
+    // note: HTML manage this value, m_loadState, therefore its upto WEBKIT
+    
       else if (
           (error == MediaPlayer::FormatError || error == MediaPlayer::NetworkError) 
           && m_loadState == LoadingFromSrcAttr)
@@ -8505,28 +8538,28 @@ below debug line and why?
 
 DEBUG  Vanadium.WebKit.VideoElement/src/VanadiumMediaPlayer.cpp:219 Position: 0
 
-    void registerMockForErrorHandlingOther()
-    {
-        boost::shared_ptr<MockMediaRouter> mock = makeMock(
-                "http://bbc.co.uk/ErrorHandlingSink.mpd",
-                "ONDEMAND.ABR");
+void registerMockForErrorHandlingOther()
+{
+    boost::shared_ptr<MockMediaRouter> mock = makeMock(
+            "http://bbc.co.uk/ErrorHandlingSink.mpd",
+            "ONDEMAND.ABR");
 
-        EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
-                Return(completedFuture(Position(0, 0, 1000000))));
+    EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+            Return(completedFuture(Position(0, 0, 1000000))));
 
-        EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
-                Return(makeCompletedFuture(1000000)));
+    EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+            Return(makeCompletedFuture(1000000)));
 
-        EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
-                    Return(makeCompletedFuture()));
+    EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+                Return(makeCompletedFuture()));
 
-        EXPECT_CALL(*mock, start()).WillOnce(
-            DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::other,
-                            ErrorEventContext::other, std::string())),
-                Return(makeCompletedFuture())));
+    EXPECT_CALL(*mock, start()).WillOnce(
+        DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::other,
+                        ErrorEventContext::other, std::string())),
+            Return(makeCompletedFuture())));
 
-        registerMock("ErrorHandlingOther", mock);
-    }
+    registerMock("ErrorHandlingOther", mock);
+}
 
 
 <Q>
@@ -8554,37 +8587,6 @@ Media router [CanPlayAndPauseVideo] stopped
 
 
 <may-be-a-bug>
-
-class MediaPlayer {
-enum NetworkState { Empty, Idle, Loading, Loaded, FormatError, NetworkError, DecodeError };
-enum ReadyState  { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
-};
-
-class QMediaPlayerInterface
-{
-public:
-
-    enum NetworkState
-    {
-        NETWORK_EMPTY,
-        NETWORK_IDLE,
-        NETWORK_LOADING, (2)
-        NETWORK_ERROR,
-        NETWORK_LOADED,
-        DECODE_ERROR,
-        FORMAT_ERROR
-    };
-
-    enum ReadyState
-    {
-        HAVE_NOTHING,
-        HAVE_METADATA,
-        HAVE_CURRENT_DATA,
-        HAVE_FUTURE_DATA, (3)
-        HAVE_ENOUGH_DATA
-    };
-}
-
 
 1. The interface to get state from client to media player uses a translation
 to map enums:
@@ -8711,20 +8713,36 @@ bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
     }
 }
 
-void VanadiumMediaPlayer::BufferStatusEvent(
-        const BufferStatusEventValue::Enum event)
+void VanadiumMediaPlayer::StatusEvent(const StatusEventValue::Enum statusEvent)
 {
     VANADIUM_FUNC_TRACE;
 
-    if(event == BufferStatusEventValue::buffering_started)
+    VANADIUM_DEBUG("statusEvent: " << statusEvent);
+
+    // STARTED: A StatusEvent of this value shall be emitted when the first
+    // frame of a MediaRouter's media is output from the decoder following a
+    // call to start, following a seek to a different position within the media,
+    // or when a MediaRouter resumes playback after recovering from an
+    // underflow.
+
+    if(statusEvent == StatusEventValue::started)
     {
-        currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
-        callbacks.networkStateChanged();
-    }
-    if(event == BufferStatusEventValue::buffering_complete)
-    {
-        currentNetworkState = QMediaPlayerInterface::NETWORK_LOADED;
-        callbacks.networkStateChanged();
+        if(isSeeking)
+        {
+            // We were seeking and normal playback has just resumed
+            isSeeking = false;
+
+            if(pauseState != PAUSED)
+            {
+                mediaRouter->setPlaySpeed(1.0);
+            }
+            callbacks.timeChanged();
+        }
+        else
+        {
+            currentReadyState = HAVE_ENOUGH_DATA;
+            callbacks.readyStateChanged();
+        }
     }
 }
 
@@ -8759,6 +8777,35 @@ gboolean MediaPlayerPrivateGStreamer::stallTimeoutCallback(MediaPlayerPrivateGSt
         m_networkState = MediaPlayer::Loading;
         m_readyState = MediaPlayer::HaveCurrentData;
     } else if (currentStatus == QMediaPlayer::BufferedMedia
+
+
+note: this is HTML standard said:
+
+stalled 	Event 	
+
+The user agent is trying to fetch media data, but data is unexpectedly not
+forthcoming. 	
+
+networkState is NETWORK_LOADING. 
+
+<implemented>
+
+void VanadiumMediaPlayer::StatusEvent(const StatusEventValue::Enum statusEvent)
+{
+    VANADIUM_FUNC_TRACE;
+
+    VANADIUM_DEBUG("statusEvent: " << statusEvent);
+
+    ...
+
+    if(QMediaPlayerInterface::NETWORK_LOADING == currentNetworkState &&
+        StatusEventValue::underflow == statusEvent)
+    {
+        VANADIUM_DEBUG("statusEvent: UNDERFLOW: currentNetworkState " << currentNetworkState );
+        currentReadyState = HAVE_CURRENT_DATA;
+        callbacks.readyStateChanged();
+    }
+}
 
 
 ={============================================================================
@@ -8840,6 +8887,30 @@ asyncTestCase("ErrorHandlingSink", function() {
 
 
 How those two get 'linked' together? Use "ErrorHandlingSink" sting?
+
+
+<careful>
+
+1. Great care about "name"
+
+void registerMockForErrorHandlingDataToNotSupported()
+{
+  ...
+  registerMock("ErrorHandlingDataNotSupported", mock);  // note:
+}
+
+// from js
+var onlyRunTheseTests = ["ErrorHandlingDataToNotSupported"];
+
+Here missed "To" and got:
+
+Could not find mock [ErrorHandlingDataToNotSupported]
+Activating ErrorHandlingDataToNotSupported
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  Mock function called more times than expected - returning default value.
+    Function call: setSource(@0x7fff88b295c0 "http://bbc.co.uk/ErrorHandlingSink.mpd", 1)
+    The mock function has no default action set, and its return type has no default value set.
+Aborted
 
 
 ={============================================================================
