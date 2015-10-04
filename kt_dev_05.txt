@@ -95,6 +95,8 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_600* glib: gthread
 *kt_dev_bcast_600* glib: gmain
 *kt_dev_bcast_600* glib: gerror
+*kt_dev_bcast_600* glib: gquark
+*kt_dev_bcast_600* glib: gtime and gdate
 
 
 # ============================================================================
@@ -10370,8 +10372,8 @@ these steps manually if you need greater control or to use a custom main
 context.
 
 Parameters
-function function to call
-data data to pass to function .
+function    function to call
+data        data to pass to function.
 	 
 Returns
 the ID (greater than 0) of the event source.
@@ -10382,6 +10384,67 @@ The source is to be removed either when the function returns FALSE or when
 g_source_remove() is called.
 
 
+g_idle_add_full ()
+--------------------------
+guint
+g_idle_add_full (gint priority,
+                 GSourceFunc function,
+                 gpointer data,
+                 GDestroyNotify notify);
+
+Adds a function to be called whenever there are no higher priority events
+  pending. If the function returns FALSE it is automatically removed from the
+  list of event sources and will not be called again.
+
+See memory management of sources for details on how to handle the return value
+and memory management of data .
+
+This internally creates a main loop source using g_idle_source_new() and
+attaches it to the global GMainContext using g_source_attach(), so the callback
+will be invoked in whichever thread is running that main context. You can do
+these steps manually if you need greater control or to use a custom main
+context.
+
+[rename-to g_idle_add]
+
+Parameters
+
+priority
+the priority of the idle source. Typically this will be in the range between
+G_PRIORITY_DEFAULT_IDLE and G_PRIORITY_HIGH_IDLE.
+	 
+function
+function to call
+
+data
+data to pass to function
+	 
+notify
+function to call when the idle is removed, or NULL. [allow-none]
+
+Returns
+the ID (greater than 0) of the event source.
+
+
+GSourceFunc ()
+--------------------------
+gboolean
+(*GSourceFunc) (gpointer user_data);
+
+Specifies the type of function passed to g_timeout_add(), g_timeout_add_full(),
+          g_idle_add(), and g_idle_add_full().
+            
+Parameters
+
+user_data
+data passed to the function, set when the source was created with one of the
+above functions
+	 
+Returns
+FALSE if the source should be removed. G_SOURCE_CONTINUE and G_SOURCE_REMOVE are
+more memorable names for the return value.
+
+
 g_source_remove ()
 --------------------------
 gboolean g_source_remove (guint tag);
@@ -10389,9 +10452,11 @@ gboolean g_source_remove (guint tag);
 Removes the source with the given id from the default main context.
 
 The id of a GSource is given by g_source_get_id(), or will be returned by the
-functions g_source_attach(), g_idle_add(), g_idle_add_full(), g_timeout_add(),
-          g_timeout_add_full(), g_child_watch_add(), g_child_watch_add_full(),
-          g_io_add_watch(), and g_io_add_watch_full().
+functions:
+
+g_source_attach(), g_idle_add(), g_idle_add_full(), g_timeout_add(),
+  g_timeout_add_full(), g_child_watch_add(), g_child_watch_add_full(),
+  g_io_add_watch(), and g_io_add_watch_full().
 
 See also g_source_destroy(). You must use g_source_destroy() for sources added
 to a non-default main context.
@@ -10423,7 +10488,7 @@ g_timeout_add_seconds (guint interval,
 
 Sets a function to be called at 'regular' intervals with the default priority,
      G_PRIORITY_DEFAULT. The function is called repeatedly 'until' it returns
-       FALSE, at which point the timeout is automatically destroyed and the
+       FALSE, at which point the timeout is 'automatically' destroyed and the
        function will not be called again.
 
 This internally creates a main loop source using g_timeout_source_new_seconds()
@@ -10442,9 +10507,9 @@ The interval given is in terms of monotonic time, not wall clock time. See
 g_get_monotonic_time().  
 
 Parameters
-interval the time between calls to the function, in seconds
-function function to call
-data data to pass to function
+interval    the time between calls to the function, in seconds
+function    function to call
+data        data to pass to function
 	 
 Returns
 the ID (greater than 0) of the event source.
@@ -10588,6 +10653,68 @@ const gchar *g_quark_to_string ()
 GQuark g_quark_try_string ()
 const gchar * g_intern_string ()
 const gchar * g_intern_static_string ()
+
+
+={============================================================================
+*kt_dev_bcast_600* glib: gtime and gdate
+
+https://developer.gnome.org/glib/stable/glib-Date-and-Time-Functions.html
+
+The GDate data structure represents a day between January 1, Year 1, and
+sometime a few thousand years in the future (right now it will go to the year
+    65535 or so, but g_date_set_parse() only parses up to the year 8000 or so -
+    just count on "a few thousand"). GDate is meant to represent everyday dates,
+not astronomical dates or historical dates or ISO timestamps or the like. It
+  extrapolates the current Gregorian calendar forward and backward in time;
+there is no attempt to change the calendar to match time periods or locations.
+  GDate does not store time information; it represents a day.
+
+The GDate implementation has several nice features; it is only a 64-bit struct,
+so storing large numbers of dates is very efficient. It can keep both a Julian
+  and day-month-year representation of the date, since some calculations are
+  much easier with one representation or the other. A Julian representation is
+  simply a count of days since some fixed day in the past; for GDate the fixed
+  day is January 1, 1 AD. ("Julian" dates in the GDate API aren't really Julian
+      dates in the technical sense; technically, Julian dates count from the
+      start of the Julian period, Jan 1, 4713 BC).
+
+GDate is simple to use. First you need a "blank" date; you can get a dynamically
+allocated date from g_date_new(), or you can declare an automatic variable or
+array and initialize it to a sane state by calling g_date_clear(). A cleared
+date is sane; it's safe to call g_date_set_dmy() and the other mutator functions
+to initialize the value of a cleared date. However, a cleared date is initially
+invalid, meaning that it doesn't represent a day that exists. It is undefined to
+call any of the date calculation routines on an invalid date. If you obtain a
+date from a user or other unpredictable source, you should check its validity
+with the g_date_valid() predicate. g_date_valid() is also used to check for
+errors with g_date_set_parse() and other functions that can fail. Dates can be
+invalidated by calling g_date_clear() again.
+
+It is very important to use the API to access the GDate struct. Often only the
+day-month-year or only the Julian representation is valid. Sometimes neither is
+valid. Use the API.
+
+GLib also features GDateTime which represents a precise time.
+
+
+g_get_monotonic_time ()
+--------------------------
+gint64
+g_get_monotonic_time (void);
+
+Queries the system monotonic time.
+
+The monotonic clock will always increase and doesn't suffer discontinuities when
+the user (or NTP) changes the system time. It may or may not continue to tick
+during times where the machine is suspended.
+
+We try to use the clock that corresponds as closely as possible to the passage
+of time as measured by system calls such as poll() but it may not always be
+possible to do this.
+
+Returns
+
+the monotonic time, in microseconds
 
 
 ==============================================================================
