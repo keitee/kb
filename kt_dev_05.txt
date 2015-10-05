@@ -27,6 +27,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_300| gst: tutorial: 04: seeking
 *kt_dev_bcast_300* gst: tutorial: 06: pad cap negotiation
 *kt_dev_bcast_300* gst: tutorial: 07: queue
+*kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
 |kt_dev_bcast_302| gst: timer and query
 |kt_dev_bcast_303| gst: registry
 |kt_dev_bcast_304| gst: queue, branch
@@ -2469,7 +2470,7 @@ int main(int argc, char *argv[]) {
 
 
 ={============================================================================
-*kt_dev_bcast_305* gst: tutorial: 08 buffers and interact with a pipeline
+*kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
 
 Basic tutorial 8: Short-cutting the pipeline
 
@@ -2516,17 +2517,16 @@ assume that if a single buffer enters an element, a single buffer will come out.
 Elements are free to do with the received buffers as they please.
 
 'every' buffer has an attached 'caps' 'GstCaps' that describes the kind of media
-contained in the buffer. Also, buffers have an attached 'time'-stamp and
+contained in the buffer. Also, buffers have an attached 'timestamp' and
 'duration', that describe in which moment the content of the buffer should be
 rendered or displayed. Time stamping is a very complex and delicate subject, but
 this simplified vision should suffice for now.
 
 As an example, a filesrc (element that reads files) produces buffers with the
-"ANY" caps and no time-stamping information. 'after' demuxing (see Basic
-        tutorial 3: Dynamic pipelines) buffers can have some specific caps, for
-example “video/x-h264”. 'after' decoding, each buffer will contain a single
-video frame with raw caps (for example, “video/x-raw-yuv”) and very precise time
-stamps indicating when should that frame be displayed.
+"ANY" caps and no time-stamping information. 'after' demuxing buffers can have
+some specific caps, for example "video/x-h264". 'after' decoding, each buffer
+will contain a single video frame with raw caps (for example, "video/x-raw-yuv")
+and very precise time stamps indicating when should that frame be displayed.
 
 
 application:
@@ -2537,7 +2537,7 @@ application:
                + push_data()                       + pull_buffer
             stop_feed()
 
-pipeline:
+pipeline signals:
 
 need-data  : -> start_feed()                    new-buffer: -> new_buffer()
 enough-data: -> stop_feed()
@@ -2589,7 +2589,7 @@ typedef struct _CustomData {
  * it is arbitrarily set to 1024 bytes) with gst_buffer_new_and_alloc(). 
  *
  * We count the number of samples that we have generated so far with the
- * CustomData.num_samples variable, so we can time-stamp this buffer using the
+ * CustomData.num_samples variable, so we can 'timestamp' this buffer using the
  * GST_BUFFER_TIMESTAMP macro in GstBuffer.  
  *
  * Since we are producing buffers of the same size, their duration is the same
@@ -2632,6 +2632,7 @@ static gboolean push_data (CustomData *data) {
    
   /* Generate some psychodelic waveforms */
   raw = (gint16 *)GST_BUFFER_DATA (buffer);
+
   data->c += data->d;
   data->d -= data->c / 1000;
   freq = 1100 + 1000 * data->d;
@@ -2869,9 +2870,11 @@ int main(int argc, char *argv[]) {
   /* Configure appsink 
    *
    * Regarding the appsink configuration, we connect to the new-buffer signal,
-   * which is emitted every time the sink receives a buffer. Also, the signal
+   * which is emitted every time the sink 'receives' a buffer. Also, the signal
    * emission needs to be enabled through the emit-signals property, because, by
    * default, it is disabled 
+   *
+   * note: that appsrc do not need to be set emit-signals
    */
   g_object_set (data.app_sink, "emit-signals", TRUE, "caps", audio_caps, NULL);
   g_signal_connect (data.app_sink, "new-buffer", G_CALLBACK (new_buffer), &data);
@@ -2968,8 +2971,6 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-
-note: why not to set emit-signals for appsrc given that it is disabled by default?
 
 ={============================================================================
 *kt_dev_bcast_306* gst: 
