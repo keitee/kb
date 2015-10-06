@@ -18510,22 +18510,21 @@ provides mutual exclusion for accessing the shared variable, while the condition
 variable is used to signal changes in the variable's state.
 
 note:
-1. This example uses two mutex group: produce or write and consume or read.
+-. The second example has reading and writing in the same mutex group and all
+competes with others. So reading and writing cannot run at the same time.
 
-2. In write mutex group, only producers compete and in read mutex group, both
-producers and consumer compete.
+-. This example uses two mutex group: one for writing and one for reading. This
+allows two things:
 
-3. In read group, it is the same in that all competes and has equal chance to
-run. However, differently from the example 02, when consumer runs, there is a
-item to process. In example 02, requires check and if there is no item, then
-blocks again. 
+1. More chances to run reading and writing at the same time. Still possible to
+write when condition is signaled.
+
+2. Consumer wakes up and competes with producers only when there are items to
+process. 
 
 After all, codition variable is to reduce such waste of polling and blocking.
 
 <ex>
-
-{Q} Is it possible to implement this using two mutex than using a muext and a
-cond-var?
 
 // note: previously
 // 
@@ -18581,12 +18580,12 @@ void* produce(void* arg)
 
     // note: changed to use cond-var 
     // {
-    
     pthread_mutex_lock( &nready.mutex );
 
     // "ready" is 0 and means there is no items to read. Now there is one item
     // produced and signal cond-var. So "ready" is the number of items
     // avaialbe to read.
+
     if( nready.ready == 0 )
       pthread_cond_signal( &nready.cond );
 
@@ -18632,6 +18631,33 @@ void* consume(void* arg)
 
   return NULL;
 }
+
+
+Q: Is it possible to implement this using two mutex than using a mutex and a
+cond-var?
+
+Q: If change producer's handling of ready like this, is it better?
+
+{
+    // note: changed to use cond-var 
+    // {
+    pthread_mutex_lock( &nready.mutex );
+
+    // "ready" is 0 and means there is no items to read. Now there is one item
+    // produced and signal cond-var. So "ready" is the number of items
+    // avaialbe to read.
+
+    if( nready.ready == 0 )
+    {
+      nready.ready++;
+      pthread_cond_signal( &nready.cond );
+    }
+
+    pthread_mutex_unlock( &nready.mutex );
+    // }
+}
+
+Q: Better if consumer reads all when has a lock?
 
 
 ={============================================================================
