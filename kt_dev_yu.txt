@@ -140,6 +140,7 @@
 *kt_dev_uv_task_010* task:09: fr15: hls: DEVARCH-9861
 *kt_dev_uv_task_011* task:09: fr15: video resize support
 *kt_dev_uv_task_011* task:09: fr15: dash error handling
+*kt_dev_uv_task_011* task:09: fr15: underflow error handling
 
 
 # ============================================================================
@@ -914,7 +915,6 @@ zb-virtual-slave zb-make
 
    + unset DBUS_SESSION_BUS_ADDRESS
    + set -o pipefai
-l
 
 + make buildtools
 + make
@@ -8500,37 +8500,99 @@ else if (err->domain == GST_RESOURCE_ERROR)
 
 <new-mapping>
 
-GST_CORE_ERROR_MISSING_PLUGIN:
-GST_RESOURCE_ERROR_NOT_FOUND:
-GST_RESOURCE_ERROR_BUSY:
-GST_RESOURCE_ERROR_SETTINGS:
-GST_STREAM_ERROR_CODEC_NOT_FOUND:
-GST_STREAM_ERROR_WRONG_TYPE
-GST_STREAM_ERROR_FAILED:
-GST_STREAM_all_others:
-  -> ErrorEventValue::data;
+case: ErrorEventValue::data;
+    // to raise MEDIA_ERR_DECODE in https://jira.youview.co.uk/browse/SOLDES-584
+    //
+    // GST_CORE_ERROR_MISSING_PLUGIN:
+    // GST_RESOURCE_ERROR_NOT_FOUND:
+    // GST_RESOURCE_ERROR_BUSY:
+    // GST_RESOURCE_ERROR_SETTINGS:
+    // GST_STREAM_ERROR_CODEC_NOT_FOUND:
+    // GST_STREAM_ERROR_WRONG_TYPE
+    // GST_STREAM_ERROR_FAILED:
+    // GST_STREAM_all_others:
 
-GST_RESOURCE_all_others:
-  -> ErrorEventValue::network;
+    
+      if(currentReadyState > QMediaPlayerInterface::HAVE_METADATA)
 
-note:
-Since this changes states
+      1. currentNetworkState = QMediaPlayerInterface::DECODE_ERROR;
+          -> MediaError::MEDIA_ERR_DECODE;
 
-  void VanadiumMediaPlayer::SourceEvent() {
-    currentReadyState = HAVE_FUTURE_DATA;
-    callbacks.readyStateChanged();
-    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
-    callbacks.networkStateChanged();
-  }
+      note: How this error? since in VanadiumMediaPlayer::SourceEvent, it
+              changes state to readyState
 
-This maps network to ERR_NETWORK from HTML code but not SRC_NOT_SUPPORTED:
+      if(event == SourceEventValue::source_config_complete)
+      {
+        currentReadyState = HAVE_FUTURE_DATA;
+        callbacks.readyStateChanged();
+        currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+        callbacks.networkStateChanged();
+      }
 
-if (error == MediaPlayer::NetworkError && m_readyState >= HAVE_METADATA)
-  mediaEngineError(MediaError::create(MediaError::MEDIA_ERR_NETWORK));
+      2. currentNetworkState = QMediaPlayerInterface::FORMAT_ERROR;
+          -> MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED;
+
+      note: how to test this error? By doing this, readyState is < METADATA.
+
+      From:
+
+        EXPECT_CALL(*mock,
+                setSource(source,
+                    SetSourceReason::mhegstandard)).WillOnce(
+                    DoAll(Invoke(boost::bind(&sendSourceEvent, mock,
+                                SourceEventValue::change_complete,
+                                SetSourceReason::mhegstandard)),
+                        Invoke(boost::bind(&sendSourceEvent, mock,
+                                SourceEventValue::source_config_complete,
+                                SetSourceReason::mhegstandard)),
+                    Return(makeCompletedFuture())));
+      To:
+
+        EXPECT_CALL(*mock,
+                setSource(source,
+                    SetSourceReason::mhegstandard)).WillOnce(
+                    DoAll(Invoke(boost::bind(&sendSourceEvent, mock,
+                                SourceEventValue::change_complete,
+                                SetSourceReason::mhegstandard)),
+                        Invoke(boost::bind(&sendErrorEvent, mock, error,
+                                ErrorEventContext::other, std::string())),
+                    Return(makeCompletedFuture())));
 
 
-ALL_ANY_OTHER:
-  -> ErrorEventValue::other;
+case ErrorEventValue::server:
+case ErrorEventValue::network:
+    // used in GST MR and defined to raise MEDIA_ERR_NETWORK in
+    // https://jira.youview.co.uk/browse/SOLDES-584. 
+    // All other GST_RESOURCE_xxx including HTTP errors
+
+    currentNetworkState = QMediaPlayerInterface::NETWORK_ERROR;
+
+
+case ErrorEventValue::other;
+    // All any other GST errors. 
+    //
+    // if(readyState==HAVE_NOTHING) error=MEDIA_ERR_SRC_NOT_SUPPORTED 
+    // else error=MEDIA_ERR_DECODE 
+    // in https://jira.youview.co.uk/browse/SOLDES-584. 
+
+    if(QMediaPlayerInterface::HAVE_NOTHING == currentReadyState)
+    {
+        currentNetworkState = QMediaPlayerInterface::FORMAT_ERROR;
+    }
+    else
+    {
+        currentNetworkState = QMediaPlayerInterface::DECODE_ERROR;
+    }
+
+case ErrorEventValue::locator:
+    // not used in GST MR but defined to raise MEDIA_ERR_SRC_NOT_SUPPORTED in
+    // https://jira.youview.co.uk/browse/SOLDES-584
+    currentNetworkState = QMediaPlayerInterface::FORMAT_ERROR;
+
+case ErrorEventValue::tag:
+case ErrorEventValue::language:
+case ErrorEventValue::linear_selection:
+    // https://jira.youview.co.uk/browse/SOLDES-584 said N/A
 
 
 <Q>
@@ -8563,28 +8625,9 @@ void registerMockForErrorHandlingOther()
 }
 
 
-<Q>
-When have this test, fails on but not always:
-
-Waiting for all video elements to be garbage collected
-Media router [ErrorsBeforePlayAreReported] stopped
-Media router [CanPlayAndPauseVideo] stopped
-
-// asyncTestCase("ErrorHandlingNetwork", function() {
-//     expect(1);
-//     video = document.createElement('video');
-// 
-//     video.addEventListener("error", function() {
-//         console.log("network error");
-//         equal(video.error.code, MediaError.MEDIA_ERR_NETWORK, 
-//             "Expected MEDIA_ERR_NETWORK");
-//         start();
-//     });
-// 
-//     video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingSink.mpd');
-//     video.load();
-//     video.play();
-// });
+<mock-timeout>
+There is a timeout in mock repo:
+boost::posix_time::seconds(VERIFICATION_TIMEOUT),
 
 
 <may-be-a-bug>
@@ -8822,6 +8865,13 @@ data has failed to receive any data for a duration equal to the stall timeout,
 
 ={============================================================================
 *kt_dev_uv_stack_257* stack: vanadium: qunit test
+
+For each test, it creates video elements:
+https://developer.mozilla.org/en-US/docs/Web/API/Document/createElement
+
+    video = document.createElement('video');
+
+This means that it creates Vanadium each time.
 
 
 /builds/topic/pc/zinc-build-root/release-debian-7-x86_64/Nickel/
@@ -18725,20 +18775,39 @@ https://jira.youview.co.uk/browse/DEVARCH-10097
 
 DEVARCH-10097: YV MediaRouter: DASH error support
 
-The YV MediaRouter allows the client application to receive errors for DASH
-unicast play in case there are errors reported during play and defines
-ErrorEventValue and ErrorEventContext to support reporting errors to the
-client.
+The YV MediaRouter allows the client application to receive errors for
+DASH unicast play in case there are errors reported during play and
+defines ErrorEventValue and ErrorEventContext to support reporting
+errors to the client.
 
-This commit enables video tag in HTML application to receive those errors
-through WebKit and implements translation and mapping of play errors between
-GStreamer and YV MediaRouter according to the YV MediaRouter [1] and the
-MediaPlayerPrivateGStreamer implementation.
+This commit enables video tag in HTML application to receive playback
+errors which are non-DRM related errors through WebKit and implements
+translation and mapping of play errors between GStreamer and YV
+MediaRouter according to the YV MediaRouter[1] and the design
+requirement[2].
 
 This commit comes with corresponding test in Vanadium test harness.
 
 [1] 1125-S Media Router Specification v1.3
+[2] https://jira.youview.co.uk/browse/SOLDES-584
 
+
+={============================================================================
+*kt_dev_uv_task_011* task:09: fr15: underflow error handling
+
+DEVARCH-10424: YV MediaRouter: Underflow error support
+
+The YV MediaRouter allows the client application to receive HTMLMediaElement
+events for underflow event reported during play via StatusEvent.
+
+This commit enables video element in HTML to receive underflow event through
+WebKit and implements unit tests according to the YV MediaRouter[1] and the
+design requirement[2].
+
+This commit comes with corresponding test in Vanadium test harness.
+
+[1] 1125-S Media Router Specification v1.3
+[2] https://jira.youview.co.uk/browse/SOLDES-584
 
 ==============================================================================
 vim:tw=100:ts=3:ft=help:norl:

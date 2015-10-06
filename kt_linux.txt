@@ -249,8 +249,10 @@
 |kt_linux_core_200| ipc: sync: semaphore 
 *kt_linux_core_201* sync: mutex
 *kt_linux_core_202* sync: deadlock
-*kt_linux_core_202* sync: why condition variable using cons and prod problem
-*kt_linux_core_202* sync: condition variable
+*kt_linux_core_202* sync-cond: why condition variable using cons and prod problem
+*kt_linux_core_202* sync-cond: condition variable
+*kt_linux_core_202* sync-cond: example:
+*kt_linux_core_202* sync-cond: example: use single lock for api and callback
 *kt_linux_core_202* sync: between processes
 |kt_linux_core_220| sync: read-write lock
 
@@ -18633,7 +18635,107 @@ void* consume(void* arg)
 
 
 ={============================================================================
-*kt_linux_core_202* sync: condition variable example
+*kt_linux_core_202* sync-cond: condition variable 
+
+<cond-wait>
+// This is blocking on condition and ALWAYS has an associated mutex. Why?
+// because both producer and consumer accesses to the shared state variable
+// which is linked to that condition so should be synced. In other words, there
+// is a natural association of a muext with a condition varaible.
+//
+// pthread_cond_wait( &nready.cond, &nready.mutex );
+//
+// Do three things: unlock a mutex, block a calling thread until signaled, and
+// relock mutex when signaled. 
+//
+// A condition variable holds no state information. It is simply a mechanism for
+// communicating information about the application's state.
+
+int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
+
+<cond-can-be-lost>
+// Guaranteede that at least one of the blocked thread is woken up. If no thread
+// is waiting, the signal is lost since condition variable holds no state
+// information.
+
+int pthread_cond_signal( pthread_cond_t *cptr );
+int pthread_cond_broadcast( pthread_cond_t *cptr );
+int pthread_cond_timedwait( ... );
+
+The {ref-LPI} said that _signal is for the case where all waiting threads do the
+  same task since it do not care which should woken up and _broadcast is for
+  case where waiting threads do different task.  Real examples?
+
+
+{the-order-of-call}
+
+{ref-LPI} uses different call order for producer as below because {ref-UNP} said
+that use _signal before unlock can cause {mutex-deadlock} or {lock-conflict}.
+Therefore, POSIX recommends the followings and {ref-LPI} said this may yieid
+better performance in 30.2.2:
+
+<approach-one>
+pthread_mutex_lock( &nready.mutex );
+if( nready.ready == 0 )
+   pthread_cond_signal( &nready.cond );
+
+nready.ready++;
+
+pthread_mutex_unlock( &nready.mutex );
+
+<approach-two>
+pthread_mutex_lock( &nready.mutex );
+
+nready.ready++;
+
+pthread_mutex_unlock( &nready.mutex );
+
+if( nready.ready == 0 )
+ pthread_cond_signal( &nready.cond );
+
+
+{check-on-predicate}
+
+Each condition variable has an associated predicate involving one or more shared
+variables. In this example, nready.ready == 0 is the predicate.
+
+This demonstrates a general design principle: a pthread_cond_wait() call must be
+governed by a while loop rather than an if statement. This is so because, on
+return from pthread_cond_wait(), there are no guarantees about the state of the
+predicate; therefore, we should immediately recheck the predicate and resume
+sleeping if it is not in the desired state. [KT] When calls cond_wait, the
+associated lock is released so no gurantee that this predicate is the same when
+wakes up.
+
+So use [while-loop] always to test the condition again when wakes up because
+spurious wakeups can occur for following reasons:
+
+while( nready.ready == 0 )
+	pthread_cond_wait( &nready.cond, &nready.mutex );
+
+-. Other threads may be woken up first. Perhaps several threads were waiting to
+acquire the mutex associated with the condition variable. Even if the thread
+that signaled the mutex set the predicate to the desired state, it is still
+possible that another thread might acquire the mutex first and change the state
+of the associated shared variable(s), and thus the state of the predicate.
+
+-. Designing for "loose" predicates may be simpler. Sometimes, it is easier to
+design applications based on condition variables that indicate possibility
+rather than certainty. In other words, signaling a condition variable would mean
+"there may be something" for the signaled thread to do rather than "there is
+something" to do. Using this approach, the condition variable can be signaled
+based on approximations of the predicate's state, and the signaled thread can
+ascertain if there really is something to do by rechecking the predicate.
+
+-. Spurious wake-ups can occur. On some implementations, a thread waiting on a
+condition variable may be woken up even though no other thread actually signaled
+the condition variable. Such spurious wake-ups are a (rare) consequence of the
+techniques required for efficient implementation on some multiprocessor systems,
+           and are explicitly permitted by SUSv3.
+
+
+={============================================================================
+*kt_linux_core_202* sync-cond: example
 
 typedef struct
 {
@@ -18683,6 +18785,9 @@ static void gst_nexus_mgr_generic_1st_level_cb(void* context, int reason)
   g_cond_signal(&mgr->callback_cond);
 }
 
+
+note: is it going to be a double lock on the same mutex?
+
 static gpointer mgr_callback_thread(gpointer context)
 {
   GstNexusMgr* mgr = context;
@@ -18712,97 +18817,38 @@ static gpointer mgr_callback_thread(gpointer context)
 
 
 ={============================================================================
-*kt_linux_core_202* sync: condition variable example
+*kt_linux_core_202* sync-cond: example use single lock for api and callback
 
+This uses a single mutex, managerMutex, to guard access to APIs and callbacks.
 
-<cond-wait>
-// This is blocking on condition and ALWAYS has an associated mutex. Why? because both producer and
-// consumer accesses to the shared state variable which is linked to that condition so should be
-// synced. In other words, there is a natural association of a muext with a condition varaible.
-//
-// pthread_cond_wait( &nready.cond, &nready.mutex );
-//
-// Do three things: unlock a mutex, block a calling thread until signaled, and relock mutex when
-// signaled. 
-//
-// A condition variable holds no state information. It is simply a mechanism for communicating
-// information about the application's state.
+void XX::API1(...)
+{
+    boost::unique_lock<boost::mutex> statusLock(managerMutex);
 
-int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
+    if(activePlayer)
+    {
+        // Suspend player and wait for StatusEvent saying MR is stopped
+        activePlayer->suspend();
+        managerCondition.wait(statusLock);
+    }
 
-<cond-can-be-lost>
-// Guaranteede that at least one of the blocked thread is woken up. If no thread is waiting, the
-// signal is lost since condition variable holds no state information.
+    mediaRouter->addListener(dispatcher, shared_from_this());
+}
 
-int pthread_cond_signal( pthread_cond_t *cptr );
-int pthread_cond_broadcast( pthread_cond_t *cptr );
-int pthread_cond_timedwait( ... );
+void XX::API2(...)
+{
+    const boost::unique_lock<boost::mutex> statusLock(managerMutex);
+    ...
+}
 
-The {ref-LPI} said that _signal is for the case where all waiting threads do the same task since it
-do not care which should woken up and _broadcast is for case where waiting threads do different task.
-Real examples?
-
-
-{the-order-of-call}
-
-{ref-LPI} uses different call order for producer as below because {ref-UNP} said that use _signal
-before unlock can cause {mutex-deadlock} or {lock-conflict}. Therefore, POSIX recommends the
-followings and {ref-LPI} said this may yieid better performance in 30.2.2:
-
-<approach-one>
-pthread_mutex_lock( &nready.mutex );
-if( nready.ready == 0 )
-   pthread_cond_signal( &nready.cond );
-
-nready.ready++;
-
-pthread_mutex_unlock( &nready.mutex );
-
-<approach-two>
-pthread_mutex_lock( &nready.mutex );
-
-nready.ready++;
-
-pthread_mutex_unlock( &nready.mutex );
-
-if( nready.ready == 0 )
- pthread_cond_signal( &nready.cond );
-
-
-{check-on-predicate}
-
-Each condition variable has an associated predicate involving one or more shared variables. In this
-example, nready.ready == 0 is the predicate.
-
-This demonstrates a general design principle: a pthread_cond_wait() call must be governed by a while
-loop rather than an if statement. This is so because, on return from pthread_cond_wait(), there are
-no guarantees about the state of the predicate; therefore, we should immediately recheck the
-predicate and resume sleeping if it is not in the desired state. [KT] When calls cond_wait, the
-associated lock is released so no gurantee that this predicate is the same when wakes up.
-
-So use [while-loop] always to test the condition again when wakes up because spurious wakeups can
-occur for following reasons:
-
-while( nready.ready == 0 )
-	pthread_cond_wait( &nready.cond, &nready.mutex );
-
-1> Other threads may be woken up first. Perhaps several threads were waiting to acquire the mutex
-associated with the condition variable. Even if the thread that signaled the mutex set the predicate
-to the desired state, it is still possible that another thread might acquire the mutex first and
-change the state of the associated shared variable(s), and thus the state of the predicate.
-
-2> Designing for "loose" predicates may be simpler. Sometimes, it is easier to design applications
-based on condition variables that indicate possibility rather than certainty. In other words,
-signaling a condition variable would mean "there may be something" for the signaled thread to do
-rather than "there is something" to do. Using this approach, the condition variable can be signaled
-based on approximations of the predicateâs state, and the signaled thread can ascertain if there
-really is something to do by rechecking the predicate.
-
-3> Spurious wake-ups can occur. On some implementations, a thread waiting on a condition variable
-may be woken up even though no other thread actually signaled the condition variable. Such spurious
-wake-ups are a (rare) consequence of the techniques required for efficient implementation on some
-multiprocessor systems, and are explicitly permitted by SUSv3.
-
+void XX::CALLBACK(const EventValue::Enum statusEvent)
+{
+    if(statusEvent == StatusEventValue::stopped)
+    {
+        boost::unique_lock<boost::mutex> statusLock(managerMutex);
+        managerCondition.notify_one();
+    }
+}
 
 
 ={============================================================================
@@ -23820,26 +23866,28 @@ execute.
 
 
 {position-independent-code}
-These changes allow the code to be located at any virtual address at run time. This is necessary for
-shared libraries, since there is no way of knowing at link time where the shared library code will
-be located in memory.
+These changes allow the code to be located at any virtual address at run time.
+This is necessary for shared libraries, since there is no way of knowing at link
+time where the shared library code will be located in memory.
 
-In order to determine whether an existing object file has been compiled with the -fPIC option, can
-check for the presence of the name _GLOBAL_OFFSET_TABLE_ in the object file's symbol table, using
-either of the following commands:
+In order to determine whether an existing object file has been compiled with the
+-fPIC option, can check for the presence of the name _GLOBAL_OFFSET_TABLE_ in
+the object file's symbol table, using either of the following commands:
 
 $ nm mod1.o | grep _GLOBAL_OFFSET_TABLE_
 $ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_         // -s, --syms|--symbols
 
-note: as shown above, this not necessarily means 'shared' object. It's only tell -fPIC used.
+note: as shown above, this not necessarily means 'shared' object. It's only tell
+-fPIC used.
 
 <pic-vs-relocatable>
-This is talking about position independent code, which is 'not' the same as relocatable code.
-Relocatable code is code whose address may be assigned at 'linktime'. Position independent code is
-code whose address may be assigned at 'runtime'.
+This is talking about position independent code, which is 'not' the same as
+relocatable code.  Relocatable code is code whose address may be assigned at
+'linktime'. Position independent code is code whose address may be assigned at
+'runtime'.
 
-'all' object files are relocatable. For most targets, only object files compiled with -fpic or -fPIC
-or -pie are position independent.
+'all' object files are relocatable. For most targets, only object files compiled
+with -fpic or -fPIC or -pie are position independent.
 
 For more about relocatable code: http://www.airs.com/blog/archives/41
 
