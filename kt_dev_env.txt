@@ -116,7 +116,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_002| git-config: alias and help
 *kt_dev_env_git_003* git-config: use gvim as default editor
 
-|kt_dev_env_git_004| init and clone
+|kt_dev_env_git_004| git-init and git-clone
 |kt_dev_env_git_003| git-three-stage
 *kt_dev_env_git_005* git-argument: 
 |kt_dev_env_git_005| git-status
@@ -132,6 +132,10 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_git_015* git-branch: check if a branch has a commit 
 *kt_dev_env_git_016* git-branch: list
 |kt_dev_env_git_011| merge workflow. mergetool
+*kt_dev_env_git_011* git-merge: mergetool
+*kt_dev_env_git_011* git-merge: mergetool: use meld
+*kt_dev_env_git_011* git-merge: mergetool: local and remote
+*kt_dev_env_git_011* git-merge: mergetool: use gvimdiff
 |kt_dev_env_git_012| generate patch and apply
 |kt_dev_env_git_013| merge: undo merge attempt
 |kt_dev_env_git_015| tag
@@ -1299,7 +1303,7 @@ always appear in this order:
  | (HEAD)         | copy    |               |
  +------------------------------------------+
 
-- the left window contains the version from the target branch
+- the left window contains the version from the target(current) branch
 
 - the middle window contains the working copy of the file, complete with
   conflict markers
@@ -6759,7 +6763,7 @@ From gvim help:
 
 
 ={============================================================================
-*kt_dev_env_git_004* init, clone
+*kt_dev_env_git_004* git-init and git-clone
 
 {init-repo-in-existing-dirs}
 Create an empty repository.
@@ -6767,7 +6771,8 @@ Create an empty repository.
 $ git init
 Initialized empty Git repository in /home/kit/.git/
 
-if it's a directory, the command adds all the files in that directory recursively.
+If it's a directory, the command adds all the files in that directory
+recursively.
 
 $ git add *.c or $ git add *
 $ git add README
@@ -8001,7 +8006,7 @@ $ git mergetool
 Then will run external merge tool with 'three' panes when merge.conflictstyle
 has not been set.
 
-LOCAL: HEAD version   | Base: common base version   | REMOTE: merge-in version.
+LOCAL: HEAD version   | Merged    | REMOTE: merge-in version.
 
 The file in the 'middle' is a failed merge which shows conflicts. So can select
 either head version or merge-in version. Or can write up new one. The mergetool
@@ -8011,6 +8016,26 @@ case.
 Once resolved conflicts, run git status again to verify that all conflicts have
 been resolved. Run git commit to 'finalize' the merge commit. Can modify that
 message with details about how you resolved the merge 
+
+
+When mergetool is invoked with this tool (either through the -t or --tool option
+    or the merge.tool configuration variable) the configured command line will
+be 'invoked' with $BASE set to the name of a temporary file containing the
+common base for the merge, if available; $LOCAL set to the name of a temporary
+file containing the contents of the file on the 'current' branch; $REMOTE set to
+the name of a temporary file containing the contents of the file to be merged,
+and $MERGED set to the name of the file to which the merge tool should write the
+  result of the merge resolution.
+
+
+If the custom merge tool correctly indicates the success of a merge resolution
+with its exit code, then the configuration variable
+mergetool.<tool>.trustExitCode can be set to true. Otherwise, git mergetool will
+prompt the user to indicate the success of the resolution after the custom tool
+has exited.
+
+Setting the mergetool.keepBackup configuration variable to false causes git
+mergetool to automatically remove the backup as files are successfully merged.
 
 
 ={============================================================================
@@ -8027,28 +8052,70 @@ There are four important pieces of information involved in a merge, three of
 which are necessary to resolve the merge. In this case, git has only given you
 two of the required pieces.
 
-            common base ()
+      common base ()
 
   commit a ()         commit c ()
           1             2
-            merge d ()
-      
+          merge d ()
+
 The git shows 1 (delta from a to d) and 2 (delta from c to d). This tip is to
 see deltas from common base as well so that to see better context.
 
+Suppose that mergetool is configured to use meld and when run:
+
+git mergetool
+
+This shows:
+
++-------------------------+
+| LOCAL | merged | REMOTE |
++-------------------------+
+
+To see deltas from the base, set up followings which runs three meld instances.
+
+gitmerge $BASE $LOCAL $REMOTE $MERGED
+          $1    $2    $3      $4
+
+#!/bin/sh
+# gitmerge
+#
+meld $2 $1 &
+sleep 0.5
+meld $1 $3 &
+sleep 0.5
+meld $2 $4 $3
+
+[merge]
+    tool = mymeld
+[mergetool "mymeld"]
+    cmd = $HOME/bin/gitmerge $BASE $LOCAL $REMOTE $MERGED
+
+git config --global merge.tool mymeld
 git config --global mergetool.mymeld.cmd 'gitmerge $BASE $LOCAL $REMOTE $MERGED'
 
 
-<config-mergetool>
+={============================================================================
+*kt_dev_env_git_011* git-merge: mergetool: local and remote
 
-[merge]
-	tool = diffconflicts
-[mergetool "diffconflicts"]
-	cmd = diffconflicts gvim $BASE $LOCAL $REMOTE $MERGED
-	trustExitCode = true
-	keepBackup = false
+$ git checkout master
+$ git merge topic
 
-<as-a-git-merge-tool>
+LOCAL is master and REMOTE is topic
+
+$ git checkout topic
+$ git rebase master
+
+LOCAL is master and REMOTE is topic
+
+note: Why LOCAL is not topic in rebase case? Since rebase checkout to master
+internally and LOCAL HEAD is master.
+
+The LOCAL is HEAD and target which want to have as the final result of action.
+
+
+={============================================================================
+*kt_dev_env_git_011* git-merge: mergetool: use gvimdiff
+
 https://github.com/whiteinge/dotfiles/blob/master/bin/diffconflicts
 
 #!/bin/bash
@@ -8061,8 +8128,8 @@ https://github.com/whiteinge/dotfiles/blob/master/bin/diffconflicts
 #
 # The vertical format and lack of syntax highlighting in the plain conflict
 # marker layout makes it difficult to spot subtle conflicts such as
-# single-character changes and this is where a two-way diff really shines!
-# To see this explained using screenshots, see:
+# single-character changes and this is where a two-way diff really shines! To
+# see this explained using screenshots, see:
 # http://vim.wikia.com/wiki/A_better_Vimdiff_Git_mergetool
 #
 # This script, when used as a Git mergetool, opens each "side" of the conflict
@@ -8073,10 +8140,19 @@ https://github.com/whiteinge/dotfiles/blob/master/bin/diffconflicts
 # Add this mergetool to your ~/.gitconfig (you can substitute gvim for vim):
 #
 # git config --global merge.tool diffconflicts
-## git config --global mergetool.diffconflicts.cmd 'diffconflicts vim $BASE $LOCAL $REMOTE $MERGED'
-# git config --global mergetool.diffconflicts.cmd 'diffconflicts gvim $BASE $LOCAL $REMOTE $MERGED'
+# # git config --global mergetool.diffconflicts.cmd 'diffconflicts 
+#     vim $BASE $LOCAL $REMOTE $MERGED'
+# git config --global mergetool.diffconflicts.cmd 'diffconflicts 
+#     gvim $BASE $LOCAL $REMOTE $MERGED'
 # git config --global mergetool.diffconflicts.trustExitCode true
 # git config --global mergetool.diffconflicts.keepBackup false
+#
+# [merge]
+#   tool = diffconflicts
+# [mergetool "diffconflicts"]
+#   cmd = diffconflicts gvim $BASE $LOCAL $REMOTE $MERGED
+#   trustExitCode = true
+#   keepBackup = false
 #
 # The next time you perform a merge with conflicts, invoke this tool with the
 # following command. (Of course you can set it as your default mergetool as
@@ -8084,37 +8160,44 @@ https://github.com/whiteinge/dotfiles/blob/master/bin/diffconflicts
 #
 # git mergetool --tool diffconflicts
 #
-# This tool will open three tabs in Vim that each provide a different way to
+# This tool will open 'three' tabs in Vim that each provide a different way to
 # view the conflicts. You can resolve the conflicts in the first tab and save
 # and exit the file. This will also mark the conflict as resolved in Git.
 #
-# Tab1 is a two-way diff of just the conflicts. Resolve the conflicts here
-# and save the file.
-# +--------------------------------+
+# <Tab1> is a two-way diff of just the conflicts. Resolve the conflicts here and
+# save the file.
+# +-----------------+
 # | LCONFL | RCONFL |
-# +--------------------------------+
+# +-----------------+
 #
-# Tab2 is a three-way diff of the original files and the merge base. This is
-# the traditional three-way diff. Although noisy, it is occasionally useful
-# to view the three original states of the conflicting file before the merge.
-# +--------------------------------+
+# <Tab2> is a three-way diff of the original files and the merge 'base'. This is
+# the traditional three-way diff. Although noisy, it is occasionally useful to
+# view the three original states of the conflicting file before the merge.
+# +-----------------------+
 # | LOCAL | BASE | REMOTE |
-# +--------------------------------+
+# +-----------------------+
 #
-# Tab3 is the in-progress merge that Git has written to the filesystem
+# <Tab3> is the in-progress merge that Git has written to the filesystem
 # containing the conflict markers. I.e., the file you would normally edit by
 # hand when not using a mergetool.
-# +--------------------------------+
-# | <<<<<<< HEAD |
-# | LCONFL |
-# | ======= |
-# | RCONFL |
-# | >>>>>>> someref |
-# +--------------------------------+
+# +---------------------+
+# | <<<<<<< HEAD        |
+# | LCONFL              |
+# | =======             |
+# | RCONFL              |
+# | >>>>>>> someref     |
+# +---------------------+
 #
 # Workflow:
 #
-# note: here can save the merge result.
+# 0. Starts with the conflicted file. (Seems when run mergetool, git generates
+# LOCAL, BASE, REMOTE files)
+#
+# curr_time.c
+# curr_time.c.BACKUP.5258.c 
+# curr_time.c.REMOTE.5258.c
+# curr_time.c.BASE.5258.c
+# curr_time.c.LOCAL.5258.c
 #
 # 1. Save your changes to the LCONFL temporary file (the left window on the
 # first tab; also the only file that isn't read-only).
@@ -8126,6 +8209,7 @@ https://github.com/whiteinge/dotfiles/blob/master/bin/diffconflicts
 # will be updated with the contents of your LCONFL file edits.
 #
 # NOTE: Use :cq to abort the merge and exit Vim with an error code.
+# :help *:cq* *:cquit*
 #
 if [[ -z $@ || $# != "5" ]] ; then
   echo -e "Usage: $0 \$EDITOR \$BASE \$LOCAL \$REMOTE \$MERGED"
@@ -8138,36 +8222,26 @@ LOCAL="$3"
 REMOTE="$4"
 MERGED="$5"
 
+# *Q* Why do these since would have the same value?
+#
 printf -v QBASE '%q' "${BASE}"
 printf -v QLOCAL '%q' "${LOCAL}"
 printf -v QREMOTE '%q' "${REMOTE}"
 printf -v QMERGED '%q' "${MERGED}"
 
 # Temporary files for left and right side
-# note: these seems to be files generated by git.
-#
-# | local fname(remote contents) | remote fname(local contents, ro) |
-#LCONFL="${MERGED}.LOCAL.$$.tmp"
-#RCONFL="${MERGED}.REMOTE.$$.tmp"
-
 LCONFL="${MERGED}.REMOTE.$$.tmp"
 RCONFL="${MERGED}.LOCAL.$$.tmp"
 
-# LCONFL="${MERGED}.REMOTE.$$.tmp"
-# RCONFL="${MERGED}.LOCAL.$$.tmp"
 #
-# and 
+# $cmd -f -R -d "${fileone}" "${filetwo}" -c ":set noro" 
 #
-# $cmd -f -R -d "${LCONFL}" "${RCONFL}" \
+# creates 2way diff window which are all read-only and the left gets active.
+# Then set the left writable by running ":set noro".
 #
-# makes | remote fname(remote contents) | local fname(local contents, ro) |
+# | fileone, noro | filetwo, ro |
 #
-# $cmd -f -R -d "${RCONFL}" "${LCONFL}" \
 #
-# makes | local fname(local contents) | remote fname(remote contents, ro) |
-#
-# note: this is better since cursor will be in the left
-
 # Always delete our temp files; Git will handle it's own temp files
 trap 'rm -f "'"${LCONFL}"'" "'"${RCONFL}"'"' SIGINT SIGTERM EXIT
 
@@ -8175,35 +8249,52 @@ trap 'rm -f "'"${LCONFL}"'" "'"${RCONFL}"'"' SIGINT SIGTERM EXIT
 sed -r -e '/^<<<<<<< /,/^=======\r?$/d' -e '/^>>>>>>> /d' "${MERGED}" > "${LCONFL}"
 sed -r -e '/^=======\r?$/,/^>>>>>>> /d' -e '/^<<<<<<< /d' "${MERGED}" > "${RCONFL}"
 
+# *Q* Why creates temporary files since LOCAL and REMOTE file do not have
+# markers already?
+#
 # Fire up vimdiff
 #
 # -d  Start in diff mode,
 #
-# -R  Readonly mode.  The 'readonly' option will be set for all the files being edited. You can
-# still edit the buffer, but will be prevented from accidentally overwriting a file.
+# -R  The 'readonly' option will be set for 'all' the files being edited. You
+# can still edit the buffer, but will be prevented from accidentally overwriting
+# a file.
 #
-# -f  'f' stands for "foreground".  If omitted, the GUI forks a new process and exits the current
-# one.  "-f" should be used when gvim is started by a program that will wait for the edit session to
-# finish (e.g., mail or readnews). 
+# -f 'foreground'. If omitted, the GUI forks a new process and exits the current
+# one. "-f" should be used when gvim is started by a program that will wait for
+# the edit session to finish (e.g., mail or readnews). 
 #
-# -c {command} {command} will be executed after the first file has been read (and after autocommands
-# and modelines for that file have been processed). "command" is interpreted as an Ex command.
-#
+# -c {command} {command} will be executed after the first file has been read
+# (and after autocommands and modelines for that file have been processed).
+# "command" is interpreted as an Ex command.
+
 # :[count]tabe[dit] 
 # :[count]tabnew 
 # Open a new tab page with an empty window, after the current
 #
 # :vert[ical] {cmd}
-# Execute {cmd}. If it contains a command that splits a window, will be split vertically.
+# Execute {cmd}. If it contains a command that splits a window, will be split
+# vertically.
 #
 # :diffs[plit] {filename}
-# Open a new window on the file {filename}. The options are set as for "vimdiff" for the current and
-# the newly opened window.
+# Open a new window on the file {filename}. The options are set as for "vimdiff"
+# for the current and the newly opened window.
 #
 # :[count]winc[md] {arg}
 # Moves to the window below the current one. :wincmd j
 #
-# :tabfir[st]  Go to the first tab page.
+# :tabfir[st]
+# Go to the first tab page.
+#
+# :set noro
+# noreadonly
+#
+# note:
+# This creates:
+#
+#   -c ":tabe $1" -c ":vert diffs $2" -c ":vert diffs $3"
+#
+#   | $3 | $2 | $1 |
 #
 $cmd -f -R -d "${LCONFL}" "${RCONFL}" \
   -c ":set noro" \
@@ -8221,30 +8312,51 @@ fi
 exit $EC
 
 
-<debug-output>
-+ [[ -z gvim ./sample_BASE_3505.c ./sample_LOCAL_3505.c ./sample_REMOTE_3505.c sample.c ]]
-+ [[ 5 != \5 ]]
-+ cmd=gvim
-+ BASE=./sample_BASE_3505.c
-+ LOCAL=./sample_LOCAL_3505.c
-+ REMOTE=./sample_REMOTE_3505.c
-+ MERGED=sample.c
-+ printf -v QBASE %q ./sample_BASE_3505.c
-+ printf -v QLOCAL %q ./sample_LOCAL_3505.c
-+ printf -v QREMOTE %q ./sample_REMOTE_3505.c
-+ printf -v QMERGED %q sample.c
-+ LCONFL=sample.c.LOCAL.3567.tmp
-+ RCONFL=sample.c.REMOTE.3567.tmp
-+ trap 'rm -f "sample.c.LOCAL.3567.tmp" "sample.c.REMOTE.3567.tmp"' SIGINT SIGTERM EXIT
-+ sed -r -e '/^<<<<<<< /,/^=======\r?$/d' -e '/^>>>>>>> /d' sample.c
-+ sed -r -e '/^=======\r?$/,/^>>>>>>> /d' -e '/^<<<<<<< /d' sample.c
+<modified>
 
-// this makes | remote (w) | local (ro) |
-+ gvim -f -R -d sample.c.REMOTE.3567.tmp sample.c.LOCAL.3567.tmp -c ':set noro' 
++-----------------------+
+| LOCAL | REMOTE |
++-----------------------+
++-----------------------+
+| LOCAL | BASE | REMOTE |
++-----------------------+
++-----------------------+
+| MERGED |
++-----------------------+
 
-// this makes | remote | base | local |
--c ':tabe ./sample_LOCAL_3505.c' -c ':vert diffs ./sample_BASE_3505.c' -c ':vert diffs ./sample_REMOTE_3505.c'
--c ':winc t' -c ':tabe sample.c' -c :tabfir
+#!/bin/bash
+#
+if [[ -z $@ || $# != "5" ]] ; then
+  echo -e "Usage: $0 \$EDITOR \$BASE \$LOCAL \$REMOTE \$MERGED"
+  exit 1
+fi
+
+cmd=$1
+BASE="$2"
+LOCAL="$3"
+REMOTE="$4"
+MERGED="$5"
+
+LCONFL="${LOCAL}"
+RCONFL="${REMOTE}"
+
+# Always delete our temp files; Git will handle it's own temp files
+trap 'rm -f "'"${LCONFL}"'" "'"${RCONFL}"'"' SIGINT SIGTERM EXIT
+
+# Fire up vimdiff
+$cmd -f -R -d "${LCONFL}" "${RCONFL}" \
+  -c ":set noro" \
+  -c ":tabe $REMOTE" -c ":vert diffs $BASE" -c ":vert diffs $LOCAL" \
+  -c ":winc t" -c ":tabe $MERGED" -c ":tabfir"
+
+EC=$?
+
+# Overwrite $MERGED only if vimdiff exits cleanly.
+if [[ $EC == "0" ]] ; then
+  cat "${LCONFL}" > "${MERGED}"
+fi
+
+exit $EC
 
 
 ={============================================================================
