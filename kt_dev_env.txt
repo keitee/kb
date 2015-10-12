@@ -118,6 +118,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 
 |kt_dev_env_git_004| init and clone
 |kt_dev_env_git_003| git-three-stage
+*kt_dev_env_git_005* git-argument: 
 |kt_dev_env_git_005| git-status
 |kt_dev_env_git_006| ignore
 |kt_dev_env_git_007| git-log
@@ -129,7 +130,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_git_013* git-branch: checkout and tracking
 *kt_dev_env_git_014* git-branch: merge or rebase
 *kt_dev_env_git_015* git-branch: check if a branch has a commit 
-*kt_dev_env_git_016* git-branch: list, remote show
+*kt_dev_env_git_016* git-branch: list
 |kt_dev_env_git_011| merge workflow. mergetool
 |kt_dev_env_git_012| generate patch and apply
 |kt_dev_env_git_013| merge: undo merge attempt
@@ -996,7 +997,8 @@ Q: seems that vim gets blocked while a brower is running.
 ={============================================================================
 *kt_dev_env_vim_014* plugins: git: fugitive
 
-<1> #31
+#31. 1) A complement to command line git
+
 http://vimcasts.org/episodes/fugitive-vim---a-complement-to-command-line-git/
 
 Commands such as Gremove and Gmove map directly to git rm and git mv. I wasn't
@@ -1104,7 +1106,11 @@ will follow.
 :[range]Gblame [flags]  Run git-blame on the given range.
 
 
-<2> #32
+={============================================================================
+*kt_dev_env_vim_014* plugins: git: fugitive
+
+#32. 2) Working with the git index
+
 http://vimcasts.org/episodes/fugitive-vim-working-with-the-git-index/
 
 The fugitive plugin provides an interactive status window, where you can
@@ -1219,6 +1225,8 @@ always appear in that order, so you can commit that to memory.
                         "git add --patch".
 
 
+<gwrite>
+
 Wholesale reconciliation
 
 The :Gread and :Gwrite commands can either add a file to the index or reset
@@ -1231,6 +1239,21 @@ command     active window     affect
 :Gread      working copy      checkout file
 :Gwrite     index             checkout file
 :Gread      index             stage file
+
+
+// from #33. 3) Resolving merge conflicts with vimdiff
+Keeping one parent version in its entirety
+
+In reality, it's often the case that one of the parent versions is to be kept
+wholesale, and the other version is to be discarded. In this scenario, :Gwrite
+command comes in handy. This overwrites the working tree and index copies with
+the contents of the currently active file.
+
+If you run :Gwrite from the target or merge version of a file, fugitive raises a
+warning. This is to protect you from accidentally overwriting the working copy
+and index files when you've carefully cherry picked the changes from the parent
+versions. If you want to stage either of the parent versions in their entirety,
+use :Gwrite! to show you really mean it.
 
 
 Piecemeal reconciliation
@@ -1246,6 +1269,114 @@ command   active window   affect
 :diffput  index           checkout hunk
 :diffget  index           stage hunk
 
+[c        jump to previous hunk
+]c        jump to next hunk
+
+To leave vimdiff mode, you just need to close the windows that are being
+compared. The quickest way to do this is to run :only from the window that you
+want to keep open.
+
+:only     close all windows apart from the current one
+
+
+={============================================================================
+*kt_dev_env_vim_014* plugins: git: fugitive
+
+#33. 3) Resolving merge conflicts with vimdiff
+
+http://vimcasts.org/episodes/fugitive-vim-resolving-merge-conflicts-with-vimdiff/
+
+:Gdiff on a conflicted file opens 3-way diff
+
+When you run :Gdiff on a conflicted file, fugitive opens 3 split windows. They
+always appear in this order:
+
+ +------------------------------------------+
+ | bufspec: //2   |         | bufspec: //3  |  
+ |                |         |               |
+ |                |         |               |
+ | target         | working |         merge |
+ | (HEAD)         | copy    |               |
+ +------------------------------------------+
+
+- the left window contains the version from the target branch
+
+- the middle window contains the working copy of the file, complete with
+  conflict markers
+
+- the right window contains the version from the merge branch
+
+
+$ git checkout master
+$ git merge feature
+
+
+I discuss 'target' and 'merge' branches a lot in the screencast, so lets just make
+sure that we're on the same page. The target branch is the one that is active
+when you run git merge. Or in other words, it's the HEAD branch. 
+
+The merge branch is the one that is named in the git merge command. In this
+scenario the master branch is the target, and the feature branch is merged into
+target, making it the merge branch.
+
+note: target is current branch and merge is a branch to merge and cherry-pick.
+
+
+Strategies for reconciling 3-way diffs
+
+There are two basic strategies for reconciling a 3-way diff. You can either keep
+your cursor in the 'middle' file, and run :diffget with the bufspec for the file
+containing the change you want to keep. Or you can position your cursor on the
+change that you want to keep, and run :diffput with the bufspec for the working
+copy file. We’ll take a look at each of these strategies in turn, starting with
+diffget.
+
+
+Introducing buffspecs
+
+In the context of a 2-way diff, the :diffget and :diffput commands are
+'unambiguous'. If you ask Vim to get the diff from the other window, there is
+only one place for it to look. When you do a 3-way merge, things get a little
+more complex. This time, it would be 'ambiguous' if you were to tell Vim to
+fetch the changes from the other window. You have to specify which buffer to
+fetch the changes from by providing a [bufspec].
+
+The buffspec could either be the buffer number, or a partial match for the
+buffer's name. Buffer numbers are assigned sequentially, so they will differ
+from session to session, but you can always be sure that they will uniquely
+identify their buffer.
+
+Fugitive follows a consistent naming convention when creating buffers for the
+target and merge versions of a conflicted file. The parent file from the target
+branch 'always' includes the string //2, while the parent from the merge branch
+always contains //3. These partial matches are sufficient to uniquely identify
+the target and merge parents when using the :diffget command.
+
+
+Resolving a 3-way diff with :diffget
+
+The :diffget command modifies the current buffer by pulling a change over from
+one of the other buffers. In resolving a merge conflict, we want to treat target
+and merge parents as reference copies, pulling hunks of changes from those into
+the conflicted working copy. That means that we want to keep the middle buffer
+active, and run diffget with a reference to the buffer containing the change
+that we want to use.
+
+    :diffget //2 - fetches the hunk from the target parent (on the left)
+    :diffget //3 - fetches the hunk from the merge parent (on the right)
+
+Note that Vim does not automatically recalculate the diff colors after you run
+:diffget. You can tell Vim to do this by running :diffupdate.
+
+Vim provides a couple of convenient shorthand mappings for these commands: do
+performs a diffget, and dp does diffput. These mappings don't normally work in a
+3-way diff, because the diffget and diffput commands both require an argument in
+this context. But in the case of the diffput command, it's pretty easy to guess
+what that argument is going to be.
+
+
+={============================================================================
+*kt_dev_env_vim_014* plugins: git: fugitive
 
 *fugitive.txt*  A Git wrapper so awesome, it should be illegal
 
@@ -6778,6 +6909,58 @@ was changed since it was checked out but has not been staged, it is modified.
 
 
 ={============================================================================
+*kt_dev_env_git_005* git-argument: 
+
+git xxx [options] [<repository> [<refspec>...]]
+
+<repository>
+    The "remote" repository that is the source of a fetch or pull operation.
+    This parameter can be either a URL (see the section GIT URLS below) or the
+    name of a remote (see the section REMOTES below).
+    
+<refspec>
+    Specifies which refs to fetch and which local refs to update. When no
+    <refspec>s appear on the command line, the refs to fetch are read from
+    remote.<repository>.fetch variables instead (see git-fetch[1]).
+
+    The format of a <refspec> parameter is an optional plus +, followed by the
+    source ref <src>, followed by a colon :, followed by the destination ref
+    <dst>. The colon can be omitted when <dst> is empty.
+
+    tag <tag> means the same as refs/tags/<tag>:refs/tags/<tag>; it requests
+    fetching everything up to the given tag.
+
+    The remote ref that matches <src> is fetched, and if <dst> is not empty
+    string, the local ref that matches it is fast-forwarded using <src>. If the
+    optional plus + is used, the local ref is updated even if it does not result
+    in a fast-forward update.
+
+    Note
+    When the remote branch you want to fetch is known to be rewound and rebased
+    regularly, it is expected that its new tip will not be descendant of its
+    previous tip (as stored in your remote-tracking branch the last time you
+        fetched). You would want to use the + sign to indicate non-fast-forward
+    updates will be needed for such branches. There is no way to determine or
+    declare that a branch will be made available in a repository with this
+    behavior; the pulling user simply must know this is the expected usage
+    pattern for a branch.
+
+    Note
+    There is a difference between listing multiple <refspec> directly on git
+    pull command line and having multiple remote.<repository>.fetch entries in
+    your configuration for a <repository> and running a git pull command without
+    any explicit <refspec> parameters. <refspec>s listed explicitly on the
+    command line are always merged into the current branch after fetching. In
+    other words, if you list more than one remote ref, git pull will create an
+    Octopus merge. On the other hand, if you do not list any explicit <refspec>
+    parameter on the command line, git pull will fetch all the <refspec>s it
+    finds in the remote.<repository>.fetch configuration and merge only the
+    first <refspec> found into the current branch. This is because making an
+    Octopus from remote refs is rarely done, while keeping track of multiple
+    remote heads in one-go by fetching more than one is often useful. 
+
+
+={============================================================================
 *kt_dev_env_git_005* git-status
 
 {status}
@@ -7488,23 +7671,24 @@ to a new branch 'tztv_2.2'
 
 
 {check-tracking-in-config}
-Can see tracking details in git config.
 
-$ cat .git/config
-[core]
-repositoryformatversion = 0
-filemode = true
-bare = false
-logallrefupdates = true
-[remote "origin"]
-fetch = +refs/heads/*:refs/remotes/origin/*
-url = ssh://jongwoo.chae@168.219.241.167:29418/training1
-[branch "master"]
-remote = origin
-merge = refs/heads/master
-[branch "tztv_2.2_local"]
-remote = origin
-merge = refs/heads/tztv_2.2
+<ex>
+-t
+--track
+
+    When creating a new branch, set up branch.<name>.remote and
+    branch.<name>.merge configuration entries to mark the start-point branch as
+    "upstream" from the new branch. This configuration will tell git to show the
+    relationship between the two branches in git status and git branch -v.
+    Furthermore, it directs git pull without arguments to pull from the upstream
+    when the new branch is checked out.
+
+[branch "topic"]
+	remote = origin                // this is tracking branch
+	merge = refs/heads/master
+
+$ git config branch.topic.remote
+origin
 
 
 ={============================================================================
@@ -7567,7 +7751,7 @@ $ note: shows nothing
 
 
 ={============================================================================
-*kt_dev_env_git_016* git-branch: list, remote show
+*kt_dev_env_git_016* git-branch: list
 
 {list-branch}
 
@@ -7629,18 +7813,7 @@ from all your remotes right before running this. You could do that like this:
 $ git fetch --all; git branch -vv
 
 
-{git-remote}
-
-$ git remote show origin
-* remote origin
-  URL: git://github.com/schacon/ticgit.git
-  Remote branch merged with 'git pull' while on branch master
-    master
-  Tracked remote branches
-    master
-    ticgit
-
-<ls-remote>
+{git-ls-remote}
 The ls-remote command returns the SHA1 hash of the latest commit for that
 reference, so it is quite easy to parse out and get to the exact commit you need
 if you're doing some scripting. The --heads option lists only branch names since
@@ -7813,27 +7986,67 @@ In order to resolve the conflict, you have to either choose one side or the othe
 contents yourself. After you've resolved each of these sections in each conflicted file, run git add
 on each file to mark it as resolved. "Staging the file" marks it as resolved in Git.  
 
-<use-mergetool>
-Instead of editing manually, can use GUI by running mergetool.
+
+={============================================================================
+*kt_dev_env_git_011* git-merge: mergetool
+
+Instead of editing manually, can use GUI by running mergetool which is set in
+config.
+
+$ git config --global merge.tool gvimdiff
+$ git config --global merge.tool meld
 
 $ git mergetool
 
-Then will run external merge tool with 'three' panes.
+Then will run external merge tool with 'three' panes when merge.conflictstyle
+has not been set.
 
-Local: HEAD version     Base: common base version  Remote: merge-in version.
+LOCAL: HEAD version   | Base: common base version   | REMOTE: merge-in version.
 
-So can select either head version or merge-in version. Or can write up new one. The mergetool runs
-'mordal' mode and when close it, stage it automatically unlike the merge case.
+The file in the 'middle' is a failed merge which shows conflicts. So can select
+either head version or merge-in version. Or can write up new one. The mergetool
+runs 'mordal' mode and when close it, 'stage' it automatically unlike the merge
+case.
 
-<finish-merge>
-Once resolved conflicts, run git status again to verify that all conflicts have been resolved. Run
-git commit to 'finalize' the merge commit. Can modify that message with details about how you resolved
-the merge 
+Once resolved conflicts, run git status again to verify that all conflicts have
+been resolved. Run git commit to 'finalize' the merge commit. Can modify that
+message with details about how you resolved the merge 
+
+
+={============================================================================
+*kt_dev_env_git_011* git-merge: mergetool: use meld
+
+http://blog.wuwon.id.au/2010/09/painless-merge-conflict-resolution-in.html
+
+I have found that the tools and interfaces available for performing merges do
+not equip programmers sufficiently to do them effectively. The usual merge
+strategy of the human at the helm is to use the surrounding context to roughly
+guess what the intended program is supposed to look like.
+
+There are four important pieces of information involved in a merge, three of
+which are necessary to resolve the merge. In this case, git has only given you
+two of the required pieces.
+
+            common base ()
+
+  commit a ()         commit c ()
+          1             2
+            merge d ()
+      
+The git shows 1 (delta from a to d) and 2 (delta from c to d). This tip is to
+see deltas from common base as well so that to see better context.
+
+git config --global mergetool.mymeld.cmd 'gitmerge $BASE $LOCAL $REMOTE $MERGED'
+
 
 <config-mergetool>
-To set GUI tool to reslove merge conflict.
 
-$ git config --global merge.tool gvimdiff
+[merge]
+	tool = diffconflicts
+[mergetool "diffconflicts"]
+	cmd = diffconflicts gvim $BASE $LOCAL $REMOTE $MERGED
+	trustExitCode = true
+	keepBackup = false
 
 <as-a-git-merge-tool>
 https://github.com/whiteinge/dotfiles/blob/master/bin/diffconflicts
@@ -8237,14 +8450,14 @@ c0 <- c1 <- c2       <- c3             <- c5    # points to c3 and c4
 {use-rebase}
 You can take the patch of the change that was introduced in C4 and 'reapply'
 it on top of C3. This is called rebasing. Take changes from experiment and
-apply to master.
+apply 'to' master.
 
 It works by going to the common ancestor (c2) of the two branches; experiment
 and master which you're rebasing onto, getting the diff introduced by each
 commit of the branch you're on (diff between c4 and c2), saving those diffs to
 temporary files, resetting the current branch to the same commit as the branch
-you are rebasing onto(checkout to master), and finally applying each change in
-turn (apply temp diff to c3 which makes c4')
+you are rebasing onto (checkout 'to' master), and finally applying each change
+in turn (apply temp diff to c3 which makes c4')
 
                       <experiment>
 c0 <- c1 <- c2        <- c4
@@ -8343,7 +8556,7 @@ See result
 * cfeeaddadd add more handling of using bar  // master branch
 * ... 
 
-As can see, applied two commits from experiment 'to' master and master branch
+As can see, applied two commits 'from' experiment 'to' master and master branch
 'remains' the same. So do fast-forward merge.
 
 $ git checkout master 
@@ -8917,19 +9130,6 @@ your story, but never rebase anything you've pushed somewhere.
 ={============================================================================
 *kt_dev_env_git_022* git-cherry-pick
 
-{cherry-pick-from-remote}
-There normally isn't any need to undo a fetch, because doing a fetch only updates the remote branch
-and none of your branches. If you're not prepared to do a pull and merge in all the remote commits,
-    you can use git cherry-pick to accept only the specific remote commits you want. Later, when
-    you're ready to get everything, a git pull will merge in the rest of the commits.
-
-Update: I'm not entirely sure why you want to avoid the use of git fetch. All git fetch does is
-update your local copy of a remote branch. This local copy doesn't have anything to do with any of
-your branches, and it doesn't have anything to do with uncommitted local changes. I have heard of
-people who run git fetch in a cron job because it's so safe.
-
-
-{cherry-pick}
 A cherry-pick in Git is like a rebase for a 'single' commit. It takes the patch
 that was introduced in a commit and tries to reapply it on the branch you're
 currently on. This is useful if you have a number of commits on a topic branch
@@ -8946,15 +9146,16 @@ Finished one cherry-pick.
 [master]: created a0a41a9: "More friendly message when locking the index fails."
 3 files changed, 17 insertions(+), 3 deletions(-)
 
-This pulls the same change introduced in e43a6 to master and you get a 'new' commit because the date
-applied is different. Now your history looks like this:
+This pulls the same change introduced in e43a6 to master and you get a 'new'
+commit because the date applied is different. Now your history looks like this:
 
                         master
 C1    C2    C3          C6   
             C4(e43a6)   C5
                         topic
 
-Now you can remove your topic branch and drop the commits you didn't want to pull in.
+Now you can remove your topic branch and drop the commits you didn't want to
+pull in.
 
 note: master moves.
 
@@ -8963,6 +9164,20 @@ note: master moves.
 You are currently cherry-picking commit 938d0ac.
   (fix conflicts and run "git cherry-pick --continue")
   (use "git cherry-pick --abort" to cancel the cherry-pick operation)
+
+
+<from-remote>
+There normally isn't any need to undo a fetch, because doing a fetch only
+updates the remote branch and none of your branches. If you're not prepared to
+do a pull and merge in all the remote commits, you can use git cherry-pick to
+  accept only the specific remote commits you want. Later, when you're ready to
+    get everything, a git pull will merge in the rest of the commits.
+
+Update: I'm not entirely sure why you want to avoid the use of git fetch. All
+git fetch does is update your local copy of a remote branch. This local copy
+doesn't have anything to do with any of your branches, and it doesn't have
+anything to do with uncommitted local changes. I have heard of people who run
+git fetch in a cron job because it's so safe.
 
 
 ={============================================================================
@@ -10753,12 +10968,56 @@ Date:   Sat Jan 17 20:56:38 2015 +0000
 
 
 ={============================================================================
-*kt_dev_env_git_150* remote: local, remote master
+*kt_dev_env_git_150* git-remote
 
-{list-remotes}
+Manage the set of repositories ("remotes") whose branches you track.
+
+{git-remote}
+
+$ git remote show origin
+* remote origin
+  URL: git://github.com/schacon/ticgit.git
+  Remote branch merged with 'git pull' while on branch master
+    master
+  Tracked remote branches
+    master
+    ticgit
+
+
+<list>
 $ git remote -v
 bakkdoor  git://github.com/bakkdoor/grit.git
 origin    git@github.com:mojombo/grit.git          // means SSH url
+
+
+<set-url>
+
+    Changes URLs for the remote. Sets first URL for remote <name> that matches
+    regex <oldurl> (first URL if no <oldurl> is given) to <newurl>. If <oldurl>
+    doesn't match any URL, an error occurs and nothing is changed.
+
+// View the upstream/remote name
+//
+git remote show
+
+// Assuming your upstream is known as "origin", you can view the old upstream
+// URL by the following command. This shows the "url" in the config.
+
+git config remote.origin.url
+
+// Assuming your upstream is known as "origin", change to new Stash URL
+
+git remote set-url origin ssh://git@stash.dev.co.uk/tvos/zinc-git-tools.git
+
+// View the new URL
+git config remote.origin.url
+
+[remote "origin"]
+fetch = +refs/heads/*:refs/remotes/origin/*
+url = ssh://jongwoo.chae@168.219.241.167:29418/training1
+
+The remote configuration is achieved using the remote.origin.url and
+remote.origin.fetch configuration variables. (See git-config[1]).
 
 
 {add-delete-rename-remotes}
@@ -10928,6 +11187,8 @@ Two things: 'branch' serverfix set up to track remote branch refs/remotes/origin
 ={============================================================================
 *kt_dev_env_git_153* git-pull: --rebase and workflow
 
+git pull [options] [<repository> [<refspec>...]]
+
 DESCRIPTION
 
 Incorporates changes from a remote repository into the current branch. In its
@@ -10942,9 +11203,8 @@ note:
 This is why git-pull page has "Options related to merging".
 
 <repository> should be the name of a remote repository as passed to
-git-fetch[1]. <refspec> can name an arbitrary remote ref (for example, the
-    name of a tag) but usually it is the name of a branch in the remote
-repository.
+git-fetch[1]. <refspec> can name an arbitrary remote ref (for example, the name
+    of a tag) but usually it is the name of a branch in the remote repository.
 
 Default values for <repository> and <branch> are read from the "remote" and
 "merge" configuration for the current branch as set by git-branch[1] --track
@@ -11076,7 +11336,8 @@ remote master. Then replay changes from master.
 {pull-rebase}
 You can also simplify this by running a git pull --rebase
 
-For the same example above, suppose you are on master.
+For the same example above, 'suppose' you are on master and master is tracking
+"remote/master"
 
 git pull --rebase                // on master and replay onto remote/master
                                  
@@ -11087,6 +11348,11 @@ C1  - C5  -   C4' -  C2'  -   C3'  <- master
 If you treat rebasing as a way to clean up and work with commits 'before' you
 push them, and if you only rebase commits that have 'never' been available
 publicly, then you'll be fine. 
+
+
+<rebase-when-specify-tracking-branch>
+
+git pull --rebase origin master
 
 
 <why-pull-rebase>
