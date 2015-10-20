@@ -117,7 +117,8 @@
 *kt_linux_tool_049* term: terminator
 |kt_linux_tool_050| watch
 *kt_linux_tool_051* font
-*kt_linux_tool_051* cmd-echo
+*kt_linux_tool_051* tool-echo
+*kt_linux_tool_051* tool-wireshark
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -5285,6 +5286,37 @@ echo
             -E      Disable interpretation of backslash-escaped characters
 
 echo -e "\E[1;31mThe commit subject does not match \"DEVARCH-xxxx: <subject>\"";
+
+
+={============================================================================
+*kt_linux_tool_051* tool-wireshark
+
+$ sudo wireshark
+
+
+filter the response to a matched HTTP request
+
+https://ask.wireshark.org/questions/30972/filter-the-response-to-a-matched-http-request
+
+you can do this:
+
+  Filter for the request: http.request.uri contains "/test"
+  http.request.uri contains TT.mpd
+
+  Get the TCP stream number(s) of those frames (tcp.stream)
+  Field name is tcp.stream and displayed as "Stream index:"
+
+  Then filter for: tcp.stream eq xxx and frame contains "HTTP/1.1 200 OK" (or
+      HTTP/1.0)
+
+
+You can automate that with tshark and some scripting.
+
+tshark -nr input.pcap -R 'http.request.uri contains "/test"' -T fields -e tcp.stream
+Read the tcp streams with a script and create new filters based on them
+tshark -nr input.pcap -R 'tcp.stream eq xxx and frame contains "HTTP/1.1 200 OK"'
+
+See also my answer to a similar question
 
 
 # ============================================================================
@@ -27976,16 +28008,16 @@ $ sudo apt-get install nginx
 Nginx has become one of the most important web servers over the last couple of
 years. There's a reason for that. Instead of using the standard threaded- or
 process-oriented architecture, it uses a scalable, event-driven (asynchronous)
-    architecture. 
+  architecture. 
 
 So not only is it incredibly light weight, it's highly scalable and memory usage
 is far better suited for limited resource deployments. Nginx also handles simple
 load balancing, fault tolerance, auto-indexing, virtual servers (both name- and
-        IP-based), mod_rewrite, access control, and much more. Nginx can also
-serve as a reverse proxy and an IMAP/POP3 proxy server.
+    IP-based), mod_rewrite, access control, and much more. Nginx can also serve
+as a reverse proxy and an IMAP/POP3 proxy server.
 
 Surprisingly, Nginx powers a few very high-profile sites, such as: Netflix,
-    Hulu, Pinterest, Wordpress.com, and AirBnB.
+  Hulu, Pinterest, Wordpress.com, and AirBnB.
 
 Who is Nginx right for? The nice thing about this particular light weight HTTPD
 daemon is that it doesn't perform like a lightweight server. Not only does it
@@ -27995,16 +28027,83 @@ need a powerhouse server, in a lighter weight package, Nginx is the server for
 you.
 
 Nginx comes in at a 10 MB installation (versus the Apache 30 MB installation)
-    and can give you up to a 35 percent performance increase (versus Apache).
+  and can give you up to a 35 percent performance increase (versus Apache).
+
+<config>
 
 /etc/nginx/sites-enabled/default 
 
 server {
-	#listen   80; ## listen for ipv4; this line is default and implied
-	#listen   [::]:80 default_server ipv6only=on; ## listen for ipv6
+  #listen   80; ## listen for ipv4; this line is default and implied
+  #listen   [::]:80 default_server ipv6only=on; ## listen for ipv6
 
-	root /usr/share/nginx/www;
-	index index.html index.htm;
+  root /usr/share/nginx/www;
+  index index.html index.htm;
+  ...
+}
+
+
+<commands>
+
+Use the following command:
+
+# /etc/init.d/nginx restart
+# /etc/init.d/nginx reload
+
+# service nginx restart
+# service nginx reload
+
+However, recommend way is as follows. This should work with any Linux
+distributions or Unix like operating systems:
+
+# nginx -s reload
+# /path/to/full/nginx -s reload
+
+
+{proxy-pass}
+http://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass
+
+Take a look at nginx's HttpProxyModule, which is where proxy_pass comes from.
+The proxy_pass docs say:
+
+This directive sets the address of the proxied server and the URI to which
+location will be mapped.
+
+So when you tell Nginx to proxy_pass, you're saying "Pass this request on to
+this proxy URL".
+
+
+<okay>
+This is a configuration for local web server and want want to have is when there
+are requests to the local server, it would redirect those to the actual server.
+
+wget http://wll1p04345.dev.youview.co.uk/e/pseudolive/bbb/client_manifest.mpd;
+
+To:
+
+wget http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd;
+
+
+location / {
+# First attempt to serve request as file, then
+# as directory, then fall back to displaying a 404.
+# try_files $uri $uri/ /index.html;
+# Uncomment to enable naxsi on this location
+# include /etc/nginx/naxsi.rules
+  proxy_pass http://dash.bidi.int.bbc.co.uk;
+}
+
+<not-okay>
+
+location / {
+# First attempt to serve request as file, then
+# as directory, then fall back to displaying a 404.
+try_files $uri $uri/ /index.html;
+
+# Uncomment to enable naxsi on this location
+# include /etc/nginx/naxsi.rules
+  proxy_pass http://dash.bidi.int.bbc.co.uk;
+}
 
 
 ={============================================================================
