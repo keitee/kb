@@ -7750,9 +7750,8 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
 
 {current-impl} the proposed which use the proxy
 
-MediaPlayerPrivateGStreamer.cpp
-MediaPlayerPrivateMediaRouter.cpp
-
+graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+graphics/mediarouter/MediaPlayerPrivateMediaRouter.cpp
 
 note: ERROR_MEDIA_MESSAGE() maps to GST_ERROR
 
@@ -7897,7 +7896,6 @@ webkit plugin.
 libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
 
 
-/Zinc/Zinc.3rdPartyStack/src/qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform
 /graphics/gstreamer/MediaPlayerPrivateMediaRouter.cpp
 
 void MediaPlayerPrivateMediaRouter::registerMediaEngine(MediaEngineRegistrar registrar)
@@ -7912,39 +7910,42 @@ note: here make a link to Vanadium
 
 PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateMediaRouter::create(MediaPlayer* player)
 {
-    // ZINC_QMEDIA_PLAYER_LIB=${final_prefix}/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0
-    
-    const char* libraryName = getenv("ZINC_QMEDIA_PLAYER_LIB");
-    if(!libraryName)
-    {
-        ERROR_MEDIA_MESSAGE("ZINC_QMEDIA_PLAYER_LIB env var not defined");
-        return PassOwnPtr<MediaPlayerPrivateInterface>();
-    }
+  // old: ZINC_QMEDIA_PLAYER_LIB
+  //    =${final_prefix}/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0
+  //
+  // ZINC_QMEDIA_PLAYER_LIB="$prefix/lib/libVanadiumWebKitVideoElement.so" 
 
-    void* handle = dlopen(libraryName, RTLD_NOW);
-    if(!handle)
-    {
-        ERROR_MEDIA_MESSAGE("Failed to load library [%s]", libraryName);
-        return PassOwnPtr<MediaPlayerPrivateInterface>();
-    }
+  const char* libraryName = getenv("ZINC_QMEDIA_PLAYER_LIB");
+  if(!libraryName)
+  {
+    ERROR_MEDIA_MESSAGE("ZINC_QMEDIA_PLAYER_LIB env var not defined");
+    return PassOwnPtr<MediaPlayerPrivateInterface>();
+  }
 
-    // this links to the proxy
-    void* symbol = dlsym(handle, "createMediaPlayerImplementation");
+  void* handle = dlopen(libraryName, RTLD_NOW);
+  if(!handle)
+  {
+    ERROR_MEDIA_MESSAGE("Failed to load library [%s]", libraryName);
+    return PassOwnPtr<MediaPlayerPrivateInterface>();
+  }
 
-    typedef QMediaPlayerInterface* (*CreateFunction)(QMediaPlayerCallbackInterface*);
-    CreateFunction createFunction = reinterpret_cast<CreateFunction>(symbol);
+  // this links to the proxy
+  void* symbol = dlsym(handle, "createMediaPlayerImplementation");
 
-    // note:
-    // MediaPlayerPrivateMediaRouterCallbacks simply forwards callbacks to
-    // MediaPlayer.
-    //
-    std::auto_ptr<QMediaPlayerCallbackInterface> callbacks(
-            new MediaPlayerPrivateMediaRouterCallbacks(player));
+  typedef QMediaPlayerInterface* (*CreateFunction)(QMediaPlayerCallbackInterface*);
+  CreateFunction createFunction = reinterpret_cast<CreateFunction>(symbol);
 
-    std::auto_ptr<QMediaPlayerInterface> mediaRouterImpl(createFunction(callbacks.get()));
+  // note:
+  // MediaPlayerPrivateMediaRouterCallbacks simply forwards callbacks to
+  // MediaPlayer.
+  //
+  std::auto_ptr<QMediaPlayerCallbackInterface> callbacks(
+      new MediaPlayerPrivateMediaRouterCallbacks(player));
 
-    return adoptPtr(new MediaPlayerPrivateMediaRouter(mediaRouterImpl,
-                callbacks));
+  std::auto_ptr<QMediaPlayerInterface> mediaRouterImpl(createFunction(callbacks.get()));
+
+  return adoptPtr(new MediaPlayerPrivateMediaRouter(mediaRouterImpl,
+        callbacks));
 }
 
 void MediaPlayerPrivateMediaRouter::getSupportedTypes(HashSet<String>& types)
@@ -9122,6 +9123,8 @@ Aborted
 GST_DEBUG=5 ZINC_QMEDIA_PLAYER_LIB=/opt/zinc-trunk/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0 \
     ./runBrowserStandalone.sh --url http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 
+ZINC_QMEDIA_PLAYER_LIB="$prefix/lib/libVanadiumWebKitVideoElement.so" \
+runBrowserStandalone.sh --url http://filegateway.youview.co.uk/applications/dev/mpask/Player-reference-App-FR15
 
 2015-07-02 08:48:48,363 TRACE  715849728 vanadium /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Vanadium/Vanadium.W3CEngine/src/YVWebPage.cpp:66 Network request for [http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd]: accepted
 
@@ -19181,7 +19184,6 @@ platform.settings.enable-yv-media
 To use YV media router, run:
 
 lsr-config platform.settings.webkit-use-media-router 1
-
 
 // runBrowser.sh
 
