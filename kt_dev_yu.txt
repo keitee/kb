@@ -59,8 +59,11 @@
 |kt_dev_uv_stack_254| stack: vanadium: listener
 *kt_dev_uv_stack_255* stack: vanadium: error handle
 *kt_dev_uv_stack_256* stack: vanadium: underflow error handle
+*kt_dev_uv_stack_256* stack: vanadium: connection retry
+*kt_dev_uv_stack_256* stack: vanadium: when pull network out
 *kt_dev_uv_stack_257* stack: vanadium: qunit test
 *kt_dev_uv_stack_258* stack: vanadium: log lines
+*kt_dev_uv_stack_258* zinc-mr: run cdi app on yv mr
 *kt_dev_uv_stack_259* stack: vanadium: run web server and client
 
 |kt_dev_uv_stack_300| stack: copper: lsr (local storage repository)
@@ -84,7 +87,7 @@
 |kt_dev_uv_stack_411| stack: nickel: qt and media router interface
 *kt_dev_uv_stack_412* stack: nickel: get natual size
 *kt_dev_uv_stack_413* stack: nickel: gstmediaroutertest
-*kt_dev_uv_stack_413* stack: nickel: device auth
+*kt_dev_uv_stack_413* zinc-auth: nickel: device auth
 
 |kt_dev_uv_stack_411| stack: media: gst packages
 |kt_dev_uv_stack_412| stack: media: dash play
@@ -3963,9 +3966,10 @@ all_client_api_headers:=$(shell find $(client_api_include_dir) -name \*.h)
 
 
 ={============================================================================
-*kt_dev_uv_stack_105* stack: dbus
+*kt_dev_uv_stack_105* zinc-dbus: monitor
 
-To get the list of active bus names. This is script in box: opt/zinc/devel/bin/lsdbus
+To get the list of active bus names. This is script in box:
+opt/zinc/devel/bin/lsdbus
 
 $lsdbus
 
@@ -3973,14 +3977,36 @@ $lsdbus
 
 https://wiki.youview.co.uk/display/canvas/dbus-send+Emporium?src=contextnavpagetreemode
 
-<monitor>
+{monitor}
+
 # to capture
 dbus-monitor > /mnt/hd1/mylogs.log &
 dbus-monitor | tee /mnt/hd1/mylogs.log &
 
-# To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the following command:
+
+# To launch Dbus-Monitor on your STB, and inspect MediaRouter activity, run the
+# following command:
+
 dbus-monitor "interface=Zinc.Media.MediaRouter"
 
+
+<use-different-media-router>
+
+note: see different 'path'
+
+path=/Zinc/Media/DefaultMediaRouter;
+path=/Zinc/Media/MediaRouters/0;
+
+method call sender=:1.81 -> dest=Zinc.Media serial=969
+path=/Zinc/Media/DefaultMediaRouter; interface=Zinc.Media.MediaRouter;
+member=setVideoWindow
+
+signal sender=:1.114 -> dest=(null destination) serial=49
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter;
+member=PositionChangeEvent
+
+
+<source-event>
 # will only display MediaRouter SourceEvent messages:
 dbus-monitor | grep -C 2 "member=SourceEvent"
 
@@ -3988,6 +4014,29 @@ dbus-monitor "type=method_call" "type=method_return" "type=error"
 
 dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
    "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
+
+
+<error-event>
+dbus-monitor "interface=Zinc.Media.MediaRouter,member=ErrorEvent"
+
+signal sender=org.freedesktop.DBus -> dest=:1.149 serial=2
+path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
+string ":1.149"
+
+signal sender=:1.147 -> dest=(null destination) serial=3959
+path=/Zinc/Media/MediaRouters/23; interface=Zinc.Media.MediaRouter;
+member=ErrorEvent
+
+   int32 6
+   int32 1
+   string "Not Found
+GStreamer error domain: gst-resource-error-quark
+Additional debug:
+gstsouphttpsrc.c(1623): gst_soup_http_src_parse_status ():
+  /GstPipeline:pipeline/GstBin:VirtualBinTypefind/GstURIDecodeBin:uri-decoder/GstSoupHTTPSrc:source:
+   Not Found (404), URL:
+   http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd,
+   Redirect to: (NULL)"
 
 
 {dbus-call}
@@ -4146,6 +4195,26 @@ This is only place to implement this since Iron server is OEM object.
 Iron.System.DBusClient/src/getScheduledEvents.cpp
 113:    cout<<"Calling getScheduleEvents for service "<<serviceLocator<<" start "<<start<<" end "<<end<<endl;
 116:    vector<NS_IRON_SYSTEM::Event> events = eventRepository->getScheduleEvents(servs,start,end).get();
+
+
+={============================================================================
+*kt_dev_uv_stack_105* zinc-dbus: commands
+
+note: stop default MR
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
+
+<dbus-seekpos>
+method call sender=:1.106 -> dest=:1.72 serial=40107 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=seekPosition
+   int32 0
+   int32 1092939
+   int32 0
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy2' /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.seekPosition int32:0 int32:92939 int32:0
+method return sender=:1.154 -> dest=:1.227 reply_serial=2
+
+<dbus-getpos>
+dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy2' /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getPosition
 
 
 ={============================================================================
@@ -8247,7 +8316,7 @@ void VanadiumMediaPlayer::ErrorEvent(const ErrorEventValue::Enum error,
 
 
 ={============================================================================
-*kt_dev_uv_stack_255* stack: vanadium: error handle
+*kt_dev_uv_stack_255* zinc-mr: vanadium: error handle
 
 https://html.spec.whatwg.org/multipage/embedded-content.html#media-data
 
@@ -8909,6 +8978,9 @@ GST_HLSDEMUX_RETRIES_MAX_TIME=$(get_lsr_int_with_default
     "platform.gstreamer.hlsdemux-max-backoff-time-seconds" 8) \
 
 
+={============================================================================
+*kt_dev_uv_stack_256* stack: vanadium: when pull network out
+
 <log-from-iplayer>
 
 syslog[775]: <info> (eth0): carrier now OFF (device state 8)
@@ -8984,9 +9056,8 @@ gsthlsdemux.c:1036:gst_hls_demux_updates_loop:<hlsdemux0> error: Could not fetch
 the next fragment, giving  
 
 
-note: retries up to 10
-
-note: GST_RESOURCE_ERROR_FAILED = 1 and raise NetworkError. HaveCurrentData(2)
+note: GST_RESOURCE_ERROR_FAILED(1) -> NetworkError. HaveCurrentData(2) 
+          -> NETWORK_ERROR
 
 ERROR      webkitmediaplayer :handleMessage: KT: Error 1: Download error:
 gst-resource-error-quark (url=http://vod-hls-uk-live.edgesuite.)
@@ -8996,13 +9067,17 @@ ERROR      webkitmediaplayer :handleMessage: KT: final error 6
 ERROR      webkitmediaplayer :loadingFailed: KT: NET CHANGED 6
 ERROR      webkitmediaplayer :loadingFailed: KT: STAT CHANGED 6
 
-note: GST_RESOURCE_ERROR_NOT_FOUND(3) and raise FormatError(4)
+note: GST_RESOURCE_ERROR_NOT_FOUND(3) -> FormatError(4) -> DECODE_ERROR
 
 ERROR      webkitmediaplayer :handleMessage: KT: Error 3: Could not fetch the
 next fragment, giving up: gst-resource-error-quark (url=htt)
 
 ERROR      webkitmediaplayer :handleMessage: KT: final error 4
-ERROR      webkitmediaplayer :loadingFailed: KT: NET CHANGED 6
+ERROR      webkitmediaplayer :loadingFailed: KT: NET CHANGED 4
+
+note: 
+When put network back, GST do not recover and UI will show "Something went wrong
+playing this programme" even if there is network on message on console.
 
 
 ={============================================================================
@@ -9123,9 +9198,6 @@ Aborted
 GST_DEBUG=5 ZINC_QMEDIA_PLAYER_LIB=/opt/zinc-trunk/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0 \
     ./runBrowserStandalone.sh --url http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 
-ZINC_QMEDIA_PLAYER_LIB="$prefix/lib/libVanadiumWebKitVideoElement.so" \
-runBrowserStandalone.sh --url http://filegateway.youview.co.uk/applications/dev/mpask/Player-reference-App-FR15
-
 2015-07-02 08:48:48,363 TRACE  715849728 vanadium /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Vanadium/Vanadium.W3CEngine/src/YVWebPage.cpp:66 Network request for [http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd]: accepted
 
 
@@ -9151,6 +9223,42 @@ $ scp $BLD/qtwebkit/lib/libQt5WebKit.so root@humax-01351:/opt/zinc-trunk/oss/lib
 4. check 
    ./share/vanadium-webkit-mediarouter-plugin/system-factory.plugin-config
    libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
+
+
+={============================================================================
+*kt_dev_uv_stack_258* zinc-mr: run cdi app on yv mr
+
+# Tell WebKit to use the media router for video playback. The default is to use
+# the built-in GStreamer pipeline
+webkit_use_media_router="false"
+[ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ] || {
+    webkit_use_media_router="true"
+}
+
+<to-use-old-mr>
+note:
+Use MediaPlayerPrivateGst and there are no MR dbus log.
+
+lsr-config platform.settings.webkit-use-media-router false
+lsr-config --bool platform.settings.webkit-use-media-router
+
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
+runBrowserStandalone.sh --url http://filegateway.youview.co.uk/applications/dev/mpask/Player-reference-App-FR15
+
+
+<to-use-yv-mr>
+note:
+Run in nickelmedia daemon which is created when play. There are MR dbus log.
+
+lsr-config platform.settings.webkit-use-media-router true
+lsr-config --bool platform.settings.webkit-use-media-router
+
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
+runBrowserStandalone.sh --url http://filegateway.youview.co.uk/applications/dev/mpask/Player-reference-App-FR15
+
+method call sender=:1.145 -> dest=:1.147 serial=3328
+path=/Zinc/Media/MediaRouters/13; interface=Zinc.Media.MediaRouter;
+member=getPosition
 
 
 ={============================================================================
@@ -10050,8 +10158,6 @@ o Reading live MPEG-TS stream from zmp
 
 {dbus}
 Media Playback    Zinc.Media 
-
-dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
 
 // Nickel/Nickel.System.DBusServer/include/ObjectPath.h
 
@@ -12416,21 +12522,31 @@ This case raises GST_CORE_ERROR_MISSING_PLUGIN
 
 
 ={============================================================================
-*kt_dev_uv_stack_413* stack: nickel: device auth
+*kt_dev_uv_stack_413* zinc-auth: nickel: device auth
 
 DEVARCH-10265: YouView MR: Enable only on selected production devices
 
 [root@HUMAX share]# find . -name titaniumdeviceauthority-system-*-config
 ./nickel-system-gstreamer/titaniumdeviceauthority-system-factory.plugin-config
 
-[root@HUMAX share]# cat ./nickel-system-gstreamer/titaniumdeviceauthority-system-factory.plugin-config
+note: org
+
+/opt/zinc-trunk/share/
+
+nickel-system-gstreamer/titaniumdeviceauthority-system-factory.plugin-config
 libTitaniumDeviceAuthoritySystemDbusClient.so createDbusSystemFactory 
 
-/opt/zinc-trunk/share/nickel-system-gstreamer/titaniumdeviceauthority-system-factory.plugin-config:2:# DA disabled by patch-a-tron: libTitaniumDeviceAuthoritySystemDbusClient.so createDbusSystemFactory
+titanium-applicationcontainer-production/titaniumdeviceauthority.plugin-config:
+libTitaniumDeviceAuthoritySystemDbusClient.so createDbusSystemFactory
 
-/opt/zinc-trunk/share/titanium-applicationcontainer-production/titaniumdeviceauthority.plugin-config:1:libTitaniumDeviceAuthoritySystemDbusClient.so createDbusSystemFactory
+mercury-system-uimanager/titaniumdeviceauthority.plugin-config:
+libTitaniumDeviceAuthoritySystemDbusClient.so createDbusSystemFactory
 
-/opt/zinc-trunk/share/mercury-system-uimanager/titaniumdeviceauthority.plugin-config:1:libTitaniumDeviceAuthoritySystemDbusClient.so createDbusSystemFactory
+note: changed
+
+nickel-system-gstreamer/titaniumdeviceauthority-system-factory.plugin-config:
+libTitaniumDeviceAuthoritySystemOff.so createOffSystemFactory
+# DA disabled by patch-a-tron: libTitaniumDeviceAuthoritySystemDbusClient.so createDbusSystemFactory
 
 grep -lsr '^libTitaniumDeviceAuthoritySystemDbusClient.so' /opt/zinc-trunk/share/ | \
 xargs -r sed -i \

@@ -44,7 +44,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_006| error: expected specifier-qualifier-list before 'X' or error: 'X' does not name a type 
 |kt_dev_gcc_007| error: expected '=', ',', ';', 'asm' or '__attribute__' before
 |kt_dev_gcc_008| warn: deprecated conversion from string constant to 'char*' [-Wwrite-strings]
-|kt_dev_gcc_009| error: jump to case label and crosses initialisation of 
+|kt_dev_gcc_009| gcc-error: jump to case label and crosses initialisation of 
 |kt_dev_gcc_010| error: dereferencing pointer to incomplete type
 *kt_dev_gcc_011* error: void value not ignored as it ought to be
 *kt_dev_gcc_012* warn: may be used uninitialized in this function -Wmaybe-uninitialized
@@ -4109,19 +4109,21 @@ This (char*) is the easiest way.
 
 
 ={============================================================================
-*kt_dev_gcc_009*  error: jump to case label [-fpermissive]
+*kt_dev_gcc_009* jump to case label and crosses initialisation of
 
 {code-example}
 http://stackoverflow.com/questions/2392655/what-are-the-signs-of-crosses-initialization
 
-<example-one>
+<ex>
 #include <iostream>
 using namespace std;
 
 int main()
 {
   int x, y, i;
+
   cin >> x >> y >> i;
+
   switch(i) {
     case 1:
       // int r;         // a) okay
@@ -4136,27 +4138,55 @@ int main()
   };
 }
 
-sam01.cpp:14:14: error: jump to case label [-fpermissive]   // NOTE. this is main error.
-sam01.cpp:11:17: error:   crosses initialisation of ‘int r’
+:14:14: error: jump to case label   // note. this is main error.
+:11:17: error:   crosses initialisation of ‘int r’
 
 Why? Why is a) okay?
 
 The Standard says (6.7/3):
-It is possible to transfer into a block, but not in a way that bypasses declarations with
-'initialization'. A program that jumps from a point where a local variable with automatic storage
-duration is not in scope (KT, out of switch) to a point where it is in scope (KT, in switch) is
-ill-formed unless the variable has POD type (3.9) and is declared without an initializer (8.5).
 
-1) The problem is that it is possible for r to come to scope without its initializer being executed.
-The code would compile fine if you removed the initializer completely (i.e. the line would read int
-r;).
+It is possible to transfer into a block, but 'not' in a way that 'bypasses'
+declarations with 'initialization'. A program that jumps 'from' a point where a
+local variable with automatic storage duration is not in scope 'to' a point
+where it is in scope is ill-formed unless the variable has POD type (3.9) and is
+declared without an initializer (8.5).
 
-2) It will cause a "crosses initialization" error, because it is possible to skip the initialization
-of r, but after that it will still be in scope, even though it was never created in the first place.
-NOTE: this is not true since switch is a single scope. see below examples.
+note:
+KT. from out of switch to inside of switch
 
-The best thing you can do is to limit the scope of the variable. That way you'll satisfy both the
-compiler and the reader. Or declare variables before switch.
+1) The problem is that it is possible for r to come to scope without its
+initializer being executed. The code would compile fine if you removed the
+initializer completely (i.e. the line would read "int r;").
+
+2) It will cause a "crosses initialization" error, because it is possible to
+skip the initialization of r, but after that it will still be in scope, even
+though it was never created in the first place. NOTE: this is not true since
+switch is a single scope. see below examples.
+
+<ex>
+:281:10: error: jump to case label
+:260:34: error:   crosses initialization of 'std::vector<unsigned char> abortCode'
+:284:34: error: redeclaration of 'std::vector<unsigned char> abortCode'
+:260:34: error: 'std::vector<unsigned char> abortCode' previously declared here
+:295:5: error: jump to case label
+:260:34: error:   crosses initialization of 'std::vector<unsigned char> abortCode'
+
+    case SIGNAL_CI_APP_MMI_ABORT_REQ:
+260:      std::vector<unsigned char> abortCode;
+      ...
+      break;
+
+281:case SIGNAL_CI_APP_MMI_ABORT_ACK:
+      ...
+284:      std::vector<unsigned char> abortCode;
+
+note:
+KT. So the switch is a 'single' scope but has multiple blocks(jumps). The
+problem is that there is chance to go any block such as default even if it is
+not covered in code and this 'skip' the initiailisation. not clear why it causes
+a problem but the 'best' thing you can do is to limit the scope of the variable.
+That way you'll satisfy both the compiler and the reader. Or declare variables
+before switch.
 
 switch(i)
 {
@@ -4173,27 +4203,6 @@ switch(i)
     }
     break;
 };
-
-<example-two>
-CCi.cpp:281:10: error: jump to case label
-CCi.cpp:260:34: error:   crosses initialization of 'std::vector<unsigned char> abortCode'
-CCi.cpp:284:34: error: redeclaration of 'std::vector<unsigned char> abortCode'
-CCi.cpp:260:34: error: 'std::vector<unsigned char> abortCode' previously declared here
-CCi.cpp:295:5: error: jump to case label
-CCi.cpp:260:34: error:   crosses initialization of 'std::vector<unsigned char> abortCode'
-
-    case SIGNAL_CI_APP_MMI_ABORT_REQ:
-260:      std::vector<unsigned char> abortCode;
-      ...
-      break;
-
-281:case SIGNAL_CI_APP_MMI_ABORT_ACK:
-      ...
-284:      std::vector<unsigned char> abortCode;
-
-
-KT. So the switch is a single scope but has multiple blocks(jumps). The problem is that code can be
-executed without proper initiailisation. Hence 'intelligent' compiler flags up.
 
 
 ={============================================================================
