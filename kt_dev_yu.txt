@@ -57,7 +57,7 @@
 |kt_dev_uv_stack_252| stack: vanadium: browser remote debug
 |kt_dev_uv_stack_253| stack: vanadium: MediaRouter.WebKit.Plugin
 |kt_dev_uv_stack_254| stack: vanadium: listener
-*kt_dev_uv_stack_255* stack: vanadium: error handle
+*kt_dev_uv_stack_255* zinc-mr: vanadium: error handle
 *kt_dev_uv_stack_256* stack: vanadium: underflow error handle
 *kt_dev_uv_stack_256* stack: vanadium: connection retry
 *kt_dev_uv_stack_256* stack: vanadium: when pull network out
@@ -2254,12 +2254,10 @@ cat /var/tmp/NetworkManager.log
 {refs}
 https://wiki.youview.co.uk/display/canvas/Zinc+Logging+Framework
 
-
 <config-and-use>
-
 /opt/zinc-trunk/share
 
-[root@HUMAX share]# find . -name *.props
+# find . -name *.props
 
 ./arsenic-common/arsenic.props
 ./californium-common/californium.props
@@ -2390,9 +2388,8 @@ Applications like the main UI or OnDemand players live in a different place:
 
 
 {pc-build-log}
-
-/home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/share/vanadium-common/
-vanadium.props
+/home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/
+share/vanadium-common/vanadium.props
 
 /home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/var/log
 
@@ -8789,7 +8786,7 @@ https://wiki.youview.co.uk/display/CANPDE/Legacy+Error+Messages?src=search
 
 
 ={============================================================================
-*kt_dev_uv_stack_256* stack: vanadium: underflow error handle
+*kt_dev_uv_stack_256* zinc-mr: vanadium: underflow error handle
 
 commit 0c4b989fe8d287edb89d202e0e4104ab506fd16c
 Author: Alex Ashley <alex.ashley@youview.com>
@@ -8817,6 +8814,38 @@ static void gst_nexus_sink_on_error( void* context, int reason )
     }
     break;
 }
+
+
+// commit 4cff7c7f0a46b543e94e3315a8aa33d472771541
+// Author: Mariusz Buras <mariusz.buras@youview.com>
+// Date:   Fri Sep 18 18:23:36 2015 +0100
+// 
+//     DEVARCH-9489: Nickel.System.GStreamer: Make sure StatusEvent::underflow
+//     is not sent while seeking
+//
+//    So the fix is to stop YV MR from sending StatusEventValue::underrun
+//    events when seek is in progress.
+//
+// note:
+// However, this do not work 'perfectly'
+// 
+// GstMediaRouter.cpp:1264 KT: seekPosition: seekInFlight = true
+// GstMediaRouter.cpp:466  KT: warning domain: gst-stream-error-quark, code: 1
+// GstMediaRouter.cpp:472  KT: warning domain: seekInFlight: 1, underflow:0
+// GstMediaRouter.cpp:1264 KT: seekPosition: seekInFlight = true
+// GstMediaRouter.cpp:1264 KT: seekPosition: seekInFlight = true
+//
+// eats up the first underflow event
+//
+// GstMediaRouter.cpp:1192 KT: seekPositionFinish_locked: 
+//    send started and seekInFlight = false
+//
+// GstMediaRouter.cpp:466  KT: warning domain: gst-stream-error-quark, code: 1
+// GstMediaRouter.cpp:472  KT: warning domain: seekInFlight: 0, underflow:0
+// GstMediaRouter.cpp:476  KT: warning domain: fire underflow
+// GstMediaRouter.cpp:466  KT: warning domain: gst-stream-error-quark, code: 9
+//
+// However, will not eat up the second and will fire event up to the chain.
 
 bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
 {
@@ -8890,8 +8919,10 @@ gboolean MediaPlayerPrivateGStreamer::stallTimeoutCallback(MediaPlayerPrivateGSt
   // This is the callback for a timeout following a FIFO empty message from Nexus
   ASSERT(isMainThread());
   if(players.find(player)!=players.end()) {
+
     if(!player->m_paused && !player->m_seeking && !player->m_isEndReached 
         && !player->m_resetPipeline) {
+
       LOG_MEDIA_MESSAGE ("Media pipeline has stalled");
       player->m_readyState = MediaPlayer::HaveCurrentData;
       player->m_player->readyStateChanged();
@@ -8944,6 +8975,32 @@ three seconds. When a media element that is actively attempting to obtain media
 data has failed to receive any data for a duration equal to the stall timeout,
      the user agent must queue a task to fire a simple event named stalled at
      the element.
+
+
+<log-when-seeking-on-implemented>
+VanadiumMediaPlayer.cpp:537 KT: statusEvent: 0
+VanadiumMediaPlayer.cpp:542 KT: statusEvent: started: isSeeking: 0 currentReadyState: 3
+
+do seeking
+
+VanadiumMediaPlayer.cpp:537 KT: statusEvent: 5
+VanadiumMediaPlayer.cpp:537 KT: statusEvent: 5
+
+started
+
+VanadiumMediaPlayer.cpp:537 KT: statusEvent: 0
+anadiumMediaPlayer.cpp:542 KT: statusEvent: started: isSeeking: 1 currentReadyState: 4
+
+underflow (regardless of if from seeking or net down)
+
+anadiumMediaPlayer.cpp:537 KT: statusEvent: 4
+anadiumMediaPlayer.cpp:573 KT: start stall timer: 
+
+started (why two started events?)
+
+anadiumMediaPlayer.cpp:537 KT: statusEvent: 0
+anadiumMediaPlayer.cpp:542 KT: statusEvent: started: isSeeking: 0 currentReadyState: 4
+anadiumMediaPlayer.cpp:558 KT: not seeking and remove stall timer: 
 
 
 ={============================================================================
@@ -9499,7 +9556,7 @@ lrwxrwxrwx    1 root     root            33 Jan  1  1970 ./zinc/lib/
 
 
 ={============================================================================
-*kt_dev_uv_stack_351* stack: titanium: sandbox
+*kt_dev_uv_stack_351* zinc-sandbox: titanium: sandbox
 
 {sandbox}
 Generally this is about what to import from a real file system in to "sandbox"
