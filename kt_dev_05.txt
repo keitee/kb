@@ -41,6 +41,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_302* gst: elements: identity
 *kt_dev_bcast_302* gst: elements: queue
 *kt_dev_bcast_302* gst: elements: typefind
+*kt_dev_bcast_302* gst: elements: fakesink
 
 *kt_dev_bcast_310* gst-registry
 |kt_dev_bcast_310| gst: debug
@@ -80,6 +81,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_400| gst: ref: gstcap
 
 *kt_dev_bcast_500* gst-object
+*kt_dev_bcast_500* gst-childproxy
 *kt_dev_bcast_500* gst: gstbin
 *kt_dev_bcast_500* gst: man: gstcap
 *kt_dev_bcast_500* gst: gstbasesink and preroll
@@ -4131,6 +4133,63 @@ gint                    num-buffers         Read / Write
 gboolean                signal-handoffs     Read / Write
 gboolean                silent              Read / Write
 GstFakeSinkStateError   state-error         Read / Write
+
+
+={============================================================================
+*kt_dev_bcast_302* gst: elements: hlsdemux
+
+{dash}
+dash+xml application/dash+xml
+http://www.iana.org/assignments/media-types/application/dash+xml
+
+/zinc-build-root/debug-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src$ ag "application/dash"
+
+gst_plugins_bad-1.5.0/ext/dash/gstplugin.c
+74:/*** application/dash+xml typefind helper ***/
+76:static GstStaticCaps dash_caps = GST_STATIC_CAPS ("application/dash+xml");
+95:  if (!gst_type_find_register (plugin, "application/dash+xml",
+
+gst_plugins_bad-1.5.0/ext/dash/gstdashdemux.c
+171:    GST_STATIC_CAPS ("application/dash+xml"));
+
+gst_plugins_base-1.5.0/gst/playback/gsturidecodebin.c
+1293:  "application/dash+xml", NULL
+
+
+{hls}
+http://www.iana.org/assignments/media-types/application/vnd.apple.mpegurl
+vnd.apple.mpegurl application/vnd.apple.mpegurl
+
+Additional information :
+
+1. Magic number(s) : #EXTM3U
+2. File extension(s) : m3u, m3u8
+3. Macintosh file type code : none
+4. Object Identifiers: none
+
+
+/zinc-build-root/debug-humax-dtr_t1000/Zinc/Zinc.3rdPartyStack/src$ ag GST_STATIC_CAPS | ag hls
+gst_plugins_bad-1.5.0/ext/hls/gsthlssink.c:68:    GST_STATIC_CAPS_ANY);
+gst_plugins_bad-1.5.0/ext/hls/gsthlsdemux.c:50:    GST_STATIC_CAPS_ANY);
+gst_plugins_bad-1.5.0/ext/hls/gsthlsdemux.c:55:    GST_STATIC_CAPS ("application/x-hls"));
+gst_plugins_base-1.5.0/gst/typefind/gsttypefindfunctions.c:427:static GstStaticCaps hls_caps = GST_STATIC_CAPS ("application/x-hls");
+
+
+<hlsdemux>
+[root@HUMAX /]# gst-inspect-1.0 hlsdemux
+
+Pad Templates:
+  SRC template: 'src_%u'
+    Availability: Sometimes
+    Capabilities:
+      ANY
+
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      application/x-hls
+
+application%2Fx-hls
 
 
 ={============================================================================
@@ -8643,6 +8702,83 @@ gst_element_add_pad() take ownership of the floating reference.
 In contrast to GObject instances, GstObject adds a name property. The functions
 gst_object_set_name() and gst_object_get_name() are used to set/get the name of
 the object.
+
+
+#define GST_TYPE_CHILD_PROXY               (gst_child_proxy_get_type ())
+
+#define GST_IS_CHILD_PROXY(obj)            (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_CHILD_PROXY))
+
+/**
+ * G_TYPE_CHECK_INSTANCE_TYPE:
+ * @instance: Location of a #GTypeInstance structure.
+ * @g_type: The type to be checked
+ * 
+ * Checks if @instance is an instance of the type identified by @g_type.
+ * 
+ * This macro should only be used in type implementations.
+ *
+ * Returns: %TRUE on success.
+ */
+#define G_TYPE_CHECK_INSTANCE_TYPE(instance, g_type)            (_G_TYPE_CIT ((instance), (g_type)))
+
+
+struct GTypeInfo {
+  /* interface types, classed types, instantiated types */
+  guint16                class_size;
+  
+  GBaseInitFunc          base_init;
+  GBaseFinalizeFunc      base_finalize;
+  
+  /* interface types, classed types, instantiated types */
+  GClassInitFunc         class_init;
+  GClassFinalizeFunc     class_finalize;
+  gconstpointer          class_data;
+  
+  /* instantiated types */
+  guint16                instance_size;
+  guint16                n_preallocs;
+  GInstanceInitFunc      instance_init;
+  
+  /* value handling */
+  const GTypeValueTable *value_table;
+};
+
+
+={============================================================================
+*kt_dev_bcast_500* gst-childproxy
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstChildProxy.html
+
+This interface 'abstracts' handling of property sets for elements with children.
+Imagine elements such as mixers or polyphonic generators. They all have multiple
+GstPad or some kind of voice objects. Another use case are container elements
+like GstBin. The element implementing the interface acts as a parent for those
+child objects.
+
+By implementing this interface the child properties can be accessed 'from' the
+'parent' element by using gst_child_proxy_get() and gst_child_proxy_set().
+
+Property names are written as "child-name::property-name". The whole naming
+scheme is recursive. Thus "child1::child2::property" is valid too, if "child1"
+and "child2" implement the GstChildProxy interface.
+
+
+The "child-added" signal
+
+void
+user_function (GstChildProxy *child_proxy,
+               GObject       *object,
+               gchar         *name,
+               gpointer       user_data)
+
+Will be emitted after the object was added to the child_proxy .
+
+Parameters
+
+child_proxy     the GstChildProxy
+object          the GObject that was added
+name            the name of the new child
+user_data       user data set when the signal handler was connected.
 
 
 ={============================================================================

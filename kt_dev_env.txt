@@ -127,6 +127,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_005| git-status
 |kt_dev_env_git_006| ignore
 |kt_dev_env_git_007| git-log
+*kt_dev_env_git_037* git-log: pickaxe
 |kt_dev_env_git_008| git-checkout 
 |kt_dev_env_git_009| auto completion
 |kt_dev_env_git_010| git-branch
@@ -163,7 +164,6 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_035| git-show
 |kt_dev_env_git_036| git-commit
 *kt_dev_env_git_037* git-blame
-*kt_dev_env_git_037* git-blame: pickaxe
 
 |kt_dev_env_git_100| case: determine what is introduced. commit ranges.
 |kt_dev_env_git_038| git-grep
@@ -7242,6 +7242,8 @@ until it gets to ~ or /, looking for a .git directory at every step.
 ={============================================================================
 *kt_dev_env_git_007* git-log
 
+Shows the commit logs.
+
 git log [<options>] [<revision range>] [[\--] <path>...]
 
 With no arguments, git log lists the commits made in that repository in reverse
@@ -7410,6 +7412,184 @@ CommitDate: Wed Sep 9 19:42:30 2015 +0100
 
 {log-on-multiple-branches}
 git log <branch1> <branch2> <branch3>
+
+
+={============================================================================
+*kt_dev_env_git_037* git-log: pickaxe
+
+{git-pickaxe}
+It's also possible to search for commits that introduce or remove a particular
+'line' of source code. This is called a pickaxe, and it takes the form of
+-S"<string>". For example, if you want to know when the string Hello, World! was
+added to any file in the project, you would use the following command:
+
+git log -S"Hello, World!"
+
+If you want to search using a regular expression instead of a string, you can
+use the -G"<regex>" flag instead.
+
+This is a very powerful debugging tool, as it lets you locate 'all' of the
+commits that affect a particular line of code. It can even show you when a line
+was copied or moved to another file.
+
+
+-S<string>
+
+    Look for differences that change the number of occurrences of the specified
+    string (i.e. addition/deletion) in a 'file'. Intended for the scripter’s
+    use.
+
+    It is useful when you're looking for an exact block of code (like a struct),
+    and want to know the history of that block since it 'first' came into being:
+    use the feature iteratively to feed the interesting block in the preimage
+    back into -S, and keep going until you get the very first version of the
+    block.  
+    
+-G<regex>
+
+    Look for differences whose patch text contains added/removed lines that
+    match <regex>.
+
+    To illustrate the difference between -S<regex> --pickaxe-regex and
+    -G<regex>, consider a commit with the following diff in the same file:
+
+    +    return !regexec(regexp, two->ptr, 1, &regmatch, 0);
+    ...
+    -    hit = !regexec(regexp, mf2.ptr, 1, &regmatch, 0);
+
+    While git log -G"regexec\(regexp" will show this commit, git log
+    -S"regexec\(regexp" --pickaxe-regex will not (because the number of
+          occurrences of that string did not change).
+
+    See the pickaxe entry in gitdiffcore[7] for more information.
+
+
+<ex> see difference between git-grep
+
+$ git grep pes_stream_get_duration
+src/concurrent_pes_writer.c:    chunk->duration = pes_stream_get_duration(data);
+src/pes.c:GstClockTime pes_stream_get_duration(PesStream *stream)
+src/pes.h:GstClockTime pes_stream_get_duration(PesStream* stream);
+
+$ git log -S pes_stream_get_duration
+commit 23b5d6607917a3fb8613cf31f37b234767b9c3e0
+Author: xxx 
+Date:   Tue Apr 21 10:36:25 2015 +0100
+
+    Even though STB hardware supports several playpumps (see DEVARCH-8872),
+    OEMs only make one playpump available to YouView. If we write each
+    elementary stream into its own playpump, by the time we need to support
+    audio description with DASH playback, we would need a total of 3
+    playpumps. Therefore we implemented software-based multiplexing of
+    multiple elementary streams to a single playpump.
+    
+
+The -S option which takes a string and only shows the 'commits' that introduced
+a change to the code that added or removed that string. For instance, if you
+wanted to find the last commit that added or removed a reference to a specific
+function, you could call:
+
+$ git log -S function_name
+$ git log -p -S function_name
+
+note: git log -S shows a commit.
+
+
+<ex>
+http://www.philandstuff.com/2014/02/09/git-pickaxe.html
+
+The git pickaxe
+
+Posted on 09 February 2014
+
+I care a lot about commit messages. I try to write them following Tim Pope's
+example, using a short summary line, followed by one or more paragraphs of
+explanation. It's not unusual for my commit message to be longer than the diff.
+Why do I do this? Is it just some form of OCD? After all, who really reads
+commit messages?
+
+The reason I care about commit messages is because I'm an avid user of the git
+pickaxe. If I'm ever confused about a line of code, and I want to know what was
+going through the mind of the developer when they were writing it, the pickaxe
+is the first tool I'll reach for. For example, let's say I was looking at this
+line from our puppet-graphite module:
+
+    exec <%= @root_dir %>/bin/carbon-cache.py --debug start
+
+That --debug option looks suspect. I might think to myself: "Why are we running
+carbon-cache in --debug mode? Isn't that wasteful? Do we capture the output? Why
+was it added in the first place?" In order to answer these questions, I'd like
+to find the commit that 'added' the switch. I could run git blame on the file,
+   to find the last commit that 'touched' the line. However that leads to a
+   totally unrelated commit that had nothing to do with my --debug flag issue.
+
+note: this is difference between "git blane" and "git pickaxe"
+
+So I still want to find the commit that added that --debug switch, but git blame
+has got me nowhere. What next? It turns out there's an option to git log which
+will find any commit which 'introduces' or 'removes' a string from anywhere in
+its commit:
+
+    git log -p -S --debug
+
+This will show me every commit that either introduced or removed the string
+--debug. (It's a slightly confusing example, because --debug is not being used
+    as a command-line switch to git, but as a string argument to the -S switch
+    instead. Nevertheless, git does the right thing.) The -p switch shows the
+commit diff as well. There are in fact a few matches for this search, but the
+third commit that comes up is the winner:
+
+commit 5288d5804a3fc20dae4f3b2deeaa7f687595aff1
+Author: Philip Potter <philip.g.potter@gmail.com>
+Date:   Tue Dec 17 09:33:59 2013 +0000
+
+    Re-add --debug option (reverts #11)
+
+    The --debug option is somewhat badly named -- it *both* adds debug
+    output, *and* causes carbon-cache to run in the foreground. Removing the
+    option in #11 caused the upstart script to lose track of the process as
+    carbon-cache started unexpectedly daemonizing.
+
+    Ideally we want to have a way of running through upstart without the
+    debug output, but this will fix the immediate problem.
+
+diff --git a/templates/upstart/carbon-cache.conf b/templates/upstart/carbon-cache.conf
+old mode 100644
+new mode 100755
+index 43a16ee..2322b2d
+--- a/templates/upstart/carbon-cache.conf
++++ b/templates/upstart/carbon-cache.conf
+@@ -12,4 +12,4 @@ pre-start exec rm -f '<%= @root_dir %>'/storage/carbon-cache.pid
+ chdir '<%= @root_dir %>'
+ env GRAPHITE_STORAGE_DIR='<%= @root_dir %>/storage'
+ env GRAPHITE_CONF_DIR='<%= @root_dir %>/conf'
+-exec python '<%= @root_dir %>/bin/carbon-cache.py' start
++exec python '<%= @root_dir %>/bin/carbon-cache.py' --debug start
+
+note:
+The another point is here that although can find a commit which added that
+string, think about using commit log as a way to have full comment than comment
+in a code.
+
+Now I know exactly why --debug is there, and I know that I certainly don't want
+to remove it. But what if my commit message had just been "Re-add --debug
+option"? I'd be none the wiser. This is why I care so much about commit
+messages: because I have the tools to quickly get from a piece of code to the
+commit that introduced it, I spend much more time reading commit messages.
+
+This example is also interesting because it raises another question: should this
+explanation have been in a code comment instead? The --debug flag is inherently
+confusing, and a comment could have answered my questions even quicker by being
+right there in the file.
+
+However, a 6-line comment in the file would be quite a bit of noise whenever you
+weren't interested in the --debug switch, whereas a commit message can be as big
+as it needs to be to make the explanation clear. Comments and commit messages
+can be complementary: there could be a one-line comment saying that --debug
+causes carbon-cache to stay in the foreground, and a more detailed explanation
+in the commit message. In some ways I see commit messages as a type of expanded
+commenting system which is available at your fingertips whenever you need it but
+automatically hides when you just want to read the code.
 
 
 ={============================================================================
@@ -9752,8 +9932,8 @@ git reop
 HEAD        index       working directory
 <v2>        v3          v3
 
-It essentially 'undo' the last git commit command. git status shows difference
-in green since HEAD is different from index. 
+It essentially 'undo' the last "git commit". git status shows difference in
+green since HEAD is different from index. 
 
 note: "git commit --amend" do
 
@@ -10642,12 +10822,12 @@ confusing, because now you've seen at least three different ways that Git uses
 the ^ to modify a commit SHA-1, but that is what it means here.
 
 
-{moved-or-removed}
+{moved-or-removed} option -C
 
 One of the interesting features of this is that you can ask it to figure out all
 sorts of code movement as well. If you pass -C to git blame, Git analyzes the
 file you're annotating and tries to figure out where snippets of code within it
-originally came from if they were copied from elsewhere. For example, say you
+'originally' came from if they were copied from elsewhere. For example, say you
 are refactoring a file named GITServerHandler.m into multiple files, one of
 which is GITPackUpload.m. By blaming GITPackUpload.m with the -C option, you can
 see where sections of the code originally came from:
@@ -10672,108 +10852,6 @@ you copied the code over, because that is the first time you touched those lines
 in this file. Git tells you the original commit where you wrote those lines,
    even if it was in another file.
 
-
-={============================================================================
-*kt_dev_env_git_037* git-blame: pickaxe
-
-{git-pickaxe}
-
-It's also possible to search for commits that introduce or remove a particular
-line of source code. This is called a pickaxe, and it takes the form of
--S"<string>". For example, if you want to know when the string Hello, World! was
-added to any file in the project, you would use the following command:
-
-git log -S"Hello, World!"
-
-If you want to search using a regular expression instead of a string, you can
-use the -G"<regex>" flag instead.
-
-This is a very powerful debugging tool, as it lets you locate 'all' of the
-commits that affect a particular line of code. It can even show you when a line
-was copied or moved to another file.
-
-
-git-log:
-
--S<string>
-
-    Look for differences that change the number of occurrences of the specified
-    string (i.e. addition/deletion) in a file. Intended for the scripter’s use.
-
-    It is useful when you're looking for an exact block of code (like a struct),
-    and want to know the history of that block since it first came into being:
-    use the feature iteratively to feed the interesting block in the preimage
-    back into -S, and keep going until you get the very first version of the
-    block.  
-    
--G<regex>
-
-    Look for differences whose patch text contains added/removed lines that
-    match <regex>.
-
-    To illustrate the difference between -S<regex> --pickaxe-regex and
-    -G<regex>, consider a commit with the following diff in the same file:
-
-    +    return !regexec(regexp, two->ptr, 1, &regmatch, 0);
-    ...
-    -    hit = !regexec(regexp, mf2.ptr, 1, &regmatch, 0);
-
-    While git log -G"regexec\(regexp" will show this commit, git log
-    -S"regexec\(regexp" --pickaxe-regex will not (because the number of
-          occurrences of that string did not change).
-
-    See the pickaxe entry in gitdiffcore[7] for more information.
-
-
-<ex> see difference between git-grep
-
-$ git grep pes_stream_get_duration
-src/concurrent_pes_writer.c:    chunk->duration = pes_stream_get_duration(data);
-src/pes.c:GstClockTime pes_stream_get_duration(PesStream *stream)
-src/pes.h:GstClockTime pes_stream_get_duration(PesStream* stream);
-
-$ git log -S pes_stream_get_duration
-commit 23b5d6607917a3fb8613cf31f37b234767b9c3e0
-Author: xxx 
-Date:   Tue Apr 21 10:36:25 2015 +0100
-
-    Even though STB hardware supports several playpumps (see DEVARCH-8872),
-    OEMs only make one playpump available to YouView. If we write each
-    elementary stream into its own playpump, by the time we need to support
-    audio description with DASH playback, we would need a total of 3
-    playpumps. Therefore we implemented software-based multiplexing of
-    multiple elementary streams to a single playpump.
-    
-
-The -S option which takes a string and only shows the 'commits' that introduced
-a change to the code that added or removed that string. For instance, if you
-wanted to find the last commit that added or removed a reference to a specific
-function, you could call:
-
-$ git log -S function_name
-
-note: git log -S shows a commit.
-
-
-<ex>
-
-https://gitfu.wordpress.com/2008/06/03/the-pickaxe-finding-changes-was-never-easier/
-
-To use the pickaxe, just pass the -S option. 
-
-git log -Sgit-diff --pretty=oneline --abbrev-commit 
-note: do not work!?
-
-Because tig supports all the git options, running tig -Sgit-diff shows you the
-list of commits and lets you see the diffs by hitting enter.
-
-The pickaxe can help find code that's been deleted or moved, git blame won't
-tell you about those lines at all. Any time you want to find out more about a
-piece of code than just who touched it last, the pickaxe is a good little tool
-to reach for.
-
-Q:
-Difference between "git blame -C" and "git log -S"?
 
 
 ={============================================================================
