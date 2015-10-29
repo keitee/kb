@@ -53,7 +53,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_312| gst: sdk, tutorials
 
 |kt_dev_bcast_319| gst: mime and types
-|kt_dev_bcast_320| gst: plugin writer's guide
 *kt_dev_bcast_320* gst: plugin: 02 Foundations
 *kt_dev_bcast_321* gst: plugin: 03 Building a Plugin
 *kt_dev_bcast_321* gst: plugin: 04 Building a Plugin
@@ -5465,8 +5464,9 @@ out the other documentation available on the GStreamer web site.
 In order to understand this manual, you will need to have a basic understanding
 of the C language. Since GStreamer adheres to the GObject programming model,
 this guide also assumes that you understand the basics of GObject programming.
-    You may also want to have a look at Eric Harlow's book Developing Linux
-    Applications with GTK+ and GDK. 
+
+You may also want to have a look at Eric Harlow's book Developing Linux
+Applications with GTK+ and GDK. 
 
 
 Elements and Plugins
@@ -5482,12 +5482,12 @@ guide concentrates primarily on plugins containing one element.
 A filter is an important type of element that processes a stream of data.
 Producers and consumers of data are called source and sink elements,
 respectively. Bin elements contain other elements. One type of bin is
-    responsible for synchronization of the elements that they contain so that
-    data flows smoothly. 
+  responsible for synchronization of the elements that they contain so that data
+  flows smoothly. 
 
 Another type of bin, called 'autoplugger' elements, automatically add other
-elements to the bin and links them together so that they act as a filter
-between two arbitrary stream types.
+elements to the bin and links them together so that they act as a filter between
+two arbitrary stream types.
 
 
 GstMiniObject, Buffers and Events
@@ -10469,15 +10469,292 @@ MT safe.
 
 
 ={============================================================================
-*kt_dev_bcast_600* gobj-model
+*kt_dev_bcast_600* glib: gobj model
 
 http://library.gnome.org/devel/gobject/stable/
 
 GObject programming model
 
+<background>
+GObject, and its lower-level type system, GType, are used by GTK+ and most GNOME
+libraries to provide:
+
+  object-oriented C-based APIs and
+
+  automatic transparent API bindings to other compiled or interpreted languages.
+  cross-language interoperability.
+
+It is useful to keep in mind that allowing access to C objects from other
+interpreted languages was one of the major design goals.
+
+
+The GLib Dynamic Type System
+
+A type, as manipulated by the GLib type system, is much more generic than what
+is usually understood as an Object type.
+
+<register-new-type>
+g_type_register_static, g_type_register_dynamic and g_type_register_fundamental
+are the C functions, defined in gtype.h and implemented in gtype.c which you
+should use to register a new GType in the program's type system.
+
+Fundamental types are top-level types which do not derive from any other type
+while other non-fundamental types derive from other types.
+
+
+Copy functions
+
+The major common point between all GLib types (fundamental and non-fundamental,
+    classed and non-classed, instantiable and non-instantiable) is that they can
+  all be manipulated through a single API to copy/assign them.
+
+The GValue structure is used as an abstract 'container' for all of these types.
+Its simplistic API (defined in gobject/gvalue.h) can be used to invoke the
+value_table functions registered during type registration: for example
+g_value_copy copies the content of a GValue to another GValue. This is similar
+to a C++ assignment which invokes the C++ copy operator to modify the default
+bit-by-bit copy semantics of C++/C structures/classes.
+
+https://developer.gnome.org/gobject/stable/gobject-Generic-values.html#GValue
+
+The GValue structure is basically a variable container that consists of a type
+'identifier' and a specific 'value' of that type. The type identifier within a
+GValue structure always determines the type of the associated value. To create a
+undefined GValue structure, simply create a zero-filled GValue structure. To
+initialize the GValue, use the g_value_init() function. A GValue cannot be used
+until it is initialized. The basic type operations (such as freeing and copying)
+are determined by the GTypeValueTable 'associated' with the type ID stored in
+the GValue. Other GValue operations (such as converting values between types)
+are provided by this interface.
+
+The following code shows how you can copy around a 64 bit integer, as well as a
+GObject instance pointer: 
+
+static void test_int (void)
+{
+  GValue a_value = G_VALUE_INIT;
+  GValue b_value = G_VALUE_INIT;
+  guint64 a, b;
+
+  a = 0xdeadbeef;
+
+  g_value_init (&a_value, G_TYPE_UINT64);
+  g_value_set_uint64 (&a_value, a);
+
+  g_value_init (&b_value, G_TYPE_UINT64);
+  g_value_copy (&a_value, &b_value);
+
+  b = g_value_get_uint64 (&b_value);
+
+  if (a == b) {
+    g_print ("Yay !! 10 lines of code to copy around a uint64.\n");
+  } else {
+    g_print ("Are you sure this is not a Z80 ?\n");
+  }
+}
+
+static void test_object (void)
+{
+  GObject *obj;
+  GValue obj_vala = G_VALUE_INIT;
+  GValue obj_valb = G_VALUE_INIT;
+  obj = g_object_new (MAMAN_TYPE_BAR, NULL);
+
+  g_value_init (&obj_vala, MAMAN_TYPE_BAR);
+  g_value_set_object (&obj_vala, obj);
+
+  g_value_init (&obj_valb, G_TYPE_OBJECT);
+
+  /* g_value_copy's semantics for G_TYPE_OBJECT types is to copy the reference.
+   * This function thus calls g_object_ref.
+   *
+   * It is interesting to note that the assignment works here because
+   * MAMAN_TYPE_BAR is a G_TYPE_OBJECT.
+   */
+  g_value_copy (&obj_vala, &obj_valb);
+
+  g_object_unref (G_OBJECT (obj));
+  g_object_unref (G_OBJECT (obj));
+}
+
+The important point about the above code is that the exact semantics of the copy
+calls is undefined since they depend on the implementation of the copy function.
+Certain copy functions might decide to allocate a new chunk of memory and then
+to copy the data from the source to the destination. Others might want to simply
+increment the reference count of the instance and copy the reference to the new
+GValue.
+
+The value table used to specify these assignment functions is documented in
+GTypeValueTable.
+
+Interestingly, it is also very 'unlikely' you will ever need to specify a
+value_table during type registration because these value_tables are 'inherited'
+from the parent types for non-fundamental types. 
+
+
+Unless your code has special requirements, you can use the G_DEFINE_TYPE macro
+to define a class:
+
+G_DEFINE_TYPE (MamanBar, maman_bar, G_TYPE_OBJECT)
+
+'otherwise', the maman_bar_get_type function must be implemented manually:
+
+GType maman_bar_get_type (void)
+{
+  static GType type = 0;
+  if (type == 0) {
+    const GTypeInfo info = {
+      /* You fill this structure. */
+    };
+    type = g_type_register_static (G_TYPE_OBJECT,
+                                   "MamanBarType",
+                                   &info, 0);
+  }
+  return type;
+}
+
+
+Instantiable classed types: objects
+
+Types which are registered with a class and are declared instantiable are what
+most closely resembles an object. 
+
+Although GObjects (detailed in The GObject base class) are the most well known
+type of instantiable classed types, other kinds of similar objects used as the
+base of an inheritance hierarchy have been externally developed and they are all
+built on the fundamental features described below. 
+
+For example, the code below shows how you could register such a fundamental
+object type in the type system (using none of the GObject convenience API):
+
+typedef struct {
+  GObject parent;
+  /* instance members */
+  int field_a;
+} MamanBar;
+
+typedef struct {
+  GObjectClass parent;
+  /* class members */
+  void (*do_action_public_virtual) (MamanBar *self, guint8 i);
+
+  void (*do_action_public_pure_virtual) (MamanBar *self, guint8 i);
+} MamanBarClass;
+
+#define MAMAN_TYPE_BAR (maman_bar_get_type ())
+
+GType 
+maman_bar_get_type (void)
+{
+  static GType type = 0;
+  if (type == 0) {
+    const GTypeInfo info = {
+      sizeof (MamanBarClass),           /* class size */
+      NULL,                             /* base_init */
+      NULL,                             /* base_finalize */
+      (GClassInitFunc) foo_class_init,  /* class_init */
+      NULL,                             /* class_finalize */
+      NULL,                             /* class_data */
+      sizeof (MamanBar),                /* instance size */
+      0,                                /* n_preallocs */
+      (GInstanceInitFunc) NULL          /* instance_init */
+    };
+    type = g_type_register_static (G_TYPE_OBJECT,
+                                   "BarType",
+                                   &info, 0);
+  }
+  return type;
+}
+
+<register-type>
+Upon the first call to maman_bar_get_type, the type named BarType will be
+'registered' in the type system as inheriting from the type G_TYPE_OBJECT.
+
 
 ={============================================================================
-*kt_dev_bcast_600* glib-model
+*kt_dev_bcast_600* glib: gobject
+
+GObject is a fundamental classed instantiable type. It implements:
+
+    Memory management with reference counting
+
+    Construction/Destruction of instances
+
+    Generic per-object properties with set/get function pairs
+
+    Easy use of signals
+
+All the GNOME libraries which use the GLib type system (like GTK+ and GStreamer)
+inherit from GObject which is why it is important to understand the details of
+how it works. 
+
+
+Object instantiation
+
+The g_object_new family of functions can be used to 'instantiate' any GType
+which inherits from the GObject base type. All these functions make sure the
+class and instance structures have been correctly initialized by GLib's type
+system and then invoke at one point or another the constructor class method
+which is used to:
+
+    Allocate and clear memory through g_type_create_instance,
+
+    Initialize the object's instance with the construction properties.
+
+Objects which inherit from GObject are allowed to override this constructed
+class method. The example below shows how MamanBar overrides the parent's
+construction process:
+
+#define MAMAN_TYPE_BAR maman_bar_get_type ()
+G_DECLARE_FINAL_TYPE (MamanBar, maman_bar, MAMAN, BAR, GObject)
+
+struct _MamanBar
+{
+  GObject parent_instance;
+
+  /* instance members */
+};
+
+/* will create maman_bar_get_type and set maman_bar_parent_class */
+G_DEFINE_TYPE (MamanBar, maman_bar, G_TYPE_OBJECT);
+
+static void
+maman_bar_constructed (GObject *obj)
+{
+  /* update the object state depending on constructor properties */
+
+  /* Always chain up to the parent constructed function to complete object
+   * initialisation. */
+  G_OBJECT_CLASS (maman_bar_parent_class)->constructed (obj);
+}
+
+static void
+maman_bar_class_init (MamanBarClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->constructed = maman_bar_constructed;
+}
+
+static void
+maman_bar_init (MamanBar *self)
+{
+  /* initialize the object */
+}
+
+note:
+Here pass maman_bar_get_type ()
+
+MamanBar *bar = g_object_new (MAMAN_TYPE_BAR, NULL);
+
+
+={============================================================================
+*kt_dev_bcast_600* glib: property
+
+
+
+={============================================================================
+*kt_dev_bcast_600* glib: doc
 
 http://library.gnome.org/devel/glib/stable/
 
