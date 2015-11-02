@@ -61,7 +61,8 @@
 *kt_dev_uv_stack_255* zinc-mr-web: ended event
 *kt_dev_uv_stack_256* zinc-mr: underflow error handle
 *kt_dev_uv_stack_256* zinc-mr: connection retry
-*kt_dev_uv_stack_256* zinc-mr: when pull network out
+*kt_dev_uv_stack_256* zinc-mr-error: when pull network out
+*kt_dev_uv_stack_256* zinc-mr-error: when http 404
 *kt_dev_uv_stack_257* zinc-mr-web: qunit test
 *kt_dev_uv_stack_258* zinc-mr: yv webkit plugin
 *kt_dev_uv_stack_258* zinc-mr: run cdi app on yv mr
@@ -4188,7 +4189,7 @@ note: stop default MR
 
 <dbus-stop-default-mr>
 dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' \
-  /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
+/Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
 
 <dbus-seekpos>
 method call sender=:1.106 -> dest=:1.72 serial=40107 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=seekPosition
@@ -8576,6 +8577,10 @@ MediaPlayerPrivateGStreamer.cpp:
       || err->code == GST_RESOURCE_ERROR_BUSY
       || err->code == GST_RESOURCE_ERROR_SETTINGS) {
 
+    // note: this is default. so there is no match to readyState then format
+    // error.
+    error = MediaPlayer::FormatError;
+
     if (m_readyState == MediaPlayer::HaveMetadata) 
       error = MediaPlayer::FormatError;
     else if (m_readyState > MediaPlayer::HaveMetadata)
@@ -9146,7 +9151,7 @@ GST_HLSDEMUX_RETRIES_MAX_TIME=$(get_lsr_int_with_default
 
 
 ={============================================================================
-*kt_dev_uv_stack_256* zinc-mr: when pull network out
+*kt_dev_uv_stack_256* zinc-mr-error: when pull network out
 
 <log-from-iplayer> means the previous implementation before YV MR.
 
@@ -9275,6 +9280,8 @@ nickel /home/kpark/buieth0 cable unplugged, powering down
 GstMediaRouter.cpp:1378 
   presentationStreamTime: 1446208080292000000 bufPos 1446207527743281000 1446208120
 
+// GST_MESSAGE_WARNING           = (1 << 2),
+// GST_STREAM_ERROR_FAILED = 1,
 GstMediaRouter.cpp:464 KT: what mesg : 4                                                                 
 GstMediaRouter.cpp:486 KT: warning domain: gst-stream-error-quark, code: 1                               
 GstMediaRouter.cpp:492 KT: warning domain: seekInFlight: 0, underflow:0                                  
@@ -9302,19 +9309,8 @@ GstMediaRouter.cpp:1378
 bcmgenet bcmgenet.0: eth0: link up, 100 Mbps, full duplex                                                                                                                                                                                    
 
 syslog[796]: <info> (eth0): carrier now ON (device state 2)
-syslog[796]: <info> (eth0): device state change: 2 -> 3 (reason 40)                                                                                                                                                          
-syslog[796]: <info> Activation (eth0) starting connection 'Auto eth0'                                                                                                                                                        
-syslog[796]: <info> (eth0): device state change: 3 -> 4 (reason 0)                                                                                                                                                           
-syslog[796]: <info> Activation (eth0) Stage 1 of 5 (Device Prepare) scheduled...                                                                                                                                             
-syslog[796]: <info> Activation (eth0) Stage 1 of 5 (Device Prepare) started...                                                                                                                                               
-syslog[796]: <info> Activation (eth0) Stage 2 of 5 (Device Configure) scheduled...                                                                                                                                           
-syslog[796]: <info> Activation (eth0) Stage 1 of 5 (Device Prepare) complete.                                                                                                                                                
-syslog[796]: <info> Activation (eth0) Stage 2 of 5 (Device Configure) starting...                                                                                                                                            
-syslog[796]: <info> (eth0): device state change: 4 -> 5 (reason 0)                                                                                                                                                           
-syslog[796]: <info> Activation (eth0) Stage 2 of 5 (Device Configure) successful.                                                                                                                                            
-syslog[796]: <info> Activation (eth0) Stage 3 of 5 (IP Configure Start) scheduled.                                                                                                                                           
-syslog[796]: <info> Activation (eth0) Stage 2 of 5 (Device Configure) complete.                                                                                                                                              
-syslog[796]: <info> Activation (eth0) Stage 3 of 5 (IP Configure Start) started...                                                                                                                                           
+syslog[796]: <info> (eth0): device state change: 2 -> 3 (reason 40)
+..
 syslog[796]: <info> (eth0): device state change: 5 -> 7 (reason 0)
 syslog[796]: <info> Activation (eth0) Beginning DHCPv4 transaction (timeout in 1073741823 seconds)
 syslog[796]: <info> dhclient started with pid 2062
@@ -9323,6 +9319,67 @@ syslog[796]: <info> (eth0): DHCPv4 state changed nbi -> preinit
 
 GstMediaRouter.cpp:1378 
   presentationStreamTime: 1446208080292000000 bufPos 1446207569934523000 1446208160
+
+
+={============================================================================
+*kt_dev_uv_stack_256* zinc-mr-error: when http 404
+
+GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found.txt GST_DEBUG=4 gstmr-play.sh http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd
+
+
+GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found.txt GST_DEBUG=4 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
+
+
+<when-file-not-found>
+
+// GST_MESSAGE_ERROR             = (1 << 1),
+GstMediaRouter.cpp:464 KT: what mesg : 2
+
+// GST_RESOURCE_ERROR_NOT_FOUND,
+GstMediaRouter.cpp:515 KT: error domain: gst-resource-error-quark, code: 3
+
+// server = 6,
+GstMediaRouter.cpp:562 KT: produceEvent: 6
+
+GstMediaRouter.cpp:464 KT: what mesg : 2
+// GST_STREAM_ERROR_FAILED = 1,
+GstMediaRouter.cpp:515 KT: error domain: gst-stream-error-quark, code: 1
+
+GstMediaRouter.cpp:464 KT: what mesg : 2
+// GST_STREAM_ERROR_TYPE_NOT_FOUND(4),
+GstMediaRouter.cpp:515 KT: error domain: gst-stream-error-quark, code: 4
+
+GstMediaRouter.cpp:1023 SetVideoWindow: {0, 0, 1, 1}, => {0.00078125, 0.0569444, 1, 0.888889}
+VirtualBinSink.cpp:133 VirtualBinSink::setVideoWindow: {0, 0, 1, 1} => {0.00078125, 0.0569444, 1, 0.888889}
+VirtualBinSink.cpp:147 Can't find sink element
+
+// NetworkState { Empty, Idle, Loading(3)
+// ReadyState  { HaveNothing(0)
+VanadiumMediaPlayer.cpp:717 KT: currentNetworkState: 2 currentReadyState: 0 error: 6
+
+
+method call sender=:1.151 -> dest=:1.141 serial=194 path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=setSource
+   string "http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd"
+   int32 1
+signal sender=:1.141 -> dest=(null destination) serial=54 path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=SourceEvent
+   int32 1
+   int32 1
+method call sender=:1.151 -> dest=:1.141 serial=195 path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=setSink
+   string "decoder://0"
+method call sender=:1.151 -> dest=:1.141 serial=196 path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=startBuffering
+signal sender=:1.141 -> dest=(null destination) serial=57 path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=BufferStatusEvent
+   int32 0
+signal sender=:1.141 -> dest=(null destination) serial=59 path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorEvent
+   int32 6
+   int32 1
+   string "Not Found
+GStreamer error domain: gst-resource-error-quark
+Additional debug:
+gstsouphttpsrc.c(1623): gst_soup_http_src_parse_status (): /GstPipeline:pipeline/GstBin:VirtualBinTypefind/GstURIDecodeBin:uri-decoder/GstSoupHTTPSrc:source:
+Not Found (404), URL: http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd, Redirect to: (NULL)"
+
+
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" runBrowserStandalone.sh --url http://wll1p00830.dev.youview.co.uk:9080/video/live_404_2
 
 
 ={============================================================================
@@ -9495,7 +9552,6 @@ lsr-config --bool platform.settings.webkit-use-media-router
 ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
 runBrowserStandalone.sh --url http://filegateway.youview.co.uk/applications/dev/mpask/Player-reference-App-FR15
 
-
 <to-use-yv-mr>
 note:
 Run in nickelmedia daemon which is created when play. There are MR dbus log.
@@ -9505,6 +9561,9 @@ lsr-config --bool platform.settings.webkit-use-media-router
 
 ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
 runBrowserStandalone.sh --url http://filegateway.youview.co.uk/applications/dev/mpask/Player-reference-App-FR15
+
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
+runBrowserStandalone.sh --url http://filegateway.youview.co.uk/applications/applications/html/app-source/cdi-player-FR15
 
 method call sender=:1.145 -> dest=:1.147 serial=3328
 path=/Zinc/Media/MediaRouters/13; interface=Zinc.Media.MediaRouter;
@@ -9600,14 +9659,13 @@ startTesting();
 
 <client-side>
 
-ZINC_YV_MEDIA_ROUTER is a switch to use "PrivateMeidaRouter"
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
+runBrowserStandalone.sh --url http://wll1p04345.dev.youview.co.uk/test.html
+http://filegateway.youview.co.uk/applications/applications/html/app-source/cdi-player-FR15
 
-[root@HUMAX /]# cat ./run-vtag.sh 
-#!/bin/sh
-
-ZINC_YV_MEDIA_ROUTER=1 ZINC_QMEDIA_PLAYER_LIB=\
-  /opt/zinc-trunk/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0 \
-  ./runBrowserStandalone.sh --url http://wll1p04345.dev.youview.co.uk/test.html
+<use-local-to-play-dash>
+GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found GST_DEBUG=5 
+GST_DEBUG=adaptivedemux:5 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
 
 
 <ee>
@@ -12816,9 +12874,10 @@ gst_zmp_sink_plugin_init (GstPlugin * plugin)
 ulimit -c unlimited
 program_name=$(basename $0)
 target="/opt/zinc-trunk/bin/${program_name}"
-GST_DEBUG=5 G_MESSAGES_DEBUG=drmwasabi \
-  LD_LIBRARY_PATH="/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib \
-  :/opt/zinc-trunk/oss/lib:${LD_LIBRARY_PATH}" exec "${target}" "${@}"
+GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/dash.txt GST_DEBUG=adaptivedemux:5 \
+G_MESSAGES_DEBUG=drmwasabi \
+LD_LIBRARY_PATH="/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib \
+:/opt/zinc-trunk/oss/lib:${LD_LIBRARY_PATH}" exec "${target}" "${@}"
 
 
 G_MESSAGES_DEBUG=drmwasabi get you:
