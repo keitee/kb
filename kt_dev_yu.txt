@@ -11262,58 +11262,63 @@ class ZINC_EXPORT MediaRouterAsync :
 
 class GstMediaRouter : public MediaRouterAsync
 {
-    // MediaRouter IFs
-    //
-
-   GstMediaRouter(boost::shared_ptr<NS_ZINC::Dispatcher> d) :
-    NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>(d)
-    {
-        //
-        typefindPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
-
-        srcPadFactory_srcpads = boost::make_shared<VirtualPadFactoryInProcess>();
-        srcPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
-        sinkPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
-        init();
-    }
+  GstMediaRouter(boost::shared_ptr<NS_ZINC::Dispatcher> d,
+      boost::function<GstElement*(void)> pipelineFactory) :
+    NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>(d),
+    pipelineFactory(pipelineFactory),
+    ...
+  {
+    typefindPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
+    srcPadFactory_srcpads = boost::make_shared<VirtualPadFactoryInProcess>();
+    srcPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
+    sinkPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
+    init();
+  }
 };
 
 
 void GstMediaRouter::init()
 {
-    NICKEL_FUNC_TRACE;
+  // VirtualBinTypefind(boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
+  //    boost::shared_ptr<VirtualPadFactory> srcPadFactory,
+  //    VirtualBin::CallbackType);
+  //
+  // typedef boost::function<
+  //    bool(VirtualBinCallbackAction::Enum,
+  //    boost::shared_ptr<VirtualBin>,
+  //    boost::shared_ptr<VirtualPad>)> CallbackType;
 
-    typefindBin =
-        boost::make_shared<VirtualBinTypefind>(
-            boost::shared_ptr<VirtualPadFactoryInProcess>(),
-            typefindPadFactory_sinkpads,
-            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+  typefindBin =
+    boost::make_shared<VirtualBinTypefind>(
+        boost::shared_ptr<VirtualPadFactoryInProcess>(),
+        typefindPadFactory_sinkpads,
+        boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
 
-    srcBin =
-        boost::make_shared<VirtualBinSrc>(
-            srcPadFactory_srcpads,
-            srcPadFactory_sinkpads,
-            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+  srcBin =
+    boost::make_shared<VirtualBinSrc>(
+        srcPadFactory_srcpads,
+        srcPadFactory_sinkpads,
+        boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
 
-    sinkBin =
-        boost::make_shared<VirtualBinSink>(
-            sinkPadFactory_sinkpads,
-            boost::shared_ptr<VirtualPadFactoryInProcess>(),
-            boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+  sinkBin =
+    boost::make_shared<VirtualBinSink>(
+        sinkPadFactory_sinkpads,
+        boost::shared_ptr<VirtualPadFactoryInProcess>(),
+        boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
 
-    // note: this is 'pipeline' and changed to pipelineFactory.
-    
-    RefObj<GstElement> elem = gst_pipeline_new("pipeline");
+  // note: this is 'pipeline' and changed to pipelineFactory.
 
-    gst_bin_add_many(GST_BIN(elem.get()),
-                     typefindBin->getParent().retain(),
-                     srcBin->getParent().retain(),
-                     sinkBin->getParent().retain(), NULL);
+  RefObj<GstElement> elem = gst_pipeline_new("pipeline");
 
-    const RefObj<GstBus> bus =
-        gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
+  gst_bin_add_many(GST_BIN(elem.get()),
+      typefindBin->getParent().retain(),
+      srcBin->getParent().retain(),
+      sinkBin->getParent().retain(), NULL);
 
-    watchId = gst_bus_add_watch(bus.get(), busCallback, this);
+  const RefObj<GstBus> bus =
+    gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
+
+  watchId = gst_bus_add_watch(bus.get(), busCallback, this);
 }
 
 
@@ -11778,9 +11783,12 @@ class ZINC_LOCAL SetSourceContinuation
   {
     // note: <6> async call.
     //
-    // Future<void> GstMediaRouter::setSource(const std::string&, Zinc::Media::SetSourceReason::Enum);
+    // Future<void> 
+    // GstMediaRouter::setSource
+    // (const std::string&, Zinc::Media::SetSourceReason::Enum);
 
-    continueOnSuccess(impl->setSource(source, reason), &SetSourceContinuation::complete);
+    continueOnSuccess
+      (impl->setSource(source, reason), &SetSourceContinuation::complete);
   }
 
   void complete() {
