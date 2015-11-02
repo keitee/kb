@@ -98,8 +98,9 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst-error
 *kt_dev_bcast_500* gst: gstclock
 
-*kt_dev_bcast_600* gobj-model
 *kt_dev_bcast_600* glib-model
+*kt_dev_bcast_600* glib-gobject
+*kt_dev_bcast_600* glib-property
 
 *kt_dev_bcast_600* glib: gdebug
 *kt_dev_bcast_600* glib-signal
@@ -10469,7 +10470,7 @@ MT safe.
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib: gobj model
+*kt_dev_bcast_600* glib-model
 
 http://library.gnome.org/devel/gobject/stable/
 
@@ -10614,6 +10615,26 @@ GType maman_bar_get_type (void)
 }
 
 
+/* --- GType boilerplate --- */
+/**
+ * G_DEFINE_TYPE:
+ * @TN: The name of the new type, in Camel case.
+ * @t_n: The name of the new type, in lowercase, with words 
+ *  separated by '_'.
+ * @T_P: The #GType of the parent type.
+ * 
+ * A convenience macro for type implementations, which declares a class
+ * initialization function, an instance initialization function (see #GTypeInfo
+ * for information about these) and a static variable named @t_n<!--
+ * -->_parent_class pointing to the parent class. 
+ *
+ * Furthermore, it defines a *_get_type() function. See G_DEFINE_TYPE_EXTENDED()
+ * for an example.
+ * 
+ * Since: 2.4
+ */
+
+
 Instantiable classed types: objects
 
 Types which are registered with a class and are declared instantiable are what
@@ -10671,8 +10692,85 @@ Upon the first call to maman_bar_get_type, the type named BarType will be
 'registered' in the type system as inheriting from the type G_TYPE_OBJECT.
 
 
+
+<class-and-instance>
+
+struct _GTypeClass
+{
+  /*< private >*/
+  GType g_type;
+};
+
+struct  _GObjectClass
+{
+  GTypeClass   g_type_class;
+  ...
+};
+
+
+struct _GTypeInstance
+{
+  /*< private >*/
+  GTypeClass *g_class;
+};
+
+struct  _GObject
+{
+  GTypeInstance  g_type_instance;
+  
+  /*< private >*/
+  volatile guint ref_count;
+  GData         *qdata;
+};
+
+Every object must define two structures: its class structure and its instance
+structure. All class structures must contain as first member a GTypeClass
+structure. All instance structures must contain as first member a GTypeInstance
+structure. The declaration of these C types, coming from gtype.h is shown below:
+
+struct _GTypeClass
+{
+  GType g_type;
+};
+struct _GTypeInstance
+{
+  GTypeClass *g_class;
+};
+
+These constraints allow the type system to make sure that every object instance
+(identified by a pointer to the object's instance structure) contains in its
+first bytes a pointer to the object's class structure.
+
+This relationship is best explained by an example: let's take object B which
+inherits from object A:
+
+/* A definitions */
+typedef struct {
+  GTypeInstance parent;
+  int field_a;
+  int field_b;
+} A;
+typedef struct {
+  GTypeClass parent_class;
+  void (*method_a) (void);
+  void (*method_b) (void);
+} AClass;
+
+/* B definitions. */
+typedef struct {
+  A parent;
+  int field_c;
+  int field_d;
+} B;
+typedef struct {
+  AClass parent_class;
+  void (*method_c) (void);
+  void (*method_d) (void);
+} BClass;
+
+
 ={============================================================================
-*kt_dev_bcast_600* glib: gobject
+*kt_dev_bcast_600* glib-gobject
 
 GObject is a fundamental classed instantiable type. It implements:
 
@@ -10751,6 +10849,198 @@ MamanBar *bar = g_object_new (MAMAN_TYPE_BAR, NULL);
 ={============================================================================
 *kt_dev_bcast_600* glib: property
 
+Object properties
+
+One of GObject's nice features is its generic get/set mechanism for object
+properties. When an object is instantiated, the object's class_init handler
+should be used to register the object's properties with
+g_object_class_install_properties.
+
+The best way to understand how object properties work is by looking at a real
+example of how it is used:
+
+/************************************************/
+/* Implementation                               */
+/************************************************/
+
+enum
+{
+  PROP_MAMAN_NAME = 1,
+  PROP_PAPA_NUMBER,
+  N_PROPERTIES
+};
+
+static GParamSpec *obj_properties[N_PROPERTIES] = { NULL, };
+
+static void
+maman_bar_set_property (GObject      *object,
+                        guint         property_id,
+                        const GValue *value,
+                        GParamSpec   *pspec)
+{
+  MamanBar *self = MAMAN_BAR (object);
+
+  switch (property_id)
+    {
+    case PROP_MAMAN_NAME:
+      g_free (self->priv->name);
+      self->priv->name = g_value_dup_string (value);
+      g_print ("maman: %s\n", self->priv->name);
+      break;
+
+    case PROP_PAPA_NUMBER:
+      self->priv->papa_number = g_value_get_uchar (value);
+      g_print ("papa: %u\n", self->priv->papa_number);
+      break;
+
+    default:
+      /* We don't have any other property... */
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
+    }
+}
+
+static void
+maman_bar_get_property (GObject    *object,
+                        guint       property_id,
+                        GValue     *value,
+                        GParamSpec *pspec)
+{
+  MamanBar *self = MAMAN_BAR (object);
+
+  switch (property_id)
+    {
+    case PROP_MAMAN_NAME:
+      g_value_set_string (value, self->priv->name);
+      break;
+
+    case PROP_PAPA_NUMBER:
+      g_value_set_uchar (value, self->priv->papa_number);
+      break;
+
+    default:
+      /* We don't have any other property... */
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
+    }
+}
+
+static void
+maman_bar_class_init (MamanBarClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->set_property = maman_bar_set_property;
+  object_class->get_property = maman_bar_get_property;
+
+  obj_properties[PROP_MAMAN_NAME] =
+    g_param_spec_string ("maman-name",
+                         "Maman construct prop",
+                         "Set maman's name",
+                         "no-name-set" /* default value */,
+                         G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE));
+
+  obj_properties[PROP_PAPA_NUMBER] =
+    g_param_spec_uchar ("papa-number",
+                        "Number of current Papa",
+                        "Set/Get papa's number",
+                        0  /* minimum value */,
+                        10 /* maximum value */,
+                        2  /* default value */,
+                        G_PARAM_READWRITE));
+
+  g_object_class_install_properties (object_class,
+                                     N_PROPERTIES,
+                                     obj_properties);
+}
+
+/************************************************/
+/* Use                                          */
+/************************************************/
+
+GObject *bar;
+GValue val = G_VALUE_INIT;
+
+bar = g_object_new (MAMAN_TYPE_BAR, NULL);
+
+g_value_init (&val, G_TYPE_CHAR);
+g_value_set_char (&val, 11);
+
+g_object_set_property (G_OBJECT (bar), "papa-number", &val);
+
+g_value_unset (&val);
+
+
+"g_object_set_property" first ensures a property with this name was 'registered'
+in bar's class_init handler. If so it 'walks' the class hierarchy, from
+bottom-most most-derived type, to top-most fundamental type to find the class
+which registered 'that' property. It then tries to convert the user-provided
+GValue into a GValue whose type is that of the associated property.
+
+If the user provides a signed char GValue, as is shown here, and if the object's
+property was registered as an unsigned int, g_value_transform will try to
+transform the input signed char into an unsigned int. Of course, the success of
+the transformation depends on the availability of the required transform
+function. In practice, there will almost always be a transformation [3] which
+matches and conversion will be carried out if needed. 
+
+Here, the GParamSpec we provided in class_init has a validation function which
+makes sure that the GValue contains a value which respects the minimum and
+maximum bounds of the GParamSpec. In the example above, the client's GValue does
+not respect these constraints (it is set to 11, while the maximum is 10). As
+such, the g_object_set_property function will return with an error. 
+
+If the user's GValue had been set to a valid value, g_object_set_property would
+have proceeded with calling the object's set_property class 'method'. Here,
+     since our implementation did override this method, execution would jump to
+     maman_bar_set_property after having retrieved from the GParamSpec the
+     param_id [4] which had been stored 'by' g_object_class_install_property.
+
+Once the property has been set by the object's set_property class method,
+     execution 'returns' to g_object_set_property which makes sure that the
+     "notify" signal is emitted on the object's instance with the changed
+     property as parameter unless notifications were frozen by
+     g_object_freeze_notify. 
+
+
+It sounds like a tedious task to set up GValues every time when one wants to
+modify a property. In practice one will rarely do this. For application there is
+an easier way and that is described next.
+
+
+Accessing multiple properties at once
+
+It is interesting to note that the g_object_set and g_object_set_valist
+(variadic version) functions can be used to set multiple properties at once. The
+client code shown above can then be re-written as:
+
+MamanBar *foo;
+foo = /* */;
+g_object_set (G_OBJECT (foo),
+              "papa-number", 2, 
+              "maman-name", "test", 
+              NULL);
+
+This saves us from managing the GValues that we were needing to handle when
+using g_object_set_property. The code above will trigger one notify signal
+emission for each property modified.
+
+Equivalent _get versions are also available: g_object_get and
+g_object_get_valist (variadic version) can be used to get numerous properties at
+once.
+
+These high level functions have one 'drawback' — they don't provide a return
+value. One should pay attention to the argument types and ranges when using
+them. A known source of errors is to pass a different type from what the
+property expects; for instance, passing an integer when the property expects a
+floating point value and thus shifting all subsequent parameters by some number
+of bytes. Also forgetting the terminating NULL will lead to 'undefined'
+behaviour.
+
+This explains how g_object_new, g_object_newv and g_object_new_valist work: they
+parse the user-provided variable number of parameters and invoke g_object_set on
+the parameters only after the object has been successfully constructed. The
+"notify" signal will be emitted for each property set.
 
 
 ={============================================================================
