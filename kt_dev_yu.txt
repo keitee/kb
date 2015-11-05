@@ -76,8 +76,8 @@
 *kt_dev_uv_stack_405* zinc-mr-linear: zmp 
 *kt_dev_uv_stack_407* zinc-mr: media router spec
 *kt_dev_uv_stack_408* zinc-mr: plugin creations on mime types
-*kt_dev_uv_stack_409* zinc-mr: create gst mr
-*kt_dev_uv_stack_410* zinc-mr: build dash pipeline using gst mr
+*kt_dev_uv_stack_409* mr-dash: create gst mr
+*kt_dev_uv_stack_410* mr-dash: build dash pipeline using gst mr
 *kt_dev_uv_stack_411* zinc-mr: qt and media router interface
 *kt_dev_uv_stack_412* zinc-mr: get natual size
 *kt_dev_uv_stack_413* zinc-mr: gstmediaroutertest
@@ -9560,13 +9560,13 @@ Error on stream dashdemux0:video_00"
 <zira>
 DEVARCH-10579: YV MediaRouter: Support HTTP 404 error for DASH play
 
-The YV MediaRouter[1] specifies HTTP errors as server category. However, this
-HTTP error support is different or not handled from the previous implementation
-before YV MediaRouter and is additional support from YV MediaRouter. 
+The YV MediaRouter[1] specifies HTTP errors as server errors. However, HTTP
+error support is different or not handled from the previous implementation
+before YV MediaRouter and requires additional support from YV MediaRouter. 
 
-During integration test phase[2], there are scenarios identified which are not
-reporting specified HTMLMediaElement error events such as 404 error in URI and
-DASH segment.
+During integration test phase[2], scenarios were identified which were not
+reporting specified HTMLMediaElement error events such as the 404 error of
+missing DASH segment.
 
 This commit supports these cases and comes with corresponding test in YV
 MediaRouter test harness.
@@ -11415,7 +11415,7 @@ boost::shared_ptr<MediaRouterAsync> createGstMediaRouter(
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* zinc-mr: create gst mr
+*kt_dev_uv_stack_409* mr-dash: create gst mr
 
 {creation}
 
@@ -11494,9 +11494,10 @@ void GstMediaRouter::init()
   //    bool(VirtualBinCallbackAction::Enum,
   //    boost::shared_ptr<VirtualBin>,
   //    boost::shared_ptr<VirtualPad>)> CallbackType;
-RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
-                         const RefObj<GstElement>& bin,
-                         const char* padName = NULL);
+
+  RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
+      const RefObj<GstElement>& bin,
+      const char* padName = NULL);
 
   typefindBin =
     boost::make_shared<VirtualBinTypefind>(
@@ -11517,10 +11518,6 @@ RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
         boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
 
   RefObj<GstElement> elem = pipelineFactory();
-  if (!elem) {
-    NICKEL_ERROR("Failed to create pipeline element");
-    return;
-  }
 
   gst_bin_add_many(GST_BIN(elem.get()),
       typefindBin->getParent().retain(),
@@ -11529,10 +11526,6 @@ RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
 
   const RefObj<GstBus> bus =
     gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
-  if (!bus) {
-    NICKEL_ERROR("Failed to get pipeline bus");
-    return;
-  }
 
   watchId = gst_bus_add_watch(bus.get(), busCallback, this);
 }
@@ -11648,7 +11641,8 @@ class VirtualBinSrc : public VirtualBin
       const char* const outputCaps)
   {
     // 'decodebin'
-    const RefObj<GstElement> decodebin = gst_element_factory_make("decodebin", NULL);
+    const RefObj<GstElement> decodebin =
+      gst_element_factory_make("decodebin", NULL);
 
     g_object_set(decodebin.get(),
         "caps", gst_caps_from_string(outputCaps),
@@ -11770,7 +11764,7 @@ class VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
-*kt_dev_uv_stack_410* zinc-mr: build dash pipeline using media router
+*kt_dev_uv_stack_410* mr-dash: build dash pipeline using media router
 
 *uridecodebin* -> *decodebin(video)* -> *qtdemux* -> *h264parse-nexussink*
                 *decodebin(audio)* -> *fakesink*
@@ -11784,21 +11778,21 @@ string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32
 // See spec A.1.1
 
 NS_ZINC::Future< void > 
-   ProxyMediaRouter::setSource(const std::string& mediaLocator_in, 
-           const SetSourceReason::Enum reason_in) 
+ProxyMediaRouter::setSource(const std::string& mediaLocator_in, 
+  const SetSourceReason::Enum reason_in) 
 {
-    scoped_lock lock(mutex);
+  scoped_lock lock(mutex);
 
-    if (sourcing) {
-        return deferCall(
-                boost::bind(&MediaRouter::setSource, _1, mediaLocator_in, reason_in));
-    }
+  if (sourcing) {
+    return deferCall(
+        boost::bind(&MediaRouter::setSource, _1, mediaLocator_in, reason_in));
+  }
 
-    sourcing = true;
+  sourcing = true;
 
-    // note: <0>
-    return SetSourceContinuation::create(
-            *dispatcher, shared_from_this(), mediaLocator_in, reason_in);
+  // note: <0>
+  return SetSourceContinuation::create(
+      *dispatcher, shared_from_this(), mediaLocator_in, reason_in);
 }
 
 
@@ -12038,20 +12032,20 @@ NS_ZINC::Future<void> GstMediaRouter::start()
 void VirtualBinTypefind::newPadCb
   (GstElement* element, GstPad* pad, gpointer data)
 {
-    VirtualBinTypefind* const vbin = static_cast<VirtualBinTypefind*>(data);
-    vbin->newPad(element, pad);
+  VirtualBinTypefind* const vbin = static_cast<VirtualBinTypefind*>(data);
+  vbin->newPad(element, pad);
 }
 
 void VirtualBinTypefind::newPad(GstElement*, GstPad* pad)
 {
-    const boost::shared_ptr<VirtualPad> wrappedPad = wrapSrcPad(pad);
+  const boost::shared_ptr<VirtualPad> wrappedPad = wrapSrcPad(pad);
 
-    // this comes from VirtualBin and each bin has callback memeber when gets
-    // created.
-    parentCallback(
-        VirtualBinCallbackAction::RequestPadConnection,
-        shared_from_this(),
-        wrappedPad);
+  // this comes from VirtualBin and each bin has callback memeber when gets
+  // created.
+  parentCallback(
+      VirtualBinCallbackAction::RequestPadConnection,
+      shared_from_this(),
+      wrappedPad);
 }
 
 // note:
@@ -12330,7 +12324,8 @@ GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
 
 
 <stop>
-ProxyMediaRouter.cpp:862 ENTER: virtual zinc::Future<void> nickel::system::ProxyMediaRouter::stop()
+ProxyMediaRouter.cpp:862 ENTER: 
+  virtual zinc::Future<void> nickel::system::ProxyMediaRouter::stop()
 
 
 ={============================================================================

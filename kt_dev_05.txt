@@ -85,12 +85,13 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst-object
 *kt_dev_bcast_500* gst-childproxy
 *kt_dev_bcast_500* gst-bin
-*kt_dev_bcast_500* gst: man: gstcap
+*kt_dev_bcast_500* gst-cap
 *kt_dev_bcast_500* gst: gstbasesink and preroll
 *kt_dev_bcast_500* gst: gstbuffer
 *kt_dev_bcast_500* gst: gstevent
 *kt_dev_bcast_500* gst: gstvideo
 *kt_dev_bcast_500* gst-element
+*kt_dev_bcast_500* gst-ghostpad
 *kt_dev_bcast_500* gst: gststructure
 *kt_dev_bcast_500* gst-message
 *kt_dev_bcast_500* gst: gstbus
@@ -7691,9 +7692,10 @@ bin
 +==============================================+
 
 A ghost pad is a pad from some element in the bin that can be accessed
-directly from the bin as well. Compare it to a symbolic link in UNIX
+'directly' from the 'bin' as well. Compare it to a 'symbolic' link in UNIX
 filesystems. Using ghost pads on bins, the bin also has a pad and can
 transparently be used as an element in other parts of your code.
+
 
 bin
 +==============================================+
@@ -7702,35 +7704,35 @@ bin
 |                                              |
 +==============================================+
 
-Figure 8-2 is a representation of a ghost pad. The sink pad of element one is
-now also a pad of the bin. Because ghost pads look and work like any other
-pads, they can be added to any type of elements, not just to a GstBin, just
-like ordinary pads.
+This is a representation of a ghost pad. The sink pad of element one is now
+'also' a pad of the bin. Because ghost pads look and work like any other pads,
+  they can be added to any type of elements, not just to a GstBin, just like
+  ordinary pads.
 
 int
 main (int argc, char *argv[])
 {
-    GstElement *bin, *sink;
-    GstPad *pad;
+  GstElement *bin, *sink;
+  GstPad *pad;
 
-    /* init */
-    gst_init (&argc, &argv);
+  /* init */
+  gst_init (&argc, &argv);
 
-    /* create element, add to bin */
-    sink = gst_element_factory_make ("fakesink", "sink");
-    bin = gst_bin_new ("mybin");
-    gst_bin_add (GST_BIN (bin), sink);
+  /* create element, add to bin */
+  sink = gst_element_factory_make ("fakesink", "sink");
+  bin = gst_bin_new ("mybin");
+  gst_bin_add (GST_BIN (bin), sink);
 
-    /* add ghostpad */
-    pad = gst_element_get_static_pad (sink, "sink");
-    gst_element_add_pad (bin, gst_ghost_pad_new ("sink", pad));
-    gst_object_unref (GST_OBJECT (pad));
-    [..]
+  /* add ghostpad */
+  pad = gst_element_get_static_pad (sink, "sink");
+  gst_element_add_pad (bin, gst_ghost_pad_new ("sink", pad));
+  gst_object_unref (GST_OBJECT (pad));
+  [..]
 }
 
-In the above example, the bin now also has a pad: the pad called "sink" of the given element. The
-bin can, from here on, be used as a substitute for the sink element. You could, for example, link
-another element to the bin.
+In the above example, the bin now also has a pad: the pad called "sink" of the
+given element. The bin can, from here on, be used as a substitute for the sink
+element. You could, for example, link another element to the bin.
 
 
 ={============================================================================
@@ -8901,7 +8903,6 @@ the object.
 
 #define GST_TYPE_CHILD_PROXY               (gst_child_proxy_get_type ())
 
-#define GST_IS_CHILD_PROXY(obj)            (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_CHILD_PROXY))
 
 /**
  * G_TYPE_CHECK_INSTANCE_TYPE:
@@ -8912,9 +8913,10 @@ the object.
  * 
  * This macro should only be used in type implementations.
  *
- * Returns: %TRUE on success.
+ * Returns: %TRUE on success. note: return true.
  */
-#define G_TYPE_CHECK_INSTANCE_TYPE(instance, g_type)            (_G_TYPE_CIT ((instance), (g_type)))
+#define G_TYPE_CHECK_INSTANCE_TYPE(instance, g_type)
+  (_G_TYPE_CIT ((instance), (g_type)))
 
 
 struct GTypeInfo {
@@ -8944,11 +8946,20 @@ struct GTypeInfo {
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstChildProxy.html
 
-This interface 'abstracts' handling of property sets for elements with children.
-Imagine elements such as mixers or polyphonic generators. They all have multiple
-GstPad or some kind of voice objects. Another use case are container elements
-like GstBin. The element implementing the interface acts as a parent for those
-child objects.
+GstChildProxy — Interface for multi child elements.
+
+Object Hierarchy
+
+    GInterface
+    ╰── GstChildProxy
+
+
+This interface 'abstracts' handling of 'property' sets for elements with
+children. Imagine elements such as mixers or polyphonic generators. They all
+have multiple GstPad or some kind of voice objects. 
+
+Another use case are 'container' elements like GstBin. The element implementing
+the interface acts as a parent for those child objects.
 
 By implementing this interface the child properties can be accessed 'from' the
 'parent' element by using gst_child_proxy_get() and gst_child_proxy_set().
@@ -8974,6 +8985,29 @@ child_proxy     the GstChildProxy
 object          the GObject that was added
 name            the name of the new child
 user_data       user data set when the signal handler was connected.
+
+
+#define GST_IS_CHILD_PROXY(obj)            
+  (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_CHILD_PROXY))
+
+
+<ex>
+So calls this callback recursively to childs in a container.
+
+g_signal_connect(elem.get(), "child-added",
+  G_CALLBACK(GstMediaRouter::childAddedCallback),
+  const_cast<std::string::value_type*>(userAgent.c_str()));
+
+void Gst::childAddedCallback(GstChildProxy* /*proxy*/, GObject* obj, gchar* /*name*/,
+                    gpointer data)
+{
+  if (g_object_class_find_property(G_OBJECT_GET_CLASS(obj), "user-agent")) {
+    g_object_set(obj, "user-agent", data, NULL);
+  } else if (GST_IS_CHILD_PROXY(obj)) {
+    g_signal_connect(obj, "child-added",
+        G_CALLBACK(childAddedCallback), data);
+  }
+}
 
 
 ={============================================================================
@@ -9020,7 +9054,7 @@ from the bin.
 
 
 ={============================================================================
-*kt_dev_bcast_500* gst: man: gstcap
+*kt_dev_bcast_500* gst-cap
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstCaps.html
 
@@ -9035,12 +9069,11 @@ g_object_set(uridecodebin.transferNone(), "caps",
         ), NULL);
 
 
-
 void
 gst_caps_unref (GstCaps *caps);
 
-Unref a GstCaps and and 'free' all its structures and the structures' values when the refcount reaches
-0.
+Unref a GstCaps and and 'free' all its structures and the structures' values
+  when the refcount reaches 0.
 
 
 GstCaps *
@@ -9048,12 +9081,12 @@ gst_caps_from_string (const gchar *string);
 
 Converts caps from a string representation.
 
-The current implementation of serialization will lead to unexpected results when there are nested
-GstCaps / GstStructure deeper than one level.
+The current implementation of serialization will lead to unexpected results when
+there are nested GstCaps / GstStructure deeper than one level.
 
 string
 a string to convert to GstCaps
-	 
+
 Returns
 a newly 'allocated' GstCaps. 
 
@@ -9702,6 +9735,75 @@ source 0x500550 calling dispatch with element message: 0x500178, time
 #define GST_ELEMENT_CAST(obj)           ((GstElement*)(obj))
 
 
+GST_ELEMENT_ERROR()
+-----------------
+#define             GST_ELEMENT_ERROR(el, domain, code, text, debug)
+
+Utility function that elements can use in case they encountered a fatal data
+processing error. The pipeline will 'post' an error message and the application
+will be requested to stop further media processing.
+
+note: uses gst_element_message_full() to post
+
+GST_ELEMENT_ERROR(demux, 
+    RESOURCE, FAILED, ("Download error"), ("http error %d", http_status));
+
+
+={============================================================================
+*kt_dev_bcast_500* gst-ghostpad
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstGhostPad.html
+
+Object Hierarchy
+
+    GObject
+    ╰── GInitiallyUnowned
+        ╰── GstObject
+            ╰── GstPad
+                ╰── GstProxyPad
+                    ╰── GstGhostPad
+
+
+Description
+
+GhostPads are useful when organizing pipelines with GstBin like elements. The
+idea here is to create hierarchical element graphs. The bin element contains a
+sub-graph. Now one would like to treat the bin-element like any other
+GstElement. This is where GhostPads come into play. A GhostPad acts as a proxy
+for another pad. Thus the bin can have sink and source ghost-pads that are
+  associated with sink and source pads of the child elements.
+
+If the target pad is known at creation time, gst_ghost_pad_new() is the function
+to use to get a ghost-pad. Otherwise one can use gst_ghost_pad_new_no_target()
+to create the ghost-pad and use gst_ghost_pad_set_target() to establish the
+association later on.
+
+Note that GhostPads add overhead to the data processing of a pipeline.
+
+
+gst_ghost_pad_new ()
+-----------------
+GstPad *
+gst_ghost_pad_new (const gchar *name,
+                   GstPad *target);
+
+Create a new ghostpad with target as the target. The direction will be taken
+  from the target pad. target must be unlinked.
+
+Will ref the target.
+
+Parameters
+
+name
+the name of the new pad, or NULL to assign a default name.
+
+target
+the pad to ghost.
+
+Returns
+a new GstPad, or NULL in case of an error. 
+
+
 ={============================================================================
 *kt_dev_bcast_500* gst: gststructure
 
@@ -9880,10 +9982,19 @@ GST_MESSAGE_SRC_NAME()
 Get the name of the object that posted message. Returns "(NULL)" if the message
 has no source object set.
 
+
 note: type name and object name
 
-type name from msg  : GstSoupHTTPSrc 
-object name from msg: source
+element = gst_element_factory_make("queue","uri-decoder");
+
+GstMessage *msg =
+  gst_message_new_error(GST_OBJECT_CAST (element.get()),
+    g_error_new_literal(GST_RESOURCE_ERROR,
+    GST_RESOURCE_ERROR_NOT_FOUND, ""),
+    "(no debug)");
+
+type name from msg  : GstQueue 
+object name from msg: uri-decoder
 
 G_OBJECT_TYPE_NAME(msg->src)
 GST_MESSAGE_SRC_NAME(msg)
