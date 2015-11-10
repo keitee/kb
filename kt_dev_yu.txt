@@ -32,6 +32,7 @@
 |kt_dev_uv_stack_012| stack: gdb
 |kt_dev_uv_stack_013| stack: platform data
 *kt_dev_uv_stack_014* zinc-test
+*kt_dev_uv_stack_014* zinc-test-support
 
 |kt_dev_uv_stack_100| stack: element names
 *kt_dev_uv_stack_101* zinc-plugin: plugin and client system
@@ -3277,6 +3278,15 @@ All Tests
 		nickel::system::GstMediaRouterTest::test_thatSetVideoWindowAndGetVideoWindowMatchUp_afterMediaRouterHasStarted
 		nickel::system::GstMediaRouterTest::test_thatSetVideoWindowAndGetVideoWindowMatchUp_whenMediaRouterIsStarted
 		nickel::system::GstMediaRouterTest::test_thatSetVideoWindowAndGetVideoWindowMatchUp_beforeMediaRouterHasStarted
+
+
+={============================================================================
+*kt_dev_uv_stack_014* zinc-test-support
+
+VERIFY_AND_CLEAR_MOCK   66 Zinc/Zinc.Common/include/testsupport/VerifyAndClearMock.h #define VERIFY_AND_CLEAR_MOCK(mock) NS_ZINC::verifyAndClearMock( mock, #mock, __LINE__ )
+
+verifyAndClearMock   28 Zinc/Zinc.Common/include/testsupport/VerifyAndClearMock.h void verifyAndClearMock( T* mock, const std::string& mockVarName, int linenum )
+verifyAndClearMock   42 Zinc/Zinc.Common/include/testsupport/VerifyAndClearMock.h void verifyAndClearMock( boost::shared_ptr< T > mock,
 
 
 ={============================================================================
@@ -12199,6 +12209,21 @@ class ZINC_EXPORT MediaRouterAsync :
 };
 
 
+
+NS_ZINC::Future<boost::shared_ptr<MediaRouterAsync> >
+GstMediaRouterFactory::createMediaRouter()
+{
+  return enabled ?
+    NS_ZINC::completedFuture(
+        *dispatcher,
+        createGstMediaRouter(dispatcher,
+          boost::bind(gst_pipeline_new, "pipeline"),
+          userAgent)) :
+    NS_ZINC::exceptionalFuture<boost::shared_ptr<MediaRouterAsync> >(
+        *dispatcher,
+        NotSupportedException("YouView MediaRouter is disabled"));
+}
+
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
 
 class GstMediaRouter : public MediaRouterAsync
@@ -12250,6 +12275,8 @@ void GstMediaRouter::init()
     boost::make_shared<VirtualBinTypefind>(
         boost::shared_ptr<VirtualPadFactoryInProcess>(),
         typefindPadFactory_sinkpads,
+
+        // note: pass down the callback
         boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
 
   srcBin =
@@ -12511,6 +12538,86 @@ class VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
+*kt_dev_uv_stack_409* mr-dash: create gst mr: revised to support
+
+boost::signals2::signal<void(GstState, GstState, GstState)> onStateChange;
+
+void GstMediaRouter::produceStatusEvent(
+    const StatusEventValue::Enum what)
+{
+  produceEvent(
+      boost::bind(&MediaRouterEventListener::StatusEvent,
+        _1,
+        what));
+}
+
+void GstMediaRouter::startReportingPositionChange()
+{
+  ...
+}
+
+NS_ZINC::Future<void> GstMediaRouter::start()
+{
+  onStateChange.connect_extended(
+      OneShotFunctionCall(
+        boost::bind(&GstMediaRouter::produceStatusEvent,
+          this,
+          StatusEventValue::started),
+        GST_STATE_PLAYING));
+
+  onStateChange.connect_extended(
+      OneShotFunctionCall(
+        boost::bind(
+          &GstMediaRouter::startReportingPositionChange,
+          this), GST_STATE_PLAYING));
+}
+
+struct OneShotFunctionCall
+{
+  typedef void result_type;
+
+  OneShotFunctionCall(boost::function<void(void)> func, GstState desiredState)
+    : func(func), desiredState(desiredState) {}
+  OneShotFunctionCall(boost::function<void(void)> func)
+    : func(func), desiredState(GST_STATE_VOID_PENDING) {}
+
+  void operator()(const boost::signals2::connection& connection,
+      GstState /* oldstate */,
+      GstState newstate,
+      GstState /* pending */)
+  {
+    if (newstate == desiredState) {
+      func();
+      connection.disconnect();
+    }
+  }
+
+  void operator()(const boost::signals2::connection& connection)
+  {
+    func();
+    connection.disconnect();
+  }
+
+  boost::function<void(void)> func;
+  const GstState desiredState;
+};
+
+case GST_MESSAGE_STATE_CHANGED:
+  onStateChange(oldstate, newstate, pending);
+
+
+={============================================================================
+*kt_dev_uv_stack_409* mr-dash: create gst mr: revised to support
+
+1. GstMediaRouter creates "bins" directly without using bin factory.
+  -> should use "bin factory", createXXXBinFactory instead.
+
+2. VirtualPadFactoryInProcess is not used.
+
+3. Use setPlugCallback(CallbackType callback) to set callback.
+
+
+={============================================================================
 *kt_dev_uv_stack_410* mr-dash: build dash pipeline using media router
 
 *uridecodebin* -> *decodebin(video)* -> *qtdemux* -> *h264parse-nexussink*
@@ -12631,8 +12738,6 @@ class ZINC_LOCAL SetSourceContinuation
   }
 
   void complete() {
-
-    NICKEL_FUNC_TRACE;
 
     promise.complete();
 

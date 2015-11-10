@@ -17,6 +17,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_boost_009* boost-function
 *kt_dev_boost_010* boost-intrusive-ptr: usage
 *kt_dev_boost_010* boost-ptr-map:
+*kt_dev_boost_010* boost-signal
 
 |kt_dev_boost_100| asio
 |kt_dev_boost_101| asio: tutorial
@@ -1019,6 +1020,503 @@ bool registerFactory(std::unique_ptr<JSPluginFactoryNP> f)
 Here used the first overload:
 
 iterator  insert( key_type& k, T* x ); 
+
+
+={============================================================================
+*kt_dev_boost_010* boost-signal
+
+Introduction
+===================================
+
+The Boost.Signals2 library is an implementation of a managed signals and slots
+system. Signals represent 'callbacks' with multiple targets, and are also called
+publishers or events in similar systems. Signals are connected to some set of
+slots, which are callback receivers (also called event targets or subscribers),
+which are called when the signal is "emitted."
+
+Signals and slots are managed, in that signals and slots (or, more properly,
+    objects that occur as part of the slots) can track connections and are
+capable of automatically disconnecting signal/slot connections when either is
+destroyed. This enables the user to make signal/slot connections without
+expending a great effort to manage the lifetimes of those connections with
+regard to the lifetimes of all objects involved.
+
+When signals are connected to multiple slots, there is a question regarding the
+relationship between the return values of the slots and the return value of the
+signals. Boost.Signals2 allows the user to specify the manner in which multiple
+return values are combined.
+
+This documentation describes a thread-safe 'variant' of the original
+Boost.Signals library. There have been some changes to the interface to support
+thread-safety, mostly with respect to automatic connection management. This
+implementation was written by Frank Mori Hess. 
+
+
+How to Read this Tutorial
+
+This tutorial is not meant to be read linearly. Its top-level structure roughly
+separates different concepts in the library (e.g., handling calling multiple
+    slots, passing values to and from slots) and in each of these concepts the
+basic ideas are presented first and then more complex uses of the library are
+described later. Each of the sections is marked Beginner, Intermediate, or
+Advanced to help guide the reader. The Beginner sections include information
+that all library users should know; one can make good use of the Signals2
+library after having read only the Beginner sections. The Intermediate sections
+build on the Beginner sections with slightly more complex uses of the library.
+Finally, the Advanced sections detail very advanced uses of the Signals2
+library, that often require a solid working knowledge of the Beginner and
+Intermediate topics; most users will not need to read the Advanced sections.
+
+
+Hello, World! (Beginner)
+
+The following example writes "Hello, World!" using signals and slots. First, we
+create a signal sig, a signal that takes no arguments and has a void return
+value. Next, we connect the hello function object to the signal using the
+connect method. Finally, use the signal sig 'like' a function to call the slots,
+which in turns invokes HelloWorld::operator() to print "Hello, World!".
+
+struct HelloWorld
+{
+  void operator()() const
+  {
+    std::cout << "Hello, World!" << std::endl;
+  }
+};
+
+{
+  // Signal with no arguments and a void return value
+  boost::signals2::signal<void ()> sig;
+
+  // Connect a HelloWorld slot
+  HelloWorld hello;
+  sig.connect(hello);
+
+  // Call all of the slots note: 'invoke'
+  sig();
+}
+
+
+Calling Multiple Slots
+===================================
+
+Connecting Multiple Slots (Beginner)
+
+<signal-slots-pair>
+So we can make the Hello, World program more interesting by 'splitting' the work
+of printing "Hello, World!" into two completely separate slots. The first slot
+will print "Hello" and may look like this:
+
+struct Hello
+{
+  void operator()() const
+  {
+    std::cout << "Hello";
+  }
+};
+
+The second slot will print ", World!" and a newline, to complete the program.
+The second slot may look like this:
+
+struct World
+{
+  void operator()() const
+  {
+    std::cout << ", World!" << std::endl;
+  }
+};
+
+Like in our previous example, we can create a signal sig that takes no arguments
+and has a void return value. This time, we 'connect' 'both' a hello and a world
+'slot' to the same signal, and when we call the signal both slots will be
+called.
+
+{
+  boost::signals2::signal<void ()> sig;
+
+  sig.connect(Hello());   note: multiple connects
+  sig.connect(World());
+
+  sig();
+}
+
+<slot-list>
+By default, slots are pushed onto the 'back' of the slot list, so the output of
+this program will be as expected:
+
+Hello, World!
+
+
+Connection Management
+===================================
+
+Disconnecting Slots (Beginner)
+
+Slots aren't expected to exist indefinitely after they are connected. Often
+slots are only used to receive a few events and are then disconnected, and the
+programmer needs 'control' to decide when a slot should no longer be connected.
+
+<connection-class>
+The entry for managing connections explicitly is the boost::signals2::connection
+class. 
+  
+The connection class uniquely represents the connection between a particular
+signal and a particular slot. The connected() method checks if the signal and
+slot are still connected, and the disconnect() method disconnects the signal and
+slot if they are connected before it is called. Each call to the signal's
+connect() method returns a connection object, which can be used to determine if
+the connection still exists or to disconnect the signal and slot.
+
+  boost::signals2::connection c = sig.connect(HelloWorld());
+  std::cout << "c is connected\n";
+  sig(); // Prints "Hello, World!"
+
+  c.disconnect(); // Disconnect the HelloWorld object
+  std::cout << "c is disconnected\n";
+  sig(); // Does nothing: there are no connected slots
+
+
+Giving a Slot Access to its Connection (Advanced)
+
+You may encounter situations where you wish to disconnect or block a slot's
+connection from 'within' the slot itself. For example, suppose you have a group
+of asynchronous tasks, each of which emits a signal when it completes. You wish
+to connect a slot to all the tasks to retrieve their results as each completes.
+Once a given task completes and the slot is run, the slot no longer needs to be
+connected to the completed task. Therefore, you may wish to clean up old
+connections by having the slot disconnect its invoking connection when it runs.
+
+
+<connection-object>
+For a slot to disconnect (or block) its invoking connection, it must have access
+to a signals2::connection object which references the invoking signal-slot
+connection. The difficulty is, the connection object is returned by the
+signal::connect method, and therefore is not available until after the slot is
+already connected to the signal. This can be particularly troublesome in a
+multi-threaded environment where the signal may be invoked concurrently by a
+different thread while the slot is being connected.
+
+Therefore, the signal classes provide signal::connect_extended methods, which
+allow slots which take an extra argument to be connected to a signal. The extra
+argument is a signals2::connection object which refers to the signal-slot
+connection currently invoking the slot. signal::connect_extended uses slots of
+the type given by the signal::extended_slot_type typedef.
+
+The examples section includes an extended_slot program which demonstrates the
+syntax for using signal::connect_extended. 
+
+
+Thread-Safety
+===================================
+
+Introduction
+
+The primary motivation for Boost.Signals2 is to provide a version of the
+original Boost.Signals library which can be used safely in a multi-threaded
+environment. This is achieved primarily through 'two' changes from the original
+Boost.Signals API. One is the introduction of a new automatic connection
+management scheme relying on shared_ptr and weak_ptr, as described in the
+tutorial. The second change was the introduction of a Mutex template type
+parameter to the signal class. 
+
+This section details how the library employs these changes to provide
+thread-safety, and the limits of the provided thread-safety.  
+
+
+Signals and combiners
+
+Each signal object default-constructs a Mutex object to protect its internal
+state. Furthermore, a Mutex is created 'each' time a new slot is connected to
+the signal, to protect the associated signal-slot connection.
+
+A signal's mutex is automatically locked whenever any of the signal's methods
+are called. The mutex is usually held until the method completes, however there
+is one major exception to this rule. 
+
+When a signal is 'invoked' by calling signal::operator(), the invocation first
+acquires a lock on the signal's mutex. Then it obtains a handle to the signal's
+slot list and combiner. Next it releases the signal's mutex, 'before' invoking
+the combiner to 'iterate' through the slot list. Thus no mutexes are held by the
+signal while a slot is executing.  
+
+This design choice makes it impossible for user code running in a slot to
+deadlock against any of the mutexes used internally by the Boost.Signals2
+library. It also prevents slots from accidentally causing recursive locking
+attempts on any of the library's internal mutexes. 
+
+Therefore, if you invoke a signal concurrently from multiple threads, it is
+possible for the signal's combiner to be invoked 'concurrently' and thus the
+slots to execute concurrently.
+
+During a combiner invocation, the following steps are performed in order to find
+the next callable slot while iterating through the signal's slot list.
+
+    The Mutex associated with the connection to the slot is locked.
+
+    All the tracked weak_ptr associated with the slot are copied into temporary
+    shared_ptr which will be kept alive until the invocation is done with the
+    slot. If this fails due to any of the weak_ptr being expired, the connection
+    is automatically disconnected. Therefore a slot will never be run if any of
+    its tracked weak_ptr have expired, and none of its tracked weak_ptr will
+    expire while the slot is running.
+
+    The slot's connection is checked to see if it is blocked or disconnected,
+    and then the connection's mutex is unlocked. If the connection was either
+    blocked or disconnected, we start again from the beginning with the next
+    slot in the slot list. Otherwise, we commit to executing the slot when the
+    combiner next dereferences the slot call iterator (unless the combiner
+        should increment the iterator without ever dereferencing it).
+
+Note that since we unlock the connection's mutex before executing its associated
+slot, it is possible a slot will still be executing after it has been
+disconnected by a connection::disconnect(), if the disconnect was called
+concurrently with signal invocation.
+
+You may have noticed above that during signal invocation, the invocation only
+obtains handles to the signal's slot list and combiner while holding the
+signal's mutex. Thus concurrent signal invocations may still wind up accessing
+the same slot list and combiner concurrently. So what happens if the slot list
+is modified, for example by connecting a new slot, while a signal invocation is
+in progress concurrently? If the slot list is already in use, the signal
+performs a deep copy of the slot list before modifying it. Thus the a concurrent
+signal invocation will continue to use the old unmodified slot list, undisturbed
+by modifications made to the newly created deep copy of the slot list. Future
+signal invocations will receive a handle to the newly created deep copy of the
+slot list, and the old slot list will be destroyed once it is no longer in use.
+Similarly, if you change a signal's combiner with signal::set_combiner while a
+signal invocation is running concurrently, the concurrent signal invocation will
+continue to use the old combiner undisturbed, while future signal invocations
+will receive a handle to the new combiner.
+
+The fact that concurrent signal invocations use the same combiner object means
+you need to insure any custom combiner you write is thread-safe. So if your
+combiner maintains state which is modified when the combiner is invoked, you may
+need to protect that state with a mutex. Be aware, if you hold a mutex in your
+combiner while dereferencing slot call iterators, you run the risk of deadlocks
+and recursive locking if any of the slots cause additional mutex locking to
+occur. One way to avoid these perils is for your combiner to release any locks
+before dereferencing a slot call iterator. The combiner classes provided by the
+Boost.Signals2 library are all thread-safe, since they do not maintain any state
+across invocations.
+
+Suppose a user writes a slot which connects another slot to the invoking signal.
+Will the newly connected slot be run during the same signal invocation in which
+the new connection was made? The answer is no. Connecting a new slot modifies
+the signal's slot list, and as explained above, a signal invocation already in
+progress will not see any modifications made to the slot list.
+
+Suppose a user writes a slot which disconnects another slot from the invoking
+signal. Will the disconnected slot be prevented from running during the same
+signal invocation, if it appears later in the slot list than the slot which
+disconnected it? This time the answer is yes. Even if the disconnected slot is
+still present in the signal's slot list, each slot is checked to see if it is
+disconnected or blocked immediately before it is executed (or not executed as
+    the case may be), as was described in more detail above.
+
+Connections and other classes
+
+The methods of the signals2::connection class are thread-safe, with the
+exception of assignment and swap. This is achived via locking the mutex
+associated with the object's underlying signal-slot connection. Assignment and
+swap are not thread-safe because the mutex protects the underlying connection
+which a signals2::connection object references, not the signals2::connection
+object itself. That is, there may be many copies of a signals2::connection
+object, all of which reference the same underlying connection. There is not a
+mutex for each signals2::connection object, there is only a single mutex
+protecting the underlying connection they reference.
+
+The shared_connection_block class obtains some thread-safety from the Mutex
+protecting the underlying connection which is blocked and unblocked. The
+internal reference counting which is used to keep track of how many
+shared_connection_block objects are asserting blocks on their underlying
+connection is also thread-safe (the implementation relies on shared_ptr for the
+    reference counting). However, individual shared_connection_block objects
+should not be accessed concurrently by multiple threads. As long as two threads
+each have their own shared_connection_block object, then they may use them in
+safety, even if both shared_connection_block objects are copies and refer to the
+same underlying connection.
+
+The signals2::slot class has no internal mutex locking built into it. It is
+expected that slot objects will be created then connected to a signal in a
+single thread. Once they have been copied into a signal's slot list, they are
+protected by the mutex associated with each signal-slot connection.
+
+The signals2::trackable class does NOT provide thread-safe automatic connection
+management. In particular, it leaves open the possibility of a signal invocation
+calling into a partially destructed object if the trackable-derived object is
+destroyed in a different thread from the one invoking the signal.
+signals2::trackable is only provided as a convenience for porting
+single-threaded code from Boost.Signals to Boost.Signals2.
+
+
+Porting from Boost.Signals to Boost.Signals2
+===================================
+
+The 'changes' made to the Boost.Signals2 API compared to the original
+Boost.Signals library are summarized below. We also provide some notes on
+dealing with each change while porting existing Boost.Signals code to
+Boost.Signals2. 
+
+-. signals2::signal::connect_extended()
+
+The signals2::signal class has an additional 
+
+typedef signals2::signal::extended_slot_type and 
+signals2::signal::connect_extended() methods. 
+
+These allow connection of slots which take an additional signals2::connection
+argument, giving them thread-safe access to their signal/slot connection when
+they are invoked. There is also a new ExtendedSlotFunction template parameter
+for specifying the underlying slot function type for the new extended slots.
+
+These additions should have no effect on porting unless you are also converting
+your program from a single threaded program into a multi-threaded one. In that
+case, if you have slots which need access to their signals2::connection to the
+signal invoking them (for example to block or disconnect their connection) you
+may wish to connect the slots with signals2::signal::connect_extended(). This
+also requires adding an additional connection argument to the slot. More
+information on how and why to use extended slots is available in the tutorial.
+
+
+Class template signal
+===================================
+
+// In header: <boost/signals2/signal.hpp>
+
+template<typename Signature, 
+         typename Combiner = boost::signals2::optional_last_value<R>, 
+         typename Group = int, typename GroupCompare = std::less<Group>, 
+
+         typename SlotFunction = boost::function<Signature>, 
+         typename ExtendedSlotFunction = 
+            boost::function<R (const connection &, T1, T2, ..., TN)>, 
+
+         typename Mutex = boost::signals2::mutex> 
+class signal : public boost::signals2::signal_base {
+public:
+  // types
+  ...
+  typedef SlotFunction slot_function_type;         
+  typedef typename signals2::slot<Signature, SlotFunction> slot_type;
+
+  typedef ExtendedSlotFunction extended_slot_function_type;
+
+  typedef typename 
+    signals2::slot<R (const connection &, T1, ..., TN), ExtendedSlotFunction> 
+      extended_slot_type;
+
+  typedef typename SlotFunction::result_type slot_result_type;           
+  ...
+
+1.
+
+signal connection management
+
+    connection connect(const slot_type& slot, connect_position at = at_back);
+    connection connect(const group_type& group, const slot_type& slot, 
+                       connect_position at = at_back);
+
+    Effects:
+    
+    Connects the signal this to the incoming slot. If the slot is inactive,
+    i.e., any of the slots's tracked objects have been destroyed, then the call
+    to connect is a no-op. If the second version of connect is invoked, the slot
+    is associated with the given group. The at parameter specifies where the
+    slot should be connected: at_front indicates that the slot will be connected
+    at the front of the list or group of slots and at_back indicates that the
+    slot will be connected at the back of the list or group of slots.
+
+    Returns:
+
+    A signals2::connection object that references the newly-created connection
+    between the signal and the slot; if the slot is inactive, returns a
+    disconnected connection.
+
+    Throws:
+
+    This routine meets the strong exception guarantee, where any exception
+    thrown will cause the slot to not be connected to the signal.
+
+    Complexity:
+
+    Constant time when connecting a slot without a group name or logarithmic in
+    the number of groups when connecting to a particular group.
+
+    Notes:
+
+    It is unspecified whether connecting a slot while the signal is calling will
+    result in the slot being called immediately.
+
+
+2.
+    connection connect_extended(const extended_slot_type& slot, 
+                                connect_position at = at_back);
+    connection connect_extended(const group_type& group, 
+                                const extended_slot_type& slot, 
+                                connect_position at = at_back);
+
+    The connect_extended methods work the same as the connect methods, except
+    they take slots of type extended_slot_type. This is useful if a slot needs
+    to access the connection between it and the signal invoking it, for example
+    if it wishes to disconnect or block its own connection.
+
+4. 
+
+void disconnect_all_slots();
+
+    Effects:
+    Disconnects all slots connected to the signal.
+
+    Notes:
+    May be called at any time within the lifetime of the signal, including
+    during calls to the signal's slots.
+
+
+<ex>
+
+libs/signals2/example/extended_slot.cpp
+
+// Example program for connecting an extended slot,
+// using a signal's connect_extended and extended_slot_type.
+//
+// Copyright Frank Mori Hess 2009.
+//
+// Use, modification and
+// distribution is subject to the Boost Software License, Version
+// 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+// http://www.boost.org/LICENSE_1_0.txt)
+// For more information, see http://www.boost.org
+
+#include <boost/signals2/signal.hpp>
+#include <iostream>
+#include <string>
+
+namespace bs2 = boost::signals2;
+
+void single_shot_slot(const bs2::connection &conn, const std::string &message)
+{
+  conn.disconnect();
+  std::cout << message;
+}
+
+int main()
+{
+  typedef bs2::signal<void (void)> sig_type;
+  sig_type sig;
+  {
+    sig_type::extended_slot_type hello(&single_shot_slot, _1, "Hello");
+    sig.connect_extended(hello);
+  }
+  sig();  // prints "Hello"
+  {
+    sig_type::extended_slot_type world(&single_shot_slot, _1, ", World!\n");
+    sig.connect_extended(world);
+  }
+  sig();  // only prints ", World!\n" since hello slot has disconnected itself
+  sig();  // prints nothing, world slot has disconnected itself
+
+  return 0;
+}
 
 
 ={============================================================================
