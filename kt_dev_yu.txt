@@ -8,8 +8,6 @@
 |kt_dev_uv_set_004| huawei: to revert back the previous version
 |kt_dev_uv_set_005| setup: screen connection
 |kt_dev_uv_set_006| filegateway
-|kt_dev_uv_set_007| setup: huawei build the stack
-|kt_dev_uv_set_008| setup: oem staging and toolchains
 |kt_dev_uv_set_010| setup: git for dev and oem
 |kt_dev_uv_set_011| setup: ci builds
 
@@ -80,7 +78,10 @@
 *kt_dev_uv_stack_405* zinc-mr-linear: zmp 
 *kt_dev_uv_stack_407* zinc-mr: media router spec
 *kt_dev_uv_stack_408* zinc-mr: plugin creations on mime types
-*kt_dev_uv_stack_409* mr-dash: create gst mr
+*kt_dev_uv_stack_409* mr-dash: gst-mr: create
+*kt_dev_uv_stack_409* mr-dash: gst-mr: use signal
+*kt_dev_uv_stack_409* mr-dash: gst-mr: revised to support bin injection
+*kt_dev_uv_stack_409* mr-dash: gst-mr: disable dash on master
 *kt_dev_uv_stack_410* mr-dash: build dash pipeline using gst mr
 *kt_dev_uv_stack_411* zinc-mr: qt and media router interface
 *kt_dev_uv_stack_412* zinc-mr: get natual size
@@ -89,8 +90,8 @@
 *kt_dev_uv_stack_412* zinc-mr: dash play using the proxy
 *kt_dev_uv_stack_413* zinc-mr: hls play
 *kt_dev_uv_stack_413* zinc-mr: gstmr-play.sh
-*kt_dev_uv_stack_413* zinc-mr-debug: 
-*kt_dev_uv_stack_413* zinc-mr-debug: on nickel in sandbox
+*kt_dev_uv_stack_413* mr-dash-debug: 
+*kt_dev_uv_stack_413* mr-dash-debug: nickel in sandbox
 *kt_dev_uv_stack_413* zinc-mr-drm:
 *kt_dev_uv_stack_413* zinc-mr-drm: error
 |kt_dev_uv_stack_415| zinc-mr: boot failure when use wrong plugin name
@@ -305,25 +306,6 @@ to close screen use Ctrl-A, k, y. Do not use Ctrl-C as it can kill processes run
 $ scp -r kit.park@filegateway.youview.co.uk:/export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP33_Eng_Release_20150331_for_YVHUAWEI-6751 ./
 
 $ ssh kit.park@filegateway.youview.co.uk ls -alR /export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP46_Release_20150424/
-
-
-={============================================================================
-*kt_dev_uv_set_007* setup: huawei build the stack
-
-sudo apt-get install huawei-dn370t-toolchain
-sudo apt-get install huawei-dn370t-staging
-sudo apt-get install huawei-stbgcc-4.5.3-2.4
-
-note: this will picks up the correct file from the link below.
-http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/DEBS/
-
-huawei-dn370t-toolchain_20120927-2_i386.deb
-huawei-dn370t-nexus_20131104-2_i386.deb
-huawei-dn370t-staging_20140804-2_i386.deb
-
-https://wiki.youview.co.uk/display/canvas/HOWTO+Install+Huawei+DN370T+PVR1+B37SP11
-
-ZB_CFG=huawei.370 zb-make
 
 
 ={============================================================================
@@ -10327,6 +10309,26 @@ MediaRouter test harness.
 
 
 ={============================================================================
+*kt_dev_uv_stack_256* mr-dash-error: corrupted stream
+
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" runBrowserStandalone.sh --url http://wll1p00830.dev.youview.co.uk:9080/video/vod_corrupt_2
+
+gstnexussink.c:1659:gst_nexus_sink_create_warning:<videosink> Video decode error
+gstnexussink.c:1765:gst_nexus_sink_on_error:<videosink> Error: 0x0202
+
+GstMediaRouter.cpp:496 warning domain: Video decode error                                                
+GstMediaRouter.cpp:504 warning domain: errVal: 7                                                         
+
+signal sender=:1.318 -> dest=(null destination) serial=400 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=ErrorEvent
+   int32 7
+   int32 0
+   string "Video decode error
+GStreamer warning domain: gst-stream-error-quark
+Additional debug:
+Video decode error"
+
+
+={============================================================================
 *kt_dev_uv_stack_257* zinc-mr-web: qunit test
 
 For each test, it creates video elements:
@@ -12538,7 +12540,7 @@ class VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* mr-dash: create gst mr: revised to support
+*kt_dev_uv_stack_409* mr-dash: gst mr: use signal
 
 boost::signals2::signal<void(GstState, GstState, GstState)> onStateChange;
 
@@ -12607,7 +12609,7 @@ case GST_MESSAGE_STATE_CHANGED:
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* mr-dash: create gst mr: revised to support
+*kt_dev_uv_stack_409* mr-dash: gst-mr: revised to support bin injection
 
 1. GstMediaRouter creates "bins" directly without using bin factory.
   -> should use "bin factory", createXXXBinFactory instead.
@@ -12615,6 +12617,20 @@ case GST_MESSAGE_STATE_CHANGED:
 2. VirtualPadFactoryInProcess is not used.
 
 3. Use setPlugCallback(CallbackType callback) to set callback.
+
+
+={============================================================================
+*kt_dev_uv_stack_409* mr-dash: gst-mr: disable dash on master
+
+1. Use different auth string and check on a box:
+
+dbus-send --session --print-reply --dest=Zinc.DeviceAuthority /Zinc/DeviceAuthority/Authoriser Zinc.DeviceAuthority.Authoriser.isFeatureEnabled string:"yv-mediarouter-dash"
+method return sender=:1.125 -> dest=:1.134 reply_serial=2
+   boolean false
+
+2. Get these error:
+VirtualBin.cpp:283 Couldn't handle media type: application/dash+xml
+GstMediaRouter.cpp:693 Pad linking failed!
 
 
 ={============================================================================
@@ -13577,7 +13593,10 @@ YouView MediaRouter is disabled
 <check-on-dbus>
 dbus-send --session --print-reply --dest=Zinc.DeviceAuthority /Zinc/DeviceAuthority/Authoriser Zinc.DeviceAuthority.Authoriser.isFeatureEnabled string:"yv-mediarouter"
 
-note: changed
+
+note: change config as below by running command
+
+/opt/zinc-trunk/share/
 
 nickel-system-gstreamer/titaniumdeviceauthority-system-factory.plugin-config:
 libTitaniumDeviceAuthoritySystemOff.so createOffSystemFactory
@@ -13596,30 +13615,6 @@ grep -lsr '^libTitaniumDeviceAuthoritySystemDbusClient.so' /opt/zinc/share/ | \
 xargs -r sed -i \
 -e '1i libTitaniumDeviceAuthoritySystemOff.so createOffSystemFactory' \
 -e 's/^/# DA disabled by patch-a-tron: /'
-
-<key>
-
-[root@HUMAX /]# ls -l /var/lib/
-drwxrwxrwx    2 root     root          4096 Oct 14 14:27 marlin/
--rw-------    1 root     root           512 Jan  1  2000 random-seed
-[root@HUMAX /]# ls -l /var/lib/marlin
--rw-------    1 root     root         63514 Oct 14 14:27 db0.storage
-
-that's wrong. run /bin/marlin-personalise.sh
-
-[root@HUMAX /]# ls -alR /var/lib/
-/var/lib/:
-drwxr-xr-x    3 root     root          4096 Oct 14 15:51 ./
-drwxr-xr-x   12 root     root          4096 Jan  1  2000 ../
-drwxrws--T    2 root     keys          4096 Oct 14 15:51 marlin/
--rw-------    1 root     root           512 Jan  1  2000 random-seed
-
-/var/lib/marlin:
-drwxrws--T    2 root     keys          4096 Oct 14 15:51 ./
-drwxr-xr-x    3 root     root          4096 Oct 14 15:51 ../
--rw-rw-r-T    1 root     keys         63514 Oct 14 15:51 db0.storage
-
-See owner and permission changes.
 
 
 ={============================================================================
@@ -13859,7 +13854,7 @@ directly. So "-p" is to say if want to use the proxy or not in a new daemon.
 
 
 ={============================================================================
-*kt_dev_uv_stack_413* zinc-mr-debug: 
+*kt_dev_uv_stack_413* mr-dash-debug: 
 
 {for-glib}
 G_MESSAGES_DEBUG=drmwasabi
@@ -13946,7 +13941,7 @@ gst_zmp_sink_plugin_init (GstPlugin * plugin)
 
 
 ={============================================================================
-*kt_dev_uv_stack_413* zinc-mr-debug: on nickel in sandbox
+*kt_dev_uv_stack_413* mr-dash-debug: nickel in sandbox
 
 {on-log-in-sandbox}
 
@@ -13967,6 +13962,8 @@ G_MESSAGES_DEBUG=drmwasabi get you:
 (nickelmediad:2907): drmwasabi-DEBUG: 
   Failed at /.../DEVARCH/Polonium/Polonium.Drm/src/gdrmwasabi.c:986
 
+note: not able to log file in sandbox but able to get GST_DEBUG on console.
+
 
 ={============================================================================
 *kt_dev_uv_stack_413* zinc-mr-drm:
@@ -13984,6 +13981,9 @@ if [[ -d "${wasabi_pkg_config_dir}" ]]; then
 else
   echo "Info: Wasabi not found"
 fi
+
+$ pkg-config --libs wasabi
+-L/home/kpark/builds-src-dev/_virtual_/huawei.372/zinc-install-root/release/huawei-bcm7231/usr/local/lib -Wl,-rpath,/usr/local/lib -lWasabi -lSkb 
 
 
 {enc-play-fail}
@@ -14109,7 +14109,7 @@ drwxrws--T    2 root     keys          4096 Oct 29 10:19 ./
 drwxr-xr-x    3 root     root          4096 Oct 29 10:19 ../
 -rw-rw-r-T    1 root     keys         63514 Oct 29 10:19 db0.storage
 
-note: MUST *restart* nickelmediad
+note: see owner and permission changes. MUST *restart* nickelmediad
 
 
 [root@HUMAX /]# cat /bin/marlin-personalise.sh
@@ -14356,7 +14356,7 @@ lrwxrwxrwx    1 root     root            33 Jan  1  1970 ./zinc/lib/
 
 
 ={============================================================================
-*kt_dev_uv_stack_351* zinc-sandbox: titanium: sandbox
+*kt_dev_uv_stack_351* zinc-sandbox: titanium
 
 {sandbox}
 Generally this is about what to import from a real file system in to "sandbox"
@@ -14670,6 +14670,9 @@ lrwx------    1 osmiumd  osmiumd       64 Feb 16 16:14 12 -> anon_inode:[eventfd
 l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 2 -> /dev/null
 l-wx------    1 osmiumd  osmiumd       64 Feb 16 16:04 3 -> /run/youview/jail/daemons/
    osmiumd-N7HXTA/opt/zinc/var/log/osmium.log
+
+note: for zinc-trunk
+cat /opt/zinc-trunk/var/log/osmium.log
 
 cat /opt/zinc/var/daemons/osmiumd/log/osmium.log
 
@@ -16179,7 +16182,8 @@ From SSH or the serial console run the following command:
 
 mkdir -p /mnt/nand/userdata/data && echo "rw" > /mnt/nand/userdata/data/rw_cmd
 
-The next boot will take slightly longer than normal as the files are copied from nand to the harddisk.
+The next boot will take slightly longer than normal as the files are copied from
+nand to the harddisk.
 
 
 {hwei}
@@ -16190,6 +16194,33 @@ huawei-04877 huawei-04877.dev.youview.co.uk  172.20.33.192  20:F3:A3:70:D1:94
 <1>
 if delete this, then will boot from flash
 /mnt/nand/userdata/data/rw_cmd
+
+
+<370-PVR1>
+sudo apt-get install huawei-dn370t-toolchain
+sudo apt-get install huawei-dn370t-staging
+sudo apt-get install huawei-stbgcc-4.5.3-2.4
+
+note: this will picks up the correct file from the link below.
+http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/DEBS/
+
+huawei-dn370t-toolchain_20120927-2_i386.deb
+huawei-dn370t-nexus_20131104-2_i386.deb
+huawei-dn370t-staging_20140804-2_i386.deb
+
+https://wiki.youview.co.uk/display/canvas/HOWTO+Install+Huawei+DN370T+PVR1+B37SP11
+
+ZB_CFG=huawei.370 zb-make
+
+
+<372-PVR2>
+
+sudo apt-cache search dn372
+
+huawei-dn372t-toolchain - Toolchain for HUAWEI DN372T set-top box
+huawei-dn372t-staging - Staging environment for Huawei DN372T set-top box
+
+ZB_CFG=huawei.372 zb-make
 
 
 ={============================================================================
@@ -16327,8 +16358,9 @@ This is copied to build root to be used in building and these are the same:
 /data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/usr/local/refsw/nexus
 
 <oem-code>
-The OEM header files: note: this means that if changes OEM code and want to build any in the full
-stack build env, then need to update staging as well before building.
+The OEM header files: note: this means that if changes OEM code and want to
+build any in the full stack build env, then need to update staging as well
+before building.
 
 /opt/oem-staging/huawei-bcm7409/
 ./usr/local/include/nexusMgr/nexusMgr.h
@@ -16353,9 +16385,7 @@ humax-dtr-t2100-toolchain - Toolchain for HUMAX DTR-T2100 set-top box
 humax-dtr-t1000-toolchain - Toolchain for HUMAX DTR-T1000 set-top box
 humax-dtr-t1000-staging - Staging environment for HUMAX DTR-T1000 set-top box
 
-http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/pool/main/h/
-
-http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/DEBS/
+http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/pool/main/h
 
 $ wget http://devarch-deb.dev.youview.co.uk:8080/job/DEBs/ws/pool/main/h/huawei-dn372t-staging/huawei-dn372t-staging_20150427-5_i386.deb
 $ sudo dpkg -i huawei-dn372t-staging_20150427-5_i386.deb

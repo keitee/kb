@@ -25,7 +25,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_300| gst: tutorial: 02: concept
 |kt_dev_bcast_300| gst: tutorial: 03: signal
 |kt_dev_bcast_300| gst: tutorial: 04: seeking
-*kt_dev_bcast_300* gst: tutorial: 06: pad cap negotiation
 *kt_dev_bcast_300* gst: tutorial: 07: queue
 *kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
 |kt_dev_bcast_302| gst: timer and query
@@ -71,17 +70,14 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_333* gst-man: 05: elements, state
 *kt_dev_bcast_334* gst-man: 06: bins
 *kt_dev_bcast_335* gst-man: 07: bus
-*kt_dev_bcast_330* gst-man: 08: pad and capability
-*kt_dev_bcast_330* gst: man: 14: clocks and synchronization
+*kt_dev_bcast_330* gst-doc-pad: pad and capability
+*kt_dev_bcast_330* gst-doc-clock: synchronization
+*kt_dev_bcast_330* gst-doc-clock: gst time and mpeg time
 *kt_dev_bcast_330* gst: man: 15: buffering
 |kt_dev_bcast_330| gst: man: 18: autoplug and typefind
 
 |kt_dev_bcast_330| gst: doc: segment, gstsegment
-*kt_dev_bcast_330* gst: doc: synchronisation
 
-
-*kt_dev_bcast_400* gst: gst time and mpeg time
-|kt_dev_bcast_400| gst: ref: gstcap
 
 *kt_dev_bcast_500* gst-object
 *kt_dev_bcast_500* gst-childproxy
@@ -93,7 +89,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst: gstvideo
 *kt_dev_bcast_500* gst-element
 *kt_dev_bcast_500* gst-ghostpad
-*kt_dev_bcast_500* gst: gststructure
+*kt_dev_bcast_500* gst-structure
 *kt_dev_bcast_500* gst-message
 *kt_dev_bcast_500* gst: gstbus
 *kt_dev_bcast_500* gst: gstutil
@@ -109,7 +105,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_600* glib: gatomic
 *kt_dev_bcast_600* glib: gthread
 *kt_dev_bcast_600* glib: gmain
-*kt_dev_bcast_600* glib-error
+*kt_dev_bcast_600* g-error
 *kt_dev_bcast_600* glib-quark
 *kt_dev_bcast_600* glib: gtime and gdate
 
@@ -2068,243 +2064,6 @@ warned that it might take longer to calculate the seeking position (very long,
 And finally we provide the position to seek to. Since we asked for
 GST_FORMAT_TIME, this position is in nanoseconds, so we use the GST_SECOND macro
 for simplicity.
-
-
-={============================================================================
-*kt_dev_bcast_300* gst: tutorial: 06: pad cap negotiation
-
-Through a process known as negotiation, two linked Pads agree on a common type,
-and thus the Capabilities of the Pads become fixed. they only have one type and
-do not contain ranges.
-
-As the process evolves, actual Pads are instantiated and their Capabilities
-  refined until they are fixed (or negotiation fails).
-
-This tutorial instantiates two elements, shows their Pad Templates, links them
-and sets the pipeline to play. On each state change, the Capabilities of the
-sink element's Pad are shown, so you can observe how the negotiation proceeds
-until the Pad Caps are fixed.
-
-
-<ex> basic-tutorial-6.c
-
-#include <gst/gst.h>
-   
-/* Functions below print the Capabilities in a human-friendly format */
-static gboolean print_field (GQuark field, const GValue * value, gpointer pfx) {
-  gchar *str = gst_value_serialize (value);
-   
-  g_print ("%s  %15s: %s\n", (gchar *) pfx, g_quark_to_string (field), str);
-  g_free (str);
-  return TRUE;
-}
-   
-static void print_caps (const GstCaps * caps, const gchar * pfx) {
-  guint i;
-   
-  g_return_if_fail (caps != NULL);
-   
-  if (gst_caps_is_any (caps)) {
-    g_print ("%sANY\n", pfx);
-    return;
-  }
-  if (gst_caps_is_empty (caps)) {
-    g_print ("%sEMPTY\n", pfx);
-    return;
-  }
-   
-  for (i = 0; i < gst_caps_get_size (caps); i++) {
-    GstStructure *structure = gst_caps_get_structure (caps, i);
-     
-    g_print ("%s%s\n", pfx, gst_structure_get_name (structure));
-    gst_structure_foreach (structure, print_field, (gpointer) pfx);
-  }
-}
-   
-/* Prints information about a Pad Template, including its Capabilities */
-static void print_pad_templates_information (GstElementFactory * factory) {
-  const GList *pads;
-  GstStaticPadTemplate *padtemplate;
-   
-  g_print ("Pad Templates for %s:\n", gst_element_factory_get_longname (factory));
-  if (!factory->numpadtemplates) {
-    g_print ("  none\n");
-    return;
-  }
-   
-  pads = factory->staticpadtemplates;
-  while (pads) {
-    padtemplate = (GstStaticPadTemplate *) (pads->data);
-    pads = g_list_next (pads);
-     
-    if (padtemplate->direction == GST_PAD_SRC)
-      g_print ("  SRC template: '%s'\n", padtemplate->name_template);
-    else if (padtemplate->direction == GST_PAD_SINK)
-      g_print ("  SINK template: '%s'\n", padtemplate->name_template);
-    else
-      g_print ("  UNKNOWN!!! template: '%s'\n", padtemplate->name_template);
-     
-    if (padtemplate->presence == GST_PAD_ALWAYS)
-      g_print ("    Availability: Always\n");
-    else if (padtemplate->presence == GST_PAD_SOMETIMES)
-      g_print ("    Availability: Sometimes\n");
-    else if (padtemplate->presence == GST_PAD_REQUEST) {
-      g_print ("    Availability: On request\n");
-    } else
-      g_print ("    Availability: UNKNOWN!!!\n");
-     
-    if (padtemplate->static_caps.string) {
-      g_print ("    Capabilities:\n");
-      print_caps (gst_static_caps_get (&padtemplate->static_caps), "      ");
-    }
-     
-    g_print ("\n");
-  }
-}
-   
-/* Shows the CURRENT capabilities of the requested pad in the given element */
-static void print_pad_capabilities (GstElement *element, gchar *pad_name) {
-  GstPad *pad = NULL;
-  GstCaps *caps = NULL;
-   
-  /* Retrieve pad */
-  pad = gst_element_get_static_pad (element, pad_name);
-  if (!pad) {
-    g_printerr ("Could not retrieve pad '%s'\n", pad_name);
-    return;
-  }
-   
-  /* Retrieve negotiated caps 
-   * (or acceptable caps if negotiation is not finished yet) 
-   */
-  caps = gst_pad_get_negotiated_caps (pad);
-  if (!caps)
-    caps = gst_pad_get_caps_reffed (pad);
-   
-  /* Print and free */
-  g_print ("Caps for the %s pad:\n", pad_name);
-  print_caps (caps, "      ");
-  gst_caps_unref (caps);
-  gst_object_unref (pad);
-}
-   
-int main(int argc, char *argv[]) {
-  GstElement *pipeline, *source, *sink;
-  GstElementFactory *source_factory, *sink_factory;
-  GstBus *bus;
-  GstMessage *msg;
-  GstStateChangeReturn ret;
-  gboolean terminate = FALSE;
-   
-  /* Initialize GStreamer */
-  gst_init (&argc, &argv);
-    
-  // gst_element_factory_make() is really a shortcut for
-  // gst_element_factory_find() + gst_element_factory_create().
-
-  /* Create the element factories */
-  source_factory = gst_element_factory_find ("audiotestsrc");
-  sink_factory = gst_element_factory_find ("autoaudiosink");
-  if (!source_factory || !sink_factory) {
-    g_printerr ("Not all element factories could be created.\n");
-    return -1;
-  }
-   
-  /* Print information about the pad templates of these factories */
-  print_pad_templates_information (source_factory);
-  print_pad_templates_information (sink_factory);
-   
-  /* Ask the factories to instantiate actual elements */
-  source = gst_element_factory_create (source_factory, "source");
-  sink = gst_element_factory_create (sink_factory, "sink");
-   
-  /* Create the empty pipeline */
-  pipeline = gst_pipeline_new ("test-pipeline");
-   
-  if (!pipeline || !source || !sink) {
-    g_printerr ("Not all elements could be created.\n");
-    return -1;
-  }
-   
-  /* Build the pipeline */
-  gst_bin_add_many (GST_BIN (pipeline), source, sink, NULL);
-  if (gst_element_link (source, sink) != TRUE) {
-    g_printerr ("Elements could not be linked.\n");
-    gst_object_unref (pipeline);
-    return -1;
-  }
-   
-  /* Print initial negotiated caps (in NULL state) */
-  g_print ("In NULL state:\n");
-  print_pad_capabilities (sink, "sink");
-   
-  /* Start playing */
-  ret = gst_element_set_state (pipeline, GST_STATE_PLAYING);
-  if (ret == GST_STATE_CHANGE_FAILURE) {
-    g_printerr ("Unable to set the pipeline to the playing state.\n");
-  }
-   
-  /* Wait until error, EOS or State Change */
-  bus = gst_element_get_bus (pipeline);
-  do {
-    msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
-        GST_MESSAGE_ERROR | GST_MESSAGE_EOS |
-        GST_MESSAGE_STATE_CHANGED);
-   
-    /* Parse message */
-    if (msg != NULL) {
-      GError *err;
-      gchar *debug_info;
-     
-      switch (GST_MESSAGE_TYPE (msg)) {
-        case GST_MESSAGE_ERROR:
-          gst_message_parse_error (msg, &err, &debug_info);
-          g_printerr ("Error received from element %s: %s\n",
-              GST_OBJECT_NAME (msg->src), err->message);
-          g_printerr ("Debugging information: %s\n",
-              debug_info ? debug_info : "none");
-          g_clear_error (&err);
-          g_free (debug_info);
-          terminate = TRUE;
-          break;
-        case GST_MESSAGE_EOS:
-          g_print ("End-Of-Stream reached.\n");
-          terminate = TRUE;
-          break;
-
-        case GST_MESSAGE_STATE_CHANGED:
-          /* We are only interested in state-changed messages from the pipeline */
-          if (GST_MESSAGE_SRC (msg) == GST_OBJECT (pipeline)) {
-            GstState old_state, new_state, pending_state;
-            gst_message_parse_state_changed (msg, &old_state, &new_state,
-                &pending_state);
-            g_print ("\nPipeline state changed from %s to %s:\n",
-                gst_element_state_get_name (old_state),
-                gst_element_state_get_name (new_state));
-
-            /* Print the current capabilities of the sink element */
-            print_pad_capabilities (sink, "sink");
-          }
-          break;
-
-        default:
-          /* We should not reach here because we 'only' asked for ERRORs, EOS
-           * and STATE_CHANGED */
-          g_printerr ("Unexpected message received.\n");
-          break;
-      }
-      gst_message_unref (msg);
-    }
-  } while (!terminate);
-   
-  /* Free resources */
-  gst_object_unref (bus);
-  gst_element_set_state (pipeline, GST_STATE_NULL);
-  gst_object_unref (pipeline);
-  gst_object_unref (source_factory);
-  gst_object_unref (sink_factory);
-  return 0;
-}
 
 
 ={============================================================================
@@ -7337,7 +7096,247 @@ case GST_MESSAGE_STATE_CHANGED:
 
 
 ={============================================================================
-*kt_dev_bcast_330* gst-man: 08: pad and capability
+*kt_dev_bcast_330* gst-doc-pad: pad and capability
+
+<from-tutorial-06> 06: pad cap negotiation
+
+Through a process known as negotiation, two linked Pads agree on a common type,
+and thus the Capabilities of the Pads become fixed. they only have one type and
+do not contain ranges.
+
+As the process evolves, actual Pads are instantiated and their Capabilities
+  refined until they are fixed (or negotiation fails).
+
+This tutorial instantiates two elements, shows their Pad Templates, links them
+and sets the pipeline to play. On each state 'change', the Capabilities of the
+sink element's Pad are shown, so you can observe how the negotiation proceeds
+until the Pad Caps are fixed.
+
+
+<ex> basic-tutorial-6.c
+
+#include <gst/gst.h>
+   
+/* Functions below print the Capabilities in a human-friendly format */
+static gboolean print_field (GQuark field, const GValue * value, gpointer pfx) {
+  gchar *str = gst_value_serialize (value);
+   
+  g_print ("%s  %15s: %s\n", (gchar *) pfx, g_quark_to_string (field), str);
+  g_free (str);
+  return TRUE;
+}
+   
+static void print_caps (const GstCaps * caps, const gchar * pfx) {
+  guint i;
+   
+  g_return_if_fail (caps != NULL);
+   
+  if (gst_caps_is_any (caps)) {
+    g_print ("%sANY\n", pfx);
+    return;
+  }
+  if (gst_caps_is_empty (caps)) {
+    g_print ("%sEMPTY\n", pfx);
+    return;
+  }
+   
+  for (i = 0; i < gst_caps_get_size (caps); i++) {
+    GstStructure *structure = gst_caps_get_structure (caps, i);
+     
+    g_print ("%s%s\n", pfx, gst_structure_get_name (structure));
+    gst_structure_foreach (structure, print_field, (gpointer) pfx);
+  }
+}
+   
+/* Prints information about a Pad Template, including its Capabilities */
+static void print_pad_templates_information (GstElementFactory * factory) {
+  const GList *pads;
+  GstStaticPadTemplate *padtemplate;
+   
+  g_print ("Pad Templates for %s:\n", gst_element_factory_get_longname (factory));
+  if (!factory->numpadtemplates) {
+    g_print ("  none\n");
+    return;
+  }
+   
+  pads = factory->staticpadtemplates;
+  while (pads) {
+    padtemplate = (GstStaticPadTemplate *) (pads->data);
+    pads = g_list_next (pads);
+     
+    if (padtemplate->direction == GST_PAD_SRC)
+      g_print ("  SRC template: '%s'\n", padtemplate->name_template);
+    else if (padtemplate->direction == GST_PAD_SINK)
+      g_print ("  SINK template: '%s'\n", padtemplate->name_template);
+    else
+      g_print ("  UNKNOWN!!! template: '%s'\n", padtemplate->name_template);
+     
+    if (padtemplate->presence == GST_PAD_ALWAYS)
+      g_print ("    Availability: Always\n");
+    else if (padtemplate->presence == GST_PAD_SOMETIMES)
+      g_print ("    Availability: Sometimes\n");
+    else if (padtemplate->presence == GST_PAD_REQUEST) {
+      g_print ("    Availability: On request\n");
+    } else
+      g_print ("    Availability: UNKNOWN!!!\n");
+     
+    if (padtemplate->static_caps.string) {
+      g_print ("    Capabilities:\n");
+      print_caps (gst_static_caps_get (&padtemplate->static_caps), "      ");
+    }
+     
+    g_print ("\n");
+  }
+}
+   
+/* Shows the CURRENT capabilities of the requested pad in the given element */
+static void print_pad_capabilities (GstElement *element, gchar *pad_name) {
+  GstPad *pad = NULL;
+  GstCaps *caps = NULL;
+   
+  /* Retrieve pad */
+  pad = gst_element_get_static_pad (element, pad_name);
+  if (!pad) {
+    g_printerr ("Could not retrieve pad '%s'\n", pad_name);
+    return;
+  }
+   
+  /* Retrieve negotiated caps 
+   * (or acceptable caps if negotiation is not finished yet) 
+   */
+  caps = gst_pad_get_negotiated_caps (pad);
+  if (!caps)
+    caps = gst_pad_get_caps_reffed (pad);
+   
+  /* Print and free */
+  g_print ("Caps for the %s pad:\n", pad_name);
+  print_caps (caps, "      ");
+  gst_caps_unref (caps);
+  gst_object_unref (pad);
+}
+   
+int main(int argc, char *argv[]) {
+  GstElement *pipeline, *source, *sink;
+  GstElementFactory *source_factory, *sink_factory;
+  GstBus *bus;
+  GstMessage *msg;
+  GstStateChangeReturn ret;
+  gboolean terminate = FALSE;
+   
+  /* Initialize GStreamer */
+  gst_init (&argc, &argv);
+    
+  // gst_element_factory_make() is really a shortcut for
+  // gst_element_factory_find() + gst_element_factory_create().
+
+  /* Create the element factories */
+  source_factory = gst_element_factory_find ("audiotestsrc");
+  sink_factory = gst_element_factory_find ("autoaudiosink");
+  if (!source_factory || !sink_factory) {
+    g_printerr ("Not all element factories could be created.\n");
+    return -1;
+  }
+   
+  /* Print information about the pad templates of these factories */
+  print_pad_templates_information (source_factory);
+  print_pad_templates_information (sink_factory);
+   
+  /* Ask the factories to instantiate actual elements */
+  source = gst_element_factory_create (source_factory, "source");
+  sink = gst_element_factory_create (sink_factory, "sink");
+   
+  /* Create the empty pipeline */
+  pipeline = gst_pipeline_new ("test-pipeline");
+   
+  if (!pipeline || !source || !sink) {
+    g_printerr ("Not all elements could be created.\n");
+    return -1;
+  }
+   
+  /* Build the pipeline */
+  gst_bin_add_many (GST_BIN (pipeline), source, sink, NULL);
+  if (gst_element_link (source, sink) != TRUE) {
+    g_printerr ("Elements could not be linked.\n");
+    gst_object_unref (pipeline);
+    return -1;
+  }
+   
+  // note:
+  /* Print initial negotiated caps (in NULL state) */
+  g_print ("In NULL state:\n");
+  print_pad_capabilities (sink, "sink");
+   
+  /* Start playing */
+  ret = gst_element_set_state (pipeline, GST_STATE_PLAYING);
+  if (ret == GST_STATE_CHANGE_FAILURE) {
+    g_printerr ("Unable to set the pipeline to the playing state.\n");
+  }
+   
+  /* Wait until error, EOS or State Change */
+  bus = gst_element_get_bus (pipeline);
+  do {
+    msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
+        GST_MESSAGE_ERROR | GST_MESSAGE_EOS |
+        GST_MESSAGE_STATE_CHANGED);
+   
+    /* Parse message */
+    if (msg != NULL) {
+      GError *err;
+      gchar *debug_info;
+     
+      switch (GST_MESSAGE_TYPE (msg)) {
+        case GST_MESSAGE_ERROR:
+          gst_message_parse_error (msg, &err, &debug_info);
+          g_printerr ("Error received from element %s: %s\n",
+              GST_OBJECT_NAME (msg->src), err->message);
+          g_printerr ("Debugging information: %s\n",
+              debug_info ? debug_info : "none");
+          g_clear_error (&err);
+          g_free (debug_info);
+          terminate = TRUE;
+          break;
+        case GST_MESSAGE_EOS:
+          g_print ("End-Of-Stream reached.\n");
+          terminate = TRUE;
+          break;
+
+        case GST_MESSAGE_STATE_CHANGED:
+          /* We are only interested in state-changed messages from the pipeline */
+          if (GST_MESSAGE_SRC (msg) == GST_OBJECT (pipeline)) {
+            GstState old_state, new_state, pending_state;
+            gst_message_parse_state_changed (msg, &old_state, &new_state,
+                &pending_state);
+            g_print ("\nPipeline state changed from %s to %s:\n",
+                gst_element_state_get_name (old_state),
+                gst_element_state_get_name (new_state));
+
+            // note:
+            /* Print the current capabilities of the sink element */
+            print_pad_capabilities (sink, "sink");
+          }
+          break;
+
+        default:
+          /* We should not reach here because we 'only' asked for ERRORs, EOS
+           * and STATE_CHANGED */
+          g_printerr ("Unexpected message received.\n");
+          break;
+      }
+      gst_message_unref (msg);
+    }
+  } while (!terminate);
+   
+  /* Free resources */
+  gst_object_unref (bus);
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  gst_object_unref (pipeline);
+  gst_object_unref (source_factory);
+  gst_object_unref (sink_factory);
+  return 0;
+}
+
+
+<from-man-08> 08: pad and capability
 
 As we have seen in Elements, the pads are "the element's 'interface'" to the
 outside world. Data streams from one element's source pad to another element's
@@ -7467,14 +7466,14 @@ gst_element_set_state () or gst_element_sync_state_with_parent ().
 
 8.1.2. Request pads
 
-An element can also have request pads. These pads are not created
-automatically but are only created on demand. This is very useful for
-multiplexers, aggregators and tee elements. Aggregators are elements that
-merge the content of several input streams together into one output stream.
-Tee elements are the reverse: they are elements that have one input stream and
-copy this stream to each of their output pads, which are created on request.
-Whenever an application needs another copy of the stream, it can simply
-request a new output pad from the tee element.
+An element can also have request pads. These pads are not created automatically
+but are only created on demand. This is very useful for multiplexers,
+    aggregators and tee elements. Aggregators are elements that merge the
+    content of several input streams together into one output stream.  Tee
+    elements are the reverse: they are elements that have one input stream and
+    copy this stream to each of their output pads, which are created on request.
+    Whenever an application needs another copy of the stream, it can simply
+    request a new output pad from the tee element.
 
 // skipped the rest
 
@@ -7501,13 +7500,10 @@ pad, in which case the pad has been negotiated already.
 note: capability is "media type"
 
 A pad's capabilities are described in a GstCaps object. Internally, a GstCaps
-(http://gstreamer.freedesktop.org/data/doc/gstreamer/stable/gstreamer/html/gstreamer-GstCaps.html)
-will contain one or more GstStructure
-(http://gstreamer.freedesktop.org/data/doc/gstreamer/stable/gstreamer/html/gstreamer-GstStructure.html)
-that will describe 'one' media type. A negotiated pad will have capabilities
-set that contain exactly one structure. Also, this structure will contain only
-fixed values. These constraints are not true for unnegotiated pads or pad
-templates.
+will contain one or more GstStructure that will describe 'one' media type. A
+'negotiated' pad will have capabilities set that contain exactly one structure.
+Also, this structure will contain only fixed values. These constraints are not
+true for unnegotiated pads or pad templates.
 
 Pad Templates:
    SRC template: ’src’
@@ -7518,9 +7514,10 @@ Pad Templates:
             rate: [ 1, 2147483647 ]
             channels: [ 1, 256 ]
 
-The source pad will be used to send raw (decoded) audio samples to the next element, with a raw
-audio media type (in this case, "audio/x-raw"). The source pad will also contain 'properties' for the
-audio samplerate and the amount of channels, plus some more.
+The source pad will be used to send raw (decoded) audio samples to the next
+element, with a raw audio media type (in this case, "audio/x-raw"). The source
+pad will also contain 'properties' for the audio samplerate and the amount of
+channels, plus some more.
 
 // other example
 
@@ -7553,75 +7550,80 @@ Pad Templates:
     goto exit;
   }
 
-gst_pad_get_caps() retrieves the capabilities of the pad wrapped in a GstCaps structure. A pad can
-offer many capabilities, and hence GstCaps can contain many GstStructure, 'each' representing a
-different capability.
+gst_pad_get_caps() retrieves the capabilities of the pad wrapped in a GstCaps
+structure. A pad can offer many capabilities, and hence GstCaps can contain many
+GstStructure, 'each' representing a different capability.
 
-Since, in this case, we know that the pad we want only had one capability (audio), we retrieve the
-first GstStructure with gst_caps_get_structure().
+Since, in this case, we know that the pad we want only had one capability
+(audio), we retrieve the first GstStructure with gst_caps_get_structure().
 
-Finally, with gst_structure_get_name() we recover the name of the structure, which contains the main
-description of the format (its 'MIME' type, actually).
+Finally, with gst_structure_get_name() we recover the name of the structure,
+  which contains the main description of the format (its 'MIME' type, actually).
 
 
 8.2.2. Properties and values
 
-Properties are used to describe extra information for capabilities. A property consists of a key (a
-        string) and a value. There are different possible value types that can be used:
+Properties are used to describe 'extra' information for capabilities. A property
+consists of a key (a string) and a value. There are different possible value
+types that can be used:
 
-* Basic types, this can be pretty much any GType registered with Glib. Those properties indicate a
-specific, non-dynamic value for this property. Examples include:
+Basic types, this can be pretty much any GType registered with Glib. Those
+properties indicate a specific, non-dynamic value for this property. Examples
+include:
 
 ** An integer value (G_TYPE_INT): the property has this exact value.
 ** A boolean value (G_TYPE_BOOLEAN): the property is either TRUE or FALSE.
 ** A float value (G_TYPE_FLOAT): the property has this exact floating point value.
 ** A string value (G_TYPE_STRING): the property contains a UTF-8 string.
-** A fraction value (GST_TYPE_FRACTION): contains a fraction expressed by an integer numerator and
-denominator.
+** A fraction value (GST_TYPE_FRACTION): contains a fraction expressed by an
+                                         integer numerator and denominator.
 
 // skipped the rest
 
 
 8.3. What capabilities are used for
 
-Capabilities (short: caps) describe the type of data that is streamed between two pads, or that one
-pad (template) supports. This makes them very useful for various purposes:
+Capabilities (short: caps) describe the type of data that is streamed between
+two pads, or that one pad (template) supports. This makes them very useful for
+various purposes:
 
-* Autoplugging: automatically finding elements to link to a pad based on its capabilities. All
-autopluggers use this method.
+  Autoplugging: automatically finding elements to link to a pad based on its
+  capabilities. All autopluggers use this method.
 
-* Compatibility detection: when two pads are linked, GStreamer can verify if the two pads are
-talking about the same media type. The process of linking two pads and checking if they are
-compatible is called "caps negotiation".
+  Compatibility detection: when two pads are linked, GStreamer can verify if the
+  two pads are talking about the same media type. The process of linking two
+  pads and checking if they are compatible is called "caps negotiation".
 
-* Metadata: by reading the capabilities from a pad, applications can provide information about the
-type of media that is being streamed over the pad, which is information about the stream that is
-'currently' being played back.
+  Metadata: by reading the capabilities from a pad, applications can provide
+  information about the type of media that is being streamed over the pad, which
+  is information about the stream that is 'currently' being played back.
 
-* Filtering: an application can use capabilities to limit the possible media types that can stream
-between two pads to a specific subset of their supported stream types. An application can, for
-example, use "filtered caps" to set a specific (fixed or non-fixed) video size that should stream
-between two pads.
+  Filtering: an application can use capabilities to limit the possible media
+  types that can stream between two pads to a specific subset of their supported
+  stream types. An application can, for example, use "filtered caps" to set a
+  specific (fixed or non-fixed) video size that should stream between two pads.
 
-You will see an example of filtered caps later in this manual, in Section 19.2. You can do caps
-filtering by inserting a capsfilter element into your pipeline and setting its "caps" property. Caps
-filters are often placed after converter elements like audioconvert, audioresample, videoconvert or
-videoscale to force those converters to convert data to a specific output format at a certain point
+You will see an example of filtered caps later in this manual, in Section 19.2.
+You can do caps filtering by inserting a capsfilter element into your pipeline
+and setting its "caps" property. Caps filters are often placed after converter
+elements like audioconvert, audioresample, videoconvert or videoscale to force
+those converters to convert data to a specific output format at a certain point
 in a stream.
 
 note: from possible caps, allowed and negotiated cap
 
-Note that there is a distinct difference between the possible capabilities of a pad; ie. usually
-what you find as caps of pad templates as they are shown in gst-inspect; the allowed caps of a pad;
-can be the same as the pad's template caps or a subset of them, depending on the possible caps of
-the 'peer' pad; and lastly negotiated caps. these describe the exact format of a stream or buffer
-and contain "exactly one structure" and have no variable bits like ranges or lists, ie. they are
-fixed caps.
+Note that there is a distinct difference between the possible capabilities of a
+pad; ie. usually what you find as caps of pad templates as they are shown in
+gst-inspect; the 'allowed' caps of a pad; can be the same as the pad's template
+caps or a subset of them, depending on the possible caps of the 'peer' pad; and
+lastly 'negotiated' caps. these describe the exact format of a stream or buffer
+and contain "exactly one structure" and have no variable bits like ranges or
+lists, ie. they are fixed caps.
 
 <type-of-caps>
-Caps are called simple caps when they contain only one structure, and fixed caps when they contain
-only one structure and have no variable field types (like ranges or lists of possible values). Two
-other special types of caps are ANY caps and empty caps.
+Caps are called simple caps when they contain only one structure, and fixed caps
+when they contain only one structure and have no variable field types. Two other
+special types of caps are ANY caps and empty caps.
 
 
 8.4. Ghost pads
@@ -7685,7 +7687,7 @@ element. You could, for example, link another element to the bin.
 
 
 ={============================================================================
-*kt_dev_bcast_330* gst-doc: clocks and synchronization
+*kt_dev_bcast_330* gst-doc-clock: synchronization
 
 note: from gst manual 14 which is the same as plugin guide
 
@@ -7714,7 +7716,7 @@ thus all calculate the running-time according to the pipeline clock.
 14.2. Buffer running-time
 
 To calculate a buffer running-time, we need a buffer timestamp and the SEGMENT
-event that preceeded the buffer. First we can convert the SEGMENT event into a
+event that preceeded the buffer. First we can 'convert' the SEGMENT event into a
 GstSegment object and then we can use the gst_segment_to_running_time ()
 function to perform the calculation of the buffer running-time.
 
@@ -7740,12 +7742,12 @@ function to perform the calculation of the buffer running-time.
 // segment     a GstSegment structure.  
 // format      the format of the segment.  
 // position    the position in the segment
-// 	 
+// 
 // Returns the position as the total running time or -1 when an invalid position
 // was given.
 
 Synchronization is now a matter of making sure that a buffer with a certain
-running-time is played when the clock reaches the same running-time. Usually
+running-time is played when the clock 'reaches' the same running-time. Usually
 this task is done by 'sink' elements. Sink also have to take into account the
 latency configured in the pipeline and add this to the buffer running-time
 before synchronizing to the pipeline clock.
@@ -7754,7 +7756,7 @@ before synchronizing to the pipeline clock.
 Non-live sources 'timestamp' buffers with a running-time starting from 0. After
 a flushing seek, they will produce buffers again from a running-time of 0.
 
-note: source in a pipeline do timestamp on buffers. For example:
+note: 'source' in a pipeline do timestamp on buffers. For example:
 
 ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue 
                                               ^1        ^2
@@ -7770,14 +7772,16 @@ pipeline running-time when the first byte of the buffer was captured.
 
 14.3. Buffer stream-time
 
-The buffer stream-time, also known as the position in the stream, is calculated
-from the buffer timestamps and the preceding SEGMENT event. It represents the
-time 'inside' the media as a value between 0 and the total duration of the media.
+The buffer stream-time, also known as the position in the stream, is
+'calculated' from the buffer timestamps and the preceding SEGMENT event. It
+represents the time 'inside' the media as a value between 0 and the total
+duration of the media.
 
 The stream-time is used in:
-* Report the current position in the stream with the POSITION query.
-* The position used in the seek events and queries.
-* The position used to synchronize controlled values.
+
+  Report the current position in the stream with the POSITION query.
+  The position used in the seek events and queries.
+  The position used to synchronize controlled values.
 
 note: The stream-time is never used to synchronize streams, this is only done
 with the running-time.
@@ -7834,11 +7838,11 @@ note: audio sink?
 This algorithm prefers a clock from an audio sink in a typical playback pipeline
 and a clock from source elements in a typical capture pipeline.
 
-note: bus message
+note: clock bus message
 
 There exist some bus messages to let you know about the clock and clock
 providers in the pipeline. You can see what clock is selected in the pipeline by
-looking at the NEW_CLOCK message on the bus.When a clock provider is removed
+looking at the NEW_CLOCK message on the bus. When a clock provider is removed
 from the pipeline, a CLOCK_LOST message is posted and the application should go
 to PAUSED and back to PLAYING to select a new clock.
 
@@ -7852,7 +7856,7 @@ For pipelines where the only elements that synchronize against the clock are the
 sinks, the latency is always 0 since no other element is delaying the buffer.
 
 For pipelines with live sources, a latency is introduced, mostly because of the
-way a live source works.  Consider an audio source, it will start capturing the
+way a live source works. Consider an audio source, it will start capturing the
 first sample at time 0. If the source pushes buffers with 44100 samples at a
 time at 44100Hz it will have collected the buffer at second 1. Since the
 timestamp of the buffer is 0 and the time of the clock is now >= 1 second, the
@@ -7883,10 +7887,10 @@ all sinks delay with the same amount of time, they will be relative in sync.
 // 
 // live
 // if there is a live element upstream
-// 	 
+// 
 // min_latency
 // the minimal latency of the upstream elements
-// 	 
+// 
 // max_latency
 // the maximal latency of the upstream elements
 //
@@ -7904,6 +7908,409 @@ pipeline by posting a LATENCY message on the bus. The application can then
 decide to query and redistribute a new latency or not. Changing the latency in a
 pipeline might cause visual or audible glitches and should therefore only be
 done by the application when it is allowed.
+
+
+<from-design-doc>
+
+http://cgit.freedesktop.org/gstreamer/gstreamer/tree/docs/design/
+part-synchronisation.txt
+
+Synchronisation
+---------------
+
+This document outlines the techniques used for doing synchronised playback of
+multiple streams.
+
+Synchronisation in a GstPipeline is achieved using the following 3 components:
+
+ - a GstClock, which is global for all elements in a GstPipeline.
+ - Timestamps on a GstBuffer.
+ - the SEGMENT event preceding the buffers.
+
+
+A GstClock
+~~~~~~~~~~
+This object provides a counter that represents the current time in
+'nanoseconds'. This value is called the absolute_time.
+
+Different sources exist for this counter:
+
+ - the system time (with g_get_current_time() and with microsecond accuracy)
+ - monotonic time (with g_get_monotonic_time () with microsecond accuracy)
+ - an audio device (based on number of samples played)
+ - a network source based on packets received + timestamps in those packets (a
+   typical example is an RTP source)
+ - ...
+
+In GStreamer any element can provide a GstClock object that can be used in the
+pipeline. The GstPipeline object will select a clock from all the providers and
+will distribute it to all other elements (see part-gstpipeline.txt).
+
+A GstClock always counts time upwards and does not necessarily start at 0.
+
+While it is possible, it is 'not' recommended to create a clock derived from the
+contents of a stream (for example, create a clock from the PCR in an mpeg-ts
+        stream).
+
+
+Running time
+~~~~~~~~~~~~
+After a pipeline selected a clock it will maintain the running_time based on the
+selected clock. This running_time represents the total time spent in the PLAYING
+state and is calculated as follows:
+
+  If the pipeline is NULL/READY, the running_time is undefined.
+
+  In PAUSED, the running_time remains at the time when it was last PAUSED. When
+  the stream is PAUSED for the first time, the running_time is '0'.
+
+  In PLAYING, the running_time is the delta between the absolute_time and the
+  base time. The base time is 'defined' as the absolute_time minus the
+  running_time at the time when the pipeline is set to PLAYING.
+
+  after a flushing seek, the running_time is set to 0 (see part-seeking.txt).
+  This is accomplished by 'redistributing' a new base_time to the elements that
+  got flushed.
+
+This algorithm captures the running_time when the pipeline is set from PLAYING
+to PAUSED and restores this time based on the current absolute_time when going
+back to PLAYING. This allows for both clocks that progress when in the PAUSED
+state (systemclock) and clocks that don't (audioclock).
+
+The clock and pipeline now provide a running_time to all elements that want to
+perform synchronisation. Indeed, the running time can be observed in each
+element (during the PLAYING state) as:
+  
+  C.running_time = absolute_time - base_time
+
+We note C.running_time as the running_time obtained by looking at the clock.
+This value is monotonically increasing at the rate of the clock.
+
+
+Timestamps
+~~~~~~~~~~
+The GstBuffer timestamps and the preceding SEGMENT event (See part-streams.txt)
+'define' a 'transformation' of the buffer timestamps to running_time as follows:
+
+The following notation is used:
+
+note: PTS or DTS
+
+ B: GstBuffer 
+  - B.timestamp = buffer timestamp (GST_BUFFER_PTS or GST_BUFFER_DTS)
+
+ S:  SEGMENT event preceding the buffers.
+  - S.start: start field in the SEGMENT event. This is the lowest allowed
+             timestamp.
+  - S.stop: stop field in the SEGMENT event. This is the highers allowed
+            timestamp.
+  - S.rate: rate field of SEGMENT event. This is the desired playback rate.
+  - S.base: a base time for the time. This is the total elapsed running_time of
+            any previous segments.
+  - S.offset: an offset to apply to S.start or S.stop. This is the amount that
+              has already been elapsed in the segment.
+
+<valid-buffer>
+Valid buffers for synchronisation are those with B.timestamp between S.start and
+S.stop (after applying the S.offset). All other buffers outside this range
+should be dropped or clipped to these boundaries (see also part-segments.txt).
+
+The following transformation to running_time exist:
+
+  if (S.rate > 0.0)
+    B.running_time = (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base
+  else
+    B.running_time = ((S.stop - S.offset) - B.timestamp) / ABS (S.rate) + S.base
+
+We write B.running_time as the running_time obtained from the SEGMENT event and
+the buffers of that segment.
+
+The first displayable buffer will yield a value of 0 (since B.timestamp ==
+        S.start and S.offset and S.base == 0).
+
+For S.rate > 1.0, the timestamps will be scaled down to increase the playback
+rate. Likewise, a rate between 0.0 and 1.0 will slow down playback.
+
+For negative rates, timestamps are received stop S.stop to S.start so that the
+first buffer received will be transformed into B.running_time of 0 (B.timestamp
+        == S.stop and S.base == 0).
+
+This makes it so that B.running_time is always monotonically increasing starting
+from 0 with both positive and negative rates.
+
+
+Synchronisation
+~~~~~~~~~~~~~~~
+As we have seen, we can get a running_time:
+
+ - using the clock and the element's base_time with:
+
+    C.running_time = absolute_time - base_time
+
+ - using the buffer timestamp and the preceding SEGMENT event as (assuming
+   positive playback rate):
+
+    B.running_time = (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base
+
+We prefix C. and B. before the two running times to note how they were
+calculated.
+
+The task of synchronized playback is to make sure that we play a buffer with
+B.running_time at the moment when the clock reaches the same C.running_time.
+
+Thus the following must hold:
+
+   B.running_time = C.running_time
+
+expaning:
+
+   B.running_time = absolute_time - base_time
+
+or:
+
+   absolute_time = B.running_time + base_time
+
+The absolute_time when a buffer with B.running_time should be played is noted
+with B.sync_time. Thus:
+
+  B.sync_time = B.running_time + base_time
+
+One then waits for the clock to reach B.sync_time 'before' rendering the buffer
+in the sink (See also part-clocks.txt).
+
+For multiple streams this means that buffers with the same running_time are to
+be displayed at the same time. 
+
+note:
+A demuxer must make sure that the SEGMENT it emits on its output pads yield the
+same running_time for buffers that should be played synchronized. This usually
+means sending the same SEGMENT on all pads and making sure that the synchronized
+buffers have the same timestamps.
+
+
+Stream time
+~~~~~~~~~~~
+The stream time is also known as the position in the stream and is a value
+between 0 and the total duration of the media file.
+
+It is the stream time that is used for:
+
+  - report the POSITION query in the pipeline
+  - the position used in seek events/queries
+  - the position used to synchronize controller values
+
+Additional fields in the SEGMENT are used:
+
+  - S.time: time field in the SEGMENT event. This the stream-time of S.start
+  - S.applied_rate: The rate already applied to the stream.
+
+Stream time is calculated using the buffer times and the preceding SEGMENT event
+as follows:
+
+    stream_time = (B.timestamp - S.start) * ABS (S.applied_rate) + S.time
+ 
+For negative rates, B.timestamp will go backwards from S.stop to S.start, making
+the stream time go backwards.
+
+In the PLAYING state, it is also possible to use the pipeline clock to derive
+the current stream_time.
+
+Give the two formulas above to match the clock times with buffer timestamps
+allows us to rewrite the above formula for stream_time (and for positive rates).
+
+    C.running_time = absolute_time - base_time
+    B.running_time = (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base
+
+  =>
+    (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base = absolute_time
+    - base_time;
+
+  =>
+    (B.timestamp - (S.start + S.offset)) / ABS (S.rate) = absolute_time -
+    base_time - S.base;
+
+  =>
+    (B.timestamp - (S.start + S.offset)) = (absolute_time - base_time - S.base)
+    * ABS (S.rate)
+
+  =>
+    (B.timestamp - S.start) = S.offset + (absolute_time - base_time - S.base) *
+    ABS (S.rate)
+
+  filling (B.timestamp - S.start) in the above formule for stream time
+
+  =>
+    stream_time = (S.offset + (absolute_time - base_time - S.base) * ABS
+            (S.rate)) * ABS (S.applied_rate) + S.time
+
+This last formula is typically used in sinks to report the current position in
+an accurate and efficient way.
+
+Note that the stream time is never used for synchronisation against the clock.
+
+
+={============================================================================
+*kt_dev_bcast_330* gst-doc-clock: gst time and mpeg time
+
+/**
+ * GstSegment:
+ * @flags: flags for this segment
+ * @rate: the rate of the segment
+ * @applied_rate: the already applied rate to the segment
+ * @format: the format of the segment values
+ * @base: the base of the segment
+ * @offset: the offset to apply to @start or @stop
+ * @start: the start of the segment
+ * @stop: the stop of the segment
+ * @time: the stream time of the segment
+ * @position: the position in the segment
+ * @duration: the duration of the segment
+ *
+ * A helper structure that holds the configured region of
+ * interest in a media file.
+ */
+struct _GstSegment {
+  /*< public >*/
+  GstSegmentFlags flags;
+
+  gdouble         rate;
+  gdouble         applied_rate;
+
+  GstFormat       format;
+  guint64         base;
+  guint64         offset;
+  guint64         start;
+  guint64         stop;
+  guint64         time;
+
+  guint64         position;
+  guint64         duration;
+
+  /* < private > */
+  gpointer        _gst_reserved[GST_PADDING];
+};
+
+GST_DEBUG_OBJECT (sink, 
+        "Segment event: %" GST_TIME_FORMAT " -> %" GST_TIME_FORMAT, 
+        GST_TIME_ARGS(segment->start),GST_TIME_ARGS(segment->stop));
+
+:gst_nexus_sink_event_locked: KT: Segment start: 32654987520000000
+:gst_nexus_sink_event_locked:<nexussink1> Segment event: \
+    9070:49:47.520000000 -> 99:99:99.999999999
+
+
+<gst-time-vs-pts-time>
+32654987520000000/90K = 362833194666 sec
+
+>>> 362833194666/(60*60)
+100786998 hours?
+
+what happened? The reason is gst uses 'nanosecond' so usage of the GST_SECOND
+or GST_MSECOND macros is highly recommended.
+
+>>> 32654987520000000/(1000000000)
+32654987
+>>> 32654987/(60*60)
+9070
+
+
+/**
+ * GST_SECOND:
+ *
+ * Constant that defines one GStreamer second.
+ *
+ * Value: 1000000000
+ * Type: GstClockTime
+ */
+#define GST_SECOND  (G_USEC_PER_SEC * G_GINT64_CONSTANT (1000))
+
+
+/* microseconds per second */
+typedef struct _GTimer GTimer;
+
+#define G_USEC_PER_SEC 1000000
+
+/**
+ * GstClockTime:
+ *
+ * A datatype to hold a time, measured in nanoseconds.
+ */
+typedef guint64 GstClockTime;
+
+
+/* timestamp debugging macros */
+/**
+ * GST_TIME_FORMAT:
+ *
+ * A string that can be used in printf-like format strings to display a
+ * #GstClockTime value in h:m:s format.  Use GST_TIME_ARGS() to construct
+ * the matching arguments.
+ *
+ * Example:
+ * |[
+ * printf("%" GST_TIME_FORMAT "\n", GST_TIME_ARGS(ts));
+ * ]|
+ */
+#define GST_TIME_FORMAT "u:%02u:%02u.%09u"
+/**
+ * GST_TIME_ARGS:
+ * @t: a #GstClockTime
+ *
+ * Format @t for the #GST_TIME_FORMAT format string. Note: @t will be
+ * evaluated more than once.
+ */
+#define GST_TIME_ARGS(t) \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) (((GstClockTime)(t)) / (GST_SECOND * 60 * 60)) : 99, \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) ((((GstClockTime)(t)) / (GST_SECOND * 60)) % 60) : 99, \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) ((((GstClockTime)(t)) / GST_SECOND) % 60) : 99, \
+        GST_CLOCK_TIME_IS_VALID (t) ? \
+        (guint) (((GstClockTime)(t)) % GST_SECOND) : 999999999
+
+
+<gst-buffer>
+GST_BUFFER_PTS(stream->buf);
+
+/**
+ * GstBuffer:
+ * @mini_object: the parent structure
+ * @pool: pointer to the pool owner of the buffer
+ * @pts: presentation timestamp of the buffer, can be #GST_CLOCK_TIME_NONE when the
+ *     pts is not known or relevant. The pts contains the timestamp when the
+ *     media should be presented to the user.
+ * @dts: decoding timestamp of the buffer, can be #GST_CLOCK_TIME_NONE when the
+ *     dts is not known or relevant. The dts contains the timestamp when the
+ *     media should be processed.
+ * @duration: duration in time of the buffer data, can be #GST_CLOCK_TIME_NONE
+ *     when the duration is not known or relevant.
+ * @offset: a media specific offset for the buffer data.
+ *     For video frames, this is the frame number of this buffer.
+ *     For audio samples, this is the offset of the first sample in this buffer.
+ *     For file data or compressed data this is the byte offset of the first
+ *       byte in this buffer.
+ * @offset_end: the last offset contained in this buffer. It has the same
+ *     format as @offset.
+ *
+ * The structure of a #GstBuffer. Use the associated macros to access the public
+ * variables.
+ */
+struct _GstBuffer {
+  GstMiniObject          mini_object;
+
+  /*< public >*/ /* with COW */
+  GstBufferPool         *pool;
+
+  /* timestamp */
+  GstClockTime           pts;
+  GstClockTime           dts;
+  GstClockTime           duration;
+
+  /* media specific offset */
+  guint64                offset;
+  guint64                offset_end;
+};
 
 
 ={============================================================================
@@ -8362,410 +8769,6 @@ For elements that need to perform operations on media data in stream_time,
         segment info to stream time (which is always between 0 and the duration
                 of the stream).
 
-
-={============================================================================
-*kt_dev_bcast_330* gst: doc: synchronisation
-
-http://cgit.freedesktop.org/gstreamer/gstreamer/tree/docs/design/part-synchronisation.txt
-
-Synchronisation
----------------
-
-This document outlines the techniques used for doing synchronised playback of
-multiple streams.
-
-Synchronisation in a GstPipeline is achieved using the following 3 components:
-
- - a GstClock, which is global for all elements in a GstPipeline.
- - Timestamps on a GstBuffer.
- - the SEGMENT event preceding the buffers.
-
-
-A GstClock
-~~~~~~~~~~
-
-This object provides a counter that represents the current time in nanoseconds.
-This value is called the absolute_time.
-
-Different sources exist for this counter:
-
- - the system time (with g_get_current_time() and with microsecond accuracy)
- - monotonic time (with g_get_monotonic_time () with microsecond accuracy)
- - an audio device (based on number of samples played)
- - a network source based on packets received + timestamps in those packets (a
-   typical example is an RTP source)
- - ...
-
-In GStreamer any element can provide a GstClock object that can be used in the
-pipeline. The GstPipeline object will select a clock from all the providers and
-will distribute it to all other elements (see part-gstpipeline.txt).
-
-A GstClock always counts time upwards and does not necessarily start at 0.
-
-While it is possible, it is 'not' recommended to create a clock derived from the
-contents of a stream (for example, create a clock from the PCR in an mpeg-ts
-        stream).
-
-
-Running time
-~~~~~~~~~~~~
-
-After a pipeline selected a clock it will maintain the running_time based on the
-selected clock. This running_time represents the total time spent in the PLAYING
-state and is calculated as follows:
-
-  If the pipeline is NULL/READY, the running_time is undefined.
-
-  In PAUSED, the running_time remains at the time when it was last PAUSED. When
-  the stream is PAUSED for the first time, the running_time is '0'.
-
-  In PLAYING, the running_time is the delta between the absolute_time and the
-  base time. The base time is 'defined' as the absolute_time minus the
-  running_time at the time when the pipeline is set to PLAYING.
-
-  after a flushing seek, the running_time is set to 0 (see part-seeking.txt).
-  This is accomplished by 'redistributing' a new base_time to the elements that
-  got flushed.
-
-This algorithm captures the running_time when the pipeline is set from PLAYING
-to PAUSED and restores this time based on the current absolute_time when going
-back to PLAYING. This allows for both clocks that progress when in the PAUSED
-state (systemclock) and clocks that don't (audioclock).
-
-The clock and pipeline now provide a running_time to all elements that want to
-perform synchronisation. Indeed, the running time can be observed in each
-element (during the PLAYING state) as:
-  
-  C.running_time = absolute_time - base_time
-
-We note C.running_time as the running_time obtained by looking at the clock.
-This value is monotonically increasing at the rate of the clock.
-
-
-Timestamps
-~~~~~~~~~~
- 
-The GstBuffer timestamps and the preceding SEGMENT event (See part-streams.txt)
-'define' a 'transformation' of the buffer timestamps to running_time as follows:
-
-The following notation is used:
-
-note: PTS or DTS
-
- B: GstBuffer 
-  - B.timestamp = buffer timestamp (GST_BUFFER_PTS or GST_BUFFER_DTS)
-
- S:  SEGMENT event preceding the buffers.
-  - S.start: start field in the SEGMENT event. This is the lowest allowed
-             timestamp.
-  - S.stop: stop field in the SEGMENT event. This is the highers allowed
-            timestamp.
-  - S.rate: rate field of SEGMENT event. This is the desired playback rate.
-  - S.base: a base time for the time. This is the total elapsed running_time of
-            any previous segments.
-  - S.offset: an offset to apply to S.start or S.stop. This is the amount that
-              has already been elapsed in the segment.
-
-Valid buffers for synchronisation are those with B.timestamp between S.start and
-S.stop (after applying the S.offset). All other buffers outside this range
-should be dropped or clipped to these boundaries (see also part-segments.txt).
-
-The following transformation to running_time exist:
-
-  if (S.rate > 0.0)
-    B.running_time = (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base
-  else
-    B.running_time = ((S.stop - S.offset) - B.timestamp) / ABS (S.rate) + S.base
-
-We write B.running_time as the running_time obtained from the SEGMENT event and
-the buffers of that segment.
-
-The first displayable buffer will yield a value of 0 (since B.timestamp ==
-        S.start and S.offset and S.base == 0).
-
-For S.rate > 1.0, the timestamps will be scaled down to increase the playback
-rate. Likewise, a rate between 0.0 and 1.0 will slow down playback.
-
-For negative rates, timestamps are received stop S.stop to S.start so that the
-first buffer received will be transformed into B.running_time of 0 (B.timestamp
-        == S.stop and S.base == 0).
-
-This makes it so that B.running_time is always monotonically increasing starting
-from 0 with both positive and negative rates.
-
-
-Synchronisation
-~~~~~~~~~~~~~~~
-
-As we have seen, we can get a running_time:
-
- - using the clock and the element's base_time with:
-
-    C.running_time = absolute_time - base_time
-
- - using the buffer timestamp and the preceding SEGMENT event as (assuming
-   positive playback rate):
-
-    B.running_time = (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base
-
-We prefix C. and B. before the two running times to note how they were
-calculated.
-
-The task of synchronized playback is to make sure that we play a buffer with
-B.running_time at the moment when the clock reaches the same C.running_time.
-
-Thus the following must hold:
-
-   B.running_time = C.running_time
-
-expaning:
-
-   B.running_time = absolute_time - base_time
-
-or:
-
-   absolute_time = B.running_time + base_time
-
-The absolute_time when a buffer with B.running_time should be played is noted
-with B.sync_time. Thus:
-
-  B.sync_time = B.running_time + base_time
-
-One then waits for the clock to reach B.sync_time 'before' rendering the buffer
-in the sink (See also part-clocks.txt).
-
-For multiple streams this means that buffers with the same running_time are to
-be displayed at the same time. 
-
-note:
-A demuxer must make sure that the SEGMENT it emits on its output pads yield the
-same running_time for buffers that should be played synchronized. This usually
-means sending the same SEGMENT on all pads and making sure that the synchronized
-buffers have the same timestamps.
-
-
-Stream time
-~~~~~~~~~~~
-The stream time is also known as the position in the stream and is a value
-between 0 and the total duration of the media file.
-
-It is the stream time that is used for:
-
-  - report the POSITION query in the pipeline
-  - the position used in seek events/queries
-  - the position used to synchronize controller values
-
-Additional fields in the SEGMENT are used:
-
-  - S.time: time field in the SEGMENT event. This the stream-time of S.start
-  - S.applied_rate: The rate already applied to the stream.
-
-Stream time is calculated using the buffer times and the preceding SEGMENT event
-as follows:
-
-    stream_time = (B.timestamp - S.start) * ABS (S.applied_rate) + S.time
- 
-For negative rates, B.timestamp will go backwards from S.stop to S.start, making
-the stream time go backwards.
-
-In the PLAYING state, it is also possible to use the pipeline clock to derive
-the current stream_time.
-
-Give the two formulas above to match the clock times with buffer timestamps
-allows us to rewrite the above formula for stream_time (and for positive rates).
-
-    C.running_time = absolute_time - base_time
-    B.running_time = (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base
-
-  =>
-    (B.timestamp - (S.start + S.offset)) / ABS (S.rate) + S.base = absolute_time
-    - base_time;
-
-  =>
-    (B.timestamp - (S.start + S.offset)) / ABS (S.rate) = absolute_time -
-    base_time - S.base;
-
-  =>
-    (B.timestamp - (S.start + S.offset)) = (absolute_time - base_time - S.base)
-    * ABS (S.rate)
-
-  =>
-    (B.timestamp - S.start) = S.offset + (absolute_time - base_time - S.base) *
-    ABS (S.rate)
-
-  filling (B.timestamp - S.start) in the above formule for stream time
-
-  =>
-    stream_time = (S.offset + (absolute_time - base_time - S.base) * ABS
-            (S.rate)) * ABS (S.applied_rate) + S.time
-
-This last formula is typically used in sinks to report the current position in
-an accurate and efficient way.
-
-Note that the stream time is never used for synchronisation against the clock.
-
-
-={============================================================================
-*kt_dev_bcast_400* gst: gst time and mpeg time
-
-/**
- * GstSegment:
- * @flags: flags for this segment
- * @rate: the rate of the segment
- * @applied_rate: the already applied rate to the segment
- * @format: the format of the segment values
- * @base: the base of the segment
- * @offset: the offset to apply to @start or @stop
- * @start: the start of the segment
- * @stop: the stop of the segment
- * @time: the stream time of the segment
- * @position: the position in the segment
- * @duration: the duration of the segment
- *
- * A helper structure that holds the configured region of
- * interest in a media file.
- */
-struct _GstSegment {
-  /*< public >*/
-  GstSegmentFlags flags;
-
-  gdouble         rate;
-  gdouble         applied_rate;
-
-  GstFormat       format;
-  guint64         base;
-  guint64         offset;
-  guint64         start;
-  guint64         stop;
-  guint64         time;
-
-  guint64         position;
-  guint64         duration;
-
-  /* < private > */
-  gpointer        _gst_reserved[GST_PADDING];
-};
-
-GST_DEBUG_OBJECT (sink, 
-        "Segment event: %" GST_TIME_FORMAT " -> %" GST_TIME_FORMAT, 
-        GST_TIME_ARGS(segment->start),GST_TIME_ARGS(segment->stop));
-
-:gst_nexus_sink_event_locked: KT: Segment start: 32654987520000000
-:gst_nexus_sink_event_locked:<nexussink1> Segment event: 9070:49:47.520000000 -> 99:99:99.999999999
-
-
-<gst-time-vs-pts-time>
-32654987520000000/90K = 362833194666 sec
-
->>> 362833194666/(60*60)
-100786998 hours?
-
-what happened? The reason is gst uses 'nanosecond' so usage of the GST_SECOND
-or GST_MSECOND macros is highly recommended.
-
->>> 32654987520000000/(1000000000)
-32654987
->>> 32654987/(60*60)
-9070
-
-
-/**
- * GST_SECOND:
- *
- * Constant that defines one GStreamer second.
- *
- * Value: 1000000000
- * Type: GstClockTime
- */
-#define GST_SECOND  (G_USEC_PER_SEC * G_GINT64_CONSTANT (1000))
-
-
-/* microseconds per second */
-typedef struct _GTimer		GTimer;
-
-#define G_USEC_PER_SEC 1000000
-
-/**
- * GstClockTime:
- *
- * A datatype to hold a time, measured in nanoseconds.
- */
-typedef guint64 GstClockTime;
-
-
-/* timestamp debugging macros */
-/**
- * GST_TIME_FORMAT:
- *
- * A string that can be used in printf-like format strings to display a
- * #GstClockTime value in h:m:s format.  Use GST_TIME_ARGS() to construct
- * the matching arguments.
- *
- * Example:
- * |[
- * printf("%" GST_TIME_FORMAT "\n", GST_TIME_ARGS(ts));
- * ]|
- */
-#define GST_TIME_FORMAT "u:%02u:%02u.%09u"
-/**
- * GST_TIME_ARGS:
- * @t: a #GstClockTime
- *
- * Format @t for the #GST_TIME_FORMAT format string. Note: @t will be
- * evaluated more than once.
- */
-#define GST_TIME_ARGS(t) \
-        GST_CLOCK_TIME_IS_VALID (t) ? \
-        (guint) (((GstClockTime)(t)) / (GST_SECOND * 60 * 60)) : 99, \
-        GST_CLOCK_TIME_IS_VALID (t) ? \
-        (guint) ((((GstClockTime)(t)) / (GST_SECOND * 60)) % 60) : 99, \
-        GST_CLOCK_TIME_IS_VALID (t) ? \
-        (guint) ((((GstClockTime)(t)) / GST_SECOND) % 60) : 99, \
-        GST_CLOCK_TIME_IS_VALID (t) ? \
-        (guint) (((GstClockTime)(t)) % GST_SECOND) : 999999999
-
-
-<gst-buffer>
-GST_BUFFER_PTS(stream->buf);
-
-/**
- * GstBuffer:
- * @mini_object: the parent structure
- * @pool: pointer to the pool owner of the buffer
- * @pts: presentation timestamp of the buffer, can be #GST_CLOCK_TIME_NONE when the
- *     pts is not known or relevant. The pts contains the timestamp when the
- *     media should be presented to the user.
- * @dts: decoding timestamp of the buffer, can be #GST_CLOCK_TIME_NONE when the
- *     dts is not known or relevant. The dts contains the timestamp when the
- *     media should be processed.
- * @duration: duration in time of the buffer data, can be #GST_CLOCK_TIME_NONE
- *     when the duration is not known or relevant.
- * @offset: a media specific offset for the buffer data.
- *     For video frames, this is the frame number of this buffer.
- *     For audio samples, this is the offset of the first sample in this buffer.
- *     For file data or compressed data this is the byte offset of the first
- *       byte in this buffer.
- * @offset_end: the last offset contained in this buffer. It has the same
- *     format as @offset.
- *
- * The structure of a #GstBuffer. Use the associated macros to access the public
- * variables.
- */
-struct _GstBuffer {
-  GstMiniObject          mini_object;
-
-  /*< public >*/ /* with COW */
-  GstBufferPool         *pool;
-
-  /* timestamp */
-  GstClockTime           pts;
-  GstClockTime           dts;
-  GstClockTime           duration;
-
-  /* media specific offset */
-  guint64                offset;
-  guint64                offset_end;
-};
 
 
 ={============================================================================
@@ -9758,7 +9761,7 @@ a new GstPad, or NULL in case of an error.
 
 
 ={============================================================================
-*kt_dev_bcast_500* gst: gststructure
+*kt_dev_bcast_500* gst-structure
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstStructure.html
 
@@ -9936,7 +9939,7 @@ Get the name of the object that posted message. Returns "(NULL)" if the message
 has no source object set.
 
 
-note: type name and object name
+note: see type name and object name and how to create error
 
 element = gst_element_factory_make("queue","uri-decoder");
 
@@ -12038,7 +12041,7 @@ Since: 2.14
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-error
+*kt_dev_bcast_600* g-error
 
 https://developer.gnome.org/glib/unstable/glib-Error-Reporting.html#GError
 
