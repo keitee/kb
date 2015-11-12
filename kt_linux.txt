@@ -153,7 +153,7 @@
 |kt_linux_tool_203| binutil: objdump
 |kt_linux_tool_204| binutil: addr2line
 |kt_linux_tool_205| binutil: ld
-*kt_linux_tool_250* binutil: busybox
+*kt_linux_tool_250* bin-busybox
 
 #{ gdb
 |kt_linux_tool_300| gdb: term and links
@@ -281,13 +281,17 @@
 |kt_linux_core_302|  case: analysis of 200 and 201 case
 |kt_linux_core_303|  case: msg q between threads
 
+*kt_linux_core_400* uclibc
+*kt_linux_core_400* uclibc: config ld_debug
+*kt_linux_core_400* uclibc: fail to find symbol
+
 *kt_linux_core_400* slib: shared library
 *kt_linux_core_400* slib: dynamic linker
-|kt_linux_core_401| slib: ld --as-needed problem at link stage
-|kt_linux_core_402| shared library: search and resolve
-|kt_linux_core_403| shared library: resolve real problem. 
-|kt_linux_core_404| shared library: resolve real problem. hang on running application
-|kt_linux_core_405| shared library: dl and ABI. visibility
+*kt_linux_core_401* slib: --as-needed flag and link error
+*kt_linux_core_402* slib: search and resolve
+*kt_linux_core_403* slib: case problem in name resolve. crash
+*kt_linux_core_404* slib: case problem in name resolve. pthread stub 
+*kt_linux_core_405* slib: dl, ABI, visibility
 |kt_linux_core_406| shared library: preload, debug and monitor ld
 |kt_linux_core_407| shared library: further information
 |kt_linux_core_408| shared library: md5sum
@@ -9630,7 +9634,7 @@ Copyright 2011 Free Software Foundation, Inc.
 
 
 ={============================================================================
-*kt_linux_tool_250* binutil: busybox
+*kt_linux_tool_250* bin-busybox
 
 http://www.busybox.net/source.html
 http://www.busybox.net/downloads/BusyBox.html
@@ -24486,6 +24490,7 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
     return res;
 }
 
+
 ={============================================================================
 *kt_linux_core_400* uclibc
 
@@ -24834,7 +24839,8 @@ libfoo.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically l
   BuildID[sha1]=0x7c5aa43368b2a98af48a1558d7e2c5a010d238b0, not stripped
 
 $ readelf -s libfoo.so | grep _OFFSET_TA
-(standard input):64:    43: 0000000000200978     0 OBJECT  LOCAL  DEFAULT  ABS _GLOBAL_OFFSET_TABLE_
+(standard input):64:    43: 0000000000200978     0 OBJECT  LOCAL  DEFAULT  \
+                   ABS _GLOBAL_OFFSET_TABLE_
 
 note: no SONAME is involved here and use a realname since so do not have SONAME.
 
@@ -24859,12 +24865,14 @@ $ readelf -d two | grep NEEDED
 (standard input):4: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 
 $ readelf -s libfoo.so | grep _OFFSET_TA
-(standard input):14:    10: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND _GLOBAL_OFFSET_TABLE_
+(standard input):14:    10: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  \
+                   UND _GLOBAL_OFFSET_TABLE_
 
 $ file libfoo.so 
 libfoo.so: ELF 64-bit LSB 'relocatable', x86-64, version 1 (SYSV), not stripped
 
-note: what does it mean? same as static link? looks like "libfoo.so" is not shared object.
+note: what does it mean? same as static link? looks like "libfoo.so" is not
+shared object.
 
 $ nm two | grep foo
 (standard input):32:000000000040051c T foo
@@ -25140,24 +25148,32 @@ note: The above is convention but not mandatory so can have followings:
 
 
 ={============================================================================
-*kt_linux_core_401* slib: ld --as-needed problem at link stage
+*kt_linux_core_401* slib: --as-needed flag and link error
+
+<manual>
+https://sourceware.org/binutils/docs/ld/Options.html
 
 --as-needed 
 --no-as-needed
 
 This option affects ELF DT_NEEDED tags for 'dynamic' libraries mentioned on the
-command line 'after' the --as-needed option. Normally the linker will add a
-DT_NEEDED tag for each dynamic library mentioned on the command line,
-'regardless' of whether the library is actually needed or not.
+command line 'after' the --as-needed option. 
 
---as-needed causes a DT_NEEDED tag to 'only' be emitted for a library that at
-that point in the link satisfies a non-weak undefined symbol reference from a
-regular object file or, if the library is not found in the DT_NEEDED lists of
+<default>
+Normally the linker will add a DT_NEEDED tag for each dynamic library mentioned
+on the command line, 'regardless' of whether the library is actually needed or
+not.
+
+The --as-needed causes a DT_NEEDED tag to 'only' be emitted for a library that
+"at that point in the link" satisfies a non-weak undefined symbol reference from
+a regular object file or, if the library is not found in the DT_NEEDED lists of
 other needed libraries, a non-weak undefined symbol reference from another
-needed dynamic library. Object files or libraries appearing on the command line
-after the library in question do not affect whether the library is seen as
-needed. This is similar to the rules for extraction of object files from
-archives. --no-as-needed restores the 'default' behaviour. 
+needed dynamic library. 
+
+Object files or libraries appearing on the command line after the library in
+question do not affect whether the library is seen as needed. This is similar to
+the rules for extraction of object files from archives. --no-as-needed restores
+the 'default' behaviour. 
 
 <example>
 $ gcc -c -fpic foo.c 
@@ -25167,6 +25183,17 @@ $ gcc -o one main.c libfoo.so          <embedding-the-name-of-lib>
 or 
 
 $ gcc -L. -lfoo -o one main.c
+
+$ nm libfoo.so | grep foo
+(standard input):24:00000550 T foo
+
+$ nm one | grep foo
+(standard input):33:         U foo
+
+$ readelf -d one | grep NEEDED
+(standard input):4: 0x00000001 (NEEDED)   Shared library: [libfoo.so]
+(standard input):5: 0x00000001 (NEEDED)   Shared library: [libc.so.6]
+
 
 However, when tried:
 
@@ -25180,12 +25207,10 @@ The followings are okay.
 $ gcc -L. -lfoo -Wl,--as-needed -o one main.c
 $ gcc -Wl,--as-needed -o one main.c libfoo.so
 
+note: WHY this fails to link even if main really uses foo()?
 
-note: Seen this which is a bit different from 'default' option but showed the
-point.
-http://stackoverflow.com/questions/8140494/why-am-i-getting-a-gcc-undefined-reference-error-trying-to-create-shared-objec
 
-<problem>
+<case>
 There is an application which is said that it uses one shared library and this
 library again uses the other shard library. 
 
@@ -25206,18 +25231,18 @@ Two problems:
 1. Wrong assumption. For okay case, there was actually no reference between
 application and a.so. That's why cannot see dependancies.
 
-2. When build the new source, this code introduce a call to a.so and this so has
-reference to the b.so. Since the application is the 'final' in the linking
-process and now see undefined symbols which used in a.so but in the b.so. The
-problem is that b.so is dropped to link of application by using as-needed
-option.
+2. When build the new source, this code introduce a call to a.so and this call
+has calls to the b.so. Now application need to know both a.so and b.so. Since
+the application is the 'final' in the linking process and now see undefined
+symbols which used in a.so but in the b.so. The problem is that b.so is dropped
+to link of application due to as-needed option.
 
 application          libMgr                  libFb
 reference to Mgr  -> no reference to Fb
                      reference to Fb      ->
 
 
-when fails:
+When fails:
 
 -Wl,--as-needed -lMgr -lFb ...
 
@@ -25226,7 +25251,7 @@ when fails:
 /.../usr/local/lib/libMgr.so: undefined reference to `DirectFBInit' 
   collect2: ld returned 1 exit status
 
-when works:
+When works:
 
 -o application application.o
 -lMgr -lFb ...
@@ -25291,20 +25316,22 @@ all because the code using it was removed or refactored or has not been written.
 <final-linking> only for executable but not library
 Failure in final linking, undefined symbols
 
-This is the most common error that happens while using --as-needed. It happens during the final
-linking stage of an executable note: libraries don't create problems, because they are allowed to
-have undefined symbols. The executable linking stage dies because of an undefined symbol that is
-present in one of the libraries fed to the command line. However, the library is not used by the
-executable itself, thus it gets removed by --as-needed.
+This is the most common error that happens while using --as-needed. It happens
+during the final linking stage of an executable note: libraries don't create
+problems, because they are allowed to have undefined symbols. The executable
+linking stage dies because of an undefined symbol that is present in one of the
+libraries fed to the command line. However, the library is not used by the
+executable itself, thus it gets 'removed' by --as-needed.
 
-This usually means that a library was not linked to another library, but was using it, and then
-'relying' on the final executable to link them together. This behavior is also an extra encumbrance
-on developers using that library because they have to check for the requirements.
+This usually means that a library was not linked to another library, but was
+using it, and then 'relying' on the final executable to link them together. This
+behavior is also an extra encumbrance on developers using that library because
+they have to check for the requirements.
 
-The fix to this kind of problem is usually simple: just find which library provides the symbols and
-which one is requiring them (the error message from the linker should contain the name of the
-    latter). Then make sure that when the library is linked from the source files it's also linked
-to the first. 
+The fix to this kind of problem is usually simple: just find which library
+provides the symbols and which one is requiring them (the error message from the
+    linker should contain the name of the latter). Then make sure that when the
+library is linked from the source files it's also linked to the first. 
 
 
 ={============================================================================
@@ -25495,7 +25522,7 @@ solve the case-example since it force to pick up the one in the same library.
 
 
 ={============================================================================
-*kt_linux_core_404* slib: case problem in name resolve. hang 
+*kt_linux_core_404* slib: case problem in name resolve. pthread stub 
 
 {description}
 2015.05. YouView.
@@ -25704,25 +25731,26 @@ $ nm -D libc.so.0 | ag pthread
 
 
 ={============================================================================
-*kt_linux_core_405* shared library: dl and ABI. visibility
+*kt_linux_core_405* slib: dl, ABI, visibility
 
-When an executable starts, the dynamic linker loads 'all' of the shared libraries in the program's
-dynamic dependency list. Sometimes, however, it can be useful to load libraries at a 'later' time.
-For example, a plug-in is loaded only when it is needed. This functionality is provided by an API to
-the dynamic linker.
+When an executable starts, the dynamic linker loads 'all' of the shared
+libraries in the program's dynamic dependency list. Sometimes, however, it can
+be useful to load libraries at a 'later' time. For example, a plug-in is loaded
+only when it is needed. This functionality is provided by an API to the dynamic
+linker.
 
 
 {version-check}
-The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2, which is employed by
-every ELF executable that uses shared libraries.
+The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2,
+    which is employed by every ELF executable that uses shared libraries.
 
-for host:
+# for host:
 $ ls -l /lib/ld-linux.so.2 
-lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
+25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
 
-for-embedded:
-root# ls -al /lib/ld-linux.so.2 
-lrwxrwxrwx    1 root     root            24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
+# for-embedded:
+# ls -al /lib/ld-linux.so.2 
+24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
 
 
 {dlopen-apis} from LPI 42.1
@@ -25733,30 +25761,34 @@ void *dlopen(const char *libfilename, int flags);
 
 Returns library handle on success, or NULL on error
 
-The dlopen() opens a shared library, returning a handle used by sub-sequent calls. Loads the shared
-library named in libfilename into the calling process's virtual address space and increments the
-count of open references to the library.
+The dlopen() opens a shared library, returning a handle used by sub-sequent
+calls. Loads the shared library named in libfilename into the calling process's
+virtual address space and increments the count of open references to the
+library.
 
-If the shared library specified by libfilename contains dependencies on other shared libraries,
-   dlopen() also automatically loads those libraries. This procedure occurs recursively if
-   necessary. We refer to the set of such loaded libraries as this library's dependency tree.
+If the shared library specified by libfilename contains 'dependencies' on other
+shared libraries, dlopen() also automatically loads those libraries. This
+procedure occurs recursively if necessary. We refer to the set of such loaded
+libraries as this library's dependency tree.
 
 RTLD_LAZY
 
-Undefined function symbols in the library should be resolved only as the code is executed. If a
-piece of code requiring a particular symbol is not executed, that symbol is never resolved. Lazy
-resolution is performed only for function references; references to variables are always resolved
-immediately. Specifying the RTLD_LAZY flag provides behavior that corresponds to the normal
-operation of the dynamic linker when loading the shared libraries identified in an executable's
-dynamic dependency list.
+Undefined function symbols in the library should be resolved only as the code is
+executed. If a piece of code requiring a particular symbol is not executed, that
+symbol is 'never' resolved. Lazy resolution is performed 'only' for function
+references; references to variables are always resolved immediately. Specifying
+the RTLD_LAZY flag provides behavior that corresponds to the normal operation of
+the dynamic linker when loading the shared libraries identified in an
+executable's dynamic dependency list.
 
-It is also possible to include further values in flags. The following flags are specified
-in SUSv3:
+It is also possible to include further values in flags. The following flags are
+specified in SUSv3:
 
 RTLD_GLOBAL
 
-Symbols in this library and its dependency tree are made available for resolving references in other
-libraries loaded by this process and also for lookups via dlsym().
+Symbols in this library and its dependency tree are made available for resolving
+references in other libraries loaded by this process and also for lookups via
+dlsym().
 
 <dlsym>
 #include <dlfcn.h>
@@ -25765,28 +25797,30 @@ void *dlsym(void *handle, char *symbol);
 
 Returns address of symbol, or NULL if symbol is not found
 
-searches a library for a symbol (a string containing the name of a function or variable) and returns
-its address.
+searches a library for a symbol (a string containing the name of a function or
+    variable) and returns its address.
 
-The value of a symbol returned by dlsym() may be NULL, which is indistinguishable from the "symbol
-not found" return. In order to differentiate the two possibilities, we must call dlerror()
-    beforehand (to make sure that any previously held error string is cleared) and then if, after
-    the call to dlsym(), dlerror() returns a non-NULL value, we know that an error occurred.
+The value of a symbol returned by dlsym() may be NULL, which is
+indistinguishable from the "symbol not found" return. In order to differentiate
+the two possibilities, we must call dlerror() beforehand (to make sure that any
+    previously held error string is cleared) and then if, after the call to
+dlsym(), dlerror() returns a non-NULL value, we know that an error occurred.
 
 The dlclose() function closes a library previously opened by dlopen().
 
-The dlerror() function returns an error-message string, and is used after a fail- ure return from
-one of the preceding functions.
+The dlerror() function returns an error-message string, and is used after a
+fail- ure return from one of the preceding functions.
 
 <to-link>
-To build programs that use the dlopen API on Linux, we must specify the -ldl option, in order to
-link against the libdl library.
+To build programs that use the dlopen API on Linux, we must specify the -ldl
+option, in order to link against the libdl library.
 
 
 {access-symbols-in-main}
-Sometimes, it is desirable instead to have x() in shared library invoke an implementation of y() in
-the main program. In order to do this, we must make the (global-scope) symbols in the main program
-available to the dynamic linker, by linking the program using the --export-dynamic linker option:
+Sometimes, it is desirable instead to have x() in shared library invoke an
+implementation of y() in the main program. In order to do this, we must make the
+(global-scope) symbols in the main program available to the dynamic linker, by
+linking the program using the --export-dynamic linker option:
 
 $ gcc -Wl,--export-dynamic main.c (plus further options and arguments)
 
@@ -25794,29 +25828,32 @@ Equivalently, we can write the following:
 
 $ gcc -export-dynamic main.c
 
-Using either of these options allows a dynamically loaded library to access global symbols in the
-main program.
+Using either of these options allows a dynamically loaded library to access
+global symbols in the main program.
 
 
 {visibility}
-A well-designed shared library should make visible only those symbols (functions and variables) that
-form part of its specified application binary interface (ABI). The reasons for this are as follows:
+A well-designed shared library should make visible only those symbols (functions
+    and variables) that form part of its specified application binary interface
+(ABI). The reasons for this are as follows:
 
-o If the shared library designer accidentally exports unspecified interfaces, then authors of
-applications that use the library may choose to employ these interfaces. This creates a
-'compatibility' problem for future upgrades of the shared library.
+o If the shared library designer accidentally exports unspecified interfaces,
+  then authors of applications that use the library may choose to employ these
+  interfaces. This creates a 'compatibility' problem for future upgrades of the
+  shared library.
 
-The library developer expects to be able to change or remove any interfaces 'other' than those in
-the documented ABI, while the library user expects to continue using the same interfaces (with the
-    same semantics) that they currently employ.
+The library developer expects to be able to change or remove any interfaces
+'other' than those in the documented ABI, while the library user expects to
+continue using the same interfaces (with the same semantics) that they currently
+employ.
 
-o During run-time symbol resolution, any symbols that are exported by a shared library might
-interpose definitions that are provided in other shared libraries.
+o During run-time symbol resolution, any symbols that are exported by a shared
+library might interpose definitions that are provided in other shared libraries.
 
 note: this is a problem as <resolve-real-problem>?
 
-o Exporting unnecessary symbols increases the size of the dynamic symbol table that must be loaded
-at runtime. note: also means 'faster' loading time?
+o Exporting unnecessary symbols increases the size of the dynamic symbol table
+that must be loaded at runtime. note: also means 'faster' loading time?
 
 All of these problems can be minimized or avoided altogether if the library designer ensures that
 only the symbols required by the library's specified ABI are exported. 
