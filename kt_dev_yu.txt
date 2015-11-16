@@ -11,7 +11,8 @@
 |kt_dev_uv_set_010| setup: git for dev and oem
 |kt_dev_uv_set_011| setup: ci builds
 
-*kt_dev_uv_stack_000* zinc-build: scripts
+*kt_dev_uv_stack_000* zinc-build: zb-make
+*kt_dev_uv_stack_000* zinc-build: makefile
 *kt_dev_uv_stack_001* zinc-build: build examples
 *kt_dev_uv_stack_003* zinc-build: debug or release
 *kt_dev_uv_stack_003* zinc-build: autotool structures
@@ -160,7 +161,7 @@
 *kt_dev_uv_task_011* task:09: fr15: dash error handling
 *kt_dev_uv_task_011* task:09: fr15: underflow error handling
 *kt_dev_uv_task_011* task:09: fr15: fix gstmediaroutertest failure
-
+*kt_dev_uv_task_011* task:09: fr15: wrong drm db creation on HWEI PVR2
 
 # ============================================================================
 #{
@@ -376,7 +377,7 @@ http://spongebob:8080/view/developer/job/Test_Build_Concurrent/
 
 
 ={============================================================================
-*kt_dev_uv_stack_000* zinc-build: scripts
+*kt_dev_uv_stack_000* zinc-build: zb-make
 
 <ET>
 Many of these tools rely on the environment variable "ET" to find your checkout
@@ -514,205 +515,204 @@ zb-virtual-slave zb-make
 }
 
 
-
-
 <zb-make-sh>
 {
-  if [ -n "${ZB_FORCE_BRANCH}" ]; then
-      echo "Using overridden branch."
-  else
-   <load-config>
-   source $where_am_i/zb/zb-load-config.sh
-   {
-      note: pick up brach name or force it
 
-      # Branch of git repository for which build is to be performed
-      if [ -n "${ZB_FORCE_BRANCH}" ]; then
-          echo "Overriding branch to build to: ${ZB_FORCE_BRANCH}"
-          branch=$ZB_FORCE_BRANCH
-          # TODO: Validate that the branch exists.
+  + source /home/kpark/source/zinc-git-tools/zb/zb-load-config.sh
+  {
+    note: pick up brach name or force it
+
+    # Branch of git repository for which build is to be performed
+    if [ -n "${ZB_FORCE_BRANCH}" ]; then
+        echo "Overriding branch to build to: ${ZB_FORCE_BRANCH}"
+        branch=$ZB_FORCE_BRANCH
+        # TODO: Validate that the branch exists.
+    else
+        if [ -f "$ET/.git/rebase-merge/head-name" ]; then
+            # We are in the middle of rebasing
+            branch="$(cut -b 12- < "$ET/.git/rebase-merge/head-name")"
+        else
+            branch=$(GIT_DIR=$ET/.git git symbolic-ref HEAD | cut -b 12- )
+        fi
+    fi
+
+    ++++ GIT_DIR=/home/kpark/source/DEVARCH//.git
+    ++++ git config zb.huawei.install-prefix
+    +++ var=/opt/zinc-trunk
+    ++ ZINC_USER_HOST_PREFIX=/opt/zinc-trunk
+
+    export ZB_BRANCH=$branch
+    ++ ZB_BRANCH=DEVARCH-8092
+
+    note: slave_dir is set
+
+    # Allow slave_dir to evaluate dynamically, so it used latest values
+    # of variables (some of them can be set by later scripts)
+    slave_dir () {
+      if [ -n "${ZB_SLAVE_DIR}" ]; then
+          # eg. running under zb-virtual-slave
+          echo $ZB_SLAVE_DIR/$ZB_CFG
       else
-          if [ -f "$ET/.git/rebase-merge/head-name" ]; then
-              # We are in the middle of rebasing
-              branch="$(cut -b 12- < "$ET/.git/rebase-merge/head-name")"
-          else
-              branch=$(GIT_DIR=$ET/.git git symbolic-ref HEAD | cut -b 12- )
-          fi
+          echo $ZB_BUILD_DIR/$branch/$ZB_CFG
       fi
+    }
 
-      ++++ GIT_DIR=/home/kpark/source/DEVARCH//.git
-      ++++ git config zb.huawei.install-prefix
-      +++ var=/opt/zinc-trunk
-      ++ ZINC_USER_HOST_PREFIX=/opt/zinc-trunk
+    ++ slave_dir=/data/builds/DEVARCH-8092/huawei.370
+  }
 
-      export ZB_BRANCH=$branch
-      ++ ZB_BRANCH=DEVARCH-8092
+  cd $ET
+  + cd /home/kpark/source/DEVARCH
 
-      if
-          slave_dir=$ZB_SLAVE_DIR/$ZB_CFG
-      else
-          slave_dir=$ZB_BUILD_DIR/$branch/$ZB_CFG
-      fi
+  ++ git rev-parse HEAD
+  + commit_sha=fabf2f275c01fcf68bd8ce212c4e507c46eff45b
+  + build_cmd=make
 
-      note: ZB_BUILD_DIR is set
-
-      ++ slave_dir=/data/builds/DEVARCH-8092/huawei.370
-   }
-
-   ZB_HOST_CONFIG=host 
-   cd $ET
-   + cd /home/kpark/source/DEVARCH
 
    note: use git and add all tracked but not untracted.
 
-   + GIT_DIR=/home/kpark/source/DEVARCH/.git
-   + TMP_INDEX=/home/kpark/source/DEVARCH/.git/zb-make.BQARxy
-   ++ cp -p /home/kpark/source/DEVARCH/.git/index /home/kpark/source/DEVARCH/.git/zb-make.BQARxy
-   ++ GIT_INDEX_FILE=/home/kpark/source/DEVARCH/.git/zb-make.BQARxy
-   ++ cd /home/kpark/source/DEVARCH
-   ++ export GIT_INDEX_FILE
-   
-   ++ git add -u
-   
-   ++ git write-tree
-   ++ rm -f /home/kpark/source/DEVARCH/.git/zb-make.BQARxy
-   + w_tree=0a1007627919340947ff5559fbcf402c3e45be31
-   + [[ 14dbb0bffed797c3de26af9ed3887aa099deaa4a == \1\4\d\b\b\0\b\f\f\e\d\7\9\7\c\3\d\e\2\6\a\f\9\e\d\3\8\8\7\a\a\0\9\9\d\e\a\a\4\a ]]
-   + b_commit=0b59954972927a2ee94845191444ed8c010a0399
-   
-   ++ git commit-tree 0a1007627919340947ff5559fbcf402c3e45be31 -p 0b59954972927a2ee94845191444ed8c010a0399
-   
-   + w_commit=9bb7699e8dba4d5c478ec12753c0873682a3095a
-   
-   + git update-ref -m zb-make refs/heads/zb/DEVARCH-8092-TEMP 9bb7699e8dba4d5c478ec12753c0873682a3095a
-   + branch=zb/DEVARCH-8092-TEMP
-   
-   + '[' '!' -e /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Zinc/Zinc.Build/Makefile ']'
-   + unset GIT_DIR
-   + unset GIT_INDEX_FILE
-   + echo /home/kpark/builds/_virtual_/humax.1000/DEVARCH
-   + cd /home/kpark/builds/_virtual_/humax.1000/DEVARCH
-   + git fetch origin zb/DEVARCH-8092-TEMP
-   From /home/kpark/source/DEVARCH
-    * branch            zb/DEVARCH-8092-TEMP -> FETCH_HEAD
-      0b59954..9bb7699  zb/DEVARCH-8092-TEMP -> origin/zb/DEVARCH-8092-TEMP
-   + git update-index --refresh
-   + git reset --hard 9bb7699e8dba4d5c478ec12753c0873682a3095a
-   HEAD is now at 9bb7699 BUILD: ZB_CFG="humax.1000" make 
+  ++ mktemp /home/kpark/source/DEVARCH/.git/zb-make.XXXXXX
+  + TMP_INDEX=/home/kpark/source/DEVARCH/.git/zb-make.yHIM2k
 
+  w_tree=$( (
+      cp -p ${GIT_INDEX_FILE-"$GIT_DIR/index"} "$TMP_INDEX" &&
+      GIT_INDEX_FILE="$TMP_INDEX" &&
+      cd $ET &&
+      export GIT_INDEX_FILE &&
+      git add -u &&
+      git write-tree &&
+      rm -f "$TMP_INDEX"
+  ) )
+
+  ++ cp -p /home/kpark/source/DEVARCH/.git/index /home/kpark/source/DEVARCH/.git/zb-make.yHIM2k
+  ++ GIT_INDEX_FILE=/home/kpark/source/DEVARCH/.git/zb-make.yHIM2k
+  ++ cd /home/kpark/source/DEVARCH
+  ++ export GIT_INDEX_FILE
+  ++ git add -u
+  ++ git write-tree
+  ++ rm -f /home/kpark/source/DEVARCH/.git/zb-make.yHIM2k
+  + w_tree=927a2553cfcc5f738f462d82df5e726363aa142d
+
+  if [[ $(git merge-base $commit_sha "refs/heads/zb/$branch" ) == "$commit_sha" ]]
+
+  + [[ a65d2644c9d647d360b1c04261bcfe90ff8ba1ff == \f\a\b\f\2\f\2\7\5\c\0\1\f\c\f\6\8\b\d\8\c\e\2\1\2\c\4\e\5\0\7\c\4\6\e\f\f\4\5\b ]]
+  + b_commit=fabf2f275c01fcf68bd8ce212c4e507c46eff45b
+
+
+  w_commit=$(printf 'BUILD: ZB_CFG="%s" %s\n' "$ZB_CFG" "$build_cmd $@" |
+      git commit-tree $w_tree -p $b_commit) ||
+      die "Cannot record working tree state"
+
+  ++ printf 'BUILD: ZB_CFG="%s" %s\n' humax.2100 'make Zinc/Zinc.Common'
+  ++ git commit-tree 927a2553cfcc5f738f462d82df5e726363aa142d -p fabf2f275c01fcf68bd8ce212c4e507c46eff45b
+  + w_commit=51a0268d701c77dd925a6aea2b2c6ad8a23b8545
+
+  // note:
+  // Seems that it make a tree and puts that into a commit
+  //
+  // commit 51a0268d701c77dd925a6aea2b2c6ad8a23b8545
+  // Author: Kit Park <kit.park@youview.com>
+  // Date:   Mon Nov 16 14:28:39 2015 +0000
+  // 
+  //     BUILD: ZB_CFG="humax.2100" make Zinc/Zinc.Common
+
+  git update-ref -m "zb-make" "refs/heads/zb/$branch" "$w_commit" ||
+      die "Cannot save the current status"
+
+  + git update-ref -m zb-make refs/heads/zb/master 51a0268d701c77dd925a6aea2b2c6ad8a23b8545
+   
+
+  note: want to new build slave?
+  # Create repo
+  if [ ! -e "$(slave_dir)/DEVARCH/Zinc/Zinc.Build/Makefile" ]; then
+      echo "Creating new build slave - 
+        $branch because $(slave_dir)/DEVARCH/Zinc/Zinc.Build/Makefile doesn't exist"
+      rm -Rf "$(slave_dir)/DEVARCH/"
+      mkdir -p "$(slave_dir)/DEVARCH"
+      cd "$(slave_dir)"
+      git clone -s --branch "zb/$branch" "$ET" "$(slave_dir)/DEVARCH"
+  fi
+
+
+  note: update 'repo'. So make a sink between working and slave repo.
+
+  // <1> when make a change to $(slave_dir), zb-make fails to start:
+  //
+  // error: refs/remotes/origin/HEAD does not point to a valid object!
+  // error: refs/remotes/origin/master does not point to a valid object!
+  // error: refs/remotes/origin/HEAD does not point to a valid object!
+  // error: refs/remotes/origin/master does not point to a valid object!
+  // From /home/kpark/source/DEVARCH
+  //  * branch            zb/master  -> FETCH_HEAD
+  // error: refs/remotes/origin/HEAD does not point to a valid object!
+  // error: refs/remotes/origin/master does not point to a valid object!
+  //  + 767650f...51a0268 zb/master  -> origin/zb/master  (forced update)
+  // + git update-index --refresh
+  // Zinc/Zinc.Common/src/Makefile.am: needs update   note: message from update
+
+  + cd /home/kpark/builds/_virtual_/humax.2100/DEVARCH
+  + git fetch origin zb/master
+
+  cd "$(slave_dir)/DEVARCH"
+  git fetch origin "zb/$branch"
+
+  # Sometimes the build system (or something) will touch autogen.sh in various
+  # directories not making any changes to the contents but changing the mtime.
+  # When we did git reset git would see this and overwrite autogen.sh changing
+  # the mtime once again which would in turn confuse the build system.  Calling
+  # git update-index --refresh fixes these issues
+  git update-index --refresh
+  git reset --hard $w_commit
+
+  + git update-index --refresh
+  + git reset --hard a56085c23d123f5e5293f23f664a792a29c175bb
+
+  # Build
+  cd "$(slave_dir)/DEVARCH/Zinc/Zinc.Build"
    note: one time and can clone again by deleting a makefile?
-
-   # Create repo
-   if [ ! -e "$slave_dir/DEVARCH/Zinc/Zinc.Build/Makefile" ]; then
-       echo "Creating new build slave - \
-         $branch because $slave_dir/DEVARCH/Zinc/Zinc.Build/Makefile doesn't exist"
-       rm -Rf "$slave_dir/DEVARCH/"
-       mkdir -p "$slave_dir/DEVARCH"
-       cd "$slave_dir"
-       git clone -s --depth=1 --branch "$branch" "$ET" "$slave_dir/DEVARCH"
-   fi
 
    build_cmd=${ZB_BUILD_CMD-"make"}
    + build_cmd=make
 
-   <setvars-sh>
-   {
-      note: when not "host", run setvars-host.sh
 
-      if [ "$ZB_HOST_CONFIG" != "host" ];
-      + '[' humax-dtr_t1000 '!=' host ']'
+  <starts-build>
+  note: build build tool for host or not.
+  + cd /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Zinc/Zinc.Build
+  + '[' humax-dtr_t2100 '!=' host ']'
+  + '[' '' '!=' 1 ']'
+  + echo '========================================= BUILDING BUILD TOOLS!!!!'
+  + unset ZINC_USER_HOST_PREFIX
 
-      + echo '========================================= BUILDING BUILD TOOLS!!!!'
+  + source ./setvars-host.sh
 
-      + source ../../Zinc/Zinc.Build/setvars-host.sh
+  'OR'
 
-      export HOST_TRIPLE="${ARCH}-pc-linux-gnu"
-      ++ export HOST_TRIPLE=x86_64-pc-linux-gnu
-      export BUILD_TRIPLE=${HOST_TRIPLE}
+  source ../../*/*/setvars-$ZB_HOST_CONFIG.sh
 
-      ZINC_NATIVE_BUILD=1 source "$(dirname ${BASH_SOURCE})/setvars-common.sh"
+  <build>
+  note: back to zb-make
+  + build_date='2015-01-09 08:58:17+00:00'
+  (
+    # Create an environment more like the build servers
+    unset DBUS_SESSION_BUS_ADDRESS
 
-      {
-         note: this is for host tools and cwd.
+    set -o pipefail
+    $build_cmd "$@" 2> >( sed -u "s | $ZINC_SRC_ROOT | $ET|" >&2 ) \
+    | sed -u "s| $ZINC_SRC_ROOT| $ET|"
+  ) && exit_code=0 || exit_code=1 # Don't want to exit on failure
 
-         source setvars-common see <setvars-common>
-      }
+  + unset DBUS_SESSION_BUS_ADDRESS
+  + set -o pipefai
 
-      # We can't build these for PC
-      export ZINC_EXCLUDE_PROJECTS="Polonium.GSTNexus Polonium.NexusInspect Polonium.PCMPlayback"
+  + make buildtools
+  + make
+  + sed -u 's|/data/builds/master/pc/DEVARCH|/home/kpark/source/DEVARCH|'
+   sed -u "s|$ZINC_SRC_ROOT|$ET|" >&2 
+  ++ sed -u 's|/data/builds/master/pc/DEVARCH|/home/kpark/source/DEVARCH|'
+}
 
-      ++ export 'ZINC_EXCLUDE_PROJECTS=Polonium.GSTNexus Polonium.NexusInspect Polonium.PCMPlayback'
-      ++ ZINC_EXCLUDE_PROJECTS='Polonium.GSTNexus Polonium.NexusInspect Polonium.PCMPlayback'
 
-      ++ CPPFLAGS+=' -fstack-protector-all '
-   }
-
-   // after done buildtools builds
-
-   Must remake target `buildtools'.
-   Successfully remade target file `buildtools'.
-   + source ../../OEM.Humax/OEM.Humax.3rdPartyStack/setvars-humax-dtr_t1000.sh
-
-   {
-      <setvars-sh>
-      source ../../*/*/setvars-$ZB_HOST_CONFIG.sh
-      + source ../../OEM.Huawei/OEM.Huawei.3rdPartyStack/setvars-huawei-bcm7409.sh
-
-      // note: unset and set
-
-      ++ unset ZINC_EXCLUDE_PROJECTS
-
-      # N.B: This is a temporary for a QIP release and to be removed.
-      export ZINC_EXCLUDE_PROJECTS="Polonium.NexusInspect"
-      ++ export ZINC_EXCLUDE_PROJECTS=Polonium.NexusInspect
-      ++ ZINC_EXCLUDE_PROJECTS=Polonium.NexusInspect
-
-      ++ warnings_flags='-Wall -Wextra -Werror=address -Werror=array-bounds -Werror=c++0x-compat
-
-      -Werror=char-subscripts -Werror=comment -Werror=enum-compare -Werror=format
-      -Werror=missing-braces -Werror=nonnull -Werror=parentheses -Werror=pointer-sign
-      -Werror=return-type -Werror=sequence-point -Werror=strict-overflow=1 -Werror=trigraphs
-      -Werror=unknown-pragmas -Werror=unused-function -Werror=unused-label -Werror=unused-value
-      -Werror=volatile-register-var -fdiagnostics-show-option'
-
-      # Enable "Safe" STL wrappers in debug builds.
-      # 
-      if [[ "${ZINC_BUILD_TYPE}" == "debug" ]]; then
-          export CPPFLAGS+=" -D_GLIBCXX_DEBUG "
-      fi
-      ++ [[ debug == \d\e\b\u\g ]]
-      ++ export 'CPPFLAGS+= -D_GLIBCXX_DEBUG '
-      ++ CPPFLAGS+=' -D_GLIBCXX_DEBUG '
-
-      # -fstack-protector-all enables the insertion of "canaries" to detect stack-smashing at
-      # runtime. The cost of such checks are supposedly small.
-      export CPPFLAGS+=" -fstack-protector-all "
-      ++ export 'CPPFLAGS+= -fstack-protector-all '
-      ++ CPPFLAGS+=' -fstack-protector-all '
-   }
-
-   note: back to zb-make
-
-   + build_date='2015-01-09 08:58:17+00:00'
-   (
-      # Create an environment more like the build servers
-      unset DBUS_SESSION_BUS_ADDRESS
-
-      set -o pipefail
-      $build_cmd "$@" 2> >( sed -u "s | $ZINC_SRC_ROOT | $ET|" >&2 ) \
-      | sed -u "s| $ZINC_SRC_ROOT| $ET|"
-   ) && exit_code=0 || exit_code=1 # Don't want to exit on failure
-
-   + unset DBUS_SESSION_BUS_ADDRESS
-   + set -o pipefai
-
-+ make buildtools
-+ make
-+ sed -u 's|/data/builds/master/pc/DEVARCH|/home/kpark/source/DEVARCH|'
- sed -u "s|$ZINC_SRC_ROOT|$ET|" >&2 
-++ sed -u 's|/data/builds/master/pc/DEVARCH|/home/kpark/source/DEVARCH|'
-
-<makefile>
+={============================================================================
+*kt_dev_uv_stack_001* zinc-build: makefile
 
 Zinc/Zinc.Build/project-deps-rules.mk
 
@@ -1154,6 +1154,8 @@ kpark  37256 Nov 12 10:10 Makefile
 
 kpark  37256 Nov 12 10:10 Makefile
 
+note: Can see libtool variables in config.log, config.status, and Makefiles
+
 
 // config.log
 
@@ -1376,6 +1378,14 @@ Zinc/Zinc.Build/excluded-files-production.txt
      a new value. DO NOT HAVE as-needed.
 
      this means that uses local LDFLAG than global for humax.
+     
+     ++ unset ZINC_EXCLUDE_PROJECTS
+
+     # N.B: This is a temporary for a QIP release and to be removed.
+     export ZINC_EXCLUDE_PROJECTS="Polonium.NexusInspect"
+     ++ export ZINC_EXCLUDE_PROJECTS=Polonium.NexusInspect
+     ++ ZINC_EXCLUDE_PROJECTS=Polonium.NexusInspect
+
    } <setvars-end>
 }
 
@@ -9329,7 +9339,7 @@ void VanadiumMediaPlayer::ErrorEvent(const ErrorEventValue::Enum error,
 
 
 ={============================================================================
-*kt_dev_uv_stack_255* zinc-mr-error: error handle
+*kt_dev_uv_stack_255* mr-dash: error handle
 
 https://html.spec.whatwg.org/multipage/embedded-content.html#media-data
 
@@ -13819,6 +13829,17 @@ xargs -r sed -i \
 -e 's/^/# DA disabled by patch-a-tron: /'
 
 grep -lsr '^libTitaniumDeviceAuthoritySystemDbusClient.so' /opt/zinc/share/ | \
+xargs -r sed -i \
+-e '1i libTitaniumDeviceAuthoritySystemOff.so createOffSystemFactory' \
+-e 's/^/# DA disabled by patch-a-tron: /'
+
+<for-pc-build>
+04:04:03 ~/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/share$ grep -lsr '^libTitaniumDeviceAuthoritySystemDbusClient.so' ./
+./titanium-applicationcontainer-production/titaniumdeviceauthority.plugin-config
+./mercury-system-uimanager/titaniumdeviceauthority.plugin-config
+04:04:07 ~/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/share$ 
+
+grep -lsr '^libTitaniumDeviceAuthoritySystemDbusClient.so' ./
 xargs -r sed -i \
 -e '1i libTitaniumDeviceAuthoritySystemOff.so createOffSystemFactory' \
 -e 's/^/# DA disabled by patch-a-tron: /'
@@ -21091,6 +21112,42 @@ and adds some log messages.
 
 [1] DEVARCH-10097
 [2] 1125-S Media Router Specification v1.3
+
+
+={============================================================================
+*kt_dev_uv_task_011* task:09: fr15: wrong drm db creation on HWEI PVR2
+
+YVHUAWEI-7403 found that DRM DB file gets created unencrypted and eventually
+fails to load on PVR2 because huawei deamon loads Zinc.Common so which loads
+sqlite3 as well. However, wasabi so expects its own sqlite statically linked
+with it. Since sqlite is loaded first, wasabi version won't get resovled.
+
+Tried to use --as-needed globally in link option but found that there is a
+toolchain issue in the toolchain for this platform and the solution is to change
+Zinc.Common dependancy directly.
+
+https://jira.youview.co.uk/browse/DEVARCH-10610
+
+DASH: Zinc.Common: Remove dependency on sqlite
+
+As the analysis on YVHUAWEI-7403 showed, the dependency of libZincCommon.so on
+libsqlite3.so has caused the problem of using the DRM personalisation DB.
+
+The --as-needed link flag would be a general solution to this but it is disabled
+for Huawei PVR2 without history or explanation. The further investigation showed
+that when the build has that link flag on, build fails on various 3party packages 
+and that there is a toolchain issue, GNU LD, https://sourceware.org/ml/binutils/2013-02/msg00159.html, 
+which seems not fixed yet for mips target when looked at git upstream.
+
+The toolchain in question is huawei-stbgcc-4.5.3-2.4 and GNU ld 2.22 and
+therefore, some Humax target which uses the same toolchain base has the same
+issue and hence no --as-needed flag used.
+
+Since there is no prospect that BRCM would fix this in their future toolchain
+delivery, this commit changes Zinc.Common dependencies directly to remove
+sqlite3 from the Zinc.Common shared library and would have no impact on the
+other part of stack since that sqlite3 feaure was separated out to
+libZincCommonSQLite.so.
 
 
 ==============================================================================

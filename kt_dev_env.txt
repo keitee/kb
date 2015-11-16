@@ -131,7 +131,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_008| git-checkout 
 |kt_dev_env_git_009| auto completion
 |kt_dev_env_git_010| git-branch
-*kt_dev_env_git_011* git-branch: rename, delete
+*kt_dev_env_git_011* git-branch: rename, delete, move
 *kt_dev_env_git_012* git-branch: list
 *kt_dev_env_git_013* git-branch: checkout and tracking
 *kt_dev_env_git_014* git-branch: merge or rebase
@@ -143,7 +143,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_git_011* git-merge: mergetool: local and remote
 *kt_dev_env_git_011* git-merge: mergetool: use gvimdiff
 *kt_dev_env_git_034* git-diff: git-difftool
-*kt_dev_env_git_012* git-diff: git-patch
+*kt_dev_env_git_012* git-diff-patch
 |kt_dev_env_git_012| git-format-patch
 |kt_dev_env_git_013| merge: undo merge attempt
 |kt_dev_env_git_015| tag
@@ -182,7 +182,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_154| git-push: refspec
 *kt_dev_env_git_155* git-hook:
 *kt_dev_env_git_155* git-hook: pre-push example
-|kt_dev_env_git_156| 
+*kt_dev_env_git_155* git-update-ref:
 |kt_dev_env_git_157| remote: branch inspect, show, and ls-remote
 |kt_dev_env_git_158| remote: push errors. bare
 |kt_dev_env_git_159| remote: pull conflict
@@ -7808,7 +7808,7 @@ to a specific commit.
 
 
 ={============================================================================
-*kt_dev_env_git_011* git-branch: rename, delete
+*kt_dev_env_git_011* git-branch: rename, delete, move
 
 {branch-rename}
 git branch -m newname            " when want to rename current branch you are on
@@ -7839,6 +7839,35 @@ $ git push origin --delete propose/huawei
 Or can use this form to delete a remote branch:
 
 $ git push origin :review/DEVARCH-10262
+
+
+{branch-move}
+
+(topic) ~/source/DEVARCH$ git ll -5 topic kit/fix-zinc-common-remove-sqlite 
+* efa10d6 (topic) DEVARCH-10610: ...
+| * bd8e4b9 (kit/fix-zinc-common-remove-sqlite) DASH: ...
+|/  
+* fabf2f2 (origin/master, master) DEVARCH-10605: 
+* f7f82a5 DEVARCH-10547: Stuck at 
+
+(topic) ~/source/DEVARCH$ git branch -f kit/fix-zinc-common-remove-sqlite topic 
+
+(topic) ~/source/DEVARCH$ git ll -5 topic kit/fix-zinc-common-remove-sqlite 
+* efa10d6 (topic, kit/fix-zinc-common-remove-sqlite) DEVARCH-10610: ...
+*
+
+
+git branch [--set-upstream | --track | --no-track] [-l] 
+  [-f] <branchname> [<start-point>]
+
+-f
+--force
+
+    Reset <branchname> to <startpoint> if <branchname> exists already. Without
+    -f git branch refuses to change an existing branch. In combination with -d
+    (or --delete), allow deleting the branch irrespective of its merged status.
+    In combination with -m (or --move), allow renaming the branch even if the
+    new branch name already exists.
 
 
 ={============================================================================
@@ -8968,7 +8997,7 @@ note:
 
 
 ={============================================================================
-*kt_dev_env_git_012* git-diff: patch
+*kt_dev_env_git_012* git-diff-patch
 
 {git-diff-and-patch}
 To create a patch of the changes on the experimental branch and apply them to
@@ -11261,8 +11290,59 @@ Which will allow you to search only branches (including remote branches)
 ={============================================================================
 *kt_dev_env_git_39* git-rev-parse
 
---git-dir
+git-rev-parse - Pick out and massage parameters
 
+SYNOPSIS
+
+git rev-parse [ --option ] <args>...
+
+DESCRIPTION
+
+Many Git porcelainish commands take mixture of flags (i.e. parameters that begin
+    with a dash -) and parameters meant for the underlying git rev-list command
+they use internally and flags and parameters for the other commands they use
+downstream of git rev-list. This command is used to distinguish between them.
+
+<from-SO>
+git rev-parse is an ancillary plumbing command primarily used for manipulation.
+
+One common usage of git rev-parse is to print the SHA1 hashes given a revision
+specifier. In addition, it has various options to format this output such as
+--short for printing a shorter unique SHA1.
+
+There are other use cases as well (in scripts and other tools built on top of
+    git) that I've used for:
+
+    --verify to verify that the specified object is a valid git object.
+
+    --git-dir for displaying the abs/relative path of the the .git directory.
+
+    Checking if you're currently within a repository using --is-inside-git-dir
+    or within a work-tree using --is-inside-work-tree
+
+    Checking if the repo is a bare using --is-bare-repository
+
+    Printing SHA1 hashes of branches (--branches), tags (--tags) and the refs
+    can also be filtered based on the remote (using --remote)
+
+    --parse-opt to normalize arguments in a script (kind of similar to getopt)
+    and print an output string that can be used with eval
+
+Massage just implies that it is possible to convert the info from one form into
+another i.e. a transformation command. These are some quick examples I can think
+of:
+
+    a branch or tag name into the commit's SHA1 it is pointing to so that it can
+    be passed to a plumbing command which only accepts SHA1 values for the
+    commit.
+
+    a revision range A..B for git log or git diff into the equivalent arguments
+    for the underlying plumbing command as B ^A
+
+
+<ex>
+
+--git-dir
     Show $GIT_DIR if defined. Otherwise show the path to the .git directory. The
     path shown, when relative, is relative to the current working directory.
 
@@ -11270,8 +11350,13 @@ Which will allow you to search only branches (including remote branches)
     in a Git repository or work tree print a message to stderr and exit with
     nonzero status.
 
-<ex>
 dir="`git rev-parse --git-dir`"
+
+
+<ex>
+Get SHA of HEAD.
+
+git rev-parse HEAD
 
 
 ={============================================================================
@@ -12501,6 +12586,135 @@ do
 done
 
 exit 0
+
+
+={============================================================================
+*kt_dev_env_git_155* git-update-ref:
+
+NAME
+
+git-update-ref - Update the object name stored in a ref safely
+
+SYNOPSIS
+
+git update-ref [-m <reason>] (-d <ref> [<oldvalue>] | [--no-deref]
+    [--create-reflog] <ref> <newvalue> [<oldvalue>] | --stdin [-z])
+
+DESCRIPTION
+
+Given two arguments, stores the <newvalue> in the <ref>, possibly dereferencing
+the symbolic refs. E.g. git update-ref HEAD <newvalue> updates the current
+branch head to the new object.
+
+
+={============================================================================
+*kt_dev_env_git_155* git-update-index:
+
+NAME
+
+git-update-index - Register file contents in the working tree to the index
+
+SYNOPSIS
+
+git update-index
+        [--refresh] [-q] [--unmerged] [--ignore-missing]
+        [--] [<file>...]
+
+DESCRIPTION
+
+Modifies the index or directory cache. Each file mentioned is updated into the
+index and any unmerged or needs updating state is cleared.
+
+See also git-add[1] for a more user-friendly way to do some of the most common
+operations on the index.
+
+The way git update-index handles files it is told about can be modified using
+the various options:
+
+
+--refresh
+
+    Looks at the current index and checks to see if merges or updates are needed
+    by checking stat() information.
+
+
+={============================================================================
+*kt_dev_env_git_155* git-write-tree:
+
+NAME
+
+git-write-tree - Create a tree object from the current index
+
+SYNOPSIS
+
+git write-tree [--missing-ok] [--prefix=<prefix>/]
+
+DESCRIPTION
+
+Creates a tree object using the current index. The name of the new tree object
+is 'printed' to standard output.
+
+The index must be in a fully merged state.
+
+Conceptually, git write-tree sync()s the current index contents into a set of
+tree files. In order to have that match what is actually in your directory right
+now, you need to have done a git update-index phase before you did the git
+write-tree.
+
+
+={============================================================================
+*kt_dev_env_git_155* git-commit-tree:
+
+NAME
+
+git-commit-tree - Create a new commit object
+
+SYNOPSIS
+
+git commit-tree <tree> [(-p <parent>)...]
+git commit-tree [(-p <parent>)...] [-S[<keyid>]] [(-m <message>)...]
+    [(-F <file>)...] <tree>
+
+DESCRIPTION
+
+This is usually not what an end user wants to run directly. See git-commit[1]
+instead.
+
+Creates a new commit object based on the provided tree object and emits the new
+commit object id on stdout. The log message is read from the standard input,
+unless -m or -F options are given.
+
+A commit object may have any number of parents. With exactly one parent, it is
+an ordinary commit. Having more than one parent makes the commit a merge between
+several lines of history. Initial (root) commits have no parents.
+
+While a tree represents a particular directory state of a working directory, a
+commit represents that state in "time", and explains how to get there.
+
+Normally a commit would identify a new "HEAD" state, and while Git doesn’t care
+where you save the note about that state, in practice we tend to just write the
+result to the file that is pointed at by .git/HEAD, so that we can always see
+what the last committed state was.
+
+={============================================================================
+*kt_dev_env_git_155* git-merge-base:
+
+git-merge-base - Find as good common ancestors as possible for a merge
+SYNOPSIS
+
+git merge-base [-a|--all] <commit> <commit>...
+git merge-base [-a|--all] --octopus <commit>...
+git merge-base --is-ancestor <commit> <commit>
+git merge-base --independent <commit>...
+git merge-base --fork-point <ref> [<commit>]
+
+DESCRIPTION
+
+git merge-base finds best 'common' ancestor(s) between two commits to use in a
+three-way merge. One common ancestor is better than another common ancestor if
+the latter is an ancestor of the former. A common ancestor that does not have
+any better common ancestor is a best common ancestor, i.e. a merge base. Note
+that there can be more than one merge base for a pair of commits.
 
 
 ={============================================================================
