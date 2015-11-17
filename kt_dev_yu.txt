@@ -12,8 +12,9 @@
 |kt_dev_uv_set_011| setup: ci builds
 
 *kt_dev_uv_stack_000* zinc-build: zb-make
+*kt_dev_uv_stack_000* zinc-build: zb-build-with-progress
 *kt_dev_uv_stack_000* zinc-build: makefile
-*kt_dev_uv_stack_001* zinc-build: build examples
+*kt_dev_uv_stack_001* zinc-build: build commands and build vars
 *kt_dev_uv_stack_003* zinc-build: debug or release
 *kt_dev_uv_stack_003* zinc-build: autotool structures
 *kt_dev_uv_stack_003* zinc-build: exclude files
@@ -72,7 +73,8 @@
 *kt_dev_uv_stack_256* zinc-mr: underflow error handle
 *kt_dev_uv_stack_256* zinc-mr: connection retry
 *kt_dev_uv_stack_256* zinc-mr-error: when pull network out
-*kt_dev_uv_stack_256* zinc-mr-error: when http 404
+*kt_dev_uv_stack_256* mr-dash-error: when http 404
+*kt_dev_uv_stack_256* mr-dash-error: corrupted stream
 *kt_dev_uv_stack_257* zinc-mr-web: qunit test
 *kt_dev_uv_stack_258* zinc-mr: yv webkit plugin
 *kt_dev_uv_stack_258* zinc-mr: run cdi app on yv mr
@@ -381,7 +383,7 @@ http://spongebob:8080/view/developer/job/Test_Build_Concurrent/
 
 <ET>
 Many of these tools rely on the environment variable "ET" to find your checkout
-of the DEVARCH repo.  The zb-make and zb-build-with-progress tools build the
+of the DEVARCH repo. The zb-make and zb-build-with-progress tools build the
 stack out of your source tree, so you can carry on developing while a build is
 running. You control this behaviour with the "ZB_BUILD_DIR" environment
 variable, so make sure it exists and is writeable by yourself. Similarly, you'll
@@ -536,6 +538,18 @@ zb-virtual-slave zb-make
         fi
     fi
 
+    note: this is why ZB_FORCE_BRANCH is used
+
+    # Warn the user if they're in a shell already but the branch has
+    # changed. This avoids accidentally rebuilding potentially all of
+    # the stack when changing branches.
+    if [[ -n "${ZB_BRANCH}" && "${ZB_BRANCH}" != "$branch" ]]; then
+        warn "You have appeared to change branches in this shell from '$ZB_BRANCH' to '$branch'."
+        warn "Continuing may overwrite the build slave for branch '$branch' (oh noes!)."
+        prompt "Do you want to continue" || exit
+    fi
+
+
     ++++ GIT_DIR=/home/kpark/source/DEVARCH//.git
     ++++ git config zb.huawei.install-prefix
     +++ var=/opt/zinc-trunk
@@ -567,6 +581,11 @@ zb-virtual-slave zb-make
   + commit_sha=fabf2f275c01fcf68bd8ce212c4e507c46eff45b
   + build_cmd=make
 
+
+  if [ -n "${ZB_FORCE_BRANCH}" ]; then
+      echo "Using overridden branch."
+  else
+  {
 
    note: use git and add all tracked but not untracted.
 
@@ -620,8 +639,11 @@ zb-virtual-slave zb-make
 
   + git update-ref -m zb-make refs/heads/zb/master 51a0268d701c77dd925a6aea2b2c6ad8a23b8545
    
+  } // end of force branch if
 
-  note: want to new build slave?
+
+  note: want to new build slave? set "zb/branch" on slave_dir
+
   # Create repo
   if [ ! -e "$(slave_dir)/DEVARCH/Zinc/Zinc.Build/Makefile" ]; then
       echo "Creating new build slave - 
@@ -651,6 +673,8 @@ zb-virtual-slave zb-make
 
   + cd /home/kpark/builds/_virtual_/humax.2100/DEVARCH
   + git fetch origin zb/master
+
+  note: see use of $branch
 
   cd "$(slave_dir)/DEVARCH"
   git fetch origin "zb/$branch"
@@ -709,6 +733,16 @@ zb-virtual-slave zb-make
    sed -u "s|$ZINC_SRC_ROOT|$ET|" >&2 
   ++ sed -u 's|/data/builds/master/pc/DEVARCH|/home/kpark/source/DEVARCH|'
 }
+
+
+={============================================================================
+*kt_dev_uv_stack_000* zinc-build: zb-build-with-progress
+
+ZB_BUILD_CMD=./build-with-progress.sh zb-make "$@"
+
+./Zinc/Zinc.Build/build-with-progress.sh
+
+  -i                            enable incremental building. 
 
 
 ={============================================================================
@@ -937,23 +971,25 @@ confusion and ended up running /bin/ version.
 
 
 ={============================================================================
-*kt_dev_uv_stack_001* zinc-build: build examples
+*kt_dev_uv_stack_001* zinc-build: build commands and build vars
 
-<one>
+<ex>
 cd =~/sources/DEVARCH/
 ZB_CFG="huawei.370" zb-make Polonium/Polonium.NexusInspect
 ZB_CFG="huawei.370" zb-make
 ZB_CFG=humax.1000 zb-make
 
+<to-pass-make-option>
+# -n dry run
+zb-make Polonium.NexusInspect -n
+
+<zb-force-branch>
+Do not use current branch but use the specified one instead.
+
 ZB_FORCE_BRANCH="xxx" ZB_CFG="huawei.370" zb-make Polonium/Polonium.NexusInspect
 
-# -n dry run
-ZB_FORCE_BRANCH="xxx" ZB_OVERWRITE_REMOTE_BRANCH=1 ZB_CFG="huawei.370" zb-make Polonium.NexusInspect -n
 
-ZB_FORCE_BRANCH="xxx" ZB_OVERWRITE_REMOTE_BRANCH=1 ZB_CFG="huawei.370" zb-make Polonium.NexusInspect
-
-
-<two> check if env is configured properly or do compile manually
+<to-check-env> check if env is configured properly or do compile manually
 cd ~/source/DEVARCH/
 ZB_CFG=huawei.370 zb-shell
 
@@ -978,15 +1014,18 @@ zb-make
 
 zb-virtual-slave zb-build-with-progress
 
-<tips>
 
+<to-set-build-target>
 note: can specify make build target
+
 ZINC_SILENT_RULES=1 zb-virtual-slave zb-build-with-progress Zinc.AIR.CTV.Tests-install
 
+
+<zinc-slient-rules>
 ZINC_SILENT_RULES=1 zb-virtual-slave zb-build-with-progress Zinc.AIR.CTV.Tests
 
 DEVARCH/Zinc/Zinc.Build/setvars-common.sh
-391-
+
 392-# Automake "silent-rules" can be turned on to reduce the amount of repetitive
 393-# information printed when building. Warnings and errors are all still printed
 394-# so using silent-rules by default is safe.
@@ -995,10 +1034,11 @@ DEVARCH/Zinc/Zinc.Build/setvars-common.sh
 397-fi
 
 
+<zinc-incremental>
 ZINC_INCREMENTAL
 
 DEVARCH/Zinc/Zinc.Build/Makefile
-129-#
+
 130-$(patsubst %,$(ZINC_BUILD_DIR)/%buildtools.built,$(PACKAGES) $(zinc3ps) $(zinc_bash_test)) : $(ZINC_BUILD_DIR)/%buildtools.built :
 131- $(info +++ Building $* +++)
 132-ifeq (${ZINC_DRY_RUN},)  
@@ -1007,6 +1047,7 @@ DEVARCH/Zinc/Zinc.Build/Makefile
 135:endif # ! ZINC_INCREMENTAL
 
 
+<zinc-skip-tests>
 ZINC_SKIP_TESTS
 
 DEVARCH/Zinc/Zinc.Build/Makefile
@@ -10422,7 +10463,7 @@ gst_adaptive_demux_stream_download_uri ()
 
 
 ={============================================================================
-*kt_dev_uv_stack_256* zinc-mr-error: http 404
+*kt_dev_uv_stack_256* mr-dash--error: http 404
 
 GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found.txt GST_DEBUG=4 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
 
@@ -10543,6 +10584,24 @@ signal sender=:1.318 -> dest=(null destination) serial=400 path=/Zinc/Media/Medi
 GStreamer warning domain: gst-stream-error-quark
 Additional debug:
 Video decode error"
+
+
+<zira>
+DEVARCH-10527: DASH: Fix wrong mapping of stream errors between sink and GST MR
+
+The YV MediaRouter[1] specifies stream decode errors such as a case where there
+is a corrupted segment in the stream to play and YV MediaRouter shall surface it
+up to HTMLMediaElement. To that end, YV MediaRouter maps GStreamer errors or
+warnings to HTMLMediaElement error depending on current network and metadata
+state. However, it has found that GStreamer stream decode errors were mapped to
+error domain while these were defined in warning domain in lower Nexus sink
+element. So these are not surfaced to HTMLMediaElement.
+
+This commit corrects this mapping in order to support and surface stream decode
+errors, some log messages, and relevant test cases in YV MediaRouter test
+harness.
+
+[1] https://jira.youview.co.uk/browse/SOLDES-584
 
 
 ={============================================================================

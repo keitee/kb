@@ -838,10 +838,6 @@ Baptiste Wicht
 
 This post will present the Boost intrusive_ptr and its usage in C++ programming.
 
-Recently, I took some time to optimize the parsing performances of the EDDI
-Compiler. The parsing phase creates a lot of nodes to fill the Abstract Syntax
-Tree.
-
 One of the way I found was to replace some shared_ptr by some intrusive_ptr of
 the Boost library.
 
@@ -901,10 +897,12 @@ And finally you can use the intrusive_ptr to replace your shared_ptr :
     std::cout << x->name << std::endl;
   }
 
-The smart pointer itself can be used exactly the same way as a shared_ptr. If
-  you have several classes that are managed using an intrusive_ptr, you can use
-  a function template to tell Boost that all the reference counter are at the
-  same place :
+The smart pointer itself can be used exactly the same way as a shared_ptr. 
+  
+<support-multiple-types>
+If you have several classes that are managed using an intrusive_ptr, you can use
+a function template to tell Boost that all the reference counter are at the same
+place :
 
   template<typename T>
     inline void intrusive_ptr_add_ref(T* expr){
@@ -956,6 +954,217 @@ note: same place?
 Another case where it's interesting to use an intrusive_ptr is when dealing with
 libraries using a lot of raw pointers, because you can create several
 intrusive_ptr to the same raw pointer without any problem.
+
+
+={============================================================================
+*kt_dev_boost_010* boost-intrusive-ptr: 
+
+http://www.boost.org/doc/libs/master/libs/smart_ptr/intrusive_ptr.html
+
+The intrusive_ptr class template stores a pointer to an object with an embedded
+reference count. Every new intrusive_ptr instance increments the reference count
+by using an unqualified call to the function intrusive_ptr_add_ref, passing it
+the pointer as an argument. Similarly, when an intrusive_ptr is destroyed, it
+calls intrusive_ptr_release; this function is responsible for destroying the
+object when its reference count drops to zero. 
+
+The user is expected to provide suitable definitions of these two functions. 
+
+On compilers that support argument-dependent lookup, intrusive_ptr_add_ref and
+intrusive_ptr_release should be defined in the namespace that corresponds to
+their parameter; otherwise, the definitions need to go in namespace boost. The
+library provides a helper base class template intrusive_ref_counter which may
+help adding support for intrusive_ptr to user types.
+
+The class template is parameterized on T, the type of the object pointed to.
+intrusive_ptr<T> can be implicitly converted to intrusive_ptr<U> whenever T* can
+be implicitly converted to U*.
+
+The main reasons to use intrusive_ptr are:
+
+  Some existing frameworks or OSes provide objects with embedded reference
+  counts;
+
+  The memory footprint of intrusive_ptr is the same as the corresponding raw
+    pointer;
+
+  intrusive_ptr<T> can be constructed from an arbitrary raw pointer of type T *.
+
+As a general rule, if it isn't obvious whether intrusive_ptr better fits your
+needs than shared_ptr, try a shared_ptr-based design first.
+
+
+<get>
+
+T * get() const; // never throws
+
+    Returns: the stored pointer.
+
+    Throws: nothing.
+
+
+<code>
+
+// boost-1.57.0/boost/smart_ptr/intrusive_ptr.hpp
+
+namespace boost
+{
+
+//
+//  intrusive_ptr
+//
+//  A smart pointer that uses intrusive reference counting.
+//
+//  Relies on unqualified calls to
+//  
+//      void intrusive_ptr_add_ref(T * p);
+//      void intrusive_ptr_release(T * p);
+//
+//          (p != 0)
+//
+//  The object is responsible for destroying itself.
+//
+
+template<class T> class intrusive_ptr
+{
+private:
+
+    typedef intrusive_ptr this_type;
+
+public:
+
+    typedef T element_type;
+
+    intrusive_ptr() BOOST_NOEXCEPT : px( 0 )
+    {
+    }
+
+    intrusive_ptr( T * p, bool add_ref = true ): px( p )
+    {
+        if( px != 0 && add_ref ) intrusive_ptr_add_ref( px );
+    }
+
+#if !defined(BOOST_NO_MEMBER_TEMPLATES) || defined(BOOST_MSVC6_MEMBER_TEMPLATES)
+
+    template<class U>
+#if !defined( BOOST_SP_NO_SP_CONVERTIBLE )
+
+    intrusive_ptr( intrusive_ptr<U> const & rhs,
+        typename boost::detail::sp_enable_if_convertible<U,T>::type 
+          = boost::detail::sp_empty() )
+
+#else
+
+    intrusive_ptr( intrusive_ptr<U> const & rhs )
+
+#endif
+    : px( rhs.get() )
+    {
+        if( px != 0 ) intrusive_ptr_add_ref( px );
+    }
+
+#endif
+
+    intrusive_ptr(intrusive_ptr const & rhs): px( rhs.px )
+    {
+        if( px != 0 ) intrusive_ptr_add_ref( px );
+    }
+
+    ~intrusive_ptr()
+    {
+        if( px != 0 ) intrusive_ptr_release( px );
+    }
+
+    ...
+};
+
+
+={============================================================================
+*kt_dev_boost_010* boost-intrusive-ptr: case ex
+
+inline
+GObject* intrusive_ptr_add_ref(GObject* const p)
+{
+    return G_OBJECT(g_object_ref(p));
+}
+
+inline
+void intrusive_ptr_release(GObject* const p)
+{
+    g_object_unref(p);
+}
+
+inline
+GstElement* intrusive_ptr_add_ref(GstElement* const p)
+{
+    return GST_ELEMENT_CAST(gst_object_ref(p));
+}
+
+inline
+void intrusive_ptr_release(GstElement* const p)
+{
+    gst_object_unref(p);
+}
+
+// defines more functions for other types
+
+/**
+ * Ideally `boost::intrusive_ptr` should be used directly but unfortunately its
+ * constructor by default increments the reference counter which is not handy as
+ * GStreamer (GObject) objects are returned with reference counter already
+ * initialised.  Also specifying `incRef` as `false` for most of the instances
+ * is inconvenient or sometimes even impossible.
+ *
+ * This thin class does _not_ increment the reference counter by default which
+ * suits most of the use cases.
+ */
+template <typename T>
+class RefObj : public boost::intrusive_ptr<T>
+{
+  public:
+    inline RefObj() : boost::intrusive_ptr<T>() {}
+
+    /**
+     * Initialise the pointer but do _not_ increment reference counter by
+     * default.
+     */
+    inline RefObj(T* const elem, const bool incRef = false)
+      : boost::intrusive_ptr<T>(elem, incRef)
+    {
+    }
+
+    /**
+     * In some contexts it's necessary to retain the ownership of the object.
+     * This happens in situations when a function takes ownership of the object
+     * provided but the caller wants to keep a reference to the object as well.
+     *
+     * In other contexts this also means transferring ownership of the object as
+     * the original object goes out of scope after a call to a function
+     * expecting transfer of ownership.
+     */
+    inline T* retain() const
+    {
+      if (T* const p = this->get()) {
+        return intrusive_ptr_add_ref(p);
+      }
+
+      return NULL;
+    }
+};
+
+
+initParams->pipelineFactory = boost::bind(gst_pipeline_new, "pipeline");
+
+RefObj<GstElement> elem = pipelineFactory();
+
+g_signal_connect(elem.get(), "child-added",
+  G_CALLBACK(GstMediaRouter::childAddedCallback),
+  const_cast<std::string::value_type*>(userAgent.c_str()));
+
+gst_bin_add_many(GST_BIN(elem.get()),
+  typefindBin->getParent().retain(),
+  srcBin->getParent().retain(),
+  sinkBin->getParent().retain(), NULL);
 
 
 ={============================================================================
