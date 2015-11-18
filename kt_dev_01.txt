@@ -102,16 +102,17 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_004| copy controls of dyn resource. valuelike. preventing-copies. swap and move example
 |kt_dev_cpp_005| converting ctor {class-type-conversion} {explicit-keyword}
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
-|kt_dev_cpp_007| function matching and overload {scope-in-inheritance}
+|kt_dev_cpp_007| overload: function matching
 |kt_dev_cpp_008| const-, equal-misspell
 |kt_dev_cpp_008| const-member
 |kt_dev_cpp_008| const-bitwise
 |kt_dev_cpp_008| const-mutable
-|kt_dev_cpp_009| undefined result
+|kt_dev_cpp_009| return: undefined result
+*kt_dev_cpp_009* return: from main, meaning of 0
 |kt_dev_cpp_010| temp-object
 |kt_dev_cpp_011| inline {empty-ctor-represenstaion}
 |kt_dev_cpp_012| list initialization. initializer_list
-|kt_dev_cpp_013| use reference {called-by-reference} 
+|kt_dev_cpp_013| reference, called-by-reference 
 |kt_dev_cpp_014| auto, decltype, typedef, and struct {class-vs-struct} 
 |kt_dev_cpp_015| declaration and definition
 |kt_dev_cpp_016| array and struct
@@ -309,7 +310,6 @@ KT KB. DEVELOPMENT.
 
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
-|kt_dev_blush_002| default return values
 
 #{ design
 |kt_dev_design_001| generic structure access
@@ -11066,9 +11066,10 @@ else
 
 http://en.cppreference.com/w/cpp/language/operator_precedence
 
-The following table lists the precedence and associativity of C++ operators. Operators are listed
-top to bottom, in descending precedence. Where no associativity follows the above one.
-note that is from C++ Primus and hence updated.
+The following table lists the precedence and associativity of C++ operators.
+Operators are listed top to bottom, in descending precedence. Where no
+associativity follows the above one. note that is from C++ Primus and hence
+updated.
 
 Precedence Operator, Description, Use, Associativity, (L)eft-to-right
 
@@ -11142,8 +11143,9 @@ Precedence Operator, Description, Use, Associativity, (L)eft-to-right
 
 
 {parentheses}
-CPP p136. The parentheses override the normal grouping since parenthesized expressions are evaluated
-by treating it 'subexpressions' as a 'unit' and otherwise applying the normal precedence rules.
+CPP p136. The parentheses override the normal grouping since parenthesized
+expressions are evaluated by treating it 'subexpressions' as a 'unit' and
+otherwise applying the normal precedence rules.
 
 
 {side-effect} <evaluation-order>
@@ -13894,12 +13896,26 @@ all containers?
 
 
 ={============================================================================
-*kt_dev_cpp_007* function matching and overload
+*kt_dev_cpp_007* overload: function matching
 
-{function-matching}
-Also known as overload resolution. The name has 'scope' and object has
+Function overloading eliminates the need to invent and remember names that exist
+only to help the compiler figure out which function to call.
+
+
+<overload-condition>
+Member functions differing only in their constness can be overloaded. Conditons
+for overloading
+
+-. Shall be the same 'name'
+-. Shall have different param list in the 'number' or the 'type'
+-. Shall be in the same 'scope'
+
+It is an error for two functions to differ only in terms of their return types.
+
+
+<function-matching>
+Also known as overload resolution or deduce. The name has 'scope' and object has
 'lifetime'. Three possible outcomes: best match, no match, and ambiguous call.
-For overload condition, see {const-on-overload} 
 
 note: step 0 and 1 is called <normal-scope-or-name-lookup>?
 
@@ -13924,13 +13940,16 @@ the set of overloaded functions and should be the same name and visible.
 Include any function-template instantiation for which template arg deduction
 succeeds.
 
-step-2: <build-viables>
-Use the number of arguments, type match, and conversion to get viable functions.
 
-step-3: <find-best-match> prefer best and nontemplate
-The exact match is better than a match that requires a conversion.
-non-template func is selected if there's only one in the set. if not, more
-specialized func template is called. otherwise, the call is ambiguous.
+02: <build-viables>
+Use the number of arguments, type match, and conversion to get viable functions.
+"In C++, name lookup happens before type checking".
+
+
+03: <find-best-match> prefer best and nontemplate
+The exact match is better than a match that requires a conversion. non-template
+func is selected if there's only one in the set. If not, more specialized func
+template is called. otherwise, the call is ambiguous.
 
 step-4: <check-access>
 See accessibilty in case of inheritance. From EC++40
@@ -14320,7 +14339,7 @@ flexibility: can use for both const and nonconst parameter. can use conversion.
 ={============================================================================
 *kt_dev_cpp_008* const-member
 
-<constness-and-overload> overload-condition
+<overload-condition>
 Member functions differing only in their constness can be overloaded. Conditons
 for overloading
 
@@ -14328,15 +14347,21 @@ for overloading
 -. Shall have different param list in the number or the type
 -. Shall be in the same 'scope'
 
+It is an error for two functions to differ only in terms of their return types.
 So don't see return type. See {virtual-copy-constructor} for override case.
 
-// int *const currErr : const pointer. read from right to left
+<constness-and-overload>
+The reason that the compiler can use the constness of the argument to
+distinguish which funtion to call is that there is 'no' conversion from const.
 
-Record lookup( account * );      // pointer
-Record lookup( account *const ); // const pointer. re-define. top-level.
+Record lookup(account *);         // pointer
+Record lookup(account *const);    // const pointer. re-define. ignore top-level
 
-Record lookup( account & );      // non-const version
-Record lookup( const account &); // const version
+Record lookup(account &);         // non-const version
+Record lookup(const account &);   // const version
+
+Record lookup(account *);         // non-const version
+Record lookup(const account *);   // const version
 
 
 {why-const-member-func}
@@ -14527,22 +14552,23 @@ class TextBlock {
   }
 };
 
-From C++P p233, const_cast is most useful in the conext of overloaded functions.
+From CPR 233, const_cast is most useful in the conext of overloaded functions.
 
 const string &shorterString( const string &s1, const string &s2 )
 {
-	return s1.size() <= s2.size() ? s1 : s2;
+  return s1.size() <= s2.size() ? s1 : s2;
 }
 
 string &shorterString( string &s1, string &s2 )
 {
-	auto &r = shorterString( const_cast<const string&>(s1), const_cast<const string&>(s2) );
+  auto &r = shorterString(const_cast<const string&>(s1), 
+                          const_cast<const string&>(s2));
 
-	return const_cast< string& >(r);
+  return const_cast< string& >(r);
 }
 
-This is safe to cast that string back to a plain string & in the return because it is one of
-original nonconst arguments.
+This is safe to cast that string back to a plain string & in the return because
+it is one of original nonconst arguments.
 
 
 <approach-three> Change the order
@@ -14815,11 +14841,10 @@ const char* _determineSource(char*in, int* sourceLen, int *readPos, bool* usePat
 
 
 ={============================================================================
-*kt_dev_cpp_009* undefined result and a temp-object
-
-{undefined-result-in-return}
+*kt_dev_cpp_009* return: undefined result
 
 <no-return-when-expected>
+
 #include <iostream>
 #include <string>
 
@@ -14835,7 +14860,7 @@ bool str_subrange( const string& str1, const string& str2 )
   for( decltype(small_size) i = 0; i != small_size; ++i )
     if( str1[i] != str2[i] )
       ;                          // NO ERROR in this case
-  return;                        // ERROR-01
+      return;                    // ERROR-01
                                  // ERROR-02
 }
 
@@ -14859,15 +14884,74 @@ int main()
 <ERROR-01>
 VC and GCC picks up this error. This is GCC case:
 
-samcpp.cpp: In function bool str_subrange(const std::string&, const std::string&)
-samcpp.cpp:16: error: return-statement with no value, in function returning bool
+.cpp: In function bool str_subrange(const std::string&, const std::string&)
+.cpp:16: error: return-statement with no value, in function returning bool
 
 <ERROR-02> undefined-result
-Primus says that some picks up this error and some do not. Both VC adn GCC do not picks up this
-error.
+CPR 6.3.2 says that some picks up this error and some do not. Both VC adn GCC do
+not picks up this error.
 
-Primus also says that its result at runtime is 'undefined'. When running for VC and GCC showed
-different result: VC returns true and GCC do false. Hence 'undefined'. 
+Also says that its result at runtime is 'undefined'. When running for VC and GCC
+showed different result: VC returns true and GCC do false. Hence 'undefined'. 
+
+
+<case>
+Have spent a day to find out why a program crashes. Two lessons:
+
+1) It is better to have a core dump rather then narrowing down where a crash
+happens. Since looked like there are other places to be suspicious while doing
+gdb session until reachs to the real cause such as constructors, map insertions,
+    and so on.
+
+2) From the '89 standard as quoted in the new testament: Flowing off the end of
+a function is equivalent to a return with no expression. In either case, the
+return value is undefined.
+
+This is a debug trace routines and defines enums, strings for enums. It is easy
+to make a mismatch between enum and strings when add more enums. So better to
+have strings from enums using macro stringfication. However, in that case, enum
+should be sequential.
+
+typedef enum MHEGComponent_
+{
+    eMHEGNull       = 0x00000001,
+    eMHEGeng        = 0x00000002,
+    eMHEGengRuntime = 0x00000004,
+    ...
+} MHEGComponent;
+
+const char* s_names[] =
+{
+    "Null",
+    "MHEGEng",
+    "MHEGEngRun",
+    ...
+};
+
+const uint32_t getIndex(MHEGComponent comp)
+{
+  switch (comp)
+  {
+    case 0x00000001: return 0; break;
+    case 0x00000002: return 1; break;
+    case 0x00000004: return 2; break;
+    case 0x00000008: return 3; break;
+    case 0x00000010: return 4; break;
+    ...
+    case 0x00000040: return 6; break;
+    case 0x00000080: return 7; break;
+    case 0x00000100: return 8; break;
+    case 0x00000200: return 9; break;
+    case 0x00000400: return 10; break;
+  }
+}
+
+This didn't have default case and when there is a enum which don't have a
+matching case, no return statement but this function returns int. Which value
+will you get? Quick test shows undefined return value.
+
+case: 3000
+val: 134520896
 
 
 <when-return-local>
@@ -14881,8 +14965,20 @@ const string& foo()
     return "Empty";
 }
 
-Both return cause 'undefined'-result at the call site(caller) because it returns reference to local
-to function foo().
+Both return cause 'undefined'-result at the call site(caller) because it returns
+reference to local to function foo().
+
+
+={============================================================================
+*kt_dev_cpp_009* return: from main, meaning of 0
+
+This is exception to the rule that a function with a return type 'must' return a
+value. If control reaches the end of main and there is no return, then the
+compiler inserts a return of 0.
+
+A zero return indicates 'success' and other indicates failure. To make return
+value machine independent, use EXIT_FAILURE and EXIT_SUCCESS from cstdlib
+header which are preprocessor variables.
 
 
 ={============================================================================
@@ -15277,11 +15373,11 @@ void print( std::initializer_list<int> vals )
 
 
 ={============================================================================
-*kt_dev_cpp_013* when use reference {called-by-reference}
+*kt_dev_cpp_013* reference, called-by-reference
 
 {no-address-when-use}
-There is a difference between called-by-reference(passed-by-reference) and called-by-value. For
-example:
+There is a difference between called-by-reference(passed-by-reference) and
+called-by-value. For example:
 
 void reset( int i )
 { i = 0; }
@@ -15300,8 +15396,8 @@ void reset( &j );
 
 what's the value of j here?
 
-Here reference i will be bounded to whatever int object we pass and say "pass an object" directly.
-So no need to pass its address.
+Here reference i will be bounded to whatever int object we pass and say "pass an
+object" directly. So no need to pass its address.
 
 void reset(int &i)
 { i = 0; }
@@ -15311,7 +15407,8 @@ reset(j);      // note: no need to pass its address
 
 what's the value of j here?
 
-For called-by-reference, C uses pointers and C++ uses reference. Use C++ way of doing it.
+For called-by-reference, C uses pointers and C++ uses reference. Use C++ way of
+doing it.
 
 
 {reference-vs-pointer}
@@ -15435,12 +15532,12 @@ for( auto &c : str )
 auto &v = container.back();
 auto v = container.back();
 
-<Q> cannot overload by having different return since overload do not see return type. Then how this
-back() work?
+<Q> cannot overload by having different return since overload do not see return
+type. Then how this back() work?
 
 
 {return-reference-vs-copy}
-Beware a func that returns copy or reference. {quiz} maybe a quiz?
+Beware a func that returns copy or reference. QUIZ: maybe a quiz?
 
 class Screen {
   public:
@@ -15460,6 +15557,11 @@ class Screen {
 int main()
 {
   Screen myscreen;
+
+  // note: shows that the call and dot operator has the same precedence and left
+  // associative. so can use the result of a call to call a member of the
+  // resulting object.
+
   myscreen.set_move(5).set_set(10);
   myscreen.print();
 }
@@ -15470,8 +15572,8 @@ int main()
 <02>
 5, 0
 
-Since <02> set_move returns a copy and set_set is called upon the copy, no changes on myscreen
-object.
+Since <02> set_move returns a copy and set_set is called upon the copy, no
+changes on myscreen object.
 
 
 ={============================================================================
@@ -17356,10 +17458,25 @@ void StrVec::reallocate()
 note: the std::move() returns a result that cause construct() to use the string move ctor.
 
 
-{rvalue-reference}
-An rvalue reference is obtained by using '&&' rather than '&'. Has 'important' property that be bound
-'only' to an object that is about to be 'destroyed'. As a result, free to 'move' resource from an
-rvalue reference(moved-from) 'to' another object(moved-to).
+{lvalue-rvalue-reference}
+
+CPR 226. "Calls to functions that return reference are 'lvalue'" which means
+that can be used in the same ways as any other lvaue.
+
+char &get_value(string &str, string::size_type ix)
+{
+  return str[ix];
+}
+
+{
+  string s("a value");
+  get_value(s, 0) = 'A';    // changes s[0] to A
+}
+
+An rvalue reference is obtained by using '&&' rather than '&'. Has 'important'
+property that be bound 'only' to an object that is about to be 'destroyed'. As a
+result, free to 'move' resource from an rvalue reference(moved-from) 'to'
+another object(moved-to).
 
 <lvalue-and-rvalue>
 In C, lvalue could stand on the left-hand side of an assignment whereas rvalues could 'not'. In C++
@@ -37412,8 +37529,9 @@ char *pc = reinterpret_cast<char*>(ip);
 
 
 <const_cast>
-This manipulates the constness of the object pointed by a pointer, either to set or to removed. For
-example, in order to pass a const pointer to a function that expects a non-const argument:
+This manipulates the constness of the object pointed by a pointer, either to
+'set' or to 'remove'. For example, in order to pass a const pointer to a
+function that expects a non-const argument:
 
 // const_cast
 #include <iostream>
@@ -37430,25 +37548,27 @@ int main () {
   return 0;
 }
 
-The example above is safe because function print does not write to the pointed object. After
-removing the constness of a pointed object, writing to it causes undefined behavior.
+The example above is safe because function print does not write to the pointed
+object. After removing the constness of a pointed object, writing to it causes
+undefined behavior.
 
-From C++P p233, const_cast is most useful in the conext of overloaded functions.
+From CPR 233, const_cast is most useful in the conext of overloaded functions.
 
 const string &shorterString( const string &s1, const string &s2 )
 {
-	return s1.size() <= s2.size() ? s1 : s2;
+  return s1.size() <= s2.size() ? s1 : s2;
 }
 
 string &shorterString( string &s1, string &s2 )
 {
-	auto &r = shorterString( const_cast<const string&>(s1), const_cast<const string&>(s2) );
+  auto &r = shorterString(const_cast<const string&>(s1), 
+                          const_cast<const string&>(s2));
 
-	return const_cast< string& >(r);
+  return const_cast< string& >(r);
 }
 
-This is safe to cast that string back to a plain string & in the return because it is one of
-original nonconst arguments.
+This is safe to cast that string back to a plain string & in the return because
+it is one of original nonconst arguments.
 
 
 {named-cast}
@@ -41717,64 +41837,6 @@ int NeighborCount( Grid map, int row, int col)
 
 	 return count;
 }
-
-
-={===========================================================================
-*kt_dev_blush_002* default return values
-
-Have spent a day to find out why a program crashes. Two lessons:
-
-1) It is better to have a core dump rather then narrowing down where a crash happens. Since looked
-like there are other places to be suspicious while doing gdb session until reachs to the real cause
-such as constructors, map insertions, and so on.
-
-2) From the '89 standard as quoted in the new testament: Flowing off the end of a function is
-equivalent to a return with no expression. In either case, the return value is undefined.
-
-This is a debug trace routines and defines enums, strings for enums. It is easy to make a mismatch
-between enum and strings when add more enums. So better to have strings from enums using macro
-stringfication. However, in that case, enum should be sequential.
-
-typedef enum MHEGComponent_
-{
-    eMHEGNull       = 0x00000001,
-    eMHEGeng        = 0x00000002,
-    eMHEGengRuntime = 0x00000004,
-    ...
-} MHEGComponent;
-
-const char* s_names[] =
-{
-    "Null",
-    "MHEGEng",
-    "MHEGEngRun",
-    ...
-};
-
-const uint32_t getIndex(MHEGComponent comp)
-{
-  switch (comp)
-  {
-    case 0x00000001: return 0; break;
-    case 0x00000002: return 1; break;
-    case 0x00000004: return 2; break;
-    case 0x00000008: return 3; break;
-    case 0x00000010: return 4; break;
-    ...
-    case 0x00000040: return 6; break;
-    case 0x00000080: return 7; break;
-    case 0x00000100: return 8; break;
-    case 0x00000200: return 9; break;
-    case 0x00000400: return 10; break;
-  }
-}
-
-This didn't have default case and when there is a enum which don't have a matching case, no return
-statement but this function returns int. Which value will you get? Quick test shows undefined return
-value.
-
-case: 3000
-val: 134520896
 
 
 # ============================================================================
