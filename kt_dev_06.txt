@@ -1003,6 +1003,41 @@ T * get() const; // never throws
     Throws: nothing.
 
 
+<assignment>
+
+intrusive_ptr & operator=(intrusive_ptr const & r);
+template<class Y> intrusive_ptr & operator=(intrusive_ptr<Y> const & r);
+intrusive_ptr & operator=(T * r);
+
+    Effects: Equivalent to intrusive_ptr(r).swap(*this).
+
+    Returns: *this.
+
+
+<reset>
+
+void reset();
+
+    Effects: Equivalent to intrusive_ptr().swap(*this).
+
+void reset(T * r);
+
+    Effects: Equivalent to intrusive_ptr(r).swap(*this).
+
+void reset(T * r, bool add_ref);
+
+    Effects: Equivalent to intrusive_ptr(r, add_ref).swap(*this).
+
+
+<swap>
+
+void swap(intrusive_ptr & b); // never throws
+
+    Effects: Exchanges the contents of the two smart pointers.
+
+    Throws: nothing.
+
+
 <code>
 
 // boost-1.57.0/boost/smart_ptr/intrusive_ptr.hpp
@@ -1075,12 +1110,21 @@ public:
         if( px != 0 ) intrusive_ptr_release( px );
     }
 
+    intrusive_ptr & operator=(T * rhs)
+    {
+        this_type(rhs).swap(*this);
+        return *this;
+    }
+
     ...
 };
 
 
 ={============================================================================
 *kt_dev_boost_010* boost-intrusive-ptr: case ex
+
+This case uses reference count in GObject and no need to add reference count
+member to the type.
 
 inline
 GObject* intrusive_ptr_add_ref(GObject* const p)
@@ -1153,18 +1197,71 @@ class RefObj : public boost::intrusive_ptr<T>
 };
 
 
-initParams->pipelineFactory = boost::bind(gst_pipeline_new, "pipeline");
+<case>
 
-RefObj<GstElement> elem = pipelineFactory();
+// as a member
 
-g_signal_connect(elem.get(), "child-added",
-  G_CALLBACK(GstMediaRouter::childAddedCallback),
-  const_cast<std::string::value_type*>(userAgent.c_str()));
+boost::shared_ptr<VirtualBinFactory> typefindBinFactory;
 
-gst_bin_add_many(GST_BIN(elem.get()),
-  typefindBin->getParent().retain(),
-  srcBin->getParent().retain(),
-  sinkBin->getParent().retain(), NULL);
+mutable RefObj<GstElement> pipeline;
+
+{
+  // this is local object. increase reference count
+
+  RefObj<GstElement> elem = gst_pipeline_new("pipeline");
+
+  // from init()
+
+  g_signal_connect(elem.get(), "child-added", ...);
+
+  // this gets a pointer to bin and increase reference count. Still want to use
+  // after init call.
+
+  gst_bin_add_many(GST_BIN(elem.get()),
+      typefindBin->getParent().retain(),
+      srcBin->getParent().retain(),
+      sinkBin->getParent().retain(), NULL);
+
+  elem.swap(this->pipeline);
+}
+
+typefindBin->setSource(sinkBin->setDrmUrl(mediaLocator));
+
+
+<case>
+
+// create intrusive_ptr instance as a member 
+
+RefObj<GstElement> uridecodebin;
+
+// from setSource()
+//
+// this works since intrusive_ptr & operator=(T *r); and factory_make() increase
+// reference count.
+
+uridecodebin = gst_element_factory_make("uridecodebin", "uri-decoder");
+
+if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get())) 
+{
+  // increase reference count. Why this? Since gst_bin_add() take a ownership
+  // but after that, still want to use.
+
+  uridecodebin.retain();
+
+  GstCaps *const caps = gst_caps_from_string(
+      "application/dash+xml; "
+      "application/x-hls; "
+      "video/quicktime");
+
+  g_object_set(uridecodebin.get(), "caps", caps, NULL);
+
+  if (0 == g_signal_connect(uridecodebin.get(), "pad-added",
+        G_CALLBACK(newPadCb),
+        static_cast<gpointer>(this))) {
+  }
+
+  // note: WHY do not need to decrease reference count of uridecodebin?
+}
 
 
 ={============================================================================

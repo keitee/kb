@@ -89,6 +89,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst: gstvideo
 *kt_dev_bcast_500* gst-pipeline
 *kt_dev_bcast_500* gst-element
+*kt_dev_bcast_500* gst-element-factory
 *kt_dev_bcast_500* gst-ghostpad
 *kt_dev_bcast_500* gst-structure
 *kt_dev_bcast_500* gst-message
@@ -98,8 +99,9 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst: gstclock
 
 *kt_dev_bcast_600* glib-model
-*kt_dev_bcast_600* glib-gobject
-*kt_dev_bcast_600* glib-gobject: reference count
+*kt_dev_bcast_600* glib-object
+*kt_dev_bcast_600* glib-object: reference count
+*kt_dev_bcast_600* glib-object: floating reference
 *kt_dev_bcast_600* glib-property
 
 *kt_dev_bcast_600* glib: gdebug
@@ -6627,23 +6629,6 @@ values and GParamSpecs are therefore supported.
 Every GstElement 'inherits' at least one property from its parent GstObject:
 the "name" property. This is the name you provide to the functions.
 
-gst_element_factory_make ()
-
-GstElement *
-gst_element_factory_make (const gchar *factoryname,
-                          const gchar *name);
-
-Create a new element of the type defined by the given element factory. If name
-is NULL, then the element will receive a guaranteed unique name, consisting of
-the element factory name and a number. If name is given, it will be given the
-name supplied.
-
-Parameters
-
-factoryname   a named factory to instantiate
-name          name of new element, or NULL to automatically create a unique
-              name. 
-
 int main (int argc, char *argv[])
 {
   GstElement *element;
@@ -6856,9 +6841,11 @@ note: pipeline is a special bin.
 
 Bins are created in the same way that other elements are created, i.e. using
 an element factory. There are also convenience functions available
-(gst_bin_new () and gst_pipeline_new ()). To add elements to a bin or remove
-elements from a bin, you can use gst_bin_add () and gst_bin_remove (). Note
-that the bin that you add an element to will take ownership of that element. 
+(gst_bin_new () and gst_pipeline_new ()). note: increase 'reference' count
+
+To add elements to a bin or remove elements from a bin, you can use gst_bin_add
+() and gst_bin_remove (). Note that the bin that you add an element to will take
+'ownership' of that element. 
 
 If you destroy the bin, the element will be dereferenced with it. If you remove
 an element from a bin, it will be dereferenced automatically.
@@ -8850,6 +8837,7 @@ of the functions are just extended for special GStreamer needs and can be found
 under the same name in the base class of GstObject which is GObject (e.g.
     g_object_ref() becomes gst_object_ref()).
 
+<take-ownership>
 Since GstObject derives from GInitiallyUnowned, it also inherits the floating
 reference. Be aware that functions such as gst_bin_add() and
 gst_element_add_pad() take ownership of the floating reference.
@@ -8971,15 +8959,18 @@ void Gst::childAddedCallback(
 ={============================================================================
 *kt_dev_bcast_500* gst-bin
 
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstBin.html
+
 GstBin — Base class and element that can contain other elements
 
 Object Hierarchy
 
-  GObject
-   +----GstObject
-         +----GstElement
-               +----GstBin *
-                     +----GstPipeline
+    GObject
+    ╰── GInitiallyUnowned
+        ╰── GstObject
+            ╰── GstElement
+                ╰── GstBin
+                    ╰── GstPipeline
 
 Description
 
@@ -9009,6 +9000,65 @@ gst_object_unref() is used to drop your reference to the bin.
 The "element-added" signal is fired whenever a new element is added to the bin.
 Likewise the "element-removed" signal is fired whenever an element is removed
 from the bin. 
+
+gst_bin_add ()
+--------------------------
+gboolean
+gst_bin_add (GstBin *bin,
+             GstElement *element);
+
+<take-ownership>
+Adds the given element to the bin. Sets the element's parent, and thus takes
+  'ownership' of the element. An element can only be added to one bin.
+
+If the element's pads are linked to other pads, the pads will be unlinked before
+the element is added to the bin.
+
+When you add an element to an already-running pipeline, you will have to take
+care to set the state of the newly-added element to the desired state (usually
+    PLAYING or PAUSED, same you set the pipeline to originally) with
+gst_element_set_state(), or use gst_element_sync_state_with_parent(). The bin or
+pipeline will not take care of this for you.
+
+MT safe.
+
+Parameters
+
+bin
+a GstBin
+
+element
+the GstElement to add.  [transfer full]
+
+<take-ownership>
+note: "transfer full" says that "Free data after the code is done"
+
+Returns
+TRUE if the element could be added, FALSE if the bin does not want to accept the
+element.
+
+
+gst_bin_add_many ()
+--------------------------
+void
+gst_bin_add_many (GstBin *bin,
+                  GstElement *element_1,
+                  ...);
+
+Adds a NULL-terminated list of elements to a bin. This function is equivalent to
+  calling gst_bin_add() for each member of the list. The return value of each
+  gst_bin_add() is ignored.
+
+Parameters
+
+bin
+a GstBin
+
+element_1
+the GstElement element to add to the bin. [transfer full]
+
+...
+additional elements to add to the bin.  [transfer full]
 
 
 ={============================================================================
@@ -9650,6 +9700,10 @@ newly created GstPipeline
 
 MT safe. 
 
+[transfer floating]
+
+note: it calls gst_element_factory_make ();
+
 
 ={============================================================================
 *kt_dev_bcast_500* gst-element
@@ -9662,6 +9716,7 @@ Object Hierarchy
         ╰── GstObject
             ╰── GstElement
                 ╰── GstBin
+
 
 gst_element_post_message ()
 -----------------
@@ -9735,6 +9790,44 @@ note: uses gst_element_message_full() to post
 
 GST_ELEMENT_ERROR(demux, 
     RESOURCE, FAILED, ("Download error"), ("http error %d", http_status));
+
+
+={============================================================================
+*kt_dev_bcast_500* gst-element-factory
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElementFactory.html
+
+    GObject
+    ╰── GInitiallyUnowned
+        ╰── GstObject
+            ╰── GstPluginFeature
+                ╰── GstElementFactory
+
+gst_element_factory_make ()
+-----------------
+GstElement *
+gst_element_factory_make (const gchar *factoryname,
+                          const gchar *name);
+
+Create a new element of the type defined by the given element factory. If name
+is NULL, then the element will receive a guaranteed unique name, consisting of
+the element factory name and a number. If name is given, it will be given the
+name supplied.
+
+Parameters
+
+factoryname   a named factory to instantiate
+name          name of new element, or NULL to automatically create a unique
+              name. 
+
+Returns
+new GstElement or NULL if unable to create element.
+
+[transfer floating][nullable]
+
+note: 
+Q: this uses g_object_new in implementation which means increase reference
+   count? YES. See floating reference.
 
 
 ={============================================================================
@@ -10993,7 +11086,7 @@ typedef struct {
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-gobject
+*kt_dev_bcast_600* glib-object
 
 GObject is a fundamental classed instantiable type. It implements:
 
@@ -11070,7 +11163,7 @@ MamanBar *bar = g_object_new (MAMAN_TYPE_BAR, NULL);
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-gobject: reference count
+*kt_dev_bcast_600* glib-object: reference count
 
 https://developer.gnome.org/gobject/stable/gobject-memory.html
 
@@ -11086,6 +11179,8 @@ The functions g_object_ref/g_object_unref respectively increase and decrease the
 reference count. These functions are thread-safe. g_clear_object is a
 convenience wrapper around g_object_unref which also clears the pointer passed
 to it.
+
+note: g_object_new increase reference count
 
 The reference count is 'initialized' to 'one' by g_object_new which means that
 the caller is currently the sole owner of the newly-created reference. When the
@@ -11105,6 +11200,60 @@ interfaces”.
 The table below summarizes the destruction process of a GObject:
 
 Table 5. g_object_unref
+
+
+={============================================================================
+*kt_dev_bcast_600* glib-object: floating reference
+
+https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html
+
+Floating references
+
+GInitiallyUnowned is derived from GObject. The only difference between the two
+is that the initial reference of a GInitiallyUnowned is flagged as a "floating"
+reference. This means that it is not specifically claimed to be "owned" by any
+code portion. The main motivation for providing floating references is C
+convenience. In particular, it allows code to be written as:
+
+container = create_container ();
+container_add_child (container, create_child());
+
+If container_add_child() calls g_object_ref_sink() on the passed-in child, no
+  reference of the newly created child is leaked. 
+  
+Without floating references, container_add_child() can only g_object_ref() the
+new child, so to implement this code without reference leaks, it would have to
+be written as:
+
+Child *child;
+container = create_container ();
+child = create_child ();                    // increase reference
+container_add_child (container, child);     // increase reference
+g_object_unref (child);
+
+
+note: this is about increasing reference count in container. so still increase
+count when call create function.
+
+Child *child;
+child = create_child ();                    // increase reference
+g_object_unref (child);
+
+
+The floating reference can be converted into an ordinary reference by calling
+  g_object_ref_sink(). For already sunken objects (objects that don't have a
+      floating reference anymore), g_object_ref_sink() is equivalent to
+  g_object_ref() and returns a new reference.
+
+note: seems that floating reference set a flag in a object and if it is set,
+  g_object_ref() has no effect meaning not increase reference.
+
+Since floating references are useful almost exclusively for C convenience,
+language bindings that provide automated reference and memory ownership
+  maintenance (such as smart pointers or garbage collection) should not expose
+  floating references in their API.
+
+note: since C do not have smart pointers.
 
 
 ={============================================================================
