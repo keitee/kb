@@ -24,13 +24,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_300| gst-git
 |kt_dev_bcast_300| gst: tutorial: 02: concept
 |kt_dev_bcast_300| gst: tutorial: 03: signal
-|kt_dev_bcast_300| gst: tutorial: 04: seeking
+|kt_dev_bcast_300| gst: tutorial: 04: seeking and query
 *kt_dev_bcast_300* gst: tutorial: 07: queue
 *kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
-|kt_dev_bcast_302| gst: timer and query
-|kt_dev_bcast_303| gst: registry
-|kt_dev_bcast_304| gst: queue, branch
-|kt_dev_bcast_305| gst: tutorial: 08 buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
 *kt_dev_bcast_302* gst: elements: souphttpsrc
 |kt_dev_bcast_302| gst-uridecodebin
@@ -57,7 +53,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_321* gst-plug: 04 Chain up
 *kt_dev_bcast_321* gst-plug: 05 The chain function
 *kt_dev_bcast_321* gst-plug: 06 The event function
-*kt_dev_bcast_321* gst-plug: 07 The query function
+*kt_dev_bcast_321* gst-plug: 07: The query support
 *kt_dev_bcast_321* gst-plug: 08 What are states?
 *kt_dev_bcast_321* gst-plug: 09 Adding Properties
 *kt_dev_bcast_321* gst-plug: 10 Signals
@@ -1801,7 +1797,7 @@ Basic tutorial 4: Time management
 
 GstQuery is a mechanism that allows asking an element or pad for a piece of
 information. In this example we ask the pipeline if seeking is allowed (some
-    sources, like live streams, do not allow seeking). If it is allowed, then,
+    sources, like live streams, do 'not' allow seeking). If it is allowed, then,
 once the movie has been running for ten seconds, we skip to a different position
   using a seek.
 
@@ -1811,8 +1807,8 @@ we modify this function to periodically wake up and query the pipeline for the
 stream position, so we can print it on screen. This is similar to what a media
 player would do, updating the User Interface on a periodic basis.
 
-Finally, the stream duration is queried and updated whenever it changes.  Here
-we modify this function to periodically wake up and query the pipeline for the
+Finally, the stream duration is queried and updated whenever it changes. Here we
+modify this function to periodically wake up and query the pipeline for the
 stream position, so we can print it on screen. This is similar to what a media
 player would do, 'updating' the User Interface on a periodic basis.
 
@@ -1989,6 +1985,7 @@ static void handle_message (CustomData *data, GstMessage *msg) {
           GstQuery *query;
           gint64 start, end;
 
+          // <gst-query>
           // gst_query_new_seeking() creates a new query object of the "seeking"
           // type, with GST_FORMAT_TIME format. This indicates that we are
           // interested in seeking by specifying the new time to which we want
@@ -2755,10 +2752,6 @@ int main(int argc, char *argv[]) {
   gst_object_unref (data.pipeline);
   return 0;
 }
-
-
-={============================================================================
-*kt_dev_bcast_306* gst: 
 
 
 ={============================================================================
@@ -4244,9 +4237,13 @@ debug level. All levels below that will also be shown (i.e., if you set
     GST_DEBUG=2, you will get both ERROR and WARNING messages).
 
 Furthermore, each plugin or part of the GStreamer defines its own category, so
-you can specify a debug level for each individual category. For example,
-GST_DEBUG=2,audiotestsrc:5, will use Debug Level 5 for the audiotestsrc element,
-and 2 for all the others.
+you can specify a debug level for each individual category. 
+
+
+<ex>
+For example, GST_DEBUG=2,audiotestsrc:5, will use Debug Level 5 for the
+audiotestsrc element, and 2 for all the others.
+
 
 The '*' wildcard is also available. For example GST_DEBUG=2,audio*:5 will use
 Debug Level 5 for all categories starting with the word audio. GST_DEBUG=*:2 is
@@ -5804,7 +5801,7 @@ this in the event handler ourselves.
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst-plug: 07 The query function
+*kt_dev_bcast_321* gst-plug: 07: The query support
 
 Through the query function, your element will receive queries that it has to
 reply to. These are queries like position, duration but also about the
@@ -10746,6 +10743,103 @@ Use:
 g_quark_to_string(error->domain) returns "gst-resource-error-quark"
 
 if (error->domain == GST_CORE_ERROR)
+
+
+={============================================================================
+*kt_dev_bcast_500* gst-query
+
+http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstQuery.html
+
+GstQuery — Provide functions to create queries, and to set and parse values in them.
+
+Object Hierarchy
+
+    GBoxed
+    ╰── GstQuery
+
+
+Description
+
+Queries can be performed on pads (gst_pad_query()) and elements
+(gst_element_query()). Please note that some queries might need a running
+pipeline to work.
+
+Queries can be created using the gst_query_new_*() functions. Query values can
+be set using gst_query_set_*(), and parsed using gst_query_parse_*() helpers.
+
+The following example shows how to query the duration of a pipeline:
+
+GstQuery *query;
+gboolean res;
+
+query = gst_query_new_duration (GST_FORMAT_TIME);
+
+res = gst_element_query (pipeline, query);
+if (res) {
+  gint64 duration;
+  gst_query_parse_duration (query, NULL, &duration);
+  g_print ("duration = %"GST_TIME_FORMAT, GST_TIME_ARGS (duration));
+} else {
+  g_print ("duration query failed...");
+}
+
+gst_query_unref (query);
+
+
+gst_query_new_seeking ()
+-----------------
+GstQuery *
+gst_query_new_seeking (GstFormat format);
+
+Constructs a new query object for querying seeking properties of the stream.
+
+Free-function: gst_query_unref
+
+Parameters
+
+format
+the default GstFormat for the new query
+
+Returns
+a new GstQuery.
+
+[transfer full]
+
+
+gst_query_parse_seeking ()
+-----------------
+void
+gst_query_parse_seeking (GstQuery *query,
+                         GstFormat *format,
+                         gboolean *seekable,
+                         gint64 *segment_start,
+                         gint64 *segment_end);
+
+Parse a seeking query, writing the format into format, and other results into
+the passed parameters, if the respective parameters are non-NULL 
+
+Parameters
+
+query
+a GST_QUERY_SEEKING type query GstQuery
+
+format
+the format to set for the segment_start and segment_end values, or NULL.
+[out][allow-none]
+
+seekable
+the seekable flag to set, or NULL.
+[out][allow-none]
+
+segment_start
+the segment_start to set, or NULL.
+[out][allow-none]
+
+segment_end
+the segment_end to set, or NULL.
+[out][allow-none]
+
+note: set NULL if don't want to get
 
 
 ={============================================================================

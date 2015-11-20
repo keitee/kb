@@ -67,8 +67,9 @@
 *kt_dev_uv_stack_014* zinc-mr-web: debug webkit
 *kt_dev_uv_stack_014* zinc-mr-web: build webkit plugin
 *kt_dev_uv_stack_253* zinc-mr-web: MediaRouter.WebKit.Plugin
-*kt_dev_uv_stack_254* zinc-mr: listener
-*kt_dev_uv_stack_255* mr-dash-error handle
+*kt_dev_uv_stack_254* mr-dash: event listener
+*kt_dev_uv_stack_255* mr-dash-error: status event value
+*kt_dev_uv_stack_255* mr-dash-error: handle
 *kt_dev_uv_stack_255* zinc-mr-web: ended event
 *kt_dev_uv_stack_256* zinc-mr: underflow error handle
 *kt_dev_uv_stack_256* zinc-mr: connection retry
@@ -103,6 +104,7 @@
 *kt_dev_uv_stack_413* zinc-mr: gstmr-play.sh
 *kt_dev_uv_stack_413* mr-dash-debug: 
 *kt_dev_uv_stack_413* mr-dash-debug: nickel in sandbox
+*kt_dev_uv_stack_413* mr-dash: position
 *kt_dev_uv_stack_413* zinc-drm:
 *kt_dev_uv_stack_413* zinc-drm: wrong db creation due to library depandancy
 *kt_dev_uv_stack_413* zinc-drm: error
@@ -3230,13 +3232,13 @@ ZINC_DECLARE_LOGGER(nickel);
 #endif
 
 
-std::vector<boost::filesystem::path> findMediaRouterPluginConfigFiles(const std::string& configDir) {
+std::vector<boost::filesystem::path> findMediaRouterPluginConfigFiles() {
    NICKEL_FUNC_TRACE;
    ...
 }
 
 2015-06-09 15:01:21,298 TRACE  715849728 nickel
-/home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp:50
+/ProxySystemFactory.cpp:50
 ENTER: std::vector<boost::filesystem::basic_path<std::basic_string<char, std::char_traits<char>,
     std::allocator<char> >, boost::filesystem::path_traits>,
     std::allocator<boost::filesystem::basic_path<std::basic_string<char, std::char_traits<char>,
@@ -3244,7 +3246,7 @@ ENTER: std::vector<boost::filesystem::basic_path<std::basic_string<char, std::ch
 nickel::system::findMediaRouterPluginConfigFiles(const std::string&)
 
 2015-06-09 15:01:21,300 TRACE  715849728 nickel
-/home/kpark/builds/_virtual_/humax.1000/DEVARCH/Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp:50
+/ProxySystemFactory.cpp:50
 EXIT:  std::vector<boost::filesystem::basic_path<std::basic_string<char, std::char_traits<char>,
     std::allocator<char> >, boost::filesystem::path_traits>,
     std::allocator<boost::filesystem::basic_path<std::basic_string<char, std::char_traits<char>,
@@ -9159,7 +9161,7 @@ boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
 
 
 ={============================================================================
-*kt_dev_uv_stack_254* zinc-mr: listener
+*kt_dev_uv_stack_254* mr-dash: event listener
 
 // Nickel/Nickel.Client.API/include/MediaRouterEventListener.h
 /**
@@ -9252,6 +9254,68 @@ produceEvent(
         errVal, errContext, text_msg));
 
 
+Nickel/Nickel.Client.API/include/MediaRouterEventListener.h
+{
+  /**
+   * ErrorEvents signals run-time errors.
+   *
+   * @param error 
+   * an <code>ErrorEventValue</code>, indicates the type of error encountered.  
+   *
+   * @param context indicates the context in which the error occurred.
+   * Corresponds to a <code>ErrorEventContext</code> value.
+   *
+   * @param info provides any further information on the specific error
+   * condition.
+   *
+   * @see nickel::client::ErrorEventValue::Enum
+   * @see nickel::client::ErrorEventContext::Enum
+   *
+   */
+  virtual void ErrorEvent
+    (const ErrorEventValue::Enum error, const ErrorEventContext::Enum context, 
+     const std::string& info) = 0;
+
+  /**
+   * StatusEvents signals changes in playing-status.
+   *
+   * @param event a <code>StatusEventValue</code> the playing-status.
+   *
+   * @see nickel::client::StatusEventValue::Enum
+   */
+   virtual void StatusEvent(const StatusEventValue::Enum event) = 0;
+
+  /**
+   * <code>PositionChangeEvent</code> signals changes in play-position.
+   *
+   * <p>Since, in normal playback, play-position will be constantly changing,
+   * <code>PositionChangeEvents</code> are limited in frequency to one per
+   * second.</p>
+   *
+   * @param position a <code>Position</code> structure.
+   *
+   * @if AS3 @includeExample
+   * MediaRouterEventListenerPositionChangeEvent.as@endif
+   *
+   * @see nickel::client::Position
+   */
+   virtual void PositionChangeEvent(boost::shared_ptr<Position> position) = 0;
+
+  /**
+   * <code>BufferStatusEvents</code> signals changes in the buffer state.
+   *
+   * @param event a <code>BufferStatusEventValue</code> signals changes in the
+   * buffer state.
+   *
+   * @see nickel::client::BufferStatusEventValue::Enum
+   *
+   * @if AS3 @includeExample BufferStatusEventLisenerExample.as@endif
+   *
+   */
+   virtual void BufferStatusEvent(const BufferStatusEventValue::Enum event) = 0;
+}
+
+
 void VanadiumMediaPlayer::SourceEvent(const SourceEventValue::Enum event,
             const SetSourceReason::Enum)
 {
@@ -9271,7 +9335,74 @@ void VanadiumMediaPlayer::ErrorEvent(const ErrorEventValue::Enum error,
 
 
 ={============================================================================
-*kt_dev_uv_stack_255* mr-dash: error handle
+*kt_dev_uv_stack_255* mr-dash-error: status event value
+
+struct StatusEventValue : NS_ZINC::Enum
+{
+  /**
+   * The defined set of status-event values.
+   *
+   * @see nickel::client::MediaRouterEventListener#StatusEvent()
+   */
+  enum Enum
+  {
+    /**
+     * Playback has started or restarted. This means the first frame has been
+     * output from the decoder and is displayed on-screen.
+     *
+     * <p>Playback may have been started or restarted following :</p>
+     * <ul>
+     * <li>A call of <code>MediaRouter.start()</code> </li>
+     * <li>A call of <code>MediaRouter.seekPosition()</code> </li>
+     * <li>Recovery from a buffer underflow </li>
+     * </ul>
+     */
+    started = 0,
+
+    /**
+     * Playback is complete.
+     *
+     * <p>Raised when presentation of a MediaRouter’s media has stopped due to
+     * the end of the play region being reached.  Once the COMPLETE event has
+     * been raised, it shall be possible for the same MediaRouter or another
+     * MediaRouter attached to the same sink to immediately start presentation.
+     * </p>
+     */
+    complete = 1,
+
+    /**
+     * Raised when a MediaRouter has entered the Waiting state following a call
+     * to  <code>MediaRouter.startDeferred()</code>.
+     */
+    waiting = 2,
+
+    /**
+     * Raised when a MediaRouter has stopped playback following a call to
+     * <code>MediaRouter.stop()</code>. Once the STOPPED event has been raised,
+     * it shall be possible for the same MediaRouter or another MediaRouter to
+     * immediately start presentation.
+     */
+    stopped = 3,
+
+    /**
+     * Raised when a MediaRouter pauses presentation due to a lack of buffered
+     * data ahead of play-position. Once the underflow has ended, a
+     * <code>StatusEventValue.started</code> event is sent and playout
+     * continues.
+     */
+    underflow = 4,
+
+    /**
+     * Raised when a MediaRouter starts a seek operation following a call to
+     * <code>MediaRouter.seekPosition()</code>.
+     */
+    seek_started = 5,
+  };
+};
+
+
+={============================================================================
+*kt_dev_uv_stack_255* mr-dash-error handle
 
 https://html.spec.whatwg.org/multipage/embedded-content.html#media-data
 
@@ -14134,6 +14265,7 @@ ulimit -c unlimited
 program_name=$(basename $0)
 target="/opt/zinc-trunk/bin/${program_name}"
 GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/dash.txt GST_DEBUG=adaptivedemux:5 \
+GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/dash.txt GST_DEBUG=nexussink:5 \
 G_MESSAGES_DEBUG=drmwasabi \
 LD_LIBRARY_PATH="/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib \
 :/opt/zinc-trunk/oss/lib:${LD_LIBRARY_PATH}" exec "${target}" "${@}"
@@ -14145,6 +14277,111 @@ G_MESSAGES_DEBUG=drmwasabi get you:
   Failed at /.../DEVARCH/Polonium/Polonium.Drm/src/gdrmwasabi.c:986
 
 note: not able to log file in sandbox but able to get GST_DEBUG on console.
+
+
+={============================================================================
+*kt_dev_uv_stack_413* mr-dash: position
+
+
+/**
+ * A three field structure holding the position values of a MediaRouter.
+ *
+ * Position - a three field structure holding :
+ *
+ * start    - the start-time of the media in milliseconds
+ * current  - the play-position of the media in milliseconds
+ * end      - the end-time of the media in milliseconds
+ *
+ * A Position structure is returned by a call of MediaRouter.getPosition() If
+ * MediaRouter.getPosition() was called on a one hour on-demand programme that
+ * had been playing for 4 seconds - the values of the returned Position
+ * structure would be : start = 0, current = 4000, end = 3600000.
+ *
+ * Note: This interface is NOT intended to be implemented directly by 3rd party
+ * applications.
+ */
+class ZINC_EXPORT Position : virtual public NS_ZINC::Polymorphic 
+{
+  public:
+    Position() : start(0), current(0), end(0) {}
+
+    /**
+     * Gets the start-time of the media in milliseconds. For on-demand content
+     * this should always return a value of 0 ms.
+     *
+     * @return the start-time of the media in milliseconds.
+     */
+    int32_t getStart(void) const { return start; }
+
+    /**
+     * Gets the play-position of the media in milliseconds.
+     *
+     * @return the play-position in milliseconds.
+     */
+    int32_t getCurrent(void) const { return current; }
+
+    /**
+     * Gets the end-time of the media in milliseconds.
+     *
+     * When the actual end-time of the media cannot be determined, its value
+     * will be set to <code>-1</code>.
+     *
+     * @return the end-time of the media in milliseconds.
+     */
+    int32_t getEnd(void) const { return end; }
+
+  private:
+
+    int32_t start;
+    int32_t current;
+    int32_t end;
+};
+
+
+virtual void PositionChangeEvent(boost::shared_ptr<Position> position) = 0;
+
+note: stops default mr
+
+path=/Zinc/Media/DefaultMediaRouter; interface=Zinc.Media.MediaRouter; member=StatusEvent
+   int32 3
+stopped = 3,
+
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=setSource
+   string "http://vod-hls-uk-live.edgesuite.net/usp/auth/vod/piff_abr_full_hd/beb516-p034nsgv/vf_p034nsgv_ef27e25c-5275-46cd-9909-2b36738e4133.ism.hlsv2.ism/iptv_sdlow_abr_v1_hls_master.m3u8?__gda__=1447942285_cde1b3455f0a79652a0f73f6d263f04c"
+
+
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=BufferStatusEvent
+   int32 0
+buffering_started = 0,
+
+note: starts yv mr
+
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=StatusEvent
+   int32 0
+started = 0,
+
+note: first position after start. 157 sec??
+
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
+   struct {
+      int32 0
+      int32 0
+      int32 157000
+   }
+
+
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
+   struct {
+      int32 0
+      int32 156760
+      int32 157000
+   }
+
+note: finished play
+
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=StatusEvent
+   int32 1
+complete = 1,
 
 
 ={============================================================================
