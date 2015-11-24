@@ -208,7 +208,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_072| stl-string: search and find 
 |kt_dev_stl_073| stl-string: numeric conversion
 |kt_dev_stl_074| stl-string: iterator support
-|kt_dev_stl_075| stl-string: stringstream {inefficient-concatnation}
+*kt_dev_stl_075* stl-string: stringstream and io stream
+*kt_dev_stl_075* stl-string: stringstream state and conversion to bool
 *kt_dev_stl_075* stl-string: seg fault
 
 |kt_dev_stl_080| bitset
@@ -30941,17 +30942,53 @@ int main(int argc, char* argv[])
 *kt_dev_stl_075* stl-string: stringstream and io stream
 
 {stringstream}
+
+CLR 15.10
+
+The mechanisms of stream classes can also be used to read from strings or to
+write to strings. String streams provide a buffer but don't have an I/O channel.
+This buffer/string can be manipulated with special functions. 
+
+<use-case>
+A major use of this capability is the processing of I/O independent of the
+actual I/O. For example, text for output can be formatted in a string and then
+sent to an output channel sometime later. Another use is reading input line by
+line and processing each line by using string streams.
+
 Supports in-memory IO and read from or write to a string as if the string were
 an IO stream. In other words, read(>>) and write(<<) to a stream are string
 manipulations. 
 
-#include <sstream> add memebers as:
+The following stream classes - corresponding to the stream classes for files -
+are defined for strings:
 
-sstream strm(s);  strm is an sstream that holds a copy of the string s.
-strm.str();       return a copy of the string that strm holds.
-strm.str(s);      copies the string s into strm.
+  - The class template basic_istringstream<> with the specializations
+  istringstream and wistringstream for reading from strings ("input string
+      stream")
 
-CLR 15.10
+  - The class template basic_ostringstream<> with the specializations
+  ostringstream and wostringstream for writing to strings ("output string
+      stream")
+
+  - The class template basic_stringstream<> with the specializations
+  stringstream and wstringstream for reading from and writing to strings
+
+  - The class template basic_stringbuf<> with the specializations stringbuf and
+  wstringbuf, used by the other string stream classes to perform the reading and
+  writing of characters
+
+
+<members>
+#include <sstream>
+
+sstream strm(string);   strm is an sstream that holds a copy of the string s.
+
+strm.str();             return a copy of the string that strm holds.
+                        Returns the buffer as a string
+
+strm.str(string);       copies the string s into strm.
+                        Sets the contents of the buffer to string
+
 
 <ex>
 #include<iostream>
@@ -30980,6 +31017,9 @@ dec: 15 hex: f
 float: 4.67 bitset: 001011010011101
 
 $ 
+
+note: stringstreams's buffer remains vaild.
+
 
 <ex>
 #include<iostream>
@@ -31011,6 +31051,50 @@ oct: 17 hex: f
 float: 4.67 bitset: 001011010011101
 
 $
+
+Using seekp(), the write position is moved to the beginning of the stream. 
+
+So, the following call of operator << writes at the beginning of the string,
+  thus overwriting the beginning of the existing string stream. However, the
+  characters that are not overwritten remain valid. 
+
+
+<to-reset>
+To remove the current contents from the stream, you can use the function str()
+  to assign new contents to the buffer:
+
+
+<ex>
+#include<iostream>
+#include<string>
+#include<sstream>
+#include<bitset>
+
+using namespace std;
+
+int main()
+{
+  ostringstream os;
+
+  // os << "dec: " << 15 << hex << " hex: " << 15 << endl;
+  os << "dec: " << 15 << hex << " hex: " << 15;
+  cout << os.str() << endl;
+
+  bitset<15> b(5789);
+  // os << "float: " << 4.67 << " bitset: " << b << endl;
+  os << "float: " << 4.67 << " bitset: " << b;
+
+  os.seekp(0);
+  os << "oct: " << oct << 15;
+  cout << os.str() << endl;
+}
+
+$ ./a.out 
+dec: 15 hex: f
+oct: 17 hex: ffloat: 4.67 bitset: 001011010011101
+$ 
+
+This means that the string ends with a newline character.
 
 
 <ex> istringstream example. file parsing example
@@ -31099,10 +31183,125 @@ for( const auto &entry : people )
 
 
 ={============================================================================
-*kt_dev_stl_075* stl-string: stringstream and bool
+*kt_dev_stl_075* stl-string: stringstream state and conversion to bool
 
-"wait_for_idle_test.cpp:127:25: error: cannot convert ‘std::istream {aka
-std::basic_istream<char>}’ to ‘bool’ in initialization"
+<use-in-boolean-expression>
+Two stream functions are defined for the use of streams in Boolean expressions
+
+operator bool ()
+Returns whether the stream has not run into an error (corresponds to !fail())
+
+operator ! ()
+Returns whether the stream has run into an error (corresponds to fail())
+
+note: Before C++11, the operator bool() was declared as operator void*(), which
+could cause problems such as those described in Section 15.10.1, page 805.
+
+note: fail() is stream member function:
+Returns true if an error has occurred (failbit or badbit is set)
+
+
+<conversion-to-bool>
+The conversion to bool is often used to read objects and test for success in the
+same expression. Because cin is being used in the context of a condition, its
+operator void* is called, which returns whether the stream has run into an
+error.
+
+A typical application of this technique is a loop that reads and processes
+objects:
+
+// as long as obj can be read
+while (std::cin >> obj) {
+  // process obj (in this case, simply output it)
+  std::cout << obj << std::endl;
+}
+
+This is C's classic filter framework for C++ objects. The loop is terminated if
+the failbit or badbit is set.
+
+
+With operator !, the inverse test can be performed. The operator is defined to
+return whether a stream has run into an error; that is, the operator returns
+true if failbit or badbit is set. 
+
+Like the implicit conversion to a Boolean value, this operator is often used to
+test for success in the same expression in which an object was read:
+
+if (! (std::cin >> x)) {
+  // the read failed
+  ...
+}
+
+
+<conversion-to-void-problem>
+Use implicit conversion operator which is traditional. This is the way iostream
+uses so it is possible:
+
+ifstream inputFile("datafile.dat");
+if(ifstream) ...
+
+template< class T>
+class SmartPtr {
+  public:
+    operator void*(); // return 0 if smart pointer is null, non-zero otherwise.
+    ...
+};
+
+note: Q: why void*? how it works?
+
+This approach has a problem since it allows following: 
+
+SmartPtr<Apple> pa; SmartPtr<Orange> po;
+
+if( pa == po ) ...
+
+Even if there is no operator== taking a SmartPtr<Apple> and a SmartPtr<Orange>,
+     this compiles, because both smart pointers can be implicitly converted into
+     void* pointers, and there is a built-in comparison function for built-in
+     pointers.
+
+
+<conversion-to-void-problem>
+Before C++11, a typical programming error when dealing with string streams was
+to forget to extract the string with the function str() and to write to the
+stream directly instead. This was, from a compiler's point of view, a possible
+and reasonable thing to do because there was an implicit conversion to void*. As
+a result, instead of its value the state of the stream was written in the form
+of an address. 
+
+Section 15.3.3, page 756
+
+Type void*
+
+Operators << and >> also provide the possibility of printing a pointer and
+reading it back in again.  An address is printed in an implementation-dependent
+format if a parameter of type void* is passed to the output operator. For
+example, the following statement prints the contents of a C-string and its
+address:
+
+char* cstring = "hello";
+
+std::cout << "string \"" << cstring << "\" is located at address: "
+<< static_cast<void*>(cstring) << std::endl;
+
+The result of this statement might appear as follows:
+
+string "hello" is located at address: 0x10000018
+
+It is even possible to read an address again with the input operator. However,
+   note that addresses are normally transient. The same object can get a
+   different address in a newly started program. A possible application of
+   printing and reading addresses may be programs that exchange addresses for
+   object identification or programs that share memory.
+
+With C++11, this conversion was replaced by an explicit conversion to bool, so
+passing a string stream to the output operator << 'without' calling str() is no
+longer possible.
+
+
+<case>
+: error: cannot convert ‘std::istream {aka std::basic_istream<char>}’ to ‘bool’
+in initialization"
 
 This is because operator bool() is defined explicit. This issue was shadowed by
 the fact that gcc-4.9 (and below) still had operator void*() const.
@@ -31114,6 +31313,32 @@ stringstream s;
 -
 +    s >> st;
 +    ASSERT_THAT(s.good(), Eq(true));
+
+
+
+file: ostream
+
+  template<typename _CharT, typename _Traits>
+    class basic_ostream : virtual public basic_ios<_CharT, _Traits>
+  {
+  }
+
+file: bits/basic_ios.h
+
+  template<typename _CharT, typename _Traits>
+    class basic_ios : public ios_base
+  {
+    public:
+      //@{
+      /**
+       *  @brief  The quick-and-easy status check.
+       *
+       *  This allows you to write constructs such as
+       *  "if (!a_stream) ..." and "while (a_stream) ..."
+      */
+      operator void*() const
+      { return this->fail() ? 0 : const_cast<basic_ios*>(this); }
+  }
 
 
 ={============================================================================
