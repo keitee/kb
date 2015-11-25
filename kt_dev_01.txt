@@ -8699,7 +8699,40 @@ int main()
 
 
 ={============================================================================
-*kt_dev_lang_010* incomplete type
+*kt_dev_lang_010* incomplete-type
+
+{incomplete-type} CPR 279
+
+struct Sales_data { /* ... */ };
+Sales_data accum, trans, *salesptr;
+
+The semicolon marks the end of the (usually empty) list of declarators. It is a
+common mistake among new programmers to forget the semicolon at the end of a
+class definition.
+
+This declaration, sometimes referred to as a <forward-declaration>, introduces
+the name Screen into the program and indicates that Screen refers to a class
+type. After a declaration and 'before' a definition is seen, the type Screen is
+an <incomplete-type>; it is known that Screen is a class type but not known what
+members that type contains.
+
+<limited-use>
+We can use an incomplete type in only limited ways: We can define pointers or
+references to such types, and we can declare (but 'not' define) functions that
+'use' an incomplete type as a parameter or return type.
+
+A class must be defined-not just declared-before we can write code that creates
+objects of that type. Otherwise, the compiler does not know how much storage
+such objects need. Similarly, the class must be defined before a reference or
+pointer is used to 'access' a member of the type. 
+
+After all, if the class has not been defined, the compiler cannot know what
+members the class has and don't know the class(type) layout:
+
+  - Cannot create object of that type.
+  - Cannot defines funcs using return or params of incomplete type.
+  - Cannot use that type to define data member of the other class.
+
 
 {text-query-example}
 Primus p484. The output for query word 'element' is:
@@ -9059,37 +9092,6 @@ class OrQuery : public BinaryQuery {
 inline Query operator|( const Query &lhs, const Query &rhs )
 { return std::shared_ptr<Query_base>( new OrQuery(lhs, rhs) ); }
 
-
-{class-definition} {forward-declaration}
-Primers p279.
-
-struct Sales_data { /* ... */ };
-Sales_data accum, trans, *salesptr;
-
-The semicolon marks the end of the (usually empty) list of declarators. It is a common mistake among
-new programmers to forget the semicolon at the end of a class definition.
-
-This declaration, sometimes referred to as a <forward-declaration>, introduces the name Screen into
-the program and indicates that Screen refers to a class type. After a declaration and 'before' a
-definition is seen, the type Screen is an <incomplete-type>-it is known that Screen is a class type
-but not known what members that type contains.
-
-<limited-use>
-We can use an incomplete type in only limited ways: We can define pointers or references to such
-types, and we can declare (but not define) functions that use an incomplete type as a parameter or
-return type.
-
-A class must be defined-not just declared-before we can write code that creates objects of that
-type. Otherwise, the compiler does not know how much storage such objects need. Similarly, the
-class must be defined before a reference or pointer is used to access a member of the type. After
-all, if the class has not been defined, the compiler cannot know what members the class has.
-
-In sum, two problems when use incomplete type, that is a compiler don't know the class(type) layout:
-
-o cannot create object
-o cannot defines funcs using return or params of incomplete type.
-
-In this example, cannot create temp return object.
 
 
 {missing-declaration}
@@ -14546,8 +14548,9 @@ test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&'
 from expression of type 'const Screen'
 
-This is an ERROR on "const to nonconst conversion" So const member 'must' have
-this form since const applies to this pointer: 
+This is an ERROR on "return *this" since there is no "const to nonconst
+conversion". So const member 'must' have this form since const applies to this
+pointer: 
 
 
 note: this shows why cannot use nonconst member on const object
@@ -14568,7 +14571,7 @@ Screen::set()' discards qualifiers [-fpermissive]
 
 note: when remove const return and function do not return *this.
 
-Screen& display() const                          // not "const Screen& display() const"
+Screen& display() const                 // not "const Screen& display() const"
 { cout << "dis: this is const member" << endl; } // do not return *this
 
 dis: this is non-const member
@@ -14578,7 +14581,8 @@ dis: this is const member
 dis: this is const member
 set: this is non-const member           // see
 
-The const display() returns as 'declared' since no comiple error and works. 
+The const display() returns nonconst as 'declared' since no comiple error and
+works. 
 
 The point is that the const member func has always this form when use return.
 Why? see bitwise-const for more. This matters only when returns reference but
@@ -19103,6 +19107,31 @@ class Screen {
 };
 
 
+<type-member-error> CPR 285
+Ordinarily, an inner scope can redefine a name from an oute scope. However, if
+that is a type member, may not redefine that name.
+
+typedef double Money;
+
+class Account {
+  public:
+    Money balance() { return bal; }
+
+  private:
+    typedef double Money;
+    Money bal;
+    ...
+};
+
+Although it is an error to redefine a type name, compilers are not required to
+diagnose this error. Some compilers will quietly accept such code, even though
+the program is in error.
+
+note: VC emits no errors.
+
+
+<nested-class>
+
 Called nested-type and think it as nested-scope. Most used to define
 implementation class. This defines <type-member> of enclosing class. Means:
 
@@ -19453,7 +19482,7 @@ auto ct = Foo<int>::count();     // via scope operator
 ct = fi.count();                 // via an object
 
 
-{use-class-type-members} <typename-keyword>
+{class-type-members} <typename-keyword>
 Uses scope operator(::) to access both static member and type members. e.g., string::size_type. In
 nontemplate code, the compiler has access to the class definition and knows whether a name accessed
 through the scope operator is a type or static member.
