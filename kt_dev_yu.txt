@@ -89,6 +89,7 @@
 *kt_dev_uv_stack_409* mr-dash: switch between yv mr and old
 *kt_dev_uv_stack_410* mr-dash: build dash pipeline using gst mr
 *kt_dev_uv_stack_410* mr-dash: position
+*kt_dev_uv_stack_410* mr-dash: output control
 
 *kt_dev_uv_stack_408* mr-dash: dbus log
 *kt_dev_uv_stack_408* mr-dash: dbus log: from start to complete
@@ -5877,7 +5878,8 @@ note: WRT getSynopsis, it only uses in void testGetEventFromSummary() but don't 
 ={============================================================================
 *kt_dev_uv_stack_203* stack: uranium: metadata: system api call via dbus rpc
 
-UI has shared pointer to MB via MD Locator and makes a call via this shared pointer.
+UI has shared pointer to MB via MD Locator and makes a call via this shared
+pointer.
 
 // note: <dbus-call-to-cobalt>
 return metadataBroker->search(searchTerms,
@@ -8872,6 +8874,7 @@ void MediaPlayer::timeChanged()
 
 
 Use two channels and use networkstate for network and decode errors
+m_player is one of private player.
 
 m_player->networkStateChanged();
 m_player->readyStateChanged();
@@ -8902,6 +8905,8 @@ graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
 graphics/mediarouter/MediaPlayerPrivateMediaRouter.cpp
 
 note: ERROR_MEDIA_MESSAGE() maps to GST_ERROR
+
+qtwebkit/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
 
 class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface {
 
@@ -10054,10 +10059,23 @@ ENTER: virtual bool vanadium::VanadiumMediaPlayer::didLoadingProgress() const
 
 {to-changes}
 
+webkitmediaplayer   Debug messages from MediaPlayerPrivateGstreamer.cpp
+
+GST_DEBUG_CATEGORY_INIT(webkit_media_player_debug, 
+    "webkitmediaplayer", 0, "WebKit media player");
+
 1. change source 
 
 // note: this log line only works when use MediaPlayerPrivateGStreamer.cpp
 // since it inits gst and without GST_DEBUG set
+
+#define LOG_MEDIA_MESSAGE(...) do { \
+    GST_DEBUG(__VA_ARGS__); \
+    LOG_VERBOSE(Media, __VA_ARGS__); } while (0)
+
+#define ERROR_MEDIA_MESSAGE(...) do {           \
+    GST_ERROR(__VA_ARGS__);                     \
+    LOG_VERBOSE(Media, __VA_ARGS__); } while (0)
 
 ERROR_MEDIA_MESSAGE ("** KT: MP-GStreamer::supportsType: type(%s) supported!
     \n", type.utf8().data());
@@ -10578,9 +10596,14 @@ Nickel.System.DBusServer/data/media-daemon.plugin-config:
 
 4. MediaDaemon.cpp
 
+Nickel.System.DBusServer/include/ObjectPath.h 	
+
+const char* const DEFAULT_MEDIA_ROUTER = "/Zinc/Media/DefaultMediaRouter";
+
 void MediaDaemon::start(int argc, char *argv[])
 {
   // note: the default is media-daemon.plugin-config
+
   NS_ZINC::FilePluginConfig filePluginConfig(configFilePath);
 
   // combine file plugin with command-line-arguments
@@ -10621,7 +10644,6 @@ extern "C" {
     return new NS_NICKEL_SYSTEM::ProxySystemFactory();
   }
 }
-
 
 typedef std::pair<std::string, std::vector<MIMEMediaRouterFactory> > 
   MIMEMediaRouterFactoryMap;
@@ -12226,6 +12248,130 @@ path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=Status
 complete = 1,
 
 
+={============================================================================
+*kt_dev_uv_stack_410* mr-dash: output control
+
+/zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include
+
+OutputControlConfig.h
+
+struct OutputControlConfig
+{
+  OutputControlConfig();
+  explicit OutputControlConfig(const CCI::Enum cci_, const bool requireHdcp_, const bool disableAnalogueSD_);
+  void swap(OutputControlConfig&);
+
+  // Members:
+  CCI::Enum cci;
+  bool requireHdcp;
+  bool disableAnalogueSD;
+
+};
+
+// Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp
+
+<output-control-manager>
+
+boost::shared_ptr<OutputControlManager> ProxySystemFactory::createOutputControlManager() {
+	NICKEL_FUNC_TRACE;
+	return defaultImplementation->createOutputControlManager();
+}
+
+
+[26-11-2015 13:27:48.658857] 
+method call sender=:1.336 -> dest=:1.339 serial=5141 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=start
+
+[26-11-2015 13:27:48.662204] 
+method call sender=:1.339 -> dest=Zinc.Media serial=4996 path=/Zinc/Media/OutputControlManager; interface=Zinc.Media.OutputControlManager; member=add
+   struct {
+      int32 0
+      boolean false
+      boolean false
+   }
+
+[26-11-2015 13:27:48.672171] 
+method return sender=:1.7 -> dest=:1.339 'reply'_serial=4996
+   object path "/Zinc/Media/OutputControls/27"
+
+
+<stop>
+
+[26-11-2015 13:27:43.055869] method call sender=:1.336 -> dest=:1.339 serial=5111 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=stop
+
+note: 1.7 was bronze
+
+[26-11-2015 13:27:43.059180] method call sender=:1.339 -> dest=:1.7 serial=4966 path=/Zinc/Media/OutputControls/26; interface=Zinc.DBus.RefCounted; member=DropRef
+   uint32 1
+
+note: no reply which seems okay
+
+
+typedef OutputControlManagerAsync OutputControlManager;
+
+typedef OutputControlRefAsync OutputControlRef;
+
+boost::shared_ptr<OutputControlRef> ocr;
+
+ocr = ocm->add(ocCfg);
+
+
+<output-control-manager>
+
+interface-OutputControlManager.xml
+
+include/OutputControlManagerAsync.h
+
+/* =============================== Methods ================================= */
+public:
+
+	/**
+	 * 
+	 *         Adds output controls configuration to the set of (possibly) multiple
+	 *         configurations. The final set is resolved to a single strictest
+	 *         configuration. There's no way for any client to weaken any other output
+	 *         controls currently being in force.
+	 */
+   virtual NS_ZINC::Future< boost::shared_ptr< OutputControlRef > > add(const
+       OutputControlConfig& cfg_in) = 0;
+
+
+<output-control-ref>
+
+
+  <interface name="Zinc.Media.OutputControlRef">
+
+    <yv:docstring>
+      A handle (reference) to the applied output controls configuration. The
+      applied configuration is in force (contributes to the resolved
+      configuration) for as long as the reference exists. As soon as the
+      reference is dropped, associated output controls configuration is removed.
+    </yv:docstring>
+
+  </interface>
+
+
+// generated in build root
+
+OutputControlRefAsync.h
+
+  namespace Zinc {
+    namespace Media {
+
+      /**
+       * 
+       *       A handle (reference) to the applied output controls configuration. The
+       *       applied configuration is in force (contributes to the resolved
+       *       configuration) for as long as the reference exists. As soon as the
+       *       reference is dropped, associated output controls configuration is removed.
+       */
+      class ZINC_EXPORT OutputControlRefAsync
+      {
+        protected:
+          virtual ~OutputControlRefAsync();
+      };
+
+    } // namespace
+  } // namespace
 
 
 ={============================================================================
@@ -12254,12 +12400,6 @@ member=getPosition
 path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=setSource
    string "http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd"
    int32 1
-
-<->
-path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorEvent
-   int32 6    note: this is error value
-   int32 1
-   string "Not Found
 
 <use-different-media-router>
 
@@ -12310,6 +12450,12 @@ gstsouphttpsrc.c(1623): gst_soup_http_src_parse_status ():
    Redirect to: (NULL)"
 
 
+path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorEvent
+   int32 6    note: this is error value
+   int32 1
+   string "Not Found
+
+
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: dbus log: from start to complete
 
@@ -12319,8 +12465,10 @@ method call sender=:1.121 -> dest=:1.72 serial=29 path=/Zinc/Media/MediaRouters/
 signal sender=:1.72 -> dest=(null destination) serial=5133 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=SourceEvent
    int32 1
    int32 1
+
 method call sender=:1.121 -> dest=:1.72 serial=30 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setSink
    string "decoder://0"
+
 method call sender=:1.121 -> dest=:1.72 serial=31 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=startBuffering
 signal sender=:1.72 -> dest=(null destination) serial=5136 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=BufferStatusEvent
    int32 0
@@ -12363,7 +12511,9 @@ method call sender=:1.121 -> dest=:1.72 serial=37 path=/Zinc/Media/MediaRouters/
    }
 method call sender=:1.121 -> dest=:1.72 serial=49 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setPlaySpeed
    double 1
+
 method call sender=:1.121 -> dest=:1.72 serial=50 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=start
+
 signal sender=:1.72 -> dest=(null destination) serial=5160 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=SourceEvent
    int32 2
    int32 0
