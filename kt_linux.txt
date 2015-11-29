@@ -162,7 +162,14 @@
 
 #{ gdb
 |kt_linux_tool_300| gdb: term and links
-|kt_linux_tool_301| gdb: start and quit
+*kt_linux_tool_300* gdb: sample session
+*kt_linux_tool_301* gdb: start
+*kt_linux_tool_301* gdb: start: options
+*kt_linux_tool_301* gdb: start: what do during startup
+*kt_linux_tool_301* gdb: log
+*kt_linux_tool_301* gdb: shell command
+*kt_linux_tool_301* gdb-cpp:
+
 |kt_linux_tool_302| gdb: command syntax and help
 |kt_linux_tool_303| gdb: about status
 |kt_linux_tool_304| gdb: debugging info
@@ -183,6 +190,7 @@
 |kt_linux_tool_328| gdb: debugging remote real example
 
 |kt_linux_tool_300| gdb: core dump setting
+*kt_linux_tool_300* gdb: sample session
 |kt_linux_tool_301| gdb: core dump analysis {frame-command}
 |kt_linux_tool_302| gdb: kernel crash analysis
 |kt_linux_tool_303| gdb: .gdbinit
@@ -9832,62 +9840,508 @@ http://visualgdb.com/gdbreference/commands/sharedlibrary
 
 
 ={============================================================================
-*kt_linux_tool_301* gdb: start and quit
+*kt_linux_tool_300* gdb: sample session
+
+1 A Sample gdb Session
+
+You can use this manual at your leisure to read all about gdb. However, a
+handful of commands are enough to get started using the debugger. This chapter
+illustrates those commands.
+
+One of the preliminary versions of gnu m4 (a generic macro processor) exhibits
+the following bug: sometimes, when we change its quote strings from the default,
+the commands used to capture one macro definition within another stop working.
+  In the following short m4 session, we define a macro foo which expands to
+  0000; we then use the m4 built-in defn to define bar as the same thing.
+  However, when we change the open quote string to <QUOTE> and the close quote
+  string to <UNQUOTE>, the same procedure fails to define a new synonym baz:
+
+     $ cd gnu/m4
+     $ ./m4
+     define(foo,0000)
+     
+     foo
+     0000
+     define(bar,defn(`foo'))
+     
+     bar
+     0000
+     changequote(<QUOTE>,<UNQUOTE>)
+     
+     define(baz,defn(<QUOTE>foo<UNQUOTE>))
+     baz
+     Ctrl-d
+     m4: End of input: 0: fatal error: EOF in string
+
+Let us use gdb to try to see what is going on.
+
+     $ gdb m4
+     
+     
+     (gdb)
+
+gdb reads only enough symbol data to know where to find the rest when needed; as
+a result, the first prompt comes up very quickly. We now tell gdb to use a
+narrower display width than usual, so that examples fit in this manual.
+
+     (gdb) set width 70
+
+We need to see how the m4 built-in changequote works. Having looked at the
+source, we know the relevant subroutine is m4_changequote, so we set a
+breakpoint there with the gdb break command.
+
+     (gdb) break m4_changequote
+     Breakpoint 1 at 0x62f4: file builtin.c, line 879.
+
+Using the run command, we start m4 running under gdb control; as long as control
+does not reach the m4_changequote subroutine, the program runs as usual:
+
+     (gdb) run
+     Starting program: /work/Editorial/gdb/gnu/m4/m4
+     define(foo,0000)
+     
+     foo
+     0000
+
+
+<gdb-call-function>
+
+To trigger the breakpoint, we 'call' changequote. gdb suspends execution of m4,
+displaying information about the context where it stops.
+
+     changequote(<QUOTE>,<UNQUOTE>)
+     
+     Breakpoint 1, m4_changequote (argc=3, argv=0x33c70)
+         at builtin.c:879
+     879         if (bad_argc(TOKEN_DATA_TEXT(argv[0]),argc,1,3))
+
+Now we use the command n (next) to advance execution to the next line of the
+current function.
+
+     (gdb) n
+     882         set_quotes((argc >= 2) ? TOKEN_DATA_TEXT(argv[1])\
+      : nil,
+
+set_quotes looks like a promising subroutine. We can go into it by using the
+command s (step) instead of next. step goes to the next line to be executed in
+any subroutine, so it steps into set_quotes.
+
+     (gdb) s
+     set_quotes (lq=0x34c78 "<QUOTE>", rq=0x34c88 "<UNQUOTE>")
+         at input.c:530
+     530         if (lquote != def_lquote)
+
+The display that shows the subroutine where m4 is now suspended (and its
+  arguments) is called a stack frame display. It shows a summary of the stack.
+We can use the backtrace command (which can also be spelled bt), to see where we
+are in the stack as a whole: the backtrace command displays a stack frame for
+each active subroutine.
+
+     (gdb) bt
+     #0  set_quotes (lq=0x34c78 "<QUOTE>", rq=0x34c88 "<UNQUOTE>")
+         at input.c:530
+     #1  0x6344 in m4_changequote (argc=3, argv=0x33c70)
+         at builtin.c:882
+     #2  0x8174 in expand_macro (sym=0x33320) at macro.c:242
+     #3  0x7a88 in expand_token (obs=0x0, t=209696, td=0xf7fffa30)
+         at macro.c:71
+     #4  0x79dc in expand_input () at macro.c:40
+     #5  0x2930 in main (argc=0, argv=0xf7fffb20) at m4.c:195
+
+We step through a few more lines to see what happens. The first two times, we
+can use ‘s’; the next two times we use n to avoid falling into the xstrdup
+subroutine.
+
+     (gdb) s
+     0x3b5c  532         if (rquote != def_rquote)
+     (gdb) s
+     0x3b80  535         lquote = (lq == nil || *lq == '\0') ?  \
+     def_lquote : xstrdup(lq);
+     (gdb) n
+     536         rquote = (rq == nil || *rq == '\0') ? def_rquote\
+      : xstrdup(rq);
+     (gdb) n
+     538         len_lquote = strlen(rquote);
+
+note: looks odd since "len_lquote (left) = strlen(rquote) (right)
+
+The last line displayed looks a little odd; we can examine the variables lquote
+  and rquote to see if they are in fact the new left and right quotes we
+  specified. We use the command p (print) to see their values.
+
+     (gdb) p lquote
+     $1 = 0x35d40 "<QUOTE>"
+     (gdb) p rquote
+     $2 = 0x35d50 "<UNQUOTE>"
+
+lquote and rquote are indeed the new left and right quotes. To look at some
+context, we can display ten lines of source surrounding the current line with
+the l (list) command.
+
+     (gdb) l
+     533             xfree(rquote);
+     534
+     535         lquote = (lq == nil || *lq == '\0') ? def_lquote\
+      : xstrdup (lq);
+     536         rquote = (rq == nil || *rq == '\0') ? def_rquote\
+      : xstrdup (rq);
+     537
+     538         len_lquote = strlen(rquote);
+     539         len_rquote = strlen(lquote);
+     540     }
+     541
+     542     void
+
+Let us step past the two lines that set len_lquote and len_rquote, and then
+examine the values of those variables.
+
+     (gdb) n
+     539         len_rquote = strlen(lquote);
+     (gdb) n
+     540     }
+     (gdb) p len_lquote
+     $3 = 9
+     (gdb) p len_rquote
+     $4 = 7
+
+That certainly looks 'wrong', assuming len_lquote and len_rquote are meant to be
+the lengths of lquote and rquote respectively. We can 'set' them to better
+values using the p command, since it can print the value of any expression—and
+that expression can include subroutine calls and assignments.
+
+<gdb-set-var>
+
+     (gdb) p len_lquote=strlen(lquote)
+     $5 = 7
+     (gdb) p len_rquote=strlen(rquote)
+     $6 = 9
+
+Is that enough to fix the problem of using the new quotes with the m4 built-in
+defn? We can allow m4 to continue executing with the c (continue) command, and
+then try the example that caused trouble initially:
+
+     (gdb) c
+     Continuing.
+     
+     define(baz,defn(<QUOTE>foo<UNQUOTE>))
+     
+     baz
+     0000
+
+Success! The new quotes now work just as well as the default ones. The problem
+seems to have been just the two typos defining the wrong lengths. We allow m4
+exit by giving it an EOF as input:
+
+     Ctrl-d
+     Program exited normally.
+
+The message ‘Program exited normally.’ is from gdb; it indicates m4 has finished
+executing. We can end our gdb session with the gdb quit command.
+
+     (gdb) quit
+
+
+={============================================================================
+*kt_linux_tool_301* gdb: start
 
 2 Getting In and Out of gdb
 
-{start}
-The most usual way to start gdb is with one argument, specifying an executable program. Since it
-reads any arguments other than options as see the first argument as equivalent to the ‘-se’ option
-and the second argument as equivalent to the ‘-c’/‘-p’ option followed by that argument:
+2.1 Invoking gdb
 
-gdb program
+The most usual way to start gdb is with one argument, specifying an executable
+program:
 
-Same as using "-se file" 
-Read symbol table from file 'file' and use it as the executable file.
+     gdb program
+
+// note
+// Since it reads any arguments other than options as see the first argument as
+// equivalent to the '-se' option and the second argument as equivalent to the
+// '-c'/'-p' option followed by that argument:
+//
+// gdb program is the same as gdb -se program
+//
+// -se file
+// Read symbol table from file 'file' and use it as the executable file.
 
 You can also start with both an executable program and a core file specified:
 
-gdb program core (same as gdb -c core program)
+     gdb program core
 
--c file 
-Use file file as a core dump to examine.
+You can, instead, specify a process ID as a second argument, if you want to
+debug a running process:
 
-You can, instead, specify a process ID as a second argument, if you want to debug a running process:
+     gdb program 1234
 
-gdb program 1234 (same as gdb -p 1234 program)
-
--p number Connect to process ID number, as with the attach command.
-
-
-<pass-args>
-You can optionally have gdb pass any arguments after the executable file to the inferior using
---args. This option stops option processing.
-
-gdb --args /opt/zinc-trunk/oss/bin/gst-launch-1.0 $@
-gdb --args gcc -O2 -c foo.c
+would attach gdb to process 1234 (unless you also have a file named 1234; gdb
+    does check for a core file first).
 
 
-<eval-option>
+<gdb-args-options>
+
+Taking advantage of the second command-line argument requires a fairly complete
+operating system; when you use gdb as a remote debugger attached to a bare
+board, there may not be any notion of “process”, and there is often no way to
+get a core dump. gdb will warn you if it is unable to attach or to read core
+dumps.
+
+You can optionally have gdb pass any arguments after the executable file to the
+inferior using --args. This option stops option processing.
+
+     gdb --args gcc -O2 -c foo.c
+
+This will cause gdb to debug gcc, and to set gcc's command-line arguments (see
+    Arguments) to '-O2 -c foo.c'.
+
+// note
+// gdb --args /opt/zinc-trunk/oss/bin/gst-launch-1.0 $@
+
+
+You can run gdb without printing the front material, which describes gdb's
+non-warranty, by specifying --silent (or -q/--quiet):
+
+     gdb --silent
+
+You can further control how gdb starts up by using command-line options. gdb
+itself can remind you of the options available.
+
+Type
+
+     gdb -help
+
+to display all available options and briefly describe their use (‘gdb -h’ is a
+    shorter equivalent).
+
+All options and command line arguments you give are processed in sequential
+order. The order makes a difference when the ‘-x’ option is used.
+
+
+={============================================================================
+*kt_linux_tool_301* gdb: start: options
+
+<gdb-eval-option>
+
 -eval-command command
 -ex command
 
-Execute a single gdb command. This option may be used multiple times to call multiple commands. It
-may also be interleaved with '-command' as required.
+Execute a 'single' gdb command. This option may be used multiple times to call
+multiple commands. It may also be interleaved with '-command' as required.
 
 gdb -eval-command=run --args /opt/zinc-trunk/oss/bin/gst-launch-1.0 $@
 
 
-<shell>
+<gdb-command-file>
+
+-command file
+-x file
+    Execute commands from file file. The contents of this file is evaluated
+    exactly as the 'source' command would. See 23.1.3 Command Files
+
+-init-command file
+-ix file
+    Execute commands from file file 'before' loading the inferior (but after
+        loading gdbinit files). See Startup.
+
+-init-eval-command command
+-iex command
+    Execute a single gdb command 'before' loading the inferior (but after
+        loading gdbinit files). See Startup.
+
+
+<gdb-set-search>
+
+-directory directory
+-d directory
+    Add directory to the path to search for source and script files. 
+
+
+={============================================================================
+*kt_linux_tool_301* gdb: start: what do during startup
+
+2.1.3 What gdb Does During Startup
+
+Here's the description of what gdb does during session startup:
+
+    Sets up the command interpreter as specified by the command line (see
+        interpreter).  
+    
+    Reads the system-wide init file (if --with-system-gdbinit was used when
+        building gdb; see System-wide configuration and settings) and executes
+    all the commands in that file.
+
+    Reads the init file (if any) in your home directory and executes all the
+    commands in that file.
+
+    Executes commands and command files specified by the ‘-iex’ and ‘-ix’
+    options in their specified order. note: Usually you should use the '-ex' and
+    '-x' options instead, but this way you can apply settings before gdb init
+    files get executed and before inferior gets loaded.  
+    
+    Processes command line options and operands.
+
+    Reads and executes the commands from init file (if any) in the current
+    working directory as long as ‘set auto-load local-gdbinit’ is set to ‘on’
+    (see Init File in the Current Directory). 
+    
+    note: This is only done if the current directory is different from your home
+    directory. Thus, you can have more than one init file, one generic in your
+    home directory, and another, specific to the program you are debugging, in
+    the directory where you invoke gdb.  
+  
+    If the command line specified a program to debug, or a process to attach to,
+or a core file, gdb loads any auto-loaded scripts provided for the program or
+  for its loaded shared libraries. See Auto-loading.
+
+    Executes commands and command files specified by the ‘-ex’ and ‘-x’ options
+      in their specified order.
+
+    note: command-history
+    Reads the command history recorded in the history file. See Command History,
+          for more details about the command history and the files where gdb
+            records it. 
+
+Init files use the same syntax as command files and are processed by gdb in the
+same way. The init file in your home directory can set options (such as 'set
+    complaints') that affect subsequent processing of command line options and
+operands. Init files are not executed if you use the ‘-nx’ option (see Choosing
+    Modes).
+
+<gdb-list-init>
+To display the list of init files loaded by gdb at startup, you can use gdb
+--help.
+
+The gdb init files are normally called .gdbinit. 
+
+Q: use HOME varaible?
+
+
+={============================================================================
+*kt_linux_tool_301* gdb: log
+
+2.4 Logging Output
+
+You may want to save the output of gdb commands to a file. There are several
+commands to control gdb's logging.
+
+set logging on
+    Enable logging.
+
+set logging off
+    Disable logging.
+
+set logging file file
+    Change the name of the current logfile. The default logfile is gdb.txt.
+
+set logging overwrite [on|off]
+    By default, gdb will append to the logfile. Set overwrite if you want set
+    logging on to 'overwrite' the logfile instead.
+
+set logging redirect [on|off]
+    By default, gdb output will go to both the terminal and the logfile. Set
+    redirect if you want output to go 'only' to the log file.
+
+show logging
+    Show the current values of the logging settings. 
+
+
+={============================================================================
+*kt_linux_tool_301* gdb: shell command
+
+2.3 Shell Commands
+
+If you need to execute occasional shell commands during your debugging session,
+there is no need to leave or suspend gdb; you can just use the shell command. 
+
 shell command-string
 !command-string
 
-Invoke a standard shell to execute command-string. Note that no space is needed between ! and
-command-string.
+Invoke a standard shell to execute command-string. Note that no space is needed
+between ! and command-string.
 
 
-{quit}
-(gdb) type quit or Ctrl-d to exit.
+={============================================================================
+*kt_linux_tool_301* gdb-cpp:
+
+15.4.1.7 gdb Features for C++
+
+Some gdb commands are particularly useful with C++, and some are designed
+specifically for use with C++. Here is a summary:
+
+breakpoint menus
+    When you want a breakpoint in a function whose name is 'overloaded', gdb has
+    the capability to display a menu of possible breakpoint locations to help
+    you specify which function definition you want. See Ambiguous Expressions.
+
+
+rbreak regex
+    Setting breakpoints using regular expressions is helpful for setting
+    breakpoints on overloaded functions that are not members of any special
+    classes. See Setting Breakpoints.
+
+catch throw
+catch rethrow
+catch catch
+    Debug C++ exception handling using these commands. See Setting Catchpoints.
+
+
+ptype typename
+    Print inheritance relationships as well as other information for type
+    typename. See Examining the Symbol Table.
+
+info vtbl expression.
+    The info vtbl command can be used to display the virtual method tables of
+    the object computed by expression. This shows one entry per virtual table.
+    there may be multiple virtual tables when multiple inheritance is in use.
+
+demangle name
+    Demangle name. See Symbols, for a more complete description of the demangle
+    command.
+
+
+set print demangle
+show print demangle
+set print asm-demangle
+show print asm-demangle
+    Control whether C++ symbols display in their source form, both when
+    displaying code as C++ source and when displaying disassemblies. See Print
+    Settings.
+
+set print object
+show print object
+    Choose whether to print derived (actual) or declared types of objects. See
+    Print Settings.
+
+set print vtbl
+show print vtbl
+    Control the format for printing virtual function tables. See Print Settings.
+    (The vtbl commands do not work on programs compiled with the HP ANSI C++
+     compiler (aCC).)
+
+
+set overload-resolution on
+    Enable overload resolution for C++ expression evaluation. The default is on.
+    For overloaded functions, gdb evaluates the arguments and searches for a
+    function whose signature matches the argument types, using the standard C++
+    conversion rules (see C++ Expressions, for details). If it cannot find a
+    match, it emits a message.
+
+set overload-resolution off
+    Disable overload resolution for C++ expression evaluation. For overloaded
+    functions that are not class member functions, gdb chooses the first
+    function of the specified name that it finds in the symbol table, whether or
+    not its arguments are of the correct type. For overloaded functions that are
+    class member functions, gdb searches for a function whose signature exactly
+    matches the argument types.
+
+
+show overload-resolution
+    Show the current setting of overload resolution.
+
+Overloaded symbol names
+    You can specify a particular definition of an overloaded symbol, using the
+    same notation that is used to declare such symbols in C++: type
+    symbol(types) rather than just symbol. You can also use the gdb command-line
+    word completion facilities to list the available choices, or to finish the
+    type list for you. See Command Completion, for details on how to do this. 
 
 
 ={============================================================================
@@ -13002,8 +13456,108 @@ To continue to a specific location, use the
 ={============================================================================
 *kt_linux_tool_309* gdb-break
 
-{gdb-breakpoint}
+5.1 Breakpoints, Watchpoints, and Catchpoints
+
+A breakpoint makes your program stop whenever a certain point in the program is
+reached. For each breakpoint, you can add conditions to control in finer detail
+whether your program stops. You can set breakpoints with the break command and
+its variants (see Setting Breakpoints), to specify the place where your program
+should stop 'by' line number, function name or exact address in the program. 
+
+On some systems, you can set breakpoints in shared libraries before the
+executable is run. 
+
+A watchpoint is a special breakpoint that stops your program when the value of
+an expression changes. The expression may be a value of a variable, or it could
+involve values of one or more variables combined by operators, such as 'a + b'.
+This is sometimes called 'data' breakpoints. You must use a different command to
+set watchpoints, but aside from that, you can manage a watchpoint like any other
+breakpoint: you enable, disable, and delete both breakpoints and watchpoints
+using the same commands.
+
+You can arrange to have values from your program displayed automatically
+whenever gdb stops at a breakpoint. See Automatic Display.
+
+A catchpoint is another special breakpoint that stops your program when a
+certain kind of 'event' occurs, such as the throwing of a C++ exception or the
+loading of a library. As with watchpoints, you use a different command to set a
+catchpoint, but aside from that, you can manage a catchpoint like any other
+breakpoint. (To stop when your program receives a signal, use the handle
+    command; see Signals.)
+
+gdb assigns a number to each breakpoint, watchpoint, or catchpoint when you
+create it; these numbers are successive integers starting with one. In many of
+the commands for controlling various features of breakpoints you use the
+breakpoint number to say which breakpoint you want to change. Each breakpoint
+may be enabled or disabled; if disabled, it has no effect on your program until
+you enable it again.
+
+Some gdb commands accept a range of breakpoints on which to operate. A
+breakpoint range is either a single breakpoint number, like '5', or two such
+numbers, in increasing order, separated by a hyphen, like '5-7'. When a
+breakpoint range is given to a command, all breakpoints in that range are
+operated on. 
+
+
+={============================================================================
+*kt_linux_tool_309* gdb-break: specifying a location
+
+5.1.1 Setting Breakpoints
+
 Breakpoints are set with the break command (abbreviated b).
+
+break location
+    Set a breakpoint at the given location, which can specify a function name, a
+    line number, or an address of an instruction. The breakpoint will stop your
+    program just before it executes any of the code in the specified location.
+
+    When using source languages that permit overloading of symbols, such as C++,
+    a function name may refer to more than one possible place to break. See
+      Ambiguous Expressions, for a discussion of that situation.
+
+    It is also possible to insert a breakpoint that will stop the program only
+    if a specific 'thread' (see Thread-Specific Breakpoints).
+
+
+9.2 Specifying a Location
+
+Several gdb commands accept arguments that specify a location of your program's
+code. Since gdb is a source-level debugger, a location usually specifies some
+line in the source code; for that reason, locations are also known as linespecs.
+
+Here are all the different ways of specifying a code location that gdb understands:
+
+linenum
+    Specifies the line number linenum of the current source file.
+-offset
++offset
+    Specifies the line offset lines before or after the current line. For the list command, the current line is the last one printed; for the breakpoint commands, this is the line at which execution stopped in the currently selected stack frame (see Frames, for a description of stack frames.) When used as the second of the two linespecs in a list command, this specifies the line offset lines up or down from the first linespec.
+filename:linenum
+    Specifies the line linenum in the source file filename. If filename is a relative file name, then it will match any source file name with the same trailing components. For example, if filename is ‘gcc/expr.c’, then it will match source file name of /build/trunk/gcc/expr.c, but not /build/trunk/libcpp/expr.c or /build/trunk/gcc/x-expr.c.
+function
+    Specifies the line that begins the body of the function function. For example, in C, this is the line with the open brace.
+function:label
+    Specifies the line where label appears in function.
+filename:function
+    Specifies the line that begins the body of the function function in the file filename. You only need the file name with a function name to avoid ambiguity when there are identically named functions in different source files.
+label
+    Specifies the line at which the label named label appears. gdb searches for the label in the function corresponding to the currently selected stack frame. If there is no current selected stack frame (for instance, if the inferior is not running), then gdb will not search for a label.
+*address
+    Specifies the program address address. For line-oriented commands, such as list and edit, this specifies a source line that contains address. For break and other breakpoint oriented commands, this can be used to set breakpoints in parts of your program which do not have debugging information or source files.
+
+    Here address may be any expression valid in the current working language (see working language) that specifies a code address. In addition, as a convenience, gdb extends the semantics of expressions used in locations to cover the situations that frequently happen during debugging. Here are the various forms of address:
+
+    expression
+        Any expression valid in the current working language.
+    funcaddr
+        An address of a function or procedure derived from its name. In C, C++, Java, Objective-C, Fortran, minimal, and assembly, this is simply the function's name function (and actually a special case of a valid expression). In Pascal and Modula-2, this is &function. In Ada, this is function'Address (although the Pascal form also works).
+
+        This form specifies the address of the function's first instruction, before the stack frame and arguments have been set up.
+    'filename':funcaddr
+        Like funcaddr above, but also specifies the name of the source file explicitly. This is useful if the name of the function does not specify the function unambiguously, e.g., if there are several functions with identical names in different source files. 
+
+={============================================================================
+*kt_linux_tool_309* gdb-break: specifying a location
 
 gdb normally implements breakpoints by replacing the program code at the breakpoint address with a
 special instruction, which, when executed, given control to the debugger.  By default, the program
