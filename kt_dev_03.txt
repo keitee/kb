@@ -9283,7 +9283,7 @@ class FutureValueBase
 class FutureValue<T> : class FutureValueBase
 
     ^
-    | Since Future is from Promise::getFuture, Future has FC from Promise.
+    | // since Future is from Promise::getFuture, Future has FC from Promise.
 class FutureBase
    + boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
 
@@ -9316,16 +9316,15 @@ class PromiseBase : boost::noncopyable
 
 class Promise<T> : public PromiseBase
    + Promise(); 
-      note create FutureContext<T>
+      // create FutureContext<T>
 
    + Future<T> getFuture(); 
-      note create Future<T>(&FC);
+      // create Future<T>(&FC);
 
    + void complete(typename const_param<T>::type);
 
 
-<work-flow>
-
+<flow>
 1. when creates a promise, associated value, FC gets created with 'dispatcher'
 
 template<typename T>
@@ -9334,15 +9333,15 @@ inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
 {
 }
 
-2. set a pointer in promise which links to FC.
+2. set a pointer in promise which points to FC.
 
 PromiseBase::PromiseBase(detail::FutureContextCommonImpl* p)
  : context(p)
 {
-    if (context.get())
-    {
-        ++context->promiseCount;
-    }
+  if (context.get())
+  {
+    ++context->promiseCount;
+  }
 }
 
 3. when complete() is called, calls set() on FC. see copy of value
@@ -9350,7 +9349,7 @@ PromiseBase::PromiseBase(detail::FutureContextCommonImpl* p)
 template<typename T>
 inline void Promise<T>::complete(typename const_param<T>::type value)
 {
-    getContext().set(value);
+  getContext().set(value);
 }
 
 4. FC copy value from promise, call scheduleCallback().
@@ -9363,7 +9362,7 @@ class FutureContext : public FutureContextCommonImpl
    *
    * Take a 'copy' of the result from the Promise and 'stash' it in
    * FutureContext, complete() marks this FutureContext as completed, and post()
-   * hands it over to the dispatcher
+   * hands it over to the 'dispatcher'
    *
    * @see FutureContextBase::complete()
    * @see FutureContextBase::post()
@@ -9400,6 +9399,8 @@ void FutureContextCommonImpl::doPostSetActionsAndUnlock
 
 void FutureContextBase::scheduleCallback()
 {
+  // Q: is it okay to use local shared pointer?
+
   assert(clientDispatcher);
   boost::intrusive_ptr<FutureContextBase> ip(this);
 
@@ -9424,7 +9425,6 @@ bool FutureContextCommonImpl::dispatchNextResult()
     // Release the work object at the end of this scope
     Dispatcher::work w;
     w.swap(this->work);
-
 
     // Don't hold locks when calling user code
 
@@ -9629,8 +9629,8 @@ FutureContextBase::FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_) :
 
 FutureContextBase::~FutureContextBase()
 {
-    assert(refCount == 0);
-    assert(promiseCount == 0);
+  assert(refCount == 0);
+  assert(promiseCount == 0);
 }
 
 /**
@@ -9638,11 +9638,11 @@ FutureContextBase::~FutureContextBase()
  */
 void FutureContextBase::wait()
 {
-    boost::mutex::scoped_lock lock(mutex);
-    while (!completed)
-    {
-        cond.wait(lock);
-    }
+  boost::mutex::scoped_lock lock(mutex);
+  while (!completed)
+  {
+    cond.wait(lock);
+  }
 }
 
 // note: <set-callback>
@@ -9650,7 +9650,8 @@ void FutureContextBase::scheduleCallback()
 {
   assert(clientDispatcher);
   boost::intrusive_ptr<FutureContextBase> ip(this);
-  clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+  clientDispatcher->
+    post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
   cond.notify_all();
 }
 
@@ -9658,7 +9659,8 @@ void FutureContextBase::scheduleCancellationCallback()
 {
   assert(dispatcher);
   boost::intrusive_ptr<FutureContextBase> ip(this);
-  dispatcher->post(boost::bind(&FutureContextBase::dispatchCancellation, ip));
+  dispatcher->
+    post(boost::bind(&FutureContextBase::dispatchCancellation, ip));
 }
 
 // NOTE: These two functions are deliberately out-of-line, so they can be
@@ -9723,6 +9725,7 @@ protected:
     void doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock);
 
     void doPost();
+
 public:
     /**
      * This gets called by the FutureDispatcher implementation
@@ -9920,19 +9923,19 @@ NS_ZINC_OPEN
 PromiseBase::PromiseBase(detail::FutureContextCommonImpl* p)
  : context(p)
 {
-    if (context.get())
-    {
-        ++context->promiseCount;
-    }
+  if (context.get())
+  {
+    ++context->promiseCount;
+  }
 }
 
 PromiseBase::PromiseBase(const PromiseBase& p)
 : boost::noncopyable(), context(p.context)
 {
-    if (context.get())
-    {
-        ++context->promiseCount;
-    }
+  if (context.get())
+  {
+    ++context->promiseCount;
+  }
 }
 
 PromiseBase::~PromiseBase()
@@ -10006,7 +10009,6 @@ FutureContextCommonImpl::FutureContextCommonImpl(NS_ZINC::FutureDispatcher* disp
    promiseState(promise_state::incomplete),
    callCancellationCallback(true),
    cancellationCallback(cancellationCallback_)
-
 {
 }
 
@@ -10164,25 +10166,25 @@ void FutureContextCommonImpl::dispatchCancellation()
 // note: <set-callback>
 bool FutureContextCommonImpl::dispatchNextResult()
 {
-    boost::mutex::scoped_lock lock(mutex);
+  boost::mutex::scoped_lock lock(mutex);
 
-    // NOTE: We always want to come into this method and null the callback when we're done,
-    // even if canceled.
+  // NOTE: We always want to come into this method and null the callback when we're done,
+  // even if canceled.
 
-    if (completed && shouldCallCompletionHandler && completionHandler)
-    {
-        // Release the work object at the end of this scope
-        Dispatcher::work w;
-        w.swap(this->work);
+  if (completed && shouldCallCompletionHandler && completionHandler)
+  {
+    // Release the work object at the end of this scope
+    Dispatcher::work w;
+    w.swap(this->work);
 
-        // Don't hold locks when calling user code
-        boost::function<void (FutureContextBase*)> stackCompletionHandler;
-        stackCompletionHandler.swap(completionHandler);
-        lock.unlock();
-        stackCompletionHandler(this);
-    }
+    // Don't hold locks when calling user code
+    boost::function<void (FutureContextBase*)> stackCompletionHandler;
+    stackCompletionHandler.swap(completionHandler);
+    lock.unlock();
+    stackCompletionHandler(this);
+  }
 
-    return false;
+  return false;
 }
 
 } //namespace detail
@@ -10222,110 +10224,110 @@ class Dispatcher;
 
 class FutureBase {
 
-    friend class internal::PolymorphicFuture;
+  friend class internal::PolymorphicFuture;
 
-    public:
+  public:
 
-    /**
-     * Cancel the Future.
-     *
-     * This merely prevents the Future ever being fulfilled. If a callback
-     * has been set, and not called already, it will not be called.
-     *
-     * Cancellation may, or may not, cause the underlying asynchronous
-     * operation to be canceled. The client should not assume this to be the
-     * case.
-     *
-     * Cancellation may be modified with the flags argument.
-     *  * future.cancel(clear_callback) just prevents the
-     *    callback set with setCallback from being invoked.
-     *  * future.cancel(deep) calls the onCancel handler that may have been
-     *    provided promise-side
-     *  * future.cancel(immediately) has behaviour equivalent to the Promise
-     *    being immediately completed with a CancelledFuture exception.  If the
-     *    promise has already been completed calling get() will still cause a
-     *    CancelledFuture exception to be thrown.
-     *  * future.cancel(0) does nothing.
-     */
-    void cancel(unsigned flags = cancel_flag::clear_callback |
-            cancel_flag::deep |
-            cancel_flag::immediately);
+  /**
+   * Cancel the Future.
+   *
+   * This merely prevents the Future ever being fulfilled. If a callback
+   * has been set, and not called already, it will not be called.
+   *
+   * Cancellation may, or may not, cause the underlying asynchronous
+   * operation to be canceled. The client should not assume this to be the
+   * case.
+   *
+   * Cancellation may be modified with the flags argument.
+   *  * future.cancel(clear_callback) just prevents the
+   *    callback set with setCallback from being invoked.
+   *  * future.cancel(deep) calls the onCancel handler that may have been
+   *    provided promise-side
+   *  * future.cancel(immediately) has behaviour equivalent to the Promise
+   *    being immediately completed with a CancelledFuture exception.  If the
+   *    promise has already been completed calling get() will still cause a
+   *    CancelledFuture exception to be thrown.
+   *  * future.cancel(0) does nothing.
+   */
+  void cancel(unsigned flags = cancel_flag::clear_callback |
+      cancel_flag::deep |
+      cancel_flag::immediately);
 
-    /**
-     * Synchronously wait for the value to become available.
-     *
-     * This will block the calling thread until either the value is available,
-     * or an exception occurs.
-     *
-     * When the caller returns from this call, a subsequent call to get() will not
-     * block.
-     */
-    void wait();
+  /**
+   * Synchronously wait for the value to become available.
+   *
+   * This will block the calling thread until either the value is available,
+   * or an exception occurs.
+   *
+   * When the caller returns from this call, a subsequent call to get() will not
+   * block.
+   */
+  void wait();
 
-    /**
-     * Synchronously wait for the value to become available, with a timeout
-     * specified as a relative time duration
-     *
-     * eg
-     *		Future<int> f = fn_returning_a_future();
-     *		f.wait_for(boost::posix_time::milliseconds(500));
-     *
-     * @param rel_time specifies the time duration to wait for completion
-     * @return false if the given time period elapses without completion or cancellation
-     * @see wait()
-     */
-    template<typename duration_type>
-        bool wait_for(const duration_type &rel_time);
+  /**
+   * Synchronously wait for the value to become available, with a timeout
+   * specified as a relative time duration
+   *
+   * eg
+   *		Future<int> f = fn_returning_a_future();
+   *		f.wait_for(boost::posix_time::milliseconds(500));
+   *
+   * @param rel_time specifies the time duration to wait for completion
+   * @return false if the given time period elapses without completion or cancellation
+   * @see wait()
+   */
+  template<typename duration_type>
+    bool wait_for(const duration_type &rel_time);
 
-    /**
-     * Synchronously wait for the value to become available, with a timeout
-     * specified as an absolute time point
-     *
-     * Use wait_for() in preference
-     *
-     * @param abs_time specifies the time point to stop waiting
-     * @return false if we reach the given time point without completion or cancellation
-     *
-     * @see wait()
-     * @see wait_for()
-     */
-    template<typename time_point_type>
-        bool wait_until(const time_point_type &abs_time);
+  /**
+   * Synchronously wait for the value to become available, with a timeout
+   * specified as an absolute time point
+   *
+   * Use wait_for() in preference
+   *
+   * @param abs_time specifies the time point to stop waiting
+   * @return false if we reach the given time point without completion or cancellation
+   *
+   * @see wait()
+   * @see wait_for()
+   */
+  template<typename time_point_type>
+    bool wait_until(const time_point_type &abs_time);
 
-    /**
-     * Ask if the Future has been completed with a value provided by its Promise
-     *
-     * A positive response does not guarantee that the callback has yet been executed
-     *
-     * @return true if this Future has been completed
-     */
-    bool isComplete();
+  /**
+   * Ask if the Future has been completed with a value provided by its Promise
+   *
+   * A positive response does not guarantee that the callback has yet been executed
+   *
+   * @return true if this Future has been completed
+   */
+  bool isComplete();
 
-    /**
-     * Has this Future been default constructed?  If so, then it is not useful
-     *
-     * @see Future<T>::swap
-     * @see Promise<T>::getFuture
-     *
-     * @return false if this Future is valid
-     */
-    bool isEmpty();
+  /**
+   * Has this Future been default constructed?  If so, then it is not useful
+   *
+   * @see Future<T>::swap
+   * @see Promise<T>::getFuture
+   *
+   * @return false if this Future is valid
+   */
+  bool isEmpty();
 
 
-protected:
+  protected:
 
-    explicit FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context) ZINC_EXPORT;
+  explicit FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context) ZINC_EXPORT;
 
-    FutureBase(const FutureBase& other) ZINC_EXPORT;
+  FutureBase(const FutureBase& other) ZINC_EXPORT;
 
-    FutureBase() {}
+  FutureBase() {}
 
-    ~FutureBase() ZINC_EXPORT;
+  ~FutureBase() ZINC_EXPORT;
 
-    void baseSwap(FutureBase& other);
+  void baseSwap(FutureBase& other);
 
-    // note:
-    boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
+  // note:
+  boost::intrusive_ptr<detail::FutureContextCommonImpl > context;
 };
 
 
@@ -11135,7 +11137,10 @@ NS_ZINC_CLOSE
 <complete-helpers>
 
 ////////////////////////////////////////
-note: not a whole file. this simply complete a promise as if it's "really" completed.
+
+note: not a whole file. this simply complete a promise as if it's "really"
+completed.
+
 /*
  * Zinc/Zinc.Common/include/async/detail/async-helpers_Impl.h
  */
