@@ -9326,7 +9326,7 @@ class Promise<T> : public PromiseBase
 
 <work-flow>
 
-1. when creates a promise, associated value, FC gets created with dispatcher
+1. when creates a promise, associated value, FC gets created with 'dispatcher'
 
 template<typename T>
 inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
@@ -9381,31 +9381,32 @@ class FutureContext : public FutureContextCommonImpl
 void FutureContextCommonImpl::doPostSetActionsAndUnlock
   (boost::mutex::scoped_lock& lock)
 {
-    assert(lock.owns_lock());
-    bool wasCompleted = completed;
-    bool oldForDispatch = forDispatch;
-    completed = true;
-    lock.unlock();
-    if (!wasCompleted) {
-        cond.notify_all();
-        if (oldForDispatch && clientDispatcher) {
+  assert(lock.owns_lock());
+  bool wasCompleted = completed;
+  bool oldForDispatch = forDispatch;
+  completed = true;
+  lock.unlock();
+  if (!wasCompleted) {
+    cond.notify_all();
+    if (oldForDispatch && clientDispatcher) {
 
-            scheduleCallback();
-        }
+      scheduleCallback();
     }
+  }
 }
 
-5. post to dispatcher.
+
+5. post to 'dispatcher' which is provided by a user
 
 void FutureContextBase::scheduleCallback()
 {
-    assert(clientDispatcher);
-    boost::intrusive_ptr<FutureContextBase> ip(this);
+  assert(clientDispatcher);
+  boost::intrusive_ptr<FutureContextBase> ip(this);
 
-    clientDispatcher->
-      post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+  clientDispatcher->
+    post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
 
-    cond.notify_all();
+  cond.notify_all();
 }
 
 
@@ -9413,29 +9414,29 @@ void FutureContextBase::scheduleCallback()
 
 bool FutureContextCommonImpl::dispatchNextResult()
 {
-    boost::mutex::scoped_lock lock(mutex);
+  boost::mutex::scoped_lock lock(mutex);
 
-    // NOTE: We always want to come into this method and null the callback when
-    // we're done, even if canceled.
+  // NOTE: We always want to come into this method and null the callback when
+  // we're done, even if canceled.
 
-    if (completed && shouldCallCompletionHandler && completionHandler)
-    {
-        // Release the work object at the end of this scope
-        Dispatcher::work w;
-        w.swap(this->work);
+  if (completed && shouldCallCompletionHandler && completionHandler)
+  {
+    // Release the work object at the end of this scope
+    Dispatcher::work w;
+    w.swap(this->work);
 
-        
-        // Don't hold locks when calling user code
 
-        // note: class FutureContextCommonImpl: class FutureContextBase 
-        boost::function<void (FutureContextBase*)> stackCompletionHandler;
+    // Don't hold locks when calling user code
 
-        stackCompletionHandler.swap(completionHandler);
-        lock.unlock();
-        stackCompletionHandler(this);
-    }
+    // note: class FutureContextCommonImpl: class FutureContextBase 
+    boost::function<void (FutureContextBase*)> stackCompletionHandler;
 
-    return false;
+    stackCompletionHandler.swap(completionHandler);
+    lock.unlock();
+    stackCompletionHandler(this);
+  }
+
+  return false;
 }
 
 
@@ -9509,7 +9510,7 @@ NS_ZINC_OPEN
 
 class ZINC_EXPORT FutureContextBase : boost::noncopyable
 {
-public:
+  public:
 
     virtual ~FutureContextBase();
 
@@ -9529,11 +9530,11 @@ public:
      * @see Future<T>::wait_for()
      */
     template<typename duration_type>
-        bool wait_for(const duration_type &rel_time)
-        {
-            monotonic_clock::time_point abs_time = monotonic_clock::now() + rel_time;
-            return wait_until(abs_time);
-        }
+      bool wait_for(const duration_type &rel_time)
+      {
+        monotonic_clock::time_point abs_time = monotonic_clock::now() + rel_time;
+        return wait_until(abs_time);
+      }
 
     /**
      * Wait for this async op to complete, with a time out
@@ -9542,17 +9543,18 @@ public:
      * @see Future<T>::wait_until()
      */
     template<typename time_point_type>
-        bool wait_until(const time_point_type &abs_time)
+      bool wait_until(const time_point_type &abs_time)
+      {
+        boost::mutex::scoped_lock lock(mutex);
+        while (!completed)
         {
-            boost::mutex::scoped_lock lock(mutex);
-            while (!completed)
-            {
-                const bool signalled = cond.wait_until(lock, abs_time);
-                if (!signalled && !completed)
-                    return false; // we timed out, without a completion and without a cancellation
-            }
-            return true;
+          const bool signalled = cond.wait_until(lock, abs_time);
+          if (!signalled && !completed)
+            return false; // we timed out, without a completion 
+                          // and without a cancellation
         }
+        return true;
+      }
 
     /**
      * Does the moral equivalent to
@@ -9565,7 +9567,7 @@ public:
 
     void scheduleCancellationCallback();
 
-protected:
+  protected:
 
     explicit FutureContextBase(NS_ZINC::FutureDispatcher* dispatcher_);
 
@@ -9576,16 +9578,17 @@ protected:
      */
     void markCallback();
 
-public:
+  public:
     boost::detail::atomic_count refCount;
     boost::detail::atomic_count promiseCount;
-public:
+
+  public:
     bool completed;
     FutureDispatcher* dispatcher;
     FutureDispatcher* clientDispatcher;
     static boost::condition_variable cond;
     static boost::mutex mutex;
-private:
+  private:
     FutureContextBase(); // forbid default construction
 };
 
@@ -9645,17 +9648,17 @@ void FutureContextBase::wait()
 // note: <set-callback>
 void FutureContextBase::scheduleCallback()
 {
-    assert(clientDispatcher);
-    boost::intrusive_ptr<FutureContextBase> ip(this);
-    clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
-    cond.notify_all();
+  assert(clientDispatcher);
+  boost::intrusive_ptr<FutureContextBase> ip(this);
+  clientDispatcher->post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+  cond.notify_all();
 }
 
 void FutureContextBase::scheduleCancellationCallback()
 {
-    assert(dispatcher);
-    boost::intrusive_ptr<FutureContextBase> ip(this);
-    dispatcher->post(boost::bind(&FutureContextBase::dispatchCancellation, ip));
+  assert(dispatcher);
+  boost::intrusive_ptr<FutureContextBase> ip(this);
+  dispatcher->post(boost::bind(&FutureContextBase::dispatchCancellation, ip));
 }
 
 // NOTE: These two functions are deliberately out-of-line, so they can be
@@ -9663,16 +9666,16 @@ void FutureContextBase::scheduleCancellationCallback()
 
 void intrusive_ptr_add_ref(NS_ZINC::FutureContextBase * p)
 {
-    ++p->refCount;
+  ++p->refCount;
 }
 
 void intrusive_ptr_release(NS_ZINC::FutureContextBase * p)
 {
-    int c = --p->refCount;
-    if (c == 0)
-    {
-        delete p;
-    }
+  int c = --p->refCount;
+  if (c == 0)
+  {
+    delete p;
+  }
 }
 
 NS_ZINC_CLOSE
@@ -9794,19 +9797,19 @@ CallbackHoistingWrapper<T, Functor> makeCallbackHoistingWrapper(const Functor& f
 template <typename T>
 class FutureContext : public FutureContextCommonImpl
 {
-public:
+  public:
 
     explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_)
-        : FutureContextCommonImpl(dispatcher_)
+      : FutureContextCommonImpl(dispatcher_)
     {}
 
     explicit FutureContext(NS_ZINC::FutureDispatcher* dispatcher_, 
-            boost::function<void ()> cancellationCallback_)
-        : FutureContextCommonImpl(dispatcher_, cancellationCallback_)
+        boost::function<void ()> cancellationCallback_)
+      : FutureContextCommonImpl(dispatcher_, cancellationCallback_)
     {}
 
     // note:
-    
+
     /**
      * Type specific completion code called from Promise::complete()
      *
@@ -9819,21 +9822,21 @@ public:
      */
     void set(const T & result)
     {
-        boost::mutex::scoped_lock lock;
-        if (runPreSetChecksAndLock(lock)) {
-            value = result;
-        }
-        doPostSetActionsAndUnlock(lock);
+      boost::mutex::scoped_lock lock;
+      if (runPreSetChecksAndLock(lock)) {
+        value = result;
+      }
+      doPostSetActionsAndUnlock(lock);
     }
 
     // <set-callback>
     template <typename Handler>
-        void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
-            setCallbackHoisted(boost::function<void (FutureContextBase*)>(
-                        makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))),
-                    clientDispatcher_
-                    );
-        }
+      void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
+        setCallbackHoisted(boost::function<void (FutureContextBase*)>(
+              makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))),
+            clientDispatcher_
+            );
+      }
 
     T value;
 };
@@ -9946,32 +9949,26 @@ FutureValueBase::FutureValueBase(const boost::intrusive_ptr<detail::FutureContex
 	context(context_),
 	state(context_->futurevalueState)
 {
-
 }
 
-FutureValueBase::~FutureValueBase() {
-
+FutureValueBase::~FutureValueBase() 
+{
 }
 
 
 FutureBase::FutureBase(boost::intrusive_ptr<detail::FutureContextCommonImpl> context_) :
 	context(context_)
 {
-
 }
 
 FutureBase::FutureBase(const FutureBase& other) :
 	context(other.context)
 {
-
 }
 
 FutureBase::~FutureBase()
 {
-
 }
-
-
 
 ChunkedFutureBase::ChunkedFutureBase(boost::intrusive_ptr<FutureContextBase> context_ ) :
 	context(context_)
@@ -10125,18 +10122,18 @@ bool FutureContextCommonImpl::runPreSetChecksAndLock(boost::mutex::scoped_lock& 
 // note:
 void FutureContextCommonImpl::doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock)
 {
-    assert(lock.owns_lock());
-    bool wasCompleted = completed;
-    bool oldForDispatch = forDispatch;
-    completed = true;
-    lock.unlock();
-    if (!wasCompleted) {
-        cond.notify_all();
-        if (oldForDispatch && clientDispatcher) {
+  assert(lock.owns_lock());
+  bool wasCompleted = completed;
+  bool oldForDispatch = forDispatch;
+  completed = true;
+  lock.unlock();
+  if (!wasCompleted) {
+    cond.notify_all();
+    if (oldForDispatch && clientDispatcher) {
 
-            scheduleCallback();
-        }
+      scheduleCallback();
     }
+  }
 }
 
 
@@ -12550,7 +12547,7 @@ class ZINC_LOCAL DispatchingEventProducer
     virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher) {
       impl.setDispatcher(dispatcher);
     }
-
+youview cannot open player
     virtual boost::shared_ptr<EventDispatcher> getDispatcher() const {
       return impl.getDispatcher();
     }
@@ -13030,7 +13027,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_code_017* asyc: dispatcher use
+*kt_dev_code_017* asyc: dispatcher use ex
 
 <use-case>
 
@@ -13051,10 +13048,10 @@ NS_ZINC_CLOSE
 5. FD calls SystemClientEventRepository::eventWindowDataRetrievalComplete(cmd)
    - this is a registered handler and use EventWindow in cmd
 
-6.
+6. Follows notify and produce event chain via listener 
 
 
-<1> note: The application calls this API
+<1> note: The application calls this API and creates dispatch thread.
 
 SystemClientFactory() creates two dispatches:
 
@@ -13068,7 +13065,8 @@ SystemClientFactory() creates two dispatches:
 
 
 <2> The application calls this to have SCER:
-boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> createEventRepository() 
+boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> 
+  createEventRepository() 
 {
   // createConcreteEventRepository() create SCER 
   // set dispatchers to SCER
@@ -13093,21 +13091,25 @@ So DD is inline dispatcher and FD is single threaded dispatcher.
 class DispatchingFutureProducer : virtual public Polymorphic
 {
   public:
-    virtual void setFutureDispatcher(boost::shared_ptr<FutureDispatcher> dispatcher)
+    virtual void setFutureDispatcher
+      (boost::shared_ptr<FutureDispatcher> dispatcher)
     {
       boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
       this->dispatcher = dispatcher;
     }
+
     virtual void removeFutureDispatcher()
     {
       boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
       dispatcher.reset();
     }
+
     virtual boost::shared_ptr<FutureDispatcher> getFutureDispatcher() const
     {
       boost::recursive_mutex::scoped_lock lock(dispatcherMutex);
       return dispatcher;
     }
+
   private:
     boost::shared_ptr<FutureDispatcher> dispatcher;
     mutable boost::recursive_mutex dispatcherMutex;
@@ -13119,35 +13121,38 @@ class ZINC_EXPORT SystemClientEventRepository :
     public boost::enable_shared_from_this<SystemClientEventRepository>,
     public MetadataChangeListener
 {
-    boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher;
+  boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher;
 
-    // note: set DD
-    void setDefaultDispatcher(boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher_)
+  // note: set DD
+  void setDefaultDispatcher
+    (boost::shared_ptr<NS_ZINC::EventDispatcher> dispatcher_)
     {
-        dispatcher = dispatcher_;
+      dispatcher = dispatcher_;
     }
 
-    /**
-     * Creates event window from events passed in.
-     * @note The method sanitizes the events, removes duplicates and joins
-     * adjacent null events 
-     * @note This method assumes that if there are duplicates inside events
-     * passed in, they'll be identical.
-     */
-    boost::shared_ptr<SystemClientEventWindow> SystemClientEventRepository::createEventWindow(
-            EventWindowCreateCommand& cmd,
-            event_collection_ptr events, bool hasStaleData)
+  /**
+   * Creates event window from events passed in.
+   * @note The method sanitizes the events, removes duplicates and joins
+   * adjacent null events 
+   * @note This method assumes that if there are duplicates inside events
+   * passed in, they'll be identical.
+   */
+  boost::shared_ptr<SystemClientEventWindow> 
+    SystemClientEventRepository::createEventWindow(
+        EventWindowCreateCommand& cmd,
+        event_collection_ptr events, bool hasStaleData)
     {
-        boost::shared_ptr<SystemClientEventWindow> ew = 
-            boost::make_shared<SystemClientEventWindow>(cmd.location,
-                    sanitizedEvents, serviceRepo, shared_from_this(),
-                    (microsec_clock::universal_time() - cmd.dataRetrievalStartTime).total_milliseconds(),
-                    cmd.hasDataFromAllSources(), hasStaleData);
+      boost::shared_ptr<SystemClientEventWindow> ew = 
+        boost::make_shared<SystemClientEventWindow>(cmd.location,
+            sanitizedEvents, serviceRepo, shared_from_this(),
+            (microsec_clock::universal_time() - 
+             cmd.dataRetrievalStartTime).total_milliseconds(),
+            cmd.hasDataFromAllSources(), hasStaleData);
 
-        // note: pass DD to EventWindow
-        ew->setDispatcher(dispatcher);
+      // note: pass DD to EventWindow
+      ew->setDispatcher(dispatcher);
 
-        metadataObserver->addListener(ew);
+      metadataObserver->addListener(ew);
     }
 };
 
@@ -13171,11 +13176,12 @@ SystemClientEventRepository::getEventWindow(
       serviceRepo);
 
   // create SCEW and set ED(DD)
-  boost::shared_ptr<SystemClientEventWindow> ew = createEventWindow(cmd, newWindowEvents,
-      hasStaleData);
+  boost::shared_ptr<SystemClientEventWindow> ew = 
+    createEventWindow(cmd, newWindowEvents, hasStaleData);
 
-  // note: this is to say that EW creation is done. so "promise" for EW creation.
-  cmd.promise.complete(ew);
+  // note: this is to say that EW creation is done. so "promise" for EW
+  // creation.
+  cmd.promise.complete(ew); 
   cmd.promiseCompleted = true;
 
   getEventsFromSystemAPI(cmd);
@@ -13186,88 +13192,90 @@ SystemClientEventRepository::getEventWindow(
 
 
 <4>
-void SystemClientEventRepository::getEventsFromSystemAPI(EventWindowCreateCommand& cmd)
+void SystemClientEventRepository::getEventsFromSystemAPI
+  (EventWindowCreateCommand& cmd)
 {
-    // set future dispatcher to future barrier
+  // set future dispatcher to future barrier
 
-    NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
+  NS_ZINC::FutureBarrier bar(*getFutureDispatcher());
 
-    // add {future, member function pointer} pair to future barrier and these
-    // futures are futures associated to dbus call. suppose that future will be
-    // set when dbus call succeeds and when it is set, member function gets
-    // called.
-    //
-    // note: eventsReceived are overloaded
-    //
-    // therefore,
-    //
-    // fMASEvents -> SystemClientEventRepository::eventsReceived()
-    // fDTTEvents -> SystemClientEventRepository::eventsReceived()
+  // add {future, member function pointer} pair to future barrier and these
+  // futures are futures associated to dbus call. suppose that future will be
+  // set when dbus call succeeds and when it is set, member function gets
+  // called.
+  //
+  // note: eventsReceived are overloaded
+  //
+  // therefore,
+  //
+  // fMASEvents -> SystemClientEventRepository::eventsReceived()
+  // fDTTEvents -> SystemClientEventRepository::eventsReceived()
 
-    void (SystemClientEventRepository::*masCallback)
-        (boost::shared_ptr<EventWindowCreateCommand>,
-         const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
-        &SystemClientEventRepository::eventsReceived;
+  void (SystemClientEventRepository::*masCallback)
+    (boost::shared_ptr<EventWindowCreateCommand>,
+     const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result > > &) =
+    &SystemClientEventRepository::eventsReceived;
 
-    void (SystemClientEventRepository::*dttCallback)
-        (boost::shared_ptr<EventWindowCreateCommand>,
-         const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
-        &SystemClientEventRepository::eventsReceived;
+  void (SystemClientEventRepository::*dttCallback)
+    (boost::shared_ptr<EventWindowCreateCommand>,
+     const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > &) =
+    &SystemClientEventRepository::eventsReceived;
 
-    // note: dynamically created so that used later in bind object
-    boost::shared_ptr<EventWindowCreateCommand> 
-        sharedCmd = boost::make_shared<EventWindowCreateCommand>(cmd);
+  // note: dynamically created so that used later in bind object
+  boost::shared_ptr<EventWindowCreateCommand> 
+    sharedCmd = boost::make_shared<EventWindowCreateCommand>(cmd);
 
-    // note:
-    // add {future, callback} and callback gets called when future is ready. 
-    //
-    //   void Callback(FutureValue<T>);
-    //   T is "vector < NS_COBALT_SYSTEM::Result>"
-    //
-    // The eventReceived is overloaded and see that it receives that &FV. When
-    // one of eventsReceived is called, set a promise completed.
-    //
-    // void SystemClientEventRepository::eventsReceived(
-    //   boost::shared_ptr<EventWindowCreateCommand> command,
-    //   const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
-    // {
-    //     // get the returned data from eventsFV.get() and copy data to a vector.
-    //     const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
-    //     event_collection_ptr  clientEvents = getClientEvents(systemEvents);
-    //
-    //     // this is a promise matches to future passed to application.
-    //     // signal client(application) that data is ready by setting
-    //     command->promise.complete(data);
-    // };
-    //
+  // note:
+  // add {future, callback} and callback gets called when future is ready. 
+  //
+  //   void Callback(FutureValue<T>);
+  //   T is "vector < NS_COBALT_SYSTEM::Result>"
+  //
+  // The eventReceived is overloaded and see that it receives that &FV. When
+  // one of eventsReceived is called, set a promise completed.
+  //
+  // void SystemClientEventRepository::eventsReceived(
+  //   boost::shared_ptr<EventWindowCreateCommand> command,
+  //   const NS_ZINC::FutureValue< std::vector<NS_COBALT_SYSTEM::Result> >& eventsFV)
+  // {
+  //     // get the returned data from eventsFV.get() and copy data to a vector.
+  //     const std::vector<NS_COBALT_SYSTEM::Result>& systemEvents = eventsFV.get();
+  //     event_collection_ptr  clientEvents = getClientEvents(systemEvents);
+  //
+  //     // this is a promise matches to future passed to application.
+  //     // signal client(application) that data is ready by setting
+  //     command->promise.complete(data);
+  // };
+  //
 
-    Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
-        metadataBroker->getEventSummariesByServices(recids, start, end);
+  Future < vector < NS_COBALT_SYSTEM::Result> > fMASEvents =
+    metadataBroker->getEventSummariesByServices(recids, start, end);
 
-    bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
+  bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
 
-    //
-    // void eventsReceived(
-    //    boost::shared_ptr<EventWindowCreateCommand> command,
-    //    const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
-    // {
-    //    event_collection_ptr clientEvents = getClientEvents(systemEvents);
-    // }  
+  //
+  // void eventsReceived(
+  //    boost::shared_ptr<EventWindowCreateCommand> command,
+  //    const NS_ZINC::FutureValue< std::vector<NS_IRON_SYSTEM::Event> > & eventsFV)
+  // {
+  //    event_collection_ptr clientEvents = getClientEvents(systemEvents);
+  // }  
 
-    Future < vector < NS_IRON_SYSTEM::Event> > fDTTEvents =
-            systemEventRepo->getScheduleEvents(locators, dttStart, end);
+  Future < vector < NS_IRON_SYSTEM::Event> > fDTTEvents =
+    systemEventRepo->getScheduleEvents(locators, dttStart, end);
 
-    bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
+  bar.addWithCallback(fDTTEvents, boost::bind(dttCallback, this, sharedCmd, _1));
 
-    // note: after all, eventWindowDataRetrievalComplete() has a notify chain up
-    // to a client. 
-    
-    bar.setCallback(
-          boost::bind
-            (&SystemClientEventRepository::eventWindowDataRetrievalComplete, 
-             shared_from_this(), sharedCmd)
-          );
+  // note: after all, eventWindowDataRetrievalComplete() has a notify chain up
+  // to a client. 
+
+  bar.setCallback(
+      boost::bind
+      (&SystemClientEventRepository::eventWindowDataRetrievalComplete, 
+       shared_from_this(), sharedCmd)
+      );
 };
+
 
 <5> goes up to a client via SystemClientEventWindow::produceEvent
 
@@ -13308,7 +13316,7 @@ class TextEPGEventWindowEventListener : public EventWindowEventListener
 {
     virtual void EventWindowChanged()
     {
-    	printDebug("EventWindowChanged.");
+      printDebug("EventWindowChanged.");
         actionProcessor->post(boost::bind(&doRefreshWindowAndPrintStats));
     }
 };
@@ -13571,6 +13579,219 @@ bool FutureContextCommonImpl::dispatchNextResult()
   stackCompletionHandler(this);
 }
 
+
+={============================================================================
+*kt_dev_code_017* asyc: asyncInvoke
+
+/*
+ * async-helpers_Impl.h
+ *
+ *  Created on: 16 Nov 2011
+ *      Author: YouView
+ *
+ *   Copyright (C) 2011 YouView TV Ltd
+ */
+
+#ifndef ZINC_COMMON_ASYNC_HELPERS_IMPL_H_
+#define ZINC_COMMON_ASYNC_HELPERS_IMPL_H_
+
+#include "../Future.h"
+#include "../FutureDispatcher.h"
+#include "../Promise.h"
+
+#include <boost/utility/result_of.hpp>
+
+NS_ZINC_OPEN
+
+namespace detail {
+
+// Enable to specialise ResultType for void
+template <typename Functor, typename ResultType>
+struct call_and_complete;
+
+template <typename Functor, typename ResultType>
+struct Adaptor {
+
+    Adaptor(boost::shared_ptr<FutureDispatcher> futureDispatcher_, Functor functor_)
+     : futureDispatcher(futureDispatcher_), functor(functor_), promise(*futureDispatcher) {
+    }
+
+    Adaptor(Functor functor_)
+     : functor(functor_) {
+    }
+
+    void operator()() {
+        call_and_complete<Functor, ResultType>::apply(functor, promise);
+    }
+
+    boost::shared_ptr<FutureDispatcher> futureDispatcher; ///< Keep a reference to the futureDispatcher
+                                                          ///< until the promise is completed;
+    Functor functor;
+    NS_ZINC::Promise<ResultType> promise;
+};
+
+template <typename Functor, typename ResultType>
+struct call_and_complete {
+
+    static void apply(Functor& functor, NS_ZINC::Promise<ResultType>& promise) {
+        try {
+            promise.complete(functor());
+        }
+        catch (std::exception &e) {
+            promise.exception(e);
+        }
+    }
+};
+
+template <typename Functor>
+struct call_and_complete<Functor, void> {
+
+    static void apply(Functor& functor, NS_ZINC::Promise<void>& promise) {
+        try {
+            functor();
+            promise.complete();
+        }
+        catch (std::exception &e) {
+            promise.exception(e);
+        }
+    }
+};
+
+} // namespace detail
+
+template<typename Dispatcher, typename Functor, typename ResultType>
+Future<ResultType> asyncInvoke(boost::shared_ptr<FutureDispatcher> futureDispatcher,
+                               Dispatcher &dispatcher, Functor functor) {
+    BOOST_ASSERT(futureDispatcher);
+    detail::Adaptor<Functor, ResultType> adaptor(futureDispatcher, functor);
+    dispatcher.post(adaptor);
+    return adaptor.promise.getFuture();
+}
+
+// Matches boost::function and boost::bind functors
+template<typename Dispatcher, typename Functor>
+Future<typename Functor::result_type> asyncInvoke(boost::shared_ptr<FutureDispatcher> futureDispatcher,
+                                                  Dispatcher &dispatcher, Functor functor) {
+    BOOST_ASSERT(futureDispatcher);
+    return asyncInvoke<Dispatcher, Functor, typename Functor::result_type>(futureDispatcher, dispatcher, functor);
+}
+
+// Matches C-style function
+template<typename Dispatcher, typename ResultType>
+Future<ResultType> asyncInvoke(
+        boost::shared_ptr<FutureDispatcher> futureDispatcher, Dispatcher &dispatcher, ResultType (*functor)(void)) {
+    BOOST_ASSERT(futureDispatcher);
+    return asyncInvoke<Dispatcher, ResultType (*)(void), ResultType>(
+               futureDispatcher, dispatcher, functor);
+}
+
+template<typename Dispatcher, typename Functor>
+Future<typename boost::result_of<Functor(void)>::type>
+asyncInvoke(Dispatcher &dispatcher, Functor functor) {
+    detail::Adaptor<Functor, typename boost::result_of<Functor(void)>::type> adaptor(functor);
+    dispatcher.post(adaptor);
+    return adaptor.promise.getFuture();
+}
+
+namespace detail {
+template <typename T>
+struct AssignToFunctor {
+    typedef void result_type;
+    AssignToFunctor(T* out_)
+     : out(out_)
+    {
+        assert(out);
+    }
+    template< typename FromType>
+    void operator()(const FromType& in) {
+        *out = in;
+    }
+    T* out;
+};
+} //namespace detail
+
+template <typename T>
+detail::AssignToFunctor<T> assignTo(T* out) {
+    assert(out);
+    return detail::AssignToFunctor<T>(out);
+}
+
+namespace detail {
+
+template <typename Handler>
+struct OnSuccessCallback {
+
+    Handler fn;
+    template<class F> struct result;
+
+    template<class F, class T>
+    struct result<F(T)> {
+        typedef typename boost::result_of<Handler(T)>::type type;
+    };
+
+    OnSuccessCallback(Handler h) : fn(h) {};
+
+    template <typename T>
+    typename boost::result_of<Handler(T)>::type operator()(const FutureValue<T>& fv) {
+        return fn(fv.get());
+    }
+
+    typename boost::result_of<Handler(void)>::type operator()(const FutureValue<void>& fv) {
+        fv.get();
+        return fn();
+    }
+};
+
+}
+
+template <typename Handler>
+detail::OnSuccessCallback<Handler> onSuccessCallback(Handler fn)
+{
+   return detail::OnSuccessCallback<Handler>(fn);
+}
+
+template<typename R, typename Functor>
+Future<typename boost::result_of<Functor(R)>::type> transformFuture(
+    Future<R> future, Functor transformRtoT) {
+
+    return future.then(onSuccessCallback(transformRtoT));
+}
+
+template<typename T>
+Future<T> completedFuture(Dispatcher& dispatcher, const T& val) {
+
+    Promise<T> p(dispatcher);
+    p.complete(val);
+    return p.getFuture();
+}
+
+template<typename T>
+Future<T> completedFuture(const T& val) {
+
+    Promise<T> p;
+    p.complete(val);
+    return p.getFuture();
+}
+
+template<typename T>
+Future<T> exceptionalFuture(Dispatcher& dispatcher, const std::exception& e) {
+
+    Promise<T> p(dispatcher);
+    p.exception(e);
+    return p.getFuture();
+}
+
+template<typename T>
+Future<T> exceptionalFuture(const std::exception& e) {
+
+    Promise<T> p;
+    p.exception(e);
+    return p.getFuture();
+}
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_COMMON_ASYNC_HELPERS_IMPL_H_ */
 
 
 # ============================================================================
