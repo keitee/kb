@@ -99,8 +99,11 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_001| virtual inheritance (interview) {virtual-base-class}
 |kt_dev_cpp_002| reference-vs-pointer (interview)
 |kt_dev_cpp_003| ctor and copy controls. ctor-initializers
+*kt_dev_cpp_003* vexing parse
 |kt_dev_cpp_004| copy controls of dyn resource. valuelike. preventing-copies. swap and move example
-|kt_dev_cpp_005| converting ctor {class-type-conversion} {explicit-keyword}
+*kt_dev_cpp_005* class-type-conversion, explicit, copy-form initialization
+*kt_dev_cpp_005* form-of-initialization
+*kt_dev_cpp_005* conversion-to-bool
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
 |kt_dev_cpp_007| overload: function matching
 |kt_dev_cpp_008| const-, equal-misspell
@@ -12224,6 +12227,17 @@ init. Hence this is error. This applies to all other cases that need a
 default-ctor and that's why default ctor is almost nearly required.
 
 For example, VC shows:
+class NoDefault {
+  public:
+    NoDefault(const std::string&);
+};
+
+struct A {
+  NoDefault my_mem;
+};
+
+A a;
+
 Error 1 error C2512: 'NoDefCtor' : no appropriate default constructor available
 
 
@@ -12336,77 +12350,6 @@ Used in contexts:
 
 For pass and return by value they are rightly non reference type, they are copy-inited. Hence called
 copy-ctor. In other words, defines how pass-by-value is implemented for that type.
-
-
-{direct-and-copy-form-initialization}
-// default initialzation. empty
-string s1;                 
-
-// direct form of initialzation.
-string s2( s1 );           
-string dots(10, '.');
-string null_book( "9-999-99999-9" );
-
-// copy form of initialzation. 
-string null_book = "9-999-99999-9";
-string s2 = s1;
-
-<copy-initialization-use-copy-ctor>
-The direct form of initialization use ordinary function matching in searching string ctor and the
-copy form use copy ctor or move ctor if there is. In both cases, implicit conversion on arguments
-can happen.
-
-class MSTR
-{
-    public:
-        MSTR() : mesg() {}
-
-        // MSTR(const string &str) : mesg(str) {}
-        // explicit MSTR(const char *pchar) : mesg(pchar) {}
-
-        // copy ctor
-        MSTR( const MSTR &mstr )
-        {
-            cout << "mstr:copy ctor" << endl;
-            mesg = mstr.mesg;
-        }
-};
-
-MSTR m3("mstring three");
-
-: In function ‘int main()’:
-:75:28: error: no matching function for call to ‘MSTR::MSTR(const char [14])’
-:75:28: note: candidates are:
-:40:9: note: MSTR::MSTR(const MSTR&)
-:40:9: note:   no known conversion for argument 1 from ‘const char [14]’ to ‘const MSTR&’
-:35:9: note: MSTR::MSTR()
-:35:9: note:   candidate expects 0 arguments, 1 provided
-
-As you can see, compiler do "function matching" to find the best match. When a class has MSTR(const
-        string &) then use this and no errors.
-
-MSTR m3 = "mstring three";
-
-: In function ‘int main()’:
-:76:15: error: conversion from ‘const char [14]’ to non-scalar type ‘MSTR’ requested
-
-No function matching and simply use copy ctor but complains about type mismatch of argument.
-
-
-note:
-1. The copy ctor cannot be 'explicit' since used implicitly in cases mentioned above such as pass by
-value. 
-
-2. The copy form uses implicit conversion and that means it uses 'converting' constructor to make a
-call succeed. If that converting constructor is explicit or is not defined, then cannot make it
-succeed and is in error. See "converting ctor" for more.
-
-MSTR m3 = "mstring three";
-
-:78:15: error: conversion from ‘const char [14]’ to non-scalar type ‘MSTR’ requested
-
-The C++SLR says that you can't use the assignment notation here because that is considered to be an
-implicit conversion.
 
 
 <synthesized-copy-constructor>
@@ -12774,6 +12717,54 @@ class X {
 
   GstMediaRouterSize videoSize;
 };
+
+
+={============================================================================
+*kt_dev_cpp_003* vexing parse
+
+<ex>
+From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the the
+syntax can be the same as that of a fuction declaration.
+
+class background_task;
+std::thread my_thread( background_task() );     // T()
+
+This declares the function my_thread that takes a single parameter which is type
+  pointer to a function taking no parameters and returning a background_task
+  object. However, the intention was to create std::thread instance with
+  function object to run.
+
+Solution?
+
+std::thread my_thread( (background_task()) );   // extra ()
+std::thread my_thread{ background_task() };     // brace-init
+
+<ex>
+The intention is to have value-init but defines a function.
+
+std::string source();
+source = _determineSource((char*)in, &sourcelen, &inIndex, &usePath);
+
+error: assignment of function 'std::string source()'
+error: cannot convert 'std::string' to 'std::string()' in assignment
+
+note: 
+see 'function' in error message. to use it as intended, create a temporary and
+use copy initialzation. not useful.
+
+std::string source = string();
+
+<ex>
+CPR 293. Using the default ctor.
+
+Sales_data obj();
+
+if (obj.isbn() == Primer.isbn())
+
+Intended to declare a default-init object but the compiler complains that cannot
+  apply member access notation to a function. The correct way:
+
+Sales_data obj;
 
 
 ={============================================================================
@@ -13394,18 +13385,18 @@ void doSomething( const Base& rb, Derived* pd );
 
 
 ={============================================================================
-*kt_dev_cpp_005* converting ctor
+*kt_dev_cpp_005* class-type-conversion, explicit, copy-form initialization
 
 {converting-ctor}
-The converting-ctor is a coversion 'to' class type from other type and conversion op is a conversion
-to the other.
+The converting-ctor is a coversion 'to' class type from other type and
+conversion op is a conversion to the other.
 
 class T {       <- from other type to T. converting-ctor
    ...          -> from T to other types. conversion-op
 };
 
-The converting ctor is 'every' ctor with single argument and do 'implicit' conversion from arg type
-to class type. 
+The converting ctor is every ctor with 'single' argument and do 'implicit'
+conversion from arg type to class type. 
 
 class Sale_data {
 
@@ -13418,22 +13409,20 @@ class Sale_data {
 string null_book;
 
 item.combine(null_book);
-item.combine(cin);
 
-The combine() expect Sales_date type but it is given a string and istream. How can make it work? The
-compiler do implicit conversion to make a call succeed and creates a temporary Sales_data object. So
-this equates to:
+The combine() expect Sales_date type but it is given a string and istream. How
+can make it work? The compiler do implicit conversion to make a call succeed and
+creates a 'temporary' Sales_data object. So this equates to:
 
 item.combine(Sales_data(str));
 
+note:
+Compared with built-in type conversion, the converting-ctor and conversion-op
+are called class-type-conversion.
 
-{implicit-conversion}
-See *kt_dev_lang_009* for built-in conversion. The converting-ctor and conversion-op are called
-"class-type-conversion".
 
-
-<only-single-conversion-allowed>
-The compiler will do only 'one' "implicit conversion" and the following is error.
+<only-one-conversion-allowed>
+The compiler will do only 'one' implicit conversion and the following is error.
 
 item.combine("9-999-99999-9");
 
@@ -13443,39 +13432,117 @@ item.combine(string("9-999-99999-9"));
 item.combine(Sales_data("9-999-99999-9"));
 
 
-<why-explicit-keyword>
-Whether the conversion is desiable depends on how users wil use the conversion. Also, When combine
-finishes, temporary is gone and lost input. To avoid this, can use explicit-keyword:
+{explicit-keyword}
+
+<why-explicit>
+Whether the conversion is desiable depends on "how users wil use the
+conversion." More problematic is the conversion from istream to Sales_data. When
+combine() finishes, temporary is gone and lost input. 
+
+item.combine(cin);
+
+To avoid this, can use explicit-keyword:
 
 class Sales_data {
 
-  'explicit' Sales_data(const std::string &s);
+  'explicit' Sales_data(const std::string &s): bookNo(s) {};
+  'explicit' Sales_data(std::istream &s);
   combine(const Sales_data&);
 
 };
 
-Now have to use it 'explicitly':
+Have to use explicit ctor 'explicitly':
 
-item.combine( Sales_data(null_book) );                   // T()
-item.combine( static_cast<Sales_data>(cin) );
+item.combine(null_book);                      // error
+item.combine(cin);                            // error
+
+item.combine(Sales_data(null_book));          // T()
+item.combine(static_cast<Sales_data>(cin));
+
+
+<avoid-implicit-conversion>
+From MEC++05. Recommend to use a member func to do the same.
+
+<problem-case>
+template< typename T>
+class Array {
+  public:
+    Array(int lowBound, int highBound);
+    Array(int size);
+    ...
+};
+
+bool operator==(const Array<int> &lhs, const Array<int> &rhs);
+
+Array<int> a(10); Array<int> b(10);
+
+for( int i=0; i < 10; ++i )
+  if( a == b[i] ) {        # meant to be a[i] == b[i]
+    ...
+  }
+  else {
+    ...
+  }
+
+There is no match candidate, ( operator==( Array< int>, int ), and compiler do
+    convert the second arg to Array because there is converting-ctor. This is
+    the same as:
+
+if( a == static_cast< Array<int>> (b[i]) )
+
+This causes a creation and deletion of unknowm number of Array objects for each
+iteration. How to prevent this?
+
+The implicit conversion is not always useful since temporary is made. More
+expensive, lost state(input), or making changes on temporary. So the point is
+about making it explicit in code and forcing user to know what they are doing.
+
+
+<stl-example-of-explicit>
+The vector<T> v(number) is explicit so the following is in error.
+
+explicit container::container (size_type num)
+- Creates a container with num elements.
+- The elements are created by their default constructor.
+- Provided by vector, deque, list, forward list.
+
+// x.member(vector<string>& vec);
+x.member(10);  // error
+
+
+
+<copy-form-initialization>
+One context in which implicit conversions happen is when use the copy-form
+initialization. So cannot use explicit ctor with this form of initialization.
+
+// explicit Sales_data(const std::string &s): bookNo(s) {};
+
+Sales_data item(null_book);     // okay, direct-form
+Sales_data item = null_book;    // error
 
 
 note:
-1. So explicit-keyward 'supress' conversion or use of constructor in a context that requires an
-implicit conversion.
+1. The explicit-keyword 'supress' conversion or use of constructor in a context
+that requires an implicit conversion.
 
-2. The explicit-keyword is 'meaningful' only on constructors that can be called with a 'single'
-arguments since constructors with more arguments are 'not' used to perform an implicit conversion.
+2. The explicit-keyword is meaningful 'only' on constructors that can be called
+with a 'single' arguments since constructors with more arguments are 'not' used
+to perform an implicit conversion.
 
-3. The explicit-keyword is used only in constructor 'declaration' inside a class.
+3. The explicit-keyword is used 'only' in constructor 'declaration' inside a
+class.
+
+4. The explicit ctor can be used only with direct-form initialization. The
+compiler will not use this in an automatic conversion.
 
 
-<errors>
+<copy-form-ex>
 
 class Base {
   public:
     explicit Base(const string &s) : mesg(s) {}
     // Base(const string &s) : mesg(s) {}
+
     void message( const Base & b ) 
     { 
       cout << "base: " << b.mesg << endl;
@@ -13499,65 +13566,20 @@ int main()
 }
 
 <1>
-sam03.cpp:24:45: error: no matching function for call to ‘Base::message(std::string)’
-sam03.cpp:24:45: note: candidate is:
-sam03.cpp:9:10: note: void Base::message(const Base&)
-sam03.cpp:9:10: note:   no known conversion for argument 1 from ‘std::string {aka std::basic_string<char>}’ to ‘const Base&’
+:24:45: error: no matching function for call to ‘Base::message(std::string)’
+:24:45: note: candidate is:
+:9:10: note: void Base::message(const Base&)
+:9:10: note:   no known conversion for argument 1 from ‘std::string {aka
+  std::basic_string<char>}’ to ‘const Base&’
 
 <2>
-sam03.cpp:25:35: error: conversion from ‘std::string {aka std::basic_string<char>}’ to non-scalar type ‘Base’ requested
-
-<avoid-implicit-conversion>
-From MEC++05. Recommend to use a member func to do the same.
-
-<problem-case>
-template< typename T>
-class Array {
-  public:
-    Array(int lowBound, int highBound);
-    Array(int size);
-    ...
-};
-
-bool operator==(const Array<int> &lhs, const Array<int> &rhs );
-
-Array<int> a(10); Array<int> b(10);
-
-for( int i=0; i < 10; ++i )
-  if( a == b[i] ) {        # meant to be a[i] == b[i]
-    ...
-  }
-  else {
-    ...
-  }
-
-There is no match candidate, ( operator==( Array< int>, int ), and compiler do convert the second
-arg to Array because there is converting-ctor. This is the same as:
-
-if( a == static_cast< Array<int>> (b[i]) )
-
-This causes a creation and deletion of unknowm number of Array objects for each iteration. How to
-prevent this?
-
-<key> 
-The implicit conversion is not always useful since temporary is made. More expensive, lost
-state(input), or making changes on temporary. So the point is about making it explicit in code and
-forcing user to know what they are doing.
-
-<stl-example-of-explicit>
-The vector<T> v(number) is explicit so the following is in error.
-
-explicit container::container (size_type num)
-- Creates a container with num elements.
-- The elements are created by their default constructor.
-- Provided by vector, deque, list, forward list.
-
-// x.member(vector<string>& vec);
-x.member(10);  // error
+:25:35: error: conversion from ‘std::string {aka std::basic_string<char>}’ to
+non-scalar type ‘Base’ requested
 
 
 {conversion-op}
-This is conversion from class type to other type. Use overloading and the form is:
+This is conversion from class type to other type. Use overloading and the form
+is:
 
 operator T() const;
 
@@ -13574,11 +13596,87 @@ To avoid following problem, use explicit keyword:
 int i = 42;
 cin << 42;
 
-There is no << operator in cin but there is conversion to bool. So works as if depending on the cin
-state; 0 or 1.
+There is no << operator in cin but there is conversion-to-bool. So works as if
+depending on the cin state; 0 or 1.
 
 0 or 1 << 42;
 
+
+={============================================================================
+*kt_dev_cpp_005* form-of-initialization
+
+// default-form initialzation
+string s1;                 
+
+// direct-form initialzation
+string s2( s1 );           
+string dots(10, '.');
+string null_book( "9-999-99999-9" );
+
+// copy-form initialzation 
+string null_book = "9-999-99999-9";
+string s2 = s1;
+
+<copy-form-use-copy-ctor>
+The direct-form initialization use ordinary function matching in searching
+string ctor and the copy-form use copy ctor or move ctor if there is. In both
+cases, implicit conversion on arguments can happen.
+
+class MSTR
+{
+  public:
+    MSTR() : mesg() {}
+
+    // MSTR(const string &str) : mesg(str) {}
+    // explicit MSTR(const char *pchar) : mesg(pchar) {}
+
+    // copy ctor
+    MSTR( const MSTR &mstr )
+    {
+      cout << "mstr:copy ctor" << endl;
+      mesg = mstr.mesg;
+    }
+};
+
+MSTR m3("mstring three");
+
+: In function ‘int main()’:
+:75:28: error: no matching function for call to ‘MSTR::MSTR(const char [14])’
+:75:28: note: candidates are:
+:40:9: note: MSTR::MSTR(const MSTR&)
+:40:9: note:   no known conversion for argument 1 from ‘const char [14]’ to ‘const MSTR&’
+:35:9: note: MSTR::MSTR()
+:35:9: note:   candidate expects 0 arguments, 1 provided
+
+The compiler do "function matching" to find the best match. When a class has
+MSTR(const string &); then use this and no errors.
+
+
+MSTR m3 = "mstring three";
+
+: In function ‘int main()’:
+: error: conversion from ‘const char [14]’ to non-scalar type ‘MSTR’ requested
+
+No function matching. Simply use copy ctor but complains about type mismatch of
+argument.
+
+
+note:
+The copy ctor cannot be 'explicit' since used implicitly in cases mentioned
+above such as pass by value. 
+
+
+<copy-form-initialization>
+The copy-form uses copy-ctor which uses implicitly class-type-conversion to make
+a call succeed. However, if that converting constructor is explicit or is not
+defined, then cannot make it succeed and is in error.
+
+The C++SLR says that you can't use the assignment notation, copy-form here
+because that is considered to be an implicit conversion.
+
+
+={============================================================================
+*kt_dev_cpp_005* conversion-to-bool
 
 <conversion-to-bool>
 However, even if uses explicit, this explicit has no effect when used in condition such as:
@@ -15361,35 +15459,6 @@ double? However such initialization might happen unintentionally in template. 't
 3. use single form of initialization
 
 4. avoid vexing-parse
-
-<example>
-From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the the syntax can be the
-same as that of a fuction declaration.
-
-class background_task;
-std::thread my_thread( background_task() );     // T()
-
-This declares the function my_thread that takes a single parameter which is type pointer to a
-function taking no parameters and returning a background_task object. However, the intention was to
-create std::thread instance with function object to run.
-
-Solution?
-
-std::thread my_thread( (background_task()) );   // extra ()
-std::thread my_thread{ background_task() };     // brace-init
-
-<example>
-The intention is to have value-init but defines a function.
-
-std::string source();
-source = _determineSource((char*)in, &sourcelen, &inIndex, &usePath);
-
-error: assignment of function 'std::string source()'     // see 'function' in error message
-error: cannot convert 'std::string' to 'std::string()' in assignment
-
-note: to make it as intended and this create a temporary and use copy initialzation. not useful.
-
-std::string source = string();
 
 
 {initializer-list}
