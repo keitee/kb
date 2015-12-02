@@ -64,6 +64,7 @@
 *kt_dev_uv_stack_250* mr-web: runbrowser, nexus-inspect
 *kt_dev_uv_stack_250* mr-web: run-cdi on yv mr
 *kt_dev_uv_stack_250* mr-web: binding
+*kt_dev_uv_stack_250* mr-web: run sport app on atk
 *kt_dev_uv_stack_250* mr-web: remote debug webkit
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
 *kt_dev_uv_stack_250* mr-web: stack from html to mr
@@ -84,13 +85,13 @@
 *kt_dev_uv_stack_408* mr-dash: create mr and plugin
 *kt_dev_uv_stack_408* mr-dash: create gst
 *kt_dev_uv_stack_408* mr-dash: create gst: revised to support bin injection
-*kt_dev_uv_stack_408* mr-dash: create gst: revised to support bin injection
-*kt_dev_uv_stack_409* mr-dash: use signal in gst mr
-*kt_dev_uv_stack_409* mr-dash: disable dash on master
-*kt_dev_uv_stack_409* mr-dash: switch between yv mr and old
-*kt_dev_uv_stack_410* mr-dash: build dash pipeline using gst mr
-*kt_dev_uv_stack_410* mr-dash: position
-*kt_dev_uv_stack_410* mr-dash: output control
+*kt_dev_uv_stack_408* mr-dash: build dash pipeline using media router
+*kt_dev_uv_stack_408* mr-dash: sync and async
+*kt_dev_uv_stack_408* mr-dash: use signal in gst mr
+*kt_dev_uv_stack_408* mr-dash: disable dash on master
+*kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
+*kt_dev_uv_stack_408* mr-dash: position
+*kt_dev_uv_stack_408* mr-dash: output control
 
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
@@ -3215,6 +3216,8 @@ This is the same file as:
 
 
 {pc-build-log}
+note: it is used for tests on pc build but not able to change pattern.
+
 /home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/
 share/vanadium-common/vanadium.props
 
@@ -8666,6 +8669,38 @@ NPError NP_Initialize(NPNetscapeFuncs* nFuncs, NPPluginFuncs* pFuncs)
 
 
 ={============================================================================
+*kt_dev_uv_stack_250* mr-web: run sport app on atk
+
+[root@HUMAX tmp]# configure-webkit -h
+
+Usage: /usr/local/bin/configure-webkit [-u <URL>|-U] [-d|-D] [-g|-G] [-c]
+        -u: Hard-code a fixed URL in runBrowser script
+        -U: Revert to default URL
+
+
+source/setup-humax/scripts/configure-webkit
+
+set_url_in_run_browser() {
+  ...
+}
+
+// Sports app works on my ATK box. Had to go via Duncan's index page:
+
+[root@HUMAX bin]# configure-webkit -u 'http://filegateway.youview.co.uk/applications/dev/duncan/html/BBCAppSelector.html'
+Hard coding 'http://filegateway.youview.co.uk/applications/dev/duncan/html/BBCAppSelector.html' in /opt/zinc-trunk/bin/runBrowser.sh... Done.
+
+
+runBrowser.sh
+
+# Providing a URL bypasses all HTML application specific processing
+url=http://filegateway.youview.co.uk/applications/dev/duncan/html/BBCAppSelector.html # hard-coded URL
+[ -n "$url" ] || {
+...
+
+// choose "live" from the menu
+
+
+={============================================================================
 *kt_dev_uv_stack_250* mr-web: remote debug webkit
 
 https://wiki.youview.co.uk/display/YVHTMLCRB/Debugging+video+playback+in+the+HTML+engine
@@ -8678,8 +8713,6 @@ of webkit. More options may be added in future so check the help:
 
 [root@HUMAX tmp]# configure-webkit -h
 Usage: /usr/local/bin/configure-webkit [-u <URL>|-U] [-d|-D] [-g|-G] [-c]
-        -u: Hard-code a fixed URL in runBrowser script
-        -U: Revert to default URL
         -d: Enable WebKit Remote Debugging [1]
         -D: Disable WebKit Remote Debugging [1]
         -g: Enable GStreamer debugging [1]
@@ -10039,8 +10072,11 @@ float MediaPlayerPrivateGStreamer::duration() const
 
 note: do not have a history
 
-/Zinc/Zinc.3rdPartyStack/source-packages/qt-everywhere-opensource-src-5.1.0/patches$ ag shouldSendDurationChanged                                      
+/Zinc/Zinc.3rdPartyStack/source-packages/qt-everywhere-opensource-src-5.1.0/patches
+$ ag shouldSendDurationChanged                                      
+
 0010-Qt-Support-GSTNexus-Video-Playback-MediaPlayerPrivat.patch
+
 2591:+    bool shouldSendDurationChanged = false;
 2596:+        shouldSendDurationChanged = true;
 2609:+    if (shouldSendDurationChanged) {
@@ -11674,116 +11710,7 @@ DEVARCH-10602:
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* mr-dash: use signal in gst mr
-
-boost::signals2::signal<void(GstState, GstState, GstState)> onStateChange;
-
-void GstMediaRouter::produceStatusEvent(
-    const StatusEventValue::Enum what)
-{
-  produceEvent(
-      boost::bind(&MediaRouterEventListener::StatusEvent,
-        _1,
-        what));
-}
-
-void GstMediaRouter::startReportingPositionChange()
-{
-  ...
-}
-
-NS_ZINC::Future<void> GstMediaRouter::start()
-{
-  onStateChange.connect_extended(
-      OneShotFunctionCall(
-        boost::bind(&GstMediaRouter::produceStatusEvent,
-          this,
-          StatusEventValue::started),
-        GST_STATE_PLAYING));
-
-  onStateChange.connect_extended(
-      OneShotFunctionCall(
-        boost::bind(
-          &GstMediaRouter::startReportingPositionChange,
-          this), GST_STATE_PLAYING));
-}
-
-struct OneShotFunctionCall
-{
-  typedef void result_type;
-
-  OneShotFunctionCall(boost::function<void(void)> func, GstState desiredState)
-    : func(func), desiredState(desiredState) {}
-  OneShotFunctionCall(boost::function<void(void)> func)
-    : func(func), desiredState(GST_STATE_VOID_PENDING) {}
-
-  void operator()(const boost::signals2::connection& connection,
-      GstState /* oldstate */,
-      GstState newstate,
-      GstState /* pending */)
-  {
-    if (newstate == desiredState) {
-      func();
-      connection.disconnect();
-    }
-  }
-
-  void operator()(const boost::signals2::connection& connection)
-  {
-    func();
-    connection.disconnect();
-  }
-
-  boost::function<void(void)> func;
-  const GstState desiredState;
-};
-
-case GST_MESSAGE_STATE_CHANGED:
-  onStateChange(oldstate, newstate, pending);
-
-
-={============================================================================
-*kt_dev_uv_stack_409* mr-dash: disable dash on master
-
-1. Use different auth string and check on a box:
-
-dbus-send --session --print-reply --dest=Zinc.DeviceAuthority /Zinc/DeviceAuthority/Authoriser Zinc.DeviceAuthority.Authoriser.isFeatureEnabled string:"yv-mediarouter-dash"
-method return sender=:1.125 -> dest=:1.134 reply_serial=2
-   boolean false
-
-2. Get these error:
-VirtualBin.cpp:283 Couldn't handle media type: application/dash+xml
-GstMediaRouter.cpp:693 Pad linking failed!
-
-
-={============================================================================
-*kt_dev_uv_stack_409* mr-dash: switch between yv mr and old
-
-# Tell WebKit to use the media router for video playback. The default is to use
-# the built-in GStreamer pipeline
-webkit_use_media_router="false"
-[ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ] || {
-    webkit_use_media_router="true"
-}
-
-<to-use-old-mr>
-note:
-Use MediaPlayerPrivateGst and there are no MR dbus log.
-
-lsr-config platform.settings.webkit-use-media-router false
-lsr-config --bool platform.settings.webkit-use-media-router
-
-<to-use-yv-mr>
-note:
-Run in nickelmedia daemon which is created when play. There are MR dbus log.
-
-lsr-config platform.settings.webkit-use-media-router true
-lsr-config --bool platform.settings.webkit-use-media-router
-
-
-
-={============================================================================
-*kt_dev_uv_stack_410* mr-dash: build dash pipeline using media router
+*kt_dev_uv_stack_408* mr-dash: build dash pipeline using media router
 
 *uridecodebin* -> *decodebin(video)* -> *qtdemux* -> *h264parse-nexussink*
                 *decodebin(audio)* -> *fakesink*
@@ -11831,12 +11758,12 @@ class ZINC_LOCAL SetSourceContinuation
   void start(boost::shared_ptr<ProxyMediaRouter> proxy_, 
       const std::string& source_, const SetSourceReason::Enum reason_) 
   {
-    // I take copies of the proxy state, in case it is modified before the continuation
-    // completes.
+    // I take copies of the proxy state, in case it is modified before the
+    // continuation completes.
     //
-    // This start() method will be called by the same thread that calls 
-    // ProxyMediaRouter::setSource(), so I assume it is OK to access proxy state from 
-    // here (as lock will already be held).
+    // This start() method will be called by the same thread that calls
+    // ProxyMediaRouter::setSource(), so I assume it is OK to access proxy state
+    // from here (as lock will already be held).
 
     // note: property comes from ProxyMediaRouter
 
@@ -11863,13 +11790,14 @@ class ZINC_LOCAL SetSourceContinuation
       }
     }
 
-    // We only reach here if we have a recycled MediaRouter implementation already,
-    // or we have an existing dvb MediaRouter and we are setting another dvb source.
+    // We only reach here if we have a recycled MediaRouter implementation
+    // already, or we have an existing dvb MediaRouter and we are setting
+    // another dvb source.
     //
-    // In these cases, we do not have to create a new MediaRouter implementation, so
-    // we move straight on to setting the properties.
+    // In these cases, we do not have to create a new MediaRouter
+    // implementation, so we move straight on to setting the properties.
     //
-    setProperties();
+    setProperties(); 
   }
 
   void onMediaRouterCreated(boost::shared_ptr<MediaRouter> impl_) {
@@ -12343,6 +12271,216 @@ GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
 <stop>
 ProxyMediaRouter.cpp:862 ENTER: 
   virtual zinc::Future<void> nickel::system::ProxyMediaRouter::stop()
+
+
+={============================================================================
+*kt_dev_uv_stack_409* mr-dash: sync and async
+
+{sync}
+DEVARCH-10679
+
+The root cause of the problem is double-deadlock in GstMediaRouter and D-Bus
+mutexes – this is not real crash. Browser kill is a side effect.
+
+browser getPosition() call:  D-Bus -> libdbus -> Zinc.DBus-C++ -> dbus lock ->
+GstMediaRouter::getPosition() -> GstMR lock -> GStreamer call
+
+internal MR GStreamer callback:  callback function -> GstMR lock -> dbus lock ->
+Zinc.DBus-C++ -> libdbus -> D-Bus
+
+Both calls are made in same time, in parallel, so here is kind of action list which is happening:
+
+1. GStreamer fires up callback, GstMR mutex is locked now
+2. Client (browser) calls MR->getPosition() over DBus, DBus mutex is locked now
+3. GstMR tries to send data over dbus, gets stuck on already locked mutex [DBUS]
+4. getPosition() call tries to do its things in GstMR and gets stuck on already
+locked mutex [MR]
+5. Dbus call is timedout, browser is killed
+
+<1>
+
+Vanadium:
+
+  float VanadiumMediaPlayer::currentTime() const
+  {
+    // The Media Router API represents times in milliseconds whereas HTML uses
+    // seconds
+    Position position = mediaRouter->getPosition().get();
+  }
+
+DBUS:
+
+GstMR:
+
+  virtual NS_ZINC::Future<Position> getPosition() const;
+
+  NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
+  {
+    boost::lock_guard<boost::mutex> l(lock);
+
+    return NS_ZINC::completedFuture(
+        *getDispatcher(), getPosition_locked(mediaType == LIVE));
+  }
+
+  const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+  {
+    // sync calls to gst
+
+    const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
+    int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
+    ...
+      return Position;
+  }
+
+
+<2>
+
+gst:
+
+GstMR:
+
+bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
+{
+  const boost::lock_guard<boost::mutex> l(lock);
+
+  case GST_MESSAGE_EOS:
+    produceStatusEvent(eventValue);
+}
+
+void GstMediaRouter::produceStatusEvent(
+    const StatusEventValue::Enum what)
+{
+  produceEvent(
+      boost::bind(&MediaRouterEventListener::StatusEvent,
+        _1,
+        what));
+}
+
+DBUS:
+
+
+{async-solution}
+So change API which run in dispatcher thread context and this is async.
+
+Position GstMediaRouter::doGetPosition() const
+{
+  boost::lock_guard<boost::mutex> l(lock);
+  return getPosition_locked(mediaType == LIVE);
+}
+
+NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
+{
+  return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
+      boost::bind(&GstMediaRouter::doGetPosition, this));
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_409* mr-dash: use signal in gst mr
+
+boost::signals2::signal<void(GstState, GstState, GstState)> onStateChange;
+
+void GstMediaRouter::produceStatusEvent(
+    const StatusEventValue::Enum what)
+{
+  produceEvent(
+      boost::bind(&MediaRouterEventListener::StatusEvent,
+        _1,
+        what));
+}
+
+void GstMediaRouter::startReportingPositionChange()
+{
+  ...
+}
+
+NS_ZINC::Future<void> GstMediaRouter::start()
+{
+  onStateChange.connect_extended(
+      OneShotFunctionCall(
+        boost::bind(&GstMediaRouter::produceStatusEvent,
+          this,
+          StatusEventValue::started),
+        GST_STATE_PLAYING));
+
+  onStateChange.connect_extended(
+      OneShotFunctionCall(
+        boost::bind(
+          &GstMediaRouter::startReportingPositionChange,
+          this), GST_STATE_PLAYING));
+}
+
+struct OneShotFunctionCall
+{
+  typedef void result_type;
+
+  OneShotFunctionCall(boost::function<void(void)> func, GstState desiredState)
+    : func(func), desiredState(desiredState) {}
+  OneShotFunctionCall(boost::function<void(void)> func)
+    : func(func), desiredState(GST_STATE_VOID_PENDING) {}
+
+  void operator()(const boost::signals2::connection& connection,
+      GstState /* oldstate */,
+      GstState newstate,
+      GstState /* pending */)
+  {
+    if (newstate == desiredState) {
+      func();
+      connection.disconnect();
+    }
+  }
+
+  void operator()(const boost::signals2::connection& connection)
+  {
+    func();
+    connection.disconnect();
+  }
+
+  boost::function<void(void)> func;
+  const GstState desiredState;
+};
+
+case GST_MESSAGE_STATE_CHANGED:
+  onStateChange(oldstate, newstate, pending);
+
+
+={============================================================================
+*kt_dev_uv_stack_409* mr-dash: disable dash on master
+
+1. Use different auth string and check on a box:
+
+dbus-send --session --print-reply --dest=Zinc.DeviceAuthority /Zinc/DeviceAuthority/Authoriser Zinc.DeviceAuthority.Authoriser.isFeatureEnabled string:"yv-mediarouter-dash"
+method return sender=:1.125 -> dest=:1.134 reply_serial=2
+   boolean false
+
+2. Get these error:
+VirtualBin.cpp:283 Couldn't handle media type: application/dash+xml
+GstMediaRouter.cpp:693 Pad linking failed!
+
+
+={============================================================================
+*kt_dev_uv_stack_409* mr-dash: switch between yv mr and old
+
+# Tell WebKit to use the media router for video playback. The default is to use
+# the built-in GStreamer pipeline
+webkit_use_media_router="false"
+[ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ] || {
+    webkit_use_media_router="true"
+}
+
+<to-use-old-mr>
+note:
+Use MediaPlayerPrivateGst and there are no MR dbus log.
+
+lsr-config platform.settings.webkit-use-media-router false
+lsr-config --bool platform.settings.webkit-use-media-router
+
+<to-use-yv-mr>
+note:
+Run in nickelmedia daemon which is created when play. There are MR dbus log.
+
+lsr-config platform.settings.webkit-use-media-router true
+lsr-config --bool platform.settings.webkit-use-media-router
 
 
 ={============================================================================
@@ -13024,6 +13162,7 @@ dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/Media
 Nickel/Nickel.System.GStreamer/test/GstMediaRouterTest.cpp
 
 {for-mr-test}
+To test GST MR with fake gst pipeline.
 
 1. create GST MR 
 
@@ -13037,7 +13176,9 @@ Nickel/Nickel.System.GStreamer/test/GstMediaRouterTest.cpp
 
 {for-error-test}
 
-NICKEL_LOGGING_RULE="TRACE,STDOUT" ./gstmediaroutertest --cases nickel::system::GstMediaRouterTest::test_thatUriDecoderErrorIsProcessedForStreamErrorCodeWrongType
+NICKEL_LOGGING_RULE="TRACE,STDOUT" \
+  ./gstmediaroutertest --cases \
+  nickel::system::GstMediaRouterTest::test_thatUriDecoderErrorIsProcessedForStreamErrorCodeWrongType
 
 // default EventVal value is 'data'
 
@@ -13114,6 +13255,62 @@ GstMediaRouter.cpp:552 KT: error domain: gst-resource-error-quark, code: 0
 
 GstMediaRouter.cpp:569 KT: error domain: _sink
 GstMediaRouter.cpp:581 KT: produceEvent: 5
+
+
+={============================================================================
+*kt_dev_uv_stack_254* mr-dash: gstmediaroutertest: invalid url
+
+$ ./gstmediaroutertest --cases nickel::system::GstMediaRouterTest::test_thatInvalidMediaUrlRaisesError
+
+.GStreamer/test/../src/GstMediaRouter.cpp:771 ENTER: nickel::system::GstMediaRouter::GstMediaRouter(const nickel::system::GstMediaRouterInit&)
+.GStreamer/test/../src/GstMediaRouter.cpp:676 ENTER: void nickel::system::GstMediaRouter::init()
+.GStreamer/src/VirtualBinTypefind.cpp:34 ENTER: nickel::system::VirtualBinTypefind::VirtualBinTypefind(boost::shared_ptr<nickel::system::VirtualPadFactory>, boost::shared_ptr<nickel::system::VirtualPadFactory>)
+.GStreamer/src/VirtualBinTypefind.cpp:34 EXIT:  nickel::system::VirtualBinTypefind::VirtualBinTypefind(boost::shared_ptr<nickel::system::VirtualPadFactory>, boost::shared_ptr<nickel::system::VirtualPadFactory>)
+.GStreamer/test/../src/GstMediaRouter.cpp:676 EXIT:  void nickel::system::GstMediaRouter::init()
+.GStreamer/test/../src/GstMediaRouter.cpp:771 EXIT:  nickel::system::GstMediaRouter::GstMediaRouter(const nickel::system::GstMediaRouterInit&)
+.GStreamer/test/../src/GstMediaRouter.cpp:1277 ENTER: virtual zinc::Future<void> nickel::system::GstMediaRouter::setSink(const string&)
+.GStreamer/test/../src/GstMediaRouter.cpp:1277 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::setSink(const string&)
+.GStreamer/test/../src/GstMediaRouter.cpp:786 ENTER: virtual zinc::Future<void> nickel::system::GstMediaRouter::setSource(const string&, Zinc::Media::SetSourceReason::Enum)
+.GStreamer/src/VirtualBinTypefind.cpp:43 ENTER: virtual void nickel::system::VirtualBinTypefind::setSource(const string&)
+.GStreamer/src/VirtualBinTypefind.cpp:44 sourceUri: bla://outerspace.mars
+.GStreamer/src/VirtualBinTypefind.cpp:43 EXIT:  virtual void nickel::system::VirtualBinTypefind::setSource(const string&)
+.GStreamer/test/../src/GstMediaRouter.cpp:786 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::setSource(const string&, Zinc::Media::SetSourceReason::Enum)
+.GStreamer/test/../src/GstMediaRouter.cpp:521 State transition NULL -> READY wanted PAUSED
+.GStreamer/test/../src/GstMediaRouter.cpp:1393 ENTER: virtual zinc::Future<void> nickel::system::GstMediaRouter::start()
+.GStreamer/test/../src/GstMediaRouter.cpp:474 error domain: gst-core-error-quark, code: 12
+.GStreamer/src/VirtualBinSink.cpp:339 ENTER: virtual void nickel::system::VirtualBinSink::start()
+.GStreamer/src/VirtualBinSink.cpp:332 ENTER: void nickel::system::VirtualBinSink::startDrm()
+.API/src/ProductionOutputControlManager.cpp:166 Adding output control configuration: (0, 0, 0) (0x7f8484000a00)
+.API/src/ProductionOutputControlManager.cpp:176 Applying resolved output control configuration: (0, 0, 0)
+.Fake/src/FakeSystemFactory.cpp:93 FakeOutputControlImpl: requested to apply output control configuration: cci=0, requireHdcp=0, disableAnalogueSD=0
+.GStreamer/src/VirtualBinSink.cpp:332 EXIT:  void nickel::system::VirtualBinSink::startDrm()
+.GStreamer/src/VirtualBinSink.cpp:339 EXIT:  virtual void nickel::system::VirtualBinSink::start()
+.GStreamer/test/../src/GstMediaRouter.cpp:1393 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::start()
+.GStreamer/test/../src/GstMediaRouter.cpp:1489 ENTER: virtual zinc::Future<void> nickel::system::GstMediaRouter::stop()
+.GStreamer/test/../src/GstMediaRouter.cpp:1456 ENTER: zinc::Future<void> nickel::system::GstMediaRouter::stop_locked(Zinc::Media::StatusEventValue::Enum)
+.GStreamer/test/../src/GstMediaRouter.cpp:605 ENTER: void nickel::system::GstMediaRouter::stopReportingPositionChange()
+.GStreamer/test/../src/GstMediaRouter.cpp:605 EXIT:  void nickel::system::GstMediaRouter::stopReportingPositionChange()
+.GStreamer/src/VirtualBinSink.cpp:368 ENTER: virtual void nickel::system::VirtualBinSink::stop()
+.GStreamer/src/VirtualBinSink.cpp:361 ENTER: void nickel::system::VirtualBinSink::stopDrm()
+.API/src/ProductionOutputControlManager.cpp:197 Removing output control configuration: (0, 0, 0) (0x7f8484000a00)
+.API/src/ProductionOutputControlManager.cpp:176 Applying resolved output control configuration: (0, 0, 0)
+.Fake/src/FakeSystemFactory.cpp:93 FakeOutputControlImpl: requested to apply output control configuration: cci=0, requireHdcp=0, disableAnalogueSD=0
+.GStreamer/src/VirtualBinSink.cpp:361 EXIT:  void nickel::system::VirtualBinSink::stopDrm()
+.GStreamer/src/VirtualBinSink.cpp:368 EXIT:  virtual void nickel::system::VirtualBinSink::stop()
+.GStreamer/test/../src/GstMediaRouter.cpp:1456 EXIT:  zinc::Future<void> nickel::system::GstMediaRouter::stop_locked(Zinc::Media::StatusEventValue::Enum)
+.GStreamer/test/../src/GstMediaRouter.cpp:1489 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::stop()
+.GStreamer/test/../src/GstMediaRouter.cpp:1489 ENTER: virtual zinc::Future<void> nickel::system::GstMediaRouter::stop()
+.GStreamer/test/../src/GstMediaRouter.cpp:1456 ENTER: zinc::Future<void> nickel::system::GstMediaRouter::stop_locked(Zinc::Media::StatusEventValue::Enum)
+.GStreamer/test/../src/GstMediaRouter.cpp:1456 EXIT:  zinc::Future<void> nickel::system::GstMediaRouter::stop_locked(Zinc::Media::StatusEventValue::Enum)
+.GStreamer/test/../src/GstMediaRouter.cpp:1489 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::stop()
+.GStreamer/test/../src/GstMediaRouter.cpp:777 ENTER: virtual nickel::system::GstMediaRouter::~GstMediaRouter()
+.GStreamer/test/../src/GstMediaRouter.cpp:729 ENTER: void nickel::system::GstMediaRouter::deinit()
+.GStreamer/test/../src/GstMediaRouter.cpp:605 ENTER: void nickel::system::GstMediaRouter::stopReportingPositionChange()
+.GStreamer/test/../src/GstMediaRouter.cpp:605 EXIT:  void nickel::system::GstMediaRouter::stopReportingPositionChange()
+.GStreamer/test/../src/GstMediaRouter.cpp:729 EXIT:  void nickel::system::GstMediaRouter::deinit()
+.GStreamer/test/../src/GstMediaRouter.cpp:777 EXIT:  virtual nickel::system::GstMediaRouter::~GstMediaRouter()
+
+OK (1)
 
 
 ={============================================================================

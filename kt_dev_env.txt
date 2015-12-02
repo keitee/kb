@@ -127,6 +127,10 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_005| git-status
 |kt_dev_env_git_006| ignore
 |kt_dev_env_git_007| git-log
+*kt_dev_env_git_007* git-log: grep
+|kt_dev_env_git_007| git-grep
+*kt_dev_env_git_007* git-grep: serach all branches
+*kt_dev_env_git_007* git-grep: fun
 *kt_dev_env_git_037* git-log: pickaxe
 |kt_dev_env_git_008| git-checkout 
 |kt_dev_env_git_009| auto completion
@@ -166,8 +170,6 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_git_037* git-bisect
 
 |kt_dev_env_git_100| case: determine what is introduced. commit ranges.
-|kt_dev_env_git_038| git-grep
-*kt_dev_env_git_038* git-grep: serach all branches
 
 |kt_dev_env_git_050| gitk
 
@@ -7329,22 +7331,6 @@ $ git log --pretty="%h - %s" --author=gitster --since="2008-10-01" \
 --before="2008-11-01" --no-merges -- t/
 
 
-{git-log-grep}
-Search a pattern in commit 'messages' which is different from git-grep since
-git-grep search through commit 'contents' but not message.
-
-$ git log --grep PATTERN
-
-Shows a diff as well.
-
-// -p
-// -u
-// --patch
-//    Generate patch (see section on generating patches).
-
-$ git log -p --grep PATTERN
-
-
 {git-log-search-commits} 'useful' to locate related commit
 
 <use-file-or-directory>
@@ -7408,6 +7394,262 @@ CommitDate: Wed Sep 9 19:42:30 2015 +0100
 
 {log-on-multiple-branches}
 git log <branch1> <branch2> <branch3>
+
+
+={============================================================================
+*kt_dev_env_git_007* git-log: grep
+
+{git-log-grep}
+Search a pattern in commit 'messages' which is different from git-grep since
+git-grep search through commit 'contents' but not message.
+
+$ git log --grep PATTERN
+
+Shows a diff as well.
+
+// -p
+// -u
+// --patch
+//    Generate patch (see section on generating patches).
+
+$ git log -p --grep PATTERN
+
+
+{more}
+http://gitster.livejournal.com/30195.html
+
+12:41 pm - Fun with "git log --grep"
+
+Earlier I showed a somewhat advanced feature of "git grep" command, and hinted
+that a limited subset of the feature is available also in "git log" to look for
+commits that have specified strings in their commit log messages.
+
+This entry is the promised follow-up.
+
+First, we learn the very basic form:
+
+    git log --grep=frotz --grep=nitfol --since=1.month
+
+This finds the commits that happened within the last month and mentioned either
+frotz 'or' nitfol in their commit log messages. As with the usual "git grep",
+      giving more than one patterns means "this or that".
+
+Two options, "--author=name" and "--committer=name" are also supported
+internally with the same "grep" mechanism. You can ask:
+
+    git log --grep=frotz --author=Linus
+
+to find changes written by Linus or mentioned frotz (the use of or semantics
+    here often feels unintuitive and less useful, but we will come to that
+    shortly).
+
+The following attempt to overcome this does not work as you expect, for two
+reasons:
+
+    git log --grep=frotz --and --author=Linus
+
+One is simply because "git log" family does not support the --and option.
+
+But a more fundamental reason why this does not work is because "grep" is 'line'
+oriented. "git grep -e frotz --and -e nitfol" looks for lines that have both
+frotz and nitfol, but obviously the line that records Linus's name does not have
+the word frotz; the above will never match.
+
+That is partly the reason why "git log" family does not support --and option to
+begin with. The and semantics is not very useful in the context of "git log"
+command, and this is true even if we limit the discussion to the message part.
+
+For example, even if we had --and option to "git log" family, this command line:
+
+    git log --grep=frotz --and --grep=nitfol
+
+will not find a commit if its log message has a line break in the sentence "This
+commit fixes the frotz feature and adds support for the nitfol feature"
+somewhere between the two words you are looking for.
+
+Does that mean the "grep" feature in "git log" family can practically only find
+one item at a time and not very useful?
+
+Not really. I did not explain "git grep --all-match" in the earlier entry, but
+it is exactly what we want to use here, so we digress a bit.
+
+We learned that this finds files with a line that has both frotz and nitfol:
+
+    git grep -l -e frotz --and -e nitfol
+
+But often you would want to see a file that has both frotz and nitfol, not
+necessarily on the same line but anywhere in the same file. The above is not
+what you want to use for that purpose.
+
+There is an aspect of "grep" that cares only about the existence of matches with
+the pattern in a 'file' (this is true not just with "git grep" but also is true
+    with the regular "grep"). The exit status of the command is zero (success)
+if there is a match, and the -l option shows the names of the files that have
+matches, but it does not actually show the lines that matched. "git grep"
+extends this concept.
+
+"git grep" allows you to say "I am looking for this or that patterns, but please
+consider a file successfully matches with them only if you found matches with
+all of the patterns", with the --all-match option (the regular "grep" does not
+let you do this).  
+
+Using this mechanism:
+
+    git grep -l --all-match -e frotz -e nitfol
+
+will give the names of the files that have both frotz and nitfol somewhere in
+them. The matches do not have to be on the same line; they can be anywhere in
+the same file.
+
+The way "git log" family uses the grep mechanism is exactly for this "does the
+whole thing has a match?" aspect , not "show me the lines that match these
+criteria" aspect.  It allows you to use this mechanism like so:
+
+    git log --all-match --grep=frotz --author=Linus
+
+This will show commits that mention frotz and written by Linus.
+
+note:
+       --all-match
+           Limit the commits output to ones that match all given --grep, instead
+           of ones that match at least one.
+
+$ git log --all-match --grep hlsdemux: --grep duration
+
+
+={============================================================================
+*kt_dev_env_git_007* git-grep
+
+To search through any 'committed' tree or the working directory for a string
+or 'regular' expression.
+
+git grep ...
+  [ [--[no-]exclude-standard] [--cached | --no-index | --untracked] | <tree> ]
+  [--] [<pathspec>...]
+
+Advantages over normal searching commands like grep and ack. 
+
+The first is that it's really fast. 
+
+The second is that you can search through any tree in Git, not just the
+working directory. As we saw in the above example, we looked for terms in an
+older version of the Git source code, not the version that was currently
+checked out.  
+
+By default, it will look through the files in your working directory. You can
+pass -n to print out the line numbers
+
+$ git grep -n gmtime_r
+
+
+{configs}
+// Allow extended regular expressions
+git config --global grep.extendRegexp true
+
+// Always include line numbers
+git config --global grep.lineNumber true
+
+// [grep]
+//  extendRegexp = true
+//  lineNumber = true
+
+// Group output like ack!
+git config --global alias.g "grep --break --heading --line-number"
+
+// [alias]
+//  g = grep --break --heading --line-number
+
+
+{search-branch}
+git grep xxx <branch>
+
+<tree>...
+    Instead of searching tracked files in the working tree, search blobs in the
+    given trees.
+
+git grep -e <regexp> my_other_branch -- '*.js'
+
+
+{show-function}
+To see what method or function it thinks it has found a match in, you can pass
+-p:
+
+-p
+--show-function
+
+    Show the preceding line that 'contains' the function name of the match,
+    unless the matching line is a function name itself. The name is determined
+    in the same way as git diff works out patch hunk headers (see Defining a
+        custom hunk-header in gitattributes[5]).
+
+$ git grep -p gmtime_r *.c
+
+date.c=static int match_multi_number(unsigned long num, const char *date, 
+date.c: if (gmtime_r(&now, &now_tm))
+date.c=static int match_digit(const char *date, struct tm *tm, int *tm_
+date.c: if (gmtime_r(&time, tm)) {
+
+So here we can see that gmtime_r is called in the match_multi_number and
+match_digit functions in the date.c file.
+
+
+{complex-matches}
+Look for complex combinations of strings with the --and flag. Use the --break
+and --heading options which help split up the output into a more readable
+format.
+
+--break
+    Print an empty line between matches from different files.
+
+--heading
+    Show the filename above the matches in that file instead of at the start of
+    each shown line.
+
+-e
+    The next parameter is the pattern. This option has to be used for patterns
+    starting with - and should be used in scripts passing user input to grep.
+    Multiple patterns are combined by or.
+
+-n
+--line-number
+    Prefix the line number to matching lines
+
+$ git grep --break --heading -n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
+
+$ git grep --break --heading \
+-n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
+v1.8.0:builtin/index-pack.c
+62:#define FLAG_LINK (1u<<20)
+
+v1.8.0:cache.h
+73:#define S_IFGITLINK 0160000
+74:#define S_ISGITLINK(m) (((m) & S_IFMT) == S_IFGITLINK)
+
+v1.8.0:strbuf.c
+326:#define STRBUF_MAXLINK (2*PATH_MAX)
+
+
+={============================================================================
+*kt_dev_env_git_007* git-grep: serach all branches
+
+{search-all}
+That searches through all the commits, which should include all the branches.
+
+git grep <regexp> $(git rev-list --all)
+
+Note: chernjie suggested that git rev-list --all is an overkill.
+
+A more refined command can be:
+
+git branch -a | tr -d \* | xargs git grep <regexp>
+
+Which will allow you to search only branches (including remote branches)
+
+
+={============================================================================
+*kt_dev_env_git_007* git-grep: fun
+
+http://gitster.livejournal.com/27674.html
 
 
 ={============================================================================
@@ -11151,135 +11393,6 @@ $ git show HEAD^        // == HEAD~ ,
 
 This means the parent of HEAD so the previous commit.
 $ git show HEAD^2       // not the second from the HEAD but the second parent
-
-
-={============================================================================
-*kt_dev_env_git_038* git-grep
-
-To search through any 'committed' tree or the working directory for a string
-or 'regular' expression.
-
-git grep ...
-  [ [--[no-]exclude-standard] [--cached | --no-index | --untracked] | <tree> ]
-  [--] [<pathspec>...]
-
-Advantages over normal searching commands like grep and ack. 
-
-The first is that it's really fast. 
-
-The second is that you can search through any tree in Git, not just the
-working directory. As we saw in the above example, we looked for terms in an
-older version of the Git source code, not the version that was currently
-checked out.  
-
-By default, it will look through the files in your working directory. You can
-pass -n to print out the line numbers
-
-$ git grep -n gmtime_r
-
-
-{configs}
-// Allow extended regular expressions
-git config --global grep.extendRegexp true
-
-// Always include line numbers
-git config --global grep.lineNumber true
-
-// [grep]
-//  extendRegexp = true
-//  lineNumber = true
-
-// Group output like ack!
-git config --global alias.g "grep --break --heading --line-number"
-
-// [alias]
-//  g = grep --break --heading --line-number
-
-
-{search-branch}
-git grep xxx <branch>
-
-<tree>...
-    Instead of searching tracked files in the working tree, search blobs in the
-    given trees.
-
-git grep -e <regexp> my_other_branch -- '*.js'
-
-
-{show-function}
-To see what method or function it thinks it has found a match in, you can pass
--p:
-
--p
---show-function
-
-    Show the preceding line that 'contains' the function name of the match,
-    unless the matching line is a function name itself. The name is determined
-    in the same way as git diff works out patch hunk headers (see Defining a
-        custom hunk-header in gitattributes[5]).
-
-$ git grep -p gmtime_r *.c
-
-date.c=static int match_multi_number(unsigned long num, const char *date, 
-date.c: if (gmtime_r(&now, &now_tm))
-date.c=static int match_digit(const char *date, struct tm *tm, int *tm_
-date.c: if (gmtime_r(&time, tm)) {
-
-So here we can see that gmtime_r is called in the match_multi_number and
-match_digit functions in the date.c file.
-
-
-{complex-matches}
-Look for complex combinations of strings with the --and flag. Use the --break
-and --heading options which help split up the output into a more readable
-format.
-
---break
-    Print an empty line between matches from different files.
-
---heading
-    Show the filename above the matches in that file instead of at the start of
-    each shown line.
-
--e
-    The next parameter is the pattern. This option has to be used for patterns
-    starting with - and should be used in scripts passing user input to grep.
-    Multiple patterns are combined by or.
-
--n
---line-number
-    Prefix the line number to matching lines
-
-$ git grep --break --heading -n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
-
-$ git grep --break --heading \
--n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
-v1.8.0:builtin/index-pack.c
-62:#define FLAG_LINK (1u<<20)
-
-v1.8.0:cache.h
-73:#define S_IFGITLINK 0160000
-74:#define S_ISGITLINK(m) (((m) & S_IFMT) == S_IFGITLINK)
-
-v1.8.0:strbuf.c
-326:#define STRBUF_MAXLINK (2*PATH_MAX)
-
-
-={============================================================================
-*kt_dev_env_git_038* git-grep: serach all branches
-
-{search-all}
-That searches through all the commits, which should include all the branches.
-
-git grep <regexp> $(git rev-list --all)
-
-Note: chernjie suggested that git rev-list --all is an overkill.
-
-A more refined command can be:
-
-git branch -a | tr -d \* | xargs git grep <regexp>
-
-Which will allow you to search only branches (including remote branches)
 
 
 ={============================================================================
