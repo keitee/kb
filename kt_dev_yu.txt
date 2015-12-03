@@ -114,6 +114,8 @@
 *kt_dev_uv_stack_400* mr-dash: gst-elements
 *kt_dev_uv_stack_400* mr-dash: gst-libs and packages
 *kt_dev_uv_stack_400* mr-dash: gst-nexussink
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: release on pause
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: callbacks
 *kt_dev_uv_stack_400* mr-dash: gst-tsnexusbin
 *kt_dev_uv_stack_400* mr-dash: gst-linearsourced
 *kt_dev_uv_stack_400* mr-dash: gst-zmp 
@@ -168,7 +170,6 @@
 *kt_dev_uv_oem_001* nexus-mgr
 *kt_dev_uv_oem_001* nexus-mgr: build
 *kt_dev_uv_oem_001* nexus-mgr: build issue and proposal
-*kt_dev_uv_oem_002* nexus-sink: nexussink callback
 *kt_dev_uv_oem_003* nexus-playpump
 *kt_dev_uv_oem_003* nexus-reference sw
 *kt_dev_uv_oem_003* brcm playpump
@@ -2518,6 +2519,9 @@ note:
 Going back from RC or prebuilt deploy to own zb-deploy do not seem to work well.
 Did the root fs again.
 
+<for-url>
+note: use production file.
+http://spongebob.dev.youview.co.uk:8080/job/Deploy_Zinc_Binary_URL/
 
 
 ={============================================================================
@@ -10088,6 +10092,24 @@ Author: philn@webkit.org <philn@webkit.org@268f45cc-cd09-0410-ab3c-d52691b4dbfc>
 Date:   Wed Sep 12 12:33:23 2012 +0000
 
 
+<jira>
+DEVARCH-10711: Nickel.GStreamer: Synchronize duration with current position when
+a play finishes
+
+It is found that some HTML application relies on the position pair, current
+position and duration, and also the `ended` event in HTML specification[1] to do
+continuous back-to-back play. However, GStreamer reports a estimated current
+position which is not the exact same value and which confuses WebKit to know
+when it should fire a ended event. The in-process MediaRouter has a specific
+handling of this at the end of play and the same is found in in WebKit upstream
+[2].
+
+This commit implements the same handling of this case in YV MediaRouter.
+
+[1] https://html.spec.whatwg.org
+[2] https://www.webkit.org/
+
+
 ={============================================================================
 *kt_dev_uv_stack_250* mr-web: playing event
 
@@ -12280,7 +12302,7 @@ ProxyMediaRouter.cpp:862 ENTER:
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* mr-dash: sync and async
+*kt_dev_uv_stack_408* mr-dash: sync and async
 
 {sync}
 DEVARCH-10679
@@ -12367,6 +12389,20 @@ DBUS:
 
 {async-solution}
 So change API which run in dispatcher thread context and this is async.
+
+NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
+{
+  boost::lock_guard<boost::mutex> l(lock);
+  return NS_ZINC::completedFuture(
+      *getDispatcher(), getPosition_locked(mediaType == LIVE));
+}
+
+const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+{
+  ...
+}
+
+To:
 
 Position GstMediaRouter::doGetPosition() const
 {
@@ -14972,6 +15008,601 @@ KT: call poll_decoder_status: to test Joseph v
 
 nexussink /gstnexussink.c:1934:gst_nexus_sink_get_times_locked:<nexussink1> 
 get_times 9530:26:52.800000000 99:99:99.999999
+
+
+={============================================================================
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: release on pause
+
+DEVARCH-9186: Get rid of inherently racy gst_nexus_mgr_decoder_is_playing()
+
+Similar story to DEVARCH-9148. Another function in GstNexusMgr is deemed
+inherently racy, so it's getting removed.
+
+The function in question is gst_nexus_mgr_is_playing(). It's used in
+"release on pause" feature implementation. "Release on pause" makes
+GstNexus release Nexus resources when the video is paused. The way WebKit
+(with our patches) deals with having multiple <video> elements is by
+asking the ones that aren't playing to release their resources.
+
+For testing purposes, the following page can be used:
+http://wll1p00830.dev.youview.co.uk:3000/ad
+Disabling "release on pause" breaks not only the advert video but the main
+video as well. Both the main video and the advert should be played in
+sequence.
+
+VirtualBinSink.cpp:
+
+stop() {
+  RefObj<GstElement> sink =
+    gst_bin_get_by_name (GST_BIN(getParent().get()), "videosink");
+
+  if (sink &&
+      g_object_class_find_property(G_OBJECT_GET_CLASS(sink.get()), "release")) {
+    g_object_set(sink.get(), "release", TRUE, NULL);
+  }
+}
+
+gstnexussink.c:
+
+{
+  init() {
+    g_object_class_install_property( gobject_class, PROP_RELEASE_ON_PAUSE,
+        g_param_spec_boolean( "release", "Release on pause",
+          "Release the nexus resources when  "
+          "in the paused state.",
+          FALSE, G_PARAM_READWRITE) );
+  }
+
+  set_property() {
+    case PROP_RELEASE_ON_PAUSE:
+      sink->release_on_pause = g_value_get_boolean( value );
+      if(sink->release_on_pause){
+        gst_nexus_sink_release_if_paused_locked(sink, NULL);
+      }
+      break;
+  }
+
+  static void gst_nexus_sink_release_if_paused_locked() {
+    if(state <= GST_STATE_PAUSED) {
+      GST_DEBUG_OBJECT (sink, "Releasing decoder as release-on-pause was requested");
+
+      /* Another thread may be inside gst_nexus_sink_render_locked() at a point
+       * where it temporarily releases sink->mutex. Provided such a point
+       * is not between gst_nexus_mgr_get_resources() and
+       * gst_nexus_mgr_release_resources() [we make
+       * sure there are no such places], we are allowed to stop the decoder
+       * at such a point and there is even no need to wake up that other thread.
+       */
+      gst_nexus_sink_stop_locked(sink,event);
+    }
+  }
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: callbacks
+
+Hmax only provides 1 playpump.
+
+note: seems that stream types comes from gst when opens a sink and that means
+that below enums should match ones in gst?
+
+// gstnexusmgr.h
+
+enum NexusSinkContentType
+{
+    CTTransportStream=0,
+    CTVideoElementaryStream=1,
+    CTAudioElementaryStream=2,
+    CTNone=0xFF
+};
+
+
+<sink-settings>
+
+NEXUS_Callback void ( void *context, int param );
+
+struct {
+  /**
+   * Fires when space becomes available, but only when writing transport stream.
+   * For elementary streams, use gst_nexus_mgr_get_pes_writer() and
+   * ConcurrentPesWriter API.
+   */
+  NEXUS_Callback data;
+
+  /**
+   * Fires when Nexus resources are acquired.
+   *
+   * @note If there are multiple clients using the same instance of GstNexusMgr,
+   *       only one of them (an arbitrary one) will receive this callback.
+   */
+  NEXUS_Callback resourcesAcquired;
+
+  /**
+   * Fires when Nexus resources are released. When we release Nexus resources
+   * to immediately re-acquire them (we do that for re-configuration purposes),
+   * we don't emit resourcesReleased followed by resourcesAcquired callbacks.
+   * If re-acquiring fails though, we do emit a single resourcesReleased callback.
+   *
+   * @note If there are multiple clients using the same instance of GstNexusMgr,
+   *       only one of them (an arbitrary one) will receive this callback.
+   */
+  NEXUS_Callback resourcesReleased;
+
+  NEXUS_Callback firstPts;  /* Fires when the decoder receives the first PTS after start. */
+  NEXUS_Callback streamChange; /* Fires when stream format has changed or the first time
+                                  the decoder has parsed the codec format after start. */
+  NEXUS_Callback error; /* Fires when an error occurs */
+  void* context; /* passed as the first parameter to the callback functions */
+} GstNexusCallbacks ;
+
+struct {
+  NexusSinkContentType contentType;
+  NexusSinkVideoCodec video_codec;
+  NexusSinkAudioCodec audio_codec;
+
+  // *callbacks*
+  GstNexusCallbacks callbacks;
+
+  int video_pid;
+  int audio_pid;
+} GstNexusStreamSetting;
+
+struct {
+  ...
+  GstNexusStreamSetting settings;
+} GstNexusSink;
+
+
+static void gst_nexus_sink_init( GstNexusSink * sink )
+{
+  sink->settings.callbacks.data = gst_nexus_sink_space_available;
+  sink->settings.callbacks.resourcesAcquired = gst_nexus_sink_resources_acquired;
+  sink->settings.callbacks.resourcesReleased = gst_nexus_sink_resources_released;
+
+  // *sink-on-error* handles custom Exxx error and this emits EOS
+  sink->settings.callbacks.error = gst_nexus_sink_on_error;
+
+  sink->settings.callbacks.firstPts = gst_nexus_sink_first_pts;
+
+  sink->settings.callbacks.streamChange = gst_nexus_sink_stream_change;
+
+  // note:
+  // each sink set itself and this used to set callback_contexts. when callback
+  // fires, it passes this and each sink callback use this to identify which
+  // sink to use.
+  sink->settings.callbacks.context = sink;
+}
+
+enum NexusSinkErrorReason
+{
+    EFifoEmpty = 0x0101,
+    EPtsError = 0x0206, /* PTS discontinuity error */
+}
+
+src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: AudioError: 0x0206
+src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: VideoError: 0x0101
+
+
+<nexusmgr-callback>
+
+typedef struct
+{
+  /**
+   * First level callbacks may only access callback_cond, pending_callbacks
+   * and pending_callbacks_mutex through this pointer. Second level callbacks
+   * may access any member, as those are called with resource_lock held.
+   *
+   * @note mgr->resources may well be NULL in a 2nd level callback handler.
+   */
+  GstNexusMgr* mgr;
+
+  GstNexusCallbackId callback_id;
+
+  /**
+   * We initialise NEXUS_CallbackDesc::param with one of NexusSinkErrorReason
+   * enumeration values. Nexus passes that value as a second argument to
+   * callbacks. gst_nexus_mgr_generic_1st_level_cb() takes that argument and
+   * saves it to this member before posting the callback to mgr->callback_thread.
+   */
+  int reason;
+
+  /* The members below are specific to callback_id. */
+
+  int playpump_num;
+  NEXUS_Callback delegate_callback;
+  void* delegate_context;
+} GstNexusMgrCallbackInfo;
+
+typedef struct
+{
+  GstNexusMgrCallbackInfo audio_buffer_available;
+  GstNexusMgrCallbackInfo video_buffer_available;
+
+  GstNexusMgrCallbackInfo audio_first_pts;
+  GstNexusMgrCallbackInfo video_first_pts;
+
+  GstNexusMgrCallbackInfo audio_error;
+  GstNexusMgrCallbackInfo video_error;
+} GstNexusMgrCallbackContexts;
+
+
+struct _GstNexusMgr
+{
+  ...
+  GstNexusMgrCallbackContexts callback_contexts;
+
+  GstNexusStreamSetting settings;
+  {
+    GstNexusCallbacks callbacks;
+  }
+
+  GstNexusCallbacks audioCallbacks;
+}
+
+
+gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
+  const GstNexusStreamSetting * settings)
+{
+  // *resource-lock*
+  g_mutex_lock(&mgr->resource_lock);
+
+  // sink call this with its setting so mgr has its sink setting.
+  // set mgr callbacks from sink
+  mgr->settings.callbacks = settings->callbacks;
+
+  // only for audio type
+  mgr->audioCallbacks = settings->callbacks;
+
+  // set callback_contexts with cb id
+  gst_nexus_mgr_callback_contexts_init(&mgr->callback_contexts, mgr);
+
+  // { set *mgr_callback_contexts_delegate* to forward them to *sink-on-error*
+  // note: make a callback link from mgr to sink without 2nd level callback
+  
+  // set context to pass a/v errors to video sink
+  mgr->callback_contexts.video_error.delegate_callback = mgr->settings.callbacks.error;
+
+  // note: context is the address of sink
+  mgr->callback_contexts.video_error.delegate_context = mgr->settings.callbacks.context;
+
+  // set context to pass a/v errors to audio sink
+  if(mgr->audioCallbacks.error){
+    mgr->callback_contexts.audio_error.delegate_callback = mgr->audioCallbacks.error;
+    mgr->callback_contexts.audio_error.delegate_context = mgr->audioCallbacks.context;
+  }
+
+  mgr->callback_contexts.audio_error.delegate_callback = mgr->settings.callbacks.error;
+  mgr->callback_contexts.audio_error.delegate_context = mgr->settings.callbacks.context;
+  //}}
+
+
+  // note: don't see why use audioCallbacks
+
+  //{{ set *callbacks* for *playpump*
+  //
+  // set buffer avail callbacks via nexusmgr
+  //
+  // use direct callback
+
+  BcmNexus_StreamPlayer_Resources_Config config;
+  config.numPlaypumps = 1;
+
+  // use two level callback when TS type. use direct callback when ES type.
+  config.audioDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
+  config.audioDataCallback.context = mgr->pes_writer;
+
+  config.videoDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
+  config.videoDataCallback.context = mgr->pes_writer;
+
+
+  <acquire-nexus>
+
+  mgr->resources = 
+    (BcmNexus_StreamPlayer_Resources*) BcmNexus_StreamPlayer_Resources_Acquire( &config );
+
+  // set error callbacks via nexus playpump
+  //
+  NEXUS_CallbackDesc playpumpErrorCallbackConfiguration = {
+    gst_nexus_mgr_error_1st_level_cb, &mgr->callback_contexts.audio_error, EStreamError
+  };
+
+  NEXUS_Playpump_GetSettings( mgr->resources->playpump[mgr->audio.playpump_num], &playpump_settings );
+
+  playpump_settings.errorCallback = playpumpErrorCallbackConfiguration;
+
+  NEXUS_Playpump_SetSettings( mgr->resources->playpump[mgr->video.playpump_num], &playpump_settings );
+  //}}
+
+
+  //{{ set *callbacks* for *video-decoder*
+  
+  <two-level-call>
+  // used and maps to
+  // gst_nexus_mgr_video_first_pts_2nd_level_cb,  /* CB_VIDEO_FIRST_PTS */
+  // and 'leads' to sink callback gst_nexus_sink_first_pts:<nexussink1>
+  //
+  // note "firstPtsPassed"
+  //
+  // -> gst_nexus_mgr_generic_1st_level_cb
+  //      (&mgr->callback_contexts.video_first_pts, 0);
+
+  video_decoder_settings.firstPtsPassed.callback = &gst_nexus_mgr_generic_1st_level_cb;
+  video_decoder_settings.firstPtsPassed.context = &mgr->callback_contexts.video_first_pts;
+
+
+  <direct-call>  
+  //
+  // typedef struct NEXUS_CallbackDesc {
+  //     NEXUS_Callback callback; /* Function pointer */
+  //     void *context;           /* First parameter to callback function. */
+  //     int param;               /* Second parameter to callback function. */
+  // } NEXUS_CallbackDesc;
+  //
+  // note: callback_context is an array and has default settings by
+  // gst_nexus_mgr_callback_contexts_init() so "cb->" is always okay. 
+  //
+  // static void gst_nexus_mgr_error_1st_level_cb(void* context, int reason)
+  // {
+  //   GstNexusMgrCallbackInfo* cb = context;
+  //   if (cb->delegate_callback) {
+  //     cb->delegate_callback(cb->delegate_context, reason);
+  //   }
+  //   else
+  //     print("messges");
+  // }
+  //
+  // -> gst_nexus_mgr_error_1st_level_cb
+  //      (&mgr->callback_contexts.video_error, EFifoEmpty);
+  //
+  // note:
+  // this will be forwarded to *sink-on-error* since delegate is set above
+  //
+
+  video_decoder_settings.fifoEmpty.callback = &gst_nexus_mgr_error_1st_level_cb;
+  video_decoder_settings.fifoEmpty.context = &mgr->callback_contexts.video_error;
+  video_decoder_settings.fifoEmpty.param = EFifoEmpty;
+
+  video_decoder_settings.decodeError.callback = &gst_nexus_mgr_error_1st_level_cb;
+  video_decoder_settings.decodeError.context = &mgr->callback_contexts.video_error;
+  video_decoder_settings.decodeError.param = EVideoDecode;
+
+  // *streamChanged* for video from sink so will goes to sink directly
+  if(mgr->settings.callbacks.streamChange){
+    NEXUS_CALLBACKDESC_INIT( &video_decoder_settings.streamChanged );
+    video_decoder_settings.streamChanged.callback = mgr->settings.callbacks.streamChange;
+    video_decoder_settings.streamChanged.context = mgr->settings.callbacks.context;
+  }
+
+  NEXUS_VideoDecoder_SetSettings( mgr->resources->videoDecoder, 
+      &video_decoder_settings );
+  //
+  //}}
+
+
+  //{{ set *callbacks* for *audio-decoder*
+  //
+  NEXUS_AudioDecoderSettings audio_decoder_settings;
+
+  // used and maps to
+  // gst_nexus_mgr_audio_first_pts_2nd_level_cb,  /* CB_AUDIO_FIRST_PTS */
+  //
+  // and leads to sink callback
+  //
+  audio_decoder_settings.firstPts.callback = &gst_nexus_mgr_generic_1st_level_cb;
+  audio_decoder_settings.firstPts.context = &mgr->callback_contexts.audio_first_pts;
+
+  // forwards them to *sink-on-error*
+  audio_decoder_settings.ptsError.callback = &gst_nexus_mgr_error_1st_level_cb;
+  audio_decoder_settings.ptsError.context = &mgr->callback_contexts.audio_error;
+
+  // *streamChanged* for audio from sink so will goes to sink directly
+  // note: use streamStatusAvailable
+  if(mgr->audioCallbacks.streamChange){
+    NEXUS_CALLBACKDESC_INIT( &audio_decoder_settings.streamStatusAvailable );
+    audio_decoder_settings.streamStatusAvailable.callback = mgr->audioCallbacks.streamChange;
+    audio_decoder_settings.streamStatusAvailable.context = mgr->audioCallbacks.context;
+  }
+
+  NEXUS_AudioDecoder_SetSettings( mgr->resources->audioDecoder[0], 
+      &audio_decoder_settings );
+  //
+  //}}
+}
+
+
+{issue-when-eos-is-broken}
+The problem is that as shown, eos is received at sink and need to populate it to
+the pipeline which is to be done in sink_on_error callback. However, this
+callback link do not work.
+
+nexussink /gstnexussink.c:999:gst_nexus_sink_event_locked:<nexussink0> End of stream
+nexussink /gstnexussink.c:999:gst_nexus_sink_event_locked:<nexussink1> End of stream
+nexussink /gstnexusmgr.c:1795:gst_nexus_mgr_error_1st_level_cb: VideoError: 0x0101
+
+After all, registered callback to NEXUS will use context from sink settings even
+when there is no resource locked since callback happens regardless of resource
+acquired/released. So mgr settings *must* remain vaild when releasing resource
+is done. This is the fix which excluding setting init when releasing resource.
+
+// new one which fixes the broken callback link causing eos issue
+//
+static void
+gst_nexus_mgr_release_playpumps_locked(GstNexusMgr *mgr, gboolean mute)
+{
+    if(mgr->resources){
+      ...
+      <release-nexus>
+	   BcmNexus_StreamPlayer_Resources_Release( mgr->resources );
+      memset(&mgr->callback_contexts, 0, sizeof(mgr->callback_contexts));
+    }
+}
+
+
+// old one which has resets callback settings so broke callback link.
+//
+static void
+gst_nexus_mgr_release_playpumps_locked(GstNexusMgr *mgr, gboolean mute)
+{
+    if(mgr->resources){
+
+        ...
+
+        /* This has to go after dispatching pending callbacks, as those callbacks
+         * will be receiving pointers to members of mgr->callback_contexts as
+         * their "context" argument.
+         */
+        memset(&mgr->callback_contexts, 0, sizeof(mgr->callback_contexts));
+
+        /* These have to go after dispatching pending callbacks, as callbacks
+         * are accessing these structures.
+         */
+        memset(&mgr->settings.callbacks, 0, sizeof(mgr->settings.callbacks));
+        memset(&mgr->audioCallbacks, 0, sizeof(mgr->audioCallbacks));
+    }
+}
+
+
+<callback-handlers>
+
+// GstNexusMgrCallbackInfo
+
+static const GstNexusMgr2ndLevelCallback gst_nexus_mgr_2nd_level_cb_table[] = {
+  &gst_nexus_mgr_buffer_available_2nd_level_cb, /* CB_BUFFER_AVAILABLE */
+  &gst_nexus_mgr_audio_first_pts_2nd_level_cb,  /* CB_AUDIO_FIRST_PTS */
+  &gst_nexus_mgr_video_first_pts_2nd_level_cb,  /* CB_VIDEO_FIRST_PTS */
+  &gst_nexus_mgr_noop_2nd_level_cb,             /* CB_AUDIO_ERROR */
+  &gst_nexus_mgr_noop_2nd_level_cb              /* CB_VIDEO_ERROR */
+};
+
+void gst_nexus_mgr_generic_1st_level_cb(void* context, int reason)
+{
+  uses two level callback which means to use callback thread to decouple
+  callbacks from NEXUS
+
+  used for buffer avail in TS case and first pts for in ES
+
+  use CB ID(index) in GstNexusMgr2ndLevelCallback 
+
+  gst_nexus_mgr_2nd_level_cb_table[cb->callback_id](cb);
+}
+
+void gst_nexus_mgr_stream_change_2nd_level_cb(GstNexusMgrCallbackInfo* cb)
+{
+  mgr->settings.callbacks.streamChange(mgr->settings.callbacks.context, cb->reason);
+}
+
+void gst_nexus_mgr_error_1st_level_cb(void* context, int reason)
+{
+   calls client sink directly if it's set and if not stops here
+
+   if (cb->delegate_callback) {
+     cb->delegate_callback(cb->delegate_context, reason);
+   }
+}
+
+
+{resouce-lock}
+
+// where it used and only from sink
+
+gst_nexus_sink_render_locked( GstNexusSink * sink, GstBuffer * buf );
+gst_nexus_sink_play_locked ( GstNexusSink * sink);
+gst_nexus_sink_get_times_locked (GstNexusSink * sink, ...);
+
+
+// note: must be used as a pair. get resource and release it when finishes.
+
+BcmNexus_StreamPlayer_Resources*
+gst_nexus_mgr_get_resources(GstNexusMgr * mgr, 
+							const GstNexusStreamSetting * settings)
+{
+  if (gst_nexus_mgr_acquire_playpumps(mgr, settings)) {
+	return mgr->resources;
+  }
+  return NULL;
+}
+
+gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
+								const GstNexusStreamSetting * settings)
+{
+  g_mutex_lock(&mgr->resource_lock);
+  ...
+}
+
+// res is used to check args
+void gst_nexus_mgr_release_resources(GstNexusMgr * mgr, 
+        BcmNexus_StreamPlayer_Resources* res)
+{
+  if(!mgr->video.decoder_active && !mgr->video.playpump_active &&
+     !mgr->audio.decoder_active && !mgr->audio.playpump_active){
+    GST_TRACE ("no decoders or playpumps active, releasing Nexus resources");
+
+    // true is for mute
+    gst_nexus_mgr_release_playpumps_locked(mgr, true);
+
+    gst_nexus_mgr_signal_resources_released_locked(mgr);
+  }
+
+  g_mutex_unlock( &mgr->resource_lock );
+}
+
+note: locking between two sink elements, callback thread and pes writer
+
+All uses mgr->resource_lock. The point is that it is to protect mgr structure
+which has handles and states. However not to guard to NEXUS calls. So can make a
+NEXUS calls without locking.
+
+GMutex resource_lock;
+
+
+{stream-changed}
+When plays DASH and see many stream changes for video, sink0. This shows that
+there are many representation? True the number of changes matches to the num of
+representation in mpd file.
+
+$ ag "call sink|stream change|first PTS" 01-dash.log 
+
+nexussink /gstnexusmgr.c:1937:gst_nexus_mgr_audio_first_pts_2nd_level_cb: KT: call sink audio first pts
+nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink1> KT: first PTS
+nexussink /gstnexusmgr.c:1937:gst_nexus_mgr_audio_first_pts_2nd_level_cb: KT: call sink audio first pts
+nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink1> KT: first PTS
+
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink1> KT: stream change
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+
+nexussink /gstnexusmgr.c:1914:gst_nexus_mgr_video_first_pts_2nd_level_cb: KT: call sink video first pts
+nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink0> KT: first PTS
+
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+
+
+from mpd file:
+
+<Representation id="V1" codecs="avc3.4d4015" height="288" width="512" bandwidth="356296" />
+<Representation id="V2" codecs="avc3.4d401e" height="396" width="704" bandwidth="619088" />
+<Representation id="V3" codecs="avc3.64001f" height="504" width="896" bandwidth="1330608" />
+<Representation id="V4" codecs="avc3.640020" height="720" width="1280" bandwidth="2501216" />
+<Representation id="V5" codecs="avc3.640028" height="1080" width="1920" bandwidth="4487408" />
+
+
+note: see that less changed callback and ratio change than mpd file
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
+KT: Video size or aspect ratio changed to size=0x0 PAR=0/0
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
+KT: Video size or aspect ratio changed to size=512x288 PAR=1/1
+
+nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
+nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
+KT: Video size or aspect ratio changed to size=1280x720 PAR=1/1
 
 
 ={============================================================================
@@ -19570,532 +20201,6 @@ dn370t.		5 days ago 5 JIRA Issues
 
 o The updated and proposed nexusMgr.
 https://git-dev.dev.youview.co.uk/?p=nexusMgr.git;a=shortlog;h=refs/heads/propose/huawei
-
-
-={============================================================================
-*kt_dev_uv_oem_002* nexus-sink: nexussink callback
-
-Hmax only provides 1 playpump.
-
-note: seems that stream types comes from gst when opens a sink and that means
-that below enums should match ones in gst?
-
-// gstnexusmgr.h
-
-enum NexusSinkContentType
-{
-    CTTransportStream=0,
-    CTVideoElementaryStream=1,
-    CTAudioElementaryStream=2,
-    CTNone=0xFF
-};
-
-
-<sink-settings>
-
-NEXUS_Callback void ( void *context, int param );
-
-struct {
-  /**
-   * Fires when space becomes available, but only when writing transport stream.
-   * For elementary streams, use gst_nexus_mgr_get_pes_writer() and
-   * ConcurrentPesWriter API.
-   */
-  NEXUS_Callback data;
-
-  /**
-   * Fires when Nexus resources are acquired.
-   *
-   * @note If there are multiple clients using the same instance of GstNexusMgr,
-   *       only one of them (an arbitrary one) will receive this callback.
-   */
-  NEXUS_Callback resourcesAcquired;
-
-  /**
-   * Fires when Nexus resources are released. When we release Nexus resources
-   * to immediately re-acquire them (we do that for re-configuration purposes),
-   * we don't emit resourcesReleased followed by resourcesAcquired callbacks.
-   * If re-acquiring fails though, we do emit a single resourcesReleased callback.
-   *
-   * @note If there are multiple clients using the same instance of GstNexusMgr,
-   *       only one of them (an arbitrary one) will receive this callback.
-   */
-  NEXUS_Callback resourcesReleased;
-
-  NEXUS_Callback firstPts;  /* Fires when the decoder receives the first PTS after start. */
-  NEXUS_Callback streamChange; /* Fires when stream format has changed or the first time
-                                  the decoder has parsed the codec format after start. */
-  NEXUS_Callback error; /* Fires when an error occurs */
-  void* context; /* passed as the first parameter to the callback functions */
-} GstNexusCallbacks ;
-
-struct {
-  NexusSinkContentType contentType;
-  NexusSinkVideoCodec video_codec;
-  NexusSinkAudioCodec audio_codec;
-
-  // *callbacks*
-  GstNexusCallbacks callbacks;
-
-  int video_pid;
-  int audio_pid;
-} GstNexusStreamSetting;
-
-struct {
-  ...
-  GstNexusStreamSetting settings;
-} GstNexusSink;
-
-
-static void gst_nexus_sink_init( GstNexusSink * sink )
-{
-  sink->settings.callbacks.data = gst_nexus_sink_space_available;
-  sink->settings.callbacks.resourcesAcquired = gst_nexus_sink_resources_acquired;
-  sink->settings.callbacks.resourcesReleased = gst_nexus_sink_resources_released;
-
-  // *sink-on-error* handles custom Exxx error and this emits EOS
-  sink->settings.callbacks.error = gst_nexus_sink_on_error;
-
-  sink->settings.callbacks.firstPts = gst_nexus_sink_first_pts;
-
-  sink->settings.callbacks.streamChange = gst_nexus_sink_stream_change;
-
-  // note:
-  // each sink set itself and this used to set callback_contexts. when callback
-  // fires, it passes this and each sink callback use this to identify which
-  // sink to use.
-  sink->settings.callbacks.context = sink;
-}
-
-enum NexusSinkErrorReason
-{
-    EFifoEmpty = 0x0101,
-    EPtsError = 0x0206, /* PTS discontinuity error */
-}
-
-src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: AudioError: 0x0206
-src/gstnexusmgr.c:1777:gst_nexus_mgr_error_1st_level_cb: => KT: VideoError: 0x0101
-
-
-<nexusmgr-callback>
-
-typedef struct
-{
-  /**
-   * First level callbacks may only access callback_cond, pending_callbacks
-   * and pending_callbacks_mutex through this pointer. Second level callbacks
-   * may access any member, as those are called with resource_lock held.
-   *
-   * @note mgr->resources may well be NULL in a 2nd level callback handler.
-   */
-  GstNexusMgr* mgr;
-
-  GstNexusCallbackId callback_id;
-
-  /**
-   * We initialise NEXUS_CallbackDesc::param with one of NexusSinkErrorReason
-   * enumeration values. Nexus passes that value as a second argument to
-   * callbacks. gst_nexus_mgr_generic_1st_level_cb() takes that argument and
-   * saves it to this member before posting the callback to mgr->callback_thread.
-   */
-  int reason;
-
-  /* The members below are specific to callback_id. */
-
-  int playpump_num;
-  NEXUS_Callback delegate_callback;
-  void* delegate_context;
-} GstNexusMgrCallbackInfo;
-
-typedef struct
-{
-  GstNexusMgrCallbackInfo audio_buffer_available;
-  GstNexusMgrCallbackInfo video_buffer_available;
-
-  GstNexusMgrCallbackInfo audio_first_pts;
-  GstNexusMgrCallbackInfo video_first_pts;
-
-  GstNexusMgrCallbackInfo audio_error;
-  GstNexusMgrCallbackInfo video_error;
-} GstNexusMgrCallbackContexts;
-
-
-struct _GstNexusMgr
-{
-  ...
-  GstNexusMgrCallbackContexts callback_contexts;
-
-  GstNexusStreamSetting settings;
-  {
-    GstNexusCallbacks callbacks;
-  }
-
-  GstNexusCallbacks audioCallbacks;
-}
-
-
-gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
-  const GstNexusStreamSetting * settings)
-{
-  // *resource-lock*
-  g_mutex_lock(&mgr->resource_lock);
-
-  // sink call this with its setting so mgr has its sink setting.
-  // set mgr callbacks from sink
-  mgr->settings.callbacks = settings->callbacks;
-
-  // only for audio type
-  mgr->audioCallbacks = settings->callbacks;
-
-  // set callback_contexts with cb id
-  gst_nexus_mgr_callback_contexts_init(&mgr->callback_contexts, mgr);
-
-  // { set *mgr_callback_contexts_delegate* to forward them to *sink-on-error*
-  // note: make a callback link from mgr to sink without 2nd level callback
-  
-  // set context to pass a/v errors to video sink
-  mgr->callback_contexts.video_error.delegate_callback = mgr->settings.callbacks.error;
-
-  // note: context is the address of sink
-  mgr->callback_contexts.video_error.delegate_context = mgr->settings.callbacks.context;
-
-  // set context to pass a/v errors to audio sink
-  if(mgr->audioCallbacks.error){
-    mgr->callback_contexts.audio_error.delegate_callback = mgr->audioCallbacks.error;
-    mgr->callback_contexts.audio_error.delegate_context = mgr->audioCallbacks.context;
-  }
-
-  mgr->callback_contexts.audio_error.delegate_callback = mgr->settings.callbacks.error;
-  mgr->callback_contexts.audio_error.delegate_context = mgr->settings.callbacks.context;
-  //}}
-
-
-  // note: don't see why use audioCallbacks
-
-  //{{ set *callbacks* for *playpump*
-  //
-  // set buffer avail callbacks via nexusmgr
-  //
-  // use direct callback
-
-  BcmNexus_StreamPlayer_Resources_Config config;
-  config.numPlaypumps = 1;
-
-  // use two level callback when TS type. use direct callback when ES type.
-  config.audioDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
-  config.audioDataCallback.context = mgr->pes_writer;
-
-  config.videoDataCallback.callback = &gst_nexus_mgr_pes_buffer_availability;
-  config.videoDataCallback.context = mgr->pes_writer;
-
-
-  <acquire-nexus>
-
-  mgr->resources = 
-    (BcmNexus_StreamPlayer_Resources*) BcmNexus_StreamPlayer_Resources_Acquire( &config );
-
-  // set error callbacks via nexus playpump
-  //
-  NEXUS_CallbackDesc playpumpErrorCallbackConfiguration = {
-    gst_nexus_mgr_error_1st_level_cb, &mgr->callback_contexts.audio_error, EStreamError
-  };
-
-  NEXUS_Playpump_GetSettings( mgr->resources->playpump[mgr->audio.playpump_num], &playpump_settings );
-
-  playpump_settings.errorCallback = playpumpErrorCallbackConfiguration;
-
-  NEXUS_Playpump_SetSettings( mgr->resources->playpump[mgr->video.playpump_num], &playpump_settings );
-  //}}
-
-
-  //{{ set *callbacks* for *video-decoder*
-  
-  <two-level-call>
-  // used and maps to
-  // gst_nexus_mgr_video_first_pts_2nd_level_cb,  /* CB_VIDEO_FIRST_PTS */
-  // and 'leads' to sink callback gst_nexus_sink_first_pts:<nexussink1>
-  //
-  // note "firstPtsPassed"
-  //
-  // -> gst_nexus_mgr_generic_1st_level_cb
-  //      (&mgr->callback_contexts.video_first_pts, 0);
-
-  video_decoder_settings.firstPtsPassed.callback = &gst_nexus_mgr_generic_1st_level_cb;
-  video_decoder_settings.firstPtsPassed.context = &mgr->callback_contexts.video_first_pts;
-
-
-  <direct-call>  
-  //
-  // typedef struct NEXUS_CallbackDesc {
-  //     NEXUS_Callback callback; /* Function pointer */
-  //     void *context;           /* First parameter to callback function. */
-  //     int param;               /* Second parameter to callback function. */
-  // } NEXUS_CallbackDesc;
-  //
-  // note: callback_context is an array and has default settings by
-  // gst_nexus_mgr_callback_contexts_init() so "cb->" is always okay. 
-  //
-  // static void gst_nexus_mgr_error_1st_level_cb(void* context, int reason)
-  // {
-  //   GstNexusMgrCallbackInfo* cb = context;
-  //   if (cb->delegate_callback) {
-  //     cb->delegate_callback(cb->delegate_context, reason);
-  //   }
-  //   else
-  //     print("messges");
-  // }
-  //
-  // -> gst_nexus_mgr_error_1st_level_cb
-  //      (&mgr->callback_contexts.video_error, EFifoEmpty);
-  //
-  // note:
-  // this will be forwarded to *sink-on-error* since delegate is set above
-  //
-
-  video_decoder_settings.fifoEmpty.callback = &gst_nexus_mgr_error_1st_level_cb;
-  video_decoder_settings.fifoEmpty.context = &mgr->callback_contexts.video_error;
-  video_decoder_settings.fifoEmpty.param = EFifoEmpty;
-
-  video_decoder_settings.decodeError.callback = &gst_nexus_mgr_error_1st_level_cb;
-  video_decoder_settings.decodeError.context = &mgr->callback_contexts.video_error;
-  video_decoder_settings.decodeError.param = EVideoDecode;
-
-  // *streamChanged* for video from sink so will goes to sink directly
-  if(mgr->settings.callbacks.streamChange){
-    NEXUS_CALLBACKDESC_INIT( &video_decoder_settings.streamChanged );
-    video_decoder_settings.streamChanged.callback = mgr->settings.callbacks.streamChange;
-    video_decoder_settings.streamChanged.context = mgr->settings.callbacks.context;
-  }
-
-  NEXUS_VideoDecoder_SetSettings( mgr->resources->videoDecoder, 
-      &video_decoder_settings );
-  //
-  //}}
-
-
-  //{{ set *callbacks* for *audio-decoder*
-  //
-  NEXUS_AudioDecoderSettings audio_decoder_settings;
-
-  // used and maps to
-  // gst_nexus_mgr_audio_first_pts_2nd_level_cb,  /* CB_AUDIO_FIRST_PTS */
-  //
-  // and leads to sink callback
-  //
-  audio_decoder_settings.firstPts.callback = &gst_nexus_mgr_generic_1st_level_cb;
-  audio_decoder_settings.firstPts.context = &mgr->callback_contexts.audio_first_pts;
-
-  // forwards them to *sink-on-error*
-  audio_decoder_settings.ptsError.callback = &gst_nexus_mgr_error_1st_level_cb;
-  audio_decoder_settings.ptsError.context = &mgr->callback_contexts.audio_error;
-
-  // *streamChanged* for audio from sink so will goes to sink directly
-  // note: use streamStatusAvailable
-  if(mgr->audioCallbacks.streamChange){
-    NEXUS_CALLBACKDESC_INIT( &audio_decoder_settings.streamStatusAvailable );
-    audio_decoder_settings.streamStatusAvailable.callback = mgr->audioCallbacks.streamChange;
-    audio_decoder_settings.streamStatusAvailable.context = mgr->audioCallbacks.context;
-  }
-
-  NEXUS_AudioDecoder_SetSettings( mgr->resources->audioDecoder[0], 
-      &audio_decoder_settings );
-  //
-  //}}
-}
-
-
-{issue-when-eos-is-broken}
-The problem is that as shown, eos is received at sink and need to populate it to
-the pipeline which is to be done in sink_on_error callback. However, this
-callback link do not work.
-
-nexussink /gstnexussink.c:999:gst_nexus_sink_event_locked:<nexussink0> End of stream
-nexussink /gstnexussink.c:999:gst_nexus_sink_event_locked:<nexussink1> End of stream
-nexussink /gstnexusmgr.c:1795:gst_nexus_mgr_error_1st_level_cb: VideoError: 0x0101
-
-After all, registered callback to NEXUS will use context from sink settings even
-when there is no resource locked since callback happens regardless of resource
-acquired/released. So mgr settings *must* remain vaild when releasing resource
-is done. This is the fix which excluding setting init when releasing resource.
-
-// new one which fixes the broken callback link causing eos issue
-//
-static void
-gst_nexus_mgr_release_playpumps_locked(GstNexusMgr *mgr, gboolean mute)
-{
-    if(mgr->resources){
-      ...
-      <release-nexus>
-	   BcmNexus_StreamPlayer_Resources_Release( mgr->resources );
-      memset(&mgr->callback_contexts, 0, sizeof(mgr->callback_contexts));
-    }
-}
-
-
-// old one which has resets callback settings so broke callback link.
-//
-static void
-gst_nexus_mgr_release_playpumps_locked(GstNexusMgr *mgr, gboolean mute)
-{
-    if(mgr->resources){
-
-        ...
-
-        /* This has to go after dispatching pending callbacks, as those callbacks
-         * will be receiving pointers to members of mgr->callback_contexts as
-         * their "context" argument.
-         */
-        memset(&mgr->callback_contexts, 0, sizeof(mgr->callback_contexts));
-
-        /* These have to go after dispatching pending callbacks, as callbacks
-         * are accessing these structures.
-         */
-        memset(&mgr->settings.callbacks, 0, sizeof(mgr->settings.callbacks));
-        memset(&mgr->audioCallbacks, 0, sizeof(mgr->audioCallbacks));
-    }
-}
-
-
-<callback-handlers>
-
-// GstNexusMgrCallbackInfo
-
-static const GstNexusMgr2ndLevelCallback gst_nexus_mgr_2nd_level_cb_table[] = {
-  &gst_nexus_mgr_buffer_available_2nd_level_cb, /* CB_BUFFER_AVAILABLE */
-  &gst_nexus_mgr_audio_first_pts_2nd_level_cb,  /* CB_AUDIO_FIRST_PTS */
-  &gst_nexus_mgr_video_first_pts_2nd_level_cb,  /* CB_VIDEO_FIRST_PTS */
-  &gst_nexus_mgr_noop_2nd_level_cb,             /* CB_AUDIO_ERROR */
-  &gst_nexus_mgr_noop_2nd_level_cb              /* CB_VIDEO_ERROR */
-};
-
-void gst_nexus_mgr_generic_1st_level_cb(void* context, int reason)
-{
-  uses two level callback which means to use callback thread to decouple
-  callbacks from NEXUS
-
-  used for buffer avail in TS case and first pts for in ES
-
-  use CB ID(index) in GstNexusMgr2ndLevelCallback 
-
-  gst_nexus_mgr_2nd_level_cb_table[cb->callback_id](cb);
-}
-
-void gst_nexus_mgr_stream_change_2nd_level_cb(GstNexusMgrCallbackInfo* cb)
-{
-  mgr->settings.callbacks.streamChange(mgr->settings.callbacks.context, cb->reason);
-}
-
-void gst_nexus_mgr_error_1st_level_cb(void* context, int reason)
-{
-   calls client sink directly if it's set and if not stops here
-
-   if (cb->delegate_callback) {
-     cb->delegate_callback(cb->delegate_context, reason);
-   }
-}
-
-
-{resouce-lock}
-
-// where it used and only from sink
-
-gst_nexus_sink_render_locked( GstNexusSink * sink, GstBuffer * buf );
-gst_nexus_sink_play_locked ( GstNexusSink * sink);
-gst_nexus_sink_get_times_locked (GstNexusSink * sink, ...);
-
-
-// note: must be used as a pair. get resource and release it when finishes.
-
-BcmNexus_StreamPlayer_Resources*
-gst_nexus_mgr_get_resources(GstNexusMgr * mgr, 
-							const GstNexusStreamSetting * settings)
-{
-  if (gst_nexus_mgr_acquire_playpumps(mgr, settings)) {
-	return mgr->resources;
-  }
-  return NULL;
-}
-
-gst_nexus_mgr_acquire_playpumps(GstNexusMgr * mgr, 
-								const GstNexusStreamSetting * settings)
-{
-  g_mutex_lock(&mgr->resource_lock);
-  ...
-}
-
-// res is used to check args
-void gst_nexus_mgr_release_resources(GstNexusMgr * mgr, 
-        BcmNexus_StreamPlayer_Resources* res)
-{
-  if(!mgr->video.decoder_active && !mgr->video.playpump_active &&
-     !mgr->audio.decoder_active && !mgr->audio.playpump_active){
-    GST_TRACE ("no decoders or playpumps active, releasing Nexus resources");
-
-    // true is for mute
-    gst_nexus_mgr_release_playpumps_locked(mgr, true);
-
-    gst_nexus_mgr_signal_resources_released_locked(mgr);
-  }
-
-  g_mutex_unlock( &mgr->resource_lock );
-}
-
-note: locking between two sink elements, callback thread and pes writer
-
-All uses mgr->resource_lock. The point is that it is to protect mgr structure
-which has handles and states. However not to guard to NEXUS calls. So can make a
-NEXUS calls without locking.
-
-GMutex resource_lock;
-
-
-{stream-changed}
-When plays DASH and see many stream changes for video, sink0. This shows that
-there are many representation? True the number of changes matches to the num of
-representation in mpd file.
-
-$ ag "call sink|stream change|first PTS" 01-dash.log 
-
-nexussink /gstnexusmgr.c:1937:gst_nexus_mgr_audio_first_pts_2nd_level_cb: KT: call sink audio first pts
-nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink1> KT: first PTS
-nexussink /gstnexusmgr.c:1937:gst_nexus_mgr_audio_first_pts_2nd_level_cb: KT: call sink audio first pts
-nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink1> KT: first PTS
-
-nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink1> KT: stream change
-nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-
-nexussink /gstnexusmgr.c:1914:gst_nexus_mgr_video_first_pts_2nd_level_cb: KT: call sink video first pts
-nexussink /gstnexussink.c:1918:gst_nexus_sink_first_pts:<nexussink0> KT: first PTS
-
-nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-nexussink /gstnexussink.c:1722:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-
-
-from mpd file:
-
-<Representation id="V1" codecs="avc3.4d4015" height="288" width="512" bandwidth="356296" />
-<Representation id="V2" codecs="avc3.4d401e" height="396" width="704" bandwidth="619088" />
-<Representation id="V3" codecs="avc3.64001f" height="504" width="896" bandwidth="1330608" />
-<Representation id="V4" codecs="avc3.640020" height="720" width="1280" bandwidth="2501216" />
-<Representation id="V5" codecs="avc3.640028" height="1080" width="1920" bandwidth="4487408" />
-
-
-note: see that less changed callback and ratio change than mpd file
-
-nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
-KT: Video size or aspect ratio changed to size=0x0 PAR=0/0
-
-nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-
-nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
-KT: Video size or aspect ratio changed to size=512x288 PAR=1/1
-
-nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
-nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
-KT: Video size or aspect ratio changed to size=1280x720 PAR=1/1
 
 
 ={============================================================================
