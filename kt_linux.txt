@@ -20771,7 +20771,7 @@ Multiple producer(writing) and one consumer(reading). Once writing finishs,
 consumer get started. No sync between producer and consumer and only sync for
   producers. So use mutex. 
 
-No sync for reading? NO for this example since reaading starts after writing.
+No sync for reading? NO for this example since reading starts after writing.
 However, need to sync reading if want to have right result while writing
 happens.  
 
@@ -20990,7 +20990,7 @@ time for it to do write what it need to do is to write blindly. However, for
 consumers, it is not the same as producers since it have to chceck if items are
 available to read to to its work.
 
-That is why it has polling to check but The polling is a waste of cpu time. How
+That is why it has polling to check but the polling is a waste of cpu time. How
 to solve? A mutex is for locking and a cond-var is for waiting. The mutex
 provides mutual exclusion for accessing the shared variable, while the condition
 variable is used to signal changes in the variable's state.
@@ -20999,14 +20999,18 @@ note:
 -. The second example has reading and writing in the same mutex group and all
 competes with others. So reading and writing cannot run at the same time.
 
--. This example uses two mutex group: one for writing and one for reading. This
-allows two things:
+-. This example uses 'two' mutex group: one for writing and one for reading. Why
+two mutexes since there is only one reader? Since there should be a mutex
+associated with cond-var and that should be different from writer group to meet
+the intention of using cond-var.
 
-1. More chances to run reading and writing at the same time. Still possible to
-write when condition is signaled.
+This allows two things:
 
-2. Consumer wakes up and competes with producers only when there are items to
-process. 
+1. Less contention and more chances to run since reading is not in the same
+mutex group. 
+
+2. Consumer wakes up when there are items to process and which do not waste a
+running slot in polling. 
 
 After all, codition variable is to reduce such waste of polling and blocking.
 
@@ -21096,13 +21100,13 @@ void* consume(void* arg)
     // receieve cond-var
     pthread_mutex_lock( &nready.mutex );
 
-    // Always test the condition again when wakes up because
-    // *spurious-wakeups* can occur. Unlock "nready.ready" and wait. 
+    // Always test the condition again when wakes up because *spurious-wakeups*
+    // can occur. Unlock "nready.mutex" and wait. 
 
     while( nready.ready == 0 ) 
       pthread_cond_wait( &nready.cond, &nready.mutex);
 
-    // When returns from pthread_cond_wait, "nready.ready" is locked
+    // When returns from pthread_cond_wait, "nready.mutex" is locked
     // automatically and there is a item to read.
     
     nready.ready--;
@@ -21120,28 +21124,30 @@ void* consume(void* arg)
 
 
 Q: Is it possible to implement this using two mutex than using a mutex and a
-cond-var?
+cond-var? Yes, but more contention.
 
-Q: If change producer's handling of ready like this, is it better?
-
-{
-    // note: changed to use cond-var 
-    // {
-    pthread_mutex_lock( &nready.mutex );
-
-    // "ready" is 0 and means there is no items to read. Now there is one item
-    // produced and signal cond-var. So "ready" is the number of items
-    // avaialbe to read.
-
-    if( nready.ready == 0 )
-    {
-      nready.ready++;
-      pthread_cond_signal( &nready.cond );
-    }
-
-    pthread_mutex_unlock( &nready.mutex );
-    // }
-}
+// Q: If change producer's handling of ready like this, is it better?
+// 
+// {
+//     // note: changed to use cond-var 
+//     // {
+//     pthread_mutex_lock( &nready.mutex );
+// 
+//     // "ready" is 0 and means there is no items to read. Now there is one item
+//     // produced and signal cond-var. So "ready" is the number of items
+//     // avaialbe to read.
+// 
+//     if( nready.ready == 0 )
+//     {
+//       nready.ready++;
+//       pthread_cond_signal( &nready.cond );
+//     }
+// 
+//     pthread_mutex_unlock( &nready.mutex );
+//     // }
+// }
+//
+// NO since other writers cannot updates nready.ready even when done writing.
 
 Q: Better if consumer reads all when has a lock?
 
@@ -21153,7 +21159,7 @@ Q: Better if consumer reads all when has a lock?
 // This is blocking on condition and ALWAYS has an associated mutex. Why?
 // because both producer and consumer accesses to the shared state variable
 // which is linked to that condition so should be synced. In other words, there
-// is a natural association of a muext with a condition varaible.
+// is a natural association of a mutex with a condition varaible.
 //
 // pthread_cond_wait( &nready.cond, &nready.mutex );
 //
@@ -21166,7 +21172,7 @@ Q: Better if consumer reads all when has a lock?
 int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
 
 <cond-can-be-lost>
-// Guaranteede that at least one of the blocked thread is woken up. If no thread
+// Guarantee that at least one of the blocked thread is woken up. If no thread
 // is waiting, the signal is lost since condition variable holds no state
 // information.
 
@@ -21184,10 +21190,21 @@ The {ref-LPI} said that _signal is for the case where all waiting threads do the
 {ref-LPI} uses different call order for producer as below because {ref-UNP} said
 that use _signal before unlock can cause {mutex-deadlock} or {lock-conflict}.
 Therefore, POSIX recommends the followings and {ref-LPI} said this may yieid
-better performance in 30.2.2:
+'better' performance in 30.2.2:
+
+If the mutex is unlocked only after the condition variable is signaled, the
+thread performing pthread_cond_wait() 'may' wake up while the mutex is still
+locked, and then immediately go back to sleep again when it 'finds' that the
+mutex is 'locked'. This results in two superfluous context switches. Some
+implementations eliminate this problem by employing a technique called wait
+morphing, which moves the signaled thread from the "condition variable wait
+queue" to the "mutex wait queue" without performing a context switch if the
+mutex is locked.
+
 
 <approach-one>
 pthread_mutex_lock( &nready.mutex );
+
 if( nready.ready == 0 )
    pthread_cond_signal( &nready.cond );
 
@@ -21206,20 +21223,18 @@ if( nready.ready == 0 )
  pthread_cond_signal( &nready.cond );
 
 
-{check-on-predicate}
+{check-on-predicate} <spurious-wakeups>
 
 Each condition variable has an associated predicate involving one or more shared
 variables. In this example, nready.ready == 0 is the predicate.
 
 This demonstrates a general design principle: a pthread_cond_wait() call must be
 governed by a while loop rather than an if statement. This is so because, on
-return from pthread_cond_wait(), there are no guarantees about the state of the
-predicate; therefore, we should immediately recheck the predicate and resume
-sleeping if it is not in the desired state. [KT] When calls cond_wait, the
-associated lock is released so no gurantee that this predicate is the same when
-wakes up.
+return from pthread_cond_wait(), there are 'no' guarantees about the state of the
+predicate; therefore, we should immediately 'recheck' the predicate and resume
+sleeping if it is not in the desired state. 
 
-So use [while-loop] always to test the condition again when wakes up because
+So use while-loop always to test the condition again when wakes up because
 spurious wakeups can occur for following reasons:
 
 while( nready.ready == 0 )
@@ -21232,7 +21247,7 @@ possible that another thread might acquire the mutex first and change the state
 of the associated shared variable(s), and thus the state of the predicate.
 
 -. Designing for "loose" predicates may be simpler. Sometimes, it is easier to
-design applications based on condition variables that indicate possibility
+design applications based on condition variables that indicate 'possibility'
 rather than certainty. In other words, signaling a condition variable would mean
 "there may be something" for the signaled thread to do rather than "there is
 something" to do. Using this approach, the condition variable can be signaled
@@ -21243,7 +21258,7 @@ ascertain if there really is something to do by rechecking the predicate.
 condition variable may be woken up even though no other thread actually signaled
 the condition variable. Such spurious wake-ups are a (rare) consequence of the
 techniques required for efficient implementation on some multiprocessor systems,
-           and are explicitly permitted by SUSv3.
+           and are explicitly 'permitted' by SUSv3.
 
 
 ={============================================================================
