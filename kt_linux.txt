@@ -284,8 +284,9 @@
 |kt_linux_core_200| ipc: sync: semaphore 
 *kt_linux_core_201* sync: mutex
 *kt_linux_core_202* sync: deadlock
-*kt_linux_core_202* sync: why condition variable in UNP example
-*kt_linux_core_202* sync: why condition variable in LPI example
+*kt_linux_core_202* sync-cond: why condition variable in UNP example
+*kt_linux_core_202* sync-cond: why condition variable in LPI example
+*kt_linux_core_202* sync-cond: compare two examples
 *kt_linux_core_202* sync-cond: condition variable
 *kt_linux_core_202* sync-cond: order, spurious wakeup
 *kt_linux_core_202* sync-cond: example:
@@ -20768,7 +20769,7 @@ more 'flexible' since no need rigid hierarchy.
 
 
 ={============================================================================
-*kt_linux_core_202* sync: why condition variable in UNP example
+*kt_linux_core_202* sync-cond: why condition variable in UNP example
 
 UNP-XX
 
@@ -21007,9 +21008,7 @@ note:
 competes with others. So reading and writing cannot run at the same time.
 
 -. This example uses 'two' mutex group: one for writing and one for reading. Why
-two mutexes since there is only one reader? Since there should be a mutex
-associated with cond-var and that should be different from writer group to meet
-the intention of using cond-var.
+two mutexes since there is only one reader? 
 
 This allows two things:
 
@@ -21080,8 +21079,8 @@ void* produce(void* arg)
     pthread_mutex_lock( &nready.mutex );
 
     // "ready" is 0 and means there is no items to read. Now there is one item
-    // produced and signal cond-var. So "ready" is the number of items
-    // avaialbe to read.
+    // produced and signal cond-var. So "ready" is 'predicate' and the number of
+    // items avaialbe to read ( number of produce - number of consume ).
 
     if( nready.ready == 0 )
       pthread_cond_signal( &nready.cond );
@@ -21156,26 +21155,31 @@ cond-var? Yes, but more contention.
 //
 // NO since other writers cannot updates nready.ready even when done writing.
 
-Q: Better if consumer reads all when has a lock?
+Q: Better if consumer reads all when has a lock? Yes, like a LPI example.
 
 
 ={============================================================================
-*kt_linux_core_202* sync: why condition variable in LPI example
+*kt_linux_core_202* sync-cond: why condition variable in LPI example
 
-note: not a complete code
+<with-no-cond-var>
+
+note: not a complete code since removed some to show points
 
 /* LPI Chapter 30 */ threads/prod_no_condvar.c
 
 /* prod_no_condvar.c
 
-   A simple POSIX threads producer-consumer example that doesn't use
-   a condition variable.
+   A simple POSIX threads producer-consumer example that doesn't use a condition
+   variable.
 */
+
 static int avail = 0;
 
 static void *
 threadFunc(void *arg)
 {
+  // each thread has given the number of unit to produce from main argv
+
   for (j = 0; j < cnt; j++) {
     sleep(1);
 
@@ -21245,6 +21249,128 @@ main(int argc, char *argv[])
 }
 
 
+<with-cond-var>
+
+/* prod_condvar.c
+
+   A simple POSIX threads producer-consumer example using a condition variable.
+*/
+
+static int avail = 0;
+
+static void *
+threadFunc(void *arg)
+{
+  // each thread has given the number of unit to produce from main argv
+
+  for (j = 0; j < cnt; j++) {
+    sleep(1);
+
+    /* Code to produce a unit omitted */
+
+    s = pthread_mutex_lock(&mtx);
+    if (s != 0)
+      errExitEN(s, "pthread_mutex_lock");
+
+    avail++;        /* Let consumer know another unit is available */
+
+    s = pthread_mutex_unlock(&mtx);
+    if (s != 0)
+      errExitEN(s, "pthread_mutex_unlock");
+
+    s = pthread_cond_signal(&cond);         /* Wake sleeping consumer */
+    if (s != 0)
+      errExitEN(s, "pthread_cond_signal");
+  }
+
+  return NULL;
+}
+
+int
+main(int argc, char *argv[])
+{
+  /* Create all threads */
+
+  totRequired = 0;
+  for (j = 1; j < argc; j++) {
+    totRequired += atoi(argv[j]);
+
+    s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+    if (s != 0)
+      errExitEN(s, "pthread_create");
+  }
+
+  /* Loop to consume available units */
+
+  numConsumed = 0;
+  done = FALSE;
+
+  for (;;) {
+    s = pthread_mutex_lock(&mtx);
+    if (s != 0)
+      errExitEN(s, "pthread_mutex_lock");
+
+    while (avail == 0) {            /* Wait for something to consume */
+      s = pthread_cond_wait(&cond, &mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_cond_wait");
+    }
+
+    /* At this point, 'mtx' is locked... */
+
+    while (avail > 0) {             /* Consume all available units */
+
+      /* Do something with produced unit */
+
+      numConsumed ++;
+      avail--;
+      printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
+          numConsumed);
+
+      done = numConsumed >= totRequired;
+    }
+
+    s = pthread_mutex_unlock(&mtx);
+    if (s != 0)
+      errExitEN(s, "pthread_mutex_unlock");
+
+    if (done)
+      break;
+
+    /* Perhaps do other work here that does not require mutex lock */
+
+  }
+
+  exit(EXIT_SUCCESS);
+}
+
+
+={============================================================================
+*kt_linux_core_202* sync-cond: compare two examples
+
+<UNP>
+- Two mutex. One for producer and the other for consumer and cond-var.
+
+- Producers can produce in producer mutex and make a signal only when there was
+no item for consumer to use. Producer is in consumer mutext for short time to
+signal or update predicate.
+
+- Single consumer reads as many item as it can. 
+
+note: Looks that this approach would increase chances of running producer and
+consumer concurrently. 
+
+<LPI>
+- One mutex for producer, consumer, and cond-var.
+
+- Producers make a signal for each item produced. 
+
+- Single consumer reads as many item as it can. 
+
+note: Since consumer reads as many as it can, some signal gets lost and not
+used.
+
+
 ={============================================================================
 *kt_linux_core_202* sync-cond: condition variable 
 
@@ -21267,15 +21393,26 @@ int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
 <cond-can-be-lost>
 // Guarantee that at least one of the blocked thread is woken up. If no thread
 // is waiting, the signal is 'lost' since condition variable holds no state
-// information.
+// information. 
+//
+// Q: no cost for too many signals?
+//
 
 int pthread_cond_signal( pthread_cond_t *cptr );
 int pthread_cond_broadcast( pthread_cond_t *cptr );
 int pthread_cond_timedwait( ... );
 
-The {ref-LPI} said that _signal is for the case where all waiting threads do the
-  same task since it do not care which should woken up and _broadcast is for
-  case where waiting threads do different task. Real examples?
+The LPI said: 
+  
+Using pthread_cond_broadcast() always yields correct results (since all threads
+    should be programmed to handle redundant and spurious wake-ups), but
+pthread_cond_signal() can be more efficient. However, pthread_cond_signal()
+should be used only if just 'one' of the waiting threads needs to be woken up to
+handle the change in state of the shared variable, and it doesn't matter which
+one of the waiting threads is woken up. This scenario typically applies when all
+of the waiting threads are designed to perform the exactly same task. Given
+these assumptions, pthread_cond_signal() can be more efficient than
+pthread_cond_broadcast(), because it avoids the following possibility:
 
 
 ={============================================================================
@@ -21283,10 +21420,13 @@ The {ref-LPI} said that _signal is for the case where all waiting threads do the
 
 {the-order-of-call}
 
-{ref-LPI} uses different call order for producer as below because {ref-UNP} said
-that use _signal before unlock can cause {mutex-deadlock} or {lock-conflict}.
-Therefore, POSIX recommends the followings and {ref-LPI} said this may yieid
-'better' performance in 30.2.2:
+{LPI} uses different call order for producer as below because {UNP} said that
+use _signal before unlock can cause {mutex-deadlock} or {lock-conflict}.
+Therefore, POSIX recommends the followings although SUSv3 permits them to be
+done in either order and {LPI} said this may yieid 'better' performance in
+30.2.2:
+
+<redundant-wakeup>
 
 If the mutex is unlocked only after the condition variable is signaled, the
 thread performing pthread_cond_wait() 'may' wake up while the mutex is still
@@ -21294,11 +21434,12 @@ locked, and then immediately go back to sleep again when it 'finds' that the
 mutex is 'locked'. This results in two superfluous context switches. Some
 implementations eliminate this problem by employing a technique called wait
 morphing, which moves the signaled thread from the "condition variable wait
-queue" to the "mutex wait queue" without performing a context switch if the
+queue" to the "mutex wait queue" without performing a context switch 'if' the
 mutex is locked.
 
 
-<approach-one>
+<one> redundant wakeup
+
 pthread_mutex_lock( &nready.mutex );
 
 if( nready.ready == 0 )
@@ -21308,7 +21449,9 @@ nready.ready++;
 
 pthread_mutex_unlock( &nready.mutex );
 
-<approach-two>
+
+<two>
+
 pthread_mutex_lock( &nready.mutex );
 
 nready.ready++;
@@ -21318,7 +21461,9 @@ pthread_mutex_unlock( &nready.mutex );
 if( nready.ready == 0 )
  pthread_cond_signal( &nready.cond );
 
-<ex>
+
+<ex> redundant wakeup
+
 1st change: We should always set variable first and then signal the change to
 other tasks, not the other way round. Although here it is done under locked
 mutex, which makes it safe, however it is still worth following a good practice.
@@ -21355,9 +21500,9 @@ variables. In this example, nready.ready == 0 is the predicate.
 
 This demonstrates a general design principle: a pthread_cond_wait() call must be
 governed by a while loop rather than an if statement. This is so because, on
-return from pthread_cond_wait(), there are 'no' guarantees about the state of the
-predicate; therefore, we should immediately 'recheck' the predicate and resume
-sleeping if it is not in the desired state. 
+return from pthread_cond_wait(), that is when 'signaled', there are 'no'
+guarantees about the state of the predicate; therefore, we should immediately
+'recheck' the predicate and resume sleeping if it is not in the desired state. 
 
 So use while-loop always to test the condition again when wakes up because
 spurious wakeups can occur for following reasons:
@@ -21365,11 +21510,11 @@ spurious wakeups can occur for following reasons:
 while( nready.ready == 0 )
 	pthread_cond_wait( &nready.cond, &nready.mutex );
 
--. Other threads may be woken up first. Perhaps several threads were waiting to
-acquire the mutex associated with the condition variable. Even if the thread
-that signaled the mutex set the predicate to the desired state, it is still
-possible that another thread might acquire the mutex first and change the state
-of the associated shared variable(s), and thus the state of the predicate.
+-. Other (consumer) threads may be woken up first. Perhaps several threads were
+waiting to acquire the mutex associated with the condition variable. Even if the
+thread that signaled the mutex set the predicate to the desired state, it is
+still possible that another thread might acquire the mutex first and change the
+state of the associated shared variable(s), and thus the state of the predicate.
 
 -. Designing for "loose" predicates may be simpler. Sometimes, it is easier to
 design applications based on condition variables that indicate 'possibility'
