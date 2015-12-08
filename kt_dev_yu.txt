@@ -92,6 +92,7 @@
 *kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
 *kt_dev_uv_stack_408* mr-dash: position
 *kt_dev_uv_stack_408* mr-dash: output control
+*kt_dev_uv_stack_408* mr-dash: seek
 
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
@@ -102,7 +103,7 @@
 *kt_dev_uv_stack_254* mr-dash: device auth
 
 *kt_dev_uv_stack_255* mr-error: soldes
-*kt_dev_uv_stack_255* mr-error: status event value
+*kt_dev_uv_stack_255* mr-error: status, source, event value
 *kt_dev_uv_stack_255* mr-error: error handle
 *kt_dev_uv_stack_255* mr-error: underflow error
 *kt_dev_uv_stack_255* mr-error: connection retry
@@ -3109,7 +3110,11 @@ https://wiki.youview.co.uk/display/canvas/Zinc+Logging+Framework
 ./uranium-common/uranium.props
 
 
-[root@HUMAX share]# cat ./nickel-common/nickel.props
+cat ./nickel-common/nickel.props
+
+note: must "STDOUT" for other levels and ERR for _ERROR() to get log on console
+in props file.
+
 log4cplus.logger.nickel=INFO, STDERR, nickelfile
 
 log4cplus.appender.nickelfile=log4cplus::RollingFileAppender
@@ -3124,8 +3129,6 @@ log4cplus.logger.uranium=TRACE, uraniumfile
 
 log4cplus.appender.uraniumfile=log4cplus::RollingFileAppender
 log4cplus.appender.uraniumfile.File=/home/kpark/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/var/log/uranium.log
-log4cplus.appender.uraniumfile.layout=log4cplus::PatternLayout
-log4cplus.appender.uraniumfile.layout.ConversionPattern=%D{%Y-%m-%d %H:%M:%S,%q} %-5p %x %t %c %l %m%n
 
 
 note: can override settings
@@ -3198,7 +3201,7 @@ EXIT:  std::vector<boost::filesystem::basic_path<std::basic_string<char, std::ch
 nickel::system::findMediaRouterPluginConfigFiles(const std::string&)
 
 
-{application-log}
+{w3cEngine-log}
 https://wiki.youview.co.uk/display/canvas/Debugging+Issues+on+a+Device+Emporium
 
 Applications like the main UI or OnDemand players live in a different place:
@@ -12418,7 +12421,7 @@ NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* mr-dash: use signal in gst mr
+*kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 
 boost::signals2::signal<void(GstState, GstState, GstState)> onStateChange;
 
@@ -12487,7 +12490,7 @@ case GST_MESSAGE_STATE_CHANGED:
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* mr-dash: disable dash on master
+*kt_dev_uv_stack_408* mr-dash: disable dash on master
 
 1. Use different auth string and check on a box:
 
@@ -12501,7 +12504,7 @@ GstMediaRouter.cpp:693 Pad linking failed!
 
 
 ={============================================================================
-*kt_dev_uv_stack_409* mr-dash: switch between yv mr and old
+*kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
 
 # Tell WebKit to use the media router for video playback. The default is to use
 # the built-in GStreamer pipeline
@@ -12526,7 +12529,7 @@ lsr-config --bool platform.settings.webkit-use-media-router
 
 
 ={============================================================================
-*kt_dev_uv_stack_410* mr-dash: position
+*kt_dev_uv_stack_408* mr-dash: position
 
 /**
  * A three field structure holding the position values of a MediaRouter.
@@ -12630,7 +12633,7 @@ complete = 1,
 
 
 ={============================================================================
-*kt_dev_uv_stack_410* mr-dash: output control
+*kt_dev_uv_stack_408* mr-dash: output control
 
 /zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include
 
@@ -12756,6 +12759,104 @@ OutputControlRefAsync.h
 
 
 ={============================================================================
+*kt_dev_uv_stack_408* mr-dash: seek
+
+struct SeekReference : NS_ZINC::Enum {
+
+  enum Enum {
+
+    /**
+     * Offset from start-time.
+     */
+    sr_start = 0,
+    sr_current = 1,
+    sr_end = 2,
+  };
+};
+
+struct SeekMode : NS_ZINC::Enum {
+
+  /**
+   * The defined set of seek-modes.
+   *
+   * @see nickel::client::MediaRouter#seekPosition()
+   */
+  enum Enum {
+    /** Prioritises positional accuracy over speed in a call of
+     * <code>MediaRouter.seekPosition()</code>.
+     *
+     * <p>If the seek-position parameter doesn't correspond exactly to the
+     * presentation-time of a frame, playback will resume from the next frame.
+     * </p>
+     *
+     * <p>If that frame is not a valid random-access point within the media,
+     * then the MediaRouter may be required to decode preceeding frames from a
+     * previous valid random-access point, without outputting them to the
+     * display, until the requested frame is reached.</p>
+     *
+     * @see nickel::client::MediaRouter#seekPosition()
+     */
+
+    prioritise_accuracy = 0,
+    prioritise_speed = 1,
+
+  };
+};
+
+NS_ZINC::Future<void> GstMediaRouter::seekPosition(
+    const SeekReference::Enum whence_in,
+    const int32_t offset_in,
+    const SeekMode::Enum mode_in)
+{
+    NICKEL_FUNC_TRACE;
+
+    return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
+        boost::bind(&GstMediaRouter::seekPosition_async, this, whence_in,
+                        offset_in, mode_in));
+}
+
+[08-12-2015 12:01:54.227642] method call sender=:1.113 -> dest=:1.79 serial=46
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter;
+member=seekPosition
+   int32 0
+   int32 24000
+   int32 0
+
+void GstMediaRouter::seekPosition_async(
+    const SeekReference::Enum whence_in,
+    const int32_t offset_in,
+    const SeekMode::Enum mode_in)
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    if (sinkBin->getSink().empty() || src.empty()) {
+        NICKEL_ERROR("KT: seekPosition_async: exp not confed");
+        throw NotConfiguredException();
+    }
+
+    if (!isSeekModeValid(mode_in) || !isSeekReferenceValid(whence_in)) {
+        NICKEL_ERROR("KT: seekPosition_async: exp invalid enum");
+        throw InvalidEnumerationException();
+    }
+
+    // note: when commenting out "return", works okay. However, starts it again,
+    // got a black screen. When re-launch iplayer, starts from beginning and
+    // this means that it played to end in the previous run.
+    
+    if (stopped) {
+        NICKEL_ERROR("KT: seekPosition_async: XXX: Don't know what to do at this point");
+        // XXX: Don't know what to do at this point
+        // return;
+    }
+
+    NICKEL_ERROR("KT: seekPosition_async: shall see seek_started");
+
+    produceStatusEvent(StatusEventValue::seek_started);
+    ...
+};
+
+
+={============================================================================
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 
 [root@HUMAX /]# pidof w3cEngine
@@ -12874,19 +12975,34 @@ path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorE
 method call sender=:1.121 -> dest=:1.72 serial=29 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setSource
    string "http://vod-hls-uk-live.bbcfmt.vo.llnwd.net/usp/auth/vod/piff_abr_full_hd/beb516-p034nsgv/vf_p034nsgv_ef27e25c-5275-46cd-9909-2b36738e4133.ism.hlsv2.ism/iptv_sdlow_abr_v1_hls_master.m3u8?s=1448440401&e=1448483601&h=746324fd8226beda57d6dd92f26539ef"
    int32 1
-signal sender=:1.72 -> dest=(null destination) serial=5133 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=SourceEvent
-   int32 1
-   int32 1
+
+
+signal sender=:1.72 -> dest=(null destination) serial=5133
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=SourceEvent 
+    int32 1   // note:
+    int32 1
 
 method call sender=:1.121 -> dest=:1.72 serial=30 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setSink
    string "decoder://0"
 
-method call sender=:1.121 -> dest=:1.72 serial=31 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=startBuffering
-signal sender=:1.72 -> dest=(null destination) serial=5136 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=BufferStatusEvent
-   int32 0
-signal sender=:1.72 -> dest=(null destination) serial=5139 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=SourceEvent
-   int32 3
+
+method call sender=:1.121 -> dest=:1.72 serial=31
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=startBuffering
+
+signal sender=:1.72 -> dest=(null destination) serial=5136
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=BufferStatusEvent 
+    int32 0   // note buffering_started = 0,
+
+signal sender=:1.72 -> dest=(null destination) serial=5139
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=SourceEvent
+   int32 3    // note:
    int32 1
+
+
 method call sender=:1.121 -> dest=:1.72 serial=33 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setVideoWindow
    struct {
       double 0
@@ -12921,14 +13037,22 @@ method call sender=:1.121 -> dest=:1.72 serial=37 path=/Zinc/Media/MediaRouters/
       double 1
       double 0.944444
    }
-method call sender=:1.121 -> dest=:1.72 serial=49 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setPlaySpeed
-   double 1
 
-method call sender=:1.121 -> dest=:1.72 serial=50 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=start
+method call sender=:1.121 -> dest=:1.72 serial=49
+  path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=setPlaySpeed double 1
 
-signal sender=:1.72 -> dest=(null destination) serial=5160 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=SourceEvent
-   int32 2
-   int32 0
+
+method call sender=:1.121 -> dest=:1.72 serial=50
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=start
+
+
+signal sender=:1.72 -> dest=(null destination) serial=5160
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=SourceEvent 
+    int32 2 
+    int32 0
+
 method call sender=:1.121 -> dest=:1.72 serial=62 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setVideoWindow
    struct {
       double 0
@@ -12940,9 +13064,17 @@ method call sender=:1.121 -> dest=:1.72 serial=62 path=/Zinc/Media/MediaRouters/
       double 1
       double 1
    }
-method call sender=:1.121 -> dest=:1.72 serial=78 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=getSourceInformation
-signal sender=:1.72 -> dest=(null destination) serial=9845 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=StatusEvent
-   int32 1
+
+method call sender=:1.121 -> dest=:1.72 serial=78
+  path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=getSourceInformation
+
+
+signal sender=:1.72 -> dest=(null destination) serial=9845
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=StatusEvent 
+    int32 1     // note: completed
+
 
 ={============================================================================
 *kt_dev_uv_stack_254* mr-dash: event listener
@@ -13444,7 +13576,19 @@ https://jira.youview.co.uk/browse/SOLDES-555
 
 
 ={============================================================================
-*kt_dev_uv_stack_255* mr-error: status event value
+*kt_dev_uv_stack_255* mr-error: status, source, event value
+
+struct SourceEventValue : NS_ZINC::Enum
+{
+	enum Enum
+	{
+		change_initiated = 0,
+		change_complete = 1,
+		source_information_change = 2,
+		source_config_complete = 3,
+		tracks_changed = 4,
+	};
+};
 
 struct StatusEventValue : NS_ZINC::Enum
 {
@@ -17127,6 +17271,14 @@ directories that YouView considers as required to import into the sandbox:
 # where <daemon> is daemon link name
 
 
+<to-see-outputs-from-daemon-on-console>
+note: this applies to all daemons. add this line to a daemon conf file.
+
+[options]                       
+StdOut=/dev/console
+StdErr=/dev/console
+
+
 <specific-daemon>
 
 dr-x------    2 root     root        4.0K Jul  9 13:43 service-oem.d/
@@ -17152,14 +17304,6 @@ Make sure that only root can read it (otherwise sandboxing the daemon may fail).
 -r--------    1 root     root         132 Jun 25 14:17 sodiumd.conf
 -r--------    1 root     root          89 Jul  8 16:20 tunerd.conf
 -r--------    1 root     root         322 Jul  8 15:06 uimanagerd.conf
-
-
-<to-see-outputs-from-daemon-on-console>
-add this line to a daemon conf file.
-
-[options]                       
-StdOut=/dev/console
-StdErr=/dev/console
 
 
 <to-run-deamon-in-sandbox>
