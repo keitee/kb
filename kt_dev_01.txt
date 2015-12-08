@@ -99,6 +99,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_001| virtual inheritance (interview) {virtual-base-class}
 |kt_dev_cpp_002| reference-vs-pointer (interview)
 |kt_dev_cpp_003| ctor and copy controls. ctor-initializers
+*kt_dev_cpp_003* pass-by-reference
 *kt_dev_cpp_003* vexing parse
 |kt_dev_cpp_004| copy controls of dyn resource. valuelike. preventing-copies. swap and move example
 *kt_dev_cpp_005* class-type-conversion, explicit, copy-form initialization
@@ -12133,8 +12134,8 @@ The reasons to avoid the syn-version:
   - Compile error when there's a class member that don't have default ctor since
   compiler cannot syn default ctor for this class.
 
- - If a class requires control to init an object in one case, then the class is
- likely to require control in all cases.
+  - If a class requires control to init an object in one case, then the class is
+  likely to require control in all cases.
 
 
 <constructor-and-const>
@@ -12154,9 +12155,10 @@ note: There are cases when syn-operations are useful. See
 
 
 {default-initialization-mean}
-The detault synthesised ctor will use in-class init if there is. Otherwise default init its member
-and use default ctor for its class member. So 'undefined' value for built-in types and default
-constructed value for user types.
+The detault synthesised ctor will use in-class init if there is. Otherwise
+default init its member and use default ctor for its class member. So
+'undefined' value for built-in types and default constructed value for user
+types.
 
 
 {in-class-init} C++11
@@ -12270,7 +12272,7 @@ ABEntry::ABEntry(...)
 The ctor-initializer is all about making sure that built-in type do not have
 undefined values since user type has constructors so no undefined value. Is it
 overkill when use constructor initializer for all members since default ctor
-will be used when omitted? Use constructor initializer always since:
+will be used when omitted? Use ctor-initializer always since:
 
   - Avoid to remember which memebers may go uninitialized if they are omitted.
   - Cover data members which are const or reference.
@@ -12286,10 +12288,59 @@ class Derived: public Base
 };
 
 
+<order-of-member-init>
+CPR 289. Members are initialized in the order in which they appear in the class
+definition. The order of initialization often doesn't matter unless one member
+is initialized in terms of another.
+
+Some compliers are kind enough to generate a 'warning' if the data members are
+listed in the ctor-initializer in a 'different' order from the order in which
+the members are declared.
+
+1. Good idea to write ctor-initializer in the same order as the members are
+declared.
+
+2. Good idea to write member initializer to use the ctor's parameters rather
+than another data member from the same object.
+
+<ex>
+This is a warning simply becuase of different order and turned to an error due
+to compiler flag:
+
+class X {
+  // ...
+  GstMediaRouterSize videoSize;
+
+  SetSourceReason::Enum setSourceReason;
+};
+
+: error: 'X::setSourceReason' will be initialized after
+: error:   'GstMediaRouterSize videoSize'
+: error:   when initialized here  // points to the ctor.
+
+X::X() :
+  ...
+  setSourceReason(SetSourceReason::unspecified),
+  videoSize(0, 0)                 // points to the ctor.
+{
+}
+
+It solves the errors when changes the order of declaration:
+
+class X {
+  // ...
+  
+  SetSourceReason::Enum setSourceReason;
+
+  GstMediaRouterSize videoSize;
+};
+
+
 {default-arg}
-The default argument in function. If a parameter has a default argument, all the parameters that
-follow it 'must' also have default arguments. The default arguments are used from right most
-arguments that means that user provided arguments are used from left most.
+The default argument in function. If a parameter has a default argument, all the
+parameters that follow it 'must' also have default arguments. The default
+arguments are used from right most arguments that means that user provided
+arguments are used from left most.
 
 typedef string::size_type sz;
 string screen( sz ht = 24, sz wid = 80, char background = ' ' );
@@ -12299,8 +12350,9 @@ string window = screen();        // == screen( 24, 80, ' ');
 string window = screen(66);      // == screen( 66, 80, ' ');
 string window = screen(66,256);  // == screen( 66, 256, ' ');
 
-So consider ordering the parameters in declaration so that those lesat likely to use a default value
-appear first. See {default-arg-in-virtual} for use inheritance.
+So consider ordering the parameters in declaration so that those lesat likely to
+use a default value appear first. See {default-arg-in-virtual} for use
+inheritance.
 
 class T {
   T() = default;
@@ -12319,8 +12371,9 @@ class T {
 
 
 Two points:
-Use carefully as there are logical cases where need to have args from the same source. For
-example, it's logical error when one arg is from def init and the other is from the user.
+Use carefully as there are logical cases where need to have args from the same
+source. For example, it's logical error when one arg is from def init and the
+other is from the user.
 
 
 {copy-control}
@@ -12414,21 +12467,26 @@ class FooFoo
     FooFoo(int val) : foo(val) 
   { cout << "FooFoo's ctor: " << val << endl; }
 
-    // note: this is why constructor cannot be a const
+    // note: this is an error when ctor is const
+    //
     // error: passing 'const Foo' as 'this' argument of 'int Foo::get()' 
     // discards qualifiers [-fpermissive]
+    //
     // FooFoo(const FooFoo& arg) const : foo()
     // { cout << "FooFoo's copy ctor: " << arg.foo.get() << endl; }
 
     // note: calls foo's copy constructor.
+    //
     // FooFoo(const FooFoo& arg): foo(arg.foo) 
     // { cout << "FooFoo's copy ctor: " << foo.get() << endl; }
 
     // note: calls foo's default constructor. value-init
+    //
     // FooFoo(const FooFoo& arg): foo() 
     // { cout << "FooFoo's copy ctor: " << foo.get() << endl; }
 
     // note: calls foo's default constructor. value-init
+    //
     // FooFoo(const FooFoo& arg) 
     // { cout << "FooFoo's copy ctor: " << foo.get() << endl; }
 
@@ -12443,16 +12501,61 @@ int main()
 
   FooFoo cx = bx;
 
-  // note: this direct from also has the same call as above. calls copy constructor.
+  // note: this direct-form also has the same call as above. calls copy
+  // constructor.
+
   FooFoo cx(bx);
 }
 
 
 <why-reference-parameter>
-Why the copy constructor's own parameter 'must' be a reference? If it is not a reference, then the
-call would never succeed. To call the copy constructor, need to use copy constructor to copy the
-argument and to copy the argument, need to use copy constructor. indefinite recursive call.
+Why the copy constructor's own parameter 'must' be a reference? If it is not a
+reference, then the call would never succeed. To call the copy constructor, need
+to use copy constructor to copy the argument and to copy the argument, need to
+use copy constructor. indefinite recursive call.
 
+
+{copy-assign} deleted-copy-controls. reference-member.
+As with copy-ctor, cannot use syn version when there are reference and const
+member data. Why? because syn copy assign is defined as 'deleted' if the class
+has a const or reference member. C++P p508
+
+It uses op overloading and must be a 'member' because 'lhs' is this pointer.
+
+class Foo {
+  Foo& operator=(const Foo&);
+};
+
+The copy-assign controls how objects of its class are assigned
+
+Sales_data trans, accum;
+trans = accum;
+
+For assign with different types, need additional assign op and see
+*kt_dev_cpp_021*
+
+<assignment-must-return-a-reference-to-this>
+EC++10. All assign ops must follow this convention like built-in types because
+of 'chain' of assignment and should behave the same as built-in types.
+
+x = y = z = 15;   // right associative
+
+Widget wx, wy, wz;
+wx = wy = wz = DefaultWidget;
+
+class Widget {
+  public:
+    Widget& operator=( const Widget& rhs )
+    {
+      ...
+      return *this;
+    }
+};
+
+
+
+={============================================================================
+*kt_dev_cpp_003* pass-by-reference
 
 {pass-by-reference-to-const} EC++20.
 
@@ -12586,43 +12689,6 @@ class Rational {
 };
 
 
-{copy-assign} deleted-copy-controls. reference-member.
-As with copy constructor, cannot use syn version when there are reference and const member data.
-Why? because syn copy assign is defined as 'deleted' if the class has a const or reference member.
-C++P p508
-
-It uses op overloading and must be a 'member' because 'lhs' is this pointer.
-
-class Foo {
-  Foo& operator=(const Foo&);
-};
-
-The copy-assign controls how objects of its class are assigned
-
-Sales_data trans, accum;
-trans = accum;
-
-For assign with different types, need additional assign op and see *kt_dev_cpp_021*
-
-<assignment-must-return-a-reference-to-this>
-EC++10. All assign ops must follow this convention like built-in types because of 'chain' of
-assignment and should behave the same as built-in types.
-
-x = y = z = 15;   // right associative
-
-Widget wx, wy, wz;
-wx = wy = wz = DefaultWidget;
-
-class Widget {
-  public:
-    Widget& operator=( const Widget& rhs )
-    {
-      ...
-        return *this; ~
-    }
-};
-
-
 {avoid-unnecessary-default-ctor}
 From MEC++04. There are two categories:
 
@@ -12689,38 +12755,6 @@ struct Address {
   char zip[5]; // 07974
 
   Address(..., const string& st, int z);
-};
-
-
-{ctor-order}
-
-class X {
-  // ...
-
-  GstMediaRouterSize videoSize;
-
-  SetSourceReason::Enum setSourceReason;
-};
-
-: error: 'X::setSourceReason' will be initialized after
-: error:   'GstMediaRouterSize videoSize'
-: error:   when initialized here  note: points to the ctor.
-
-X::X() :
-  ...
-  setSourceReason(SetSourceReason::unspecified),
-  videoSize(0, 0)                 note: points to the ctor.
-{
-}
-
-It solves the errors when changes the order of declaration:
-
-class X {
-  // ...
-  
-  SetSourceReason::Enum setSourceReason;
-
-  GstMediaRouterSize videoSize;
 };
 
 
@@ -13627,18 +13661,25 @@ f(10);                    // error since ctor that takes a size is explicit
 f(vector<int>(10));       // okay
 
 
-<copy-form-use-copy-ctor>
+{copy-form-use-copy-ctor}
 The direct-form initialization use ordinary function matching in searching for
-matching ctor and the copy-form use copy ctor or move ctor if there is. In both
-cases, implicit conversion on arguments can happen.
+matching ctor among ctors including copy-ctor and the copy-form use copy-ctor or
+move-ctor if there is 'and' use converting-ctor.
+
+<1>
+
+#include<iostream>
+#include<string>
+
+using namespace std;
 
 class MSTR
 {
+  private:
+    string mesg;
+
   public:
     MSTR() : mesg() {}
-
-    // MSTR(const string &str) : mesg(str) {}
-    // explicit MSTR(const char *pchar) : mesg(pchar) {}
 
     // copy ctor
     MSTR( const MSTR &mstr )
@@ -13648,7 +13689,10 @@ class MSTR
     }
 };
 
-MSTR m3("mstring three");
+int main()
+{
+  MSTR m3("mstring three");
+}
 
 : In function ‘int main()’:
 :75:28: error: no matching function for call to ‘MSTR::MSTR(const char [14])’
@@ -13658,17 +13702,128 @@ MSTR m3("mstring three");
 :35:9: note: MSTR::MSTR()
 :35:9: note:   candidate expects 0 arguments, 1 provided
 
-The compiler do "function matching" to find the best match. When a class has
-MSTR(const string &); then use this and no errors.
+
+<2>
+
+#include<iostream>
+#include<string>
+
+using namespace std;
+
+class MSTR
+{
+  private:
+    string mesg;
+
+  public:
+    MSTR() : mesg() {}
+
+    MSTR(const string &str) : mesg(str)
+    { cout << "convert ctor" << endl; }
+
+    MSTR(const char *pchar) : mesg(pchar)
+    { cout << "convert ctor" << endl; }
+
+    explicit MSTR(const char *pchar) : mesg(pchar) 
+    { cout << "convert ctor" << endl; }
+
+    // copy ctor
+    MSTR( const MSTR &mstr )
+    {
+      cout << "mstr:copy ctor" << endl;
+      mesg = mstr.mesg;
+    }
+};
+
+int main()
+{
+  MSTR m3("mstring three");
+}
+
+The compiler do "function matching" to find the best match. When one of above
+three converting ctor is defined, no errors and only converting ctor is called.
 
 
-MSTR m3 = "mstring three";
+<3>
+
+#include<iostream>
+#include<string>
+
+using namespace std;
+
+class MSTR
+{
+  private:
+    string mesg;
+
+  public:
+    MSTR() : mesg() {}
+
+    explicit MSTR(const char *pchar) : mesg(pchar) 
+    {
+      cout << "convert ctor" << endl;
+    }
+
+    // copy ctor
+    MSTR( const MSTR &mstr )
+    {
+      cout << "mstr:copy ctor" << endl;
+      mesg = mstr.mesg;
+    }
+};
+
+int main()
+{
+  MSTR m3 = "mstring three";
+}
+
 
 : In function ‘int main()’:
 : error: conversion from ‘const char [14]’ to non-scalar type ‘MSTR’ requested
 
 No function matching. Simply use copy ctor but complains about type mismatch of
-argument.
+argument since there is no coversion.
+
+
+<4>
+
+#include<iostream>
+#include<string>
+
+using namespace std;
+
+class MSTR
+{
+  private:
+    string mesg;
+
+  public:
+    MSTR() : mesg() {}
+
+    MSTR(const char *pchar) : mesg(pchar)
+    {
+      cout << "convert ctor" << endl;
+    }
+
+    // copy ctor
+    MSTR( const MSTR &mstr )
+    {
+      cout << "mstr:copy ctor" << endl;
+      mesg = mstr.mesg;
+    }
+};
+
+int main()
+{
+  cout << "main:" << endl;
+
+  // MSTR m3("mstring three");
+  MSTR m3 = "mstring three";
+
+  cout << "main:" << endl;
+}
+
+This works fine since there is a conversion.
 
 
 note:
@@ -13677,9 +13832,10 @@ above such as pass by value.
 
 
 <copy-form-initialization>
-The copy-form uses copy-ctor which uses implicitly class-type-conversion to make
-a call succeed. However, if that converting constructor is explicit or is not
-defined, then cannot make it succeed and is in error.
+The copy-form uses copy-ctor 'and' converting-ctor which is used implicitly
+class-type-conversion to make a call succeed. However, if that converting
+constructor is explicit or is not defined, then cannot make it succeed and is in
+error.
 
 The C++SLR says that you can't use the assignment notation, copy-form here
 because that is considered to be an implicit conversion.
