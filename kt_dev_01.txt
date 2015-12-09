@@ -58,7 +58,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_107| gcc: link: sysroot and rpath-link
 |kt_dev_gcc_108| gcc: options
 |kt_dev_gcc_109| gcc: options: get dependancies
-|kt_dev_gcc_110| gcc: attributes
+|kt_dev_gcc_110| gcc-attributes
 |kt_dev_gcc_111| gcc: profiling
 |kt_dev_gcc_112| gcc: options: optimization
 |kt_dev_gcc_113| gcc: options: warning
@@ -5657,29 +5657,55 @@ $ echo '#include <errno.h>' | cpp -dM
 
 
 ={============================================================================
-*kt_dev_gcc_110* gcc: attributes
+*kt_dev_gcc_110* gcc-attributes
 
 https://gcc.gnu.org/onlinedocs/gcc-4.1.2/gcc/Function-Attributes.html
 
 5.24 Declaring Attributes of Functions
 
-In GNU C, you declare certain things about functions which help the compiler optimize function calls
-and check your code more carefully.
+In GNU C, you declare certain things about functions which help the compiler
+optimize function calls and check your code more carefully.
 
-The keyword __attribute__ allows you to specify special attributes when making a declaration. This
-keyword is followed by an attribute specification inside double parentheses. The following
-attributes are currently defined for functions on all targets: noreturn, returns_twice, noinline,
-always_inline, flatten, pure, const, nothrow, sentinel, format, format_arg, no_instrument_function,
-section, constructor, destructor, used, unused, deprecated, weak, malloc, alias, warn_unused_result,
-nonnull and externally_visible. 
+The keyword __attribute__ allows you to specify special attributes when making a
+declaration. This keyword is followed by an attribute specification inside
+'double' parentheses. The following attributes are currently defined for
+functions on all targets: noreturn, returns_twice, noinline, always_inline,
+flatten, pure, const, nothrow, sentinel, format, format_arg,
+no_instrument_function, section, constructor, destructor, used, unused,
+deprecated, weak, malloc, alias, warn_unused_result, nonnull and
+  externally_visible. 
   
 Several other attributes are defined for functions on particular target systems.
+
+unused
+    This attribute, attached to a function, means that the function is meant to
+    be possibly unused. GCC will not produce a warning for this function.
+
+note: can be used on object?
+
+#define ZINC_UNUSED __attribute__((unused))
+
+try
+{
+  ...
+}
+catch(ZINC_UNUSED const NS_RUBIDIUM_SYSTEM::NetworkProblemException& e)
+{
+  ...
+}
+
+used
+    This attribute, attached to a function, means that code must be emitted for
+    the function even if it appears that the function is 'not' referenced. This
+    is useful, for example, when the function is referenced only in inline
+    assembly.
+
 
 <visibility>
 visibility ("visibility_type")
 
-The visibility attribute on ELF targets causes the declaration to be emitted with default, hidden,
-protected or internal visibility.
+The visibility attribute on ELF targets causes the declaration to be emitted
+with default, hidden, protected or internal visibility.
 
 void __attribute__ ((visibility ("protected")))
 f () { /* Do something. */; }
@@ -5690,27 +5716,35 @@ int i __attribute__ ((visibility ("hidden")));
 See the ELF gABI for complete details, but the short story is:
 
 default
-Default visibility is the normal case for ELF. This value is available for the visibility attribute
-to override other options that may change the assumed visibility of symbols.
+    Default visibility is the normal case for ELF. This value is available for
+    the visibility attribute to override other options that may change the
+    assumed visibility of symbols.
+
+#define ZINC_EXPORT __attribute__((visibility("default")))
+
 
 hidden
-Hidden visibility indicates that the symbol will not be placed into the dynamic symbol table, so no
-other module (executable or shared library) can reference it directly.  
+Hidden visibility indicates that the 'symbol' will not be placed into the
+dynamic symbol table, so no other module (executable or shared library) can
+reference it directly.  
 
 internal 
-Internal visibility is like hidden visibility, but with additional processor specific semantics.
-Unless otherwise specified by the psABI, GCC defines internal visibility to mean that the function
-is never called from another module. Note that hidden symbols, while they cannot be referenced
-directly by other modules, can be referenced indirectly via function pointers. By indicating that a
-symbol cannot be called from outside the module, GCC may for instance omit the load of a PIC
-register since it is known that the calling function loaded the correct value.  
+Internal visibility is like hidden visibility, but with additional processor
+specific semantics.  Unless otherwise specified by the psABI, GCC defines
+internal visibility to mean that the function is never called from another
+module. Note that hidden symbols, while they cannot be referenced directly by
+other modules, can be referenced indirectly via function pointers. By indicating
+that a symbol cannot be called from outside the module, GCC may for instance
+omit the load of a PIC register since it is known that the calling function
+loaded the correct value.  
 
 protected 
-Protected visibility indicates
-that the symbol will be placed in the dynamic symbol table, but that references within the defining
-module will bind to the local symbol. That is, the symbol cannot be overridden by another module. 
+Protected visibility indicates that the symbol will be placed in the dynamic
+symbol table, but that references within the defining module will bind to the
+local symbol. That is, the symbol cannot be overridden by another module. 
 
 Not all ELF targets support this attribute. 
+
 
 ={============================================================================
 *kt_dev_gcc_111* gcc: profiling
@@ -17649,6 +17683,54 @@ void __cxa_throw() { abort(); }
 WARNING: This is a horrible hack. It should work on x86 and x86-64, but I strongly recommend against
 this. Notably, it won't actually improve performance or save code space, as -fno-exceptions might.
 However, it will allow the throw syntax, while turning throws into abort()s.
+
+
+={============================================================================
+*kt_dev_cpp_019* exception
+
+class ZINC_EXPORT BrokerException: public std::runtime_error
+{
+  public:
+    BrokerException() : std::runtime_error("Error in MetadataBroker."){}
+
+    BrokerException(std::string msg) : 
+      std::runtime_error(msg)
+  {}
+
+    /** Explicit virtual destructor to control RTTI generation. */
+    virtual ~BrokerException() throw();
+};
+
+class ZINC_EXPORT NetworkProblemException : public BrokerException
+{
+  public:
+    /**  */
+    NetworkProblemException (const std::string& mesg = "")
+      : BrokerException(mesg)
+      {}
+
+    /** Explicit virtual destructor to control RTTI generation. */
+    virtual ~NetworkProblemException() throw();
+};
+
+
+={============================================================================
+*kt_dev_cpp_019* exception: blanket catch
+
+catch(ZINC_UNUSED const std::exception& e)
+{
+  ...
+}
+
+This seems like a rather blanket catch and could potentially catch some serious
+exceptions that you don't intend on catching given the below comments. You
+should be more specific in which exceptions you catch IMO.
+
+There's a whole list of exceptions that could be thrown. Just because you're not
+expecting it right now doesn't mean it won't happen in the future. I don't think
+std::exception should be caught anywhere but say in a main message loop. It's
+much harder to debug exceptions being hidden like that, as what() is not always
+likely to include a useful what().
 
 
 ={============================================================================
