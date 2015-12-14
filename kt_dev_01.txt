@@ -113,9 +113,13 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
 |kt_dev_cpp_007| overload: function matching
 |kt_dev_cpp_008| const-, equal-misspell
-|kt_dev_cpp_008| const-member
-|kt_dev_cpp_008| const-bitwise
-|kt_dev_cpp_008| const-mutable
+*kt_dev_cpp_008* const-temporary
+*kt_dev_cpp_008* const-this, overload, member function
+|kt_dev_cpp_008| const-bitwise, logical
+*kt_dev_cpp_008* const-mutable
+*kt_dev_cpp_008* read: from the outside (interfaces first) or from the inside?
+*kt_dev_cpp_008* read: logical and physical state
+*kt_dev_cpp_008* read: constness on logical state
 |kt_dev_cpp_009| return: undefined result
 *kt_dev_cpp_009* return: from main, meaning of 0
 |kt_dev_cpp_010| temp-object
@@ -15235,90 +15239,9 @@ const GstCaps *caps = gst_caps_from_string();
 GstCaps const *caps = gst_caps_from_string();
 gst_caps_unref(GetCaps *caps);
 
+<const-to-nonconst-error>
 :44: error: invalid conversion from 'const GstCaps*' to 'GstCaps*'
 :44: error:   initializing argument 1 of 'void gst_caps_unref(GstCaps*)'
-
-
-{nonconst-to-const-conversion} type-match-exceptions. CPR p61
-As long as maintain constness, allow conversion and so two 'exceptions' to type
-match rule. If necessary, compiler make a 'temporary' to allow conversion and
-maintain constness.
-
-These exception are 'implicit' nonconst-to-const and derived-to-base-reference
-conversion. Can bind reference-to-const to non-const, a literal, a temp, or
-other expression that evaluate to an type.
-
-const int ci = 42;      
-int i = ci;             
-
-const int& r = ci;      // is 'always' low-level
-
-int i;
-const int &j = i;       // conversion from nonconst to const
-const int *p = &i;      // conversion from nonconst to const
-int &r = j, *q = p;     // ERROR since conversion from const to nonconst
-
-const int &ri = 42;     // ok but int &ri = 42 is an error
-int &ri = 10;           // ERROR
-int &ri = double_val;   // ERROR note: it's reference
-
-double dval = 3.14;
-const int &ri = dval;   // ok becuase will bind to 'temporary' and cannot change
-                        // it via ri. note: it's reference.
-
-The reference is alias for something exist and also need to maintain constness.
-This is all about for 'compiler' to maintain constness by creating temporary. So
-the compiler transforms this:
-
-const int temp = dval;     // see const and tempoary is const object.
-cont int &di = temp;
-
-This also shows an example of creating a temporary through const conversion.
-
-int main()
-{
-  int i{100};
-  const int &ri = i;
-
-  i = 200;
-
-  std::cout << "i: " << i << std::endl;
-  std::cout << "ri: " << ri << std::endl;
-
-  double dval{3.14};
-  const int &di = dval;
-
-  dval = 6.28;
-
-  std::cout << "d: " << dval << std::endl;
-  std::cout << "rd: " << di << std::endl;
-}
-
-i: 200
-ri: 200
-d: 6.28
-rd: 3          // see
-
-
-<ex>
-
-// std::string YVCloudAuth::getAuthToken() const;
-
-try
-{
-  const std::string& token = cloudAuth->getAuthToken();
-  Header.replace("<add-youview-token>", token.c_str());
-}
-
-You're taking a reference to a temporary object
-
-That's allowed.
-
-exactly, this const reference binds to this rvalue, extending it's lifetime for
-the lifetime of the reference itself. But in practice it's like giving a temp an
-alias. see
-http://herbsutter.com/2008/01/01/gotw-88-a-candidate-for-the-most-important-const/
-for a nice explanation
 
 
 {const-return} equal-misspell
@@ -15407,6 +15330,186 @@ find_char("Hello", 'o');   // ERROR because literal is const
 
 So recommend reference-to-const-param over plain reference-param for
 flexibility: can use for both const and nonconst parameter. can use conversion.
+
+
+={============================================================================
+*kt_dev_cpp_008* const-temporary
+
+{nonconst-to-const-conversion} type-match-exceptions. CPR p61
+As long as maintain constness, allow conversion and so two 'exceptions' to type
+match rule. If necessary, compiler make a 'temporary' to allow conversion and
+maintain constness.
+
+These exception are 'implicit' nonconst-to-const and derived-to-base-reference
+conversion. Can bind reference-to-const to non-const, a literal, a temp, or
+other expression that evaluate to an type.
+
+const int ci = 42;      
+int i = ci;             
+
+const int& r = ci;      // is 'always' low-level
+
+int i;
+const int &j = i;       // conversion from nonconst to const
+const int *p = &i;      // conversion from nonconst to const
+int &r = j, *q = p;     // ERROR since conversion from const to nonconst
+
+const int &ri = 42;     // ok but int &ri = 42 is an error
+int &ri = 10;           // ERROR
+int &ri = double_val;   // ERROR note: it's reference
+
+double dval = 3.14;
+const int &ri = dval;   // ok becuase will bind to 'temporary' and cannot change
+                        // it via ri. note: it's reference.
+
+The reference is alias for something exist and also need to maintain constness.
+This is all about for 'compiler' to maintain constness by creating temporary. So
+the compiler transforms this:
+
+const int temp = dval;     // see const and tempoary is const object.
+cont int &di = temp;
+
+This also shows an example of creating a temporary through const conversion.
+
+int main()
+{
+  int i{100};
+  const int &ri = i;
+
+  i = 200;
+
+  std::cout << "i: " << i << std::endl;
+  std::cout << "ri: " << ri << std::endl;
+
+  double dval{3.14};
+  const int &di = dval;
+
+  dval = 6.28;
+
+  std::cout << "d: " << dval << std::endl;
+  std::cout << "rd: " << di << std::endl;
+}
+
+i: 200
+ri: 200
+d: 6.28
+rd: 3          // see
+
+
+<ex>
+
+// std::string YVCloudAuth::getAuthToken() const;
+
+try
+{
+  const std::string& token = cloudAuth->getAuthToken();
+  Header.replace("<add-youview-token>", token.c_str());
+}
+
+You're taking a reference to a temporary object
+
+That's allowed.
+
+exactly, this const reference binds to this rvalue, extending it's lifetime for
+the lifetime of the reference itself. But in practice it's like giving a temp an
+alias. see below for a nice explanation
+
+<read>
+http://herbsutter.com/2008/01/01/gotw-88-a-candidate-for-the-most-important-const/
+
+GotW #88: A Candidate For the "Most Important const"
+
+Q1: Is the following code legal C++?
+
+    // Example 1
+
+    string f() { return "abc"; }
+
+    void g() {
+      const string& s = f();
+      cout << s << endl;    // can we still use the "temporary" object?
+    }
+
+
+A1: Yes.
+
+This is a C++ feature. the code is valid and does exactly what it appears to do.
+
+Normally, a temporary object lasts only until the end of the full expression in
+which it appears. However, C++ deliberately specifies that binding a temporary
+object to a reference to const on the stack 'lengthens' the lifetime of the
+temporary to the 'lifetime' of the reference itself, and thus avoids what would
+otherwise be a common dangling-reference error. In the example above, the
+temporary returned by f() lives until the closing curly brace. (Note this only
+    applies to stack-based references. It doesn't work for references that are
+    members of objects.)
+
+
+Q2: What if we take out the const. is Example 2 still legal C++?
+
+    // Example 2
+
+    string f() { return "abc"; }
+
+    void g() {
+      string& s = f();       // still legal?
+      cout << s << endl;
+    }
+
+A2: No.
+
+The "const" is important. The first line is an error and the code won't compile
+portably with this reference to non-const, because f() returns a temporary
+object (i.e., rvalue) and only lvalues can be bound to references to non-const.
+
+Note: Visual C++ does allow Example 2 but emits a "nonstandard extension used"
+warning by default. A conforming C++ compiler can always allow otherwise-illegal
+C++ code to compile and give it some meaning — hey, it could choose to allow
+inline COBOL if some kooky compiler writer was willing to implement that
+extension, maybe after a few too many Tequilas. For some kinds of extensions the
+C++ standard requires that the compiler at least emit some diagnostic to say
+that the code isn’t valid ISO C++, as this compiler does.
+
+Note: gcc 4.7.2 and see 'rvalue'.
+
+<const-to-nonconst-error>
+:19:21: error: invalid initialization of non-const reference of type 
+  ‘std::string& {aka std::basic_string<char>&}’ 
+  from an rvalue of type ‘std::string {aka std::basic_string<char>}’
+
+I once heard Andrei Alexandrescu give a talk on ScopeGuard (invented by Petru
+    Marginean) where he used this C++ feature and called it "the most important
+const I ever wrote." And this brings us to the Guru Question, which highlights
+the additional subtlety that Andrei's code deftly leveraged.
+
+Guru Question
+
+Q3: When the reference goes out of scope, which destructor gets called?
+A3: The same destructor that would be called for the temporary object. It's just
+being delayed.
+
+Corollary: You can take a const Base& to a Derived temporary and it will be
+destroyed without virtual dispatch on the destructor call.
+
+This is nifty. Consider the following code:
+
+    // Example 3
+
+    Derived factory(); // construct a Derived object
+
+    void g() {
+      const Base& b = factory(); // calls Derived::Derived here
+      // use b
+    } // calls Derived::~Derived directly here - not Base::~Base + virtual dispatch!
+
+Does this work in practice on real compilers? Yes: Every compiler I have access
+to calls the correct Derived destructor, including even ancient Borland 5.5 and
+Visual C++ 6.0 (and Digital Mars, though DM calls the destructor at the wrong
+    time, as noted above).
+
+Andrei leverages this subtlety (of course) in his ScopeGuard implementation to
+avoid making the implementation classes' destructors virtual at all, which is
+okay in that case because those classes otherwise have no need for one. 
 
 
 ={============================================================================
@@ -15558,6 +15661,7 @@ If it were written:
 Screen& display() const
 { cout << "dis: this is const member" << endl; return *this; }
 
+<const-to-nonconst-error>
 test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&'
 from expression of type 'const Screen'
@@ -15674,39 +15778,39 @@ bool Stack::empty() const     // must use
 
 
 ={============================================================================
-*kt_dev_cpp_008* const and conversion
-
-
-={============================================================================
-*kt_dev_cpp_008* const and conversion
+*kt_dev_cpp_008* const-bitwise, logical
 
 {bitwise-const} physical constness
-From EC++03. Bitwise-const(physical const) is C++'s definition and compiler only catches assignment to
-member data which is read-only. Issues errors like:
+From EC++03. bitwise-const(physical const) is C++'s definition and compiler only
+catches assignment to member data which is read-only. Issues errors like:
 
-<example>
+<ex>
+
 Error_code Stack::top(Stack_entry &item) const
 {
   else
-    item = entry[count--];   // ERROR. count is member
-    // item = entry[count-1];
+    item = entry[count--];   // ERROR since count is member
+  // item = entry[count-1];
 
   return outcome;
 }
 
-usedeskcalc.cpp:53:21: error: decrement of member 'Stack::count' in read-only object
+:53:21: error: decrement of member 'Stack::count' in read-only 'object'
 
 
-<example>
+<ex>
+
 int cube(const int& num)
 {
   num = num * num;   // ERROR
   return num;
 }
 
-test.cpp:22:14: error: assignment of read-only reference 'num'
+:22:14: error: assignment of read-only reference 'num'
 
-<example>
+
+<ex>
+
 #include <iostream>
 
 using namespace std;
@@ -15715,9 +15819,9 @@ class Sample {
   public:
     Sample(const char* str) : text(str) {}
 
-    const char& operator[] (std::size_t pos) const       // note: 1
-    // char& operator[] (std::size_t pos) const          // note: 2
-    { return text[pos]; }
+    const char& operator[] (std::size_t pos) const      // note: 1
+    char& operator[] (std::size_t pos) const            // note: 2
+    { return text[pos]; }                               // error
 
   private:
     std::string text;
@@ -15733,12 +15837,17 @@ int main(int argc, char** argv)
 }
 
 note: 1. read-only assignment error
-use-const-second.cpp: In function ‘int main(int, char**)’:
-use-const-second.cpp:25:11: error: assignment of read-only location ‘sam.Sample::operator[](1u)’
+: In function ‘int main(int, char**)’:
+:25:11: error: assignment of read-only 'location' ‘sam.Sample::operator[](1u)’
 
+<const-to-nonconst-error>
 note: 2. const to nonconst error
+11:22: error: invalid initialization of reference of type ‘char&’ 
+  from expression of type ‘const char’
 
-<example>
+
+<ex> when changed to use pointer instead
+
 #include <iostream>
 
 using namespace std;
@@ -15747,8 +15856,8 @@ class Sample {
   public:
     Sample(const char* str) : ptext(new std::string(str)) {}
 
-    char& operator[] (std::size_t pos) const             // note: 1. no const to nonconst error and works
-    const char& operator[] (std::size_t pos) const       // note: 2. read-only assignment error
+    const char& operator[] (std::size_t pos) const       // note: 1
+    char& operator[] (std::size_t pos) const             // note: 2
     { return (*ptext)[pos]; }
 
     ~Sample() { delete ptext; }
@@ -15766,27 +15875,35 @@ int main(int argc, char** argv)
   std::cout << sam[1] << endl;
 }
 
+note: 1. As with the above, emits read-only assignment error.
+
+note: 2. NO error and can change the value
+
 O
 X
 
-No compile errors because 'indirect' use of an object (outside of an object) can avoid C++'s const
-check called bitwise-const. Since do not make changes to *this, member, pointer in this case, so
-compiler do not complain. This means const member func can change object state. Break encapsulation.
+No compile errors because 'indirect' use of an object (outside of an object) can
+avoid C++'s const check called bitwise-const. Since do not make changes to
+*this, member, pointer in this case, so compiler do not complain. This means
+const member func can change object state. Break encapsulation.
+
 
 <solution-one>
 From EC++28. Can fix this problem as below,
 
-const char& operator[] (std::size_t pos) const     // not able to modify via this call
+const char& operator[] (std::size_t pos) const
 
-However, 'dangling' handles problem still remains since it returns reference to internal member such
-as reading it which is already gone.
+Not able to modify via this call. However, 'dangling' handles problem still
+remains since it returns reference to internal member such as reading it which
+is already gone.
 
-<key> Therefore, recommend to use const T(...) const form as a 'default'.
+Therefore, recommend to use const T(...) const form as a 'default'.
+
 
 <solution-two> logical constness
-EC++03. Hence logical-const. This is an example to cache the length whenever it is requested. cache
-textLength. Although it changes its member, it has logical constness as it updates length to cache
-purpose. 
+EC++03. Hence logical-const. This is an example to cache the length whenever it
+is requested. cache textLength. Although it changes its member, it maintains
+logical constness as it updates length to cache purpose. 
 
 class CTextBlock {
   public:
@@ -15812,9 +15929,11 @@ std::size_t CTextBlock::length() const
 }
 
 
-{mutable}
-To make member data writable from a const member func. A mutable data member is never const even
-when it is a member of a const object.
+={============================================================================
+*kt_dev_cpp_008* const-mutable
+
+To make member data writable from a const member func. A mutable data member is
+never const even when it is a member of a const object.
 
 class T {
   public:
@@ -15857,6 +15976,7 @@ const char* _determineSource(const char*in, int* sourceLen, int *readPos, bool* 
   ...
 }
 
+<const-to-nonconst-error>
 Session.cpp:876:23: error: invalid conversion from 'const char*' to 'char*'
 
 Looked at the strchr man page and it says:
@@ -15916,6 +16036,337 @@ const char* _determineSource(char*in, int* sourceLen, int *readPos, bool* usePat
   idx = strchr(in, '/');
   ...
 }
+
+
+={============================================================================
+*kt_dev_cpp_008* read: from the outside (interfaces first) or from the inside?
+
+https://isocpp.org/wiki/faq/operator-overloading#design-interfaces-first
+
+Should I design my classes from the outside (interfaces first) or from the
+inside (data first)?
+
+From the outside!
+
+A good interface provides a simplified view that is expressed in the vocabulary
+of a user. In the case of OO software, the interface is normally the set of
+public methods of either a single class or a tight group of classes.
+
+First think about what the object logically represents, 'not' how you intend to
+physically build it. For example, suppose you have a Stack class that will be
+built by containing a LinkedList:
+
+class Stack {
+  public:
+    // ...
+  private:
+    LinkedList list_;
+};
+
+Should the Stack have a get() method that returns the LinkedList? Or a set()
+  method that takes a LinkedList? Or a constructor that takes a LinkedList?
+  Obviously the answer is No, since you should design your interfaces from the
+  outside-in. I.e., users of Stack objects don’t care about LinkedLists; they
+  care about pushing and popping.
+
+Now for another example that is a bit more subtle. Suppose class LinkedList is
+built 'using' a linked list of Node objects, where each Node object has a
+pointer to the next Node:
+
+class Node { /*...*/ };
+
+class LinkedList {
+  public:
+    // ...
+  private:
+    Node* first_;
+};
+
+Should the LinkedList class have a get() method that will let users access the
+first Node? Should the Node object have a get() method that will let users
+follow that Node to the next Node in the chain? In other words, what should a
+LinkedList look like from the outside? Is a LinkedList really a chain of Node
+objects? Or is that just an implementation detail? And if it is just an
+implementation detail, how will the LinkedList let users(Stack class) access
+each of the elements in the LinkedList one at a time?
+
+The key insight is the realization that a LinkedList is not a chain of Nodes.
+That may be 'how' it is built, but that is 'not' what it is. What it is is a
+sequence of elements. 
+
+Therefore the LinkedList 'abstraction' should provide a LinkedListIterator class
+as well, and that LinkedListIterator might have an operator++ to go to the next
+element, and it might have a get()/set() pair to access its value stored in the
+Node (the value in the Node element is solely the responsibility of the
+    LinkedList user, which is why there is a get()/set() pair that allows the
+    user to freely manipulate that value).
+
+Starting from the user’s perspective, we might want our LinkedList class to
+support operations that look similar to accessing an array using pointer
+arithmetic:
+
+    void userCode(LinkedList& a)
+    {
+      for (LinkedListIterator p = a.begin(); p != a.end(); ++p)
+        std::cout << *p << '\n';
+    }
+
+To implement this interface, LinkedList will need a begin() method and an end()
+  method. These return a LinkedListIterator object. The LinkedListIterator will
+  need a method to go forward, ++p; a method to access the current element, *p;
+  and a comparison operator, p != a.end().
+
+The code follows. 
+
+The important thing to notice is that LinkedList does not have any methods that
+let users access Nodes. 
+
+Nodes are an implementation technique that is completely buried. This makes:
+
+  the LinkedList class safer (no chance a user will mess up the invariants and
+      linkages between the various nodes), 
+  
+  easier to use (users don’t need to expend extra effort keeping the node-count
+      equal to the actual number of nodes, or any other infrastructure stuff),
+
+  and more flexible (by changing a single typedef, users could change their code
+      from using LinkedList to some other list-like class and the bulk of their
+      code would compile cleanly and hopefully with improved performance
+      characteristics).
+
+
+#include <cassert>    // Poor man's exception handling
+
+class LinkedListIterator;
+class LinkedList;
+
+class Node {
+  // No public members; this is a "private class"
+  friend class LinkedListIterator;   // A friend class
+  friend class LinkedList;
+  Node* next_;
+  int elem_;
+};
+
+class LinkedListIterator {
+  public:
+    bool operator== (LinkedListIterator i) const;
+    bool operator!= (LinkedListIterator i) const;
+    void operator++ ();   // Go to the next element
+
+    // note: get/set to access element(value)
+    int& operator*  ();   // Access the current element
+
+  private:
+    LinkedListIterator(Node* p);
+    Node* p_;
+    friend class LinkedList;  // so LinkedList can construct a LinkedListIterator
+};
+
+class LinkedList {
+  public:
+    void append(int elem);    // Adds elem after the end
+    void prepend(int elem);   // Adds elem before the beginning
+
+    // ...
+    LinkedListIterator begin();
+    LinkedListIterator end();
+
+    // ...
+  private:
+    Node* first_;
+};
+
+Here are the methods that are obviously inlinable (probably in the same header
+    file):
+
+    inline bool LinkedListIterator::operator== (LinkedListIterator i) const
+    {
+      return p_ == i.p_;
+    }
+    inline bool LinkedListIterator::operator!= (LinkedListIterator i) const
+    {
+      return p_ != i.p_;
+    }
+    inline void LinkedListIterator::operator++()
+    {
+      assert(p_ != NULL);  // or if (p_==NULL) throw ...
+      p_ = p_->next_;
+    }
+    inline int& LinkedListIterator::operator*()
+    {
+      assert(p_ != NULL);  // or if (p_==NULL) throw ...
+      return p_->elem_;
+    }
+    inline LinkedListIterator::LinkedListIterator(Node* p)
+      : p_(p)
+    { }
+    inline LinkedListIterator LinkedList::begin()
+    {
+      return first_;
+    }
+    inline LinkedListIterator LinkedList::end()
+    {
+      return NULL;
+    }
+
+Conclusion: The linked list had two different kinds of data. The values of the
+elements stored in the linked list are the responsibility of the user of the
+linked list (and only the user; the linked list itself makes no attempt to
+    prohibit users from changing the third element to 5), and the linked list’s
+infrastructure data (next pointers, etc.), whose values are the responsibility
+of the linked list (and only the linked list; e.g., the linked list does not let
+    users change (or even look at!) the various next pointers).
+
+Thus the only get()/set() methods were to get and set the elements of the linked
+list, but not the infrastructure of the linked list. Since the linked list hides
+the infrastructure pointers/etc., it is able to make very strong promises
+regarding that infrastructure (e.g., if it were a doubly linked list, it might
+    guarantee that every forward pointer was matched by a backwards pointer from
+    the next Node).
+
+So, we see here an example of where the values of some of a class’s data is the
+responsibility of users (in which case the class needs to have get()/set()
+    methods for that data) but the data that the class wants to control does not
+  necessarily have get()/set() methods.
+
+Note: the purpose of this example is not to show you how to write a linked-list
+class. In fact you should not “roll your own” linked-list class since you should
+use one of the “container classes” provided with your compiler. Ideally you’ll
+use one of the standard container classes such as the std::list<T> template.
+
+
+={============================================================================
+*kt_dev_cpp_008* read: logical and physical state
+
+https://isocpp.org/wiki/faq/const-correctness#logical-vs-physical-state
+
+How can it help me design better classes if I distinguish logical state from
+physical state?  
+
+Because that encourages you to design your classes from the outside-in rather
+than from the inside-out, which in turn makes your classes and objects easier to
+understand and use, more intuitive, less error prone, and faster. (Okay, that’s
+    a slight over-simplification. To understand all the if’s and’s and but’s,
+    you’ll just have to read the rest of this answer!)
+
+Let’s understand this from the inside-out — you will (should) design your
+classes from the outside-in, but if you’re new to this concept, it’s easier to
+understand from the inside-out.
+
+On the inside, your objects have physical (or concrete or bitwise) state. This
+is the state that’s easy for programmers to see and understand; it’s the state
+that would be there if the class were just a C-style struct.
+
+On the outside, your objects have users of your class, and these users are
+restricted to using only public member functions and friends. These external
+users also perceive the object as having state, for example, if the object is of
+class Rectangle with methods width(), height() and area(), your users would say
+that those three are all part of the object’s logical (or abstract or
+    meaningwise) state. To an external user, the Rectangle object actually has
+an area, even if that area is computed on the fly (e.g., if the area() method
+    returns the product of the object’s width and height). In fact, and this is
+the important point, your users don’t know and don’t care how you implement any
+of these methods; your users still perceive, from their perspective, that your
+object logically has a meaningwise state of width, height, and area.
+
+note:
+Even if there is no 'area' member data in a class, user assumes that and this is
+logical state.
+
+The area() example shows a case where the logical state can contain elements
+that are not directly realized in the physical state. The opposite is also true:
+classes sometimes intentionally hide part of their objects’ physical (concrete,
+    bitwise) state from users — they intentionally do not provide any public
+member functions or friends that would allow users to read or write or even know
+about this hidden state. That means there are bits in the object’s physical
+state that have no corresponding elements in the object’s logical state.
+
+As an example of this latter case, a collection-object might 'cache' its last
+lookup in hopes of improving the performance of its next lookup. This cache is
+certainly part of the object’s physical state, but there it is an internal
+implementation detail that will probably not be exposed to users - it will
+probably 'not' be part of the object’s logical state. Telling what’s what is
+easy if you think from the outside-in: if the collection-object’s users have no
+way to check the state of the cache itself, then the cache is transparent, and
+is not part of the object’s logical state.
+
+
+={============================================================================
+*kt_dev_cpp_008* read: constness on logical state
+
+https://isocpp.org/wiki/faq/const-correctness#logical-vs-physical-state
+
+Should the constness of my public member functions be based on what the method
+does to the object’s logical state, or physical state?  
+
+Logical.
+
+There’s no way to make this next part easy. It is going to hurt. Best
+recommendation is to sit down. And please, for your safety, make sure there are
+no sharp implements nearby.
+
+Let’s go back to the collection-object example. Remember: there’s a lookup
+method that caches the last lookup in hopes to speed up future lookups.
+
+Let’s state what is probably obvious: assume that the lookup method makes no
+changes to any of the collection-object’s logical state.
+
+So... the time has come to hurt you. Are you ready?
+
+Here comes: if the lookup method does not make any change to any of the
+collection-object’s logical state, but it does change the collection-object’s
+physical state (it makes a very real change to the very real cache), should the
+lookup method be const?
+
+The answer is a resounding Yes. (There are exceptions to every rule, so “Yes”
+    should really have an asterisk next to it, but the vast majority of the
+    time, the answer is Yes.)
+
+This is all about “logical const” over “physical const.” It means the decision
+about whether to decorate a method with const should hinge primarily on whether
+that method leaves the logical state unchanged, irrespective (are you sitting
+    down?) (you might want to sit down) irrespective of whether the method
+happens to make very real changes to the object’s very real physical state.
+
+In case that didn’t sink in, or in case you are not yet in pain, let’s tease it
+apart into two cases:
+
+    If a method changes any part of the object’s logical state, it logically is
+    a mutator; it should not be const even if (as actually happens!) the method
+    doesn’t change any physical bits of the object’s concrete state.
+
+    Conversely, a method is logically an inspector and should be const if it
+    never changes any part of the object’s logical state, even if (as actually
+        happens!) the method changes physical bits of the object’s concrete
+    state.
+
+If you’re confused, read it again.
+
+If you’re not confused but are angry, good: you may not like it yet, but at
+least you understand it. Take a deep breath and repeat after me: “The constness
+of a method should makes sense from outside the object.”
+
+If you’re still angry, repeat this three times: “The constness of a method must
+make sense to the object’s users, and those users can see only the object’s
+logical state.”
+
+If you’re still angry, sorry, it is what it is. Suck it up and live with it.
+Yes, there will be exceptions; every rule has them. But as a rule, in the main,
+this logical const notion is good for you and good for your software.
+
+One more thing. This is going to get inane, but let’s be precise about whether a
+method changes the object’s logical state. If you are outside the class - you
+are a normal user, every experiment you could perform (every method or sequence
+    of methods you call) would have the same results (same return values, same
+      exceptions or lack of exceptions) irrespective of whether you first called
+    that lookup method. If the lookup function changed any future behavior of
+    any future method (not just making it faster but changed the outcome,
+        changed the return value, changed the exception), then the lookup method
+    changed the object’s logical state - it is a mutuator. But if the lookup
+    method changed nothing other than perhaps making some things faster, then it
+    is an inspector.
+
 
 
 ={============================================================================
@@ -16139,6 +16590,8 @@ conversion, sounds better and possible?
 size_t countChar( string& str, char ch );    // see no const here
 
 Then there is an error:
+
+<const-to-nonconst-error>
 :19:19: error: invalid initialisation of non-const reference of type ‘std::string& {aka
   std::basic_string<char>&}’ from an rvalue of type ‘char*’
 
@@ -22179,336 +22632,6 @@ you're looking for some more compelling arguments, check out some of these sourc
 All pages with Singleton in their title at the Portland Pattern Repository Wiki
 
 Use Your Singletons Wisely (IBM developerWorks) 
-
-
-={============================================================================
-*kt_dev_cpp_104* ref: from the outside (interfaces first) or from the inside?
-
-https://isocpp.org/wiki/faq/operator-overloading#design-interfaces-first
-
-Should I design my classes from the outside (interfaces first) or from the
-inside (data first)?
-
-From the outside!
-
-A good interface provides a simplified view that is expressed in the vocabulary
-of a user. In the case of OO software, the interface is normally the set of
-public methods of either a single class or a tight group of classes.
-
-First think about what the object logically represents, 'not' how you intend to
-physically build it. For example, suppose you have a Stack class that will be
-built by containing a LinkedList:
-
-class Stack {
-  public:
-    // ...
-  private:
-    LinkedList list_;
-};
-
-Should the Stack have a get() method that returns the LinkedList? Or a set()
-  method that takes a LinkedList? Or a constructor that takes a LinkedList?
-  Obviously the answer is No, since you should design your interfaces from the
-  outside-in. I.e., users of Stack objects don’t care about LinkedLists; they
-  care about pushing and popping.
-
-Now for another example that is a bit more subtle. Suppose class LinkedList is
-built 'using' a linked list of Node objects, where each Node object has a
-pointer to the next Node:
-
-class Node { /*...*/ };
-
-class LinkedList {
-  public:
-    // ...
-  private:
-    Node* first_;
-};
-
-Should the LinkedList class have a get() method that will let users access the
-first Node? Should the Node object have a get() method that will let users
-follow that Node to the next Node in the chain? In other words, what should a
-LinkedList look like from the outside? Is a LinkedList really a chain of Node
-objects? Or is that just an implementation detail? And if it is just an
-implementation detail, how will the LinkedList let users(Stack class) access
-each of the elements in the LinkedList one at a time?
-
-The key insight is the realization that a LinkedList is not a chain of Nodes.
-That may be 'how' it is built, but that is 'not' what it is. What it is is a
-sequence of elements. 
-
-Therefore the LinkedList 'abstraction' should provide a LinkedListIterator class
-as well, and that LinkedListIterator might have an operator++ to go to the next
-element, and it might have a get()/set() pair to access its value stored in the
-Node (the value in the Node element is solely the responsibility of the
-    LinkedList user, which is why there is a get()/set() pair that allows the
-    user to freely manipulate that value).
-
-Starting from the user’s perspective, we might want our LinkedList class to
-support operations that look similar to accessing an array using pointer
-arithmetic:
-
-    void userCode(LinkedList& a)
-    {
-      for (LinkedListIterator p = a.begin(); p != a.end(); ++p)
-        std::cout << *p << '\n';
-    }
-
-To implement this interface, LinkedList will need a begin() method and an end()
-  method. These return a LinkedListIterator object. The LinkedListIterator will
-  need a method to go forward, ++p; a method to access the current element, *p;
-  and a comparison operator, p != a.end().
-
-The code follows. 
-
-The important thing to notice is that LinkedList does not have any methods that
-let users access Nodes. 
-
-Nodes are an implementation technique that is completely buried. This makes:
-
-  the LinkedList class safer (no chance a user will mess up the invariants and
-      linkages between the various nodes), 
-  
-  easier to use (users don’t need to expend extra effort keeping the node-count
-      equal to the actual number of nodes, or any other infrastructure stuff),
-
-  and more flexible (by changing a single typedef, users could change their code
-      from using LinkedList to some other list-like class and the bulk of their
-      code would compile cleanly and hopefully with improved performance
-      characteristics).
-
-
-#include <cassert>    // Poor man's exception handling
-
-class LinkedListIterator;
-class LinkedList;
-
-class Node {
-  // No public members; this is a "private class"
-  friend class LinkedListIterator;   // A friend class
-  friend class LinkedList;
-  Node* next_;
-  int elem_;
-};
-
-class LinkedListIterator {
-  public:
-    bool operator== (LinkedListIterator i) const;
-    bool operator!= (LinkedListIterator i) const;
-    void operator++ ();   // Go to the next element
-
-    // note: get/set to access element(value)
-    int& operator*  ();   // Access the current element
-
-  private:
-    LinkedListIterator(Node* p);
-    Node* p_;
-    friend class LinkedList;  // so LinkedList can construct a LinkedListIterator
-};
-
-class LinkedList {
-  public:
-    void append(int elem);    // Adds elem after the end
-    void prepend(int elem);   // Adds elem before the beginning
-
-    // ...
-    LinkedListIterator begin();
-    LinkedListIterator end();
-
-    // ...
-  private:
-    Node* first_;
-};
-
-Here are the methods that are obviously inlinable (probably in the same header
-    file):
-
-    inline bool LinkedListIterator::operator== (LinkedListIterator i) const
-    {
-      return p_ == i.p_;
-    }
-    inline bool LinkedListIterator::operator!= (LinkedListIterator i) const
-    {
-      return p_ != i.p_;
-    }
-    inline void LinkedListIterator::operator++()
-    {
-      assert(p_ != NULL);  // or if (p_==NULL) throw ...
-      p_ = p_->next_;
-    }
-    inline int& LinkedListIterator::operator*()
-    {
-      assert(p_ != NULL);  // or if (p_==NULL) throw ...
-      return p_->elem_;
-    }
-    inline LinkedListIterator::LinkedListIterator(Node* p)
-      : p_(p)
-    { }
-    inline LinkedListIterator LinkedList::begin()
-    {
-      return first_;
-    }
-    inline LinkedListIterator LinkedList::end()
-    {
-      return NULL;
-    }
-
-Conclusion: The linked list had two different kinds of data. The values of the
-elements stored in the linked list are the responsibility of the user of the
-linked list (and only the user; the linked list itself makes no attempt to
-    prohibit users from changing the third element to 5), and the linked list’s
-infrastructure data (next pointers, etc.), whose values are the responsibility
-of the linked list (and only the linked list; e.g., the linked list does not let
-    users change (or even look at!) the various next pointers).
-
-Thus the only get()/set() methods were to get and set the elements of the linked
-list, but not the infrastructure of the linked list. Since the linked list hides
-the infrastructure pointers/etc., it is able to make very strong promises
-regarding that infrastructure (e.g., if it were a doubly linked list, it might
-    guarantee that every forward pointer was matched by a backwards pointer from
-    the next Node).
-
-So, we see here an example of where the values of some of a class’s data is the
-responsibility of users (in which case the class needs to have get()/set()
-    methods for that data) but the data that the class wants to control does not
-  necessarily have get()/set() methods.
-
-Note: the purpose of this example is not to show you how to write a linked-list
-class. In fact you should not “roll your own” linked-list class since you should
-use one of the “container classes” provided with your compiler. Ideally you’ll
-use one of the standard container classes such as the std::list<T> template.
-
-
-={============================================================================
-*kt_dev_cpp_104* ref: from the outside (interfaces first) or from the inside?
-
-https://isocpp.org/wiki/faq/const-correctness#logical-vs-physical-state
-
-How can it help me design better classes if I distinguish logical state from
-physical state?  
-
-Because that encourages you to design your classes from the outside-in rather
-than from the inside-out, which in turn makes your classes and objects easier to
-understand and use, more intuitive, less error prone, and faster. (Okay, that’s
-    a slight over-simplification. To understand all the if’s and’s and but’s,
-    you’ll just have to read the rest of this answer!)
-
-Let’s understand this from the inside-out — you will (should) design your
-classes from the outside-in, but if you’re new to this concept, it’s easier to
-understand from the inside-out.
-
-On the inside, your objects have physical (or concrete or bitwise) state. This
-is the state that’s easy for programmers to see and understand; it’s the state
-that would be there if the class were just a C-style struct.
-
-On the outside, your objects have users of your class, and these users are
-restricted to using only public member functions and friends. These external
-users also perceive the object as having state, for example, if the object is of
-class Rectangle with methods width(), height() and area(), your users would say
-that those three are all part of the object’s logical (or abstract or
-    meaningwise) state. To an external user, the Rectangle object actually has
-an area, even if that area is computed on the fly (e.g., if the area() method
-    returns the product of the object’s width and height). In fact, and this is
-the important point, your users don’t know and don’t care how you implement any
-of these methods; your users still perceive, from their perspective, that your
-object logically has a meaningwise state of width, height, and area.
-
-note:
-Even if there is no 'area' member data in a class, user assumes that and this is
-logical state.
-
-The area() example shows a case where the logical state can contain elements
-that are not directly realized in the physical state. The opposite is also true:
-classes sometimes intentionally hide part of their objects’ physical (concrete,
-    bitwise) state from users — they intentionally do not provide any public
-member functions or friends that would allow users to read or write or even know
-about this hidden state. That means there are bits in the object’s physical
-state that have no corresponding elements in the object’s logical state.
-
-As an example of this latter case, a collection-object might 'cache' its last
-lookup in hopes of improving the performance of its next lookup. This cache is
-certainly part of the object’s physical state, but there it is an internal
-implementation detail that will probably not be exposed to users - it will
-probably 'not' be part of the object’s logical state. Telling what’s what is
-easy if you think from the outside-in: if the collection-object’s users have no
-way to check the state of the cache itself, then the cache is transparent, and
-is not part of the object’s logical state.
-
-
-={============================================================================
-*kt_dev_cpp_104* ref: from the outside (interfaces first) or from the inside?
-
-https://isocpp.org/wiki/faq/const-correctness#logical-vs-physical-state
-
-Should the constness of my public member functions be based on what the method
-does to the object’s logical state, or physical state?  
-
-Logical.
-
-There’s no way to make this next part easy. It is going to hurt. Best
-recommendation is to sit down. And please, for your safety, make sure there are
-no sharp implements nearby.
-
-Let’s go back to the collection-object example. Remember: there’s a lookup
-method that caches the last lookup in hopes to speed up future lookups.
-
-Let’s state what is probably obvious: assume that the lookup method makes no
-changes to any of the collection-object’s logical state.
-
-So... the time has come to hurt you. Are you ready?
-
-Here comes: if the lookup method does not make any change to any of the
-collection-object’s logical state, but it does change the collection-object’s
-physical state (it makes a very real change to the very real cache), should the
-lookup method be const?
-
-The answer is a resounding Yes. (There are exceptions to every rule, so “Yes”
-    should really have an asterisk next to it, but the vast majority of the
-    time, the answer is Yes.)
-
-This is all about “logical const” over “physical const.” It means the decision
-about whether to decorate a method with const should hinge primarily on whether
-that method leaves the logical state unchanged, irrespective (are you sitting
-    down?) (you might want to sit down) irrespective of whether the method
-happens to make very real changes to the object’s very real physical state.
-
-In case that didn’t sink in, or in case you are not yet in pain, let’s tease it
-apart into two cases:
-
-    If a method changes any part of the object’s logical state, it logically is
-    a mutator; it should not be const even if (as actually happens!) the method
-    doesn’t change any physical bits of the object’s concrete state.
-
-    Conversely, a method is logically an inspector and should be const if it
-    never changes any part of the object’s logical state, even if (as actually
-        happens!) the method changes physical bits of the object’s concrete
-    state.
-
-If you’re confused, read it again.
-
-If you’re not confused but are angry, good: you may not like it yet, but at
-least you understand it. Take a deep breath and repeat after me: “The constness
-of a method should makes sense from outside the object.”
-
-If you’re still angry, repeat this three times: “The constness of a method must
-make sense to the object’s users, and those users can see only the object’s
-logical state.”
-
-If you’re still angry, sorry, it is what it is. Suck it up and live with it.
-Yes, there will be exceptions; every rule has them. But as a rule, in the main,
-this logical const notion is good for you and good for your software.
-
-One more thing. This is going to get inane, but let’s be precise about whether a
-method changes the object’s logical state. If you are outside the class - you
-are a normal user, every experiment you could perform (every method or sequence
-    of methods you call) would have the same results (same return values, same
-      exceptions or lack of exceptions) irrespective of whether you first called
-    that lookup method. If the lookup function changed any future behavior of
-    any future method (not just making it faster but changed the outcome,
-        changed the return value, changed the exception), then the lookup method
-    changed the object’s logical state - it is a mutuator. But if the lookup
-    method changed nothing other than perhaps making some things faster, then it
-    is an inspector.
 
 
 ={============================================================================
