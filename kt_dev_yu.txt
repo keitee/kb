@@ -775,7 +775,7 @@ ZB_BUILD_CMD=./build-with-progress.sh zb-make "$@"
 
 
 ={============================================================================
-*kt_dev_uv_stack_001* zinc-build: makefile
+*kt_dev_uv_stack_000* zinc-build: makefile
 
 Zinc/Zinc.Build/project-deps-rules.mk
 
@@ -3327,12 +3327,16 @@ drwxrwxr-x    2 1024     1025        4.0K Jun  2 11:51 zinc-http-cache/
 ={============================================================================
 *kt_dev_uv_stack_014* zinc-test
 
+{run-all}
+zb-make Nickel/Nickel.System.GStreamer-check
+
+
+{test-run-single}
   --cases arg            Specify which test cases to run.  This is a whitespace
                          seperated list of test cases
   --list-cases           List the cases that would be run rather than 
                          runningthem
 
-{test-run-single}
 /_virtual_/pc/zinc-build-root/debug-debian-7-x86_64/
     Uranium/Uranium.Client.System/test/metadata
 
@@ -12319,7 +12323,8 @@ GstMediaRouter::getPosition() -> GstMR lock -> GStreamer call
 internal MR GStreamer callback:  callback function -> GstMR lock -> dbus lock ->
 Zinc.DBus-C++ -> libdbus -> D-Bus
 
-Both calls are made in same time, in parallel, so here is kind of action list which is happening:
+Both calls are made in same time, in parallel, so here is kind of action list
+which is happening:
 
 1. GStreamer fires up callback, GstMR mutex is locked now
 2. Client (browser) calls MR->getPosition() over DBus, DBus mutex is locked now
@@ -12328,7 +12333,7 @@ Both calls are made in same time, in parallel, so here is kind of action list wh
 locked mutex [MR]
 5. Dbus call is timedout, browser is killed
 
-<1>
+<1> this is a sync call
 
 Vanadium:
 
@@ -12418,6 +12423,52 @@ NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
   return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
       boost::bind(&GstMediaRouter::doGetPosition, this));
 }
+
+<log-from-console>
+2015-12-14 12:46:24,022 ERROR  1484772624 zinc /data/ws/sources/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include8
+all to /Zinc/Media/MediaRouters/1
+terminate called after throwing an instance of 'DBus::ErrorNoReply'
+  what():  Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken.
+(*) SaWMan/Watcher: Process 1673 [10] has exited ABNORMALLY!
+
+This shows that application is timedout from dbus call and gets killed since no
+handling of timeout exception.
+
+<bt>
+(gdb) bt
+#0  0x778d6d1c in __lll_lock_wait () from /lib/libpthread.so.0
+#1  0x778de5cc in pthread_mutex_lock () from /lib/libpthread.so.0
+#2  0x741903a8 in nickel::system::GstMediaRouter::getPosition() const () from /opt/zinc-trunk/lib/libNickelSystemGStreamer.so
+
+#3  0x765a4d10 in boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >::result_type nickel::system::ProxyMediaRouter::deferForwardOrDefault<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > > >(boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >, nickel::system::returned_future_type<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > > >::type const&) const () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+
+#4  0x76576e8c in nickel::system::ProxyMediaRouter::getPosition() const () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+
+#5  0x0044926c in Zinc::Media::(anonymous namespace)::getPosition_stub(Zinc::Media::MediaRouterAsync&, DBus::Connection::WeakRef&, DBus::CallMessage const&) ()
+
+#6  0x0045d3ec in Zinc::Media::MediaRouterAsyncToDBus::call_method_async(DBus::CallMessage const&) ()
+#7  0x0045d784 in Zinc::Media::MediaRouterAsyncToDBus::handle_message(DBus::Message const&) ()
+#8  0x004634d0 in zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus>::operator()(DBus::Connection&, DBus::Message&) ()
+#9  0x00463678 in DBus::detail::AdaptorWrapper<zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus> >::call(DBusConnection*, DBusMessage*, void*) ()
+#10 0x776ca16c in _dbus_object_tree_dispatch_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#11 0x776ab944 in dbus_connection_dispatch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#12 0x7772a7f8 in DBus::drain_pending_messages(DBus::Connection::Private*) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#13 0x776aaea8 in _dbus_connection_update_dispatch_status_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#14 0x776a4ef4 in _dbus_connection_handle_watch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#15 0x776dd6dc in dbus_watch_handle () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#16 0x7773d484 in DBus::Watch::handle(int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#17 0x77748f6c in DBus::DefaultWatch::do_callback() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#18 0x77749444 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#19 0x7774b030 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#20 0x7774c704 in DBus::BusDispatcher::run() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#21 0x777b49bc in zinc::binding::dbus::MainLoop::run() () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#22 0x00409674 in main ()
+
+(gdb) i thread
+  Id   Target Id         Frame 
+  ...
+* 1    Thread 0x77a71000 (LWP 1370) "nickelmediad" 0x778d6d1c in 
+    __lll_lock_wait () from /lib/libpthread.so.0
 
 
 ={============================================================================
