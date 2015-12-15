@@ -45,7 +45,10 @@
 |kt_dev_uv_stack_103| zinc-plugin
 *kt_dev_uv_stack_103* zinc-plugin: finder
 |kt_dev_uv_stack_104| stack: binding and makefile 
-|kt_dev_uv_stack_105| stack: dbus
+*kt_dev_uv_stack_105* zinc-dbus: monitor
+*kt_dev_uv_stack_105* zinc-dbus: commands
+
+*kt_dev_uv_stack_105* zinc-app: ui version
 
 |kt_dev_uv_stack_200| stack: uranium: stagecraft and air
 |kt_dev_uv_stack_201| stack: uranium: creation chain to other components via dbus and factory
@@ -81,7 +84,6 @@
 
 *kt_dev_uv_stack_408* mr-dash: mr spec
 *kt_dev_uv_stack_408* mr-dash: todo list
-*kt_dev_uv_stack_408* mr-dash: bronze or proxy
 *kt_dev_uv_stack_408* mr-dash: create mr and plugin
 *kt_dev_uv_stack_408* mr-dash: create gst
 *kt_dev_uv_stack_408* mr-dash: create gst: revised to support bin injection
@@ -92,7 +94,7 @@
 *kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
 *kt_dev_uv_stack_408* mr-dash: position
 *kt_dev_uv_stack_408* mr-dash: output control
-*kt_dev_uv_stack_408* mr-dash: seek
+*kt_dev_uv_stack_408* mr-dash: seek and resume
 
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
@@ -121,9 +123,11 @@
 *kt_dev_uv_stack_400* mr-dash: gst-linearsourced
 *kt_dev_uv_stack_400* mr-dash: gst-zmp 
 
-*kt_dev_uv_stack_412* mr-dash: dash play dbus commands
+*kt_dev_uv_stack_412* mr-dash: bronze or media proxy
+*kt_dev_uv_stack_412* mr-dash: dash play commands
 *kt_dev_uv_stack_413* mr-dash: hls play in in-process version
 *kt_dev_uv_stack_413* mr-dash: hls play commands
+*kt_dev_uv_stack_413* mr-dash: ts play commands
 *kt_dev_uv_stack_413* mr-dash: gstmr-play.sh
 *kt_dev_uv_stack_413* mr-debug: gst
 *kt_dev_uv_stack_413* mr-debug: nickel in sandbox
@@ -4823,9 +4827,12 @@ opt/zinc/devel/bin/lsdbus
 
 $lsdbus
 
-# dbus-send Emporium
-
+dbus-send Emporium
 https://wiki.youview.co.uk/display/canvas/dbus-send+Emporium?src=contextnavpagetreemode
+
+How to Introspect DBus from the Command Line
+https://wiki.youview.co.uk/display/canvas/How+to+Introspect+DBus+from+the+Command+Line?src=search
+
 
 {monitor}
 
@@ -5031,6 +5038,13 @@ dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy2' /
 
 <dbus-getsource>
 dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
+
+
+={============================================================================
+*kt_dev_uv_stack_105* zinc-app: ui version
+
+root# cat /opt/ui/ui.txt 
+ui revision-846ef89 version-F26.8.0-RC1root# 
 
 
 ={============================================================================
@@ -10486,22 +10500,12 @@ source/DEVARCH/Zinc/Zinc.3rdPartyStack/source-packages/qt-everywhere-opensource-
 
 https://jira.youview.co.uk/browse/SPECWIP-3703
 
+
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: todo list
 
 MPEG DASH to-do list
 https://wiki.youview.co.uk/display/canvas/MPEG+DASH+to-do+list?src=search
-
-
-={============================================================================
-*kt_dev_uv_stack_408* mr-dash: bronze or media proxy
-
-855   :1.6                     /opt/zinc/bin/bronzemediad.oem                  
-855   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
-855   Zinc.OEMSystem           /opt/zinc/bin/bronzemediad.oem                  
-
-1343  :1.72                    /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
-1343  Zinc.MediaProxy          /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
 
 
 ={============================================================================
@@ -12810,7 +12814,11 @@ OutputControlRefAsync.h
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: seek
+*kt_dev_uv_stack_408* mr-dash: seek and resume
+
+The issue:
+When resumes a play from iplayer, video starts but shows spinner and something
+went wrong popup. The progress bar do not move along.
 
 struct SeekReference : NS_ZINC::Enum {
 
@@ -12890,10 +12898,7 @@ void GstMediaRouter::seekPosition_async(
         throw InvalidEnumerationException();
     }
 
-    // note: when commenting out "return", works okay. However, starts it again,
-    // got a black screen. When re-launch iplayer, starts from beginning and
-    // this means that it played to end in the previous run.
-    
+    // note: when commenting out "return", works okay. 
     if (stopped) {
         NICKEL_ERROR("KT: seekPosition_async: XXX: Don't know what to do at this point");
         // XXX: Don't know what to do at this point
@@ -12905,6 +12910,31 @@ void GstMediaRouter::seekPosition_async(
     produceStatusEvent(StatusEventValue::seek_started);
     ...
 };
+
++ The current implementation assumes that seeking happens only when a play is
+  playing state. Not allow seeking in stopped state as above.
+
++ Seeking failed and starts play. The current pos is far behind from seeking
+  point which is a point of resuming. Hence spinner and error popup.
+
++ With the fix, resume play ends well but when play it again, got a black
+  screen. Turns out that the second play don't happen. This is the same with
+  in-process version so not to go further. Seems that every play means each MR
+  instance.
+
+
+DEVARCH-10744: Nickel.GStreamer: Fix up resume play error in BBC iplayer.
+    
+It was found that a resume play shows a spinner and an error pop-up in BBC
+iplayer although video runs well behind.
+
+The player seeks to the position to resume before starting a play. However, this
+is not allowed in the current YV MediaRouter which only supports seeking in
+playing state. Therefore it absorbs a seeking operation, makes the play starts
+from the wrong position, and eventually leads the player to these error state. 
+
+This commits allows a seek operation in stopped state in YV MediaRouter as the
+in-process MediaRouter does.
 
 
 ={============================================================================
@@ -16228,7 +16258,18 @@ ssize_t onData( ZMPStream *, int infd)
 
 
 ={============================================================================
-*kt_dev_uv_stack_412* mr-dash: dash play dbus commands
+*kt_dev_uv_stack_412* mr-dash: bronze or media proxy
+
+855   :1.6                     /opt/zinc/bin/bronzemediad.oem                  
+855   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
+855   Zinc.OEMSystem           /opt/zinc/bin/bronzemediad.oem                  
+
+1343  :1.72                    /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
+1343  Zinc.MediaProxy          /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
+
+
+={============================================================================
+*kt_dev_uv_stack_412* mr-dash: dash play commands
 
 Live: http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 
@@ -16240,6 +16281,12 @@ deleted when the dbus-send process terminates. Luckily, Will Manley wrote
 dbussenddaemon which holds into the references for you until you're done.
 Awesome.
 
+# set env vars
+declare -r prefix="/opt/zinc-trunk"
+
+export GST_PLUGIN_PATH="/opt/zinc-trunk/lib/gstreamer-1.0:/opt/zinc-trunk/oss/lib/gstreamer-1.0"
+
+export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0
 
 # stop oem bronze
 
@@ -16288,18 +16335,6 @@ ls -al /opt/zinc/bin/nickelmediad*
 16:13 /opt/zinc/bin/nickelmediad*
 02:15 /opt/zinc/bin/nickelmediad.oem*
 
-note: 
-need to use local library. LD_LIBRARY_PATH is local
-
-export
-LD_LIBRARY_PATH=/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/lib
-:/opt/zinc-trunk/devel/lib:/usr/local/lib
-:/opt/stagecraft-2.0/bin:/opt/zinc/tests/lib:
-
-LD_PRELOAD=/usr/local/lib/libdirectfb.so
-:/usr/local/lib/libdirect.so
-:/usr/local/lib/libinit.so:/lib/libpthread.so.0
-
 /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy
 
 
@@ -16343,19 +16378,12 @@ line as shown above before launching a new nickel daemon.
 
 If all is okay, shall see directfb log in the log, nexus fds in /proc/XXX/fd.
 
-note:
-export
-LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so
 
-export LD_LIBRARY_PATH=/opt/zinc-trunk/oss/lib:/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:${LD_LIBRARY_PATH}
+<gst-launch>
 
-export GST_PLUGIN_PATH=/opt/zinc-trunk/oss/lib/gstreamer-1.0
+export GST_PLUGIN_PATH="/opt/zinc-trunk/lib/gstreamer-1.0:/opt/zinc-trunk/oss/lib/gstreamer-1.0"
+export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0
 
-dbus-send --session --print-reply --type=method_call --dest='Zinc.Media'
-/Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
-
-
-<gst-launcgh>
 gst-launch-1.0 --gst-debug=souphttpsrc:5  -v souphttpsrc
 location="http://wll1p02380.dev.youview.co.uk/videos/dash/bigBunny2/yv_TestTRec.mpd"
 ! dashdemux name=dash dash.  ! qtdemux ! h264parse ! queue  ! nexussink
@@ -16410,13 +16438,57 @@ cb_new_hlsdemux_pad (GstElement *hlsdemuxElement,)
 https://wiki.youview.co.uk/display/canvas/2014/05/30/playback+of+a+HLS+stream+from+the+command+line?src=search
 
 # on the box
-gst-launch-1.0
-  souphttpsrc location="http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8" 
-  ! hlsdemux ! tsnexusbin
+
+export GST_PLUGIN_PATH="/opt/zinc-trunk/lib/gstreamer-1.0:/opt/zinc-trunk/oss/lib/gstreamer-1.0"
+export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0
+
+gst-launch-1.0 \
+souphttpsrc location="http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8" \
+! hlsdemux ! tsnexusbin
 
 
 GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/gst-hls-log.txt GST_DEBUG=5 
   ./gstmr-play.sh -p 3
+
+
+={============================================================================
+*kt_dev_uv_stack_413* mr-dash: ts play commands
+
+export GST_PLUGIN_PATH="/opt/zinc-trunk/lib/gstreamer-1.0:/opt/zinc-trunk/oss/lib/gstreamer-1.0"
+export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0
+
+gst-launch-1.0 souphttpsrc \
+location=http://filegateway.youview.co.uk/applications/dev/chay/html/video/BBC.News.at.Six-2015-Nov-24.18_25_17.199613.ts ! tsnexusbin
+
+gst-launch-1.0 souphttpsrc \
+location=http://wll1p00830.dev.youview.co.uk:3000/video/adverts/Webuyanycar-crash.ts ! tsnexusbin
+
+
+<use-oem>
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' /Zinc/Media/DefaultMediaRouter \
+Zinc.Media.MediaRouter.stop
+
+dbussenddaemon &
+
+sleep 1
+
+MR=`dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DBusSendDaemon' /Zinc/Media/MediaRouterFactory \
+Zinc.Media.MediaRouterFactory.createMediaRouter string:Zinc.Media 2>/dev/null |grep "/Zinc/Media/MediaRouters/" |cut -d'"' -f2`
+
+echo $MR
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' $MR Zinc.Media.MediaRouter.setSource \
+string:http://wll1p00830.dev.youview.co.uk:3000/video/adverts/Webuyanycar-crash.ts int32:0
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' $MR Zinc.Media.MediaRouter.setSink string:decoder://0
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' $MR Zinc.Media.MediaRouter.start
+
+sleep 10
+
+dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' $MR Zinc.Media.MediaRouter.stop
+
+killall dbussenddaemon
 
 
 ={============================================================================
@@ -17209,6 +17281,8 @@ oem.softwaremanagement.coredevicesoftware.manifest.baseurl=http://su.tv.talktalk
 oem.softwaremanagement.coredevicesoftware.updatepolicy=standard
 oem.softwaremanagement.manufacturerconfiguration.baseurl=http://su.tv.talktalk.net
 oem.softwaremanagement.manufacturerconfiguration.updatepolicy=standard
+
+root# setItem platform.settings.enable-ipcrb 1
 
 
 ={============================================================================
@@ -19003,33 +19077,6 @@ Feb 17 14:33:06 syslog[785]: <info> Activation (eth0) Stage 5 of 5 (IP Configure
       )
    ]
 Feb 17 14:33:56 syslog[785]: <info> Trying to start the supplicant...
-
-
-={============================================================================
-*kt_dev_uv_stack_200* commands
-
-# what?
-root# setItem platform.settings.enable-ipcrb 1
-
-# log?
-tail -f /opt/zinc/var/daemons/crbd/log/helium.log
-
-
-How to Introspect DBus from the Command Line
-https://wiki.youview.co.uk/display/canvas/How+to+Introspect+DBus+from+the+Command+Line?src=search
-# to see messages on dbus
-root# dbus-monitor "interface=Zinc.Application.ApplicationManager"
-
-# what is it? LSR?
-root# getChildItems oem
-
-LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so gst-launch-1.0 souphttpsrc location=http://54.225.86.153/INT01_LCN_551.sdp ! vqesdpdemux caps=video/mpegts ! queue ! tsnexusbin 
-
-#
-root# cat /opt/ui/ui.txt 
-ui revision-846ef89 version-F26.8.0-RC1root# 
-
-root# ls /opt/zinc-trunk/share/Zinc.Binaries.*
 
 
 ={============================================================================
