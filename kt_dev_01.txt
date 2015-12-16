@@ -121,6 +121,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_008* read: from the outside (interfaces first) or from the inside?
 *kt_dev_cpp_008* read: logical and physical state
 *kt_dev_cpp_008* read: constness on logical state
+*kt_dev_cpp_008* read: gotw: const-correctness, part 1
 |kt_dev_cpp_009| return: undefined result
 *kt_dev_cpp_009* return: from main, meaning of 0
 |kt_dev_cpp_010| temp-object
@@ -16404,6 +16405,155 @@ are a normal user, every experiment you could perform (every method or sequence
     method changed nothing other than perhaps making some things faster, then it
     is an inspector.
 
+
+={============================================================================
+*kt_dev_cpp_008* read: gotw: const-correctness, part 1
+
+http://herbsutter.com/2013/05/24/gotw-6a-const-correctness-part-1-3/
+
+1. What is a "shared variable"?
+
+A "shared variable" is one that could be accessed from more than one thread at
+the same time.
+
+This concept is important in the C++ memory model. For example, the C++ memory
+model (the core of which is described in ISO C++ §1.10) prohibits the invention
+of a write to a "potentially shared memory location" that would not have been
+written to in a sequentially consistent execution of the program, and the C++
+standard library refers to this section when it prohibits "modify[ing] objects
+accessible by [other] threads" 'through' a const function, as we will see in #2.
+
+
+2. What do const and mutable mean on shared variables?
+
+Starting with C++11, const on a variable that is possibly shared means
+"read-only or as good as read-only" for the purposes of concurrency. Concurrent
+const operations on the same object are required to be safe without the calling
+code doing external synchronization.
+
+If you are implementing a type, unless you know objects of the type can never be
+shared (which is generally impossible), this means that each of your const
+member functions must be either:
+
+    truly physically/bitwise const with respect to this object, meaning that
+    they perform no writes to the object's data; or else
+
+    internally synchronized so that if it does perform any actual writes to the
+    object's data, that data is correctly protected with a mutex or equivalent
+    (or if appropriate are atomic<>) so that any possible concurrent const
+    accesses by multiple callers can't tell the difference.
+
+Types that do not respect this cannot be used with the standard library, which
+requires that:
+
+    "... to prevent data races (1.10). ... [a] C++ standard library function
+    shall not directly or indirectly modify objects (1.10) accessible by threads
+    other than the current thread unless the objects are accessed directly or
+    indirectly via the function's *non-const* arguments, including this."-ISO C++
+    §17.6.5.9
+
+    note: that is, shall not modify if the objects are accessed via const
+
+
+Similarly, writing mutable on a member variable means what it has always meant:
+The variable is "writable but logically const." Note what this implies:
+
+    The "logically const" part now means "can be used safely by multiple
+    concurrent const operations." The "mutable" and "writable" part further
+    means that some const operations may actually be writers of the shared
+    variable, which means it's inherently got to be correct to read and write
+    concurrently, so it should be protected with a mutex or similar, or made
+    atomic<>.
+
+In general, remember:
+
+    Guideline: Remember the "M&M rule": For a member variable, mutable and mutex
+    (or atomic) go together.
+
+This applies in both directions, to wit:
+
+    (1) For a member variable, mutable implies mutex (or equivalent): 
+
+    A mutable member variable is presumed to be a mutable shared variable and so
+    must be synchronized internally-protected with a mutex, made atomic, or
+    similar.
+
+    (2) For a member variable, mutex (or similar synchronization type) implies
+    mutable: 
+
+    A member variable that is itself of a synchronization type, such as a mutex
+    or a condition variable, naturally wants to be mutable, because you will
+    want to use it in a non-const way (e.g., take a std::lock_guard<mutex>)
+    inside concurrent const member functions.
+
+We'll see an example of (2) in Part 2, GotW #6b.
+
+
+3. How are const and mutable different in C++98 and C++11?
+
+First, let's be clear: C++98 single-threaded code still works. 
+
+C++11 has excellent C++98 compatibility, and even though the meaning of const
+has evolved, C++98 single-threaded code that uses the old "logically const"
+meaning of const is still valid.
+
+With C++98, we taught a generation of C++ developers that "const means logically
+const, not physically/bitwise const." That is, in C++98 we taught that const
+meant only that the observable state of the object (say, via its non-private
+    member functions) should not change as far as the caller could tell, but its
+internal bits might change in order to update counters and instrumentation and
+other data not accessible via the type's public or protected interface.
+
+That definition is 'not' sufficient for concurrency. With C++11 and onward, which
+now includes a concurrency memory model and thread safety specification for the
+standard library, this is now much simpler: 
+
+const now really does mean "read-only, or safe to read concurrently"-either
+truly physically/bitwise const, or internally synchronized so that any actual
+writes are synchronized with any possible concurrent const accesses so the
+callers can't tell the difference.
+
+Although existing C++98-era types still work just fine in C++98-era
+single-threaded code for compatibility, those types and any new ones you write
+today should obey the new stricter requirement if they could be used on multiple
+threads. 
+
+The good news is that most existing types already followed that rule, and code
+that relies on casting away const and/or using mutable data members in
+single-threaded code has already been generally questionable and relatively
+rare.  
+        
+Summary
+
+Don’t shoot yourself (or your fellow programmers) in the foot. Write
+const-correct code.
+
+Using const consistently is simply necessary for correctly-synchronized code.
+That by itself is ample reason to be consistently const-correct, but there's
+more: 
+
+It lets you document interfaces and invariants far more effectively than any
+mere /* I promise not to change this */ comment can accomplish. It’s a powerful
+part of "design by contract." 
+
+It helps the compiler to stop you from accidentally writing bad code. It can
+even help the compiler generate tighter, faster, smaller code. That being the
+case, there's no reason why you shouldn't use it as much as possible, and every
+reason why you should.
+
+Remember that the correct use of mutable is a key part of const-correctness. If
+your class contains a member that could change even for const objects and
+operations, make that member mutable and protect it with a mutex or make it
+atomic. That way, you will be able to write your class' const member functions
+easily and correctly, and users of your class will be able to correctly create
+and use const and non-const objects of your class' type.
+
+It's true that not all commercial libraries' interfaces are const-correct. That
+isn't an excuse for you to write const-incorrect code, though. 
+
+It is, however, one of the few good excuses to write const_cast, plus a detailed
+comment nearby grumbling about the library vendor's laziness and how you're
+looking for a replacement product.
 
 
 ={============================================================================
