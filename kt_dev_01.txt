@@ -118,11 +118,11 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_008| const-bitwise, logical
 *kt_dev_cpp_008* const-logical, cases 
 *kt_dev_cpp_008* const-mutable
-*kt_dev_cpp_008* read: from the outside (interfaces first) or from the inside?
-*kt_dev_cpp_008* read: logical and physical state
-*kt_dev_cpp_008* read: constness on logical state
-*kt_dev_cpp_008* read: gotw: const-correctness, part 1
-*kt_dev_cpp_008* read: gotw: const-correctness, part 2
+*kt_dev_cpp_008* const-read: from the outside (interfaces first) or from the inside?
+*kt_dev_cpp_008* const-read: logical and physical state
+*kt_dev_cpp_008* const-read: constness on logical state
+*kt_dev_cpp_008* const-read: gotw: const-correctness, part 1
+*kt_dev_cpp_008* const-read: gotw: const-correctness, part 2
 |kt_dev_cpp_009| return: undefined result
 *kt_dev_cpp_009* return: from main, meaning of 0
 |kt_dev_cpp_010| temp-object
@@ -15717,13 +15717,11 @@ T func( ... ) const       // NO
 <approach-two> Have one implementation for both const and non-const <const_cast>
 
 From EC++03. Why need? If member function is big, code duplication. So implement
-once and use it twice. Have non-const that calls const version and have only one
-implementation. Why this direction?  If you were to call a non-const from a
-const one, you'd run the risk that that object you'd promised not to modify
-would be changed. 
+once and use it twice. Have one const implementation and nonconst version simply
+calls const one.
 
-Used static_cast to call const version and const_cast to cast away const and
-return.
+Why this direction? If you were to call a nonconst from a const, would run the
+risk that that object you'd promised not to modify would be changed. 
 
 class TextBlock {
   const char& operator[]( std::szie_t position ) const 
@@ -15734,6 +15732,8 @@ class TextBlock {
 
   char& operator[]( std::size_t position )
   {
+    // Use static_cast to set const and const_cast to remove const
+
     return const_cast<char&> ( static_cast<const TextBlock&>(*this)[position] );
   }
 };
@@ -15753,8 +15753,8 @@ string &shorterString( string &s1, string &s2 )
   return const_cast< string& >(r);
 }
 
-This is safe to cast that string back to a plain string & in the return because
-it is one of original nonconst arguments.
+This is safe to cast the const string back to a plain string and return it
+because it is one of original nonconst arguments.
 
 
 <approach-three> Change the order
@@ -17021,16 +17021,37 @@ The parameter isn't really const, so don't declare it as const and then try to
 modify it anyway. Lying to the compiler, never mind to the caller, is a bad
 idea, never mind morally reprehensible in most value systems.
 
+see <const-undefined>
 
-11. g’s const is illegal and useless.
+
+11. g's const is illegal and useless.
 
 void g( polygon& const poly ) { poly.add_point( {1,1} ); }
 
-This const is illegal; you can’t apply const directly to the reference itself, besides which references are already const inasmuch as they cannot be reseated to refer to a different object.
+This const is illegal; you can't apply const directly to the reference itself,
+     besides which references are already const inasmuch as they cannot be
+     reseated to refer to a different object.
+
+note:     
+void g( polygon& const poly ) { poly.add_point( {1,1} ); }
+
+cause:
+:51:24: error: ‘const’ qualifiers cannot be applied to ‘polygon&’
+
+void g( const polygon& poly ) { poly.add_point( {1,1} ); }
+
+cause:
+:53:56: error: passing ‘const polygon’ as ‘this’ argument of ‘void
+  polygon::add_point(point)’ discards qualifiers [-fpermissive]
+
 
 void h( polygon* const poly ) { poly->add_point( {2,2} ); }
 
-Note that h‘s const merely ensures that h‘s body won’t modify the pointer value. This is the same as the const value parameters in add_point and get_point, and perfectly fine on the definition.
+Note that h's const merely ensures that h's body won't modify the pointer value.
+This is the same as the const value parameters in add_point and get_point, and
+perfectly fine on the definition.
+
+
 12. Examining the mainline.
 
 int main() {
@@ -17043,7 +17064,8 @@ This is fine.
 
     f(cpoly);
 
-As already noted, this causes undefined results when f tries to cast away the const-ness of its parameter and then modify it.
+As already noted, this causes undefined results when f tries to cast away the
+const-ness of its parameter and then modify it. see <const-undefined>
 
     g(poly);
 
@@ -17053,9 +17075,14 @@ This is fine.
 }
 
 This is fine.
+
+
 Summary
 
-Here is a revised version of the code that corrects the const issues noted above, but does not attempt to correct any other poor style. Note that because of the atomic member, which is not copyable, we now provide polygon‘s copy and move operations explicitly.
+Here is a revised version of the code that corrects the const issues noted
+above, but does not attempt to correct any other poor style. Note that because
+of the atomic member, which is not copyable, we now provide polygon's copy and
+move operations explicitly.
 
 class polygon {
 public:
@@ -17122,8 +17149,6 @@ int main() {
     g(poly);
     h(&poly);
 }
-
-Acknowledgments
 
 
 ={============================================================================
@@ -39682,12 +39707,13 @@ int *p;
 char *pc = reinterpret_cast<char*>(ip);
 
 
-<const_cast>
+{const-cast}
 This manipulates the constness of the object pointed by a pointer, either to
 'set' or to 'remove'. For example, in order to pass a const pointer to a
 function that expects a non-const argument:
 
-// const_cast
+<remove-const-cast>
+
 #include <iostream>
 using namespace std;
 
@@ -39703,9 +39729,14 @@ int main () {
 }
 
 The example above is safe because function print does not write to the pointed
-object. After removing the constness of a pointed object, writing to it causes
-undefined behavior.
+object. 
 
+<const-undefined>
+After removing the constness of a pointed object, writing to it causes
+'undefined' behavior.
+
+
+<set-const-cast>
 From CPR 233, const_cast is most useful in the conext of overloaded functions.
 
 const string &shorterString( const string &s1, const string &s2 )
@@ -39721,8 +39752,8 @@ string &shorterString( string &s1, string &s2 )
   return const_cast< string& >(r);
 }
 
-This is safe to cast that string back to a plain string & in the return because
-it is one of original nonconst arguments.
+This is safe to cast the const string back to a plain string and return it
+because it is one of original nonconst arguments.
 
 
 {named-cast}
