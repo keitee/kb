@@ -122,6 +122,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_008* read: logical and physical state
 *kt_dev_cpp_008* read: constness on logical state
 *kt_dev_cpp_008* read: gotw: const-correctness, part 1
+*kt_dev_cpp_008* read: gotw: const-correctness, part 2
 |kt_dev_cpp_009| return: undefined result
 *kt_dev_cpp_009* return: from main, meaning of 0
 |kt_dev_cpp_010| temp-object
@@ -15241,6 +15242,7 @@ const GstCaps *caps = gst_caps_from_string();
 GstCaps const *caps = gst_caps_from_string();
 gst_caps_unref(GetCaps *caps);
 
+
 <const-to-nonconst-error>
 :44: error: invalid conversion from 'const GstCaps*' to 'GstCaps*'
 :44: error:   initializing argument 1 of 'void gst_caps_unref(GstCaps*)'
@@ -15784,7 +15786,10 @@ bool Stack::empty() const     // must use
 
 {bitwise-const} physical constness
 From EC++03. bitwise-const(physical const) is C++'s definition and compiler only
-catches assignment to member data which is read-only. Issues errors like:
+catches assignment to member data which is read-only. 
+
+note: these are compiler errors at build time even if a user not use a member
+function which causes an error.
 
 <ex>
 
@@ -16554,6 +16559,571 @@ isn't an excuse for you to write const-incorrect code, though.
 It is, however, one of the few good excuses to write const_cast, plus a detailed
 comment nearby grumbling about the library vendor's laziness and how you're
 looking for a replacement product.
+
+
+={============================================================================
+*kt_dev_cpp_008* read: gotw: const-correctness, part 2
+
+Problem 
+
+In the following code, add or remove const (including minor variants and related
+    keywords) wherever appropriate. Note: Don't comment on or change the
+structure of this program. It's contrived and condensed for illustration only.
+
+For bonus points: In what places are the program's results undefined or
+uncompilable due to const errors?
+
+class polygon {
+public:
+    polygon() : area{-1} {}
+
+    void add_point( const point pt ) { area = -1;
+                                       points.push_back(pt); }
+
+    point get_point( const int i ) { return points[i]; }
+
+    int get_num_points() { return points.size(); }
+
+    double get_area() {
+        if( area < 0 )   // if not yet calculated and cached
+            calc_area();     // calculate now
+        return area;
+    }
+
+private:
+    void calc_area() {
+        area = 0;
+        vector<point>::iterator i;
+        for( i = begin(points); i != end(points); ++i )
+            area += /* some work using *i */;
+    }
+
+    vector<point> points;
+    double        area;
+};
+
+polygon operator+( polygon& lhs, polygon& rhs ) {
+    auto ret = lhs;
+    auto last = rhs.get_num_points();
+    for( auto i = 0; i < last; ++i ) // concatenate
+        ret.add_point( rhs.get_point(i) );
+    return ret;
+}
+
+void f( const polygon& poly ) {
+    const_cast<polygon&>(poly).add_point( {0,0} );
+}
+
+void g( polygon& const poly ) { poly.add_point( {1,1} ); }
+
+void h( polygon* const poly ) { poly->add_point( {2,2} ); }
+
+int main() {
+    polygon poly;
+    const polygon cpoly;
+
+    f(poly);
+    f(cpoly);
+    g(poly);
+    h(&poly);
+}
+
+
+<mine>
+
+class polygon {
+public:
+    polygon() : area{-1} {}
+
+    void add_point( const point pt ) { area = -1;
+                                       points.push_back(pt); }
+
+    // note: make it const member function. asuumes no consideration of
+    // concurrency since is asked to add/remove "const" keyword.
+
+    point get_point( const int i ) { return points[i]; }
+
+    // note: make it const member function
+    int get_num_points() { return points.size(); }
+
+    // note: can make it const member function even if calc_area() changes
+    // member data?
+
+    double get_area() {
+        if( area < 0 )   // if not yet calculated and cached
+            calc_area();     // calculate now
+        return area;
+    }
+
+private:
+    void calc_area() {
+        area = 0;
+        vector<point>::iterator i;
+        for( i = begin(points); i != end(points); ++i )
+            area += /* some work using *i */;
+    }
+
+    vector<point> points;
+    double        area;
+};
+
+
+// note: 
+// polygon operator+( const polygon& lhs, const polygon& rhs ) {
+
+polygon operator+( polygon& lhs, polygon& rhs ) {
+    auto ret = lhs;
+    auto last = rhs.get_num_points();
+    for( auto i = 0; i < last; ++i ) // concatenate
+        ret.add_point( rhs.get_point(i) );
+    return ret;
+}
+
+void f( const polygon& poly ) {
+    const_cast<polygon&>(poly).add_point( {0,0} );
+}
+
+// note:
+// remove const since there is no const reference.
+// void g( polygon& poly ) { poly.add_point( {1,1} ); }
+
+void g( polygon& const poly ) { poly.add_point( {1,1} ); }
+
+// note:
+// const pointer which is no harm and no use as well.
+
+void h( polygon* const poly ) { poly->add_point( {2,2} ); }
+
+int main() {
+    polygon poly;
+    const polygon cpoly;
+
+    f(poly);
+    f(cpoly);
+    g(poly);
+    h(&poly);
+}
+
+
+<solution>
+
+When I pose this kind of problem, I find that most people think the problem is
+on the easy side and address only the more-usual const issues. There are,
+   however, subtleties that are worth knowing, and hence this Item.
+
+1. The point object is passed by value, so there is little benefit to declaring
+it const.
+
+    void  add_point( const point pt )
+
+In this particular case, because the function is defined inline, the const value
+parameter can make sense. This is because for inline functions the declaration
+and definition are the same. Otherwise, const value parameters should appear
+only on the definition, not on the declaration. Let's see why.
+
+Putting the const on a 'value' parameter in a function declaration is irrelevant
+outside the function—it makes no difference to the caller and can only confuse
+readers. 
+
+To the compiler, the function signature is the 'same' whether you include this
+const in front of a value parameter or not. For example:
+
+// value parameter: top-level const is not part of function signature
+int f( int );
+int f( const int );    // redeclares f(int): this is the same function
+
+// non-value parameter: top-level const is part of function signature
+int g( int& );
+int g( const int& );   // overloads g(int&): these are two functions
+
+But putting the const on the value parameter does make a difference to how it
+can be used 'inside' the function's actual definition. Remember that, inside a
+function, the parameters are just the 'first' set of local variables, so putting
+a const on a value parameter simply means that the function can't modify its
+local variable, which only happens to be a parameter. Here's an example that
+declares and then defines the same function f:
+
+int f( int );          // declaration: no const
+
+int f( const int i ) { // definition: use const to express "read-only"
+
+    vector<int> v;
+    v.push_back(i);    // ok, only reads from i
+
+    i = 42;            // error, attempts to modify i
+
+}
+
+    Guideline: Consider not writing const on pass-by-value function parameters
+    when only forward-declaring a function. You can always add it on the
+    definition to express a read-only parameter.
+
+
+2. get_point and get_num_points should be const.
+
+    point get_point( const int i ) { return points[i]; }
+
+    int   get_num_points() { return points.size(); }
+
+These functions should be marked const, because they don't change the state of
+the object.
+
+
+3. get_area should be const.
+
+    double get_area() {
+        if( area < 0 )   // if not yet calculated and cached
+            calc_area();     // calculate now
+        return area;
+    }
+
+Even though this function modifies the object's internal state, we should
+consider making it const. Why? Because this function does not modify the
+object's 'observable' state; we are doing some caching here, but that's an
+internal implementation detail and the object is logically const even if it
+isn't physically const.
+
+
+4. Therefore calc_area should also be const.
+
+    void calc_area() {
+        area = 0;
+        vector<point>::iterator i;
+        for( i = begin(points); i != end(points); ++i )
+            area += /* some work using *i */;
+    }
+
+Once we make get_area be const, this private helper function 'ought' also to be
+const.
+
+In turn, once you make this function const, the compiler will tell you that you
+also need to do something about the member variable area, which should be:
+
+    declared mutable, so that it's writable in a const member function; and
+
+    synchronized using a mutex or made atomic<>, so that it's concurrency-safe,
+    as discussed in GotW #6a.
+
+
+note: why 'ought'?
+
+<const-to-nonconst-error>
+
+class Sample {
+  public:
+
+    void f(const string say) const
+    {
+        cout << "f(" << say << ")" << endl;
+        f_do(say);
+    }
+
+  private:
+    void f_do(const string msg) {
+        text = msg;
+    }
+
+    std::string text;
+};
+
+: In member function 'void Sample::f(std::string) const':
+:15:17: error: passing 'const Sample' as 'this' argument of 'void
+  Sample::f_do(std::string)' discards qualifiers [-fpermissive]
+
+
+5. Also, calc_area should use a const_iterator.
+
+The iterator should not change the state of the points collection, and so it
+ought to be a const_iterator. We're now 'forced' to make this change anyway if
+we're making calc_area be a const member function, but 
+
+note that if we had said auto for the iterator's type we wouldn't have had to
+make any change at all.
+
+While we're at it, the for loop inside calc_area: It should prefer to use the
+range-based for loop, as well as auto.
+
+Combining all that, we get this simpler and const-correct code:
+
+      for( auto& pt : points )
+          area += /* some work using pt */;
+
+    Guideline: Prefer declaring variables using auto.
+
+    Guideline: Prefer range-based for loops to naked iterator-incrementing for
+    loops when visiting the elements of the range in order.
+
+
+6. area should be mutable and synchronized.
+
+    double        area;
+
+As noted already, in conjunction with the other changes the internal cache
+variable will area now want to be mutable so that it can be used correctly and
+safely inside const member functions, and because it is now a shared variable
+potentially used by multiple concurrent const operations it must also be
+synchronized—protected with a mutex or made atomic.
+
+Bonus Question: Before reading on, which should it be: Protected by a mutex? or
+made atomic<double>?
+
+Have you thought about it? All right, let's continue…
+
+Both work, but a mutex is usually 'overkill' for a single variable.
+
+Option 1 is to use a mutex in the perhaps-soon-to-be-canonical "mutable mutex
+mutables" pattern:
+
+// Option 1: Use a mutex 
+
+    double get_area() const {
+        auto lock = unique_lock<mutex>{mutables};
+        if( area < 0 )   // if not yet calculated and cached
+            calc_area();     // calculate now
+        return area;
+    }
+
+private:
+    // ...
+    mutable mutex  mutables;      // canonical pattern: mutex that
+    mutable double area;          //   covers all mutable members
+
+Option 1 generalizes well if you add more data members in the future. However,
+       it's also more invasive and generalizes less well if you add more const
+       member functions in the future that use area, because they will all have
+       to remember to acquire a lock on the mutex before using area.
+
+Option 2 is to just change double to mutable atomic<double>. 
+
+    mutable atomic<double> area; 
+
+This is attractive because the "mutable part" of polygon is just a single
+variable. That can work, but you have to be careful because that's not the only
+necessary change, for two reasons:
+
+    The minor reason is that atomic<double> doesn't support +=, so if we only
+    change area's 'type' then calc_area will no longer compile. That can be
+    worked around, but leads us to the major reason...
+
+    The major reason is that, because calc_area is a 'compound' operation and
+    must be safe to run on multiple threads concurrently, we must restructure
+    calc_area to be safe to run concurrently. In particular it should not
+    perform intermediate updates to area, and should ensure that multiple
+    competing concurrent updates to area don't cause overwrites that lose
+    written values.
+
+There are several ways to do it, but the simplest is probably to allow benign
+redundant recalculations in the case of concurrent calls to calc_area, on the
+grounds that it's probably no worse than blocking the concurrent calls which
+would have to wait anyway.
+
+// Option 2: Use an atomic
+
+    // void calc_area() {
+    //     area = 0;
+    //     vector<point>::iterator i;
+    //     for( i = begin(points); i != end(points); ++i )
+    //         area += /* some work using *i */;
+    // }
+
+    void calc_area() const {
+        auto tmp = 0.0;              // do all the work off to the side
+        for( auto& pt : points )
+            tmp += /* some work using pt */;
+        area = tmp;                  // then commit with a single write
+    }
+
+private:
+    // ...
+    mutable atomic<double> area;
+
+Notice that concurrent const operations that call to calc_area can still overlap
+and overwrite each other's results, but that's benign because they're concurrent
+const operations so they will all calculate the 'same' value. Also, concurrent
+calc_area calls use the shared points variable in a loop which should make us
+mentally check that it doesn't cause cache contention, but because they're all
+readers it won't and so this too is fine.
+
+note: "tmp" is local to a thread in thread stack
+
+
+7. operator+'s rhs parameter should be a reference to const.
+
+polygon operator+( polygon& lhs, polygon& rhs ) {
+
+The rhs parameter should be passed by reference to const, of course.
+
+    Guideline: Prefer passing a read-only parameter by const& if you are only
+    going to read from it (not make a copy of it).
+
+"But wait!" I can just hear some of you saying, "you forgot about lhs! Shouldn't
+it be const& too?" Actually, not so much:
+
+
+8. operator+'s lhs parameter should be passed by value.
+
+The key point is that we're going to copy from it anyway, in this case
+immediately:
+
+    auto ret = lhs;
+
+When you're in the special case of "read-only parameter that you're going to
+  take copy of anyway," there are several ways to accept the parameter, which
+  I'll cover in detail in another GotW. For now, suffice it to say that usually
+  you shouldn't overthink these options, and just use pass-by-value as the
+  simplest method, which offers some advantages that we also touched on in GotW
+#4:
+
+    If the caller passes a named polygon object (an lvalue), there's no
+    difference. Both pass-by-const& followed by an explicit copy and
+    pass-by-value will perform 'one' copy.
+
+    If the caller passes a temporary polygon object (an rvalue), the compiler
+    automatically move-constructs lhs from that, which probably makes no
+    difference for a small type like polygon but can be considerably cheaper for
+    many types.
+
+    Guideline: Prefer passing a read-only parameter by value if you're going to
+    make a copy of the parameter anyway, because it enables move from rvalue
+    arguments.
+
+note: needs more follow-ups for reasons?
+
+
+9. Also in operator+, last should be const.
+
+    auto last = rhs.get_num_points();
+    for( auto i = 0; i < last; ++i ) // concatenate
+        ret.add_point( rhs.get_point(i) );
+    return ret;
+}
+
+Since last should never change, prefer to say so by making it const.
+
+    Guideline: Prefer to make variables, including locals, const if they should
+    not change.
+
+Incidentally, notice that once we make rhs a reference-to-const parameter as
+noted above, we see another reason why get_point should be a const member
+function.
+
+
+10. f's const_cast may give undefined behavior, and is morally wrong anyway.
+
+void f( const polygon& poly ) {
+    const_cast<polygon&>(poly).add_point( {0,0} );
+}
+
+Bonus: The result of the const_cast is undefined if the referenced object was
+declared as const-which it is in the case of f(cpoly) below.
+
+The parameter isn't really const, so don't declare it as const and then try to
+modify it anyway. Lying to the compiler, never mind to the caller, is a bad
+idea, never mind morally reprehensible in most value systems.
+
+
+11. g’s const is illegal and useless.
+
+void g( polygon& const poly ) { poly.add_point( {1,1} ); }
+
+This const is illegal; you can’t apply const directly to the reference itself, besides which references are already const inasmuch as they cannot be reseated to refer to a different object.
+
+void h( polygon* const poly ) { poly->add_point( {2,2} ); }
+
+Note that h‘s const merely ensures that h‘s body won’t modify the pointer value. This is the same as the const value parameters in add_point and get_point, and perfectly fine on the definition.
+12. Examining the mainline.
+
+int main() {
+    polygon poly;
+    const polygon cpoly;
+
+    f(poly);
+
+This is fine.
+
+    f(cpoly);
+
+As already noted, this causes undefined results when f tries to cast away the const-ness of its parameter and then modify it.
+
+    g(poly);
+
+This is fine.
+
+    h(&poly);
+}
+
+This is fine.
+Summary
+
+Here is a revised version of the code that corrects the const issues noted above, but does not attempt to correct any other poor style. Note that because of the atomic member, which is not copyable, we now provide polygon‘s copy and move operations explicitly.
+
+class polygon {
+public:
+    polygon() : area{-1} {}
+
+    polygon( const polygon& other ) : points{other.points}, area{-1} { }
+
+    polygon( polygon&& other ) 
+        : points{move(other.points)}, area{other.area.load()}
+        { other.area = -1; }
+
+    polygon& operator=( const polygon& other )
+        { points = other.points; area = -1; return *this; }
+
+    polygon& operator=( polygon&& other ) {
+        points = move(other.points);
+        area = other.area.load();
+        other.area = -1;
+        return *this;
+    }
+
+    void add_point( point pt ) 
+        { area = -1; points.push_back(pt); }
+
+    point get_point( int i ) const { return points[i]; }
+
+    int get_num_points() const { return points.size(); }
+
+    double get_area() const {
+        if( area < 0 )   // if not yet calculated and cached
+            calc_area();     // calculate now
+        return area;
+    }
+
+private:
+    void calc_area() const {
+        auto tmp = 0.0;
+        for( auto& pt : points )
+            tmp += /* some work using pt */;
+        area = tmp;
+    }
+
+    vector<point>          points;
+    mutable atomic<double> area;
+};
+
+polygon operator+( polygon lhs, const polygon& rhs ) {
+    const auto last = rhs.get_num_points();
+    for( auto i = 0; i < last; ++i ) // concatenate
+        lhs.add_point( rhs.get_point(i) );
+    return lhs;
+}
+
+void f( polygon& poly ) { poly.add_point( {0,0} ); }
+
+void g( polygon& poly ) { poly.add_point( {1,1} ); }
+
+void h( polygon* poly ) { poly->add_point( {2,2} ); }
+
+int main() {
+    auto poly = polygon{};
+
+    f(poly);
+    g(poly);
+    h(&poly);
+}
+
+Acknowledgments
 
 
 ={============================================================================
