@@ -301,9 +301,9 @@ KT KB. DEVELOPMENT.
 
 
 #{ c++ concurrent in action
-|kt_dev_ccon_000| std::thread build
-|kt_dev_ccon_001| std::thread join and detach
-|kt_dev_ccon_002| std::thread copy callables and arguments. lifetime issue
+|kt_dev_ccon_000| std-thread: build
+|kt_dev_ccon_001| std-threadad: copy callables and arguments. lifetime issue
+|kt_dev_ccon_002| std-threadad: join and detach
 |kt_dev_ccon_003| race condition, data race and approaches
 |kt_dev_ccon_004| std::mutex and inherent race in thread-safe stack
 |kt_dev_ccon_005| deadlock prevention and std::lock_guard. user-defined-mutex
@@ -41535,7 +41535,7 @@ class CustomerList {
 # ============================================================================
 #{ c++ concurrent in action
 ={============================================================================
-*kt_dev_ccon_000* std::thread build
+*kt_dev_ccon_000* std-thread: build
 
 Listing 1.1
 
@@ -41567,58 +41567,19 @@ Hello concurrent world
 
 
 ={============================================================================
-*kt_dev_ccon_001* std::thread join and detach
+*kt_dev_ccon_001* std-thread: copy callables and arguments. lifetime issue
 
-Once started a thread, need to explicitly decide whether to wait for it to
-finish by joining or leave it to run on its own by detaching.
-
-If don't decide before thread object is destoryed, then your program is
-terminated. the std::thread destructor calls std::terminate().
-
-If don't wait for a thread to finish, lifetime issues can happen and that's why
-must use self-contained approach.
-
-struct func
-{
-    int i;
-
-    func( int & i_ ): i(i_) {}
-
-    void operator()()
-    {
-        ...
-    }
-};
-
-void oops()
-{
-    int some_local_state = 0;
-
-    func my_func( some_local_state );
-
-    // new thread might still be running after oops()
-    std::thread my_thread( my_func );  
-
-    // should be my_thread.join();
-    my_thread.detach();                
-}
-
-
-={============================================================================
-*kt_dev_ccon_002* std::thread copy callables and arguments. lifetime issue
-
-<lifetime-issue>
 The std::thread object must be self-contained and this means initial function
 and its arguments should be copied into a thread object.
 
 class background_task
 {
-    public:
-        void operator()() const
-        {
-            do_something();
-            do_something_else();
-        }
+  public:
+    void operator()() const
+    {
+      do_something();
+      do_something_else();
+    }
 };
 
 background_task f;
@@ -41627,7 +41588,7 @@ std::thread my_thread(f);
 
 If use callable object, it is 'copied' into the storage belonging to the newly
 created thread of execution and invoked from there. It's therefore essential
-that the copy is 'self-contained' or the result may not be what's expected.
+that the copy is *self-contained* or the result may not be what's expected.
 
 note: std::bind uses the same mechanism.
 
@@ -41638,9 +41599,11 @@ the temporty object is self-contained and it is okay to use with stl algorithms.
 When thread object is self-contained and is detached, no need to worry about
 lifetime issue.
 
+<lifetime-issue>
 <1> when not self-contained since has a reference to external
 
 void f( int i, std::string const& s );
+
 std::thread t( f, 3, "hello" );
 
 This creates a new thread which calls f( 3, "hello" ) and the second argument is
@@ -41652,29 +41615,30 @@ void f( int i, std::string const& s );
 
 void oops( int some_param )
 {
-    char buffer[1024];
+  char buffer[1024];
 
-    sprintf( buffer, "%i", some_param );
-    std::thread t( f, 3, buffer );
-    t.detach();
+  sprintf( buffer, "%i", some_param );
+  std::thread t( f, 3, buffer );
+  t.detach();
 }
 
 The problem is that there is a significance chance that the function oops will
-exit before the buffer has been 'converted' to a std::string on the new thread.
-thus leading to undefined behavior because it relies on implicit conversion and
-a pointer of buffer is copied, no guarantee that buffer is available when a
-thread runs f() which requires a conversion from char* to string.
+exit 'before' the buffer has been 'converted' to a std::string on the new
+thread. Thus leading to undefined behavior because it relies on implicit
+conversion and a pointer of buffer is copied, no guarantee that buffer is
+available 'when' a thread runs f() which requires a conversion from char* to
+string.
 
 The solution is to do it explicitly before passing the buffer to the std::thread
 constructor:
 
 void oops( int some_param )
 {
-    char buffer[1024];
+  char buffer[1024];
 
-    sprintf( buffer, "%i", some_param );
-    std::thread t( f, 3, std::string(buffer) );
-    t.detach();
+  sprintf( buffer, "%i", some_param );
+  std::thread t( f, 3, std::string(buffer) );
+  t.detach();
 }
 
 note: is it okay if use t.join() instead? seems okay since t.join() will be
@@ -41687,17 +41651,18 @@ void update_data_for_widget( widget_id w, widget_data& data );
 
 void oops_again( widget_id w )
 {
-    widget_data data;
+  widget_data data;
 
-    std::thread t( update_data_for_widget, w, data );
-    display_status();
-    t.join();
-    process_widget_data(data);
+  std::thread t( update_data_for_widget, w, data );
+
+  display_status();
+  t.join();
+  process_widget_data(data);
 }
 
-Although passed by reference, 'still' copied and has internal copy. The problem
-is that process_widget_data will be passed an unchanged data rather than a
-correctly updated version.
+'although' passed by reference, 'still' copied and has internal copy. The
+problem is that process_widget_data will be passed an unchanged data rather than
+a correctly updated version.
 
 The solution is to use:
 
@@ -41734,9 +41699,7 @@ std::thread t( process_big_object, std::move(p) );
 This means that std::thread is movable to ensure that only one thread object is
 associated with a particular thread of execution at any one time.
 
-
-<from-stl-code>
-/// thread
+/// thread note: <from-stl-code>
 class thread
 {
     template<typename _Callable>
@@ -41785,6 +41748,44 @@ When provide callable to thread whether it is global function, member function
 or callable via bind, it is different problem to make sure that this callable is
 self-contained that is there is no external reference. That is a user to make
 sure that when use thread object.
+
+
+={============================================================================
+*kt_dev_ccon_002* std-thread: join and detach
+
+Once started a thread, need to explicitly decide whether to wait for it to
+finish by joining or leave it to run on its own by detaching.
+
+If don't decide before thread object is destoryed, then your program is
+terminated. the std::thread destructor calls std::terminate().
+
+If don't wait for a thread to finish, lifetime issues can happen and that's why
+must use self-contained approach.
+
+struct func
+{
+    int i;
+
+    func( int & i_ ): i(i_) {}
+
+    void operator()()
+    {
+        ...
+    }
+};
+
+void oops()
+{
+    int some_local_state = 0;
+
+    func my_func( some_local_state );
+
+    // new thread might still be running after oops()
+    std::thread my_thread( my_func );  
+
+    // should be my_thread.join();
+    my_thread.detach();                
+}
 
 
 ={============================================================================
