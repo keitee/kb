@@ -47,6 +47,7 @@
 |kt_dev_uv_stack_104| stack: binding and makefile 
 *kt_dev_uv_stack_105* zinc-dbus: monitor
 *kt_dev_uv_stack_105* zinc-dbus: commands
+*kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
 
 *kt_dev_uv_stack_105* zinc-app: ui version
 
@@ -1162,18 +1163,37 @@ not. This makes me confused.
 
 Polonium/Polonium.GSTNexus/Makefile.am
 
+<1>
 AM_CFLAGS = \
-	-fPIC \
-	-DGST_USE_UNSTABLE_API \
-	-DVERSION=\"@PACKAGE_VERSION@\" \
-	-DPACKAGE=\"@PACKAGE_NAME@\" \
-	-DDUAL_OUTPUT \
-	-O3 -g -Wall -Wextra -std=c99 -Werror=implicit-function-declaration \
-	-D_REENTRANT \
-	-pthread \
-	@NEXUS_CFLAGS@ \
-	@DIRECTFB_CFLAGS@ \
-	@GSTREAMER_CFLAGS@
+   -fPIC \
+   -DGST_USE_UNSTABLE_API \
+   -DVERSION=\"@PACKAGE_VERSION@\" \
+   -DPACKAGE=\"@PACKAGE_NAME@\" \
+   -DDUAL_OUTPUT \
+   -O3 -g -Wall -Wextra -std=c99 -Werror=implicit-function-declaration \
+   -D_REENTRANT \
+   -pthread \
+   @NEXUS_CFLAGS@ \
+   @DIRECTFB_CFLAGS@ \
+   @GSTREAMER_CFLAGS@
+
+<2>
+AM_CXXFLAGS = \
+   @NICKEL_SYSTEM_API_CFLAGS@ \
+   @NICKEL_COMMON_CFLAGS@ \
+   @ZINC_COMMON_CFLAGS@ \
+   @SOUP_CFLAGS@ \
+   @ZINC_HTTP_CFLAGS@ \
+   -fvisibility=hidden -Wall -Wextra -Werror
+
+AM_CXXFLAGS = \
+   @NICKEL_SYSTEM_API_CFLAGS@ \
+   @NICKEL_COMMON_CFLAGS@ \
+   @ZINC_COMMON_CFLAGS@ \
+   @SOUP_CFLAGS@ \
+   @ZINC_HTTP_CFLAGS@ \
+   -g \ ~
+   -fvisibility=hidden -Wall -Wextra -Werror
 
 
 ={============================================================================
@@ -4848,6 +4868,9 @@ dbus-monitor "type=method_call" "type=method_return" "type=error"
 
 dbus-monitor "interface=Zinc.Media.MediaRouter" "type=method_return"
 
+dbus-monitor "interface=Zinc.Media.MediaRouterFactory"
+method call sender=:1.207 -> dest=Zinc.MediaProxy serial=14 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; member=createMediaRouter
+
 
 {dbus-call}
 Take Iron call which is getScheduleEvents() as an example.
@@ -5016,6 +5039,10 @@ note: stop default MR
 dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' \
 /Zinc/Media/DefaultMediaRouter Zinc.Media.MediaRouter.stop
 
+<dbus-create-mr> note on --dest
+dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DBusSendDaemon' /Zinc/Media/MediaRouterFactory Zinc.Media.MediaRouterFactory.createMediaRouter \
+string:Zinc.MediaProxy 
+
 <dbus-seekpos>
 method call sender=:1.106 -> dest=:1.72 serial=40107 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=seekPosition
    int32 0
@@ -5030,6 +5057,39 @@ dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy2' /
 
 <dbus-getsource>
 dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
+
+
+={============================================================================
+*kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
+
+<1>
+2015-07-03 12:25:33,605 ERROR  1152333088 zinc /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken." in response to call to 
+
+/Zinc/Media/MediaRouterFactory
+
+terminate called after throwing an instance of 'DBus::ErrorNoReply'
+  what():  Did not receive a reply. Possible causes include: the remote
+           application did not send a reply, the message bus security policy
+           blocked the reply, the reply timeout expired, or the network
+           connection was broken.
+
+Aborted
+
+
+<2>
+2015-12-14 12:46:24,022 ERROR  1484772624 zinc /data/ws/sources/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include8
+all to /Zinc/Media/MediaRouters/1
+
+terminate called after throwing an instance of 'DBus::ErrorNoReply'
+  what():  Did not receive a reply. Possible causes include: the remote
+           application did not send a reply, the message bus security policy
+           blocked the reply, the reply timeout expired, or the network
+           connection was broken.
+
+(*) SaWMan/Watcher: Process 1673 [10] has exited ABNORMALLY!
+
+This shows that application is timedout from dbus call and gets killed since no
+handling of timeout exception.
 
 
 ={============================================================================
@@ -10446,26 +10506,6 @@ http://filegateway.youview.co.uk/applications/applications/html/app-source/cdi-p
 GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found GST_DEBUG=5 
 GST_DEBUG=adaptivedemux:5 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
 
-
-<ee>
-
-// 
-2015-07-03 12:25:33,605 ERROR  1152333088 zinc /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken." in response to call to 
-
-/Zinc/Media/MediaRouterFactory
-
-terminate called after throwing an instance of 'DBus::ErrorNoReply'
-  what():  Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken.
-Aborted
-
-
-[root@HUMAX /]# dbus-monitor "interface=Zinc.Media.MediaRouterFactory"
-method call sender=:1.207 -> dest=Zinc.MediaProxy serial=14 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; member=createMediaRouter
-
-no response
-
-dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DBusSendDaemon' /Zinc/Media/MediaRouterFactory Zinc.Media.MediaRouterFactory.createMediaRouter \
-string:Zinc.MediaProxy 
 
 
 ={============================================================================
@@ -16262,13 +16302,7 @@ deleted when the dbus-send process terminates. Luckily, Will Manley wrote
 dbussenddaemon which holds into the references for you until you're done.
 Awesome.
 
-# set env vars
-declare -r prefix="/opt/zinc-trunk"
-
-export GST_PLUGIN_PATH="/opt/zinc-trunk/lib/gstreamer-1.0:/opt/zinc-trunk/oss/lib/gstreamer-1.0"
-
-export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0
-
+<run-dbussenddaemon>
 # stop oem bronze
 
 dbus-send --session --print-reply --type=method_call --dest='Zinc.Media' \
@@ -16278,6 +16312,47 @@ dbussenddaemon &
 
 sleep 1
 
+<run-yv-mr>
+
+note:
+When kill nickelmediad loaded when boots up and manually launch it again, it
+will use /opt/zinc in LD_LIBRARY_PATH since it's local to a process as shown:
+
+LD_LIBRARY_PATH="/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:${LD_LIBRARY_PATH}"
+
+exec "${target}" "${@}"
+
+So need to run this and export it as shown above. If not, will use fake library
+and see OEM build path in log lines. So should see your build path in the log.
+
+note:
+Unlike humax 2000, directfb related libraries were not loaded on 1000 box and
+hence no AV although YV media router is up and running. Hence to run LD_PRELOAD
+line as shown above before launching a new nickel daemon.
+
+If all is okay, shall see directfb log in the log, nexus fds in /proc/XXX/fd.
+
+
+# set env vars
+declare -r prefix="/opt/zinc-trunk"
+
+export GST_PLUGIN_PATH="/opt/zinc-trunk/lib/gstreamer-1.0:/opt/zinc-trunk/oss/lib/gstreamer-1.0"
+export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0
+
+/opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy
+
+(!) DirectFBSetOption: DirectFBInit has to be called before DirectFBSetOption!
+commandline read: nickelmediad
+commandline read: -b
+commandline read: Zinc.MediaProxy
+
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~| DirectFB 1.4.15 Phase 1.5.2 |~~~~~~~~~~~~~~~~~~~~~~~~~~
+        (c) 2001-2010  The world wide DirectFB Open Source Community
+        (c) 2000-2004  Convergence (integrated media) GmbH
+      ----------------------------------------------------------------
+
+
+<run-yv-calls>
 MR=`dbus-send 2>/dev/null --session --print-reply --type=method_call \
 --dest='Zinc.DBusSendDaemon' \
 /Zinc/Media/MediaRouterFactory \
@@ -16311,53 +16386,6 @@ dbus-send --session --print-reply --type=method_call \
 --dest='Zinc.MediaProxy' $MR Zinc.Media.MediaRouter.stop
 
 killall dbussenddaemon
-
-ls -al /opt/zinc/bin/nickelmediad*
-16:13 /opt/zinc/bin/nickelmediad*
-02:15 /opt/zinc/bin/nickelmediad.oem*
-
-/opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy
-
-
-note: this zinc log
-
-2015-06-03 16:52:55,756 TRACE  772130080 nickel
-Nickel.System.GStreamer/src/GstMediaRouter.cpp:300 State transition PAUSED ->
-PAUSED wanted PLAYING
-
-
-(!) DirectFBSetOption: DirectFBInit has to be called before DirectFBSetOption!
-commandline read: nickelmediad
-commandline read: -b
-commandline read: Zinc.MediaProxy
-
-   ~~~~~~~~~~~~~~~~~~~~~~~~~~| DirectFB 1.4.15 Phase 1.5.2 |~~~~~~~~~~~~~~~~~~~~~~~~~~
-        (c) 2001-2010  The world wide DirectFB Open Source Community
-        (c) 2000-2004  Convergence (integrated media) GmbH
-      ----------------------------------------------------------------
-
-0:02:03.109739443  2247   0x568380 ERROR              nexussink
-Polonium.GSTNexus/src/gstnexussink.c:1687
-  :gst_nexus_sink_poll_decoder_status_locked:<nexussink0> Frame rate 25/1
-
-
-note:
-When kill nickelmediad loaded when boots up and manually launch it again, it
-will use /opt/zinc in LD_LIBRARY_PATH since it's local to a process as shown:
-
-LD_LIBRARY_PATH="/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:${LD_LIBRARY_PATH}"
-
-exec "${target}" "${@}"
-
-So need to run this and export it as shown above. If not, will use fake library
-and see OEM build path in log lines. So should see your build path in the log.
-
-note:
-Unlike humax 2000, directfb related libraries were not loaded on 1000 box and
-hence no AV although YV media router is up and running. Hence to run LD_PRELOAD
-line as shown above before launching a new nickel daemon.
-
-If all is okay, shall see directfb log in the log, nexus fds in /proc/XXX/fd.
 
 
 <gst-launch>
@@ -16657,7 +16685,6 @@ G_MESSAGES_DEBUG=drmwasabi get you:
   Failed at /.../DEVARCH/Polonium/Polonium.Drm/src/gdrmwasabi.c:986
 
 note: not able to log file in sandbox but able to get GST_DEBUG on console.
-
 
 
 ={============================================================================
