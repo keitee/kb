@@ -11,11 +11,12 @@
 |kt_dev_uv_set_010| setup: git for dev and oem
 |kt_dev_uv_set_011| setup: ci builds
 
+*kt_dev_uv_stack_000* zinc-build: zb-config
 *kt_dev_uv_stack_000* zinc-build: zb-make
 *kt_dev_uv_stack_000* zinc-build: zb-build-with-progress
 *kt_dev_uv_stack_000* zinc-build: makefile
 *kt_dev_uv_stack_001* zinc-build: build commands and build vars
-*kt_dev_uv_stack_003* zinc-build: debug or release
+*kt_dev_uv_stack_000* zinc-build: debug or release
 *kt_dev_uv_stack_003* zinc-build: autotool structures
 *kt_dev_uv_stack_003* zinc-build: exclude files
 *kt_dev_uv_stack_003* zinc-build: zb-shell, setvar-common
@@ -27,7 +28,7 @@
 *kt_dev_uv_stack_002* tool-patch-a-tron
 *kt_dev_uv_stack_002* tool-deploy the prebuilt binary
 *kt_dev_uv_stack_002* tool-deploy gdb
-|kt_dev_uv_stack_003| stack: startup and bootup
+|kt_dev_uv_stack_003| zinc-start:
 |kt_dev_uv_stack_005| stack: brcm debug level
 |kt_dev_uv_stack_006| stack: netflix ps line
 *kt_dev_uv_stack_007* tool: virtual rcu
@@ -412,6 +413,51 @@ Tarun
 
 o to see build status
 http://spongebob:8080/view/developer/job/Test_Build_Concurrent/
+
+
+={============================================================================
+*kt_dev_uv_stack_000* zinc-build: zb-config
+
+[zb]
+	build-dir = /home/kpark/builds-src-dev
+	default-config = pc
+	build-type = debug
+	one-time-setup = true
+[zb "pc"]
+	build-type = debug
+	host-config = host
+[zb "pcr"]
+	build-type = release
+	host-config = host
+[zb "bcm"]
+	build-type = release
+	install-prefix = /opt/zinc-trunk
+[zb "bcm.7250"]
+	host-config = bcm-ref7250
+[zb "bcm.7251"]
+	host-config = bcm-ref7251
+[zb "humax"]
+	build-type = release
+	install-prefix = /opt/zinc-trunk
+	setup-script-path = /home/kpark/source/setup-humax
+	deploy-script = setup-humax.sh
+[zb "humax.1000"]
+	host-config = humax-dtr_t1000
+	deploy-host = humax-01351
+[zb "humax.2100"]
+	host-config = humax-dtr_t2100
+	deploy-host = humax-04535
+[zb "huawei"]
+	build-type = release
+	install-prefix = /opt/zinc-trunk
+	setup-script-path = /home/kpark/source/setup-huawei
+	deploy-script = setup-huawei.sh
+[zb "huawei.360"]
+	host-config = huawei-dn360t
+[zb "huawei.370"]
+	host-config = huawei-bcm7409
+[zb "huawei.372"]
+	host-config = huawei-bcm7231
 
 
 ={============================================================================
@@ -1135,7 +1181,7 @@ ag 'error:'
 
 
 ={============================================================================
-*kt_dev_uv_stack_003* zinc-build: debug or release
+*kt_dev_uv_stack_000* zinc-build: debug or release
 
 note: ZINC_BUILD_TYPE this comes from git.config
 
@@ -2609,7 +2655,7 @@ setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.34
 
 
 ={============================================================================
-*kt_dev_uv_stack_003* stack: startup
+*kt_dev_uv_stack_003* zinc-start:
 
 cds: core driver software
 
@@ -2710,6 +2756,15 @@ libfusion-1.4.so.15        libpng14.so.14
 Name=Zinc.Boot
 Exec=/opt/zinc/bin/yv-start-services.sh
 User=zincbootd
+
+# cat /opt/zinc-trunk/oss/share/dbus-1/services-yv/Zinc.MetadataProxy.service 
+[D-BUS Service]
+Name=Zinc.MetadataProxy
+Exec=/opt/zinc/bin/start-service-over-dbus.sh Zinc.Broker
+User=cobaltmetadatabrokerd
+
+// why not work on command line?
+# /opt/zinc/bin/start-service-over-dbus.sh Zinc.MetadataProxy
 
 
 {zinc-boot}
@@ -3348,6 +3403,8 @@ zb-make Nickel/Nickel.System.GStreamer-check
 {test-run-single}
 
 note: must be in zb-shell and be in the 'right' target such as pc.
+
+$ cd $ZINC_BUILD_ROOT
 
   --cases arg            Specify which test cases to run.  This is a whitespace
                          seperated list of test cases
@@ -11363,6 +11420,12 @@ GstMediaRouterFactory::createMediaRouter()
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
 
+boost::shared_ptr<MediaRouterAsync> createGstMediaRouter(
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher)
+{
+    return boost::make_shared<GstMediaRouter>(dispatcher);
+}
+
 class GstMediaRouter : public MediaRouterAsync
 {
   GstMediaRouter(
@@ -11412,11 +11475,14 @@ void GstMediaRouter::init()
 
   typefindBin =
     boost::make_shared<VirtualBinTypefind>(
+
         boost::shared_ptr<VirtualPadFactoryInProcess>(),
         typefindPadFactory_sinkpads,
 
         // note: pass down the callback
-        boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+        boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3)
+
+        );
 
   srcBin =
     boost::make_shared<VirtualBinSrc>(
@@ -11701,14 +11767,21 @@ class GstSystemFactory : virtual public SystemFactory
 GstMediaRouterFactory::GstMediaRouterFactory(
     boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher) : dispatcher(dispatcher)
 {
-    /* init GStreamer */
-    gst_init(NULL, NULL);
+  /* init GStreamer */
+  gst_init(NULL, NULL);
 
-    loop = g_main_loop_new(NULL, FALSE);
-    boost::thread(g_main_loop_run, loop).swap(glibMainThread);
+  loop = g_main_loop_new(NULL, FALSE);
+  boost::thread(g_main_loop_run, loop).swap(glibMainThread);
 
-    start();
+  start();
 }
+
+Leads to: 
+  GstMediaRouterFactory::createMediaRouter();
+    boost::shared_ptr<MediaRouterAsync> createGstMediaRouter();
+      GstMediaRouter();
+        creates BINs
+
 
 <after>
 
@@ -11735,13 +11808,19 @@ GstSystemFactory::createMediaRouterFactory()
 
     initParams->pipelineFactory = boost::bind(gst_pipeline_new, "pipeline");
 
+    // pass down BINs via init params
+
     mrf = createGstMediaRouterFactory(initParams);
     mediaRouterFactory = mrf;
     return mrf;
   }
 }
 
-void GstSystemFactory::createVirtualBins(boost::shared_ptr<GstMediaRouterInit> initParams,
+
+// creates BINs via each factory and set these in "initParams"
+
+void GstSystemFactory::createVirtualBins(
+    boost::shared_ptr<GstMediaRouterInit> initParams,
     const boost::shared_ptr<NS_TITANIUM_DEVICEAUTHORITY::Authoriser> auth)
 {
   boost::shared_ptr<VirtualPadFactory> typefindPadFactory_sinkpads =
@@ -11752,7 +11831,25 @@ void GstSystemFactory::createVirtualBins(boost::shared_ptr<GstMediaRouterInit> i
         initParams->dispatcher,
         boost::shared_ptr<VirtualPadFactoryInProcess>(),
         typefindPadFactory_sinkpads);
+  ...
 
+}
+
+GstMediaRouterFactory::GstMediaRouterFactory(
+    boost::shared_ptr<GstMediaRouterInit> initParams)
+    : dispatcher(initParams->dispatcher),
+      initParams(initParams)
+{
+  loop = g_main_loop_new(NULL, FALSE);
+
+  boost::thread(g_main_loop_run, loop).swap(glibMainThread);
+
+  start();
+}
+
+void GstMediaRouter::init()
+{
+  // do not create BINs but set these up
 }
 
 
@@ -12570,13 +12667,65 @@ case GST_MESSAGE_STATE_CHANGED:
 
 1. Use different auth string and check on a box:
 
-dbus-send --session --print-reply --dest=Zinc.DeviceAuthority /Zinc/DeviceAuthority/Authoriser Zinc.DeviceAuthority.Authoriser.isFeatureEnabled string:"yv-mediarouter-dash"
+dbus-send --session --print-reply --dest=Zinc.DeviceAuthority \
+/Zinc/DeviceAuthority/Authoriser Zinc.DeviceAuthority.Authoriser.isFeatureEnabled \
+string:"yv-mediarouter-dash" \
 method return sender=:1.125 -> dest=:1.134 reply_serial=2
    boolean false
 
 2. Get these error:
 VirtualBin.cpp:283 Couldn't handle media type: application/dash+xml
 GstMediaRouter.cpp:693 Pad linking failed!
+
+
+commit acb52d2dd884c1bb649b7bd350d7ec6f2ebd144a
+Author: Mariusz Buras <mariusz.buras@youview.com>
+Date:   Mon Nov 9 13:50:42 2015 +0000
+
+    DEVARCH-10601: Nickel.System.GStreamer: Use authentication service to
+    explicitly enable DASH
+    
+    We need to disable DASH mediatype (application/dash+xml) for master as this
+    won't be initially released. Also, we need to continue development of DASH
+    playback, hence the need for a runtime check.
+    
+    A Titanium Authoriser has been used which enables us to turn on DASH
+    playback on selected devices based on DUIDs. A free string to enable DASH
+    playback is "yv-mediarouter-dash".
+    
+    This enables us to enable DASH on selected PRK boxes.  Please note that for
+    FR15 branch this is not enough and we need to disable DASH by removing the
+    code from the box hence DEVARCH-10532.
+
+ void GstSystemFactory::createVirtualBins(boost::shared_ptr<GstMediaRouterInit> initParams,
++    const boost::shared_ptr<NS_TITANIUM_DEVICEAUTHORITY::Authoriser> auth)
+{
+   boost::shared_ptr<VirtualPadFactory> typefindPadFactory_sinkpads =
+      boost::make_shared<VirtualPadFactoryInProcess>();
+           boost::shared_ptr<VirtualPadFactoryInProcess>(),
+           typefindPadFactory_sinkpads);
+
++    const bool dashCencEnable = 
+        convertToSync(auth)->isFeatureEnabled("yv-mediarouter-dash");
++
+   initParams->srcBinFactory =
+       createSrcBinFactory(
+           initParams->dispatcher,
+           srcPadFactory_srcpads,
+-            srcPadFactory_sinkpads);
++            srcPadFactory_sinkpads,
++            dashCencEnable);
+
+   initParams->sinkBinFactory =
+       createSinkBinFactory(
+           initParams->dispatcher,
+           sinkPadFactory_sinkpads,
+-            boost::shared_ptr<VirtualPadFactoryInProcess>());
++            boost::shared_ptr<VirtualPadFactoryInProcess>(),
++            // Disabling CENC is necessary because someone could inject an
++            // MP4 stream with CENC and trigger CencDec element to be instantiated.
++            dashCencEnable);
+}
 
 
 ={============================================================================
@@ -13510,7 +13659,8 @@ This case raises GST_CORE_ERROR_MISSING_PLUGIN
 
 <404-error-result>
 
-$ NICKEL_LOGGING_RULE="TRACE,STDOUT" ./test/gstmediaroutertest --cases nickel::system::GstMediaRouterTest::test_that404OnManifestFetchRaisesError
+NICKEL_LOGGING_RULE="TRACE,STDOUT" ./test/gstmediaroutertest \
+--cases nickel::system::GstMediaRouterTest::test_that404OnManifestFetchRaisesError
 
 /GstMediaRouter.cpp:532 KT: error mesg: Not found
 /GstMediaRouter.cpp:552 KT: error domain: gst-resource-error-quark, code: 3 
@@ -13523,7 +13673,8 @@ $ NICKEL_LOGGING_RULE="TRACE,STDOUT" ./test/gstmediaroutertest --cases nickel::s
 <res>
 note: Here, src name is 'videodecoder' and it goes to sink part handling.
 
-$ NICKEL_LOGGING_RULE="TRACE,STDOUT" ./test/gstmediaroutertest --cases nickel::system::GstMediaRouterTest::test_thatVideoDecoderErrorIsProcessedForResourceError
+$ NICKEL_LOGGING_RULE="TRACE,STDOUT" ./test/gstmediaroutertest \
+--cases nickel::system::GstMediaRouterTest::test_thatVideoDecoderErrorIsProcessedForResourceError
 
 GstMediaRouter.cpp:532 KT: error mesg: 
 GstMediaRouter.cpp:552 KT: error domain: gst-resource-error-quark, code: 0 
@@ -15150,9 +15301,12 @@ Element Properties:
   sync                : Sync on the clock
                         flags: readable, writable
                         Boolean. Default: false
-  max-lateness        : Maximum number of nanoseconds that a buffer can be late before it is dropped (-1 unlimited)
+  max-lateness        : Maximum number of nanoseconds that a buffer can be late
+  before it is dropped (-1 unlimited)
+
                         flags: readable, writable
                         Integer64. Range: -1 - 9223372036854775807 Default: -1 
+
   qos                 : Generate Quality-of-Service events upstream
                         flags: readable, writable
                         Boolean. Default: false
@@ -15202,25 +15356,6 @@ Element Properties:
                         flags: readable, writable
                         Boolean. Default: false
 
-
-{changes-from-fix-to-solve-audio-drop}
-1. change qlist in writer
-
-from:
- QList{ elem1     , elem2 }
-         -> queue    -> queue
-
-each source(2 sinks) points to each list elem
-
-to:
- QList{ elem1     , elem2 }
-         -> source    -> source
-            -> queue
-            
-each source points to queue since writer need to access both source to
-implement pumping based on fifo level checks.
-
-
 {poll-decoder-status}
 1. when play hls via the MR proxy, only one sink is created and 
 
@@ -15254,6 +15389,152 @@ KT: call poll_decoder_status: to test Joseph v
 
 nexussink /gstnexussink.c:1934:gst_nexus_sink_get_times_locked:<nexussink1> 
 get_times 9530:26:52.800000000 99:99:99.999999
+
+
+={============================================================================
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: pes
+
+{changes-from-fix-to-solve-audio-drop}
+1. change qlist in writer
+
+from:
+ QList{ elem1     , elem2 }
+         -> queue    -> queue
+
+each source(2 sinks) points to each list elem
+
+to:
+ QList{ elem1     , elem2 }
+         -> source    -> source
+            -> queue
+            
+  * Single writer structure.
+  * Each source represents a data source such as video and audio.
+  * Eash source has a queue, mutex, and cond since writer need to access both
+    source to implement pumping based on fifo level checks.
+
+
+<pes-thread>
+
+// GST calls gst_nexus_sink_render_locked() to push data on each sink and this
+// will call this. Add a chuck to the corresponding source q and signal it.
+
+gboolean pes_data_source_produce_data(PesDataSource* source, PesStream* data)
+{
+  g_mutex_unlock(&source->mutex);
+  g_cond_signal(&writer->cond);
+  g_mutex_unlock(&writer->mutex);
+}
+
+gpointer writer_thread(gpointer context)
+{
+  ConcurrentPesWriter* writer = context;
+  GThread* this_thread = g_thread_self();
+
+  g_assert(writer);
+  g_mutex_lock(&writer->mutex);
+
+  // concurrent_pes_writer_start() / _stop() will overwrite
+  // writer->writer_thread with another value, which is how we
+  // notice we need to shut down.
+  while (this_thread == writer->writer_thread)
+  {
+    GQueue* queue = NULL;
+    gint64 timeout;
+
+    if(!g_mutex_trylock (writer->resource_lock)) {
+      /* Might not be able to get the resource_lock because another
+         thread already has the lock and is trying to shut down this
+         writer_thread */
+      goto nap_time;
+    }
+
+    // note: resource_lock is help from here
+
+    /* Poll the FIFO status of each active decoder */
+    for (GList* node = writer->source_data; node; node = g_list_next (node)) {
+
+      PesDataSource* source = node->data;
+      g_mutex_lock (&source->mutex);
+
+      // update each fifo level using:
+      //  NEXUS_VideoDecoder_GetStatus(writer->video_handle, &videoStatus));
+      //  NEXUS_AudioDecoder_GetStatus(writer->audio_handle, &audioStatus));
+
+      g_mutex_unlock (&source->mutex);
+    }
+
+    while ((queue = find_best_queue_for_consumption_locked(writer)))
+    {
+      GList* chunk_link = g_queue_peek_head_link(queue);
+      AtomicPesChunk* chunk = chunk_link->data;
+      PesDataSource* source = chunk->source;
+      void* buffer = NULL;
+      size_t buffer_size = 0;
+      NEXUS_Error rc;
+
+      // NEXUS_Playpump_GetBuffer() doesn't block.
+      rc = NEXUS_Playpump_GetBuffer(
+          writer->playpump_handle, &buffer, &buffer_size);
+      if (NEXUS_SUCCESS != rc)
+      {
+        GST_WARNING("NEXUS_Playpump_GetBuffer() returned error (%d)\n", (int)rc);
+        break;
+      }
+
+      if (buffer_size == 0)
+      {
+        break;
+      }
+
+      const gint bytes_just_written = pes_stream_write(
+          chunk->pes, buffer, buffer_size, chunk->bytes_written);
+      g_assert(bytes_just_written >= 0); // Otherwise we are reading past the end.
+      chunk->bytes_written += bytes_just_written;
+      g_mutex_lock(&source->mutex);
+      source->fifo_level += bytes_just_written;
+      g_mutex_unlock(&source->mutex);
+
+      if (chunk->total_bytes == chunk->bytes_written)
+      {
+        // This chunk has been fully written and can be deleted.
+        g_queue_delete_link(queue, chunk_link);
+        atomic_pes_chunk_destroy(chunk);
+
+        // Do we have any more chunks from the same source?
+        if (source && g_queue_is_empty(queue))
+        {
+          // If not, wake up any threads blocked in
+          // pes_data_source_flush() on that source.
+          g_mutex_lock(&source->mutex);
+          {
+            source->have_pending_data = FALSE;
+            g_cond_broadcast(&source->cond);
+          }
+          g_mutex_unlock(&source->mutex);
+        }
+      }
+
+      // NEXUS_Playpump_WriteComplete() doesn't block.
+      rc = NEXUS_Playpump_WriteComplete(
+          writer->playpump_handle, 0, bytes_just_written);
+      if (NEXUS_SUCCESS != rc)
+      {
+        GST_WARNING("NEXUS_Playpump_WriteComplete() returned error (%d)\n", (int)rc);
+        break;
+      }
+    } // while ((queue = ...))
+    g_mutex_unlock (writer->resource_lock);
+nap_time:
+    /* sleep for a while, or until more data is added to a queue */
+    timeout = g_get_monotonic_time () + PES_WRITER_POLL_INTERVAL;
+    g_cond_wait_until(&writer->cond, &writer->mutex, timeout);
+  }
+
+  g_mutex_unlock(&writer->mutex);
+
+  return NULL;
+}
 
 
 ={============================================================================
@@ -16821,8 +17102,8 @@ drwxr-xr-x    3 root     root          4096 Oct 28 08:41 ../
 -rw-------    1 root     root         63514 Oct 29 10:16 db0.storage
 
 
-note: MUST rm dir but not db0.storage. Otherwise, not properly make files due to
-check in /opt/zinc/libexec/yv-personalise.sh
+note: MUST rm 'directory' but not db0.storage. Otherwise, not properly make
+files due to check in /opt/zinc/libexec/yv-personalise.sh
 
 [root@HUMAX /]# rm -rf /var/lib/marlin/
 
@@ -16879,7 +17160,7 @@ do
 done
 
 
-note: will create 'only' when there is no directory before.
+note: will create 'only' when there is no 'directory' before.
 
 [root@HUMAX /]# cat /opt/zinc/libexec/yv-personalise.sh
 ...
@@ -16913,6 +17194,43 @@ if [ $isUIManagerRunning == 0 ]; then
 fi
 
 https://jira.youview.co.uk/browse/CANHUM-3487
+
+
+note: when rename 'marlin' directory and start nickelmediad again, then fails on
+drm_open.
+
+drwxrws--T    2 root     keys        4.0K Dec 21 14:39 marlin_org/
+
+Fails to start nickelmediad and iplayer gets killed.
+
+0x74295fa4 in g_drm_open () from /opt/zinc-trunk/lib/libgdrm.so.0
+(gdb) bt
+#0  0x74295fa4 in g_drm_open () from /opt/zinc-trunk/lib/libgdrm.so.0
+
+#1  0x743694d8 in
+nickel::system::GstSystemFactory::GstSystemFactory(boost::shared_ptr<zinc::Dispatcher>)
+  () from /opt/zinc-trunk/lib/libNickelSystemGStreamer.so
+
+#2  0x7436bc3c in createGstSystemFactory () from
+  /opt/zinc-trunk/lib/libNickelSystemGStreamer.so
+
+#3  0x777e83a0 in zinc::PluginFactory::loadInstance(zinc::PluginConfig const&)
+  () from /opt/zinc-trunk/lib/libZincCommon.so.0
+
+#4  0x00410b68 in Zinc::Media::SystemFactory& zinc::PluginFactory::getInstance<Zinc::Media::SystemFactory>(zinc::PluginConfig const&) ()
+#5  0x76843f70 in nickel::system::ProxySystemFactory::loadImplementations (this=0x51aa18) at /home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp:120
+#6  0x76846ea8 in nickel::system::ProxySystemFactory::ProxySystemFactory (this=0x51aa18, __in_chrg=<optimized out>, __vtt_parm=<optimized out>)
+    at /home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp:49
+#7  0x76847328 in createSystemFactory () at /home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp:238
+#8  0x777e83a0 in zinc::PluginFactory::loadInstance(zinc::PluginConfig const&) () from /opt/zinc-trunk/lib/libZincCommon.so.0
+#9  0x00410b68 in Zinc::Media::SystemFactory& zinc::PluginFactory::getInstance<Zinc::Media::SystemFactory>(zinc::PluginConfig const&) ()
+#10 0x0040b81c in (anonymous namespace)::MediaDaemon::start(int, char**) ()
+#11 0x77924444 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#12 0x77926030 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#13 0x77927704 in DBus::BusDispatcher::run() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#14 0x7798f9bc in zinc::binding::dbus::MainLoop::run() () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#15 0x00409674 in main ()
+(gdb) 
 
 
 ={============================================================================
