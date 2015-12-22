@@ -9569,7 +9569,7 @@ GstBaseSinkClass.get_times() call before posting an EOS message. When the
 element receives EOS in PAUSED, preroll completes, the event is queued and an
 EOS message is posted when going to PLAYING.
 
-<segment-event>
+<sink-segment-event>
 GstBaseSink will internally use the GST_EVENT_SEGMENT events to schedule
 synchronisation and clipping of buffers. Buffers that fall completely outside of
 the current segment are dropped. Buffers that fall partially in the segment are
@@ -9589,11 +9589,13 @@ GstBaseSinkClass.render() and GstBaseSinkClass.set_caps() function will be
     called between the GstBaseSinkClass.start() and GstBaseSinkClass.stop()
     calls.
 
+<sink-event>
 The GstBaseSinkClass.event() virtual method will be called when an event is
 received by GstBaseSink. Normally this method should only be overridden by very
 specific elements (such as file sinks) which need to handle the newsegment event
 specially.
 
+<sink-unlock>
 The GstBaseSinkClass.unlock() method is called when the elements should unblock
 any blocking operations they perform in the GstBaseSinkClass.render() method.
 This is mostly useful when the GstBaseSinkClass.render() method performs a
@@ -9644,7 +9646,7 @@ render function.
 Parameters
 sink
 the sink
-	 
+
 Returns
 GST_FLOW_OK if the preroll completed and processing can continue. Any other
 return value should be returned from the render vmethod.
@@ -9699,9 +9701,11 @@ struct GstBaseSinkClass {
   gboolean      (*start)        (GstBaseSink *sink);
   gboolean      (*stop)         (GstBaseSink *sink);
 
+  <sink-unlock>
   /* unlock any pending access to the resource. subclasses should unlock
    * any function ASAP. */
   gboolean      (*unlock)       (GstBaseSink *sink);
+
   /* Clear a previously indicated unlock request not that unlocking is
    * complete. Sub-classes should clear any command queue or indicator they
    * set during unlock */
@@ -9806,6 +9810,231 @@ DEBUG               basesink gstbasesink.c:3175:gst_base_sink_event:<nexussink0>
 DEBUG              nexussink /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:979:gst_nexus_sink_event_locked:<nexussink0> Event segment
 
 DEBUG              nexussink /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:982:gst_nexus_sink_event_locked:<nexussink0> Segment event: 0:00:00.000000000 -> 99:99:99.999999999
+
+
+={============================================================================
+*kt_dev_bcast_500* gst-basesink: seek and flush
+
+{when-seek-forward}
+
+// when started FF from BBC iplayer, do "pause".
+
+nexussink gstnexussink.c:1435:gst_nexus_sink_change_state_locked:<nexussink> 
+  change state GST_STATE_CHANGE_PLAYING_TO_PAUSED
+nexussink gstnexussink.c:1607:gst_nexus_sink_pause_locked:<nexussink> Pause decoder
+nexussink gstnexusmgr.c:1051:gst_nexus_mgr_set_rate: Set playback rate 0.000000
+nexussink gstnexusmgr.c:1082:gst_nexus_mgr_set_rate: Setting rate=0.000000 (was 1.000000)
+
+
+// No log from GST. When do normal play from FF, starts output log:
+
+nexussink gstnexussink.c:1019:gst_nexus_sink_event_locked:<nexussink> Event flush start
+nexussink gstnexussink.c:1027:gst_nexus_sink_event_locked:<nexussink> Flushing nexus...
+nexussink gstnexussink.c:1034:gst_nexus_sink_event_locked: Event flush stop
+nexussink gstnexussink.c:1091:gst_nexus_sink_event_locked:<nexussink> calling GstBaseSink::event
+nexussink gstnexussink.c:1659:gst_nexus_sink_create_warning:<nexussink> FIFO empty
+nexussink gstnexussink.c:1765:gst_nexus_sink_on_error:<nexussink> Error: 0x0101
+nexussink gstnexussink.c:1043:gst_nexus_sink_event_locked:<nexussink> Event segment
+nexussink gstnexussink.c:1046:gst_nexus_sink_event_locked:<nexussink> 
+  Segment event: 0:20:13.000000000 -> 99:99:99.999999999
+nexussink gstnexussink.c:1091:gst_nexus_sink_event_locked:<nexussink> calling GstBaseSink::event
+
+note: HOW state change is triggered?
+
+nexussink gstnexussink.c:1388:gst_nexus_sink_change_state_locked:<nexussink> 
+  change state GST_STATE_CHANGE_PAUSED_TO_PLAYING
+
+nexussink gstnexussink.c:1582:gst_nexus_sink_play_locked:<nexussink> Starting decoder
+nexussink gstnexusmgr.c:1051:gst_nexus_mgr_set_rate: Set playback rate 1.000000
+nexussink gstnexusmgr.c:1082:gst_nexus_mgr_set_rate: Setting rate=1.000000 (was 0.000000)
+nexussink gstnexusmgr.c:1608:gst_nexus_mgr_start_video_locked: Started video decoder
+nexussink gstnexusmgr.c:1656:gst_nexus_mgr_start_audio_locked: Started audio decoder
+nexussink gstnexussink.c:1803:gst_nexus_sink_stream_change:<nexussink> stream change
+nexussink gstnexussink.c:1880:gst_nexus_sink_poll_decoder_status_locked:<nexussink> Frame rate 50/1
+nexussink gstnexusmgr.c:1396:gst_nexus_mgr_get_position_with_resources: video.first_pts=55054800
+
+<sink-event>
+gstbasesink_class->event = GST_DEBUG_FUNCPTR (gst_nexus_sink_event);
+
+static gboolean gst_nexus_sink_event_locked( GstNexusSink* sink, GstEvent* event )
+{
+  gboolean ret = TRUE;
+
+  switch( GST_EVENT_TYPE( event ) ) {
+    case GST_EVENT_FLUSH_START:
+      GST_DEBUG_OBJECT ( sink, "Event flush start" );
+
+      g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
+      ret = GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )->event( GST_BASE_SINK(sink), event );
+      g_mutex_lock(&sink->mutex);
+
+      g_atomic_int_set(&sink->eos_received,FALSE);
+      if( sink->nexusMgr ){
+        GST_DEBUG_OBJECT ( sink, "Flushing nexus..." );
+        gst_nexus_mgr_flush_decoder(sink->nexusMgr, &sink->settings);
+      }
+      return ret;
+      break;
+
+    case GST_EVENT_FLUSH_STOP:
+      GST_DEBUG ( "Event flush stop" );
+      g_atomic_int_set(&sink->eos_received,FALSE);
+      sink->last_position = GST_CLOCK_TIME_NONE;
+      sink->last_dts = GST_CLOCK_TIME_NONE;
+      break;
+
+    case GST_EVENT_SEGMENT: 
+      const GstSegment *segment;
+      g_atomic_int_set(&sink->eos_received,FALSE);
+      GST_DEBUG_OBJECT ( sink, "Event segment" );
+      gst_event_parse_segment (event, &segment);
+      if(segment->format == GST_FORMAT_TIME) {
+        GST_DEBUG_OBJECT (sink, "Segment event: %" GST_TIME_FORMAT 
+            " -> %" GST_TIME_FORMAT, 
+            GST_TIME_ARGS(segment->start),GST_TIME_ARGS(segment->stop));
+        gst_segment_copy_into(segment,&sink->output_segment);
+        sink->last_position = GST_CLOCK_TIME_NONE;
+        sink->last_dts = GST_CLOCK_TIME_NONE;
+      }
+      break;
+  }
+
+  if (ret && GST_BASE_SINK_CLASS (gst_nexus_sink_parent_class)->event) {
+    GST_LOG_OBJECT (sink,"calling GstBaseSink::event");
+
+    g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
+    ret = GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )
+      ->event( GST_BASE_SINK(sink), event );
+    g_mutex_lock(&sink->mutex);
+  }
+  else{
+    gst_event_unref (event);
+  }
+
+}
+
+
+<sink-render>
+
+gstbasesink_class->render = GST_DEBUG_FUNCPTR (gst_nexus_sink_render);
+
+static GstFlowReturn gst_nexus_sink_render( GstBaseSink * basesink, GstBuffer * buf )
+{
+  GstNexusSink *sink = GST_NEXUS_SINK (basesink);
+  GstFlowReturn ret;
+
+  g_mutex_lock(&sink->mutex);
+  ret = gst_nexus_sink_render_locked(sink, buf);
+  g_mutex_unlock(&sink->mutex);
+
+  return ret;
+}
+
+static GstFlowReturn gst_nexus_sink_render_locked 
+  (GstNexusSink * sink, GstBuffer * buf )
+{
+  // gboolean pes_data_source_produce_data(PesDataSource* source, PesStream* data)
+  // {
+  //   source_ahead_of_others = is_source_ahead_of_others_locked(source);
+  //   return source_ahead_of_others;
+  // }
+
+  // note:
+  // Push data and signal writer(reader) thread to process.
+
+  gboolean need_flush = pes_data_source_produce_data(sink->pes_data_source, pes_stream);
+  if(need_flush) 
+  {
+    g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
+    {
+      /* We are using sink->pes_data_source with sink->mutex unlocked.
+       * It's fine in this case, as sink->pes_data_source is assigned
+       * only in this element's open() and close() methods, which won't
+       * be called while another thread (us) is inside render().
+       * Note that calling pes_data_source_flush() while holding
+       * sink->mutex would have resulted in a deadlock when another
+       * GstNexusSink goes from READY to PAUSED and sets Nexus playback
+       * rate to zero. In such a situation pes_data_source_flush() can
+       * only return as a result of pes_data_source_pause_flush(), which
+       * won't get called until we release sink->mutex.
+       */
+      // <wait-on-source-cond>
+      while (PES_FLUSH_PAUSED == pes_data_source_flush(sink->pes_data_source)) {
+        rv = gst_base_sink_wait_preroll (GST_BASE_SINK(sink));
+        if (GST_FLOW_OK != rv) {
+          break;
+        }
+      }
+    }
+    g_mutex_lock(&sink->mutex);
+  }
+}
+
+
+note:
+The pumping thread uses one sink to push data and if it needs to flush due to
+seeking, then it is not in paused state meaning seeking in playing state, and
+has pending data. Now, block on <source-cond>.
+
+When writer(consumer) consumes all data in a queue for that source, audio or
+video, then it signal on source->cond. 
+
+PesFlushStatus pes_data_source_flush(PesDataSource* source)
+{
+  gboolean paused = FALSE;
+
+  g_mutex_lock(&source->mutex);
+
+  while (!paused && source->have_pending_data)
+  {
+    // Block, temporarily releasing source->mutex.
+    g_cond_wait(&source->cond, &source->mutex);   // <wait-on-source-cond>
+    paused = source->flush_paused;
+  }
+
+  g_mutex_unlock(&source->mutex);
+
+  return paused ? PES_FLUSH_PAUSED : PES_FLUSH_OK;
+}
+
+
+<sink-unlock>
+The GstBaseSinkClass.unlock() method is called when the elements should unblock
+any blocking operations they perform in the GstBaseSinkClass.render() method.
+This is mostly useful when the GstBaseSinkClass.render() method performs a
+blocking write on a file descriptor, for example.
+
+unlock any pending access to the resource. subclasses should unlock any function
+ASAP.
+
+note: 
+That is "resource" means "data buffer". When doing a seek, needs to unlock
+resource which means to flush. This immediately unblock a sink thread which
+waits for data being consumed in writer thread.
+
+gstbasesink_class->unlock = GST_DEBUG_FUNCPTR (gst_nexus_sink_unlock);
+
+static gboolean gst_nexus_sink_unlock_locked(GstNexusSink *sink)
+{
+  g_atomic_int_set(&sink->unlocked,1);
+  gst_nexus_sink_space_available_wakeup(sink);
+
+  if (sink->pes_data_source){
+    pes_data_source_pause_flush(sink->pes_data_source);
+  }
+
+  return TRUE;
+}
+
+void pes_data_source_pause_flush(PesDataSource* source)
+{
+  g_mutex_lock(&source->mutex);
+
+  source->flush_paused = TRUE;        // this is predicate
+  g_cond_broadcast(&source->cond);    // signal
+
+  g_mutex_unlock(&source->mutex);
+}
 
 
 ={============================================================================
@@ -12132,7 +12361,7 @@ gstreamer-1.5.0/docs/gst/running.xml
   stack trace in the usual way.  
   </para>
 
-
+https://developer.gnome.org/glib/stable/glib-Message-Logging.html
 https://developer.gnome.org/glib/stable/glib-running.html
 
 G_DEBUG.  
@@ -12145,6 +12374,30 @@ g_critical().
 
 fatal-criticals
 Causes GLib to abort the program at the first call to g_critical().
+
+g_critical()
+
+#define             g_critical(...)
+
+Logs a "critical warning" (G_LOG_LEVEL_CRITICAL). It's more or less
+application-defined what constitutes a critical vs. a regular warning. You could
+call g_log_set_always_fatal() to make critical warnings exit the program, then
+use g_critical() for fatal errors, for example.
+
+You can also make critical warnings 'fatal' at runtime by setting the G_DEBUG
+environment variable (see Running GLib Applications).
+
+If g_log_default_handler() is used as the log handler function, a new-line
+character will automatically be appended to @..., and need not be entered
+manually.  
+
+Parameters
+
+...
+
+format string, followed by parameters to insert into the format string (as with
+    printf())
+
 
 gc-friendly
 Newly allocated memory that isn't directly initialized, as well as memory being

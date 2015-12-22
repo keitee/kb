@@ -15392,7 +15392,7 @@ get_times 9530:26:52.800000000 99:99:99.999999
 
 
 ={============================================================================
-*kt_dev_uv_stack_400* mr-dash: gst-nexussink: pes
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: pes writer
 
 {changes-from-fix-to-solve-audio-drop}
 1. change qlist in writer
@@ -15414,15 +15414,28 @@ to:
     source to implement pumping based on fifo level checks.
 
 
-<pes-thread>
+<con-pes-thread>
 
+// note: simplified.
+//
 // GST calls gst_nexus_sink_render_locked() to push data on each sink and this
 // will call this. Add a chuck to the corresponding source q and signal it.
 
+/** TRUE if this source has some queued data. */
+gboolean have_pending_data;
+
 gboolean pes_data_source_produce_data(PesDataSource* source, PesStream* data)
 {
+  g_mutex_lock(&writer->mutex);
+
+  g_mutex_lock(&source->mutex);
+
+  g_queue_push_tail(source->chunks, chunk);
+  source->have_pending_data = TRUE;
+
   g_mutex_unlock(&source->mutex);
-  g_cond_signal(&writer->cond);
+
+  g_cond_signal(&writer->cond);     // <writer-cond-writer-mutex>
   g_mutex_unlock(&writer->mutex);
 }
 
@@ -15431,7 +15444,6 @@ gpointer writer_thread(gpointer context)
   ConcurrentPesWriter* writer = context;
   GThread* this_thread = g_thread_self();
 
-  g_assert(writer);
   g_mutex_lock(&writer->mutex);
 
   // concurrent_pes_writer_start() / _stop() will overwrite
@@ -15473,14 +15485,9 @@ gpointer writer_thread(gpointer context)
       size_t buffer_size = 0;
       NEXUS_Error rc;
 
-      // NEXUS_Playpump_GetBuffer() doesn't block.
+      // get a buffer
       rc = NEXUS_Playpump_GetBuffer(
           writer->playpump_handle, &buffer, &buffer_size);
-      if (NEXUS_SUCCESS != rc)
-      {
-        GST_WARNING("NEXUS_Playpump_GetBuffer() returned error (%d)\n", (int)rc);
-        break;
-      }
 
       if (buffer_size == 0)
       {
@@ -15491,10 +15498,13 @@ gpointer writer_thread(gpointer context)
           chunk->pes, buffer, buffer_size, chunk->bytes_written);
       g_assert(bytes_just_written >= 0); // Otherwise we are reading past the end.
       chunk->bytes_written += bytes_just_written;
+
+      // update fifo of chuck source
       g_mutex_lock(&source->mutex);
       source->fifo_level += bytes_just_written;
       g_mutex_unlock(&source->mutex);
 
+      // total_bytes is the size of single write from GST.
       if (chunk->total_bytes == chunk->bytes_written)
       {
         // This chunk has been fully written and can be deleted.
@@ -15504,36 +15514,163 @@ gpointer writer_thread(gpointer context)
         // Do we have any more chunks from the same source?
         if (source && g_queue_is_empty(queue))
         {
-          // If not, wake up any threads blocked in
-          // pes_data_source_flush() on that source.
+          // If not (queue is empty for that source), wake up any threads
+          // blocked in pes_data_source_flush() on that source.
+
           g_mutex_lock(&source->mutex);
           {
             source->have_pending_data = FALSE;
-            g_cond_broadcast(&source->cond);
+            g_cond_broadcast(&source->cond);  // <source-cond>
           }
           g_mutex_unlock(&source->mutex);
         }
       }
 
-      // NEXUS_Playpump_WriteComplete() doesn't block.
+      // say a write is completed 
       rc = NEXUS_Playpump_WriteComplete(
           writer->playpump_handle, 0, bytes_just_written);
       if (NEXUS_SUCCESS != rc)
       {
-        GST_WARNING("NEXUS_Playpump_WriteComplete() returned error (%d)\n", (int)rc);
         break;
       }
-    } // while ((queue = ...))
+    } // end of write while ((queue = ...))
+
     g_mutex_unlock (writer->resource_lock);
+
 nap_time:
+    // <writer-cond-writer-mutex>
     /* sleep for a while, or until more data is added to a queue */
     timeout = g_get_monotonic_time () + PES_WRITER_POLL_INTERVAL;
     g_cond_wait_until(&writer->cond, &writer->mutex, timeout);
-  }
+
+  } // end of thread while
 
   g_mutex_unlock(&writer->mutex);
 
   return NULL;
+}
+
+
+<con-pes-flush>
+
+gstbasesink_class->render = GST_DEBUG_FUNCPTR (gst_nexus_sink_render);
+
+static GstFlowReturn gst_nexus_sink_render( GstBaseSink * basesink, GstBuffer * buf )
+{
+  GstNexusSink *sink = GST_NEXUS_SINK (basesink);
+  GstFlowReturn ret;
+
+  g_mutex_lock(&sink->mutex);
+  ret = gst_nexus_sink_render_locked(sink, buf);
+  g_mutex_unlock(&sink->mutex);
+
+  return ret;
+}
+
+static GstFlowReturn gst_nexus_sink_render_locked 
+  (GstNexusSink * sink, GstBuffer * buf )
+{
+  // gboolean pes_data_source_produce_data(PesDataSource* source, PesStream* data)
+  // {
+  //   source_ahead_of_others = is_source_ahead_of_others_locked(source);
+  //   return source_ahead_of_others;
+  // }
+
+  // note:
+  // Push data and signal writer(reader) thread to process.
+
+  gboolean need_flush = pes_data_source_produce_data(sink->pes_data_source, pes_stream);
+  if(need_flush) 
+  {
+    g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
+    {
+      /* We are using sink->pes_data_source with sink->mutex unlocked.
+       * It's fine in this case, as sink->pes_data_source is assigned
+       * only in this element's open() and close() methods, which won't
+       * be called while another thread (us) is inside render().
+       * Note that calling pes_data_source_flush() while holding
+       * sink->mutex would have resulted in a deadlock when another
+       * GstNexusSink goes from READY to PAUSED and sets Nexus playback
+       * rate to zero. In such a situation pes_data_source_flush() can
+       * only return as a result of pes_data_source_pause_flush(), which
+       * won't get called until we release sink->mutex.
+       */
+      // <wait-on-source-cond>
+      while (PES_FLUSH_PAUSED == pes_data_source_flush(sink->pes_data_source)) {
+        rv = gst_base_sink_wait_preroll (GST_BASE_SINK(sink));
+        if (GST_FLOW_OK != rv) {
+          break;
+        }
+      }
+    }
+    g_mutex_lock(&sink->mutex);
+  }
+}
+
+
+note:
+The pumping thread uses one sink to push data and if it needs to flush due to
+seeking, then it is not in paused state meaning seeking in playing state, and
+has pending data. Now, block on <source-cond>.
+
+When writer(consumer) consumes all data in a queue for that source, audio or
+video, then it signal on source->cond. 
+
+PesFlushStatus pes_data_source_flush(PesDataSource* source)
+{
+  gboolean paused = FALSE;
+
+  g_mutex_lock(&source->mutex);
+
+  while (!paused && source->have_pending_data)
+  {
+    // Block, temporarily releasing source->mutex.
+    g_cond_wait(&source->cond, &source->mutex);   // <wait-on-source-cond>
+    paused = source->flush_paused;
+  }
+
+  g_mutex_unlock(&source->mutex);
+
+  return paused ? PES_FLUSH_PAUSED : PES_FLUSH_OK;
+}
+
+
+<sink-unlock>
+The GstBaseSinkClass.unlock() method is called when the elements should unblock
+any blocking operations they perform in the GstBaseSinkClass.render() method.
+This is mostly useful when the GstBaseSinkClass.render() method performs a
+blocking write on a file descriptor, for example.
+
+unlock any pending access to the resource. subclasses should unlock any function
+ASAP.
+
+note: 
+That is "resource" means "data buffer". When doing a seek, needs to unlock
+resource which means to flush. This immediately unblock a sink thread which
+waits for data being consumed in writer thread.
+
+gstbasesink_class->unlock = GST_DEBUG_FUNCPTR (gst_nexus_sink_unlock);
+
+static gboolean gst_nexus_sink_unlock_locked(GstNexusSink *sink)
+{
+  g_atomic_int_set(&sink->unlocked,1);
+  gst_nexus_sink_space_available_wakeup(sink);
+
+  if (sink->pes_data_source){
+    pes_data_source_pause_flush(sink->pes_data_source);
+  }
+
+  return TRUE;
+}
+
+void pes_data_source_pause_flush(PesDataSource* source)
+{
+  g_mutex_lock(&source->mutex);
+
+  source->flush_paused = TRUE;        // this is predicate
+  g_cond_broadcast(&source->cond);    // signal
+
+  g_mutex_unlock(&source->mutex);
 }
 
 
@@ -16966,6 +17103,15 @@ G_MESSAGES_DEBUG=drmwasabi get you:
   Failed at /.../DEVARCH/Polonium/Polonium.Drm/src/gdrmwasabi.c:986
 
 note: not able to log file in sandbox but able to get GST_DEBUG on console.
+
+/opt/zinc-trunk/bin/nickelmediad-launch
+
+declare -a env_vars=(                                                        
+    G_DEBUG=fatal-criticals                                                  
+    GST_DEBUG=nexussink:6                                                    
+    GST_PLUGIN_PATH="$prefix/lib/gstreamer-1.0:$prefix/oss/lib/gstreamer-1.0"
+    GST_REGISTRY="$gst_registry_file"                                
+)                                                                    
 
 
 ={============================================================================
