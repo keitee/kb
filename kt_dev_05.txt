@@ -22,6 +22,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_202| mpeg: streaming: mpd file
 
 |kt_dev_bcast_300| gst-git
+*kt_dev_bcast_300* gst-git: build
 |kt_dev_bcast_300| gst: tutorial: 02: concept
 |kt_dev_bcast_300| gst: tutorial: 03: signal
 |kt_dev_bcast_300| gst: tutorial: 04: seeking and query
@@ -1311,6 +1312,175 @@ git clone git://anongit.freedesktop.org/gstreamer/gst-libav
 git clone git://anongit.freedesktop.org/gstreamer/gst-devtools
 git clone git://anongit.freedesktop.org/gstreamer/common
 git clone git://anongit.freedesktop.org/gstreamer/gst-integration-testsuites
+
+
+={============================================================================
+*kt_dev_bcast_300* gst-git: build
+
+Q:
+How do I develop against an uninstalled GStreamer copy ?
+
+A:
+It is possible to develop and compile against an uninstalled copy of gstreamer
+and gst-plugins-* (for example, against git checkouts). This allows you to
+develop against and test the latest GStreamer version without having to install
+it and without interfering with your system-wide GStreamer setup.
+
+The easiest way too create such a setup is the latest version of
+create-uninstalled-setup.sh
+
+This setup makes use of the latest version of gst-uninstalled. Running this
+script, you'll be in an environment where the uninstalled tools and plugins will
+be used by default. Also, pkg-config will detect the uninstalled copies before
+(and prefer them to) any installed copies.
+
+Multiple uninstalled setups can be used in parallel. Have a look at
+gst-uninstalled to see how it determines which environment is used. 
+
+
+<uninstalled-setup>
+http://gstreamer.freedesktop.org/wiki/UninstalledSetup/
+
+0. From the above:
+
+// http://gstreamer.freedesktop.org/wiki/BuildDependenciesDebianUbuntu/
+// is this necessary?
+// sudo apt-get build-dep gstreamer1.0-plugins-{base,good,bad,ugly}
+
+
+1. Have to install glib-2.0, and orc-0.4. note that orc-0.4 is source package
+which needs to be built.
+
+https://packages.debian.org/source/jessie/orc
+
+
+2. Use two scripts to clone moudles and set up env vars to build. Need to make
+changes to make it work.
+
+/gstreamer/plain/scripts/create-uninstalled-setup.sh
+/gstreamer/plain/scripts/gst-uninstalled
+
+<1>
+Build fails on making document target for gstreamer module. Removes doc
+directory from Makefile.am
+
+diff --git a/Makefile.am b/Makefile.am
+
+ SUBDIRS = pkgconfig \
+        gst libs plugins tests \
+-       docs \
+        po \
+        m4 \
+        common \
+
+
+<2>
+This script is to clone modules, to make a sym link of "gst-uninstalled.sh" to
+the cloned one. To use env vars from outside:
+
+BRANCH=1.6 UNINSTALLED_ROOT=~/gst-build/UNINS gstreamer/scripts/create-uninstalled-setup.sh 
+
+diff --git a/scripts/create-uninstalled-setup.sh b/scripts/create-uninstalled-setup.sh
+ 
+ # set BRANCH to e.g. "1.2" to track the stable 1.2 branch instead of master
+-BRANCH="master"
++#BRANCH="master"
+ 
+-UNINSTALLED_ROOT=~/gst
++#UNINSTALLED_ROOT=~/gst
+
+
+Not to use the cloned one:
+
+ cd $UNINSTALLED_ROOT
+-ln -s $BRANCH/gstreamer/scripts/gst-uninstalled gst-$BRANCH
++ln -s ~/gst-build/gstreamer/scripts/gst-uninstalled gst-$BRANCH
+ chmod +x gst-$BRANCH
+
+<3> 
+This script is to set env vars for pkg and others which uns in the sub shell.
+Changes to use env vars which corresponds to the above.
+
+diff --git a/scripts/gst-uninstalled b/scripts/gst-uninstalled
+ 
+-if [ -z $GST_UNINSTALLED_ROOT ];
++if [ -z $UNINSTALLED_ROOT ];
+ then
+     # Change this variable to the location of your gstreamer git checkouts
+     MYGST=$HOME/gst
+@@ -41,16 +41,19 @@ then
+     VERSION=`echo $0 | sed s/.*gst-//g`
+ 
+     # base path under which dirs are installed
+-    GST=$MYGST/$VERSION
++    GST=$UNINSTALLED_ROOT/$BRANCH
+ else
+     # Alternatively, you can set the GST_UNINSTALLED_ROOT environment variable to the
+     # location of your checkout and call this script directly.
+     #
+     # Ex: GST_UNINSTALLED_ROOT=$HOME/checkout/location gst-uninstalled
+ 
+-    GST=$GST_UNINSTALLED_ROOT
++    GST=$UNINSTALLED_ROOT/$BRANCH
+ fi
+ 
+
+~/gst-build/UNINS$ 
+drwxr-xr-x  14:22 1.6/
+lrwxrwxrwx  16:33 gst-1.6 -> /home/kpark/gst-build/gstreamer/scripts/gst-uninstalled*
+
+echo "To enter the uninstalled environment do: 
+
+cd $UNINSTALLED_ROOT; 
+BRANCH=1.6 UNINSTALLED_ROOT=~/gst-build/UNINS ./gst-1.6
+
+
+04:56:56 ~/gst-build/UNINS$ env | ag PKG
+PKG_CONFIG_PATH=/home/kpark/gst-build/UNINS/1.6/gst-devtools/validate/pkgconfig:/home/kpark/gst-build/UNINS/1.6/totem-pl-parser:/home/kpark/gst-build/UNINS/1.6/clutter-gst:/home/kpark/gst-build/UNINS/1.6/prefix/lib/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gstreamer/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-plugins-base/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-plugins-good/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-plugins-ugly/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-plugins-bad/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-libav/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-ffmpeg/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-python/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-rtsp-server/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gst-editing-services/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gstreamer-sharp/pkgconfig:/home/kpark/gst-build/UNINS/1.6/gstreamer-vaapi/pkgconfig:/home/kpark/gst-build/UNINS/1.6/orc:/home/kpark/gst-build/UNINS/1.6/farsight2:/home/kpark/gst-build/UNINS/1.6/libnice/nice
+
+
+// MODULES=
+// "gstreamer gst-plugins-base gst-plugins-good gst-plugins-ugly gst-plugins-bad gst-libav"
+
+echo "    cd <MODULE>; ./autogen.sh; make"
+
+./autogen.sh; make on :
+
+gst-libav/
+gst-plugins-bad/
+gst-plugins-base/
+gst-plugins-good/
+gst-plugins-ugly/
+gstreamer/
+prefix/
+
+
+<more>
+http://arunraghavan.net/2014/07/quick-start-guide-to-gst-uninstalled-1-x/
+
+Time to build
+
+$ ./gstreamer/scripts/git-update.sh
+
+Take it out for a spin
+
+$ gst-inspect-1.0 filesrc
+$ gst-launch-1.0 playbin uri=file:///path/to/some/file
+$ gst-discoverer-1.0 /path/to/some/file
+
+That's it! Some tips:
+
+Remember that run ~/bin/gst-master to enter the environment for each new shell
+If you start up a GStreamer app from your system in this environment, it will
+use your 'uninstalled' libraries and plugins You can and should periodically
+update you tree by rerunning the git-update.sh script 
+        
+To run gdb on gst-launch, you need to do something like: $ libtool
+--mode=execute gdb --args gstreamer/tools/gst-launch-1.0 videotestsrc !
+videoconvert ! xvimagesink 
+
+I find it useful to run cscope on the top-level tree, and use that for quick
+code browsing
 
 
 ={============================================================================
