@@ -12,6 +12,7 @@
 |kt_dev_uv_set_011| setup: ci builds
 
 *kt_dev_uv_stack_000* zinc-build: zb-config
+*kt_dev_uv_stack_000* zinc-build: zb-virtual-slave, zb-shell
 *kt_dev_uv_stack_000* zinc-build: zb-make
 *kt_dev_uv_stack_000* zinc-build: zb-build-with-progress
 *kt_dev_uv_stack_000* zinc-build: makefile
@@ -19,7 +20,7 @@
 *kt_dev_uv_stack_000* zinc-build: debug or release
 *kt_dev_uv_stack_003* zinc-build: autotool structures
 *kt_dev_uv_stack_003* zinc-build: exclude files
-*kt_dev_uv_stack_003* zinc-build: zb-shell, setvar-common
+*kt_dev_uv_stack_003* zinc-build: setvar-common
 *kt_dev_uv_stack_003* zinc-build: setvars
 
 *kt_dev_uv_stack_002* tool-jirafy:
@@ -461,6 +462,53 @@ http://spongebob:8080/view/developer/job/Test_Build_Concurrent/
 
 
 ={============================================================================
+*kt_dev_uv_stack_000* zinc-build: zb-virtual-slave, zb-shell
+
+<zb-virtual-slave>
+zb-virtual-slave zb-make
+{
+  /source/zinc-git-tools/zb/zb-load-config.sh
+  {
+      pre: ET, ZB_CFG 
+
+      configure_git_for_zb() {
+
+      conf zb.huawei.360.host-config huawei-dn360t
+      conf zb.huawei.370.host-config huawei-bcm7409
+      conf zb.huawei.372.host-config huawei-bcm7231
+      conf zb.humax.1000.host-config humax-dtr_t1000
+      }
+
+      // [zb] ZB_BUILD_DIR
+      // build-dir = /data/builds
+      // git config zb.build-dir /home/kpark/builds
+
+      do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
+
+      export ZB_HOST_CONFIG=$(get_conf host-config "host")
+  }
+
+   real_path="${ZB_BUILD_DIR}/$branch"
+   virtual_path="${ZB_BUILD_DIR}/_virtual_"
+
+  + real_path=/data/builds/<BRANCH>
+  + virtual_path=/data/builds/_virtual_
+
+  note: "bash -c string" execute string on the given shell.
+
+  note: when change ET using exports, this will not be passed subshell below.
+
+   echo "===================> \"ET=$ET ${program_to_run}\"" 
+   exec map-dir-and-exec \
+      "${real_path}:${virtual_path}" "ET=$ET ${program_to_run}" "$@"
+
+  + exec map-dir-and-exec /data/builds/master:/data/builds/_virtual_ /bin/bash -c '"zb-make"  		
+  2> >( sed -u "s|/data/builds/_virtual_|/data/builds/master|" >&2 ) \
+  | sed -u "s|/data/builds/_virtual_|/data/builds/master|"'
+}
+
+
+={============================================================================
 *kt_dev_uv_stack_000* zinc-build: zb-make
 
 <ET>
@@ -553,50 +601,6 @@ dbussenddaemon*
 yv-remote-booking-agent-activate*
 yv-remote-booking-agent-watcher*
 yv-start-services.sh*
-
-
-<zb-virtual-slave>
-zb-virtual-slave zb-make
-{
-  /source/zinc-git-tools/zb/zb-load-config.sh
-  {
-      pre: ET, ZB_CFG 
-
-      configure_git_for_zb() {
-
-      conf zb.huawei.360.host-config huawei-dn360t
-      conf zb.huawei.370.host-config huawei-bcm7409
-      conf zb.huawei.372.host-config huawei-bcm7231
-      conf zb.humax.1000.host-config humax-dtr_t1000
-      }
-
-      // [zb] ZB_BUILD_DIR
-      // build-dir = /data/builds
-      // git config zb.build-dir /home/kpark/builds
-
-      do : set ZB_BUILD_DIR, slave_dir=/data/builds/master/pc
-
-      export ZB_HOST_CONFIG=$(get_conf host-config "host")
-  }
-
-   real_path="${ZB_BUILD_DIR}/$branch"
-   virtual_path="${ZB_BUILD_DIR}/_virtual_"
-
-  + real_path=/data/builds/<BRANCH>
-  + virtual_path=/data/builds/_virtual_
-
-  note: "bash -c string" execute string on the given shell.
-
-  note: when change ET using exports, this will not be passed subshell below.
-
-   echo "===================> \"ET=$ET ${program_to_run}\"" 
-   exec map-dir-and-exec \
-      "${real_path}:${virtual_path}" "ET=$ET ${program_to_run}" "$@"
-
-  + exec map-dir-and-exec /data/builds/master:/data/builds/_virtual_ /bin/bash -c '"zb-make"  		
-  2> >( sed -u "s|/data/builds/_virtual_|/data/builds/master|" >&2 ) \
-  | sed -u "s|/data/builds/_virtual_|/data/builds/master|"'
-}
 
 
 <zb-make-sh>
@@ -825,6 +829,8 @@ ZB_BUILD_CMD=./build-with-progress.sh zb-make "$@"
 ./Zinc/Zinc.Build/build-with-progress.sh
 
   -i                            enable incremental building. 
+
+./Zinc/Zinc.Build/update-build-progress.sh
 
 
 ={============================================================================
@@ -1391,7 +1397,7 @@ Zinc/Zinc.Build/excluded-files-production.txt
 
 
 ={============================================================================
-*kt_dev_uv_stack_003* zinc-build: zb-shell, setvar-common
+*kt_dev_uv_stack_003* zinc-build: setvar-common
 
 {
    <load-config>
@@ -10564,7 +10570,6 @@ GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found GST_DEBUG=5
 GST_DEBUG=adaptivedemux:5 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
 
 
-
 ={============================================================================
 *kt_dev_uv_stack_250* mr-web: qt patches
 
@@ -16883,9 +16888,6 @@ GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/gst-hls-log.txt GST_DEBUG=5
 
 export GST_PLUGIN_PATH="/opt/zinc-trunk/lib/gstreamer-1.0:/opt/zinc-trunk/oss/lib/gstreamer-1.0"
 export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so:/lib/libpthread.so.0
-
-gst-launch-1.0 souphttpsrc \
-location=http://filegateway.youview.co.uk/applications/dev/chay/html/video/BBC.News.at.Six-2015-Nov-24.18_25_17.199613.ts ! tsnexusbin
 
 gst-launch-1.0 souphttpsrc \
 location=http://wll1p00830.dev.youview.co.uk:3000/video/adverts/Webuyanycar-crash.ts ! tsnexusbin

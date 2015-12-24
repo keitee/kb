@@ -23,6 +23,10 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_bcast_300| gst-git
 *kt_dev_bcast_300* gst-git: build
+*kt_dev_bcast_300* gst-tool: gst-launch
+*kt_dev_bcast_300* gst-tool: gst-inspect
+*kt_dev_bcast_300* gst-tool: gst-discoverer
+*kt_dev_bcast_300* gst: gst-launch examples on pc
 |kt_dev_bcast_300| gst: tutorial: 02: concept
 |kt_dev_bcast_300| gst: tutorial: 03: signal
 |kt_dev_bcast_300| gst: tutorial: 04: seeking and query
@@ -44,8 +48,6 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_310* gst-registry
 *kt_dev_bcast_310* gst-scanner
 |kt_dev_bcast_310| gst: debug
-|kt_dev_bcast_311| gst: gst-launch
-|kt_dev_bcast_311| gst: gst-inspect
 |kt_dev_bcast_312| gst: sdk, tutorials
 
 |kt_dev_bcast_319| gst: mime and types
@@ -1467,6 +1469,7 @@ Take it out for a spin
 $ gst-inspect-1.0 filesrc
 $ gst-launch-1.0 playbin uri=file:///path/to/some/file
 $ gst-discoverer-1.0 /path/to/some/file
+$ gst-launch-1.0 -v fakesrc num_buffers=5 ! fakesink
 
 That's it! Some tips:
 
@@ -1475,12 +1478,317 @@ If you start up a GStreamer app from your system in this environment, it will
 use your 'uninstalled' libraries and plugins You can and should periodically
 update you tree by rerunning the git-update.sh script 
         
-To run gdb on gst-launch, you need to do something like: $ libtool
---mode=execute gdb --args gstreamer/tools/gst-launch-1.0 videotestsrc !
+To run gdb on gst-launch, you need to do something like: 
+
+$ libtool --mode=execute gdb --args gstreamer/tools/gst-launch-1.0 videotestsrc !
 videoconvert ! xvimagesink 
 
 I find it useful to run cscope on the top-level tree, and use that for quick
 code browsing
+
+
+={============================================================================
+*kt_dev_bcast_300* gst-tool: gst-launch
+
+Basic tutorial 10: GStreamer tools
+http://docs.gstreamer.com/display/GstSDK/Basic+tutorial+10%3A+GStreamer+tools
+
+The command line for gst-launch consists of a list of options followed by a
+PIPELINE-DESCRIPTION.  Some simplified instructions are given next, see the
+complete documentation at the reference page for gst-launch.
+
+In simple form, a PIPELINE-DESCRIPTION is a list of element types separated by
+exclamation marks (!). Go ahead and type in the following command:
+
+gst-launch-0.10 videotestsrc ! ffmpegcolorspace ! autovideosink
+
+
+$ ./gst-launch-0.10 --help-all
+Usage:
+  gst-launch-0.10 [OPTION?] PIPELINE-DESCRIPTION
+
+Help Options:
+  -h, --help                        Show help options
+  --help-all                        Show all help options
+  --help-gst                        Show GStreamer Options
+
+GStreamer Options
+  --gst-version                     Print the GStreamer version
+  --gst-fatal-warnings              Make all warnings fatal
+  --gst-debug-help                  Print available debug categories and exit
+
+  --gst-debug-level=LEVEL           Default debug level from 1 (only error) to 
+                                    5 (anything) or 0 for no output
+
+  --gst-debug=LIST                  Comma-separated list of category_name:level 
+                                    pairs to set specific levels for the 
+                                    individual categories. 
+                                    Example: GST_AUTOPLUG:5,GST_ELEMENT_*:3
+
+  --gst-debug-no-color              Disable coloured debugging output
+  --gst-debug-disable               Disable debugging
+  --gst-plugin-spew                 Enable verbose plugin loading diagnostics
+  --gst-plugin-path=PATHS           Colon-separated paths containing plugins
+  --gst-plugin-load=PLUGINS         Comma-separated list of plugins to preload 
+                                    in addition to the list stored in environment 
+                                    variable GST_PLUGIN_PATH
+  --gst-disable-segtrap             Disable trapping of segmentation faults 
+                                    during plugin loading
+  --gst-disable-registry-update     Disable updating the registry
+  --gst-disable-registry-fork       Disable spawning a helper process while 
+                                    scanning the registry
+
+Application Options:
+  -t, --tags                        Output tags (also known as metadata)
+  -v, --verbose                     Output status information and property notifications
+  -q, --quiet                       Do not print any progress information
+  -m, --messages                    Output messages
+  -X, --exclude=TYPE1,TYPE2,...     Do not output status information of TYPE
+  -o, --output=FILE                 Save xml representation of pipeline to FILE and exit
+  -f, --no-fault                    Do not install a fault handler
+  --no-sigusr-handler               Do not install signal handlers for SIGUSR1 and SIGUSR2
+  -T, --trace                       Print alloc trace (if enabled at compile time)
+  -e, --eos-on-shutdown             Force EOS on sources before shutting the pipeline down
+  -i, --index                       Gather and print index statistics
+  --version                         Print version information and exit
+
+
+{set-properties}
+Properties may be appended to elements, in the form property=value (multiple
+        properties can be specified, separated by spaces). Use the gst-inspect
+tool (explained next) to find out the available properties for an element.
+
+gst-launch-0.10 videotestsrc pattern=11 ! ffmpegcolorspace ! autovideosink
+
+
+{name-elements-named-pad}
+Elements can be named using the name property, in this way complex pipelines
+involving branches can be created. Names allow linking to elements created
+previously in the description, and are indispensable to use elements with
+multiple output pads, like demuxers or tees, for example.
+
+Named elements are referred to using their name followed by a dot.
+
+gst-launch-0.10 \
+   videotestsrc ! ffmpegcolorspace ! tee name=t ! queue ! autovideosink t. ! queue ! autovideosink
+                                                                                     ^^
+   videotestsrc ! ffmpegcolorspace ! tee ! queue ! autovideosink 
+                                     tee ! queue ! autovideosink
+
+You should see two video windows, showing the same sample video pattern.
+
+The tee is named simply 't' (using the name property) and then linked to a
+queue and an autovideosink. The same tee is referred to using 't.' (mind the
+        dot) and then linked to a second queue and a second autovideosink.
+
+
+{cap-filters}
+When an element has more than one output pad, it might happen that the link to
+the next element is ambiguous: the next element may have more than one
+compatible input pad, or its input pad may be compatible with the Pad Caps of
+all the output pads. In these cases GStreamer will link using the first pad
+that is available, which pretty much amounts to saying that GStreamer will
+choose one output pad at random.
+
+Consider the following pipeline:
+
+gst-launch-1.0 souphttpsrc 
+    location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
+    ! matroskademux ! filesink location=test
+
+This is the same media file and demuxer as in the previous example. The input
+Pad Caps of filesink are ANY, meaning that it can accept any kind of media.
+Which one of the two output pads of matroskademux will be linked against the
+filesink? video_00 or audio_00? You cannot know.
+
+You can remove this ambiguity, though, by using named pads, as in the previous
+sub-section, or by using Caps Filters:
+
+gst-launch-0.10 
+   souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
+   ! matroskademux ! video/x-vp8 ! matroskamux ! filesink location=sintel_video.mkv
+
+A Caps Filter behaves like a pass-through element which does nothing and only
+accepts media with the given Caps, effectively resolving the ambiguity. In
+this example, between matroskademux and matroskamux we added a video/x-vp8
+Caps Filter to specify that we are interested in the output pad of
+matroskademux which can produce this kind of video.
+
+
+{example}
+gst-launch-1.0 
+   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! dashdemux name=dash dash. 
+   ! video/quicktime 
+   ! qtdemux 
+   ! queue 
+   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! h264parse 
+   ! video/x-h264,stream-format=byte-stream 
+   ! nexussink dash. 
+   ! audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
+
+   souphttpsrc 
+   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue ! cencdec ! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink dash. 
+                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! nexussink
+
+gst-launch-1.0 
+   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! dashdemux name=dash dash. 
+   ! video/quicktime 
+   ! qtdemux 
+   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2 
+   ! h264parse 
+   ! mpegtsmux name=m 
+   ! tsnexusbin dash. 
+   ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! m.
+
+   souphttpsrc 
+   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! cencdec ! h264parse ! mpegtsmux name=m ! tsnexusbin dash. 
+                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse      ! mpegtsmux
+
+
+={============================================================================
+*kt_dev_bcast_300* gst-tool: gst-inspect
+
+This tool has three modes of operation:
+
+o Without arguments, it lists 'all' available elements types, this is, the types
+you can use to instantiate new elements.
+
+o With a file name as an argument, it treats the file as a GStreamer plugin,
+tries to open it, and lists all the elements described inside.
+
+o With a GStreamer 'element' name as an argument, it lists all information
+regarding that element.
+
+The most relevant sections are:
+
+o Pad Templates (line 25): This lists all the kinds of Pads this element can
+                           have, along with their capabilities. This is where
+                           you look to find out if an element can link with
+                           another one. In this case, it has only one sink pad
+                           template, accepting only video/x-vp8 (encoded video
+                                   data in VP8 format) and only one source pad
+                           template, producing video/x-raw-yuv (decoded video
+                                   data).
+
+o Element Properties (line 70): This lists the properties of the element, along
+                                with their type and accepted values.
+
+
+={============================================================================
+*kt_dev_bcast_300* gst-tool: gst-discoverer
+
+This tool is a wrapper around the GstDiscoverer object shown in Basic tutorial
+9: Media information gathering. It accepts a URI from the command line and
+prints all information regarding the media that GStreamer can extract. It is
+useful to find out what container and codecs have been used to produce the
+media, and therefore what elements you need to put in a pipeline to play it.
+
+Use gst-discoverer --help to obtain the list of available options, which
+basically control the amount of verbosity of the output.
+
+// hls file
+
+$ gst-discoverer-1.0 -v http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8
+Analyzing http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8
+Done discovering http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8
+
+Topology:
+  container: application/x-hls
+    container: video/mpegts, systemstream=(boolean)true, packetsize=(int)188
+      audio: audio/mpeg, mpegversion=(int)2, stream-format=(string)adts
+        Tags:
+          None
+        
+        Codec:
+          audio/mpeg, mpegversion=(int)2, stream-format=(string)adts
+        Additional info:
+          None
+        Stream ID: (null)
+        Language: <unknown>
+        Channels: 0
+        Sample rate: 0
+        Depth: 0
+        Bitrate: 0
+        Max bitrate: 0
+        audio: audio/mpeg, framed=(boolean)true, mpegversion=(int)4, level=(string)2, base-profile=(string)lc, profile=(string)lc, rate=(int)48000, channels=(int)2, stream-format=(string)adts
+          Tags:
+            audio codec: MPEG-2 AAC
+          
+          Codec:
+            audio/mpeg, framed=(boolean)true, mpegversion=(int)4, level=(string)2, base-profile=(string)lc, profile=(string)lc, rate=(int)48000, channels=(int)2, stream-format=(string)adts
+          Additional info:
+            None
+          Stream ID: 41450b6bc7f7427dad2854e9d2b2ca1ee16f15f5370b50969d863b33344ea7d9/src_0/00000101
+          Language: <unknown>
+          Channels: 2
+          Sample rate: 48000
+          Depth: 32
+          Bitrate: 0
+          Max bitrate: 0
+      video: video/x-h264, stream-format=(string)byte-stream, alignment=(string)nal
+        Tags:
+          video codec: H.264
+        
+        Codec:
+          video/x-h264, stream-format=(string)byte-stream, alignment=(string)nal
+        Additional info:
+          None
+        Stream ID: 41450b6bc7f7427dad2854e9d2b2ca1ee16f15f5370b50969d863b33344ea7d9/src_0/00000100
+        Width: 212
+        Height: 120
+        Depth: 24
+        Frame rate: 0/1
+        Pixel aspect ratio: 1/1
+        Interlaced: false
+        Bitrate: 0
+        Max bitrate: 0
+
+Properties:
+  Duration: 0:09:56.458000000
+  Seekable: yes
+  Tags: 
+      audio codec: MPEG-2 AAC
+      video codec: H.264
+
+
+={============================================================================
+*kt_dev_bcast_300* gst: gst-launch examples on pc
+
+// audio only
+gst-launch-1.0 uridecodebin uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! audioconvert ! autoaudiosink
+
+
+// video but no audio
+gst-launch-1.0 uridecodebin uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! videoconvert ! xvimagesink
+
+
+// video and audio
+gst-launch-1.0 uridecodebin uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm name=decoder decoder. ! videoconvert ! xvimagesink decoder. ! audioconvert ! autoaudiosink
+
+
+// ts file
+//
+// We also have a basic media playing plugin that will take care of most things
+// for you. This plugin is called playbin.  This should play the file if the
+// format is supported, ie. you have all the necessary demuxing and decoding and
+// some output plugins installed. 
+
+gst-launch-1.0 playbin uri=http://wll1p00830.dev.youview.co.uk:3000/video/adverts/Webuyanycar-crash.ts
+
+
+// hls file
+gst-launch-1.0 playbin uri=http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8
+
+
+// dash video only
+gst-launch-1.0 playbin uri=http://wll1p02380.dev.youview.co.uk/videos/dash/bigBunny2/yv_TestTRec.mpd
+
+
+// dash video and audio
+gst-launch-1.0 playbin uri=http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
 
 
 ={============================================================================
@@ -2956,7 +3264,11 @@ This element decodes data from a URI into raw media. It selects a source element
 given URI scheme and connects it to a decodebin2 element. Like a demuxer, so it offers as many
 source pads as streams are found in the media.
 
-gst-launch-0.10 uridecodebin uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! ffmpegcolorspace ! autovideosink
+// Not work on gst-1.6:
+// gst-launch-0.10 uridecodebin 
+// uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
+// ! ffmpegcolorspace ! autovideosink
+
 gst-launch-0.10 uridecodebin uri=http://docs.gstreamer.com/media/sintel_trailer-480p.webm ! audioconvert ! autoaudiosink
 
 Decodes data from a URI into raw media. It selects a source element that can handle the given "uri" scheme and connects it to a decodebin2. 
@@ -4541,202 +4853,6 @@ facility. From within your application, you can use the GST_DEBUG_BIN_TO_DOT_FIL
 GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS() macros to generate .dot files at your convenience.
 
 dot -Tjpeg gst-launch.PLAYING_PAUSED.dot -o gst-launch.PLAYING_PAUSED.jpg
-
-
-={============================================================================
-*kt_dev_bcast_311* gst: gst-launch
-
-Basic tutorial 10: GStreamer tools
-http://docs.gstreamer.com/display/GstSDK/Basic+tutorial+10%3A+GStreamer+tools
-
-The command line for gst-launch consists of a list of options followed by a
-PIPELINE-DESCRIPTION.  Some simplified instructions are given next, see the
-complete documentation at the reference page for gst-launch.
-
-In simple form, a PIPELINE-DESCRIPTION is a list of element types separated by
-exclamation marks (!). Go ahead and type in the following command:
-
-gst-launch-0.10 videotestsrc ! ffmpegcolorspace ! autovideosink
-
-
-$ ./gst-launch-0.10 --help-all
-Usage:
-  gst-launch-0.10 [OPTION?] PIPELINE-DESCRIPTION
-
-Help Options:
-  -h, --help                        Show help options
-  --help-all                        Show all help options
-  --help-gst                        Show GStreamer Options
-
-GStreamer Options
-  --gst-version                     Print the GStreamer version
-  --gst-fatal-warnings              Make all warnings fatal
-  --gst-debug-help                  Print available debug categories and exit
-
-  --gst-debug-level=LEVEL           Default debug level from 1 (only error) to 
-                                    5 (anything) or 0 for no output
-
-  --gst-debug=LIST                  Comma-separated list of category_name:level 
-                                    pairs to set specific levels for the 
-                                    individual categories. 
-                                    Example: GST_AUTOPLUG:5,GST_ELEMENT_*:3
-
-  --gst-debug-no-color              Disable coloured debugging output
-  --gst-debug-disable               Disable debugging
-  --gst-plugin-spew                 Enable verbose plugin loading diagnostics
-  --gst-plugin-path=PATHS           Colon-separated paths containing plugins
-  --gst-plugin-load=PLUGINS         Comma-separated list of plugins to preload 
-                                    in addition to the list stored in environment 
-                                    variable GST_PLUGIN_PATH
-  --gst-disable-segtrap             Disable trapping of segmentation faults 
-                                    during plugin loading
-  --gst-disable-registry-update     Disable updating the registry
-  --gst-disable-registry-fork       Disable spawning a helper process while 
-                                    scanning the registry
-
-Application Options:
-  -t, --tags                        Output tags (also known as metadata)
-  -v, --verbose                     Output status information and property notifications
-  -q, --quiet                       Do not print any progress information
-  -m, --messages                    Output messages
-  -X, --exclude=TYPE1,TYPE2,...     Do not output status information of TYPE
-  -o, --output=FILE                 Save xml representation of pipeline to FILE and exit
-  -f, --no-fault                    Do not install a fault handler
-  --no-sigusr-handler               Do not install signal handlers for SIGUSR1 and SIGUSR2
-  -T, --trace                       Print alloc trace (if enabled at compile time)
-  -e, --eos-on-shutdown             Force EOS on sources before shutting the pipeline down
-  -i, --index                       Gather and print index statistics
-  --version                         Print version information and exit
-
-
-{set-properties}
-Properties may be appended to elements, in the form property=value (multiple
-        properties can be specified, separated by spaces). Use the gst-inspect
-tool (explained next) to find out the available properties for an element.
-
-gst-launch-0.10 videotestsrc pattern=11 ! ffmpegcolorspace ! autovideosink
-
-
-{name-elements-named-pad}
-Elements can be named using the name property, in this way complex pipelines
-involving branches can be created. Names allow linking to elements created
-previously in the description, and are indispensable to use elements with
-multiple output pads, like demuxers or tees, for example.
-
-Named elements are referred to using their name followed by a dot.
-
-gst-launch-0.10 \
-   videotestsrc ! ffmpegcolorspace ! tee name=t ! queue ! autovideosink t. ! queue ! autovideosink
-                                                                                     ^^
-   videotestsrc ! ffmpegcolorspace ! tee ! queue ! autovideosink 
-                                     tee ! queue ! autovideosink
-
-You should see two video windows, showing the same sample video pattern.
-
-The tee is named simply 't' (using the name property) and then linked to a
-queue and an autovideosink. The same tee is referred to using 't.' (mind the
-        dot) and then linked to a second queue and a second autovideosink.
-
-
-{cap-filters}
-When an element has more than one output pad, it might happen that the link to
-the next element is ambiguous: the next element may have more than one
-compatible input pad, or its input pad may be compatible with the Pad Caps of
-all the output pads. In these cases GStreamer will link using the first pad
-that is available, which pretty much amounts to saying that GStreamer will
-choose one output pad at random.
-
-Consider the following pipeline:
-
-gst-launch-0.10 
-   souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
-   ! matroskademux ! filesink location=test
-
-This is the same media file and demuxer as in the previous example. The input
-Pad Caps of filesink are ANY, meaning that it can accept any kind of media.
-Which one of the two output pads of matroskademux will be linked against the
-filesink? video_00 or audio_00? You cannot know.
-
-You can remove this ambiguity, though, by using named pads, as in the previous
-sub-section, or by using Caps Filters:
-
-gst-launch-0.10 
-   souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
-   ! matroskademux ! video/x-vp8 ! matroskamux ! filesink location=sintel_video.mkv
-
-A Caps Filter behaves like a pass-through element which does nothing and only
-accepts media with the given Caps, effectively resolving the ambiguity. In
-this example, between matroskademux and matroskamux we added a video/x-vp8
-Caps Filter to specify that we are interested in the output pad of
-matroskademux which can produce this kind of video.
-
-
-{example}
-gst-launch-1.0 
-   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-   ! dashdemux name=dash dash. 
-   ! video/quicktime 
-   ! qtdemux 
-   ! queue 
-   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-   ! h264parse 
-   ! video/x-h264,stream-format=byte-stream 
-   ! nexussink dash. 
-   ! audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
-
-   souphttpsrc 
-   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue ! cencdec ! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink dash. 
-                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! nexussink
-
-gst-launch-1.0 
-   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-   ! dashdemux name=dash dash. 
-   ! video/quicktime 
-   ! qtdemux 
-   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2 
-   ! h264parse 
-   ! mpegtsmux name=m 
-   ! tsnexusbin dash. 
-   ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! m.
-
-   souphttpsrc 
-   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! cencdec ! h264parse ! mpegtsmux name=m ! tsnexusbin dash. 
-                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse      ! mpegtsmux
-
-
-={============================================================================
-*kt_dev_bcast_311* gst: gst-inspect
-
-This tool has three modes of operation:
-
-o Without arguments, it lists 'all' available elements types, this is, the types you can use to
-instantiate new elements.
-
-o With a file name as an argument, it treats the file as a GStreamer plugin, tries to open it, and
-lists all the elements described inside.
-
-o With a GStreamer 'element' name as an argument, it lists all information regarding that element.
-
-The most relevant sections are:
-
-o Pad Templates (line 25): This lists all the kinds of Pads this element can have, along with their
-                           capabilities. This is where you look to find out if an element can link
-                           with another one. In this case, it has only one sink pad template,
-                           accepting only video/x-vp8 (encoded video data in VP8 format) and only
-                           one source pad template, producing video/x-raw-yuv (decoded video data).
-
-o Element Properties (line 70): This lists the properties of the element, along with their type and
-                                accepted values.
-
-
-{gst-discoverer}
-This tool is a wrapper around the GstDiscoverer object shown in Basic tutorial 9: Media information
-gathering. It accepts a URI from the command line and prints all information regarding the media
-that GStreamer can extract. It is useful to find out what container and codecs have been used to
-produce the media, and therefore what elements you need to put in a pipeline to play it.
-
-Use gst-discoverer --help to obtain the list of available options, which basically control the
-amount of verbosity of the output.
 
 
 ={============================================================================
