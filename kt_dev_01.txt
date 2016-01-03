@@ -243,7 +243,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_106| when to use which containers
 |kt_dev_stl_107| smart pointers: deleter
 
-|kt_dev_stl_110| allocator
+|kt_dev_stl_110| stl-allocator
 |kt_dev_stl_111| gcc stl impl files
 
 #{ STL Q
@@ -13395,17 +13395,25 @@ Message& Message::operator=( Message &&rhs )
 *kt_dev_cpp_004* copy-control: move semantics
 
 {why}
-In some circumstances, an object is 'immediately' destroyed after it is copied. In those cases,
-moving rather than copying the object can provide a significant performance boost. Or IO or
-unique_ptr classes which cannot be copied but can be moved.
+In some circumstances, an object is 'immediately' destroyed after it is copied.
+In those cases, moving rather than copying the object can provide a significant
+performance boost. Or IO or unique_ptr classes which cannot be copied but can be
+moved.
 
-note: In previous library, class stored in a container had to be 'copyable'. Under new standard, can
-use container on types that cannot be copied so long as they can be moved.
+note: In previous library, class stored in a container had to be 'copyable'.
+Under new standard, can use container on types that cannot be copied so long as
+they can be moved.
 
-<own-allocation-example>
-StrVec example which is a simplification of the library vector class. Like vector, supports
-reallocation. If there is not enough space left, then obtains new space, moves the existing elements
-into that space, free the old space, and adds the new elements.
+<own-allocation-example> CPR 524
+Some classes need to allocate a varying amount of storage at rum time. Such
+classes often can, and if they can, generally 'should' use a library container
+to hold their data. However, this strategy does not work for every class. Some
+classes need to do own allocation.
+
+StrVec example which is a simplification of the library vector class. Like
+vector, supports reallocation. If there is not enough space left, then obtains
+new space, moves the existing elements into that space, free the old space, and
+adds the new elements.
 
 | 0 | 1 | 2 | 3 | 4 | unconstructed elements |
 
@@ -13414,17 +13422,29 @@ elements              first_free               cap
 
 class StrVec {
   public:
+    StrVec(): elements(nullptr), first_free(nullptr), cap(nullptr) {}
+    StrVec(const StrVec &);  // copy-ctor
+    StrVec &operator=(const StrVec &);
+
+    void push_back( const std::string& );
     std::string* begin() const { return elements; }
     std::string* end() const { return first_free; }
-    ...
+
   private:
 
+    // to use the same allocator object for all StrVec
     static std::allocator<std::string> alloc;
 
+    void chk_n_alloc()
+      { if( size() == capacity() ) reallocate(); }
+
+    pair<string*, string*>
+      StrVec::alloc_n_copy( const string *begin, const string *end );
+
+    void free();
     std::string *elements;
     std::string *first_free;
     std::string *cap;
-    ...
 };
 
 <copy-context> valuelike
@@ -13432,102 +13452,116 @@ class StrVec {
 pair<string*, string*>
 StrVec::alloc_n_copy( const string *begin, const string *end )
 {
-    // allocate space to hold as many elements as are in the range
-    auto data = alloc.allocate( end - begin );     // iterator-arithmetic
+  // allocate 'unconstructed' space to hold as many elements as are in the range
 
-    // uninitialized_copy 'construct' copies of given elements in 'uninitialized' space.
-    // return { begin, end }
-    return { data, uninitialized_copy( begin, end, data ) };
+  auto data = alloc.allocate( end - begin );     // iterator-arithmetic
+
+  // uninitialized_copy 'construct' copies of given elements in 'uninitialized'
+  // space. return { begin of the new space, past the last it copied }
+  // see stl-allocator for detail.
+
+  return { data, uninitialized_copy( begin, end, data ) };
 }
 
-StrVec::StrVec( const StrVec& s )
-{
-    // memeber function to allocate and copy exactly as many elements as in s
-    auto newdata = alloc_n_copy( s.begin(), s.end() );
-    elements = newdata.first;
-    first_free = cap = newdata.second;
-}
+
+// Must call destory() and deallocate(). As with construct() calling type's
+// ctor, destory() calls type's dtor.
 
 void StrVec::free()
 {
-    // may not pass deallocate a null pointer. moves backwards
-    if(elements)
-    {
-        for( auto p = first_free; p != elements; /* empty */ )
-            alloc.destroy(--p);
+  // may not pass deallocate a null pointer. moves backwards
+  if(elements)
+  {
+    for( auto p = first_free; p != elements; /* empty */ )
+      alloc.destroy(--p);
 
-        alloc.deallocate( elements, cap - elements );
-    }
+    alloc.deallocate( elements, cap - elements );
+  }
+}
+
+
+StrVec::StrVec( const StrVec &s )
+{
+  // memeber function to allocate and copy exactly as many elements as in s
+  auto newdata = alloc_n_copy( s.begin(), s.end() );
+  elements = newdata.first;
+  first_free = cap = newdata.second;
 }
 
 StrVec::~StrVec() { free(); }
 
 StrVec &StrVec::operator=( const StrVec &rhs )
 {
-    // for self-assign
-    auto data = alloc_n_copy( rhs.begin(), rhs.end() );
-    free();
-    elements = data.first;
-    first_free = cap = data.second;
-    return *this;
+  // for self-assign
+  auto data = alloc_n_copy( rhs.begin(), rhs.end() );
+  free();
+  elements = data.first;
+  first_free = cap = data.second;
+  return *this;
 }
 
 
 <reallocation>
-The string is valuelike and has own memory for those characters. When copy a string, the new and the
-old are independent from each other. However, when reallocates copies, there will be only 'one' user
-after the copy and as soon as copy is done, no need to keep the old.
+The string is valuelike and has own memory for those characters. When copy a
+string, the new and the old are independent from each other. However, when
+reallocates copies, there will be only 'one' user after the copy and as soon as
+copy is done, no need to keep the old.
 
-So copying the data in these strings in the old is 'unnecessary' in this case so StrVec's
-'performance' will be much better if can avoid the overhead of allocating and deallocating the
-strings themselves each time we reallocate.
+So copying the data in these std::strings in the old is 'unnecessary' in this
+case so StrVec's 'performance' will be much better if can avoid the overhead of
+allocating and deallocating the strings themselves each time we reallocate.
 
 
-<how-to-avoid-coping>
+<avoid-copying>
 Two facilities by C++11. 
 
-1. move constructor. 
-Several library classes, including string, define so called move constructor. Presumably the string
-move ctor copies the pointer rather than allocating spaces.
+1. move ctor. 
+Several library classes, including string, define so called move constructor.
+Presumably the string move ctor copies the pointer rather than allocating
+spaces.
 
 2. std::move().
-The library 'move' which is defined 'utility' header. Two things. must use move to signal it want to
-use the string move ctor. Otherwise, copy ctor will be used. Use std::move() not move().
-
-void chk_n_alloc() 
-{ if( size() == capacity() ) reallocate(); }
+Defined 'utility' header. Two things. must use `move()` to 'signal' it want to
+use the string move ctor. Otherwise, copy ctor will be used. Use std::move() not
+move().
 
 void StrVec::push_back( const string &s )
 {
-    chk_n_alloc();
+  chk_n_alloc();
 
-    // note: construct() calls string's copy ctor
-    alloc.construct( first_free++, s );
+  // note: 
+  // The first argument to construct must be a pointer to 'unconstructed'
+  // space allocated by `allocate()`. 
+  // The second argument determine which constructor to use to construct the
+  // object in that space. This is string's copy ctor.
+  alloc.construct( first_free++, s );
 }
 
 void StrVec::reallocate()
 {
-    auto newcapacity = size() ? 2 * size() : 1;
+  auto newcapacity = size() ? 2 * size() : 1;
 
-    auto newdata = alloc.allocate(newcapacity);
+  auto newdata = alloc.allocate(newcapacity);
 
-    auto dest = newdata;      // start in the new array
-    auto elem = elements;     // start in the old array
+  auto dest = newdata;      // start in the new array
+  auto elem = elements;     // start in the old array
 
-    // note: construct() calls string's move ctor. move existing elements.
-    for( size_t i = 0; i != size(); ++i )
-        alloc.construct( dest++, std::move(*elem++) );
+  // note: construct() calls string's move ctor. move existing elements.
+  for( size_t i = 0; i != size(); ++i )
+    alloc.construct( dest++, std::move(*elem++) );
 
-    // note: this frees up the old allocated memory and string element but not string's memory for
-    // characters
-    free();
+  // note: this frees up the old allocated memory and std::string element but
+  // not string's memory for characters. This means that std::string's dtor is
+  // move-aware and string remains in a valid, destructible state.
+  free();
 
-    elements = newdata;
-    first_free = dest;
-    cap = elements + newcapacity;
+  elements = newdata;
+  first_free = dest;
+  cap = elements + newcapacity;
 }
 
-note: the std::move() returns a result that cause construct() to use the string move ctor.
+note: the std::move() returns a result that cause construct() to use the string
+move ctor.
 
 
 {lvalue-rvalue-reference}
@@ -36109,26 +36143,29 @@ template<typename _Tp1, typename _Deleter>
 
 
 ={============================================================================
-*kt_dev_stl_110* allocator
+*kt_dev_stl_110* stl-allocator
 
 (From Primus?)
-This is analogous to allocator.construct() but one important difference: allocator.construct()
-must use memory allocated by the 'same' allocator but need not point to memory by operator
-new and refer to dynamic memory.
+This is analogous to allocator.construct() but one important difference:
+allocator.construct() must use memory allocated by the 'same' allocator but need
+not point to memory by operator new and refer to dynamic memory.
+
 
 {allocator}
-The C++ standard library uses special objects to handle the allocation and deallocation of memory.
-Such objects are called allocators. They represent a special "memory model" and are used as an
-abstraction to translate the need to use memory into a raw call for memory. The use of different
-allocator objects at the same time allows you to use different memory models in a program.
+The C++ standard library uses special objects to handle the allocation and
+deallocation of memory. Such 'objects' are called allocators. They represent a
+special "memory model" and are used as an abstraction to translate the need to
+use memory into a raw call for memory. The use of different allocator objects at
+the same time allows you to use different memory models in a program.
 
-Originally, allocators were introduced as part of the STL to handle the nasty problem of different
-pointer types on PCs (such as near, far, and huge pointers). Now, allocators serve as a base for
-technical solutions that use certain memory models, such as shared memory, garbage collection, and
+Originally, allocators were introduced as part of the STL to handle the nasty
+problem of different pointer types on PCs (such as near, far, and huge
+    pointers). Now, allocators serve as a base for technical solutions that use
+certain memory models, such as shared memory, garbage collection, and
 object-oriented databases, without changing the interfaces.
 
-The 'default' allocator is used as the default value everywhere an allocator can be used as an
-argument.
+The 'default' allocator is used as the default value everywhere an allocator can
+be used as an argument.
 
 #include <memory>
 
@@ -36138,18 +36175,21 @@ struct allocator;
 template<>
 struct allocator<void>;
 
-Provides a way to decouple alloc/dealloc and construction/destruction and allows finer control. For
-example, allocate big memory and pay the overhead of construction 'only' when needed.
+Provides a way to decouple alloc/dealloc and construction/destruction and allows
+finer control. For example, allocate big memory and pay the overhead of
+construction 'only' when needed.
 
-note: The allocator provides 'type-aware' allocation and returns 'unconstructed' memory while
-operator-new uses only 'size'. Be careful since using unconstructed memory is 'undefined'.
+note: The allocator provides 'type-aware' allocation and returns 'unconstructed'
+memory while operator-new uses only 'size'. Be careful since using unconstructed
+memory is 'undefined'.
 
 allocator<string> alloc;
 auto const p = alloc.allocator(n);
 
-// calls ctor. From C++11, supports many ctors of the 'type' The first argument to construct() must
-// be a pointer to unconstructed space allocated by allocate(). The second and subsequent argument
-// determine ctor to use.
+// calls ctor. From C++11, supports many ctors of the 'type'. The first argument
+// to construct() must be a pointer to unconstructed space allocated by
+// allocate(). The second and subsequent argument determine ctor to use.
+
 alloc.construct(p++);
 alloc.construct(p++, 10, 'c');
 alloc.construct(p++, "hi");
@@ -36160,16 +36200,15 @@ alloc.destory(p);
 // size must match
 alloc.deallocate(p, n);
 
-Some needs to allocate a varying amount of storage at run time and use a library container.
-However, some needs to do their 'own' allocation. Such classes must define own copy controls. As an
-example, see StrVec in Primers p524.
 
 <companion-algorithms>
-The library defines two that calls 'construct' on each element in uninitialsed memory.
+The library defines two that calls `construct()` on each element in
+unconstructed memory.
 
 uninitialized_copy(b, e, b2);
-copies elements from the input range by iterator b and e into 'unconstructed' memory by iterator b2.
-Like copy, return its incremented destination iterator.
+
+copies elements from the input range by iterator b and e into 'unconstructed'
+memory by iterator b2. Like copy, return its incremented destination iterator.
 
 uninitialized_copy_n(b, n, b2);
 copies n elements from b to b2.
