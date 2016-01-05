@@ -129,10 +129,11 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_006| ignore
 |kt_dev_env_git_007| git-log
 *kt_dev_env_git_007* git-log: grep
+*kt_dev_env_git_007* git-log: range: see what is to be introduced
 |kt_dev_env_git_007| git-grep
 *kt_dev_env_git_007* git-grep: serach all branches
 *kt_dev_env_git_007* git-grep: fun
-*kt_dev_env_git_037* git-log: pickaxe
+*kt_dev_env_git_007* git-log: pickaxe
 |kt_dev_env_git_008| git-checkout 
 |kt_dev_env_git_009| auto completion
 |kt_dev_env_git_010| git-branch
@@ -7390,21 +7391,6 @@ $ git log --pretty="%h - %s" --author=gitster --since="2008-10-01" \
 --before="2008-11-01" --no-merges -- t/
 
 
-{git-log-search-commits} 'useful' to locate related commit
-
-<use-file-or-directory>
-The last really useful option to pass to git log as a filter is a path. If you
-specify a 'directory' or 'file', you can limit the log output to commits that
-introduced a change to those files. This is always the last option and is
-generally preceded by double dashes (--) to separate the paths from the options.
-
-// shows commit logs
-$ git log -- Polonium/Polonium.GSTNexus
-
-// shows commit logs and changes
-$ git log -p -- Polonium/Polonium.GSTNexus
-
-
 <use-author>
 --author option allows you to filter on a specific author
 
@@ -7577,6 +7563,191 @@ $ git log --all-match --grep hlsdemux: --grep duration
 
 
 ={============================================================================
+*kt_dev_env_git_007* git-log: range: see what is to be introduced
+
+How to specify or query ranges of commits using range specifications.
+
+{git-log-search-commits} 'useful' to locate related commit
+The last really useful option to pass to git log as a filter is a path. If you
+specify a 'directory' or 'file', you can limit the log output to commits that
+introduced a change to those files. This is always the last option and is
+generally preceded by double dashes (--) to separate the paths from the options.
+
+// shows commit logs
+$ git log -- Polonium/Polonium.GSTNexus
+
+// shows commit logs and changes
+$ git log -p -- Polonium/Polonium.GSTNexus
+
+
+{double-dot} 'exclusion'
+This basically asks Git to resolve a range of commits that are 'reachable' from
+one commit but aren't reachable from another.
+
+A  B  E  F  <- master
+      C  D  <- experiment
+
+Means "all commits reachable by experiment that aren't reachable by master."
+shows what are needed to become experiment. what is in your branch.
+
+$ git log master..experiment        # git log experiment --not master
+D
+C
+
+The opposite: shows what experiment do not have. what is not in your branch
+
+$ git log experiment..master        # git log master --not experiment
+F
+E
+
+note: show commits only in local master that are differences between master and
+origin/master.
+
+$ git log origin/master..master     # git log master --not origin/master
+
+note: this notaion is more explanatory but not useful since cannot use
+'completion' feature.
+
+git log master ^origin/master
+
+
+note: range has direction and can show no result depending on direction.
+
+A  B        <- master
+      C  D  <- experiment
+
+$ git log master..experiment
+D
+C
+
+$ git log experiment..master
+(no result)
+
+
+<ex>
+* master 5777bd6 [behind 11] Fix for distcheck target is failing to compile.
+
+$ git log origin/master..master 
+// shows nothing
+
+$ git log master..origin/master 
+// shows commits ahead of local master
+
+
+{multiple-points}
+Want to specify 'more' than two branches to indicate your revision. Thus these three commands are
+equivalent:
+
+$ git log refA..refB
+$ git log ^refA refB
+$ git log refB --not refA
+
+For instance, if you want to see all commits that are reachable from refA 'or' refB but not from
+refC, you can type one of these:
+
+$ git log refA refB ^refC
+$ git log refA refB --not refC
+
+This makes for a very powerful revision query system that should help you figure out what is in
+branches in question.
+
+
+{triple-dot} 'aggregation'
+The last major range-selection syntax is the triple-dot syntax, which specifies 'all' the commits that
+are reachable by 'either' of two references but 'not' by both of them. Look back at the example
+above. If you want to see what is in master or experiment but not any common references, you can run
+
+$ git log master...experiment
+F
+E
+D
+C
+
+appearing in the traditional commit date 'ordering'.
+
+A common switch to use with the log command in this case is --left-right, which shows you which side
+of the range each commit is in. 
+
+$ git log --left-right master...experiment
+< F
+< E
+> D
+> C
+
+With these tools, you can much more easily let Git know what commit or commits you want to inspect.
+
+
+{to-see-what-to-push}
+This command shows you any commits in your current branch that aren't in the master branch on your
+origin remote. The commits listed by this command are the commits that will be transferred to the
+server.
+
+You can also leave off one side of the syntax to have Git assume HEAD. For example, you can get the
+same results as in the previous example by typing git log origin/master..
+
+$ git log origin/master..HEAD
+$ git log origin/[branch]..HEAD
+
+
+{to-see-what-to-merge}
+To see exactly what you'll be introducing if you merge this topic into your master branch.
+
+$ git log --no-merges master..topic
+$ git log topic --not master           # same as above
+$ git log -p topic --not master        # patch format
+
+
+{different-in-diff-context}
+
+master
+C1    C2    C3    topic1
+      C4    C5    topic2
+
+To see what will be introduced when merge topic1:
+
+git log master..topic1        # the same. C3, C2 note: reverse order
+git log topic2..topic1        # the same
+
+git merge-base topic1 topic2  # C1
+
+git diff master               # shows C2, C3 since currently on topic1
+git diff C1                   # the same
+
+git diff master topic         # shows C2, C3
+git diff master..topic1       # shows C2, C3
+git diff topic2..topic1       # the end result is the same but shows deleting C4, C5
+
+git diff topic2...topic1      # shows C2, C3
+
+The range in diff context is different. 
+
+<one>
+If master is a direct ancestor of your topic branch, this isn't a problem; but if the two histories
+have diverged, the diff will look like you're adding all the new stuff in your topic branch and
+'removing' everything unique to the master branch. note: this is what you get from double dot.
+
+<two> 
+This command shows you only the work your current topic1 branch has introduced since its common
+ancestor with master. That is a very useful syntax to remember.
+
+$ git diff topic2...topic1
+
+
+{revision-selection}
+From the GITR 7 Git Tools, Ancestry Reference.
+
+The other main way to specify a commit is via its ancestry. If you place a ^ at the end of a
+reference, Git resolves it to mean the parent of 'that' commit. 
+
+
+$ git show HEAD^        // == HEAD~ ,
+
+This means the parent of HEAD so the previous commit.
+$ git show HEAD^2       // not the second from the HEAD but the second parent
+
+
+
+={============================================================================
 *kt_dev_env_git_007* git-grep
 
 To search through any 'committed' tree or the working directory for a string
@@ -7712,7 +7883,7 @@ http://gitster.livejournal.com/27674.html
 
 
 ={============================================================================
-*kt_dev_env_git_037* git-log: pickaxe
+*kt_dev_env_git_007* git-log: pickaxe
 
 {git-pickaxe}
 It's also possible to search for commits that introduce or remove a particular
@@ -11286,177 +11457,6 @@ $ git bisect run test-error.sh
 Doing so automatically runs test-error.sh on each checked-out commit until Git
 finds the first broken commit. You can also run something like make or make
 tests or whatever you have that runs automated tests for you.
-
-
-={============================================================================
-*kt_dev_env_git_100* git-range: see what is to be introduced
-
-How to specify or query ranges of commits using range specifications.
-
-{double-dot} 'exclusion'
-This basically asks Git to resolve a range of commits that are 'reachable' from
-one commit but aren't reachable from another.
-
-A  B  E  F  <- master
-      C  D  <- experiment
-
-Means "all commits reachable by experiment that aren't reachable by master."
-shows what are needed to become experiment. what is in your branch.
-
-$ git log master..experiment        # git log experiment --not master
-D
-C
-
-The opposite: shows what experiment do not have. what is not in your branch
-
-$ git log experiment..master        # git log master --not experiment
-F
-E
-
-note: show commits only in local master that are differences between master and
-origin/master.
-
-$ git log origin/master..master     # git log master --not origin/master
-
-note: this notaion is more explanatory but not useful since cannot use
-'completion' feature.
-
-git log master ^origin/master
-
-
-note: range has direction and can show no result depending on direction.
-
-A  B        <- master
-      C  D  <- experiment
-
-$ git log master..experiment
-D
-C
-
-$ git log experiment..master
-(no result)
-
-
-<ex>
-* master 5777bd6 [behind 11] Fix for distcheck target is failing to compile.
-
-$ git log origin/master..master 
-// shows nothing
-
-$ git log master..origin/master 
-// shows commits ahead of local master
-
-
-{multiple-points}
-Want to specify 'more' than two branches to indicate your revision. Thus these three commands are
-equivalent:
-
-$ git log refA..refB
-$ git log ^refA refB
-$ git log refB --not refA
-
-For instance, if you want to see all commits that are reachable from refA 'or' refB but not from
-refC, you can type one of these:
-
-$ git log refA refB ^refC
-$ git log refA refB --not refC
-
-This makes for a very powerful revision query system that should help you figure out what is in
-branches in question.
-
-
-{triple-dot} 'aggregation'
-The last major range-selection syntax is the triple-dot syntax, which specifies 'all' the commits that
-are reachable by 'either' of two references but 'not' by both of them. Look back at the example
-above. If you want to see what is in master or experiment but not any common references, you can run
-
-$ git log master...experiment
-F
-E
-D
-C
-
-appearing in the traditional commit date 'ordering'.
-
-A common switch to use with the log command in this case is --left-right, which shows you which side
-of the range each commit is in. 
-
-$ git log --left-right master...experiment
-< F
-< E
-> D
-> C
-
-With these tools, you can much more easily let Git know what commit or commits you want to inspect.
-
-
-{to-see-what-to-push}
-This command shows you any commits in your current branch that aren't in the master branch on your
-origin remote. The commits listed by this command are the commits that will be transferred to the
-server.
-
-You can also leave off one side of the syntax to have Git assume HEAD. For example, you can get the
-same results as in the previous example by typing git log origin/master..
-
-$ git log origin/master..HEAD
-$ git log origin/[branch]..HEAD
-
-
-{to-see-what-to-merge}
-To see exactly what you'll be introducing if you merge this topic into your master branch.
-
-$ git log --no-merges master..topic
-$ git log topic --not master           # same as above
-$ git log -p topic --not master        # patch format
-
-
-{different-in-diff-context}
-
-master
-C1    C2    C3    topic1
-      C4    C5    topic2
-
-To see what will be introduced when merge topic1:
-
-git log master..topic1        # the same. C3, C2 note: reverse order
-git log topic2..topic1        # the same
-
-git merge-base topic1 topic2  # C1
-
-git diff master               # shows C2, C3 since currently on topic1
-git diff C1                   # the same
-
-git diff master topic         # shows C2, C3
-git diff master..topic1       # shows C2, C3
-git diff topic2..topic1       # the end result is the same but shows deleting C4, C5
-
-git diff topic2...topic1      # shows C2, C3
-
-The range in diff context is different. 
-
-<one>
-If master is a direct ancestor of your topic branch, this isn't a problem; but if the two histories
-have diverged, the diff will look like you're adding all the new stuff in your topic branch and
-'removing' everything unique to the master branch. note: this is what you get from double dot.
-
-<two> 
-This command shows you only the work your current topic1 branch has introduced since its common
-ancestor with master. That is a very useful syntax to remember.
-
-$ git diff topic2...topic1
-
-
-{revision-selection}
-From the GITR 7 Git Tools, Ancestry Reference.
-
-The other main way to specify a commit is via its ancestry. If you place a ^ at the end of a
-reference, Git resolves it to mean the parent of 'that' commit. 
-
-
-$ git show HEAD^        // == HEAD~ ,
-
-This means the parent of HEAD so the previous commit.
-$ git show HEAD^2       // not the second from the HEAD but the second parent
 
 
 ={============================================================================

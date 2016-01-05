@@ -28,11 +28,11 @@
 |kt_linux_bash_014| bash: function
 |kt_linux_bash_015| bash: basename
 |kt_linux_bash_016| bash: here document
-|kt_linux_bash_017| bash-redirection
+|kt_linux_bash_017| sh-redirection
 |kt_linux_bash_018| bash: ':' command
 |kt_linux_bash_019| bash: subshell and multiple command <execution-env>
 |kt_linux_bash_020| bash: list options
-|kt_linux_bash_021| sh-exit: test on exit status
+|kt_linux_bash_021| sh-exit: exit status
 |kt_linux_bash_022| bash: && and ||
 *kt_linux_bash_023* sh-option: invoking options
 |kt_linux_bash_024| bash: builtin: exec
@@ -43,7 +43,7 @@
 |kt_linux_bash_027| bash: test on file using which command
 |kt_linux_bash_028| bash: bash: builtin: programmable completion
 |kt_linux_bash_029| bash: variable arithmetic
-|kt_linux_bash_030| bash: interactive shell or not
+|kt_linux_bash_030| sh-interactive-or-not
 |kt_linux_bash_031| bash: double dash
 *kt_linux_bash_032* sh-readline: edit command line
 |kt_linux_bash_033| bash: true and false
@@ -1803,7 +1803,7 @@ MYURLS
 
 
 ={============================================================================
-*kt_linux_bash_017* bash-redirection
+*kt_linux_bash_017* sh-redirection
 
 <form>
 command n> file
@@ -2110,36 +2110,37 @@ xpg_echo       	off
 
 
 ={============================================================================
-*kt_linux_bash_021* sh-exit: test on exit status
+*kt_linux_bash_021* sh-exit: exit status
 
-The $? expands to the exit status of the 'most' recently executed foreground pipeline. Can be used
-in test construct.
+The $? expands to the exit status of the 'most' recently executed foreground
+pipeline. Can be used in test construct.
 
-The following example demonstrates that TEST COMMANDS might be 'any' UNIX command that returns an
-exit status, and that if again returns an exit status of zero:
+The following example demonstrates that TEST COMMANDS might be 'any' UNIX
+command that returns an exit status, and that if again returns an exit status of
+zero:
 
-<example>
-note: The grep return 0 when found and 1 when not found. The test in shell see that 0 is true and 1
-is false.
+<ex>
+note: The grep return 0 when found and 1 when not found. The test in shell see
+that 0 is true and 1 is false.
 
-kpark@wll1p04345:~$ if grep KB readme; then echo "found"; fi
+$ if grep KB readme; then echo "found"; fi
 readme:1:this is KB for keitee.
 found
 
-kpark@wll1p04345:~$ if ! grep KB readme; then echo "found"; fi
+$ if ! grep KB readme; then echo "found"; fi
 readme:1:this is KB for keitee.
-kpark@wll1p04345:~$ 
+$ 
 
-kpark@wll1p04345:~$ if true; then echo "found"; fi
+$ if true; then echo "found"; fi
 found
 
-<example>
+<ex>
 while kill -0 "${parent_pid}" &>/dev/null;
 do
    usleep 500
 done
 
-<example>
+<ex>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -2161,17 +2162,198 @@ $
 
 $ ./a.out xx && echo "return success"
  this is a main function.
-
+$ 
 
 <ex>
 Stash away the output of program and only use its exit status to see if it has
 found a element in the system.
 
-# gst-inspect-1.0 nexussink &>/dev/null && echo "true" || echo "false"
+$ gst-inspect-1.0 nexussink &>/dev/null && echo "true" || echo "false"
 true
-# gst-inspect-1.0 xx &>/dev/null && echo "true" || echo "false"
+$ gst-inspect-1.0 xx &>/dev/null && echo "true" || echo "false"
 false
-#   
+$   
+
+
+<read>
+http://bencane.com/2014/09/02/understanding-exit-codes-and-how-to-use-them-in-bash-scripts/
+
+What are exit codes?
+
+On Unix and Linux systems, programs can pass a value to their parent process
+while terminating. This value is referred to as an exit code or exit status. On
+POSIX systems the standard convention is for the program to pass 0 for
+successful executions and 1 or higher for failed executions.
+
+Why is this important? If you look at exit codes in the context of scripts
+written to be used for the command line the answer is very simple. Any script
+that is useful in some fashion will inevitably be either used in another script,
+     or wrapped with a bash one liner. This becomes especially true if the
+     script is used with automation tools like SaltStack or monitoring tools
+     like Nagios, these programs will execute scripts and check the status code
+     to determine whether that script was successful or not.
+
+On top of those reasons, exit codes exist within your scripts even if you don't
+define them. By not defining proper exit codes you could be falsely reporting
+successful executions which can cause issues depending on what the script does.
+What happens if I don't specify an exit code
+
+In Linux any script run from the command line has an exit code. With Bash
+scripts, if the exit code is not specified in the script itself the exit code
+used will be the exit code of the 'last' command run. To help explain exit codes
+a little better we are going to use a quick sample script.
+
+Sample Script:
+
+#!/bin/bash
+touch /root/test
+echo created file
+
+The above sample script will execute both the touch command and the echo
+command. When we execute this script (as a non-root user) the touch command will
+fail, ideally since the touch command failed we would want the exit code of the
+script to indicate failure with an appropriate exit code. To check the exit code
+we can simply print the $? special variable in bash. This variable will print
+the exit code of the last run command.
+
+Execution:
+
+$ ./tmp.sh 
+touch: cannot touch '/root/test': Permission denied
+created file
+$ echo $?
+0
+
+As you can see after running the ./tmp.sh command the exit code was 0 which
+indicates success, even though the touch command failed. The sample script runs
+two commands touch and echo, since we did not specify an exit code the script
+exits with the exit code of the last run command. In this case, the last run
+command is the echo command, which did execute successfully.
+
+Script:
+
+#!/bin/bash
+touch /root/test
+
+If we remove the echo command from the script we should see the exit code of the
+touch command.
+
+Execution:
+
+$ ./tmp.sh 
+touch: cannot touch '/root/test': Permission denied
+$ echo $?
+1
+
+As you can see, since the last command run was touch the exit code reflects the
+true status of the script; failed.  Using exit codes in your bash scripts
+
+While removing the echo command from our sample script worked to provide an exit
+code, what happens when we want to perform one action if the touch was
+successful and another if it was not. Actions such as printing to stdout on
+success and stderr on failure.
+
+Testing for exit codes
+
+Earlier we used the $? special variable to print the exit code of the script. We
+can also use this variable within our script to test if the touch command was
+successful or not.
+
+Script:
+
+#!/bin/bash
+
+touch /root/test 2> /dev/null
+
+if [ $? -eq 0 ]
+then
+  echo "Successfully created file"
+else
+  echo "Could not create file" >&2
+fi
+
+In the above revision of our sample script; if the exit code for touch is 0 the
+script will echo a successful message. If the exit code is anything other than 0
+this indicates failure and the script will echo a failure message to stderr.
+
+Execution:
+
+$ ./tmp.sh
+Could not create file
+
+Providing your own exit code
+
+While the above revision will provide an error message if the touch command
+fails, it still provides a 0 exit code indicating success.
+
+$ ./tmp.sh
+Could not create file
+$ echo $?
+0
+
+Since the script failed, it would not be a good idea to pass a successful exit
+code to any other program executing this script. To add our own exit code to
+this script, we can simply use the exit command.
+
+Script:
+
+#!/bin/bash
+
+touch /root/test 2> /dev/null
+
+if [ $? -eq 0 ]
+then
+  echo "Successfully created file"
+  exit 0
+else
+  echo "Could not create file" >&2
+  exit 1
+fi
+
+With the exit command in this script, we will exit with a successful message and
+0 exit code if the touch command is successful. If the touch command fails
+however, we will print a failure message to stderr and exit with a 1 value which
+indicates failure.
+
+Execution:
+
+$ ./tmp.sh
+Could not create file
+$ echo $?
+1
+
+Using exit codes on the command line
+
+Now that our script is able to tell both users and programs whether it finished
+successfully or unsuccessfully we can use this script with other administration
+tools or simply use it with bash one liners.
+
+Bash One Liner:
+
+$ ./tmp.sh && echo "bam" || (sudo ./tmp.sh && echo "bam" || echo "fail")
+Could not create file
+Successfully created file
+bam
+
+The above grouping of commands use what is called list constructs in bash. List
+constructs allow you to chain commands together with simple && for and and ||
+for or conditions. The above command will execute the ./tmp.sh script, and if
+the exit code is 0 the command echo "bam" will be executed. If the exit code of
+./tmp.sh is 1 however, the commands within the parenthesis will be executed
+next. Within the parenthesis the commands are chained together using the && and
+|| constructs again.
+
+The list constructs use exit codes to understand whether a command has
+successfully executed or not. If scripts do not properly use exit codes, any
+user of those scripts who use more advanced commands such as list constructs
+will get unexpected results on failures.
+
+More exit codes
+
+The exit command in bash accepts integers from 0 - 255, in most cases 0 and 1
+will suffice however there are other reserved exit codes that can be used for
+more specific errors. The Linux Documentation Project has a pretty good table of
+reserved exit codes and what they are used for.
 
 
 ={============================================================================
@@ -2627,7 +2809,136 @@ done
 
 
 ={============================================================================
-*kt_linux_bash_030* bash: interactive shell or not
+*kt_linux_bash_030* sh-interactive-or-not
+
+http://www.gnu.org/software/bash/manual/html_node/Interactive-Shells.html#Interactive-Shells
+
+6.3.1 What is an Interactive Shell?
+
+An interactive shell is one started without non-option arguments, unless -s is
+specified, without specifying the -c option, and whose input and error output
+are both connected to terminals (as determined by isatty(3)), or one started
+with the -i option.
+
+An interactive shell generally reads from and writes to a user's 'terminal'.
+
+The -s invocation option may be used to set the positional parameters when an
+interactive shell is started. 
+
+
+6.3.3 Interactive Shell Behavior
+
+When the shell is running interactively, it changes its behavior in several
+ways.
+
+    Startup files are read and executed as described in Bash Startup Files.
+
+    // omitted the rest
+
+
+6.2 Bash Startup Files
+
+This section describes how Bash executes its startup files. If any of the files
+exist but cannot be read, Bash reports an error. Tildes are expanded in
+filenames as described above under Tilde Expansion (see Tilde Expansion).
+
+Invoked as an interactive login shell, or with --login
+
+When Bash is invoked as an interactive login shell, or as a non-interactive
+shell with the --login option, it first reads and executes commands from the
+file /etc/profile, if that file exists. After reading that file, it looks for
+~/.bash_profile, ~/.bash_login, and ~/.profile, in that order, and reads and
+executes commands from the first one that exists and is readable. The
+--noprofile option may be used when the shell is started to inhibit this
+behavior.
+
+When a login shell exits, Bash reads and executes commands from the file
+~/.bash_logout, if it exists.
+
+
+Invoked as an interactive non-login shell
+
+When an interactive shell that is not a login shell is started, Bash reads and
+executes commands from ~/.bashrc, if that file exists. This may be inhibited by
+using the --norc option. The --rcfile file option will force Bash to read and
+execute commands from file instead of ~/.bashrc.
+
+So, typically, your ~/.bash_profile contains the line
+
+if [ -f ~/.bashrc ]; then . ~/.bashrc; fi
+
+after (or before) any login-specific initializations.
+
+
+Invoked non-interactively
+
+When Bash is started non-interactively, to run a shell script, for example, it
+looks for the variable BASH_ENV in the environment, expands its value if it
+appears there, and uses the expanded value as the name of a file to read and
+execute. Bash behaves as if the following command were executed:
+
+if [ -n "$BASH_ENV" ]; then . "$BASH_ENV"; fi
+
+but the value of the PATH variable is not used to search for the filename.
+
+As noted above, if a non-interactive shell is invoked with the --login option,
+   Bash attempts to read and execute commands from the login shell startup
+     files.
+
+
+Invoked with name sh
+
+If Bash is invoked with the name sh, it tries to mimic the startup behavior of
+historical versions of sh as closely as possible, while conforming to the POSIX
+standard as well.
+
+When invoked as an interactive login shell, or as a non-interactive shell with
+the --login option, it first attempts to read and execute commands from
+/etc/profile and ~/.profile, in that order. The --noprofile option may be used
+to inhibit this behavior. When invoked as an interactive shell with the name sh,
+Bash looks for the variable ENV, expands its value if it is defined, and uses
+  the expanded value as the name of a file to read and execute. Since a shell
+  invoked as sh does not attempt to read and execute commands from any other
+  startup files, the --rcfile option has no effect. A non-interactive shell
+  invoked with the name sh does not attempt to read any other startup files.
+
+When invoked as sh, Bash enters POSIX mode after the startup files are read.
+
+
+Invoked by remote shell daemon
+
+Bash attempts to determine when it is being run with its standard input
+connected to a network connection, as when executed by the remote shell daemon,
+usually rshd, or the secure shell daemon sshd. If Bash determines it is being
+  run in this fashion, it reads and executes commands from ~/.bashrc, if that
+  file exists and is readable. It will not do this if invoked as sh. The --norc
+  option may be used to inhibit this behavior, and the --rcfile option may be
+  used to force another file to be read, but neither rshd nor sshd generally
+  invoke the shell with those options or allow them to be specified. 
+
+
+http://tldp.org/LDP/abs/html/intandnonint.html
+
+36.1. Interactive and non-interactive shells and scripts
+
+An interactive shell reads commands from user input on a tty. Among other
+things, such a shell reads startup files on activation, displays a prompt, and
+enables job control by default. The user can interact with the shell.
+
+A shell running a script is always a non-interactive shell.
+
+Let us consider an interactive script to be one that requires input from the
+user, usually with read statements (see Example 15-3). "Real life" is actually a
+bit messier than that. For now, assume an interactive script is bound to a tty,
+a script that a user has invoked from the console or an xterm.
+
+Init and startup scripts are necessarily non-interactive, since they must run
+without human intervention. Many administrative and system maintenance scripts
+are likewise non-interactive. Unvarying repetitive tasks cry out for automation
+by non-interactive scripts.
+
+Non-interactive scripts can run in the background, but interactive ones hang,
+waiting for input that never comes.
 
 
 ={============================================================================
