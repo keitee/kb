@@ -3518,6 +3518,11 @@ VERIFY_AND_CLEAR_MOCK   66 Zinc/Zinc.Common/include/testsupport/VerifyAndClearMo
 verifyAndClearMock   28 Zinc/Zinc.Common/include/testsupport/VerifyAndClearMock.h void verifyAndClearMock( T* mock, const std::string& mockVarName, int linenum )
 verifyAndClearMock   42 Zinc/Zinc.Common/include/testsupport/VerifyAndClearMock.h void verifyAndClearMock( boost::shared_ptr< T > mock,
 
+<test-runner>
+#52 0x00007f5015b4793f in CppUnit::TextTestRunner::run (this=0x7ffda2867838, testName="", doWait=false, doPrintResult=true, doPrintProgress=true) at TextTestRunner.cpp:64
+#53 0x000000000055521f in zinc::TestRunner::run (this=0x7ffda2867820) at /home/kpark/builds/_virtual_/pc/DEVARCH/Zinc/Zinc.Common/test/testsupport/TestRunner.cpp:163
+#54 0x0000000000552dac in main (argc=1, argv=0x7ffda2867a28) at /home/kpark/builds/_virtual_/pc/DEVARCH/Zinc/Zinc.Common/include/testsupport/CompileTimeTestRunner.cpp:29
+
 
 ={============================================================================
 *kt_dev_uv_stack_100* stack: elememt names
@@ -5158,6 +5163,11 @@ dbus-send 2>/dev/null --session --print-reply --type=method_call --dest='Zinc.DB
 string:Zinc.MediaProxy 
 
 <dbus-seekpos>
+
+A.1.19 seekPosition
+seekPosition
+( whence : SeekReference enum, offset : int32, mode : SeekMode enum )
+
 in milliseconds
 
 method call sender=:1.106 -> dest=:1.72 serial=40107 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=seekPosition
@@ -12181,6 +12191,8 @@ void VirtualBinTypefind::setSource(const std::string& sourceUri)
 <mr-start>
 
 NS_ZINC::Future<void> GstMediaRouter::start()
+
+void GstMediaRouter::startPipeline()
 {
     gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
 }
@@ -13194,6 +13206,80 @@ Pid 2032 has died. Going to cleanup.
 Nexus resources are owned by PID 2032
 
 Releasing Nexus resources
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash: starts and state changes
+
+// starts
+
+void GstMediaRouter::startPipeline()
+{
+    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
+}
+
+/GstMediaRouter.cpp:1580 ENTER: void nickel::system::GstMediaRouter::setSink_async(const string&)
+/GstMediaRouter.cpp:1580 EXIT:  void nickel::system::GstMediaRouter::setSink_async(const string&)
+/GstMediaRouter.cpp:632 State transition NULL -> READY wanted PAUSED
+/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+
+...
+
+/GstMediaRouter.cpp:632 State transition READY -> PAUSED wanted PLAYING
+/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+
+...
+
+// now states changes to playing
+
+/GstMediaRouter.cpp:632 State transition PAUSED -> PLAYING wanted VOID_PENDING
+/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+/GstMediaRouter.cpp:750 KT: produceEvent: 0
+
+
+// seek
+
+void GstMediaRouter::seekPosition_async()
+{
+    if (!seekInFlight) {
+        onAsyncEvent.connect_extended(
+            OneShotFunctionCall(
+            boost::bind(&GstMediaRouter::seekPositionFinish_locked, this)));
+    }
+}
+
+
+void GstMediaRouter::seekPositionFinish_locked()
+{
+    produceStatusEvent(StatusEventValue::started);
+    seekInFlight = false;
+}
+
+// changed but not in playing state. no fire up
+
+/GstMediaRouter.cpp:1530 ENTER: void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+/GstMediaRouter.cpp:632 State transition PLAYING -> PAUSED wanted VOID_PENDING
+/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+/GstMediaRouter.cpp:717 ENTER: void nickel::system::GstMediaRouter::stopReportingPositionChange()
+/GstMediaRouter.cpp:717 EXIT:  void nickel::system::GstMediaRouter::stopReportingPositionChange()
+
+// fire up
+
+/GstMediaRouter.cpp:1530 EXIT:  void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+/GstMediaRouter.cpp:1490 KT: StatusEventValue::started
+/GstMediaRouter.cpp:1571 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::seekPosition(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+/GstMediaRouter.cpp:750 KT: produceEvent: 0
+
+/GstMediaRouter.cpp:632 State transition PAUSED -> PAUSED wanted PAUSED
+/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+/GstMediaRouter.cpp:1571 ENTER: virtual zinc::Future<void> nickel::system::GstMediaRouter::seekPosition(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+/GstMediaRouter.cpp:1530 ENTER: void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+BinSink.cpp:383 position query failed
+/GstMediaRouter.cpp:1530 EXIT:  void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+
+2016-01-06 15:31:43,298 ERROR  140549527553792 nickel /home/kpark/builds/_virtual_/pc/DEVARCH/Nickel/Nickel.System.GStreamer/test/../src/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+2016-01-06 15:31:43,299 ERROR  140549527553792 nickel /home/kpark/builds/_virtual_/pc/DEVARCH/Nickel/Nickel.System.GStreamer/test/../src/GstMediaRouter.cpp:1490 KT: StatusEventValue::started
+2016-01-06 15:31:43,299 ERROR  140549527553792 nickel /home/kpark/builds/_virtual_/pc/DEVARCH/Nickel/Nickel.System.GStreamer/test/../src/GstMediaRouter.cpp:750 KT: produceEvent: 0
 
 
 ={============================================================================
