@@ -3510,6 +3510,26 @@ All Tests
 		nickel::system::GstMediaRouterTest::test_thatSetVideoWindowAndGetVideoWindowMatchUp_beforeMediaRouterHasStarted
 
 
+{under-gdb}
+
+// passing env vars do not work in this case
+
+$ gdb --args NICKEL_LOGGING_RULE="TRACE,STDOUT" ./Nickel/Nickel.System.GStreamer/test/gstmediaroutertest --cases nickel::system::GstMediaRouterTest::test_thatGetPositionReturnsStableValues
+
+(gdb) b GstMediaRouter.cpp:nickel::system::GstMediaRouter::stop  
+No symbol table is loaded.  Use the "file" command.
+Make breakpoint pending on future shared library load? (y or [n]) y
+Breakpoint 1 (GstMediaRouter.cpp:nickel::system::GstMediaRouter::stop) pending.
+
+(gdb) file ./Nickel/Nickel.System.GStreamer/test/.libs/gstmediaroutertest 
+Reading symbols from ./Nickel/Nickel.System.GStreamer/test/.libs/gstmediaroutertest...done.
+
+(gdb) run
+Starting program: /home/kpark/builds-src-dev/_virtual_/pc/zinc-build-root/debug-debian-8-x86_64/Nickel/Nickel.System.GStreamer/test/.libs/gstmediaroutertest ./Nickel/Nickel.System.GStreamer/test/gstmediaroutertest --cases nickel::system::GstMediaRouterTest::test_thatGetPositionReturnsStableValues
+[Thread debugging using libthread_db enabled]
+...
+
+
 ={============================================================================
 *kt_dev_uv_stack_014* zinc-test-support
 
@@ -12666,7 +12686,105 @@ handling of timeout exception.
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 
+To do two actions, slots, which are fires up started event and starts position
+reporting when goes to `playing` state.
+
 boost::signals2::signal<void(GstState, GstState, GstState)> onStateChange;
+
+struct OneShotFunctionCall
+{
+  typedef void result_type;
+
+  OneShotFunctionCall(boost::function<void(void)> func, GstState desiredState)
+    : func(func), desiredState(desiredState) {}
+  OneShotFunctionCall(boost::function<void(void)> func)
+    : func(func), desiredState(GST_STATE_VOID_PENDING) {}
+
+  // note: uses only 'newstate'
+  void operator()(const boost::signals2::connection& connection,
+      GstState /* oldstate */,
+      GstState newstate,
+      GstState /* pending */)
+  {
+    if (newstate == desiredState) {
+        // note:
+        // this fires up all connected slots which are two in this case. So even
+        // if the first slot is called and disconnected, signal fires up the
+        // second. 
+
+        func();
+        connection.disconnect();
+    }
+  }
+
+  // note: not used by onStateChange signal
+  void operator()(const boost::signals2::connection& connection)
+  {
+    func();
+    connection.disconnect();
+  }
+
+  boost::function<void(void)> func;
+  const GstState desiredState;
+};
+
+// connects slots
+
+void GstMediaRouter::startPipeline()
+{
+    onStateChange.connect_extended(
+            OneShotFunctionCall(
+                boost::bind(&GstMediaRouter::produceStatusEvent,
+                    this,
+                    StatusEventValue::started),
+                GST_STATE_PLAYING)
+            );
+
+    onStateChange.connect_extended(
+            OneShotFunctionCall(
+                boost::bind(&GstMediaRouter::startReportingPositionChange,
+                    this), 
+                GST_STATE_PLAYING));
+
+    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
+}
+
+void GstMediaRouter::setPlaySpeed_async(const double speed)
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    if (!stopped) {
+        if (speed == 1.0) {
+            onStateChange.connect_extended(
+                    OneShotFunctionCall(
+                        boost::bind(
+                            &GstMediaRouter::startReportingPositionChange,this),
+                        GST_STATE_PLAYING));
+
+            if (GST_STATE_CHANGE_FAILURE ==
+                    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING)) {
+                NICKEL_ERROR("Failed to set pipeline state to playing");
+            }
+        } else if (speed == 0.0) {
+
+            onStateChange.connect_extended(
+                    OneShotFunctionCall(
+                        boost::bind(
+                            &GstMediaRouter::stopReportingPositionChange,this),
+                        GST_STATE_PAUSED));
+
+            if (GST_STATE_CHANGE_FAILURE ==
+                    gst_element_set_state(pipeline.get(), GST_STATE_PAUSED)) {
+                NICKEL_ERROR("Failed to pause pipeline");
+            }
+        } else {
+            // TODO: support trickplay :)
+            NICKEL_WARN("Client shouldn't request unsupported play speed!");
+        }
+    } else {
+        NICKEL_WARN("setPlaySpeed called on stopped MediaRouter");
+    }
+}
 
 void GstMediaRouter::produceStatusEvent(
     const StatusEventValue::Enum what)
@@ -12682,52 +12800,7 @@ void GstMediaRouter::startReportingPositionChange()
   ...
 }
 
-NS_ZINC::Future<void> GstMediaRouter::start()
-{
-  onStateChange.connect_extended(
-      OneShotFunctionCall(
-        boost::bind(&GstMediaRouter::produceStatusEvent,
-          this,
-          StatusEventValue::started),
-        GST_STATE_PLAYING)
-      );
-
-  onStateChange.connect_extended(
-      OneShotFunctionCall(
-        boost::bind(&GstMediaRouter::startReportingPositionChange,
-          this), 
-        GST_STATE_PLAYING));
-}
-
-struct OneShotFunctionCall
-{
-  typedef void result_type;
-
-  OneShotFunctionCall(boost::function<void(void)> func, GstState desiredState)
-    : func(func), desiredState(desiredState) {}
-  OneShotFunctionCall(boost::function<void(void)> func)
-    : func(func), desiredState(GST_STATE_VOID_PENDING) {}
-
-  void operator()(const boost::signals2::connection& connection,
-      GstState /* oldstate */,
-      GstState newstate,
-      GstState /* pending */)
-  {
-    if (newstate == desiredState) {
-      func();
-      connection.disconnect();
-    }
-  }
-
-  void operator()(const boost::signals2::connection& connection)
-  {
-    func();
-    connection.disconnect();
-  }
-
-  boost::function<void(void)> func;
-  const GstState desiredState;
-};
+// fire signal
 
 case GST_MESSAGE_STATE_CHANGED:
   onStateChange(oldstate, newstate, pending);
@@ -13212,6 +13285,44 @@ Releasing Nexus resources
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: starts and state changes
 
+// simplified test code
+
+void GstMediaRouterTest::test_thatGetPositionReturnsStableValues()
+{
+    EXPECT_CALL(
+            *listener, SourceEvent(_, _))
+        .Times(AnyNumber());
+
+    EXPECT_CALL(
+            *listener, BufferStatusEvent(_))
+        .Times(AnyNumber());
+
+    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::started))
+        .Times(3)
+        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
+                        boost::bind(&NS_ZINC::AtomicBool::set,
+                            boost::ref(done), true))));
+
+    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::seek_started))
+        .Times(2)
+        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
+                        boost::bind(&NS_ZINC::AtomicBool::set,
+                            boost::ref(done), false))));
+
+    mr->setSource(server.getManifestUrl(), SetSourceReason::unspecified).get();
+    mr->setSink("decoder://headless").get();
+    mr->start().get();
+
+    mr->setPlaySpeed(0.0).get();
+    mr->seekPosition(SeekReference::end, 0, SeekMode::prioritise_speed).get();
+
+    const int32_t seek_amount = 10000;
+    const int32_t position_slack = 200;
+
+    mr->seekPosition(SeekReference::end, seek_amount, SeekMode::prioritise_speed).get();
+}
+
+
 // starts
 
 void GstMediaRouter::startPipeline()
@@ -13219,26 +13330,56 @@ void GstMediaRouter::startPipeline()
     gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
 }
 
-/GstMediaRouter.cpp:1580 ENTER: void nickel::system::GstMediaRouter::setSink_async(const string&)
-/GstMediaRouter.cpp:1580 EXIT:  void nickel::system::GstMediaRouter::setSink_async(const string&)
+
+case GST_MESSAGE_STATE_CHANGED:
+    onStateChange(oldstate, newstate, pending);
+
+
+// waits for playing (newstate)
+
+/GstMediaRouter.cpp:1580 ENTER: GstMediaRouter::setSink_async(const string&)
+/GstMediaRouter.cpp:1580 EXIT:  GstMediaRouter::setSink_async(const string&)
 /GstMediaRouter.cpp:632 State transition NULL -> READY wanted PAUSED
-/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+/GstMediaRouter.cpp:634 KT: CHANGED: 
 
 ...
 
 /GstMediaRouter.cpp:632 State transition READY -> PAUSED wanted PLAYING
-/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+/GstMediaRouter.cpp:634 KT: CHANGED: 
 
 ...
 
-// now states changes to playing
+// now got the `playing(4)` states so fires up `started(0)` event and call
+// `startReportPositionChange`
 
 /GstMediaRouter.cpp:632 State transition PAUSED -> PLAYING wanted VOID_PENDING
-/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
+/GstMediaRouter.cpp:634 KT: CHANGED: 
 /GstMediaRouter.cpp:750 KT: produceEvent: 0
 
+/GstMediaRouter.cpp:699 ENTER: GstMediaRouter::startReportingPositionChange()
+/GstMediaRouter.cpp:699 EXIT:  GstMediaRouter::startReportingPositionChange()
 
-// seek
+
+// setPlaySpeed(0) which connects the signal with `paused` and
+// `stopReportingPosition`
+
+/GstMediaRouter.cpp:1296 ENTER: GstMediaRouter::setPlaySpeed_async(double)
+/GstMediaRouter.cpp:1296 EXIT:  GstMediaRouter::setPlaySpeed_async(double)
+
+// the first seek
+
+/GstMediaRouter.cpp:1532 ENTER: void GstMediaRouter::seekPosition_async
+    (Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+
+/GstMediaRouter.cpp:634 State transition PLAYING -> PAUSED wanted VOID_PENDING
+/GstMediaRouter.cpp:636 KT: CHANGED: 
+/GstMediaRouter.cpp:88 KT: OneShotFunctionCall: 3
+/GstMediaRouter.cpp:719 ENTER: void GstMediaRouter::stopReportingPositionChange()
+/GstMediaRouter.cpp:719 EXIT:  void GstMediaRouter::stopReportingPositionChange()
+
+
+// seekPosition uses the other signal and fires `started` event with no
+// condition.
 
 void GstMediaRouter::seekPosition_async()
 {
@@ -13250,37 +13391,47 @@ void GstMediaRouter::seekPosition_async()
 }
 
 
+// GstMediaRouter::seekPosition_locked() uses gst call to do seek. this causes
+// this event?
+
+case GST_MESSAGE_ASYNC_DONE:
+    onAsyncEvent();
+    break;
+
 void GstMediaRouter::seekPositionFinish_locked()
 {
     produceStatusEvent(StatusEventValue::started);
     seekInFlight = false;
 }
 
-// changed but not in playing state. no fire up
+// fires `started`
 
-/GstMediaRouter.cpp:1530 ENTER: void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
-/GstMediaRouter.cpp:632 State transition PLAYING -> PAUSED wanted VOID_PENDING
-/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
-/GstMediaRouter.cpp:717 ENTER: void nickel::system::GstMediaRouter::stopReportingPositionChange()
-/GstMediaRouter.cpp:717 EXIT:  void nickel::system::GstMediaRouter::stopReportingPositionChange()
+/GstMediaRouter.cpp:96 KT: OneShotFunctionCall()
+/GstMediaRouter.cpp:1492 KT: StatusEventValue::started
+/GstMediaRouter.cpp:752 KT: produceEvent: 0
 
-// fire up
+// changed but no action
 
-/GstMediaRouter.cpp:1530 EXIT:  void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
-/GstMediaRouter.cpp:1490 KT: StatusEventValue::started
-/GstMediaRouter.cpp:1571 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::seekPosition(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
-/GstMediaRouter.cpp:750 KT: produceEvent: 0
+/GstMediaRouter.cpp:634 State transition PAUSED -> PAUSED wanted PAUSED
+/GstMediaRouter.cpp:636 KT: CHANGED: StatusEventValue::started
 
-/GstMediaRouter.cpp:632 State transition PAUSED -> PAUSED wanted PAUSED
-/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
-/GstMediaRouter.cpp:1571 ENTER: virtual zinc::Future<void> nickel::system::GstMediaRouter::seekPosition(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
-/GstMediaRouter.cpp:1530 ENTER: void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
-BinSink.cpp:383 position query failed
-/GstMediaRouter.cpp:1530 EXIT:  void nickel::system::GstMediaRouter::seekPosition_async(Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
 
-2016-01-06 15:31:43,298 ERROR  140549527553792 nickel /home/kpark/builds/_virtual_/pc/DEVARCH/Nickel/Nickel.System.GStreamer/test/../src/GstMediaRouter.cpp:634 KT: CHANGED: StatusEventValue::started
-2016-01-06 15:31:43,299 ERROR  140549527553792 nickel /home/kpark/builds/_virtual_/pc/DEVARCH/Nickel/Nickel.System.GStreamer/test/../src/GstMediaRouter.cpp:1490 KT: StatusEventValue::started
-2016-01-06 15:31:43,299 ERROR  140549527553792 nickel /home/kpark/builds/_virtual_/pc/DEVARCH/Nickel/Nickel.System.GStreamer/test/../src/GstMediaRouter.cpp:750 KT: produceEvent: 0
+// the second seek
+
+/GstMediaRouter.cpp:1532 ENTER: void GstMediaRouter::seekPosition_async
+    (Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+
+
+// changed but no action
+
+/GstMediaRouter.cpp:634 State transition PAUSED -> PAUSED wanted VOID_PENDING
+/GstMediaRouter.cpp:636 KT: CHANGED: StatusEventValue::started
+
+// fires `started`
+
+/GstMediaRouter.cpp:96 KT: OneShotFunctionCall()
+/GstMediaRouter.cpp:1492 KT: StatusEventValue::started
+/GstMediaRouter.cpp:752 KT: produceEvent: 0
 
 
 ={============================================================================
@@ -17096,6 +17247,7 @@ What's the "-p" option?
             BUS_NAME="Zinc.MediaProxy2"
             USE_PROXY="true"
             shift;;
+
 The original script set temp cfg which force to use GST MR directly without
   going through YV MR:
 
