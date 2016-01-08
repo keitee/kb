@@ -122,6 +122,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_test_206| gmock: cheat: combine actions
 |kt_dev_test_207| gmock: cook: nice and strict mock
 *kt_dev_test_208* gmock: errors when misses expectation
+*kt_dev_test_208* gmock: case example
 
 
 # ============================================================================
@@ -23230,6 +23231,70 @@ tearDown() failed
 
 Failures !!!
 Run: 1   Failure total: 2   Failures: 2   Errors: 0
+
+
+={============================================================================
+*kt_dev_test_208* gmock: case example
+
+void GstMediaRouterTest::test_thatGetPositionReturnsStableValues()
+{
+    NS_ZINC::AtomicBool done;
+
+    EXPECT_CALL(
+            *listener, SourceEvent(_, _))
+        .Times(AnyNumber());
+
+    EXPECT_CALL(
+            *listener, BufferStatusEvent(_))
+        .Times(AnyNumber());
+
+    // note:
+    // Each time when it gets called, that is gets an event, invoke the function
+    // which set done to true.
+
+    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::started))
+        .Times(3)
+        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
+                        boost::bind(&NS_ZINC::AtomicBool::set,
+                            boost::ref(done), true))));
+
+    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::seek_started))
+        .Times(2)
+        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
+                        boost::bind(&NS_ZINC::AtomicBool::set,
+                            boost::ref(done), false))));
+
+    mr->setSource(server.getManifestUrl(), SetSourceReason::unspecified).get();
+    mr->setSink("decoder://headless").get();
+    mr->start().get();
+
+    // note:
+    // This waits for some time and do assert on if there is no the first event
+    // fired. Not all three events. 
+
+    ZINC_ASSERT_WITHIN_TIMEOUT(done.get(), DEFAULT_TIMEOUT);
+
+    mr->setPlaySpeed(0.0).get();
+    mr->seekPosition(SeekReference::end, 0, SeekMode::prioritise_speed).get();
+
+    ZINC_ASSERT_WITHIN_TIMEOUT(done.get(), DEFAULT_TIMEOUT);
+
+    const int32_t seek_amount = 10000;
+    const int32_t position_slack = 200;
+
+    mr->seekPosition(SeekReference::end, seek_amount, SeekMode::prioritise_speed).get();
+
+    while (!done.get()) {
+        // The assertion below needs to take into account the fact that when MR is
+        // paused current position will be changing because seekable range as seen
+        // by DashDemux will be tied to wall clock hence it will keep moving.
+        Position p = mr->getPosition().get();
+        CPPUNIT_ASSERT(p.current > -seek_amount - position_slack &&
+                p.current < -seek_amount + position_slack);
+    }
+
+    mr->stop().get();
+}
 
 
 # ============================================================================

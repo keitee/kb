@@ -71,14 +71,15 @@
 *kt_dev_uv_stack_250* mr-web: binding
 *kt_dev_uv_stack_250* mr-web: run sport app on atk
 *kt_dev_uv_stack_250* mr-web: remote debug webkit
+*kt_dev_uv_stack_250* mr-web: java scripts to check on video
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
 *kt_dev_uv_stack_250* mr-web: stack from html to mr
 *kt_dev_uv_stack_250* mr-web: qt interface
+*kt_dev_uv_stack_250* mr-web: media event
 *kt_dev_uv_stack_250* mr-web: ended event
 *kt_dev_uv_stack_250* mr-web: ended event: release nexus
 *kt_dev_uv_stack_250* mr-web: ended event: duration
-*kt_dev_uv_stack_250* mr-web: playing event
-*kt_dev_uv_stack_250* mr-web: java scripts to check on video
+*kt_dev_uv_stack_250* mr-web: play, ready, network state attribute 
 *kt_dev_uv_stack_250* mr-web: qunit test
 *kt_dev_uv_stack_250* mr-web: yv webkit plugin, vanadium
 *kt_dev_uv_stack_250* mr-web: local web server and client
@@ -8957,6 +8958,51 @@ http://172.20.32.153:9223/
 
 
 ={============================================================================
+*kt_dev_uv_stack_250* mr-web: java scripts to check on video
+
+video.addEventListener("timeupdate", function() {
+    equal(video.currentTime, 6, "Unexpected currentTime");
+    equal(video.played.length, 1, "Unexpected played range");
+    equal(video.played.start(0), 0, "Unexpected start of played range");
+    equal(video.played.end(0), 6, "Unexpected end of played range");
+    equal(video.seekable.length, 1, "Unexpected seekable range");
+    equal(video.seekable.start(0), 0, "Unexpected start of seekable range");
+    equal(video.seekable.end(0), 1200, "Unexpected end of seekable range");
+    equal(video.buffered.length, 1, "Unexpected buffered range");
+    equal(video.buffered.start(0), 0, "Unexpected start of buffered range");
+    equal(video.buffered.end(0), 256, "Unexpected end of buffered range");
+    start();
+});
+
+note: BBC iplayer uses 'mediaPlayerVideo' ALWAYS
+
+(function() {
+    video = document.getElementById('mediaPlayerVideo');
+    video.addEventListener("ended", function() {
+    console.log("ended");
+    });
+})()
+
+note: to print out periodically
+
+(function() {
+    video = document.getElementById('mediaPlayerVideo');
+    video.addEventListener("timeupdate", function() {
+    console.log("ended?:", video.ended);
+    console.log("readyState?:", video.readyState);
+    console.log("networkState?:", video.networkState);
+    });
+})()
+
+(function() {
+    video = document.getElementById('mediaPlayerVideo');
+    video.addEventListener("timeupdate", function() {
+    console.log("currentTime:", video.currentTime);
+    });
+})()
+
+
+={============================================================================
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
 
 zinc-build-root/release-humax-dtr_t2100/Zinc/Zinc.3rdPartyStack/
@@ -9664,6 +9710,20 @@ class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface
 
 
 ={============================================================================
+*kt_dev_uv_stack_250* mr-web: media event
+
+https://html.spec.whatwg.org/multipage/embedded-content.html#event-media-ended
+
+timeupdate 	Event 	
+
+The current playback position changed as part of normal playback or in an
+especially interesting way, for example discontinuously. 
+
+note:
+This happens regardless of position change reporting from MR.
+
+
+={============================================================================
 *kt_dev_uv_stack_250* mr-web: ended event
 
     enum ReadyState
@@ -9675,13 +9735,19 @@ class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface
         HAVE_ENOUGH_DATA
     };
 
+There are two things: the ended event and the ended attribute.
+
+<event>
+https://html.spec.whatwg.org/multipage/embedded-content.html#event-media-ended
+
+<attribute>
 https://html.spec.whatwg.org/multipage/embedded-content.html#playing-the-media-resource:event-media-ended
 
 4.8.13.8 Playing the media resource
 
 A media element is said to have ended playback when:
 
-    The element's readyState attribute is HAVE_METADATA or greater, and
+    The element's readyState attribute is HAVE_METADATA or greater, 'and'
 
     Either:
         The current playback position is the end of the media resource, and
@@ -9748,10 +9814,16 @@ bool HTMLMediaElement::ended() const
 
 <when-finish-play-hls>
 
-/VanadiumMediaPlayer.cpp:671 KT: statusEvent: 0
+/VanadiumMediaPlayer.cpp:671 KT: statusEvent: 0 
+    (started) changes to HAVE_ENOUGH_DATA
 /VanadiumMediaPlayer.cpp:673 KT: currentNetworkState: 2 currentReadyState: 3
-/VanadiumMediaPlayer.cpp:671 KT: statusEvent: 1
+    HAVE_FUTURE_DATA (3)
+
+/VanadiumMediaPlayer.cpp:671 KT: statusEvent: 1 
+    (complete)
 /VanadiumMediaPlayer.cpp:673 KT: currentNetworkState: 2 currentReadyState: 4
+    HAVE_ENOUGH_DATA (4)
+
 /VanadiumMediaPlayer.cpp:703 KT: got complete
 /VanadiumMediaPlayer.cpp:705 KT: got complete: call timechanged
 
@@ -9770,6 +9842,7 @@ case GST_MESSAGE_EOS:
   (void)stop_locked(StatusEventValue::complete);
   break;
 
+// this is the previous before a fix
 
 NS_ZINC::Future<void> GstMediaRouter::stop_locked(
     StatusEventValue::Enum eventValue)
@@ -10015,15 +10088,15 @@ gstnexussink.c:1765:gst_nexus_sink_on_error:<nexussink> Error: 0x0101
 note: if run code to change pipeline state, then happens here before Vanadium
 gets notified.
 
-2015-11-27 10:31:09,499 VanadiumMediaPlayer.cpp:681 KT: statusEvent: 1
-2015-11-27 10:31:09,500 VanadiumMediaPlayer.cpp:683 KT: currentNetworkState: 2 currentReadyState: 3
-2015-11-27 10:31:09,500 VanadiumMediaPlayer.cpp:713 KT: got complete: call timechanged
-2015-11-27 10:31:09,502 tMediaRouter.cpp:1388 KT: getPOS: VOD: CPOS(0, 156900, 157000)
-2015-11-27 10:31:09,505 VanadiumMediaPlayer.cpp:275 KT: VOD: CT: int from mr: 156900, float out: 156.9
-2015-11-27 10:31:09,507 tMediaRouter.cpp:1388 KT: getPOS: VOD: CPOS(0, 156900, 157000)
-2015-11-27 10:31:09,509 VanadiumMediaPlayer.cpp:275 KT: VOD: CT: int from mr: 156900, float out: 156.9
-2015-11-27 10:31:09,512 tMediaRouter.cpp:1661 KT: VOD: getMD: float from gst: 157000000000, int out : 157000
-2015-11-27 10:31:09,514 VanadiumMediaPlayer.cpp:249 KT: VOD: DU: int from mr: 157000, float out: 157
+10:31:09,499 VanadiumMediaPlayer.cpp:681 KT: statusEvent: 1
+10:31:09,500 VanadiumMediaPlayer.cpp:683 KT: currentNetworkState: 2 currentReadyState: 3
+10:31:09,500 VanadiumMediaPlayer.cpp:713 KT: got complete: call timechanged
+10:31:09,502 tMediaRouter.cpp:1388 KT: getPOS: VOD: CPOS(0, 156900, 157000)
+10:31:09,505 VanadiumMediaPlayer.cpp:275 KT: VOD: CT: int from mr: 156900, float out: 156.9
+10:31:09,507 tMediaRouter.cpp:1388 KT: getPOS: VOD: CPOS(0, 156900, 157000)
+10:31:09,509 VanadiumMediaPlayer.cpp:275 KT: VOD: CT: int from mr: 156900, float out: 156.9
+10:31:09,512 tMediaRouter.cpp:1661 KT: VOD: getMD: float from gst: 157000000000, int out : 157000
+10:31:09,514 VanadiumMediaPlayer.cpp:249 KT: VOD: DU: int from mr: 157000, float out: 157
 
 KT: HTML: mediaPlayerTimeChanged, now(float): 156.9, dur(float): 157, playrate: 1
 KT: HTML: mediaPlayerTimeChanged***** m_sentEndEvent is false *****
@@ -10188,19 +10261,19 @@ KT: HTML: endedPlayback, now(float): 156.902, dur(float): 157, playrate: 1
 0:02:40.118008756  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:1761:
 seekable: seekable = 0 -> 145000000000
 
-0:02:40.183911534 nexussink gstnexussink.c:1120:gst_nexus_sink_wait_event_locked:<nexussink> wait_event
-0:02:40.184160201 nexussink gstnexussink.c:1124:gst_nexus_sink_wait_event_locked:<nexussink> End of stream
-0:02:40.184357274 nexussink gstnexussink.c:1132:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - waiting until all data consumed
-0:02:40.184730942 nexussink gstnexussink.c:1134:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - done
-0:02:40.185345497 nexussink gstnexussink.c:1765:gst_nexus_sink_on_error:<nexussink> Error: 0x0101
+.183911534 nexussink gstnexussink.c:1120:gst_nexus_sink_wait_event_locked:<nexussink> wait_event
+.184160201 nexussink gstnexussink.c:1124:gst_nexus_sink_wait_event_locked:<nexussink> End of stream
+.184357274 nexussink gstnexussink.c:1132:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - waiting until all data consumed
+.184730942 nexussink gstnexussink.c:1134:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - done
+.185345497 nexussink gstnexussink.c:1765:gst_nexus_sink_on_error:<nexussink> Error: 0x0101
 
-0:02:40.185420126  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:1550:
-handleMessage: End of Stream
+.185420126  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:1550:
+essage: End of Stream
 
-0:02:40.186173978  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:2387:
-didEnd: End of stream
+.186173978  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:2387:
+ End of stream
 
-0:02:40.188031386  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:751:
+.188031386  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:751:
 playbackPosition: Position 0:02:36.900000000
 
 note: see that duration changes
@@ -10317,7 +10390,27 @@ This commit implements the same handling of this in YV MediaRouter land.
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: playing event
+*kt_dev_uv_stack_250* mr-web: play, ready, network state attribute 
+
+    enum ReadyState
+    {
+        HAVE_NOTHING,
+        HAVE_METADATA,
+        HAVE_CURRENT_DATA,
+        HAVE_FUTURE_DATA, (3)
+        HAVE_ENOUGH_DATA
+    };
+
+    enum NetworkState
+    {
+        NETWORK_EMPTY,
+        NETWORK_IDLE,
+        NETWORK_LOADING, (2)
+        NETWORK_ERROR,
+        NETWORK_LOADED,
+        DECODE_ERROR,
+        FORMAT_ERROR
+    };
 
 https://html.spec.whatwg.org/multipage/embedded-content.html#dom-media-play
 
@@ -10325,7 +10418,7 @@ When the play() method on a media element is invoked, the user agent must run
 the following steps.
 
     If the media element's networkState attribute has the value NETWORK_EMPTY,
-invoke the media element's resource selection algorithm.
+    invoke the media element's resource selection algorithm.
 
     If the playback has ended and the direction of playback is forwards, and the
     media element does not have a current media controller, seek to the earliest
@@ -10347,12 +10440,13 @@ invoke the media element's resource selection algorithm.
         Queue a task to fire a simple event named play at the element.
 
         If the media element's readyState attribute has the value HAVE_NOTHING,
-HAVE_METADATA, or HAVE_CURRENT_DATA, queue a task to fire a simple event named
-  waiting at the element.
+        HAVE_METADATA, or HAVE_CURRENT_DATA, queue a task to fire a simple event
+        named waiting at the element.
 
+        note:
         Otherwise, the media element's readyState attribute has the value
         HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA: queue a task to fire a simple
-        event named playing at the element.
+        event named 'playing' at the element.
 
     Set the media element's autoplaying flag to false.
 
@@ -10360,38 +10454,60 @@ HAVE_METADATA, or HAVE_CURRENT_DATA, queue a task to fire a simple event named
     controller state for the media element's current media controller.
 
 
-={============================================================================
-*kt_dev_uv_stack_250* mr-web: java scripts to check on video
+note: This is web inspector log when iplayer is playing without `started` event
+from GST MT and changing ready to HAVE_ENOUGH_DATA.
 
-video.addEventListener("timeupdate", function() {
-    equal(video.currentTime, 6, "Unexpected currentTime");
-    equal(video.played.length, 1, "Unexpected played range");
-    equal(video.played.start(0), 0, "Unexpected start of played range");
-    equal(video.played.end(0), 6, "Unexpected end of played range");
-    equal(video.seekable.length, 1, "Unexpected seekable range");
-    equal(video.seekable.start(0), 0, "Unexpected start of seekable range");
-    equal(video.seekable.end(0), 1200, "Unexpected end of seekable range");
-    equal(video.buffered.length, 1, "Unexpected buffered range");
-    equal(video.buffered.start(0), 0, "Unexpected start of buffered range");
-    equal(video.buffered.end(0), 256, "Unexpected end of buffered range");
-    start();
-});
+ended?: false
+readyState?: 3
+networkState?: 2
 
-note: BBC iplayer uses 'mediaPlayerVideo' ALWAYS
+Why plays well? Since as stated above, HAVE_FUTURE_DATA(3) is valid state.
 
-(function() {
-    video = document.getElementById('mediaPlayerVideo');
-    video.addEventListener("ended", function() {
-    console.log("ended");
-    });
-})()
 
-(function() {
-    video = document.getElementById('mediaPlayerVideo');
-    video.addEventListener("timeupdate", function() {
-    console.log("currentTime:", video.currentTime);
-    });
-})()
+4.8.13.7 Ready states
+
+media.readyState
+
+    Returns a value that expresses the current state of the element with respect
+    to rendering the current playback position, from the codes in the list
+    below.
+
+Media elements have a ready state, which describes to what degree they are ready
+to be rendered at the current playback position. The possible values are as
+follows; the ready state of a media element at any particular time is the
+greatest value describing the state of the element:
+
+HAVE_FUTURE_DATA (numeric value 3)
+
+    Data for the immediate current playback position is available, as well as
+    enough data for the user agent to advance the current playback position in
+    the direction of playback at least a little without immediately reverting to
+    the HAVE_METADATA state, and the text tracks are ready. For example, in
+    video this corresponds to the user agent having data for at least the
+    current frame and the next frame when the current playback position is at
+    the instant in time between the two frames, or to the user agent having the
+    video data for the current frame and audio data to keep playing at least a
+    little when the current playback position is in the middle of a frame. The
+    user agent cannot be in this state if playback has ended, as the current
+    playback position can never advance in this case.
+
+note: Vanadium set this state when gets source_config_completed event.
+
+note: This is when have `started` event and see ready state is
+HAVE_ENOUGH_DATA(4).
+
+ended?: false
+readyState?: 4
+networkState?: 2
+
+In this case, can see position reporting on dbus:
+
+signal sender=:1.169 -> dest=(null destination) serial=8794 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
+   struct {
+      int32 0
+      int32 195720
+      int32 3559000
+   }
 
 
 ={============================================================================
@@ -17987,6 +18103,7 @@ git format-patch zinc-pristine
 ={============================================================================
 *kt_dev_uv_stack_009* zinc-lsr: keys
 
+<box-type>
 [root@HUMAX /]# getItem oem.device.model.variant    
 oem.device.model.variant=80B07002
 
@@ -17994,6 +18111,7 @@ oem.device.model.variant=80B07002
 CTK = 80B07001
 ATK = 80B07002
 
+<box-uuid>
 [root@HUMAX /]# getItem oem.device.duid
 oem.device.duid=DCD321-DTRT1000-0102bb
 
@@ -19967,6 +20085,7 @@ local/lib/pkgconfig/directfb-internal.pc
 local/lib/pkgconfig/sawman.pc
 local/lib/pkgconfig/nexus.pc
 
+
 ={============================================================================
 *kt_dev_uv_oem_001* oem-box-hwei:
 
@@ -20054,9 +20173,12 @@ unsetenv IFCONFIG
 from the root@HUMAX command prompt:
 
 cd /mnt/hd1 &&
+
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/T1000/scripts/humax-hdd-install.sh -O humax-hdd-install.sh &&
+
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.1.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh &&
+
 chmod +x humax-hdd-install.sh
-./humax-hdd-install.sh -s -r H23.1.0 &&
 
 ./humax-hdd-install.sh -s -r H23.11.0
 
@@ -20126,6 +20248,31 @@ serial. At the CFE> prompt type the following commands:
 
 setenv -p KERNEL_OPT "root=/dev/sda1 rw"
 reboot
+
+
+<recovery>
+    Turn the box off. Turn the box on. Keep pressed the "DOWN" button
+    (T2100/T4000) or "VOL-" (T1000) on the FRONT PANEL until the message "Enter
+    Maintenance Mode (Y/N)" is shown on the screen.
+
+    Press "Power" button on the front panel to confirm 'Y'
+
+    WAIT FOR SEVERAL MINUTES during which time the screen will remain blank but
+    there will be some activity on the serial console. You will then see the
+    Maintenance Mode screen.
+
+    Plug the USB key into the front port on the Humax box and wait several
+    seconds. You will see the "USB Image Ready.." in the bottom of the screen.
+    Select "Internet / USB Recovery, keep recordings" (press "DOWN" to scroll
+            down) and "RIGHT" to accept. It will update the software and reboot
+    automatically. When the device starts to reboot, power if off and remove the
+    USB key.
+
+    If you get a INVALID SIGNATURE error when trying to boot into Maintenance
+    Mode, you will need to goto the "Recovery" HOWTO below to re-flash all
+    files.
+
+    Vol-/+ (okay, cancel), P-/+ (up, down)
 
 
 ={============================================================================
