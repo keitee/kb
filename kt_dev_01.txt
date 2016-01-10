@@ -13344,10 +13344,12 @@ void swap( Message &lhs, Message &rhs )
 
 
 <move-consideration>
-By defining move operations, the Message class can use string::move and set::move operations to
-avoid the overhead of copying the contents and folders members.
+The point is that by defining move operations, the Message class can use
+string::move and set::move operations to avoid the overhead of copying the
+contents and folders members.
 
-As with copy and swap, moving must update each Folder and both move ctor and assign need to update
+In addition to moving the `folder` member, moving must update each Folder that
+points to the original `Message` and both move ctor and assign need to update
 Folder pointers. So make it common work.
 
 // move Folder pointers 'from' m 'to' this message
@@ -13366,12 +13368,20 @@ void Message::move_Folders(Message *m)
     m->folders.clear();      // ensure that destroying m is harmless
 }
 
-note: that inserting an element to a set might throw since it requires memory to be allocated. As a
-result, unlike HasPtr and StrVec case, will not mark move operations as noexcept. Q: whether or not
-noexcept is necessary requirement on move operations? 
+
+note: no noexcept
+
+The inserting an element to a `set` might throw since it requires memory to be
+allocated. As a result, unlike HasPtr and StrVec case, will 'not' mark move
+operations as noexcept. 
+
+Q: whether or not noexcept is necessary requirement on move operations? See
+noexcept on move in {conditions-to-use-move}
+
 
 // move ctor
-Message::Message( Message &&m ) : contents(std::move(m.contents))    // string::move
+Message::Message( Message &&m ) 
+  : contents(std::move(m.contents)) // string::move
 {
   move_Folders(&m);
 }
@@ -13421,7 +13431,7 @@ adds the new elements.
 elements              first_free                         cap
 
 
-StrVec          std::string continuous block
+StrVec          std::string continuous block      resources to be moved
                   [0]                             [char arrays]
                   [1]                             [char arrays]
                   [2]                             [char arrays]
@@ -13465,9 +13475,9 @@ StrVec::alloc_n_copy( const string *begin, const string *end )
 
   auto data = alloc.allocate( end - begin );     // iterator-arithmetic
 
-  // uninitialized_copy 'construct' copies of given elements in 'uninitialized'
-  // space. return { begin of the new space, past the last it copied }
-  // see stl-allocator for detail.
+  // <uninitialized_copy> 'construct' copies of given elements in
+  // 'uninitialized' space. return { begin of the new space, past the last it
+  // copied } see stl-allocator for detail.
 
   return { data, uninitialized_copy( begin, end, data ) };
 }
@@ -13764,12 +13774,13 @@ state as a default initialized object and other classes may behave differently.
 
 
 {synthesized-move-operations}
-If class do not define copy ctor and assign then compiler 'always' make these operations; defined
-either as memberwise or deleted.
+If class do not define copy ctor and assign then compiler 'always' make these
+operations; defined either as memberwise or deleted.
 
-Move operations are different. The compiler make move operations 'only' if a class does 'not' define
-any copy ctor and assign and 'only' if all data members can be move ctored and assigned. So if class
-has own copy ctor and assign then move will 'not' be synthesized.
+Move operations are different. The compiler make move operations 'only' if a
+class does 'not' define any copy ctor and assign and 'only' if all data members
+can be move ctored and assigned. So if class has own copy ctor and assign then
+move will 'not' be synthesized.
 
 // the compiler will synthesize the move operations for X and hasX
 struct X {
@@ -13784,48 +13795,60 @@ struct hasX {
 X x, x2 = std::move(x);          // use the synthesized move ctor
 hasX hx, hx2 = std::move(hx);
 
-If class defines either move ctor and/or move assign, the synthesized copy ctor and copy assign will
-de defined 'deleted' So class that define move operations 'must' also define own copy operations.
-Otherwise, those members are deleted by default.
+If class defines either move ctor and/or move assign, the synthesized copy ctor
+and copy assign will de defined 'deleted'. So class that define move operations
+'must' also define own copy operations. Otherwise, those members are deleted by
+default.
 
 
 {copy-or-move}
-When class has both a move and copy ctor, how does the library know what to use? Use function
-matching since copy ctor takes const StrVec& and move only takes StrVec&&.
+When class has both a move and copy ctor, how does the library know what to use?
+Use function matching since copy ctor takes const StrVec& and move only takes
+StrVec&&.
 
 StrVec v1, v2;
-v1 = v2;                   // copy assign
+v1 = v2;                    // copy assign
 
-StrVec getVec(istream &);  // assume getVec returns an rvalue
-v2 = getVec(cin);          // note: move assign
+StrVec getVec(istream &);   // assume getVec returns an rvalue
+                            // note: right function signature to return rvalue?
+v2 = getVec(cin);           // note: move assign
    
-Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in the second assign, both
-are viable but copy assign requires conversion to const. Hence move is used since it is exact match.
+Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in the
+second assign, both are viable but copy assign requires conversion to const.
+Hence move is used since it is exact match.
 
 
 {conditions-to-use-move}
+
 1. noexcept on move
-The library containers provide guarantees as to what they do if an exception happens; vector
-guarantees that if an exception happens when call push_back, the vector itself will be left
-unchanged.
 
-Imagine that push_back in StrVec causes reallocation as vector, uses move ctor but exceptions
-happens in the middle of moving. There would be a problem. However, if used copy ctor, not a problem
-when exception happens since the original copy still remains. Like, exception safe condition in
-using dynamic resources.
+The library containers provide guarantees as to what they do if an exception
+happens; vector guarantees that if an exception happens when call push_back, the
+vector itself will be left unchanged.
 
-To avoid this potential problem, vector must use a copy ctor instead move during reallocation
-'unless' it knows that 'element's type move ctor cannot throw an exception. How to tell the library
-that move ctor is safe to use? Do so by using explicitly noexcept keyword on move ctor and assign.
+Imagine that push_back in StrVec causes reallocation as vector, uses move ctor
+but exceptions happens in the middle of moving. There would be a problem.
+However, if used copy ctor, not a problem when exception happens since the
+original copy still remains. Like, exception safe condition in using dynamic
+resources.
+
+To avoid this potential problem, vector must use a copy ctor instead move during
+reallocation 'unless' it knows that 'element's type move ctor cannot throw an
+exception. How to tell the library that move ctor is safe to use? Do so by using
+explicitly noexcept keyword on move ctor and assign.
+
+note: the question is how vector code knows if it has noexcept or not?
 
 2. copy is bigger than move 
-Using the copy controls in place of move controls is safe and will meet the requirement of move
-controls since objects is moved by copying operations. In other words, copy controls are more of
-necessary to work properly, move controls are more of performace choice so if there are no move
-operations, copy controls will be used instead.
 
-If a class has no move operations, copy operations will be used 'even if' attempt to use move by
-calling std::move().
+Using the copy controls in place of move controls is safe and will meet the
+requirement of move controls since objects is moved by copying operations. In
+other words, copy controls are more of necessary to work properly, move controls
+are more of performance choice so if there are no move operations, copy controls
+will be used instead.
+
+note: If a class has no move operations, copy operations will be used 'even if'
+attempt to use move by calling std::move().
 
 // define copy but no move operations
 class Foo {
@@ -13838,14 +13861,14 @@ Foo x;
 Foo y(x);                  // copy ctor
 Foo z( std::move(x) );     // copy ctor
 
-Here copy initialization happens but std::move returns rvalue, Foo&&, but no move ctor. So can
-convert a Foo&& to const Foo&, copy ctor is viable and it is called. "can bind rvalue to
-lreference".
+Here copy initialization happens but std::move returns rvalue, Foo&&, but no
+move ctor. So can convert a Foo&& to const Foo&, copy ctor is viable and it is
+called. "can bind rvalue to lreference".
 
 
 <move-example>
-Using the HasPtr copy-and-swap example this shows that single assignment operator acts as both copy
-and move assign.
+The HasPtr copy-and-swap example shows that 'single' assignment operator acts as
+both copy and move assign.
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
@@ -13855,76 +13878,111 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
   return *this;
 }
 
-HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's copy
+HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's a copy
 {
-  ...                // operations to change the copy if there are more to do
+  ...                // operations to change a copy(rhs)
   swap(*this, rhs);
   reutn *this;       // rhs is destroyed, which deletes the old ps.
 }
 
-If add move ctor to HasPtr class then effectively add move assign as well. The assign operator is
-both the move and copy assign. note that this is from copy-and-swap-idiom which is for valuelike
-case. Hence move is safe.
+If add move ctor to HasPtr class then effectively add move assign as well. The
+assign operator is both the move and copy assign. 
+
+note This code is from copy-and-swap-idiom which is for valuelike case. Hence
+move is safe.
 
 class HasPtr {
   public:
+    // move ctor
     HasPtr(HasPtr &&p) noexcept : ps(p.ps), i(p.i), { p.ps = 0; }
 
-    // note: HasPtr& operator=(const HasPtr rhs)
+    // note: copy ctor, HasPtr& operator=(const HasPtr rhs).
     HasPtr& operator=(HasPtr rhs)
     { swap(*this, rhs); return *this; }
     ...
 };
 
-Since operator=() uses nonreference type, uses copy initialization. Depending on the type of
-argument, it uses either the copy ctor or the move ctor.
+Since operator=() uses nonreference type, uses copy initialization. 'depending'
+on the type of argument, it uses either the copy ctor or the move ctor.
 
-HadPtr hp, hp2;
+HasPtr hp, hp2;
 
-hp = hp2;                        // copy assign is viable
-hp = std::move(hp2);             // move assign is exact match
+hp = hp2;
+hp = std::move(hp2);
 
-In the second assignment, std::move return rvalue and move assign used. Since copy-and-swap do
-allocation and deallocation and allocation is done by move, there are no other thing to do to
-maintaion move assign behaviour. So no need to have move assign.
+The first assignment. hp2 is an lvalue, so the move ctor is not viable. copy
+ctor is used to initialize `rhs`.
+
+The second assignment. std::move return rvalue and both ctor are viable.
+However, because the argument is an rvalue reference, the move ctor is an exact
+match. 
+
+Regardless of whether the copy or move ctor was used, the body of the assignment
+operator `swaps` the state of the two operators.
+
+note:
+After all, save a copy ctor in using valuelike case than move ctor case. 
+
 
 note: see <nonmember-friend-swap> for swap in HasPtr
-This was HasPtr& operator=(const HasPtr rhs) in the original example as copy context and do not have
-const now as move context even if the code of function is the same. Means that swap works always
-regardless of const. Why? Here swap works on built-in type, pointer which is not affected by
-constness check; bitwise const.
+This was HasPtr& operator=(const HasPtr rhs) in the original example as copy
+context and do not have const now as move context even if the code of function
+is the same. Means that swap works always regardless of const. Why? Here swap
+works on built-in type, pointer which is not affected by constness check;
+bitwise const.
 
 
 {move-iterator-adaptor}
-The StrVec::reallocate can be rewritten using move iterator which would be easier. The
-initialized_copy copy and costruct elements but there is no analogous to move. Instead, library
-defines move iterator adaptor which changes the behavior of iterator's dereference operator to
-'fetch' elements; return rvalue or lvalue. 
+The StrVec::reallocate can be rewritten using move iterator which would be
+easier. 
+
+The <uninitialized_copy> copy and costruct elements in uninitialized space but
+there is no analogous to move objects into unconstruced memory. Instead, the new
+library defines move iterator adaptor which changes the behavior of iterator's
+dereference operator to 'fetch' elements.
+
+Ordinarily, an iterator dereference operator returns an lvaue reference to the
+element but move iterator yields an rvalue reference.
+
+The make_move_iterator() 'transform' an ordinary iterator to a move iterator.
+
+The <uninitialized_copy> uses the iterator dereference to fetch elements from
+the input sequence. Becase passed move iterators, the dereference yields an
+rvalue reference, which means `construct` will use the move (string) ctor to
+construct the elements.
 
 void StrVec::reallocate()
 {
   auto newcapacity = size() ? 2 * size() : 1;
-  auto first = alloc.allocate(newcapacity);
+
+  auto newdata = alloc.allocate(newcapacity);   // first
+
+  auto dest = newdata;      // start in the new array
+  auto elem = elements;     // start in the old array
 
   // 'before'
   // for( size_t i = 0; i != size(); ++i )
-  //  alloc.construct( last++, std::move(*elem++) );
+  //  alloc.construct( dest++, std::move(*elem++) );
 
   // 'after'
-  auto last = uninitialized_copy( make_move_iterator( begin() ), make_move_iterator( end() ), first );
+  auto dest = uninitialized_copy(
+      make_move_iterator( begin() ),
+      make_move_iterator( end() ),
+      first );
 
   free();   // member which destroy and deallocate
 
-  elements = first;
-  first_free = last;
+  elements = newdata;
+  first_free = dest;
   cap = elements + newcapacity;
 }
 
 
 note:
-STL makes no guarantees about which algorithms can be used with move iterators or which cannot since
-move can disappear the source. Should pass move iterators to algorithms only when confident that
-algorithms does not access an element after it has assigned to that element.
+STL makes no guarantees about which algorithms can be used with move iterators
+or which cannot since move can destory the source. Should pass move iterators to
+algorithms only when confident that algorithms does not access an element after
+it has assigned to that element.
 
 
 {move-can-be-dangerous}
