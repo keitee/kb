@@ -13415,10 +13415,18 @@ vector, supports reallocation. If there is not enough space left, then obtains
 new space, moves the existing elements into that space, free the old space, and
 adds the new elements.
 
-| 0 | 1 | 2 | 3 | 4 | unconstructed elements |
+| 0 | 1 | 2 | 3 | 4 | unconstructed std::string elements |
 
-^                     ^                        ^
-elements              first_free               cap
+^                     ^                                  ^
+elements              first_free                         cap
+
+
+StrVec          std::string continuous block
+                  [0]                             [char arrays]
+                  [1]                             [char arrays]
+                  [2]                             [char arrays]
+                  ...
+
 
 class StrVec {
   public:
@@ -13427,6 +13435,7 @@ class StrVec {
     StrVec &operator=(const StrVec &);
 
     void push_back( const std::string& );
+    size_t size() const { return first_free - elements; }
     std::string* begin() const { return elements; }
     std::string* end() const { return first_free; }
 
@@ -13472,6 +13481,7 @@ void StrVec::free()
   // may not pass deallocate a null pointer. moves backwards
   if(elements)
   {
+    // calls string's dtor
     for( auto p = first_free; p != elements; /* empty */ )
       alloc.destroy(--p);
 
@@ -13509,7 +13519,8 @@ copy is done, no need to keep the old.
 
 So copying the data in these std::strings in the old is 'unnecessary' in this
 case so StrVec's 'performance' will be much better if can avoid the overhead of
-allocating and deallocating the strings themselves each time we reallocate.
+allocating and deallocating the char memories for strings themselves each time
+we reallocate.
 
 
 <avoid-copying>
@@ -13527,6 +13538,8 @@ move().
 
 void StrVec::push_back( const string &s )
 {
+  // When there is no elements, this calls reallocate() to allocate
+  // 'unconstructed' space.
   chk_n_alloc();
 
   // note: 
@@ -13536,6 +13549,12 @@ void StrVec::push_back( const string &s )
   // object in that space. This is string's copy ctor.
   alloc.construct( first_free++, s );
 }
+
+// All pointers points to 'unconstructed' space.
+//
+// when size() is 0, allocate 1 space, no move, and set pointers accordingly.
+// when size() is not 0, allocate two times bigger space, do move and set
+// pointers accordingly.
 
 void StrVec::reallocate()
 {
@@ -13551,8 +13570,9 @@ void StrVec::reallocate()
     alloc.construct( dest++, std::move(*elem++) );
 
   // note: this frees up the old allocated memory and std::string element but
-  // not string's memory for characters. This means that std::string's dtor is
-  // move-aware and string remains in a valid, destructible state.
+  // not string's memory for characters. WHY? since used string's move ctor and
+  // means that std::string's dtor is move-aware since string remains in a
+  // valid, destructible state.
   free();
 
   elements = newdata;
@@ -13679,9 +13699,10 @@ The move-ctor 'must' ensure that the moved-from object is left in a state that
 destroying that object will be 'harmless'.
 
 The moved-from object continues to 'exist', eventually will be destroyed and the
-dtor will be run on that. Setting pointer members to null makes StrVec::free()
-  in dtor harmless. Otherwise, would delete the memory(resource) we have moved.
-  Also thus is 'why' do not have const on s since changes its state.
+dtor will be run on that. Setting pointer members to nullptr makes
+StrVec::free() in dtor do nothing. Otherwise, would delete the memory(resource)
+  we have moved. Also this is 'why' do not have const on s since changes its
+  state.
 
 StrVec::StrVec( StrVec&& s ) noexcept
 : elements(s.elements), first_free(s.first_free), cap(s.cap)
@@ -13699,10 +13720,12 @@ StrVec &StrVec::operator=( StrVec &&rhs ) noexcept
   // direct test for self-assignment. note "&rhs" is address of rhs.
   if( this != &rhs )
   {
-    // free existing elements
+    // note: free existing string elements but this time it deletes memories for
+    // characters as well this case since moved is not used.
     free();    
 
-    // member initializers take over the resources from rhs. this is move as with move ctor.
+    // member initializers take over the resources from rhs. this is move as
+    // with move ctor.
     elements = rhs.elements;
     first_free = rhs.first_free;
     cap = rhs.cap;
@@ -13714,20 +13737,30 @@ StrVec &StrVec::operator=( StrVec &&rhs ) noexcept
   return *this;
 }
 
+note:
+The beheavior of dtor which is free() differs from copy and move context. This
+relies on the string's dtor.
+
+note:
+This has the same from as self-assign and exception safe does.
+
 
 <destructible-state>
-Be careful about meaning of move: The actual move happens on elements which is string in this
-case and move is done by copying and setting pointer members in StrVec POV and is not to free the
-memory moved. This is a meaning of taking over the resources in s, StrVec.
+Be careful about meaning of move: The actual move happens on elements which is
+string in this case and move is done by copying and setting pointer members in
+StrVec POV and is not to free the memory moved. This is a meaning of taking over
+the resources in s, StrVec.
 
-Moving from an object does not destroy that object. Therefore, must ensure that the moved-from
-object is in a state in which the dtor can be run. In this example, if not set these pointer members
-null, there shall be a problem when dtor runs and calls free().
+Moving from an object does not destroy that object. Therefore, must ensure that
+the moved-from object is in a state in which the dtor can be run. In this
+example, if not set these pointer members null, there shall be a problem when
+dtor runs and calls free().
 
-In addition to that, move operations guarantee that the object remains 'valid' meaning that can runs
-operations but no guarantees/assumptions about its 'value'. Can safely be given a new value or used
-in other ways that do not depend on its current value. StrVec move leave the moved-from object in
-the same state as a default initialized object and other classes may behave differently.
+In addition to that, move operations guarantee that the object remains 'valid'
+meaning that can runs operations but no guarantees/assumptions about its
+'value'. Can safely be given a new value or used in other ways that do not
+depend on its current value. StrVec move leave the moved-from object in the same
+state as a default initialized object and other classes may behave differently.
 
 
 {synthesized-move-operations}
