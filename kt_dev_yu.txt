@@ -93,6 +93,7 @@
 *kt_dev_uv_stack_408* mr-dash: build dash pipeline using media router
 *kt_dev_uv_stack_408* mr-dash: sync and async
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
+*kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
 *kt_dev_uv_stack_408* mr-dash: disable dash on master
 *kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
 *kt_dev_uv_stack_408* mr-dash: position
@@ -105,6 +106,7 @@
 *kt_dev_uv_stack_254* mr-dash: event listener
 *kt_dev_uv_stack_254* mr-dash: natual size
 *kt_dev_uv_stack_254* mr-dash: gstmediaroutertest
+*kt_dev_uv_stack_254* mr-dash: gstmediaroutertest: invalid url
 *kt_dev_uv_stack_254* mr-dash: device auth
 
 *kt_dev_uv_stack_255* mr-error: soldes
@@ -2713,6 +2715,199 @@ setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.34
 
 
 ={============================================================================
+*kt_dev_uv_stack_002* tool-core
+
+cd /tmp && wget http://devnfs2.dev.youview.co.uk/TOOLS/install-devtools && /bin/bash install-devtools
+configure-stagecraft -c
+
+$ cat ./setup-humax/scripts/configure-stagecraft
+
+do_enable_core_dumps() {
+    echo "Enabling core dumps for Flash applications..."
+    # Execute the script 'core-dump' to capture process memory map as well as core dump
+    local core_path="/mnt/hd1"
+    echo "|/bin/bash ${where_am_i}/core-dump $core_path/ %p" > /proc/sys/kernel/core_pattern
+    patch_bash_script_with_ulimit_c_unlimited $run_stagecraft_script
+    echo "Core dumps enabled. In the unlikely scenario a crash happens, look at:"
+    echo "- '$core_path/core.*'"
+    echo "- '$core_path/core-maps.*"
+    warn_as_needed_that_stagecraft_need_to_be_restarted
+}
+
+
+./setup-humax/scripts/core-dump
+
+10:14:38 ~/source$ cat ./setup-humax/scripts/core-dump
+#!/bin/bash
+
+##
+# This is meant to be used to:
+# - save the core dump piped to STDIN,
+# - capture process memory map (/proc/pid/maps)
+# - process the core dump (if gdb is installed)
+#   to produce a text file with the backtrace
+#   already demangled and info about threads.
+# See core (5) man page for more information.
+#
+# This script is meant to be executed by the Kernel if
+# /proc/sys/kernel/core_pattern references it.
+#
+# Usage:
+#         ulimit -c unlimited
+#         echo "|/bin/bash /path/to/core-dump /mnt/hd1/ %p [ disk_space_threshold_in_bytes ]" > /proc/sys/kernel/core_pattern
+#
+# Author: hubert.lacote@youview.com
+#         kris@youview.com
+#         tomasz.wisniewski@youview.com
+#
+# Copyright (c) 2014 YouView TV Ltd
+#
+##
+
+gdb_path=/opt/zinc/oss/debugtools/bin/gdb
+
+
+##
+# Defining custom reporting routines (instead of using the ones from
+# common-functions) to minimize the dependency chain, since this script will be
+# called by the kernel.
+##
+blit() {
+    local severity="${1:-INFO}" && shift
+    echo "[$(date +"%F %T")] $severity: $*"
+}
+
+error() {
+    blit "ERROR" "$*"
+}
+
+die() {
+    blit "DIE" "$*"
+    exit 1
+}
+
+info() {
+    blit "INFO" "$*"
+}
+
+##
+# Produce a text file from the core dump with the backtrace
+# already demangled and info about threads...
+##
+process_core_dump() {
+    local core_dump="$1"
+    local core_maps="$2"
+    local output_file="$3"
+
+    local first_maps_line=$(head -1 "$core_maps")
+    # Assume the executable is under /opt
+    local executable="/opt/${first_maps_line#*/opt/}"
+
+    [[ -e "$executable" ]] || {
+        error "Failed to extract executable from '$first_maps_line'." 2> "$output_file"
+        return
+    }
+
+    $gdb_path --batch \
+              --eval-command="info threads" \
+              --eval-command "bt" \
+              --eval-command "thread apply all bt" \
+              --eval-command 'info sharedlibrary' \
+              --eval-command 'info registers' \
+              --eval-command 'info locals' \
+              --eval-command 'info args' \
+              --eval-command 'x/100a $sp' \
+              --eval-command 'x/50i $pc' \
+              "$executable" "$core_dump" &> "$output_file"
+}
+
+
+##
+# gets the available free space in the directory designated for core files
+##
+get_available_space() {
+    declare -a fs_info=( $(stat -f -c "%a %s" "$core_output_path") )
+    echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
+}
+
+
+##
+# Find the pid (which is the extension) of the oldest log entries
+##
+get_pid_of_oldest_logs() {
+    local oldest_file=$(find "$core_output_path" -type f -exec stat -c "%Y %n" {} \; | sort | head -n 1 | cut -d ' ' -f 2)
+    echo "${oldest_file##*.}"
+}
+
+
+##
+# Removes the oldest files in the core_output_path directory
+##
+do_cleanup() {
+    local oldest_pid=$(get_pid_of_oldest_logs)
+    rm -fv "$core_output_path"/*."$oldest_pid"
+}
+
+#
+# Count number of entries in the core file directory
+#
+count_files() {
+    echo $(find "$core_output_path" -type f | wc -l)
+}
+
+
+core_output_path=$1
+pid=$2
+threshold=${3:-0}
+
+# redirect stdout/stderr to the log file
+exec 1>"${core_output_path}/core-log.$pid" 2>&1
+
+[[ $# -eq 3 ]] || die "Script is not meant to be run manually!"
+
+
+##
+# Perform cleanup to reclaim some space if required
+##
+while true; do
+    files_count=$(count_files)
+
+    # break the loop if the available space is above the threshold
+    [[ "$(get_available_space)" -lt "$threshold" ]] || break
+
+    # break the loop if there are no files left to remove
+    [[ "$files_count" -eq 0 ]] && break
+
+    info "Performing oldest core files cleanup to free some space ..."
+    do_cleanup
+
+    # sanity check: break the loop if the cleanup didn't remove anything
+    [[ "$files_count" -eq "$(count_files)" ]] && break
+done
+
+
+##
+# Quit if free space is still bellow the threshold
+##
+[[ "$(get_available_space)" -lt "$threshold" ]] &&
+    die "Core dump won't be created. Space usage limit exceeded!"
+
+cat "/proc/$pid/maps" > "${core_output_path}/core-maps.$pid"
+dd of="${core_output_path}/core.$pid" bs=1M
+
+[[ -x "$gdb_path" ]] &&
+    process_core_dump \
+        "${core_output_path}/core.$pid" \
+        "${core_output_path}/core-maps.$pid" \
+        "${core_output_path}/core-text.$pid"
+
+# Unfortunately, this takes too much time (at least on t1000) and can result in
+# a broken archive. Needs to be disabled.
+#gzip "${core_output_path}/core.$pid"
+info "Core file obtained successfully."
+
+
+={============================================================================
 *kt_dev_uv_stack_003* zinc-start:
 
 cds: core driver software
@@ -3454,7 +3649,7 @@ drwxrwxr-x    2 1024     1025        4.0K Jun  2 11:51 zinc-http-cache/
 ={============================================================================
 *kt_dev_uv_stack_014* zinc-test
 
-{run-all}
+{run-all} <check-target>
 zb-make Nickel/Nickel.System.GStreamer-check
 
 
@@ -5204,6 +5399,17 @@ dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy2' /
 
 <dbus-getsource>
 dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
+
+<dbus-position-report>
+
+dbus-monitor "interface=Zinc.Media.MediaRouter,member=PositionChangeEvent"
+
+signal sender=:1.169 -> dest=(null destination) serial=8794 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
+   struct {
+      int32 0
+      int32 195720
+      int32 3559000
+   }
 
 
 ={============================================================================
@@ -8882,6 +9088,8 @@ NPError NP_Initialize(NPNetscapeFuncs* nFuncs, NPPluginFuncs* pFuncs)
 ={============================================================================
 *kt_dev_uv_stack_250* mr-web: run sport app on atk
 
+// ./setup-humax/scripts/configure-webkit
+
 [root@HUMAX tmp]# configure-webkit -h
 
 Usage: /usr/local/bin/configure-webkit [-u <URL>|-U] [-d|-D] [-g|-G] [-c]
@@ -9834,15 +10042,13 @@ video.ended, video: [object Object] player.min.js:1
 Removing event listeners... player.min.js:1
 
 
-<gst-code>
+<gst-code> this is the 'previous' way before a fix(DEVARCH-10634)
 
 // gets EOS
 
 case GST_MESSAGE_EOS:
   (void)stop_locked(StatusEventValue::complete);
   break;
-
-// this is the previous before a fix
 
 NS_ZINC::Future<void> GstMediaRouter::stop_locked(
     StatusEventValue::Enum eventValue)
@@ -12920,6 +13126,37 @@ void GstMediaRouter::startReportingPositionChange()
 
 case GST_MESSAGE_STATE_CHANGED:
   onStateChange(oldstate, newstate, pending);
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
+
+See "ended event".
+
+// DEVARCH-10634 Nickel.GStreamer: Fix invalid current position when a play
+// finishes
+// 
+// This changes firing StatusEvent for state changes through boost::signal2 when
+// see EOS to fix the invalid current position of a play and also removes firing
+// started event and position reporting.
+// 
+// This breaks up the gstmediaroutertest expectation which strictly conforms to
+// the Media Router Specification[1].
+
+
+DEVARCH-10905: Nickel.System.GStreamer: Put back StatusEvent generation whent
+state changes
+
+The DEVARCH-10634 changed event reporting not to use boost signal2 but rather to
+fire StatusEvent directly when see EOS to fix the invalid current position of a
+play. This causes that other events are not fired when GStreamer changes states
+and breaks up the gstmediaroutertest expectation which strictly conforms to the
+Media Router Specification[1].
+
+This commit put back that StateEvent generation of other events back on
+GStreamer state changes. 
+
+[1] 1125-S Media Router Specification v1.3
 
 
 ={============================================================================
@@ -16679,6 +16916,34 @@ KT: Video size or aspect ratio changed to size=512x288 PAR=1/1
 nexussink /gstnexussink.c:1744:gst_nexus_sink_stream_change:<nexussink0> KT: stream change
 nexussink /gstnexussink.c:1881:gst_nexus_sink_poll_decoder_status_locked:<nexussink0> 
 KT: Video size or aspect ratio changed to size=1280x720 PAR=1/1
+
+
+={============================================================================
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: frame rate
+
+<1>
+gstbasesink_class->get_times = GST_DEBUG_FUNCPTR (gst_nexus_sink_get_times);
+
+
+static void
+gst_nexus_sink_get_times (GstBaseSink * basesink, GstBuffer * buffer,
+                          GstClockTime * start, GstClockTime * end)
+{
+    GstNexusSink* sink = GST_NEXUS_SINK( basesink );
+
+    g_mutex_lock(&sink->mutex);
+    gst_nexus_sink_get_times_locked(sink, buffer, start, end);
+    g_mutex_unlock(&sink->mutex);
+}
+
+gst_nexus_sink_get_times_locked (GstNexusSink * sink, GstBuffer * buffer,..)
+{
+    ...
+    if(resources){
+        gst_nexus_sink_poll_decoder_status_locked(sink,resources);
+        gst_nexus_mgr_release_resources(sink->nexusMgr, resources);
+    }
+}
 
 
 ={============================================================================
@@ -22083,7 +22348,9 @@ typedef struct NEXUS_AudioDecoderStatus
     unsigned fifoDepth; /* depth in bytes of the compressed buffer */
     unsigned fifoSize; /* size in bytes of the compressed buffer */
 
+    note: 
     uint32_t pts;              /* current PTS of the audio decoder */
+
     NEXUS_PtsType ptsType;     /* current PTS type of the codec */
     int32_t ptsStcDifference;  /* current PTS-STC difference including lipsync adjustments */
     unsigned ptsErrorCount;    /* counter for number of PTS errors since start of decode */

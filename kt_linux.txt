@@ -170,6 +170,8 @@
 *kt_linux_tool_300* gdb-start: repeatedly run a test in GDB, until it fails
 *kt_linux_tool_300* gdb-start: what do during startup
 *kt_linux_tool_300* gdb-start: init file
+*kt_linux_tool_300* gdb-start: init file: ex
+*kt_linux_tool_300* gdb-start: init file: c++
 *kt_linux_tool_300* gdb-start: specify files
 *kt_linux_tool_300* gdb-start: running under gdb
 *kt_linux_tool_300* gdb-start: running under gdb: case
@@ -185,42 +187,43 @@
 
 *kt_linux_tool_300* gdb-sources, source path, and substitute
 *kt_linux_tool_300* gdb-exem: memory
+*kt_linux_tool_300* gdb-exem: print
 *kt_linux_tool_300* gdb-exam: between address and code
 *kt_linux_tool_300* gdb-exam: symbols
 *kt_linux_tool_300* gdb-exam: symbols loading
 *kt_linux_tool_300* gdb-slib: difference when with -g and without -g
+*kt_linux_tool_300* gdb-core: difference when with -g and without -g
 *kt_linux_tool_300* gdb-slib: load, search
 *kt_linux_tool_300* gdb-slib: case
 *kt_linux_tool_300* gdb-case: debugging with strace and gdb in sandbox
 |kt_linux_tool_300| gdb-remote:
+|kt_linux_tool_300| gdb-remote: args
 *kt_linux_tool_300* gdb-remote: remote or local?
+*kt_linux_tool_300* gdb-remote: frontend: cgdb
+*kt_linux_tool_300* gdb-remote: frontend: eclipse
 
 |kt_linux_tool_300| gdb-core: setting
 *kt_linux_tool_300* gdb-core: force core
-*kt_linux_tool_300* gdb-core: call trace of debug and release build
 *kt_linux_tool_300* gdb-core: stack frame
 |kt_linux_tool_300| gdb-core: case analysis
 |kt_linux_tool_300| gdb-core: case kernel crash on mips 
-|kt_linux_tool_303| gdb: .gdbinit
-|kt_linux_tool_307| gdb: commands for stepping
+|kt_linux_tool_300| gdb-step: stepping
 *kt_linux_tool_309* gdb-break
 *kt_linux_tool_309* gdb-break: specifying a location
 *kt_linux_tool_309* gdb-break: specifying a location in cpp
 *kt_linux_tool_309* gdb-break: set
 *kt_linux_tool_309* gdb-break: conditional ex
-*kt_linux_tool_309* gdb-break: info, get you quickly where
+*kt_linux_tool_309* gdb-break: info. get you quickly where
+*kt_linux_tool_309* gdb-break: ignore
 *kt_linux_tool_309* gdb-break: set in shared
 *kt_linux_tool_309* gdb-break: set watch
 *kt_linux_tool_309* gdb-break: set catch
 *kt_linux_tool_310* gdb-break: unset
 *kt_linux_tool_310* gdb-break: disable
 *kt_linux_tool_310* gdb-break: run command on break
+*kt_linux_tool_310* gdb-break: save
+*kt_linux_tool_300* gdb-break: dprintf
 *kt_linux_tool_310* gdb-dprintf
-|kt_linux_tool_311| gdb: examine running
-
-|kt_linux_tool_400| gdb: remote debugging
-|kt_linux_tool_450| gdb: frontend tool: cgdb
-*kt_linux_tool_251* gdb-fend: eclipse tip
 
 
 #{ linux-performance
@@ -11097,6 +11100,778 @@ For more information, type "help" from within GDB, or consult the
 
 
 ={============================================================================
+*kt_linux_tool_300* gdb-start: init file: ex
+
+{example-one}
+can define user func that have commands to run
+
+$ more .gdbinit
+set history save on
+set history filename ./.gdb_history
+set output-radix 16
+
+define connect
+    handle SIG32 nostop noprint pass
+    handle SIG33 nostop noprint pass
+#    b CTL_SimpleZapperTestStep
+#    b CTL_ChannelZapping_FullStbTearDown
+#               b readSectionFilterDataAndWriteToFile
+    b sectionFilterTask
+                b CTL_SectionFilter_Engine.c:2126
+                b CTL_SectionFilter_Engine.c:2146
+    directory components/FOSH/FUSIONOS_XTV_TESTS/xtv_test/src/
+                i b
+end
+
+# Helper function to find a task given a PID or the
+# address of a task_struct.
+# The result is set into $t
+define init_task
+   set $t=&init_task
+   printf "task name \"%s\", pid %05d \n", $t->comm, t->pid
+end
+
+# Helper function to find a task given a PID or the
+# address of a task_struct.
+# The result is set into $t
+define find_task
+  # Addresses greater than _end: kernel data...
+  # ...user passed in an address
+  if ((unsigned)$arg0 > (unsigned)&_end)
+    set $t=(struct task_struct *)$arg0
+  else
+    # User entered a numeric PID
+    # Walk the task list to find it
+    set $t=&init_task
+    if (init_task.pid != (unsigned)$arg0)
+      find_next_task $t
+      while (&init_task!=$t && $t->pid != (unsigned)$arg0)
+        find_next_task $t
+      end
+      if ($t == &init_task)
+        printf "Couldn't find task; using init_task\n"
+      end
+    end
+  end
+  printf "Task \"%s\":\n", $t->comm
+end
+
+
+Reads and executes the commands from init file (if any) in the current working
+directory. This is only done if the current directory is different from your
+home directory. Thus, you can have more than one init file, one generic in your
+home directory, and another, specific to the program you are debugging, in the
+directory where you invoke gdb.
+
+
+={============================================================================
+*kt_linux_tool_300* gdb-start: init file: c++
+
+#
+#   STL GDB evaluators/views/utilities - 1.03
+#
+#   The new GDB commands:
+#       are entirely non instrumental
+#       do not depend on any "inline"(s) - e.g. size(), [], etc
+#       are extremely tolerant to debugger settings
+#
+#   This file should be "included" in .gdbinit as following:
+#   source stl-views.gdb or just paste it into your .gdbinit file
+#
+#   The following STL containers are currently supported:
+#
+#       std::vector<T> -- via pvector command
+#       std::list<T> -- via plist or plist_member command
+#       std::map<T,T> -- via pmap or pmap_member command
+#       std::multimap<T,T> -- via pmap or pmap_member command
+#       std::set<T> -- via pset command
+#       std::multiset<T> -- via pset command
+#       std::deque<T> -- via pdequeue command
+#       std::stack<T> -- via pstack command
+#       std::queue<T> -- via pqueue command
+#       std::priority_queue<T> -- via ppqueue command
+#       std::bitset<n> -- via pbitset command
+#       std::string -- via pstring command
+#       std::widestring -- via pwstring command
+#
+#   The end of this file contains (optional) C++ beautifiers
+#   Make sure your debugger supports $argc
+#
+#   Simple GDB Macros writen by Dan Marinescu (H-PhD) - License GPL
+#   Inspired by intial work of Tom Malnar,
+#     Tony Novac (PhD) / Cornell / Stanford,
+#     Gilad Mishne (PhD) and Many Many Others.
+#   Contact: dan_c_marinescu@yahoo.com (Subject: STL)
+#
+#   Modified to work with g++ 4.3 by Anders Elton
+#   Also added _member functions, that instead of printing the entire class in map, prints a member.
+
+# support for pending breakpoints - you can now set a breakpoint into a shared library before the it was loaded.
+set breakpoint pending on
+
+#
+# std::vector<>
+#
+
+define pvector
+    if $argc == 0
+        help pvector
+    else
+        set $size = $arg0._M_impl._M_finish - $arg0._M_impl._M_start
+        set $capacity = $arg0._M_impl._M_end_of_storage - $arg0._M_impl._M_start
+        set $size_max = $size - 1
+    end
+    if $argc == 1
+        set $i = 0
+        while $i < $size
+            printf "elem[%u]: ", $i
+            p *($arg0._M_impl._M_start + $i)
+            set $i++
+        end
+    end
+    if $argc == 2
+        set $idx = $arg1
+        if $idx < 0 || $idx > $size_max
+            printf "idx1, idx2 are not in acceptable range: [0..%u].\n", $size_max
+        else
+            printf "elem[%u]: ", $idx
+            p *($arg0._M_impl._M_start + $idx)
+        end
+    end
+    if $argc == 3
+      set $start_idx = $arg1
+      set $stop_idx = $arg2
+      if $start_idx > $stop_idx
+        set $tmp_idx = $start_idx
+        set $start_idx = $stop_idx
+        set $stop_idx = $tmp_idx
+      end
+      if $start_idx < 0 || $stop_idx < 0 || $start_idx > $size_max || $stop_idx > $size_max
+        printf "idx1, idx2 are not in acceptable range: [0..%u].\n", $size_max
+      else
+        set $i = $start_idx
+        while $i <= $stop_idx
+            printf "elem[%u]: ", $i
+            p *($arg0._M_impl._M_start + $i)
+            set $i++
+        end
+      end
+    end
+    if $argc > 0
+        printf "Vector size = %u\n", $size
+        printf "Vector capacity = %u\n", $capacity
+        printf "Element "
+        whatis $arg0._M_impl._M_start
+    end
+end
+
+document pvector
+    Prints std::vector<T> information.
+    Syntax: pvector <vector> <idx1> <idx2>
+    Note: idx, idx1 and idx2 must be in acceptable range [0..<vector>.size()-1].
+    Examples:
+    pvector v - Prints vector content, size, capacity and T typedef
+    pvector v 0 - Prints element[idx] from vector
+    pvector v 1 2 - Prints elements in range [idx1..idx2] from vector
+end
+
+#
+# std::list<>
+#
+
+define plist
+    if $argc == 0
+        help plist
+    else
+        set $head = &$arg0._M_impl._M_node
+        set $current = $arg0._M_impl._M_node._M_next
+        set $size = 0
+        while $current != $head
+            if $argc == 2
+                printf "elem[%u]: ", $size
+                p *($arg1*)($current + 1)
+            end
+            if $argc == 3
+                if $size == $arg2
+                    printf "elem[%u]: ", $size
+                    p *($arg1*)($current + 1)
+                end
+            end
+            set $current = $current._M_next
+            set $size++
+        end
+        printf "List size = %u \n", $size
+        if $argc == 1
+            printf "List "
+            whatis $arg0
+            printf "Use plist <variable_name> <element_type> to see the elements in the list.\n"
+        end
+    end
+end
+
+document plist
+    Prints std::list<T> information.
+    Syntax: plist <list> <T> <idx>: Prints list size, if T defined all elements or just element at idx
+    Examples:
+    plist l - prints list size and definition
+    plist l int - prints all elements and list size
+    plist l int 2 - prints the third element in the list (if exists) and list size
+end
+
+define plist_member
+    if $argc == 0
+        help plist_member
+    else
+        set $head = &$arg0._M_impl._M_node
+        set $current = $arg0._M_impl._M_node._M_next
+        set $size = 0
+        while $current != $head
+            if $argc == 3
+                printf "elem[%u]: ", $size
+                p (*($arg1*)($current + 1)).$arg2
+            end
+            if $argc == 4
+                if $size == $arg3
+                    printf "elem[%u]: ", $size
+                    p (*($arg1*)($current + 1)).$arg2
+                end
+            end
+            set $current = $current._M_next
+            set $size++
+        end
+        printf "List size = %u \n", $size
+        if $argc == 1
+            printf "List "
+            whatis $arg0
+            printf "Use plist_member <variable_name> <element_type> <member> to see the elements in the list.\n"
+        end
+    end
+end
+
+document plist_member
+    Prints std::list<T> information.
+    Syntax: plist <list> <T> <idx>: Prints list size, if T defined all elements or just element at idx
+    Examples:
+    plist_member l int member - prints all elements and list size
+    plist_member l int member 2 - prints the third element in the list (if exists) and list size
+end
+
+
+#
+# std::map and std::multimap
+#
+
+define pmap
+    if $argc == 0
+        help pmap
+    else
+        set $tree = $arg0
+        set $i = 0
+        set $node = $tree._M_t._M_impl._M_header._M_left
+        set $end = $tree._M_t._M_impl._M_header
+        set $tree_size = $tree._M_t._M_impl._M_node_count
+        if $argc == 1
+            printf "Map "
+            whatis $tree
+            printf "Use pmap <variable_name> <left_element_type> <right_element_type> to see the elements in the map.\n"
+        end
+        if $argc == 3
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                printf "elem[%u].left: ", $i
+                p *($arg1*)$value
+                set $value = $value + sizeof($arg1)
+                printf "elem[%u].right: ", $i
+                p *($arg2*)$value
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+        end
+        if $argc == 4
+            set $idx = $arg3
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                if *($arg1*)$value == $idx
+                    printf "elem[%u].left: ", $i
+                    p *($arg1*)$value
+                    set $value = $value + sizeof($arg1)
+                    printf "elem[%u].right: ", $i
+                    p *($arg2*)$value
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        if $argc == 5
+            set $idx1 = $arg3
+            set $idx2 = $arg4
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                set $valueLeft = *($arg1*)$value
+                set $valueRight = *($arg2*)($value + sizeof($arg1))
+                if $valueLeft == $idx1 && $valueRight == $idx2
+                    printf "elem[%u].left: ", $i
+                    p $valueLeft
+                    printf "elem[%u].right: ", $i
+                    p $valueRight
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        printf "Map size = %u\n", $tree_size
+    end
+end
+
+document pmap
+    Prints std::map<TLeft and TRight> or std::multimap<TLeft and TRight> information. Works for std::multimap as well.
+    Syntax: pmap <map> <TtypeLeft> <TypeRight> <valLeft> <valRight>: Prints map size, if T defined all elements or just element(s) with val(s)
+    Examples:
+    pmap m - prints map size and definition
+    pmap m int int - prints all elements and map size
+    pmap m int int 20 - prints the element(s) with left-value = 20 (if any) and map size
+    pmap m int int 20 200 - prints the element(s) with left-value = 20 and right-value = 200 (if any) and map size
+end
+
+
+define pmap_member
+    if $argc == 0
+        help pmap_member
+    else
+        set $tree = $arg0
+        set $i = 0
+        set $node = $tree._M_t._M_impl._M_header._M_left
+        set $end = $tree._M_t._M_impl._M_header
+        set $tree_size = $tree._M_t._M_impl._M_node_count
+        if $argc == 1
+            printf "Map "
+            whatis $tree
+            printf "Use pmap <variable_name> <left_element_type> <right_element_type> to see the elements in the map.\n"
+        end
+        if $argc == 5
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                printf "elem[%u].left: ", $i
+                p (*($arg1*)$value).$arg2
+                set $value = $value + sizeof($arg1)
+                printf "elem[%u].right: ", $i
+                p (*($arg3*)$value).$arg4
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+        end
+        if $argc == 6
+            set $idx = $arg5
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                if *($arg1*)$value == $idx
+                    printf "elem[%u].left: ", $i
+                    p (*($arg1*)$value).$arg2
+                    set $value = $value + sizeof($arg1)
+                    printf "elem[%u].right: ", $i
+                    p (*($arg3*)$value).$arg4
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        printf "Map size = %u\n", $tree_size
+    end
+end
+
+document pmap_member
+    Prints std::map<TLeft and TRight> or std::multimap<TLeft and TRight> information. Works for std::multimap as well.
+    Syntax: pmap <map> <TtypeLeft> <TypeRight> <valLeft> <valRight>: Prints map size, if T defined all elements or just element(s) with val(s)
+    Examples:
+    pmap_member m class1 member1 class2 member2 - prints class1.member1 : class2.member2
+    pmap_member m class1 member1 class2 member2 lvalue - prints class1.member1 : class2.member2 where class1 == lvalue
+end
+
+
+#
+# std::set and std::multiset
+#
+
+define pset
+    if $argc == 0
+        help pset
+    else
+        set $tree = $arg0
+        set $i = 0
+        set $node = $tree._M_t._M_impl._M_header._M_left
+        set $end = $tree._M_t._M_impl._M_header
+        set $tree_size = $tree._M_t._M_impl._M_node_count
+        if $argc == 1
+            printf "Set "
+            whatis $tree
+            printf "Use pset <variable_name> <element_type> to see the elements in the set.\n"
+        end
+        if $argc == 2
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                printf "elem[%u]: ", $i
+                p *($arg1*)$value
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+        end
+        if $argc == 3
+            set $idx = $arg2
+            set $ElementsFound = 0
+            while $i < $tree_size
+                set $value = (void *)($node + 1)
+                if *($arg1*)$value == $idx
+                    printf "elem[%u]: ", $i
+                    p *($arg1*)$value
+                    set $ElementsFound++
+                end
+                if $node._M_right != 0
+                    set $node = $node._M_right
+                    while $node._M_left != 0
+                        set $node = $node._M_left
+                    end
+                else
+                    set $tmp_node = $node._M_parent
+                    while $node == $tmp_node._M_right
+                        set $node = $tmp_node
+                        set $tmp_node = $tmp_node._M_parent
+                    end
+                    if $node._M_right != $tmp_node
+                        set $node = $tmp_node
+                    end
+                end
+                set $i++
+            end
+            printf "Number of elements found = %u\n", $ElementsFound
+        end
+        printf "Set size = %u\n", $tree_size
+    end
+end
+
+document pset
+    Prints std::set<T> or std::multiset<T> information. Works for std::multiset as well.
+    Syntax: pset <set> <T> <val>: Prints set size, if T defined all elements or just element(s) having val
+    Examples:
+    pset s - prints set size and definition
+    pset s int - prints all elements and the size of s
+    pset s int 20 - prints the element(s) with value = 20 (if any) and the size of s
+end
+
+
+
+#
+# std::dequeue
+#
+
+define pdequeue
+    if $argc == 0
+        help pdequeue
+    else
+        set $size = 0
+        set $start_cur = $arg0._M_impl._M_start._M_cur
+        set $start_last = $arg0._M_impl._M_start._M_last
+        set $start_stop = $start_last
+        while $start_cur != $start_stop
+            p *$start_cur
+            set $start_cur++
+            set $size++
+        end
+        set $finish_first = $arg0._M_impl._M_finish._M_first
+        set $finish_cur = $arg0._M_impl._M_finish._M_cur
+        set $finish_last = $arg0._M_impl._M_finish._M_last
+        if $finish_cur < $finish_last
+            set $finish_stop = $finish_cur
+        else
+            set $finish_stop = $finish_last
+        end
+        while $finish_first != $finish_stop
+            p *$finish_first
+            set $finish_first++
+            set $size++
+        end
+        printf "Dequeue size = %u\n", $size
+    end
+end
+
+document pdequeue
+    Prints std::dequeue<T> information.
+    Syntax: pdequeue <dequeue>: Prints dequeue size, if T defined all elements
+    Deque elements are listed "left to right" (left-most stands for front and right-most stands for back)
+    Example:
+    pdequeue d - prints all elements and size of d
+end
+
+
+
+#
+# std::stack
+#
+
+define pstack
+    if $argc == 0
+        help pstack
+    else
+        set $start_cur = $arg0.c._M_impl._M_start._M_cur
+        set $finish_cur = $arg0.c._M_impl._M_finish._M_cur
+        set $size = $finish_cur - $start_cur
+        set $i = $size - 1
+        while $i >= 0
+            p *($start_cur + $i)
+            set $i--
+        end
+        printf "Stack size = %u\n", $size
+    end
+end
+
+document pstack
+    Prints std::stack<T> information.
+    Syntax: pstack <stack>: Prints all elements and size of the stack
+    Stack elements are listed "top to buttom" (top-most element is the first to come on pop)
+    Example:
+    pstack s - prints all elements and the size of s
+end
+
+
+
+#
+# std::queue
+#
+
+define pqueue
+    if $argc == 0
+        help pqueue
+    else
+        set $start_cur = $arg0.c._M_impl._M_start._M_cur
+        set $finish_cur = $arg0.c._M_impl._M_finish._M_cur
+        set $size = $finish_cur - $start_cur
+        set $i = 0
+        while $i < $size
+            p *($start_cur + $i)
+            set $i++
+        end
+        printf "Queue size = %u\n", $size
+    end
+end
+
+document pqueue
+    Prints std::queue<T> information.
+    Syntax: pqueue <queue>: Prints all elements and the size of the queue
+    Queue elements are listed "top to bottom" (top-most element is the first to come on pop)
+    Example:
+    pqueue q - prints all elements and the size of q
+end
+
+
+
+#
+# std::priority_queue
+#
+
+define ppqueue
+    if $argc == 0
+        help ppqueue
+    else
+        set $size = $arg0.c._M_impl._M_finish - $arg0.c._M_impl._M_start
+        set $capacity = $arg0.c._M_impl._M_end_of_storage - $arg0.c._M_impl._M_start
+        set $i = $size - 1
+        while $i >= 0
+            p *($arg0.c._M_impl._M_start + $i)
+            set $i--
+        end
+        printf "Priority queue size = %u\n", $size
+        printf "Priority queue capacity = %u\n", $capacity
+    end
+end
+
+document ppqueue
+    Prints std::priority_queue<T> information.
+    Syntax: ppqueue <priority_queue>: Prints all elements, size and capacity of the priority_queue
+    Priority_queue elements are listed "top to buttom" (top-most element is the first to come on pop)
+    Example:
+    ppqueue pq - prints all elements, size and capacity of pq
+end
+
+
+
+#
+# std::bitset
+#
+
+define pbitset
+    if $argc == 0
+        help pbitset
+    else
+        p /t $arg0._M_w
+    end
+end
+
+document pbitset
+    Prints std::bitset<n> information.
+    Syntax: pbitset <bitset>: Prints all bits in bitset
+    Example:
+    pbitset b - prints all bits in b
+end
+
+
+
+#
+# std::string
+#
+
+define pstring
+    if $argc == 0
+        help pstring
+    else
+        printf "String \t\t\t= \"%s\"\n", $arg0._M_data()
+        printf "String size/length \t= %u\n", $arg0._M_rep()._M_length
+        printf "String capacity \t= %u\n", $arg0._M_rep()._M_capacity
+        printf "String ref-count \t= %d\n", $arg0._M_rep()._M_refcount
+    end
+end
+
+document pstring
+    Prints std::string information.
+    Syntax: pstring <string>
+    Example:
+    pstring s - Prints content, size/length, capacity and ref-count of string s
+end
+
+#
+# std::wstring
+#
+
+define pwstring
+    if $argc == 0
+        help pwstring
+    else
+        call printf("WString \t\t= \"%ls\"\n", $arg0._M_data())
+        printf "WString size/length \t= %u\n", $arg0._M_rep()._M_length
+        printf "WString capacity \t= %u\n", $arg0._M_rep()._M_capacity
+        printf "WString ref-count \t= %d\n", $arg0._M_rep()._M_refcount
+    end
+end
+
+document pwstring
+    Prints std::wstring information.
+    Syntax: pwstring <wstring>
+    Example:
+    pwstring s - Prints content, size/length, capacity and ref-count of wstring s
+end
+
+#
+# C++ related beautifiers (optional)
+#
+
+set print pretty on
+set print object on
+set print static-members on
+set print vtbl on
+set print demangle on
+set demangle-style gnu-v3
+set print sevenbit-strings off
+
+set history filename ~/.gdb_history
+set history save
+
+# finally stop the silly "A debugging session is active." - question ... just quit both.
+set confirm off
+
+
+
+={============================================================================
 *kt_linux_tool_300* gdb-start: specify files
 
 {file-command}
@@ -11866,6 +12641,12 @@ containing dots, etc. are all treated as described above.
 
 Note that the executable search path is not used to locate the source files.
 
+When you start gdb, its source path includes only `cdir` and `cwd`, in that
+order. To add other directories, use the `directory` command.
+
+The search path is used to find 'both' program source files and gdb script files
+(read using the `-command` option and `source` command).
+
 
 {substitution}
 A substitution rule specifies how to rewrite source directories stored in the
@@ -12052,6 +12833,62 @@ machine's memory against the executable file you downloaded to the target. Or,
 on any target, you may want to check whether the program has corrupted its own
   read-only sections. The compare-sections command is provided for such
   situations.
+
+
+={============================================================================
+*kt_linux_tool_300* gdb-exem: print
+
+(gdb) printf "%d\n", i
+40
+(gdb) printf "%08X\n", i
+00000028
+
+print i
+Print the value of variable i.
+
+print *p
+Print the contents of memory pointed to by p, where p is a pointer variable.
+
+(gdb) whatis pszSection
+type = uint32_t *
+(gdb) print *pszSection
+
+print x.field
+Check the different members of a structure.
+
+print x
+Check all the members of a structure, assuming x is a structure.
+
+print y-field
+y is a pointer to a structure.
+
+print array[i]
+Print the i'th element of array.
+
+print array
+Print all the elements of array.
+
+(gdb) print /x block1->magic
+$5 = 0xabeaa5b3
+
+(gdb) print /x block1 
+$9 = 0x1150f4c
+
+(gdb) print /x *block1
+$8 = {magic = 0xabeaa5b3, size = 0x28, line = 0x0, owner = 0x0, header = 0x21, data = {free = {previous = 0x8, next = 0x115106c}, 
+    userData = {0x0}}}
+
+# db_contexts_array is a global var
+(gdb) p db_contexts_array
+(gdb) p db_contexts_array[-1]
+
+
+<gdb-disp>
+to inspect over the course of the run
+
+(gdb) [disp]lay var
+(gdb) [undisp] disp_num
+(gdb) info disp 	" to list disps
 
 
 ={============================================================================
@@ -12426,6 +13263,135 @@ NOW if you build the shared libarary using -g option
   8 return 0;
 
   U can see the differences in bold lines.
+
+
+={============================================================================
+*kt_linux_tool_300* gdb-core: difference when with -g and without -g
+
+1. Seems that core file are the same since the size is the same and show the
+same gdb result when use with both debug and release executable.
+
+-rw-------   1 kpark kpark 397312 Sep  1 14:11 7842.core
+-rw-------   1 kpark kpark 397312 Sep  1 14:15 7960.core
+-rwxr-xr-x   1 kpark kpark  27974 Sep  1 13:40 a-g.out*
+-rwxr-xr-x   1 kpark kpark  10350 Sep  1 14:15 a-r.out*
+
+<debug> with -g option
+
+$ gdb a-g.out 7960.core
+...
+Reading symbols from /home/kpark/work/a-g.out...done.
+
+warning: core file may not match specified executable file.
+[New LWP 7960]
+
+warning: Can't read pathname for load map: Input/output error.
+Core was generated by `./a.out'.
+Program terminated with signal 11, Segmentation fault.
+#0  0x0000000000400a1a in main () at tdebug.cpp:16
+16	    cout << "anode's next is " << anode.next->val << endl;;
+
+(gdb) l
+11	
+12	int main()
+13	{
+14	    node anode = { NULL, 0 };
+15	
+16	    cout << "anode's next is " << anode.next->val << endl;;
+17	
+18	    cout << "anode {" << anode.next << ", " << anode.val << "}" << endl;
+19	}
+
+(gdb) bt
+#0  0x0000000000400a1a in main () at tdebug.cpp:16
+(gdb) 
+
+
+<release>
+$ gdb a.out 7960.core
+...
+Reading symbols from /home/kpark/work/a.out...(no debugging symbols found)...done.
+Illegal process-id: 7960.core.
+[New LWP 7960]
+
+warning: Can't read pathname for load map: Input/output error.
+Core was generated by `./a.out'.
+Program terminated with signal 11, Segmentation fault.
+#0  0x0000000000400a1a in main ()
+
+(gdb) l
+No symbol table is loaded.  Use the "file" command.
+
+(gdb) bt
+#0  0x0000000000400a1a in main ()
+
+2. readelf output above are true for debug and release build.
+
+<ex>
+(gdb) bt
+#0  0x779dfd1c in __lll_lock_wait () from /lib/libpthread.so.0
+#1  0x779e75cc in pthread_mutex_lock () from /lib/libpthread.so.0
+#2  0x742993a8 in nickel::system::GstMediaRouter::getPosition() const () from 
+  /opt/zinc-trunk/lib/libNickelSystemGStreamer.so
+
+#3  0x766add10 in boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
+  boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
+  Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> >
+    >::result_type
+    nickel::system::ProxyMediaRouter::deferForwardOrDefault<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
+  boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
+  Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >
+    >(boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
+        boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
+        Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >,
+        nickel::system::returned_future_type<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
+        boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
+        Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >
+        >::type const&) const () from
+    /opt/zinc-trunk/lib/libNickelSystemProxy.so
+
+#4  0x7667fe8c in nickel::system::ProxyMediaRouter::getPosition() const () 
+    from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+#5  0x0044926c in Zinc::Media::(anonymous namespace)::getPosition_stub
+    (Zinc::Media::MediaRouterAsync&, DBus::Connection::WeakRef&, DBus::CallMessage const&) ()
+#6  0x0045d3ec in Zinc::Media::MediaRouterAsyncToDBus::call_method_async(DBus::CallMessage const&) ()
+#7  0x0045d784 in Zinc::Media::MediaRouterAsyncToDBus::handle_message(DBus::Message const&) ()
+#8  0x004634d0 in zinc::binding::dbus::
+    RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus>::operator()(DBus::Connection&, DBus::Message&) ()
+
+#9  0x00463678 in DBus::detail::AdaptorWrapper<zinc::binding::dbus::
+    RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus> >::call(DBusConnection*, DBusMessage*, void*) ()
+
+#10 0x777d316c in _dbus_object_tree_dispatch_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#11 0x777b4944 in dbus_connection_dispatch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#12 0x778337f8 in DBus::drain_pending_messages(DBus::Connection::Private*) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#13 0x777b3ea8 in _dbus_connection_update_dispatch_status_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#14 0x777adef4 in _dbus_connection_handle_watch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#15 0x777e66dc in dbus_watch_handle () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#16 0x77846484 in DBus::Watch::handle(int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#17 0x77851f6c in DBus::DefaultWatch::do_callback() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#18 0x77852444 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#19 0x77854030 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#20 0x77855704 in DBus::BusDispatcher::run() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#21 0x778bd9bc in zinc::binding::dbus::MainLoop::run() () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#22 0x00409674 in main ()
+
+<ex>
+(gdb) bt
+#0  0x76bab5fc in DRV_AUDIO_Init () from /usr/local/lib/libcvms.so.1
+#1  0x76ba6798 in DI_Init () from /usr/local/lib/libcvms.so.1
+#2  0x769348c8 in CV_Media_Initialize () from /usr/local/lib/libcvms.so.1
+#3  0x773ea5f8 in bronze::system::HumaxMediaStartup::HumaxMediaStartup() () from /opt/zinc/lib/libBronzeSystemHumax.so
+#4  0x77454188 in ?? () from /opt/zinc/lib/libBronzeSystemHumax.so
+#5  0x0040bfdc in ?? ()
+#6  0x0040f7f4 in ?? ()
+#7  0x77adb404 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc/lib/libdbus-c++-1.so.0
+#8  0x77adcff0 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc/lib/libdbus-c++-1.so.0
+#9  0x77ade6c4 in DBus::BusDispatcher::run() () from /opt/zinc/lib/libdbus-c++-1.so.0
+#10 0x0040b0d8 in ?? ()
+#11 0x776906d4 in __uClibc_main () from /lib/libc.so.0
+#12 0x0040a008 in __start ()
+
 
 
 ={============================================================================
@@ -12914,6 +13880,86 @@ $ gdbserver --attach 172.20.33.215:12345 1368
 
 
 ={============================================================================
+*kt_linux_tool_300* gdb-remote: args
+
+<arguments>
+20.3.1.4 Other Command-Line Arguments for gdbserver
+
+--debug
+
+Instruct gdbserver to display extra status information about the debugging
+process. This option is intended for gdbserver development and for bug reports
+to the developers.
+
+--remote-debug
+
+Instruct gdbserver to display remote protocol debug output. This option is
+intended for gdbserver development and for bug reports to the developers.
+
+<symbols>
+First make sure you have the necessary symbol files. Load symbols for your
+application using the file command before you connect. Use set sysroot to locate
+target libraries (unless your GDB was compiled with the correct sysroot using
+        --with-sysroot). Q: <sysroot>?
+
+The symbol file and target libraries must exactly match the executable and
+libraries on the target with one exception: the files on the host system should
+not be stripped, even if the files on the target system are. Mismatched or
+missing files will lead to confusing results during debugging. On GNU/Linux
+targets, mismatched or missing files may also prevent gdbserver from debugging
+multi-threaded programs. 
+
+
+{gdb-client}
+target remote host:port
+
+monitor cmd
+
+This command allows you to send arbitrary commands directly to the remote
+monitor. Since GDB doesn't care about the commands it sends like this, this
+command is the way to extend GDBâyou can add new commands that only the
+external monitor will understand and implement. 
+	
+
+20.3.3 Monitor Commands for gdbserver
+
+During a GDB session using gdbserver, you can use the monitor command to send
+special requests to gdbserver. Here are the available commands.
+
+monitor help
+List the available monitor commands.
+
+monitor set debug 0
+monitor set debug 1
+Disable or enable general debugging messages.
+
+monitor set remote-debug 0
+monitor set remote-debug 1
+Disable or enable specific debugging messages associated with the remote
+protocol (see Remote Protocol).  
+
+monitor set debug-format option1[,option2,...]
+
+Specify additional text to add to debugging messages. Possible options are:
+
+none Turn off all extra information in debugging output. 
+
+all Turn on all extra information in debugging output. 
+
+timestamps Include a timestamp in each line of debugging output. 
+
+Options are processed in order. Thus, for example, if none appears last then no
+additional information is added to debugging output. 
+
+monitor exit
+
+Tell gdbserver to exit immediately. This command should be followed by
+disconnect to close the debugging session. gdbserver will detach from any
+attached processes and kill any processes it created. Use monitor exit to
+terminate gdbserver at the end of a multi-process mode debug session.
+
+
+={============================================================================
 *kt_linux_tool_300* gdb-remote: remote or local?
 
 {on-remote}
@@ -13201,12 +14247,247 @@ Continuing.
 
 
 ={============================================================================
+*kt_linux_tool_300* gdb-remote: frontend: cgdb
+
+It is how to change cgdb to use cross tool gdb.
+
+http://www.programdevelop.com/4527764/
+
+The GDB code CGDB calls in the path: /VARIOUS/util/src/fork_util.c by function invoke_debugger in
+
+int invoke_debugger( 
+            const char *path,  
+            int argc, char *argv[],  
+            int *in, int *out,  
+            int choice, char *filename)  
+{ 
+    pid_t pid;     
+    //GDBGDB?arm-linux-gdb 
+    const char * const GDB               = "arm-linux-gdb"; 
+}
+
+./configure --prefix=/usr/local/ --program-suffix=arm-linux
+make
+sudo make install
+
+kit@kit-vb:~/mheg-port$ ls /usr/local/bin/cgdb*
+/usr/local/bin/cgdb  /usr/local/bin/cgdbarm-linux
+kit@kit-vb:~/mheg-port$
+
+http://cgdb.github.io/
+
+
+{config}
+/.cgdb/cgdbrc
+==
+:set winspilt=top_big
+:set arrowstyle=long
+:map <F6> :continue<CR>
+:map <F7> :finish<CR>
+:map <F8> :step<CR>
+:map <F9> :next<CR>
+==
+
+
+={============================================================================
+*kt_linux_tool_300* gdb-remote: frontend: eclipse
+
+Debugging with Eclipse and gdb
+
+I have recently tried to debug some elements with Eclipse. It's quite
+straightforward. 
+
+Steps to start debugging:
+
+1. Right click on a project to be debugged and choose "Debug As" -> "Debug
+Configurations...".
+
+It should create new debug configuration under C/C++ Application branch named
+same as project itself. If it is not created then it is possible to create it
+with "New launch configuration" (button in upper left corner).
+
+2. Select executable
+
+In the Main tab it is required to provide a path to executable file which will
+be launched ("Browse...") so need to know which executable we're going to debug
+(e. g. some test).
+
+3. Set environment
+
+In most cases D-BUS demon is required. In Environment tab need to add variable
+DBUS_SESSION_BUS_ADDRESS set to proper value (assuming that D-BUS daemon is
+    started, e. g.
+    unix:path=/tmp/dbus-7a0FdfCMQ8,guid=02115674e4f1464d822c1e700000230a).
+
+4. Start debugging
+
+Eclipse automatically stops on the first line in main() so there's no need to
+worry about first breakpoint. Depending on settings in Eclipse it might ask for
+switching to Debug perspective.
+
+It is also possible to attach to the running process. In case of test
+application running under Stagecraft some hack is required: need to hold
+application, attach to it and resume it. It's a matter of experience for
+choosing proper point of suspension. Using Lead project as an example I added
+following line at the beginning of LeadAirPlugin::registerBindings() :
+
+for ( bool bDbg = true; bDbg; ) {}
+
+Rebuild:
+
+make Lead.AIR.Client.API-clean
+make Lead.AIR.Client.API
+
+Run application:
+
+$PREFIX/bin/runStagecraft2.sh --forceembeddedvectorfonts
+/home/zinc/Zinc/source/Canvas/elements.trunk/Lead/Lead.ClientApiTests/as3/getTunedChannel/bin/YoureWatching.swf
+
+Now need to attach to stagecraft application as follows:
+
+1. Right click on particular project and choose  Debug As" -> "Debug
+Configurations...".
+
+In C/C++ Attach to Application branch create new configuration (name it whatever
+    you want).
+
+2. Select stagecraft executable: /opt/stagecraft-2.0/bin/stagecraft
+
+3. Start debugging
+
+New window with a list of processes will occur. Just start typing 'stagecraft'
+and select proper process (it should be only one if you're not running any other
+    Stagecraft applications) and choose "OK". In debug perspective take a look
+into stack and find registerBindings() in one of threads (possibly the last
+    one). Double-click it and the hack-line should appear in the source code
+editor. In the upper right corner of Debug perspective there's a set of tabbed
+windows. Select Variables then select 'bDbg' variable by clicking on its 'Value'
+column and change it to false. Now you can step through the code.
+
+This method is very simple but requires rebuilding project whenever holding
+application is required or not. A better approach might be inserting this sort
+of code somewhere:
+
+for ( bool bDbg = getenv("GDB_HOLD_STAGECRAFT"); bDbg; ) {}  
+
+This hack works also with optimized code ('bDbg' variable is set conditionally
+    so compiler cannot optimize any code afterwards). It requires looking into
+  assembly and finding out where the program execution should continue after the
+  hack-loop. Example below is based on a simple few-liner application I've made
+  for this purpose (test.cpp, I've used "KRK_DBG" environment variable):
+
+#include <cstdlib>
+#include <iostream>
+ 
+int main() {
+    for ( bool bDbg = getenv("KRK_DBG"); bDbg; ) {}
+ 
+    std::cout << "haha" << std::endl;
+    return 0;
+}
+ 
+
+And the session:
+
+> g++ -O3 -o test test.cpp
+> export KRK_DBG=1
+> ./test &
+[1] 1258
+
+> gdb -p 1258
+... some GDB introduction stuff ...
+
+(gdb) set disassembly-flavor intel
+
+(gdb) x/2i $pc
+0x8048815 <main+245>:	lea    esi,[esi+0x0]
+0x8048818 <main+248>:	jmp    0x8048815 <main+245>
+
+(gdb) x/20i main
+0x8048720 <main>:	lea    ecx,[esp+0x4]
+0x8048724 <main+4>:	and    esp,0xfffffff0
+0x8048727 <main+7>:	push   DWORD PTR [ecx-0x4]
+0x804872a <main+10>:	push   ebp
+0x804872b <main+11>:	mov    ebp,esp
+0x804872d <main+13>:	push   edi
+0x804872e <main+14>:	push   esi
+0x804872f <main+15>:	push   ebx
+0x8048730 <main+16>:	push   ecx
+0x8048731 <main+17>:	sub    esp,0x118
+0x8048737 <main+23>:	mov    DWORD PTR [esp],0x80488e4
+0x804873e <main+30>:	call   0x80485a8 <getenv@plt>
+0x8048743 <main+35>:	test   eax,eax
+0x8048745 <main+37>:	jne    0x8048815 <main+245>
+0x804874b <main+43>:	mov    DWORD PTR [esp+0x8],0x4
+0x8048753 <main+51>:	mov    DWORD PTR [esp+0x4],0x80488ec
+0x804875b <main+59>:	mov    DWORD PTR [esp],0x8049b20
+0x8048762 <main+66>:	call   0x8048618 <_ZSt16__ostream_insertIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_PKS3_i@plt>
+0x8048767 <main+71>:	mov    eax,ds:0x8049b20
+0x804876c <main+76>:	mov    eax,DWORD PTR [eax-0xc]
+(gdb) set $pc=0x804874b
+(gdb) cont
+Continuing.
+haha
+
+Program exited normally.
+(gdb)
+
+
+Stepping through chain of calls.
+
+Assume this part of code:
+class A {
+   void someMethod() const {
+      // (3)
+ 
+   }
+ 
+} ;
+ 
+const A& getA() {
+   static A a;
+   return a;
+} // (2)
+ 
+void f() {
+   getA().someMethod(); // (1)
+   // (4)
+ 
+}
+
+Stepping in (F5) at point (1) will follow getA() body which might be stepped
+over (F6) but it is important to step in (F5) at point (2) to get into
+A::someMethod() at point (3). It's confusing but stepping over (F6) at point (2)
+will bring the debugger into point (4).
+
+Some observations:
+
+    Keeping 'Variables' tab opened causes gdb to ignore breakpoints or crashes
+    gdb session in some situations.
+
+    Sometimes breakpoints are not re-installed (i. e. after restarting debug
+        session).
+
+    Stepping through chain of calls is not intuitive (see the example above).
+
+All of these might be caused rather by MI bugs (gdb interface).
+
+It is also possible to debug one or more processes simultaneously in Eclipse.
+There is no problem to debug full conversation of Flash application (stagecraft
+    -> Flash -> C++ bindings actually) with service by attaching to stagecraft
+and particular daemon.
+
+Obviously it is also possible to do it with pure GDB (command line) and requires
+starting another instance of GDB what Eclipse as a matter of fact does.
+
+
+
+
+={============================================================================
 *kt_linux_tool_300* gdb-core: setting
 
 {core-pattern}
-The default is:
-
--sh-3.2# cat /proc/sys/kernel/core_pattern 
+$ cat /proc/sys/kernel/core_pattern 
 core
 
 <syntax>
@@ -13395,8 +14676,6 @@ file locks                      (-x) unlimited
 ={============================================================================
 *kt_linux_tool_300* gdb-core: force core
 
-ulimit -c unlimited
-
 // SIGSEGV 11 Core Invalid memory reference 
 // -s signal Specify the signal to send. The signal may be given as a signal
 // name or number.
@@ -13415,134 +14694,6 @@ SIGSEGV(segmentation fault)
         M(SIGQUIT)   |  M(SIGILL)    |  M(SIGTRAP)   |  M(SIGABRT)   | \
         M(SIGFPE)    |  M(SIGSEGV)   |  M(SIGBUS)    |  M(SIGSYS)    | \
         M(SIGXCPU)   |  M(SIGXFSZ)   |  M_SIGEMT                     )
-
-
-={============================================================================
-*kt_linux_tool_300* gdb-core: call trace of debug and release build
-
-1. Seems that core file are the same since the size is the same and show the
-same gdb result when use with both debug and release executable.
-
--rw-------   1 kpark kpark 397312 Sep  1 14:11 7842.core
--rw-------   1 kpark kpark 397312 Sep  1 14:15 7960.core
--rwxr-xr-x   1 kpark kpark  27974 Sep  1 13:40 a-g.out*
--rwxr-xr-x   1 kpark kpark  10350 Sep  1 14:15 a-r.out*
-
-<debug> with -g option
-
-$ gdb a-g.out 7960.core
-...
-Reading symbols from /home/kpark/work/a-g.out...done.
-
-warning: core file may not match specified executable file.
-[New LWP 7960]
-
-warning: Can't read pathname for load map: Input/output error.
-Core was generated by `./a.out'.
-Program terminated with signal 11, Segmentation fault.
-#0  0x0000000000400a1a in main () at tdebug.cpp:16
-16	    cout << "anode's next is " << anode.next->val << endl;;
-
-(gdb) l
-11	
-12	int main()
-13	{
-14	    node anode = { NULL, 0 };
-15	
-16	    cout << "anode's next is " << anode.next->val << endl;;
-17	
-18	    cout << "anode {" << anode.next << ", " << anode.val << "}" << endl;
-19	}
-
-(gdb) bt
-#0  0x0000000000400a1a in main () at tdebug.cpp:16
-(gdb) 
-
-
-<release>
-$ gdb a.out 7960.core
-...
-Reading symbols from /home/kpark/work/a.out...(no debugging symbols found)...done.
-Illegal process-id: 7960.core.
-[New LWP 7960]
-
-warning: Can't read pathname for load map: Input/output error.
-Core was generated by `./a.out'.
-Program terminated with signal 11, Segmentation fault.
-#0  0x0000000000400a1a in main ()
-
-(gdb) l
-No symbol table is loaded.  Use the "file" command.
-
-(gdb) bt
-#0  0x0000000000400a1a in main ()
-
-2. readelf output above are true for debug and release build.
-
-<ex>
-(gdb) bt
-#0  0x779dfd1c in __lll_lock_wait () from /lib/libpthread.so.0
-#1  0x779e75cc in pthread_mutex_lock () from /lib/libpthread.so.0
-#2  0x742993a8 in nickel::system::GstMediaRouter::getPosition() const () from 
-  /opt/zinc-trunk/lib/libNickelSystemGStreamer.so
-
-#3  0x766add10 in boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
-  boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
-  Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> >
-    >::result_type
-    nickel::system::ProxyMediaRouter::deferForwardOrDefault<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
-  boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
-  Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >
-    >(boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
-        boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
-        Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >,
-        nickel::system::returned_future_type<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>,
-        boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>,
-        Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >
-        >::type const&) const () from
-    /opt/zinc-trunk/lib/libNickelSystemProxy.so
-
-#4  0x7667fe8c in nickel::system::ProxyMediaRouter::getPosition() const () 
-    from /opt/zinc-trunk/lib/libNickelSystemProxy.so
-#5  0x0044926c in Zinc::Media::(anonymous namespace)::getPosition_stub
-    (Zinc::Media::MediaRouterAsync&, DBus::Connection::WeakRef&, DBus::CallMessage const&) ()
-#6  0x0045d3ec in Zinc::Media::MediaRouterAsyncToDBus::call_method_async(DBus::CallMessage const&) ()
-#7  0x0045d784 in Zinc::Media::MediaRouterAsyncToDBus::handle_message(DBus::Message const&) ()
-#8  0x004634d0 in zinc::binding::dbus::
-    RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus>::operator()(DBus::Connection&, DBus::Message&) ()
-
-#9  0x00463678 in DBus::detail::AdaptorWrapper<zinc::binding::dbus::
-    RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus> >::call(DBusConnection*, DBusMessage*, void*) ()
-
-#10 0x777d316c in _dbus_object_tree_dispatch_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#11 0x777b4944 in dbus_connection_dispatch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#12 0x778337f8 in DBus::drain_pending_messages(DBus::Connection::Private*) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#13 0x777b3ea8 in _dbus_connection_update_dispatch_status_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#14 0x777adef4 in _dbus_connection_handle_watch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#15 0x777e66dc in dbus_watch_handle () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#16 0x77846484 in DBus::Watch::handle(int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#17 0x77851f6c in DBus::DefaultWatch::do_callback() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#18 0x77852444 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#19 0x77854030 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#20 0x77855704 in DBus::BusDispatcher::run() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#21 0x778bd9bc in zinc::binding::dbus::MainLoop::run() () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
-#22 0x00409674 in main ()
-
-<ex>
-(gdb) bt
-#0  0x76bab5fc in DRV_AUDIO_Init () from /usr/local/lib/libcvms.so.1
-#1  0x76ba6798 in DI_Init () from /usr/local/lib/libcvms.so.1
-#2  0x769348c8 in CV_Media_Initialize () from /usr/local/lib/libcvms.so.1
-#3  0x773ea5f8 in bronze::system::HumaxMediaStartup::HumaxMediaStartup() () from /opt/zinc/lib/libBronzeSystemHumax.so
-#4  0x77454188 in ?? () from /opt/zinc/lib/libBronzeSystemHumax.so
-#5  0x0040bfdc in ?? ()
-#6  0x0040f7f4 in ?? ()
-#7  0x77adb404 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc/lib/libdbus-c++-1.so.0
-#8  0x77adcff0 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc/lib/libdbus-c++-1.so.0
-#9  0x77ade6c4 in DBus::BusDispatcher::run() () from /opt/zinc/lib/libdbus-c++-1.so.0
-#10 0x0040b0d8 in ?? ()
-#11 0x776906d4 in __uClibc_main () from /lib/libc.so.0
-#12 0x0040a008 in __start ()
 
 
 ={============================================================================
@@ -13629,11 +14780,13 @@ NULL. Hence SIGSEGV.
 #0  MHWMemCheckBank (mpool=0x131bc38, size=64, mem_nb_bank=1) at mem_blockpool.c:271
 #1  0x007f09c8 in MHWMemAllocStatic (pool=0x131bc38, size=64) at mem_static.c:63
 #2  0x007e6854 in MEMMAN_API_AllocStaticP (pool=0x131bc38, size=41) at memman_st.c:350
-#3  0x00419328 in DIAG_JAVA_GetJavaString (env=0x2d7056c0, l_java_string=0x2c4b3358, l_byte_array=0x2d705698, 
-    l_len=0x2d70569c) at ../src/natdiag.c:63
+#3  0x00419328 in DIAG_JAVA_GetJavaString (env=0x2d7056c0, 
+        l_java_string=0x2c4b3358, l_byte_array=0x2d705698, 
+        l_len=0x2d70569c) at ../src/natdiag.c:63
 #4  0x004197fc in DIAG_JAVA_GetJavaString (env=0x131bc38) at ../src/natdiag.c:341
-#5  0x0041a0f8 in Java_com_nds_fusion_diagimpl_DiagImpl_natLogInfo (THIS=<value optimized out>, jClass=0x40, jInt=1, 
-    jString=0x0) at sunnatdiag.c:177
+#5  0x0041a0f8 in Java_com_nds_fusion_diagimpl_DiagImpl_natLogInfo (
+        THIS=<value optimized out>, jClass=0x40, jInt=1, 
+        jString=0x0) at sunnatdiag.c:177
 
 [New process 124]
 #0  MHWMemCheckBank (mpool=0x131bc40, size=64, mem_nb_bank=1) at mem_blockpool.c:271
@@ -14015,803 +15168,51 @@ Because sb_getblk is an inline function, it has been expanded by the compiler
 
 
 ={============================================================================
-*kt_linux_tool_303* gdb: .gdbinit
-
-{example-one}
-can define user func that have commands to run
-
-$ more .gdbinit
-set history save on
-set history filename ./.gdb_history
-set output-radix 16
-
-define connect
-    handle SIG32 nostop noprint pass
-    handle SIG33 nostop noprint pass
-#    b CTL_SimpleZapperTestStep
-#    b CTL_ChannelZapping_FullStbTearDown
-#               b readSectionFilterDataAndWriteToFile
-    b sectionFilterTask
-                b CTL_SectionFilter_Engine.c:2126
-                b CTL_SectionFilter_Engine.c:2146
-    directory components/FOSH/FUSIONOS_XTV_TESTS/xtv_test/src/
-                i b
-end
-
-# Helper function to find a task given a PID or the
-# address of a task_struct.
-# The result is set into $t
-define init_task
-   set $t=&init_task
-   printf "task name \"%s\", pid %05d \n", $t->comm, t->pid
-end
-
-# Helper function to find a task given a PID or the
-# address of a task_struct.
-# The result is set into $t
-define find_task
-  # Addresses greater than _end: kernel data...
-  # ...user passed in an address
-  if ((unsigned)$arg0 > (unsigned)&_end)
-    set $t=(struct task_struct *)$arg0
-  else
-    # User entered a numeric PID
-    # Walk the task list to find it
-    set $t=&init_task
-    if (init_task.pid != (unsigned)$arg0)
-      find_next_task $t
-      while (&init_task!=$t && $t->pid != (unsigned)$arg0)
-        find_next_task $t
-      end
-      if ($t == &init_task)
-        printf "Couldn't find task; using init_task\n"
-      end
-    end
-  end
-  printf "Task \"%s\":\n", $t->comm
-end
-
-
-Reads and executes the commands from init file (if any) in the current working directory. This is
-only done if the current directory is different from your home directory. Thus, you can have more
-than one init file, one generic in your home directory, and another, specific to the program you are
-debugging, in the directory where you invoke gdb.
-
-
-{gdbinit-for-c++}
-#
-#   STL GDB evaluators/views/utilities - 1.03
-#
-#   The new GDB commands:
-#       are entirely non instrumental
-#       do not depend on any "inline"(s) - e.g. size(), [], etc
-#       are extremely tolerant to debugger settings
-#
-#   This file should be "included" in .gdbinit as following:
-#   source stl-views.gdb or just paste it into your .gdbinit file
-#
-#   The following STL containers are currently supported:
-#
-#       std::vector<T> -- via pvector command
-#       std::list<T> -- via plist or plist_member command
-#       std::map<T,T> -- via pmap or pmap_member command
-#       std::multimap<T,T> -- via pmap or pmap_member command
-#       std::set<T> -- via pset command
-#       std::multiset<T> -- via pset command
-#       std::deque<T> -- via pdequeue command
-#       std::stack<T> -- via pstack command
-#       std::queue<T> -- via pqueue command
-#       std::priority_queue<T> -- via ppqueue command
-#       std::bitset<n> -- via pbitset command
-#       std::string -- via pstring command
-#       std::widestring -- via pwstring command
-#
-#   The end of this file contains (optional) C++ beautifiers
-#   Make sure your debugger supports $argc
-#
-#   Simple GDB Macros writen by Dan Marinescu (H-PhD) - License GPL
-#   Inspired by intial work of Tom Malnar,
-#     Tony Novac (PhD) / Cornell / Stanford,
-#     Gilad Mishne (PhD) and Many Many Others.
-#   Contact: dan_c_marinescu@yahoo.com (Subject: STL)
-#
-#   Modified to work with g++ 4.3 by Anders Elton
-#   Also added _member functions, that instead of printing the entire class in map, prints a member.
-
-# support for pending breakpoints - you can now set a breakpoint into a shared library before the it was loaded.
-set breakpoint pending on
-
-#
-# std::vector<>
-#
-
-define pvector
-    if $argc == 0
-        help pvector
-    else
-        set $size = $arg0._M_impl._M_finish - $arg0._M_impl._M_start
-        set $capacity = $arg0._M_impl._M_end_of_storage - $arg0._M_impl._M_start
-        set $size_max = $size - 1
-    end
-    if $argc == 1
-        set $i = 0
-        while $i < $size
-            printf "elem[%u]: ", $i
-            p *($arg0._M_impl._M_start + $i)
-            set $i++
-        end
-    end
-    if $argc == 2
-        set $idx = $arg1
-        if $idx < 0 || $idx > $size_max
-            printf "idx1, idx2 are not in acceptable range: [0..%u].\n", $size_max
-        else
-            printf "elem[%u]: ", $idx
-            p *($arg0._M_impl._M_start + $idx)
-        end
-    end
-    if $argc == 3
-      set $start_idx = $arg1
-      set $stop_idx = $arg2
-      if $start_idx > $stop_idx
-        set $tmp_idx = $start_idx
-        set $start_idx = $stop_idx
-        set $stop_idx = $tmp_idx
-      end
-      if $start_idx < 0 || $stop_idx < 0 || $start_idx > $size_max || $stop_idx > $size_max
-        printf "idx1, idx2 are not in acceptable range: [0..%u].\n", $size_max
-      else
-        set $i = $start_idx
-        while $i <= $stop_idx
-            printf "elem[%u]: ", $i
-            p *($arg0._M_impl._M_start + $i)
-            set $i++
-        end
-      end
-    end
-    if $argc > 0
-        printf "Vector size = %u\n", $size
-        printf "Vector capacity = %u\n", $capacity
-        printf "Element "
-        whatis $arg0._M_impl._M_start
-    end
-end
-
-document pvector
-    Prints std::vector<T> information.
-    Syntax: pvector <vector> <idx1> <idx2>
-    Note: idx, idx1 and idx2 must be in acceptable range [0..<vector>.size()-1].
-    Examples:
-    pvector v - Prints vector content, size, capacity and T typedef
-    pvector v 0 - Prints element[idx] from vector
-    pvector v 1 2 - Prints elements in range [idx1..idx2] from vector
-end
-
-#
-# std::list<>
-#
-
-define plist
-    if $argc == 0
-        help plist
-    else
-        set $head = &$arg0._M_impl._M_node
-        set $current = $arg0._M_impl._M_node._M_next
-        set $size = 0
-        while $current != $head
-            if $argc == 2
-                printf "elem[%u]: ", $size
-                p *($arg1*)($current + 1)
-            end
-            if $argc == 3
-                if $size == $arg2
-                    printf "elem[%u]: ", $size
-                    p *($arg1*)($current + 1)
-                end
-            end
-            set $current = $current._M_next
-            set $size++
-        end
-        printf "List size = %u \n", $size
-        if $argc == 1
-            printf "List "
-            whatis $arg0
-            printf "Use plist <variable_name> <element_type> to see the elements in the list.\n"
-        end
-    end
-end
-
-document plist
-    Prints std::list<T> information.
-    Syntax: plist <list> <T> <idx>: Prints list size, if T defined all elements or just element at idx
-    Examples:
-    plist l - prints list size and definition
-    plist l int - prints all elements and list size
-    plist l int 2 - prints the third element in the list (if exists) and list size
-end
-
-define plist_member
-    if $argc == 0
-        help plist_member
-    else
-        set $head = &$arg0._M_impl._M_node
-        set $current = $arg0._M_impl._M_node._M_next
-        set $size = 0
-        while $current != $head
-            if $argc == 3
-                printf "elem[%u]: ", $size
-                p (*($arg1*)($current + 1)).$arg2
-            end
-            if $argc == 4
-                if $size == $arg3
-                    printf "elem[%u]: ", $size
-                    p (*($arg1*)($current + 1)).$arg2
-                end
-            end
-            set $current = $current._M_next
-            set $size++
-        end
-        printf "List size = %u \n", $size
-        if $argc == 1
-            printf "List "
-            whatis $arg0
-            printf "Use plist_member <variable_name> <element_type> <member> to see the elements in the list.\n"
-        end
-    end
-end
-
-document plist_member
-    Prints std::list<T> information.
-    Syntax: plist <list> <T> <idx>: Prints list size, if T defined all elements or just element at idx
-    Examples:
-    plist_member l int member - prints all elements and list size
-    plist_member l int member 2 - prints the third element in the list (if exists) and list size
-end
-
-
-#
-# std::map and std::multimap
-#
-
-define pmap
-    if $argc == 0
-        help pmap
-    else
-        set $tree = $arg0
-        set $i = 0
-        set $node = $tree._M_t._M_impl._M_header._M_left
-        set $end = $tree._M_t._M_impl._M_header
-        set $tree_size = $tree._M_t._M_impl._M_node_count
-        if $argc == 1
-            printf "Map "
-            whatis $tree
-            printf "Use pmap <variable_name> <left_element_type> <right_element_type> to see the elements in the map.\n"
-        end
-        if $argc == 3
-            while $i < $tree_size
-                set $value = (void *)($node + 1)
-                printf "elem[%u].left: ", $i
-                p *($arg1*)$value
-                set $value = $value + sizeof($arg1)
-                printf "elem[%u].right: ", $i
-                p *($arg2*)$value
-                if $node._M_right != 0
-                    set $node = $node._M_right
-                    while $node._M_left != 0
-                        set $node = $node._M_left
-                    end
-                else
-                    set $tmp_node = $node._M_parent
-                    while $node == $tmp_node._M_right
-                        set $node = $tmp_node
-                        set $tmp_node = $tmp_node._M_parent
-                    end
-                    if $node._M_right != $tmp_node
-                        set $node = $tmp_node
-                    end
-                end
-                set $i++
-            end
-        end
-        if $argc == 4
-            set $idx = $arg3
-            set $ElementsFound = 0
-            while $i < $tree_size
-                set $value = (void *)($node + 1)
-                if *($arg1*)$value == $idx
-                    printf "elem[%u].left: ", $i
-                    p *($arg1*)$value
-                    set $value = $value + sizeof($arg1)
-                    printf "elem[%u].right: ", $i
-                    p *($arg2*)$value
-                    set $ElementsFound++
-                end
-                if $node._M_right != 0
-                    set $node = $node._M_right
-                    while $node._M_left != 0
-                        set $node = $node._M_left
-                    end
-                else
-                    set $tmp_node = $node._M_parent
-                    while $node == $tmp_node._M_right
-                        set $node = $tmp_node
-                        set $tmp_node = $tmp_node._M_parent
-                    end
-                    if $node._M_right != $tmp_node
-                        set $node = $tmp_node
-                    end
-                end
-                set $i++
-            end
-            printf "Number of elements found = %u\n", $ElementsFound
-        end
-        if $argc == 5
-            set $idx1 = $arg3
-            set $idx2 = $arg4
-            set $ElementsFound = 0
-            while $i < $tree_size
-                set $value = (void *)($node + 1)
-                set $valueLeft = *($arg1*)$value
-                set $valueRight = *($arg2*)($value + sizeof($arg1))
-                if $valueLeft == $idx1 && $valueRight == $idx2
-                    printf "elem[%u].left: ", $i
-                    p $valueLeft
-                    printf "elem[%u].right: ", $i
-                    p $valueRight
-                    set $ElementsFound++
-                end
-                if $node._M_right != 0
-                    set $node = $node._M_right
-                    while $node._M_left != 0
-                        set $node = $node._M_left
-                    end
-                else
-                    set $tmp_node = $node._M_parent
-                    while $node == $tmp_node._M_right
-                        set $node = $tmp_node
-                        set $tmp_node = $tmp_node._M_parent
-                    end
-                    if $node._M_right != $tmp_node
-                        set $node = $tmp_node
-                    end
-                end
-                set $i++
-            end
-            printf "Number of elements found = %u\n", $ElementsFound
-        end
-        printf "Map size = %u\n", $tree_size
-    end
-end
-
-document pmap
-    Prints std::map<TLeft and TRight> or std::multimap<TLeft and TRight> information. Works for std::multimap as well.
-    Syntax: pmap <map> <TtypeLeft> <TypeRight> <valLeft> <valRight>: Prints map size, if T defined all elements or just element(s) with val(s)
-    Examples:
-    pmap m - prints map size and definition
-    pmap m int int - prints all elements and map size
-    pmap m int int 20 - prints the element(s) with left-value = 20 (if any) and map size
-    pmap m int int 20 200 - prints the element(s) with left-value = 20 and right-value = 200 (if any) and map size
-end
-
-
-define pmap_member
-    if $argc == 0
-        help pmap_member
-    else
-        set $tree = $arg0
-        set $i = 0
-        set $node = $tree._M_t._M_impl._M_header._M_left
-        set $end = $tree._M_t._M_impl._M_header
-        set $tree_size = $tree._M_t._M_impl._M_node_count
-        if $argc == 1
-            printf "Map "
-            whatis $tree
-            printf "Use pmap <variable_name> <left_element_type> <right_element_type> to see the elements in the map.\n"
-        end
-        if $argc == 5
-            while $i < $tree_size
-                set $value = (void *)($node + 1)
-                printf "elem[%u].left: ", $i
-                p (*($arg1*)$value).$arg2
-                set $value = $value + sizeof($arg1)
-                printf "elem[%u].right: ", $i
-                p (*($arg3*)$value).$arg4
-                if $node._M_right != 0
-                    set $node = $node._M_right
-                    while $node._M_left != 0
-                        set $node = $node._M_left
-                    end
-                else
-                    set $tmp_node = $node._M_parent
-                    while $node == $tmp_node._M_right
-                        set $node = $tmp_node
-                        set $tmp_node = $tmp_node._M_parent
-                    end
-                    if $node._M_right != $tmp_node
-                        set $node = $tmp_node
-                    end
-                end
-                set $i++
-            end
-        end
-        if $argc == 6
-            set $idx = $arg5
-            set $ElementsFound = 0
-            while $i < $tree_size
-                set $value = (void *)($node + 1)
-                if *($arg1*)$value == $idx
-                    printf "elem[%u].left: ", $i
-                    p (*($arg1*)$value).$arg2
-                    set $value = $value + sizeof($arg1)
-                    printf "elem[%u].right: ", $i
-                    p (*($arg3*)$value).$arg4
-                    set $ElementsFound++
-                end
-                if $node._M_right != 0
-                    set $node = $node._M_right
-                    while $node._M_left != 0
-                        set $node = $node._M_left
-                    end
-                else
-                    set $tmp_node = $node._M_parent
-                    while $node == $tmp_node._M_right
-                        set $node = $tmp_node
-                        set $tmp_node = $tmp_node._M_parent
-                    end
-                    if $node._M_right != $tmp_node
-                        set $node = $tmp_node
-                    end
-                end
-                set $i++
-            end
-            printf "Number of elements found = %u\n", $ElementsFound
-        end
-        printf "Map size = %u\n", $tree_size
-    end
-end
-
-document pmap_member
-    Prints std::map<TLeft and TRight> or std::multimap<TLeft and TRight> information. Works for std::multimap as well.
-    Syntax: pmap <map> <TtypeLeft> <TypeRight> <valLeft> <valRight>: Prints map size, if T defined all elements or just element(s) with val(s)
-    Examples:
-    pmap_member m class1 member1 class2 member2 - prints class1.member1 : class2.member2
-    pmap_member m class1 member1 class2 member2 lvalue - prints class1.member1 : class2.member2 where class1 == lvalue
-end
-
-
-#
-# std::set and std::multiset
-#
-
-define pset
-    if $argc == 0
-        help pset
-    else
-        set $tree = $arg0
-        set $i = 0
-        set $node = $tree._M_t._M_impl._M_header._M_left
-        set $end = $tree._M_t._M_impl._M_header
-        set $tree_size = $tree._M_t._M_impl._M_node_count
-        if $argc == 1
-            printf "Set "
-            whatis $tree
-            printf "Use pset <variable_name> <element_type> to see the elements in the set.\n"
-        end
-        if $argc == 2
-            while $i < $tree_size
-                set $value = (void *)($node + 1)
-                printf "elem[%u]: ", $i
-                p *($arg1*)$value
-                if $node._M_right != 0
-                    set $node = $node._M_right
-                    while $node._M_left != 0
-                        set $node = $node._M_left
-                    end
-                else
-                    set $tmp_node = $node._M_parent
-                    while $node == $tmp_node._M_right
-                        set $node = $tmp_node
-                        set $tmp_node = $tmp_node._M_parent
-                    end
-                    if $node._M_right != $tmp_node
-                        set $node = $tmp_node
-                    end
-                end
-                set $i++
-            end
-        end
-        if $argc == 3
-            set $idx = $arg2
-            set $ElementsFound = 0
-            while $i < $tree_size
-                set $value = (void *)($node + 1)
-                if *($arg1*)$value == $idx
-                    printf "elem[%u]: ", $i
-                    p *($arg1*)$value
-                    set $ElementsFound++
-                end
-                if $node._M_right != 0
-                    set $node = $node._M_right
-                    while $node._M_left != 0
-                        set $node = $node._M_left
-                    end
-                else
-                    set $tmp_node = $node._M_parent
-                    while $node == $tmp_node._M_right
-                        set $node = $tmp_node
-                        set $tmp_node = $tmp_node._M_parent
-                    end
-                    if $node._M_right != $tmp_node
-                        set $node = $tmp_node
-                    end
-                end
-                set $i++
-            end
-            printf "Number of elements found = %u\n", $ElementsFound
-        end
-        printf "Set size = %u\n", $tree_size
-    end
-end
-
-document pset
-    Prints std::set<T> or std::multiset<T> information. Works for std::multiset as well.
-    Syntax: pset <set> <T> <val>: Prints set size, if T defined all elements or just element(s) having val
-    Examples:
-    pset s - prints set size and definition
-    pset s int - prints all elements and the size of s
-    pset s int 20 - prints the element(s) with value = 20 (if any) and the size of s
-end
-
-
-
-#
-# std::dequeue
-#
-
-define pdequeue
-    if $argc == 0
-        help pdequeue
-    else
-        set $size = 0
-        set $start_cur = $arg0._M_impl._M_start._M_cur
-        set $start_last = $arg0._M_impl._M_start._M_last
-        set $start_stop = $start_last
-        while $start_cur != $start_stop
-            p *$start_cur
-            set $start_cur++
-            set $size++
-        end
-        set $finish_first = $arg0._M_impl._M_finish._M_first
-        set $finish_cur = $arg0._M_impl._M_finish._M_cur
-        set $finish_last = $arg0._M_impl._M_finish._M_last
-        if $finish_cur < $finish_last
-            set $finish_stop = $finish_cur
-        else
-            set $finish_stop = $finish_last
-        end
-        while $finish_first != $finish_stop
-            p *$finish_first
-            set $finish_first++
-            set $size++
-        end
-        printf "Dequeue size = %u\n", $size
-    end
-end
-
-document pdequeue
-    Prints std::dequeue<T> information.
-    Syntax: pdequeue <dequeue>: Prints dequeue size, if T defined all elements
-    Deque elements are listed "left to right" (left-most stands for front and right-most stands for back)
-    Example:
-    pdequeue d - prints all elements and size of d
-end
-
-
-
-#
-# std::stack
-#
-
-define pstack
-    if $argc == 0
-        help pstack
-    else
-        set $start_cur = $arg0.c._M_impl._M_start._M_cur
-        set $finish_cur = $arg0.c._M_impl._M_finish._M_cur
-        set $size = $finish_cur - $start_cur
-        set $i = $size - 1
-        while $i >= 0
-            p *($start_cur + $i)
-            set $i--
-        end
-        printf "Stack size = %u\n", $size
-    end
-end
-
-document pstack
-    Prints std::stack<T> information.
-    Syntax: pstack <stack>: Prints all elements and size of the stack
-    Stack elements are listed "top to buttom" (top-most element is the first to come on pop)
-    Example:
-    pstack s - prints all elements and the size of s
-end
-
-
-
-#
-# std::queue
-#
-
-define pqueue
-    if $argc == 0
-        help pqueue
-    else
-        set $start_cur = $arg0.c._M_impl._M_start._M_cur
-        set $finish_cur = $arg0.c._M_impl._M_finish._M_cur
-        set $size = $finish_cur - $start_cur
-        set $i = 0
-        while $i < $size
-            p *($start_cur + $i)
-            set $i++
-        end
-        printf "Queue size = %u\n", $size
-    end
-end
-
-document pqueue
-    Prints std::queue<T> information.
-    Syntax: pqueue <queue>: Prints all elements and the size of the queue
-    Queue elements are listed "top to bottom" (top-most element is the first to come on pop)
-    Example:
-    pqueue q - prints all elements and the size of q
-end
-
-
-
-#
-# std::priority_queue
-#
-
-define ppqueue
-    if $argc == 0
-        help ppqueue
-    else
-        set $size = $arg0.c._M_impl._M_finish - $arg0.c._M_impl._M_start
-        set $capacity = $arg0.c._M_impl._M_end_of_storage - $arg0.c._M_impl._M_start
-        set $i = $size - 1
-        while $i >= 0
-            p *($arg0.c._M_impl._M_start + $i)
-            set $i--
-        end
-        printf "Priority queue size = %u\n", $size
-        printf "Priority queue capacity = %u\n", $capacity
-    end
-end
-
-document ppqueue
-    Prints std::priority_queue<T> information.
-    Syntax: ppqueue <priority_queue>: Prints all elements, size and capacity of the priority_queue
-    Priority_queue elements are listed "top to buttom" (top-most element is the first to come on pop)
-    Example:
-    ppqueue pq - prints all elements, size and capacity of pq
-end
-
-
-
-#
-# std::bitset
-#
-
-define pbitset
-    if $argc == 0
-        help pbitset
-    else
-        p /t $arg0._M_w
-    end
-end
-
-document pbitset
-    Prints std::bitset<n> information.
-    Syntax: pbitset <bitset>: Prints all bits in bitset
-    Example:
-    pbitset b - prints all bits in b
-end
-
-
-
-#
-# std::string
-#
-
-define pstring
-    if $argc == 0
-        help pstring
-    else
-        printf "String \t\t\t= \"%s\"\n", $arg0._M_data()
-        printf "String size/length \t= %u\n", $arg0._M_rep()._M_length
-        printf "String capacity \t= %u\n", $arg0._M_rep()._M_capacity
-        printf "String ref-count \t= %d\n", $arg0._M_rep()._M_refcount
-    end
-end
-
-document pstring
-    Prints std::string information.
-    Syntax: pstring <string>
-    Example:
-    pstring s - Prints content, size/length, capacity and ref-count of string s
-end
-
-#
-# std::wstring
-#
-
-define pwstring
-    if $argc == 0
-        help pwstring
-    else
-        call printf("WString \t\t= \"%ls\"\n", $arg0._M_data())
-        printf "WString size/length \t= %u\n", $arg0._M_rep()._M_length
-        printf "WString capacity \t= %u\n", $arg0._M_rep()._M_capacity
-        printf "WString ref-count \t= %d\n", $arg0._M_rep()._M_refcount
-    end
-end
-
-document pwstring
-    Prints std::wstring information.
-    Syntax: pwstring <wstring>
-    Example:
-    pwstring s - Prints content, size/length, capacity and ref-count of wstring s
-end
-
-#
-# C++ related beautifiers (optional)
-#
-
-set print pretty on
-set print object on
-set print static-members on
-set print vtbl on
-set print demangle on
-set demangle-style gnu-v3
-set print sevenbit-strings off
-
-set history filename ~/.gdb_history
-set history save
-
-# finally stop the silly "A debugging session is active." - question ... just quit both.
-set confirm off
-
-
-={============================================================================
-*kt_linux_tool_307* gdb: commands for stepping
-
-{gdb-next-gdb-step}
-n (next) to advance execution to the next line of the current function.
-
-s (step) instead of next. step goes to the next line to be executed in any subroutine.
-It shows a summary of the stack. can use the backtrace command (which can also be spelled bt), to
-see where we are in the stack as a whole: the backtrace command displays a stack frame for each
-active subroutine.
-
-note. Warning: If you use the step command while control is within a function that was compiled
-without debugging information, execution proceeds until control reaches a function that does have
-debugging information. Likewise, it will not step into a function which is compiled without
-debugging information. To step through functions without debugging information, use the stepi
-command, described below.
+*kt_linux_tool_300* gdb-step: stepping
+
+{next-and-step}
+n (next) 
+    to advance execution to the next line of the current function.
+
+s (step) 
+    instead of next. step goes to the next line to be executed in any
+    subroutine.  It shows a summary of the stack. can use the backtrace command
+    (which can also be spelled bt), to see where we are in the stack as a whole:
+    the backtrace command displays a stack frame for each active subroutine.
+
+note 
+Warning: If you use the step command while control is within a function that was
+compiled without debugging information, execution proceeds until control reaches
+a function that does have debugging information. Likewise, it will 'not' step
+into a function which is compiled without debugging information.  To step
+through functions without debugging information, use the stepi command,
+        described below.
 
 To step for a single assembly instruction, use the (gdb) stepi
 
-Also, the step command 'only' enters a function if there is line number information for the
-function. Otherwise it acts like the next command.
+Also, the step command 'only' enters a function if there is line number
+information for the function. Otherwise it acts like the next command.
+
 
 {gdb-return-gdb-finish}
-To resume execution at a different place, you can use return (see Section 17.4 [Returning from a
-Function], page 221) to go back to the calling function; or jump (see Section 17.2 [Continuing
-at a Different Address], page 220) to go to an arbitrary location in your program.
+To resume execution at a different place, you can use return (see Section 17.4
+        [Returning from a Function], page 221) to go back to the calling
+function; or jump (see Section 17.2 [Continuing at a Different Address], page
+        220) to go to an arbitrary location in your program.
 
-The finish Continue running until just after function in the selected stack frame returns.  Print
-the returned value (if any). This command can be abbreviated as fin.  Contrast this with the return
-command (see Section 17.4 [Returning from a Function], page 221). Q: this is only difference?
+The finish Continue running until just after function in the selected stack
+frame returns. Print the returned value (if any). This command can be
+abbreviated as fin.  Contrast this with the return command (see Section 17.4
+        [Returning from a Function], page 221). Q: this is only difference?
+
+
+{gdb-advance}
+To continue to a specific location, use the 
+(gdb) advance funcname
+
+
+={============================================================================
+*kt_linux_tool_300* gdb-print: gdb-set
 
 {gdb-print}
 p (print) to see their values.
@@ -14822,9 +15223,9 @@ $3 = 9
 $4 = 7
 
 {gdb-set}
-can 'set' them to better values using the p command, since it can print the value of any
-expressionâand that expression can include subroutine calls and assignments. set new value and
-continue to see if it fixes the bug.
+can 'set' them to better values using the p command, since it can print the
+value of any expression that expression can include subroutine calls and
+assignments. set new value and continue to see if it fixes the bug.
 
 (gdb) p len lquote=strlen(lquote)
 $5 = 7
@@ -14832,18 +15233,6 @@ $5 = 7
 $6 = 9
 (gdb) c
 Continuing.
-
-
-{gdb-advance}
-To continue to a specific location, use the 
-(gdb) advance funcname
-
-
-{?}
-(gdb) run -v all
-(gdb) sectionFilterTable[sfIdx]
-(gdb) directory components/FOSH/FUSIONOS_XTV_TESTS/xtv_test/src/
-(gdb) directory components/FOSH/FUSIONOS_TEST_SHARED/DSL/src/ (SDS_SectionFilter.c)
 
 
 ={============================================================================
@@ -15137,7 +15526,6 @@ set breakpoint condition-evaluation auto
 ={============================================================================
 *kt_linux_tool_309* gdb-break: conditional ex
 
-
 There are times when simply breaking on every call to a function isn't what you
 want. Sometimes you want to be more 'selective'. For example, with the problem
 I'm debugging right now, I'm interested in when close() is called on a
@@ -15156,8 +15544,8 @@ Reading the Function Parameters
 
 I found a way to do this, although it is machine specific (intel in this case),
 and requires knowledge of the machine stack layout. I found a reasonable
-  reference for Intel here:
-  http://www.tenouk.com/Bufferoverflowc/Bufferoverflow3.html
+    reference for Intel here:
+    http://www.tenouk.com/Bufferoverflowc/Bufferoverflow3.html
 
 You don't need to understand every last detail. It's enough to remember that the
 parameters can be found at a 2-word positive offset from $ebp. So in the 32-bit
@@ -15195,7 +15583,7 @@ b foo if (*(int*)($ebp+8)==12345 && *(int*)($ebp+12)==5678)
 
 
 ={============================================================================
-*kt_linux_tool_309* gdb-break: info, get you quickly where
+*kt_linux_tool_309* gdb-break: info. get you quickly where
 
 info breakpoints [n...]
 info break [n...]
@@ -15208,9 +15596,11 @@ following columns are printed:
 
 note: tip
 
-info break displays a count of the number of times the breakpoint has been hit.
-This is especially useful in conjunction with the ignore command. You can ignore
-a large number of breakpoint hits, look at the breakpoint info to see how many
+(gdb) info break 
+
+displays a count of the number of times the breakpoint has been hit. This is
+especially useful in conjunction with the `ignore` command. You can ignore a
+large number of breakpoint hits, look at the breakpoint info to see how many
 times the breakpoint was hit, and then run again, ignoring one less than that
 number. This will get you 'quickly' to the last hit of that breakpoint.
 
@@ -15235,11 +15625,13 @@ program. Examples of this situation are:
 In all those cases, gdb will insert a breakpoint at all the relevant locations.
 
 A breakpoint with multiple 'locations' is displayed in the breakpoint table
-using several rows—one header row, followed by one row for each breakpoint
-location.  The header row has ‘<MULTIPLE>’ in the address column. The rows for
-individual locations contain the actual addresses for locations, and show the
-functions to which those locations belong. The number column for a location is
-of the form breakpoint-number.'location'-number.
+using several rows: 
+
+one header row, followed by one row for each breakpoint location.  The header
+row has ‘<MULTIPLE>’ in the address column. The rows for individual locations
+contain the actual addresses for locations, and show the functions to which
+those locations belong. The number column for a location is of the form
+breakpoint-number.'location'-number.
 
 For example:
 
@@ -15252,12 +15644,49 @@ For example:
 
 Each location can be individually enabled or disabled by passing
 breakpoint-number.location-number as argument to the enable and disable
-commands. Note that you 'cannot' delete the individual locations from the list,
-you can only delete the entire list of locations that belong to their parent
-  breakpoint (with the delete num command, where num is the number of the parent
-      breakpoint, 1 in the above example). Disabling or enabling the parent
-  breakpoint (see Disabling) affects all of the locations that belong to that
-  breakpoint. 
+commands. 
+
+Note that you 'cannot' delete the individual locations from the list, you can
+only delete the entire list of locations that belong to their parent breakpoint
+(with the delete num command, where num is the number of the parent breakpoint,
+ 1 in the above example). Disabling or enabling the parent breakpoint (see
+     Disabling) affects all of the locations that belong to that breakpoint. 
+
+
+={============================================================================
+*kt_linux_tool_309* gdb-break: ignore
+
+5.1.6 Break Conditions
+
+A special case of a breakpoint condition is to stop 'only' when the breakpoint
+has been reached a certain number of times. This is so useful that there is a
+special way to do it, using the ignore count of the breakpoint. 
+
+Every breakpoint has an ignore count, which is an integer. Most of the time, the
+ignore count is zero, and therefore has no effect. But if your program reaches a
+breakpoint whose ignore count is positive, then instead of stopping, it just
+decrements the ignore count by one and continues. As a result, if the ignore
+count value is n, the breakpoint does not stop the next n times your program
+reaches it.
+
+ignore bnum count
+
+Set the ignore count of breakpoint number bnum to count. The next count times
+the breakpoint is reached, your program's execution does not stop; other than to
+decrement the ignore count, gdb takes no action. 
+
+To make the breakpoint stop the next time it is reached, specify a count of
+zero. When you use `continue` to resume execution of your program from a
+breakpoint, you can specify an ignore count directly as an argument to continue,
+rather than using ignore. See Section 5.2 [Continuing and Stepping], page 68.
+
+If a breakpoint has a positive ignore count and a condition, the condition is
+not checked. Once the ignore count reaches zero, gdb resumes checking the
+condition. You could achieve the effect of the ignore count with a condition
+such as ‘$foo-- <= 0’ using a debugger convenience variable that is decremented
+each time. See Section 10.11 [Convenience Variables], page 132.
+
+Ignore counts apply to breakpoints, watchpoints, and catchpoints.
 
 
 ={============================================================================
@@ -15666,7 +16095,8 @@ clear
         Delete any breakpoints set at entry to the named function.
     clear linenum
     clear filename:linenum
-        Delete any breakpoints set at or within the code of the specified linenum of the specified filename. 
+        Delete any breakpoints set at or within the code of the specified
+        linenum of the specified filename. 
 
 
 delete [breakpoints] [range...]
@@ -15695,15 +16125,16 @@ A breakpoint, watchpoint, or catchpoint can have any of 'four' different
 
     Enabled 'once'. The breakpoint stops your program, but then becomes disabled.
 
-    Enabled for a 'count'. The breakpoint stops your program for the next N times,
-then becomes disabled.
+    Enabled for a 'count'. The breakpoint stops your program for the next N
+    times, then becomes disabled.
 
     Enabled for 'deletion'. The breakpoint stops your program, but immediately
     after it does so it is deleted permanently. A breakpoint set with the tbreak
     command starts out in this state. 
 
 
-You can use the following commands to enable or disable breakpoints, watchpoints, and catchpoints:
+You can use the following commands to enable or disable breakpoints,
+watchpoints, and catchpoints:
 
 disable [breakpoints] [range...]
     Disable the specified breakpoints—or all breakpoints, if none are listed. A
@@ -15785,9 +16216,8 @@ To save breakpoint definitions to a file use the save breakpoints command.
 save breakpoints [filename]
 
 
-
 ={============================================================================
-*kt_linux_tool_310* gdb-dprintf
+*kt_linux_tool_300* gdb-break: dprintf
 
 The dynamic printf command dprintf 'combines' a breakpoint with formatted
 printing of your program's data to give you the effect of inserting printf calls
@@ -15797,7 +16227,7 @@ into your program on-the-fly, 'without' having to recompile it.
 In its most basic form, the output goes to the GDB console. However, you can set
 the variable dprintf-style for alternate handling. For instance, you can ask to
 format the output by calling 'your' program's printf function. This has the
-advantage that the characters go to the program's output device, so they can
+advantage that the characters go to the program's 'output' device, so they can
 recorded in redirects to files and so forth.
 
 As an example, if you wanted dprintf output to go to a logfile that is a
@@ -15849,375 +16279,6 @@ Set a channel for dprintf. If set to a non-empty value, gdb will evaluate it as
 an expression and pass the result as a <first-argument> to the dprintf-function,
 in the manner of fprintf and similar functions. Otherwise, the dprintf format
   string will be the first argument, in the manner of printf.
-
-
-={============================================================================
-*kt_linux_tool_311* gdb: examining running
-
-
-{gdb-print}
-(gdb) printf "%d\n", i
-40
-(gdb) printf "%08X\n", i
-00000028
-
-print i
-Print the value of variable i.
-
-print *p
-Print the contents of memory pointed to by p, where p is a pointer variable.
-
-(gdb) whatis pszSection
-type = uint32_t *
-(gdb) print *pszSection
-
-print x.field
-Check the different members of a structure.
-
-print x
-Check all the members of a structure, assuming x is a structure.
-
-print y-field
-y is a pointer to a structure.
-
-print array[i]
-Print the i'th element of array.
-
-print array
-Print all the elements of array.
-
-(gdb) print /x block1->magic
-$5 = 0xabeaa5b3
-
-(gdb) print /x block1 
-$9 = 0x1150f4c
-
-(gdb) print /x *block1
-$8 = {magic = 0xabeaa5b3, size = 0x28, line = 0x0, owner = 0x0, header = 0x21, data = {free = {previous = 0x8, next = 0x115106c}, 
-    userData = {0x0}}}
-
-# db_contexts_array is a global var
-(gdb) p db_contexts_array
-(gdb) p db_contexts_array[-1]
-
-
-<gdb-disp>
-to inspect over the course of the run
-
-(gdb) [disp]lay var
-(gdb) [undisp] disp_num
-(gdb) info disp 	" to list disps
-
-
-
-={============================================================================
-*kt_linux_tool_400* gdb: remote debugging
-
-<arguments>
-20.3.1.4 Other Command-Line Arguments for gdbserver
-
---debug
-
-Instruct gdbserver to display extra status information about the debugging process. This option is
-intended for gdbserver development and for bug reports to the developers.
-
---remote-debug
-
-Instruct gdbserver to display remote protocol debug output. This option is intended for gdbserver
-development and for bug reports to the developers.
-
-<symbols>
-First make sure you have the necessary symbol files. Load symbols for your application using the
-file command before you connect. Use set sysroot to locate target libraries (unless your GDB was
-compiled with the correct sysroot using --with-sysroot). Q: <sysroot>?
-
-The symbol file and target libraries must exactly match the executable and libraries on the target
-with one exception: the files on the host system should not be stripped, even if the files on the
-target system are. Mismatched or missing files will lead to confusing results during debugging. On
-GNU/Linux targets, mismatched or missing files may also prevent gdbserver from debugging
-multi-threaded programs. 
-
-
-{gdb-client}
-target remote host:port
-
-monitor cmd
-
-This command allows you to send arbitrary commands directly to the remote monitor. Since GDB doesn't
-care about the commands it sends like this, this command is the way to extend GDBâyou can add new
-commands that only the external monitor will understand and implement. 
-	
-
-20.3.3 Monitor Commands for gdbserver
-
-During a GDB session using gdbserver, you can use the monitor command to send special requests to
-gdbserver. Here are the available commands.
-
-monitor help
-List the available monitor commands.
-
-monitor set debug 0
-monitor set debug 1
-Disable or enable general debugging messages.
-
-monitor set remote-debug 0
-monitor set remote-debug 1
-Disable or enable specific debugging messages associated with the remote protocol (see Remote
-Protocol).  
-
-monitor set debug-format option1[,option2,...]
-
-Specify additional text to add to debugging messages. Possible options are:
-
-none Turn off all extra information in debugging output. 
-
-all Turn on all extra information in debugging output. 
-
-timestamps Include a timestamp in each line of debugging output. 
-
-Options are processed in order. Thus, for example, if none appears last then no additional
-information is added to debugging output. 
-
-monitor exit
-
-Tell gdbserver to exit immediately. This command should be followed by disconnect to close the
-debugging session. gdbserver will detach from any attached processes and kill any processes it
-created. Use monitor exit to terminate gdbserver at the end of a multi-process mode debug session.
-
-
-={============================================================================
-*kt_linux_tool_300* gdb: frontend tool: cgdb
-
-It is how to change cgdb to use cross tool gdb.
-
-http://www.programdevelop.com/4527764/
-
-The GDB code CGDB calls in the path: /VARIOUS/util/src/fork_util.c by function invoke_debugger in
-
-int invoke_debugger( 
-            const char *path,  
-            int argc, char *argv[],  
-            int *in, int *out,  
-            int choice, char *filename)  
-{ 
-    pid_t pid;     
-    //GDBGDB?arm-linux-gdb 
-    const char * const GDB               = "arm-linux-gdb"; 
-}
-
-./configure --prefix=/usr/local/ --program-suffix=arm-linux
-make
-sudo make install
-
-kit@kit-vb:~/mheg-port$ ls /usr/local/bin/cgdb*
-/usr/local/bin/cgdb  /usr/local/bin/cgdbarm-linux
-kit@kit-vb:~/mheg-port$
-
-http://cgdb.github.io/
-
-
-{config}
-/.cgdb/cgdbrc
-==
-:set winspilt=top_big
-:set arrowstyle=long
-:map <F6> :continue<CR>
-:map <F7> :finish<CR>
-:map <F8> :step<CR>
-:map <F9> :next<CR>
-==
-
-
-={============================================================================
-*kt_linux_tool_251* gdb-fend: eclipse tip
-
-Debugging with Eclipse and gdb
-
-I have recently tried to debug some elements with Eclipse. It's quite
-straightforward. 
-
-Steps to start debugging:
-
-1. Right click on a project to be debugged and choose "Debug As" -> "Debug
-Configurations...".
-
-It should create new debug configuration under C/C++ Application branch named
-same as project itself. If it is not created then it is possible to create it
-with "New launch configuration" (button in upper left corner).
-
-2. Select executable
-
-In the Main tab it is required to provide a path to executable file which will
-be launched ("Browse...") so need to know which executable we're going to debug
-(e. g. some test).
-
-3. Set environment
-
-In most cases D-BUS demon is required. In Environment tab need to add variable
-DBUS_SESSION_BUS_ADDRESS set to proper value (assuming that D-BUS daemon is
-    started, e. g.
-    unix:path=/tmp/dbus-7a0FdfCMQ8,guid=02115674e4f1464d822c1e700000230a).
-
-4. Start debugging
-
-Eclipse automatically stops on the first line in main() so there's no need to
-worry about first breakpoint. Depending on settings in Eclipse it might ask for
-switching to Debug perspective.
-
-It is also possible to attach to the running process. In case of test
-application running under Stagecraft some hack is required: need to hold
-application, attach to it and resume it. It's a matter of experience for
-choosing proper point of suspension. Using Lead project as an example I added
-following line at the beginning of LeadAirPlugin::registerBindings() :
-
-for ( bool bDbg = true; bDbg; ) {}
-
-Rebuild:
-
-make Lead.AIR.Client.API-clean
-make Lead.AIR.Client.API
-
-Run application:
-
-$PREFIX/bin/runStagecraft2.sh --forceembeddedvectorfonts
-/home/zinc/Zinc/source/Canvas/elements.trunk/Lead/Lead.ClientApiTests/as3/getTunedChannel/bin/YoureWatching.swf
-
-Now need to attach to stagecraft application as follows:
-
-1. Right click on particular project and choose  Debug As" -> "Debug
-Configurations...".
-
-In C/C++ Attach to Application branch create new configuration (name it whatever
-    you want).
-
-2. Select stagecraft executable: /opt/stagecraft-2.0/bin/stagecraft
-
-3. Start debugging
-
-New window with a list of processes will occur. Just start typing 'stagecraft'
-and select proper process (it should be only one if you're not running any other
-    Stagecraft applications) and choose "OK". In debug perspective take a look
-into stack and find registerBindings() in one of threads (possibly the last
-    one). Double-click it and the hack-line should appear in the source code
-editor. In the upper right corner of Debug perspective there's a set of tabbed
-windows. Select Variables then select 'bDbg' variable by clicking on its 'Value'
-column and change it to false. Now you can step through the code.
-
-This method is very simple but requires rebuilding project whenever holding
-application is required or not. A better approach might be inserting this sort
-of code somewhere:
-
-for ( bool bDbg = getenv("GDB_HOLD_STAGECRAFT"); bDbg; ) {}  
-
-This hack works also with optimized code ('bDbg' variable is set conditionally
-    so compiler cannot optimize any code afterwards). It requires looking into
-  assembly and finding out where the program execution should continue after the
-  hack-loop. Example below is based on a simple few-liner application I've made
-  for this purpose (test.cpp, I've used "KRK_DBG" environment variable):
-
-#include <cstdlib>
-#include <iostream>
- 
-int main() {
-    for ( bool bDbg = getenv("KRK_DBG"); bDbg; ) {}
- 
-    std::cout << "haha" << std::endl;
-    return 0;
-}
- 
-
-And the session:
-
-> g++ -O3 -o test test.cpp
-> export KRK_DBG=1
-> ./test &
-[1] 1258
-
-> gdb -p 1258
-... some GDB introduction stuff ...
-
-(gdb) set disassembly-flavor intel
-
-(gdb) x/2i $pc
-0x8048815 <main+245>:	lea    esi,[esi+0x0]
-0x8048818 <main+248>:	jmp    0x8048815 <main+245>
-
-(gdb) x/20i main
-0x8048720 <main>:	lea    ecx,[esp+0x4]
-0x8048724 <main+4>:	and    esp,0xfffffff0
-0x8048727 <main+7>:	push   DWORD PTR [ecx-0x4]
-0x804872a <main+10>:	push   ebp
-0x804872b <main+11>:	mov    ebp,esp
-0x804872d <main+13>:	push   edi
-0x804872e <main+14>:	push   esi
-0x804872f <main+15>:	push   ebx
-0x8048730 <main+16>:	push   ecx
-0x8048731 <main+17>:	sub    esp,0x118
-0x8048737 <main+23>:	mov    DWORD PTR [esp],0x80488e4
-0x804873e <main+30>:	call   0x80485a8 <getenv@plt>
-0x8048743 <main+35>:	test   eax,eax
-0x8048745 <main+37>:	jne    0x8048815 <main+245>
-0x804874b <main+43>:	mov    DWORD PTR [esp+0x8],0x4
-0x8048753 <main+51>:	mov    DWORD PTR [esp+0x4],0x80488ec
-0x804875b <main+59>:	mov    DWORD PTR [esp],0x8049b20
-0x8048762 <main+66>:	call   0x8048618 <_ZSt16__ostream_insertIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_PKS3_i@plt>
-0x8048767 <main+71>:	mov    eax,ds:0x8049b20
-0x804876c <main+76>:	mov    eax,DWORD PTR [eax-0xc]
-(gdb) set $pc=0x804874b
-(gdb) cont
-Continuing.
-haha
-
-Program exited normally.
-(gdb)
-
-
-Stepping through chain of calls.
-
-Assume this part of code:
-class A {
-   void someMethod() const {
-      // (3)
- 
-   }
- 
-} ;
- 
-const A& getA() {
-   static A a;
-   return a;
-} // (2)
- 
-void f() {
-   getA().someMethod(); // (1)
-   // (4)
- 
-}
-
-Stepping in (F5) at point (1) will follow getA() body which might be stepped
-over (F6) but it is important to step in (F5) at point (2) to get into
-A::someMethod() at point (3). It's confusing but stepping over (F6) at point (2)
-will bring the debugger into point (4).
-
-Some observations:
-
-    Keeping 'Variables' tab opened causes gdb to ignore breakpoints or crashes
-    gdb session in some situations.
-
-    Sometimes breakpoints are not re-installed (i. e. after restarting debug
-        session).
-
-    Stepping through chain of calls is not intuitive (see the example above).
-
-All of these might be caused rather by MI bugs (gdb interface).
-
-It is also possible to debug one or more processes simultaneously in Eclipse.
-There is no problem to debug full conversation of Flash application (stagecraft
-    -> Flash -> C++ bindings actually) with service by attaching to stagecraft
-and particular daemon.
-
-Obviously it is also possible to do it with pure GDB (command line) and requires
-starting another instance of GDB what Eclipse as a matter of fact does.
 
 
 # ============================================================================
