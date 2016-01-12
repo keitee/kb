@@ -26,17 +26,18 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_300* gst-tool: gst-launch
 *kt_dev_bcast_300* gst-tool: gst-inspect
 *kt_dev_bcast_300* gst-tool: gst-discoverer
-*kt_dev_bcast_300* gst: gst-launch examples on pc
+*kt_dev_bcast_300* gst-tool: launch examples on pc
+*kt_dev_bcast_300* gst-command-line
 |kt_dev_bcast_300| gst: tutorial: 02: concept
 |kt_dev_bcast_300| gst: tutorial: 03: signal
 |kt_dev_bcast_300| gst: tutorial: 04: seeking and query
 *kt_dev_bcast_300* gst: tutorial: 07: queue
 *kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
-*kt_dev_bcast_302* gst: elements: souphttpsrc
+*kt_dev_bcast_302* gst-souphttpsrc
 |kt_dev_bcast_302| gst-uridecodebin
 *kt_dev_bcast_302* gst: elements: qtdemux
-|kt_dev_bcast_302| gst: elements: h264parse
+|kt_dev_bcast_302| gst-h264parse
 *kt_dev_bcast_302* gst: elements: tsparse
 *kt_dev_bcast_302* gst-identity
 *kt_dev_bcast_302* gst: elements: queue
@@ -57,8 +58,8 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_321* gst-plug: 05 The chain function
 *kt_dev_bcast_321* gst-plug: 06 The event function
 *kt_dev_bcast_321* gst-plug: 07: The query support
-*kt_dev_bcast_321* gst-plug: 09 adding properties
-*kt_dev_bcast_321* gst-plug: 09 adding properties: ex
+*kt_dev_bcast_321* gst-plug: gst-property: adding properties:
+*kt_dev_bcast_321* gst-plug: gst-property: adding properties: ex
 *kt_dev_bcast_321* gst-plug: 10 Signals
 *kt_dev_bcast_321* gst-plug: 11 Building a Test Application, gst-plugin-path
 *kt_dev_bcast_321* gst-plug: 17 Events: EOS
@@ -1554,6 +1555,23 @@ I find it useful to run cscope on the top-level tree, and use that for quick
 code browsing
 
 
+<check>
+11:55:27 ~/gst-build/UNINS/1.6$ gst-inspect-1.0 filesrc
+Factory Details:
+  Rank                     primary (256)
+  Long-name                File Source
+  Klass                    Source/File
+  Description              Read from arbitrary point in a file
+  Author                   Erik Walthinsen <omega@cse.ogi.edu>
+
+Plugin Details:
+  Name                     coreelements
+  Description              GStreamer core elements
+  Filename                 /home/kpark/gst-build/UNINS/1.6/gstreamer/plugins/\ ~
+    elements/.libs/libgstcoreelements.so ~
+  ...
+
+
 ={============================================================================
 *kt_dev_bcast_300* gst-tool: gst-launch
 
@@ -1618,101 +1636,6 @@ Application Options:
   -e, --eos-on-shutdown             Force EOS on sources before shutting the pipeline down
   -i, --index                       Gather and print index statistics
   --version                         Print version information and exit
-
-
-{set-properties}
-Properties may be appended to elements, in the form property=value (multiple
-        properties can be specified, separated by spaces). Use the gst-inspect
-tool (explained next) to find out the available properties for an element.
-
-gst-launch-0.10 videotestsrc pattern=11 ! ffmpegcolorspace ! autovideosink
-
-
-{name-elements-named-pad}
-Elements can be named using the name property, in this way complex pipelines
-involving branches can be created. Names allow linking to elements created
-previously in the description, and are indispensable to use elements with
-multiple output pads, like demuxers or tees, for example.
-
-Named elements are referred to using their name followed by a dot.
-
-gst-launch-0.10 \
-   videotestsrc ! ffmpegcolorspace ! tee name=t ! queue ! autovideosink t. ! queue ! autovideosink
-                                                                                     ^^
-   videotestsrc ! ffmpegcolorspace ! tee ! queue ! autovideosink 
-                                     tee ! queue ! autovideosink
-
-You should see two video windows, showing the same sample video pattern.
-
-The tee is named simply 't' (using the name property) and then linked to a
-queue and an autovideosink. The same tee is referred to using 't.' (mind the
-        dot) and then linked to a second queue and a second autovideosink.
-
-
-{cap-filters}
-When an element has more than one output pad, it might happen that the link to
-the next element is ambiguous: the next element may have more than one
-compatible input pad, or its input pad may be compatible with the Pad Caps of
-all the output pads. In these cases GStreamer will link using the first pad
-that is available, which pretty much amounts to saying that GStreamer will
-choose one output pad at random.
-
-Consider the following pipeline:
-
-gst-launch-1.0 souphttpsrc 
-    location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
-    ! matroskademux ! filesink location=test
-
-This is the same media file and demuxer as in the previous example. The input
-Pad Caps of filesink are ANY, meaning that it can accept any kind of media.
-Which one of the two output pads of matroskademux will be linked against the
-filesink? video_00 or audio_00? You cannot know.
-
-You can remove this ambiguity, though, by using named pads, as in the previous
-sub-section, or by using Caps Filters:
-
-gst-launch-0.10 
-   souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
-   ! matroskademux ! video/x-vp8 ! matroskamux ! filesink location=sintel_video.mkv
-
-A Caps Filter behaves like a pass-through element which does nothing and only
-accepts media with the given Caps, effectively resolving the ambiguity. In
-this example, between matroskademux and matroskamux we added a video/x-vp8
-Caps Filter to specify that we are interested in the output pad of
-matroskademux which can produce this kind of video.
-
-
-{example}
-gst-launch-1.0 
-   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-   ! dashdemux name=dash dash. 
-   ! video/quicktime 
-   ! qtdemux 
-   ! queue 
-   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-   ! h264parse 
-   ! video/x-h264,stream-format=byte-stream 
-   ! nexussink dash. 
-   ! audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
-
-   souphttpsrc 
-   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue ! cencdec ! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink dash. 
-                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! nexussink
-
-gst-launch-1.0 
-   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
-   ! dashdemux name=dash dash. 
-   ! video/quicktime 
-   ! qtdemux 
-   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2 
-   ! h264parse 
-   ! mpegtsmux name=m 
-   ! tsnexusbin dash. 
-   ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! m.
-
-   souphttpsrc 
-   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! cencdec ! h264parse ! mpegtsmux name=m ! tsnexusbin dash. 
-                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse      ! mpegtsmux
 
 
 ={============================================================================
@@ -1856,6 +1779,122 @@ gst-launch-1.0 playbin uri=http://wll1p02380.dev.youview.co.uk/videos/dash/bigBu
 
 // dash video and audio
 gst-launch-1.0 playbin uri=http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd
+
+
+={============================================================================
+*kt_dev_bcast_300* gst-command-line
+
+{set-properties}
+Properties may be appended to elements, in the form:
+
+property=value (multiple properties can be specified, separated by spaces). 
+
+Use the gst-inspect tool (explained next) to find out the available properties
+for an element.
+
+gst-launch-0.10 videotestsrc pattern=11 ! ffmpegcolorspace ! autovideosink
+
+
+{set-cap}
+For example, cap from an element.
+
+    Capabilities:
+      video/x-h264
+                 parsed: true
+          stream-format: { avc, avc3, byte-stream }
+              alignment: { au, nal }
+
+! video/x-h264,stream-format=byte-stream 
+
+
+{name-elements-named-pad}
+Elements can be named using the name property, in this way complex pipelines
+involving branches can be created. Names allow linking to elements created
+'previously' in the description, and are indispensable to use elements with
+multiple output pads, like demuxers or tees, for example.
+
+Named elements are referred to using their name followed by a dot.
+
+gst-launch-0.10 \
+   videotestsrc ! ffmpegcolorspace ! tee name=t ! queue ! autovideosink t. ! queue ! autovideosink
+                                                                                     ^^
+equels to:
+
+   videotestsrc ! ffmpegcolorspace ! tee ! queue ! autovideosink 
+                                     tee ! queue ! autovideosink
+
+You should see two video windows, showing the same sample video pattern.
+
+The tee is named simply 't' (using the name property) and then linked to a
+queue and an autovideosink. The same tee is referred to using 't.' (mind the
+        dot) and then linked to a second queue and a second autovideosink.
+
+
+{cap-filters}
+When an element has more than one output pad, it might happen that the link to
+the next element is 'ambiguous': the next element may have more than one
+compatible input pad, or its input pad may be compatible with the Pad Caps of
+all the output pads. In these cases GStreamer will link using the first pad that
+is available, which pretty much amounts to saying that GStreamer will choose one
+output pad at 'random'.
+
+Consider the following pipeline:
+
+gst-launch-1.0 souphttpsrc 
+    location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
+    ! matroskademux ! filesink location=test
+
+This is the same media file and demuxer as in the previous example. The input
+Pad Caps of filesink are ANY, meaning that it can accept any kind of media.
+
+Which one of the two output pads of matroskademux will be linked against the
+filesink? video_00 or audio_00? You cannot know.
+
+You can remove this ambiguity, though, by using named pads, as in the previous
+sub-section, or by using Caps Filters:
+
+gst-launch-0.10 
+   souphttpsrc location=http://docs.gstreamer.com/media/sintel_trailer-480p.webm 
+   ! matroskademux ! video/x-vp8 ! matroskamux ! filesink location=sintel_video.mkv
+
+A Caps Filter behaves like a pass-through element which does nothing and only
+accepts media with the given Caps, effectively resolving the ambiguity. In
+this example, between matroskademux and matroskamux we added a video/x-vp8
+Caps Filter to specify that we are interested in the output pad of
+matroskademux which can produce this kind of video.
+
+
+{example}
+gst-launch-1.0 
+   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! dashdemux name=dash dash. 
+   ! video/quicktime 
+   ! qtdemux 
+   ! queue 
+   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2#http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! h264parse 
+   ! video/x-h264,stream-format=byte-stream 
+   ! nexussink dash. 
+   ! audio/x-m4a '!' qtdemux '!' cencdec '!' aacparse '!' nexussink
+
+   souphttpsrc 
+   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! queue ! cencdec ! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink dash. 
+                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! nexussink
+
+gst-launch-1.0 
+   souphttpsrc location=http://test-media.youview.co.uk/ondemand/bbb/avc3/1/2drm_manifest.mpd 
+   ! dashdemux name=dash dash. 
+   ! video/quicktime 
+   ! qtdemux 
+   ! cencdec sas-url=https://ms3.youview.co.uk/s/Big+Buck+Bunny+DASH+2 
+   ! h264parse 
+   ! mpegtsmux name=m 
+   ! tsnexusbin dash. 
+   ! audio/x-m4a ! qtdemux ! cencdec ! aacparse ! m.
+
+   souphttpsrc 
+   ! dashdemux name=dash dash. ! video/quicktime ! qtdemux ! cencdec ! h264parse ! mpegtsmux name=m ! tsnexusbin dash. 
+                         dash. ! audio/x-m4a ! qtdemux ! cencdec ! aacparse      ! mpegtsmux
 
 
 ={============================================================================
@@ -3522,7 +3561,7 @@ http://gstreamer.freedesktop.org/data/doc/gstreamer/head/
 
 
 ={============================================================================
-*kt_dev_bcast_302* gst: elements: souphttpsrc
+*kt_dev_bcast_302* gst-souphttpsrc
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-good-plugins/html/
   gst-plugins-good-plugins-souphttpsrc.html
@@ -3802,7 +3841,7 @@ GST_DEBUG_OBJECT (demux, "stream : %" GST_FOURCC_FORMAT,
 
 
 ={============================================================================
-*kt_dev_bcast_302* gst: elements: h264parse
+*kt_dev_bcast_302* gst-h264parse
 
 $ gst-inspect-1.0 h264parse   
 Factory Details:
@@ -5720,7 +5759,7 @@ for strict filters -- elements that have exactly the same format on source and
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst-plug: 03 Building a Plugin
+*kt_dev_bcast_321* gst-plug: gst-cap: Building a Plugin
 
 Chapter 3. Constructing the Boilerplate
 
@@ -5891,14 +5930,15 @@ gst_my_filter_class_init (GstMyFilterClass * klass)
       gst_static_pad_template_get (&sink_factory));
 }
 
-<pad-cap>
+<gst-cap>
 The last argument in a template is its type or list of supported 'types'. In
 this example, we use 'ANY', which means that this element will accept all
 input. In real-life situations, you would set a media type and optionally a
-set of properties to make sure that only supported input will come in. This
-representation should be a string that starts with a media type, then a set of
-comma-separates properties with their supported values. In case of an audio
-filter that supports raw integer 16-bit audio, mono or stereo at any
+set of properties to make sure that only supported input will come in. 
+
+This representation should be a string that 'starts' with a media type, then a
+set of comma-separates 'properties' with their supported values. In case of an
+audio filter that supports raw integer 16-bit audio, mono or stereo at any
 samplerate, the correct template would look like this:
 
 
@@ -6212,7 +6252,9 @@ default handler will forward the query or simply unref it.
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst-plug: 09 adding properties
+*kt_dev_bcast_321* gst-plug: gst-property: adding properties
+
+Chap 09
 
 The primary and most important way of controlling how an element behaves, is
 through GObject properties. GObject properties are defined in the _class_init ()
@@ -6386,7 +6428,7 @@ gst_ts_nexus_bin_set_property (GObject * object,
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst-plug: 09 adding properties: ex
+*kt_dev_bcast_321* gst-plug: gst-property: adding properties: ex
 
 <ex>
 
@@ -6468,6 +6510,81 @@ gstsink-plugin.c:
     }
   }
 }
+
+
+<ex> structure property
+
+From gst-inspect:
+
+  destinationwindow   : Uses a GstStructure that contains doubles from 0.0 to 1.0 for x, y, height and width.  e.g. "fullscreen, x=(double)0.0, y=(double)0.0, height=(double)1.0, width=(double)1.0"  "bottomright, x=(double)0.5, y=(double)0.5, height=(double)0.5, width=(double)0.5"
+                        flags: readable, writable
+                        Boxed pointer of type "GstStructure"
+
+From code:
+
+    g_object_class_install_property( 
+            gobject_class, PROP_DEST_VIDEO_WINDOW_REGION,
+            g_param_spec_boxed ( "destinationwindow", 
+                "Destination video window region", 
+                "Uses a GstStructure that contains doubles from 0.0 to 1.0 for \
+                x, y, height and width.  e.g. \"fullscreen, x=(double)0.0, \ 
+                y=(double)0.0, height=(double)1.0, width=(double)1.0\" \
+                \"bottomright, x=(double)0.5, y=(double)0.5, \
+                height=(double)0.5, width=(double)0.5\"",
+                GST_TYPE_STRUCTURE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS ) 
+            );
+
+
+static void gst_nexus_sink_set_property_locked
+    ( GstNexusSink *sink, guint prop_id, const GValue *value, GParamSpec *pspec )
+{
+    case PROP_DEST_VIDEO_WINDOW_REGION:
+        {
+            GstStructure* region = g_value_dup_boxed ( value );
+            gdouble x, y, width, height;
+
+            // converted to a structure
+            if (region && gst_nexus_sink_parse_video_region (region, &x, &y, &width, &height))
+            {
+                if (sink->nexusMgr){
+                    if (!gst_nexus_mgr_request_video_window(sink->nexusMgr, x, y, width, height)) {
+                        gst_nexus_sink_on_error(sink, EVideoRegion);
+                    }
+                }
+            }
+
+            if (region)
+                g_boxed_free (GST_TYPE_STRUCTURE, region);
+            break;
+        }
+}
+
+static gboolean gst_nexus_sink_parse_video_region (const GstStructure *region,
+                                                   gdouble * x,
+                                                   gdouble * y,
+                                                   gdouble * width,
+                                                   gdouble * height
+                                                   )
+{
+    if (gst_structure_get (region,
+                "x", G_TYPE_DOUBLE, x,
+                "y", G_TYPE_DOUBLE, y,
+                "height", G_TYPE_DOUBLE, height,
+                "width", G_TYPE_DOUBLE, width,
+                NULL)){
+        /* simple sanity check values, let configureVideoRegion do the rest*/
+        *x = CLAMP( *x, 0.0, 1.0-MIN_VIDEO_WIDTH );
+        *y = CLAMP( *y, 0.0, 1.0-MIN_VIDEO_HEIGHT );
+        *width = CLAMP( *width, MIN_VIDEO_WIDTH, 1.0 - *x );
+        *height = CLAMP( *height, MIN_VIDEO_HEIGHT, 1.0 - *y );
+        return TRUE;
+    }
+    return FALSE;
+}
+	
+
+destinationwindow="destinationwindow, x=(double)0.2, y=(double)0.2, \
+                   width=(double)0.3, height=(double)0.3"
 
 
 ={============================================================================
@@ -6802,8 +6919,7 @@ plugin loading can be delayed until the plugin is actually used.
 
 3.2. Pads
 
-<caps-negotiation>
-
+<cap-negotiation>
 Pads are element's input and output, where you can connect other elements.
 They are used to negotiate links and data flow between elements in GStreamer.
 A pad can be viewed as a "plug" or "port" on an element where links may be
@@ -7838,7 +7954,7 @@ and thus the Capabilities of the Pads become fixed. they only have one type and
 do not contain ranges.
 
 As the process evolves, actual Pads are instantiated and their Capabilities
-  refined until they are fixed (or negotiation fails).
+    refined 'until' they are fixed (or negotiation fails).
 
 This tutorial instantiates two elements, shows their Pad Templates, links them
 and sets the pipeline to play. On each state 'change', the Capabilities of the
@@ -8156,7 +8272,8 @@ static void pad_added_handler (GstElement *src, GstPad *new_pad,
   GstStructure *new_pad_struct = NULL;
   const gchar *new_pad_type = NULL;
    
-  g_print ("Received new pad '%s' from '%s':\n", GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
+  g_print ("Received new pad '%s' from '%s':\n", GST_PAD_NAME (new_pad), \
+          GST_ELEMENT_NAME (src));
    
   /* If our converter is already linked, we have nothing to do here */
   if (gst_pad_is_linked (sink_pad)) {
@@ -8169,7 +8286,8 @@ static void pad_added_handler (GstElement *src, GstPad *new_pad,
   new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
   new_pad_type = gst_structure_get_name (new_pad_struct);
   if (!g_str_has_prefix (new_pad_type, "audio/x-raw")) {
-    g_print ("  It has type '%s' which is not raw audio. Ignoring.\n", new_pad_type);
+    g_print ("  It has type '%s' which is not raw audio. Ignoring.\n", \
+            new_pad_type);
     goto exit;
   }
    
@@ -8283,6 +8401,7 @@ Pad Templates:
     goto exit;
   }
 
+<gst-cap>
 gst_pad_get_caps() retrieves the capabilities of the pad wrapped in a GstCaps
 structure. A pad can offer many capabilities, and hence GstCaps can contain many
 GstStructure, 'each' representing a different capability.
@@ -8296,6 +8415,7 @@ Finally, with gst_structure_get_name() we recover the name of the structure,
 
 8.2.2. Properties and values
 
+<gst-property>
 Properties are used to describe 'extra' information for capabilities. A property
 consists of a key (a string) and a value. There are different possible value
 types that can be used:

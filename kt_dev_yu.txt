@@ -28,7 +28,8 @@
 |kt_dev_uv_stack_002| tool-zb-deploy
 *kt_dev_uv_stack_002* tool-patch-a-tron
 *kt_dev_uv_stack_002* tool-deploy the prebuilt binary
-*kt_dev_uv_stack_002* tool-deploy gdb
+*kt_dev_uv_stack_002* tool-gdb
+*kt_dev_uv_stack_002* tool-core
 |kt_dev_uv_stack_003| zinc-start:
 |kt_dev_uv_stack_005| stack: brcm debug level
 |kt_dev_uv_stack_006| stack: netflix ps line
@@ -97,6 +98,7 @@
 *kt_dev_uv_stack_408* mr-dash: disable dash on master
 *kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
 *kt_dev_uv_stack_408* mr-dash: position
+*kt_dev_uv_stack_408* mr-dash: position change
 *kt_dev_uv_stack_408* mr-dash: output control
 *kt_dev_uv_stack_408* mr-dash: seek and resume
 
@@ -124,6 +126,7 @@
 *kt_dev_uv_stack_400* mr-dash: gst-nexussink
 *kt_dev_uv_stack_400* mr-dash: gst-nexussink: release on pause
 *kt_dev_uv_stack_400* mr-dash: gst-nexussink: callbacks
+*kt_dev_uv_stack_400* mr-dash: gst-nexussink: frame rate
 *kt_dev_uv_stack_400* mr-dash: gst-tsnexusbin
 *kt_dev_uv_stack_400* mr-dash: gst-linearsourced
 *kt_dev_uv_stack_400* mr-dash: gst-zmp 
@@ -2658,7 +2661,7 @@ http://spongebob.dev.youview.co.uk:8080/job/Deploy_Zinc_Binary_URL/
 
 
 ={============================================================================
-*kt_dev_uv_stack_002* tool-deploy gdb
+*kt_dev_uv_stack_002* tool-gdb
 
 #debug "Installing gdb..."
 #installTool mipsgdb.tar
@@ -2735,6 +2738,19 @@ do_enable_core_dumps() {
 }
 
 
+echo /proc/sys/kernel/core_pattern
+
+declare -a fs_info=( $(stat -f -c "%a %s" /mnt/hd1) )
+echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
+
+[root@HUMAX /]# stat -f -c "%a %s" /mnt/hd1
+329347 4096
+[root@HUMAX /]# declare -a fs_info=( $(stat -f -c "%a %s" /mnt/hd1) )
+[root@HUMAX /]# echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
+1349009408
+
+echo "|/bin/bash /usr/local/bin/core-dump /mnt/hd1/ %p 10000000" > /proc/sys/kernel/core_pattern
+
 ./setup-humax/scripts/core-dump
 
 10:14:38 ~/source$ cat ./setup-humax/scripts/core-dump
@@ -2754,7 +2770,8 @@ do_enable_core_dumps() {
 #
 # Usage:
 #         ulimit -c unlimited
-#         echo "|/bin/bash /path/to/core-dump /mnt/hd1/ %p [ disk_space_threshold_in_bytes ]" > /proc/sys/kernel/core_pattern
+#         echo "|/bin/bash /path/to/core-dump /mnt/hd1/ %p \
+#           [ disk_space_threshold_in_bytes ]" > /proc/sys/kernel/core_pattern
 #
 # Author: hubert.lacote@youview.com
 #         kris@youview.com
@@ -2764,147 +2781,25 @@ do_enable_core_dumps() {
 #
 ##
 
+note:
 gdb_path=/opt/zinc/oss/debugtools/bin/gdb
 
+...
 
-##
-# Defining custom reporting routines (instead of using the ones from
-# common-functions) to minimize the dependency chain, since this script will be
-# called by the kernel.
-##
-blit() {
-    local severity="${1:-INFO}" && shift
-    echo "[$(date +"%F %T")] $severity: $*"
-}
+note: do not work for all process. for example, not work for nickelmediad
 
-error() {
-    blit "ERROR" "$*"
-}
+[root@HUMAX /]# pidof w3cEngine
+3691
+[root@HUMAX /]# kill -s 11 3691
 
-die() {
-    blit "DIE" "$*"
-    exit 1
-}
+[root@HUMAX hd1]# pwd
+/mnt/hd1
 
-info() {
-    blit "INFO" "$*"
-}
-
-##
-# Produce a text file from the core dump with the backtrace
-# already demangled and info about threads...
-##
-process_core_dump() {
-    local core_dump="$1"
-    local core_maps="$2"
-    local output_file="$3"
-
-    local first_maps_line=$(head -1 "$core_maps")
-    # Assume the executable is under /opt
-    local executable="/opt/${first_maps_line#*/opt/}"
-
-    [[ -e "$executable" ]] || {
-        error "Failed to extract executable from '$first_maps_line'." 2> "$output_file"
-        return
-    }
-
-    $gdb_path --batch \
-              --eval-command="info threads" \
-              --eval-command "bt" \
-              --eval-command "thread apply all bt" \
-              --eval-command 'info sharedlibrary' \
-              --eval-command 'info registers' \
-              --eval-command 'info locals' \
-              --eval-command 'info args' \
-              --eval-command 'x/100a $sp' \
-              --eval-command 'x/50i $pc' \
-              "$executable" "$core_dump" &> "$output_file"
-}
-
-
-##
-# gets the available free space in the directory designated for core files
-##
-get_available_space() {
-    declare -a fs_info=( $(stat -f -c "%a %s" "$core_output_path") )
-    echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
-}
-
-
-##
-# Find the pid (which is the extension) of the oldest log entries
-##
-get_pid_of_oldest_logs() {
-    local oldest_file=$(find "$core_output_path" -type f -exec stat -c "%Y %n" {} \; | sort | head -n 1 | cut -d ' ' -f 2)
-    echo "${oldest_file##*.}"
-}
-
-
-##
-# Removes the oldest files in the core_output_path directory
-##
-do_cleanup() {
-    local oldest_pid=$(get_pid_of_oldest_logs)
-    rm -fv "$core_output_path"/*."$oldest_pid"
-}
-
-#
-# Count number of entries in the core file directory
-#
-count_files() {
-    echo $(find "$core_output_path" -type f | wc -l)
-}
-
-
-core_output_path=$1
-pid=$2
-threshold=${3:-0}
-
-# redirect stdout/stderr to the log file
-exec 1>"${core_output_path}/core-log.$pid" 2>&1
-
-[[ $# -eq 3 ]] || die "Script is not meant to be run manually!"
-
-
-##
-# Perform cleanup to reclaim some space if required
-##
-while true; do
-    files_count=$(count_files)
-
-    # break the loop if the available space is above the threshold
-    [[ "$(get_available_space)" -lt "$threshold" ]] || break
-
-    # break the loop if there are no files left to remove
-    [[ "$files_count" -eq 0 ]] && break
-
-    info "Performing oldest core files cleanup to free some space ..."
-    do_cleanup
-
-    # sanity check: break the loop if the cleanup didn't remove anything
-    [[ "$files_count" -eq "$(count_files)" ]] && break
-done
-
-
-##
-# Quit if free space is still bellow the threshold
-##
-[[ "$(get_available_space)" -lt "$threshold" ]] &&
-    die "Core dump won't be created. Space usage limit exceeded!"
-
-cat "/proc/$pid/maps" > "${core_output_path}/core-maps.$pid"
-dd of="${core_output_path}/core.$pid" bs=1M
-
-[[ -x "$gdb_path" ]] &&
-    process_core_dump \
-        "${core_output_path}/core.$pid" \
-        "${core_output_path}/core-maps.$pid" \
-        "${core_output_path}/core-text.$pid"
-
-# Unfortunately, this takes too much time (at least on t1000) and can result in
-# a broken archive. Needs to be disabled.
-#gzip "${core_output_path}/core.$pid"
-info "Core file obtained successfully."
+[root@HUMAX hd1]# ls -al core-*
+-rw-r--r--    1 root     root           209 Jan 12 10:27 core-log.3691
+-rw-r--r--    1 root     root             0 Jan 12 10:27 core-maps.3691
+-rw-r--r--    1 root     root          5210 Jan 12 10:27 core-text.3691
+-rw-r--r--    1 root     root         61440 Jan 12 10:27 core.3691
 
 
 ={============================================================================
@@ -3421,6 +3316,8 @@ $ git push origin kit/support-corrupted-dash-stream:master
 
 // to merge PR
 $ git push -f origin kit/support-corrupted-dash-stream
+
+$ git pull --rebase origin master
 
 
 ={============================================================================
@@ -9294,7 +9191,7 @@ MediaPlayer::NetworkState MediaPlayer::networkState()
     return m_private->networkState();
 }
 
-<2> Client callbacks.
+<2> Client callbacks <callbacks-to-webkit>
 void MediaPlayer::networkStateChanged()
 {
   // If more than one media engine is installed and this one failed before finding metadata,
@@ -9545,6 +9442,7 @@ PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateMediaRouter::create(Me
   typedef QMediaPlayerInterface* (*CreateFunction)(QMediaPlayerCallbackInterface*);
   CreateFunction createFunction = reinterpret_cast<CreateFunction>(symbol);
 
+  <callbacks-to-webkit>
   // note:
   // MediaPlayerPrivateMediaRouterCallbacks simply forwards callbacks to
   // MediaPlayer.
@@ -9915,6 +9813,73 @@ public:
 };
 
 class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface 
+
+
+class MediaPlayerPrivateMediaRouterCallbacks : public QMediaPlayerCallbackInterface
+{
+public:
+    MediaPlayerPrivateMediaRouterCallbacks(MediaPlayer* player)
+        : m_mediaPlayer(player)
+    {}
+
+    void networkStateChanged()
+    {
+        m_mediaPlayer->networkStateChanged();
+    }
+
+    void readyStateChanged()
+    {
+        m_mediaPlayer->readyStateChanged();
+    }
+
+    void volumeChanged(float volume)
+    {
+        m_mediaPlayer->volumeChanged(volume);
+    }
+
+    void muteChanged(bool muted)
+    {
+        m_mediaPlayer->muteChanged(muted);
+    }
+
+    void timeChanged()
+    {
+        m_mediaPlayer->timeChanged();
+    }
+
+    void sizeChanged()
+    {
+        m_mediaPlayer->sizeChanged();
+    }
+
+    void rateChanged()
+    {
+        m_mediaPlayer->rateChanged();
+    }
+
+    void playbackStateChanged()
+    {
+        m_mediaPlayer->playbackStateChanged();
+    }
+
+    void durationChanged()
+    {
+        m_mediaPlayer->durationChanged();
+    }
+
+    void firstVideoFrameAvailable()
+    {
+        m_mediaPlayer->firstVideoFrameAvailable();
+    }
+
+    void characteristicChanged()
+    {
+        m_mediaPlayer->characteristicChanged();
+    }
+
+private:
+    MediaPlayer* m_mediaPlayer;
+};
 
 
 ={============================================================================
@@ -10705,15 +10670,6 @@ HAVE_ENOUGH_DATA(4).
 ended?: false
 readyState?: 4
 networkState?: 2
-
-In this case, can see position reporting on dbus:
-
-signal sender=:1.169 -> dest=(null destination) serial=8794 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
-   struct {
-      int32 0
-      int32 195720
-      int32 3559000
-   }
 
 
 ={============================================================================
@@ -13144,17 +13100,17 @@ See "ended event".
 // the Media Router Specification[1].
 
 
-DEVARCH-10905: Nickel.System.GStreamer: Put back StatusEvent generation whent
+DEVARCH-10905: Nickel.System.GStreamer: Restores StatusEvent generation when
 state changes
 
 The DEVARCH-10634 changed event reporting not to use boost signal2 but rather to
 fire StatusEvent directly when see EOS to fix the invalid current position of a
-play. This causes that other events are not fired when GStreamer changes states
+play. This causes other events are not to be fired when GStreamer changes states
 and breaks up the gstmediaroutertest expectation which strictly conforms to the
 Media Router Specification[1].
 
-This commit put back that StateEvent generation of other events back on
-GStreamer state changes. 
+This commit restores StateEvent generation of other events when GStreamer state
+changes. 
 
 [1] 1125-S Media Router Specification v1.3
 
@@ -13352,6 +13308,55 @@ note: finished play
 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=StatusEvent
    int32 1
 complete = 1,
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash: position change
+
+From Nickel/Nickel.Client.API/include/MediaRouterEventListener.h
+
+  /**
+   * <code>PositionChangeEvent</code> signals changes in play-position.
+   *
+   * <p>Since, in normal playback, play-position will be constantly changing,
+   * <code>PositionChangeEvents</code> are limited in frequency to one per
+   * second.</p>
+   *
+   * @param position a <code>Position</code> structure.
+   *
+   * @if AS3 @includeExample
+   * MediaRouterEventListenerPositionChangeEvent.as@endif
+   *
+   * @see nickel::client::Position
+   */
+   virtual void PositionChangeEvent(boost::shared_ptr<Position> position) = 0;
+
+
+signal sender=:1.169 -> dest=(null destination) serial=8794 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
+   struct {
+      int32 0
+      int32 195720
+      int32 3559000
+   }
+
+void VanadiumMediaPlayer::MediaPlayerListener::PositionChangeEvent
+    (const Position& position)
+{
+    VANADIUM_FUNC_TRACE;
+    if(player)
+    {
+        player->PositionChangeEvent(position);
+    }
+}
+
+void VanadiumMediaPlayer::PositionChangeEvent(const Position&)
+{
+    VANADIUM_FUNC_TRACE;
+    // TODO Possibly cache Position to avoid so many MR calls
+    callbacks.timeChanged();
+}
+
+void HTMLMediaElement::mediaPlayerTimeChanged(MediaPlayer*)
 
 
 ={============================================================================
