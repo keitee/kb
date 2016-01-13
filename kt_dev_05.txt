@@ -30,7 +30,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_300* gst-command-line
 |kt_dev_bcast_300| gst: tutorial: 02: concept
 |kt_dev_bcast_300| gst: tutorial: 03: signal
-|kt_dev_bcast_300| gst: tutorial: 04: seeking and query
+|kt_dev_bcast_300| gst-seek: gst-query
 *kt_dev_bcast_300* gst: tutorial: 07: queue
 *kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
 |kt_dev_bcast_301| gst: base elements
@@ -2388,7 +2388,7 @@ callback will be called:
 
 
 ={============================================================================
-*kt_dev_bcast_300* gst: tutorial: 04: seeking
+*kt_dev_bcast_300* gst-seek: gst-query
 
 Basic tutorial 4: Time management
 
@@ -2399,10 +2399,7 @@ once the movie has been running for ten seconds, we skip to a different position
   using a seek.
 
 In the previous tutorials, once we had the pipeline setup and running, our main
-function just sat and waited to receive an ERROR or an EOS through the bus. Here
-we modify this function to periodically wake up and query the pipeline for the
-stream position, so we can print it on screen. This is similar to what a media
-player would do, updating the User Interface on a periodic basis.
+function just sat and waited to receive an ERROR or an EOS through the bus. 
 
 Finally, the stream duration is queried and updated whenever it changes. Here we
 modify this function to periodically wake up and query the pipeline for the
@@ -10890,6 +10887,118 @@ note: uses gst_element_message_full() to post
 
 GST_ELEMENT_ERROR(demux, 
     RESOURCE, FAILED, ("Download error"), ("http error %d", http_status));
+
+
+gst_element_query_position ()
+-----------------
+gboolean
+gst_element_query_position (GstElement *element,
+                            GstFormat format,
+                            gint64 *cur);
+
+Queries an element (usually top-level pipeline or playbin element) for the
+    stream position in 'nanoseconds'. This will be a value 'between' 0 and the
+    stream duration (if the stream duration is known). This query will usually
+    'only' work once the pipeline is 'prerolled' (i.e. reached PAUSED or PLAYING
+            state). The application will receive an ASYNC_DONE message on the
+    pipeline bus when that is the case.
+
+If one repeatedly calls this function one can also create a query and reuse it
+in gst_element_query().
+
+Parameters
+
+element
+a GstElement to invoke the position query on.
+
+format
+the GstFormat requested
+
+cur
+a location in which to store the 'current' position, or NULL. [out][allow-none]
+
+Returns
+
+TRUE if the query could be performed.
+
+
+gst_element_query_duration ()
+-----------------
+gboolean
+gst_element_query_duration (GstElement *element,
+                            GstFormat format,
+                            gint64 *duration);
+
+Queries an element (usually top-level pipeline or playbin element) for the total
+    stream duration in nanoseconds. This query will only work once the pipeline
+    is prerolled (i.e. reached PAUSED or PLAYING state). The application will
+    receive an ASYNC_DONE message on the pipeline bus when that is the case.
+
+If the duration changes for some reason, you will get a DURATION_CHANGED message
+on the pipeline bus, in which case you should re-query the duration using this
+function. 
+
+Parameters
+
+element
+a GstElement to invoke the duration query on.
+
+format
+the GstFormat requested
+
+duration
+A location in which to store the total duration, or NULL. [out][allow-none]
+
+Returns
+
+TRUE if the query could be performed.
+
+
+gst_element_seek_simple ()
+-----------------
+gboolean
+gst_element_seek_simple (GstElement *element,
+                         GstFormat format,
+                         GstSeekFlags seek_flags,
+                         gint64 seek_pos);
+
+Simple API to perform a seek on the given element, meaning it just seeks to the
+    given position relative to the start of the stream. For more complex
+    operations like segment seeks (e.g. for looping) or changing the playback
+    rate or seeking relative to the last configured playback segment you should
+    use gst_element_seek().
+
+In a completely prerolled PAUSED or PLAYING pipeline, seeking is always
+guaranteed to return TRUE on a seekable media type or FALSE when the media type
+is certainly not seekable (such as a live stream).
+
+Some elements allow for seeking in the READY state, in this case they will store
+the seek event and execute it when they are put to PAUSED. If the element
+supports seek in READY, it will always return TRUE when it receives the event in
+the READY state.
+
+Parameters
+
+element
+a GstElement to seek on
+
+format
+a GstFormat to execute the seek in, such as GST_FORMAT_TIME
+
+seek_flags
+seek options; playback applications will usually want to use GST_SEEK_FLAG_FLUSH
+| GST_SEEK_FLAG_KEY_UNIT here
+	 
+seek_pos
+position to seek to (relative to the start); if you are doing a seek in
+GST_FORMAT_TIME this value is in nanoseconds - multiply with GST_SECOND to
+convert seconds to nanoseconds or with GST_MSECOND to convert milliseconds to
+nanoseconds.
+	 
+Returns
+
+TRUE if the seek operation succeeded. Flushing seeks will trigger a preroll,
+     which will emit GST_MESSAGE_ASYNC_DONE.
 
 
 ={============================================================================

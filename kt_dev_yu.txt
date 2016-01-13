@@ -75,7 +75,7 @@
 *kt_dev_uv_stack_250* mr-web: java scripts to check on video
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
 *kt_dev_uv_stack_250* mr-web: stack from html to mr
-*kt_dev_uv_stack_250* mr-web: qt interface
+*kt_dev_uv_stack_250* mr-web: media player interface
 *kt_dev_uv_stack_250* mr-web: media event
 *kt_dev_uv_stack_250* mr-web: ended event
 *kt_dev_uv_stack_250* mr-web: ended event: release nexus
@@ -99,6 +99,7 @@
 *kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
 *kt_dev_uv_stack_408* mr-dash: position
 *kt_dev_uv_stack_408* mr-dash: position change
+*kt_dev_uv_stack_408* mr-dash: seekable range
 *kt_dev_uv_stack_408* mr-dash: output control
 *kt_dev_uv_stack_408* mr-dash: seek and resume
 
@@ -9145,16 +9146,65 @@ HTMLMediaElement
 
 MediaPlayer
  ^
- | callabck
+ | <- callabck
+ |
+ | note: After all, there is a callbacks from <private-media-player> which is a
+ | notification and MediaPlayer calls to <private-media-player>
+ | Also, notifies HTML elements as well.
   
-0: MediaPlayerPrivateGStreamer            1: MediaPlayerPrivateMediaRouter(YV)
-  - this is a media player
-  - MediaPlayer* is passed in ctor
-  - MediaPlayer* m_player;
+// qtwebkit/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
+//
+// class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface
+
+ | -> calls installedMediaEngines()
+ |      which calls registerMediaEngine() on each MediaPlayerPrivate instance
+ |      registerMediaEngine() registers create, getSupportedTypes, supportsTypes
+
+
+// WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+// WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
+ 
+0: MediaPlayerPrivateGStreamer            
+    - registerMediaEngine();
+    - this is a private media player instance
+    - MediaPlayer* is passed throuth create() and ctor
+    - MediaPlayer* m_player;
+
+
+// class MediaPlayerPrivateMediaRouter : public MediaPlayerPrivateInterface; 
+// class MediaPlayerPrivateMediaRouterCallbacks : public QMediaPlayerCallbackInterface;
+
+1: MediaPlayerPrivateMediaRouter(YV)
+    -> fowards to Vanadium
+
+    // qtwebkit/include/QtWebKit/QMediaPlayerInterface.h
+    // QMediaPlayerInterface is 'similar' to MediaPlayerPrivateInterface:
+    // made by YV and defines:
+    //
+    // class QMediaPlayerInterface;
+    // class QMediaPlayerCallbackInterface;
+    // 
+    // class VanadiumMediaPlayer : public WebCore::QMediaPlayerInterface;
+
+
+    <- <callbacks-to-webkit>
+    MediaPlayerPrivateMediaRouterCallbacks::networkStateChanged()
+    { 
+        // this is `MediaPlayer`
+        m_mediaPlayer->networkStateChanged();
+    }
+
+        <- VanadiumMediaPlayer::callbacks.timeChanged();
 
 
 <media-element>
 WebCore/html/HTMLMediaElement.cpp
+
+
+void HTMLMediaElement::createMediaPlayer()
+{
+    m_player = MediaPlayer::create(this);
+}
 
 void HTMLMediaElement::mediaPlayerNetworkStateChanged(MediaPlayer*)
 {
@@ -9186,12 +9236,29 @@ enum ReadyState
 { HaveNothing, HaveMetadata, HaveCurrentData, HaveFutureData, HaveEnoughData };
 
 
+MediaPlayer::MediaPlayer(MediaPlayerClient* client)
+    : m_mediaPlayerClient(client)
+{
+#if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
+    Vector<MediaPlayerFactory*>& engines = installedMediaEngines();
+    if (!engines.isEmpty()) {
+        m_currentMediaEngine = engines[0];
+        m_private = engines[0]->constructor(this);
+        if (m_mediaPlayerClient)
+            m_mediaPlayerClient->mediaPlayerEngineUpdated(this);
+    }
+#endif
+}
+
+
 MediaPlayer::NetworkState MediaPlayer::networkState()
 {
+    // note: m_private is <private-media-player>
     return m_private->networkState();
 }
 
-<2> Client callbacks <callbacks-to-webkit>
+
+<callbacks-to-webkit>
 void MediaPlayer::networkStateChanged()
 {
   // If more than one media engine is installed and this one failed before finding metadata,
@@ -9215,16 +9282,10 @@ void MediaPlayer::networkStateChanged()
 
 void MediaPlayer::timeChanged()
 {
-  if (m_mediaPlayerClient)
-    m_mediaPlayerClient->mediaPlayerTimeChanged(this);
+    // note: m_mediaPlayerClient is <media-element>
+    if (m_mediaPlayerClient)
+        m_mediaPlayerClient->mediaPlayerTimeChanged(this);
 }
-
-
-Use two channels and use networkstate for network and decode errors
-m_player is one of private player.
-
-m_player->networkStateChanged();
-m_player->readyStateChanged();
 
 
 <private-player>
@@ -9245,31 +9306,27 @@ MediaPlayer::NetworkState MediaPlayerPrivateGStreamer::networkState() const
 }
 
 
-{register-private-player}
-To supports two media players: one for old and the other for YV.
+{register-private-media-player}
 
-graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
-graphics/mediarouter/MediaPlayerPrivateMediaRouter.cpp
+1. Supports two media players: one for in-process gst one and the other for YV.
 
-note: ERROR_MEDIA_MESSAGE() maps to GST_ERROR
+graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp          // in-process
+graphics/mediarouter/MediaPlayerPrivateMediaRouter.cpp      // YV
 
-qtwebkit/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
 
-class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface {
+2. ERROR_MEDIA_MESSAGE() maps to GST_ERROR
 
-Source/WebCore/platform/graphics/MediaPlayer.cpp
+// Source/WebCore/platform/graphics/MediaPlayer.cpp
 
-From:
+// previously when supports only in-process one:
 
 static Vector<MediaPlayerFactory*>& installedMediaEngines() 
 {
-#if defined(PlatformMediaEngineClassName)
-  PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
-#endif
-  return installedEngines;
+    PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
+    return installedEngines;
 }
 
-To:
+// supports two
 
 static Vector<MediaPlayerFactory*>& installedMediaEngines() 
 {
@@ -9287,23 +9344,42 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
     return installedEngines;
 }
 
+// same as above effectively but uses env switch
 
-<old>
-/Zinc/Zinc.3rdPartyStack/qt-everywhere-opensource-src-5.1.0/
-qtwebkit/Source/WebCore/platform/graphics/gstreamer/
+#if USE(GSTREAMER)
+#include "MediaPlayerPrivateGStreamer.h"
+#include "../mediarouter/MediaPlayerPrivateMediaRouter.h"
+#define PlatformMediaEngineClassName MediaPlayerPrivateGStreamer
+#endif
 
--rw-r--r--  1 kpark kpark 143317 Jun 25 13:22 MediaPlayerPrivateGStreamer.cpp
--rw-r--r--  1 kpark kpark  11157 Jun 25 13:22 MediaPlayerPrivateGStreamer.h
+static Vector<MediaPlayerFactory*>& installedMediaEngines() 
+{
 
-class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface 
+#if defined(PlatformMediaEngineClassName)
+    const char* envs = getenv("ZINC_WEBKIT_USE_MEDIA_ROUTER");
 
-'static' void MediaPlayerPrivateGStreamer::registerMediaEngine(MediaEngineRegistrar registrar)
+    if (envs && !strcmp(envs, "true"))
+        MediaPlayerPrivateMediaRouter::registerMediaEngine(addMediaEngine);
+    else
+        // this gst one
+        PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
+#endif
+    return installedEngines;
+
+}
+
+
+<private-media-player>
+
+'static' void 
+MediaPlayerPrivateGStreamer::registerMediaEngine(MediaEngineRegistrar registrar)
 {
     if (isAvailable())
         registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
 }
 
-PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateGStreamer::create(MediaPlayer* player)
+PassOwnPtr<MediaPlayerPrivateInterface> 
+MediaPlayerPrivateGStreamer::create(MediaPlayer* player)
 {
     return adoptPtr(new MediaPlayerPrivateGStreamer(player));
 }
@@ -9407,15 +9483,14 @@ libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
 
 void MediaPlayerPrivateMediaRouter::registerMediaEngine(MediaEngineRegistrar registrar)
 {
-  // note: create
-  
   registrar(create, getSupportedTypes, supportsType, 0, 0, 0);
 }
 
 
 note: here make a link to Vanadium
 
-PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateMediaRouter::create(MediaPlayer* player)
+PassOwnPtr<MediaPlayerPrivateInterface> 
+MediaPlayerPrivateMediaRouter::create(MediaPlayer* player)
 {
   // old: ZINC_QMEDIA_PLAYER_LIB
   //    =${final_prefix}/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0
@@ -9443,10 +9518,11 @@ PassOwnPtr<MediaPlayerPrivateInterface> MediaPlayerPrivateMediaRouter::create(Me
   CreateFunction createFunction = reinterpret_cast<CreateFunction>(symbol);
 
   <callbacks-to-webkit>
+
   // note:
   // MediaPlayerPrivateMediaRouterCallbacks simply forwards callbacks to
-  // MediaPlayer.
-  //
+  // `MediaPlayer` since pass down player in new.
+  
   std::auto_ptr<QMediaPlayerCallbackInterface> callbacks(
       new MediaPlayerPrivateMediaRouterCallbacks(player));
 
@@ -9530,14 +9606,10 @@ void MediaPlayerPrivateMediaRouter::play()
 
 
 <0>
-
-note: QMediaPlayerInterface is similar to MediaPlayerPrivateInterface and is
-by YV.
-
-class ZINC_EXPORT VanadiumMediaPlayer : public WebCore::QMediaPlayerInterface
-
 // Vanadium/Vanadium.MediaRouter.WebKit.Plugin/src/VanadiumMediaPlayer.h
 // Vanadium/Vanadium.MediaRouter.WebKit.Plugin/src/VanadiumMediaPlayer.cpp
+
+class ZINC_EXPORT VanadiumMediaPlayer : public WebCore::QMediaPlayerInterface;
 
 extern "C"
 {
@@ -9643,7 +9715,7 @@ boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: qt interface
+*kt_dev_uv_stack_250* mr-web: media player interface
 
 //qtwebkit/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
 
@@ -13357,6 +13429,141 @@ void VanadiumMediaPlayer::PositionChangeEvent(const Position&)
 }
 
 void HTMLMediaElement::mediaPlayerTimeChanged(MediaPlayer*)
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash: seekable range
+
+
+class MediaPlayerPrivateInterface 
+{
+    virtual PassRefPtr<TimeRanges> seekable() const 
+    { return maxTimeSeekable() ? TimeRanges::create(0, maxTimeSeekable()) 
+        : TimeRanges::create(); }
+
+    virtual float maxTimeSeekable() const = 0;
+    virtual PassRefPtr<TimeRanges> buffered() const = 0;
+};
+
+class QMediaPlayerInterface
+{
+    struct TimeRange
+    {
+        TimeRange()
+            : start(0.0),
+            end(0.0)
+        {}
+
+        TimeRange(float start_, float end_)
+            : start(start_),
+            end(end_)
+        {}
+
+        /** Start time in seconds */
+        float start;
+        /** End time in seconds */
+        float end;
+    };
+
+};
+
+
+QMediaPlayerInterface::TimeRange VanadiumMediaPlayer::seekable() const
+{
+    Position position = mediaRouter->getPosition().get();
+    VANADIUM_TRACE(
+            "start: " << position.start << " end: " << position.end);
+
+    if(mediaRouterMode == LIVE)
+    {
+        float start = static_cast<float>(positionCalculator->getCurrentPositionMS(position)
+                + (position.start - position.current)) / 1000.0;
+        float end = static_cast<float>(positionCalculator->getCurrentPositionMS(position)
+                + (position.end - position.current)) / 1000.0;
+        return QMediaPlayerInterface::TimeRange(start, end);
+    }
+    else if(mediaRouterMode == VOD)
+    {
+        return QMediaPlayerInterface::TimeRange(static_cast<float>(position.start) / 1000.0,
+                static_cast<float>(position.end) / 1000.0);
+    }
+    else
+    {
+        // Not initialised yet
+        return QMediaPlayerInterface::TimeRange();
+    }
+}
+
+
+PassRefPtr<TimeRanges> MediaPlayerPrivateMediaRouter::seekable() const
+{
+    return translateTimeRange(m_mediaPlayerImpl->seekable());
+}
+
+
+PassRefPtr<TimeRanges> MediaPlayer::seekable()
+{
+    return m_private->seekable();
+}
+
+
+PassRefPtr<TimeRanges> HTMLMediaElement::seekable() const
+{
+    return m_player ? m_player->seekable() : TimeRanges::create();
+}
+
+
+DEVARCH-10266: Clamp getPosition values differently for VOD and live YV media
+routers
+
+The YV media router populates the values returned via the getPosition
+API by making a GStreamer buffer query and combining this with the
+current presentation time. To ensure that the current position does not
+appear to be outside the current buffer region the current position is
+"clamped" within the buffer region.
+
+Essentially the logic says that if current time is <= than the start of
+the buffer region then current time = start, and if current time is >=
+the end of the buffer region then current time = end.
+
+This works fine for VOD streams, but for live streams it has the
+unfortunate side effect that when getPosition is called before playback
+has fully started presentation time will be zero so current position
+will be "clamped" to the start of the seek-back buffer. Shortly
+afterwards when we have a valid presentation time, current position will
+jump to near the end of the seek-back buffer. This causes problems for
+the browser which uses the initial call to getPosition to get the size
+of the seek-back buffer (current - start).
+
+We can solve this by saying that for live streams the presentation time
+should always be clamped to the end of the buffer region when it falls
+outside, since it should never genuinely be zero. This means that the
+browser will get a more-or-less accurate view of the size of the
+seek-back buffer when starting playback
+
+Unfortunately it has not been possible to reproduce this behaviour in a
+unit test, and any such test would necessarily be subject to race
+conditions as the new logic in GstMediaRouter::getPosition is only
+triggered when querying a partially initialised GStreamer pipeline
+
+diff --git a/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
+b/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
+
+int64_t VirtualBinSink::getPresentationTime(const GstFormat format)
+{
+    int64_t pos = GST_CLOCK_TIME_NONE;
+
+    RefObj<GstElement> sink =
+        gst_bin_get_by_name (GST_BIN(getParent().get()), "videosink");
+
+    gst_element_query_position(sink.get(), format, &pos);
+
+    return pos;
+}
+
+const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+{
+}
 
 
 ={============================================================================
