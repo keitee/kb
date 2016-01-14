@@ -40,7 +40,8 @@
 |kt_dev_uv_stack_011| zinc-log
 |kt_dev_uv_stack_013| stack: platform data
 *kt_dev_uv_stack_014* zinc-test
-*kt_dev_uv_stack_014* zinc-test-support
+*kt_dev_uv_stack_014* zinc-test: support
+*kt_dev_uv_stack_014* zinc-test: automation
 
 |kt_dev_uv_stack_100| stack: element names
 *kt_dev_uv_stack_101* zinc-plugin: plugin and client system
@@ -102,12 +103,14 @@
 *kt_dev_uv_stack_408* mr-dash: seekable range
 *kt_dev_uv_stack_408* mr-dash: output control
 *kt_dev_uv_stack_408* mr-dash: seek and resume
+*kt_dev_uv_stack_408* mr-dash: slow play on t1000
 
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
-*kt_dev_uv_stack_408* mr-dash: dbus log: from start to complete
+*kt_dev_uv_stack_408* mr-dash: dbus log: from play start to complete
 *kt_dev_uv_stack_254* mr-dash: event listener
 *kt_dev_uv_stack_254* mr-dash: natual size
+*kt_dev_uv_stack_254* mr-dash: test web server
 *kt_dev_uv_stack_254* mr-dash: gstmediaroutertest
 *kt_dev_uv_stack_254* mr-dash: gstmediaroutertest: invalid url
 *kt_dev_uv_stack_254* mr-dash: device auth
@@ -161,7 +164,6 @@
 |kt_dev_uv_stack_450| stack: cobalt
 
 |kt_dev_uv_stack_500| stack: iron
-*kt_dev_uv_stack_500* zinc-test-web
 *kt_dev_uv_stack_500* zinc-js: 
 
 |kt_dev_uv_stack_114| stack: build pc target
@@ -206,7 +208,6 @@
 *kt_dev_uv_task_010* task:09: fr15: yv meadia router switch
 *kt_dev_uv_task_011* task:09: fr15: video resize support
 *kt_dev_uv_task_011* task:09: fr15: dash error handling
-*kt_dev_uv_task_011* task:09: fr15: underflow error handling
 *kt_dev_uv_task_011* task:09: fr15: fix gstmediaroutertest failure
 *kt_dev_uv_task_011* task:09: fr15: wrong drm db creation on HWEI PVR2
 
@@ -3636,6 +3637,24 @@ verifyAndClearMock   42 Zinc/Zinc.Common/include/testsupport/VerifyAndClearMock.
 #52 0x00007f5015b4793f in CppUnit::TextTestRunner::run (this=0x7ffda2867838, testName="", doWait=false, doPrintResult=true, doPrintProgress=true) at TextTestRunner.cpp:64
 #53 0x000000000055521f in zinc::TestRunner::run (this=0x7ffda2867820) at /home/kpark/builds/_virtual_/pc/DEVARCH/Zinc/Zinc.Common/test/testsupport/TestRunner.cpp:163
 #54 0x0000000000552dac in main (argc=1, argv=0x7ffda2867a28) at /home/kpark/builds/_virtual_/pc/DEVARCH/Zinc/Zinc.Common/include/testsupport/CompileTimeTestRunner.cpp:29
+
+
+={============================================================================
+*kt_dev_uv_stack_014* zinc-test: automation
+
+Clone one from:
+https://jira.youview.co.uk/browse/TESTAUT-1492
+
+{ex-result}
+PRK boxes are running
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/5821_iplayer_launch_PRK/
+
+testaut-9-stb-1 : DTRT1000 PRK
+testaut-9-stb-4 : DTRT2100 PRK
+
+One ATK box running so far (other one still being configured)
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/5841_iplayer_launch_ATK/
+testaut-10-stb-1: DTRT1000 ATK
 
 
 ={============================================================================
@@ -9094,7 +9113,7 @@ note: to print out periodically
 (function() {
     video = document.getElementById('mediaPlayerVideo');
     video.addEventListener("timeupdate", function() {
-    console.log("ended?:", video.ended);
+    console.log("video.ended?:", video.ended);
     console.log("readyState?:", video.readyState);
     console.log("networkState?:", video.networkState);
     });
@@ -9104,6 +9123,13 @@ note: to print out periodically
     video = document.getElementById('mediaPlayerVideo');
     video.addEventListener("timeupdate", function() {
     console.log("currentTime:", video.currentTime);
+    });
+})()
+
+(function() {
+    video = document.getElementById('mediaPlayerVideo');
+    video.addEventListener("progress", function() {
+    console.log("progress is on!!");
     });
 })()
 
@@ -10060,7 +10086,8 @@ bool HTMLMediaElement::ended() const
 <when-finish-play-hls>
 
 /VanadiumMediaPlayer.cpp:671 KT: statusEvent: 0 
-    (started) changes to HAVE_ENOUGH_DATA
+    (started) fire changes to HAVE_ENOUGH_DATA when not seeking
+
 /VanadiumMediaPlayer.cpp:673 KT: currentNetworkState: 2 currentReadyState: 3
     HAVE_FUTURE_DATA (3)
 
@@ -10637,10 +10664,10 @@ This commit implements the same handling of this in YV MediaRouter land.
 
     enum ReadyState
     {
-        HAVE_NOTHING,
+        HAVE_NOTHING,       (0)
         HAVE_METADATA,
         HAVE_CURRENT_DATA,
-        HAVE_FUTURE_DATA, (3)
+        HAVE_FUTURE_DATA,   (3)
         HAVE_ENOUGH_DATA
     };
 
@@ -10648,7 +10675,7 @@ This commit implements the same handling of this in YV MediaRouter land.
     {
         NETWORK_EMPTY,
         NETWORK_IDLE,
-        NETWORK_LOADING, (2)
+        NETWORK_LOADING,    (2)
         NETWORK_ERROR,
         NETWORK_LOADED,
         DECODE_ERROR,
@@ -10697,12 +10724,20 @@ the following steps.
     controller state for the media element's current media controller.
 
 
-note: This is web inspector log when iplayer is playing without `started` event
-from GST MT and changing ready to HAVE_ENOUGH_DATA.
+note: This is web inspector log when iplayer is 'playing' without `started`
+event from GST MT and changing ready to HAVE_ENOUGH_DATA.
 
 ended?: false
-readyState?: 3
-networkState?: 2
+readyState?: 3      // HAVE_FUTURE_DATA, (3)
+networkState?: 2    // NETWORK_LOADING, (2)
+
+note: when stop the first and play second, see readyState changes
+readyState?: 0      // HAVE_NOTHING
+networkState?: 2    // NETWORK_LOADING, (2)
+
+readyState?: 3      // HAVE_FUTURE_DATA, (3)
+networkState?: 2    // NETWORK_LOADING, (2)
+
 
 Why plays well? Since as stated above, HAVE_FUTURE_DATA(3) is valid state.
 
@@ -10737,10 +10772,9 @@ HAVE_FUTURE_DATA (numeric value 3)
 note: Vanadium set this state when gets source_config_completed event.
 
 note: This is when have `started` event and see ready state is
-HAVE_ENOUGH_DATA(4).
 
 ended?: false
-readyState?: 4
+readyState?: 4      // HAVE_ENOUGH_DATA(4).
 networkState?: 2
 
 
@@ -13777,7 +13811,7 @@ void GstMediaRouter::seekPosition_async(
         throw InvalidEnumerationException();
     }
 
-    // note: when commenting out "return", works okay. 
+    // note: <fix> when commenting out "return", works okay. 
     if (stopped) {
         NICKEL_ERROR("KT: seekPosition_async: XXX: Don't know what to do at this point");
         // XXX: Don't know what to do at this point
@@ -13790,16 +13824,30 @@ void GstMediaRouter::seekPosition_async(
     ...
 };
 
-+ The current implementation assumes that seeking happens only when a play is
-  playing state. Not allow seeking in stopped state as above.
+    1. The resume is implemented by seeking to the point of resume.
 
-+ Seeking failed and starts play. The current pos is far behind from seeking
-  point which is a point of resuming. Hence spinner and error popup.
+    2. The current implementation assumes that seeking happens 'only' when a
+    play is playing state. Not allow seeking in stopped state as above.
 
-+ With the fix, resume play ends well but when play it again, got a black
-  screen. Turns out that the second play don't happen. This is the same with
-  in-process version so not to go further. Seems that every play means each MR
-  instance.
+    3. Seeking 'fails' and starts play. The current pos starts from 0 but resume
+    starts from somewhere in the middle. So the current is far behind from the
+    resume.
+
+    -----x------------------x-----------------------
+         0                  resume 
+
+    So looks like buffer underrun. Hence spinner 'and' error popup while video
+    is running background.
+
+    note: ready/networkStatus are the same as 'playing' state so uses current
+    position.
+
+    note: cannot run js script code to see status in this case.
+
+    4. With the fix, resume play ends well but when play it again, got a black
+    screen. Turns out that the second play don't happen. This is the same with
+    in-process version so not to go further. Seems that every play means each MR
+    instance.
 
 
 DEVARCH-10744: Nickel.GStreamer: Fix up resume play error in BBC iplayer.
@@ -13814,6 +13862,217 @@ from the wrong position, and eventually leads the player to these error state.
 
 This commits allows a seek operation in stopped state in YV MediaRouter as the
 in-process MediaRouter does.
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash: slow play on t1000
+
+// result from automation test
+
+PRK boxes are running
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/5821_iplayer_launch_PRK/
+
+testaut-9-stb-1 : DTRT1000 PRK
+testaut-9-stb-4 : DTRT2100 PRK
+
+// PRK shows no issue
+
+One ATK box running so far (other one still being configured)
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/5841_iplayer_launch_ATK/
+testaut-10-stb-1: DTRT1000 ATK
+
+// ATK shows three cases but the box seems unstable since there are many other
+// failures.
+
+
+The failed cases are:
+
+{1}
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/result/189386/
+
+Failure reason:
+
+NoMatchTimeout: Still found match for
+'images/players/iplayer/bbc-iplayer-html5-info-unselected.png' after 60 seconds.
+
+
+2016-01-13 19:58:04.331761  |  -    |  -    | Sig |  MR-0 |BufferStatusEvent | BUFFERING_STARTED
+2016-01-13 19:58:04.333408  | 32    |  -    | --> |  MR-0 |getPosition |
+2016-01-13 19:58:04.361199  |  -    | 32    | <-- |  MR-0 |getPosition | Start:0
+                            |       |       |     |       || Current:0
+                            |       |       |     |       || End:0
+
+
+2016-01-13 19:59:05.298024  |  -    | 50    | <-- |  MR-0 | start | 
+
+2016-01-13 19:59:07.178443  |  -    | 65    | <-- |  MR-0 | getPosition | Start:0
+                            |       |       |     |       | | Current:680
+                            |       |       |     |       | | End:500000
+
+
+{2} note: no underflow event
+
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/result/189346/
+
+2016-01-13 19:46:32.090697  |  -    | 31    | <-- |  MR-1 | startBuffering | 
+
+// first getPosition
+2016-01-13 19:46:32.098104  |  -    | 32    | <-- |  MR-1 | getPosition | Start:0
+                            |       |       |     |       | | Current:0
+                            |       |       |     |       | | End:0
+
+2016-01-13 19:46:32.202974  |  -    |  -    | Sig |  MR-1 | BufferStatusEvent | BUFFERING_STARTED
+
+2016-01-13 19:46:32.098104  |  -    | 32    | <-- |  MR-1 | getPosition | Start:0
+                            |       |       |     |       | | Current:0
+                            |       |       |     |       | | End:0
+
+2016-01-13 19:47:33.529028  |  -    | 50    | <-- |  MR-1 | start | 
+
+2016-01-13 19:47:35.545325  |  -    | 65    | <-- |  MR-1 | getPosition | Start:0
+                            |       |       |     |       | | Current:800
+                            |       |       |     |       | | End:500000
+
+
+{3}
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/result/189307/
+
+<mr-dbus-log>
+2016-01-13 19:34:55.675921  |  -    | 30    | <-- |  MR-0 | setSink| 
+
+// note: how to see this log
+//   *       MediaRouterDbusSpy 1.4          *
+// method call sender=:1.131 -> dest=:1.79 serial=31 path=/Zinc/Media/MediaRouters/1; 
+// interface=Zinc.Media.MediaRouter; member=startBuffering
+// method return sender=:1.79 -> dest=:1.131 reply_serial=31
+// 
+// call to MR
+// [94m2016-01-13 19:34:55.679579  | 31    |  -    | --> |  MR-0 |startBuffering | [0m
+// 
+// response from MR
+// 2016-01-13 19:34:55.745047  |  -    | 31    | <-- |  MR-0 | startBuffering[0m | 
+
+
+2016-01-13 19:34:54.865554  |  -    |  -    | Sig |  MR-0 | SourceEvent | event:CHANGE_COMPLETE
+                            |       |       |     |       | | reason:CHANGE_COMPLETE
+
+2016-01-13 19:34:55.679579  | 31    |  -    | --> |  MR-0 | startBuffering
+2016-01-13 19:34:55.746735  |  -    |  -    | Sig |  MR-0 | BufferStatusEvent | BUFFERING_STARTED
+
+
+// first getPosition
+2016-01-13 19:34:55.750716  |  -    | 32    | <-- |  MR-0 | getPosition | Start:0
+                            |       |       |     |       | | Current:0
+                            |       |       |     |       | | End:0
+
+2016-01-13 19:35:57.059598  |  -    | 50    | <-- |  MR-0 | start | 
+
+2016-01-13 19:34:57.938426  |  -    |  -    | Sig |  MR-0 | SourceEvent | event:SOURCE_CONFIG_COMPLETE
+                            |       |       |     |       | | reason:CHANGE_COMPLETE
+
+2016-01-13 19:35:56.913966  |  -    | 44    | <-- |  MR-0 | getMediaDuration | duration: 500000
+
+2016-01-13 19:35:59.442762  |  -    |  -    | Sig |  MR-0 | StatusEvent | UNDERFLOW
+2016-01-13 19:35:59.455606  |  -    |  -    | Sig |  MR-0 | SourceEvent | event:SOURCE_INFORMATION_CHANGE
+                            |       |       |     |       | | reason:CHANGE_INITIATED
+
+
+2016-01-13 19:35:59.700531  |  -    | 69    | <-- |  MR-0 | getPosition | Start:0
+                            |       |       |     |       | | Current:0
+                            |       |       |     |       | | End:500000
+
+// 
+2016-01-13 19:35:59.800012  |  -    | 72    | <-- |  MR-0 | getPosition | Start:0
+                            |       |       |     |       | | Current:200
+                            |       |       |     |       | | End:500000
+
+
+{4}
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/result/189065/
+
+2016-01-13 18:16:14.517797  |  -    |  -    | Sig |  MR-0 | BufferStatusEvent | BUFFERING_STARTED
+2016-01-13 18:16:14.665300  |  -    | 32    | <-- |  MR-0 | getPosition | Start:0
+                            |       |       |     |       | | Current:0
+                            |       |       |     |       | | End:0
+
+2016-01-13 18:17:16.251318  |  -    | 50    | <-- |  MR-0 | start | 
+
+2016-01-13 18:17:18.050512  |  -    |  -    | Sig |  MR-0 | SourceEvent | event:SOURCE_INFORMATION_CHANGE
+                            |       |       |     |       | | reason:CHANGE_INITIATED
+
+2016-01-13 18:17:19.559665  |  -    | 65    | <-- |  MR-0 | getPosition | Start:0
+                            |       |       |     |       | | Current:1280
+                            |       |       |     |       | | End:500000
+
+
+{2100}
+[14-01-2016 16:34:37.229841] signal sender=:1.79 -> dest=(null destination) 
+    serial=77348 path=/Zinc/Media/MediaRouters/11; 
+    interface=Zinc.Media.MediaRouter; 
+    member=BufferStatusEvent
+   int32 0      // buffering_started
+
+
+// first get current
+
+[14-01-2016 16:34:37.241742] interface=Zinc.Media.MediaRouter; 
+member=getPosition
+
+[14-01-2016 16:34:37.244036] reply_serial=32
+   struct {
+      int32 0
+      int32 0
+      int32 0
+   }
+
+[14-01-2016 16:34:39.549544] interface=Zinc.Media.MediaRouter; 
+member=start
+
+[14-01-2016 16:34:39.808456] interface=Zinc.Media.MediaRouter; 
+member=SourceEvent
+   int32 2
+   int32 0
+
+// get current
+
+[14-01-2016 16:34:40.426769] interface=Zinc.Media.MediaRouter; 
+member=getPosition
+
+[14-01-2016 16:34:40.428863] reply_serial=65
+   struct {
+      int32 0
+      int32 400
+      int32 3480000
+   }
+
+
+{1000}
+[14-01-2016 17:00:36.324605] interface=Zinc.Media.MediaRouter; member=getPosition
+
+[14-01-2016 17:00:36.338401] interface=Zinc.Media.MediaRouter; member=BufferStatusEvent
+   int32 0
+
+// get pos reply
+[14-01-2016 17:00:36.343826] method return sender=:1.77 -> dest=:1.178 reply_serial=32
+   struct {
+      int32 0
+      int32 0
+      int32 0
+   }
+
+[14-01-2016 17:00:41.054115] interface=Zinc.Media.MediaRouter; member=start
+
+[14-01-2016 17:00:49.449247] interface=Zinc.Media.MediaRouter; member=SourceEvent
+   int32 2
+   int32 0
+
+[14-01-2016 17:00:50.607264] interface=Zinc.Media.MediaRouter; member=getPosition
+[14-01-2016 17:00:50.612785] method return sender=:1.77 -> dest=:1.178 reply_serial=62
+   struct {
+      int32 0
+      int32 960
+      int32 1731000
+   }
 
 
 ={============================================================================
@@ -14082,90 +14341,93 @@ path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorE
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: dbus log: from start to complete
+*kt_dev_uv_stack_408* mr-dash: dbus log: from play start to complete
 
-method call sender=:1.121 -> dest=:1.72 serial=29 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setSource
+method call sender=:1.131 -> dest=Zinc.MediaProxy serial=25 
+path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
+member=*createMediaRouter*
+
+method call sender=:1.121 -> dest=:1.72 serial=29 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*setSource*
    string "http://vod-hls-uk-live.bbcfmt.vo.llnwd.net/usp/auth/vod/piff_abr_full_hd/beb516-p034nsgv/vf_p034nsgv_ef27e25c-5275-46cd-9909-2b36738e4133.ism.hlsv2.ism/iptv_sdlow_abr_v1_hls_master.m3u8?s=1448440401&e=1448483601&h=746324fd8226beda57d6dd92f26539ef"
    int32 1
 
-
 signal sender=:1.72 -> dest=(null destination) serial=5133
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=SourceEvent 
-    int32 1   // note:
+member=*SourceEvent* 
+    int32 1   // change_complete = 1,
     int32 1
 
-method call sender=:1.121 -> dest=:1.72 serial=30 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setSink
+method call sender=:1.121 -> dest=:1.72 serial=30 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*setSink*
    string "decoder://0"
-
 
 method call sender=:1.121 -> dest=:1.72 serial=31
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=startBuffering
+member=*startBuffering*
 
 signal sender=:1.72 -> dest=(null destination) serial=5136
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=BufferStatusEvent 
-    int32 0   // note buffering_started = 0,
+member=*BufferStatusEvent* 
+    int32 0   // buffering_started = 0,
+    note: this cause "currentNetworkState = NETWORK_LOADING;"
 
 signal sender=:1.72 -> dest=(null destination) serial=5139
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=SourceEvent
-   int32 3    // note:
+member=*SourceEvent*
+   int32 3    // source_config_complete = 3,
    int32 1
 
 
-method call sender=:1.121 -> dest=:1.72 serial=33 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setVideoWindow
-   struct {
-      double 0
-      double 0
-      double 1
-      double 1
-      double 0
-      double 0
-      double 1
-      double 0.888889
-   }
-method call sender=:1.121 -> dest=:1.72 serial=34 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setVideoWindow
-   struct {
-      double 0
-      double 0
-      double 1
-      double 1
-      double 0
-      double 0.0555556
-      double 1
-      double 0.888889
-   }
-method call sender=:1.121 -> dest=:1.72 serial=35 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=getSourceInformation
-method call sender=:1.121 -> dest=:1.72 serial=37 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setVideoWindow
-   struct {
-      double 0
-      double 0
-      double 1
-      double 1
-      double 0
-      double 0.0555556
-      double 1
-      double 0.944444
-   }
+member=setVideoWindow
+
+method call sender=:1.121 -> dest=:1.72 serial=35 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=getSourceInformation
+method return sender=:1.79 -> dest=:1.131 reply_serial=35
+   array [
+      dict entry(
+         string "CONFIGURATION"
+         string "ONDEMAND.ABR"
+      )
+      dict entry(
+         string "VIDEO_HEIGHT"
+         string "0"
+      )
+      dict entry(
+         string "VIDEO_WIDTH"
+         string "0"
+      )
+   ]
+
+member=getPosition
+member=getMediaDuration
+...
 
 method call sender=:1.121 -> dest=:1.72 serial=49
-  path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=setPlaySpeed double 1
-
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=*setPlaySpeed* 
+    double 1
 
 method call sender=:1.121 -> dest=:1.72 serial=50
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=start
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*start*
 
+note: see source_information_change after start and this means decoded a stream.
 
 signal sender=:1.72 -> dest=(null destination) serial=5160
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=SourceEvent 
-    int32 2 
+member=*SourceEvent* 
+    int32 2     // source_information_change = 2,
     int32 0
 
-method call sender=:1.121 -> dest=:1.72 serial=62 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setVideoWindow
+note: see setVideoWindow with right values
+
+method call sender=:1.121 -> dest=:1.72 serial=62 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*setVideoWindow*
    struct {
       double 0
       double 0
@@ -14177,11 +14439,22 @@ method call sender=:1.121 -> dest=:1.72 serial=62 path=/Zinc/Media/MediaRouters/
       double 1
    }
 
-method call sender=:1.121 -> dest=:1.72 serial=78
-  path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=getSourceInformation
+note: getPosition starts to show a change of current position
+
+method call sender=:1.131 -> dest=:1.79 serial=64 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=getPosition
+method return sender=:1.79 -> dest=:1.131 reply_serial=64
+   struct {
+      int32 0
+      int32 440         *current-pos*
+      int32 1737000
+   }
+
+// keep calling getPosition and getDuration ...
 
 
+// end of play
 signal sender=:1.72 -> dest=(null destination) serial=9845
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=StatusEvent 
@@ -14440,6 +14713,165 @@ Here, "eSar" and square AR
 ar: 6, { 1, 1 }
 
 dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
+
+
+={============================================================================
+*kt_dev_uv_stack_254* mr-dash: test web server
+
+https://wiki.youview.co.uk/display/canvas/2010/12/01/HTTP+Test+Server?src=search
+
+HTTP Test Server
+
+Added by Milton Mukhopadhyay, last edited by Dave Evans on Jan 18, 2011
+
+I am documenting the original use cases and requirements for the test server
+here, but as an 'embeddable' HTTP server might be useful for testing other
+components as well, please add additional requirements that we may need to cater
+to other use cases.  
+
+Pre-Implementation Stuff: 
+
+Use Cases
+
+  MetadataBroker has Python asynchronous HTTP client implemented with
+  pycurl+libcurl. We need to have unit testcases for the component.
+
+  We need to be able to test MetadataBroker against exceptional conditions where
+  HTTP server would reply back with different status codes and other errors.  
+  
+  We need to be able to test the MetadataBroker performance with or without the
+  HTTP cache by selectively injecting delays in HTTP server responses.
+
+
+High Level Requirements
+
+  To have an embeddable HTTP Server.
+  It should be possible to programmatically control the HTTP server behaviour.
+
+
+Low Level Requirements
+
+  To be able to run the server and clients on different threads in the same
+  process.
+
+  To be able to serve a request with programmatically specified header fields.
+  To be able to serve a request with HTTP response body taken from a string.
+  To be able to serve a request with HTTP response body taken from a file.
+  To be able to serve a request with programmatically specified HTTP status
+  code.
+
+  To be able to inject delay in serving requests for specific URLs.
+
+  It should be possible to use it as HTTP 1.1 file server.
+
+  To be able to serve a body as a series of chunks to verify pause/resume
+  download functionality.
+
+  To be able to verify that two HTTP requests are interleaved, possibly by
+  chunking. E.g. Deterministically download job1-chunk1, job2-chunk1,
+  job1-chunk2, job2-chunk2.
+
+
+Implementation Decisions
+
+We've decided to use mongoose as the core webserver. Mongoose is a single file,
+light weight web server, that can be run directly as a file server or it may
+  serve requests through callbacks.
+
+  When serving requests through callbacks it works as a simple listener with a
+  thread pool to invoke callbacks.
+  
+  As a standalone server it works as a HTTP 1.1 compliant file server. 
+
+We need a wrapper for creating HTTP responses from inside test cases. The
+wrapper would be responsible for the following :
+
+  Configuring the HTTP server.
+
+  Creating per URL handlers (pity that mongoose does not support per URI
+      callbacks anymore, on the other hand the API is quite succinct now.)
+
+  Creating HTTP responses with different kinds of headers, bodies, status codes
+  etc.
+
+
+Implementation Details :
+
+Mongoose :
+
+Mongoose is a single file webserver library with a command line standalone
+directory server. I had to pick up the development version of the source as
+certain APIs are not yet there in the stable version. So though we are using
+Mongoose 3.0, it is yet to be released (I picked the version number from its
+    header file). To have it under Zinc.3rdPartyStack , I patched it to make it
+an autotool project with proper package config etc.
+
+Wrappers :
+
+We have some wrappers on mongoose to make it possible to use the Http server
+programmatically in Zinc.TestWebServer. At the moment this is really like a
+framework that supports the usescases mentioned above. I believe we can easily
+add more features to it. We can also replace mongoose with any other Http Server
+if required as 'mongoose' is completely contained within MongooseWrapper.cpp and
+  any other class supporting the contract could be used.  
+    
+
+How to use : 
+
+In short, create a configuration object, one or more responder objects and run
+the server with the configuration and any number of responders. Whenever the
+server gets 'requests' from a Http client the appropriate 'responder' will
+respond to it.
+
+
+A longer desc:
+
+  Create ManualServerConfig object specifying the port on which you want your
+  server to run.
+
+  Create a 'responder' where you have the code to 'handle' actual Http requests.
+  At the moment we have a convenience responder called SimpleResponder, which
+  has methods to add header fields, body etc. so that whenever it gets requests
+  from a client it replies back with those fields and content.
+
+  A HttpServer is created with the configuration object and one or more
+  responders. You can register a responder against a particular URL or the
+  responder could be a 'wildcard' responder with empty string for the URL. A
+  wildcard responder is going to be invoked whenever there is no specific
+  responder registered for a URL.
+
+  Run the HttpServer. There is a convenient ServerRunner class that uses RAII to
+  call the start() and stop() methods on the HttpServer. 
+
+Using TestWebServer in MetadataBroker :
+
+TestWebServer is used in MetadataBroker to simulate MAS behaviour; a new set of
+representative testcases are there in MetadataBrokerHttpTests.
+
+Cobalt/Cobalt.System.Production/test/HttpGeneralTests.cpp
+
+In addition to being able to test HTTP client, it has also simplified the
+testcase writing process, as :
+
+  For the first time we could proplerly verify MetadataBroker generated URIs and
+  query strings ( we dont just have to depend on the directory structure for
+      that).
+
+  When using the TestWebServer we dont have to replicate the URL hierarchy. (So
+      we dont need to have deeply nested directories with funny file names in
+      mas-data anymore.)
+
+TODOs:
+
+  Have a programmatically controllable directory serving responder.
+  Have a convenience responder to selectively inject delays before it replies.
+  Think of all the other error injection possibilities.
+  I need to add more test cases ... at the moment I am banking on the fact that
+  since I am writing testcases in MetadataBroker using the testwebserver that
+  would in turn test the webserver as well.
+
+
+https://wiki.youview.co.uk/display/canvas/2011/02/11/HTTP+Test+Server+-+Updated?src=search
 
 
 ={============================================================================
@@ -15259,11 +15691,11 @@ commit 0c4b989fe8d287edb89d202e0e4104ab506fd16c
 Author: Alex Ashley <alex.ashley@youview.com>
 Date:   Fri Mar 28 11:15:11 2014 +0000
 
-    DEVARCH-7251: send meaningful warnings and errors from gst_nexus_sink_on_error
-    
-    Rather than sending an error number from nexussink using a private
-    message structure, this commit replaces this with meaningful error
-    or warning messages using the gstreamer defined message structures.
+DEVARCH-7251: send meaningful warnings and errors from gst_nexus_sink_on_error
+
+Rather than sending an error number from nexussink using a private
+message structure, this commit replaces this with meaningful error
+or warning messages using the gstreamer defined message structures.
 
 static void gst_nexus_sink_on_error( void* context, int reason )
 {
@@ -15318,7 +15750,6 @@ bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
 {
   case GST_MESSAGE_WARNING:
     {
-
       gchar  *debug = NULL;
       GError *error = NULL;
 
@@ -15330,6 +15761,8 @@ bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
       if (!seekInFlight && !underflow && error->code == GST_STREAM_ERROR_FAILED) {
         underflow = true;
         underflowTime = sinkBin->getPresentationTime(GST_FORMAT_TIME);
+
+        // note: fire UNDERFLOW
         produceStatusEvent(StatusEventValue::underflow);
       }
 
@@ -15337,10 +15770,10 @@ bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
     }
 }
 
+// not handle this event
+
 void VanadiumMediaPlayer::StatusEvent(const StatusEventValue::Enum statusEvent)
 {
-    VANADIUM_FUNC_TRACE;
-
     VANADIUM_DEBUG("statusEvent: " << statusEvent);
 
     // STARTED: A StatusEvent of this value shall be emitted when the first
@@ -15372,6 +15805,8 @@ void VanadiumMediaPlayer::StatusEvent(const StatusEventValue::Enum statusEvent)
 
 
 <old-private-gst>
+Not sure how stalled event is fired but see the state changes. So follows this
+implementation for the fix.
 
 if (err && err->code == GST_STREAM_ERROR_FAILED && 
     g_strrstr(debug, "FIFO empty") && !m_stallTimerHandler)
@@ -15381,7 +15816,8 @@ if (err && err->code == GST_STREAM_ERROR_FAILED &&
             MediaPlayerPrivateGStreamer::stallTimeoutCallback), this);
 }
 
-gboolean MediaPlayerPrivateGStreamer::stallTimeoutCallback(MediaPlayerPrivateGStreamer* player)
+gboolean MediaPlayerPrivateGStreamer::stallTimeoutCallback
+    (MediaPlayerPrivateGStreamer* player)
 {
   // This is the callback for a timeout following a FIFO empty message from Nexus
   ASSERT(isMainThread());
@@ -15415,33 +15851,61 @@ forthcoming.
 
 networkState is NETWORK_LOADING. 
 
-<implemented>
 
+<implemented>
 void VanadiumMediaPlayer::StatusEvent(const StatusEventValue::Enum statusEvent)
 {
-    VANADIUM_FUNC_TRACE;
-
     VANADIUM_DEBUG("statusEvent: " << statusEvent);
 
-    ...
-
-    if(QMediaPlayerInterface::NETWORK_LOADING == currentNetworkState &&
-        StatusEventValue::underflow == statusEvent)
+    if(statusEvent == StatusEventValue::started)
     {
-        VANADIUM_DEBUG("statusEvent: UNDERFLOW: currentNetworkState " 
-            << currentNetworkState );
-        currentReadyState = HAVE_CURRENT_DATA;
-        callbacks.readyStateChanged();
+        ...
+
+        // note: cancel a timer
+        if(stallTimer)
+        {
+            // We were stalled and normal playback has just resumed
+            g_source_remove(stallTimer);
+            stallTimer = 0;
+        }
     }
+
+    else if(StatusEventValue::underflow == statusEvent &&
+        QMediaPlayerInterface::NETWORK_LOADING == currentNetworkState &&
+        !stallTimer)
+    {
+        const guint STALL_TIMEOUT = 3;
+        stallTimer = g_timeout_add_seconds(STALL_TIMEOUT,
+                VanadiumMediaPlayer::stallTimerCallback, this);
+    }
+}
+
+
+// this will remove timer itself so run once
+
+gboolean VanadiumMediaPlayer::stallTimerCallback(void* data)
+{
+    VanadiumMediaPlayer* player = static_cast<VanadiumMediaPlayer*>(data);
+
+    if(player)
+    {
+        // set state which is the previous state, HAVE_CURRENT_DATA, than normal
+        // playing state, HAVE_FUTURE_DATA.
+
+        player->currentReadyState = HAVE_CURRENT_DATA;
+        player->callbacks.readyStateChanged();
+        player->stallTimer = 0;
+    }
+    return G_SOURCE_REMOVE;
 }
 
 
 <wait-three-seconds>
 The stall timeout is a user-agent defined length of time, which should be about
-three seconds. When a media element that is actively attempting to obtain media
-data has failed to receive any data for a duration equal to the stall timeout,
-     the user agent must queue a task to fire a simple event named stalled at
-     the element.
+'three' seconds. When a media element that is actively attempting to obtain
+media data has failed to receive any data for a duration equal to the stall
+timeout, the user agent must queue a task to fire a simple event named stalled
+at the element.
 
 
 <log-when-seeking-on-implemented>
@@ -15468,6 +15932,22 @@ started (why two started events?)
 anadiumMediaPlayer.cpp:537 KT: statusEvent: 0
 anadiumMediaPlayer.cpp:542 KT: statusEvent: started: isSeeking: 0 currentReadyState: 4
 anadiumMediaPlayer.cpp:558 KT: not seeking and remove stall timer: 
+
+
+<dev>
+DEVARCH-10424: YV MediaRouter: Underflow error support
+
+The YV MediaRouter allows the client application to receive HTMLMediaElement
+events for underflow event reported during play via StatusEvent.
+
+This commit enables video element in HTML to receive underflow event through
+WebKit and implements unit tests according to the YV MediaRouter[1] and the
+design requirement[2].
+
+This commit comes with corresponding test in Vanadium test harness.
+
+[1] 1125-S Media Router Specification v1.3
+[2] https://jira.youview.co.uk/browse/SOLDES-584
 
 
 ={============================================================================
@@ -19171,166 +19651,6 @@ drwxr-xr-x 7 kpark kpark 4096 Jan  7 15:55 ../
 -rwxr-xr-x 1 kpark kpark  463 Jan  7 15:55 linearmetadata-getevents*
 -rwxr-xr-x 1 kpark kpark  173 Jan  7 15:55 linearmetadata-getservice*
 -rwxr-xr-x 1 kpark kpark  165 Jan  7 15:55 linearmetadata-getservicelist*
-
-
-={============================================================================
-*kt_dev_uv_stack_500* zinc-test-web
-
-https://wiki.youview.co.uk/display/canvas/2010/12/01/HTTP+Test+Server?src=search
-
-HTTP Test Server
-
-
-Added by Milton Mukhopadhyay, last edited by Dave Evans on Jan 18, 2011
-
-I am documenting the original use cases and requirements for the test server
-here, but as an 'embeddable' HTTP server might be useful for testing other
-components as well, please add additional requirements that we may need to cater
-to other use cases.  
-
-Pre-Implementation Stuff: 
-
-Use Cases
-
-  MetadataBroker has Python asynchronous HTTP client implemented with
-  pycurl+libcurl. We need to have unit testcases for the component.
-
-  We need to be able to test MetadataBroker against exceptional conditions where
-  HTTP server would reply back with different status codes and other errors.  
-  
-  We need to be able to test the MetadataBroker performance with or without the
-  HTTP cache by selectively injecting delays in HTTP server responses.
-
-
-High Level Requirements
-
-  To have an embeddable HTTP Server.
-  It should be possible to programmatically control the HTTP server behaviour.
-
-
-Low Level Requirements
-
-  To be able to run the server and clients on different threads in the same
-  process.
-
-  To be able to serve a request with programmatically specified header fields.
-  To be able to serve a request with HTTP response body taken from a string.
-  To be able to serve a request with HTTP response body taken from a file.
-  To be able to serve a request with programmatically specified HTTP status
-  code.
-
-  To be able to inject delay in serving requests for specific URLs.
-
-  It should be possible to use it as HTTP 1.1 file server.
-
-  To be able to serve a body as a series of chunks to verify pause/resume
-  download functionality.
-
-  To be able to verify that two HTTP requests are interleaved, possibly by
-  chunking. E.g. Deterministically download job1-chunk1, job2-chunk1,
-  job1-chunk2, job2-chunk2.
-
-
-Implementation Decisions
-
-We've decided to use mongoose as the core webserver. Mongoose is a single file,
-light weight web server, that can be run directly as a file server or it may
-  serve requests through callbacks.
-
-  When serving requests through callbacks it works as a simple listener with a
-  thread pool to invoke callbacks.
-  
-  As a standalone server it works as a HTTP 1.1 compliant file server. 
-
-We need a wrapper for creating HTTP responses from inside test cases. The
-wrapper would be responsible for the following :
-
-  Configuring the HTTP server.
-
-  Creating per URL handlers (pity that mongoose does not support per URI
-      callbacks anymore, on the other hand the API is quite succinct now.)
-
-  Creating HTTP responses with different kinds of headers, bodies, status codes
-  etc.
-
-
-Implementation Details :
-
-Mongoose :
-
-Mongoose is a single file webserver library with a command line standalone
-directory server. I had to pick up the development version of the source as
-certain APIs are not yet there in the stable version. So though we are using
-Mongoose 3.0, it is yet to be released (I picked the version number from its
-    header file). To have it under Zinc.3rdPartyStack , I patched it to make it
-an autotool project with proper package config etc.
-
-Wrappers :
-
-We have some wrappers on mongoose to make it possible to use the Http server
-programmatically in Zinc.TestWebServer. At the moment this is really like a
-framework that supports the usescases mentioned above. I believe we can easily
-add more features to it. We can also replace mongoose with any other Http Server
-if required as 'mongoose' is completely contained within MongooseWrapper.cpp and
-  any other class supporting the contract could be used.  
-    
-
-How to use : 
-
-In short, create a configuration object, one or more responder objects and run
-the server with the configuration and any number of responders. Whenever the
-server gets 'requests' from a Http client the appropriate 'responder' will
-respond to it.
-
-
-A longer desc:
-
-  Create ManualServerConfig object specifying the port on which you want your
-  server to run.
-
-  Create a 'responder' where you have the code to 'handle' actual Http requests.
-  At the moment we have a convenience responder called SimpleResponder, which
-  has methods to add header fields, body etc. so that whenever it gets requests
-  from a client it replies back with those fields and content.
-
-  A HttpServer is created with the configuration object and one or more
-  responders. You can register a responder against a particular URL or the
-  responder could be a 'wildcard' responder with empty string for the URL. A
-  wildcard responder is going to be invoked whenever there is no specific
-  responder registered for a URL.
-
-  Run the HttpServer. There is a convenient ServerRunner class that uses RAII to
-  call the start() and stop() methods on the HttpServer. 
-
-Using TestWebServer in MetadataBroker :
-
-TestWebServer is used in MetadataBroker to simulate MAS behaviour; a new set of
-representative testcases are there in MetadataBrokerHttpTests.
-
-Cobalt/Cobalt.System.Production/test/HttpGeneralTests.cpp
-
-In addition to being able to test HTTP client, it has also simplified the
-testcase writing process, as :
-
-  For the first time we could proplerly verify MetadataBroker generated URIs and
-  query strings ( we dont just have to depend on the directory structure for
-      that).
-
-  When using the TestWebServer we dont have to replicate the URL hierarchy. (So
-      we dont need to have deeply nested directories with funny file names in
-      mas-data anymore.)
-
-TODOs:
-
-  Have a programmatically controllable directory serving responder.
-  Have a convenience responder to selectively inject delays before it replies.
-  Think of all the other error injection possibilities.
-  I need to add more test cases ... at the moment I am banking on the fact that
-  since I am writing testcases in MetadataBroker using the testwebserver that
-  would in turn test the webserver as well.
-
-
-https://wiki.youview.co.uk/display/canvas/2011/02/11/HTTP+Test+Server+-+Updated?src=search
 
 
 ={============================================================================
@@ -24560,23 +24880,6 @@ This commit comes with corresponding test in Vanadium test harness.
 [1] 1125-S Media Router Specification v1.3
 [2] https://jira.youview.co.uk/browse/SOLDES-584
 
-
-={============================================================================
-*kt_dev_uv_task_011* task:09: fr15: underflow error handling
-
-DEVARCH-10424: YV MediaRouter: Underflow error support
-
-The YV MediaRouter allows the client application to receive HTMLMediaElement
-events for underflow event reported during play via StatusEvent.
-
-This commit enables video element in HTML to receive underflow event through
-WebKit and implements unit tests according to the YV MediaRouter[1] and the
-design requirement[2].
-
-This commit comes with corresponding test in Vanadium test harness.
-
-[1] 1125-S Media Router Specification v1.3
-[2] https://jira.youview.co.uk/browse/SOLDES-584
 
 ={============================================================================
 *kt_dev_uv_task_011* task:09: fr15: fix gstmediaroutertest failure
