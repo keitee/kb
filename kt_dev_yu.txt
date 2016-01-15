@@ -9133,6 +9133,32 @@ note: to print out periodically
     });
 })()
 
+// loadstart, loadeddata, playing, waiting
+(function() {
+    video = document.getElementById('mediaPlayerVideo');
+    video.addEventListener("progress", function() {
+    console.log("readyState?:", video.readyState);
+    console.log("networkState?:", video.networkState);
+    console.log("played?:", video.played);
+    console.log("paused?:", video.paused);
+    });
+    video.addEventListener("play", function() {
+    console.log("GOT play");
+    });
+    video.addEventListener("loadstart", function() {
+    console.log("GOT loadstart");
+    });
+    video.addEventListener("loadeddata", function() {
+    console.log("GOT loadeddata");
+    });
+    video.addEventListener("playing", function() {
+    console.log("GOT playing");
+    });
+    video.addEventListener("waiting", function() {
+    console.log("GOT waiting");
+    });
+})()
+
 
 ={============================================================================
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
@@ -9151,14 +9177,14 @@ graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
 // go to this directory under zb-shell and see the Makefile in the same
 // directory for other targets.
 
-cd $ZINC_NATIVE_BUILD_ROOT/release-humax-dtr_t2100/Zinc/Zinc.3rdPartyStack/
+cd $ZINC_NATIVE_BUILD_ROOT/release-humax-dtr_t2100/Zinc/Zinc.3rdPartyStack/\
 qt-everywhere-opensource-src-5.1.0
 
 make module-qtwebkit-clean (optional)
 make module-qtwebkit
 
-// note: do not use this since it copies from installed directory.
-zb-copy libQt5WebKit.so.5.1.0
+// note: do NOT use this since it copies from installed directory.
+// zb-copy libQt5WebKit.so.5.1.0
 
 scp ./qtwebkit/lib/libQt5WebKit.so.5.1.0 root@humax-04535:/opt/zinc-trunk/oss/lib
 
@@ -9169,6 +9195,12 @@ scp ./qtwebkit/lib/libQt5WebKit.so.5.1.0 root@humax-04535:/opt/zinc-trunk/oss/li
 HTMLMediaElement
  ^
  | callabck   |
+
+    Zinc/Zinc.3rdPartyStack/qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/
+        WebCore/html/HTMLMediaElement.cpp
+
+ note: use iostream to output and should have "#include <iostream>" in cpp
+ std::cerr << "** KT-WEB **:" << __FUNCTION__ << ": now" << now  ": dur" << dur << std::endl;
 
 MediaPlayer
  ^
@@ -9623,7 +9655,7 @@ note: mediaRouterImpl is set to m_mediaPlayerImpl so calls to be forwarded to Va
 
       MediaPlayerPrivateMediaRouter -> VanadiumMediaPlayer
 
-
+<mr-play>
 void MediaPlayerPrivateMediaRouter::play()
 {
    INFO_MEDIA_MESSAGE("MediaPlayerPrivateMediaRouter::play()");
@@ -9682,6 +9714,7 @@ void VanadiumMediaPlayer::load(const std::string& url)
   }
 }
 
+<mr-play>
 void VanadiumMediaPlayer::play()
 {
     VANADIUM_FUNC_TRACE;
@@ -9750,6 +9783,7 @@ public:
     MediaPlayerPrivateInterface() { }
     virtual ~MediaPlayerPrivateInterface() { }
 
+    <mr-load>
     virtual void load(const String& url) = 0;
     virtual void cancelLoad() = 0;
     
@@ -9760,6 +9794,7 @@ public:
     virtual PlatformLayer* platformLayer() const { return 0; }
 #endif
 
+    <mr-play>
     virtual void play() = 0;
     virtual void pause() = 0;    
 
@@ -9981,7 +10016,9 @@ private:
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: media event
+*kt_dev_uv_stack_250* mr-web: media event and attribute
+
+4.8.13.16 Event summary
 
 https://html.spec.whatwg.org/multipage/embedded-content.html#event-media-ended
 
@@ -9992,6 +10029,9 @@ especially interesting way, for example discontinuously.
 
 note:
 This happens regardless of position change reporting from MR.
+
+
+4.8.13 Media elements (attribute)
 
 
 ={============================================================================
@@ -10310,6 +10350,8 @@ note: this is when "pipeline" changes state
 {compare-time}
 
 <in-process-version> to see time difference
+
+note: to get time, make a call to MPPGST which will be on gst debug
 
 <s> 0:02:39.952412720 PrivateGStreamer.cpp:1549:handleMessage: End of Stream
 0:02:39.952775794 PrivateGStreamer.cpp:2386:didEnd: End of stream
@@ -12341,6 +12383,42 @@ DEVARCH-10602:
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: build dash pipeline using media router
 
+<mr-load>
+void VanadiumMediaPlayer::load(const std::string& url)
+{
+    try
+    {
+        if(!currentSource.empty())
+        {
+            playerManager.clearDrmError(currentSource);
+        }
+        currentSource = url;
+
+        mediaRouter->addListener(dispatcher, listener);
+        mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
+        mediaRouter->setSink("decoder://0").get();
+
+        // WebKit expects the media player to start in the paused state
+        pauseState = PAUSED;
+
+        if(preloadPolicy != QMediaPlayerInterface::NONE)
+        {
+            // Call startBuffering before getSourceInformation so we don't waste
+            // any time before starting to acquire media, but defer notifying
+            // the state change until we know the media router mode
+            mediaRouter->startBuffering();
+            currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+            callbacks.networkStateChanged();
+        }
+    }
+    catch(const InvalidLocatorException& ex)
+    {
+        currentNetworkState = QMediaPlayerInterface::FORMAT_ERROR;
+        callbacks.networkStateChanged();
+    }
+}
+
+
 *uridecodebin* -> *decodebin(video)* -> *qtdemux* -> *h264parse-nexussink*
                 *decodebin(audio)* -> *fakesink*
 
@@ -12380,7 +12458,7 @@ class ZINC_LOCAL SetSourceContinuation
 
   private:
 
-  // note:
+  // note: <continuation-start>
   // Why start()? This is from "Contiunation" since create() creates an object
   // then calls start().
 
@@ -12592,7 +12670,9 @@ void VirtualBinTypefind::setSource(const std::string& sourceUri)
 }
 
 
-<mr-start>
+<mr-play> <mr-start>
+
+// Calls from play() from player interface
 
 NS_ZINC::Future<void> GstMediaRouter::start()
 
@@ -13865,7 +13945,93 @@ in-process MediaRouter does.
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: slow play on t1000
+*kt_dev_uv_stack_408* mr-dash: media-load. slow play on t1000
+
+<media-load>
+
+4.8.13.5 Loading the media resource
+
+media.load()
+
+    Causes the element to reset and start selecting and loading a new media
+    resource from scratch.
+
+All media elements have an autoplaying flag, which must begin in the true state,
+and a delaying-the-load-event flag, which must begin in the false state. While
+    the delaying-the-load-event flag is true, the element must delay the load
+    event of its document.
+
+When the load() method on a media element is invoked, the user agent must run
+the media element load algorithm.
+
+The resource selection algorithm for:
+
+...
+
+7. Set the media element's networkState to NETWORK_LOADING.
+
+8. Queue a task to fire a simple event named `loadstart` at the media element.
+
+...
+
+Once enough of the media data has been fetched to determine the duration of the
+media resource, its dimensions, and other metadata:
+
+Once the readyState attribute reaches HAVE_CURRENT_DATA, after the `loadeddata`
+event has been fired, set the element's delaying-the-load-event flag to false.
+This stops delaying the load event.
+
+
+<media-play>
+
+4.8.13.8 Playing the media resource
+
+When the play() method on a media element is invoked, the user agent must run
+the following steps.
+
+4. If the media element's paused attribute is true, run the following substeps:
+
+    4.  If the media element's readyState attribute has the value HAVE_NOTHING,
+        HAVE_METADATA, or HAVE_CURRENT_DATA, queue a task to fire a simple 
+        event named `waiting` at the element.
+
+        Otherwise, the media element's readyState attribute has the value
+        HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA: queue a task to fire a simple
+        event named `playing` at the element.
+
+
+<logs>
+------>> KT-HTML: selectMediaResource : loadstartEvent
+
+        -> load() called                                                                                    
+12:54:52,590 /VanadiumMediaPlayer.cpp:121 KT: load: startBufferin() : fire LOADING
+
+12:54:52,601 /VanadiumMediaPlayer.cpp:283 KT: current: 0, net: << 2, ready: 0
+
+        -> got buffering started
+12:54:54,255 /VanadiumMediaPlayer.cpp:593 KT: got buffering_started: fire LOADING
+
+------>> KT-HTML: setReadyState : loadeddataEvent
+
+12:54:54,270 /VanadiumMediaPlayer.cpp:275 KT: V: current: 0, net: << 2, ready: 3
+
+        -> got source config complete which moves state to HAVE_FUTURE_DATA
+12:54:54,271 /VanadiumMediaPlayer.cpp:656 KT: SourceEvent: fire LOADING
+
+12:54:54,293 /VanadiumMediaPlayer.cpp:275 KT: V: current: 0, net: << 2, ready: 3
+
+------>> KT-HTML: 4:playInternal : playingEvent
+
+12:54:54,309 /VanadiumMediaPlayer.cpp:275 KT: V: current: 0, net: << 2, ready: 3
+12:54:54,313 /VanadiumMediaPlayer.cpp:149 KT: call mr->start():
+12:54:54,324 /VanadiumMediaPlayer.cpp:275 KT: V: current: 0, net: << 2, ready: 3
+12:54:55,009 /VanadiumMediaPlayer.cpp:275 KT: V: current: 0.24, net: << 2, ready: 3
+
+12:54:55,486 /VanadiumMediaPlayer.cpp:275 KT: V: current: 0.72, net: << 2, ready: 3
+12:54:55,871 /VanadiumMediaPlayer.cpp:275 KT: V: current: 1.08, net: << 2, ready: 3
+
+
+<spinner-when-play-on-t1000>
 
 // result from automation test
 
@@ -13895,6 +14061,9 @@ Failure reason:
 NoMatchTimeout: Still found match for
 'images/players/iplayer/bbc-iplayer-html5-info-unselected.png' after 60 seconds.
 
+// -> HAVE_FUTURE_DATA
+2016-01-13 19:58:03.284492  |  -    |  -    | Sig |  MR-0 |SourceEvent | event:CHANGE_COMPLETE
+                            |       |       |     |       || reason:CHANGE_COMPLETE
 
 2016-01-13 19:58:04.331761  |  -    |  -    | Sig |  MR-0 |BufferStatusEvent | BUFFERING_STARTED
 2016-01-13 19:58:04.333408  | 32    |  -    | --> |  MR-0 |getPosition |
@@ -14006,10 +14175,8 @@ http://stb-tester-master.dev.youview.co.uk/stbt-reports/result/189065/
 
 
 {2100}
-[14-01-2016 16:34:37.229841] signal sender=:1.79 -> dest=(null destination) 
-    serial=77348 path=/Zinc/Media/MediaRouters/11; 
-    interface=Zinc.Media.MediaRouter; 
-    member=BufferStatusEvent
+[14-01-2016 16:34:37.229841] interface=Zinc.Media.MediaRouter; 
+member=BufferStatusEvent
    int32 0      // buffering_started
 
 
@@ -14343,6 +14510,9 @@ path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorE
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: dbus log: from play start to complete
 
+HAVE_NOTHING
+NETWORK_EMPTY
+
 method call sender=:1.131 -> dest=Zinc.MediaProxy serial=25 
 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
 member=*createMediaRouter*
@@ -14364,6 +14534,7 @@ path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=*setSink*
    string "decoder://0"
 
+<mr-load>
 method call sender=:1.121 -> dest=:1.72 serial=31
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=*startBuffering*
@@ -14377,7 +14548,7 @@ member=*BufferStatusEvent*
 signal sender=:1.72 -> dest=(null destination) serial=5139
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=*SourceEvent*
-   int32 3    // source_config_complete = 3,
+   int32 3    // source_config_complete = 3, => HAVE_FUTURE_DATA
    int32 1
 
 
@@ -14411,9 +14582,13 @@ path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=*setPlaySpeed* 
     double 1
 
+<mr-play>
 method call sender=:1.121 -> dest=:1.72 serial=50
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
 member=*start*
+
+
+note: StatusEvent::stared => HAVE_ENOUGH_DATA
 
 note: see source_information_change after start and this means decoded a stream.
 
