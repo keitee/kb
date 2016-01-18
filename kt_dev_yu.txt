@@ -3153,6 +3153,16 @@ run it on a target.
 
 
 <hmax>
+wget http://devnfs2.dev.youview.co.uk/DEVARCH/tools-humax/DTRT1000/VirtualRemoteDriver.tar.bz2
+
+scp libyouviewrcu.so root@humax-01351:/opt/zinc/lib
+
+note: see different path for t1000
+scp libyouviewrcushim.so root@humax-01351:/usr/local/lib/directfb-1.4-15-pure/inputdrivers/
+
+scp libyouviewrcushim.so root@humax-01351:/opt/zinc/oss/lib/directfb-1.4-15-pure/inputdrivers/
+
+scp zinc-send-key-hwei root@humax-01351:/usr/local/bin
 
 
 <keys>
@@ -3398,6 +3408,10 @@ https://wiki.youview.co.uk/display/canvas/Zinc+Logging+Framework
 ./radium-common/radium.props
 ./rubidium-common/rubidium.props
 ./uranium-common/uranium.props
+
+
+<log-level>
+Valid values for the log level are: FATAL, ERROR, WARN, INFO, DEBUG, TRACE.
 
 
 cat ./nickel-common/nickel.props
@@ -9210,7 +9224,8 @@ MediaPlayer
  | notification and MediaPlayer calls to <private-media-player>
  | Also, notifies HTML elements as well.
   
-// qtwebkit/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
+// /WebCore/platform/graphics/MediaPlayerPrivate.h
+// /WebCore/platform/graphics/mediarouter/MediaPlayerPrivateMediaRouter.cpp
 //
 // class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface
 
@@ -9245,45 +9260,17 @@ MediaPlayer
     // class VanadiumMediaPlayer : public WebCore::QMediaPlayerInterface;
 
 
-    <- <callbacks-to-webkit>
-    MediaPlayerPrivateMediaRouterCallbacks::networkStateChanged()
-    { 
-        // this is `MediaPlayer`
-        m_mediaPlayer->networkStateChanged();
-    }
-
-        <- VanadiumMediaPlayer::callbacks.timeChanged();
-
-
 <media-element>
 WebCore/html/HTMLMediaElement.cpp
-
 
 void HTMLMediaElement::createMediaPlayer()
 {
     m_player = MediaPlayer::create(this);
 }
 
-void HTMLMediaElement::mediaPlayerNetworkStateChanged(MediaPlayer*)
-{
-  beginProcessingMediaPlayerCallback();
-
-  // note: get state from a player
-  setNetworkState(m_player->networkState());
-  endProcessingMediaPlayerCallback();
-}
-
-void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
-{
-  // calles subroutines to translate 
-  // MediaPlayer::xxx such as FormatError to MEDIA_ERR_xxx
-  // note: see "dash error handle" for more
-}
 
 <media-player>
-
-/qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/graphics/
-MediaPlayer.h, cpp
+/qtwebkit/Source/WebCore/platform/graphics/MediaPlayer.h, cpp
 
 class MediaPlayer {
 
@@ -9306,43 +9293,6 @@ MediaPlayer::MediaPlayer(MediaPlayerClient* client)
             m_mediaPlayerClient->mediaPlayerEngineUpdated(this);
     }
 #endif
-}
-
-
-MediaPlayer::NetworkState MediaPlayer::networkState()
-{
-    // note: m_private is <private-media-player>
-    return m_private->networkState();
-}
-
-
-<callbacks-to-webkit>
-void MediaPlayer::networkStateChanged()
-{
-  // If more than one media engine is installed and this one failed before finding metadata,
-  // let the next engine try.
-  if (m_private->networkState() >= FormatError
-      && m_private->readyState() < HaveMetadata
-      && installedMediaEngines().size() > 1) 
-  {
-    if (m_contentMIMEType.isEmpty() || 
-        bestMediaEngineForTypeAndCodecs(m_contentMIMEType, 
-          m_contentTypeCodecs, m_keySystem, m_url, m_currentMediaEngine)) 
-    {
-      m_reloadTimer.startOneShot(0);
-      return;
-    }
-  }
-  if (m_mediaPlayerClient)
-    m_mediaPlayerClient->mediaPlayerNetworkStateChanged(this);
-}
-
-
-void MediaPlayer::timeChanged()
-{
-    // note: m_mediaPlayerClient is <media-element>
-    if (m_mediaPlayerClient)
-        m_mediaPlayerClient->mediaPlayerTimeChanged(this);
 }
 
 
@@ -9538,6 +9488,10 @@ libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
 
 
 /graphics/gstreamer/MediaPlayerPrivateMediaRouter.cpp
+/graphics/gstreamer/MediaPlayerPrivateMediaRouter.h
+
+class MediaPlayerPrivateMediaRouter : public MediaPlayerPrivateInterface;
+
 
 void MediaPlayerPrivateMediaRouter::registerMediaEngine(MediaEngineRegistrar registrar)
 {
@@ -9774,6 +9728,225 @@ boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
 
 
 ={============================================================================
+*kt_dev_uv_stack_250* mr-web: callback from mr to html
+
+HTML:
+==================
+m_player is `MediaPlayer`
+
+void HTMLMediaElement::mediaPlayerNetworkStateChanged(MediaPlayer*)
+{
+  beginProcessingMediaPlayerCallback();
+
+  // note: get state from a player
+  setNetworkState(m_player->networkState());
+  endProcessingMediaPlayerCallback();
+}
+
+void HTMLMediaElement::setNetworkState(MediaPlayer::NetworkState state)
+{
+  // calles subroutines to translate 
+  // MediaPlayer::xxx such as FormatError to MEDIA_ERR_xxx
+  // note: see "dash error handle" for more
+}
+
+
+void HTMLMediaElement::mediaPlayerReadyStateChanged(MediaPlayer*)
+{
+}
+
+
+MediaPlayer:
+==================
+
+MediaPlayer::NetworkState MediaPlayer::networkState()
+{
+    // m_private is `MediaPlayerPrivate`
+    return m_private->networkState();
+}
+
+
+// Client callbacks.
+void MediaPlayer::networkStateChanged()
+{
+    // If more than one media engine is installed and this one failed before finding metadata,
+    // let the next engine try.
+    if (m_private->networkState() >= FormatError
+            && m_private->readyState() < HaveMetadata
+            && installedMediaEngines().size() > 1) {
+        if (m_contentMIMEType.isEmpty() || 
+                bestMediaEngineForTypeAndCodecs(m_contentMIMEType, \
+                    m_contentTypeCodecs, m_keySystem, m_url, m_currentMediaEngine)) {
+            m_reloadTimer.startOneShot(0);
+            return;
+        }
+    }
+
+    // m_mediaPlayerClient is `HTML`
+    if (m_mediaPlayerClient)
+        m_mediaPlayerClient->mediaPlayerNetworkStateChanged(this);
+}
+
+void MediaPlayer::readyStateChanged()
+{
+    if (m_mediaPlayerClient)
+        m_mediaPlayerClient->mediaPlayerReadyStateChanged(this);
+}
+
+
+MediaPlayerPrivate:
+==================
+
+class MediaPlayerPrivateMediaRouterCallbacks : public QMediaPlayerCallbackInterface
+{
+    public:
+        MediaPlayerPrivateMediaRouterCallbacks(MediaPlayer* player)
+            : m_mediaPlayer(player)
+        {}
+
+        void networkStateChanged()
+        {
+            m_mediaPlayer->networkStateChanged();
+        }
+
+        void readyStateChanged()
+        {
+            m_mediaPlayer->readyStateChanged();
+        }
+};
+
+
+Vanadium:
+==================
+
+        callbacks.networkStateChanged();
+        callbacks.timeChanged();
+
+
+<have-log-to-vanadium>
+
+==================
+// HTMLMediaElement.cpp
+
+void HTMLMediaElement::mediaPlayerReadyStateChanged(MediaPlayer*)
+{
+    m_player->KT_DEBUG(String("HTML: ready changed: " << m_player->readyState()));
+}
+
+
+==================
+// MediaPlayer.cpp
+
+void MediaPlayer::KT_DEBUG(const KURL& mesg)
+{
+    m_private->KT_DEBUG(mesg.string());
+}
+
+class NullMediaPlayerPrivate : public MediaPlayerPrivateInterface {
+public:
+    NullMediaPlayerPrivate(MediaPlayer*) { }
+
+    virtual void KT_DEBUG(const String&) { }
+};
+
+
+// MediaPlayer.h
+
+    /** KT_DEBUG
+     */
+    void KT_DEBUG(const KURL& mesg);
+
+
+==================
+// /WebCore/platform/graphics/MediaPlayerPrivate.h
+
+class MediaPlayerPrivateInterface {
+    WTF_MAKE_NONCOPYABLE(MediaPlayerPrivateInterface); WTF_MAKE_FAST_ALLOCATED;
+public:
+    virtual void KT_DEBUG(const String& url) = 0;
+};
+
+
+// MediaPlayerPrivateMediaRouter.h
+
+    void KT_DEBUG(const String& url);
+
+// MediaPlayerPrivateMediaRouter.cpp
+void MediaPlayerPrivateMediaRouter::KT_DEBUG(const String& url)
+{
+    m_mediaPlayerImpl->KT_DEBUG(url.utf8().data());
+}
+
+// to make the build fine
+//
+// gstreamer/MediaPlayerPrivateGStreamer.h
+//            void KT_DEBUG(const String &url);
+//
+// gstreamer/MediaPlayerPrivateGStreamer.cpp
+//
+// void MediaPlayerPrivateGStreamer::KT_DEBUG(const String& url)
+// {
+//     String cleanUrl(url);
+//     INFO_MEDIA_MESSAGE ("MediaPlayerPrivateGStreamer::KT_DEBUG(%s)\n", cleanUrl.utf8().data());
+// }
+//
+
+==================
+// Vanadium/Vanadium.WebKit.VideoElement/src/VanadiumMediaPlayer.h
+
+    /** KT DEBUG
+     */
+    virtual void KT_DEBUG(const std::string& mesg);
+
+// Vanadium/Vanadium.WebKit.VideoElement/src/VanadiumMediaPlayer.cpp
+void VanadiumMediaPlayer::KT_DEBUG(const std::string& mesg)
+{
+    VANADIUM_ERROR("KT: " << mesg );
+}
+
+
+
+<to-log-to-gst>
+
+The idea is to have the log from HTML and to have log from GST right after so
+can avoid changing all from HTLM to vanadium.
+
+<1>
+HTML:
+
+    std::cerr << "KT: HTML: " << __FUNCTION__ << ", now(float): " << now << std::endl;
+    m_player->PRINT_DEBUG();
+
+<2>
+MediaPlayer:
+
+// h
+void PRINT_DEBUG();
+
+// cpp
+void MediaPlayer::PRINT_DEBUG()
+{
+    m_private->PRINT_DEBUG();
+}    
+
+<3> platform/graphics/MediaPlayerPrivate.h
+
+class MediaPlayerPrivateInterface: 
+    virtual void PRINT_DEBUG() {}
+
+<4> MediaPlayerPrivateGStreamer.cpp
+
+// h
+            void PRINT_DEBUG();
+
+// cpp
+void MediaPlayerPrivateGStreamer::PRINT_DEBUG()
+{
+  ERROR_MEDIA_MESSAGE (" *** KT: PRINT_DEBUG FROM MPPGST *** ");
+}
+
+
+={============================================================================
 *kt_dev_uv_stack_250* mr-web: media player interface
 
 //qtwebkit/Source/WebCore/platform/graphics/MediaPlayerPrivate.h
@@ -9947,6 +10120,7 @@ public:
 
 class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface 
 
+/qt-everywhere-opensource-src-5.1.0/qtwebkit/include/QtWebKit/QMediaPlayerInterface.h
 
 class MediaPlayerPrivateMediaRouterCallbacks : public QMediaPlayerCallbackInterface
 {
@@ -14053,13 +14227,14 @@ testaut-10-stb-1: DTRT1000 ATK
 
 The failed cases are:
 
-{1}
-http://stb-tester-master.dev.youview.co.uk/stbt-reports/result/189386/
-
 Failure reason:
 
 NoMatchTimeout: Still found match for
 'images/players/iplayer/bbc-iplayer-html5-info-unselected.png' after 60 seconds.
+
+
+{1}
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/result/189386/
 
 // -> HAVE_FUTURE_DATA
 2016-01-13 19:58:03.284492  |  -    |  -    | Sig |  MR-0 |SourceEvent | event:CHANGE_COMPLETE
