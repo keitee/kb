@@ -207,7 +207,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_060| algorithm
 |kt_dev_stl_061| algorithm: predicate
 |kt_dev_stl_062| algorithm: lambda
-|kt_dev_stl_063| stl-function-object
+|kt_dev_stl_063| function-object
+*kt_dev_stl_063* function-object: as argument
 |kt_dev_stl_063| stl-function-object: pass by reference, more examples
 *kt_dev_stl_063* stl-function-object: as template argument
 *kt_dev_stl_063* stl-function-object: predefined
@@ -30035,30 +30036,21 @@ Cannot be used sorting-criterion for associative containers and have state as fu
 
 
 ={============================================================================
-*kt_dev_stl_063* stl-function-object
+*kt_dev_stl_063* function-object
 
-{function-object}
+*function-object* *functor*
 
-CLR 6.10
+CPR 14.8 p571
 
-Functional arguments for algorithms don't have to be functions. As seen with
-lambdas, functional arguments can be objects that behave like functions. Such an
-object is called a function object, or functor.
+* The function object is an object and can 'call' this object. Calling an object
+  runs its overloaded call operator.
 
-Since C++11, the standard uses the term function object for every object that
-can be used as a function call. Thus, function pointers, objects of classes with
-operator () or with a conversion to a pointer to function, and lambdas are
-function objects. Here in this book, however, I use the term for objects of
-classes with operator() defined.
+* The function call operator must be member.
 
-So, what is the behavior of a function? A functional behavior is something that
-you can 'call' by using parentheses and passing arguments. For example:
+* May define multiple versions of the call operator, each of which must differ
+  as to the number or types of parameters.
 
-function(arg1,arg2); 
-
-All you have to do is define operator () with the appropriate parameter types:
-
-<ex> from C++P p571. 
+<ex>
 
 struct absInt {
   int operator() (int val) const {
@@ -30068,12 +30060,78 @@ struct absInt {
 
 int i = -42;
 absInt absObj;
-int ui = absObj(i);  // is equivalent to absObj.operator()(i)
+int ui = absObj(i);     // absObj.operator()(i)
 
 
-{function-object-and-global-function}
+{functor-has-state} 
+Can be 'smart' functions because may have other member functions and data
+members which means function objects have a 'state'.
 
-<ex> when use function object
+In fact, the same functionality, represented by two 'different' function objects
+instances of the same class, may have different 'states' at the same time. This
+is not possible for ordinary functions. Another advantage of function objects is
+that you can initialize them at 'runtime' before you use/call them.
+
+<ex> from CPR 14.8
+
+Allows users provide a different stream and different separator.
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+class PrintString {
+  public:
+    PrintString( ostream& o = cout, char c = ' ') : os(o), sep(c) {}
+
+    // const member func. works well. Q: why const as os may change its state?
+    // As with "bitwise-const", emits errors only when "assignment" is used on
+    // members.
+
+    void operator()(const string &s) const { os << s << sep; }
+
+  private:
+    ostream& os; 
+    char sep;
+};
+
+int main()
+{
+  PrintString printer;
+  printer("printer");
+
+  PrintString errors( cerr, '\n' );
+  errors("errors");
+}
+
+
+={============================================================================
+*kt_dev_stl_063* function-object: as argument
+
+Functor are 'most' often used as argument to the algorithms.
+
+<ex> 
+Will print each element in vs to cerr followed by a newline.
+
+for_each(vs.begin(), vs.end(), PrintString(cerr, '\n'));
+
+CLR 6.10
+
+Functional arguments for algorithms don't have to be functions and can be any
+'callables'. 
+
+*callables*
+
+Since C++11, the standard uses the term function object for every object that
+can be used as a function call. Thus, function pointers, objects of classes with
+operator () or with a conversion to a pointer to function, and lambdas are
+function objects. Here in this book, however, I use the term for objects of
+classes with operator() defined.
+
+
+<ex> // when use function object
 
 #include <iostream>
 #include <vector>
@@ -30084,7 +30142,7 @@ using namespace std;
 class PrintInt
 {
   public:
-    void operator() (int elem) const
+    void operator()(int elem) const
     {
       cout << elem << ' ';
     }
@@ -30101,13 +30159,13 @@ int main()
 
   // print all elements
   for_each (coll.cbegin(), coll.cend(), // range
-      PrintInt());                      // operation note: T() is temporary
+      PrintInt());                      // operation. T() is temporary
 
   cout << endl;
 }
 
 
-<ex> when use a usual function
+<ex> // when use a usual function
 
 void print(int elem)
 { cout << elem << ' '; }
@@ -30121,24 +30179,24 @@ int main()
 }
 
 
-{when-function-object-useful}
+{compile-runtime-change}
+Suppose that want to add a 'certain' value to all elements of a collection.
+Shows that functor with state is useful.
 
 <ex>
-Suppose that you want to add a 'certain' value to all elements of a collection.
-If you know the value to add at 'compile' time, you could use an ordinary
-function, predicate.
+Know the value to add at 'compile' time. Could use an ordinary function
+predicate.
 
 void add10 (int& elem)
 {
   elem += 10;
 }
 
-for_each (coll.begin(), coll.end(), add10);
+for_each(coll.begin(), coll.end(), add10);
 
 
 <ex>
-If you know the 'different' values to add at 'compile' time, you could use
-template.
+Know the 'different' values to add at 'compile' time, could use template.
 
 #include <iostream>
 #include <vector>
@@ -30174,7 +30232,7 @@ int main()
 
   PRINT_ELEMENTS(coll, "initialized: " );
 
-  // note: when use cbegin() instead, causes compile error. however, works in
+  // note: When use cbegin() instead, causes compile error. However, works in
   // previous examples?
   //
   // : error: invalid initialization of reference of type "int&" from
@@ -30187,28 +30245,28 @@ int main()
   // 2. from operation code: void add( int& elem )
   //
   // Therefore, add(*__first) and this is "int& elem <- const int". For
-  // previous examples, the argument type was int and no problem.
+  // previous examples, the argument type was int so no problem.
 
   for_each (coll.begin(), coll.end(),   // range
-      add<10>);                         // operation
+      add<10>);                         // operation. or add<20>
 
   PRINT_ELEMENTS(coll, "added      : " );
 }
-
 
 initialized: 1 2 3 4 5 6 7 8 9 
 added      : 11 12 13 14 15 16 17 18 19 
 
 
 <ex>
-If you process the value to add at 'runtime', things get complicated. This
-normally results in a global variable that is used both by the function that
-calls the algorithm and by the function that is called by the algorithm. Did you
-ever copy the definition of a function because it had a static variable to keep
-its state(the value to add) and you needed the same function with another state
-at the same time? This is exactly the same type of problem. You can't achieve
-this with one ordinary function. The below solves it by using two different
-function object but same type and functionality.
+Know the value to add at 'runtime', then things get complicated. 
+
+This normally results in a global variable that is used both by the function
+that calls the algorithm and by the function that is called by the algorithm.
+Did you ever copy the definition of a function because it had a static variable
+to keep its state(the value to add) and you needed the same function with
+another state at the same time? This is exactly the same type of problem. You
+can't achieve this with one ordinary function. The below solves it by using two
+different function object but same type and functionality.
 
 #include <iostream>
 #include <vector>
@@ -30266,7 +30324,7 @@ added 10   : 11 12 13 14 15 16 17 18 19
 added first: 22 23 24 25 26 27 28 29 30 
 
 
-{function-object-is-object-and-copied}
+{functor-is-copied}
 With this technique, two different function objects can solve the problem of
 having a function with two 'states' at the same time. For example, you could
 simply declare two function objects and use them independently:
@@ -30284,20 +30342,15 @@ class AddValue
 
   public:
     AddValue( int v ) : theValue(v)
-    {
-        cout << "ctor is called: " << theValue << endl;
-    }
+    { cout << "ctor is called: " << theValue << endl; }
 
     AddValue(const AddValue& rhs)
-    {
-        cout << "copy ctor is called: " << theValue << endl;
-    }
+    { cout << "copy ctor is called: " << theValue << endl; }
 
     // note: What might be the result when use this form? 
+    // there is no changes to container.
     //
     // void operator() (int elem) const
-    //
-    // there is no changes to container.
 
     void operator() (int &elem) const
     { elem += theValue; }
@@ -30351,19 +30404,18 @@ copy ctor is called: -1218374876
 -----------------------------
 added first: 134519580 134519581 134519582 134519583 ... 134519587 134519588 
 
-note: Why wrong result? since copy ctor is wrong and should be like this. The
-reason for that if user defines copy ctor must do it right. So if do not define
-copy ctor and then compiler would make it and this example works fine. Here
-problem is that when defines copy ctor to print message and missed out
-memberwise copy.
+note: Wrong result? since copy ctor is wrong and should be like this. The reason
+for that if user defines copy ctor must do it right. So if do not define copy
+ctor and then compiler would make it and this example works fine. Here problem
+is that when defines copy ctor to print message and missed out memberwise copy.
 
 class AddValue
 {
-    AddValue(const AddValue& rhs)
-    {
-        cout << "copy ctor is called: " << rhs.theValue << endl;
-        theValue = rhs.theValue;
-    }
+  AddValue(const AddValue& rhs)
+  {
+    cout << "copy ctor is called: " << rhs.theValue << endl;
+    theValue = rhs.theValue;
+  }
 };
 
 ctor is called: 10
@@ -30383,8 +30435,9 @@ note: Why is copy ctor called two times? since for_each<> returns _Function and
 confirms that there is one copy ctor when changes its definition in stl_algo.h
 
 
-*algo-for-each*
+{algo-for-each}
 
+*algo-for-each*
 for_each (coll.cbegin(), coll.cend(), PrintInt());
 
 Creates a temporary object of this class, which is passed to the for_each() as
@@ -30434,17 +30487,22 @@ for_each(_InputIterator __first, _InputIterator __last, _Function __f)
 }
 
 
-{function-object-advantages}
+={============================================================================
+*kt_dev_stl_063* function-object: good things
 
-1. flexible since functions have state
+<has-state> 
 
-They can be "smart functions" because may have other member functions and
-attributes. This means that function objects have a state.
+Can be 'smart' functions because may have other member functions and data
+members which means function objects have a 'state'.
 
 In fact, the same functionality, represented by two 'different' function objects
 instances of the same class, may have different 'states' at the same time. This
 is not possible for ordinary functions. Another advantage of function objects is
 that you can initialize them at 'runtime' before you use/call them.
+
+<ex> from CPR 14.8
+
+Allows users provide a different stream and different separator.
 
 #include <iostream>
 #include <vector>
@@ -30460,10 +30518,11 @@ class PrintString {
     // As with "bitwise-const", emits errors only when "assignment" is used on
     // members.
 
-    void operator() (const string &s) const { os << s << sep; }
+    void operator()(const string &s) const { os << s << sep; }
 
   private:
-    ostream& os; char sep;
+    ostream& os; 
+    char sep;
 };
 
 int main()
