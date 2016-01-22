@@ -23,6 +23,7 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_016| asyc: listener
 |kt_dev_code_017| asyc: dispatcher use
 *kt_dev_code_017* asyc: asyncInvoke
+*kt_dev_code_017* asyc: reduce number of threads
 
 |kt_dev_design_001| use state and if checks
 
@@ -13206,8 +13207,8 @@ class ZINC_EXPORT SystemClientEventRepository :
 };
 
 
-// note: this means that client will get shared_ptr<EventWindow> when Future is
-// ready.
+// note: this means that client will get "shared_ptr<EventWindow>" when Future
+// is ready.
 
 Future<boost::shared_ptr<EventWindow> > 
 SystemClientEventRepository::getEventWindow(
@@ -13841,6 +13842,31 @@ Future<T> exceptionalFuture(const std::exception& e) {
 NS_ZINC_CLOSE
 
 #endif /* ZINC_COMMON_ASYNC_HELPERS_IMPL_H_ */
+
+
+={============================================================================
+*kt_dev_code_017* asyc: reduce number of threads
+
+Background
+
+As the architecture of the YouView stack is asynchronous at it's heart, we
+should be able to get away with running very few threads on a box. We don't need
+to follow the traditional approach of using background threads to do anything
+that may take time, or wait on I/O.
+
+The interaction between the DBus layer and Futures means that any single thread
+should be able to perform CPU operations in user-space nearly all the time,
+which is ideally what we want. We then have little or no switching between
+    kernel-space and user-space, very little context switching between threads,
+in short, pure, uninterrupted throughput. Whenever I/O or kernel calls are
+    needed - which are relatively slow operations - the asynchronous APIs or an
+    existing Dispatcher can be utilised to make sure that we don't waste any
+    time in user-space checking to see if our operations are complete - the
+    kernel does that checking and let's our application know.
+
+We should be able to get away with using a very small number of Dispatchers
+(that may be one!) and maximising our use of them to run all of the tasks we
+need.
 
 
 # ============================================================================

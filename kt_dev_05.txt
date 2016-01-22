@@ -13578,15 +13578,22 @@ threads, each source is associated with a GMainContext. A GMainContext can only
 be running in a 'single' thread, but sources can be 'added' to it and 'removed'
 from it from other threads.
 
-Each event source is assigned a priority. The default priority,
-G_PRIORITY_DEFAULT, is 0. Values less than 0 denote higher priorities. Values
-    greater than 0 denote lower priorities. Events from high priority sources
-    are always processed before events from lower priority sources.
+note:
+One main context and loop represents a thread. If uses a call to add souece
+without specifying context or loop then, will addes to the global main loop.
 
+Each event source is assigned a priority. 
+
+The default priority, G_PRIORITY_DEFAULT, is 0. Values less than 0 denote higher
+priorities. Values greater than 0 denote 'lower' priorities. Events from high
+priority sources are always processed before events from lower priority sources.
+
+
+<idle-function>
 Idle functions can also be added, and assigned a priority. These will be run
 whenever no events with a higher priority are ready to be processed.
 
-*g_main_loop_new*
+*g_main_loop_new* *gmainloop-type*
 
 The GMainLoop data type represents a main event loop. A GMainLoop is created
 with g_main_loop_new(). 
@@ -13599,7 +13606,7 @@ g_main_loop_run() 'returns'.
 
 It is possible to create new instances of GMainLoop recursively. This is often
 used in GTK+ applications when showing modal dialog boxes. Note that event
-sources are associated with a particular GMainContext, and will be checked and
+sources are associated with a 'particular' GMainContext, and will be checked and
 dispatched for all main loops associated with that GMainContext.
 
 GTK+ contains wrappers of some of these functions, e.g. gtk_main(),
@@ -13615,8 +13622,8 @@ type is created by "deriving" from the GSource structure. The derived type of
 source is represented by a structure that has the GSource structure as a first
 element, and other elements specific to the new source type. 
 
-To create an instance of the new source type, call g_source_new() passing in the
-size of the derived structure and a table of functions. These GSourceFuncs
+To create an instance of the new source type, call `g_source_new()` passing in
+the size of the derived structure and a table of functions. These GSourceFuncs
 determine the behavior of the new source type.
 
 New source types basically interact with the main context in two ways. Their
@@ -13639,12 +13646,79 @@ g_main_context_dispatch().
 
 State of a Main Context
 --------------------------
-The operation of these functions can best be seen in terms of a state diagram,
+The operation of these functions can best be seen in terms of a state 'diagram',
 as shown in this image.
 
 On UNIX, the GLib mainloop is incompatible with fork(). Any program using the
 mainloop must either exec() or exit() from the child without returning to the
 mainloop.
+
+
+<functions>
+
+glib-2.40.0/glib/gmain.c
+
+GMainContext
+--------------------------
+typedef struct _GMainContext GMainContext;
+
+The GMainContext struct is an opaque data type representing a set of sources to
+be handled in a main loop.
+
+struct _GMainContext
+{
+  /* The following lock is used for both the list of sources
+   * and the list of poll records
+   */
+  GMutex mutex;
+  GCond cond;
+  GThread *owner;
+  guint owner_count;
+  GSList *waiters;
+
+  gint ref_count;
+
+  GHashTable *sources;              /* guint -> GSource */
+
+  GPtrArray *pending_dispatches;
+  gint timeout;			/* Timeout for current iteration */
+
+  guint next_id;
+  GList *source_lists;
+  gint in_check_or_prepare;
+
+  GPollRec *poll_records, *poll_records_tail;
+  guint n_poll_records;
+  GPollFD *cached_poll_array;
+  guint cached_poll_array_size;
+
+  GWakeup *wakeup;
+
+  GPollFD wake_up_rec;
+
+/* Flag indicating whether the set of fd's changed during a poll */
+  gboolean poll_changed;
+
+  GPollFunc poll_func;
+
+  gint64   time;
+  gboolean time_is_fresh;
+};
+
+
+GMainLoop
+--------------------------
+typedef struct _GMainLoop GMainLoop;
+
+The GMainLoop struct is an opaque data type representing the main event loop of
+a GLib or GTK+ application.
+
+struct _GMainLoop
+{
+  GMainContext *context;
+  gboolean is_running;
+  gint ref_count;
+};
 
 
 g_main_loop_new ()
@@ -13688,8 +13762,8 @@ void g_main_loop_quit (GMainLoop *loop);
 Stops a GMainLoop from running. Any calls to g_main_loop_run() for the loop
     will return.
 
-Note that sources that have already been dispatched when g_main_loop_quit() is
-called will still be executed.
+Note that sources that have already been dispatched(called) when
+g_main_loop_quit() is called will still be executed.
 
 Parameters
 
@@ -13697,23 +13771,55 @@ loop
 a GMainLoop
 
 
+GSourceFunc ()
+--------------------------
+gboolean
+(*GSourceFunc) (gpointer user_data);
+
+Specifies the type of function passed to g_timeout_add(), g_timeout_add_full(),
+          g_idle_add(), and g_idle_add_full().
+            
+Parameters
+
+user_data
+data passed to the function, 'set' when the source was created with one of the
+above functions
+
+Returns
+FALSE if the source should be removed. G_SOURCE_CONTINUE and G_SOURCE_REMOVE are
+more memorable names for the return value.
+
+
+G_SOURCE_REMOVE
+
+#define G_SOURCE_REMOVE         FALSE
+
+Use this macro as the return value of a GSourceFunc to remove the GSource from
+the main loop.
+
+note:
+gboolean (*)(void*)
+
+
 g_idle_add ()
 --------------------------
 guint g_idle_add (GSourceFunc function, gpointer data);
 
 Adds a function to be called whenever there are no higher priority events
-    pending to the default main loop. The function is given the default idle
+    pending to the 'default' main loop. The function is given the default idle
     priority, G_PRIORITY_DEFAULT_IDLE. 
     
+
 <function-return-value>
 If the function returns FALSE it is automatically removed from the list of
 event sources and will not be called again.
 
+*gmain-global-default-context*
 This 'internally' creates a main loop 'source' using g_idle_source_new() and
-attaches it to the global GMainContext using g_source_attach(), so the callback
-will be invoked in whichever thread is running that main context. You can do
-these steps manually if you need greater control or to use a custom main
-context.
+attaches it to the 'global' GMainContext using `g_source_attach()`, so the
+callback will be invoked in 'whichever' thread is running 'that' main context.
+You can do these steps manually if you need greater control or to use a custom
+main context.
 
 Parameters
 function    function to call
@@ -13721,7 +13827,6 @@ data        data to pass to function.
 
 Returns
 the ID (greater than 0) of the event source.
-
 
 note:
 The source is to be removed either when the function returns FALSE or when
@@ -13744,9 +13849,9 @@ See memory management of sources for details on how to handle the return value
 and memory management of data .
 
 This internally creates a main loop source using g_idle_source_new() and
-attaches it to the global GMainContext using g_source_attach(), so the callback
-will be invoked in whichever thread is running that main context. You can do
-these steps manually if you need greater control or to use a custom main
+attaches it to the global GMainContext using `g_source_attach()`, so the
+callback will be invoked in whichever thread is running that main context. You
+can do these steps manually if you need greater control or to use a custom main
 context.
 
 [rename-to g_idle_add]
@@ -13769,35 +13874,119 @@ function to call when the idle is removed, or NULL. [allow-none]
 Returns
 the ID (greater than 0) of the event source.
 
+<code>
+guint 
+g_idle_add (GSourceFunc    function,
+            gpointer       data)
+{
+  return g_idle_add_full (G_PRIORITY_DEFAULT_IDLE, function, data, NULL);
+}
 
-GSourceFunc ()
+
+The default priority, G_PRIORITY_DEFAULT, is 0. Values less than 0 denote higher
+priorities. Values greater than 0 denote 'lower' priorities. Events from high
+priority sources are always processed before events from lower priority sources.
+
+ -200, high                 0               low, 200
+ ---------------------------------------------------
+
+
+// G_PRIORITY_HIGH
+// --------------------------
+// #define G_PRIORITY_HIGH            -100
+// 
+// Use this for high priority event sources.
+// 
+// It is not used within GLib or GTK+.
+
+
+G_PRIORITY_DEFAULT
 --------------------------
-gboolean
-(*GSourceFunc) (gpointer user_data);
+#define G_PRIORITY_DEFAULT          0
 
-Specifies the type of function passed to g_timeout_add(), g_timeout_add_full(),
-          g_idle_add(), and g_idle_add_full().
-            
-Parameters
+Use this for default priority event sources.
 
-user_data
-data passed to the function, set when the source was created with one of the
-above functions
+In GLib this priority is used when adding timeout functions with
+g_timeout_add(). In GDK this priority is used for events from the X server.
+
+
+G_PRIORITY_HIGH_IDLE
+--------------------------
+#define G_PRIORITY_HIGH_IDLE        100
+
+Use this for high priority idle functions.
+
+GTK+ uses G_PRIORITY_HIGH_IDLE + 10 for resizing operations, and
+G_PRIORITY_HIGH_IDLE + 20 for redrawing operations. 
+
+This is done to ensure that any pending resizes are processed 'before' any
+pending redraws, so that widgets are not redrawn twice unnecessarily.
+
+
+G_PRIORITY_DEFAULT_IDLE
+--------------------------
+#define G_PRIORITY_DEFAULT_IDLE     200
+
+Use this for default priority idle functions.
+
+In GLib this priority is used when adding idle functions with g_idle_add().
+
+// G_PRIORITY_LOW
+// --------------------------
+// #define G_PRIORITY_LOW              300
+// 
+// Use this for very low priority background tasks.
+// 
+// It is not used within GLib or GTK+.
+
+
+g_idle_source_new ()
+--------------------------
+GSource *
+g_idle_source_new (void);
+
+Creates a new idle source.
+
+The source will not initially be associated with any GMainContext and must be
+added to one with g_source_attach() before it will be executed. Note that the
+default priority for idle sources is G_PRIORITY_DEFAULT_IDLE, as compared to
+other sources which have a default priority of G_PRIORITY_DEFAULT.
 
 Returns
-FALSE if the source should be removed. G_SOURCE_CONTINUE and G_SOURCE_REMOVE are
-more memorable names for the return value.
+the newly-created idle source
+
+<code>
+GSource *
+g_idle_source_new (void)
+{
+  GSource *source;
+
+  source = g_source_new (&g_idle_funcs, sizeof (GSource));
+  g_source_set_priority (source, G_PRIORITY_DEFAULT_IDLE);
+
+  return source;
+}
 
 
-G_SOURCE_REMOVE
+g_source_attach ()
+--------------------------
+guint
+g_source_attach (GSource *source,
+                 GMainContext *context);
 
-#define G_SOURCE_REMOVE         FALSE
+Adds a GSource to a context so that it will be executed within that context.
+Remove it by calling g_source_destroy(). 
 
-Use this macro as the return value of a GSourceFunc to remove the GSource from
-the main loop.
+Parameters
 
-note:
-gboolean (*)(void*)
+source
+a GSource
+
+context
+a GMainContext (if NULL, the default context will be used). [allow-none]
+
+Returns
+the ID (greater than 0) for the source within the GMainContext.
 
 
 g_source_remove ()
@@ -13847,9 +14036,9 @@ Sets a function to be called at 'regular' intervals with the default priority,
        function will not be called again.
 
 This internally creates a main loop source using g_timeout_source_new_seconds()
-and attaches it to the main loop context using g_source_attach(). You can do
-these steps manually if you need greater control. Also see
-g_timeout_add_seconds_full().
+    and attaches it to the main loop context using `g_source_attach()`. You can
+    do these steps manually if you need greater control. Also see
+    g_timeout_add_seconds_full().
 
 Note that the first call of the timer may not be precise for timeouts of one
 second. If you need finer precision and have such a timeout, you may want to use
@@ -13870,6 +14059,36 @@ Returns
 the ID (greater than 0) of the event source.
 
 Since: 2.14
+
+
+<to-get-default-context>
+
+GMainContext *
+g_main_context_default (void);
+--------------------------
+Returns the global default main context. This is the main context used for main
+loop functions when a main loop is not explicitly specified, and corresponds to
+the "main" main loop. note: main-main-loop
+
+
+g_main_context_pending ()
+--------------------------
+gboolean
+g_main_context_pending (GMainContext *context);
+
+Checks if any sources have pending events for the given context.
+
+
+// g_main_context_dispatch ()
+// 
+// void
+// g_main_context_dispatch (GMainContext *context);
+// 
+// Dispatches all pending sources.
+// 
+// You must have successfully acquired the context with g_main_context_acquire()
+// before you may call this function. note: when call this without _acquire(),
+// raises assert.
 
 
 ={============================================================================
