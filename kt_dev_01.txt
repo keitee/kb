@@ -110,10 +110,10 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_004* copy-control: preventing-copies
 |kt_dev_cpp_007| overload-function matching
 |kt_dev_cpp_021| overload-operator
-*kt_dev_cpp_005* class-type-conversion, explicit, copy-form initialization
+*kt_dev_cpp_005* type-conversion: explicit, copy-form initialization
+*kt_dev_cpp_005* type-conversion: conversion-to-bool
 |kt_dev_cpp_005| list initialization. initializer_list
 *kt_dev_cpp_005* form-of-initialization
-*kt_dev_cpp_005* conversion-to-bool
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
 |kt_dev_cpp_008| const-, equal-misspell
 *kt_dev_cpp_008* const-temporary
@@ -210,9 +210,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_063| function-object: lambda
 *kt_dev_stl_063* function-object: as algorithm argument
 *kt_dev_stl_063* function-object: as template argument
-*kt_dev_stl_063* stl-function-object: predefined
-|kt_dev_stl_063| stl-function-object: pass by reference, more examples
-|kt_dev_stl_064| stl-function-type
+*kt_dev_stl_063* function-object: good things
+|kt_dev_stl_063| function-object: pass by reference, more examples
+*kt_dev_stl_063* function-object: predefined
+*kt_dev_stl_064* function-object: function-type
 |kt_dev_stl_065| stl-bind
 |kt_dev_stl_066| stl-bind: cases
 |kt_dev_stl_067| algorithm: address of member function
@@ -14830,7 +14831,9 @@ cout << (*p).size() << endl;    // same as p->size()
 
 
 ={============================================================================
-*kt_dev_cpp_005* class-type-conversion, explicit, copy-form initialization
+*kt_dev_cpp_005* type-conversion: explicit, copy-form initialization
+
+Converting ctors and conversion ops define class-type conversions.
 
 {converting-ctor}
 The converting-ctor is a coversion 'to' class type from other type and
@@ -15025,28 +15028,79 @@ non-scalar type ‘Base’ requested
 
 
 {conversion-op}
-This is conversion from class type to other type. Use overloading and the form
-is:
+The conversion-op is a conversion from class type to other type. Have no
+explicitly stated return type and no parameters. Must be member.
 
-operator T() const;
+operator T() const;     where T represents `type`
 
 class SamallInt {
   public:
-    'explicit' operator int() const { return val;}
+    operator int() const { return val;}
 
   private:
     std::size_t val;
 };
 
+SmallInt si;
+
+si = 4;   // implicitly converts 4 to SmallInt then calls operator=
+si + 3;   // implicitly converts si to int then do integer addition
+
+
+note:
+Although the compiler will apply only one user-defined conversion at a time,
+         implicit user-defined conversion can be preceded or followed by a
+         standard(built-in) conversion.
+
+// the `double` converted to `int` and calls SmallInt(int) ctor.
+
+SmallInt si = 3.14;
+
+<use-exlicit>
 To avoid following problem, use explicit keyword:
+
+class SamallInt {
+  public:
+    'explicit' operator int() const { return val;}
+};
 
 int i = 42;
 cin << 42;
 
-There is no << operator in cin but there is conversion-to-bool. So works as if
-depending on the cin state; 0 or 1.
+There is no operator<< in cin but could use conversion-to-bool to convert `cin`
+to bool. So 0 or 1 depending on the cin state, promote to int and used as the
+lhs to the left shift operator.
 
 0 or 1 << 42;
+
+
+={============================================================================
+*kt_dev_cpp_005* type-conversion: conversion-to-bool
+
+The classes 'rarely' provide conversion operator but one important exception is
+convertion to bool.
+
+In earlier version of the library, the IO types defined a conversion to void to
+avoid the kind of problems above. Under the new standard, instead defines an
+explicit conversiton to bool.
+
+
+<conversion-to-bool>
+However, even if uses explicit, this explicit has no effect when use stream in
+condition such as:
+
+if, while, for and do statements. logical operators. conditional operators.
+ 
+Why? Conversion to bool is 'intended' for use in conditions and hence ordinarily
+  should be defined as explicit to avoid problems in other uses:
+
+while(std::cin >> value)
+
+It reads into value, 'return' cin, and  cin converted to bool depending on cin
+  state. This bool conversion is the typical use of conversion-op.
+
+<class-state>
+note. Like cin, seems useful to have bool conversion when class has 'state'.
 
 
 ={============================================================================
@@ -15488,29 +15542,6 @@ void print( std::initializer_list<int> vals )
     std::cout << *p << "\n";
 }
 
-
-={============================================================================
-*kt_dev_cpp_005* conversion-to-bool
-
-<conversion-to-bool>
-However, even if uses explicit, this explicit has no effect when used in condition such as:
-
-if, while, for and do statements. logical operators. conditional operators.
- 
-Why this exception? Conversion to bool is 'intended' for use in conditions and hence ordinarily
-should be defined as explicit to avoid problems in other uses:
-
-while( std::cin >> value )
-
-It reads into value, 'return' cin, and  cin converted to bool depending on cin state. This bool
-conversion is the typical use of conversion-op.
-
-note: In earlier version of the library, the IO types defined a conversion to void and under the new
-standard, instead defines an explicit conversiton to bool.
-
-
-<class-state>
-note. Like cin, seems useful to have bool conversion when class has 'state'.
 
 
 ={============================================================================
@@ -30651,7 +30682,7 @@ instead of ordinary functions often results in better performance.
 
 
 ={============================================================================
-*kt_dev_stl_063* stl-function-object: pass by reference, more examples
+*kt_dev_stl_063* function-object: pass by reference, more examples
 
 {function-object-passed-by-value} CLR 10.1.2, 3
 As with the same example, a function that may have more than one state at the
@@ -31064,9 +31095,9 @@ sort(nameTable.begin(), nameTable.end(), less<string *>());
 
 
 ={============================================================================
-*kt_dev_stl_063* stl-function-object: predefined
+*kt_dev_stl_063* function-object: predefined
 
-#include <functional> defines a set of function 'object' classes.
+#include <functional> defines library-defined function objects:
 
 negate<type>()          - param
 plus<type>()            param1 + param2
@@ -31088,11 +31119,14 @@ bit_or<type>()          param1 | param2
 bit_xor<type>()         param1 ^ param2
 
 
-set<int, less<int>> coll;      // = set<int> coll. sort elements with <
-set<int, greater<int>> coll;   // sort elements with > 
+set<int, less<int>> coll;      // == set<int> coll. sort with operator<
+set<int, greater<int>> coll;   // sort with operator> 
+
+sort(svec.begin(), svec.end(), greater<string>());    // temporary object
 
 
-# template-less from bits/stl_function.h
+<code-less> template-less from bits/stl_function.h
+
 namespace std {
 
   template<typename _Tp>
@@ -31101,6 +31135,15 @@ namespace std {
       _Tp
       operator()(const _Tp& __x) const
       { return -__x; }
+    };
+
+  /// One of the @link arithmetic_functors math functors@endlink.
+  template<typename _Tp>
+    struct minus : public binary_function<_Tp, _Tp, _Tp>
+    {
+      _Tp
+      operator()(const _Tp& __x, const _Tp& __y) const
+      { return __x - __y; }
     };
 
   template<typename _Tp>
@@ -31239,7 +31282,7 @@ namespace std {
 
 
 ={============================================================================
-*kt_dev_stl_064* stl-function-type
+*kt_dev_stl_064* function-object: function-type
 
 {function-type}
 Assume to build a simple desk calculator and to define a function table to store
@@ -31261,10 +31304,13 @@ struct divide {
 map<string, int(*)(int, int)> binops;
 
 binops.insert( {"+", add} );
-binops.insert( {"%", mod} );     // error since mod is 'not' a pointer to function
+binops.insert( {"%", mod} );  // error since mod is 'not' a pointer to function
 
 The second is in error since like any other object, a callable object has a type
 and lambda type does not match the type of the values in the map.
+
+However, callables with different types may 'share' the same call signature. A
+call signature corresponds to a function type.
 
 Solve this using library 'type' named 'function' defined in functional header.
 This represent 'any' callables that has the same call signature. This is
@@ -31289,7 +31335,9 @@ map<string, function<int(int, int)>> binops = {
   ...
 };
 
-And when index a map, get a reference to the associated value, use
+And when index a map, get a reference to an object of type `function`. The
+`function` type overloads the call operator which takes its own arguments and
+passes them along to its stored callable objects.
 
 binops["+"](10,5);   // adds(10,5)
 binops["-"](10,5);   // minus<int>(10,5)
@@ -31300,7 +31348,7 @@ binops["-"](10,5);   // minus<int>(10,5)
 
 CLR 5.4.4
 
-Class std::function<>, declared in <functional>, provides 'polymorphic' wrappers
+The std::function<>, declared in <functional>, provides 'polymorphic' wrappers
 that 'generalize' the notion of a function pointer.
 
 When member functions are used, the object they are called for 'has' to be the
