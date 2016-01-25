@@ -31,8 +31,9 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_300* gst-tuto: concept
 *kt_dev_bcast_300* gst-tuto: signal
 |kt_dev_bcast_300| gst-seek: gst-query
+*kt_dev_bcast_300* gst-seek: gst-stream-duration
 *kt_dev_bcast_300* gst: tutorial: 07: queue
-*kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
+*kt_dev_bcast_300* gst-tuto: gst-buffer
 |kt_dev_bcast_301| gst: base elements
 *kt_dev_bcast_302* gst-souphttpsrc
 |kt_dev_bcast_302| gst-uridecodebin
@@ -87,7 +88,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst-bin
 *kt_dev_bcast_500* gst-cap
 *kt_dev_bcast_500* gst-basesink, gst-preroll
-*kt_dev_bcast_500* gst: gstbuffer
+*kt_dev_bcast_500* gst-buffer
 *kt_dev_bcast_500* gst-event
 *kt_dev_bcast_500* gst: gstvideo
 *kt_dev_bcast_500* gst-pipeline
@@ -2500,6 +2501,7 @@ int main(int argc, char *argv[]) {
           g_printerr ("Could not query current position.\n");
         }
          
+        // *gst-stream-duration*
         /* If we didn't know it yet, query the stream duration */
         if (!GST_CLOCK_TIME_IS_VALID (data.duration)) {
           if (!gst_element_query_duration (data.playbin2, &fmt, &data.duration)) {
@@ -2592,8 +2594,8 @@ static void handle_message (CustomData *data, GstMessage *msg) {
           // This query object is then passed to the pipeline with
           // gst_element_query(). The result is stored in the same query, and
           // can be easily retrieved with gst_query_parse_seeking(). It extracts
-          // a boolean indicating if seeking is allowed, and the range in which
-          // seeking is possible.
+          // a boolean indicating 'if' 'seeking' is allowed, and the 'range' in
+          // which seeking is possible.
 
           query = gst_query_new_seeking (GST_FORMAT_TIME);
           if (gst_element_query (data->playbin2, query)) {
@@ -2662,6 +2664,34 @@ warned that it might take longer to calculate the seeking position (very long,
 And finally we provide the position to seek to. Since we asked for
 GST_FORMAT_TIME, this position is in 'nanoseconds', so we use the GST_SECOND
 macro for simplicity.
+
+
+={============================================================================
+*kt_dev_bcast_300* gst-seek: gst-stream-duration
+
+This is different from gst-buffer-duration.
+
+if(live)
+{
+    // linear mode
+    RefObj<GstQuery> sq(gst_query_new_seeking(GST_FORMAT_TIME));
+
+    if (!gst_element_query (pipeline.get(),sq.get())) {
+        NICKEL_ERROR("seeking query failed");
+    }
+    gst_query_parse_seeking (sq.get(), NULL, NULL, &pos.first, &pos.second);
+}
+else if(vod)
+{
+    RefObj<GstQuery> q(gst_query_new_duration(format));
+
+    if (!gst_element_query(pipeline.get(), q.get())) {
+        NICKEL_TRACE("failed duration query: " << duration);
+        return duration;
+    }
+
+    gst_query_parse_duration(q.get(), NULL, &duration);
+}
 
 
 ={============================================================================
@@ -2849,7 +2879,7 @@ int main(int argc, char *argv[]) {
 
 
 ={============================================================================
-*kt_dev_bcast_300* gst: tutorial: 08: buffers and interact with a pipeline
+*kt_dev_bcast_300* gst-tuto: gst-buffer
 
 Basic tutorial 8: Short-cutting the pipeline
 
@@ -2971,6 +3001,7 @@ typedef struct _CustomData {
  * CustomData.num_samples variable, so we can 'timestamp' this buffer using the
  * GST_BUFFER_TIMESTAMP macro in GstBuffer.  
  *
+ * *gst-buffer-duration*
  * Since we are producing buffers of the same size, their duration is the same
  * and is set using the GST_BUFFER_DURATION in GstBuffer.
  *
@@ -10511,7 +10542,7 @@ void pes_data_source_pause_flush(PesDataSource* source)
 
 
 ={============================================================================
-*kt_dev_bcast_500* gst: gstbuffer
+*kt_dev_bcast_500* gst-buffer
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstBuffer.html
 
@@ -10892,6 +10923,35 @@ GST_ELEMENT_ERROR(demux,
     RESOURCE, FAILED, ("Download error"), ("http error %d", http_status));
 
 
+gst_element_query ()
+-----------------
+gboolean
+gst_element_query (GstElement *element,
+                   GstQuery *query);
+
+Performs a query on the given element.
+
+For elements that don't implement a query handler, this function forwards the
+query to a random srcpad or to the peer of a random linked sinkpad of this
+element.
+
+Please note that some queries might need a running pipeline to work.
+
+Parameters
+
+element
+a GstElement to perform the query on.
+	 
+query
+the GstQuery. [transfer none]
+
+Returns
+
+TRUE if the query could be performed.
+
+MT safe.
+
+
 gst_element_query_position ()
 -----------------
 gboolean
@@ -10932,10 +10992,11 @@ gst_element_query_duration (GstElement *element,
                             GstFormat format,
                             gint64 *duration);
 
-Queries an element (usually top-level pipeline or playbin element) for the total
-    stream duration in nanoseconds. This query will only work once the pipeline
-    is prerolled (i.e. reached PAUSED or PLAYING state). The application will
-    receive an ASYNC_DONE message on the pipeline bus when that is the case.
+Queries an element (usually top-level pipeline or playbin element) for the
+    'total' stream duration in nanoseconds. This query will only work once the
+    pipeline is prerolled (i.e. reached PAUSED or PLAYING state). The
+    application will receive an ASYNC_DONE message on the pipeline bus when that
+    is the case.
 
 If the duration changes for some reason, you will get a DURATION_CHANGED message
 on the pipeline bus, in which case you should re-query the duration using this
@@ -10955,6 +11016,30 @@ A location in which to store the total duration, or NULL. [out][allow-none]
 Returns
 
 TRUE if the query could be performed.
+
+
+// gstreamer/gst/gstutils.c
+
+gboolean
+gst_element_query_duration (GstElement * element, GstFormat format,
+    gint64 * duration)
+{
+  GstQuery *query;
+  gboolean ret;
+
+  g_return_val_if_fail (GST_IS_ELEMENT (element), FALSE);
+  g_return_val_if_fail (format != GST_FORMAT_UNDEFINED, FALSE);
+
+  query = gst_query_new_duration (format);
+  ret = gst_element_query (element, query);
+
+  if (ret)
+    gst_query_parse_duration (query, NULL, duration);
+
+  gst_query_unref (query);
+
+  return ret;
+}
 
 
 gst_element_seek_simple ()

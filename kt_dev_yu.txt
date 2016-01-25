@@ -107,7 +107,8 @@
 *kt_dev_uv_stack_408* mr-dash: seekable range
 *kt_dev_uv_stack_408* mr-dash: output control
 *kt_dev_uv_stack_408* mr-dash: seek and resume
-*kt_dev_uv_stack_408* mr-dash: slow play on t1000
+*kt_dev_uv_stack_408* mr-dash: media-load. slow play on t1000
+*kt_dev_uv_stack_408* mr-dash: live or vod
 
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
@@ -11408,6 +11409,14 @@ GST_DEBUG=adaptivedemux:5 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/Talk
 source/DEVARCH/Zinc/Zinc.3rdPartyStack/source-packages/qt-everywhere-opensource-src-5.1.0/patches$ 
 
 
+qt-everywhere-opensource-src-5.1.0/qtbase/src/plugins/platforms/directfb/qdirectfbwindow.cpp
+
+/platforms/directfb/qdirectfbbackingstore.cpp   |   14 +++------
+/platforms/directfb/qdirectfbblitter.cpp        |    6 +--
+/platforms/directfb/qdirectfbconvenience.cpp    |   30 ++++++++++++++++++++
+/platforms/directfb/qdirectfbconvenience.h      |    8 +++++
+
+
 ={============================================================================
 *kt_dev_uv_stack_250* mr-web: launch crb
 
@@ -14266,6 +14275,45 @@ OutputControlRefAsync.h
 
 
 ={============================================================================
+*kt_dev_uv_stack_408* mr-dash: output control: nexus-inspect
+
+// both scart and hdmi are fine to play aqiva
+
+[root@HUMAX /]# nexus-inspect
+
+	Ac3EncodeHandle: 0xcf0f4600
+	StcChannelHandle: 0xe12a2718
+	VideoDecoderHandle: 0xe12a5218
+	VideoWindowHandle: 0xcc8180e0
+		VideoDecoder contrast: 0
+		VideoDecoder brightness: 0
+		VideoDecoder saturation: 0
+
+note: become yes when use hdmi and no when use scart
+		Video window visible: yes     
+
+	SD DisplayHandle: 0xcc81a000
+	SD VideoWindowHandle: 0xcc81a0e0
+		SD VideoDecoder contrast: 0
+		SD VideoDecoder brightness: 0
+		SD VideoDecoder saturation: 0
+		SD Video window visible: yes
+	PlaypumpHandle[0]: 0xcf076600
+	DmaHandle: 0xcf0e9300
+Nexus resources are owned by PID 5499
+	The video decoder has been started
+		Coded: 544 x 576,  Display: 544 x 576
+		Current PTS 3649069301
+		Num decoded frames 822
+		Num displayed frames 1642
+detachSharedMemory
+
+
+NEXUS_VideoWindow_GetSettings( sharedMem->videoWindow, &window_settings );
+printf( "\t\tVideo window visible: %s\n", window_settings.visible ? "yes" : "no" );
+
+
+={============================================================================
 *kt_dev_uv_stack_408* mr-dash: seek and resume
 
 The issue:
@@ -14796,6 +14844,139 @@ commandline read: Zinc.MediaProxy
 ------>> KT-HTML: setReadyState: n(2), r(3): loadeddataEvent
 
 2016-01-21 09:54:47,569 ERROR  715849728 vanadium /home/kpark/builds-src-dev/_virtual_/humax.1000/DEVARCH/Vanadium/Vanadium.WebKit.VideoElement/src/VanadiumMediaPlayer.cpp:279 KT: currentTime: v curr: 0.36
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash: live or vod
+
+void GstMediaRouter::preRollComplete()
+{
+    guint64 duration = getDuration(pipeline, GST_FORMAT_TIME);
+
+    if (GST_CLOCK_TIME_NONE == duration) {
+        NICKEL_TRACE("Configuring for live mode. duration " << duration);
+        mediaType = LIVE;
+    } else {
+        NICKEL_TRACE("Configuring for VOD mode. duration " << duration );
+        mediaType = VOD;
+    }
+}
+
+if (mediaType == LIVE) {
+    configurationName = "LINEAR.ABR";
+    sourceInfo["CONFIGURATION"] = configurationName;
+} else if (mediaType == VOD) {
+    configurationName = "ONDEMAND.ABR";
+    sourceInfo["CONFIGURATION"] = configurationName;
+}
+
+
+int32_t GstMediaRouter::getMediaDuration_async() const
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    if (mediaType == LIVE) {
+        return 0;
+
+    // current or cached current if play is already completed
+    } else if (mediaType == VOD) {
+        if (isCompleted) {
+            return static_cast<int32_t>(GST_TIME_AS_MSECONDS(cachedCurrent));
+        }
+
+        return static_cast<int32_t>(GST_TIME_AS_MSECONDS(getDuration(pipeline, GST_FORMAT_TIME)));
+    } else {
+        // Media pipeline has not been initialized, so duration is unknown
+        return -1;
+    }
+}
+
+
+const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+{
+    const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
+    int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
+
+    int64_t perceivedBufferSize = GST_TIME_AS_MSECONDS(bufPos.second - bufPos.first);
+
+    // LIVE
+    if (liveMode) {
+        const int64_t currentTime =
+            (presentationStreamTime <= bufPos.first || presentationStreamTime > bufPos.second)
+            ? bufPos.second
+            : presentationStreamTime;
+
+        return Position(
+                -int32_t(perceivedBufferSize),
+                -int32_t(GST_TIME_AS_MSECONDS(bufPos.second - currentTime)),
+                0);
+    }
+    else {
+        // VOD
+        // clamp the given presentation time to be between buffer start and end
+        const int64_t currentTime =
+            presentationStreamTime < bufPos.first ? bufPos.first :
+            presentationStreamTime > bufPos.second ? bufPos.second :
+            presentationStreamTime;
+
+        if(isCompleted) {
+            return Position(
+                    0,
+                    int32_t(GST_TIME_AS_MSECONDS(cachedCurrent)),
+                    int32_t(perceivedBufferSize));
+        }
+        else {
+            return Position(
+                    0,
+                    int32_t(GST_TIME_AS_MSECONDS(currentTime)),
+                    int32_t(perceivedBufferSize));
+        }
+    }
+}
+
+
+std::pair<gint64, gint64>
+getBufferPosition (const RefObj<GstElement>& pipeline, const bool mode)
+{
+    std::pair<gint64, gint64> pos(0, 0);
+
+    if (mode) {
+        // linear mode
+        RefObj<GstQuery> sq(gst_query_new_seeking(GST_FORMAT_TIME));
+
+        if (!gst_element_query (pipeline.get(),sq.get())) {
+            NICKEL_ERROR("seeking query failed");
+        }
+        gst_query_parse_seeking (sq.get(), NULL, NULL, &pos.first, &pos.second);
+    } else {
+        pos.first = 0 ;
+        pos.second = getDuration(pipeline, GST_FORMAT_TIME) ;
+    }
+
+    return pos;
+}
+
+gint64 getDuration (const RefObj<GstElement>& pipeline, const GstFormat format)
+{
+    gint64 duration = GST_CLOCK_TIME_NONE;
+
+    RefObj<GstQuery> q(gst_query_new_duration(format));
+
+    if (!q) {
+        throw std::runtime_error("Failed to create duration query");
+    }
+
+    if (!gst_element_query(pipeline.get(), q.get())) {
+        NICKEL_TRACE("failed duration query: " << duration);
+        return duration;
+    }
+
+    gst_query_parse_duration(q.get(), NULL, &duration);
+
+    NICKEL_TRACE("duration query: " << duration);
+
+    return duration;
+}
 
 
 ={============================================================================
@@ -21730,6 +21911,9 @@ unsetenv KERNEL_OPT
 unsetenv BOOT
 unsetenv IFCONFIG
 
+
+note: rootfs is different from CDS! This means that updating UI does not update
+UI.
 
 2. Install the rootfs onto HDD, type the following commands via SSH or serial
 from the root@HUMAX command prompt:
