@@ -3561,7 +3561,9 @@ log4cplus.appender.vanadiumfile.layout.ConversionPattern=%D{%Y-%m-%d %H:%M:%S,%q
 
 
 <log-on-host>
-/zinc-install-root/debug/debian-7-x86_64/share/uranium-common/uranium.props
+/zinc-install-root/debug/debian-8-x86_64/
+share/uranium-common/uranium.props
+share/vanadium-common/vanadium.props
 
 log4cplus.logger.uranium=TRACE, uraniumfile
 log4cplus.appender.uraniumfile.File=/home/kpark/builds/_virtual_/pc/zinc-install-root/debug/debian-7-x86_64/var/log/uranium.log
@@ -3584,6 +3586,8 @@ Canvas Core C++ components use the log4cplus.sourceforge.net project.
             ZINC_EXPORT log4cplus::Logger& getLoggerFallback(); \
         } \
     }
+
+/zinc-install-root/debug/debian-8-x86_64/var/log
 
 
 {use-in-code}
@@ -3651,15 +3655,6 @@ This is the same file as:
 
 # Main UI logs on a patch-o-tron build:
 /opt/zinc-trunk/var/applications/data/air/mainui/log/
-
-
-{pc-build-log}
-note: it is used for tests on pc build but not able to change pattern.
-
-/home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/
-share/vanadium-common/vanadium.props
-
-/home/kpark/builds/topic/pc/zinc-install-root/release/debian-7-x86_64/var/log
 
 
 ={============================================================================
@@ -5468,6 +5463,15 @@ signal sender=:1.169 -> dest=(null destination) serial=8794 path=/Zinc/Media/Med
       int32 195720
       int32 3559000
    }
+
+
+<serial-pair>
+See the pair between send and receive.
+
+method call sender=:1.78 -> dest=Zinc.MediaProxy 
+serial=*91* path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+
+method return sender=:1.75 -> dest=:1.78 reply_serial=*91*
 
 
 ={============================================================================
@@ -9150,7 +9154,7 @@ NPError NP_Initialize(NPNetscapeFuncs* nFuncs, NPPluginFuncs* pFuncs)
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: run sport app on atk
+*kt_dev_uv_stack_250* mr-web: sport app on atk
 
 // ./setup-humax/scripts/configure-webkit
 
@@ -9181,6 +9185,12 @@ url=http://filegateway.youview.co.uk/applications/dev/duncan/html/BBCAppSelector
 ...
 
 // choose "live" from the menu
+
+
+={============================================================================
+*kt_dev_uv_stack_250* mr-web: yplayer
+
+configure-webkit -u 'http://wll1p00830.dev.youview.co.uk/yplayer'
 
 
 ={============================================================================
@@ -11147,6 +11157,10 @@ networkState?: 2
 ={============================================================================
 *kt_dev_uv_stack_250* mr-web: qunit test
 
+<to-run>
+$ zb-make Vanadium/Vanadium.WebKit.VideoElement-qt-5.1.0-check
+
+
 For each test, it creates video elements:
 https://developer.mozilla.org/en-US/docs/Web/API/Document/createElement
 
@@ -11178,52 +11192,167 @@ class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
 };
 
 
-/Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
+// Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
 
 class ZINC_LOCAL MockMediaRouterRepository
 {
-  ...
-  registerMockForErrorHandlingSink();
+    MockMediaRouterRepository()
+    {
+        ...
+        registerMockForErrorHandlingDataToDecode();
+    };
 };
 
 
-void registerMockForErrorHandlingSink()
+void sendErrorEvent(boost::shared_ptr<MockMediaRouter> mock,
+            const ErrorEventValue::Enum error,
+            const ErrorEventContext::Enum context,
+            const std::string& msg)
 {
-  boost::shared_ptr<MockMediaRouter> mock = makeMock(
-      "http://bbc.co.uk/ErrorHandlingSink.mpd",
-      "ONDEMAND.ABR");
-
-  EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
-      Return(completedFuture(Position(0, 0, 1000000))));
-
-  EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
-      Return(makeCompletedFuture(1000000)));
-
-  EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
-      Return(makeCompletedFuture()));
-
-  EXPECT_CALL(*mock, start()).WillOnce(
-      DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::data,
-            ErrorEventContext::other, std::string())),
-        Return(makeCompletedFuture())));
-
-  registerMock("ErrorHandlingSink", mock);
+    mock->emitErrorEvent(error, context, msg);
 }
 
 
-/Vanadium/Vanadium.WebKit.VideoElement/js/testplay.js
+<1> to test MEDIA_ERR_DECODE
 
-asyncTestCase("ErrorHandlingSink", function() {
+void registerMockForErrorHandlingDataToDecode()
+{
+    boost::shared_ptr<MockMediaRouter> mock = makeMock(
+            "http://bbc.co.uk/ErrorHandlingDataToDecode.mpd",
+            "ONDEMAND.ABR");
+
+    EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+            Return(completedFuture(Position(0, 0, 1000000))));
+
+    EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+            Return(makeCompletedFuture(1000000)));
+
+    EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+                Return(makeCompletedFuture()));
+
+    EXPECT_CALL(*mock, start()).WillOnce(
+        DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::data,
+                        ErrorEventContext::other, std::string())),
+            Return(makeCompletedFuture())));
+
+    registerMock("ErrorHandlingDataToDecode", mock);
+}
+
+
+<2> to test MEDIA_ERR_SRC_NOT_SUPPORTED
+
+void registerMockForErrorHandlingDataToNotSupported()
+{
+    boost::shared_ptr<MockMediaRouter> mock = makeMockWithError(
+            "http://bbc.co.uk/ErrorHandlingDataToNotSupported.mpd",
+            "ONDEMAND.ABR",
+            ErrorEventValue::data);
+
+    registerMock("ErrorHandlingDataToNotSupported", mock);
+}
+
+boost::shared_ptr<MockMediaRouter> makeMockWithError(
+        const std::string& source,
+        const std::string& mediaRouterVariant,
+        const ErrorEventValue::Enum error)
+{
+    boost::shared_ptr<MockMediaRouter> mock
+        = boost::make_shared<MockMediaRouter>();
+
+    // The below corresponds to VanadiumMediaPlayer::load
+    EXPECT_CALL(*mock,
+            setSource(source,
+                SetSourceReason::mhegstandard)).WillOnce(
+                DoAll(Invoke(boost::bind(&sendSourceEvent, mock,
+                            SourceEventValue::change_complete,
+                            SetSourceReason::mhegstandard)),
+                    Invoke(boost::bind(&sendErrorEvent, mock, error,
+                            ErrorEventContext::other, std::string())),
+                Return(makeCompletedFuture())));
+
+    EXPECT_CALL(*mock,
+            setSink(std::string(sink))).WillOnce(
+            Return(makeCompletedFuture()));
+
+    EXPECT_CALL(*mock,
+            startBuffering()).WillOnce(
+            DoAll(Invoke(boost::bind(&sendBufferStatusEvent, mock,
+                        BufferStatusEventValue::buffering_started)),
+            Return(makeCompletedFuture())));
+
+    std::map<std::string, std::string> sourceInfo;
+    sourceInfo["CONFIGURATION"] = mediaRouterVariant;
+    EXPECT_CALL(*mock, getSourceInformation()).WillRepeatedly(
+            Return(makeCompletedFuture(sourceInfo)));
+    mock->setDispatcher(dispatcher);
+
+    EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+            Return(completedFuture(Position(0, 0, 1000000))));
+
+    EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+            Return(makeCompletedFuture(1000000)));
+
+    EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+            Return(makeCompletedFuture()));
+
+    EXPECT_CALL(*mock, stop()).WillRepeatedly(
+            DoAll(Invoke(boost::bind(&sendStatusEvent, mock, StatusEventValue::stopped)),
+                Return(makeCompletedFuture())));
+
+    return mock;
+}
+
+
+// Vanadium/Vanadium.WebKit.VideoElement/js/testplay.js
+
+asyncTestCase("ErrorHandlingDataToDecode", function() {
+    'use strict';
     expect(1);
-    video = document.createElement('video');
-
-    video.addEventListener("error", function() {
-        console.log("error event");
-        equal(video.error.code, MediaError.MEDIA_ERR_DECODE, "Expected MEDIA_ERR_DECODE");
+    var video = document.createElement('video');
+    video.addEventListener('error', function onError() {
+        console.log("data error");
+        equal(video.error.code, MediaError.MEDIA_ERR_DECODE,
+            "Expected MEDIA_ERR_DECODE");
+        video.removeEventListener('error', onError);
+        removeVideoElement(video);
         start();
     });
 
-    video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingSink.mpd');
+    video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingDataToDecode.mpd');
+    video.load();
+    video.play();
+});
+
+// asyncTestCase("ErrorHandlingSink", function() {
+//     expect(1);
+//     video = document.createElement('video');
+// 
+//     video.addEventListener("error", function() {
+//         console.log("error event");
+//         equal(video.error.code, MediaError.MEDIA_ERR_DECODE, "Expected MEDIA_ERR_DECODE");
+//         start();
+//     });
+// 
+//     video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingSink.mpd');
+//     video.load();
+//     video.play();
+// });
+
+asyncTestCase("ErrorHandlingDataToNotSupported", function() {
+    'use strict';
+    expect(1);
+    var video = document.createElement('video');
+
+    video.addEventListener('error', function onError() {
+        console.log("data error");
+        equal(video.error.code, MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED,
+            "Expected MEDIA_ERR_SRC_NOT_SUPPORTED");
+        video.removeEventListener('error', onError);
+        removeVideoElement(video);
+        start();
+    });
+
+    video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingDataToNotSupported.mpd');
     video.load();
     video.play();
 });
@@ -11244,6 +11373,10 @@ void registerMockForErrorHandlingDataToNotSupported()
 
 // from js
 var onlyRunTheseTests = ["ErrorHandlingDataToNotSupported"];
+
+note: must be char string
+
+var onlyRunTheseTests = [ErrorHandlingDataToNotSupported];
 
 Here missed "To" and got:
 
@@ -14151,14 +14284,135 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: output control
 
-/zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include
+{xml}
+  <interface name="Zinc.Media.OutputControlManager">
 
-OutputControlConfig.h
+    <yv:docstring>
+      Allows multiple clients to request output controls enforcement in a
+      consistent fashion. In the presence of multiple output controls enforced,
+      all configurations get resolved to a single, most restrictive
+      configuration.  This way it's impossible for any client to weaken any
+      other client's output controls being currently in force.  Also each client
+      is returned with an output controls reference object such that related
+      configuration is in force (contributes to the resolved configuration) for
+      as long as the object exists.
+    </yv:docstring>
+
+    <method name="add">
+      <yv:docstring>
+        Adds output controls configuration to the set of (possibly) multiple
+        configurations. The final set is resolved to a single strictest
+        configuration. There's no way for any client to weaken any other output
+        controls currently being in force.
+      </yv:docstring>
+
+      <arg type="(ibb)" yv:type="[OutputControlConfig]" name="cfg" direction="in">
+        <yv:docstring>
+          Output controls configuration to add and apply.
+        </yv:docstring>
+      </arg>
+
+      <arg type="o" yv:type="[OutputControlRef]" name="ocr" direction="out">
+        <yv:docstring>
+          Applied output controls configuration reference. When this object is
+          destroyed, related output controls are removed. The client should keep
+          a reference for as long as related output controls need to be in
+          force.
+        </yv:docstring>
+      </arg>
+
+    </method>
+  </interface>
+
+
+{generated-file}
+// zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include
+// OutputControlManagerAsync.h
+
+namespace Zinc {
+namespace Media {
+
+/**
+ * 
+ *       Allows multiple clients to request output controls enforcement in a
+ * 
+ *       consistent fashion. In the presence of multiple output controls enforced,
+ * 
+ *       all configurations get resolved to a single, most restrictive
+ * 
+ *       configuration.  This way it's impossible for any client to weaken any
+ * 
+ *       other client's output controls being currently in force.  Also each client
+ * 
+ *       is returned with an output controls reference object such that related
+ * 
+ *       configuration is in force (contributes to the resolved configuration) for
+ * 
+ *       as long as the object exists.
+ * 
+ *     
+ */
+class ZINC_EXPORT OutputControlManagerAsync
+{
+/* =============================== Methods ================================= */
+public:
+
+	/**
+	 * 
+	 *         Adds output controls configuration to the set of (possibly) multiple
+	 * 
+	 *         configurations. The final set is resolved to a single strictest
+	 * 
+	 *         configuration. There's no way for any client to weaken any other output
+	 * 
+	 *         controls currently being in force.
+	 * 
+	 *       
+	 */
+	virtual NS_ZINC::Future< boost::shared_ptr< OutputControlRef > > 
+       add(const OutputControlConfig& cfg_in) = 0;
+
+protected:
+	virtual ~OutputControlManagerAsync();
+};
+} // namespace
+} // namespace
+
+
+// OutputControlConfig.h
+
+    <yv:docstring>
+      Provides the minimum required information to configure output controls
+      (restrictions) on YouView devices. Used for each content individually and
+      as a result of resolving potentially multiple output controls
+      configurations.
+    </yv:docstring>
+
+    <yv:member type="i" yv:type="[CCI]" name="cci">
+      <yv:docstring>
+        CCI value for CGMS-A and SCMS (copy protection).
+      </yv:docstring>
+    </yv:member>
+
+    <yv:member type="b" name="requireHdcp">
+      <yv:docstring>
+        HDCP is strictly required. Disable HDMI output if HDCP is not negotiated
+        at any time.
+      </yv:docstring>
+    </yv:member>
+
+    <yv:member type="b" name="disableAnalogueSD">
+      <yv:docstring>
+        Disable analogue (SD on YouView devices) output.
+      </yv:docstring>
+    </yv:member>
+
 
 struct OutputControlConfig
 {
   OutputControlConfig();
-  explicit OutputControlConfig(const CCI::Enum cci_, const bool requireHdcp_, const bool disableAnalogueSD_);
+  explicit OutputControlConfig(const CCI::Enum cci_, 
+          const bool requireHdcp_, const bool disableAnalogueSD_);
   void swap(OutputControlConfig&);
 
   // Members:
@@ -14166,6 +14420,54 @@ struct OutputControlConfig
   bool requireHdcp;
   bool disableAnalogueSD;
 
+};
+
+
+// CCI.h
+
+  <yv:enum name="Zinc.Media.CCI">
+    <yv:docstring>
+      CCI values for CGMS-A and SCMS output controls (copy protection). For more
+      details and references see YouView "Content Protection: AV over IP
+      (1109-S)", version 1.3 E, section 3.9.2.
+    </yv:docstring>
+
+    <yv:enumvalue name="NOT_ASSERTED" value="0">
+      <yv:docstring>
+        Unlimited copies may be made of the content.
+      </yv:docstring>
+    </yv:enumvalue>
+
+    <yv:enumvalue name="NO_MORE_COPY" value="1">
+      <yv:docstring>
+        One generation of copies has already been made. No further copying is
+        allowed.
+      </yv:docstring>
+    </yv:enumvalue>
+
+    <yv:enumvalue name="COPY_ONE_GENERATION" value="2">
+      <yv:docstring>
+        One generation of copies may be made.
+      </yv:docstring>
+    </yv:enumvalue>
+
+    <yv:enumvalue name="NEVER_COPY" value="3">
+      <yv:docstring>
+        No copies may be made of the content.
+      </yv:docstring>
+    </yv:enumvalue>
+  </yv:enum>
+
+
+struct CCI : NS_ZINC::Enum
+{
+	enum Enum {
+		not_asserted = 0,
+		no_more_copy = 1,
+		copy_one_generation = 2,
+		never_copy = 3,
+
+	};
 };
 
 // Nickel/Nickel.System.Proxy/src/ProxySystemFactory.cpp
@@ -14178,20 +14480,23 @@ boost::shared_ptr<OutputControlManager> ProxySystemFactory::createOutputControlM
 }
 
 
-[26-11-2015 13:27:48.658857] 
-method call sender=:1.336 -> dest=:1.339 serial=5141 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=start
+<when-play-from-player>
 
-[26-11-2015 13:27:48.662204] 
-method call sender=:1.339 -> dest=Zinc.Media serial=4996 path=/Zinc/Media/OutputControlManager; interface=Zinc.Media.OutputControlManager; member=add
+// w3c -> mr -> oem mr
+
+3478  :1.225                   /opt/zinc-trunk/bin/w3cEngine -debug -cache 
+/app-data/client-cache -cache-size 50000000 -dbus -jar /app-data/cookies.sqlite -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 -src http://www.arqiva.net http://app.arqiva.tv        
+
+method call sender=:1.225 -> dest=:1.75 serial=48 
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=start
+
+method call sender=:1.75 -> dest=Zinc.Media serial=71 
+path=/Zinc/Media/OutputControlManager; interface=Zinc.Media.OutputControlManager; member=add
    struct {
       int32 0
       boolean false
       boolean false
    }
-
-[26-11-2015 13:27:48.672171] 
-method return sender=:1.7 -> dest=:1.339 'reply'_serial=4996
-   object path "/Zinc/Media/OutputControls/27"
 
 
 <stop>
@@ -14215,29 +14520,7 @@ boost::shared_ptr<OutputControlRef> ocr;
 ocr = ocm->add(ocCfg);
 
 
-<output-control-manager>
-
-interface-OutputControlManager.xml
-
-include/OutputControlManagerAsync.h
-
-/* =============================== Methods ================================= */
-public:
-
-	/**
-	 * 
-	 *         Adds output controls configuration to the set of (possibly) multiple
-	 *         configurations. The final set is resolved to a single strictest
-	 *         configuration. There's no way for any client to weaken any other output
-	 *         controls currently being in force.
-	 */
-   virtual NS_ZINC::Future< boost::shared_ptr< OutputControlRef > > add(const
-       OutputControlConfig& cfg_in) = 0;
-
-
 <output-control-ref>
-
-
   <interface name="Zinc.Media.OutputControlRef">
 
     <yv:docstring>
@@ -14274,6 +14557,28 @@ OutputControlRefAsync.h
   } // namespace
 
 
+// stagecraft -> mr -> oem mr
+
+method call sender=:1.78 -> dest=Zinc.MediaProxy serial=91 
+path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+
+method call sender=:1.75 -> dest=Zinc.Media serial=32 
+path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+
+method return sender=:1.7 -> dest=:1.75 reply_serial=32
+method return sender=:1.75 -> dest=:1.78 reply_serial=91
+
+1309  :1.78                    /opt/stagecraft-2.0/bin/stagecraft --astrace 
+    --bgalpha 0 --outputrect 0,0,1280,720 --extensionsdir 
+    /opt/zinc-trunk/lib/stagecraft2-extensions --profile extendedTV --modulemap IGraphicsDriver:/opt/stagecraft-2.0/bin/libIGraphicsDriver2.so /app        
+
+1425  :1.75                    /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
+1425  Zinc.MediaProxy          /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
+
+855   :1.7                     /opt/zinc/bin/bronzemediad.oem                  
+855   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
+
+
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: output control: nexus-inspect
 
@@ -14288,10 +14593,6 @@ OutputControlRefAsync.h
 		VideoDecoder contrast: 0
 		VideoDecoder brightness: 0
 		VideoDecoder saturation: 0
-
-note: become yes when use hdmi and no when use scart
-		Video window visible: yes     
-
 	SD DisplayHandle: 0xcc81a000
 	SD VideoWindowHandle: 0xcc81a0e0
 		SD VideoDecoder contrast: 0
@@ -14306,11 +14607,58 @@ Nexus resources are owned by PID 5499
 		Current PTS 3649069301
 		Num decoded frames 822
 		Num displayed frames 1642
-detachSharedMemory
 
 
 NEXUS_VideoWindow_GetSettings( sharedMem->videoWindow, &window_settings );
 printf( "\t\tVideo window visible: %s\n", window_settings.visible ? "yes" : "no" );
+
+NEXUS_VideoWindow_GetSettings( sharedMem->videoWindowSD, &window_settings );
+printf( "\t\tSD Video window visible: %s\n", window_settings.visible ? "yes" : "no" );
+
+<on-atk>
+When boots from 424 channel:
+
+                Video window visible: no
+                SD Video window visible: no
+
+when tune back from the other channel which have all "yes" visibility, maintains
+these settings:
+
+                Video window visible: yes
+                SD Video window visible: yes
+
+when play out aqiva
+                Video window visible: no
+                SD Video window visible: yes
+
+This is the same when use both scart and hdmi.
+
+
+boot-from-101.log
+1948:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
+3114:[26-01-2016 14:24:50.242541] method call sender=:1.24 -> dest=Zinc.Media serial=101 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=enableOutputs
+3194:[26-01-2016 14:24:50.886542] signal sender=:1.7 -> dest=(null destination) serial=90 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=OutputStatusEvent
+3196:[26-01-2016 14:24:50.886969] signal sender=:1.7 -> dest=(null destination) serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=HDMICECEvent
+4810:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
+5031:[26-01-2016 14:25:04.865716] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+5032:[26-01-2016 14:25:04.884930] method call sender=:1.75 -> dest=Zinc.Media serial=32 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+5834:[26-01-2016 14:25:07.058661] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=102 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
+5835:[26-01-2016 14:25:07.061342] method call sender=:1.75 -> dest=Zinc.Media serial=34 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
+149915:[26-01-2016 14:25:37.807796] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=274 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
+149916:[26-01-2016 14:25:37.810119] method call sender=:1.75 -> dest=Zinc.Media serial=46 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
+
+boot-from-242.log
+2016:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
+3163:[26-01-2016 14:19:09.038729] method call sender=:1.24 -> dest=Zinc.Media serial=95 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=enableOutputs
+3245:[26-01-2016 14:19:09.711587] signal sender=:1.7 -> dest=(null destination) serial=90 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=OutputStatusEvent
+3247:[26-01-2016 14:19:09.714917] signal sender=:1.7 -> dest=(null destination) serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=HDMICECEvent
+5007:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
+5086:[26-01-2016 14:19:23.188651] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+5087:[26-01-2016 14:19:23.204908] method call sender=:1.77 -> dest=Zinc.Media serial=32 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+5889:[26-01-2016 14:19:25.376924] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=102 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
+5890:[26-01-2016 14:19:25.379651] method call sender=:1.77 -> dest=Zinc.Media serial=34 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
+149070:[26-01-2016 14:19:57.413192] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=274 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
+149071:[26-01-2016 14:19:57.415019] method call sender=:1.77 -> dest=Zinc.Media serial=46 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
 
 
 ={============================================================================
@@ -16064,7 +16412,11 @@ xargs -r sed -i \
 ={============================================================================
 *kt_dev_uv_stack_255* mr-error: soldes
 
+DRM errors:
 https://jira.youview.co.uk/browse/SOLDES-555
+
+HTML errors:
+https://jira.youview.co.uk/browse/SOLDES-584
 
 
 ={============================================================================
@@ -16170,6 +16522,8 @@ error is an object with the code MEDIA_ERR_NETWORK or higher. networkState
 equals either NETWORK_EMPTY or NETWORK_IDLE, depending on when the download
 was aborted. 
 
+
+https://html.spec.whatwg.org/multipage/embedded-content.html#dom-media-error
 
 4.8.13.1 Error codes
 

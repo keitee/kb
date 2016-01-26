@@ -298,7 +298,7 @@
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
 |kt_linux_core_200| ipc: sync: semaphore 
-*kt_linux_core_201* sync: mutex
+*kt_linux_core_201* sync-lock: mutex
 *kt_linux_core_202* sync: deadlock
 *kt_linux_core_202* sync-cond: why condition variable in UNP example
 *kt_linux_core_202* sync-cond: why condition variable in LPI example
@@ -22526,7 +22526,7 @@ are no longer required). note: real example? useful?
 
 
 ={============================================================================
-*kt_linux_core_201* sync: mutex
+*kt_linux_core_201* sync-lock: mutex
 
 LPI-30
 
@@ -22669,11 +22669,113 @@ type of mutex: mutex-'deadlock' or EDEADLK for error check type. On Linux,
      deadlock by default from {ref-LPI}. Why deadlock?  Because blocked trying
      to lock a mutex that it already owns.
 
-o Unlocking a mutex that is not owned(locked) or that is locked by another
-thread 'undefined' result. note: ownership matters when unlock and semaphore do
-not have ownership.
+*mutex-unlock-not-locked*
+Unlocking a mutex that is not owned(locked) or that is locked by another thread
+'undefined' result. note: ownership matters when unlock and semaphore do not
+have ownership. Precisely what happens in each of these cases depends on the
+type of the mutex.
 
-Precisely what happens in each of these cases depends on the type of the mutex.
+
+<case-glib-beg>
+
+// glib-2.40.0/gthread-posix.c
+//
+// The glib 2.40 changes unlock-not-locked which aborts from glib 2.0 which
+// don't have check.
+
+#if !defined(USE_NATIVE_MUTEX)
+
+/**
+ * g_mutex_unlock:
+ * @mutex: a #GMutex
+ *
+ * Unlocks @mutex. If another thread is blocked in a g_mutex_lock()
+ * call for @mutex, it will become unblocked and can lock @mutex itself.
+ *
+ * Calling g_mutex_unlock() on a mutex that is not locked by the
+ * current thread leads to undefined behaviour.
+ */
+void
+g_mutex_unlock (GMutex *mutex)
+{
+  gint status;
+
+  if G_UNLIKELY ((status = pthread_mutex_unlock (g_mutex_get_impl (mutex))) != 0)
+    g_thread_abort (status, "pthread_mutex_unlock");
+}
+
+#endif /* !defined(USE_NATIVE_MUTEX) */
+
+
+#if defined(USE_NATIVE_MUTEX)
+
+/* Our strategy for the mutex is pretty simple:
+ *
+ *  0: not in use
+ *
+ *  1: acquired by one thread only, no contention
+ *
+ *  > 1: contended
+ *
+ *
+ * As such, attempting to acquire the lock should involve an increment.
+ * If we find that the previous value was 0 then we can return
+ * immediately.
+ *
+ * On unlock, we always store 0 to indicate that the lock is available.
+ * If the value there was 1 before then we didn't have contention and
+ * can return immediately.  If the value was something other than 1 then
+ * we have the contended case and need to wake a waiter.
+ *
+ * If it was not 0 then there is another thread holding it and we must
+ * wait.  We must always ensure that we mark a value >1 while we are
+ * waiting in order to instruct the holder to do a wake operation on
+ * unlock.
+ */
+
+void
+g_mutex_unlock (GMutex *mutex)
+{
+  guint prev;
+
+  prev = exchange_release (&mutex->i[0], 0);
+
+  /* 1-> 0 and we're done.  Anything else and we need to signal... */
+  if G_UNLIKELY (prev != 1)
+    g_mutex_unlock_slowpath (mutex, prev);
+}
+
+static void __attribute__((noinline))
+g_mutex_unlock_slowpath (GMutex *mutex,
+                         guint   prev)
+{
+  /* We seem to get better code for the uncontended case by splitting
+   * this out...
+   */
+  if G_UNLIKELY (prev == 0)
+    {
+      fprintf (stderr, "Attempt to unlock mutex that was not locked\n");
+      abort ();
+    }
+
+  syscall (__NR_futex, &mutex->i[0], (gsize) FUTEX_WAKE_PRIVATE, (gsize) 1, NULL);
+}
+
+#endif
+
+// callstack when aborted
+
+#0  0x00007ffff5692107 in __GI_raise (sig=sig@entry=6)
+    at ../nptl/sysdeps/unix/sysv/linux/raise.c:56
+#1  0x00007ffff56934e8 in __GI_abort () at abort.c:89
+#2  0x00007ffff739bcea in g_mutex_unlock_slowpath ()
+   from /release/debian-8-x86_64/oss/lib/libglib-2.0.so.0
+#3  0x00007ffff739bdb6 in g_mutex_unlock ()
+   from /release/debian-8-x86_64/oss/lib/libglib-2.0.so.0
+#4  0x00007fffd8a94c3f in gst_hls_demux_switch_playlist ()
+   from /release/debian-8-x86_64/oss/lib/gstreamer-1.0/libgsthlsdemux.so
+
+<case-glib-end>
 
 
 PTHREAD_MUTEX_NORMAL
