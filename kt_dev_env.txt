@@ -132,10 +132,13 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_git_007* git-log: range: see what is to be introduced
 *kt_dev_env_git_007* git-log: reverse order
 *kt_dev_env_git_007* git-log: with no pager
+*kt_dev_env_git_007* git-log: git-reflog: git-recover
+*kt_dev_env_git_007* git-log: git-reflog: list all
+*kt_dev_env_git_007* git-log: pickaxe
+*kt_dev_env_git_007* git-log: commit message
 |kt_dev_env_git_007| git-grep
 *kt_dev_env_git_007* git-grep: serach all branches
 *kt_dev_env_git_007* git-grep: fun
-*kt_dev_env_git_007* git-log: pickaxe
 |kt_dev_env_git_008| git-checkout 
 |kt_dev_env_git_009| auto completion
 |kt_dev_env_git_010| git-branch
@@ -162,7 +165,6 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_git_023| git-reset
 *kt_dev_env_git_024* git-reset: try out topic branches
 
-|kt_dev_env_git_029| git-recover
 |kt_dev_env_git_030| git-stash
 |kt_dev_env_git_032| git-list
 |kt_dev_env_git_033| git-add: rm, mv
@@ -7805,142 +7807,158 @@ The most commonly used git commands are:
 
 
 ={============================================================================
-*kt_dev_env_git_007* git-show:
+*kt_dev_env_git_007* git-log: git-reflog: git-recover
+
+{recover-lost-stash}
+Recover dropped stash in git
+
+http://stackoverflow.com/questions/89332/recover-dropped-stash-in-git
+
+If you have only just popped it and the terminal is still open, you will still
+have the hash value printed by git stash pop on screen (thanks, Dolda).
+
+Otherwise, you can find it using this:
+
+git fsck --no-reflog | awk '/dangling commit/ {print $3}'
+
+This will show you all the commits at the tips of your commit graph which are no
+longer referenced from any branch or tag - every lost commit, including every
+stash commit you've ever created, will be somewhere in that graph.
+
+The easiest way to find the stash commit you want is probably to pass that list
+to gitk:
+
+note:
+
+gitk --all $( git fsck --no-reflog | awk '/dangling commit/ {print $3}' )
+
+
+This will launch a repository browser showing you 'every' single commit in the
+repository ever, regardless of whether it is reachable or not.
+
+You can replace gitk there with something like git log --graph --oneline
+--decorate if you prefer a nice graph on the console over a separate GUI app.
+
+To spot stash commits, look for commit messages of this form:
+
+WIP on somebranch: commithash Some old commit message
+
+Once you know the hash of the commit you want, you can apply it as a stash:
+
+git stash apply $stash_hash
+
+Or you can use the context menu in gitk to create branches for any unreachable
+commits you are interested in. After that, you can do whatever you want with
+them with all the normal tools. When you're done, just blow those branches away 
+
+
+{restore-last-commit}
+http://gitready.com/advanced/2009/01/17/restoring-lost-commits.html
+
+So you just did a git reset --hard HEAD^ and threw out your last commit and it
+turns out you really did need those changes. Don't fear, git should still have
+your commit. When you do a reset, the commit you threw out goes to a 'dangling'
+state. It's still in git's datastore, waiting for the next garbage collection to
+clean it up. So unless you've ran a git gc since you tossed it, you should be in
+the clear to restore it.
+
+For these examples, I'm working with the code for this blog. From the top, we
+just ran:
+
+$ git show-ref -h HEAD
+  7c61179cbe51c050c5520b4399f7b14eec943754 HEAD
+
+note: the below is real output when run tha above.
+
+$ git show-ref --head HEAD
+53c849344458f858c75cd50ab924d61b867822fd HEAD
+e3abcd196ed42eef28831c70c099a76ee0c273be refs/remotes/origin/HEAD
+
+$ git reset --hard HEAD^
+  HEAD is now at 39ba87b Fixing about and submit pages so they don't look stupid
+
+$ git show-ref -h HEAD
+  39ba87bf28b5bb223feffafb59638f6f46908cac HEAD
+
+So our HEAD has been backed up by one commit. At this point if we wanted it back
+we could just git pull, but we're assuming that only our local repository knows
+about the commit. We need the SHA1 of the commit so we can bring it back. We can
+prove that git 'knows' about the commit still with the fsck command:
+
+$ git fsck --lost-found
+  [... some blobs omitted ...]
+  dangling commit 7c61179cbe51c050c5520b4399f7b14eec943754
+
+note: the output of fsck
+
+$ git fsck --lost-found                                              
+Checking object directories: 100% (256/256), done.
+Checking objects: 100% (278686/278686), done.
+dangling blob 198960a3967375f15dde3e6912b5709df742e6ea
+dangling commit e8e7005ed7f57c5a6c55427b1ec60f37e837f1a2
+dangling commit 07265101674f742917e0c6a10e7d78fbf91b6889
+dangling commit c8725150f8df2b3755aff66f2fc5489d84cb0d7a
+dangling blob b1832250dc825697aab015fb3876a951cc098125
+dangling commit 95a2029cca8c0d6445704c4144996ab3ecb8334a
+dangling commit 6abd32af822769d7f5ba8a2c2dd2981a7054c57e
+dangling commit 17109366374de1591f663ff5e206dc9f03f63230
+dangling commit 9e5c93cb6b02beb16700cc3d36c8c026b4631972
+dangling commit 8e5fc3451a2778aad439266b290885611ccf995e
+dangling commit 686983d96f27cb54067e0cd87c38b20e49d8603e
+...
+
+You can also see the that git knows about the commit still by using the reflog
+command:
+
+$ git reflog
+  39ba87b... HEAD@{0}: HEAD~1: updating HEAD
+  7c61179... HEAD@{1}: pull origin master: Fast forward
+  [... lots of other refs ...]
+
+So, we now have our SHA1: 7c61179. If we want to get immediately apply it back
+'onto' our current branch, doing a git merge will recover the commit:
+
+$ git merge 7c61179
+  Updating 39ba87b..7c61179
+  Fast forward
+    css/screen.css |    4 ++++
+    submit.html    |    4 ++--
+    2 files changed, 6 insertions(+), 2 deletions(-)
+
+note: can use cherry-pick than merge
+
+This command will bring your lost changes back and make sure that HEAD is
+pointing at the commit.
+
+From here you can continue to work as normal! You could also checkout the SHA1
+'into' a new branch, but really a merge is the fastest and easiest way to
+restore that lost commit once you have the hash. If you have other ways let us
+know in the comments!
+
+If you want some more options on what to do in this situation, Mathieu Martin's
+illustrated guide to recovering lost commits with Git has plenty for you.
+
+http://www.programblings.com/2008/06/07/the-illustrated-guide-to-recovering-lost-commits-with-git/
 
 
 ={============================================================================
-*kt_dev_env_git_007* git-grep
+*kt_dev_env_git_007* git-log: git-reflog: list all
 
-To search through any 'committed' tree or the working directory for a string
-or 'regular' expression.
+https://gist.github.com/matthewmccullough/988077
 
-git grep ...
-  [ [--[no-]exclude-standard] [--cached | --no-index | --untracked] | <tree> ]
-  [--] [<pathspec>...]
+# Put this in your .gitconfig file under the alias section
+orphank = !gitk --all `git reflog | cut -c1-7`&
+# Then run it by typing 'git orphank' on the command line.
 
-Advantages over normal searching commands like grep and ack. 
+# A text version of the same is
+orphanl = !git log --pretty=oneline --abbrev-commit --graph --decorate `git reflog | cut -c1-7`
 
-The first is that it's really fast. 
+To prevent unambiguous SHA1 IDs, suggest using cut -d " " -f 1.
+note: why? 
+git reflog will write as many characters as necessary to the SHA1 ID to be unambiguous
 
-The second is that you can search through any tree in Git, not just the
-working directory. As we saw in the above example, we looked for terms in an
-older version of the Git source code, not the version that was currently
-checked out.  
-
-By default, it will look through the files in your working directory. You can
-pass -n to print out the line numbers
-
-$ git grep -n gmtime_r
-
-
-{configs}
-// Allow extended regular expressions
-git config --global grep.extendRegexp true
-
-// Always include line numbers
-git config --global grep.lineNumber true
-
-// [grep]
-//  extendRegexp = true
-//  lineNumber = true
-
-// Group output like ack!
-git config --global alias.g "grep --break --heading --line-number"
-
-// [alias]
-//  g = grep --break --heading --line-number
-
-
-{search-branch}
-git grep xxx <branch>
-
-<tree>...
-    Instead of searching tracked files in the working tree, search blobs in the
-    given trees.
-
-git grep -e <regexp> my_other_branch -- '*.js'
-
-
-{show-function}
-To see what method or function it thinks it has found a match in, you can pass
--p:
-
--p
---show-function
-
-    Show the preceding line that 'contains' the function name of the match,
-    unless the matching line is a function name itself. The name is determined
-    in the same way as git diff works out patch hunk headers (see Defining a
-        custom hunk-header in gitattributes[5]).
-
-$ git grep -p gmtime_r *.c
-
-date.c=static int match_multi_number(unsigned long num, const char *date, 
-date.c: if (gmtime_r(&now, &now_tm))
-date.c=static int match_digit(const char *date, struct tm *tm, int *tm_
-date.c: if (gmtime_r(&time, tm)) {
-
-So here we can see that gmtime_r is called in the match_multi_number and
-match_digit functions in the date.c file.
-
-
-{complex-matches}
-Look for complex combinations of strings with the --and flag. Use the --break
-and --heading options which help split up the output into a more readable
-format.
-
---break
-    Print an empty line between matches from different files.
-
---heading
-    Show the filename above the matches in that file instead of at the start of
-    each shown line.
-
--e
-    The next parameter is the pattern. This option has to be used for patterns
-    starting with - and should be used in scripts passing user input to grep.
-    Multiple patterns are combined by or.
-
--n
---line-number
-    Prefix the line number to matching lines
-
-$ git grep --break --heading -n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
-
-$ git grep --break --heading \
--n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
-v1.8.0:builtin/index-pack.c
-62:#define FLAG_LINK (1u<<20)
-
-v1.8.0:cache.h
-73:#define S_IFGITLINK 0160000
-74:#define S_ISGITLINK(m) (((m) & S_IFMT) == S_IFGITLINK)
-
-v1.8.0:strbuf.c
-326:#define STRBUF_MAXLINK (2*PATH_MAX)
-
-
-={============================================================================
-*kt_dev_env_git_007* git-grep: serach all branches
-
-{search-all}
-That searches through all the commits, which should include all the branches.
-
-git grep <regexp> $(git rev-list --all)
-
-Note: chernjie suggested that git rev-list --all is an overkill.
-
-A more refined command can be:
-
-git branch -a | tr -d \* | xargs git grep <regexp>
-
-Which will allow you to search only branches (including remote branches)
-
-
-={============================================================================
-*kt_dev_env_git_007* git-grep: fun
-
-http://gitster.livejournal.com/27674.html
+orphanl command should be:
+orphanl = !git log --pretty=oneline --abbrev-commit --graph --decorate git reflog | cut -d " " -f 1
 
 
 ={============================================================================
@@ -8119,6 +8137,156 @@ causes carbon-cache to stay in the foreground, and a more detailed explanation
 in the commit message. In some ways I see commit messages as a type of expanded
 commenting system which is available at your fingertips whenever you need it but
 automatically hides when you just want to read the code.
+
+
+={============================================================================
+*kt_dev_env_git_007* git-log: commit message
+
+When write commit message, if there is no line to separate the title from
+message then git log shows the long title in the output.
+
+01: DEVARCH-10941: Fix CANTST-17858: the spinner shown before 
+02:    
+03: Trials reported the issue that playing content in iPlayer shows the
+
+
+={============================================================================
+*kt_dev_env_git_007* git-show:
+
+
+={============================================================================
+*kt_dev_env_git_007* git-grep
+
+To search through any 'committed' tree or the working directory for a string
+or 'regular' expression.
+
+git grep ...
+  [ [--[no-]exclude-standard] [--cached | --no-index | --untracked] | <tree> ]
+  [--] [<pathspec>...]
+
+Advantages over normal searching commands like grep and ack. 
+
+The first is that it's really fast. 
+
+The second is that you can search through any tree in Git, not just the
+working directory. As we saw in the above example, we looked for terms in an
+older version of the Git source code, not the version that was currently
+checked out.  
+
+By default, it will look through the files in your working directory. You can
+pass -n to print out the line numbers
+
+$ git grep -n gmtime_r
+
+
+{configs}
+// Allow extended regular expressions
+git config --global grep.extendRegexp true
+
+// Always include line numbers
+git config --global grep.lineNumber true
+
+// [grep]
+//  extendRegexp = true
+//  lineNumber = true
+
+// Group output like ack!
+git config --global alias.g "grep --break --heading --line-number"
+
+// [alias]
+//  g = grep --break --heading --line-number
+
+
+{search-branch}
+git grep xxx <branch>
+
+<tree>...
+    Instead of searching tracked files in the working tree, search blobs in the
+    given trees.
+
+git grep -e <regexp> my_other_branch -- '*.js'
+
+
+{show-function}
+To see what method or function it thinks it has found a match in, you can pass
+-p:
+
+-p
+--show-function
+
+    Show the preceding line that 'contains' the function name of the match,
+    unless the matching line is a function name itself. The name is determined
+    in the same way as git diff works out patch hunk headers (see Defining a
+        custom hunk-header in gitattributes[5]).
+
+$ git grep -p gmtime_r *.c
+
+date.c=static int match_multi_number(unsigned long num, const char *date, 
+date.c: if (gmtime_r(&now, &now_tm))
+date.c=static int match_digit(const char *date, struct tm *tm, int *tm_
+date.c: if (gmtime_r(&time, tm)) {
+
+So here we can see that gmtime_r is called in the match_multi_number and
+match_digit functions in the date.c file.
+
+
+{complex-matches}
+Look for complex combinations of strings with the --and flag. Use the --break
+and --heading options which help split up the output into a more readable
+format.
+
+--break
+    Print an empty line between matches from different files.
+
+--heading
+    Show the filename above the matches in that file instead of at the start of
+    each shown line.
+
+-e
+    The next parameter is the pattern. This option has to be used for patterns
+    starting with - and should be used in scripts passing user input to grep.
+    Multiple patterns are combined by or.
+
+-n
+--line-number
+    Prefix the line number to matching lines
+
+$ git grep --break --heading -n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
+
+$ git grep --break --heading \
+-n -e '#define' --and \( -e LINK -e BUF_MAX \) v1.8.0
+v1.8.0:builtin/index-pack.c
+62:#define FLAG_LINK (1u<<20)
+
+v1.8.0:cache.h
+73:#define S_IFGITLINK 0160000
+74:#define S_ISGITLINK(m) (((m) & S_IFMT) == S_IFGITLINK)
+
+v1.8.0:strbuf.c
+326:#define STRBUF_MAXLINK (2*PATH_MAX)
+
+
+={============================================================================
+*kt_dev_env_git_007* git-grep: serach all branches
+
+{search-all}
+That searches through all the commits, which should include all the branches.
+
+git grep <regexp> $(git rev-list --all)
+
+Note: chernjie suggested that git rev-list --all is an overkill.
+
+A more refined command can be:
+
+git branch -a | tr -d \* | xargs git grep <regexp>
+
+Which will allow you to search only branches (including remote branches)
+
+
+={============================================================================
+*kt_dev_env_git_007* git-grep: fun
+
+http://gitster.livejournal.com/27674.html
 
 
 ={============================================================================
@@ -10678,141 +10846,6 @@ $ git reset --hard topic-branch
 # build and run
 
 This essentially moves around HEAD to whatever to try in the repo.
-
-
-={============================================================================
-*kt_dev_env_git_029* git-recover
-
-{recover-lost-stash}
-Recover dropped stash in git
-
-http://stackoverflow.com/questions/89332/recover-dropped-stash-in-git
-
-If you have only just popped it and the terminal is still open, you will still
-have the hash value printed by git stash pop on screen (thanks, Dolda).
-
-Otherwise, you can find it using this:
-
-git fsck --no-reflog | awk '/dangling commit/ {print $3}'
-
-This will show you all the commits at the tips of your commit graph which are no
-longer referenced from any branch or tag - every lost commit, including every
-stash commit you've ever created, will be somewhere in that graph.
-
-The easiest way to find the stash commit you want is probably to pass that list
-to gitk:
-
-note:
-
-gitk --all $( git fsck --no-reflog | awk '/dangling commit/ {print $3}' )
-
-
-This will launch a repository browser showing you 'every' single commit in the
-repository ever, regardless of whether it is reachable or not.
-
-You can replace gitk there with something like git log --graph --oneline
---decorate if you prefer a nice graph on the console over a separate GUI app.
-
-To spot stash commits, look for commit messages of this form:
-
-WIP on somebranch: commithash Some old commit message
-
-Once you know the hash of the commit you want, you can apply it as a stash:
-
-git stash apply $stash_hash
-
-Or you can use the context menu in gitk to create branches for any unreachable
-commits you are interested in. After that, you can do whatever you want with
-them with all the normal tools. When you're done, just blow those branches away 
-
-
-{restore-last-commit}
-http://gitready.com/advanced/2009/01/17/restoring-lost-commits.html
-
-So you just did a git reset --hard HEAD^ and threw out your last commit and it
-turns out you really did need those changes. Don't fear, git should still have
-your commit. When you do a reset, the commit you threw out goes to a 'dangling'
-state. It's still in git's datastore, waiting for the next garbage collection to
-clean it up. So unless you've ran a git gc since you tossed it, you should be in
-the clear to restore it.
-
-For these examples, I'm working with the code for this blog. From the top, we
-just ran:
-
-$ git show-ref -h HEAD
-  7c61179cbe51c050c5520b4399f7b14eec943754 HEAD
-
-note: the below is real output when run tha above.
-
-$ git show-ref --head HEAD
-53c849344458f858c75cd50ab924d61b867822fd HEAD
-e3abcd196ed42eef28831c70c099a76ee0c273be refs/remotes/origin/HEAD
-
-$ git reset --hard HEAD^
-  HEAD is now at 39ba87b Fixing about and submit pages so they don't look stupid
-
-$ git show-ref -h HEAD
-  39ba87bf28b5bb223feffafb59638f6f46908cac HEAD
-
-So our HEAD has been backed up by one commit. At this point if we wanted it back
-we could just git pull, but we're assuming that only our local repository knows
-about the commit. We need the SHA1 of the commit so we can bring it back. We can
-prove that git 'knows' about the commit still with the fsck command:
-
-$ git fsck --lost-found
-  [... some blobs omitted ...]
-  dangling commit 7c61179cbe51c050c5520b4399f7b14eec943754
-
-note: the output of fsck
-
-$ git fsck --lost-found                                              
-Checking object directories: 100% (256/256), done.
-Checking objects: 100% (278686/278686), done.
-dangling blob 198960a3967375f15dde3e6912b5709df742e6ea
-dangling commit e8e7005ed7f57c5a6c55427b1ec60f37e837f1a2
-dangling commit 07265101674f742917e0c6a10e7d78fbf91b6889
-dangling commit c8725150f8df2b3755aff66f2fc5489d84cb0d7a
-dangling blob b1832250dc825697aab015fb3876a951cc098125
-dangling commit 95a2029cca8c0d6445704c4144996ab3ecb8334a
-dangling commit 6abd32af822769d7f5ba8a2c2dd2981a7054c57e
-dangling commit 17109366374de1591f663ff5e206dc9f03f63230
-dangling commit 9e5c93cb6b02beb16700cc3d36c8c026b4631972
-dangling commit 8e5fc3451a2778aad439266b290885611ccf995e
-dangling commit 686983d96f27cb54067e0cd87c38b20e49d8603e
-...
-
-You can also see the that git knows about the commit still by using the reflog
-command:
-
-$ git reflog
-  39ba87b... HEAD@{0}: HEAD~1: updating HEAD
-  7c61179... HEAD@{1}: pull origin master: Fast forward
-  [... lots of other refs ...]
-
-So, we now have our SHA1: 7c61179. If we want to get immediately apply it back
-'onto' our current branch, doing a git merge will recover the commit:
-
-$ git merge 7c61179
-  Updating 39ba87b..7c61179
-  Fast forward
-    css/screen.css |    4 ++++
-    submit.html    |    4 ++--
-    2 files changed, 6 insertions(+), 2 deletions(-)
-
-note: can use cherry-pick than merge
-
-This command will bring your lost changes back and make sure that HEAD is
-pointing at the commit.
-
-From here you can continue to work as normal! You could also checkout the SHA1
-'into' a new branch, but really a merge is the fastest and easiest way to
-restore that lost commit once you have the hash. If you have other ways let us
-know in the comments!
-
-If you want some more options on what to do in this situation, Mathieu Martin's
-illustrated guide to recovering lost commits with Git has plenty for you.
-
-http://www.programblings.com/2008/06/07/the-illustrated-guide-to-recovering-lost-commits-with-git/
 
 
 ={============================================================================

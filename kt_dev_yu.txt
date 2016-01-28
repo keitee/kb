@@ -105,8 +105,8 @@
 *kt_dev_uv_stack_408* mr-dash: position
 *kt_dev_uv_stack_408* mr-dash: position change
 *kt_dev_uv_stack_408* mr-dash: seekable range
-*kt_dev_uv_stack_408* mr-dash: output control
-*kt_dev_uv_stack_408* mr-dash: output control: nexus-inspect
+*kt_dev_uv_stack_408* mr-dash: output-control
+*kt_dev_uv_stack_408* mr-dash: output-control: nexus-inspect
 *kt_dev_uv_stack_408* mr-dash: seek and resume
 *kt_dev_uv_stack_408* mr-dash: media-load. slow play on t1000
 *kt_dev_uv_stack_408* mr-dash: live or vod
@@ -1751,6 +1751,7 @@ ZB_DONT_UPDATE_HOOKS
 
 zb-deploy -o humax.1000 -- -r
 zb-deploy -o humax.1000 -m 172.20.2.2 
+zb-deploy -- -X -K  // note: ??
 
 note: 
 
@@ -14284,7 +14285,7 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: output control
+*kt_dev_uv_stack_408* mr-dash: output-control
 
 {xml}
   <interface name="Zinc.Media.OutputControlManager">
@@ -14582,7 +14583,7 @@ method return sender=:1.75 -> dest=:1.78 reply_serial=91
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: output control: nexus-inspect
+*kt_dev_uv_stack_408* mr-dash: output-control: nexus-inspect
 
 // both scart and hdmi are fine to play aqiva
 
@@ -14622,25 +14623,87 @@ printf( "\t\tVideo window visible: %s\n", window_settings.visible ? "yes" : "no"
 NEXUS_VideoWindow_GetSettings( sharedMem->videoWindowSD, &window_settings );
 printf( "\t\tSD Video window visible: %s\n", window_settings.visible ? "yes" : "no" );
 
-<on-atk>
-When boots from 424 channel:
+
+<on-2100-atk>
+
+1. Boot from 242(DTT) or tune to 242.
 
                 Video window visible: no
                 SD Video window visible: no
 
-when tune back from the other channel which have all "yes" visibility, maintains
-these settings:
+2. Launch browser
 
-                Video window visible: yes
-                SD Video window visible: yes
-
-when play out aqiva
                 Video window visible: no
                 SD Video window visible: yes
+
+3. Back to 242
+
+                Video window visible: no
+                SD Video window visible: no
+
+4. Some time later
+
+                Video window visible: no
+                SD Video window visible: yes
+
+
+<on-1000-atk-writable>
+
+1. 'only' when boot from 242
+
+// note: when tune to 242 from FTA, keep settings such as "all yes". means that
+// 'not' apply protection.
+//
+//              Video window visible: yes 
+//              SD Video window visible: yes
+
+                Video window visible: no
+                SD Video window visible: no
+
+2. Launch browser
+
+                Video window visible: no
+                SD Video window visible: yes
+
+3. Back to 242
+
+                Video window visible: no
+                SD Video window visible: yes
+
+note: this suggests that when launch browser only changes SD.
 
 This is the same when use both scart and hdmi.
 
 
+<on-1000-atk-writable-but-use-oem-mr>
+
+1. 'only' when boot from 242
+
+// note: when tune to 242 from FTA, keep settings such as "all yes". means that
+// 'not' apply protection.
+//
+//              Video window visible: yes 
+//              SD Video window visible: yes
+
+                Video window visible: no
+                SD Video window visible: no
+
+2. Launch browser
+
+                Video window visible: yes
+                SD Video window visible: yes
+
+3. Back to 242
+
+                Video window visible: yes
+                SD Video window visible: yes
+
+note: this suggests that when launch browser only changes SD.
+
+This is the same when use both scart and hdmi.
+
+
+<dbus-log>
 boot-from-101.log
 1948:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
 3114:[26-01-2016 14:24:50.242541] method call sender=:1.24 -> dest=Zinc.Media serial=101 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=enableOutputs
@@ -15115,17 +15178,20 @@ The fix is to change the priority of event delivery using g_idle_add_full() and
 passes the full automation test.
 
 
-DEVARCH-10941: Vanadium.WebKit.VideoElement: Fix the spinner shown for around a minute before playing content in iPlayer
-Trials reported the issue that playing content in iPlayer shows the spinner for
-a minute and the pop-up error although it eventually gets played.
+DEVARCH-10941: Vanadium.WebKit.VideoElement: Fix CANTST-17858: the spinner shown before playing content in iPlayer
+Trials reported the issue that playing content in iPlayer shows the
+spinner for around a minute and the pop-up error although it eventually
+plays out well.
 
 The cause of the issue is that posting events in Vanadium uses `g_idle_add()`
-which has lower priority in the QT mainloop than the graphic requests which
-iPlayer uses to show the spinner. So MediaRouter events are pending and causes
-race condition that shows the issue intermittant only on T1000 and under stress.
+which has a lower priority in the QT main event loop than the graphic requests
+which iPlayer uses to show the spinner. So MediaRouter events are pending in the
+main event loop and lead to race condition that makes the issue very
+intermittent only on low-end devices and under stress.
 
-This commit changes the priority of MediaRouter events to the QT mainloop
-default.
+This commit changes the priority of MediaRouter events to the QT main
+event loop default which not only fix the issue and also start a play a
+lot quicker than before.
 
 
 ={============================================================================
@@ -20336,66 +20402,54 @@ oem.device.capabilities.html.available
 +MHEG Device is able to execute MHEG applications
 oem.device.capabilities.mheg.available
 
-
-[root@HUMAX /]# getChildItems.oem | grep oem.    
-
+<updated-rfs>
+[root@HUMAX /]# getChildItems oem | grep version
 oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
-oem.activatedsoftware.coredevicesoftware.version=23.5.0
-oem.activatedsoftware.ispconfiguration.version=10004
+oem.activatedsoftware.coredevicesoftware.version=23.12.0
 oem.activatedsoftware.manufacturerconfiguration.version=1
-oem.activatedsoftware.platformconfiguration.version=1507
-oem.activatedsoftware.platformsoftware.version=2.11.13
-oem.apps.netflix.esn.prefix=YVWBT-DT20
-oem.device.broadcast.imagedirectory=/mnt/hd6/rct
-oem.device.capabilities.audiofeedback.available=1
-oem.device.capabilities.download.available=0
-oem.device.capabilities.dvr.available=1
-oem.device.capabilities.flash.available=1
-oem.device.capabilities.html.available=1
-oem.device.capabilities.ipchannels.available=1
-oem.device.capabilities.ipchannelsmulticast.available=1
-oem.device.capabilities.ipchannelsunicast.available=0
-oem.device.capabilities.mheg.available=1
-oem.device.capabilities.rfloopthrough.available=1
-oem.device.capabilities.uhd.available=0
-oem.device.dtt-tuner-count=2
-oem.device.duid=0000DB-DTRT2100-06021c
-oem.device.ip-tuner-count=3
-oem.device.model.basename=DTRT2100
-oem.device.model.name=DTRT2100
-oem.device.model.variant=84B08502
-oem.device.provideridentifier=com.humaxdigital
-oem.device.serialnumber=+077329+1434000028
-oem.device.state.currenttimesource=BROADCAST
-oem.linearacquisition.maindecodertype=0
-oem.linearacquisition.max-concurrent-acquisitions=2
-oem.linearacquisition.max-concurrent-scheduled-recordings=2
-oem.model=DTRT2100-atk
-oem.name=Humax
-oem.oui=0000DB
-oem.rc.assigned.service=YouView
-oem.rc.description=YouView Set Top Box
-oem.rc.device.status=Disabled
-oem.rc.model.nationality=GB
-oem.rc.model.operator=BT
-oem.rc.nemo.id=urn:marlin:organization:seacert:BT-plc:clientnemo:06021a
-oem.rc.swupdate=1
-oem.software.autocheck.starttime=%DATESat Oct 24 01:33:05 2015
-oem.software.coredevicesoftware.manifest.baseurl=http://test.humaxtvportal.com/SWUpdate
-oem.software.coresoftware.upgrade.prefix=DTR-T2100_CDS
-oem.software.downloader-connection-timeout-seconds=10
-oem.software.downloader-low-speed-limit-bytespersecond=1
-oem.software.downloader-low-speed-time-seconds=10
-oem.software.downloader-overall-timeout-seconds=1200
+oem.activatedsoftware.platformconfiguration.version=1521
+oem.activatedsoftware.platformsoftware.version=2.11.29
 oem.software.ispconfig.version=0
 oem.software.manufacturerconfig.version=0
 oem.software.platformapi.version=0.11.0
 oem.software.platformconfig.version=1
-oem.uimanagement.suspendmheginpig=true
-oem.usergroups=http://refdata.youview.com/mpeg7cs/YouViewApplicationPlayerCS/2011-10-26#html5 http://refdata.youview.com/mpeg7cs/YouViewApplicationPlayerCS/2014-02-26#custom http://refdata.youview.com/mpeg7cs/YouViewApplicationPlayerCS/2015-06-05#html5+dash+pdl
-oem.vendorid=HMX
-platform.softwaremanagement.oemconfiguration.updatepolicy=normal
-platform.softwaremanagement.oemsoftware.updatepolicy=normal
+
+
+<before-update-nfs>
+[root@HUMAX /]# getChildItems.oem | grep version
+oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
+oem.activatedsoftware.coredevicesoftware.version=23.8.0
+oem.activatedsoftware.manufacturerconfiguration.version=1
+oem.activatedsoftware.platformconfiguration.version=1517
+oem.activatedsoftware.platformsoftware.version=2.11.22
+
+
+<after-updated-nfs-but-not-flash>
+[root@HUMAX /]# getChildItems oem | grep version
+oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
+oem.activatedsoftware.coredevicesoftware.version=23.12.0 ~
+oem.activatedsoftware.manufacturerconfiguration.version=1
+oem.activatedsoftware.platformconfiguration.version=1510 ~
+oem.activatedsoftware.platformsoftware.version=2.11.29 ~
+oem.software.ispconfig.version=0
+oem.software.manufacturerconfig.version=0
+oem.software.platformapi.version=0.11.0
+oem.software.platformconfig.version=1
+
+
+<when-flahsed-cds>
+[root@HUMAX /]# getChildItems oem | grep version
+oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
+oem.activatedsoftware.coredevicesoftware.version=23.12.0
+oem.activatedsoftware.manufacturerconfiguration.version=1
+oem.activatedsoftware.platformconfiguration.version=1521
+oem.activatedsoftware.platformsoftware.version=2.11.29
+oem.software.ispconfig.version=0
+oem.software.manufacturerconfig.version=0
+oem.software.platformapi.version=0.11.0
+oem.software.platformconfig.version=1
+
+note: now see the same values for flash and nfs boot.
 
 
 root# getChildItems oem | grep softwre
@@ -22182,9 +22236,13 @@ humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 
 /.ssh -> /var/tmp/authorized_keys
 
+{hmax-cds}
+http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
+
+note: will wipe out a box including writable nfs.
+
 
 {hmax-flash}
-
 https://wiki.youview.co.uk/display/canvas/HOWTO+Install+any+Humax+Release
 
 note: when flash binary, wipes out hdd rfs as well and need to download hdd rfs
@@ -22200,7 +22258,7 @@ unsetenv BOOT
 unsetenv IFCONFIG
 
 
-note: rootfs is different from CDS! This means that updating UI does not update
+note: rootfs is different from CDS! This means that updating rfs does not update
 UI.
 
 2. Install the rootfs onto HDD, type the following commands via SSH or serial
@@ -22210,7 +22268,7 @@ cd /mnt/hd1 &&
 
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/T1000/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
 
-wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.1.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh &&
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
 
 chmod +x humax-hdd-install.sh
 
@@ -22292,7 +22350,7 @@ CDS Version currently flashed:      H23.6.0
 Version on /mnt/hd1 for next boot:  H23.8.0
 
 
-<to-check-nfs>
+<to-check-rw-nfs>
 http://devnfs2.dev.youview.co.uk/HUMAX/
 
 This script writes the rootfs to the HDD and copies the UI from NAND 
@@ -22304,6 +22362,11 @@ serial. At the CFE> prompt type the following commands:
 
 setenv -p KERNEL_OPT "root=/dev/sda1 rw"
 reboot
+
+
+[root@HUMAX /]# mount
+rootfs on / type rootfs (rw)
+/dev/root on / type ext3 (rw,relatime,errors=continue,barrier=1,data=ordered)
 
 
 <recovery>
@@ -22334,37 +22397,12 @@ reboot
 ={============================================================================
 *kt_dev_uv_oem_001* oem-box: staging and toolchanis
 
-https://wiki.youview.co.uk/display/canvas/OEM+Staging+and+Toolchains
-https://wiki.youview.co.uk/display/canvas/How+To+-+Install+Compiler+Toolchain+and+Development+Libraries
-
-.
-|-- adobe
-|   `-- stagecraft
-|-- Adobe
-|   |-- Flex4SDK -> flex_sdk_4.1.0.16076_with_air_sdk_2.5_linux
-|   `-- flex_sdk_4.1.0.16076_with_air_sdk_2.5_linux
-|-- HipChat
-|   |-- bin
-|   |-- lib
-|   `-- share
 |-- oem-staging            // note: it does have headers or possibly sources
 |   |-- huawei-bcm7409
 |   |-- huawei-dn370t -> huawei-bcm7409
 |   |-- humax-dtr_t1000
 |   `-- oem-staging.md5
-|-- pac
-|   |-- lib
-|   |-- LICENSE
-|   |-- pac
-|   |-- README
-|   |-- res
-|   `-- utils
-|-- stagecraft-2.0 -> stagecraft-2.5.2.3.20120105-sl6-directfb1.4-windowed
-        -C12M2-maine_coon-release-20120518
-|-- stagecraft-2.5.2.3.20120105-sl6-directfb1.4-windowed
-      -C12M2-maine_coon-release-20120518
-|   |-- bin
-|   `-- share
+
 `-- toolchains
     |-- generic-stbgcc-4.4.5-2.0
     |-- huawei-bcm7409 -> generic-stbgcc-4.4.5-2.0
@@ -22399,7 +22437,8 @@ before building.
 For example, inspect tool and this is link option: path when build inspect tool
 
 
-https://wiki.youview.co.uk/display/canvas/OEM+Staging+and+Toolchains?src=search
+https://wiki.youview.co.uk/display/canvas/OEM+Staging+and+Toolchains
+https://wiki.youview.co.uk/display/canvas/How+To+-+Install+Compiler+Toolchain+and+Development+Libraries
 
 $ sudo apt-get install huawei-dn372t-staging
 $ sudo apt-get install huawei-dn372t-toolchain
@@ -22448,7 +22487,6 @@ note:
 Should be in zb-shell
 
 $ pkg-config --libs nexusmgr
-
 
 
 ={============================================================================
