@@ -21,7 +21,7 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_014| asyc: future barrier
 |kt_dev_code_015| asyc: dispatcher
 |kt_dev_code_016| asyc: listener
-|kt_dev_code_017| asyc: dispatcher use
+|kt_dev_code_017| asyc: flow between future, promise, and dispatcher
 *kt_dev_code_017* asyc: asyncInvoke
 *kt_dev_code_017* asyc: reduce number of threads
 
@@ -9329,119 +9329,6 @@ class Promise<T> : public PromiseBase
 
 
 <flow>
-1. when creates a promise, associated value, FC gets created with 'dispatcher'
-
-template<typename T>
-inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
-   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
-{
-}
-
-2. set a pointer in promise which points to FC.
-
-PromiseBase::PromiseBase(detail::FutureContextCommonImpl* p)
- : context(p)
-{
-  if (context.get())
-  {
-    ++context->promiseCount;
-  }
-}
-
-3. when complete() is called, calls set() on FC. see copy of value
-
-template<typename T>
-inline void Promise<T>::complete(typename const_param<T>::type value)
-{
-  getContext().set(value);
-}
-
-4. FC copy value from promise, call scheduleCallback().
-
-template <typename T>
-class FutureContext : public FutureContextCommonImpl
-{
-  /**
-   * Type specific completion code called from Promise::complete()
-   *
-   * Take a 'copy' of the result from the Promise and 'stash' it in
-   * FutureContext, complete() marks this FutureContext as completed, and post()
-   * hands it over to the 'dispatcher'
-   *
-   * @see FutureContextBase::complete()
-   * @see FutureContextBase::post()
-   */
-  void set(const T & result)
-  {
-    boost::mutex::scoped_lock lock;
-    if (runPreSetChecksAndLock(lock)) {
-      value = result;
-    }
-    doPostSetActionsAndUnlock(lock);
-  }
-};
-
-void FutureContextCommonImpl::doPostSetActionsAndUnlock
-  (boost::mutex::scoped_lock& lock)
-{
-  assert(lock.owns_lock());
-  bool wasCompleted = completed;
-  bool oldForDispatch = forDispatch;
-  completed = true;
-  lock.unlock();
-  if (!wasCompleted) {
-    cond.notify_all();
-    if (oldForDispatch && clientDispatcher) {
-
-      scheduleCallback();
-    }
-  }
-}
-
-
-5. post to 'dispatcher' which is provided by a user
-
-void FutureContextBase::scheduleCallback()
-{
-  // Q: is it okay to use local shared pointer?
-
-  assert(clientDispatcher);
-  boost::intrusive_ptr<FutureContextBase> ip(this);
-
-  clientDispatcher->
-    post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
-
-  cond.notify_all();
-}
-
-
-6. call back from io_service?
-
-bool FutureContextCommonImpl::dispatchNextResult()
-{
-  boost::mutex::scoped_lock lock(mutex);
-
-  // NOTE: We always want to come into this method and null the callback when
-  // we're done, even if canceled.
-
-  if (completed && shouldCallCompletionHandler && completionHandler)
-  {
-    // Release the work object at the end of this scope
-    Dispatcher::work w;
-    w.swap(this->work);
-
-    // Don't hold locks when calling user code
-
-    // note: class FutureContextCommonImpl: class FutureContextBase 
-    boost::function<void (FutureContextBase*)> stackCompletionHandler;
-
-    stackCompletionHandler.swap(completionHandler);
-    lock.unlock();
-    stackCompletionHandler(this);
-  }
-
-  return false;
-}
 
 
 ={============================================================================
@@ -9649,11 +9536,12 @@ void FutureContextBase::wait()
   }
 }
 
-// <schedule-callback>
+*future-complete*
 void FutureContextBase::scheduleCallback()
 {
   assert(clientDispatcher);
   boost::intrusive_ptr<FutureContextBase> ip(this);
+
   clientDispatcher->
     post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
   cond.notify_all();
@@ -9751,8 +9639,9 @@ public:
 
     bool shouldCallCompletionHandler;
 
-    // <set-callback>
+    *future-set-callback* 
     boost::function<void (FutureContextBase*)> completionHandler;
+
     NS_ZINC::ErrorCode error;
 
     // The state of the promise and the future can evolve semi-independently
@@ -9800,7 +9689,7 @@ CallbackHoistingWrapper<T, Functor> makeCallbackHoistingWrapper(const Functor& f
  * client Future and (if set) a completionHandler that is called by the
  * dispatcher when the value is available
  */
-// <set-callback> note "if set"
+note "if set"
 
 template <typename T>
 class FutureContext : public FutureContextCommonImpl
@@ -9816,8 +9705,7 @@ class FutureContext : public FutureContextCommonImpl
       : FutureContextCommonImpl(dispatcher_, cancellationCallback_)
     {}
 
-    // note:
-
+    *future-complete*
     /**
      * Type specific completion code called from Promise::complete()
      *
@@ -9837,7 +9725,7 @@ class FutureContext : public FutureContextCommonImpl
       doPostSetActionsAndUnlock(lock);
     }
 
-    // <set-callback>
+    *future-set-callback* use dispatcher from user
     template <typename Handler>
       void setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) {
         setCallbackHoisted(boost::function<void (FutureContextBase*)>(
@@ -9846,7 +9734,7 @@ class FutureContext : public FutureContextCommonImpl
             );
       }
 
-    // <context-value>
+    *future-value*
     T value;
 };
 
@@ -10077,7 +9965,7 @@ void FutureContextCommonImpl::completeError(const NS_ZINC::ErrorCode& error_)
 	doPostSetActionsAndUnlock(lock);
 }
 
-// <set-callback>
+*future-set-callback* use dispatcher from user
 void FutureContextCommonImpl::setCallbackHoisted(
         boost::function<void (FutureContextBase*)> fn, 
         FutureDispatcher* clientDispatcher_)
@@ -10106,7 +9994,7 @@ void FutureContextCommonImpl::setCallbackHoisted(
   clientDispatcher = d;
   this->work.swap(tryWork);
 
-  // <set-callback>
+  *future-set-callback* 
   completionHandler = fn;
 
   // we are responsible for dispatching the completion handler
@@ -10134,7 +10022,7 @@ bool FutureContextCommonImpl::runPreSetChecksAndLock(boost::mutex::scoped_lock& 
 	return !completed;
 }
 
-// note:
+*future-complete* 
 void FutureContextCommonImpl::doPostSetActionsAndUnlock(boost::mutex::scoped_lock& lock)
 {
   assert(lock.owns_lock());
@@ -10176,7 +10064,7 @@ void FutureContextCommonImpl::dispatchCancellation()
 }
 
 
-// <set-callback>
+*dispatcher-run* 
 bool FutureContextCommonImpl::dispatchNextResult()
 {
   boost::mutex::scoped_lock lock(mutex);
@@ -10184,7 +10072,7 @@ bool FutureContextCommonImpl::dispatchNextResult()
   // NOTE: We always want to come into this method and null the callback when
   // we're done, even if canceled.
 
-  // <set-callback>
+  *future-set-callback-only-when* 
   if (completed && shouldCallCompletionHandler && completionHandler)
   {
     // Release the work object at the end of this scope
@@ -10353,17 +10241,18 @@ class FutureBase {
 /**
  * A Future is a token for some value that will be delivered asynchronously.
  *
- * // note:
+ * note:
  * The holder of the Future token may either wait for the value synchronously,
- * (blocking the executing thread), or set a callback method that will be invoked
- * either when the value becomes available, or will not become available due to
- * some exception.
+ * (blocking the executing thread), or set a callback method that will be
+ * invoked either when the value becomes available, or will not become available
+ * due to some exception.
  *
- * The Future holder also has the option to cancel the Future, which will prevent
- * the value from being delivered, assuming this hasn't happened already.
+ * The Future holder also has the option to cancel the Future, which will
+ * prevent the value from being delivered, assuming this hasn't happened
+ * already.
  */
 
-// note: FutureBase is not template
+note: FutureBase is not template
 
 template <typename T>
 class Future : public FutureBase
@@ -10390,6 +10279,7 @@ class Future : public FutureBase
      */
     Future() {}
 
+    *future-set-callback* use dispatcher from promise
     /**
      * Set a callback method to be invoked when either the value becomes
      * available, or an exception occurs.
@@ -10413,6 +10303,7 @@ class Future : public FutureBase
         static_cast<detail::FutureContext<T>* >(context.get())->setCallback(fn, 0);
       }
 
+    *future-set-callback* use dispatcher from user
     /**
      * Set a callback method to be invoked when either the value becomes
      * available, or an exception occurs.
@@ -10431,7 +10322,6 @@ class Future : public FutureBase
      * @throws DuplicateFutureCallback if a callback has already been set on
      * this Future.
      */
-    // <set-callback>
     template <typename Handler>
       void setCallback(Dispatcher& dispatcher_, const Handler& fn) {
         // fn(x) must be valid where x is a FutureValue<T>
@@ -11695,6 +11585,7 @@ public:
     template <class FutureLike, typename SuccessCallback>
     void addWithSuccessCallback(FutureLike f, SuccessCallback /* void (T) */ c);
 
+    *add-with-callback*
     /**
      * Add a future to the barrier to delay the FutureBarrier callback until
      * after the future has completed.
@@ -11873,7 +11764,7 @@ struct noop {
 
 } //namespace detail
 
-
+*add-with-callback*
 // Callback is a functor with the signature:
 //     void (FutureValue<T>);
 template <class FutureLike, typename Callback>
@@ -11947,9 +11838,8 @@ DP <- STDP
 NS_ZINC_OPEN
 
 /*
- * Interface for general functor dispatcher.
- * Dispatchers are used to invoke callback functors (for events and futures for
- * example).
+ * Interface for general 'functor' dispatcher.  Dispatchers are used to invoke
+ * 'callback' functors (for 'events' and 'futures' for example).
  */
 struct ZINC_EXPORT Dispatcher : boost::noncopyable
 {
@@ -12055,6 +11945,7 @@ NS_ZINC_OPEN
 
 Dispatcher::~Dispatcher() {}
 
+*dispatcher-run*
 static void run(boost::asio::io_service* io) {
 
     // note: to keep io_service running
@@ -12087,12 +11978,13 @@ SingleThreadDispatcher::~SingleThreadDispatcher()
   thread.join();
 }
 
+*dispatcher-post*
 /**
- * Post a functor to the dispatcher, and put it on the pending dispatch queue.
+ * Post a functor to the dispatcher, and put it on the pending dispatch 'queue'.
  */
 void SingleThreadDispatcher::post(boost::function<void ()> handler)
 {
-    io.post(handler);
+  io.post(handler);
 }
 
 int SingleThreadDispatcher::getPendingCount()
@@ -12120,21 +12012,20 @@ namespace detail {
 void maskSignals() ZINC_EXPORT;
 
 /**
- * This functor is used to wrap any functor (or plain function) that will
- * be executed by a worker thread. It's purpose is to ensure that the first
- * thing the thread does is to ignore all signals delivered to the process.
+ * This functor is used to 'wrap' any functor (or plain function) that will be
+ * executed by a 'worker' thread. It's purpose is to ensure that the first thing
+ * the thread does is to ignore all signals delivered to the process.
  *
- * This is important, since posix does not define *which* thread a will receive
- * a signal delivered to the process. It only says that the signal may be
+ * This is important, since posix does not define which thread a will receive a
+ * signal delivered to the process. It only says that the signal may be
  * delivered to any thread that does not mask it. So, if we wish to have a sane
- * signal handling strategy, then we should nominate a *single* specific thread
- * to deal with all signals (and perhaps propagate them to other threads, as
+ * signal handling strategy, then we should nominate a single specific thread to
+ * deal with all signals (and perhaps propagate them to other threads, as
  * application events).
  *
  * Use this class like:
  *
  * boost::thread thread(WorkerFunction(myThreadFunctionOrFunctor));
- *
  */
 template <class NullaryFunctor>
     class WorkerFunction {
@@ -12154,7 +12045,7 @@ template <class NullaryFunctor>
             NullaryFunctor workerFunction;
     };
 
-}
+} // namespace 
 
 template <typename NullaryFunctor>
 detail::WorkerFunction<NullaryFunctor> 
@@ -13080,14 +12971,13 @@ NS_ZINC_CLOSE
 *kt_dev_code_017* asyc: dispatcher use ex
 
 <use-case>
-
 1. APP calls SystemClientFactory
    - create a system client factory, DD(inline D) and FD(thread)
 
 2. APP calls createEventRepository().
    - create SystemClientEventReposity and pass DD and FD to it.
 
-3. APP calls  SCER->getEventWindow().
+3. APP calls SCER->getEventWindow().
    - create SystemClientEventWindow and pass DD. return future to APP and calls
    getEventsFromSystemAPI.
 
@@ -13505,25 +13395,50 @@ void ProxyMediaRouter::setSourceComplete(
 
 
 ={============================================================================
-*kt_dev_code_017* asyc: dispatcher use
+*kt_dev_code_017* asyc: flow between future, promise, and dispatcher
 
-template <typename Functor>
-BarrierWrapper<Functor> barrierWrap(FutureBarrierImpl* impl, Functor f) {
-    return BarrierWrapper<Functor>(impl, f);
-};
+note:
+The client can provide a dispatcher or can use a dispatcher when promise is
+made.
 
-// Callback is a functor with the signature:
-//     void (FutureBarrierImpl&, FutureValue<T>);
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
+   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
+{}
+
+
+1. The client side which is future barrier.
+
+void Callback(FutureValue<T>);
+
+template <class FutureLike, typename Callback>
+  void addWithCallback(FutureLike f, Callback /* void (FutureValue<T>) */ c);
+
+// *callback* -> void (FutureValue<T>);
+
+template <class FutureLike, typename Callback>
+inline void FutureBarrier::addWithCallback(FutureLike f, Callback c) {
+    typedef typename FutureLike::value_type T;
+    impl->continueOn(f, boost::bind(c, _2));
+}
+
+// *callback* -> void (FutureBarrierImpl&, FutureValue<T>);
 
 template <class FutureLike, typename Callback>
 void FutureBarrierImpl::continueOn(FutureLike f, Callback c) {
     typedef typename FutureLike::value_type T;
-
     f.setCallback(dispatcher, detail::barrierWrap(this, c));
 }
 
 
-<add-callback-to-future> add callback to future
+2. *future-set-callback* flow
+
+//          -> fn(FutureValue<T>);
+//          -> f(FutureValue<T>(FutureContext<T>*));    // temporary
+//          -> CallbackHoistingWrapper obj(FutureContextBase*);
+// *callback* -> boost::function<void (FutureContextBase*)> completionHandler;
+//
+// add callback to future
 
 Future<T>::setCallback(Dispatcher& dispatcher_, const Handler& fn)
 {
@@ -13531,98 +13446,137 @@ Future<T>::setCallback(Dispatcher& dispatcher_, const Handler& fn)
     ->setCallback(fn, &dispatcher_);
 }
 
-//
-// make "void(FutureContextBase*)" from "fn", save it up in this object, and
-// post to dispatcher. 
-//
-// dispatcher: void(void) -> bool(void) -> void(FutureContextBase*)
-//
-// void(FutureContextBase*) -> CallbackHoistingWrapper obj(FutureContextBase*);
-//
-// -> bind_callable(FutureValue<T>(FutureContextBase*))
-//
-// -> fn(
-//				
-// f(FutureValue<T>(static_cast<FutureContext<T>*>(that)));
-
 template <typename T>
 FutureContext<T>::setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) 
 {
   setCallbackHoisted(
-      boost::function<void (FutureContextBase*)>
-        (makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))), 
+      boost::function<void (FutureContextBase*)>(makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))), 
         clientDispatcher_
         );
 }
 
-// template<typename T, typename Functor>
-// CallbackHoistingWrapper<T, Functor> 
-// makeCallbackHoistingWrapper(const Functor& f) {
-// 	return CallbackHoistingWrapper<T, Functor>(f);
-// }
+// note: function template
+template<typename T, typename Functor>
+CallbackHoistingWrapper<T, Functor> makeCallbackHoistingWrapper(const Functor& f) {
+	return CallbackHoistingWrapper<T, Functor>(f);
+}
 
-// template<typename T, typename Functor>
-// struct ZINC_LOCAL CallbackHoistingWrapper {
-// 	typedef void result_type;
-// 	CallbackHoistingWrapper(Functor f_)
-// 	 : f(f_) {
-// 	}
-//
-// 	void operator()(FutureContextBase* that) {
-// 		// We must compare by name rather than using a dynamic_cast because
-// 		// dynamic_cast can fail if the typeinfo for FutureContext<T> is in more
-// 		// than one .so
-// 		assert(std::strcmp(typeid(FutureContext<T>).name(), typeid(*that).name()) == 0);
-//
-// 		f(FutureValue<T>(static_cast<FutureContext<T>*>(that)));
-// 	}
-//
-// 	Functor f;
-// };
+template<typename T, typename Functor>
+struct ZINC_LOCAL CallbackHoistingWrapper {
+	typedef void result_type;
+	CallbackHoistingWrapper(Functor f_)
+	 : f(f_) {
+	}
+
+	void operator()(FutureContextBase* that) {
+		// We must compare by name rather than using a dynamic_cast because
+		// dynamic_cast can fail if the typeinfo for FutureContext<T> is in more
+		// than one .so
+		assert(std::strcmp(typeid(FutureContext<T>).name(), typeid(*that).name()) == 0);
+
+		f(FutureValue<T>(static_cast<FutureContext<T>*>(that)));
+	}
+
+	Functor f;
+};
 
 void FutureContextCommonImpl::setCallbackHoisted(
         boost::function<void (FutureContextBase*)> fn, 
         FutureDispatcher* clientDispatcher_)
 {
   completionHandler = fn;
-  scheduleCallback();
+
+  if (oldCompleted)
+    scheduleCallback();
 }
 
 
-<bind-flow-when-schedule-callback>
+3. *future-complete* flow
 
-struct ZINC_EXPORT Dispatcher : boost::noncopyable
+// when complete() is called, calls set() on FC. see copy of value
+
+template<typename T>
+inline void Promise<T>::complete(typename const_param<T>::type value)
 {
-    virtual void post(boost::function<void ()> handler) = 0;
+  getContext().set(value);
+}
+
+// FC copy value from promise, call scheduleCallback().
+
+template <typename T>
+class FutureContext : public FutureContextCommonImpl
+{
+  /**
+   * Type specific completion code called from Promise::complete()
+   *
+   * Take a 'copy' of the result from the Promise and 'stash' it in
+   * FutureContext, complete() marks this FutureContext as completed, and post()
+   * hands it over to the 'dispatcher'
+   *
+   * @see FutureContextBase::complete()
+   * @see FutureContextBase::post()
+   */
+  void set(const T & result)
+  {
+    boost::mutex::scoped_lock lock;
+    doPostSetActionsAndUnlock(lock);
+  }
 };
+
+void FutureContextCommonImpl::doPostSetActionsAndUnlock
+  (boost::mutex::scoped_lock& lock)
+{
+  bool wasCompleted = completed;
+  bool oldForDispatch = forDispatch;
+  completed = true;
+  lock.unlock();
+  if (!wasCompleted) {
+    cond.notify_all();
+    if (oldForDispatch && clientDispatcher) {
+
+      scheduleCallback();
+    }
+  }
+}
+
+
+4. *dispatcher-post* flow
 
 void FutureContextBase::scheduleCallback()
 {
   // note: attach 'this'
-
   boost::intrusive_ptr<FutureContextBase> ip(this);
 
-  // note: void(void) <- bool(void)
-
-  // How bind() know what signature of callable it should create? Look at the
-  // post() one?
+  // post() copies functor
+  //
+  // virtual void post(boost::function<void ()> handler) = 0;
+  // virtual bool dispatchNextResult() = 0;
+  //
+  // note:
+  // Q: Is it fine to copy local shared pointer into the bind callable?
+  // Q: Why not use `this` than ip(`this`)?
+  // post(boost::bind(&FutureContextBase::dispatchNextResult, this));
 
   clientDispatcher->
     post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
 
   cond.notify_all();
-};
+}
 
 
-// from dispatcher(io_service), bind, and calls completionHandler.
+4. *dispatcher-run* flow
+
+// from dispatcher(io_service)
+
+//          -> boost::function<void (FutureContextBase*)>
+//          -> bool dispatchNextResult()
+// *callback* -> boost::function<void ()>
 
 FutureContextCommonImpl::
     boost::function<void (FutureContextBase*)> completionHandler;
 
 bool FutureContextCommonImpl::dispatchNextResult()
 {
-  // note: void(void) -> bool(void) -> void(FutureContextBase*)
-  
   boost::function<void (FutureContextBase*)> stackCompletionHandler;
 
   stackCompletionHandler.swap(completionHandler);

@@ -24,6 +24,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_boost_101| asio: tutorial
 |kt_dev_boost_102| asio: deadline_timer
 |kt_dev_boost_103| asio: io_service
+*kt_dev_boost_103* asio: io_service: post
 |kt_dev_boost_104| asio: A guide to getting started with boost::asio
 
 
@@ -1987,11 +1988,11 @@ one or more internal threads to emulate asynchronicity. As far as possible,
 must not call the user's code directly; and
 
 must block all signals.
-note: this is what single dispatcher has in place.
+note: this is what single thread dispatcher has implemented in it. 
 
 This approach is complemented by the following guarantee:
 
-Asynchronous completion handlers will only be called from threads that are
+Asynchronous completion handlers will 'only' be called from threads that are
 currently calling io_service::run(). 
 
 Consequently, it is the library user's responsibility to create and manage all
@@ -2000,9 +2001,10 @@ threads to which the notifications will be delivered.
 The reasons for this approach include:
 
 By only calling io_service::run() from a single thread, the user's code can
-avoid the development complexity associated with synchronisation. For example,
-      a library user can implement scalable servers that are single-threaded
-      (from the user's point of view).
+avoid the development complexity associated with synchronisation. 
+
+For example, a library user can implement scalable servers that are
+single-threaded (from the user's point of view).
 
 A library user may need to perform initialisation in a thread shortly after
 the thread starts and before any other application code is executed. For
@@ -2218,6 +2220,50 @@ Asynchronous completion handlers will only be called from threads that are
 currently calling io_service::run(). 
 
 
+<03-02> Show how `bind()` works since not use placeholder::error
+
+// void print(const boost::system::error_code& /*e*/,
+//    boost::asio::deadline_timer* t, int* count)
+void print(boost::asio::deadline_timer* t, int* count)
+{
+  if (*count < 5)
+  {
+    std::cout << "callback: count: " << count << ", t: " << t << std::endl;
+    std::cout << "callback: count: " << *count << std::endl;
+    ++(*count);
+
+    t->expires_at(t->expires_at() + boost::posix_time::seconds(1));
+
+    // t->async_wait(boost::bind(print,
+    //       boost::asio::placeholders::error, t, count));
+
+    t->async_wait(boost::bind(print, t, count));
+  }
+}
+
+int main()
+{
+  boost::asio::io_service io;
+
+  int count = 0;
+  boost::asio::deadline_timer t(io, boost::posix_time::seconds(1));
+
+  std::cout << "main: count: " << &count << ", t: " << &t << std::endl;
+
+  // t.async_wait(boost::bind(print,
+  //      boost::asio::placeholders::error, &t, &count));
+
+  t.async_wait(boost::bind(print, &t, &count));
+
+  std::cout << "main: calls run" << std::endl;
+  io.run();
+
+  std::cout << "main: final count is " << count << std::endl;
+
+  return 0;
+}
+
+
 <04> Timer.4 - Using a member function as a handler
 #include <iostream>
 #include <boost/asio.hpp>
@@ -2247,14 +2293,15 @@ public:
     // not specified here, as the print member function does not accept an
     // error object as a parameter. 
 
-    std::cout << "ctor: print: " << &printer::print << 
-        ", this: " << this << std::endl;
+    std::cout << "ctor(" << this << "): print: " 
+      << &printer::print << std::endl;
+    
     timer_.async_wait(boost::bind(&printer::print, this));
   }
 
   ~printer()
   {
-    std::cout << "Final count is " << count_ << std::endl;
+    std::cout << "dtor(" << this << "): final count is " << count_ << std::endl;
   }
 
   // The print member function is very similar to the print function from
@@ -2265,9 +2312,10 @@ public:
   {
     if (count_ < 5)
     {
-      std::cout << "print: print: " << &printer::print << 
-          ", this: " << this << std::endl;
-      std::cout << "print: count: " << count_ << std::endl;
+      std::cout << "print(" << this << "): print: " 
+        << &printer::print << std::endl;
+      std::cout << "print(" << this << "): count: " << count_ << std::endl;
+
       ++count_;
 
       timer_.expires_at(timer_.expires_at() + boost::posix_time::seconds(1));
@@ -2294,32 +2342,33 @@ int main()
   return 0;
 }
 
-ctor: print: 1, this: 0xbf956508
-ctor: print: 1, this: 0xbf956530
+$ ./a.out 
+ctor(0xbff75208): print: 1
+ctor(0xbff75230): print: 1
 main: calls run
-print: print: 1, this: 0xbf956508
-print: count: 0
-print: print: 1, this: 0xbf956530
-print: count: 0
-print: print: 1, this: 0xbf956508
-print: count: 1
-print: print: 1, this: 0xbf956530
-print: count: 1
-print: print: 1, this: 0xbf956508
-print: count: 2
-print: print: 1, this: 0xbf956530
-print: count: 2
-print: print: 1, this: 0xbf956508
-print: count: 3
-print: print: 1, this: 0xbf956530
-print: count: 3
-print: print: 1, this: 0xbf956508
-print: count: 4
-print: print: 1, this: 0xbf956530
-print: count: 4
+print(0xbff75208): print: 1
+print(0xbff75208): count: 0
+print(0xbff75230): print: 1
+print(0xbff75230): count: 0
+print(0xbff75208): print: 1
+print(0xbff75208): count: 1
+print(0xbff75230): print: 1
+print(0xbff75230): count: 1
+print(0xbff75208): print: 1
+print(0xbff75208): count: 2
+print(0xbff75230): print: 1
+print(0xbff75230): count: 2
+print(0xbff75208): print: 1
+print(0xbff75208): count: 3
+print(0xbff75230): print: 1
+print(0xbff75230): count: 3
+print(0xbff75208): print: 1
+print(0xbff75208): count: 4
+print(0xbff75230): print: 1
+print(0xbff75230): count: 4
 main: ends run
-dtor: final count is 5
-dtor: final count is 5
+dtor(0xbff75230): final count is 5
+dtor(0xbff75208): final count is 5
 
 
 <05> Timer.5 - Synchronising handlers in multithreaded programs
@@ -2627,6 +2676,8 @@ auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(i
 ...
 work.reset(); // Allow run() to exit. 
 
+={============================================================================
+*kt_dev_boost_103* asio: io_service: post
 
 * Member Functions
 

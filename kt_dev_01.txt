@@ -112,6 +112,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_021| overload-operator
 *kt_dev_cpp_005* type-conversion: explicit, copy-form initialization
 *kt_dev_cpp_005* type-conversion: conversion-to-bool
+*kt_dev_cpp_005* type-conversion: conversion-to-bool: stringstream case
 |kt_dev_cpp_005| list initialization. initializer_list
 *kt_dev_cpp_005* form-of-initialization
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
@@ -229,7 +230,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_073| stl-string: numeric conversion
 |kt_dev_stl_074| stl-string: iterator support
 *kt_dev_stl_075* stl-string: stringstream and io stream
-*kt_dev_stl_075* stl-string: stringstream state and conversion to bool
 *kt_dev_stl_075* stl-string: seg fault
 
 |kt_dev_stl_080| bitset
@@ -15102,6 +15102,201 @@ It reads into value, 'return' cin, and  cin converted to bool depending on cin
 
 <class-state>
 note. Like cin, seems useful to have bool conversion when class has 'state'.
+
+
+={============================================================================
+*kt_dev_cpp_005* type-conversion: conversion-to-bool: stringstream case
+
+Two stream functions are defined for the use of streams in Boolean expressions
+
+operator bool ()
+Returns whether the stream has not run into an error (corresponds to !fail())
+
+operator ! ()
+Returns whether the stream has run into an error (corresponds to fail())
+
+note: Before C++11, the operator bool() was declared as operator void*(), which
+could cause problems such as those described in Section 15.10.1, page 805.
+
+note: fail() is stream member function:
+Returns true if an error has occurred (failbit or badbit is set)
+
+
+<conversion-to-bool>
+The conversion to bool is often used to read objects and test for success in the
+same expression. Because cin is being used in the context of a condition, its
+operator void* is called, which returns whether the stream has run into an
+error.
+
+A typical application of this technique is a loop that reads and processes
+objects:
+
+// as long as obj can be read
+while (std::cin >> obj) {
+  // process obj (in this case, simply output it)
+  std::cout << obj << std::endl;
+}
+
+This is C's classic filter framework for C++ objects. The loop is terminated if
+the failbit or badbit is set.
+
+
+With operator !, the inverse test can be performed. The operator is defined to
+return whether a stream has run into an error; that is, the operator returns
+true if failbit or badbit is set. 
+
+Like the implicit conversion to a Boolean value, this operator is often used to
+test for success in the same expression in which an object was read:
+
+if (! (std::cin >> x)) {
+  // the read failed
+  ...
+}
+
+
+<problem>
+Use implicit conversion operator which is traditional. This is the way iostream
+uses so it is possible:
+
+ifstream inputFile("datafile.dat");
+if(ifstream) ...
+
+template< class T>
+class SmartPtr {
+  public:
+    operator void*(); // return 0 if smart pointer is null, non-zero otherwise.
+    ...
+};
+
+This approach has a problem since it allows following: 
+
+SmartPtr<Apple> pa; SmartPtr<Orange> po;
+
+if( pa == po ) ...
+
+This compiles even if there is no operator== taking a SmartPtr<Apple> and a
+SmartPtr<Orange>:
+
+Since both smart pointers can be implicitly converted into void* pointers, and
+there is a built-in comparison function for built-in pointers.
+
+note: The problem may be:
+
+SmartPtr<Apple> pa; SmartPtr<Orange> po;
+
+pa = po;
+
+if( pa == po ) ...
+
+This fails although they points to the same.
+
+
+<problem>
+Before C++11, a typical programming error when dealing with stringstreams was to
+forget to extract the string with the function str() and to write to the stream
+directly instead. This was, from a compiler's point of view, a possible and
+reasonable thing to do because there was an implicit conversion to void*. 
+
+As a result, the issue is that instead of its value the state of the stream was
+written in the form of an address. 
+
+Section 15.3.3, page 756
+
+Type void*
+
+Operators << and >> also provide the possibility of printing a pointer and
+reading it back in again. An address is printed in an implementation-dependent
+format if a parameter of type void* is passed to the output operator. For
+example, the following statement prints the contents of a C-string and its
+address:
+
+char* cstring = "hello";
+
+std::cout << "string \"" << cstring << "\" is located at address: "
+<< static_cast<void*>(cstring) << std::endl;
+
+The result of this statement might appear as follows:
+
+string "hello" is located at address: 0x10000018
+
+It is even possible to read an address again with the input operator. However,
+   note that addresses are normally transient. The same object can get a
+   different address in a newly started program. A possible application of
+   printing and reading addresses may be programs that exchange addresses for
+   object identification or programs that share memory.
+
+With C++11, this conversion was replaced by an explicit conversion to bool, so
+passing a stringstream to the output operator << 'without' calling str() is no
+longer possible.
+
+
+<case>
+The issue is tht the code below starts to fail to build suddenly when upgrages
+gcc.
+
+: error: cannot convert ‘std::istream {aka std::basic_istream<char>}’ to ‘bool’
+in initialization"
+
+This is because operator bool() is defined 'explicit'. This issue was shadowed
+by the fact that gcc-4.9 (and below) still had operator void*() const.
+
+stringstream s;
+
+-    bool read_ok = s >> st;
+-    ASSERT_THAT(read_ok, Eq(true));
+-
++    s >> st;
++    ASSERT_THAT(s.good(), Eq(true));
+
+<problem>
+This member function prints "1" then the address. What happended?
+
+class printer {
+
+  void wtf()
+  {
+    std::cout << "what: " << &printer::print << std::endl;
+  }
+};
+
+
+*code-ios*
+
+// bits/basic_ios.h
+
+  template<typename _CharT, typename _Traits>
+    class basic_ios : public ios_base
+  {
+    public:
+      //@{
+      /**
+       *  @brief  The quick-and-easy status check.
+       *
+       *  This allows you to write constructs such as
+       *  "if (!a_stream) ..." and "while (a_stream) ..."
+      */
+      operator void*() const
+      { return this->fail() ? 0 : const_cast<basic_ios*>(this); }
+  }
+
+// ostream
+
+  template<typename _CharT, typename _Traits>
+    class basic_ostream : virtual public basic_ios<_CharT, _Traits>
+  {
+  }
+
+
+// bits/shared_ptr_base.h
+
+  template<typename _Tp, _Lock_policy _Lp>
+    class __shared_ptr
+    {
+      ...
+
+      explicit operator bool() const // never throws
+      { return _M_ptr == 0 ? false : true; }
+    }
 
 
 ={============================================================================
@@ -33818,165 +34013,6 @@ for( const auto &entry : people )
           badNums.str() << endl;
   }
 }
-
-
-={============================================================================
-*kt_dev_stl_075* stl-string: stringstream state and conversion to bool
-
-<use-in-boolean-expression>
-Two stream functions are defined for the use of streams in Boolean expressions
-
-operator bool ()
-Returns whether the stream has not run into an error (corresponds to !fail())
-
-operator ! ()
-Returns whether the stream has run into an error (corresponds to fail())
-
-note: Before C++11, the operator bool() was declared as operator void*(), which
-could cause problems such as those described in Section 15.10.1, page 805.
-
-note: fail() is stream member function:
-Returns true if an error has occurred (failbit or badbit is set)
-
-
-<conversion-to-bool>
-The conversion to bool is often used to read objects and test for success in the
-same expression. Because cin is being used in the context of a condition, its
-operator void* is called, which returns whether the stream has run into an
-error.
-
-A typical application of this technique is a loop that reads and processes
-objects:
-
-// as long as obj can be read
-while (std::cin >> obj) {
-  // process obj (in this case, simply output it)
-  std::cout << obj << std::endl;
-}
-
-This is C's classic filter framework for C++ objects. The loop is terminated if
-the failbit or badbit is set.
-
-
-With operator !, the inverse test can be performed. The operator is defined to
-return whether a stream has run into an error; that is, the operator returns
-true if failbit or badbit is set. 
-
-Like the implicit conversion to a Boolean value, this operator is often used to
-test for success in the same expression in which an object was read:
-
-if (! (std::cin >> x)) {
-  // the read failed
-  ...
-}
-
-
-<conversion-to-void-problem>
-Use implicit conversion operator which is traditional. This is the way iostream
-uses so it is possible:
-
-ifstream inputFile("datafile.dat");
-if(ifstream) ...
-
-template< class T>
-class SmartPtr {
-  public:
-    operator void*(); // return 0 if smart pointer is null, non-zero otherwise.
-    ...
-};
-
-note: Q: why void*? how it works?
-
-This approach has a problem since it allows following: 
-
-SmartPtr<Apple> pa; SmartPtr<Orange> po;
-
-if( pa == po ) ...
-
-Even if there is no operator== taking a SmartPtr<Apple> and a SmartPtr<Orange>,
-     this compiles, because both smart pointers can be implicitly converted into
-     void* pointers, and there is a built-in comparison function for built-in
-     pointers.
-
-
-<conversion-to-void-problem>
-Before C++11, a typical programming error when dealing with string streams was
-to forget to extract the string with the function str() and to write to the
-stream directly instead. This was, from a compiler's point of view, a possible
-and reasonable thing to do because there was an implicit conversion to void*. As
-a result, instead of its value the state of the stream was written in the form
-of an address. 
-
-Section 15.3.3, page 756
-
-Type void*
-
-Operators << and >> also provide the possibility of printing a pointer and
-reading it back in again.  An address is printed in an implementation-dependent
-format if a parameter of type void* is passed to the output operator. For
-example, the following statement prints the contents of a C-string and its
-address:
-
-char* cstring = "hello";
-
-std::cout << "string \"" << cstring << "\" is located at address: "
-<< static_cast<void*>(cstring) << std::endl;
-
-The result of this statement might appear as follows:
-
-string "hello" is located at address: 0x10000018
-
-It is even possible to read an address again with the input operator. However,
-   note that addresses are normally transient. The same object can get a
-   different address in a newly started program. A possible application of
-   printing and reading addresses may be programs that exchange addresses for
-   object identification or programs that share memory.
-
-With C++11, this conversion was replaced by an explicit conversion to bool, so
-passing a string stream to the output operator << 'without' calling str() is no
-longer possible.
-
-
-<case>
-: error: cannot convert ‘std::istream {aka std::basic_istream<char>}’ to ‘bool’
-in initialization"
-
-This is because operator bool() is defined explicit. This issue was shadowed by
-the fact that gcc-4.9 (and below) still had operator void*() const.
-
-stringstream s;
-
--    bool read_ok = s >> st;
--    ASSERT_THAT(read_ok, Eq(true));
--
-+    s >> st;
-+    ASSERT_THAT(s.good(), Eq(true));
-
-
-
-file: ostream
-
-  template<typename _CharT, typename _Traits>
-    class basic_ostream : virtual public basic_ios<_CharT, _Traits>
-  {
-  }
-
-file: bits/basic_ios.h
-
-  template<typename _CharT, typename _Traits>
-    class basic_ios : public ios_base
-  {
-    public:
-      //@{
-      /**
-       *  @brief  The quick-and-easy status check.
-       *
-       *  This allows you to write constructs such as
-       *  "if (!a_stream) ..." and "while (a_stream) ..."
-      */
-      operator void*() const
-      { return this->fail() ? 0 : const_cast<basic_ios*>(this); }
-  }
 
 
 ={============================================================================
