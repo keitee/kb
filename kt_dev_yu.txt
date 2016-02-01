@@ -5,9 +5,8 @@
 |kt_dev_uv_set_001| setup printer
 |kt_dev_uv_set_002| setup email
 |kt_dev_uv_set_003| setup: humax build the stack
-|kt_dev_uv_set_004| huawei: to revert back the previous version
 |kt_dev_uv_set_005| setup: screen connection
-|kt_dev_uv_set_006| filegateway
+|kt_dev_uv_set_006| set-filegateway
 |kt_dev_uv_set_010| setup: git for dev and oem
 
 *kt_dev_uv_set_100* env-cco:
@@ -40,6 +39,7 @@
 *kt_dev_uv_stack_010* zinc-commit
 |kt_dev_uv_stack_010| zinc-push
 |kt_dev_uv_stack_011| zinc-log
+*kt_dev_uv_stack_011* zinc-log: disable logging
 |kt_dev_uv_stack_013| stack: platform data
 *kt_dev_uv_stack_014* zinc-test
 *kt_dev_uv_stack_014* zinc-test: support
@@ -51,11 +51,13 @@
 |kt_dev_uv_stack_103| zinc-plugin
 *kt_dev_uv_stack_103* zinc-plugin: finder
 |kt_dev_uv_stack_104| stack: binding and makefile 
+
 *kt_dev_uv_stack_105* zinc-dbus: monitor
 *kt_dev_uv_stack_105* zinc-dbus: commands
 *kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
 
 *kt_dev_uv_stack_105* zinc-app: ui version
+*kt_dev_uv_stack_105* zinc-app: get crid, resource file name
 
 |kt_dev_uv_stack_200| stack: uranium: stagecraft and air
 |kt_dev_uv_stack_201| stack: uranium: creation chain to other components via dbus and factory
@@ -101,7 +103,7 @@
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
 *kt_dev_uv_stack_408* mr-dash: disable dash on master
-*kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
+*kt_dev_uv_stack_408* mr-dash: switch between mrs
 *kt_dev_uv_stack_408* mr-dash: position
 *kt_dev_uv_stack_408* mr-dash: position change
 *kt_dev_uv_stack_408* mr-dash: seekable range
@@ -160,6 +162,7 @@
 *kt_dev_uv_stack_301* zinc-lsr: copper: client factory
 *kt_dev_uv_stack_302* zinc-lsr: lsr-config
 *kt_dev_uv_stack_009* zinc-lsr: keys
+*kt_dev_uv_stack_009* zinc-lsr: hwei: to revert back the previous version
 *kt_dev_uv_stack_009* zinc-lsr: platform config
 
 *kt_dev_uv_stack_351* zinc-sandbox: on box
@@ -334,28 +337,6 @@ https://wiki.youview.co.uk/display/canvas/HOWTO+Install+Humax+DTR-T1000+T1000+H2
 
 
 ={============================================================================
-*kt_dev_uv_set_004* huawei: to revert back the previous version
-
-touch /opt/cds/download/smdebug
-
-setItem oem.software.version 11.11.11
-
-setItem oem.activatedsoftware.coredevicesoftware.version 11.01.01
-
-setItem oem.activatedsoftware.manufacturerconfiguration.version 1
-
-setItem oem.activatedsoftware.coredevicesoftware.platformapiversion 1.2.0
-
-setItem oem.activatedsoftware.platformsoftware.version 1.3.4
-
-setItem oem.activatedsoftware.platformconfiguration.version 1
-
-Goes to settings -> Dev. Mgt. -> Software Update. Then will update a box from usb stick.
-
-note: Only for ATK.
-
-
-={============================================================================
 *kt_dev_uv_set_005* setup: screen connection
 
 sudo screen /dev/ttyS0 115200
@@ -364,11 +345,16 @@ to close screen use Ctrl-A, k, y. Do not use Ctrl-C as it can kill processes run
 
 
 ={============================================================================
-*kt_dev_uv_set_006* filegateway
+*kt_dev_uv_set_006* set-filegateway
 
-$ scp -r kit.park@filegateway.youview.co.uk:/export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP33_Eng_Release_20150331_for_YVHUAWEI-6751 ./
+scp -r kit.park@filegateway.youview.co.uk:/export/repos/\
+huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP33_Eng_Release_20150331_for_YVHUAWEI-6751 ./
 
-$ ssh kit.park@filegateway.youview.co.uk ls -alR /export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP46_Release_20150424/
+ssh kit.park@filegateway.youview.co.uk ls -alR 
+
+/export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP46_Release_20150424/
+
+/export/repos/humax/from_humax/
 
 
 ={============================================================================
@@ -3660,6 +3646,38 @@ This is the same file as:
 
 
 ={============================================================================
+*kt_dev_uv_stack_011* zinc-log: disable logging
+
+https://jira.youview.co.uk/browse/CANHUM-1415
+
+Each of the daemons logs quite a lot. This has the potential to fill up /var.
+Persistent logging should therefore be disabled.
+
+The logging properties files controls where the logs are written to. By default
+logs are written to STDERR (as defined in zinc.common.props) which with
+sandboxing means that they either get written to /dev/console or /dev/null. The
+properties files which are currently installed cause the logs to get written to
+files in /var. The solution is to remove the properties files.
+
+I have tested this in DEVARCH-4307 and it seems to work fine. Run the following
+command on the box:
+
+cd /opt/zinc/share/
+
+# Stash the default props file away
+mv ./zinc-common/zinc.common.props zcp.default
+
+# Delete all the props files
+find -name '*.props' | xargs rm
+
+# Move the stashed default back again
+mv zcp.default ./zinc-common/zinc.common.props
+
+If you wish to see the logs the props files can be re-instated or STDERR can be
+redirected to file by modifying the sandbox configuration files.
+
+
+={============================================================================
 *kt_dev_uv_stack_013* stack: platform data
 
 Nickel/Nickel.System.Proxy/data/Makefile.am
@@ -5423,6 +5441,10 @@ Iron.System.DBusClient/src/getScheduledEvents.cpp
 ={============================================================================
 *kt_dev_uv_stack_105* zinc-dbus: commands
 
+<dbus-completion>
+# source /opt/zinc/oss/etc/bash_completion.d/dbus-bash-completion.sh
+
+
 note: stop default MR
 
 <dbus-stop-default-mr>
@@ -5514,6 +5536,185 @@ handling of timeout exception.
 
 root# cat /opt/ui/ui.txt 
 ui revision-846ef89 version-F26.8.0-RC1root# 
+
+
+={============================================================================
+*kt_dev_uv_stack_105* zinc-app: get crid, resource file name
+
+https://wiki.youview.co.uk/display/CANBBC/How+to+Install+H19.0.0+for+CRB?src=search
+https://wiki.youview.co.uk/display/canvas/2014/01/21/Add+support+for+HTML5+applications+and+CRB?src=search
+https://wiki.youview.co.uk/display/canvas/MAS+URL+Emporium
+
+// get crid
+
+[root@HUMAX /]# cat /opt/zinc/var/applications/program/air/66c1f1d18c2e7de1be5e448b5beefafbb1715e21824864f762dc161c1ff0684e/applicationRecord 
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<ApplicationRecord><applicationCRID>crid://arqiva.co.uk/application/1/CRB/</applicationCRID><platformIdentifier>15548915</platformIdentifier><applicationFormat>html5</applicationFormat><identifiers><identifier name="http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#programId" value="crid://arqiva.co.uk/application/1/CRB/html5"/><identifier name="http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#resourceLocator" value="http://arqiva.net/products/youview/app/adp/connecttv-youview.zip"/><identifier name="http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-05-31#applicationId" value="tv.arqiva.app.connecttv-youview"/><identifier name="http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application" value="crid://arqiva.co.uk/application/1/CRB/"/></identifiers><version>0.0.1</version><providerName>YouView</providerName><title>Arqiva</title><synopsis>Arqiva</synopsis><adult>0</adult><guidanceCode>no_parental_controls</guidanceCode><guidanceText></guidanceText><visible>1</visible><updateAvailable>0</updateAvailable><httpETag></httpETag><httpLastModified>Tue, 28 Oct 2014 15:12:32 GMT</httpLastModified><installTime>1454003226</installTime></ApplicationRecord>
+
+
+// get zip file name when cco ext03
+
+[root@HUMAX /]# dbus-send --print-reply --session --dest=Zinc.Broker /Zinc/Broker/MetadataBroker Zinc.Broker.MetadataBroker.getApplicationByApplicationCRID string:crid://arqiva.co.uk/application/1/CRB/
+method return sender=:1.24 -> dest=:1.167 reply_serial=2
+
+   struct {
+      string "15548915"
+      int64 1450443722
+      int64 1454338332
+      int32 0
+      array [
+      ]
+      array [
+         dict entry(
+            string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#programId"
+            array [
+               string "crid://arqiva.co.uk/application/1/CRB/html5"
+            ]
+         )
+         dict entry(
+            string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#resourceLocator"
+            array [
+               string "http://arqiva.net/products/youview/app/adp/connecttv-youview.zip"    // note:
+            ]
+         )
+         dict entry(
+            string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-05-31#applicationId"
+            array [
+               string "tv.arqiva.app.connecttv-youview"
+            ]
+         )
+         dict entry(
+            string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application"
+            array [
+               string "crid://arqiva.co.uk/application/1/CRB/"
+            ]
+         )
+      ]
+      array [
+      ]
+      array [
+         dict entry(
+            string "applicationId"
+            array [
+               string "15548915"
+            ]
+         )
+         dict entry(
+            string "applicationTitle"
+            array [
+               string "Arqiva"
+            ]
+         )
+         dict entry(
+            string "availabilityEnd"
+            array [
+               string "2099-01-01T00:00:00Z"
+            ]
+         )
+         dict entry(
+            string "availabilityStart"
+            array [
+               string "2010-01-01T00:00:00Z"
+            ]
+         )
+         dict entry(
+            string "compatibility"
+            array [
+               string "http://refdata.youview.com/mpeg7cs/YouViewApplicationPackagingCS/2014-01-21#html-descriptor"
+               string "http://refdata.youview.com/mpeg7cs/YouViewApplicationPlayerCS/2011-10-26#html5"
+            ]
+         )
+         dict entry(
+            string "entityType"
+            array [
+               string "application"
+            ]
+         )
+         dict entry(
+            string "guidanceCodes"
+            array [
+               string "no_parental_controls"
+            ]
+         )
+         dict entry(
+            string "guidanceScheme"
+            array [
+               string "http://refdata.youview.com/mpeg7cs/YouViewContentRatingCS/2010-11-25"
+            ]
+         )
+         dict entry(
+            string "guidanceText"
+            array [
+               string ""
+            ]
+         )
+         dict entry(
+            string "isAdult"
+            array [
+               string "0"
+            ]
+         )
+         dict entry(
+            string "isAvailable"
+            array [
+               string "1"
+            ]
+         )
+         dict entry(
+            string "longGuidanceText"
+            array [
+               string ""
+            ]
+         )
+         dict entry(
+            string "longSynopsis"
+            array [
+               string "Arqiva"
+            ]
+         )
+         dict entry(
+            string "mediumSynopsis"
+            array [
+               string "Arqiva"
+            ]
+         )
+         dict entry(
+            string "owningServiceId"
+            array [
+               string "13961080"
+            ]
+         )
+         dict entry(
+            string "shortSynopsis"
+            array [
+               string "Arqiva"
+            ]
+         )
+      ]
+      array [
+      ]
+   }
+
+[root@HUMAX /]# dbus-send --print-reply --session --dest=Zinc.Broker /Zinc/Broker/MetadataBroker Zinc.Broker.MetadataBroker.getApplicationByApplicationCRID string:crid://arqiva.co.uk/application/1/CRB/ | grep -C 3 zip
+         dict entry(
+            string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#resourceLocator"
+            array [
+               string "http://arqiva.net/products/youview/app/adp/connecttv-youview.zip"
+            ]
+         )
+         dict entry(
+
+
+// when cco live
+
+[root@HUMAX /]# dbus-send --print-reply --session --dest=Zinc.Broker /Zinc/Broker/MetadataBroker Zinc.Broker.MetadataBroker.getApplicationByApplicationCRID string:crid://arqiva.co.uk/application/1/CRB/ | grep -C 3 zip
+         dict entry(
+            string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2010-12-09#resourceLocator"
+            array [
+               string "http://app.arqiva.tv/products/youview/app/adp/connecttv-youview.zip"
+            ]
+         )
+         dict entry(
 
 
 ={============================================================================
@@ -13972,7 +14173,7 @@ Date:   Mon Nov 9 13:50:42 2015 +0000
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: switch between yv mr and old
+*kt_dev_uv_stack_408* mr-dash: switch between mrs
 
 # Tell WebKit to use the media router for video playback. The default is to use
 # the built-in GStreamer pipeline
@@ -14285,7 +14486,25 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: output-control
+*kt_dev_uv_stack_408* mr-dash: output-control-manager
+
+// output-control-manager proposal
+https://wiki.youview.co.uk/display/YVDM/Output+Controls+API
+
+What YV implements?
+
+Currently we have "Zinc.Media.OuputManager" in Nickel System API which we do not
+want to change as it's meant mainly for the Main UI. The proposal is to add a
+new API in Nickel System API.
+
+So not "OutputManager" but "OutputControlManager". YV would add relevant D-Bus
+policies as well.
+
+
+// about implementing the proposal.
+// Integrate OutputControlsManager API
+https://jira.youview.co.uk/browse/CANHUM-3475
+
 
 {xml}
   <interface name="Zinc.Media.OutputControlManager">
@@ -14336,24 +14555,14 @@ namespace Zinc {
 namespace Media {
 
 /**
- * 
  *       Allows multiple clients to request output controls enforcement in a
- * 
  *       consistent fashion. In the presence of multiple output controls enforced,
- * 
  *       all configurations get resolved to a single, most restrictive
- * 
  *       configuration.  This way it's impossible for any client to weaken any
- * 
  *       other client's output controls being currently in force.  Also each client
- * 
  *       is returned with an output controls reference object such that related
- * 
  *       configuration is in force (contributes to the resolved configuration) for
- * 
  *       as long as the object exists.
- * 
- *     
  */
 class ZINC_EXPORT OutputControlManagerAsync
 {
@@ -14361,16 +14570,10 @@ class ZINC_EXPORT OutputControlManagerAsync
 public:
 
 	/**
-	 * 
 	 *         Adds output controls configuration to the set of (possibly) multiple
-	 * 
 	 *         configurations. The final set is resolved to a single strictest
-	 * 
 	 *         configuration. There's no way for any client to weaken any other output
-	 * 
 	 *         controls currently being in force.
-	 * 
-	 *       
 	 */
 	virtual NS_ZINC::Future< boost::shared_ptr< OutputControlRef > > 
        add(const OutputControlConfig& cfg_in) = 0;
@@ -14422,7 +14625,6 @@ struct OutputControlConfig
   CCI::Enum cci;
   bool requireHdcp;
   bool disableAnalogueSD;
-
 };
 
 
@@ -14483,18 +14685,23 @@ boost::shared_ptr<OutputControlManager> ProxySystemFactory::createOutputControlM
 }
 
 
-<when-play-from-player>
-
-// w3c -> mr -> oem mr
+<dbus-when-start-with-yv-mr>
+// w3c -> yv mr -> oem mr
 
 3478  :1.225                   /opt/zinc-trunk/bin/w3cEngine -debug -cache 
 /app-data/client-cache -cache-size 50000000 -dbus -jar /app-data/cookies.sqlite -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 -src http://www.arqiva.net http://app.arqiva.tv        
 
 method call sender=:1.225 -> dest=:1.75 serial=48 
-path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=start
+    path=/Zinc/Media/MediaRouters/0; 
+    interface=Zinc.Media.MediaRouter; member=start
 
 method call sender=:1.75 -> dest=Zinc.Media serial=71 
-path=/Zinc/Media/OutputControlManager; interface=Zinc.Media.OutputControlManager; member=add
+    path=/Zinc/Media/OutputControlManager; 
+    interface=Zinc.Media.OutputControlManager; member=add
+
+    // note: called "zero configuration"
+    // This means that there is no protection on this channel.
+
    struct {
       int32 0
       boolean false
@@ -14503,8 +14710,7 @@ path=/Zinc/Media/OutputControlManager; interface=Zinc.Media.OutputControlManager
 
 
 <stop>
-
-[26-11-2015 13:27:43.055869] method call sender=:1.336 -> dest=:1.339 serial=5111 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=stop
+ method call sender=:1.336 -> dest=:1.339 serial=5111 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=stop
 
 note: 1.7 was bronze
 
@@ -14560,6 +14766,8 @@ OutputControlRefAsync.h
   } // namespace
 
 
+
+<output-manager>
 // stagecraft -> mr -> oem mr
 
 method call sender=:1.78 -> dest=Zinc.MediaProxy serial=91 
@@ -14582,15 +14790,27 @@ method return sender=:1.75 -> dest=:1.78 reply_serial=91
 855   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
 
 
+<output-manager-dbus-log>
+boot-from-101.log
+1948:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
+3114:[26-01-2016 14:24:50.242541] method call sender=:1.24 -> dest=Zinc.Media serial=101 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=enableOutputs
+3194:[26-01-2016 14:24:50.886542] signal sender=:1.7 -> dest=(null destination) serial=90 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=OutputStatusEvent
+3196:[26-01-2016 14:24:50.886969] signal sender=:1.7 -> dest=(null destination) serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=HDMICECEvent
+4810:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
+5031:[26-01-2016 14:25:04.865716] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+5032:[26-01-2016 14:25:04.884930] method call sender=:1.75 -> dest=Zinc.Media serial=32 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
+5834:[26-01-2016 14:25:07.058661] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=102 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
+5835:[26-01-2016 14:25:07.061342] method call sender=:1.75 -> dest=Zinc.Media serial=34 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
+149915:[26-01-2016 14:25:37.807796] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=274 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
+149916:[26-01-2016 14:25:37.810119] method call sender=:1.75 -> dest=Zinc.Media serial=46 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
+
+
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: output-control: nexus-inspect
 
 // both scart and hdmi are fine to play aqiva
 
 [root@HUMAX /]# nexus-inspect
-
-	Ac3EncodeHandle: 0xcf0f4600
-	StcChannelHandle: 0xe12a2718
 	VideoDecoderHandle: 0xe12a5218
 	VideoWindowHandle: 0xcc8180e0
 		VideoDecoder contrast: 0
@@ -14702,40 +14922,7 @@ note: this suggests that when launch browser only changes SD.
 
 This is the same when use both scart and hdmi.
 
-
-<dbus-log>
-boot-from-101.log
-1948:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
-3114:[26-01-2016 14:24:50.242541] method call sender=:1.24 -> dest=Zinc.Media serial=101 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=enableOutputs
-3194:[26-01-2016 14:24:50.886542] signal sender=:1.7 -> dest=(null destination) serial=90 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=OutputStatusEvent
-3196:[26-01-2016 14:24:50.886969] signal sender=:1.7 -> dest=(null destination) serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=HDMICECEvent
-4810:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
-5031:[26-01-2016 14:25:04.865716] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
-5032:[26-01-2016 14:25:04.884930] method call sender=:1.75 -> dest=Zinc.Media serial=32 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
-5834:[26-01-2016 14:25:07.058661] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=102 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
-5835:[26-01-2016 14:25:07.061342] method call sender=:1.75 -> dest=Zinc.Media serial=34 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
-149915:[26-01-2016 14:25:37.807796] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=274 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
-149916:[26-01-2016 14:25:37.810119] method call sender=:1.75 -> dest=Zinc.Media serial=46 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
-
-boot-from-242.log
-2016:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
-3163:[26-01-2016 14:19:09.038729] method call sender=:1.24 -> dest=Zinc.Media serial=95 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=enableOutputs
-3245:[26-01-2016 14:19:09.711587] signal sender=:1.7 -> dest=(null destination) serial=90 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=OutputStatusEvent
-3247:[26-01-2016 14:19:09.714917] signal sender=:1.7 -> dest=(null destination) serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=HDMICECEvent
-5007:   string "type='signal',path='/Zinc/Media/OutputManager',sender='Zinc.Media'"
-5086:[26-01-2016 14:19:23.188651] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=91 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
-5087:[26-01-2016 14:19:23.204908] method call sender=:1.77 -> dest=Zinc.Media serial=32 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
-5889:[26-01-2016 14:19:25.376924] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=102 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
-5890:[26-01-2016 14:19:25.379651] method call sender=:1.77 -> dest=Zinc.Media serial=34 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getVolume
-149070:[26-01-2016 14:19:57.413192] method call sender=:1.78 -> dest=Zinc.MediaProxy serial=274 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
-149071:[26-01-2016 14:19:57.415019] method call sender=:1.77 -> dest=Zinc.Media serial=46 path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=getAudioOutputs
-
 https://wiki.youview.co.uk/display/CANSHR/Provision+of+optional+features+by+CPs%2C+and+technical+parameters#ProvisionofoptionalfeaturesbyCPs,andtechnicalparameters-OutputControls
-
-// for dash
-https://wiki.youview.co.uk/display/YVDM/Output+Controls+API
-
-https://jira.youview.co.uk/browse/CANHUM-3475
 
 https://jira.youview.co.uk/browse/CANHUM-3503
 https://jira.youview.co.uk/browse/BTHUMAX-634
@@ -20378,9 +20565,11 @@ Make              oem.name
 Model             oem.device.model.name
 ModelVariant      oem.device.model.variant
 
+note: "manufacture software" in settings
 CDS/<version> Current version of the Core Device Software.
 oem.activatedsoftware.coredevicesoftware.version
 
+note: "component software" in settings
 API/<version> Current supported version of the YouView API.
 oem.activatedsoftware.coredevicesoftware.platformapiversion
 
@@ -20468,6 +20657,22 @@ oem.softwaremanagement.manufacturerconfiguration.baseurl=http://su.tv.talktalk.n
 oem.softwaremanagement.manufacturerconfiguration.updatepolicy=standard
 
 root# setItem platform.settings.enable-ipcrb 1
+
+
+={============================================================================
+*kt_dev_uv_stack_009* zinc-lsr: hwei: to revert back the previous version
+
+touch /opt/cds/download/smdebug
+
+setItem oem.software.version 11.11.11
+setItem oem.activatedsoftware.coredevicesoftware.version 11.01.01
+setItem oem.activatedsoftware.manufacturerconfiguration.version 1
+setItem oem.activatedsoftware.coredevicesoftware.platformapiversion 1.2.0
+setItem oem.activatedsoftware.platformsoftware.version 1.3.4
+setItem oem.activatedsoftware.platformconfiguration.version 1
+Goes to settings -> Dev. Mgt. -> Software Update. Then will update a box from usb stick.
+
+note: Only for ATK.
 
 
 ={============================================================================
