@@ -58,6 +58,7 @@
 
 *kt_dev_uv_stack_105* zinc-app: ui version
 *kt_dev_uv_stack_105* zinc-app: get crid, resource file name
+*kt_dev_uv_stack_105* zinc-app: diag screen
 
 |kt_dev_uv_stack_200| stack: uranium: stagecraft and air
 |kt_dev_uv_stack_201| stack: uranium: creation chain to other components via dbus and factory
@@ -81,6 +82,7 @@
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
 *kt_dev_uv_stack_250* mr-web: stack from html to mr
 *kt_dev_uv_stack_250* mr-web: media player interface
+*kt_dev_uv_stack_250* mr-web: media element and attribute
 *kt_dev_uv_stack_250* mr-web: media event
 *kt_dev_uv_stack_250* mr-web: ended event
 *kt_dev_uv_stack_250* mr-web: ended event: release nexus
@@ -126,7 +128,7 @@
 *kt_dev_uv_stack_255* mr-error: soldes
 *kt_dev_uv_stack_255* mr-error: status, source, event value
 *kt_dev_uv_stack_255* mr-error: error handle
-*kt_dev_uv_stack_255* mr-error: underflow error
+*kt_dev_uv_stack_255* mr-error: underflow error: stalled event
 *kt_dev_uv_stack_255* mr-error: connection retry
 *kt_dev_uv_stack_255* mr-error: network out
 *kt_dev_uv_stack_255* mr-error: http 404
@@ -5718,6 +5720,11 @@ method return sender=:1.24 -> dest=:1.167 reply_serial=2
 
 
 ={============================================================================
+*kt_dev_uv_stack_105* zinc-app: diag screen
+
+help, diagapp
+
+={============================================================================
 *kt_dev_uv_stack_200* stack: uranium: stagecraft and air
 
 <air>
@@ -9470,12 +9477,36 @@ note: BBC iplayer uses 'mediaPlayerVideo' ALWAYS
 
 note: to print out periodically
 
+    enum NetworkState
+    {
+        NETWORK_EMPTY,
+        NETWORK_IDLE,
+        NETWORK_LOADING, (2)
+        NETWORK_ERROR,
+        NETWORK_LOADED,
+        DECODE_ERROR,
+        FORMAT_ERROR
+    };
+
+    enum ReadyState
+    {
+        HAVE_NOTHING,
+        HAVE_METADATA,
+        HAVE_CURRENT_DATA,
+        HAVE_FUTURE_DATA, (3)
+        HAVE_ENOUGH_DATA
+    };
+
 (function() {
     video = document.getElementById('mediaPlayerVideo');
     video.addEventListener("timeupdate", function() {
+    console.log("currentTime:", video.currentTime);
     console.log("video.ended?:", video.ended);
     console.log("readyState?:", video.readyState);
     console.log("networkState?:", video.networkState);
+    });
+    video.addEventListener("stalled", function() {
+    console.log("got stalled event");
     });
 })()
 
@@ -9516,6 +9547,17 @@ note: to print out periodically
     });
     video.addEventListener("waiting", function() {
     console.log("GOT waiting");
+    });
+})()
+
+
+(function() {
+    video = document.getElementById('mediaPlayerVideo');
+    video.addEventListener("progress", function() {
+    console.log("progress is on!!");
+    console.log("videoWidth:", video.videoWidth);
+    console.log("videoHeight:", video.videoHeight);
+    console.log("currentTime:", video.currentTime);
     });
 })()
 
@@ -10549,7 +10591,7 @@ private:
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: media event and attribute
+*kt_dev_uv_stack_250* mr-web: media element and attribute
 
 4.8.13.16 Event summary
 
@@ -10565,6 +10607,81 @@ This happens regardless of position change reporting from MR.
 
 
 4.8.13 Media elements (attribute)
+
+https://html.spec.whatwg.org/multipage/embedded-content.html#htmlmediaelement
+
+interface HTMLMediaElement : HTMLElement {
+
+  // error state
+  readonly attribute MediaError? error;
+
+  // network state
+  attribute DOMString src;
+  attribute MediaProvider? srcObject;
+  readonly attribute DOMString currentSrc;
+  attribute DOMString? crossOrigin;
+  const unsigned short NETWORK_EMPTY = 0;
+  const unsigned short NETWORK_IDLE = 1;
+  const unsigned short NETWORK_LOADING = 2;
+  const unsigned short NETWORK_NO_SOURCE = 3;
+  readonly attribute unsigned short networkState;
+  attribute DOMString preload;
+  readonly attribute TimeRanges buffered;
+  void load();
+  CanPlayTypeResult canPlayType(DOMString type);
+
+  // ready state
+  const unsigned short HAVE_NOTHING = 0;
+  const unsigned short HAVE_METADATA = 1;
+  const unsigned short HAVE_CURRENT_DATA = 2;
+  const unsigned short HAVE_FUTURE_DATA = 3;
+  const unsigned short HAVE_ENOUGH_DATA = 4;
+  readonly attribute unsigned short readyState;
+  readonly attribute boolean seeking;
+
+  // playback state
+  attribute double currentTime;
+  void fastSeek(double time);
+  readonly attribute unrestricted double duration;
+  object getStartDate();
+  readonly attribute boolean paused;
+  attribute double defaultPlaybackRate;
+  attribute double playbackRate;
+  readonly attribute TimeRanges played;
+  readonly attribute TimeRanges seekable;
+  readonly attribute boolean ended;
+  attribute boolean autoplay;
+  attribute boolean loop;
+  Promise<void> play();
+  void pause();
+
+  // media controller
+  attribute DOMString mediaGroup;
+  attribute MediaController? controller;
+
+  // controls
+  attribute boolean controls;
+  attribute double volume;
+  attribute boolean muted;
+  attribute boolean defaultMuted;
+
+  // tracks
+  [SameObject] readonly attribute AudioTrackList audioTracks;
+  [SameObject] readonly attribute VideoTrackList videoTracks;
+  [SameObject] readonly attribute TextTrackList textTracks;
+  TextTrack addTextTrack(TextTrackKind kind, optional DOMString label = "", optional DOMString language = "");
+};
+
+
+4.8.9 The video element
+
+interface HTMLVideoElement : HTMLMediaElement {
+  attribute unsigned long width;
+  attribute unsigned long height;
+  readonly attribute unsigned long videoWidth;
+  readonly attribute unsigned long videoHeight;
+  attribute DOMString poster;
+};
 
 
 ={============================================================================
@@ -12158,6 +12275,7 @@ struct ZINC_EXPORT MediaRouterEventListener : public NS_ZINC::EventListener
 
 };
 
+
 Nickel.System.API/include/MediaRouterAsync.h
 
 class MediaRouterEventListener;
@@ -12166,6 +12284,10 @@ class ZINC_EXPORT MediaRouterAsync :
   public virtual NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>
 {
 }
+
+
+class MediaPlayerListener : boost::noncopyable,
+    public NS_NICKEL_SYSTEM::MediaRouterEventListener;
 
 
 {after} <yv-mr> nickelmediad which is a dbus-server
@@ -16196,6 +16318,56 @@ ar: 6, { 1, 1 }
 dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
 
 
+Author: Kit Park <kit.park@youview.com>
+Date:   Tue Sep 15 15:51:24 2015 +0100
+
+    DEVARCH-10262: Fix video resolution changes delivery in nexussink and implement
+    plumbing to the YV media router.
+    
+    This is a commit to support video resizing in the browser since HTML 5 defines
+    the read-only properties `videoHeight` and `videoWidth` on an video element and
+    which allows WebKit to correctly size video while maintaining aspect ratio.
+    
+    This commit examined various fixes and commits started from
+    alex.ashley/DEVARCH-8992 and different approach as to Nexus callback to use to
+    obtain stream details reliably and fixed the delivery of video resolution
+    changes in nexussink through fixing race between sink and Nexus.
+    
+    Also this commit implements plumbing up to the YV media router to pass video
+    size based on DAR and will end up to the WebKit to support resizing video.
+
+
+Here, passed up to the QTWebKit:
+
+void VanadiumMediaPlayer::SourceEvent(const SourceEventValue::Enum event,
+            const SetSourceReason::Enum)
+{
+    ...
+
+    else if(event == SourceEventValue::source_information_change)
+    {
+        SourceInfoMap sourceInfo = mediaRouter->getSourceInformation().get();
+        SourceInfoMap::const_iterator iter = sourceInfo.find("VIDEO_WIDTH");
+        if(iter != sourceInfo.end())
+        {
+            nativeVideoWidth = boost::lexical_cast<int>(iter->second);
+        }
+        iter = sourceInfo.find("VIDEO_HEIGHT");
+        if(iter != sourceInfo.end())
+        {
+            nativeVideoHeight = boost::lexical_cast<int>(iter->second);
+        }
+
+        if(nativeVideoHeight == 0 || nativeVideoWidth == 0)
+        {
+            getDefaultSize(nativeVideoWidth, nativeVideoHeight);
+        }
+
+        callbacks.sizeChanged();
+    }
+}
+
+
 ={============================================================================
 *kt_dev_uv_stack_254* mr-dash: test web server
 
@@ -17172,7 +17344,7 @@ https://wiki.youview.co.uk/display/CANPDE/Legacy+Error+Messages?src=search
 
 
 ={============================================================================
-*kt_dev_uv_stack_255* mr-error: underflow error
+*kt_dev_uv_stack_255* mr-error: underflow error: stalled event
 
 commit 0c4b989fe8d287edb89d202e0e4104ab506fd16c
 Author: Alex Ashley <alex.ashley@youview.com>
