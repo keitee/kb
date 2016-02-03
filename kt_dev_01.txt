@@ -139,6 +139,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_019| exception {problem-of-exception-in-dtor} {exception-safe}
 *kt_dev_cpp_021* code-check()
 |kt_dev_cpp_022| inheritance {static-type} {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
+*kt_dev_cpp_022* inheritance: ctor-initializers
 |kt_dev_cpp_023| override {override-condition} {override-keyword}
 |kt_dev_cpp_024| abstract base class {refactoring}
 |kt_dev_cpp_025| 
@@ -20782,7 +20783,10 @@ class Last 'final' : Base { ... };
 Use private ctor. See {{control-the-number-of-object}}
 
 
-{constructor-initializers-in-inheritance}
+={============================================================================
+*kt_dev_cpp_022* inheritance: ctor-initializers
+
+<1>
 Unless we say otherwise, the base part of a derived is 'default' initialized.
 
 The usual way is:
@@ -20803,9 +20807,37 @@ class Disc_quote : public Quote {
 
 };
 
-As for ctor, 'copy' controls must explicitly call base part and otherwise has 'oddly configured'
-object such as the derived part copied as expected but the base part 'default'-init. note: dtor is
-the only exception that do only for its own part.
+
+<2> when there are class member data
+
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer 
+{
+  public:
+
+    // note: "impl(dispatcher_)" shows that calls ctor on member data
+    //
+    explicit DispatchingEventProducer(boost::shared_ptr<EventDispatcher>
+        dispatcher_) : impl(dispatcher_) {}
+
+  private:
+    mutable detail::DispatchingEventProducerHoisted impl;
+};
+
+class DispatchingEventProducerHoisted : boost::noncopyable 
+{
+public:
+
+	explicit DispatchingEventProducerHoisted
+       (boost::shared_ptr<EventDispatcher> dispatcher_);
+   ...
+};
+
+
+<3>
+As for ctor, 'copy' controls must explicitly call base part and otherwise has
+'oddly configured' object such as the derived part copied as expected but the
+base part 'default'-init. note: dtor is the only exception that do only for its
+own part.
 
 class Base {
   public:
@@ -20821,7 +20853,8 @@ class Left: public Base {
 sam_slice.cpp: In constructor 'Left::Left(int)':
 sam_slice.cpp:27:32: error: no matching function for call to 'Base::Base()'
 
-Because Base has another ctor so default-ctor will not be made and shows this error.
+Because Base has another ctor so default-ctor will not be made and shows this
+error.
 
 
 {call-base-in-virtual-of-derived}
@@ -22442,6 +22475,36 @@ youview interview
 note: How to before C++11?
 
 http://stackoverflow.com/questions/2351148/explicit-instantiation-when-is-it-used
+For instance, libstdc++ contains the explicit instantiation of
+std::basic_string<char,char_traits<char>,allocator<char> > (which is
+        std::string) so every time you use functions of std::string, the same
+function code doesn't need to be copied to objects. The compiler only need to
+refer (link) those to libstdc++
+
+https://msdn.microsoft.com/en-us/library/by56e477%28VS.80%29.aspx
+Explicit Instantiation
+Visual Studio 2005
+Other Versions
+
+Explicit instantiation lets you create an instantiation of a templated class or
+function without actually using it in your code. Because this is useful when you
+are creating library (.lib) files that use templates for distribution,
+    uninstantiated template definitions are not put into object (.obj) files.
+
+The following explicitly instantiates MyStack for int variables and six items:
+
+template class MyStack<int, 6>;
+
+This statement creates an instantiation of MyStack without reserving any storage
+for an object; code is generated for all members.
+
+The following explicitly instantiates only the constructor member function:
+
+template MyStack<int, 6>::MyStack( void );
+
+Function templates can be explicitly instantiated by redeclaring them with a
+specific type argument, as seen in the example in Function Template
+Instantiation.
 
 
 ={============================================================================
@@ -22576,20 +22639,48 @@ note: See another example of explicit argument in template function pointer.
 
 
 ={============================================================================
-*kt_dev_cpp_052* template: argument deduction
+*kt_dev_cpp_052* template-argument deduction
 
 {template-argument-deduction}
-For function template, this is process of determining the template arguments from the function
-arguments. In other words, this is a binding from function parameter to template parameter.
+For function template, this is process of determining the template arguments
+from the function arguments. This generates a version of the function that best
+matches the given call.
 
 <limited-conversion>
-Only allows two converison in a call to function template but not others such as derived-to-base,
-     arithmetic, and user defined conversion.
+Only allows two converison in a call to function template but not others such as
+derived-to-base, arithmetic, and user defined conversion.
 
-o nonconst-to-const and array or function-to-pointer conversion.
+* const conversion
+Can pass a reference(or pointer) to a nonconst to const parameter that is a
+reference(or pointer).
+
+* function-to-pointer conversion
+A function argument will be converted to a pointer to the function's type if the
+function parameter is not a reference type.
+
+template <typename T> T fobj(T, T);
+template <typename T> T fref(const &T, const &T);
+
+string s1("a value");
+const string s2("another value");
+
+// arguments are copied, so whether the original is const doesn't matter.
+// top-level is ignored.
+fobj(s1, s2);       
+fref(s1, s2);
+
+int a[10], b[42];
+
+// the arrays are different sizes and hence have different type. Both are
+// converted to pointer.
+fobj(a, b);
+
+// error since no converion and type doesn't match
+fref(a, b);
 
 <more-than-one-type>
-The function template can have more than one type to allow normal conversion on the arguments.
+The function template can have more than one type to allow normal conversion on
+the arguments.
 
 template <typename T>   // '<typename T>' is template param list
 int compare( const T& v1, const T& v2 )
@@ -22600,9 +22691,12 @@ int compare( const T& v1, const T& v2 )
 }
 
 long lng;
-compare( lng, 1024 );      // compare( long, int );
+compare( lng, 1024 );           // compare( long, int );
 
-This is an error since compare do not have the same type. To allow normal converison:
+This is an error since compare do not have the same type and hence deduction
+fails.
+
+To allow normal converison on the second argument:
 
 template <typename A, typename B>
 int flexibleCompare( const A& v1, const B& v2 )
@@ -22611,6 +22705,8 @@ int flexibleCompare( const A& v1, const B& v2 )
   if( v2 < v1 ) return 1;
   return 0;
 }
+
+flexibleCompare( lng, 1024 );   // flexibleCompare( long, int );
 
 Of course, < operator must exist that can compare those types.
 
@@ -22624,7 +22720,7 @@ ostream &print( ostream &os, const T &obj )
 print( cout, 42 );         // print( ostream&, int )
 
 ofstream f("output");
-print( f, 10 );            // convert ofstream to ostream&
+print( f, 10 );            // convert ofstream to ostream&. derived-to-base.
 
 
 {argument-deduction-and-reference}

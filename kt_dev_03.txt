@@ -11,19 +11,20 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_003| static fsm demo in cpp
 *kt_dev_code_004* macro: wait on expression or timed out 
 
-|kt_dev_code_010| asyc: continuation
-|kt_dev_code_011| asyc: flow between future, promise, and io_service
-*kt_dev_code_012* asyc: future-context
-*kt_dev_code_012* asyc: future-base, future-then
-*kt_dev_code_012* asyc: future-value
-|kt_dev_code_013| asyc: future helper
-|kt_dev_code_013| asyc: promise
-|kt_dev_code_014| asyc: future barrier
-|kt_dev_code_015| asyc: dispatcher
-|kt_dev_code_016| asyc: listener
-|kt_dev_code_017| asyc: flow between future, promise, and dispatcher
-*kt_dev_code_017* asyc: asyncInvoke
-*kt_dev_code_017* asyc: reduce number of threads
+|kt_dev_code_010| async-continuation
+*kt_dev_code_017* async-flow between classes
+*kt_dev_code_017* async-flow between future, promise, and dispatcher
+*kt_dev_code_012* async-future-context
+*kt_dev_code_012* async-future-base, future-then
+*kt_dev_code_012* async-future-value
+|kt_dev_code_013| async-future helper
+|kt_dev_code_013| async-promise
+|kt_dev_code_014| async-future barrier
+|kt_dev_code_015| async-dispatcher
+|kt_dev_code_015| async-dispatcher: use gmainloop
+|kt_dev_code_016| async-listener
+*kt_dev_code_017* async-asyncInvoke
+*kt_dev_code_017* async-reduce number of threads
 
 |kt_dev_design_001| use state and if checks
 
@@ -9272,7 +9273,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_code_011* asyc: flow between future, promise, and io_service
+*kt_dev_code_017* asyc: flow between classes
 
 Client <-> Future<T> <-> FC <-> Promise<T>
 
@@ -9328,7 +9329,194 @@ class Promise<T> : public PromiseBase
    + void complete(typename const_param<T>::type);
 
 
-<flow>
+={============================================================================
+*kt_dev_code_017* async-flow between future, promise, and dispatcher
+
+note:
+The client can provide a dispatcher or can use a dispatcher when promise is
+made.
+
+template<typename T>
+inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
+   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
+{}
+
+
+1. The client side which is future barrier.
+
+void Callback(FutureValue<T>);
+
+template <class FutureLike, typename Callback>
+  void addWithCallback(FutureLike f, Callback /* void (FutureValue<T>) */ c);
+
+// *callback* -> void (FutureValue<T>);
+
+template <class FutureLike, typename Callback>
+inline void FutureBarrier::addWithCallback(FutureLike f, Callback c) {
+    typedef typename FutureLike::value_type T;
+    impl->continueOn(f, boost::bind(c, _2));
+}
+
+// *callback* -> void (FutureBarrierImpl&, FutureValue<T>);
+
+template <class FutureLike, typename Callback>
+void FutureBarrierImpl::continueOn(FutureLike f, Callback c) {
+    typedef typename FutureLike::value_type T;
+    f.setCallback(dispatcher, detail::barrierWrap(this, c));
+}
+
+
+2. *future-set-callback* flow
+
+//          -> fn(FutureValue<T>);
+//          -> f(FutureValue<T>(FutureContext<T>*));    // temporary
+//          -> CallbackHoistingWrapper obj(FutureContextBase*);
+// *callback* -> boost::function<void (FutureContextBase*)> completionHandler;
+//
+// add callback to future
+
+Future<T>::setCallback(Dispatcher& dispatcher_, const Handler& fn)
+{
+  static_cast<detail::FutureContext<T>* >(context.get())
+    ->setCallback(fn, &dispatcher_);
+}
+
+template <typename T>
+FutureContext<T>::setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) 
+{
+  setCallbackHoisted(
+      boost::function<void (FutureContextBase*)>(makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))), 
+        clientDispatcher_
+        );
+}
+
+// note: function template
+template<typename T, typename Functor>
+CallbackHoistingWrapper<T, Functor> makeCallbackHoistingWrapper(const Functor& f) {
+	return CallbackHoistingWrapper<T, Functor>(f);
+}
+
+template<typename T, typename Functor>
+struct ZINC_LOCAL CallbackHoistingWrapper {
+	typedef void result_type;
+	CallbackHoistingWrapper(Functor f_)
+	 : f(f_) {
+	}
+
+	void operator()(FutureContextBase* that) {
+		// We must compare by name rather than using a dynamic_cast because
+		// dynamic_cast can fail if the typeinfo for FutureContext<T> is in more
+		// than one .so
+		assert(std::strcmp(typeid(FutureContext<T>).name(), typeid(*that).name()) == 0);
+
+		f(FutureValue<T>(static_cast<FutureContext<T>*>(that)));
+	}
+
+	Functor f;
+};
+
+void FutureContextCommonImpl::setCallbackHoisted(
+        boost::function<void (FutureContextBase*)> fn, 
+        FutureDispatcher* clientDispatcher_)
+{
+  completionHandler = fn;
+
+  if (oldCompleted)
+    scheduleCallback();
+}
+
+
+3. *future-complete* flow
+
+// when complete() is called, calls set() on FC. see copy of value
+
+template<typename T>
+inline void Promise<T>::complete(typename const_param<T>::type value)
+{
+  getContext().set(value);
+}
+
+// FC copy value from promise, call scheduleCallback().
+
+template <typename T>
+class FutureContext : public FutureContextCommonImpl
+{
+  /**
+   * Type specific completion code called from Promise::complete()
+   *
+   * Take a 'copy' of the result from the Promise and 'stash' it in
+   * FutureContext, complete() marks this FutureContext as completed, and post()
+   * hands it over to the 'dispatcher'
+   *
+   * @see FutureContextBase::complete()
+   * @see FutureContextBase::post()
+   */
+  void set(const T & result)
+  {
+    boost::mutex::scoped_lock lock;
+    doPostSetActionsAndUnlock(lock);
+  }
+};
+
+void FutureContextCommonImpl::doPostSetActionsAndUnlock
+  (boost::mutex::scoped_lock& lock)
+{
+  bool wasCompleted = completed;
+  bool oldForDispatch = forDispatch;
+  completed = true;
+  lock.unlock();
+  if (!wasCompleted) {
+    cond.notify_all();
+    if (oldForDispatch && clientDispatcher) {
+
+      scheduleCallback();
+    }
+  }
+}
+
+
+4. *dispatcher-post* flow
+
+void FutureContextBase::scheduleCallback()
+{
+  // note: attach 'this'
+  boost::intrusive_ptr<FutureContextBase> ip(this);
+
+  // post() copies functor
+  //
+  // virtual void post(boost::function<void ()> handler) = 0;
+  // virtual bool dispatchNextResult() = 0;
+  //
+  // note:
+  // Q: Is it fine to copy local shared pointer into the bind callable?
+  // Q: Why not use `this` than ip(`this`)?
+  // post(boost::bind(&FutureContextBase::dispatchNextResult, this));
+
+  clientDispatcher->
+    post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
+
+  cond.notify_all();
+}
+
+
+4. *dispatcher-run* flow
+
+// from dispatcher(io_service)
+
+//          -> boost::function<void (FutureContextBase*)>
+//          -> bool dispatchNextResult()
+// *callback* -> boost::function<void ()>
+
+FutureContextCommonImpl::
+    boost::function<void (FutureContextBase*)> completionHandler;
+
+bool FutureContextCommonImpl::dispatchNextResult()
+{
+  boost::function<void (FutureContextBase*)> stackCompletionHandler;
+
+  stackCompletionHandler.swap(completionHandler);
+  stackCompletionHandler(this);
+}
 
 
 ={============================================================================
@@ -11822,7 +12010,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_code_015* asyc: dispatcher
+*kt_dev_code_015* async-dispatcher
 
 DP <- STDP
 
@@ -12186,47 +12374,56 @@ typedef InlineDispatcher MultipleListenerEventDispatcher;
 
 
 ={============================================================================
+*kt_dev_code_015* async-dispatcher: use gmainloop
+
+As long as provides two things, can use the other as a dispacther:
+
+    * post( function<void ()> f );
+    * run that functor
+  
+extern "C"
+gboolean gDispatch(gpointer data)
+{
+    boost::scoped_ptr<boost::function<void ()> > functor(
+            static_cast<boost::function<void ()>* >(data));
+    try
+    {
+        (*functor)();
+    }
+    catch(const std::exception& ex)
+    {
+        WARN("Exception thrown [" << ex.what() << "]");
+    }
+    return G_SOURCE_REMOVE;
+}
+
+class GlibEventDispatcher : public NS_ZINC::Dispatcher
+{
+	virtual void post(boost::function<void ()> handler)
+    {
+        g_idle_add_full(G_PRIORITY_DEFAULT, 
+                &gDispatch, new boost::function<void ()>(handler), NULL);
+    }
+};
+
+boost::shared_ptr<NS_ZINC::Dispatcher> makeGlibEventDispatcher()
+{
+    return boost::make_shared<GlibEventDispatcher>();
+}
+
+
+={============================================================================
 *kt_dev_code_016* asyc: listener
 
-// defines abstract interface to add/remove listener
+Listener(s) -> Producer(s) <T> -> ProducerHoisted -> DD -> Listeners
 
-class ZINC_EXPORT EventProducer<ListenerT> : virtual public Polymorphic 
-   + typedef ListenerT listener_type;
-   + virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
+<listener>
 
-class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<T> 
+1. When future barrier is completed, calls:
 
-   // implements produceEvent() by delegating events to an EventDispatcher
-   // implementation.
+void SystemClientEventRepository::eventWindowDataRetrievalComplete();
 
-   + mutable detail::DispatchingEventProducerHoisted impl;
-
-   // It accepts a functor with the signature:
-   //
-   // void f(ListenerT*)
-
-   + template <typename Functor>
-        void produceEvent(Functor f) const {
-            ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
-            impl.produceEvent(DowncastingCaller<Functor>(f));
-        }
-
-   + virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
-         impl.setDispatcher(dispatcher);
-
-// 1. have std::list<listener> which has entry:
-//    listener_entry pair{wp<listener>, sp<event dispatcher>}
-//
-// 2. produceEvent calls user code(listener) with event using the dispatcher
-// registered with the listener or default dispatcher.
-
-class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
-   + void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
-         boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
-   + void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher_);
-
-   + void produceEvent(
-       boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event);
+2. This leads to:
 
 // this defines APIs for application and also have 'producer' implementation
 // by deriving from EventProducer.
@@ -12239,38 +12436,59 @@ class ZINC_EXPORT EventWindow :
 //
 // SystemClientEventWindow->setDispatcher(DD);
 
-<produce-event>
-// creates functor and calls DispatchingEventProducerHoisted::produceEvent(f)
-
 class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow 
+    virtual void EventWindowChanged();
+
+void SystemClientEventWindow::notifyWindowChanged()
+{
+   produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
+}
+
+
+<producer>
+// defines abstract interface to add/remove listener
+
+class ZINC_EXPORT EventProducer<ListenerT> : virtual public Polymorphic 
+{
+   + typedef ListenerT listener_type;
+   + virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
+};
+
+class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<T> 
+{
+   + mutable detail::DispatchingEventProducerHoisted impl;
+
+   // -> void f(ListenerT*)
+   // -> void f(boost::shared_ptr<detail::hoisted_event_listener>);
 
    + template <typename Functor>
         void produceEvent(Functor f) const {
+            ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
             impl.produceEvent(DowncastingCaller<Functor>(f));
         }
 
+   + virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
+         impl.setDispatcher(dispatcher);
+};
 
-virtual void EventWindowChanged();
+class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
+{
+    1. have std::list<listener> which has entry:
+    listener_entry pair{wp<listener>, sp<event dispatcher>}
 
-produceEvent(
-    bind(&EventWindowEventListener::EventWindowChanged, _1)
-    );
+    2. produceEvent 'post' user code(listener) with event using the dispatcher
+    registered with the listener or default dispatcher.
 
-1. DowncastingCaller:
-  operator() (boost::shared_ptr<detail::hoisted_event_listener> listener) 
-  {
-    f( static_cast<ListenerT*>(listener.get()) );
-  }
+   + void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
+         boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
+   + void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher_);
 
-2. DispatchingEventProducerHoisted:
-  produceEvent(
-      boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event
-      ) 
-
-3. makeWeakFunctor(event, localListeners[i].first));
+   + void produceEvent(
+       boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event);
+};
 
 
-<event-listener>
+{code}
 ////////////////////////////////////////
 /*
  * EventListener.h
@@ -12339,7 +12557,6 @@ NS_URANIUM_METADATA_CLIENT_CLOSE
 #endif /* URANIUM_METADATA_CLIENT_EVENTWINDOWEVENTLISTENER_H_ */
 
 
-<event-producer>
 ////////////////////////////////////////
 /*
  * EventProducer.h
@@ -12488,7 +12705,7 @@ class ZINC_LOCAL DispatchingEventProducer
     virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher) {
       impl.setDispatcher(dispatcher);
     }
-youview cannot open player
+
     virtual boost::shared_ptr<EventDispatcher> getDispatcher() const {
       return impl.getDispatcher();
     }
@@ -12527,26 +12744,26 @@ youview cannot open player
       produceEvent(static_cast<boost::shared_ptr<Event> >(event));
     }
 
-    <produce-event>
-      /**
-       * Derived implementations should call this method to dispatch an event.
-       *
-       * NOTE: This overload is preferred to the one above, as it is more
-       * efficient and offers greater clarity.
-       *
-       * It accepts a functor with the signature:
-       *
-       *     void f(ListenerT*)
-       *
-       * @param f a functor with the above signature, which can be a plain-old
-       * function, member-function, boost::function, or bind expression.
-       */
-      template <typename Functor>
-      void produceEvent(Functor f) const {
+    *produce-event*
+    /**
+     * Derived implementations should call this method to dispatch an event.
+     *
+     * NOTE: This overload is preferred to the one above, as it is more
+     * efficient and offers greater clarity.
+     *
+     * It accepts a functor with the signature:
+     *
+     *     void f(ListenerT*)
+     *
+     * @param f a functor with the above signature, which can be a plain-old
+     * function, member-function, boost::function, or bind expression.
+     */
+    template <typename Functor>
+    void produceEvent(Functor f) const {
 
-        ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
-        impl.produceEvent(DowncastingCaller<Functor>(f));
-      }
+      ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
+      impl.produceEvent(DowncastingCaller<Functor>(f));
+    }
 
   private:
     template <typename Functor>
@@ -12656,11 +12873,13 @@ NS_ZINC_OPEN
 
 namespace detail {
 
-bool operator==(const boost::weak_ptr<hoisted_event_listener> l, const boost::weak_ptr<hoisted_event_listener> r) {
+bool operator==(const boost::weak_ptr<hoisted_event_listener> l, 
+        const boost::weak_ptr<hoisted_event_listener> r) {
 	return !(l < r || r < l);
 }
 
-DispatchingEventProducerHoisted::DispatchingEventProducerHoisted(boost::shared_ptr<EventDispatcher> dispatcher_) :
+DispatchingEventProducerHoisted::DispatchingEventProducerHoisted
+    (boost::shared_ptr<EventDispatcher> dispatcher_) :
 		dispatcher(dispatcher_) {
 }
 
@@ -12677,13 +12896,16 @@ DispatchingEventProducerHoisted::~DispatchingEventProducerHoisted() {
 }
 
 void DispatchingEventProducerHoisted::addListener(
-        boost::shared_ptr<hoisted_event_listener> listener, boost::shared_ptr<EventDispatcher> clientDispatcher) 
+    boost::shared_ptr<hoisted_event_listener> listener, 
+    boost::shared_ptr<EventDispatcher> clientDispatcher) 
 {
     if (!listener) {
         throw std::invalid_argument("NULL listener provided in call to addListener()!");
     }
 
-    ZINC_COMMON_DEBUG(std::string(__func__)+" Dispatcher: "+boost::lexical_cast<std::string>(static_cast<const EventDispatcher*>(clientDispatcher.get()))+
+    ZINC_COMMON_DEBUG(std::string(__func__)+
+            " Dispatcher: "+boost::lexical_cast<std::string>(
+                static_cast<const EventDispatcher*>(clientDispatcher.get()))+
             ", Producer: "+boost::lexical_cast<std::string>(this)+
             ", Listener: "+boost::lexical_cast<std::string>(listener.get())
             );
@@ -12717,7 +12939,8 @@ void DispatchingEventProducerHoisted::addListener(
     }
 }
 
-void DispatchingEventProducerHoisted::removeListener(boost::shared_ptr<hoisted_event_listener> listener) {
+void DispatchingEventProducerHoisted::removeListener(
+        boost::shared_ptr<hoisted_event_listener> listener) {
 
 	ZINC_COMMON_DEBUG(std::string(__func__)+
 			" Producer: "+boost::lexical_cast<std::string>(this)+
@@ -12773,6 +12996,8 @@ DispatchingEventProducerHoisted::getDispatcher() const {
 // is registered with listener.
 //
 // typedef void hoisted_event_listener;
+
+*produce-event*
 
 void 
 DispatchingEventProducerHoisted::produceEvent(
@@ -13391,196 +13616,6 @@ void ProxyMediaRouter::setSourceComplete(
     deferredCalls.front()(this);
     deferredCalls.pop_front();
   }
-}
-
-
-={============================================================================
-*kt_dev_code_017* asyc: flow between future, promise, and dispatcher
-
-note:
-The client can provide a dispatcher or can use a dispatcher when promise is
-made.
-
-template<typename T>
-inline Promise<T>::Promise(FutureDispatcher& dispatcher_) :
-   PromiseBase( new detail::FutureContext<T>(&dispatcher_) )
-{}
-
-
-1. The client side which is future barrier.
-
-void Callback(FutureValue<T>);
-
-template <class FutureLike, typename Callback>
-  void addWithCallback(FutureLike f, Callback /* void (FutureValue<T>) */ c);
-
-// *callback* -> void (FutureValue<T>);
-
-template <class FutureLike, typename Callback>
-inline void FutureBarrier::addWithCallback(FutureLike f, Callback c) {
-    typedef typename FutureLike::value_type T;
-    impl->continueOn(f, boost::bind(c, _2));
-}
-
-// *callback* -> void (FutureBarrierImpl&, FutureValue<T>);
-
-template <class FutureLike, typename Callback>
-void FutureBarrierImpl::continueOn(FutureLike f, Callback c) {
-    typedef typename FutureLike::value_type T;
-    f.setCallback(dispatcher, detail::barrierWrap(this, c));
-}
-
-
-2. *future-set-callback* flow
-
-//          -> fn(FutureValue<T>);
-//          -> f(FutureValue<T>(FutureContext<T>*));    // temporary
-//          -> CallbackHoistingWrapper obj(FutureContextBase*);
-// *callback* -> boost::function<void (FutureContextBase*)> completionHandler;
-//
-// add callback to future
-
-Future<T>::setCallback(Dispatcher& dispatcher_, const Handler& fn)
-{
-  static_cast<detail::FutureContext<T>* >(context.get())
-    ->setCallback(fn, &dispatcher_);
-}
-
-template <typename T>
-FutureContext<T>::setCallback(const Handler& fn, FutureDispatcher* clientDispatcher_) 
-{
-  setCallbackHoisted(
-      boost::function<void (FutureContextBase*)>(makeCallbackHoistingWrapper<T>(boost::bind<void>(fn, _1))), 
-        clientDispatcher_
-        );
-}
-
-// note: function template
-template<typename T, typename Functor>
-CallbackHoistingWrapper<T, Functor> makeCallbackHoistingWrapper(const Functor& f) {
-	return CallbackHoistingWrapper<T, Functor>(f);
-}
-
-template<typename T, typename Functor>
-struct ZINC_LOCAL CallbackHoistingWrapper {
-	typedef void result_type;
-	CallbackHoistingWrapper(Functor f_)
-	 : f(f_) {
-	}
-
-	void operator()(FutureContextBase* that) {
-		// We must compare by name rather than using a dynamic_cast because
-		// dynamic_cast can fail if the typeinfo for FutureContext<T> is in more
-		// than one .so
-		assert(std::strcmp(typeid(FutureContext<T>).name(), typeid(*that).name()) == 0);
-
-		f(FutureValue<T>(static_cast<FutureContext<T>*>(that)));
-	}
-
-	Functor f;
-};
-
-void FutureContextCommonImpl::setCallbackHoisted(
-        boost::function<void (FutureContextBase*)> fn, 
-        FutureDispatcher* clientDispatcher_)
-{
-  completionHandler = fn;
-
-  if (oldCompleted)
-    scheduleCallback();
-}
-
-
-3. *future-complete* flow
-
-// when complete() is called, calls set() on FC. see copy of value
-
-template<typename T>
-inline void Promise<T>::complete(typename const_param<T>::type value)
-{
-  getContext().set(value);
-}
-
-// FC copy value from promise, call scheduleCallback().
-
-template <typename T>
-class FutureContext : public FutureContextCommonImpl
-{
-  /**
-   * Type specific completion code called from Promise::complete()
-   *
-   * Take a 'copy' of the result from the Promise and 'stash' it in
-   * FutureContext, complete() marks this FutureContext as completed, and post()
-   * hands it over to the 'dispatcher'
-   *
-   * @see FutureContextBase::complete()
-   * @see FutureContextBase::post()
-   */
-  void set(const T & result)
-  {
-    boost::mutex::scoped_lock lock;
-    doPostSetActionsAndUnlock(lock);
-  }
-};
-
-void FutureContextCommonImpl::doPostSetActionsAndUnlock
-  (boost::mutex::scoped_lock& lock)
-{
-  bool wasCompleted = completed;
-  bool oldForDispatch = forDispatch;
-  completed = true;
-  lock.unlock();
-  if (!wasCompleted) {
-    cond.notify_all();
-    if (oldForDispatch && clientDispatcher) {
-
-      scheduleCallback();
-    }
-  }
-}
-
-
-4. *dispatcher-post* flow
-
-void FutureContextBase::scheduleCallback()
-{
-  // note: attach 'this'
-  boost::intrusive_ptr<FutureContextBase> ip(this);
-
-  // post() copies functor
-  //
-  // virtual void post(boost::function<void ()> handler) = 0;
-  // virtual bool dispatchNextResult() = 0;
-  //
-  // note:
-  // Q: Is it fine to copy local shared pointer into the bind callable?
-  // Q: Why not use `this` than ip(`this`)?
-  // post(boost::bind(&FutureContextBase::dispatchNextResult, this));
-
-  clientDispatcher->
-    post(boost::bind(&FutureContextBase::dispatchNextResult, ip));
-
-  cond.notify_all();
-}
-
-
-4. *dispatcher-run* flow
-
-// from dispatcher(io_service)
-
-//          -> boost::function<void (FutureContextBase*)>
-//          -> bool dispatchNextResult()
-// *callback* -> boost::function<void ()>
-
-FutureContextCommonImpl::
-    boost::function<void (FutureContextBase*)> completionHandler;
-
-bool FutureContextCommonImpl::dispatchNextResult()
-{
-  boost::function<void (FutureContextBase*)> stackCompletionHandler;
-
-  stackCompletionHandler.swap(completionHandler);
-  stackCompletionHandler(this);
 }
 
 
