@@ -81,6 +81,7 @@
 *kt_dev_uv_stack_250* mr-web: java scripts to check on video
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
 *kt_dev_uv_stack_250* mr-web: stack from html to mr
+*kt_dev_uv_stack_250* mr-web: callback from mr to html
 *kt_dev_uv_stack_250* mr-web: media player interface
 *kt_dev_uv_stack_250* mr-web: media element and attribute
 *kt_dev_uv_stack_250* mr-web: media event
@@ -10605,6 +10606,44 @@ especially interesting way, for example discontinuously.
 note:
 This happens regardless of position change reporting from MR.
 
+HTML:
+
+scheduleEvent(eventNames().pauseEvent);
+scheduleEvent(eventNames().playingEvent);
+scheduleEvent(eventNames().waitingEvent);
+scheduleEvent(eventNames().playEvent);
+scheduleEvent(eventNames().ratechangeEvent);
+scheduleEvent(eventNames().ratechangeEvent);
+scheduleEvent(eventNames().seekedEvent);
+scheduleEvent(eventNames().seekingEvent);
+scheduleEvent(eventNames().seekedEvent);
+scheduleEvent(eventNames().seekingEvent);
+scheduleEvent(eventNames().stalledEvent);
+scheduleEvent(eventNames().progressEvent);
+scheduleEvent(eventNames().errorEvent);
+scheduleEvent(eventNames().playingEvent);
+scheduleEvent(eventNames().playEvent);
+scheduleEvent(eventNames().playingEvent);
+scheduleEvent(eventNames().canplaythroughEvent);
+scheduleEvent(eventNames().canplayEvent);
+scheduleEvent(eventNames().playingEvent);
+scheduleEvent(eventNames().canplayEvent);
+scheduleEvent(eventNames().loadeddataEvent);
+scheduleEvent(eventNames().loadedmetadataEvent);
+scheduleEvent(eventNames().durationchangeEvent);
+scheduleEvent(eventNames().waitingEvent);
+scheduleEvent(eventNames().waitingEvent);
+scheduleEvent(eventNames().suspendEvent);
+scheduleEvent(eventNames().progressEvent);
+scheduleEvent(eventNames().emptiedEvent);
+scheduleEvent(eventNames().errorEvent);
+scheduleEvent(eventNames().errorEvent);
+scheduleEvent(eventNames().loadstartEvent);
+scheduleEvent(eventNames().emptiedEvent);
+scheduleEvent(eventNames().abortEvent);
+
+Not all of them here.
+
 
 4.8.13 Media elements (attribute)
 
@@ -11407,12 +11446,12 @@ the following steps.
 
         If the media element's readyState attribute has the value HAVE_NOTHING,
         HAVE_METADATA, or HAVE_CURRENT_DATA, queue a task to fire a simple event
-        named waiting at the element.
+        named `waiting` at the element.
 
         note:
         Otherwise, the media element's readyState attribute has the value
         HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA: queue a task to fire a simple
-        event named 'playing' at the element.
+        event named `playing` at the element.
 
     Set the media element's autoplaying flag to false.
 
@@ -11492,8 +11531,7 @@ This means that it creates Vanadium each time.
 /builds/topic/pc/zinc-build-root/release-debian-7-x86_64/Nickel/
   Nickel.System.API/include/mock/MockMediaRouterAsync.h
 
-namespace Zinc {
-namespace Media {
+namespace Zinc { namespace Media { 
 
 class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
 {
@@ -11509,6 +11547,15 @@ class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
     MOCK_CONST_METHOD0(getSource, NS_ZINC::Future< Mock_getSourceRet > ());
 
     ...
+
+	void emitSourceEvent(const SourceEventValue::Enum event, const SetSourceReason::Enum reason)
+	{
+		produceEvent(
+			boost::bind(&MediaRouterEventListener::SourceEvent,
+			     _1,
+			     event,
+			     reason));
+	}
 };
 
 
@@ -15904,12 +15951,13 @@ path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorE
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: dbus log: from play start to complete
 
-HAVE_NOTHING
-NETWORK_EMPTY
+starts from HAVE_NOTHING, NETWORK_EMPTY
 
 method call sender=:1.131 -> dest=Zinc.MediaProxy serial=25 
 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
 member=*createMediaRouter*
+
+// VanadiumMediaPlayer.load() sets NET = NETWORK_LOADING
 
 method call sender=:1.121 -> dest=:1.72 serial=29 
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
@@ -15940,12 +15988,12 @@ signal sender=:1.72 -> dest=(null destination) serial=5136
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=*BufferStatusEvent* 
     int32 0   // buffering_started = 0,
-    -> this do "currentNetworkState = NETWORK_LOADING;"
+    -> this set "currentNetworkState = NETWORK_LOADING(2)"
 
 signal sender=:1.72 -> dest=(null destination) serial=5139
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=*SourceEvent*
-   int32 3    // source_config_complete = 3, => HAVE_FUTURE_DATA
+   int32 3    // source_config_complete = HAVE_FUTURE_DATA(3)
    int32 1
    note: got source config complete which moves state to HAVE_FUTURE_DATA
 
@@ -16011,12 +16059,14 @@ member=*setPlaySpeed*
     double 1
 
 <mr-play>
+// VanadiumMediaPlayer.play()
+
 method call sender=:1.121 -> dest=:1.72 serial=50
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
 member=*start*
 
 
-note: StatusEvent::stared => HAVE_ENOUGH_DATA which is fixed
+note: StatusEvent::stared => HAVE_ENOUGH_DATA(4)
 
 note: see source_information_change after start and this means decoded a stream.
 
@@ -16057,7 +16107,7 @@ method return sender=:1.79 -> dest=:1.131 reply_serial=64
 // keep calling getPosition and getDuration ...
 
 
-// end of play
+// end of play when gets EOS
 signal sender=:1.72 -> dest=(null destination) serial=9845
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=StatusEvent 
@@ -17501,14 +17551,75 @@ gboolean MediaPlayerPrivateGStreamer::stallTimeoutCallback
     } else if (currentStatus == QMediaPlayer::BufferedMedia
 
 
-note: this is HTML standard said:
-
-stalled 	Event 	
-
+<html>
+stalled
 The user agent is trying to fetch media data, but data is unexpectedly not
-forthcoming. 	
+forthcoming. networkState is NETWORK_LOADING. 
 
-networkState is NETWORK_LOADING. 
+progress
+The user agent is fetching media data. networkState equals NETWORK_LOADING
+
+
+m_progressEventTimer(this, &HTMLMediaElement::progressEventTimerFired);
+
+void HTMLMediaElement::loadResource(const KURL& initialURL, ContentType& contentType, const String& keySystem)
+{
+    if (m_sendProgressEvents) 
+        startProgressEventTimer();
+}
+
+
+void HTMLMediaElement::startProgressEventTimer()
+{
+    if (m_progressEventTimer.isActive())
+        return;
+
+    // note: time
+    m_previousProgressTime = WTF::currentTime();
+
+    // 350ms is not magic, it is in the spec!
+    m_progressEventTimer.startRepeating(0.350);
+}
+
+
+void HTMLMediaElement::progressEventTimerFired(Timer<HTMLMediaElement>*)
+{
+    ASSERT(m_player);
+    if (m_networkState != NETWORK_LOADING)
+        return;
+
+    double time = WTF::currentTime();
+    double timedelta = time - m_previousProgressTime;
+
+    // As long as didLoadingProgress() returns true, that means there is no
+    // stall timer and fire `progress` event. Otherwise, `stalled` event.
+    //
+    // bool VanadiumMediaPlayer::didLoadingProgress() const
+    // {
+    //    VANADIUM_FUNC_TRACE;
+    //    // In the event of an underflow stallTimer will be set
+    //    return stallTimer == 0;
+    // }
+
+    if (m_player->didLoadingProgress()) {
+        scheduleEvent(eventNames().progressEvent);
+        m_previousProgressTime = time;
+        m_sentStalledEvent = false;
+        if (renderer())
+            renderer()->updateFromElement();
+        if (hasMediaControls())
+            mediaControls()->bufferingProgressed();
+    } else if (timedelta > 3.0 && !m_sentStalledEvent) {
+        scheduleEvent(eventNames().stalledEvent);
+        m_sentStalledEvent = true;
+        setShouldDelayLoadEvent(false);
+    }
+}
+
+1. This means that there are other way to distinguish between stalled and
+progress event other than network state.
+
+2. This is a single place which fires `stalled` event.
 
 
 <implemented>
