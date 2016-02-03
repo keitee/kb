@@ -155,8 +155,9 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_050* template-member
 *kt_dev_cpp_050* template-explicit-instantiation
 *kt_dev_cpp_050* template-efficiency: deleter case
-|kt_dev_cpp_051| template-explicit-argument and type transformation
-|kt_dev_cpp_052| template: argument deduction
+|kt_dev_cpp_051| template-explicit-argument
+|kt_dev_cpp_051| template-type-traits
+|kt_dev_cpp_052| template-argument deduction
 |kt_dev_cpp_053| template: variadic
 |kt_dev_cpp_054| template: specialization
 |kt_dev_cpp_060| template: how to initialize T member
@@ -181,7 +182,6 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_000* stl-gcc: doc
 |kt_dev_stl_001| stl-pair and stl-tuple
 |kt_dev_stl_002| std::ref
-|kt_dev_stl_003| type and iterator traits
 |kt_dev_stl_004| test in condition
 
 |kt_dev_stl_006| stl concepts, error, exception handling
@@ -22580,19 +22580,30 @@ alternative_sum<long long, int, long>(i, lng);
 note: does it have real case?
 
 <normal-conversion>
-As with <normal-conversion-for-ordinary-argument>, the same applies on "explicit arguments".
+As with ordinary argument, normal conversion applies on explicit arguments since
+no deduction involved.
+
+template <typename T> int compare(const T& v1, const T& v2);
 
 long lng;
 
-compare( lng, 1024 );            // error since parameters do not match
-compare<long>( lng, 1024 );      // okay. compare( long, long )
-In other cases, "explicit template argument" imposes a burden on the user. What's alternative?
+compare(lng, 1024);         // error since parameters do not match
+compare<long>(lng, 1024);   // okay. compare( long, long );
+compare<int>(lng, 1024);    // okay. compare( int, int );
+
+
+={============================================================================
+*kt_dev_cpp_051* template-type-traits
+
+// The explicit template argument imposes a burden on the user. What's alternative?
+Suppose that want to write the function that takes a sequence and returns a
+reference to an element.
 
 template< typename T > 
 ??? &fcn( It beg, It end )
 {
-    // process the range
-    return *beg;  // return a reference to an element from the range
+  // process the range
+  return *beg;  // return a reference to an element from the range
 }
 
 vector<int> vi = { 1, 2, 3, 4 };
@@ -22601,41 +22612,211 @@ Blob<string> ca = { "hi", "bye" };
 auto &i = fcn( vi.begin(), vi.end() );    // should return int&
 auto &i = fcn( ca.begin(), ca.end() );    // should return string&
 
-Do not know the exact type to return but know that want that type to be a reference to the element
-type of the sequence.
+Do not know the exact type to return but know that want that type to be a
+reference to the element type of the sequence. How to solve?
+
+note: How about having the type of return?
+
+template< typename T, typename R > R &fcn( It beg, It end );
 
 
 <trailing-return-type> C++11
-May use decltype(*beg) to get the type but beg don't exist until the parameter list has been seen.
-How to solve? The trailing return type allows us define the return type after the parameter list is
-seen.
+May use decltype(*beg) to get the type but beg don't exist until the parameter
+list has been seen. The trailing return type allows us define the return type
+after the parameter list is seen.
 
 template< typename T > 
-auto &fcn( It beg, It end )    -> decltype(*beg)
+auto &fcn( It beg, It end ) -> decltype(*beg)
 {
-    // process the range
-    return *beg;  // return a reference to an element from the range
+  // process the range
+  return *beg;  // return a reference to an element from the range
 }
+
+This say fcn's return type is the same as the type returned by dereferencing its
+beg parameter and which is a reference to the type.
 
 
 <type-transformation>
-How to return value instead in this example? The problem is that we know almost nothing about the
-types we're passed. To obtain the element type (as opposed to reference to element), use "type
-transformation" template in the "type_traits" header.
+Sometimes do not have direct access to the type we need. How to return 'value'
+rather than a reference in this example? 
 
-The remove_reference has one type parameter and public type memeber, type, which is the
-'referred-to-type'. 
+The problem is that we know almost nothing about the types we're passed. In this
+function, the only operators we 'know' we can use are iterator operations but no
+iterator operations that yield elemen type (as opposed to reference to element).
 
-remove_reference<int&>     // type is int
+To get the element type, use type transformation template in the "type_traits"
+header.
+
+In this case, when instantiate `remove_reference` with a reference type, public
+type memeber `type` is the referred-to type. 
+
+remove_reference<int&>     // `type` member is `int`
 
 template< typename T > 
-auto &fcn( It beg, It end )    -> typename remove_reference<decltype(*beg)>::type
+auto &fcn( It beg, It end ) -> typename remove_reference<decltype(*beg)>::type
 {
-    // process the range
-    return *beg;  // return a reference to an element from the range
+  // process the range
+  return *beg;  // return a reference to an element from the range
 }
 
-note: See another example of explicit argument in template function pointer.
+Returns a copy of an element's value.
+
+note: Still use C++11 feature. How to do that before C++11? 
+
+
+{type-traits} CLR 5.4
+Almost everything in the C++ standard library is template based. To support the
+programming of templates, sometimes called metaprogramming, template utilities
+are provided to help both programmers and library implementers.
+
+Type traits, which were introduced with TR1 and extended with C++11, provide a
+'mechanism' to define behavior 'depending' on types. They can be used to
+optimize code for types that provide special abilities. A type trait provides a
+way to deal with the properties of a type.
+
+<ex>
+#include <iostream>
+
+using namespace std;
+
+template <typename T>
+void foo (const T& val)
+{
+  if (std::is_pointer<T>::value) {
+    std::cout << "foo() called for a pointer" << std::endl;
+  }
+  else {
+    std::cout << "foo() called for a value" << std::endl;
+  }
+}
+
+int main()
+{
+  int *p;
+
+  foo(p);
+}
+
+foo() called for a pointer
+
+The 'trait' std::is_pointer, defined in <type_traits>, is used to check whether
+type T is a pointer type. In fact, is_pointer<> yields either a type true_type
+or a type false_type, for which ::value either yields true or false.
+
+note: not include type_traits header in the ex.
+
+
+{traits-and-overloads}
+Why use traits to provide two actions based on type better than providing two
+overloads of foo(): one for ordinary types and one for pointer types?
+
+One answer is that sometimes, too many overloads are necessary. In general, the
+power of type traits comes more from the fact that they are building blocks for
+'generic' code, which can be demonstrated by two examples.
+
+<ex>
+Suppose that you have a function foo() that should be implemented differently
+for integral and floating-point type arguments. The usual approach would be to
+overload this function for all available integral and floating-point types:
+
+void foo (short);             // provide integral version
+void foo (unsigned short);
+void foo (int);
+...
+void foo (float);             // provide floating-point version
+void foo (double);
+void foo (long double);
+
+This repetition is not only tedious but also introduces the problem that it
+might not work for new integral or floating-point types, either provided by the
+standard, such as long long, or provided as user-defined types.
+
+With the type traits, you can provide the following instead:
+
+template <typename T>
+void foo_impl (T val, true_type);   // provide integral version
+
+template <typename T>
+void foo_impl (T val, false_type);  // provide floating-point version
+
+template <typename T>
+void foo (T val)
+{
+  foo_impl (val, std::is_integral<T>());
+}
+
+The std::is_integral<T>() at compile time yields std::true_type or
+std::false_type, which defines which of the provided foo_impl() overloads gets
+instantiated.
+
+note: do not see benefit since even when use template version, implicit
+conversion still happen between types as do when provide single foo() for all
+integral types.
+
+<ex>
+Another example for the usability of type traits is the need to process the
+"common type" of two or more types.
+
+For example, it would be an appropriate type of the minimum or the sum of two
+values of different type. Otherwise, if I want to implement a function that
+yields the minimum of two values of different types, which return type should it
+have:
+
+template <typename T1, typename T2>
+??? min (const T1& x, const T2& y);
+
+Using the type traits, you can simply use the std::common_type<> to declare this
+type:
+
+template <typename T1, typename T2>
+typename std::common_type<T1,T2>::type min (const T1& x, const T2& y);
+
+note: this is the way before C++11.
+
+
+{iterator-traits} for writing algorithm?
+It might be useful or even necessary to be able to overload behavior for different iterator
+categories. By using iterator tags and iterator traits (both provided in <iterator>), such an
+overloading can be performed.
+
+For each iterator category, the C++ standard library provides an iterator tag that can be used as a
+"label" for iterators:
+
+namespace std {
+  struct output_iterator_tag {
+  };
+  struct input_iterator_tag {
+  };
+  struct forward_iterator_tag
+    : public input_iterator_tag {
+    };
+  struct bidirectional_iterator_tag
+    : public forward_iterator_tag {
+    };
+  struct random_access_iterator_tag
+    : public bidirectional_iterator_tag {
+    };
+}
+
+If you write generic code, you might not be interested only in the iterator category. You may need
+the type of the elements to which the iterator refers. Therefore, the C++ standard library provides
+a special template structure to define the iterator traits.
+
+This structure contains all relevant information about an iterator and is used as a common interface
+for all the type definitions an iterator should have (the category, the type of the elements, and so
+on):
+
+namespace std {
+  template <typename T>
+    struct iterator_traits {
+      typedef typename T::iterator_category iterator_category;
+      typedef typename T::value_type value_type;
+      typedef typename T::difference_type difference_type;
+      typedef typename T::pointer pointer;
+      typedef typename T::reference reference;
+    };
+}
+
 
 
 ={============================================================================
@@ -25963,155 +26144,6 @@ This feature is used by the C++ standard library at various places. For example:
 * make_tuple() uses this to be able to create a tuple<> of references
 * Binders use this to be able to bind references
 * Threads use this to pass arguments by reference
-
-
-={============================================================================
-*kt_dev_stl_003* type and iterator traits
-
-{type-traits}
-from the ref 5.4
-Almost everything in the C++ standard library is template based. To support the programming of
-templates, sometimes called metaprogramming, template 'utilities' are provided to help both
-programmers and library implementers.
-
-Type traits, which were introduced with TR1 and extended with C++11, provide a 'mechanism' to define
-behavior 'depending' on types. They can be used to optimize code for types that provide special
-abilities. A type trait provides a way to deal with the properties of a type.
-
-<example>
-#include <iostream>
-
-using namespace std;
-
-template <typename T>
-void foo (const T& val)
-{
-  if (std::is_pointer<T>::value) {
-    std::cout << "foo() called for a pointer" << std::endl;
-  }
-  else {
-    std::cout << "foo() called for a value" << std::endl;
-  }
-}
-
-int main()
-{
-  int *p;
-
-  foo(p);
-}
-
-foo() called for a pointer
-
-The 'trait' std::is_pointer, defined in <type_traits>, is used to check whether type T is a pointer
-type. In fact, is_pointer<> yields either a type true_type or a type false_type, for which ::value
-either yields true or false.
-
-
-{traits-and-overloads}
-Why is the way using traits to provide two actions based on type better than providing two overloads
-of foo(): one for ordinary types and one for pointer types?
-
-One answer is that sometimes, too many overloads are necessary. In general, the power of type traits
-comes more from the fact that they are building blocks for generic code, which can be demonstrated
-by two examples.
-
-<example>
-Suppose that you have a function foo() that should be implemented differently for integral and
-floating-point type arguments. The usual approach would be to overload this function for all
-available integral and floating-point types:
-
-void foo (short);             // provide integral version
-void foo (unsigned short);
-void foo (int);
-...
-void foo (float);             // provide floating-point version
-void foo (double);
-void foo (long double);
-
-This repetition is not only tedious but also introduces the problem that it might not work for new
-integral or floating-point types, either provided by the standard, such as long long, or provided as
-user-defined types.
-
-With the type traits, you can provide the following instead:
-
-template <typename T>
-void foo_impl (T val, true_type);   // provide integral version
-
-template <typename T>
-void foo_impl (T val, false_type);  // provide floating-point version
-
-template <typename T>
-void foo (T val)
-{
-  foo_impl (val, std::is_integral<T>());
-}
-
-std::is_integral<T>() at compile time yields std::true_type or std::false_type, which defines which
-of the provided foo_impl() overloads gets instantiated.
-
-note: do not see benefit since even when use template version, implicit conversion still happen
-between types as do when provide single foo() for all integral types.
-
-<example>
-Another example for the usability of type traits is the need to process the "common type" of two or
-more types.
-
-For example, it would be an appropriate type of the minimum or the sum of two values of different
-type. Otherwise, if I want to implement a function that yields the minimum of two values of
-different types, which return type should it have:
-
-template <typename T1, typename T2>
-??? min (const T1& x, const T2& y);
-
-Using the type traits, you can simply use the std::common_type<> to declare this type:
-
-template <typename T1, typename T2>
-typename std::common_type<T1,T2>::type min (const T1& x, const T2& y);
-
-
-{iterator-traits} for writing algorithm?
-It might be useful or even necessary to be able to overload behavior for different iterator
-categories. By using iterator tags and iterator traits (both provided in <iterator>), such an
-overloading can be performed.
-
-For each iterator category, the C++ standard library provides an iterator tag that can be used as a
-"label" for iterators:
-
-namespace std {
-  struct output_iterator_tag {
-  };
-  struct input_iterator_tag {
-  };
-  struct forward_iterator_tag
-    : public input_iterator_tag {
-    };
-  struct bidirectional_iterator_tag
-    : public forward_iterator_tag {
-    };
-  struct random_access_iterator_tag
-    : public bidirectional_iterator_tag {
-    };
-}
-
-If you write generic code, you might not be interested only in the iterator category. You may need
-the type of the elements to which the iterator refers. Therefore, the C++ standard library provides
-a special template structure to define the iterator traits.
-
-This structure contains all relevant information about an iterator and is used as a common interface
-for all the type definitions an iterator should have (the category, the type of the elements, and so
-on):
-
-namespace std {
-  template <typename T>
-    struct iterator_traits {
-      typedef typename T::iterator_category iterator_category;
-      typedef typename T::value_type value_type;
-      typedef typename T::difference_type difference_type;
-      typedef typename T::pointer pointer;
-      typedef typename T::reference reference;
-    };
-}
 
 
 ={============================================================================
