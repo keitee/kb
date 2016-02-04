@@ -89,9 +89,10 @@
 *kt_dev_uv_stack_250* mr-web: ended event: release nexus
 *kt_dev_uv_stack_250* mr-web: ended event: duration
 *kt_dev_uv_stack_250* mr-web: play, ready, network state attribute 
-*kt_dev_uv_stack_250* mr-web: qunit test
+*kt_dev_uv_stack_250* mr-web-server
+*kt_dev_uv_stack_250* mr-web-local server to play
+*kt_dev_uv_stack_250* mr-web-qunit test
 *kt_dev_uv_stack_250* mr-web: yv webkit plugin, vanadium
-*kt_dev_uv_stack_250* mr-web: local web server and client
 *kt_dev_uv_stack_250* mr-web: qt patches
 *kt_dev_uv_stack_250* mr-web: launch crb
 *kt_dev_uv_stack_250* mr-web: get w3c threads
@@ -5532,6 +5533,185 @@ terminate called after throwing an instance of 'DBus::ErrorNoReply'
 
 This shows that application is timedout from dbus call and gets killed since no
 handling of timeout exception.
+
+
+={============================================================================
+*kt_dev_uv_stack_105* zinc-dbus: mock generation: mr case
+
+<xml>
+/Nickel/Nickel.System.API/data/introspection-xml
+interface-MediaRouter.xml
+
+
+{mock-generated}
+
+<sync>
+/zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include/
+MediaRouterSync.h
+
+ *	Template base-sync.template
+ *	Using Nickel.System.API/data/introspection-xml/interface-MediaRouter.xml
+
+class MediaRouterSync : 
+    public virtual NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>
+{
+	virtual void setSource
+       (const std::string& mediaLocator_in, 
+        const SetSourceReason::Enum reason_in) = 0;
+   ...
+};
+
+
+/zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include/mock
+MockMediaRouterSync.h
+
+class ZINC_LOCAL MockMediaRouterSync: public MediaRouterSync
+{
+
+/* ============================== Methods ================================== */
+	typedef void Mock_setSourceRet;
+	MOCK_METHOD2(setSource, 
+           Mock_setSourceRet (const std::string&, const SetSourceReason::Enum));
+   ...
+
+/* ============================== Signals ================================== */
+	void emitBufferStatusEvent(const BufferStatusEventValue::Enum event)
+	{
+		produceEvent(
+			boost::bind(&MediaRouterEventListener::BufferStatusEvent,
+			     _1,
+			     event));
+	}
+   ...
+};
+
+
+<signal>
+/zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include/
+MediaRouterEventListener.h
+
+ *	Template base-listener.template
+ *	Using Nickel.System.API/data/introspection-xml/interface-MediaRouter.xml
+
+struct ZINC_EXPORT MediaRouterEventListener : public NS_ZINC::EventListener
+{
+	virtual void BufferStatusEvent(const BufferStatusEventValue::Enum event) = 0;
+   ...
+};
+
+/zinc-build-root/release-humax-dtr_t2100/Nickel/Nickel.System.API/include/mock
+MockMediaRouterEventListener.h
+
+struct ZINC_LOCAL MockMediaRouterEventListener : public MediaRouterEventListener
+{
+	MOCK_METHOD1(BufferStatusEvent, void(const BufferStatusEventValue::Enum));
+};
+
+
+<async>
+Nickel.System.API/include/MediaRouterAsync.h
+
+ *	Template base-async.template
+ *	Using Nickel.System.API/data/introspection-xml/interface-MediaRouter.xml
+ *
+class ZINC_EXPORT MediaRouterAsync : 
+    public virtual NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>
+{
+/* =============================== Methods ================================= */
+	virtual NS_ZINC::Future< void > 
+       setSource(const std::string& mediaLocator_in, 
+               const SetSourceReason::Enum reason_in) = 0;
+   ...
+};
+
+MockMediaRouterAsync.h
+
+class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
+{
+/* ============================== Methods ================================== */
+	typedef void Mock_setSourceRet;
+	MOCK_METHOD2(setSource, 
+           NS_ZINC::Future< Mock_setSourceRet > 
+           (const std::string&, const SetSourceReason::Enum));
+   ...
+
+/* ============================== Signals ================================== */
+	void emitBufferStatusEvent(const BufferStatusEventValue::Enum event)
+	{
+		produceEvent(
+			boost::bind(&MediaRouterEventListener::BufferStatusEvent,
+			     _1,
+			     event));
+	}
+   ...
+};
+
+
+{use}
+
+<van>
+VanadiumMediaPlayer::VanadiumMediaPlayer(
+        QMediaPlayerCallbackInterface& callbacks,
+        MediaPlayerManager& playerManager)
+    : dispatcher(makeGlibEventDispatcher()),
+    callbacks(callbacks),
+    preloadPolicy(QMediaPlayerInterface::AUTO),
+    // Initially this should really be NO_SOURCE but this is not defined on the
+    // MediaPlayer API
+    listener(boost::make_shared<MediaPlayerListener>(this)),
+    playerManager(playerManager),
+{
+    FilePluginConfig pluginConfig(dataFinder.find("system-factory.plugin-config"));
+    NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
+        PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
+
+    mediaRouterFactory = nickelSystemFactory.createMediaRouterFactory();
+    mediaRouter = mediaRouterFactory->createMediaRouter().get();
+}
+
+void VanadiumMediaPlayer::load(const std::string& url)
+{
+    // note:
+    // comes from `EventProducer` IF
+    mediaRouter->addListener(dispatcher, listener);
+
+    mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
+}
+
+
+<mock>
+Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
+
+typedef StrictMock<MockMediaRouterAsync> MockMediaRouter;
+
+class ZINC_LOCAL MockMediaRouterRepository
+{
+    // one test case and one mock
+    void registerMockForInvalidSourceException()
+    {
+        boost::shared_ptr<MockMediaRouter> mockMediaRouter
+            = boost::make_shared<MockMediaRouter>();
+
+        EXPECT_CALL(*mockMediaRouter,
+                setSource(std::string("http://itv.com/media.mpd"),
+                    SetSourceReason::mhegstandard)).WillOnce(
+                    Return(makeErrorFuture<void, InvalidLocatorException>("")));
+
+        EXPECT_CALL(*mockMediaRouter, stop()).WillRepeatedly(
+                DoAll(Invoke(boost::bind
+                        (&sendStatusEvent, mockMediaRouter, StatusEventValue::stopped)),
+                    Return(makeCompletedFuture())));
+
+        registerMock("InvalidSourceException", mockMediaRouter);
+    }
+};
+
+// global functions
+void sendStatusEvent(boost::shared_ptr<MockMediaRouter> mock,
+    const StatusEventValue::Enum statusEvent)
+{
+    mock->emitStatusEvent(statusEvent);
+}
 
 
 ={============================================================================
@@ -11514,10 +11694,465 @@ networkState?: 2
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: qunit test
+*kt_dev_uv_stack_250* mr-web-server
+
+https://wiki.youview.co.uk/display/canvas/2010/12/01/HTTP+Test+Server?src=search
+
+HTTP Test Server
+
+Added by Milton Mukhopadhyay, last edited by Dave Evans on Jan 18, 2011
+
+I am documenting the original use cases and requirements for the test server
+here, but as an 'embeddable' HTTP server might be useful for testing other
+components as well, please add additional requirements that we may need to cater
+to other use cases.  
+
+Pre-Implementation Stuff: 
+
+Use Cases
+
+  MetadataBroker has Python asynchronous HTTP client implemented with
+  pycurl+libcurl. We need to have unit testcases for the component.
+
+  We need to be able to test MetadataBroker against exceptional conditions where
+  HTTP server would reply back with different status codes and other errors.  
+  
+  We need to be able to test the MetadataBroker performance with or without the
+  HTTP cache by selectively injecting delays in HTTP server responses.
+
+
+High Level Requirements
+
+  To have an embeddable HTTP Server.
+  It should be possible to programmatically control the HTTP server behaviour.
+
+
+Low Level Requirements
+
+  To be able to run the server and clients on different threads in the same
+  process.
+
+  To be able to serve a request with programmatically specified header fields.
+  To be able to serve a request with HTTP response body taken from a string.
+  To be able to serve a request with HTTP response body taken from a file.
+  To be able to serve a request with programmatically specified HTTP status
+  code.
+
+  To be able to inject delay in serving requests for specific URLs.
+
+  It should be possible to use it as HTTP 1.1 file server.
+
+  To be able to serve a body as a series of chunks to verify pause/resume
+  download functionality.
+
+  To be able to verify that two HTTP requests are interleaved, possibly by
+  chunking. E.g. Deterministically download job1-chunk1, job2-chunk1,
+  job1-chunk2, job2-chunk2.
+
+
+Implementation Decisions
+
+We've decided to use 'mongoose' as the core webserver. Mongoose is a single
+file, light weight web server, that can be run directly as a file server or it
+may serve requests through callbacks.
+
+  When serving requests through callbacks it works as a simple listener with a
+  thread pool to invoke callbacks.
+  
+  As a standalone server it works as a HTTP 1.1 compliant file server. 
+
+We need a wrapper for creating HTTP responses from inside test cases. The
+wrapper would be responsible for the following :
+
+  Configuring the HTTP server.
+
+  Creating per URL handlers (pity that mongoose does not support per URI
+      callbacks anymore, on the other hand the API is quite succinct now.)
+
+  Creating HTTP responses with different kinds of headers, bodies, status codes
+  etc.
+
+
+Implementation Details :
+
+Mongoose :
+
+Mongoose is a single file webserver library with a command line standalone
+directory server. I had to pick up the development version of the source as
+certain APIs are not yet there in the stable version. So though we are using
+Mongoose 3.0, it is yet to be released (I picked the version number from its
+    header file). To have it under Zinc.3rdPartyStack , I patched it to make it
+an autotool project with proper package config etc.
+
+Wrappers :
+
+We have some wrappers on mongoose to make it possible to use the Http server
+programmatically in Zinc.TestWebServer. At the moment this is really like a
+framework that supports the usescases mentioned above. I believe we can easily
+add more features to it. We can also replace mongoose with any other Http Server
+if required as 'mongoose' is completely contained within MongooseWrapper.cpp and
+  any other class supporting the contract could be used.  
+    
+
+How to use : 
+
+In short, create a configuration object, one or more responder objects and run
+the server with the configuration and any number of responders. Whenever the
+server gets 'requests' from a Http client the appropriate 'responder' will
+respond to it.
+
+
+A longer desc:
+
+  Create ManualServerConfig object specifying the port on which you want your
+  server to run.
+
+  Create a 'responder' where you have the code to 'handle' actual Http requests.
+  At the moment we have a convenience responder called SimpleResponder, which
+  has methods to add header fields, body etc. so that whenever it gets requests
+  from a client it replies back with those fields and content.
+
+  A HttpServer is created with the configuration object and one or more
+  responders. You can register a responder against a particular URL or the
+  responder could be a 'wildcard' responder with empty string for the URL. A
+  wildcard responder is going to be invoked whenever there is no specific
+  responder registered for a URL.
+
+  Run the HttpServer. There is a convenient ServerRunner class that uses RAII to
+  call the start() and stop() methods on the HttpServer. 
+
+Using TestWebServer in MetadataBroker :
+
+TestWebServer is used in MetadataBroker to simulate MAS behaviour; a new set of
+representative testcases are there in MetadataBrokerHttpTests.
+
+Cobalt/Cobalt.System.Production/test/HttpGeneralTests.cpp
+
+In addition to being able to test HTTP client, it has also simplified the
+testcase writing process, as :
+
+  For the first time we could proplerly verify MetadataBroker generated URIs and
+  query strings ( we dont just have to depend on the directory structure for
+      that).
+
+  When using the TestWebServer we dont have to replicate the URL hierarchy. (So
+      we dont need to have deeply nested directories with funny file names in
+      mas-data anymore.)
+
+TODOs:
+
+  Have a programmatically controllable directory serving responder.
+  Have a convenience responder to selectively inject delays before it replies.
+  Think of all the other error injection possibilities.
+  I need to add more test cases ... at the moment I am banking on the fact that
+  since I am writing testcases in MetadataBroker using the testwebserver that
+  would in turn test the webserver as well.
+
+
+https://wiki.youview.co.uk/display/canvas/2011/02/11/HTTP+Test+Server+-+Updated?src=search
+
+
+<ex>
+
+////////////////////////////////////////////////////////////////////////////
+#ifndef NICKEL_SYSTEM_SIMPLEDASHSERVER_H_
+#define NICKEL_SYSTEM_SIMPLEDASHSERVER_H_
+
+#include <nickel-common/nickel-common.h>
+#include <zinc-common/testsupport/UnitTestSandbox.h>
+#include <zinc-testwebserver/zinc-testwebserver.h>
+
+#include <boost/shared_ptr.hpp>
+
+NS_NICKEL_OPEN
+
+struct SimpleDashServer
+{
+    explicit SimpleDashServer(NS_ZINC::ResourceFinder& finder, bool live = false);
+    ~SimpleDashServer();
+    std::string getManifestUrl() const;
+private:
+    std::string port;
+    boost::shared_ptr<NS_ZINC_TESTWEBSERVER::HttpServer> server;
+};
+
+NS_NICKEL_CLOSE
+
+#endif // NICKEL_SYSTEM_SIMPLEDASHSERVER_H_
+
+////////////////////////////////////////////////////////////////////////////
+#include "SimpleDashServer.h"
+
+#include <zinc-common/testsupport/UnitTestSandbox.h>
+#include <zinc-testwebserver/zinc-testwebserver.h>
+
+#include <boost/make_shared.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/posix_time_io.hpp>
+
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/posix_time_io.hpp>
+
+#include <fstream>
+#include <iostream>
+#include <streambuf>
+#include <string>
+
+using namespace NS_ZINC_TESTWEBSERVER;
+
+NS_NICKEL_OPEN
+
+#define MANIFEST_AVAILABILITYSTARTTIME ("_time_")
+
+void createResponse(
+    NS_ZINC::ResourceFinder& finder,
+    SimpleResponderPtr responder,
+    const char* uri_fragment,
+    const char* datafile,
+    const char* content_type)
+{
+    HttpResponsePtr res = createHttpResponse();
+    res->setVersion("HTTP/1.1");
+    res->setStatus(HttpStatus::OK);
+    res->addHeader(HttpHeaders::ContentType, content_type);
+    res->setBodyFromFile(finder.find(datafile));
+    responder->addResponseForSubStringInUri(res, uri_fragment);
+}
+
+void createManifestResponse(
+    NS_ZINC::ResourceFinder& finder,
+    SimpleResponderPtr responder,
+    const char* uri_fragment,
+    const char* datafile,
+    const char* content_type)
+{
+    HttpResponsePtr res = createHttpResponse();
+    res->setVersion("HTTP/1.1");
+    res->setStatus(HttpStatus::OK);
+    res->addHeader(HttpHeaders::ContentType, content_type);
+
+    boost::posix_time::ptime t = boost::posix_time::second_clock::universal_time();
+    t -= boost::posix_time::hours(2);
+
+    std::ifstream body(finder.find(datafile).c_str());
+    std::string bodystr((std::istreambuf_iterator<char>(body)),
+                        std::istreambuf_iterator<char>());
+
+    bodystr.replace(bodystr.find(MANIFEST_AVAILABILITYSTARTTIME),
+                    strlen(MANIFEST_AVAILABILITYSTARTTIME),
+                    boost::posix_time::to_iso_extended_string(t));
+
+    res->setBody(bodystr);
+    responder->addResponseForSubStringInUri(res, uri_fragment);
+}
+
+SimpleDashServer::SimpleDashServer(NS_ZINC::ResourceFinder& finder, bool live)
+{
+    ManualServerConfigPtr config = createManualServerConfig();
+    SimpleResponderPtr responder = createSimpleResponder();
+    responder->setVersion("HTTP/1.1");
+    responder->addHeader(HttpHeaders::ContentType, "text/plain");
+    responder->appendToBody("Default response");
+    responder->setStatus(HttpStatus::NOT_FOUND);
+
+    if (live) {
+        createManifestResponse(
+            finder, responder, "client_manifest.mpd",
+            "assets/client_manifest.mpd", "application/dash+xml");
+    } else {
+        createResponse(
+            finder, responder, "client_manifest.mpd",
+            "assets/client_manifest_vod.mpd", "application/dash+xml");
+    }
+
+    createResponse(
+        finder, responder, "audio_segment",
+        "assets/audio.m4s", "video/quicktime");
+
+    createResponse(
+        finder, responder, "video_segment",
+        "assets/video.m4s", "video/quicktime");
+
+    createResponse(
+        finder, responder, "audio_is",
+        "assets/audio_is.mp4", "video/quicktime");
+
+    createResponse(
+        finder, responder, "video_is",
+        "assets/video_is.mp4", "video/quicktime");
+
+    server = boost::make_shared<HttpServer>(config, responder, responder);
+    server->start();
+
+    port = config->getPort();
+}
+
+SimpleDashServer::~SimpleDashServer()
+{
+    server->stop();
+    server.reset();
+}
+
+std::string SimpleDashServer::getManifestUrl() const
+{
+    std::stringstream ss;
+    ss << "http://localhost:" << port << "/client_manifest.mpd";
+    return ss.str();
+}
+
+NS_NICKEL_CLOSE
+
+
+////////////////////////////////////////////////////////////////////////////
+
+CPPUNIT_TEST(test_that);
+
+void GstMediaRouterTest::test_that()
+{
+    SimpleDashServer server(getDataFinder());
+
+    mr->setSource(server.getManifestUrl(), SetSourceReason::unspecified).get();
+}
+
+
+={============================================================================
+*kt_dev_uv_stack_250* mr-web-local server to play
+
+<server-side>
+kpark@wll1p04345:~$ ll /usr/share/nginx/www
+
+-rwxrwxrwx 1 root root  164 Jul  2 12:11 index.html*
+-rwxrwxrwx 1 root root  644 Jul  2 12:25 test.html*
+-rwxrwxrwx 1 root root 1408 Jul  2 14:41 test.js*
+-rwxrwxrwx 1 root root 1285 Jul  2 12:20 testplay.js*
+
+<page>
+kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.html 
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+  <!--
+      A generic (default) HTML file for JS tests.
+
+      If you need a test specific HTML file, name it after the
+      JS test file
+  -->
+
+  <head>
+    <title>Welcome to nginx on Kit</title>
+    <script type="text/javascript" src="qunit-1.14.0.js"></script>
+    <script type="text/javascript" src="qunit-headless.js"></script>
+
+    <!-- This always has to be test.js due to the way the testing
+         framework works -->
+    <script type="text/javascript" src="test.js"></script>
+
+  </head>
+
+  <body>
+  <center><h1>Welcome to nginx on Kit!</h1></center>
+  </body>
+
+</html>
+
+
+kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.js   
+function beginTest(testID) {
+    var req = new XMLHttpRequest();
+    req.enctype = 'text\/plain';
+    // We use a GET request to tell the MockMediaRouterRepository that a new
+    // test case is starting, which is not very REST-ful but is nice and simple
+    req.open('GET', 'http://localhost:5555/' + testID, false);
+    req.setRequestHeader('Content-Type', 'text\/plain');
+    req.send();
+}
+
+function testCase(testName, testFunction) {
+    if(testName !== null)
+    {
+        beginTest(testName);
+    }
+}
+
+// Create a video element as the first thing we do. This causes the
+// libVanadiumVideoTagTest.so plugin to be loaded, which starts the embedded
+// web server. The media router factory returns a default mock media router
+// for this purpose
+function startTesting() {
+    video = document.createElement('video');
+    // video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
+    video.setAttribute('src', 'http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd');
+    video.setAttribute('autoplay', '');
+    video.setAttribute('controls', 'controls');
+    video.load();
+    video.play();
+}
+
+startTesting();
+
+/*test("CanPlayVideoElement", function() {*/
+    //beginTest("CanPlayVideoElement");
+    //video = document.createElement('video');
+    //video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
+    //video.load();
+    //ok(true, "video element created");
+/*});*/
+
+
+<run-browser>
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
+runBrowserStandalone.sh --url http://wll1p04345.dev.youview.co.uk/test.html
+
+ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
+runBrowserStandalone.sh --url http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8
+
+<use-local-to-play-dash>
+GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found GST_DEBUG=5 
+GST_DEBUG=adaptivedemux:5 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
+
+// dash
+gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
+
+// hls
+gstmr-play.sh http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8
+
+gstmr-play.sh -p http://wll1p04345.dev.youview.co.uk/file_0000025585_20160122_143758_15930049906_15930935523.ts
+
+
+={============================================================================
+*kt_dev_uv_stack_250* mr-web-qunit test
+
+<to-run-under-gdb>
+$ vi Zinc/Zinc.JsCore.BindingRuntime/test/test-common
+
+if [[ -n "${GDB_BROWSER}" ]]; then
+gdb="gdb --args "
+fi
+
+
+(gdb) run
+Starting program: /home/kpark/builds/_virtual_/pc/zinc-install-root/debug/debian-8-x86_64/htmlengine/qt-5.1.0/tests/bin/zinc-jscore-binding-runtime/minimaltestbrowser -platform minimal file:///tmp/rE88JGPXZ/test.html
+
+Zinc/Zinc.JsCore.BindingRuntime/test/Makefile.am
+31:minimaltestbrowser_SOURCES = testsupport/MinimalTestBrowser.cpp testsupport/TestWebPage.cpp testsupport/TestWebPage.h $(BUILT_SOURCES)
+118:testsharebin_PROGRAMS = minimaltestbrowser
+
+$ GDB_BROWSER=1 zb-make Vanadium/Vanadium.WebKit.VideoElement-qt-5.1.0-check
+
 
 <to-run>
 $ zb-make Vanadium/Vanadium.WebKit.VideoElement-qt-5.1.0-check
+
+// Makefile-Test.am
+
+glibeventdispatchertest_SOURCES = test/GlibEventDispatcherTest.cpp
+
+js_tests = test/js/testplay
+
+TESTS = glibeventdispatchertest \
+		$(js_tests)
+
+test_PROGRAMS = glibeventdispatchertest
 
 
 For each test, it creates video elements:
@@ -11757,6 +12392,205 @@ Aborted
 
 
 ={============================================================================
+*kt_dev_uv_stack_250* mr-web-test: playvideoextended
+
+<js>
+
+// Simulates playing a video for a reasonable length of time, asserts that all
+// expected events (and only those expected events) are generated
+asyncTestCase("PlayVideoExtended", function() {
+    'use strict';
+    expect(8);
+    var hasEnded = false;
+    var updateCount = 0;
+    var video = document.createElement('video');
+    var videoDurationMS = 10000;
+    var progressEventCount = 0;
+
+    function onTimeUpdate() {
+        if(video.currentTime < 10)
+        {
+            sendPOST("setCurrent=" + Math.min((video.currentTime * 1000) + 200,
+                    videoDurationMS));
+        }
+        else
+        {
+            console.log("currentTime: " + video.currentTime + " duration: " + video.duration);
+        }
+    }
+    video.addEventListener('timeupdate', onTimeUpdate);
+
+    var unexpectedEvents = [
+        "suspend",
+        "abort",
+        "error",
+        "emptied",
+        "stalled",
+        "waiting",
+        "seeking",
+        "seeked",
+        "ratechange",
+        "resize",
+        "volumechange"
+    ];
+
+    unexpectedEvents.forEach(function(eventName, index, array) {
+        video.addEventListener(eventName, function() {
+            if(!hasEnded) {
+                ok(false, eventName + " events should not be raised during normal playback");
+            }
+        });
+    });
+
+    var mandatoryEvents = [
+        "durationchange",
+        "canplay",
+        "play",
+        "pause",
+        "playing",
+        "loadstart" ];
+
+    mandatoryEvents.forEach(function(eventName, index, array) {
+        video.addEventListener(eventName, function() {
+            console.log(eventName);
+            ok(true, "Got " + eventName + " event");
+        });
+    });
+
+    // We should get _some_ progress events, but the exact number is unknown
+    function progressListener()
+    {
+        console.log("progress");
+        if(progressEventCount == 0)
+        {
+            ok(true, "Got a progress event");
+            ++progressEventCount;
+        }
+    }
+
+    video.addEventListener('progress', progressListener);
+
+    video.addEventListener('ended', function onEnded() {
+        // This is the end of the test
+        console.log("ended");
+        hasEnded=true;
+        video.removeEventListener('progress', progressListener);
+        ok(true);
+        video.removeEventListener('timeupdate', onTimeUpdate);
+        video.removeEventListener('ended', onEnded);
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+        removeVideoElement(video);
+        start();
+    });
+
+    function onLoadedMetadata() {
+        console.log("loadedmetadata");
+        video.play();
+    }
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
+
+    video.src = 'http://bbc.co.uk/PlayVideoExtended.mpd';
+});
+
+
+<log>
+PlayVideoExtended ...
+QSslSocket: cannot resolve SSLv3_client_method
+QSslSocket: cannot resolve SSLv3_server_method
+
+rc/VanadiumMediaPlayer.cpp:958 ENTER: WebCore::QMediaPlayerInterface* 
+    vanadium::createMediaPlayerImplementation(WebCore::QMediaPlayerCallbackInterface*)
+rc/VanadiumMediaPlayer.cpp:524 ENTER: virtual void 
+    vanadium::VanadiumMediaPlayer::setPreload(WebCore::QMediaPlayerInterface::Preload)
+
+rc/VanadiumMediaPlayer.cpp:130 ENTER: virtual void vanadium::VanadiumMediaPlayer::load(const string&)
+rc/VanadiumMediaPlayer.cpp:134 Loading: http://bbc.co.uk/PlayVideoExtended.mpd
+rc/VanadiumMediaPlayer.cpp:443 networkState: 2
+
+rc/VanadiumMediaPlayer.cpp:677 KT: source event: 1
+rc/VanadiumMediaPlayer.cpp:677 KT: source event: 3
+rc/VanadiumMediaPlayer.cpp:683 Media router mode: [ONDEMAND.ABR]
+rc/VanadiumMediaPlayer.cpp:450 readyState: 3
+rc/VanadiumMediaPlayer.cpp:301 KT: mr duration in ms: 10000
+
+rc/VanadiumMediaPlayer.cpp:414 ENTER: virtual bool vanadium::VanadiumMediaPlayer::paused() const
+rc/VanadiumMediaPlayer.cpp:416 pausedState 0
+rc/VanadiumMediaPlayer.cpp:414 EXIT:  virtual bool vanadium::VanadiumMediaPlayer::paused() const
+
+// note:
+// ecah call currentTime() maps to playbackEmulator::getPosition in mock
+
+rc/VanadiumMediaPlayer.cpp:309 ENTER: virtual float vanadium::VanadiumMediaPlayer::currentTime() const
+rc/VanadiumMediaPlayer.cpp:322 Position: 0
+
+rc/VanadiumMediaPlayer.cpp:443 networkState: 2
+
+rc/VanadiumMediaPlayer.cpp:858 ENTER: virtual void 
+    vanadium::VanadiumMediaPlayer::MediaPlayerListener::BufferStatusEvent
+        (Zinc::Media::BufferStatusEventValue::Enum)
+rc/VanadiumMediaPlayer.cpp:636 ENTER: void 
+    vanadium::VanadiumMediaPlayer::BufferStatusEvent(Zinc::Media::BufferStatusEventValue::Enum)
+
+loadstart
+durationchange
+loadedmetadata          // js: video.play()
+
+rc/VanadiumMediaPlayer.cpp:301 KT: mr duration in ms: 10000
+rc/VanadiumMediaPlayer.cpp:416 pausedState 0 (paused)
+rc/VanadiumMediaPlayer.cpp:407 New play rate set 1
+
+rc/VanadiumMediaPlayer.cpp:189 ENTER: virtual void vanadium::VanadiumMediaPlayer::play()
+
+/src/MediaPlayerManager.cpp:32 ENTER: void vanadium::MediaPlayerManager::playbackStarting(vanadium::VanadiumMediaPlayer*, boost::shared_ptr<Zinc::Media::MediaRouterAsync>)
+
+canplay
+
+rc/VanadiumMediaPlayer.cpp:230 ENTER: virtual void vanadium::VanadiumMediaPlayer::stop()
+rc/VanadiumMediaPlayer.cpp:223 ENTER: void vanadium::VanadiumMediaPlayer::suspend()
+/src/MediaPlayerManager.cpp:50 ENTER: void vanadium::MediaPlayerManager::unregisterMediaPlayer(vanadium::VanadiumMediaPlayer*)
+
+play
+playing
+
+rc/VanadiumMediaPlayer.cpp:517 ENTER: virtual bool vanadium::VanadiumMediaPlayer::
+    didLoadingProgress() const
+
+// note: console.log from js
+progress
+
+// note:
+// In `timeupdate` handler of js, post "setCurrent" command to web server and
+// this reaches to mock object. Then find playbackEmulater for that test case
+// and call setCurrent on them. playbackEmulator emits PositionChangeEvent or
+// complete state events depending on current against duration.
+//
+setCurrent: 200.1845359802246
+
+...
+
+setCurrent: 400.00000298023224
+
+rc/VanadiumMediaPlayer.cpp:880 ENTER: virtual void vanadium::VanadiumMediaPlayer::MediaPlayerListener::PositionChangeEvent(const Zinc::Media::Position&)
+rc/VanadiumMediaPlayer.cpp:668 ENTER: void vanadium::VanadiumMediaPlayer::PositionChangeEvent(const Zinc::Media::Position&)
+rc/VanadiumMediaPlayer.cpp:301 KT: mr duration in ms: 10000
+rc/VanadiumMediaPlayer.cpp:322 Position: 400
+rc/VanadiumMediaPlayer.cpp:416 pausedState 1 (playing)
+rc/VanadiumMediaPlayer.cpp:668 EXIT:  void vanadium::VanadiumMediaPlayer::PositionChangeEvent(const Zinc::Media::Position&)
+
+rc/VanadiumMediaPlayer.cpp:880 EXIT:  virtual void vanadium::VanadiumMediaPlayer::MediaPlayerListener::PositionChangeEvent(const Zinc::Media::Position&)
+
+rc/VanadiumMediaPlayer.cpp:322 Position: 400
+
+setCurrent: 600.0000059604645
+...
+setCurrent: 800.0000238418579
+setCurrent: 1000.000011920929
+setCurrent: 1200
+setCurrent: 1400.0000476837158
+...
+
+
+={============================================================================
 *kt_dev_uv_stack_250* mr-web: yv webkit plugin, vanadium
 
 GST_DEBUG=5 ZINC_QMEDIA_PLAYER_LIB=/opt/zinc-trunk/lib/libVanadiumMediaRouterWebKitPlugin.so.0.0.0 \
@@ -11806,101 +12640,6 @@ $ scp $BLD/qtwebkit/lib/libQt5WebKit.so root@humax-01351:/opt/zinc-trunk/oss/lib
 4. check 
    ./share/vanadium-webkit-mediarouter-plugin/system-factory.plugin-config
    libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
-
-
-={============================================================================
-*kt_dev_uv_stack_250* mr-web: local web server and client
-
-<server-side>
-kpark@wll1p04345:~$ ll /usr/share/nginx/www
-
--rwxrwxrwx 1 root root  164 Jul  2 12:11 index.html*
--rwxrwxrwx 1 root root  644 Jul  2 12:25 test.html*
--rwxrwxrwx 1 root root 1408 Jul  2 14:41 test.js*
--rwxrwxrwx 1 root root 1285 Jul  2 12:20 testplay.js*
-
-
-kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.html 
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-
-  <!--
-      A generic (default) HTML file for JS tests.
-
-      If you need a test specific HTML file, name it after the
-      JS test file
-  -->
-
-  <head>
-    <title>Welcome to nginx on Kit</title>
-    <script type="text/javascript" src="qunit-1.14.0.js"></script>
-    <script type="text/javascript" src="qunit-headless.js"></script>
-
-    <!-- This always has to be test.js due to the way the testing
-         framework works -->
-    <script type="text/javascript" src="test.js"></script>
-
-  </head>
-
-  <body>
-  <center><h1>Welcome to nginx on Kit!</h1></center>
-  </body>
-
-</html>
-
-
-kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.js   
-function beginTest(testID) {
-    var req = new XMLHttpRequest();
-    req.enctype = 'text\/plain';
-    // We use a GET request to tell the MockMediaRouterRepository that a new
-    // test case is starting, which is not very REST-ful but is nice and simple
-    req.open('GET', 'http://localhost:5555/' + testID, false);
-    req.setRequestHeader('Content-Type', 'text\/plain');
-    req.send();
-}
-
-function testCase(testName, testFunction) {
-    if(testName !== null)
-    {
-        beginTest(testName);
-    }
-}
-
-// Create a video element as the first thing we do. This causes the
-// libVanadiumVideoTagTest.so plugin to be loaded, which starts the embedded
-// web server. The media router factory returns a default mock media router
-// for this purpose
-function startTesting() {
-    video = document.createElement('video');
-    // video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
-    video.setAttribute('src', 'http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd');
-    video.setAttribute('autoplay', '');
-    video.setAttribute('controls', 'controls');
-    video.load();
-    video.play();
-}
-
-startTesting();
-
-/*test("CanPlayVideoElement", function() {*/
-    //beginTest("CanPlayVideoElement");
-    //video = document.createElement('video');
-    //video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
-    //video.load();
-    //ok(true, "video element created");
-/*});*/
-
-
-<client-side>
-
-ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
-runBrowserStandalone.sh --url http://wll1p04345.dev.youview.co.uk/test.html
-http://filegateway.youview.co.uk/applications/applications/html/app-source/cdi-player-FR15
-
-<use-local-to-play-dash>
-GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/not-found GST_DEBUG=5 
-GST_DEBUG=adaptivedemux:5 gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_dash.mpd
 
 
 ={============================================================================
@@ -15957,6 +16696,8 @@ method call sender=:1.131 -> dest=Zinc.MediaProxy serial=25
 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
 member=*createMediaRouter*
 
+// KT-HTML: selectMediaResource: n(2), r(0): loadstartEvent
+// KT-HTML: loadResource: n(2), r(0): ->load()
 // VanadiumMediaPlayer.load() sets NET = NETWORK_LOADING
 
 method call sender=:1.121 -> dest=:1.72 serial=29 
@@ -15996,6 +16737,9 @@ member=*SourceEvent*
    int32 3    // source_config_complete = HAVE_FUTURE_DATA(3)
    int32 1
    note: got source config complete which moves state to HAVE_FUTURE_DATA
+
+//KT-HTML: setReadyState: n(2), r(3): loadeddataEvent
+
 
 // GstMediaRouter.cpp:1545 KT: setSink_async: startPreRoll_locked
 //
@@ -16058,7 +16802,9 @@ path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=*setPlaySpeed* 
     double 1
 
+
 <mr-play>
+// KT-HTML: playInternal: n(2), r(3): playingEvent
 // VanadiumMediaPlayer.play()
 
 method call sender=:1.121 -> dest=:1.72 serial=50
@@ -16372,7 +17118,7 @@ Author: Kit Park <kit.park@youview.com>
 Date:   Tue Sep 15 15:51:24 2015 +0100
 
     DEVARCH-10262: Fix video resolution changes delivery in nexussink and implement
-    plumbing to the YV media router.
+    plumbing to the YV media routerserver.
     
     This is a commit to support video resizing in the browser since HTML 5 defines
     the read-only properties `videoHeight` and `videoWidth` on an video element and
@@ -16416,165 +17162,6 @@ void VanadiumMediaPlayer::SourceEvent(const SourceEventValue::Enum event,
         callbacks.sizeChanged();
     }
 }
-
-
-={============================================================================
-*kt_dev_uv_stack_254* mr-dash: test web server
-
-https://wiki.youview.co.uk/display/canvas/2010/12/01/HTTP+Test+Server?src=search
-
-HTTP Test Server
-
-Added by Milton Mukhopadhyay, last edited by Dave Evans on Jan 18, 2011
-
-I am documenting the original use cases and requirements for the test server
-here, but as an 'embeddable' HTTP server might be useful for testing other
-components as well, please add additional requirements that we may need to cater
-to other use cases.  
-
-Pre-Implementation Stuff: 
-
-Use Cases
-
-  MetadataBroker has Python asynchronous HTTP client implemented with
-  pycurl+libcurl. We need to have unit testcases for the component.
-
-  We need to be able to test MetadataBroker against exceptional conditions where
-  HTTP server would reply back with different status codes and other errors.  
-  
-  We need to be able to test the MetadataBroker performance with or without the
-  HTTP cache by selectively injecting delays in HTTP server responses.
-
-
-High Level Requirements
-
-  To have an embeddable HTTP Server.
-  It should be possible to programmatically control the HTTP server behaviour.
-
-
-Low Level Requirements
-
-  To be able to run the server and clients on different threads in the same
-  process.
-
-  To be able to serve a request with programmatically specified header fields.
-  To be able to serve a request with HTTP response body taken from a string.
-  To be able to serve a request with HTTP response body taken from a file.
-  To be able to serve a request with programmatically specified HTTP status
-  code.
-
-  To be able to inject delay in serving requests for specific URLs.
-
-  It should be possible to use it as HTTP 1.1 file server.
-
-  To be able to serve a body as a series of chunks to verify pause/resume
-  download functionality.
-
-  To be able to verify that two HTTP requests are interleaved, possibly by
-  chunking. E.g. Deterministically download job1-chunk1, job2-chunk1,
-  job1-chunk2, job2-chunk2.
-
-
-Implementation Decisions
-
-We've decided to use mongoose as the core webserver. Mongoose is a single file,
-light weight web server, that can be run directly as a file server or it may
-  serve requests through callbacks.
-
-  When serving requests through callbacks it works as a simple listener with a
-  thread pool to invoke callbacks.
-  
-  As a standalone server it works as a HTTP 1.1 compliant file server. 
-
-We need a wrapper for creating HTTP responses from inside test cases. The
-wrapper would be responsible for the following :
-
-  Configuring the HTTP server.
-
-  Creating per URL handlers (pity that mongoose does not support per URI
-      callbacks anymore, on the other hand the API is quite succinct now.)
-
-  Creating HTTP responses with different kinds of headers, bodies, status codes
-  etc.
-
-
-Implementation Details :
-
-Mongoose :
-
-Mongoose is a single file webserver library with a command line standalone
-directory server. I had to pick up the development version of the source as
-certain APIs are not yet there in the stable version. So though we are using
-Mongoose 3.0, it is yet to be released (I picked the version number from its
-    header file). To have it under Zinc.3rdPartyStack , I patched it to make it
-an autotool project with proper package config etc.
-
-Wrappers :
-
-We have some wrappers on mongoose to make it possible to use the Http server
-programmatically in Zinc.TestWebServer. At the moment this is really like a
-framework that supports the usescases mentioned above. I believe we can easily
-add more features to it. We can also replace mongoose with any other Http Server
-if required as 'mongoose' is completely contained within MongooseWrapper.cpp and
-  any other class supporting the contract could be used.  
-    
-
-How to use : 
-
-In short, create a configuration object, one or more responder objects and run
-the server with the configuration and any number of responders. Whenever the
-server gets 'requests' from a Http client the appropriate 'responder' will
-respond to it.
-
-
-A longer desc:
-
-  Create ManualServerConfig object specifying the port on which you want your
-  server to run.
-
-  Create a 'responder' where you have the code to 'handle' actual Http requests.
-  At the moment we have a convenience responder called SimpleResponder, which
-  has methods to add header fields, body etc. so that whenever it gets requests
-  from a client it replies back with those fields and content.
-
-  A HttpServer is created with the configuration object and one or more
-  responders. You can register a responder against a particular URL or the
-  responder could be a 'wildcard' responder with empty string for the URL. A
-  wildcard responder is going to be invoked whenever there is no specific
-  responder registered for a URL.
-
-  Run the HttpServer. There is a convenient ServerRunner class that uses RAII to
-  call the start() and stop() methods on the HttpServer. 
-
-Using TestWebServer in MetadataBroker :
-
-TestWebServer is used in MetadataBroker to simulate MAS behaviour; a new set of
-representative testcases are there in MetadataBrokerHttpTests.
-
-Cobalt/Cobalt.System.Production/test/HttpGeneralTests.cpp
-
-In addition to being able to test HTTP client, it has also simplified the
-testcase writing process, as :
-
-  For the first time we could proplerly verify MetadataBroker generated URIs and
-  query strings ( we dont just have to depend on the directory structure for
-      that).
-
-  When using the TestWebServer we dont have to replicate the URL hierarchy. (So
-      we dont need to have deeply nested directories with funny file names in
-      mas-data anymore.)
-
-TODOs:
-
-  Have a programmatically controllable directory serving responder.
-  Have a convenience responder to selectively inject delays before it replies.
-  Think of all the other error injection possibilities.
-  I need to add more test cases ... at the moment I am banking on the fact that
-  since I am writing testcases in MetadataBroker using the testwebserver that
-  would in turn test the webserver as well.
-
-
-https://wiki.youview.co.uk/display/canvas/2011/02/11/HTTP+Test+Server+-+Updated?src=search
 
 
 ={============================================================================
