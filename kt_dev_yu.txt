@@ -46,15 +46,18 @@
 *kt_dev_uv_stack_014* zinc-test: automation
 
 |kt_dev_uv_stack_100| stack: element names
-*kt_dev_uv_stack_101* zinc-plugin: plugin and client system
-|kt_dev_uv_stack_102| zinc-plugin: plugin and dbus client
 |kt_dev_uv_stack_103| zinc-plugin
 *kt_dev_uv_stack_103* zinc-plugin: finder
+*kt_dev_uv_stack_101* zinc-plugin: plugin-client-system
+|kt_dev_uv_stack_102| zinc-plugin: plugin-system-client: dbus-client
+|kt_dev_uv_stack_102| zinc-plugin: plugin-system-server: dbus-server
 |kt_dev_uv_stack_104| stack: binding and makefile 
 
 *kt_dev_uv_stack_105* zinc-dbus: monitor
 *kt_dev_uv_stack_105* zinc-dbus: commands
 *kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
+*kt_dev_uv_stack_105* zinc-dbus: mock generation: mr case
+*kt_dev_uv_stack_105* zinc-dbus: mock use: mr case
 
 *kt_dev_uv_stack_105* zinc-app: ui version
 *kt_dev_uv_stack_105* zinc-app: get crid, resource file name
@@ -80,7 +83,7 @@
 *kt_dev_uv_stack_250* mr-web: remote debug webkit
 *kt_dev_uv_stack_250* mr-web: java scripts to check on video
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
-*kt_dev_uv_stack_250* mr-web: stack from html to mr
+*kt_dev_uv_stack_250* mr-web: from html to mr. yv-mr-dbus-client
 *kt_dev_uv_stack_250* mr-web: callback from mr to html
 *kt_dev_uv_stack_250* mr-web: media player interface
 *kt_dev_uv_stack_250* mr-web: media element and attribute
@@ -111,11 +114,12 @@
 *kt_dev_uv_stack_408* mr-dash: position
 *kt_dev_uv_stack_408* mr-dash: position change
 *kt_dev_uv_stack_408* mr-dash: seekable range
-*kt_dev_uv_stack_408* mr-dash: output-control
-*kt_dev_uv_stack_408* mr-dash: output-control: nexus-inspect
+*kt_dev_uv_stack_408* mr-dash: output-control-manager
+*kt_dev_uv_stack_408* mr-dash: output-control-visibility
 *kt_dev_uv_stack_408* mr-dash: seek and resume
 *kt_dev_uv_stack_408* mr-dash: media-load. slow play on t1000
 *kt_dev_uv_stack_408* mr-dash: live or vod
+*kt_dev_uv_stack_408* mr-dash: help app?
 
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
@@ -410,12 +414,15 @@ fi
 <cco-list>
 http://npestatus-yv-verify-32.elasticbeanstalk.com/playerDetails?applicationId=tv.arqiva.app.connecttv-youview
 
+int01
+
 ext03
 For Content Providers' development.
 
 ext04
 For Content Providers' integration testing. 
 
+[root@HUMAX /]# getChildItems | grep cco
 
 $ ccoSwitcher.sh ext04
 
@@ -3828,382 +3835,6 @@ Iron     Linear metadata (Broadcast sourced) Zinc.Metadata
 
 
 ={============================================================================
-*kt_dev_uv_stack_101* zinc-plugin: plugin and client system
-
-   UI runtimes (EPG, stagecraft(air), etc)
-   --------------------------------------- 
-      XXX.YYY.Client.API (Uranium.AIR.Client.API)
-   ---------------------------------------
-         XXX.Client.API     (Uranium.Client.API), API interface
-         XXX.Client.System  (Uranium.Client.System), ClientFactory
-                            ( Dbus client factories..)
-
-This is directory structure:
-
-Uranium.AIR.Client.API/
-Uranium.Client.API/
-Uranium.Client.System/
-Uranium.Common/
-
-
-{plugin-mechanism}
-
-1. UI get a SystemClientFactory of a component
-
-All component provides the same "createSystemClientFactory" global function
-which is out of a namespace and UI can get this via *plugin-mechanism* see
-plugin for more. 
-
-This means that UI makes PluginConfig which set config filename and calls
-<get-instance> to get T* derived from Plugin. 
-
-Uranium.AIR.Client.API/data/client-factory.plugin-config:
-  libUraniumClientSystem.so createSystemClientFactory
-
-  // This call is global since it is out of a namespace.
-  // Uranium.Client.System/src/SystemClientFactory.cpp
-
-  Plugin* createSystemClientFactory() {
-    URANIUM_PROFILE_FUNC;
-    return 'new' NS_URANIUM_CLIENT::SystemClientFactory();
-  }
-
-
-note:
-Each ClientFactory for each component derives from "Plugin", plugin mechanism
-calls create function, maiantain derived T*.
-
-// Uranium/Uranium.Client.API/include/ClientFactory.h
-
-struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
-
-    /**
-     * IP Metadata factory methods.
-     */
-    virtual boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> 
-      createMetadataLocator() = 0;
-
-    virtual boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> 
-      createMetadataBroker() = 0;
-
-    virtual boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::EventRepository> 
-      createEventRepository() = 0;
-
-    virtual boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::ServiceRepository> 
-      createServiceRepository() = 0;
-
-    virtual boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::ParamFactory> 
-      createParamFactory() = 0;
-
-    /**
-     * Linear Metadata factory methods.
-     */
-
-    virtual boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::Locator> 
-      createLinearMetadataLocator() = 0;
-
-    ...
-};
-
-class ZINC_EXPORT SystemClientFactory : public ClientFactory, public NS_ZINC::Resettable {
-    ...
-};
-
-
-
-UI gets shared pointers of each necessary component using factory create functions.
-
-// Uranium.AIR.Client.API/src/UraniumAirPlugin.cpp
-
-note: Binding. 
-Not sure how
-NS_URANIUM_LINEAR_AIR_CLIENT::LocatorBinding::setSingletonInstance() is
-implemented since there is no source and appears that it is generated by binding
-tool. Assumes that this saves a shared pointer of each component locator and
-uses it to call apis.
-
-class ZINC_LOCAL UraniumAirPlugin : public GenericAirPlugin<UraniumAirPlugin, ClientFactory> 
-{
-  void initSingletons(ClientFactory& clientFactory) 
-  {
-    // create <MD>, save it in its locator and return it back to UI
-    shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> nativeLocator(
-        clientFactory.createMetadataLocator()
-        );
-
-    NS_URANIUM_METADATA_AIR_CLIENT::LocatorBinding::setSingletonInstance(nativeLocator);
-
-    // create <LMD>
-    NS_URANIUM_LINEAR_AIR_CLIENT::LocatorBinding::setSingletonInstance(
-        clientFactory.createLinearMetadataLocator());
-
-    // get LMLL(locator) and pass up to client application. see factory below
-    NS_URANIUM_LML_AIR_CLIENT::LocatorBinding::setSingletonInstance(
-        clientFactory.createLocalMediaLibraryLocator());
-  }
-};
-
-<3> Locators 
-
-note: singleton and factory
-Each create function is a factory function: create a singletone locator instance
-of each component and this locator has member functions to get a shared pointer
-of each interface. So the locator is a container to pack shared pointers to
-interfaces and return a shared pointer of this locator to UI.
-
-note:
-Each interface(component) defines 'own' locator class chain and how it is
-possible? Use namespace.
-
-/Uranium.Client.API/include/local-media-library/Locator.h
-/Uranium.Client.API/include/linear-acquisition/Locator.h
-/Uranium.Client.API/include/linear-metadata/Locator.h
-/Uranium.Client.API/include/metadata/Locator.h
-/Uranium.Client.API/include/tuner/Locator.h
-
-/Uranium.Client.System/src/local-media-library/SystemClientLocator.h
-/Uranium.Client.System/src/linear-acquisition/SystemClientLocator.h
-/Uranium.Client.System/src/linear-metadata/SystemClientLocator.h
-/Uranium.Client.System/src/metadata/SystemClientLocator.h
-/Uranium.Client.System/src/tuner/SystemClientLocator.h
-
-This is metadata case.
-
-NS_URANIUM_METADATA_CLIENT_OPEN
-
-/**
- * This is the top-level entrypoint to the Zinc Client API.
- * A singleton instance will likely be exposed in the global
- * context within the Javascript environment. An Actionscript
- * binding will be newed in the Flash case.
- */
-class ZINC_EXPORT Locator : public NS_ZINC::Polymorphic {
-
-public:
-    virtual ~Locator();
-    virtual boost::shared_ptr<MetadataBroker> getMetadataBroker() const = 0;
-    virtual boost::shared_ptr<EventRepository> getEventRepository() const = 0;
-    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const = 0;
-};
-
-class SystemClientLocator : virtual public Locator {
-
-  public:
-    SystemClientLocator(boost::shared_ptr<MetadataBroker> metadataBroker, 
-        boost::shared_ptr<EventRepository> er, boost::shared_ptr<ServiceRepository> sr);
-
-    boost::shared_ptr<MetadataBroker> getMetadataBroker() const;
-    virtual boost::shared_ptr<EventRepository> getEventRepository() const;
-    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const;
-
-  private:
-    boost::shared_ptr<MetadataBroker> metadataBroker;
-    boost::shared_ptr<EventRepository> eventRepository;
-    boost::shared_ptr<ServiceRepository> serviceRepository;
-};
-
-
-={============================================================================
-*kt_dev_uv_stack_102* zinc-plugin: plugin and dbus client
-
-{dbus-system-factory}
-This is uranium case and see that client system uses plugin mechanism to use
-DBUS.
-
-/Uranium/Uranium.Client.System/data$
-
-cadmium-system-factory.plugin-config:
-  libCadmiumSystemDbusClient.so createDbusSystemFactory
-
-cobalt-system-factory.plugin-config:
-  libCobaltSystemDbusClient.so createDbusSystemFactory
-
-copper-system-factory.plugin-config:
-  libCopperSystemDbusClient.so createDbusSystemFactory
-
-ironreminders-system-factory.plugin-config:
-  libIronRemindersSystemDbusClient.so createDbusSystemFactory
-
-iron-system-factory.plugin-config:
-  libIronSystemDbusClient.so createDbusSystemFactory(Zinc.MetadataProxy)
-
-note: why is this "MetadataProxy" but not "Metadata"?
-
-neon-client-factory.plugin-config:
-  libNeonClientSystem.so createSystemClientFactory
-
-nickel-system-factory.plugin-config:
-  libNickelSystemDbusClient.so createDbusSystemFactory
-
-
-note:
-The system factory can be replaced with a fake by simply changing plugin config
-which is flexible.
-
-Uranium.Client.System/data/cobalt-system-factory.plugin-config:
-  libCobaltSystemDbusClient.so createDbusSystemFactory
-  #libCobaltSystemFake.so createFakeSystemFactory
-
-
-note: dbus-client
-This is a client interface for a component that can be used by others.
-
-No code in source tree and these are 'generated'.
-
-:~/builds/master/humax.1000/zinc-build-root/release-humax-dtr_t1000$ find . -name unity.cpp
-./Helium/Helium.System.DBusClient/src/unity.cpp
-./Helium/Helium.System.API/src/unity.cpp
-./Lead/Lead.System.API/src/unity.cpp
-./Lead/Lead.System.DBusClient/src/unity.cpp
-./Copper/CopperAnnouncement.System.API/src/unity.cpp
-./Copper/CopperAnnouncement.System.DBusClient/src/unity.cpp
-./Copper/Copper.System.API/src/unity.cpp
-./Copper/Copper.System.DBusClient/src/unity.cpp
-./Sodium/Sodium.System.API/src/unity.cpp
-./Sodium/Sodium.System.DBusClient/src/unity.cpp
-./Radium/Radium.System.API/src/unity.cpp
-./Radium/Radium.System.DBusClient/src/unity.cpp
-
-./Iron/IronReminders.System.DBusClient/src/unity.cpp
-./Iron/IronReminders.System.API/src/unity.cpp
-./Iron/Iron.System.API/src/unity.cpp
-./Iron/Iron.System.DBusClient/src/unity.cpp
-
-./Cadmium/Cadmium.System.API/src/unity.cpp
-./Cadmium/Cadmium.System.DBusClient/src/unity.cpp
-./Rubidium/Rubidium.System.DBusClient/src/unity.cpp
-./Rubidium/Rubidium.System.API/src/unity.cpp
-./Osmium/Osmium.System.API/src/unity.cpp
-./Osmium/Osmium.System.DBusClient/src/unity.cpp
-./Neon/Neon.System.DBusClient/src/unity.cpp
-./Neon/Neon.System.API/src/unity.cpp
-./Nickel/Nickel.System.DBusClient/src/unity.cpp
-./Nickel/NickelOnScreenId.System.DBusClient/src/unity.cpp
-./Nickel/Nickel.System.API/src/unity.cpp
-./Nickel/NickelOnScreenId.System.API/src/unity.cpp
-./Nickel/NickelTuner.System.API/src/unity.cpp
-./Nickel/NickelTuner.System.DBusClient/src/unity.cpp
-./Arsenic/Arsenic.System.API/src/unity.cpp
-./Arsenic/Arsenic.System.DBusClient/src/unity.cpp
-./Mercury/Mercury.System.API/src/unity.cpp
-./Mercury/Mercury.System.DBusClient/src/unity.cpp
-
-./Cobalt/Cobalt.System.DBusClient/src/unity.cpp
-./Cobalt/Cobalt.System.API/src/unity.cpp
-
-
-<system-factory> SF is DBUS SF
-
-note:
-Two types. Cobalt DBus client is auto-generated but Nickel DBus client has
-sources.
-
-
-All are generated in build root.
-
-// Cobalt/Cobalt.System.API/include/SystemFactory.h
-
-namespace Zinc { namespace Broker {
-
-  struct ZINC_EXPORT SystemFactory : virtual public NS_ZINC::Plugin {
-    virtual ~SystemFactory();
-
-    virtual boost::shared_ptr<Zinc::Broker::MetadataBroker> 
-      createMetadataBroker() = 0;
-
-    virtual boost::shared_ptr<Zinc::Broker::HiddenServicesStore> 
-      createHiddenServicesStore() = 0;
-
-    ...
-    
-  };
-
-} //namespace
-} //namespace
-
-// Cobalt/Cobalt.System.DBusClient/src/unity.cpp
-
-namespace Zinc { namespace Broker { 
-
-class ZINC_EXPORT DbusSystemFactory : public SystemFactory
-  {
-    public: // from SystemFactory
-      DbusSystemFactory(const char* args = NULL);
-
-      virtual boost::shared_ptr<Zinc::Broker::MetadataBroker> 
-        createMetadataBroker();
-      ...
-
-    private:
-      NS_ZINC_DBUS_BINDING::DBusSystemFactoryImpl impl;
-
-      // references to our proxy objects
-      boost::weak_ptr<NS_ZINC_DBUS_BINDING::ObjectProxy> 
-        theMetadataBroker;
-      ...
-  };
-
-extern "C" {
-  NS_ZINC::Plugin* createDbusSystemFactory(const char* args = NULL) ZINC_EXPORT;
-}
-
-NS_ZINC::Plugin *createDbusSystemFactory(const char* args) {
-  return new Zinc::Broker::DbusSystemFactory(args);
-}
-
-DbusSystemFactory::DbusSystemFactory(const char* args)
- : impl(DBus::BusType::SESSION, getBusName(args))
-{
-}
-
-note: can see the bus name for this this dbus object, application.
-
-static std::string getBusName(const char* overrideBusName)
-{
-  const char* busName = NULL;
-  if (overrideBusName != NULL && overrideBusName[0] != '\0') {
-    busName = overrideBusName;
-  }
-  if (busName == NULL) {
-    busName = ::getenv(BUSNAME_ENV);
-  }
-  std::string theBusName;
-
-  if(busName && strlen(busName) > 0) {
-    theBusName = busName;
-  } else {
-    theBusName = "Zinc.Broker";          // note: default name
-  }
-  return theBusName;
-}
-
-note: can see all 'interfaces' from this dbus object, application.
-
-boost::shared_ptr<Zinc::Broker::MetadataBroker> DbusSystemFactory::createMetadataBroker()
-{
-    return NS_ZINC_DBUS_BINDING::applyInterface<Zinc::Broker::MetadataBroker>(
-            impl.getOrCreateObject(theMetadataBroker, "/Zinc/Broker/MetadataBroker"));
-}
-
-
-// MetadataProxy      15 ../Cobalt/Cobalt.System.DBusServer/src/BusName.cpp char const * const
-// BusName::LINEAR_METADATA = "Zinc.MetadataProxy";
-
-
-{map-from-client=factory-to-system-factory}
-// Uranium.Client.System/data/iron-system-factory.plugin-config
-//  libIronSystemDbusClient.so createDbusSystemFactory(Zinc.MetadataProxy)
-
-NS_IRON_SYSTEM::SystemFactory& SystemClientFactory::getIronSystemFactory() 
-{
-  const NS_ZINC::FilePluginConfig pluginConfig(PackageDataFinder().find( 
-        "iron-system-factory.plugin-config"));
-
-  return PluginFactory::getInstance<NS_IRON_SYSTEM::SystemFactory>(pluginConfig);
-}
-
-
-={============================================================================
 *kt_dev_uv_stack_103* zinc-plugin
 
 ////////////////////////////////////////
@@ -4614,7 +4245,8 @@ class ZINC_EXPORT PluginFactory {
 
 extern "C" typedef Plugin* createFunction_t(const char *);
 
-<get-instance>
+*plugin-get-instance*
+
 template<class T>
 T& PluginFactory::getInstance(const PluginConfig& config) 
 {
@@ -4802,7 +4434,8 @@ static bool checkLibraryNotAlreadyLoaded(const std::string& libPath) {
 # endif
 
 
-<load-instance>
+*plugin-get-instance*
+
 Plugin* PluginFactory::loadInstance(const PluginConfig& config) 
 {
   // note:
@@ -4914,6 +4547,7 @@ std::string PluginFactory::hashKey(const PluginConfig& config) {
     return hashKey ;
 }
 
+*plugin-get-instance*
 // note: singleton
 PluginFactory::instances_t& PluginFactory::getInstances(void) {
     static instances_t instances;
@@ -5231,6 +4865,331 @@ defaultImplementation = boost::addressof(PluginFactory::getInstance<SystemFactor
 
 
 ={============================================================================
+*kt_dev_uv_stack_101* zinc-plugin: plugin-client system
+
+<1> UI runtimes (EPG, stagecraft(air), etc)
+    --------------------------------------- 
+    // Uranium.AIR.Client.API/
+    XXX.YYY.Client.API (Nickel.AIR.Client.API)  Uranium.AIR.Client.API  ...
+    for binding between YYY and XXX
+
+    data/client-factory.plugin-config
+    libUraniumClientSystem.so createSystemClientFactory
+
+        data/client-factory.plugin-config
+        libNickelClientSystem.so createSystemClientFactory
+        ...
+
+   --------------------------------------- SystemClientFactory
+    libUraniumClientSystem.so createSystemClientFactory
+
+    // Uranium.Client.API/
+    XXX.Client.API     (Uranium.Client.API), API interface
+
+    // Uranium.Client.System/
+    XXX.Client.System  (Uranium.Client.System), ClientFactory
+
+    data/*-system-factory.plugin-config
+    libXXXSystemDbusClient.so createDbusSystemFactory
+    ...
+
+   --------------------------------------- SystemFactory
+    libXXXSystemDbusClient.so createDbusSystemFactory
+    Dbus client factories
+
+note:
+Singleton factory returns factory. Nested factory.
+
+1. UI get a SystemClientFactory of a component
+
+The UI uses plugin mean to set config filename and calls *plugin-get-instance*
+to get T* which is derived from Plugin. This is *SystemClientFactory.
+
+To that for component to use and those component provides factory function. 
+
+// This call is global since it is out of a namespace.
+// Uranium.Client.System/src/SystemClientFactory.cpp
+
+Plugin* createSystemClientFactory() {
+    return 'new' NS_URANIUM_CLIENT::SystemClientFactory();
+}
+
+
+note:
+Each ClientFactory for each component derives from "Plugin", plugin mechanism
+calls create function, maiantain derived T*.
+
+// Uranium/Uranium.Client.API/include/ClientFactory.h
+
+struct ZINC_EXPORT ClientFactory : virtual public NS_ZINC::Plugin {
+
+    /**
+     * IP Metadata factory methods.
+     */
+    virtual boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> 
+      createMetadataLocator() = 0;
+
+    virtual boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> 
+      createMetadataBroker() = 0;
+
+    ...
+
+    /**
+     * Linear Metadata factory methods.
+     */
+    virtual boost::shared_ptr<NS_URANIUM_LINEAR_CLIENT::Locator> 
+      createLinearMetadataLocator() = 0;
+
+    ...
+};
+
+class ZINC_EXPORT SystemClientFactory : 
+    public ClientFactory, public NS_ZINC::Resettable {
+    ...
+};
+
+
+2. UI calls nested factory function to get a locator for each interface.
+
+// Uranium.AIR.Client.API/src/UraniumAirPlugin.cpp
+
+note: Binding. Not sure how
+NS_URANIUM_LINEAR_AIR_CLIENT::LocatorBinding::setSingletonInstance() is
+implemented since there is no source and appears that it is generated by binding
+tool. Assumes that this saves a shared pointer of each component locator and
+uses it to call apis.
+
+class ZINC_LOCAL UraniumAirPlugin : 
+    public GenericAirPlugin<UraniumAirPlugin, ClientFactory> 
+{
+  void initSingletons(ClientFactory& clientFactory) 
+  {
+    // create <MD>, save it in its locator and return it back to UI
+    shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> nativeLocator(
+        clientFactory.createMetadataLocator()
+        );
+
+    // create <LMD>
+    NS_URANIUM_LINEAR_AIR_CLIENT::LocatorBinding::setSingletonInstance(
+        clientFactory.createLinearMetadataLocator());
+
+    ...
+  }
+};
+
+
+// /Uranium.Client.System/src/SystemClientFactory.cpp
+
+boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::Locator> 
+    SystemClientFactory::createMetadataLocator() {
+
+    if(!metadataLocator)
+    {
+        metadataLocator = 
+            boost::make_shared<NS_URANIUM_METADATA_CLIENT::SystemClientLocator>
+            (createMetadataBroker(),    <CMB>
+             createEventRepository(), 
+             createServiceRepository());
+    }
+    return metadataLocator;
+}
+
+3. Each Locator returns *IF 
+
+note: singleton and factory
+Each create function is a factory function: create a singletone locator instance
+of each component and this locator has member functions to get a shared pointer
+of each interface. So the locator is a container to pack shared pointers to
+interfaces and return a shared pointer of this locator to UI.
+
+note:
+Each interface(component) defines 'own' locator class chain and how it is
+possible? Use namespace.
+
+/Uranium.Client.API/include/local-media-library/Locator.h
+/Uranium.Client.API/include/linear-acquisition/Locator.h
+/Uranium.Client.API/include/linear-metadata/Locator.h
+/Uranium.Client.API/include/metadata/Locator.h
+/Uranium.Client.API/include/tuner/Locator.h
+
+/Uranium.Client.System/src/local-media-library/SystemClientLocator.h
+/Uranium.Client.System/src/linear-acquisition/SystemClientLocator.h
+/Uranium.Client.System/src/linear-metadata/SystemClientLocator.h
+/Uranium.Client.System/src/metadata/SystemClientLocator.h
+/Uranium.Client.System/src/tuner/SystemClientLocator.h
+
+This is metadata case.
+
+NS_URANIUM_METADATA_CLIENT_OPEN
+
+/**
+ * This is the top-level entrypoint to the Zinc Client API.
+ * A singleton instance will likely be exposed in the global
+ * context within the Javascript environment. An Actionscript
+ * binding will be newed in the Flash case.
+ */
+class ZINC_EXPORT Locator : public NS_ZINC::Polymorphic {
+
+public:
+    virtual ~Locator();
+    virtual boost::shared_ptr<MetadataBroker> getMetadataBroker() const = 0;
+    virtual boost::shared_ptr<EventRepository> getEventRepository() const = 0;
+    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const = 0;
+};
+
+class SystemClientLocator : virtual public Locator {
+
+  public:
+    SystemClientLocator(boost::shared_ptr<MetadataBroker> metadataBroker, 
+        boost::shared_ptr<EventRepository> er, boost::shared_ptr<ServiceRepository> sr);
+
+    boost::shared_ptr<MetadataBroker> getMetadataBroker() const;
+    virtual boost::shared_ptr<EventRepository> getEventRepository() const;
+    virtual boost::shared_ptr<ServiceRepository> getServiceRepository() const;
+
+  private:
+    boost::shared_ptr<MetadataBroker> metadataBroker;
+    boost::shared_ptr<EventRepository> eventRepository;
+    boost::shared_ptr<ServiceRepository> serviceRepository;
+};
+
+
+={============================================================================
+*kt_dev_uv_stack_102* zinc-plugin: plugin-system-client
+
+{dbus-system-factory}
+
+1. CMB. Loads Cobalt system client through plugin. Nested factory.
+
+boost::shared_ptr<NS_URANIUM_METADATA_CLIENT::MetadataBroker> 
+    SystemClientFactory::createMetadataBroker() {
+
+    if(metadataBroker == 0)
+    {
+        boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> 
+            systemMetadataBroker(getSystemMetadataBroker());
+
+        boost::shared_ptr<SystemClientMetadataBroker> mb =
+            boost::make_shared<SystemClientMetadataBroker>( systemMetadataBroker,
+                                                     createConverter(),
+                                                     createMetadataObserver() );
+
+        metadataBroker = mb;
+    }
+
+    return metadataBroker;
+}
+
+boost::shared_ptr<NS_COBALT_SYSTEM::MetadataBroker> 
+    SystemClientFactory::getSystemMetadataBroker()
+{
+    if(systemMetadataBroker == 0)
+    {
+        *dbus-client-create-meta*
+        systemMetadataBroker = 
+            getCobaltSystemFactory().createMetadataBroker();
+    }
+    return systemMetadataBroker;
+}
+
+NS_COBALT_SYSTEM::SystemFactory& 
+    SystemClientFactory::getCobaltSystemFactory() {
+    const NS_ZINC::FilePluginConfig 
+        pluginConfig(PackageDataFinder().find("cobalt-system-factory.plugin-config"));
+    return PluginFactory::getInstance<NS_COBALT_SYSTEM::SystemFactory>(pluginConfig);
+}
+
+// Uranium/Uranium.Client.System/data$
+
+cobalt-system-factory.plugin-config:
+  libCobaltSystemDbusClient.so createDbusSystemFactory
+
+
+<system-factory-fake>
+The system factory can be replaced with a fake by simply changing plugin config
+which is flexible.
+
+Uranium.Client.System/data/cobalt-system-factory.plugin-config:
+  libCobaltSystemDbusClient.so createDbusSystemFactory
+  #libCobaltSystemFake.so createFakeSystemFactory
+
+
+<dbus-client> >
+This is a client(proxy) interface for a component that can be used by others. No
+code in source tree and these are 'generated'.
+
+zinc-build-root/release-humax-dtr_t2100/Cobalt/Cobalt.System.DBusClient/src/
+CobaltDbusSystemFactory.cpp
+
+ * Template dbusproxy_systemfactory.cpp.template
+ * Using /zinc-install-root/release/humax-dtr_t2100/opt/zinc-trunk/share/
+   cobalt-system-api/introspection-xml/service.xml
+
+NS_ZINC::Plugin *createDbusSystemFactory(const char* args) {
+    return new Zinc::Broker::DbusSystemFactory(args);
+}
+
+note: getBusName returns default name if not given
+
+DbusSystemFactory::DbusSystemFactory(const char* args)
+ : impl(DBus::BusType::SESSION, getBusName(args))
+{
+}
+
+char const * const BUSNAME_ENV = "ZINC_BROKER_DBUSCLIENT_BUSNAME";
+
+static std::string getBusName(const char* overrideBusName)
+{
+    const char* busName = NULL;
+    if (overrideBusName != NULL && overrideBusName[0] != '\0') {
+        busName = overrideBusName;
+    }
+    if (busName == NULL) {
+        busName = ::getenv(BUSNAME_ENV);
+    }
+    std::string theBusName;
+
+    if(busName && strlen(busName) > 0) {
+        theBusName = busName;
+    } else {
+        theBusName = "Zinc.Broker";
+    }
+    return theBusName;
+}
+
+*dbus-client-create-meta*
+boost::shared_ptr<Zinc::Broker::MetadataBroker> DbusSystemFactory::createMetadataBroker()
+{
+	return NS_ZINC_DBUS_BINDING::applyInterface<Zinc::Broker::MetadataBroker>(
+		impl.getOrCreateObject(theMetadataBroker, "/Zinc/Broker/MetadataBroker"));
+}
+
+
+zinc-build-root/release-humax-dtr_t2100/Cobalt/Cobalt.System.DBusClient/src/
+CobaltDbusSystemFactory.h
+
+class ZINC_EXPORT DbusSystemFactory : public SystemFactory
+{
+public: // from SystemFactory
+    DbusSystemFactory(const char* args = NULL);
+
+    virtual boost::shared_ptr<Zinc::Broker::MetadataBroker> 
+       createMetadataBroker();
+
+    virtual boost::shared_ptr<Zinc::Broker::HiddenServicesStore> 
+       createHiddenServicesStore();
+   ...
+
+private:
+    NS_ZINC_DBUS_BINDING::DBusSystemFactoryImpl impl;
+};
+
+extern "C" {
+    NS_ZINC::Plugin* createDbusSystemFactory(const char* args = NULL);
+}
+
+
+={============================================================================
 *kt_dev_uv_stack_104* stack: binding and makefile 
 
 How do translation?
@@ -5506,7 +5465,12 @@ method return sender=:1.75 -> dest=:1.78 reply_serial=*91*
 *kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
 
 <1>
-2015-07-03 12:25:33,605 ERROR  1152333088 zinc /home/kpark/builds/_virtual_/humax.1000/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken." in response to call to 
+2015-07-03 12:25:33,605 ERROR  1152333088 zinc 
+/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41
+Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a
+reply. Possible causes include: the remote application did not send a reply, the
+message bus security policy blocked the reply, the reply timeout expired, or the
+network connection was broken." in response to call to 
 
 /Zinc/Media/MediaRouterFactory
 
@@ -5520,8 +5484,10 @@ Aborted
 
 
 <2>
-2015-12-14 12:46:24,022 ERROR  1484772624 zinc /data/ws/sources/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include8
-all to /Zinc/Media/MediaRouters/1
+2015-12-14 12:46:24,022 ERROR  1484772624 zinc 
+/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received
+remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply.
+Possible causes include8 all to /Zinc/Media/MediaRouters/1
 
 terminate called after throwing an instance of 'DBus::ErrorNoReply'
   what():  Did not receive a reply. Possible causes include: the remote
@@ -5647,7 +5613,8 @@ class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
 };
 
 
-{use}
+={============================================================================
+*kt_dev_uv_stack_105* zinc-dbus: mock use: mr case
 
 <van>
 VanadiumMediaPlayer::VanadiumMediaPlayer(
@@ -5679,14 +5646,73 @@ void VanadiumMediaPlayer::load(const std::string& url)
 }
 
 
-<mock>
-Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
+<use-test-mock>
+/Vanadium.WebKit.VideoElement/test/data/system-factory.plugin-config 
+libVanadiumVideoTagTest.so createMockSystemFactory
 
+note: 
+Here "createMockSystemFactory" which means that this is createSystemFactory 
+
+
+<mock>
+// testlib_LTLIBRARIES = libVanadiumVideoTagTest.la
+// Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
+
+// global functions
+void sendStatusEvent(boost::shared_ptr<MockMediaRouter> mock,
+    const StatusEventValue::Enum statusEvent)
+{
+    mock->emitStatusEvent(statusEvent);
+}
+
+namespace
+{
+    MockMediaRouterRepository mediaRouterRepository;
+}
+
+extern "C"
+{
+	NS_NICKEL_SYSTEM::SystemFactory*  createMockSystemFactory() ZINC_EXPORT;
+	NS_NICKEL_SYSTEM::SystemFactory*  createMockSystemFactory()
+    {
+        VANADIUM_WARN("Creating system factory");
+        return mediaRouterRepository.getSystemFactory();
+    }
+}
+
+note: this implements MR IF
 typedef StrictMock<MockMediaRouterAsync> MockMediaRouter;
 
+/**
+ * Manages a collection of mock MediaRouters for testing VanadiumMediaPlayer.
+ *
+ * We test VanadiumMediaPlayer through WebKit using JavaScript to drive
+ * operations on the HTML video element which call through to Gmock
+ * implementations of the MediaRouter API. The JavaScript indicates the start
+ * and end of a test by posting to a Mongoose web server.
+ */
 class ZINC_LOCAL MockMediaRouterRepository
 {
-    // one test case and one mock
+public:
+    MockMediaRouterRepository()
+        : dispatcher(new NS_ZINC::SingleThreadDispatcher),
+        mediaRouterFactory(new SimpleMediaRouterFactory("default", dispatcher)),
+
+        // Nickel/Nickel.System.Proxy/include/testsupport/StubSystemFactory.h
+        stubSystemFactory(new StubSystemFactory("default", dispatcher, mediaRouterFactory)),
+        sink("decoder://0"),
+        activatedTestCount(0),
+        stoppedMediaRouterCount(0),
+        hasStalled(0)
+    {
+    }
+
+    SystemFactory* getSystemFactory() const
+    {
+        return stubSystemFactory.get();
+    }
+
+    // note: ecah test case has a moco object.
     void registerMockForInvalidSourceException()
     {
         boost::shared_ptr<MockMediaRouter> mockMediaRouter
@@ -5705,13 +5731,6 @@ class ZINC_LOCAL MockMediaRouterRepository
         registerMock("InvalidSourceException", mockMediaRouter);
     }
 };
-
-// global functions
-void sendStatusEvent(boost::shared_ptr<MockMediaRouter> mock,
-    const StatusEventValue::Enum statusEvent)
-{
-    mock->emitStatusEvent(statusEvent);
-}
 
 
 ={============================================================================
@@ -10045,10 +10064,9 @@ void MediaPlayerPrivateGStreamer::createDashPipeline(const char *srcElementName)
 }
 
 
-<yv-mr>
-
-1. libVanadiumMediaRouterWebKitPlugin.so.0.0.0 to get VanadiumMediaPlayer which is
-webkit plugin.
+<yv-mr-dbus-client>
+1. libVanadiumMediaRouterWebKitPlugin.so.0.0.0 to get VanadiumMediaPlayer which
+is webkit plugin.
 
 2. VanadiumMediaPlayer links to the proxy.
 
@@ -12768,15 +12786,12 @@ https://wiki.youview.co.uk/display/canvas/MPEG+DASH+to-do+list?src=search
                                   gst.so, virtualbin.so
 
 
-{before}
+{before-yv}
 
 <app> same as before. gets SCF and then MR factory via SCF.
 
 Nickel.AIR.Client.API/data/client-factory.plugin-config
   libNickelClientSystem.so createSystemClientFactory
-
-
-<get-system-media-router-factory>
 
 MediaRouterFactory* createMediaRouterFactory();
   SF(dbus)->createMediaRouterFactory();
@@ -13033,47 +13048,6 @@ boost::shared_ptr<MediaRouter> wrapSystemRouter(
   NICKEL_DEBUG("cli "<<cliSysRouter<<" sys "<<sysRouter);
   return cliSysRouter;
 }
-
-
-{how-events-get-delivered-on-dbus}
-
-Nickel.System.API/include/MediaRouterEventListener.h
-
-/**
- * Inherit from MediaRouterEventListener and register with
- * MediaRouter::addListener() to receive signals sent by
- * MediaRouter.
- */
-struct ZINC_EXPORT MediaRouterEventListener : public NS_ZINC::EventListener
-{
-  virtual ~MediaRouterEventListener();
-  virtual void BufferStatusEvent(const BufferStatusEventValue::Enum event) = 0;
-  virtual void DrmEvent(const DrmEventValue::Enum event, 
-      const std::string& drmMediaIdentifier, 
-      const std::string& rightsIssuerUrl) = 0;
-  virtual void PositionChangeEvent(const Position& position) = 0;
-  virtual void SourceEvent(const SourceEventValue::Enum event, 
-      const SetSourceReason::Enum reason) = 0;
-  virtual void SpeedChangeEvent() = 0;
-  virtual void StatusEvent(const StatusEventValue::Enum event) = 0;
-  virtual void ErrorEvent(const ErrorEventValue::Enum error, 
-      const ErrorEventContext::Enum context, const std::string& info) = 0;
-
-};
-
-
-Nickel.System.API/include/MediaRouterAsync.h
-
-class MediaRouterEventListener;
-
-class ZINC_EXPORT MediaRouterAsync : 
-  public virtual NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>
-{
-}
-
-
-class MediaPlayerListener : boost::noncopyable,
-    public NS_NICKEL_SYSTEM::MediaRouterEventListener;
 
 
 {after} <yv-mr> nickelmediad which is a dbus-server
@@ -15714,7 +15688,7 @@ boot-from-101.log
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: output-control: nexus-inspect
+*kt_dev_uv_stack_408* mr-dash: output-control-visibility
 
 // both scart and hdmi are fine to play aqiva
 
@@ -16421,6 +16395,13 @@ gint64 getDuration (const RefObj<GstElement>& pipeline, const GstFormat format)
     return duration;
 }
 
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash: help app?
+
+[05-02-2016 10:48:49.109079] method call sender=:1.163 -> dest=:1.77 serial=15 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=setSource
+   string "http://cc4-pro01-help-app-assets-s3-website.s3.amazonaws.com/Help%20App%20Videos/DigitalReception_1/DigitalReception.m3u8"
+   int32 1
 
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed

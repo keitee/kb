@@ -22939,45 +22939,77 @@ The point is that use "const T&" to pass 'any' type.
 
 <from-rvalue-reference>
 
-template <typename T> void f1( const T&& );
+template <typename T> void f3( const T&& );
 
-f3(5);      // T is int
-f3(i);      // T is int&
+f3(5);      // T is `int`
 
-In this case, T is deuced to "int &" due to collapising rule, C++P 688. (not understand fully). The
-important thing to remember is that can pass 'any' type of argument to T&& function parameter;
-rvalue or lvalue.
+How about this?
+
+f3(i);
+
+illegal? Since cannot bind an rvalue reference to an lvalue? Allows two
+exception.
+
+note: CPR 688
+The first is when pass an lvalue to rvalue reference function parameter, deduce
+it as lvalue reference.
+
+f3(i);      // T is `int&`
+
+Then instantiates 
+
+void f3(const int& &&);
+
+reference to reference? Ordinarily, cannot define that but allows indirectly.
+This is second called 'collapsing'
+
+X& &, X& &&, X&& & to X&. X&& && to X&&
+
+The reference collapsing applies only when a reference to a reference is created
+indirectly such as in a type alias or a template parameter.
+
+f3(i);      // T is `int&`
+f3(ci);     // T is `const int&`
+
+void f3<int&>(int& &&); to void f3<int&>(int&);
+
+The point is that to pass 'any' type.
 
 <implication>
 This matters when write template.
 
-template <typename T> void f3( T&& val )
+template <typename T> void f3(T&& val)
 { 
-    T t = val;
-    t = fcn(t);
-    ...
+    T t = val;      // copy or binding?
+    t = fcn(t);     // change only t or val and t?
+    if(val == t) { ... }
 }
 
-o when call f3 on rvalue, T is int and "int t = val". so t and val is independant.
-o when call f3 on lvalue, T is int& and "int& t = val". so when change t, will change val as well.
 
-note: In summary, when pass rvalue on rvalue reference parameter, T is "type" and when pass lvalue
-on rvalue parameter, T is "type &".
+* When call f3 on rvalue, T is `int` so "int t = val". t and val are
+  independant.
+    
+* When call f3 on lvalue, T is `int&` so "int& t = val". When change t, will
+  change val as well.
 
-It is suprisingly difficult to write code that is correct when type is plain nonreference or
-reference type. In practice, rvlue reference used in one of two context: argument forwading or
-template overload.
+  note: is it legal?
+
+  int& t = int& val; 
+
+It is suprisingly difficult to write code that is correct when type is plain
+nonreference or reference type. In practice, rvalue reference used in one of two
+context: argument forwading or template overload.
 
 // const overloading
-Record lookup( account & );      // non-const version
-Record lookup( const account &); // const version
+Record lookup( account & );             // non-const version
+Record lookup( const account &);        // const version
 
 // copy and move overloading
 void push_back( const X& );
 void push_back( X&& );
 
-template <typename T> void f( const T& );       // binds to lvalue and const rvalue
-template <typename T> void f( T&& );            // binds to nonconst rvalue
+template <typename T> void f( const T& );   // binds to lvalue and const rvalue
+template <typename T> void f( T&& );        // binds to nonconst rvalue
 
 
 <std-move-example>
