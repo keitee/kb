@@ -105,7 +105,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_004| copy-control of dyn resource
 *kt_dev_cpp_004* copy-control: valuelike
 *kt_dev_cpp_004* copy-control: message example, swap, move consideration
-*kt_dev_cpp_004* copy-control: move semantics
+*kt_dev_cpp_004* copy-control: move
+*kt_dev_cpp_004* copy-control: move: rvalue reference
+*kt_dev_cpp_004* copy-control: move: std-move
 *kt_dev_cpp_004* copy-control: preventing-copies
 |kt_dev_cpp_007| overload-function matching
 |kt_dev_cpp_021| overload-operator
@@ -158,6 +160,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_051| template-explicit-argument
 |kt_dev_cpp_051| template-type-traits
 |kt_dev_cpp_052| template-argument deduction
+*kt_dev_cpp_053* template-argument deduction: std-forward
 |kt_dev_cpp_053| template: variadic
 |kt_dev_cpp_054| template: specialization
 |kt_dev_cpp_060| template: how to initialize T member
@@ -13655,6 +13658,9 @@ note: the std::move() returns a result that cause construct() to use the string
 move ctor.
 
 
+={============================================================================
+*kt_dev_cpp_004* copy-control: move: rvalue reference
+
 {lvalue-rvalue-reference}
 CPR 226. "Calls to functions that return reference are 'lvalue'" which means
 that can be used in the same ways as any other lvalue.
@@ -13682,9 +13688,9 @@ means that an assignment can appear as part of a larger expression, such as
 "while((c = getchar()) != EOF)"
 
 These, lvalue/rvalue, are 'properties' of an expression. Expressions yield or
-require rvalue/lvalue.  Operators 'differ' as to whether require lvalue or
-rvalue operands and as to whether return lvalue or rvalues. Some yield or
-require lvalues and others yield or require rvalues:
+require rvalue/lvalue. Operators 'differ' as to whether require lvalue or rvalue
+operands and as to whether return lvalue or rvalues. Some yield or require
+lvalues and others yield or require rvalues:
 
 Assignment requires a (nonconst) lvalue as its left hand operand and yields its
 left-hand operand as an lvalue.
@@ -13703,24 +13709,31 @@ int main(int argc, char* argv[])
 }
 
 
-<bindings> like const 
+<bindings> like const. CPR 532 
 The lvalue binding properties is that cannot bind regular(lvalue) reference to
 expression that requires a conversion, to literals, or to expression that return
-an rvalue. The rvalue binding have the opposite. The important point is that can
-use lvalue when an rvalue is required but cannot use an rvalue when lvalue is
-required.
+an rvalue. 
+
+The rvalue binding have the opposite; can bind an rvalue reference to these but
+cannot 'directly' bind an rvalue reference to an lvalue.
+
+The important point is that can use lvalue when an rvalue is required but cannot
+use an rvalue when lvalue is required.
 
 An rvalue reference is obtained by using '&&' rather than '&'. 
 
 int i = 42;
 
 int &r = i;             // okay  bind lvalue to lref
-int &&rr = i;           // error since cannot bind an rref to lvalue.
+int &&rr = i;           // error since cannot bind an rref to lvalue
 
 const int &r3 = i*42;   // okay  bind rvalue to 
 
 int &r2 = i*42;         // error bind rvalue to lref.
 int &&r2 = i*42;        // okay  bind rvalue to rref.
+
+Functions that return a nonreference type, along with the arithmetic,
+relational, bitwise, and postfix operations, all yield rvalues.
 
 
 <rvalue-is-temporary> implicit move sementics
@@ -13737,6 +13750,9 @@ about to be destroyed and there can be 'no' other users of that object. So the
 code that uses an rvalue reference is 'free' to 'take' over resources from the
 object to which the reference refers.
 
+
+={============================================================================
+*kt_dev_cpp_004* copy-control: move: std-move
 
 {std-move}
 This is defined in <utility> header and to 'return' rvalue reference to its
@@ -23015,13 +23031,15 @@ template <typename T> void f( T&& );        // binds to nonconst rvalue
 <std-move-example>
 Again, copied from {copy-or-move}:
 
-Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in the second assign, both
-are viable but copy assign requires conversion to const. Hence move is used since it is exact match.
+Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in the
+second assign, both are viable but copy assign requires conversion to const.
+Hence move is used since it is exact match.
 
-In other words, cannot directly bind an rvalue reference to lvalue but can use move() to obtain an
-rvalue reference bound to an lvalue.
+In other words, cannot directly bind an rvalue reference to lvalue but can use
+move() to obtain an rvalue reference bound to an lvalue.
 
-The standard defines move() which is example that works on rvalue and lvalue arguments.
+The standard defines move() which is example that works on rvalue and lvalue
+arguments.
 
 template <typename T>
 typename remove_reference<T>::type&& move( T&& t )
@@ -23034,7 +23052,82 @@ string s1("hi!"), s2;
 s2 = std::move( string("bye") );       // temporary, rvalue.
 s2 = std::move( s1 );                  // lvalue.
 
-note: for more details on how this works, see C++P 690.
+note: For more details on how this works, see CPR 690.
+
+
+={============================================================================
+*kt_dev_cpp_053* template-argument deduction: std-forward
+
+*std-forward*
+Some function need to forward their arguments with types 'unchanged' to another
+function. In such cases, need to 'preserve' everything including whether or not
+type is `const` and whether the argument is an lvalue or an rvalue.
+
+template <typename F, typename T1, typename T2>
+void flip1(F f, T1 t1, T2 t2)
+{
+  f(t2, t1);
+}
+
+Do not work when use it to call a function that has a reference.
+
+void f(int v1, int &v2)
+{
+  cout << v1 << " " << ++v2 << endl;
+}
+
+flip1(f, j, 42);
+
+The problem is that the parameter in flip1 is `int`, not an int&, and the
+changes made by f do not affect the original argument.
+
+Solution? A function parameter that is an rvalue reference to a template
+parameter 'preserves' constness and lvalue/rvalue property of its corresponding
+argument.
+
+template <typename F, typename T1, typename T2>
+void flip2(F f, T1 &&t1, T2 &&t2)
+{
+  f(t2, t1);
+}
+
+Still flip2 solves one half of the problem since cannot be used to call a
+function that has an rvalue parameter.
+
+void g(int &&i, int& j)
+{
+  cout << i << " " << j << endl;
+}
+
+flip2(g, i, 42);    // g(t2, t1);
+
+Why? Since a function parameter, like any other variable, is an lvalue
+expression. The t2 is lvaue and cannot 'directly' bind lvalue to rvalue
+parameter in g.
+
+Use std::forward to preserve the types of the original arguments. Unlike
+std::move, std::forward must be called with an explicit template argument and
+returns rvalue reference to that type, T &&. 
+
+template <typename F, typename T1, typename T2>
+void flip(F f, T1 &&t1, T2 &&t2)
+{
+  f(std::forward<T2>(t2), std::forward<T1>(t1));
+}
+
+
+={============================================================================
+*kt_dev_cpp_053* template-function: overload
+
+A function return a string representation of a given object.
+
+// print any type
+template <typename T> string debug_rep(const T &t)
+{
+  ostringstream ret;
+  ret << t;           // use T's output operator
+  return ret.str();   // return a copy of the string to which ret is bound
+}
 
 
 ={============================================================================
