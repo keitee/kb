@@ -94,7 +94,10 @@
 *kt_dev_uv_stack_250* mr-web: play, ready, network state attribute 
 *kt_dev_uv_stack_250* mr-web-server
 *kt_dev_uv_stack_250* mr-web-local server to play
-*kt_dev_uv_stack_250* mr-web-qunit test
+*kt_dev_uv_stack_250* mr-web-test: run with gdb
+*kt_dev_uv_stack_250* mr-web-test: run 
+*kt_dev_uv_stack_250* mr-web-test: how the test harness work
+*kt_dev_uv_stack_250* mr-web-test: playvideoextended
 *kt_dev_uv_stack_250* mr-web: yv webkit plugin, vanadium
 *kt_dev_uv_stack_250* mr-web: qt patches
 *kt_dev_uv_stack_250* mr-web: launch crb
@@ -156,7 +159,8 @@
 *kt_dev_uv_stack_413* mr-dash: hls play in in-process version
 *kt_dev_uv_stack_413* mr-dash: hls play commands
 *kt_dev_uv_stack_413* mr-dash: ts play commands
-*kt_dev_uv_stack_413* mr-dash: gstmr-play.sh
+*kt_dev_uv_stack_413* mr-dash-script: gstmr-play
+*kt_dev_uv_stack_413* mr-dash-script: yv-mpeg-dash
 
 *kt_dev_uv_stack_413* mr-debug: gst
 *kt_dev_uv_stack_413* mr-debug: nickel in sandbox
@@ -5613,14 +5617,40 @@ class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
 };
 
 
+<mr-factory>
+
+Nickel.System.API/include/MediaRouterFactoryAsync.h
+
+ *	Template base-async.template
+ *	Using Nickel.System.API/data/introspection-xml/interface-MediaRouterFactory.xml
+
+namespace Zinc {
+namespace Media {
+
+class ZINC_EXPORT MediaRouterFactoryAsync
+{
+/* =============================== Methods ================================= */
+public:
+	virtual NS_ZINC::Future< boost::shared_ptr< MediaRouter > > createMediaRouter() = 0;
+
+protected:
+	virtual ~MediaRouterFactoryAsync();
+};
+
+} // namespace
+} // namespace
+
+
 ={============================================================================
-*kt_dev_uv_stack_105* zinc-dbus: mock use: mr case
+*kt_dev_uv_stack_105* zinc-dbus: mock use: mr vanadium case
 
 <van>
 VanadiumMediaPlayer::VanadiumMediaPlayer(
         QMediaPlayerCallbackInterface& callbacks,
         MediaPlayerManager& playerManager)
+
     : dispatcher(makeGlibEventDispatcher()),
+
     callbacks(callbacks),
     preloadPolicy(QMediaPlayerInterface::AUTO),
     // Initially this should really be NO_SOURCE but this is not defined on the
@@ -5628,6 +5658,18 @@ VanadiumMediaPlayer::VanadiumMediaPlayer(
     listener(boost::make_shared<MediaPlayerListener>(this)),
     playerManager(playerManager),
 {
+    // note:
+    // Here changes to use "MR mock" instead rather then the real which is dbus
+    // system client and is the media proxy. Simply replace a config file.
+    //
+    // From:
+    // Vanadium/Vanadium.WebKit.VideoElement/data$ cat system-factory.plugin-config 
+    // libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
+    //
+    // To:
+    // Vanadium.WebKit.VideoElement/test/data/system-factory.plugin-config 
+    // libVanadiumVideoTagTest.so createMockSystemFactory
+
     FilePluginConfig pluginConfig(dataFinder.find("system-factory.plugin-config"));
     NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
         PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
@@ -5639,22 +5681,17 @@ VanadiumMediaPlayer::VanadiumMediaPlayer(
 void VanadiumMediaPlayer::load(const std::string& url)
 {
     // note:
-    // comes from `EventProducer` IF
+    // comes from `EventProducer` IF and calls to "mock" MR
     mediaRouter->addListener(dispatcher, listener);
-
     mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
 }
 
 
-<use-test-mock>
-/Vanadium.WebKit.VideoElement/test/data/system-factory.plugin-config 
-libVanadiumVideoTagTest.so createMockSystemFactory
-
-note: 
-Here "createMockSystemFactory" which means that this is createSystemFactory 
-
-
 <mock>
+
+// MockMediaRouterRepository(sp) -> 
+//      -> stubSystemFactory(sp) -> SimpleMediaRouterFactory(sps to many mocks)
+//
 // testlib_LTLIBRARIES = libVanadiumVideoTagTest.la
 // Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
 
@@ -5665,6 +5702,7 @@ void sendStatusEvent(boost::shared_ptr<MockMediaRouter> mock,
     mock->emitStatusEvent(statusEvent);
 }
 
+// note: static creation
 namespace
 {
     MockMediaRouterRepository mediaRouterRepository;
@@ -5672,15 +5710,14 @@ namespace
 
 extern "C"
 {
-	NS_NICKEL_SYSTEM::SystemFactory*  createMockSystemFactory() ZINC_EXPORT;
-	NS_NICKEL_SYSTEM::SystemFactory*  createMockSystemFactory()
+    NS_NICKEL_SYSTEM::SystemFactory*  createMockSystemFactory() ZINC_EXPORT;
+    NS_NICKEL_SYSTEM::SystemFactory*  createMockSystemFactory()
     {
-        VANADIUM_WARN("Creating system factory");
         return mediaRouterRepository.getSystemFactory();
     }
 }
 
-note: this implements MR IF
+// note: this "mock" MR that implements MR IF
 typedef StrictMock<MockMediaRouterAsync> MockMediaRouter;
 
 /**
@@ -5696,15 +5733,23 @@ class ZINC_LOCAL MockMediaRouterRepository
 public:
     MockMediaRouterRepository()
         : dispatcher(new NS_ZINC::SingleThreadDispatcher),
+
         mediaRouterFactory(new SimpleMediaRouterFactory("default", dispatcher)),
 
         // Nickel/Nickel.System.Proxy/include/testsupport/StubSystemFactory.h
         stubSystemFactory(new StubSystemFactory("default", dispatcher, mediaRouterFactory)),
+
         sink("decoder://0"),
         activatedTestCount(0),
         stoppedMediaRouterCount(0),
         hasStalled(0)
     {
+        mediaRouterFactory->setMockMediaRouters(
+                addDeleter(MockList(1, defaultMockMediaRouter), "default"));
+
+        // Here we set up our mocks
+        registerMockForInvalidSourceException();
+        ...
     }
 
     SystemFactory* getSystemFactory() const
@@ -5712,7 +5757,15 @@ public:
         return stubSystemFactory.get();
     }
 
-    // note: ecah test case has a moco object.
+    void registerMock(const std::string& testName,
+            boost::shared_ptr<MockMediaRouter> mock)
+    {
+        mock->setDispatcher(dispatcher);
+        mapOfMocks[testName].push_back(mock);
+    }
+
+    // note: ecah test case create a "mock", set dispacher to that, and add that
+    // mock to
     void registerMockForInvalidSourceException()
     {
         boost::shared_ptr<MockMediaRouter> mockMediaRouter
@@ -5725,12 +5778,145 @@ public:
 
         EXPECT_CALL(*mockMediaRouter, stop()).WillRepeatedly(
                 DoAll(Invoke(boost::bind
-                        (&sendStatusEvent, mockMediaRouter, StatusEventValue::stopped)),
+                        (&sendStatusEvent, mockMediaRouter, 
+                         StatusEventValue::stopped)),
                     Return(makeCompletedFuture())));
 
         registerMock("InvalidSourceException", mockMediaRouter);
     }
+
+private:
+    boost::shared_ptr<StubSystemFactory> stubSystemFactory;
+
+    typedef std::vector<boost::shared_ptr<MockMediaRouter>> MockList;
+    typedef std::map<std::string, MockList> MockMap;
+    MockMap mapOfMocks;
 };
+
+
+<helper-simple-mr-factory>
+#ifndef NICKEL_SYSTEM_PROXY_SIMPLEMEDIAROUTERFACTORY_H
+#define NICKEL_SYSTEM_PROXY_SIMPLEMEDIAROUTERFACTORY_H
+
+/**
+ * SimpleMediaRouterFactory.h
+ */
+NS_NICKEL_SYSTEM_OPEN
+
+class ZINC_LOCAL SimpleMediaRouterFactory : public MediaRouterFactory, public Stub {
+
+public:
+
+	SimpleMediaRouterFactory(const std::string& stubName_,
+            boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher_) :
+		Stub(stubName_, dispatcher_),
+		mediaRoutersCreated(0)
+    {}
+
+	virtual NS_ZINC::Future<boost::shared_ptr<MediaRouter> > createMediaRouter()
+    {
+        NICKEL_FUNC_TRACE;
+
+        return NS_ZINC::completedFuture(*dispatcher, mediaRouters[mediaRoutersCreated++]);
+	}
+
+    void setMockMediaRouter(boost::shared_ptr<MediaRouter> mediaRouter)
+    {
+        mediaRouter->setDispatcher(dispatcher);
+        mediaRouters.push_back(mediaRouter);
+        mediaRoutersCreated = 0;
+    }
+
+    void setMockMediaRouters(const std::vector<boost::shared_ptr<MediaRouter>>& mediaRouters_)
+    {
+        mediaRouters = mediaRouters_;
+        BOOST_FOREACH(boost::shared_ptr<MediaRouter> mr, mediaRouters)
+        {
+            mr->setDispatcher(dispatcher);
+        }
+        mediaRoutersCreated = 0;
+    }
+
+    void clearMediaRouters()
+    {
+        mediaRouters.clear();
+    }
+
+private:
+    std::vector<boost::shared_ptr<MediaRouter>> mediaRouters;
+    size_t mediaRoutersCreated;
+};
+
+NS_NICKEL_SYSTEM_CLOSE
+#endif // NICKEL_SYSTEM_PROXY_SIMPLEMEDIAROUTERFACTORY_H
+
+
+<helper-stub-mr-factory>
+#ifndef NICKEL_SYSTEM_PROXY_STUBSYSTEMFACTORY_H
+#define NICKEL_SYSTEM_PROXY_STUBSYSTEMFACTORY_H
+
+/**
+ * StubSystemFactory.h
+ */
+NS_NICKEL_SYSTEM_OPEN
+
+class ZINC_LOCAL StubSystemFactory : public SystemFactory, public Stub {
+
+public:
+
+	explicit StubSystemFactory(const std::string& stubName,
+            boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher_)
+        : Stub(stubName, dispatcher_),
+		mediaRouterFactory(new StubMediaRouterFactory(stubName, dispatcher_)),
+		serviceListBuilder(new StubServiceListBuilder(stubName, dispatcher_)) {
+	}
+
+   // note:
+	StubSystemFactory(const std::string& stubName,
+            boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher_,
+            boost::shared_ptr<MediaRouterFactory> mediaRouterFactory_)
+        : Stub(stubName, dispatcher_),
+		mediaRouterFactory(mediaRouterFactory_),
+		serviceListBuilder(new StubServiceListBuilder(stubName, dispatcher_)) {
+	}
+
+	boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory() {
+		return mediaRouterFactory;
+	}
+
+	boost::shared_ptr<MediaRouter> createDefaultMediaRouter() {
+		return boost::shared_ptr<MediaRouter>();
+	}
+
+	boost::shared_ptr<LocalMediaLibrary> createLocalMediaLibrary() {
+		return boost::shared_ptr<LocalMediaLibrary>();
+	}
+
+	boost::shared_ptr<MediaSettings> createMediaSettings() {
+		return boost::shared_ptr<MediaSettings>();
+	}
+
+	boost::shared_ptr<OutputManager> createOutputManager() {
+		return boost::shared_ptr<OutputManager>();
+	}
+
+	boost::shared_ptr<OutputControlManager> createOutputControlManager() {
+		return boost::shared_ptr<OutputControlManager>();
+	}
+
+	boost::shared_ptr<ServiceListBuilder> createServiceListBuilder() {
+		return serviceListBuilder;
+	}
+
+private:
+
+	boost::shared_ptr<MediaRouterFactory> mediaRouterFactory;
+	boost::shared_ptr<ServiceListBuilder> serviceListBuilder;
+};
+
+NS_NICKEL_SYSTEM_CLOSE
+
+#endif // NICKEL_SYSTEM_PROXY_STUBSYSTEMFACTORY_H
 
 
 ={============================================================================
@@ -12075,22 +12261,6 @@ kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.html
 
 
 kpark@wll1p04345:~$ cat /usr/share/nginx/www/test.js   
-function beginTest(testID) {
-    var req = new XMLHttpRequest();
-    req.enctype = 'text\/plain';
-    // We use a GET request to tell the MockMediaRouterRepository that a new
-    // test case is starting, which is not very REST-ful but is nice and simple
-    req.open('GET', 'http://localhost:5555/' + testID, false);
-    req.setRequestHeader('Content-Type', 'text\/plain');
-    req.send();
-}
-
-function testCase(testName, testFunction) {
-    if(testName !== null)
-    {
-        beginTest(testName);
-    }
-}
 
 // Create a video element as the first thing we do. This causes the
 // libVanadiumVideoTagTest.so plugin to be loaded, which starts the embedded
@@ -12098,26 +12268,17 @@ function testCase(testName, testFunction) {
 // for this purpose
 function startTesting() {
     video = document.createElement('video');
-    // video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
-    video.setAttribute('src', 'http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd');
-    video.setAttribute('autoplay', '');
-    video.setAttribute('controls', 'controls');
-    video.load();
+
+    // video.src = 'http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8';
+    video.src = 'http://wll1p04345.dev.youview.co.uk/file_0000025585_20160122_143758_15930049906_15930935523.ts';
     video.play();
 }
 
 startTesting();
 
-/*test("CanPlayVideoElement", function() {*/
-    //beginTest("CanPlayVideoElement");
-    //video = document.createElement('video');
-    //video.setAttribute('src', 'http://blahblahblah.com/media.mpd');
-    //video.load();
-    //ok(true, "video element created");
-/*});*/
-
-
 <run-browser>
+
+// on my local server
 ZINC_QMEDIA_PLAYER_LIB="/opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so" \
 runBrowserStandalone.sh --url http://wll1p04345.dev.youview.co.uk/test.html
 
@@ -12135,18 +12296,22 @@ gstmr-play.sh http://wll1p04345.dev.youview.co.uk/TalkTalk_YouView_TV_Ad-1_vid_d
 gstmr-play.sh http://184.72.239.149/vod/smil:bigbuckbunnyiphone.smil/playlist.m3u8
 
 gstmr-play.sh -p http://wll1p04345.dev.youview.co.uk/file_0000025585_20160122_143758_15930049906_15930935523.ts
+gstmr-play.sh -p http://wll1p04345.dev.youview.co.uk/file_0000544355_20160125_144829_4955123647_4955998843.ts
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web-qunit test
+*kt_dev_uv_stack_250* mr-web-test: run with gdb
 
-<to-run-under-gdb>
+$ GDB_BROWSER=1 zb-make Vanadium/Vanadium.WebKit.VideoElement-qt-5.1.0-check
+
+
 $ vi Zinc/Zinc.JsCore.BindingRuntime/test/test-common
 
 if [[ -n "${GDB_BROWSER}" ]]; then
 gdb="gdb --args "
 fi
 
+${gdb} "${browser}" "${plugin_args[@]}" -platform minimal "file://${temp_dir}/test.html"
 
 (gdb) run
 Starting program: /home/kpark/builds/_virtual_/pc/zinc-install-root/debug/debian-8-x86_64/htmlengine/qt-5.1.0/tests/bin/zinc-jscore-binding-runtime/minimaltestbrowser -platform minimal file:///tmp/rE88JGPXZ/test.html
@@ -12155,15 +12320,41 @@ Zinc/Zinc.JsCore.BindingRuntime/test/Makefile.am
 31:minimaltestbrowser_SOURCES = testsupport/MinimalTestBrowser.cpp testsupport/TestWebPage.cpp testsupport/TestWebPage.h $(BUILT_SOURCES)
 118:testsharebin_PROGRAMS = minimaltestbrowser
 
-$ GDB_BROWSER=1 zb-make Vanadium/Vanadium.WebKit.VideoElement-qt-5.1.0-check
 
+={============================================================================
+*kt_dev_uv_stack_250* mr-web-test: run
 
-<to-run>
 $ zb-make Vanadium/Vanadium.WebKit.VideoElement-qt-5.1.0-check
+
+
+={============================================================================
+*kt_dev_uv_stack_250* mr-web-test: how the test harness work
+
+How it works
+------------
+
+When the tests are run a simple run script starts the headless web browser. To
+bootstrap the testing infrastructure the JavaScript code creates a video element
+in the DOM, which causes WebKit to load libVanadiumWebKitVideoElement.so.  This
+in turn looks for a plugin config file to find out which
+nickel::system::SystemFactory it should load. For testing, we tell it to load
+libVanadiumVideoTagTest.so, which starts an embedded Mongoose web server. The
+SystemFactory created by the plugin returns a MediaRouterFactory which can be
+controlled by JavaScript posting to the embedded web server to tell it which
+MockMediaRouter to return when VanadiumMediaPlayer requests one. Thus, the
+correct mock media router will be loaded for each QUnit test.
+
+When the last test finishes the JavaScript code sends a POST request which tells
+MockMediaRouterRepository to verify the last mock
+
 
 // Makefile-Test.am
 
 glibeventdispatchertest_SOURCES = test/GlibEventDispatcherTest.cpp
+
+dist_testdata_DATA = test/test.html \
+	test/data/system-factory.plugin-config \
+	test/data/copper-system-factory.plugin-config
 
 js_tests = test/js/testplay
 
@@ -12173,158 +12364,46 @@ TESTS = glibeventdispatchertest \
 test_PROGRAMS = glibeventdispatchertest
 
 
-For each test, it creates video elements:
-https://developer.mozilla.org/en-US/docs/Web/API/Document/createElement
+<html>
+/Vanadium/Vanadium.WebKit.VideoElement$ cat test/test.html 
 
-    video = document.createElement('video');
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
 
-This means that it creates Vanadium each time.
+  <!--
+      A generic (default) HTML file for JS tests.
 
+      If you need a test specific HTML file, name it after the
+      JS test file
+  -->
 
-/builds/topic/pc/zinc-build-root/release-debian-7-x86_64/Nickel/
-  Nickel.System.API/include/mock/MockMediaRouterAsync.h
+  <head>
+    
+    <script type="text/javascript" src="qunit-1.14.0.js"></script>
+    <script type="text/javascript" src="qunit-headless.js"></script>
 
-namespace Zinc { namespace Media { 
+    <!-- This always has to be test.js due to the way the testing
+         framework works -->
+    <script type="text/javascript" src="test.js"></script>
 
-class ZINC_LOCAL MockMediaRouterAsync: public MediaRouterAsync
-{
-  public:
+  </head>
 
-    /* ============================== Methods ================================== */
+  <body>
+  </body>
 
-    typedef void Mock_setSourceRet;
-    MOCK_METHOD2(setSource, NS_ZINC::Future< Mock_setSourceRet > 
-        (const std::string&, const SetSourceReason::Enum));
-
-    typedef std::string Mock_getSourceRet;
-    MOCK_CONST_METHOD0(getSource, NS_ZINC::Future< Mock_getSourceRet > ());
-
-    ...
-
-	void emitSourceEvent(const SourceEventValue::Enum event, const SetSourceReason::Enum reason)
-	{
-		produceEvent(
-			boost::bind(&MediaRouterEventListener::SourceEvent,
-			     _1,
-			     event,
-			     reason));
-	}
-};
+</html>
 
 
-// Vanadium.WebKit.VideoElement/test/MockMediaRouterRepository.cpp
-
-class ZINC_LOCAL MockMediaRouterRepository
-{
-    MockMediaRouterRepository()
-    {
-        ...
-        registerMockForErrorHandlingDataToDecode();
-    };
-};
-
-
-void sendErrorEvent(boost::shared_ptr<MockMediaRouter> mock,
-            const ErrorEventValue::Enum error,
-            const ErrorEventContext::Enum context,
-            const std::string& msg)
-{
-    mock->emitErrorEvent(error, context, msg);
-}
-
-
-<1> to test MEDIA_ERR_DECODE
-
-void registerMockForErrorHandlingDataToDecode()
-{
-    boost::shared_ptr<MockMediaRouter> mock = makeMock(
-            "http://bbc.co.uk/ErrorHandlingDataToDecode.mpd",
-            "ONDEMAND.ABR");
-
-    EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
-            Return(completedFuture(Position(0, 0, 1000000))));
-
-    EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
-            Return(makeCompletedFuture(1000000)));
-
-    EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
-                Return(makeCompletedFuture()));
-
-    EXPECT_CALL(*mock, start()).WillOnce(
-        DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::data,
-                        ErrorEventContext::other, std::string())),
-            Return(makeCompletedFuture())));
-
-    registerMock("ErrorHandlingDataToDecode", mock);
-}
-
-
-<2> to test MEDIA_ERR_SRC_NOT_SUPPORTED
-
-void registerMockForErrorHandlingDataToNotSupported()
-{
-    boost::shared_ptr<MockMediaRouter> mock = makeMockWithError(
-            "http://bbc.co.uk/ErrorHandlingDataToNotSupported.mpd",
-            "ONDEMAND.ABR",
-            ErrorEventValue::data);
-
-    registerMock("ErrorHandlingDataToNotSupported", mock);
-}
-
-boost::shared_ptr<MockMediaRouter> makeMockWithError(
-        const std::string& source,
-        const std::string& mediaRouterVariant,
-        const ErrorEventValue::Enum error)
-{
-    boost::shared_ptr<MockMediaRouter> mock
-        = boost::make_shared<MockMediaRouter>();
-
-    // The below corresponds to VanadiumMediaPlayer::load
-    EXPECT_CALL(*mock,
-            setSource(source,
-                SetSourceReason::mhegstandard)).WillOnce(
-                DoAll(Invoke(boost::bind(&sendSourceEvent, mock,
-                            SourceEventValue::change_complete,
-                            SetSourceReason::mhegstandard)),
-                    Invoke(boost::bind(&sendErrorEvent, mock, error,
-                            ErrorEventContext::other, std::string())),
-                Return(makeCompletedFuture())));
-
-    EXPECT_CALL(*mock,
-            setSink(std::string(sink))).WillOnce(
-            Return(makeCompletedFuture()));
-
-    EXPECT_CALL(*mock,
-            startBuffering()).WillOnce(
-            DoAll(Invoke(boost::bind(&sendBufferStatusEvent, mock,
-                        BufferStatusEventValue::buffering_started)),
-            Return(makeCompletedFuture())));
-
-    std::map<std::string, std::string> sourceInfo;
-    sourceInfo["CONFIGURATION"] = mediaRouterVariant;
-    EXPECT_CALL(*mock, getSourceInformation()).WillRepeatedly(
-            Return(makeCompletedFuture(sourceInfo)));
-    mock->setDispatcher(dispatcher);
-
-    EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
-            Return(completedFuture(Position(0, 0, 1000000))));
-
-    EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
-            Return(makeCompletedFuture(1000000)));
-
-    EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
-            Return(makeCompletedFuture()));
-
-    EXPECT_CALL(*mock, stop()).WillRepeatedly(
-            DoAll(Invoke(boost::bind(&sendStatusEvent, mock, StatusEventValue::stopped)),
-                Return(makeCompletedFuture())));
-
-    return mock;
-}
-
-
+<jscript>
 // Vanadium/Vanadium.WebKit.VideoElement/js/testplay.js
-
+//
+// For each test, it creates video elements:
+// https://developer.mozilla.org/en-US/docs/Web/API/Document/createElement
+//
+//  video = document.createElement('video');
+//
+// This means that it creates Vanadium each time.
+//
 asyncTestCase("ErrorHandlingDataToDecode", function() {
     'use strict';
     expect(1);
@@ -12343,42 +12422,150 @@ asyncTestCase("ErrorHandlingDataToDecode", function() {
     video.play();
 });
 
-// asyncTestCase("ErrorHandlingSink", function() {
-//     expect(1);
-//     video = document.createElement('video');
-// 
-//     video.addEventListener("error", function() {
-//         console.log("error event");
-//         equal(video.error.code, MediaError.MEDIA_ERR_DECODE, "Expected MEDIA_ERR_DECODE");
-//         start();
-//     });
-// 
-//     video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingSink.mpd');
-//     video.load();
-//     video.play();
-// });
 
-asyncTestCase("ErrorHandlingDataToNotSupported", function() {
-    'use strict';
-    expect(1);
-    var video = document.createElement('video');
+function asyncTestCase(testName, testFunction) {
+    if(onlyRunTheseTests.length == 0 || onlyRunTheseTests.indexOf(testName) != -1)
+    {
+        // note: Is this Qunit thing?
+        asyncTest(testName, function () {
+            if(testName !== null)
+            {
+                // note: here send a request to the server!
+                beginTest(testName);
+            }
+            testFunction();
+        });
+    }
+}
 
-    video.addEventListener('error', function onError() {
-        console.log("data error");
-        equal(video.error.code, MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED,
-            "Expected MEDIA_ERR_SRC_NOT_SUPPORTED");
-        video.removeEventListener('error', onError);
-        removeVideoElement(video);
-        start();
-    });
+function sendPOST(params) {
+    var req = new XMLHttpRequest();
+    req.enctype = 'text\/plain';
+    req.open('POST', 'http://localhost:5555/', false);
+    req.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    req.send(params);
+    return req.status;
+}
 
-    video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingDataToNotSupported.mpd');
-    video.load();
-    video.play();
-});
+function beginTest(testID) {
+    sendPOST('testCase=' + testID);
+}
 
 
-How those two get 'linked' together? Use "ErrorHandlingSink" sting?
+<server>
+Create a server and set handler to process a request from client.
+
+class ZINC_LOCAL MockMediaRouterRepository
+{
+    MockMediaRouterRepository()
+        : dispatcher(new NS_ZINC::SingleThreadDispatcher),
+        mediaRouterFactory(new SimpleMediaRouterFactory("default", dispatcher)),
+        stubSystemFactory(new StubSystemFactory("default", dispatcher, mediaRouterFactory)),
+        sink("decoder://0"),
+        activatedTestCount(0),
+        stoppedMediaRouterCount(0)
+    {
+        ManualServerConfigPtr config = createManualServerConfig(
+            atoi(getenv("MOCK_MEDIA_ROUTER_REPOSITORY_PORT")),
+            false,
+            "");
+
+        ResponderPtr responder = boost::make_shared<TestActivator>(boost::ref(*this));
+        server = boost::make_shared<HttpServer>(config, responder,
+                boost::make_shared<TestErrorHandler>());
+        server->start();
+    }
+
+    bool activateMock(const std::string& testName)
+    {
+        boost::unique_lock<boost::mutex> l(repositoryMutex);
+        currentTestName = testName;
+
+        std::cout << "Activating " << testName << std::endl;
+        // Reset the time
+        clock_gettime(CLOCK_MONOTONIC, &testTime);
+        if(mapOfMocks.find(testName) != mapOfMocks.end())
+        {
+            std::vector<boost::shared_ptr<MediaRouter>> mocks = addDeleter(mapOfMocks[testName], testName);
+
+            // Need to release the lock here as setMockMediaRouters may call onMediaRouterDelete
+            // which acquires the mutex
+            l.unlock();
+            mediaRouterFactory->setMockMediaRouters(mocks);
+            l.lock();
+            activatedTestCount += mapOfMocks[testName].size();
+            activatedMocks.insert(testName);
+            std::cout << "Activated " << testName << std::endl;
+            return true;
+        }
+        else
+        {
+            std::cerr << "Could not find mock [" << testName << "]" << std::endl;
+            return false;
+        }
+    }
+};
+
+    class TestActivator : public HttpResponder
+    {
+    public:
+        TestActivator(MockMediaRouterRepository& repository)
+            : repository(repository)
+        {}
+
+    private:
+        virtual HttpResponsePtr processRequest(HttpRequestPtr request)
+        {
+            HttpResponsePtr response = createHttpResponse();
+            response->setVersion("HTTP/1.1");
+            response->addHeader(HttpHeaders::ContentType, "text/plain");
+            response->addHeader("Access-Control-Allow-Origin", "*");
+            response->appendToBody("Default response");
+
+            boost::char_separator<char> sep("&");
+            boost::tokenizer<boost::char_separator<char> > tok(request->getBody(), sep);
+            for(boost::tokenizer<boost::char_separator<char> >::iterator iter = tok.begin();
+                    iter != tok.end();
+                    ++iter)
+            {
+                std::size_t delimiterIdx = iter->find('=');
+                if(delimiterIdx != std::string::npos)
+                {
+                    const std::string parameterName = iter->substr(0, delimiterIdx);
+                    const std::string value = iter->substr(delimiterIdx + 1, std::string::npos);
+
+                    if(parameterName == "testCase")
+                    {
+                        if(!repository.activateMock(value))
+                        {
+                            response->setStatus(HttpStatus::INTERNAL_ERROR);
+                        }
+                    }
+                    else if(parameterName == "verifyAndClearMocks")
+                    {
+                        std::cout << "End of tests" << std::endl;
+                        if(!repository.verifyAndClearMocks())
+                        {
+                            response->setStatus(HttpStatus::INTERNAL_ERROR);
+                        }
+                    }
+                    else if(parameterName == "setCurrent")
+                    {
+                        std::cout << "setCurrent: " << value << std::endl;
+                        repository.setCurrent(atoi(value.c_str()));
+                    }
+                    else if(parameterName == "advanceTime")
+                    {
+                        std::cout << "advanceTime: " << value << std::endl;
+                        repository.advanceTime(atoi(value.c_str()));
+                    }
+                }
+            }
+            return response;
+        }
+
+        MockMediaRouterRepository& repository;
+    };
 
 
 <careful>
@@ -17886,6 +18073,134 @@ There is a timeout in mock repo:
 boost::posix_time::seconds(VERIFICATION_TIMEOUT),
 
 
+<mock-test>
+
+<1> to test MEDIA_ERR_DECODE
+
+void registerMockForErrorHandlingDataToDecode()
+{
+    boost::shared_ptr<MockMediaRouter> mock = makeMock(
+            "http://bbc.co.uk/ErrorHandlingDataToDecode.mpd",
+            "ONDEMAND.ABR");
+
+    EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+            Return(completedFuture(Position(0, 0, 1000000))));
+
+    EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+            Return(makeCompletedFuture(1000000)));
+
+    EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+                Return(makeCompletedFuture()));
+
+    EXPECT_CALL(*mock, start()).WillOnce(
+        DoAll(Invoke(boost::bind(&sendErrorEvent, mock, ErrorEventValue::data,
+                        ErrorEventContext::other, std::string())),
+            Return(makeCompletedFuture())));
+
+    registerMock("ErrorHandlingDataToDecode", mock);
+}
+
+
+<2> to test MEDIA_ERR_SRC_NOT_SUPPORTED
+
+void registerMockForErrorHandlingDataToNotSupported()
+{
+    boost::shared_ptr<MockMediaRouter> mock = makeMockWithError(
+            "http://bbc.co.uk/ErrorHandlingDataToNotSupported.mpd",
+            "ONDEMAND.ABR",
+            ErrorEventValue::data);
+
+    registerMock("ErrorHandlingDataToNotSupported", mock);
+}
+
+boost::shared_ptr<MockMediaRouter> makeMockWithError(
+        const std::string& source,
+        const std::string& mediaRouterVariant,
+        const ErrorEventValue::Enum error)
+{
+    boost::shared_ptr<MockMediaRouter> mock
+        = boost::make_shared<MockMediaRouter>();
+
+    // The below corresponds to VanadiumMediaPlayer::load
+    EXPECT_CALL(*mock,
+            setSource(source,
+                SetSourceReason::mhegstandard)).WillOnce(
+                DoAll(Invoke(boost::bind(&sendSourceEvent, mock,
+                            SourceEventValue::change_complete,
+                            SetSourceReason::mhegstandard)),
+                    Invoke(boost::bind(&sendErrorEvent, mock, error,
+                            ErrorEventContext::other, std::string())),
+                Return(makeCompletedFuture())));
+
+    EXPECT_CALL(*mock,
+            setSink(std::string(sink))).WillOnce(
+            Return(makeCompletedFuture()));
+
+    EXPECT_CALL(*mock,
+            startBuffering()).WillOnce(
+            DoAll(Invoke(boost::bind(&sendBufferStatusEvent, mock,
+                        BufferStatusEventValue::buffering_started)),
+            Return(makeCompletedFuture())));
+
+    std::map<std::string, std::string> sourceInfo;
+    sourceInfo["CONFIGURATION"] = mediaRouterVariant;
+    EXPECT_CALL(*mock, getSourceInformation()).WillRepeatedly(
+            Return(makeCompletedFuture(sourceInfo)));
+    mock->setDispatcher(dispatcher);
+
+    EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+            Return(completedFuture(Position(0, 0, 1000000))));
+
+    EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+            Return(makeCompletedFuture(1000000)));
+
+    EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+            Return(makeCompletedFuture()));
+
+    EXPECT_CALL(*mock, stop()).WillRepeatedly(
+            DoAll(Invoke(boost::bind(&sendStatusEvent, mock, StatusEventValue::stopped)),
+                Return(makeCompletedFuture())));
+
+    return mock;
+}
+
+
+
+// asyncTestCase("ErrorHandlingSink", function() {
+//     expect(1);
+//     video = document.createElement('video');
+// 
+//     video.addEventListener("error", function() {
+//         console.log("error event");
+//         equal(video.error.code, MediaError.MEDIA_ERR_DECODE, "Expected MEDIA_ERR_DECODE");
+//         start();
+//     });
+// 
+//     video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingSink.mpd');
+//     video.load();
+//     video.play();
+// });
+
+asyncTestCase("ErrorHandlingDataToNotSupported", function() {
+    'use strict';
+    expect(1);
+    var video = document.createElement('video');
+
+    video.addEventListener('error', function onError() {
+        console.log("data error");
+        equal(video.error.code, MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED,
+            "Expected MEDIA_ERR_SRC_NOT_SUPPORTED");
+        video.removeEventListener('error', onError);
+        removeVideoElement(video);
+        start();
+    });
+
+    video.setAttribute('src', 'http://bbc.co.uk/ErrorHandlingDataToNotSupported.mpd');
+    video.load();
+    video.play();
+});
+
+
 <may-be-a-bug>
 
 1. The interface to get state from client to media player uses a translation
@@ -20650,7 +20965,7 @@ warning: GDB can't find the start of the function at 0x76981da2.
 
 
 ={============================================================================
-*kt_dev_uv_stack_413* mr-dash: gstmr-play.sh
+*kt_dev_uv_stack_413* mr-dash-script: gstmr-play
 
 What's the "-p" option?
 
@@ -20659,6 +20974,11 @@ What's the "-p" option?
             USE_PROXY="true"
             shift;;
 
+
+note:
+The both case see INFO logging on ssh terminal
+
+<without-p>
 The original script set temp cfg which force to use GST MR directly without
   going through YV MR:
 
@@ -20671,6 +20991,7 @@ env ${vars[@]} nickelmediad \
     -b $BUS_NAME -f $cfg &
 
 
+<with-p>
 Now need to make YV MR usable on command line to test hls/dash play through YV
 MR. Therefore, introduced this option to do this:
 
@@ -20692,9 +21013,16 @@ else
     env ${vars[@]} nickelmediad -b $BUS_NAME &
 fi
 
-
 Now when run "gstmr-play.sh 3", will launch a new daemon and use GST MR
 directly. So "-p" is to say if want to use the proxy or not in a new daemon.
+
+
+={============================================================================
+*kt_dev_uv_stack_413* mr-dash-script: yv-mpeg-dash
+
+Use gst pipeline directly.
+
+$ cat Polonium/Polonium.GSTCencDec/scripts/yv-mpeg-dash.in
 
 
 ={============================================================================
