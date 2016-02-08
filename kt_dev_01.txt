@@ -161,7 +161,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_051| template-type-traits
 |kt_dev_cpp_052| template-argument deduction
 *kt_dev_cpp_053* template-argument deduction: std-forward
-|kt_dev_cpp_053| template: variadic
+|kt_dev_cpp_053| template-variadic
+|kt_dev_cpp_053| template-variadic: forward
 |kt_dev_cpp_054| template: specialization
 |kt_dev_cpp_060| template: how to initialize T member
 
@@ -23110,10 +23111,12 @@ std::move, std::forward must be called with an explicit template argument and
 returns rvalue reference to that type, T &&. 
 
 template <typename F, typename T1, typename T2>
-void flip(F f, T1 &&t1, T2 &&t2)
+void flip(F f, T1 &&t1, T2 &&t2)                    // 1
 {
-  f(std::forward<T2>(t2), std::forward<T1>(t1));
+  f(std::forward<T2>(t2), std::forward<T1>(t1));    // 2
 }
+
+To preserve type information is two-step process, 1 and 2.
 
 
 ={============================================================================
@@ -23144,14 +23147,14 @@ For more detailed text, see CPR 694, 16.3
 
 
 ={============================================================================
-*kt_dev_cpp_053* template: variadic
+*kt_dev_cpp_053* template-variadic
 
-{variadic-templates}
-A template function or class that can take varying number of parameters which is is called as a
-parameter pack. Two kinds: template parameter pack and function parameter pack(list).
+A template function or class that can take varying number of parameters which is
+is called a parameter pack to represent zero or more parameters. Two kinds:
+template parameter pack and function parameter pack.
 
-template <typename T, typename... Args>         // Args is template parameter pack
-void foo( const T &t, const Args& ... rest);    // rest is function parameter pack.
+template <typename T, typename... Args>         // Args is template param pack
+void foo( const T &t, const Args& ... rest);    // rest is function param pack
 
 int i = 0; double d = 3.14; string s = "how now brown cow";
 foo( i, s, 42, d );  // three parameters in the pack
@@ -23159,12 +23162,13 @@ foo( s, 42, "hi" );  // two parameters in the pack
 foo( d, s );         // one parameters in the pack
 foo( "hi" );         // empty pack
 
-the compiler deduces the template parameter types and instantiate four different foo:
+The compiler deduces the parameter types and also the number of parameters in
+the pack, and instantiate four different foo:
 
-void foo( const int&, const string&, const int&, const double&);
-void foo( const string&, const int&, const char[3]&);
-void foo( const double&, const string&);
-void foo( const char[3]&);
+void foo(const int&, const string&, const int&, const double&);
+void foo(const string&, const int&, const char[3]&);
+void foo(const double&, const string&);
+void foo(const char[3]&);
 
 
 <variadic-sizeof-operator>
@@ -23176,8 +23180,7 @@ template <typename... Args> void g( Args... args)
   cout << sizeof... (args) << endl;    // number of function parameters
 }
 
-Determine what sizeof... (Args) and sizeof... (rest) return for all foo instances?
-
+<ex>
 Used GCC 4.6.3
 
 #include <iostream>
@@ -23214,16 +23217,16 @@ int main()
 0
 
 
-<why-variadic> 
-Can use an initializer-list to define a function that can take a varying number of arguments.
-However, the arguments must have the 'same' type.
+<variadic-or-initializer-list> 
+Can use an initializer-list to define a function that can take a varying number
+of arguments. However, the arguments must have the 'same' type.
 
-The point is that variadic functions are used when we know neither the number nor the types of the
-arguments to process.
+The point is that variadic functions are used when we know neither the number
+nor the types of the arguments to process.
 
 
 <variadic-recursive>
-Variadic are often recursive on arguments in a pack. To stop the recustion, we also need nonvariadic
+Variadic are often recursive. To stop the recustion, we also need nonvariadic
 funtion.
 
 template <typename T> 
@@ -23237,21 +23240,21 @@ ostream &print( ostream &os, const T &t, const Args&... rest)
   return print(os, rest...);  // recursive call; print the other arguments.
 }
 
-The key part is that the first argument in rest gets bound to t. That pops up a argument in the pack
-and the remaining in rest 'form' the pack for the next call until there is the last since variadic
-is only viable match. 
+The key part is that the 'first' argument in rest gets bound to t. That pops up
+a argument from the pack and the remaining in rest 'form' the pack for the next
+call until there is the last since variadic is only viable match. 
 
 print( cout, i, s, 42 );
 ...
 print( cout, s, 42 );
 print( cout, 42 );
 
-When the last remains, the variadic and the nonvariadic are viable and the nonvariadic gets called
-since it is more speciailized. Stop recursion.
+When the last remains, the variadic and the nonvariadic are viable and the
+nonvariadic gets called since it is more speciailized. So ends recursion.
 
-note: The declaration of the nonvariadic version of print 'must' be 'before' variadic version, that
-is in scope, since be in scope when the variadic version is defined. Otherwise, the variadic will
-recurse indefinitely.
+note: The declaration of the nonvariadic version of print 'must' be 'before'
+variadic version since must be 'in' scope when the variadic version is defined.
+Otherwise, the variadic will recurse indefinitely.
 
 
 <pack-expansion>
@@ -23264,36 +23267,34 @@ ostream &print( ostream &os, const T &t, const Args&... rest)     // 1
   return print(os, rest...);                                      // 2
 }
 
-1, expand template pack to generate function pack
-2. expand function pack to call argument list of print()
+* 1. Expand Args to generate function parameter pack. Applies the pattern,
+  "const Args&" to 'each' element in the template pack.
 
-When expand function pack, can apply 'pattern' which applies on each elememt in the pack and
-'defines' the type of arguments.
+* 2. Expand rest to call argument list of print()
 
+
+More complicated pattern is: 
 
 template <typename T> string debug_rep( const T &t );
 
 template <typename T, typename... Args>
 ostream &errorMsg( ostream &os, const Args&... rest)     // 1
 {
+  // print( os, debug_rep(a1), debug_rep(a2), ... );
   return print(os, debug_rep(rest)...);                  // pattern
 }
 
-This expands to:
-
-print( os, debug_rep(a1), debug_rep(a2), ... );
-
-This call expands:
+When call this:
 
 errorMsg( cerr, fcnName, code.num(), otherData, "other", item );
+
+expands to:
 
 print( cerr, debug_rep(fcnName), debug_rep(code.num()), 
                debug_rep(otherData), debug_rep("other"), debug_rep(item) );
 
-note: debug_rep is function template and can be overloaded for many types.
-
-
-When write this:
+note:
+When write this, fails to compile since expanded as if five arguments to print.
 
 template <typename T, typename... Args>
 ostream &errorMsg( ostream &os, const Args&... rest)     // 1
@@ -23301,7 +23302,33 @@ ostream &errorMsg( ostream &os, const Args&... rest)     // 1
   return print(os, debug_rep(rest...) );                 // pattern
 }
 
-print( cerr, fcnName, code.num(), otherData, "other", item );
+print(cerr, debug_rep(fcnName, code.num(), otherData, "other", item));
+
+
+={============================================================================
+*kt_dev_cpp_053* template-variadic: forward
+
+Can use variadic template together with std::forward. To illustrate this, add an
+emplace_back to StrVec class.
+
+The emplace_back is variadic member template that uses its arguments to
+construct an element directly in space managed by the container.
+
+class StrVec {
+  public:
+    // each function parameter will be an rvalue reference
+    template <typename... Args> void emplace_back(Args &&...args)
+    {
+      chk_n_alloc();  // reallocate the StrVec if necessary
+      alloc.construct(first_free++, std::forward<Args>(args)...);
+    }
+};
+
+svec.emplace_back(10, 'c');
+
+The pattern in the call to construct will expand to
+
+std::forward<int>(10), std::forward<char>(c)
 
 
 ={============================================================================
