@@ -49,7 +49,7 @@ Use #{ for a group and ={ for a item
 
 *kt_dev_bcast_310* gst-registry
 *kt_dev_bcast_310* gst-scanner
-|kt_dev_bcast_310| gst: debug
+|kt_dev_bcast_310| gst-debug
 |kt_dev_bcast_312| gst: sdk, tutorials
 
 |kt_dev_bcast_319| gst: mime and types
@@ -4876,7 +4876,7 @@ you can specify a debug level for each individual category.
 For example, GST_DEBUG=2,audiotestsrc:5, will use Debug Level 5 for the
 audiotestsrc element, and 2 for all the others.
 
-
+note:
 The '*' wildcard is also available. For example GST_DEBUG=2,audio*:5 will use
 Debug Level 5 for all categories starting with the word audio. GST_DEBUG=*:2 is
 equivalent to GST_DEBUG=2.
@@ -10836,6 +10836,29 @@ MT safe.
 note: it calls gst_element_factory_make ();
 
 
+gst_pipeline_get_clock ()
+-----------------
+GstClock *
+gst_pipeline_get_clock (GstPipeline *pipeline);
+
+Gets the current clock used by pipeline. Users of object oriented languages
+    should use gst_pipeline_get_pipeline_clock() to avoid confusion with
+    gst_element_get_clock() which has a different behavior.
+
+Unlike gst_element_get_clock(), this function will always return a clock, even
+if the pipeline is not in the PLAYING state.
+
+Parameters
+
+pipeline
+a GstPipeline
+
+Returns
+a GstClock, unref after usage.
+
+[transfer full]
+
+
 ={============================================================================
 *kt_dev_bcast_500* gst-element-ref
 
@@ -12395,9 +12418,9 @@ gst_clock_new_periodic_id (GstClock *clock,
                            GstClockTime start_time,
                            GstClockTime interval);
 
-Get an ID from clock to trigger a periodic notification. The periodic
-  notifications will start at time start_time and will then be fired with the
-  given interval. id should be unreffed after usage.
+'get' an ID from clock to trigger a periodic notification. The periodic
+    notifications will start at time start_time and will then be fired with the
+    given interval. id should be unreffed after usage.
 
 Free-function: gst_clock_id_unref
 
@@ -12422,6 +12445,100 @@ GST_TIME_AS_MSECONDS()
 #define GST_TIME_AS_MSECONDS(time) ((time) / G_GINT64_CONSTANT (1000000))
 
 Convert a GstClockTime to milliseconds (1/1000 of a second).
+
+
+gst_clock_id_wait_async ()
+-----------------
+GstClockReturn
+gst_clock_id_wait_async (GstClockID id,
+                         GstClockCallback func,
+                         gpointer user_data,
+                         GDestroyNotify destroy_data);
+
+'register' a callback on the given GstClockID id with the given function and
+    user_data. When passing a GstClockID with an invalid time to this function,
+    the callback will be called immediately with a time set to
+        GST_CLOCK_TIME_NONE. The callback will be called when the time of id has
+        been reached.
+
+The callback func can be invoked from any thread, either provided by the core or
+from a streaming thread. The application should be prepared for this.
+
+Parameters
+id
+a GstClockID to wait on
+
+func
+The callback function
+
+user_data
+User data passed in the callback
+
+destroy_data
+GDestroyNotify for user_data
+
+Returns
+the result of the non blocking wait.
+
+MT safe.
+
+
+GstClockCallback ()
+-----------------
+gboolean
+(*GstClockCallback) (GstClock *clock,
+                     GstClockTime time,
+                     GstClockID id,
+                     gpointer user_data);
+
+The function prototype of the callback.
+Parameters
+
+clock
+The clock that triggered the callback
+
+time
+The time it was triggered
+
+id
+The GstClockID that expired
+
+user_data
+user data passed in the gst_clock_id_wait_async() function
+
+Returns
+TRUE or FALSE (currently unused)
+
+
+GDestroyNotify ()
+-----------------
+void
+(*GDestroyNotify) (gpointer data);
+
+Specifies the type of function which is called when a data element is destroyed.
+    It is passed the pointer to the data element and should free any memory and
+    resources allocated for it.  Parameters
+
+data
+the data element.
+
+
+<ex>
+
+    RefObj<GstClock> clock(
+        gst_pipeline_get_clock(
+            GST_PIPELINE(pipeline.get())));
+
+    const GstClockTime now = gst_clock_get_time (clock.get());
+
+    positionChangeEventClockId =
+        gst_clock_new_periodic_id (clock.get(), now, GST_SECOND);
+
+    (void)gst_clock_id_wait_async (
+        positionChangeEventClockId,
+        &GstMediaRouter::positionChangeEventTimerCallback,
+        static_cast<gpointer>(this),
+        NULL);
 
 
 ={============================================================================

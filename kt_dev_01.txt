@@ -55,7 +55,8 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_105| gcc likely and unlikely 
 |kt_dev_gcc_106| gcc: link: lrt
 |kt_dev_gcc_107| gcc: link: sysroot and rpath-link
-|kt_dev_gcc_108| gcc: options
+*kt_dev_gcc_108* gcc-options-debug
+|kt_dev_gcc_108| gcc-options
 |kt_dev_gcc_109| gcc: options: get dependancies
 |kt_dev_gcc_110| gcc-attributes
 |kt_dev_gcc_111| gcc: profiling
@@ -5419,36 +5420,11 @@ link.
 
 
 ={============================================================================
-*kt_dev_gcc_108* gcc: options
+*kt_dev_gcc_108* gcc-options-debug
 
-{reference}
-https://gcc.gnu.org/onlinedocs/gcc/Option-Index.html#Option-Index
+3.9 Options for Debugging Your Program
 
--v
-Print (on standard error output) the commands executed to run the stages of compilation. Also print
-the version number of the compiler driver program and of the preprocessor and the compiler proper.
-note: can see spec and include path
-
--###
-Like -v except the commands are not executed and arguments are quoted unless they contain only
-alphanumeric characters or ./-_. This is useful for shell scripts to capture the driver-generated
-command lines. 
-
--print-search-dirs 
-note: to check path for lib
-
-<debug-options>
 https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
-
--g
-Produce debugging information in the operating system's native format (stabs,
-        COFF, XCOFF, or DWARF 2). GDB can work with this debugging information.
-
-On most systems that use stabs format, -g enables use of extra debugging
-information that only GDB can use; this extra information makes debugging work
-better in GDB but probably makes other debuggers crash or refuse to read the
-program. If you want to control for certain whether to generate the extra
-information, use -gstabs+, -gstabs, -gxcoff+, -gxcoff, or -gvms (see below).
 
 GCC allows you to use -g with -O. The shortcuts taken by optimized code may
 occasionally produce surprising results: some variables you declared may not
@@ -5460,9 +5436,95 @@ because they have been moved out of loops.
 Nevertheless it proves possible to debug optimized output. This makes it
 reasonable to use the optimizer for programs that might have bugs.
 
-The following options are useful when GCC is generated with the capability for
-more than one debugging format. 
+If you are not using some other optimization option, consider using -Og (see
+        Optimize Options) with -g. With no -O option at all, some compiler
+passes that collect information useful for debugging do not run at all, so that
+-Og may result in a better debugging experience. 
 
+
+-g
+    Produce debugging information in the operating system's native format
+    (stabs, COFF, XCOFF, or DWARF 2). GDB can work with this debugging
+    information.
+
+    On most systems that use stabs format, -g enables use of extra debugging
+    information that only GDB can use; this extra information makes debugging
+    work better in GDB but probably makes other debuggers crash or refuse to
+    read the program. If you want to control for certain whether to generate the
+    extra information, use -gstabs+, -gstabs, -gxcoff+, -gxcoff, or -gvms (see
+            below).
+
+-ggdb
+    Produce debugging information for use by GDB. This means to use the most
+    expressive format available (DWARF, stabs, or the native format if neither
+            of those are supported), including GDB extensions if at all
+    possible. 
+
+-g`level`
+-ggdb`level`
+-gstabslevel
+-gcofflevel
+-gxcofflevel
+-gvmslevel
+    Request debugging information and also use level to specify how much
+    information. The default level is 2.
+
+    Level 0 produces no debug information at all. Thus, -g0 negates -g.
+
+    Level 1 produces minimal information, enough for making backtraces in parts
+    of the program that you don't plan to debug. This includes descriptions of
+    functions and external variables, and line number tables, but no information
+    about local variables.
+
+    Level 3 includes extra information, such as all the macro definitions
+    present in the program. Some debuggers support macro 'expansion' when you
+    use -g3.
+
+    -gdwarf does not accept a concatenated debug level, to avoid confusion with
+    -gdwarf-level. Instead use an additional -glevel option to change the debug
+    level for DWARF.
+
+
+<ex>
+
+#define CONST_VALUE (10)
+
+// when no macro expansion
+
+(gdb) p CONST_VALUE
+No symbol "CONST_VALUE" in current context.
+
+// when use either -ggdb3 or -g3
+
+20	  cout << "value: " << CONST_VALUE << endl;
+(gdb) n
+value: 10
+22	  string str("this is string");
+(gdb) p CON
+CONCAT       CONST_VALUE  
+(gdb) p CONST_VALUE
+$1 = 10
+
+
+={============================================================================
+*kt_dev_gcc_108* gcc-options
+
+{reference}
+h
+tps://gcc.gnu.org/onlinedocs/gcc/Option-Index.html#Option-Index
+
+-v
+Print (on standard error output) the commands executed to run the stages of
+compilation. Also print the version number of the compiler driver program and of
+the preprocessor and the compiler proper. note: can see spec and include path
+
+-###
+Like -v except the commands are not executed and arguments are quoted unless
+they contain only alphanumeric characters or ./-_. This is useful for shell
+scripts to capture the driver-generated command lines. 
+
+-print-search-dirs 
+note: to check path for lib
 
 <code-gen-options>
 -fpic or -fPIC
@@ -21845,7 +21907,9 @@ int compare(const int& v1, const int& v2)
 }
 
 
-// T is vector<int>. instantiates `int compare(const vector<int>&, const vector<int>&)`
+// T is vector<int>. 
+// instantiates `int compare(const vector<int>&, const vector<int>&)`
+
 vector<int> vec1{1, 2, 3}, vec2{4, 5, 6};
 cout << compare( vec1, vec2 ) << endl;
 
@@ -23134,6 +23198,94 @@ template <typename T> string debug_rep(const T &t)
 
 note:
 Why T's output operator since operator<< is usually nonmember function?
+
+When use gdb, this "ret << t" leads to:
+
+std::operator<< <char, std::char_traits<char>, std::allocator<char> > 
+    (__os=..., __str="this is string") 
+    at /include/c++/4.9.2/bits/basic_string.h:2777
+2777	      return __ostream_insert(__os, __str.data(), __str.size());
+
+This is not in "class basic_string" and in std global namespace. Looks like a
+global function template.
+
+  /**
+   *  @brief  Write string to a stream.
+   *  @param __os  Output stream.
+   *  @param __str  String to write out.
+   *  @return  Reference to the output stream.
+   *
+   *  Output characters of @a __str into os following the same rules as for
+   *  writing a C string.
+   */
+  template<typename _CharT, typename _Traits, typename _Alloc>
+    inline basic_ostream<_CharT, _Traits>&
+    operator<<(basic_ostream<_CharT, _Traits>& __os,
+	       const basic_string<_CharT, _Traits, _Alloc>& __str)
+    {
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // 586. string inserter not a formatted function
+      return __ostream_insert(__os, __str.data(), __str.size());
+    }
+
+
+When use own class like, "debug_rep(My);", emit errors:
+
+$ ./bldcpp.sh t_templ.cpp 
+t_templ.cpp: In instantiation of 'std::string debug_rep(const T&) [with T = My; std::string = std::basic_string<char>]':
+t_templ.cpp:27:17:   required from here
+t_templ.cpp:15:9: error: cannot bind 'std::basic_ostream<char>' lvalue to 'std::basic_ostream<char>&&'
+     ret << t;
+         ^
+In file included from /home/kpark/gcc-build/install/include/c++/4.9.2/iostream:39:0,
+                 from t_templ.cpp:1:
+/home/kpark/gcc-build/install/include/c++/4.9.2/ostream:602:5: note: initializing argument 1 of 'std::basic_ostream<_CharT, _Traits>& std::operator<<(std::basic_ostream<_CharT, _Traits>&&, const _Tp&) [with _CharT = char; _Traits = std::char_traits<char>; _Tp = My]'
+     operator<<(basic_ostream<_CharT, _Traits>&& __os, const _Tp& __x)
+     ^
+
+<ex>
+#include<iostream>
+#include<string>
+#include<sstream>
+
+using namespace std;
+
+class Mine 
+{
+    private:
+        string name;
+
+    public:
+        Mine(): name(string("mine")) { cout << "mine class" << endl; }
+        const string& get() { return name; }
+};
+
+ostringstream& operator<<(ostringstream& os, Mine mine) 
+{ 
+    os << mine.get();
+    return os;
+}
+
+template <typename T> string debug_rep(const T &t)
+{
+    ostringstream ret;
+    ret << t;
+    return ret.str();
+}
+
+int main()
+{
+  cout << "---" << endl;
+
+  Mine mine;
+
+  // string str("this is string");
+  // cout << debug_rep(str) << endl;
+  
+  cout << debug_rep(mine) << endl;   
+  cout << "---" << endl;
+}
+
 
 note:
 When there are several overloaded templates that provide an eaually good match
