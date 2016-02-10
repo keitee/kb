@@ -164,7 +164,8 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_053* template-argument deduction: std-forward
 |kt_dev_cpp_053| template-variadic
 |kt_dev_cpp_053| template-variadic: forward
-|kt_dev_cpp_054| template: specialization
+|kt_dev_cpp_054| template-specialization
+*kt_dev_cpp_054* template-inheritance
 |kt_dev_cpp_060| template: how to initialize T member
 
 |kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
@@ -23536,7 +23537,8 @@ more template parameters are specified to have particular types.
 
 note:
 Then can use template-explicit-argument here because it specifies the types? No
-becuase it specifies the type with the same defintion.
+becuase explict-argument specifies the type with the same defintion(code) but
+specialization has different definition.
 
 
 <for-function-template>
@@ -23576,19 +23578,23 @@ The best practice is that should have all in the same header file. Declarations
 for all templates should appear first, followed by any specialization.
 
 
-<class-template-specialization>
-As an example, specialize the library hash template to store Sales_data object in an unordered
-container. Must do so in the same namespace in which the original template is defined.
+<for-class-template>
+As an example, specialize the library hash template to store Sales_data object
+in an unordered container. Must do so in the 'same' namespace in which the
+original template is defined.
 
-C++P 709. To use unordered map with our own data type, must define a specialization of the hash
-template and it must define:
+CPR 709. To use unordered map with our own data type, must define a
+specialization of the hash template and it must define:
 
-1. An overloaded call operator that return a size_t and takes an object of the container's key type.
-2. Two type members, result_type and argument_type, which are the return and argument types,
-  respectively, of the call operator.
-3. The default constructor and copy-assign operator.
+    * An overloaded call operator that return a size_t and takes an object of
+      the container's key type.
 
-To add members to a namespace
+    * Two type members, result_type and argument_type, which are the return and
+      argument types, respectively, of the call operator.
+
+    * The default constructor and copy-assign operator.
+
+To add members to std namespace
 
 namespace std {
     template <>
@@ -23602,16 +23608,20 @@ namespace std {
 
     size_t hash<Sales_data>::operator() const Sales_data& s) const
     {
-        return hash<string>() (s.bookNo) ^ hash<unsigned>() (s.units_sold) ^ hash<double>() (s.revenue);
+        // use 'unnamed' object and delegate the complexity of good hash
+        // function to the library.
+        
+        return hash<string>() (s.bookNo) 
+          ^ hash<unsigned>() (s.units_sold) ^ hash<double>() (s.revenue);
     }
-}  // no semicolon after the close curly
+}  // no semicolon after the end of namespace
 
 Assuming this speciailization is in scope, use it:
 
 unordered_multiset<Sales_data> SDest;
 
-Since hash<Sales_data> uses the private members of Sales_data, must make this calss, the specific
-instantiation, a friend of Sales_data.
+Since hash<Sales_data> uses the private members of Sales_data, must make this
+calss, the specific instantiation, a friend of Sales_data.
 
 template <class T> class std::hash;
 
@@ -23621,8 +23631,8 @@ class Sales_data {
 };
 
 
-The second way: Having added the declaration for the specialization to std namespce we can define
-the specialization outside the std.
+The second way: Having added the declaration for the specialization to std
+namespce we can define the specialization outside the std.
 
 namespace std {
    template <> struct hash< Sales_data >;
@@ -23632,19 +23642,21 @@ template <> struct hash <Sales_data>
 {
   size_t operator() ( const Sales_data& s ) const
   {
-    return hash<sring>()(s.bookNo);
+    ...
   }
   // other members as before
 }
 
 
 {partial-specialization}
-Differently from function template, can specify some, but not all, of the template parameters of
-class template. Partial speciailization is itself a template and user must supply arguments that are
-not specified.
+Differently from function template, can specify some, but not all, of the
+template parameters of class template. Partial speciailization is 'only' for
+class template, is itself a template and user must supply arguments that are not
+specified.
 
 The library remove_reference template works through a series of specialization.
 
+// original, most general template
 template <typename T> struct remove_reference 
 {
     typedef T type;
@@ -23653,30 +23665,39 @@ template <typename T> struct remove_reference
 // partial specialization used for lvalue and rvalue reference
 
 template <typename T> struct remove_reference <T&> 
-{
+{                                             ^^^^
     typedef T type;
 };
 
 template <typename T> struct remove_reference <T&&> 
-{
+{                                             ^^^^^
     typedef T type;
 };
 
-In this case, the specialization have the same number of parameters as the original but the
+The specialization have the same number of parameters as the original but the
 parameter's type in the specialization 'differ' from the original.
 
 int i;
 
-remove_reference< decltype(42) >::type a;
-remove_reference< decltype(i) >::type b;
-remove_reference< decltype(std::move(i)) >::type c;
+// decltype(42) is `int`, use the original
+remove_reference<decltype(42)>::type a;
 
-All three, a, b, and c, have type int.
+// decltype(i) is `int&`, use the first 
+remove_reference<decltype(i)>::type b;
+
+// decltype(std::move(i)) is `int&&`, use the second
+remove_reference<decltype(std::move(i))>::type c;
+
+All three, a, b, and c, have type `int` 
+
+note:
+Why partial? Since the base type is the same, `int`.
 
 
 {member-specialization}
-Rather then specialize the whole template, can specialize specific member function(s). If Foo is a
-template with a member Bar.
+This is different from template-member which is template function. Rather then
+specialize the whole template, can specialize specific member function(s). If
+Foo is a template with a member Bar.
 
 template <typename T> struct Foo 
 {
@@ -23690,7 +23711,8 @@ template <> void Foo<int>::Bar()
   ...
 }
 
-Here specializing one member of the Foo<int> class.
+When use Foo with any type other than int, members are instantiated as usual.
+Here specializing the Bar member of Foo<int> class.
 
 Foo<string> fs;   // instantiate Foo<string>::Foo()
 fs.Bar();         // instantiate Foo<string>::Bar()
@@ -23699,7 +23721,9 @@ Foo<int> fi;      // instantiate Foo<int>::Foo()
 fi.Bar();         // use specialization version of Foo<int>::Bar()
 
 
-{template-inheritance}
+={============================================================================
+*kt_dev_cpp_054* template-inheritance
+
 Have got an error on GCC in following case:
 
 template <typename Entry>
