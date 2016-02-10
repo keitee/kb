@@ -54,7 +54,7 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_bcast_319| gst: mime and types
 *kt_dev_bcast_320* gst-plug: 02 Foundations
-*kt_dev_bcast_321* gst-plug: 03 Building a Plugin
+*kt_dev_bcast_321* gst-plug-constructing the boilerplate
 *kt_dev_bcast_321* gst-plug: 04 Chain up
 *kt_dev_bcast_321* gst-plug: 05 The chain function
 *kt_dev_bcast_321* gst-plug: 06 The event function
@@ -102,8 +102,8 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst-error
 *kt_dev_bcast_500* gst-clock
 
-*kt_dev_bcast_600* glib-model
-*kt_dev_bcast_600* glib-object
+*kt_dev_bcast_600* glib-object-model
+*kt_dev_bcast_600* glib-object-type
 *kt_dev_bcast_600* glib-object: reference count
 *kt_dev_bcast_600* glib-object: floating reference
 *kt_dev_bcast_600* glib-property
@@ -5790,7 +5790,7 @@ for strict filters -- elements that have exactly the same format on source and
 
 
 ={============================================================================
-*kt_dev_bcast_321* gst-plug: gst-cap: Building a Plugin
+*kt_dev_bcast_321* gst-plug-constructing the boilerplate
 
 Chapter 3. Constructing the Boilerplate
 
@@ -12410,6 +12410,57 @@ http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstClock
 
 GstClock — Abstract class for global clocks
 
+GStreamer uses a global clock to synchronize the plugins in a pipeline.
+Different clock implementations are possible by implementing this abstract base
+class or, more conveniently, by subclassing GstSystemClock.
+
+The GstClock returns a monotonically increasing time with the method
+gst_clock_get_time(). Its accuracy and base time depend on the specific clock
+implementation but time is always expressed in nanoseconds. Since the baseline
+of the clock is undefined, the clock time returned is not meaningful in itself,
+what matters are the deltas between two clock times. The time returned by a
+    clock is called the absolute time.
+
+The pipeline uses the clock to calculate the running time. Usually all renderers
+synchronize to the global clock using the buffer timestamps, the newsegment
+events and the element's base time, see GstPipeline.
+
+A clock implementation can support periodic and single shot clock notifications
+both synchronous and asynchronous.
+
+One first needs to create a GstClockID for the periodic or single shot
+notification using gst_clock_new_single_shot_id() or
+gst_clock_new_periodic_id().
+
+To perform a blocking wait for the specific time of the GstClockID use the
+gst_clock_id_wait(). To receive a callback when the specific time is reached in
+the clock use gst_clock_id_wait_async(). Both these calls can be interrupted
+with the gst_clock_id_unschedule() call. If the blocking wait is unscheduled a
+return value of GST_CLOCK_UNSCHEDULED is returned.
+
+Periodic callbacks scheduled async will be repeatedly called automatically until
+it is unscheduled. To schedule a sync periodic callback, gst_clock_id_wait()
+should be called repeatedly.
+
+The async callbacks can happen from any thread, either provided by the core or
+from a streaming thread. The application should be prepared for this.
+
+A GstClockID that has been unscheduled cannot be used again for any wait
+operation, a new GstClockID should be created and the old unscheduled one should
+be destroyed with gst_clock_id_unref().
+
+It is possible to perform a blocking wait on the same GstClockID from multiple
+threads. However, registering the same GstClockID for multiple async
+notifications is not possible, the callback will only be called for the thread
+registering the entry last.
+
+None of the wait operations unref the GstClockID, the owner is 'responsible' for
+unreffing the ids itself. This holds for both periodic and single shot
+notifications. The reason being that the owner of the GstClockID has to keep a
+handle to the GstClockID to unblock the wait on FLUSHING events or state changes
+and if the entry would be unreffed automatically, the handle might become
+invalid without any notification.
+
 
 gst_clock_new_periodic_id ()
 -----------------
@@ -12420,7 +12471,7 @@ gst_clock_new_periodic_id (GstClock *clock,
 
 'get' an ID from clock to trigger a periodic notification. The periodic
     notifications will start at time start_time and will then be fired with the
-    given interval. id should be unreffed after usage.
+    given interval. id should be 'unreffed' after usage.
 
 Free-function: gst_clock_id_unref
 
@@ -12445,6 +12496,23 @@ GST_TIME_AS_MSECONDS()
 #define GST_TIME_AS_MSECONDS(time) ((time) / G_GINT64_CONSTANT (1000000))
 
 Convert a GstClockTime to milliseconds (1/1000 of a second).
+
+
+gst_clock_id_unschedule ()
+-----------------
+void
+gst_clock_id_unschedule (GstClockID id);
+
+Cancel an outstanding request with id. This can either be an outstanding async
+    notification or a pending sync notification. After this call, id cannot be
+    used anymore to receive sync or async notifications, you need to create a
+    new GstClockID.
+
+MT safe.
+
+Parameters
+id
+The id to unschedule
 
 
 gst_clock_id_wait_async ()
@@ -12517,10 +12585,15 @@ void
 
 Specifies the type of function which is called when a data element is destroyed.
     It is passed the pointer to the data element and should free any memory and
-    resources allocated for it.  Parameters
+    resources allocated for it.  
+    
+Parameters
 
 data
 the data element.
+
+note:
+Seems that this function is to give the user to chance to clear up any resource.
 
 
 <ex>
@@ -12540,9 +12613,30 @@ the data element.
         static_cast<gpointer>(this),
         NULL);
 
+note:
+    There's a race condition caused by the fact that there's no guarantee
+    that clock's callback will not be executed after a call to unscheduled
+    it. 
+    
+    To fix this problem the callback holds a weak pointer to the resource and
+    just do nothing when it fails to lock it.
+
+    That is that while the thread to run callback is still active, resource
+    object is already gone. To prevent this use weak_ptr.
+
+    However, use unschedule() only before and now adds unref().
+
+    gst_clock_id_unschedule(positionChangeEventClockId);
+    +gst_clock_id_unref(positionChangeEventClockId);
+
+    Would it be okay to use unref() without using weak_ptr?
+
+    From gst source, gst_clock_id_unref() calls GDestroyNotify() before freeing
+    the given clock id.
+
 
 ={============================================================================
-*kt_dev_bcast_600* glib-model
+*kt_dev_bcast_600* glib-object-model
 
 http://library.gnome.org/devel/gobject/stable/
 
@@ -12665,6 +12759,7 @@ value_table during type registration because these value_tables are 'inherited'
 from the parent types for non-fundamental types. 
 
 
+<define-class>
 Unless your code has special requirements, you can use the G_DEFINE_TYPE macro
 to define a class:
 
@@ -12686,6 +12781,8 @@ GType maman_bar_get_type (void)
   return type;
 }
 
+note:
+This shows how class and init functions get linked together.
 
 /* --- GType boilerplate --- */
 /**
@@ -12693,7 +12790,7 @@ GType maman_bar_get_type (void)
  * @TN: The name of the new type, in Camel case.
  * @t_n: The name of the new type, in lowercase, with words 
  *  separated by '_'.
- * @T_P: The #GType of the parent type.
+ * @T_P: The #GType of the 'parent' type.
  * 
  * A convenience macro for type implementations, which declares a class
  * initialization function, an instance initialization function (see #GTypeInfo
@@ -12703,6 +12800,75 @@ GType maman_bar_get_type (void)
  * Furthermore, it defines a *_get_type() function. See G_DEFINE_TYPE_EXTENDED()
  * for an example.
  * 
+ * Since: 2.4
+ */
+
+
+#define G_DEFINE_TYPE(TN, t_n, T_P)			    G_DEFINE_TYPE_EXTENDED (TN, t_n, T_P, 0, {})
+
+#define G_DEFINE_TYPE_EXTENDED(TN, t_n, T_P, _f_, _C_)	    
+    _G_DEFINE_TYPE_EXTENDED_BEGIN (TN, t_n, T_P, _f_) {_C_;} _G_DEFINE_TYPE_EXTENDED_END()
+
+/**
+ * G_DEFINE_TYPE_EXTENDED:
+ * @TN: The name of the new type, in Camel case.
+ * @t_n: The name of the new type, in lowercase, with words
+ *    separated by '_'.
+ * @T_P: The #GType of the parent type.
+ * @_f_: #GTypeFlags to pass to g_type_register_static()
+ * @_C_: Custom code that gets inserted in the *_get_type() function.
+ *
+ * The most general convenience macro for type implementations, on which
+ * G_DEFINE_TYPE(), etc are based.
+ *
+ * |[
+ * G_DEFINE_TYPE_EXTENDED (GtkGadget,
+ *                         gtk_gadget,
+ *                         GTK_TYPE_WIDGET,
+ *                         0,
+ *                         G_IMPLEMENT_INTERFACE (TYPE_GIZMO,
+ *                                                gtk_gadget_gizmo_init));
+ * ]|
+ * expands to
+ * |[
+ * static void     gtk_gadget_init       (GtkGadget      *self);
+ * static void     gtk_gadget_*class_init* (GtkGadgetClass *klass);
+ * static gpointer gtk_gadget_parent_class = NULL;
+ * static void     gtk_gadget_class_intern_init (gpointer klass)
+ * {
+ *   gtk_gadget_parent_class = g_type_class_peek_parent (klass);
+ *   gtk_gadget_*class_init* ((GtkGadgetClass*) klass);
+ * }
+ *
+ * GType
+ * gtk_gadget_get_type (void)
+ * {
+ *   static volatile gsize g_define_type_id__volatile = 0;
+ *   if (g_once_init_enter (&g_define_type_id__volatile))
+ *     {
+ *       GType g_define_type_id =
+ *         g_type_register_static_simple (GTK_TYPE_WIDGET,
+ *                                        g_intern_static_string ("GtkGadget"),
+ *                                        sizeof (GtkGadgetClass),
+ *                                        (GClassInitFunc) gtk_gadget_class_intern_init,
+ *                                        sizeof (GtkGadget),
+ *                                        (GInstanceInitFunc) gtk_gadget_init,
+ *                                        0);
+ *       {
+ *         const GInterfaceInfo g_implement_interface_info = {
+ *           (GInterfaceInitFunc) gtk_gadget_gizmo_init
+ *         };
+ *         g_type_add_interface_static (g_define_type_id, TYPE_GIZMO, &g_implement_interface_info);
+ *       }
+ *       g_once_init_leave (&g_define_type_id__volatile, g_define_type_id);
+ *     }
+ *   return g_define_type_id__volatile;
+ * }
+ * ]|
+ * The only pieces which have to be manually provided are the definitions of
+ * the instance and class structure and the definitions of the instance and
+ * class init functions.
+ *
  * Since: 2.4
  */
 
@@ -12759,10 +12925,10 @@ maman_bar_get_type (void)
   return type;
 }
 
+
 <register-type>
 Upon the first call to maman_bar_get_type, the type named BarType will be
-'registered' in the type system as inheriting from the type G_TYPE_OBJECT.
-
+'registered' in the type system as 'inheriting' from the type G_TYPE_OBJECT.
 
 
 <class-and-instance>
@@ -12778,7 +12944,6 @@ struct  _GObjectClass
   GTypeClass   g_type_class;
   ...
 };
-
 
 struct _GTypeInstance
 {
@@ -12822,6 +12987,7 @@ typedef struct {
   int field_a;
   int field_b;
 } A;
+
 typedef struct {
   GTypeClass parent_class;
   void (*method_a) (void);
@@ -12834,6 +13000,7 @@ typedef struct {
   int field_c;
   int field_d;
 } B;
+
 typedef struct {
   AClass parent_class;
   void (*method_c) (void);
@@ -12842,7 +13009,7 @@ typedef struct {
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-object
+*kt_dev_bcast_600* glib-object-type
 
 GObject is a fundamental classed instantiable type. It implements:
 
@@ -12862,7 +13029,7 @@ how it works.
 Object instantiation
 
 The g_object_new family of functions can be used to 'instantiate' any GType
-which inherits from the GObject base type. All these functions make sure the
+which 'inherits' from the GObject base type. All these functions make sure the
 class and instance structures have been correctly initialized by GLib's type
 system and then invoke at one point or another the constructor class method
 which is used to:

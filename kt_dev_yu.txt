@@ -11,7 +11,7 @@
 
 *kt_dev_uv_set_100* env-cco:
 
-*kt_dev_uv_stack_000* zinc-build: zenkins
+*kt_dev_uv_stack_000* zinc-build-jenkins
 *kt_dev_uv_stack_000* zinc-build: zb-config
 *kt_dev_uv_stack_000* zinc-build: zb-virtual-slave, zb-shell
 *kt_dev_uv_stack_000* zinc-build: zb-make
@@ -432,7 +432,7 @@ $ ccoSwitcher.sh ext04
 
 
 ={============================================================================
-*kt_dev_uv_stack_000* zinc-build: zenkins
+*kt_dev_uv_stack_000* zinc-build-jenkins
 
 https://wiki.youview.co.uk/display/canvas/How+access+Jenkins+build+slaves
 
@@ -465,9 +465,15 @@ http://spongebob:8080/view/developer/job/Test_Build_Concurrent/
 <stat-for-each-commit>
 http://releasedb.dev.youview.co.uk/reports/branch?name=master&start=0
 
-$ ssh 
+$ ssh devnfs2
 
-[kit.park@devnfs2 Test_Build_Concurrent]$ pwd
+<build-num>
+https://spongebob.dev.youview.co.uk/job/Test_Build_Concurrent/8128/
+Build #8128
+
+Started by upstream project Build_Zinc_Release_Try-Single-Platform build 'number' 1075
+
+$ pwd
 /NFS/jenkins-job-archive/Test_Build_Concurrent
 
 // to list out the builds which shows failure on this test
@@ -498,6 +504,25 @@ note:
 2. Some SHA in the headline do not exist.
 
 So not easy to "bisect" in the builds.
+
+
+<zinc-trunk>
+From build pgae:
+https://spongebob.dev.youview.co.uk/job/Test_Build_Concurrent/8128/
+
+T1000 - 05c44df - zinc-trunk - origin/review/DEVARCH-11046_add_json_files_to_dist 
+
+/NFS/zinc-trunk-builds/zinc.05c44df/humax-dtr_t1000/
+
+-rw-r--r-- 1 jenkins youviewdev 247691767 Feb 10 11:25 zinc-complete-stack-humax-dtr_t1000-origin-review-DEVARCH-11046_add_json_files_to_dist-05c44df-20160210-1122-release.tar.bz2
+-rw-r--r-- 1 jenkins youviewdev 247691767 Feb 10 11:25 zinc-complete-stack-humax-dtr_t1000.tar.bz2
+-rw-r--r-- 1 jenkins youviewdev  61171910 Feb 10 11:25 zinc-production-stack-humax-dtr_t1000-origin-review-DEVARCH-11046_add_json_files_to_dist-05c44df-20160210-1122-release.tar.gz
+-rw-r--r-- 1 jenkins youviewdev  61171910 Feb 10 11:25 zinc-production-stack-humax-dtr_t1000.tar.gz
+
+
+<from-console-log>
+10:52:52 [description-setter] Description set: T1000 - Slave=Mrbenn - zinc-trunk -
+05c44dfbc888d41bb8be5ba3e32b9a984a863a44
 
 
 ={============================================================================
@@ -15153,6 +15178,12 @@ void GstMediaRouter::startReportingPositionChange()
 case GST_MESSAGE_STATE_CHANGED:
     onStateChange(oldstate, newstate, pending);
 
+// stop
+NS_ZINC::Future<void> GstMediaRouter::stop_locked()
+void GstMediaRouter::deinit()
+void GstMediaRouter::setPlaySpeed_async(const double speed)
+        stopReportingPositionChange();
+
 
 <2> Not use desired state.
 
@@ -15210,6 +15241,8 @@ This commit restores StateEvent generation of other events when GStreamer state
 changes. 
 
 [1] 1125-S Media Router Specification v1.3
+
+note: mared in FR15 fix but not in FR15 branch. WHY?
 
 
 ={============================================================================
@@ -21210,6 +21243,142 @@ exec $exec_wrapper env ${env_vars[@]} nickelmediad -b "Zinc.MediaProxy"
 ->
 
 gdb --eval-command=run --args ${env_vars[@]} $prefix/bin/nickelmediad -b "Zinc.MediaProxy"
+
+
+={============================================================================
+*kt_dev_uv_stack_413* mr-drm:
+
+
+Polonium/Polonium.Drm/src/gdecrypt.h
+------------------------------------
+ Defines abstract parent class. Particularly interfaces for CENC
+
+/**
+ * GDecrypt:
+ *
+ * A type for decrypting media in two different modes: CENC (MPEG-DASH) and
+ * BBTS (MPEG-TS).
+ *
+ * An implementation usually can support both modes but only one of them can be
+ * used at a time which is decided at creation time.
+ *
+ * The procedure of decrypting media stream is as follows:
+ * * load key and IV
+ * * add bytes (possibly multiple times)
+ * * finish
+ *
+ * For BBTS a pair of keys is used interchangeably: odd and even.  The next (not
+ * used) key should only be updated except for the first time when the current
+ * key should be loaded as well.
+ *
+ * Since: 0.1
+ **/
+
+G_DEFINE_ABSTRACT_TYPE (GDecrypt, g_decrypt, G_TYPE_OBJECT)
+struct _GDecryptClass {
+  GObjectClass parent_class;
+
+  /* CENC */
+  void (*load_key_cenc)  (GDecrypt * decrypt, GBytes * key, GBytes * iv);
+  void (*add_bytes_cenc) (GDecrypt * decrypt, guint8 * data, gsize size);
+  void (*finish_cenc)    (GDecrypt * decrypt);
+
+};
+
+/**
+ * g_decrypt_add_bytes_cenc:
+ * @decrypt: a #GDecrypt
+ * @data: (inout) (transfer none) (array length=size) (element-type guint8):
+ *        the data to be decrypted
+ * @size: the size of @data
+ *
+ * Adds data bytes for CENC decryption.  g_decrypt_load_key_cenc() must be
+ * called at least once before calling this function.
+ *
+ * @data may not be completely decrypted until g_decrypt_finish_cenc() is
+ * called.  @data must not be freed before g_decrypt_finish_cenc() is called.
+ *
+ * Since: 0.1
+ **/
+
+
+Polonium/Polonium.Drm/src/gdecryptnexus.c
+------------------------------------
+
+ * GDecryptNexus:
+ *
+ * This is a H/W oriented implementation of #GDecrypt type.  Specifically it
+ * uses Broadcom's Nexus APIs to perform decryption and other required
+ * operations.
+ *
+ * Keys are expected to be encrypted such that they can be loaded (imported)
+ * into Marlin Key Register (MKR) and never be available outside of Broadcom
+ * Secure Processor (BSP) during decryption.  Optionally keys can be loaded into
+ * MKR from clear text or remain in clear (not recommended).
+ 
+ : one of concrete implementation class
+ : use NEXUS calls to load/clear a key
+ : pump data down into dma
+
+_class_init:
+  base_klass->add_bytes_cenc = g_decrypt_nexus_add_bytes_cenc;
+
+static void
+g_decrypt_nexus_add_bytes_cenc (GDecrypt * decrypt, guint8 * data, gsize size)
+{
+  g_return_if_fail (decrypt != NULL);
+  g_return_if_fail (data != NULL);
+
+  /* "slice" data if it doesn't fit into preallocated Nexus DMA memory */
+  // static const gsize MAX_DMA_MEM  = 1 * 1024 * 1024; /* 1 MB, arbitrary */
+
+  while (size > 0) {
+      gsize to_consume = MIN (size, MAX_DMA_MEM);
+      g_decrypt_nexus_add_bytes_cenc_impl (decrypt, data, to_consume);
+
+      size -= to_consume;
+      data += to_consume;
+  }
+}
+
+static void
+g_decrypt_nexus_add_bytes_cenc_impl (GDecrypt * decrypt,
+                                     guint8 * data,
+                                     gsize size)
+{
+  g_debug ("Adding DMA block: %p size: %" G_GSIZE_FORMAT, data, size);
+
+  /* need to copy data from client into Nexus DMA memory */
+  src = priv->dma_mem + priv->mem_used;
+  memcpy (src, data, size);
+
+  index = priv->n_blocks++;
+  priv->mem_used += size;
+
+  settings = &priv->block_settings[index];
+  NEXUS_DmaJob_GetDefaultBlockSettings (settings);
+  settings->pSrcAddr = src;
+  settings->pDestAddr = src;
+  settings->blockSize = size;
+  settings->resetCrypto = index == 0;
+  settings->cached = TRUE;
+  settings->scatterGatherCryptoStart = index == 0;
+  settings->scatterGatherCryptoEnd = FALSE;
+}
+
+Polonium/Polonium.Drm/src/gdrm.h
+Polonium/Polonium.Drm/src/gdrm*
+------------------------------------
+  About wasabi
+
+
+VirtualBinSink::VirtualBinSink()
+{
+    if (enableCenc) {
+        elementFactory["application/x-cenc"] = boost::bind(&makeElement, "cencdec");
+        NICKEL_TRACE("CencDec (application/x-cenc) is enabled.");
+    }
+}
 
 
 ={============================================================================

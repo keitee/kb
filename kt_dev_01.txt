@@ -22622,7 +22622,9 @@ template<typename _Tp1, typename _Deleter>
 Not possible for the compiler to deduce the type when a function return type
 differs from any used in the parameter list. Have to specify the type.
 
-template< typename T1, typename T2, typename T3 >
+note: This is to off deduction in essence.
+
+template< typename T1, typename T2, typename T3 > 
 T1 sum( T2, T3 );
 
 auto val3 = sum(i, lng);              // cannot deduce T1
@@ -23484,29 +23486,43 @@ std::forward<int>(10), std::forward<char>(c)
 
 
 ={============================================================================
-*kt_dev_cpp_054* template: specialization
+*kt_dev_cpp_054* template-specialization
 
-{why-specialization}
-When cannot or do not want to use the template version, can define a specialized version of the
-class or function template.
+Not always possible to write a 'single' template suited for every possible
+template argument. In some cases, the general template is wrong for a type. 
 
-o when the general template definition might not compile or might do the wrong thing.
-o when can take advantage of some specific knowledge to write more efficient code.
+    * When the general template definition might not compile or might do the
+      wrong thing.
 
+    * When can take advantage of some specific knowledge to write more efficient
+      code.
 
-{why-problem}
-Again, compare() is an example for which the general definition is not appropriate for a particular
-type, character pointers.
-
-// first version to compare any two types
-template <typename T> int compare( const T&, const T& );
-
-// second version to compare string literals
-template <size_t N, size_t M> int compare( const char (&) [N], const (&) [M] );
+When cannot or do not want to use the template version, can define a specialized
+version of the class or function template.
 
 
-If call compare() with character pointers, the first version will be called but want to compare
-pointers by strcmp() rather than by comparing the pointer values.
+{problem}
+Again, compare() is an example for which the general template is not appropriate
+for a particular type, character pointers.
+
+// First version for any two types
+template <typename T> int compare(const T&, const T&)
+{
+  if( v1 < v2 ) return -1;
+  if( v2 < v1 ) return 1;
+  return 0;
+}
+
+// Second version for string literals. Uses 'nontype' template parameters
+template <size_t N, size_t M> int compare(const char (&) [N], const (&) [M])
+{
+    return strcmp(p1, p2);
+}
+
+If call compare() with character pointers, the first version will be called
+because nontype version will be called only when pass a string literal or an
+array but want to compare pointers by strcmp() rather than by comparing the
+pointer values.
 
 const char *p1 = "hi", *p2 = "mom";
 
@@ -23515,29 +23531,49 @@ compare( "hi", "mom" );
 
 
 {specialization}
-Is a separate definition, specific instantiation in which one or more template parameters are
-specified to have particular types.
+A 'separate' definition of the template, specific instantiation in which one or
+more template parameters are specified to have particular types.
+
+note:
+Then can use template-explicit-argument here because it specifies the types? No
+becuase it specifies the type with the same defintion.
 
 
-<function-template-specialization>
-Must supply arguments for every template parameter in the original template.
+<for-function-template>
+Must supply arguments for 'all' template parameter in the original template.
 
-// first version to compare any two types
-template <typename T> int compare( const T&, const T& );
-
-// specialization
+// specialized version
 template <>
 int compare( const char* const &p1, const char* const &p2 )
 { return strcmp( p1, p2 ); }
 
-The hard part is the function parameter type.
+The hard part is to understand the function parameter type because the function
+parameter 'must' match the corresponding types in the 'original' template.
 
-const char *p1 = "hi", *p2 = "mom";
+template <typename T> int compare(const T&, const T&);
 
-compare( p1, p2 );
+int compare(const char* const &p1, const char* const &p2);
 
-Want to use T as "const char *" and our function requires "const" version of this type. As with 
-{const-on-base-type}, the type to use in specialization is "const char const *".
+Want to use T as "const char *" and our function requires "const" version of
+this "type". As with {const-on-base-type}, the type to use in specialization is
+"const char const *" since base type is "const char *"
+
+note:
+Specializations instantiate a template; do not overload it.
+
+
+<scope-rule>
+In order to specialize a template, the original template must be in scope.
+Moreover, a declaration for a specialization must be in scope before any use of
+it.
+
+Because the compiler can generate code using the original template when a
+specialization is missing, errors in declaration 'order' between a template and
+specialization are easy to make but hard to find. The compiler is unlikely to
+detect.
+
+The best practice is that should have all in the same header file. Declarations
+for all templates should appear first, followed by any specialization.
 
 
 <class-template-specialization>
