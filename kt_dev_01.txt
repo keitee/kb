@@ -246,7 +246,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_080| bitset
 
 |kt_dev_stl_100| raii {factory-func} {auto-lock}
-|kt_dev_stl_101| smartp-shared
+|kt_dev_stl_101| sp-shared
 |kt_dev_stl_102| smart pointer: weak
 *kt_dev_stl_103* smart pointer: unique
 *kt_dev_stl_104* smartp: points not to misuse
@@ -254,7 +254,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_102| smart pointer: internal: auto_ptr
 |kt_dev_stl_103| smart pointer: internal: shared_ptr
 |kt_dev_stl_104| smart pointer: examples
-|kt_dev_stl_105| make_shared
 |kt_dev_stl_106| when to use which containers
 |kt_dev_stl_107| smart pointers: deleter
 
@@ -35192,19 +35191,133 @@ resource is transfered.
 
 
 ={============================================================================
-*kt_dev_stl_101* smartp-shared
+*kt_dev_stl_101* sp-shared
 
-{shared-ptr}
-A pointer that implements the concept of 'shared' ownership so that the object
-and its associated resources get released whenever the last reference to it gets
+This implements the concept of 'shared' ownership so that the object and its
+associated resources get released whenever the last reference to it gets
 destroyed. To perform this task in more complicated scenarios, helper classes,
-  such as weak_ptr, bad_weak_ptr, and enable_shared_from_this are provided.
+such as weak_ptr, bad_weak_ptr, and enable_shared_from_this are provided.
 
-note: #include <memory> and default initialization is a nullptr. 
-note: that "T" but not "T*".
+  * Defined in the <memory> 
+  * The default initialized holds a nullptr. 
+  * The template and use "T" but not "T*".
 
 shared_ptr<T> plist;
 shared_ptr<list<int>> plist;
+
+
+{sp-operations}
+
+// Use args to initialize that object of type T
+make_shared<T>(args);
+
+// Decrements p's reference count and increments q's count
+p = q;          
+
+// Return true if p.use_count() is 1
+p.unique();
+
+// May be slow operation, intended for debugging purpose
+p.use_count();
+
+// Swap pointers in p and q
+swap(p, q);
+p.swap(q);
+
+
+{sp-shared-code}
+include/c++/4.9.2/bits/shared_ptr.h
+namespace std {
+  template<typename _Tp>
+    class shared_ptr : public __shared_ptr<_Tp>
+    {
+    };
+
+  /**
+   *  @brief  Create an object that is owned by a shared_ptr.
+   *  @param  __args  Arguments for the @a _Tp object's constructor.
+   *  @return A shared_ptr that owns the newly created object.
+   *  @throw  std::bad_alloc, or an exception thrown from the
+   *          constructor of @a _Tp.
+   */
+  template<typename _Tp, typename... _Args>
+    inline shared_ptr<_Tp>
+    make_shared(_Args&&... __args)
+    {
+      typedef typename std::remove_const<_Tp>::type _Tp_nc;
+      return std::allocate_shared<_Tp>(std::allocator<_Tp_nc>(),
+              std::forward<_Args>(__args)...);
+    }
+}
+
+
+{make-shared}
+
+// points to '9999999999'
+shard_prt<string> p4 = make_shared<string>(10, '9');
+
+// points to empty vector<string>
+auto p6 = make_shared<vector<sting>>();
+
+
+<safer-and-faster>
+The shared_ptr<T>(new X(...)) performs two allocations: one for X and one for
+the control block used, for example, by the shared pointer to manage its use
+count. 
+  
+Using make_shared<T>(...) instead is considerably faster, performing only one
+allocation, and safer because a situation where the allocation of X succeeds but
+the allocation of the control block fails cannot occur: do alloc and bind at the
+same time.
+
+<use-count-on-make-shared>
+What's the use_count when creates make_shared?
+
+int main()
+{
+  shared_ptr<string> spstr = make_shared<string>("this is string");
+
+  cout << "spstr.count() : " << spstr.use_count() << endl;
+}
+
+spstr.count() : 1
+
+This question comes from:
+
+bsk.add_item( make_shared<Quote>("123", 45) );
+// void add_item( const std::shared_ptr<Quote>& sale);
+
+
+<use-argument-type-operators>
+#include<iostream>
+#include<string>
+#include<memory>
+
+using namespace std;
+
+class XX
+{
+    public:
+        XX(int value): price(value) {}
+        int get() { return price; }
+
+    private:
+        int price;
+};
+
+int main()
+{
+    XX x(100);
+    cout << "XX get: " << x.get() << endl;
+
+    shared_ptr<XX> sp1 = make_shared<XX>(x);
+    cout << "sp1->get: " << sp1->get() << endl;
+    cout << "sp1.count() : " << sp1.use_count() << endl;
+}
+
+Why does this example work when type XX do not have XX::XX(XX &)? Since XX's
+synthesized co constructor is used.
+
 
 <ex>
 
@@ -35261,32 +35374,6 @@ note:
 Because the constructor taking a pointer as single argument is 'explicit',
         can't use the assignment notation here because that is considered to
         be an implicit conversion.
-
-
-<make-shared>
-
-// 10 occurrences of character '9'
-shard_prt<string> p4 = make_shared<string>(10, '9');
-
-// create empty vector<string>
-auto p6 = make_shared<vector<sting>>();
-
-
-note: What's the use_count when uses make_shared?
-
-int main()
-{
-  shared_ptr<string> spstr = make_shared<string>("this is string");
-
-  cout << "spstr.count() : " << spstr.use_count() << endl;
-}
-
-spstr.count() : 1
-
-This question comes from:
-
-bsk.add_item( make_shared<Quote>("123", 45) );
-// void add_item( const std::shared_ptr<Quote>& sale);
 
 
 <reset-but-not-assign>
@@ -37062,70 +37149,6 @@ all         :  Kong Yize: 44.77
  The Maltese Falcon: 19.76
  Water: 0.44
  Pizza: 2.22
-
-
-={============================================================================
-*kt_dev_stl_105* make_shared
-
--. safer and faster
-
-shared_ptr<T>(new X(...)) performs two allocations: one for X and one for the
-control block used, for example, by the shared pointer to manage its use
-count. 
-  
-Using make_shared<T>(...) instead is considerably faster, performing only one
-allocation, and safer because a situation where the allocation of X succeeds
-but the allocation of the control block fails cannot occur: do alloc and bind
-at the same time
-
-<ex>
-
-#include<iostream>
-#include<string>
-#include<memory>
-
-using namespace std;
-
-class XX
-{
-    public:
-        XX(int value): price(value) {}
-        int get() { return price; }
-
-    private:
-        int price;
-};
-
-int main()
-{
-    XX x(100);
-    cout << "XX get: " << x.get() << endl;
-
-    shared_ptr<XX> sp1 = make_shared<XX>(x);
-    cout << "sp1->get: " << sp1->get() << endl;
-    cout << "sp1.count() : " << sp1.use_count() << endl;
-}
-
-Q: Why does this work when XX do not have XX::XX(XX &)?
-A: Since XX's copy constructor is used and if there isn't, will be synthesized.
-
-From shared_ptr.h
-
-/**
- *  @brief  Create an object that is owned by a shared_ptr.
- *  @param  __args  Arguments for the @a _Tp object's constructor.
- *  @return A shared_ptr that owns the newly created object.
- *  @throw  std::bad_alloc, or an exception thrown from the
- *          constructor of @a _Tp.
- */
-template<typename _Tp, typename... _Args>
-  inline shared_ptr<_Tp>
-  make_shared(_Args&&... __args)
-{
-    typedef typename std::remove_const<_Tp>::type _Tp_nc;
-    return std::allocate_shared<_Tp>(std::allocator<_Tp_nc>(),
-            std::forward<_Args>(__args)...);
-}
 
 
 ={============================================================================
