@@ -113,7 +113,7 @@
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
 *kt_dev_uv_stack_408* mr-dash: disable dash on master
-*kt_dev_uv_stack_408* mr-dash: switch between mrs
+*kt_dev_uv_stack_408* mr-dash-switch-mrs
 *kt_dev_uv_stack_408* mr-dash: position
 *kt_dev_uv_stack_408* mr-dash: position change
 *kt_dev_uv_stack_408* mr-dash: seekable range
@@ -126,7 +126,7 @@
 
 *kt_dev_uv_stack_408* mr-dash: nickelmediad when killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
-*kt_dev_uv_stack_408* mr-dash: dbus log: from play start to complete
+*kt_dev_uv_stack_408* mr-dash-dbus-log: from play start to complete
 *kt_dev_uv_stack_254* mr-dash: event listener
 *kt_dev_uv_stack_254* mr-dash: natual size
 *kt_dev_uv_stack_254* mr-dash: test web server
@@ -205,7 +205,8 @@
 
 *kt_dev_uv_oem_001* oem-box-hwei: pkgconfig
 *kt_dev_uv_oem_001* oem-box-hwei:
-*kt_dev_uv_oem_001* oem-box-hmax: burning
+*kt_dev_uv_oem_001* oem-box-hmax-ctk-atk
+*kt_dev_uv_oem_001* oem-box-hmax-flash
 *kt_dev_uv_oem_001* oem-box: staging and toolchanis
 *kt_dev_uv_oem_001* zinc-jira: deploy the prebuilt binary
 
@@ -15313,7 +15314,7 @@ Date:   Mon Nov 9 13:50:42 2015 +0000
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: switch between mrs
+*kt_dev_uv_stack_408* mr-dash-switch-mrs
 
 # Tell WebKit to use the media router for video playback. The default is to use
 # the built-in GStreamer pipeline
@@ -16927,7 +16928,7 @@ path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorE
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: dbus log: from play start to complete
+*kt_dev_uv_stack_408* mr-dash-dbus-log: from play start to complete
 
 starts from HAVE_NOTHING, NETWORK_EMPTY
 
@@ -17063,6 +17064,7 @@ member=*SourceEvent*
 
 note: see setVideoWindow with right values
 
+// from Vanadium::resizeVideo()
 method call sender=:1.121 -> dest=:1.72 serial=62 
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
 member=*setVideoWindow*
@@ -21008,6 +21010,9 @@ location=http://wll1p00830.dev.youview.co.uk:3000/video/adverts/Webuyanycar-cras
 gst-launch-1.0 souphttpsrc \
 location=http://wll1p04345.dev.youview.co.uk/file_0000025585_20160122_143758_15930049906_15930935523.ts ! tsnexusbin
 
+gst-launch-1.0 souphttpsrc \
+location=http://wll1p04345.dev.youview.co.uk/file_0000544355_20160125_144829_4955123647_4955998843.ts ! tsnexusbin
+
 
 {use-uv-mr}
 YV MR forwards works to bronze since it has ts extension. This is the same case
@@ -21362,6 +21367,19 @@ key slots are Nexus abstractions not directly tied to any finite H/W resource
 and seem to be unconstrained (no resource control is required other than
         internal Nexus synchronisation).
 
+
+<pipeline>
+gst-launch-1.0 souphttpsrc 
+location=http://skydvn-dash-mobile-test.skydvn.com.edgesuite-staging.net/dash2/dash-multi-marlin/manifest.mpd 
+
+! dashdemux name=dash dash.video_00 ! video/quicktime ! qtdemux ! queue 
+! cencdec sas-url=https://ms3.youview.co.uk/s/YV_DashPocAbrCdn#http://skydvn-dash-mobile-test.skydvn.com.edgesuite-staging.net/dash2/dash-multi-marlin/manifest.mpd 
+
+! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink 
+
+dash.audio_00 ! audio/x-m4a ! qtdemux 
+
+
 <cenc>
 Polonium/Polonium.GSTCencDec/src/gstcencdec.c
 ------------------------------------
@@ -21520,16 +21538,82 @@ Polonium/Polonium.Drm/src/gdrm*
   About wasabi
 
 
-<pipeline>
-gst-launch-1.0 souphttpsrc 
-location=http://skydvn-dash-mobile-test.skydvn.com.edgesuite-staging.net/dash2/dash-multi-marlin/manifest.mpd 
+<no-enc-key-on-ctk>
+(gst-launch-1.0:1761): drmwasabi-WARNING **: No key encryption available
 
-! dashdemux name=dash dash.video_00 ! video/quicktime ! qtdemux ! queue 
-! cencdec sas-url=https://ms3.youview.co.uk/s/YV_DashPocAbrCdn#http://skydvn-dash-mobile-test.skydvn.com.edgesuite-staging.net/dash2/dash-multi-marlin/manifest.mpd 
+g_drm_wasabi_init (GDrmWasabi * drm)
+{
+  GDrmWasabiPrivate *priv = G_DRM_WASABI_GET_PRIVATE (drm);
 
-! h264parse ! video/x-h264,stream-format=byte-stream ! nexussink 
+  priv->encrypt_keys = g_drm_key_encryption_available ();
 
-dash.audio_00 ! audio/x-m4a ! qtdemux 
+  if (!priv->encrypt_keys) {
+    g_warning ("No key encryption available");
+  }
+}
+
+/** note: return FALSE for CTK
+ *
+ * g_drm_key_encryption_available:
+ * Tests if key encryption (in H/W registers) is available.
+ * Returns: %TRUE if key encryption is available
+ */
+gboolean
+g_drm_key_encryption_available ()
+{
+#ifdef USE_NEXUS
+  /*
+   * So here's the trick: on ATK devices, which are currently the majority,
+   * libWsbHkpConfig.so is available which means loading SKB will initialise
+   * HKP module (a low level API implemented with Nexus security APIs on YouView
+   * devices).  We still need to support CTK devices though where this library
+   * (and hence Hardware Key Protection) is not available.
+   */
+  void *h = dlopen ("libWsbHkpConfig.so", RTLD_LAZY);
+};
+
+
+={============================================================================
+*kt_dev_uv_stack_413* mr-drm-play 
+
+#/ Usage: yv-mpeg-dash [GST-LAUNCH-OPTION] [OPTION] [URI]
+
+#/   --key-dir=<dir>      Read content keys from directory <dir>
+#/                        Keys should be stored as:
+#/                        <dir>/<SHA1("urn:marlin:kid:<KID bytes in hex>")>.key
+#/
+#/                        Use yv-sas-client to obtain required information.
+#/
+#/                        Use xxd to create key files, for example:
+#/
+#/                          echo "0123456789abcdef0123456789abcdef" | \
+#/                          xxd -r -p > /tmp/aaaabbbbccccddddeeeeffff0000111122223333.key
+#/
+#/   --no-key-enc         disable content key encryption (use keys in clear)
+#/
+#/   --no-hw-dec          disable H/W decryption and key encryption (if any)
+#/
+#/   --no-sas-cert-check  disable MS3 server certificate verification
+
+
+        (--key-dir=*)
+            cencdec_props+=" key-dir=${opt#*=*}";;
+
+        (--no-key-enc)
+            cencdec_props+=" disable-key-enc=true";;
+
+        (--no-hw-dec)
+            cencdec_props+=" disable-hw-dec=true";;
+
+        // select sw one
+        //
+        // if (self->config.disable_hw_decryption) {
+        //      self->decrypt = g_decrypt_create_soft ();
+        // else
+        //      self->decrypt = g_decrypt_create_default ();
+
+        (--no-sas-cert-check)
+            cencdec_props+=" disable-cert-check=true";;
 
 
 ={============================================================================
@@ -22082,14 +22166,6 @@ git format-patch zinc-pristine
 
 ={============================================================================
 *kt_dev_uv_stack_009* zinc-lsr: keys
-
-<box-type>
-[root@HUMAX /]# getItem oem.device.model.variant    
-oem.device.model.variant=80B07002
-
-[From wiki]
-CTK = 80B07001
-ATK = 80B07002
 
 <box-uuid>
 [root@HUMAX /]# getItem oem.device.duid
@@ -23967,7 +24043,54 @@ ZB_CFG=huawei.372 zb-make
 
 
 ={============================================================================
-*kt_dev_uv_oem_001* oem-box-hmax: burning
+*kt_dev_uv_oem_001* oem-box-hmax-ctk-atk
+
+<box-type>
+[root@HUMAX /]# getItem oem.device.model.variant    
+oem.device.model.variant=80B07002
+
+[From wiki]
+CTK = 80B07001
+ATK = 80B07002
+
+<from-mount>
+ATK since /opt/device has keys, certs
+
+/dev/mtdblock8 on /opt/device type cramfs (ro,relatime)
+
+/opt/device# ls -alR
+.:
+dr-xr-xr-x    1 root     root           104 Jan  1  1970 HKP/
+dr-xr-xr-x    1 root     root            80 Jan  1  1970 Marlin/
+dr-xr-xr-x    1 root     root            48 Jan  1  1970 OEMData/
+dr-xr-xr-x    1 root     root            44 Jan  1  1970 YouView/
+
+./HKP:
+-r--r-----    1 root     keys          2112 Jan  1  1970 hash_locked_keys.dat
+-r--r-----    1 root     keys           531 Jan  1  1970 kpk10.dat
+-r--r-----    1 root     keys           531 Jan  1  1970 kpk11.dat
+-r--r-----    1 root     keys           531 Jan  1  1970 kpk12.dat
+
+./Marlin:
+-r--r-----    1 root     keys         23930 Jan  1  1970 marlin_personality.dat
+-r--r-----    1 root     keys           112 Jan  1  1970 marlin_starfish_testvector.dat
+
+./OEMData:
+-r--r--r--    1 root     root          1249 Jan  1  1970 pke1.pub.pem
+-r--r--r--    1 root     root          1249 Jan  1  1970 ps1.pub.pem
+
+./YouView:
+-r--r-----    1 root     keys           799 Jan  1  1970 ok3.priv.skb
+dr-xr-xr-x    1 root     root            24 Jan  1  1970 public/
+
+./YouView/public:
+-r--r--r--    1 root     root          1499 Jan  1  1970 ok3.pub.pem
+
+CTK don't have since it has those in rfs
+
+
+={============================================================================
+*kt_dev_uv_oem_001* oem-box-hmax-flash
 
 {hmax} 
 onlydebug (Humax)
@@ -23978,6 +24101,7 @@ humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 /.ssh -> /var/tmp/authorized_keys
 
 {hmax-cds}
+http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/
 http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
 
 note: will wipe out a box including writable nfs.
@@ -24013,7 +24137,10 @@ wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/T2100/scripts/humax-hdd-ins
 
 chmod +x humax-hdd-install.sh
 
+
 <script>
+note: cannot run this when already booted from HDD.
+
 ./humax-hdd-install.sh -s -r H23.12.0
 
 // do not work for me. why?
@@ -26078,14 +26205,26 @@ typedef struct NEXUS_VideoDecoderStatus
     unsigned long pictureTag; /* last picture tag found in the stream */
     
     /* TSM status */                                 
-    bool tsm;                 /* VideoDecoder is in TSM (time stamp managed) mode. TSM may be not applicable (e.g. ES streams), may be disabled directly
-                                 by the user (setting stcChannel = NULL) or indirectly by other API's (e.g. trick modes, ASTM, etc.) */
-    uint32_t pts;             /* Current PTS of the video decoder
-                                 Note: the stc is available from NEXUS_StcChannel_GetStc */
-    int32_t  ptsStcDifference; /* Current PTS-STC difference including lipsync adjustments */
+    bool tsm;                 /* VideoDecoder is in TSM (time stamp managed)
+                                 mode. TSM may be not applicable (e.g. ES
+                                 streams), may be disabled directly by the user
+                                 (setting stcChannel = NULL) or indirectly by
+                                 other API's (e.g. trick modes, ASTM, etc.) */
+
+    uint32_t pts;             /* Current PTS of the video decoder Note: the stc
+                                 is available from NEXUS_StcChannel_GetStc */
+
+    int32_t  ptsStcDifference; /* Current PTS-STC difference including lipsync
+                                  adjustments */
+
     NEXUS_PtsType ptsType;    /* Type of the current PTS */
-    bool firstPtsPassed;      /* The first PTS for this stream has passed. This means that the information in this status structure is for pictures currently being displayed.
-                                 See NEXUS_VideoDecoderSettings.firstPtsPassed for a callback related to this status. */
+
+    bool firstPtsPassed;      /* The first PTS for this stream has passed. This
+                                 means that the information in this status
+                                 structure is for pictures currently being
+                                 displayed.  See
+                                 NEXUS_VideoDecoderSettings.firstPtsPassed for a
+                                 callback related to this status. */
 
     /* buffer status */                                 
     unsigned fifoDepth;       /* depth in bytes of the compressed buffer */
@@ -26101,12 +26240,23 @@ typedef struct NEXUS_VideoDecoderStatus
     unsigned numDecodeErrors; /* total number of decoder errors since Start */
     unsigned numDecodeOverflows; /* total number of overflows of the input to the decoder since Start */
     unsigned numDisplayErrors;/* total number of display manager errors since Start. This includes parity mismatches which may result in glitching on the display. */
-    unsigned numDecodeDrops;  /* total number of pictures dropped by the decoder since Start */
-    unsigned numPicturesReceived; /* total number of pictures which the decoder has received since Start. This includes pictures which are skipped due to TSM, NEXUS_VideoDecoderDecodeMode,
-                                     or other factors. */
-    unsigned numDisplayDrops; /* total number of pictures dropped by the display manager due to TSM failures since Start */
+
+    unsigned numDecodeDrops;  /* total number of pictures dropped by the decoder
+                                 since Start */
+
+    unsigned numPicturesReceived; /* total number of pictures which the decoder
+                                     has received since Start. This includes
+                                     pictures which are skipped due to TSM,
+                                     NEXUS_VideoDecoderDecodeMode, or other
+                                     factors. */
+
+    unsigned numDisplayDrops; /* total number of pictures dropped by the display
+                                 manager due to TSM failures since Start */
+
     unsigned numDisplayUnderflows;  /* total number of times the display manager was unable to deliver a new picture since Start */
+
     unsigned ptsErrorCount;   /* counter for number of PTS error interrupts since Start */
+
     unsigned avdStatusBlock;  /* snap shot of the AVD channel status. See NEXUS_CHANNELSTATUS_AVD_XXX macros for possible values. */
     unsigned numWatchdogs;    /* total number of watchdog events for the device since NEXUS_VideoDecoderModule_Init. the count is per AVD device, not per VideoDecoder channel. */
     uint64_t numBytesDecoded; /* total number of ES bytes decoded since last start or flush */
