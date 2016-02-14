@@ -294,10 +294,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_ecpp_012| 33: avoid hiding inherited names
 |kt_dev_ecpp_013| 22: data member must be private, encapsulation
 |kt_dev_ecpp_014| cpp-cast: minimize casting, named-cast
-|kt_dev_ecpp_015| new and delete
+|kt_dev_ecpp_015| new-delete
 |kt_dev_ecpp_016| 49 : new handler
 |kt_dev_ecpp_017| 50: when to replace new and delete
-|kt_dev_ecpp_018| 52: placemane new
+|kt_dev_ecpp_018| new-placemane-new
 
 
 #{ MORE EFFECTIVE C++ 1ST, 1996, 25TH PRINTING
@@ -20623,7 +20623,10 @@ likely to include a useful what().
 ... [0               (size-1)] size ...
     <------------------------>
 
-note: when used to check its empty
+note:
+Use the fact that the valid size is always < container.size().
+
+// when used to check its empty
 
 void StrBlob::check(size_type i, const string &msg) const
 {
@@ -20638,7 +20641,7 @@ string& StrBlob::front()
 };
 
 
-note: when used to check if it's in range including the past end
+// when used to check if it's in range including the past end
 
 std::string &StrBlobPtr::deref() const
 {
@@ -22298,6 +22301,31 @@ void workWithIterator(iterT iter)
   value_type temp(*iter);
   ...
 }
+
+<ex>
+In the StrBlob example, it uses: 
+
+class StrBlob {
+  public:
+    typedef std::vector<std::string>::size_type size_type;
+    ...
+};
+
+Shouldn't that be:
+
+class StrBlob {
+  public:
+    typedef typename std::vector<std::string>::size_type size_type;
+    ...
+};
+
+Tried the both and the both compiles and works well.
+
+  template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
+    class vector : protected _Vector_base<_Tp, _Alloc>
+    {
+      typedef size_t					 size_type;
+    };
 
 
 ={============================================================================
@@ -35320,7 +35348,6 @@ synthesized co constructor is used.
 
 
 <ex>
-
 #include <iostream>
 #include <memory>
 #include <string>
@@ -35376,33 +35403,41 @@ Because the constructor taking a pointer as single argument is 'explicit',
         be an implicit conversion.
 
 
-<reset-but-not-assign>
+{sp-reset}
 Why not assignment instead of using reset when assign a shared pointer with a
-new resource? Think that operator=() is to decrease a reference counter of
-left and to increase the one of right. However, cannot increase a count of new
-objects. 
+new resource? 
 
-note: This is when set shared pointer with new resource and assignment works
-between shared pointers.
+  * Think that operator=() is to decrease a reference counter of left and to
+    increase the one of right. However, cannot increase a count of new objects. 
 
-To assign a new pointer to a SP, reset 'decrease' reference count of SP. If SP
-is the only SP pointing at its object, reset frees SP's existing object. If q is
-passed, makes SP points to q otherwise makes SP nullptr. 
+  * This is when set shared pointer with new resource and assignment works
+    between shared pointers.
 
-note: After all, reset() decrease count of left and set SP with the given
+
+p.reset();
+p.reset(q);
+p.reset(q, d);
+
+If p is the only shared_ptr pointing at its object, reset frees p's existing
+object. If the optional built-in pointer q is passed, makes p points to q,
+  otherwise makes p null. If d is supplied, will call d to free q otherwise use
+  delete to free q.
+
+After all, `reset` decrease count of left and set shared pointer with the given
 pointer or nullptr.
 
-sp.reset(); or sp.reset(q);
-
-This is used to alloc a SP first and 'bind' it later.
+The reset can be used to bind a pointer with shared pointer later.
 
 shared_ptr<string> pNico4;
-pNico4 = new string("nico");        // ERROR
-pNico4.reset(new string("nico"));   // OK
+pNico4.reset(new string("nico"));
+
+However, cannot use copy-form-initialization since shared pointer ctors that
+takes pointers are explicit but copy-from reuires implicit conversion.
 
 shared_ptr<int> p (new int(42));
 p = new int(1024);                  // ERROR
-p.reset( new int(1024));
+
+shared_ptr<int> p = new int(42);    // ERROR
 
 
 <access-to-pointee>
@@ -35477,7 +35512,7 @@ static_pointer_cast<int*>(sp)                 // OK
 
 
 <ex> 
-StrBlob from p455 which show how to implement a new collection type to share.
+StrBlob from CPR 455 which show how to implement a new collection type to share.
 
 This shows when shared_ptr is useful than own raii since this case don't have
 'copy-controls' and use syn versions but not a problem as it has only one member
@@ -35501,9 +35536,10 @@ class StrBlob {
     std::string& front();
     std::string& back();
 
-    // return a copy object like iterator. vector[0] and vector[size] that is off-the-end
-    //
+    // return a copy object like iterator. vector[0] and vector[size] that is
+    // off-the-end
     // note: how the weak pointer in StrBlobPtr get set from *this
+
     StrBlobPtr begin() { return StrBlobPtr(*this); }
     StrBlobPtr end() { reutn StrBlobPtr(*this, data->size(); }
 
@@ -35512,12 +35548,11 @@ class StrBlob {
     void check( size_type i, const std::string &msg ) const;
 };
 
-# ctors
-
 StrBlob::StrBlob: data( make_shared<vector<string>> ()) {}
-StrBlob::StrBlob(initializer_list<string> il): data( make_shared<vector<string>> (il)) {}
+StrBlob::StrBlob(initializer_list<string> il): 
+  data( make_shared<vector<string>> (il)) {}
 
-# see return type is void when raise an exception.
+// see return type is void when raise an exception.
 
 void StrBlob::check( size_type i, const string &msg ) const
 {
@@ -35543,8 +35578,7 @@ string& StrBlob::pop_back()
   return data->pop_back();
 };
 
-{Q} are these all operation on vector? what will happen when calls on empty
-vector?
+note: Q. What will happen when calls on empty vector?
 
 
 ={============================================================================
@@ -41378,7 +41412,7 @@ for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
 
 
 ={============================================================================
-*kt_dev_ecpp_015* new and delete
+*kt_dev_ecpp_015* new-delete
 
 {default-value-initialize}
 
@@ -41388,28 +41422,32 @@ string* ps = new string();    // value-init. T()
 int* pi = new int;            // default-init
 int* pi = new int();          // value-init. T()
 
-Only for built-in types, value-init makes difference and this means that default-init for built-in
-types has 'uninitialized' values. For class types, both will use default ctors and so no difference.
-"new operator" combines allocation and construction; creates 'unnamed' and then 'default-init'
-objects e.g. calls ctor for class object.
+Only for built-in types, value-init makes difference and this means that
+default-init for built-in types has 'uninitialized' values. For class types,
+  both will use default ctors and so no difference. The "new operator" combines
+  allocation and construction; creates 'unnamed' and then 'default-init' objects
+  e.g. calls ctor for class object.
 
 
 {new-operator-and-operator-new}
-MEC++08: This operator is built into the language and, like sizeof, you can't change its meaning: it
-always does the same thing. What it does is twofold: allocation and construction.
+MEC++08: This operator is built into the language and, like sizeof, you can't
+change its meaning: it always does the same thing. What it does is twofold:
+allocation and construction.
 
-For new operator, use operator new (or operator new[]) to allocate raw memory, runs ctor to
-construct, and returns pointer to constructed memory. Raise 'bad_alloc' exception when there no
+For new operator, use operator new (or operator new[]) to allocate raw memory,
+    runs ctor to construct, and returns pointer to constructed memory. Raise
+    'bad_alloc' exception when there no memory.
+
+For deletion, do opposite; runs dtor and operator delete( or delete[]) to free
 memory.
-
-For deletion, do opposite; runs dtor and operator delete( or delete[]) to free memory.
 
 note: C++ runtime gurantees that delete nullptr do nothing.
 
 
 {do-not-mix-with-array-form}
-EC++16. Use the same form in corresponding uses of new and delete since these do two things but
-think what will happen when call destructor(s) less or more than needed. Undefined in both ways. 
+EC++16. Use the same form in corresponding uses of new and delete since these do
+two things but think what will happen when call destructor(s) less or more than
+needed. Undefined in both ways. 
 
 std::string *stringPtr1 = new std::string;
 std::string *stringPtr2 = new std::string[100]; 
@@ -41425,28 +41463,30 @@ std::string *pal = new AddressLines;
 delete pal;    // undefined
 delete[] pal;
 
-If do not know that there is a typedef, for example, it is in a file somewhere in huge source tree
-then may be a problem.
+If do not know that there is a typedef, for example, it is in a file somewhere
+in huge source tree then may be a problem.
 
 
 {operator-new-and-delete}
-This is the C++ equivalent of calling malloc and free. What you can change is how the memory for an
-object is allocated. The name of the function that the new operator calls to allocate memory is
-operator new. Can rewrite or overload that function to change its behavior.
+This is the C++ equivalent of calling malloc and free. What you can change is
+how the memory for an object is allocated. The name of the function that the new
+operator calls to allocate memory is operator new. Can rewrite or overload that
+function to change its behavior.
 
 The operator new function is usually declared like this:
 
 void * operator new(size_t size);
 
-The return type is void*, because this function returns a pointer to raw, uninitialized memory.
+The return type is void*, because this function returns a pointer to raw,
+    uninitialized memory.
 
 void *rawMemory = operator new(sizeof(string));
 
 Like malloc, operator new's only responsibility is to allocate memory.
 
-note: Can define own operator new and delete but careful because it takes over responsibility for
-'all' dynamic memory allocation. Since it changes global one so new operator will automatically
-invoke your custom version of operator new.
+note: Can define own operator new and delete but careful because it takes over
+responsibility for 'all' dynamic memory allocation. Since it changes global one
+so new operator will automatically invoke your custom version of operator new.
 
 
 ={============================================================================
@@ -41682,13 +41722,13 @@ such as boost pool library for allocation of a large number of small objects, fi
 
 
 ={============================================================================
-*kt_dev_ecpp_018* 52: placemane new
+*kt_dev_ecpp_018* new-placemane-new
 
 Widget* pw = new Widget;
 
-Two functions are called: operator new and constructor. What would happen when operator new
-  allocated memory but constructor raised exception? C++ runtime system gurantees to undo operator
-  new.
+Two functions are called: operator new and constructor. What would happen when
+  operator new allocated memory but constructor raised exception? C++ runtime
+  system gurantees to undo operator new.
 
 {normal-new-and-delete-form}
 The normal global new and delete are:
@@ -41701,8 +41741,8 @@ void operator delete( void* rawMemory, std::size_t ) throw ();       // at class
 
 
 {placement-new} interview question
-Means operator new function that takes extra parameters other than the size. To use this version of
-new, include 'new' header.
+Means operator new function that takes additional parameters other than the
+size. To use this version of new, include 'new' header.
 
 note: see how passes parameters to operator new
 note: operator new and deletes use 'overloads' mechanism.
@@ -41713,15 +41753,18 @@ static void* operator new( std::size_t size, std::ostream& os ) throw (std::bad_
 // particularly useful placement version
 void* operator new( std::size_t size, void *pMemory) throw();
 
-<example>
-One example is to tell not to raise exception. No exception and return nullptr instead. 
+<ex>
+One example is to tell not to raise exception. No exception and return 'nullptr'
+instead. 
 
-note: This is for older code which expect null pointer when allocation fails since newer C++ raise
-an exception instead. This is called 'nothrow' new. This only guarentees no exception in operator
-new but not whole expression since constructor can still raise an exception. So will never have a
-need for nothrow new.
+note: This is for older code which expect null pointer when allocation fails
+since newer C++ raise an exception instead. This is called 'nothrow' new. This
+only guarentees no exception in operator new but not whole expression since
+constructor can still raise an exception. So will never have a need for nothrow
+new.
 
-note: The nothrow keyword is the same as noexcept but used in new operator expression.
+note: The nothrow keyword is the same as noexcept but used in new operator
+expression.
 
 int* pi = new (std::nothrow) int;
 
