@@ -247,8 +247,8 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_100| raii {factory-func} {auto-lock}
 |kt_dev_stl_101| sp-shared
-|kt_dev_stl_102| smart pointer: weak
-*kt_dev_stl_103* smart pointer: unique
+|kt_dev_stl_102| sp-weak
+*kt_dev_stl_103* sp-unique
 *kt_dev_stl_104* smartp: points not to misuse
 *kt_dev_stl_105* smart pointer: gotw #102: exception safety
 |kt_dev_stl_102| smart pointer: internal: auto_ptr
@@ -20624,7 +20624,8 @@ likely to include a useful what().
     <------------------------>
 
 note:
-Use the fact that the valid size is always < container.size().
+Use the fact that the valid size is always < container.size(). When i equals to
+size() is either empty or past end.
 
 // when used to check its empty
 
@@ -35582,60 +35583,72 @@ note: Q. What will happen when calls on empty vector?
 
 
 ={============================================================================
-*kt_dev_stl_102* smart pointer: weak
+*kt_dev_stl_102* sp-weak
 
 The major reason to use shared_ptrs is to avoid taking care of the resources a
 pointer refers to. Two points:
 
-*. The weak_ptr do 'not' participate in the reference count of shared_ptr and
-won't affect the lifetime of the vector. 
+  * The weak_ptr do 'not' participate in the reference count of shared_ptr and
+    won't affect the lifetime of the vector. 
 
-*. However, can prevent the user from attempting to access a vector that no
-longer exist.
+  * Because the object might no longer exist, cannot use a weak_ptr to access
+    its object directly.
+
+auto p = make_shared<int>(42);
+weak_ptr<int> wp(p);
+
+if (shared_ptr<int> np = wp.lock()) {
+  // inside the if, np shares its object with p
+}
 
 
-<use-cases>
-shared_ptrs are provided to automatically release resources associated with
+<usecase>
+The shared_ptrs are provided to automatically release resources associated with
 objects no longer needed. However, under certain circumstances, this behavior
 doesn't work or is not what is intended:
 
-1. One example is 'cyclic' references. If two objects refer to each other
-using shared_ptrs, and you want to release the objects and their associated
-resource if no other references to these objects exist, shared_ptr won't
-release the data, because the use_count() of each object is still 1. You might
-want to use ordinary pointers in this situation, but doing so requires
-explicitly caring for and managing the release of associated resources.
+1. One example is 'cyclic' references. If two objects refer to each other using
+shared_ptrs, and you want to release the objects and their associated resource
+if no other references to these objects exist, shared_ptr won't release the
+data, because the use_count() of each object is still 1. You might want to use
+ordinary pointers in this situation, but doing so requires explicitly caring for
+and managing the release of associated resources.
 
 2. Another example occurs when you explicitly want to share but not 'own' an
 object. Thus, you have the semantics that the lifetime of a reference to an
-object 'outlives' the object it refers to. Here, shared_ptrs would never
-release the object, and ordinary pointers might not notice that the object
-they refer to is not valid anymore, which introduces the 'risk' of accessing
-released data.
+object 'outlives' the object it refers to. Here, shared_ptrs would never release
+the object, and ordinary pointers might not notice that the object they refer to
+is not valid anymore, which introduces the 'risk' of accessing released data.
 
 
-<properties>
-1. This class requires a shared pointer to get created.
+<operations>
+* This class requires a shared pointer to get created.
 
-2. Whenever the last shared pointer owning the object loses its ownership, any
-weak pointer automatically becomes empty. 
+// * Whenever the last shared pointer owning the object loses its ownership, any
+// weak pointer automatically becomes empty. note: It this is the case, then no
+// need to use lock() so seems not.
 
-3. Thus, besides default and copy constructors, class weak_ptr provides only a
-constructor taking a shared_ptr.
+* Besides default and copy constructors, class weak_ptr provides 'only' a
+  constructor taking a shared_ptr.
 
-4. You can't use operators * and -> to access a referenced object of a
-weak_ptr directly. Instead, you have to 'create' a shared pointer out of it.
-This makes sense for two reasons:
+* Cannot use operators * and -> to access a referenced object of a weak_ptr
+  directly. Instead, you have to 'create' a shared pointer out of it.
 
-4.1 Creating a shared pointer out of a weak pointer checks whether there is
-(still) an associated object. If not, this operation will throw an exception
-or create an 'empty' shared pointer; what exactly happens depends on the
-operation used.
+  * Creating a shared pointer out of a weak pointer checks whether there is
+  * (still) an associated object. If not, create an 'empty' shared pointer.
+  // If not, this operation will throw an exception or create an 'empty' shared
+  // pointer; what exactly happens depends on the operation used.
 
-4.2 While dealing with the referenced object, the shared pointer can't get
-released since shared pointer was created out of weak pointer.
+  * While dealing with the referenced object, the shared pointer can't get
+    released since shared pointer was created out of weak pointer.
 
 As a consequence, class weak_ptr provides only a small number of operations:
+
+weak_ptr<T> w(sp);
+w.reset();
+w.use_count();
+w.expired();
+w.lock();
 
 
 <ex>
@@ -35678,22 +35691,20 @@ shared_ptr<Person> initFamily (const string& name)
 
 int main()
 {
-  {
-    shared_ptr<Person> p = initFamily("nico");
+  shared_ptr<Person> p = initFamily("nico");
 
-    cout << "nico's family exists" << endl;
-    cout << "- nico is shared " << p.use_count() << " times" << endl;
-    cout << "- name of 1st kid of nico's mom: " 
-      << p->mother->kids[0]->name << endl;
+  cout << "nico's family exists" << endl;
+  cout << "- nico is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of nico's mom: " 
+    << p->mother->kids[0]->name << endl;
 
-    // note: this is when expect dtor happens but not.
-    p = initFamily("jim");
+  // note: this is when expect dtor happens but not.
+  p = initFamily("jim");
 
-    cout << "jim's family exists" << endl;
-    cout << "- jim is shared " << p.use_count() << " times" << endl;
-    cout << "- name of 1st kid of jim's mom: " 
-      << p->mother->kids[0]->name << endl;
-  }
+  cout << "jim's family exists" << endl;
+  cout << "- jim is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of jim's mom: " 
+    << p->mother->kids[0]->name << endl;
 }
 
 nico's family exists
@@ -35733,6 +35744,45 @@ class Person {
     }
 };
 
+
+<check-on-weak-pointer>
+To use weak pointer approach, instead of calling
+
+p->mother->kids[0]->name
+
+we now have to insert lock() into the expression
+
+p->mother->kids[0].lock()->name
+
+This lock() yields a shared_ptr out of the weak_ptr the vector of kids contains.
+If this modification is not possible, lock() yields an empty shared_ptr. 
+
+note:
+// In that case, calling operator * or -> would cause 'undefined' behavior.
+// Using lock() is 'optional' since still can use directly.
+
+In g++ (Debian 4.7.2-5) 4.7.2, this emits an error:
+
+p->mother->kids[0]->name << endl;
+
+error: base operand of ‘->’ has non-pointer type 
+'__gnu_cxx::__alloc_traits<std::allocator<std::weak_ptr<Person> > >::value_type 
+{aka std::weak_ptr<Person>}'
+
+
+Have several options to check that the object still exist: 
+
+  * Can call expired(), which returns true if the weak_ptr doesn't share an
+    object any longer. This option is equivalent to checking whether use_count()
+    is equal to 0 but might be 'faster'.
+
+  * Can explicitly convert a weak_ptr into a shared_ptr by using a corresponding
+    shared_ptr constructor. If there is no valid referenced object, this
+    constructor will throw a bad_weak_ptr exception. note: or use lock().
+
+  * Use use_count(). Not recommended since it is slow and not reliable.
+
+
 By doing so, we can break the cycle of shared pointers. The output:
 
 nico's family exists
@@ -35747,28 +35797,30 @@ delete jim's dad
 delete jim's mom
 
 
-<key>
 As soon as we lose our handle into a kid created - either by assigning a new
 value to p or by leaving main() - the kid's object of the family loses its
 last owner, which has the effect that both parents lose their last owner. So
 'all' objects, initially created by new, are deleted now so that their
 destructors get called since weak pointer don't increase count.
 
-# StrBlobPtr example
-#
+
+<ex>
+// StrBlobPtr example
+
 <- new container class ->  <- companion class like iterator ->
    StrBlob                    StrBlobPtr
    - shared_ptr               - weak_ptr
                      vector[]
                      - underlying container
 
-
 class StrBlobPtr {
   public:
     StrBlobPtr(): curr(0) {}
 
-    // note: weak-ptr gets created out of shared ptr, a.data.
-    // note: StrBlobPtr only be bound to a `nonconst` StrBlob.
+    // note: weak ptr, wptr, gets created out of shared ptr, a.data.
+    // note: StrBlobPtr only be bound to a `nonconst` StrBlob since ctor takes
+    // nonconst reference.
+
     StrBlobPtr( StrBlob &a, size_t sz=0 ): wptr( a.data ), curr(sz) {}
 
     StrBlobPtr& incr();
@@ -35782,17 +35834,11 @@ class StrBlobPtr {
     std::size_t curr;
 };
 
-// returns a shared-ptr to the vector if the check succeeds. Because a weak ptr
-// does not participate in the reference count of its corresponding shared ptr,
-// the vector might have been deleted. If the vector is gone, lock() will return
-// a null pointer. 
+// If the vector is gone, lock() will return a null pointer. 
 
 std::shared_ptr<std::vector<std::string>>
 StrBlobPtr::check( std::size_t i, const std::string &msg ) const
 {
-  // note: lock() returns shared-ptr when resouce(vector) is still around. If
-  // it's gone, lock() returns null.
-
   auto ret = wptr.lock();
   if(!ret)
     throw std::runtime_error("unbounded StrBlobPtr");
@@ -35815,12 +35861,11 @@ StrBlobPtr& StrBlobPtr::incr() const
 {
   // if curr already points past the end of the container, can't increment it.
   check(curr, "increment past end of StrBlobPtr");
-  curr++;
+  ++curr;
   return *this;
 }
 
 
-<Q> Expected output?
 #include <iostream>
 #include <string>
 #include <vector>
@@ -35850,7 +35895,8 @@ class StrBlob {
     void checks( size_type i, const std::string &msg) const;
 };
 
-StrBlob::StrBlob(std::string n): name(n), data( std::make_shared<std::vector<std::string>>() )
+StrBlob::StrBlob(std::string n): 
+  name(n), data( std::make_shared<std::vector<std::string>>() )
 {
   std::cout << "ctor for " << name << std::endl;
 }
@@ -35899,37 +35945,13 @@ ctor for b1
 ctor for b2
 -b2 size: 4-
 dtor for b2
--b1 size: 4-   // pointing to the same underlying vector.
+
+// pointing to the same underlying vector.
+-b1 size: 4-   
 -} main ---
-dtor for b2    // why not b1? since name is copied using the syn copy assign in b1=b2.
 
-
-<check-on-weak-pointer>
-To use weak pointer approach, instead of calling
-
-p->mother->kids[0]->name
-
-we now have to insert lock() into the expression
-
-p->mother->kids[0].lock()->name
-
-This lock() 'yields' a shared_ptr out of the weak_ptr the vector of kids
-contains. If this modification is not possible, lock() yields an empty
-shared_ptr. In that case, calling operator * or -> would cause 'undefined'
-behavior. note: using lock() is 'optional' since still can use directly.
-
-you have several options to check that the object still exist: 
-
-1. Can call expired(), which returns true if the weak_ptr doesn't share an
-object any longer. This option is equivalent to checking whether use_count()
-    is equal to 0 but might be 'faster'.
-
-2. Can explicitly convert a weak_ptr into a shared_ptr by using a
-corresponding shared_ptr constructor. If there is no valid referenced object,
-              this constructor will throw a bad_weak_ptr exception. note: or
-              use lock().
-
-3. Use use_count(). Not recommended since it is slow and not reliable.
+// why not b1? since name is copied using the syn copy assign in b1=b2.
+dtor for b2    
 
 
 ={============================================================================
@@ -37409,7 +37431,19 @@ error void end_connection( connection *p ) { disconnect(*p); }
 void f()
 {
   connection c = connect(&d);
-  shared_ptr<connection> p (&c, end_connection);
+  shared_ptr<connection> p(&c, end_connection);
+  // use connection
+  // if exception occur
+}
+
+
+unique_ptr<T, D> u2;
+unique_ptr<T, D> u(d);
+
+void f(destination &d)
+{
+  connection c = connect(&d);
+  unique_ptr<connection, decltype(end_connection)*> p(&c, end_connection);
   // use connection
   // if exception occur
 }
