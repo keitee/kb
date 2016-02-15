@@ -255,7 +255,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_103| smart pointer: internal: shared_ptr
 |kt_dev_stl_104| smart pointer: examples
 |kt_dev_stl_106| when to use which containers
-|kt_dev_stl_107| smart pointers: deleter
+|kt_dev_stl_107| sp-deleter
 
 |kt_dev_stl_110| stl-allocator
 |kt_dev_stl_111| gcc stl impl files
@@ -35933,32 +35933,35 @@ corresponding shared_ptr constructor. If there is no valid referenced object,
 
 
 ={============================================================================
-*kt_dev_stl_103* smart pointer: unique
+*kt_dev_stl_103* sp-unique
 
-{unique-ptr} no copy support
+{unique-ptr} no copy or assign support
 A pointer that implements the concept of 'exclusive' ownership and is a kind of
 a smart pointer that helps to avoid resource leaks when 'exceptions' are thrown.
 This was auto_ptr before C++11 and it has only one user because 'no' ordinary
 copy and assign are supported. Only 'one' unique_ptr at a time can point to a
 given object. So limit the use and it transfer ownerships.
 
-note: In contrast to shared pointers, a 'minimum' space and time overhead is the
-focus of this class.
+std::unique_ptr<std::string> up(new std::string("nico"));
+unique_ptr<string> p2(p1);      // error
+p3 = p2;                        // error
 
-<why>
+note: 
+In contrast to shared pointers, a 'minimum' space and time overhead is the focus
+of this class.
+
 The unique_ptr tries to solve the exactly same problem of raii. Say that
 unique_ptr is one of raii implementations.
 
-<uses>
-Pretty much same as shared_ptr.
 
-std::unique_ptr<std::string> up(new std::string("nico"));
-std::string* sp = up.release();  // "up" loses ownership
-
-<release>
+<operations>
 u.release() 
 relinquishes control of the pointer u has held; returns the pointer u has held
 and makes u null.
+
+std::string* sp = up.release(); // 'transfer' ownership. "up" loses ownership
+sp.reset(up.release());         // 'transfer' ownership. "up" loses ownership
+
 
 You can check whether a unique pointer owns an object by calling operator bool():
 
@@ -35966,8 +35969,10 @@ if (up) {   // if up is not empty
    std::cout << *up << std::endl;
 }
 
-u.reset() delete the object to which u points. same as u = nullptr.
+u.reset() 
+delete the object to which u points. same as u = nullptr.
 
+<ex>
 #include <iostream>
 #include <memory>
 
@@ -35988,7 +35993,7 @@ int main()
   unique_ptr<Foo> p2(new Foo(2));
   unique_ptr<Foo> p3(new Foo(3));
 
-  p2.reset( p3.release() );
+  p2.reset(p3.release());
 }
 
 $ ./a.out 
@@ -35999,84 +36004,48 @@ Foo dtor(2)
 Foo dtor(3)
 Foo dtor(1)
 
-<ownership>
+
+{ownership}
 The unique_ptr do not support copy so have to transfer ownership. Two options:
 
-1. Use release and reset
-The release() return the pointer it held and make the unique ptr null so using reset/release pair to
-transfer ownerships.
+1. Use release and reset pair
 
-// p1 becomes null. transfer ownership. Like copy ctor
+The release() return the pointer it held and make the unique ptr null so using
+reset/release pair to transfer ownerships.
+
 unique_ptr<string> p2( p1.release() );
 
-// reset 'delete' a mem that p2 points if P2 owned an object 'before' and set it with pointer p3
-// points. transfer ownership. Like copy assign.
 unique_ptr<string> p3( new string("Fred") ); 
 p2.reset( p3.release() );
 
-2. Use move semantics.
 
-# copy
+2. Use move semantics.
 
 // initialize a unique_ptr with a new object
 std::unique_ptr<ClassA> up1(new ClassA);
 
-std::unique_ptr<ClassA> up2(up1);            // ERROR in compile since no copy support
-std::unique_ptr<ClassA> up3(std::move(up1)); // copy the unique_ptr. transfer ownership of the unique_ptr
+// error in compile since no copy support
+std::unique_ptr<ClassA> up2(up1);            
 
-# assign
+// copy the unique_ptr. transfer ownership of the unique_ptr
+std::unique_ptr<ClassA> up3(std::move(up1)); 
+
 
 // initialize a unique_ptr with a new object
 std::unique_ptr<ClassA> up1(new ClassA);
 std::unique_ptr<ClassA> up2; // create another unique_ptr
 
-up2 = up1;              // ERROR: not possible since no copy support
-up2 = std::move(up1);   // assign the unique_ptr - transfers ownership from up1 to up2
+// error since no copy support
+up2 = up1;              
 
-<source-sink>
-# sink: when called, gets ownership
+// assign the unique_ptr - transfers ownership from up1 to up2
+up2 = std::move(up1);   
 
-void sink(std::unique_ptr<ClassA> up)  // sink() gets ownership. <Q> why not rvalue argument?
-{
-...
-}
-
-std::unique_ptr<ClassA> up(new ClassA);
-...
-sink(std::move(up));                   // up loses ownership
-
-
-note: Q: why not rvalue argument? As with "copy-or-move", whether or not to use copy or move
-constructor depends on function matching and that's why std::move() is used in sink() call.
-
-
-# source: when exit, transfer ownership 
-
-std::unique_ptr<ClassA> source()
-{
-   std::unique_ptr<ClassA> ptr(new ClassA);  // ptr owns the new object
-   ...
-   return ptr;                               // transfer ownership to calling function
-}
-
-void g()
-{
-  std::unique_ptr<ClassA> p;
-  for (int i=0; i<10; ++i) {
-    p = source(); // p gets ownership of the returned object
-    // (previously returned object of f() gets deleted)
-    ...
-  }
-} // last-owned object of p gets deleted
-
-In any case, 'no' resource leak is possible. Even if an exception is thrown, any unique_ptr that owns
-data ensures that this data is deleted.
-
-note: Q: Why no std::move() in the return statement of source()?
 
 <return-unique-ptr> move-operation
-One exception to the rule that cannot copy a unique_ptr; that according to the language rules of
-C++11, the compiler will try a 'move' automatically. 
+One exception to the rule that cannot copy a unique_ptr; that according to the
+language rules of C++11, the compiler will try a 'move' automatically. Can copy
+or assign a unique_ptr thatis about to be destoryed.
 
 unique_ptr<int> clone(int p) {
   ...
@@ -36090,6 +36059,56 @@ unique_ptr<int> clone(int p) {
   // can return a copy of local object
   return ret;
 }
+
+
+<source-sink-pattern>
+
+// sink() gets ownership when gets called.
+
+void sink(std::unique_ptr<ClassA> up)  
+{
+...
+}
+
+std::unique_ptr<ClassA> up(new ClassA);
+...
+sink(std::move(up));                   // up loses ownership
+
+
+note: 
+Why not rvalue argument? As with "copy-or-move", whether or not to use copy or
+move constructor depends on function matching and that's why std::move() is used
+in sink() call.
+
+
+// source: when exit, transfer ownership 
+// no std::move() in the return statement of source().
+
+std::unique_ptr<ClassA> source()
+{
+   std::unique_ptr<ClassA> ptr(new ClassA);
+   ...
+   // transfer ownership to calling function
+   return ptr;                               
+}
+
+void g()
+{
+    std::unique_ptr<ClassA> p;
+
+    for (int i=0; i<10; ++i) {
+
+        // note: 
+        // p gets ownership of the returned object when no copy support
+        p = source(); 
+        // (previously returned object of f() gets deleted)
+        ...
+    }
+} // last-owned object of p gets deleted
+
+In any case, 'no' resource leak is possible. Even if an exception is thrown, any
+unique_ptr that owns data ensures that this data is deleted.
+
 
 <mis-use-unique-pointer>
 # lost pointer
@@ -37302,11 +37321,11 @@ combine them in a way that is best for you.
 
 
 ={============================================================================
-*kt_dev_stl_107* smart pointers: deleter
+*kt_dev_stl_107* sp-deleter
 
 {default-deleter}
-The deleter is callable and is called when is needed. Here the excerpt from stl unique_ptr.h. See
-default_delete is overload operator().
+The deleter is callable and is called when is needed. Here the excerpt from stl
+unique_ptr.h. See default_delete is overload operator().
 
 /// Primary template, default_delete.
 template<typename _Tp>
@@ -37341,7 +37360,7 @@ class unique_ptr
 
     explicit
         unique_ptr(pointer __p) noexcept
-        : _M_t(__p, deleter_type())                      // note: default ctored deleter
+        : _M_t(__p, deleter_type())         // note: default ctored deleter
         { static_assert(!std::is_pointer<deleter_type>::value,
                 "constructed with null function pointer deleter"); }
 
@@ -37350,7 +37369,7 @@ class unique_ptr
     {
         auto& __ptr = std::get<0>(_M_t);
         if (__ptr != nullptr)
-            get_deleter()(__ptr);                        // note: call deleter()
+            get_deleter()(__ptr);          // note: call deleter()
         __ptr = pointer();
     }
 
@@ -37361,12 +37380,16 @@ class unique_ptr
 
 
 {set-own-deleter}
-SP is exception safe. However, how can we make it sense when using resources which have own
-interfaces since default deleter is delete op.
+
+shared_ptr<T> p(q, d);      // built-in pointer q
+shared_ptr<T> p(p2, d);     // shared_ptr p2
+
+SP is exception safe. However, how can we make it sense when using resources
+which have own interfaces since default deleter is delete op.
 
 void f()
 {
-  shared_ptr<int> sp (new int(42) );
+  shared_ptr<int> sp(new int(42));
   // use sp
   // exception occur and no catch
 }
@@ -37380,8 +37403,8 @@ void f()
 
 User can set deleter of shared_ptr rather than the default deleter, delete.
 
-note: this deleter must take a 'single' argument of type T*. otherwise, compile error
-void end_connection( connection *p ) { disconnect(*p); }
+note: this deleter must take a 'single' argument of type T*. otherwise, compile
+error void end_connection( connection *p ) { disconnect(*p); }
 
 void f()
 {

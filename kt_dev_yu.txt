@@ -21498,6 +21498,9 @@ g_decrypt_nexus_add_bytes_cenc (GDecrypt * decrypt, guint8 * data, gsize size)
   }
 }
 
+// note:
+// Adds a block to process into the queue which will be processed by dma
+
 static void
 g_decrypt_nexus_add_bytes_cenc_impl (GDecrypt * decrypt,
                                      guint8 * data,
@@ -21521,6 +21524,74 @@ g_decrypt_nexus_add_bytes_cenc_impl (GDecrypt * decrypt,
   settings->cached = TRUE;
   settings->scatterGatherCryptoStart = index == 0;
   settings->scatterGatherCryptoEnd = FALSE;
+}
+
+// note:
+// Do decryption and copy that back to the client
+
+g_decrypt_nexus_finish_cenc (GDecrypt * decrypt)
+{
+  GDecryptNexusPrivate *priv;
+
+  NEXUS_DmaJobSettings job_settings;
+  NEXUS_DmaJobHandle job;
+  NEXUS_Error rc;
+  guint n_blocks;
+
+  g_return_if_fail (decrypt != NULL);
+
+  priv = G_DECRYPT_NEXUS_GET_PRIVATE (decrypt);
+
+  n_blocks = priv->n_blocks;
+  if (n_blocks == 0) {
+    return;
+  }
+
+  NEXUS_DmaJob_GetDefaultSettings (&job_settings);
+  job_settings.numBlocks = n_blocks;
+  job_settings.dataFormat = NEXUS_DmaDataFormat_eBlock;
+  job_settings.completionCallback.callback = NULL;
+  job_settings.keySlot = priv->key_slot;
+
+  job = NEXUS_DmaJob_Create (priv->dma, &job_settings);
+
+  /* terminate the block list */
+  priv->block_settings[n_blocks - 1].scatterGatherCryptoEnd = TRUE;
+
+  /* run the job */
+  g_debug ("Running decryption job...");
+  rc = NEXUS_DmaJob_ProcessBlocks (job, priv->block_settings, n_blocks);
+  if (rc == NEXUS_DMA_QUEUED) {
+    /*
+     * It's tempting to use a completion callback here with some mutex and a
+     * conditional variable (each DMA job has its own handle and a completion
+     * callback).  Apparently this Nexus mechanism doesn't cope very well with
+     * requests from multiple threads (e.g. from multiple `GDecryptNexus`
+     * instance each running in its own thread).  The requests seem to be
+     * processed fine but completion callbacks delivered through a user-space
+     * Nexus thread don't.  So here we use the good old Nexus pattern for job
+     * completion.
+     */
+    NEXUS_DmaJobStatus jobStatus;
+
+    do {
+      g_debug ("DMA job queued.  Waiting for completion...");
+
+      BKNI_Delay (1);
+      NEXUS_DmaJob_GetStatus (job, &jobStatus);
+    } while (jobStatus.currentState != NEXUS_DmaJobState_eComplete);
+  } else if (rc != NEXUS_SUCCESS) {
+    g_critical ("Decryption failed");
+  }
+
+  g_debug ("Decryption job done");
+
+  /* copy decrypted data back to the original memory */
+  for (guint i = 0; i < n_blocks; ++i) {
+    memcpy (priv->original_data[i],
+            priv->block_settings[i].pDestAddr,
+            priv->block_settings[i].blockSize);
+  }
 }
 
 
