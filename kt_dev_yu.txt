@@ -62,6 +62,7 @@
 *kt_dev_uv_stack_105* zinc-app: ui version
 *kt_dev_uv_stack_105* zinc-app: get crid, resource file name
 *kt_dev_uv_stack_105* zinc-app: diag screen
+*kt_dev_uv_stack_105* zinc-appmgr: mercury
 
 |kt_dev_uv_stack_200| stack: uranium: stagecraft and air
 |kt_dev_uv_stack_201| stack: uranium: creation chain to other components via dbus and factory
@@ -1932,8 +1933,19 @@ zb-deploy -o huawei.370 -- -r
 }
 
 
-<setup-humax-sh>
+={============================================================================
+*kt_dev_uv_stack_002* tool-setup-humax
 
+
+  -T <tools>    Install the given tool (or tools) on the box. Multiple tools
+                can be passed by passing a comma-separated list:
+                    eg. '-T tool1,tool2'
+                Tar files are also accepted (but not zipped tars).
+                A full list of available tools can be seen at:
+                    http://devnfs/DEVARCH/tools-humax/.
+
+
+<setup-humax-sh>
 note: no zinc-trunk handling. okay to run it as a standalone.
 
 note: this requires RW rfs.
@@ -3295,17 +3307,49 @@ note: cannot use it on host since nc failed. seems that there is firewall settin
 run it on a target.
 
 
-<hmax>
+<hmax-1000>
+
+note: this is broken for T2100.
+
+setup-humax
+  -d            Install the VirtualInput driver and the zinc-send-input-key
+                script. This requires a reboot of the box to work, but this
+                isn't forced. You will have to also pass -r if you want to
+                use this straight away.
+
 wget http://devnfs2.dev.youview.co.uk/DEVARCH/tools-humax/DTRT1000/VirtualRemoteDriver.tar.bz2
 
 scp libyouviewrcu.so root@humax-01351:/opt/zinc/lib
 
 note: see different path for t1000
 scp libyouviewrcushim.so root@humax-01351:/usr/local/lib/directfb-1.4-15-pure/inputdrivers/
-
 scp libyouviewrcushim.so root@humax-01351:/opt/zinc/oss/lib/directfb-1.4-15-pure/inputdrivers/
-
 scp zinc-send-key-hwei root@humax-01351:/usr/local/bin
+
+The latest driver do not work.
+
+
+<hmax-2100>
+cp libyouviewrcu.so /opt/zinc/lib
+cp libyouviewrcushim.so /usr/local/lib/directfb-1.4-17-pure/inputdrivers/
+cp libyouviewrcushim.so /opt/zinc-trunk/oss/lib/directfb-1.4-17-pure/inputdrivers/
+
+Tamas Koloti
+
+T2xxx boxes have directfb 1.4-17 while the virtual input driver is linked to
+1.4-15 (used by T1000 and Huawei boxes).  The following symlinks are needed to
+make the input driver work:
+
+ln -s libdirectfb-1.4.so.17.0.0 /usr/local/lib/libdirectfb-1.4.so.15
+ln -s libdirect-1.4.so.17.0.0 /usr/local/lib/libdirect-1.4.so.15
+ln -s libfusion-1.4.so.17.0.0 /usr/local/lib/libfusion-1.4.so.15
+
+You can use the following command to test if the driver (the driver itself just
+        dlopen() this lib) is happy to load:
+
+LD_PRELOAD=/opt/zinc/lib/libyouviewrcu.so /bin/true
+
+WORKS!
 
 
 <keys>
@@ -3322,6 +3366,8 @@ back                             Back
 
 
 <to-check>
+[root@HUMAX /]# pidof dfbmaster
+
 1007 ?        Sl     0:06 /usr/local/bin/directfb/1.4/dfbmaster
 
 root# cat /proc/1007/maps | grep youview
@@ -6148,6 +6194,53 @@ method return sender=:1.24 -> dest=:1.167 reply_serial=2
 *kt_dev_uv_stack_105* zinc-app: diag screen
 
 help, diagapp
+
+
+={============================================================================
+*kt_dev_uv_stack_105* zinc-appmgr: mercury
+
+https://wiki.youview.co.uk/display/YVDP/Application+lifecycle
+
+onTerminationImminent – Your application is about to be closed (in ~5 seconds).
+This is because the user has chosen to navigate to another application, a linear
+service or the user has pressed the close button. You will also get this event
+if your application closes itself. For example, when a user presses back and
+there is no further back history within your application then you must close
+down your application, this will in turn trigger an onTerminationImminent event.
+
+data/introspection-xml/enum-ApplicationLifecycleState.xml
+
+	<yv:enum type="u" name="Zinc.Application.ApplicationLifecycleState">
+		<yv:enumvalue name="ACTIVATED" value="0" />
+		<yv:enumvalue name="DEACTIVATED" value="1" />
+		<yv:enumvalue name="TERMINATION_IMMINENT" value="2" />
+        <yv:enumvalue name="TERMINATED" value="3" />
+        <yv:enumvalue name="TERMINATED_REUSED" value="4" />
+	</yv:enum>
+
+    	<signal name="ApplicationLifecycleEvent">
+    		<yv:docstring>
+				This signal is emitted in response to an Application becoming Active, Inactive or prior to 
+				the Application terminating.
+			</yv:docstring>
+			<arg type="u" yv:type="[ApplicationLifecycleState]" name="applicationLifecycleState">
+				<yv:docstring>
+					The Application’s Lifecycle State.
+				</yv:docstring>
+			</arg>
+			<arg type="i" name="applicationRuntimeInstanceID">
+				<yv:docstring>
+					The unique Identifier which identifies the Application to which the state change pertains.
+				</yv:docstring>
+			</arg>
+    	</signal>
+
+ApplicationManagerEventListener.h
+
+virtual void ApplicationLifecycleEvent
+(const ApplicationLifecycleState::Enum applicationLifecycleState, 
+ const int32_t applicationRuntimeInstanceID) = 0;
+
 
 ={============================================================================
 *kt_dev_uv_stack_200* stack: uranium: stagecraft and air
