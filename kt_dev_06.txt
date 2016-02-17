@@ -15,7 +15,10 @@ Use #{ for a group and ={ for a item
 |kt_dev_boost_007| filesystem
 |kt_dev_boost_008| boost-sync: condition 
 *kt_dev_boost_009* boost-function
-*kt_dev_boost_010* boost-intrusive-ptr: usage
+*kt_dev_boost_010* boost-sp-intrusive-ptr-usage
+*kt_dev_boost_010* boost-sp-intrusive-ptr
+*kt_dev_boost_010* boost-sp-intrusive-ptr-case
+*kt_dev_boost_010* boost-sp-scoped-ptr
 *kt_dev_boost_010* boost-ptr-map:
 *kt_dev_boost_010* boost-signal
 *kt_dev_boost_010* boost-thread
@@ -828,7 +831,7 @@ references and arrays:
 
 
 ={============================================================================
-*kt_dev_boost_010* boost-intrusive-ptr: usage
+*kt_dev_boost_010* boost-sp-intrusive-ptr-usage
 
 http://baptiste-wicht.com/posts/2011/11/boost-intrusive_ptr.html
 
@@ -959,7 +962,7 @@ intrusive_ptr to the same raw pointer without any problem.
 
 
 ={============================================================================
-*kt_dev_boost_010* boost-intrusive-ptr: 
+*kt_dev_boost_010* boost-sp-intrusive-ptr
 
 http://www.boost.org/doc/libs/master/libs/smart_ptr/intrusive_ptr.html
 
@@ -1123,7 +1126,7 @@ public:
 
 
 ={============================================================================
-*kt_dev_boost_010* boost-intrusive-ptr: case ex
+*kt_dev_boost_010* boost-sp-intrusive-ptr-case
 
 This case uses reference count in GObject and no need to add reference count
 member to the type.
@@ -1264,6 +1267,200 @@ if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get()))
 
   // note: WHY do not need to decrease reference count of uridecodebin?
 }
+
+
+={============================================================================
+*kt_dev_boost_010* boost-sp-scoped-ptr
+
+http://www.boost.org/doc/libs/1_60_0/libs/smart_ptr/scoped_ptr.htm
+
+scoped_ptr class template
+
+The scoped_ptr class template stores a pointer to a dynamically allocated
+object. Dynamically allocated objects are allocated with the C++ new expression.
+The object pointed to is guaranteed to be deleted, either on destruction of the
+scoped_ptr, or via an explicit reset. See the example.
+
+The scoped_ptr template is a simple solution for simple needs. It supplies a
+basic "resource acquisition is initialization" facility, 'without'
+shared-ownership or transfer-of-ownership semantics. Both its name and
+enforcement of semantics (by being noncopyable) signal its intent to retain
+ownership solely within the current scope. Because it is noncopyable, it is
+safer than shared_ptr or std::auto_ptr for pointers which should not be copied.
+
+Because scoped_ptr is simple, in its usual implementation every operation is as
+fast as for a built-in pointer and it has no more space overhead that a built-in
+pointer.
+
+scoped_ptr cannot be used in C++ Standard Library containers. Use shared_ptr if
+you need a smart pointer that can.
+
+scoped_ptr cannot correctly hold a pointer to a dynamically allocated array. See
+scoped_array for that usage.
+
+The class template is parameterized on T, the type of the object pointed to. T
+must meet the smart pointer common requirements.
+
+
+Synopsis
+
+namespace boost {
+
+  template<class T> class scoped_ptr : noncopyable {
+
+   public:
+     typedef T element_type;
+
+     explicit scoped_ptr(T * p = 0); // never throws
+     ~scoped_ptr(); // never throws
+
+     void reset(T * p = 0); // never throws
+
+     T & operator*() const; // never throws
+     T * operator->() const; // never throws
+     T * get() const; // never throws
+     
+     operator unspecified-bool-type() const; // never throws
+
+     void swap(scoped_ptr & b); // never throws
+  };
+
+  template<class T> void swap(scoped_ptr<T> & a, scoped_ptr<T> & b); // never throws
+
+}
+
+
+Example
+
+Here's an example that uses scoped_ptr.
+
+    #include <boost/scoped_ptr.hpp>
+    #include <iostream>
+
+    struct Shoe { ~Shoe() { std::cout << "Buckle my shoe\n"; } };
+
+    class MyClass {
+        boost::scoped_ptr<int> ptr;
+      public:
+        MyClass() : ptr(new int) { *ptr = 0; }
+        int add_one() { return ++*ptr; }
+    };
+
+    int main()
+    {
+        boost::scoped_ptr<Shoe> x(new Shoe);
+        MyClass my_instance;
+        std::cout << my_instance.add_one() << '\n';
+        std::cout << my_instance.add_one() << '\n';
+    }
+
+The example program produces the beginning of a child's nursery rhyme:
+
+    1
+    2
+    Buckle my shoe
+
+
+Rationale
+
+The primary reason to use scoped_ptr rather than auto_ptr is to let readers of
+your code know that you intend "resource acquisition is initialization" to be
+applied only for the current scope, and have no 'intent' to transfer ownership.
+
+A secondary reason to use scoped_ptr is to prevent a later maintenance
+programmer from adding a function that transfers ownership by returning the
+auto_ptr, because the maintenance programmer saw auto_ptr, and assumed ownership
+could safely be transferred.
+
+Think of bool vs int. We all know that under the covers bool is usually just an
+int. Indeed, some argued against including bool in the C++ standard because of
+that. But by coding bool rather than int, you tell your readers what your intent
+is. Same with scoped_ptr; by using it you are signaling intent.
+
+It has been suggested that scoped_ptr<T> is equivalent to std::auto_ptr<T>
+const. Ed Brey pointed out, however, that reset will not work on a
+std::auto_ptr<T> const.
+
+
+Handle/Body Idiom
+
+One common usage of scoped_ptr is to implement a handle/body (also called pimpl)
+  idiom which avoids exposing the body (implementation) in the header file.
+
+The scoped_ptr_example_test.cpp sample program includes a header file,
+    scoped_ptr_example.hpp, which uses a scoped_ptr<> to an 'incomplete' type to
+    hide the implementation. The instantiation of member functions which require
+    a complete type occurs in the scoped_ptr_example.cpp implementation file.
+
+//  scoped_ptr_example.hpp
+//  Boost scoped_ptr_example -------------------------------//
+//  Copyright Beman Dawes 2001.  Distributed under the Boost
+//  Software License, Version 1.0. (See accompanying file
+//  LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+//  See http://www.boost.org/libs/smart_ptr for documentation.
+
+#include <boost/utility.hpp>
+#include <boost/scoped_ptr.hpp>
+
+//  The 'point' of this example is to prove that even though
+//  example::implementation is an incomplete type in translation units using
+//  this header, scoped_ptr< implementation > is still valid because the type is
+//  complete 'where' it counts - in the inplementation translation unit where
+//  destruction is actually instantiated.
+
+class example : private boost::noncopyable
+{
+ public:
+  example();
+  ~example();
+  void do_something();
+ private:
+  class implementation;
+  boost::scoped_ptr< implementation > _imp; // hide implementation details
+};
+
+
+//  scoped_ptr_example.cpp
+//  Boost scoped_ptr_example -------------------------------//
+
+#include "scoped_ptr_example.hpp"
+#include <iostream>
+
+class example::implementation
+{
+ public:
+  ~implementation() { std::cout << "destroying implementation\n"; }
+};
+
+example::example() : _imp( new implementation ) {}
+
+void example::do_something() { std::cout << "did something\n"; }
+
+example::~example() {}
+
+
+//  scoped_ptr_example_test.cpp
+//  Boost scoped_ptr_example -------------------------------//
+
+#include "scoped_ptr_example.hpp"
+
+int main()
+{
+  example my_example;
+  my_example.do_something();
+  return 0;
+}
+
+
+Frequently Asked Questions
+
+Q. Why doesn't scoped_ptr have a release() member?
+A. When reading source code, it is valuable to be able to draw conclusions about
+program behavior based on the types being used. If scoped_ptr had a release()
+member, it would become possible to transfer ownership of the held pointer,
+  weakening its role as a way of limiting resource lifetime to a given context.
+Use std::auto_ptr where transfer of ownership is required. (supplied by Dave
+    Abrahams)
 
 
 ={============================================================================
