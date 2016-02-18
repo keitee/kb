@@ -1463,6 +1463,42 @@ Use std::auto_ptr where transfer of ownership is required. (supplied by Dave
     Abrahams)
 
 
+<case>
+The scoped_ptr is useful in handling exception as RAII.
+
+// When gets called, wraps up the functor in scoped_ptr and calls that functor.
+// If functor raises exception and that is not caught then release the
+// dynamically created unnamed callable.
+
+extern "C"
+gboolean gDispatch(gpointer data)
+{
+    boost::scoped_ptr<boost::function<void ()> > functor(
+            static_cast<boost::function<void ()>* >(data));
+    try
+    {
+        (*functor)();
+    }
+    catch(const std::exception& ex)
+    {
+        VANADIUM_WARN("Exception thrown [" << ex.what() << "]");
+    }
+    return G_SOURCE_REMOVE;
+}
+
+// Use glib mainloop as a dispatcher and g_idle_add() adds a callback and
+// argument to be called later. note that new callable dynamically.
+
+class GlibEventDispatcher : public NS_ZINC::Dispatcher
+{
+    virtual void post(boost::function<void ()> handler)
+    {
+        g_idle_add_full(G_PRIORITY_DEFAULT, &gDispatch, 
+                new boost::function<void ()>(handler), NULL);
+    }
+};
+
+
 ={============================================================================
 *kt_dev_boost_010* boost-ptr-map:
 

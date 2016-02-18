@@ -246,7 +246,7 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_080| bitset
 
-|kt_dev_stl_100| raii {factory-func} {auto-lock}
+|kt_dev_stl_100| sp-raii
 |kt_dev_stl_101| sp-shared
 |kt_dev_stl_102| sp-weak
 *kt_dev_stl_103* sp-unique
@@ -34901,43 +34901,50 @@ see the use of bitset and bitset only supports fixed size.
 
 
 ={============================================================================
-*kt_dev_stl_100* raii
+*kt_dev_stl_100* sp-raii
 
 {resource-acquisition-is-initialization} {resource-managing-class}
-EC++13. Why raii? When use dynamic resource, client is fully resposible for releasing it after use
-but it is very difficult to do 'bookkeeping' and problems are:
+EC++13. Why RAII? When use dynamic resource, client is fully resposible for
+releasing it after use but it is very difficult to do 'bookkeeping' and problems
+are:
 
-1. Very tricky to ensure that reference lifetime and the lifetime of the objects they refer to
-match, especially when multiple pointers refer to the same object.
+* Very tricky to ensure that reference lifetime and the lifetime of the objects
+  they refer to match, especially when multiple pointers refer to the same
+  object.
 
-1.1. When the objects outlives, means resource leak. 
+    * When the objects outlives, means "resource leak". 
 
-1.2. When the references outlives, means dangling reference. 
+    * When the references outlives, means "dangling reference". 
 
-   o Double free that means to try to release what it do not own. For example, passing pointers via
-   function calls or between components. 
+        * "double free" that means to try to release what it do not own. For
+          example, passing pointers via function calls or between components. 
 
-   o Invalid access to objects which are released already. 
+        * "invalid access" to objects which are released already. 
 
-3. Interrupted code path due to exception. the usual path is interrupted and may cannot release it
-as expected.
+* Interrupted code path due to exception. the usual path is interrupted and may
+  cannot release it as expected.
 
-With raii, such as smart poitners, good things are: 
+With RAII, such as smart poitners, good things are: 
 
-1. Make resource bookkeeping easier.
-2. Can minimize client's burden to use resource properly. For example, raii with deleter.
-3. Support sharing resources.
+* Make resource bookkeeping easier.
+* Can minimize client's burden to use resource properly. For example, raii with
+  deleter.
+
+// * Support sharing resources. note that this is from smart pointers but not
+// from RAII.
+
 
 <exception-problem>
+
 void f()
 {
-  // createInvestment() is factory-func that returns a pointer to dynamically created resource or
-  // derived class. client must delete it after use
+  // createInvestment() is factory-func that returns a pointer to dynamically
+  // created resource or derived class. client must delete it after use
 
   Investment* pInv = createInvestment();
 
-  // <key> problem: code that throws an exception that is not caught inside f. may not reach to
-  // delete statement
+  // key problem: code that throws an exception that is not caught inside f. may
+  // not reach to delete statement
 
   delete pInv;
 }
@@ -34965,31 +34972,36 @@ Approaches to implement raii.
 
 void f()
 {
-  // createInvestment() is factory-func that returns a pointer to dyn created resource
-  // or derived class. client must delete it after use
+  // createInvestment() is factory-func that returns a pointer to dyn created
+  // resource or derived class. client must delete it after use
 
   std::auto_ptr<Investment> pInv( createInvestment() );
 
   // code that throws an exception that is not caught inside f.
 
-  // NO need to concern about free resource regardless of how control leaves a block
+  // NO need to concern about free resource regardless of how control leaves a
+  // block 
   // delete pInv;
 }
 
-To solve this, use resource-managing-class by putting reference(resource) 'inside' object and use
-the fact that dtor is called automatically when object is destroyed; use object lifetime. As soon as
-get resource, initialize a object. How? In a 'constructor' and hence called raii.
+To solve this, use resource managing class by putting reference(resource)
+    'inside' object and use the fact that dtor is called automatically when
+    object is destroyed; use resource-managing-class object lifetime. As soon as
+    get resource, initialize a object. How? In a 'constructor' and hence called
+    raii.
 
-Acquire and initialize a resource-managing-class in the same statement. In other words, reference
-should be 'encapsulated' in a object, resouce-managing-class, but raii do not exist to encapsulate
-resource but to 'prevent' leak.
+Acquire and initialize a resource-managing-class in the same statement. In other
+words, reference should be 'encapsulated' in a object, resouce-managing-class,
+    but raii do not exist to encapsulate resource but to 'prevent' leak.
 
-However, auto_ptr is not the best way to manage all dyn resources since it's limitation on copying
-to make sure there's only one ptr to object. So containers of auto_ptr aren't allowed since STL
-requires normal copying, deep-copy.
+However, auto_ptr is not the best way to manage all dyn resources since it's
+limitation on copying to make sure there's only one ptr to object. So containers
+of auto_ptr aren't allowed since STL requires normal copying, deep-copy.
+
 
 <raii-shared-ptr-approach>
-Returning shared_ptr from a factory-func is a better way that supports normal copying than auto_ptr. 
+Returning shared_ptr from a factory-func is a better way that supports normal
+copying than auto_ptr. 
 
 // use the fixed type, Foo that's the underlying object.
 
@@ -35006,10 +35018,10 @@ void use_factory(T arg)
 
 
 {raii-for-resource-using-own-interface}
-EC++14. There should be 'own' raii class for resource that uses own interface to create and delete
-it because cannot use delete operator on it.
+EC++14. There should be 'own' raii class for resource that uses own interface to
+create and delete it because cannot use delete operator on it.
 
-<example-mutex-lock> {auto-lock}
+<ex-mutex-lock> {auto-lock}
 void lock(Mutex* pm);      // int pthread_mutex_lock( pthread_mutex_t *mptr); 
 void unlock(Mutex* pm);
 
@@ -35035,7 +35047,7 @@ function()
   ...
 }
 
-<example> # AUTOLOCK example
+<e> # AUTOLOCK example
 This is a case example seen in the code:
 
 class CCAutoLock
@@ -35047,8 +35059,8 @@ class CCAutoLock
     ~CCAutoLock() { m_mutex->Unlock(); };
 };
 
-static PCMutex* g_mhdebug_mutex;
-#define AUTOLOCK() CCAutoLock lock(&g_mhdebug_mutex)
+static PCMutex* g_debug_mutex;
+#define AUTOLOCK() CCAutoLock lock(&g_debug_mutex)
 
 void func()
 { 
@@ -35057,9 +35069,10 @@ void func()
 }
 
 
-<Q> When there is a nested call tree used AUTOLOCK, will the lock be maintained? That is the lock of
-func1 in the below example will BE VALID/LOCKED when func3 gets run? Will do. However, all three
-uses the same lock then deadlock.
+note: Q. When there is a nested call tree used AUTOLOCK, will the value of lock
+be maintained? That is the lock of func1 in the below example will BE
+VALID/LOCKED when func3 gets run? Will do. However, all three uses the same
+mutex then deadlock.
 
 #include <iostream>
 
@@ -35123,7 +35136,8 @@ dtor: ALOCK: 2
 dtor: ALOCK: 1
 --} main 
 
-<example-window-handle> MEC++09.
+
+<e-window-handle> MEC++09.
 void displayInfo(const Information& info)
 {
   WINDOW_HANDLE w ( createWindow() );
@@ -35159,51 +35173,56 @@ void displayInfo(const Information& info)
   // destoryWindow(w);
 }
 
-<example>
-For example, if your object is an array allocated with new[], you have to define that the cleanup
-performs a delete[]. note: this show that smart pointer is useful to lessen client's burden since
-this can be done in smart pointer so client no need to know.
+<ex>
+For example, if your object is an array allocated with new[], you have to define
+that the cleanup performs a delete[]. note: this show that smart pointer is
+useful to lessen client's burden since this can be done in smart pointer so
+client no need to know.
 
 
 {raii-and-two-cautions}
 The raii is great but there are two cautions when use raii.
 
-1. When use resources which has own interface such as mutex and db connection, it can raise
-exception in destructor. Since raii uses destructor, it can cause the problem is described in
-{problem-of-exception-in-dtor}.
+* When use resources which has own interface such as mutex and db connection, it
+  can raise exception in destructor. Since raii uses destructor, it can cause
+  the problem is described in {problem-of-exception-in-dtor}.
 
-2. Acquire and initialize a raii in the same statement. In other words, use constructor. If not, can
-be a problem as described in EC++17. <evaluation-order>
+* Acquire and initialize a raii in the same statement. In other words, use
+  constructor. If not, can be a problem as described in EC++17.
+ <evaluation-order>
 
 processWidget( std::shared_ptr<Widget>( new Widget ), priority() );
 
-The problem is that there is no order in evaluating the arguments between new, shared_ptr
-constructor, and priority() call. note: ctor is also under evaluation order here. So if complier
-reorder calls as new, priority, and shared_ptr and priority raise exception then raii is broken.
-Means newed pointer will be lost. The better way is:
+The problem is that there is no order in evaluating the arguments between new,
+    shared_ptr constructor, and priority() call. note: ctor is also under
+    evaluation order here. So if complier reorder calls as new, priority, and
+    shared_ptr and priority raise exception then raii is broken.  Means newed
+    pointer will be lost. The better way is:
 
 std::shared_ptr<Widget> pw( new Widget );
 processWidget( pw, priority() );
 
 
 {raii-and-copy-support}
-EC++14. What should happen when a Lock object, more generally raii object, is 'copied' or
-'assigned'? There are four approaches depending on the type of resource.
+EC++14. What should happen when a Lock object, more generally raii object, is
+'copied' or 'assigned'? There are four approaches depending on the type of
+resource.
 
-<1> no copying
+1. no copying
 Likely to be true for Lock. See {preventing-copies} in *kt_dev_cpp_004* So,
 
 class Lock: private Uncopyable {
   ...
 };
 
-<2> reference counting underlying resources
+2. reference counting underlying resources
 By using shared_ptr with delete, do not need to concern about clean up. 
 
 <raii-vs-shared-pointer>
-note: this is a decision point; use raii and concern about copy or use shared_ptr with deleter and
-don't concern about copy. {pointerlike} in *kt_dev_cpp_004* For this example, use 'deleter' to use
-unlock instead of default delete.
+note: this is a decision point; use raii and concern about copy or use
+shared_ptr with deleter and don't concern about copy. {pointerlike} in
+*kt_dev_cpp_004* For this example, use 'deleter' to use unlock instead of
+default delete.
 
 class Lock {
   public:
@@ -35222,23 +35241,26 @@ class Lock {
   public:
     explicit Lock( Mutex* pm )
       :mutexPtr( pm, unlock )    // note: deleter
-      {
-        lock( mutexPtr.get() );  // to get law pointer assuming this is C interface
+      {  
+          // to get law pointer assuming this is C interface
+          lock( mutexPtr.get() );
       }
 
   private:
     std::shared_ptr<Mutex> mutexPtr;
 };
 
-Set deleter using shared_ptr ctor in ctor init list. No longer declares a destructor.
+Set deleter using shared_ptr ctor in ctor init list. No longer declares a
+destructor.
 
-<3> copy the underlying resource
-This is {valuelike} in *kt_dev_cpp_004* Such as string class which uses heap for characters.
-Copying the resource managing object should also copy the resource it wraps. deep-copy.
+3. copy the underlying resource
+This is {valuelike} in *kt_dev_cpp_004* Such as string class which uses heap for
+characters. Copying the resource managing object should also copy the resource
+it wraps. deep-copy.
 
-<4> transfer ownership of underlying resource
-This is unique_ptr. Only one raii refers to a raw resource and when raii is copied ownership of the
-resource is transfered. 
+4. transfer ownership of underlying resource
+This is unique_ptr. Only one raii refers to a raw resource and when raii is
+copied ownership of the resource is transfered. 
 
 
 ={============================================================================

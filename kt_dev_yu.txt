@@ -492,6 +492,9 @@ $ find . -mtime -60 -name Nickel.System.GStreamer.log -printf '%T@ %Tc %p\n' | s
 1450917751.0000000000 Thu 24 Dec 2015 00:42:31 GMT ./6779/Nickel.System.GStreamer.log
 ...
 
+find . -mtime -60 -name Vanadium.WebKit.VideoElement-qt-5.1.0.log -printf '%T@ %Tc %p\n' | sort -r
+find . -mtime -60 -name Vanadium.WebKit.VideoElement-qt-5.1.0.log -printf '%T@ %Tc %p\n' | sort -r | cut -d' ' -f 8 | xargs grep -C 5 FAILED
+
 // to find out platform built against.
 
 $ grep -A 1 MODEL 6181/6181.json
@@ -2872,9 +2875,20 @@ setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.34
 *kt_dev_uv_stack_002* tool-core
 
 cd /tmp && wget http://devnfs2.dev.youview.co.uk/TOOLS/install-devtools && /bin/bash install-devtools
-configure-stagecraft -c
 
-$ cat ./setup-humax/scripts/configure-stagecraft
+declare -a fs_info=( $(stat -f -c "%a %s" /mnt/hd1) )
+echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
+
+[root@HUMAX /]# stat -f -c "%a %s" /mnt/hd1
+329347 4096
+[root@HUMAX /]# declare -a fs_info=( $(stat -f -c "%a %s" /mnt/hd1) )
+[root@HUMAX /]# echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
+1349009408
+
+<use-script>
+
+configure-stagecraft -c
+configure-webkit -c
 
 do_enable_core_dumps() {
     echo "Enabling core dumps for Flash applications..."
@@ -2887,18 +2901,6 @@ do_enable_core_dumps() {
     echo "- '$core_path/core-maps.*"
     warn_as_needed_that_stagecraft_need_to_be_restarted
 }
-
-
-echo /proc/sys/kernel/core_pattern
-
-declare -a fs_info=( $(stat -f -c "%a %s" /mnt/hd1) )
-echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
-
-[root@HUMAX /]# stat -f -c "%a %s" /mnt/hd1
-329347 4096
-[root@HUMAX /]# declare -a fs_info=( $(stat -f -c "%a %s" /mnt/hd1) )
-[root@HUMAX /]# echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
-1349009408
 
 echo "|/bin/bash /usr/local/bin/core-dump /mnt/hd1/ %p 10000000" > /proc/sys/kernel/core_pattern
 
@@ -2937,20 +2939,28 @@ gdb_path=/opt/zinc/oss/debugtools/bin/gdb
 
 ...
 
-note: do not work for all process. for example, not work for nickelmediad
+<note>
+When use the script above, see core file generated under /mnt/hd1 as specified.
+However, under the same condition, use the the pattern:
 
-[root@HUMAX /]# pidof w3cEngine
-3691
-[root@HUMAX /]# kill -s 11 3691
+cat /proc/sys/kernel/core_pattern 
+/mnt/hd1/core.%e.%p.%h.%t
 
-[root@HUMAX hd1]# pwd
-/mnt/hd1
+[root@HUMAX /]# kill -s 11 `pidof w3cEngine`
 
-[root@HUMAX hd1]# ls -al core-*
+/mnt/hd1# ls -al core-*
 -rw-r--r--    1 root     root           209 Jan 12 10:27 core-log.3691
 -rw-r--r--    1 root     root             0 Jan 12 10:27 core-maps.3691
 -rw-r--r--    1 root     root          5210 Jan 12 10:27 core-text.3691
 -rw-r--r--    1 root     root         61440 Jan 12 10:27 core.3691
+
+Cannot see core files generated? Why? Because applications runs in sandbox,
+creates under when:
+
+echo "/app-data/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
+
+./69c36e5677249ec5520f34941aa3fb9fe9026dd9b218a07978c07d68b5b60f3e/app-data/core.w3cEngine.18944.HUMAX.1455809759
+./31c5e1725fb42bc769224449ebe0e6464cb6304acba079d0e5c4b59768cb9331/app-data/core.w3cEngine.19462.HUMAX.1455811038
 
 
 ={============================================================================
@@ -3353,7 +3363,7 @@ WORKS!
 
 
 <keys>
-See this for other keys:
+See this for other keys in ch05:
 https://svn.youview.co.uk/Canvas/Documents/Presentation.Technology/trunk/2105-S%20Flash%20Presentation%20Engine%20Integration%20Specification%20v1.1E%20tracked.pdf
 
 menu                             YouView
@@ -3363,7 +3373,7 @@ escape                           Close
 cursor_up/down/left/right        
 ok                               Enter
 back                             Back
-
+red                              Red
 
 <to-check>
 [root@HUMAX /]# pidof dfbmaster
@@ -3633,7 +3643,7 @@ log4cplus.logger.vanadium=TRACE, STDERR, vanadiumfile
 log4cplus.appender.STDERR=log4cplus::ConsoleAppender
 
 log4cplus.appender.STDERR.Threshold=ERROR  
-    note: change to get trace on stderr.
+    note: change to match trace level in order to have logs on stderr.
 
 log4cplus.appender.STDERR.layout=log4cplus::PatternLayout
 log4cplus.appender.STDERR.layout.ConversionPattern=%D{%Y-%m-%d %H:%M:%S,%q} %-5p %x %t %m%n
@@ -6194,6 +6204,29 @@ method return sender=:1.24 -> dest=:1.167 reply_serial=2
 *kt_dev_uv_stack_105* zinc-app: diag screen
 
 help, diagapp
+
+
+={============================================================================
+*kt_dev_uv_stack_105* zinc-app: diag screen
+
+/opt/zinc-trunk/oss/var/applications/identities
+
+./16389:
+drwxr-xr-x    2 root     root          4096 Feb 15 16:50 ./
+drwxr-xr-x    8 root     root          4096 Feb 15 16:50 ../
+-rw-r--r--    1 root     root           109 Feb 15 16:50 User-Agent
+-rw-r--r--    1 root     root            35 Feb 15 16:50 x-youview-appid
+
+This has string and this is converted to SHAID
+
+x-youview-appid
+
+[root@HUMAX /]# ll opt/zinc-trunk/var/applications/data/air/
+drwxr-xr-x    4 root     root        4.0K Feb 15 16:50 1afd3be65b627bd7900923711175328bc4034427547ed6f9e81d4e46cc2cf486/
+drwxr-xr-x    4 root     root        4.0K Feb  2 09:46 31c5e1725fb42bc769224449ebe0e6464cb6304acba079d0e5c4b59768cb9331/
+drwxr-xr-x    4 root     root        4.0K Feb 15 14:55 69c36e5677249ec5520f34941aa3fb9fe9026dd9b218a07978c07d68b5b60f3e/
+drwxr-xr-x    4 root     root        4.0K Feb  5 11:02 d2051348f086985ccfbd5331805a7ab535eeed927a909f846f371d8fba66e0f1/
+drwxr-xr-x    5 root     root        4.0K Feb 10 14:00 e3839e3e5a73e36b09a0d121e17bde747ad0861f306126cecb2c2aed41abf935/
 
 
 ={============================================================================
@@ -22728,7 +22761,6 @@ CDS to be installed on a read-write partition.
 
 {sandbox-application}
 /opt/zinc-trunk/lib/sandbox/application-yv.conf
-
 ##
 # This is a common configuration file for application sandbox.  It specifies all
 # directories that are imported "as is" from the real file system into the
@@ -22756,9 +22788,7 @@ CDS to be installed on a read-write partition.
 /usr/local/lib
 /usr/local/etc
 
-# TODO: Remove
 /bin
-# TODO: Remove
 /usr/bin
 
 # users, groups, networking...
@@ -22773,12 +22803,6 @@ CDS to be installed on a read-write partition.
 /opt/zinc-trunk/oss/var/applications/identities
 /opt/zinc-trunk/oss/lib
 
-# TODO: Remove
-/opt/zinc-trunk/bin
-/opt/zinc-trunk/devel/bin
-# TODO: Remove
-/opt/zinc-trunk/oss/bin
-
 # certificates
 /opt/youview/pki
 
@@ -22788,37 +22812,38 @@ CDS to be installed on a read-write partition.
 # Application type specific configuration is specified in application-yv.d
 # directory
 
+note: this applies to ALL applications
 [options]
 StdOut=/dev/console
 StdErr=/dev/console
 
 
-<applications>
-/opt/zinc-trunk/lib/sandbox/application-yv.d
-dr-x------    2 root     root        4.0K Jul 14 14:38 ./
-drwxrwxr-x    6 1024     1025        4.0K Jul 14 15:22 ../
--r--------    1 root     root         419 Jul 14 14:38 air.conf
--r--------    1 root     root         376 Jul 14 16:26 html5.conf
--r--------    1 root     root         272 Jul 14 14:38 netflix.conf
--r--------    1 root     root         418 Jul 14 14:38 ui.conf
-
-
-# cat air.conf 
-
-##
-# This is AIR specific configuration file for application sandbox.  It specifies
-# directories that are imported "as is" from the real filesystem into the
-# sandbox.  This file is managed by YouView and is not to be modified by OEMs.
-#
-# Note that following directories are already in the sandbox and they are
-# "special": 
-# /opt/adobe/stagecraft/data
-####
-
-[directories]
-/opt/stagecraft-2.0
-/opt/adobe/stagecraft/fonts
-[root@HUMAX application-yv.d]# 
+// <applications>
+// /opt/zinc-trunk/lib/sandbox/application-yv.d
+// dr-x------    2 root     root        4.0K Jul 14 14:38 ./
+// drwxrwxr-x    6 1024     1025        4.0K Jul 14 15:22 ../
+// -r--------    1 root     root         419 Jul 14 14:38 air.conf
+// -r--------    1 root     root         376 Jul 14 16:26 html5.conf
+// -r--------    1 root     root         272 Jul 14 14:38 netflix.conf
+// -r--------    1 root     root         418 Jul 14 14:38 ui.conf
+// 
+// 
+// # cat air.conf 
+// 
+// ##
+// # This is AIR specific configuration file for application sandbox.  It specifies
+// # directories that are imported "as is" from the real filesystem into the
+// # sandbox.  This file is managed by YouView and is not to be modified by OEMs.
+// #
+// # Note that following directories are already in the sandbox and they are
+// # "special": 
+// # /opt/adobe/stagecraft/data
+// ####
+// 
+// [directories]
+// /opt/stagecraft-2.0
+// /opt/adobe/stagecraft/fonts
+// [root@HUMAX application-yv.d]# 
 
 
 {in-zinc}
@@ -28390,6 +28415,120 @@ delivery, this commit changes Zinc.Common dependencies directly to remove
 sqlite3 from the Zinc.Common shared library and would have no impact on the
 other part of stack since that sqlite3 feaure was separated out to
 libZincCommonSQLite.so.
+
+
+={============================================================================
+*kt_dev_uv_task_011* task:09: video test failure
+
+ALL SHOWS log-Assertion failed: Test timed out
+
+1455756167.0000000000 Thu 18 Feb 2016 00:42:47 GMT ./8419/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1455756165.0000000000 Thu 18 Feb 2016 00:42:45 GMT ./8381/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1455756162.0000000000 Thu 18 Feb 2016 00:42:42 GMT ./8350/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1455669756.0000000000 Wed 17 Feb 2016 00:42:36 GMT ./8222/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1454719341.0000000000 Sat 06 Feb 2016 00:42:21 GMT ./7983/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1454632926.0000000000 Fri 05 Feb 2016 00:42:06 GMT ./7974/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1454460152.0000000000 Wed 03 Feb 2016 00:42:32 GMT ./7830/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1454200898.0000000000 Sun 31 Jan 2016 00:41:38 GMT ./7800/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1454114532.0000000000 Sat 30 Jan 2016 00:42:12 GMT ./7793/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1454028128.0000000000 Fri 29 Jan 2016 00:42:08 GMT ./7734/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1453941738.0000000000 Thu 28 Jan 2016 00:42:18 GMT ./7691/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1453941737.0000000000 Thu 28 Jan 2016 00:42:17 GMT ./7687/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1453250612.0000000000 Wed 20 Jan 2016 00:43:32 GMT ./7386/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1452645754.0000000000 Wed 13 Jan 2016 00:42:34 GMT ./7088/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1452386528.0000000000 Sun 10 Jan 2016 00:42:08 GMT ./7062/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1450917752.0000000000 Thu 24 Dec 2015 00:42:32 GMT ./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+1450831378.0000000000 Wed 23 Dec 2015 00:42:58 GMT ./6744/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+
+=======================
+1455756167.0000000000 Thu 18 Feb 2016 00:42:47 GMT ./8419/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+          "name" : "MODEL",
+          "value" : "Centos7_64Bit"
+
+./8419/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingDataToDecode FAILED.
+
+=======================
+1455756165.0000000000 Thu 18 Feb 2016 00:42:45 GMT ./8381/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+          "name" : "MODEL",
+          "value" : "Centos7_64Bit"
+
+./8381/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingNetwork FAILED.
+
+=======================
+1455756162.0000000000 Thu 18 Feb 2016 00:42:42 GMT ./8350/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+          "name" : "MODEL",
+          "value" : "Debian7_64Bit"
+./8350/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorsBeforePlayAreReported FAILED.
+
+=======================
+1455669756.0000000000 Wed 17 Feb 2016 00:42:36 GMT ./8222/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+          "name" : "MODEL",
+          "value" : "Centos7_64Bit"
+./8222/Vanadium.WebKit.VideoElement-qt-5.1.0.log:PlayVideoExtended FAILED.
+
+=======================
+1454719341.0000000000 Sat 06 Feb 2016 00:42:21 GMT ./7983/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+          "name" : "MODEL",
+          "value" : "Debian7_64Bit"
+./7983/Vanadium.WebKit.VideoElement-qt-5.1.0.log:MultipleVideoTagsCanCoexist FAILED.
+
+=======================
+1454632926.0000000000 Fri 05 Feb 2016 00:42:06 GMT ./7974/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+          "name" : "MODEL",
+          "value" : "Centos7_64Bit"
+./7974/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingServer FAILED.
+
+=======================
+1454460152.0000000000 Wed 03 Feb 2016 00:42:32 GMT ./7830/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+          "name" : "MODEL",
+          "value" : "Debian7_64Bit"
+
+./7830/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorsBeforePlayAreReported FAILED.
+
+=======================
+1454200898.0000000000 Sun 31 Jan 2016 00:41:38 GMT ./7800/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./7800/Vanadium.WebKit.VideoElement-qt-5.1.0.log:MultipleVideoTagsCanCoexist FAILED.
+
+=======================
+1454114532.0000000000 Sat 30 Jan 2016 00:42:12 GMT ./7793/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./7793/Vanadium.WebKit.VideoElement-qt-5.1.0.log:PlayVideoExtended FAILED.
+=======================
+1454028128.0000000000 Fri 29 Jan 2016 00:42:08 GMT ./7734/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./7734/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingOtherToNotSupported FAILED.
+=======================
+1453941738.0000000000 Thu 28 Jan 2016 00:42:18 GMT ./7691/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./7691/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingOtherToNotSupported FAILED.
+=======================
+1453941737.0000000000 Thu 28 Jan 2016 00:42:17 GMT ./7687/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./7687/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingOtherToDecode FAILED.
+=======================
+1453250612.0000000000 Wed 20 Jan 2016 00:43:32 GMT ./7386/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./7088/Vanadium.WebKit.VideoElement-qt-5.1.0.log:MultipleVideoTagsCanCoexist FAILED.
+=======================
+1452645754.0000000000 Wed 13 Jan 2016 00:42:34 GMT ./7088/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./7062/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingNetwork FAILED.
+=======================
+1452386528.0000000000 Sun 10 Jan 2016 00:42:08 GMT ./7062/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log:SeekingVOD FAILED.
+=======================
+1450917752.0000000000 Thu 24 Dec 2015 00:42:32 GMT ./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-           Actual: never called - unsatisfied and active
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-../test/MockMediaRouterRepository.cpp:596: Failure
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-Actual function call count doesn't match EXPECT_CALL(*mock, seekPosition(SeekReference::start, position, SeekMode::prioritise_accuracy))...
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-         Expected: to be called once
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-           Actual: never called - unsatisfied and active
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log:PlayVideoExtended mock object FAILED verification
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-Assertion failed: Mock verification failed
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-expected: 200, actual: 500
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log:Verify Mock Objects FAILED.
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-Failed: 3, Passed: 103, Total: 106, Runtime: 36267
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-Asked to exit, status=1
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-FAIL: test/js/testplay
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-=======================================
+./6816/Vanadium.WebKit.VideoElement-qt-5.1.0.log-1 of 2 tests failed
+=======================
+1450831378.0000000000 Wed 23 Dec 2015 00:42:58 GMT ./6744/Vanadium.WebKit.VideoElement-qt-5.1.0.log
+./6744/Vanadium.WebKit.VideoElement-qt-5.1.0.log:ErrorHandlingNetwork FAILED.
 
 
 ==============================================================================
