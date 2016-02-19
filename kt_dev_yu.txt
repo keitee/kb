@@ -106,11 +106,11 @@
 
 *kt_dev_uv_stack_408* mr-dash: mr spec
 *kt_dev_uv_stack_408* mr-dash: todo list
-*kt_dev_uv_stack_408* mr-dash: create mr and plugin
+*kt_dev_uv_stack_408* mr-dash-create mr and plugin
 *kt_dev_uv_stack_408* mr-dash: create gst
 *kt_dev_uv_stack_408* mr-dash: create gst: revised to support bin injection
 *kt_dev_uv_stack_408* mr-dash: build dash pipeline using media router
-*kt_dev_uv_stack_408* mr-dash: sync and async
+*kt_dev_uv_stack_408* mr-dash-sync and async
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
 *kt_dev_uv_stack_408* mr-dash: disable dash on master
@@ -5582,11 +5582,11 @@ terminate called after throwing an instance of 'DBus::ErrorNoReply'
 Aborted
 
 
-<2>
+<2> mangled output on console
 2015-12-14 12:46:24,022 ERROR  1484772624 zinc 
-/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received
-remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply.
-Possible causes include8 all to /Zinc/Media/MediaRouters/1
+/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 
+Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a
+reply.  Possible causes include8 all to /Zinc/Media/MediaRouters/1
 
 terminate called after throwing an instance of 'DBus::ErrorNoReply'
   what():  Did not receive a reply. Possible causes include: the remote
@@ -13134,7 +13134,7 @@ https://wiki.youview.co.uk/display/canvas/MPEG+DASH+to-do+list?src=search
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: create mr and plugin
+*kt_dev_uv_stack_408* mr-dash-create mr and plugin
 
 <before>
     w3c:
@@ -13513,8 +13513,11 @@ typedef std::pair<std::string, std::vector<MIMEMediaRouterFactory> >
 typedef std::vector<MIMEMediaRouterFactoryMap> 
   ProtocolMediaRouterFactoryMap;
 
-note:
-ProxySystemFactory::ProxySystemFactory() {
+
+note: single thread dispacther
+
+ProxySystemFactory::ProxySystemFactory()
+    : dispatcher(boost::make_shared<NS_ZINC::SingleThreadDispatcher>()) {
     loadImplementations();
 }
 
@@ -15019,13 +15022,13 @@ ProxyMediaRouter.cpp:862 ENTER:
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: sync and async
+*kt_dev_uv_stack_408* mr-dash-sync and async
 
 {sync}
 DEVARCH-10679
 
 The root cause of the problem is double-deadlock in GstMediaRouter and D-Bus
-mutexes – this is not real crash. Browser kill is a side effect.
+mutexes - this is not real crash. Browser kill is a side effect.
 
 browser getPosition() call:  D-Bus -> libdbus -> Zinc.DBus-C++ -> dbus lock ->
 GstMediaRouter::getPosition() -> GstMR lock -> GStreamer call
@@ -15033,7 +15036,7 @@ GstMediaRouter::getPosition() -> GstMR lock -> GStreamer call
 internal MR GStreamer callback:  callback function -> GstMR lock -> dbus lock ->
 Zinc.DBus-C++ -> libdbus -> D-Bus
 
-Both calls are made in same time, in parallel, so here is kind of action list
+Both calls are made in same time, in parallel, so here is kind of situation
 which is happening:
 
 1. GStreamer fires up callback, GstMR mutex is locked now
@@ -15043,8 +15046,8 @@ which is happening:
 locked mutex [MR]
 5. Dbus call is timedout, browser is killed
 
-<1> this is a sync call
 
+{sync-way}
 Vanadium:
 
   float VanadiumMediaPlayer::currentTime() const
@@ -15064,6 +15067,7 @@ GstMR:
   {
     boost::lock_guard<boost::mutex> l(lock);
 
+    // note: this is sync call
     return NS_ZINC::completedFuture(
         *getDispatcher(), getPosition_locked(mediaType == LIVE));
   }
@@ -15071,19 +15075,25 @@ GstMR:
   const Position GstMediaRouter::getPosition_locked(bool liveMode) const
   {
     // sync calls to gst
-
     const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
+    {
+        gst_element_query(pipeline.get(), q.get());
+    }
     int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
+    {
+        return sinkBin->getPresentationTime(timeFormat);
+        { 
+            gst_bin_get_by_name (GST_BIN(getParent().get()), "videosink"); 
+            gst_element_query_position(sink.get(), format, &pos);
+        }
+    }
     ...
-      return Position;
+    return Position;
   }
 
 
 <2>
-
-gst:
-
-GstMR:
+gst: GstMR:
 
 bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
 {
@@ -15122,11 +15132,7 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
 
 To:
 
-Position GstMediaRouter::doGetPosition() const
-{
-  boost::lock_guard<boost::mutex> l(lock);
-  return getPosition_locked(mediaType == LIVE);
-}
+note: The point is to use asyncInvoke()
 
 NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
 {
@@ -15134,8 +15140,17 @@ NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
       boost::bind(&GstMediaRouter::doGetPosition, this));
 }
 
+Position GstMediaRouter::doGetPosition() const
+{
+  boost::lock_guard<boost::mutex> l(lock);
+  return getPosition_locked(mediaType == LIVE);
+}
+
+
 <log-from-console>
-2015-12-14 12:46:24,022 ERROR  1484772624 zinc /data/ws/sources/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include8
+2015-12-14 12:46:24,022 ERROR  1484772624 zinc 
+/data/ws/sources/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 
+Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include8
 all to /Zinc/Media/MediaRouters/1
 terminate called after throwing an instance of 'DBus::ErrorNoReply'
   what():  Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken.
@@ -15191,7 +15206,6 @@ GST_STATE_PLAYING   -> "started" event
 GST_STATE_PLAYING   -> startReportingPositionChange
 GST_STATE_PAUSED    -> stopReportingPositionChange
 
-<1>
 boost::signals2::signal<void(GstState, GstState, GstState)> onStateChange;
 
 note: calls 'slot' once. Hence called 'OneShot'
@@ -15233,7 +15247,45 @@ struct OneShotFunctionCall
   const GstState desiredState;
 };
 
-// connects slots
+<1>
+starts, and connects slots
+
+NS_ZINC::Future<void> GstMediaRouter::start()
+{
+    // note: this is async version
+    return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
+        boost::bind(&GstMediaRouter::start_async, this));
+}
+
+void GstMediaRouter::start_async()
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    if (sinkBin->getSink().empty() || src.empty()) {
+        throw NotConfiguredException();
+    }
+
+    stopped = false;
+    isCompleted = false;
+    cachedCurrent = 0;
+
+    // Allow for the decoder resources to be acquired
+    sinkBin->start().then(*getDispatcher(),
+                          boost::bind(&GstMediaRouter::startPipelineMaybe,
+                                         shared_from_this(), _1));
+}
+
+// note: weak_ptr
+
+void GstMediaRouter::startPipelineMaybe(boost::weak_ptr<GstMediaRouter> mr,
+                                        NS_ZINC::FutureValue<void> fvDrmDone)
+{
+    if (const boost::shared_ptr<GstMediaRouter> mrs = mr.lock())
+    {
+        fvDrmDone.get(); // throws if there's an error
+        mrs->startPipeline();
+    }
+}
 
 void GstMediaRouter::startPipeline()
 {
