@@ -140,7 +140,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_016| array and struct
 |kt_dev_cpp_017| static-members and class const {class-method} {class-const}
 |kt_dev_cpp_018| dtor. non-virtual-destruction-problem. how-virtual-works.
-|kt_dev_cpp_019| exception {problem-of-exception-in-dtor} {exception-safe}
+|kt_dev_cpp_019| except
+|kt_dev_cpp_019| except-dtor-ctor
+|kt_dev_cpp_019| except-case
+|kt_dev_cpp_019| except-blanket catch and hidden exception
 *kt_dev_cpp_021* code-check()
 |kt_dev_cpp_022| inheritance {static-type} {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
 *kt_dev_cpp_022* inheritance: ctor-initializers
@@ -19802,30 +19805,99 @@ ABCAnimal::~ABCAnimal() {}
 
 
 ={============================================================================
-*kt_dev_cpp_019* exception
+*kt_dev_cpp_019* except
 
-{intention}
-The exception is intended for events that prevent the program from continuing normally. so when
-found no matching catch and stop execution of the program; call the library 'terminate' function.
+The exception are run-time anomalies that prevent the program from continuing
+normally. Exception handling supports the cooperation between the detecting and
+handling parts of a program. 
 
-MEC++09: What's different to the approach of returning error code? Exception 'cannot' be 'ignored'
-and if do, it is terminated. From MEC++12. The execution return to call site for func call but never
-for exception when think that throw is a function call.
+MEC++09: What's different to the approach of returning error code? Exception
+'cannot' be 'ignored' and if do, it is terminated. From MEC++12. The execution
+return to call site for func call but never for exception when think that throw
+is a function call.
+
+Exception handling involves:
+
+  * throw expression
+  * try blocks and catch clauses or exception handlers
+  * exception classes
+
+
+{form}
+
+try {
+  program-statements
+} catch (exception-declaration) {
+      handler-statments
+} catch (exception-declaration) {
+      handler-statments
+}
 
 
 {standard-exception}
-The 'stdexcept' header defines several general purpose exception classes and the typeinfo header
-defines the bad_cast exception type. 
+Exception classes are defined in four headers.
 
-The C++ Standard library provides a base class specifically designed to declare objects to be thrown
-as exceptions. It is called std::exception and is defined in the 'exception' header. This class has
-a virtual member function called what() that returns a null-terminated character sequence and that
-can be overwritten in derived classes to contain some sort of description of the exception. note:
-seems that exception header is older one and both works anyway.
+  * exception header
+    The C++ Standard library provides a 'base' class specifically designed to
+    declare objects to be thrown as exceptions. It is called std::exception and
+    is defined in the exception header. This class has a virtual member function
+    called what() that returns a null-terminated character sequence and that can
+    be overwritten in derived classes to contain some sort of description of the
+    exception. 
 
-<example>
+  * stdexcept header
+    The 'stdexcept' header defines several general purpose exception classes
+    which are derived from std::exception.
+
+  * new header
+    Defines bad_alloc exception type.
+
+  * typeinfo header
+    Defines the bad_cast exception type. 
+
+  <exception>
+  /**
+   *  @brief Base class for all library exceptions.
+   *
+   *  This is the base class for all exceptions thrown by the standard
+   *  library, and by certain language expressions.  You are free to derive
+   *  your own %exception classes, or use a different hierarchy, or to
+   *  throw non-class data (e.g., fundamental types).
+   */
+  class exception
+  {
+  public:
+    exception() _GLIBCXX_USE_NOEXCEPT { }
+    virtual ~exception() _GLIBCXX_USE_NOEXCEPT;
+
+    /** Returns a C-style character string describing the general cause
+     *  of the current error.  */
+    virtual const char* what() const _GLIBCXX_USE_NOEXCEPT;
+  };
+  
+  <stdexcept>
+  class logic_error : public exception;
+
+  class runtime_error : public exception 
+  {
+    string _M_msg;
+
+  public:
+    /** Takes a character string describing the error.  */
+    explicit 
+    runtime_error(const string& __arg);
+
+    virtual ~runtime_error() _GLIBCXX_USE_NOEXCEPT;
+
+    /** Returns a C-style character string describing the general cause of
+     *  the current error (the same string passed to the ctor).  */
+    virtual const char* 
+    what() const _GLIBCXX_USE_NOEXCEPT;
+  };
+
+
+<ex>
 #include <iostream>
-// #include <stdexcept>
 #include <exception>
 
 using namespace std;
@@ -19853,8 +19925,8 @@ int main () {
 My exception happened
 
 
-All exceptions thrown by components of the C++ Standard library derived from this exception class.
-These are:
+All exceptions thrown by components of the C++ Standard library derived from
+this exception class.  These are:
 
 bad_alloc            thrown by new on allocation failure
 bad_cast             thrown by dynamic_cast when it fails in a dynamic cast
@@ -19863,19 +19935,21 @@ bad_typeid           thrown by typeid
 bad_function_call    thrown by empty function objects
 bad_weak_ptr         thrown by shared_ptr when passed a bad weak_ptr
 
-Also deriving from exception, exception header defines two generic exception types that can be
-inherited by custom exceptions to report errors:
+Also deriving from exception, exception header defines two generic exception
+types that can be inherited by custom exceptions to report errors:
 
 logic_error          error related to the internal logic of the program
 runtime_error        error detected during runtime
 
 
 {stack-unwinding}
-A throw-keyword is like a return; statements following a throw are not executed. If no
-'matching' catch found, current/calling function is exted until found one in the call tree.
+A `throw` acts like a return; statements following a throw are not executed.  If
+no 'matching' catch found, current/calling function is exited until found one in
+the call tree.
 
-If not found a matching catch and call 'terminate'. If found, run catch and coutinue running from
-the the end of the try block catched but not the point where throw is called.
+If not found a matching catch and call 'terminate'. If found, run catch and
+coutinue running from the the end of the try block catched but not the point
+where throw is called.
 
 When no try-catch block in the chain, 1,2, and 3 runs only.  
 
@@ -19887,49 +19961,36 @@ func3()              func2()                func1()
 }                    }                      }
 
 
-During stack-unwinding, func exits 'prematurely' and means local objects are dstroyed and dtor is
-called.
+During stack-unwinding, function exits 'prematurely' and means local objects are
+dstroyed and dtor is called.
 
+
+={============================================================================
+*kt_dev_cpp_019* except-dtor-ctor
 
 {exception-in-ctor}
-Partially constructed. Even if it's partially constructed, guaranteed that the constructed members
-will be properly destroyed. From EC++30 p137 and see {empty-ctor-represenstaion}
+Partially constructed. Even if it's partially constructed, guaranteed that the
+constructed members will be properly destroyed. From EC++30 p137 and see
+{empty-ctor-represenstaion}
 
-But from MEC++10, it shows many ways to handle exceptions in ctor so not sure that it is properly
-destroyed. Seems EC++ is the latest.
-
-
-{function-try-block}
-Primus p773, 18.1.3 shows function-try to handle exception when do {constructor-initializers} This
-is for ctor and dtor as well and to handle exceptions happens before ctor body get runs because
-exception handling in ctor body cannot catch it.
-
-1. The members are initialised in the order of defined in class.
-2. The parameters are copied using copy-ctor and if exception happens, covered in caller site.
-3. Runs constructor-initializers if there are. covered by function-try-block.
-4. Runs ctor-body. covered by function-try-block.
-
-template< typename T>
-Blob<T>::Blob( std::initialzer_list<T>il) : data( std::make_shared< std::vector<T>> (il)) 
-{}
-
-template< typename T>
-Blob<T>::Blob( std::initialzer_list<T>il) try : data( std::make_shared< std::vector<T>> (il)) 
-{}
-catch ( const std::bad_alloc& e) { handle_out_of_memory(e); }
+But from MEC++10, it shows many ways to handle exceptions in ctor so not sure
+that it is properly destroyed. Seems EC++ is the latest.
 
 
 {problem-of-exception-in-dtor}
-Why exception in dtor is the problem? Since stack-unwinding starts to find matching catch and local
-objects are destroyed. If dtor of object being destroyed can raise an execption, then would have two
-running exceptions and it is not allowed in C++. EC++08 says that terminate is called or undefined.
+Why exception in dtor is the problem? Since stack-unwinding starts to find
+matching catch and local objects are destroyed. If dtor of object being
+destroyed can raise an execption, then would have two running exceptions and it
+is not allowed in C++. EC++08 says that terminate is called or undefined.
 
-The main problem is 'permature'-program-termination which means 'no' chance to do useful things as
-resource clean-up and making a log entry in handling exception or before terminating or swallowing.
-So premature termination means the undefined state of an application or system.
+The main problem is 'permature' termination which means 'no' chance to do useful
+things as resource clean-up and making a log entry in handling exception or
+before terminating or swallowing.  So premature termination means the undefined
+state of an application or system.
 
-So no exception in dtor and if necessary, should handle in the same dtor. This is the base
-assumption STL has and STL guarantee that any class's dtor will not raise an execption.
+So no exception in dtor and if necessary, should handle in the same dtor. This
+is the base assumption STL has and STL guarantee that any class's dtor will not
+raise an execption.
 
 
 {exception-and-resource-managing-class}
@@ -20038,37 +20099,53 @@ it. See {raii-and-exception-in-dtor} for the point to consider when use raii.
 }
 
 
+{function-try-block}
+CPR 773, 18.1.3 shows function-try to handle exception in construction or
+destruction phase.
+
+Since constructor initializers executes 'before' ctor body, exception handling
+in ctor body cannot catch that.
+
+* The members are initialised in the order of defined in class. covered by
+  function-try-block.
+* The parameters are copied using copy-ctor and if exception happens, covered in
+  caller site.
+* Runs constructor-initializers if there are. covered by function-try-block.
+* Runs ctor-body. covered by function-try-block.
+
+template< typename T>
+Blob<T>::Blob( std::initialzer_list<T>il) : 
+  data( std::make_shared< std::vector<T>> (il)) {}
+
+template< typename T>
+Blob<T>::Blob( std::initialzer_list<T>il) try : 
+  data( std::make_shared< std::vector<T>> (il)) { /* empty body */ }
+catch ( const std::bad_alloc& e) { handle_out_of_memory(e); }
+
+
 {exception-object} user-defined-exception-object
-The throw and catch expression use special-object, exception object. If it's a
-class type, must have dtor and copy or move op. 
-
-If it's array or func type, it's converted to its pointer type. {QQ} If it is
-array, must be in heap since there is no connection between call and called
-site?
-
-try {
-  ...
-  throw runtime_error("data must refer to the same"); // throw expression
-
-} catch (runtime_error err) {                         // exception declaration
-  ...
-  cout << err.what();
-  ...
-}
+The `throw` and `catch` expression use special-object, exception object. If it's
+a class type, must be 'complete' type and have dtor and copy or move op. If it's
+array or func type, it's converted to its pointer type. 
 
 Because there's a stack-unwinding, must not to throw a pointer to a local
-object. Hence exception object is 'copied' that is manintained by compiler and
-remains vaild 'until' catched.
+object. Hence exception object is 'copied' in space that is manintained by
+compiler and remains vaild 'until' catched.
+
+} catch (exception-declaration) {
 
 Exception is like a functin call and exception declaration is like a function
-with one param. Like function call, catch 'parameter' can be non-refernce or
-reference. If it's class type from inheritance and non-reference then
-{sliced-off} *kt_dev_cpp_022* can happen. How can use reference in catch? Since
-there is separation between throw and catch site. That is the exception object
-is held in 'global' space by a compiler.
+  with one param. Like function call, catch 'parameter' can be non-refernce or
+  reference. If it's class type from inheritance and non-reference then
+  `sliced-off` can happen in `throw` and `catch` 
 
-throw arg -> (copy init) -> exception object -> (copy init) -> catch (param)
+How can use reference in catch? Since there is separation between throw and
+catch site. That is the exception object is held in 'global' space by a
+compiler.
 
+throw expr -> (copy init) -> exception object -> (copy init) -> catch (expr)
+
+<ex>
 #include <iostream>
 using namespace std;
 
@@ -20206,13 +20283,21 @@ going to throw
 terminate called after throwing an instance of 'B'
 Aborted (core dumped) note: the exception spec mismatches hence terminated.
 
-<exception-type-conversion-and-order>
-Limited type conversion for exception. Support 'inheritance'-based-conversion
-that means catch using base class type can catch exception object of derived
-class. Also catch uses the order of appearance in code, called 'first'-fit
-strategy compared to 'best'-fit in function-matching.
 
-In STL exception tree, logic_error is higher than invalid_argument
+<type-conversion-and-first-fit>
+Restricted type conversion for exception. 
+
+  * conversions from nonconst to const
+  * conversions from derived to base type
+
+No others are allowrd such as class type conversion.
+
+Since catch uses the order of appearance in code, this is called first-fit
+strategy compared to best-fit in function-matching. If use exceptions from an
+inheritance, 'must' order from derived type to least derived.
+
+  class logic_error : public exception;
+  class invalid_argument : public logic_error;
 
 try {
   ...
@@ -20222,7 +20307,7 @@ try {
   ...
 }
 
-Should be:
+must be:
 
 try {
   ...
@@ -20232,10 +20317,30 @@ try {
   ...
 }
 
-Because if first-match is found then look no further. In the first case, if
-throw base then terminated called and if throw derived then first catch will
-run. So second catch never gets run. Therefore, the catch for base must come
-first in order. 
+
+<rethrow>
+Partially handle the exception and may decide that the exception must be handled
+by a function further up the call chain.
+
+  * Do not specify an expression; the current exception object is passed up
+  * Changes will be passed up only if catch uses a reference
+
+catch (myerror& eobj) {
+  eobj.status = errCodes::severeErr;
+  throw;
+}
+
+
+<catch-all>
+To catch all exceptions regardless of type. If used with other handlers, must be
+the last one. Often used with rethrow.
+
+catch (...)
+{
+  // work to partially handle the exception
+  throw;
+}
+
 
 <exception-object-always-copied>
 The execution returns to call site for func call but never for exception. This means that whenever
@@ -20553,15 +20658,6 @@ strong safety: if it's practical in terms of efforts, cost in efficiency and com
 functions should have strong safety. 80-20 rule?
 
 
-{rethrow}
-Partially handle the exception and rethrow it up to the chain.
-
-catch( myerror& eobj ) {
-  eobj.status = errCodes::severeErr;
-  throw;
-}
-
-
 {exception-cost}
 MEC++15. Exception has cost:
 
@@ -20625,9 +20721,9 @@ However, it will allow the throw syntax, while turning throws into abort()s.
 
 
 ={============================================================================
-*kt_dev_cpp_019* exception
+*kt_dev_cpp_019* except-case
 
-class ZINC_EXPORT BrokerException: public std::runtime_error
+class BrokerException: public std::runtime_error
 {
   public:
     BrokerException() : std::runtime_error("Error in MetadataBroker."){}
@@ -20640,7 +20736,7 @@ class ZINC_EXPORT BrokerException: public std::runtime_error
     virtual ~BrokerException() throw();
 };
 
-class ZINC_EXPORT NetworkProblemException : public BrokerException
+class NetworkProblemException : public BrokerException
 {
   public:
     /**  */
@@ -20654,7 +20750,7 @@ class ZINC_EXPORT NetworkProblemException : public BrokerException
 
 
 ={============================================================================
-*kt_dev_cpp_019* exception: blanket catch
+*kt_dev_cpp_019* except-blanket catch and hidden exception
 
 catch(ZINC_UNUSED const std::exception& e)
 {
@@ -20668,8 +20764,8 @@ should be more specific in which exceptions you catch IMO.
 There's a whole list of exceptions that could be thrown. Just because you're not
 expecting it right now doesn't mean it won't happen in the future. I don't think
 std::exception should be caught anywhere but say in a main message loop. It's
-much harder to debug exceptions being hidden like that, as what() is not always
-likely to include a useful what().
+much harder to debug exceptions being 'hidden' like that, as what() is not
+always likely to include a useful what().
 
 
 ={============================================================================
@@ -20784,22 +20880,23 @@ print_total( bulk_item );     // Bulk version. dynamic-binding.
 
 
 {sliced-off} {static-binding} {dynamic-binding}
-The staic binding is done at compile time. copy-ctor and copy-assign are func calls and
-derived-to-base-conversion happens when base's copy-int and copy-assign is called.
+The staic binding is done at compile-time. copy-ctor and copy-assign are func
+calls and derived-to-base-conversion happens when base's copy-int and
+copy-assign is called.
 
 class Foo {
   Foo(const Foo&);
   Foo& operator=(const Foo&);
 };
 
-The compiler always use static-type and if it is a virtual call then will generate a code for
-run-time binding and could calls derived version. However, this could be broken if fails to override
-in the derived.
+The compiler always use static-type and if it is a virtual call then will
+generate a code for run-time binding and could calls derived version. However,
+         this could be broken if fails to override in the derived.
 
-// example-one where item is base and bulk is derived
+// where item is base and bulk is derived
 
-Quote item(bulk);         # sliced-off
-item = bulk;              # sliced-off
+Quote item(bulk);         // sliced-off
+item = bulk;              // sliced-off
 
 // example-two
 
