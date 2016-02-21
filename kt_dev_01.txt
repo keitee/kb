@@ -21,7 +21,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_prob_004| DUMA, DML, KDEBUG, FTRACE, ASN, valgrind
 |kt_dev_prob_005| use-after-free error
 |kt_dev_prob_006| print ansi color 
-|kt_dev_prob_007| random number
 |kt_dev_prob_008| elapsed time {clock}
 |kt_dev_prob_009| preprocessor {stdarg} {why-ellipses-dangerous} {ndebug}
 |kt_dev_prob_010| bit manipulation: get max value of type <shift-operator>
@@ -142,6 +141,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_018| dtor. non-virtual-destruction-problem. how-virtual-works.
 |kt_dev_cpp_019| except
 |kt_dev_cpp_019| except-dtor-ctor
+*kt_dev_cpp_019* except-noexcept
+*kt_dev_cpp_019* except-safe
+*kt_dev_cpp_019* except-disable
 *kt_dev_cpp_019* except-terminate-call-tree
 |kt_dev_cpp_019| except-case
 |kt_dev_cpp_019| except-blanket catch and hidden exception
@@ -2077,40 +2079,6 @@ int main()
 }
 
 echo -e "\E[1;31mThe git hook pre-push runs\E[m";
-
-
-={============================================================================
-*kt_dev_prob_007* random number
-
-#include <stdlib.h>
-
-The seed
-
-void Randomize()
-{
-  srand( (unsigned int) (time(NULL)%10000));
-}
-
-time() returns the number of seconds elapsed since 00:00:00 GMT, Jan. 1, 1970. 
-time_t time(time_t *timeptr); 
-
-int PoissonRandom( double expectedvalue )
-{
-  int n = 0;
-  double limit;
-  double x;
-
-  limit = exp(-expectedvalue);
-  x = rand()/(double) INT_MAX;
-  while( x > limit )
-  {
-    n++;
-    x *= rand()/(double) INT_MAX;
-  }
-
-  return n;
-}
-
 
 ={============================================================================
 *kt_dev_prob_008* elapsed time 
@@ -19978,7 +19946,7 @@ But from MEC++10, it shows many ways to handle exceptions in ctor so not sure
 that it is properly destroyed. Seems EC++ is the latest.
 
 
-{problem-of-exception-in-dtor}
+{problem-of-exception-in-dtor} *stack-unwinding*
 Why exception in dtor is the problem? Since stack-unwinding starts to find
 matching catch and local objects are destroyed. If dtor of object being
 destroyed can raise an execption, then would have two running exceptions and it
@@ -19994,15 +19962,16 @@ is the base assumption STL has and STL guarantee that any class's dtor will not
 raise an execption.
 
 
-{exception-and-resource-managing-class}
-To handle exception, shall use resource-managing-class, ie., raii and see {resource-managing-class}
-in *kt_dev_stl_018* for various solutions since destruction will be handled when do stack unwinding.
+{exception-and-raii}
+To handle exception, shall use resource-managing-class, RAII, since destruction
+will be handled when do stack unwinding.
 
 
 {how-to-handle-exeception-in-dtor}
-See {raii-for-resource-using-own-interface} for other examples. From EC++08. General recommendation
-is not to raise exception in dtor. If interface to use comes from external source then it could
-raise an exception. What to do? These are how to handle when exception happens in dtor.
+See {raii-for-resource-using-own-interface} for other examples. From EC++08.
+General recommendation is not to raise exception in dtor. If interface to use
+comes from external source then it could raise an exception. What to do? These
+are how to handle when exception happens in dtor.
 
 // think this external source
 class DBConnection {
@@ -20041,11 +20010,13 @@ DBConn::~DBConn()
   }
 }
 
-Can use {noexcept} at below? Seems not as it has the same effect when not handling exaction from a
-dtor: no chance to do useful thing such as making a log entry.
+Can use {noexcept} at below? Seems not as it has the same effect when not
+handling exaction from a dtor: no chance to do useful thing such as making a log
+entry.
 
 <2> swallow the exception
-Can be used when the program must be able to continue execution even after exception is happened.
+Can be used when the program must be able to continue execution even after
+exception is happened.
 
 DBConn::~DBConn()
 {
@@ -20083,10 +20054,11 @@ class DBConn {
 };
 
 
-The client have an opportunity to handle the exception and if the client choose not to handle it
-then fall back to default action: terminating or swallowing. It appears that it make raii less
-useful and pass the burden on to the client but it is not since it gives them opportunity to handle.
-it. See {raii-and-exception-in-dtor} for the point to consider when use raii.
+The client have an opportunity to handle the exception and if the client choose
+not to handle it then fall back to default action: terminating or swallowing. It
+appears that it make raii less useful and pass the burden on to the client but
+it is not since it gives them opportunity to handle.  it. See
+{raii-and-exception-in-dtor} for the point to consider when use raii.
 
 // client use
 {
@@ -20197,12 +20169,13 @@ end
 <exception-catch-by-reference>
 The catch by referecne is recommendation.
 
-1. catch by pointer, do not know if should call delete on it because do not know if it is created by
-new or not.
-2. catch by value, sliced-off can happen.
-3. catch by reference, okay for both problems above.
+* Catch by pointer, do not know if should call delete on it because do not know
+  if it is created by new or not.
+* Catch by value, sliced-off can happen.
+* Catch by reference, okay for both problems above.
 
-// example when throw derived and catch base. sliced-off.
+<ex> to show sliced-off.
+
 int main () {
   try
   {
@@ -20233,7 +20206,9 @@ CD dtor              // { dtor for exception object
 B dtor               // } 
 end
 
-// example when catch reference
+
+<ex> to see when catch reference
+
 int main () {
   try
   {
@@ -20262,7 +20237,9 @@ CD dtor              // { dtor for exception object
 B dtor               // } 
 end
 
-// example when throw base and catch derived
+
+<ex> when throw base and catch derived
+
 int main () {
   try
   {
@@ -20282,7 +20259,9 @@ int main () {
 B ctor
 going to throw
 terminate called after throwing an instance of 'B'
-Aborted (core dumped) note: the exception spec mismatches hence terminated.
+Aborted (core dumped) 
+  
+note: the exception spec mismatches hence terminated.
 
 
 <type-conversion-and-first-fit>
@@ -20344,9 +20323,10 @@ catch (...)
 
 
 <exception-object-always-copied>
-The execution returns to call site for func call but never for exception. This means that whenever
-throw happens, a copy is 'always' made regardless of catch type whether it is value or reference
-because throw leaves a call site. This is natural since there should be execption object anyway.
+The execution returns to call site for func call but never for exception. This
+means that whenever throw happens, a copy is 'always' made regardless of catch
+type whether it is value or reference because throw leaves a call site. This is
+natural since there should be execption object anyway.
 
 // example-one
 catch( Widget& w )
@@ -20355,8 +20335,8 @@ catch( Widget& w )
   throw;
 }
 
-Use 'current' exception and throw it again. 'rethrow'. So there is no addtional copy made and w can
-be a derived class in Widget inheritance.
+Use 'current' exception and throw it again, rethrow. So there is no addtional
+copy made and w can be a derived class in Widget inheritance.
 
 // example-two
 catch( Widget& w )
@@ -20365,38 +20345,41 @@ catch( Widget& w )
   throw w;        // see
 }
 
-This create a new Widget type exception and cost copy ctor and dtor even if catch reference. Checked
-with code. Therefore, 'rethrow' recommended if possible.
+This create a new Widget type exception and cost copy ctor and dtor even if
+catch reference. Checked with code. Therefore, 'rethrow' recommended if
+possible.
 
 
-{exception-spec}
-Older code may contain dynamic exception specifications. They are now
-'deprecated' in C++, but still supported. A 'dynamic' exception specification
-follows the declaration of a function, appending a throw specifier to it. For
-example:
+={============================================================================
+*kt_dev_cpp_019* except-noexcept
 
-double myfunction (char param) throw (int);
+{noexcept-specification}
+A function can specify that it does not `throw` exception by providing a
+noexcept specificaton.
 
-<exception-spec-mismatch>
-This declares a function called myfunction, which takes one argument of type
-char and returns a value of type double. If this function throws an exception of
-some type 'other' than int, the function calls std::unexpected or
-std::terminate, which by default calls std::abort()
+void recoup(int) noexcept;    // won't `throw`
+void alloc(int);              // moght `throw`
 
-If this throw specifier is left empty with no type, this means that
-std::unexpected is called for any exception. Functions with no throw specifier
-(regular functions) never call std::unexpected, but follow the normal path of
-looking for their exception handler.
 
-// all exceptions call unexpected. the same as 'noexcept' in C++11
-int myfunction (int param) throw(); 
+Earlier C++ allowed us to specify the types of exception that a function might
+throw and has been 'deprecated'. There is one use of the old scheme.
 
-// normal exception handling 
-int myfunction (int param);         
+void recoup(int) noexcept;
+void recoup(int) throw();     // equivalent declaration in earlier C++
 
-MEC++14. If there is a mismatch of 'spec' between throw and catch
-<permature-program-termination> happens: unexpected() -> terminated() ->
-abort(). This means no clean-up so should be avoided.
+note:
+If the compiler knows that no exceptions will be thrown, can (sometimes) perform
+'oprimizations' that must be supressed if code might throw.
+
+
+{broke-exception-spec}
+The compiler does 'not' check the `noexcept` specification at compile time and
+as a result, possible that a function that claims it will not `throw` will in
+fact throw. In that case, `terminate()` is called, thereby 'enforcing' the
+promise not to `throw` at run time.
+
+MEC++14. If there is a mismatch of 'spec' between throw and catch, permature
+program-termination happens and This means no clean-up so should be avoided.
 
 extern void f1();       // may throw anything
 void f2() throw (int);  // says it will throw only int type exception
@@ -20411,124 +20394,57 @@ void f2() throw (int)
 By this, can wrap old code with new code that handles exception. But if f1()
   raise exception other than int type, 'violate' f2's exception specification.
 
-How to minimise these?
 
-1. do not mix template and exception spec because do not know T type so not able to write spec.
-2. change default handler, unexpected(), to handle those. For example, if we use a library that
-raise unexpected exception:
+<avoid-spec-mismatch>
 
-When to use throw()?
+* Do not mix template and exception spec because do not know T type so not able
+  to write spec.
 
-Since if an exception happens when it's declared it will not, 'terminate' is called. So two use
-cases:
+* Change default handler, unexpected(), to handle those. For example, if we use
+  a library that raise unexpected exception:
 
-1. when absolutly sure that there's no exception.
-2. when not possible to handle an exception. exit the program.
+
+<when-use-noexcpt>
+
+* When absolutly sure that there's no exception.
+
+* When don't know what to do or not possible to handle an exception. Exit the
+  program.
+
 
 <why-deprecated-and-dynamic>
-From stl reference, p24. noexcept targets a lot of problems (empty) exception specifications,
-throw(), have. (also lot of problems of specifying the spec)
+From stl reference, p24. noexcept targets a lot of problems (empty) exception
+specifications, throw(), have. (also lot of problems of specifying the spec)
 
-1. Runtime checking: C++ exception specifications are checked at runtime rather than at compile
-time, so they offer no programmer guarantees that all exceptions have been handled. The runtime
-failure mode (calling std::unexpected()) does not lend itself to recovery.
+1. Runtime checking: C++ exception specifications are checked at runtime rather
+than at compile time, so they offer no programmer guarantees that all exceptions
+have been handled. The runtime failure mode (calling std::unexpected()) does not
+lend itself to recovery.
 
-2. Runtime overhead: Runtime checking requires the compiler to produce additional code that also
-hampers optimizations.
+2. Runtime overhead: Runtime checking requires the compiler to produce
+additional code that also hampers optimizations.
 
-3. Unusable in generic code: Within generic code, it is not generally possible to know what types of
-exceptions may be thrown from operations on template arguments, so a precise exception specification
-cannot be written.
+3. Unusable in generic code: Within generic code, it is not generally possible
+to know what types of exceptions may be thrown from operations on template
+arguments, so a precise exception specification cannot be written.
 
-In practice, only two forms of exception-throwing guarantees are useful: An operation might throw an
-exception (any exception) or an operation will never throw any exception. The former is expressed by
-omitting the exception-specification entirely, while the latter can be expressed as throw() but
-rarely is, due to performance considerations.
+In practice, only two forms of exception-throwing guarantees are useful: 
 
-Especially because noexcept does not require stack unwinding, programmers can now express the
-nothrow guarantee without additional overhead. As a result, the use of exception specifications is
-'deprecated' since C++11. <Q> not clear
+An operation might throw an exception (any exception) or an operation will never
+throw any exception. The former is expressed by omitting the
+exception-specification entirely, while the latter can be expressed as throw()
+  but rarely is, due to performance considerations.
 
-<noexcept-operator>
-void recomp(int) noexcept;    // C++11 style
+Especially because noexcept does not require stack unwinding, programmers can
+now express the nothrow guarantee 'without' additional overhead. As a result, the
+use of exception specifications is 'deprecated' since C++11. 
 
-The noexcept on both the declaration in the class header and on the definition if that appears outside
-the class.
-
-class Foo {
-  public:
-    Foo( Foo&& ) noexcept;
-    ...
-};
-
-Foo::Foo( Foo && ) noexcept : // member initializers
-{
-  ...
-}
-
-<default-exception-handler>
-
-class UnexpectedException { };
-
-void convertUnexpected()
-{ throw UnexpectedException(); }
-
-set_unexpected( convertUnexpected );
-
-This convert <all-unhandled-exception> to UnexpectedException and there should be catch for that
-type. This means to set default exception handler.
-
-OR
-
-void convertUnexpected()
-{ throw; }
-
-set_unexpected( convertUnexpected );
-
-This convert all to <bad_exception> but no detail about why. Q: why bad_exec?
-
-<another-permature-program-termination>
-This can block a exception handling of higher level. If logDestruction is declared that raise no
-exception but raise it, then terminated and do not reach to ~Session().
-
-Session::~Session()
-{
-  try {
-    logDestruction(this);
-  }
-  catch(...) { }
-}
+note: additional overhead?
 
 
-{self-assign-exception-safe}
-See {self-assign} for reasons why need to handle self-assign. Also if not, then it's not exception
-safe as well. If this is exception safe, then lhs state shouldn't change when new raise exception,
-but the below don't and the below isn't exception safe.
+={============================================================================
+*kt_dev_cpp_019* except-safe
 
-// NO self-assign and exception-safe in valuelike case
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
-{
-  delete ps;
-  auto newp = new string(*rhs.ps);
-  ps = newp;
-  return *this;
-}
-
-// combine dtor and copy. handle self-assign and exception-safe by moving delete after new.
-// careful-statement-ordering
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
-{
-  auto newp = new string(*rhs.ps);
-  delete ps;
-  ps = newp;
-  return *this;
-}
-
-EC++11. Making operator= exception-safe typically renders it self-assign-safe too. So think about
-exception-safe only. Alternatively, can use {copy-and-swap-idiom} in *kt_dev_cpp_006*
-
-
-{exception-safe-gurantees}
 EC++29. Two requirements for exception safety when exception happens:
 
 NO resource leak and NO change of object state.
@@ -20540,6 +20456,38 @@ Therefore, a function can offer one of four gurantees:
 3. strong. unchaned object state as if they'd never called.
 4. noexcept. never throw exception.
  
+
+{self-assign-exception-safe}
+See {self-assign} for reasons why need to handle self-assign. Also if not, then
+it's not exception safe as well. If this is exception safe, then lhs state
+shouldn't change when new raise exception, but the below don't and the below
+isn't exception safe.
+
+// NO self-assign and exception-safe in valuelike case
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  delete ps;
+  auto newp = new string(*rhs.ps);
+  ps = newp;
+  return *this;
+}
+
+// combine dtor and copy. handle self-assign and exception-safe by moving delete
+// after new.  careful-statement-ordering
+
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
+}
+
+EC++11. Making operator= exception-safe typically renders it self-assign-safe
+too. So think about exception-safe only. Alternatively, can use
+{copy-and-swap-idiom} in *kt_dev_cpp_006*
+
+
 <example>
 // from the bad example
 void PrettyMenu::changeBackGround( std::istream& imgSrc )
@@ -20659,6 +20607,31 @@ strong safety: if it's practical in terms of efforts, cost in efficiency and com
 functions should have strong safety. 80-20 rule?
 
 
+={============================================================================
+*kt_dev_cpp_019* except-disable
+
+<default-exception-handler>
+
+class UnexpectedException { };
+
+void convertUnexpected()
+{ throw UnexpectedException(); }
+
+set_unexpected( convertUnexpected );
+
+This convert <all-unhandled-exception> to UnexpectedException and there should be catch for that
+type. This means to set default exception handler.
+
+OR
+
+void convertUnexpected()
+{ throw; }
+
+set_unexpected( convertUnexpected );
+
+This convert all to <bad_exception> but no detail about why. Q: why bad_exec?
+
+
 {exception-cost}
 MEC++15. Exception has cost:
 
@@ -20672,6 +20645,7 @@ amount if you use try blocks. So try to 'minimise' the use.
 But think 80-20 rule and that exception is rare. The recommendation is that think if it is feasible
 not to use exception, if can minimise, if can use other compiler showing better exception
 implementation, and if use profiler to find out 20% to use exception.
+
 
 <exception-to-disable>
 From stackoverflow and said G++ specific.
@@ -21638,7 +21612,47 @@ override. No when not use ABC and there are multiple overrides down the inherita
 
 
 ={============================================================================
-*kt_dev_cpp_025* 
+*kt_dev_cpp_025* random
+
+{rand-function}
+NAME
+       rand, rand_r, srand - pseudo-random number generator
+
+SYNOPSIS
+       #include <stdlib.h>
+
+       int rand(void);
+       int rand_r(unsigned int *seedp);
+       void srand(unsigned int seed);
+
+<ex>
+
+#include <stdlib.h>
+
+void Randomize()
+{
+  srand( (unsigned int) (time(NULL)%10000));
+}
+
+time() returns the number of seconds elapsed since 00:00:00 GMT, Jan. 1, 1970. 
+time_t time(time_t *timeptr); 
+
+int PoissonRandom( double expectedvalue )
+{
+  int n = 0;
+  double limit;
+  double x;
+
+  limit = exp(-expectedvalue);
+  x = rand()/(double) INT_MAX;
+  while( x > limit )
+  {
+    n++;
+    x *= rand()/(double) INT_MAX;
+  }
+
+  return n;
+}
 
 
 ={============================================================================
