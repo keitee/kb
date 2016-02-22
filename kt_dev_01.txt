@@ -150,9 +150,10 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_021* code-check()
 |kt_dev_cpp_022| inheritance {static-type} {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
 *kt_dev_cpp_022* inheritance: ctor-initializers
+*kt_dev_cpp_022* inheritance-rtti
 |kt_dev_cpp_023| override {override-condition} {override-keyword}
 |kt_dev_cpp_024| abstract base class {refactoring}
-|kt_dev_cpp_025| 
+|kt_dev_cpp_025| random
 |kt_dev_cpp_026| enum {enum-hack}
 |kt_dev_cpp_027| volatile
 |kt_dev_cpp_028| namespace {case-example} {unnamed-namespace}
@@ -21135,6 +21136,9 @@ class SpecialWindow: public Window {
 };
 
 
+={============================================================================
+*kt_dev_cpp_022* inheritance-rtti
+
 {base-class-pointer-container} {RTTI}
 <problem-one>
 MEC++03: In inheritance, base pointer can point to derived class and when passes a array of derived
@@ -21625,8 +21629,20 @@ SYNOPSIS
        int rand_r(unsigned int *seedp);
        void srand(unsigned int seed);
 
-<ex>
+DESCRIPTION
+       The  rand()  function returns a pseudo-random integer in the range 0 to
+       RAND_MAX inclusive (i.e., the mathematical range [0, RAND_MAX]).
 
+NOTES
+       The versions of rand() and srand() in the Linux C Library use the  same
+       random number generator as random(3) and srandom(3), so the lower-order
+       bits should be as random as the higher-order bits.  However,  on  older
+       rand()  implementations,  and  on  current implementations on different
+       systems, the lower-order bits are much less  random  than  the  higher-
+       order  bits.   Do  not use this function in applications intended to be
+       portable when good randomness is needed.  (Use random(3) instead.)
+
+<ex>
 #include <stdlib.h>
 
 void Randomize()
@@ -21634,8 +21650,10 @@ void Randomize()
   srand( (unsigned int) (time(NULL)%10000));
 }
 
-time() returns the number of seconds elapsed since 00:00:00 GMT, Jan. 1, 1970. 
 time_t time(time_t *timeptr); 
+
+The `time()` returns the number of seconds elapsed since the epoch, 00:00:00
+GMT, Jan. 1, 1970. If that pointer is null, function just returns the time.
 
 int PoissonRandom( double expectedvalue )
 {
@@ -21653,6 +21671,212 @@ int PoissonRandom( double expectedvalue )
 
   return n;
 }
+
+
+{c++-random}
+The rand() has several problems. Many programs need random numbers in a
+different range and some require random floating-point numbers. Some needs
+numbers that reflect a nonuniform distribution. 
+
+* engine: types that generate a sequence of random unsigned integers
+* distribution: types that use an engine to retuen numbers according to a
+  particular probability distribution.
+
+<ex>
+The engines are function-object class that define a call operator and returns a
+random unsigned number. The engine object is similar to the output of rand().
+
+#include <iostream>
+#include <random>
+
+using namespace std;
+
+int main(void)
+{
+  default_random_engine e;
+
+  for (size_t i = 0; i < 10; i++)
+    cout << e() << " ";
+
+  cout << endl;
+
+  return 0;
+}
+
+16807 282475249 1622650073 984943658 1144108930 470211272 101027544 1457850878 \
+1458777923 2007237709 
+
+
+The library defines several random-number engines that differ in terms of
+performance and quality of randomness. Each compiler designates one of these as
+the default_random_engine type. This is intended to be the engine with the most
+generally useful properties.
+
+
+<ex> to get a number in a specified range
+#include <iostream>
+#include <random>
+
+using namespace std;
+
+int main(void)
+{
+  default_random_engine e;
+  uniform_int_distribution<unsigned> u(0,9);
+
+  for (size_t i = 0; i < 10; i++)
+    cout << u(e) << " ";
+
+  cout << endl;
+
+  return 0;
+}
+
+0 1 7 4 5 2 0 6 6 9
+
+
+note:
+When refer to an random-number generator, mean the combination of a distribution
+object with an engine.
+
+
+{same-sequence}
+Even though the numbers generated appear to be random, a given generator returns
+the 'same' sequence of numbers each time it is run. This is very 'helpful'
+during testing and on the other hand, programs have to take this fact into
+account.
+
+<ex>
+#include <iostream>
+#include <random>
+#include <vector>
+
+using namespace std;
+
+vector<unsigned> bad_randVec(void)
+{
+  default_random_engine e;
+  uniform_int_distribution<unsigned> u(0,9);
+  vector<unsigned> ret;
+
+  cout << "--------------" << endl;
+
+  for (size_t i = 0; i < 20; i++)
+  {
+    unsigned rval = u(e);
+    ret.push_back(rval);
+    cout << rval << " ";
+  }
+
+  cout << endl;
+
+  return ret;
+}
+
+int main(void)
+{
+  vector<unsigned> v1(bad_randVec());
+  vector<unsigned> v2(bad_randVec());
+
+  cout << ((v1 == v2) ? "equal" : "not equal") << endl;
+}
+
+--------------
+0 1 7 4 5 2 0 6 6 9 3 5 8 0 0 5 6 0 3 0 
+--------------
+0 1 7 4 5 2 0 6 6 9 3 5 8 0 0 5 6 0 3 0 
+equal
+
+
+The right way is to make the engine and distribution objects `static` and they
+will hold their state across calls.
+
+
+<ex>
+#include <iostream>
+#include <random>
+#include <vector>
+
+using namespace std;
+
+vector<unsigned> good_randVec(void)
+{
+  static default_random_engine e;
+  static uniform_int_distribution<unsigned> u(0,9);
+  vector<unsigned> ret;
+
+  cout << "--------------" << endl;
+
+  for (size_t i = 0; i < 20; i++)
+  {
+    unsigned rval = u(e);
+    ret.push_back(rval);
+    cout << rval << " ";
+  }
+
+  cout << endl;
+
+  return ret;
+}
+
+int main(void)
+{
+  vector<unsigned> v1(good_randVec());
+  vector<unsigned> v2(good_randVec());
+
+  cout << ((v1 == v2) ? "equal" : "not equal") << endl;
+}
+
+--------------
+0 1 7 4 5 2 0 6 6 9 3 5 8 0 0 5 6 0 3 0 
+--------------
+4 6 5 9 8 5 0 6 4 7 9 7 2 0 7 3 6 7 9 3 
+not equal
+
+
+{different-sequence}
+The same sequence is helpful during debugging. However, once program is tested
+we often want to cause each run to generate different random results.
+
+<ex>
+#include <iostream>
+#include <random>
+
+using namespace std;
+
+int main(void)
+{
+  default_random_engine e1;
+  default_random_engine e2(2147483646);
+
+  default_random_engine e3;
+  e3.seed(32767);
+  default_random_engine e4(32767);
+
+  for (size_t i = 0; i < 20; i++)
+  {
+    if (e1() == e2())
+      cout << "unseeded match at iteration:" << i << endl;
+
+    if (e3() != e4())
+      cout << "seeded differ at iteration:" << i << endl;
+  }
+}
+
+no output
+
+note:
+Picking a good seed, like most things about generating good random numbers, is
+surprisingly hard. The most common approach is to call `time()` function. 
+
+Since that retuns time as the number of seconds, this seed is 'only' useful for
+applications that generate the seed at longer intervals. This usually doesn't
+work if the program is run repeatedly as part of an automated process; it might
+wind up with the same seed several times.
+
+
+{other-distribution}
+CPR 749. TBD.
 
 
 ={============================================================================
