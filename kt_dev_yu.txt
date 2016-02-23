@@ -106,9 +106,9 @@
 
 *kt_dev_uv_stack_408* mr-dash: mr spec
 *kt_dev_uv_stack_408* mr-dash: todo list
-*kt_dev_uv_stack_408* mr-dash-create mr and plugin
-*kt_dev_uv_stack_408* mr-dash: create gst
-*kt_dev_uv_stack_408* mr-dash: create gst: revised to support bin injection
+*kt_dev_uv_stack_408* mr-dash-create-and-plugin
+*kt_dev_uv_stack_408* mr-dash-create-gst
+*kt_dev_uv_stack_408* mr-dash-create-gst-revised to support bin injection
 *kt_dev_uv_stack_408* mr-dash: build dash pipeline using media router
 *kt_dev_uv_stack_408* mr-dash-sync and async
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
@@ -208,7 +208,7 @@
 *kt_dev_uv_oem_001* oem-box-hwei: pkgconfig
 *kt_dev_uv_oem_001* oem-box-hwei:
 *kt_dev_uv_oem_001* oem-box-hmax-ctk-atk
-*kt_dev_uv_oem_001* oem-box-hmax-flash
+*kt_dev_uv_oem_001* hmax-flash
 *kt_dev_uv_oem_001* oem-box: staging and toolchanis
 *kt_dev_uv_oem_001* zinc-jira: deploy the prebuilt binary
 
@@ -1947,6 +1947,8 @@ zb-deploy -o huawei.370 -- -r
                 A full list of available tools can be seen at:
                     http://devnfs/DEVARCH/tools-humax/.
 
+$ setup-humax.sh -T vim74.tar 172.20.33.57
+
 
 <setup-humax-sh>
 note: no zinc-trunk handling. okay to run it as a standalone.
@@ -2879,7 +2881,7 @@ setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.34
 <setup-humax-core>
 The setup-humax scripts install scripts and setup core pattern. Hoerver, the
 below reset those so need to remove those lines. This comes from read-only
-system and means that comes from humax.
+system and means that comes from humax. Checked on H23.13.0
 
     /etc/profile    
 
@@ -3663,12 +3665,6 @@ log4cplus.appender.STDERR.layout.ConversionPattern=%D{%Y-%m-%d %H:%M:%S,%q} %-5p
     note: works on stderr but not file.
 
 log4cplus.appender.STDERR.logToStdErr=true
-
-log4cplus.appender.vanadiumfile=log4cplus::RollingFileAppender
-log4cplus.appender.vanadiumfile.File=/opt/zinc-trunk/var/log/vanadium.log
-log4cplus.appender.vanadiumfile.layout=log4cplus::PatternLayout
-log4cplus.appender.vanadiumfile.layout.ConversionPattern=%D{%Y-%m-%d %H:%M:%S,%q} %-5p %x %t %c %l %m%n
-    note: works on fine
 
 
 <log-on-host>
@@ -13208,7 +13204,7 @@ https://wiki.youview.co.uk/display/canvas/MPEG+DASH+to-do+list?src=search
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash-create mr and plugin
+*kt_dev_uv_stack_408* mr-dash-create-and-plugin
 
 <before>
     w3c:
@@ -13984,15 +13980,15 @@ GstMediaRouterFactory::createMediaRouter()
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
 
-boost::shared_ptr<MediaRouterAsync> createGstMediaRouter(
-    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher)
+boost::shared_ptr<MediaRouterAsync>  createGstMediaRouter(
+    const GstMediaRouterInit& initParams)
 {
-    return boost::make_shared<GstMediaRouter>(dispatcher);
+    return boost::make_shared<GstMediaRouter>(initParams);
 }
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: create gst
+*kt_dev_uv_stack_408* mr-dash-create-gst
 
 {creation}
 
@@ -14043,10 +14039,10 @@ GstMediaRouterFactory::createMediaRouter()
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
 
-boost::shared_ptr<MediaRouterAsync> createGstMediaRouter(
-    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher)
+boost::shared_ptr<MediaRouterAsync>  createGstMediaRouter(
+    const GstMediaRouterInit& initParams)
 {
-    return boost::make_shared<GstMediaRouter>(dispatcher);
+    return boost::make_shared<GstMediaRouter>(initParams);
 }
 
 class GstMediaRouter : public MediaRouterAsync
@@ -14368,7 +14364,7 @@ class VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: create gst: revised to support bin injection
+*kt_dev_uv_stack_408* mr-dash-create-gst-revised to support bin injection
 
 1. GstMediaRouter creates "bins" directly without using bin factory.
   -> should use "bin factory", createXXXBinFactory instead.
@@ -14487,6 +14483,59 @@ DEVARCH-10602:
     
     This opens a range of possibilities for testing, security upgrade with a
     process split architecture, etc.
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-dash-create-gst-pipeline
+
+class GstMediaRouter : public MediaRouterAsync,
+{
+    boost::function<GstElement*(void)> pipelineFactory;
+    mutable RefObj<GstElement> pipeline;
+};
+
+GstMediaRouter::GstMediaRouter(const GstMediaRouterInit& initParams) :
+    pipelineFactory(initParams.pipelineFactory),
+{
+    init();
+}
+
+void GstMediaRouter::init()
+{
+    RefObj<GstElement> elem = pipelineFactory();
+
+    g_signal_connect(elem.get(), "child-added",
+                     G_CALLBACK(GstMediaRouter::childAddedCallback),
+                     const_cast<std::string::value_type*>(userAgent.c_str()));
+
+    gst_bin_add_many(GST_BIN(elem.get()),
+                     typefindBin->getParent().retain(),
+                     srcBin->getParent().retain(),
+                     sinkBin->getParent().retain(), NULL);
+
+    const RefObj<GstBus> bus =
+        gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
+
+    watchId = gst_bus_add_watch(bus.get(), busCallback, this);
+
+    elem.swap(this->pipeline);
+}
+
+
+void GstMediaRouter::deinit()
+{
+    stopReportingPositionChange();
+    g_source_remove(watchId);
+    watchId = 0;
+
+    // setting state to NULL is a blocking operation
+    if (GST_STATE_CHANGE_SUCCESS !=
+        gst_element_set_state(pipeline.get(), GST_STATE_NULL)) {
+        NICKEL_ERROR("Failed to set pipeline state to NULL");
+    }
+
+    pipeline.reset();
+}
 
 
 ={============================================================================
@@ -21606,7 +21655,7 @@ _priv_gst_debug_init (void)
 If GST_DEBUG_FILE is not writable then default to stdout.
 
 note:
-The trick is to use /opt/zinc-trunk/kit to log gst log:
+The trick is to use /var/corefiles or any directory to log gst log:
     * have that in the sandbox conf
     * run chmod 777 on that
 
@@ -24450,7 +24499,7 @@ CTK don't have since it has those in rfs
 
 
 ={============================================================================
-*kt_dev_uv_oem_001* oem-box-hmax-flash
+*kt_dev_uv_oem_001* hmax-flash
 
 {hmax} 
 onlydebug (Humax)
@@ -24462,7 +24511,7 @@ humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 
 {hmax-cds}
 http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/
-wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.13.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
 
 note: will wipe out a box including writable nfs.
 
@@ -24620,6 +24669,12 @@ rootfs on / type rootfs (rw)
     files.
 
     Vol-/+ (okay, cancel), P-/+ (up, down)
+
+
+<downgrade>
+Need to erase eeprom.
+
+wget http://devnfs2.dev.youview.co.uk/HUMAX/archived/eeprom_eraser/ATK/DTRT2100_upgrade.hdf
 
 
 ={============================================================================
