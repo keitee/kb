@@ -21136,13 +21136,9 @@ class SpecialWindow: public Window {
 };
 
 
-={============================================================================
-*kt_dev_cpp_022* inheritance-rtti
-
-{base-class-pointer-container} {RTTI}
-<problem-one>
-MEC++03: In inheritance, base pointer can point to derived class and when passes a array of derived
-instead of base, <undefined-result> can happen.
+{base-class-pointer-container} {RTTI} <problem-one>
+MEC++03: In inheritance, base pointer can point to derived class and when passes
+a array of derived instead of base, <undefined-result> can happen.
 
 class BalancedBST: public BST { };
 
@@ -21184,12 +21180,6 @@ for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
 Undesirable because dynamic_cast is slow and also need to know to which type the object should be
 cast since dynamic_case 'must' refer 'complete' object. Means already you know what it is.
 
-<dynamic_cast-vs-virtual>
-From Primus C++ 19.2 RTTI:
-The dynamic_cast operator is the part of RTTI(run-time type identification). These operators are
-useful when we have a derived operation that we want to perform through a pointer or reference to a
-base-class object and it is not possible to make that operation a virtual function. Ordinarily, we
-'should' use virtual functions if we can.
 
 <problem-three>
 From MEC++33: when showing virtual operator= to support mixed type assign in inheritance.
@@ -21199,20 +21189,6 @@ Derived& Derived::operator=(const Base& rhs)      # virtual member op
 	 const Derived& rhs_derived = dynamic_cast<const Derived&>(rhs);
 
 	 // proceed with a normal assignment of rhs_derived to left *this
-}
-
-
-<when-dynamic-cast-fails>
-If a dynamic_cast to a pointer type fails, the result is 0. Error-reporting strategy for pointer.
-For reference, bad_cast exception. 
-
-if (Derived *dp = dynamic_cast<Derived*>(bp))
-{
-  // use the Derived object to which dp points
-
-} else {  // bp points at a Base object
-
-    // use the Base object to which bp points
 }
 
 
@@ -21266,24 +21242,164 @@ User code may use the derived to base conversion only if inherits publicly from 
 for other derivations.
 
 
-{typeid-operator}
-typeid allows to check the type of an expression:
+={============================================================================
+*kt_dev_cpp_022* inheritance-rtti
 
-typeid (expression)
+{rtti} CPR 19.2 825
+The RTTI(run-time type identification) is provided through two operators:
 
-This operator returns a reference to a constant object of type type_info that is defined in the
-standard header <typeinfo>. A value returned by typeid can be compared with another value returned
-by typeid using operators == and != or can serve to obtain a null-terminated character sequence
-representing the data type or class name by using its name() member.
+* `typeid` operator, which returns the type of a given expression
+* `dynamic_cast` operator, which 'safely' coverts base type pointer or reference
+  into ones to a derived type
 
-<example>
+These operators are useful when we have a derived operation that we want to
+perform through a pointer or reference to a base type and it is not possible to
+make that operation a virtual function since when the operation is virtual, the
+compiler automatically selects the right function.
+
+note:
+Ordinarily, 'should' use virtual 'functions' if we can since RTTI is more
+error-prone and the programmer must know to which type the object should be cast
+and must check that the cast was successful.
+
+
+{dynamic-cast}
+Has following forms:
+
+dynamic_cast<type*>(e);
+dynamic_cast<type&>(e);
+dynamic_cast<type&&>(e);
+
+The type e must be either a class type that has at least one 'virtual'
+functions, is publicly derived from the target type, a public base class of the
+target type, or the same as the target type.
+
+note:
+This means to support dynamic type since if the type has 'no' virtuals, then it
+is static type and compiler knows that at compile time, also to support upcast
+and downcast in the inheritance hirachacy.
+
+
+If e has one of these types, the the call will succeed. Otherwise, the cast
+fails and the result is 0. If the cast to a reference type fails, throws an
+`bad_cast` exception.
+
+
+if (Derived *dp = dynamic_cast<Derived*>(bp))
+{
+  //
+} else {
+  //
+}
+
+note:
+By defining the variable in a condition, do the cast and check as a single
+operation. Moreover, dp is not accessible outside the if. If the cast fails,
+  then the unbound pointer is not available.
+
+
+{typeid}
+The `typeid` allows to check the type of an expression or type name.
+
+typeid (e);
+
+This operator returns a reference to a constant object of type `type_info` that is
+defined in the standard header typeinfo. A value returned by typeid can be
+compared with another value returned by typeid using operators == and != or can
+serve to obtain a null-terminated character sequence representing the data type
+or class name by using its name() member.
+
+<ex>
+Derived *dp = new Derived;
+Base *bp = dp;
+
+// compare the type of two objects at run-time
+if (typeid(*bp) == typeid(*dp)) {
+  //
+}
+
+// test whether the run-time type is a specific type
+if (typeid(*bp) == typeid(Derived)) {
+  //
+}
+
+// typeid(bp) retuns static type and this check always fails
+if (typeid(bp) == typeid(Derived)) {
+  //
+}
+
+
+{using-rtti}
+An example when RTTI might be useful. Consider a class hierarchy for which
+implements the equality operator. Equals if they have the same type an same
+value for data members. Each derived type may add its own data members.
+
+Use virtual equality operator that operates on reference to the base type?
+
+This strategy doesn't quite work since virtual function must have the same
+parameter type in hierarchy and which is a reference to the base type. This
+means that equal function could use 'only' members from the base type.
+
+class Base {
+  friend bool operator==(const Base&, const Base&);
+
+  public:
+    //
+  protected:
+    virtual bool equal(const Base&) const;
+};
+
+class Derived : public Base {
+  protected:
+    virtual bool equal(const Base&) const;
+};
+
+
+// return false if typeids are different; otherwise makes a virtual call to
+// equal.
+
+bool operator==(const Base &lhs, const Base &rhs)
+{
+  return typeid(lhs) == typeid(rhs) && lhs.equal(rhs);
+}
+
+// the cast always succeed since type check is done already. Why do dynamic cast
+// then? Because needs to access the members of rhs but not funtions.
+
+bool Derived::equal(const Base& rhs) const
+{
+  auto r = dynamic_cast<const Derived&>(rhs);
+
+  // do whatever is required to compare two objects.
+}
+
+bool Base::equal(const Base& rhs) const
+{
+  // do whatever is required to compare two objects.
+}
+
+
+{typeinfo}
+The exact definition of the type_info varies by compiler but the standard
+gurantees that the class will provide at least the operations:
+
+t1 == t2
+t1 != t2
+t.name();
+t1.before(t2);
+
+The string returned by member name of type_info depends on the specific
+implementation of your compiler and library. The only guarantee is that it
+returns a unique string for each type.
+
+<ex>
 #include <iostream>
 #include <typeinfo>
 
 using namespace std;
 
 int main () {
-  int * a,b;
+  int *a, b;
   a=0; b=0;
   if (typeid(a) != typeid(b))
   {
@@ -21304,15 +21420,8 @@ a and b are of different types:
 a is: int *
 b is: int  
 
-note: The string returned by member name of type_info depends on the specific implementation of your
-compiler and library. It is not necessarily a simple string with its typical type name, like in the
-compiler used to produce this output. 
 
-When typeid is applied to classes, typeid uses the RTTI to keep track of the type of dynamic
-objects. When typeid is applied to an expression whose type is a polymorphic class, the result is
-the type of the most derived complete object:
-
-<example>
+<ex>
 // typeid, polymorphic class
 #include <iostream>
 #include <typeinfo>
@@ -21346,12 +21455,13 @@ b is: class Base *
 *a is: class Base
 *b is: class Derived
 
-Notice how the type that typeid considers for pointers is the pointer type itself (both a and b are
-of type class Base *). However, when typeid is applied to objects (like *a and *b) typeid yields
-their dynamic type (i.e. the type of their most derived complete object).
+Notice how the type that typeid considers for pointers is the pointer type
+itself, static type. However, when typeid is applied to objects typeid yields
+their dynamic type.
 
-If the type that typeid evaluates is a pointer preceded by the dereference operator (*), and this
-pointer has a null value, typeid throws a bad_typeid exception.
+If the type that typeid evaluates is a pointer preceded by the dereference
+operator (*), and this pointer has a null value, typeid throws a bad_typeid
+exception.
 
 
 ={============================================================================
