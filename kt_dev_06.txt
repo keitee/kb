@@ -1188,12 +1188,13 @@ void intrusive_ptr_release(GstElement* const p)
  * Ideally `boost::intrusive_ptr` should be used directly but unfortunately its
  * constructor by default increments the reference counter which is not handy as
  * GStreamer (GObject) objects are returned with reference counter already
- * initialised.  Also specifying `incRef` as `false` for most of the instances
- * is inconvenient or sometimes even impossible.
+ * initialised(increased). Also specifying `incRef` as `false` for most of the
+ * instances is inconvenient or sometimes even impossible.
  *
  * This thin class does 'not' increment the reference counter by default which
  * suits most of the use cases.
  */
+
 template <typename T>
 class RefObj : public boost::intrusive_ptr<T>
 {
@@ -1201,7 +1202,7 @@ class RefObj : public boost::intrusive_ptr<T>
     inline RefObj() : boost::intrusive_ptr<T>() {}
 
     /**
-     * Initialise the pointer but do _not_ increment reference counter by
+     * Initialise the pointer but do 'not' increment reference counter by
      * default.
      */
     inline RefObj(T* const elem, const bool incRef = false)
@@ -1231,15 +1232,12 @@ class RefObj : public boost::intrusive_ptr<T>
 
 
 <case>
-
 // as a member
-
-boost::shared_ptr<VirtualBinFactory> typefindBinFactory;
-
 mutable RefObj<GstElement> pipeline;
 
-{
-  // this is local object. increase reference count
+void MR::MR() {
+  // the elem is local object. The RefObj do not increase the count since get a
+  // already increased reference count.
 
   RefObj<GstElement> elem = gst_pipeline_new("pipeline");
 
@@ -1255,29 +1253,29 @@ mutable RefObj<GstElement> pipeline;
       srcBin->getParent().retain(),
       sinkBin->getParent().retain(), NULL);
 
+  // swaps and elem is gone
   elem.swap(this->pipeline);
 }
 
-typefindBin->setSource(sinkBin->setDrmUrl(mediaLocator));
+void MR::~MR()
+{
+    pipeline.reset();
+}
 
 
 <case>
-
 // create intrusive_ptr instance as a member 
-
 RefObj<GstElement> uridecodebin;
 
 // from setSource()
-//
-// this works since intrusive_ptr & operator=(T *r); and factory_make() increase
-// reference count.
+// and factory_make() returns an increased reference count.
 
 uridecodebin = gst_element_factory_make("uridecodebin", "uri-decoder");
 
 if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get())) 
 {
-  // increase reference count. Why this? Since gst_bin_add() take a ownership
-  // but after that, still want to use.
+  // retain() increase reference count. Why? Since gst_bin_add() take a
+  // ownership but after that, still want to use in this class.
 
   uridecodebin.retain();
 
@@ -1293,7 +1291,8 @@ if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get()))
         static_cast<gpointer>(this))) {
   }
 
-  // note: WHY do not need to decrease reference count of uridecodebin?
+  // note: WHY do not need to decrease reference count of uridecodebin? To be
+  // done automatically when the object of this class goes away. RAII after all.
 }
 
 
