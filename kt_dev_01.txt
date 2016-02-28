@@ -154,7 +154,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_023| override {override-condition} {override-keyword}
 |kt_dev_cpp_024| abstract base class {refactoring}
 |kt_dev_cpp_025| random
-|kt_dev_cpp_026| enum {enum-hack}
+|kt_dev_cpp_026| enum
 |kt_dev_cpp_027| volatile
 |kt_dev_cpp_028| namespace {case-example} {unnamed-namespace}
 |kt_dev_cpp_029| type-member, nested-class
@@ -234,7 +234,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_063* function-object: good things
 |kt_dev_stl_063| function-object: pass by reference, more examples
 *kt_dev_stl_063* function-object: predefined
-*kt_dev_stl_064* function-object: function-type
+*kt_dev_stl_064* function-object-function-type
 |kt_dev_stl_065| stl-bind
 |kt_dev_stl_066| stl-bind: cases
 |kt_dev_stl_067| algorithm: address of member function
@@ -14210,7 +14210,7 @@ Here assign to the "rvalue result" of concatentating these strings.
 
 s1 + s2 = "wow!";
 
-<reference-quailifier>
+<reference-quailifier> <reference-function>
 Still allow assignment to rvalues for backward compatability. The new standard
 have a way to 'prevent' such usage by forcing the left-hand operand, the object
 to which `this` points, to be an lvalue.
@@ -21990,67 +21990,75 @@ CPR 749. TBD.
 
 
 ={============================================================================
-*kt_dev_cpp_026* enum {enum-hack}
+*kt_dev_cpp_026* enum
 
-The enumerations group together sets of integral 'constants' and defines 'new' type. From ansic,
-there are two advantages over #define:
+The enumerations group together sets of 'integral' constants and defines new
+  'type'. From ansic, there are two advantages over #define:
 
-1. provide a convenient way to associate constant value with names.
-2. a debugger may be able to print values of enumeration variables. confirmed on gcc.
+* Provide a convenient way to associate constant value with names.
+* A debugger may be able to print values of enumeration variables. confirmed on
+  gcc.
+
+Why scoped enum in C++11? Support scope and type checks.
+
+
+{forms}
+The enumerator is const and need 'not' be unique. By default, start at 0 and
+increases by 1.
+
+// scoped, named
+enum class open_modes { input, output, append };
+
+// unscoped, named
+enum color { red, yellow, green };
+
+// unscoped, unnamed
+enum { floatPrec = 6, doublePrec = 10, double_doublePrec = 10 };
 
 
 {scoped-enum}
-C++11. note that used 'class' keyword. Defines an object of 'open_modes' type and follows scoping
-rule means 'type'-erorr can happen. Scope means to specify explicitly where it come from
+CPR 19.3 832. C++11. note that used 'class' keyword. Defines an object of
+'open_modes' type and follows scoping rule means 'type' erorr can happen. Scope
+means that enumerators are inaccessible outside the scope and user have to
+specify explicitly when use it. 
 
-// see that "enum class"
+// scoped, named
 enum class open_modes { input, output, append };
-
-note: see the difference enum and struct; for enum, do not use "enum open_modes" as a stuct one.
-open_modes readfile = open_modes::input;
-open_modes readfile = 2;                     // error
-
-Why this error? Unlike C, implicit conversions to and from int are not possible.
-
-<in-c>
-enum color eyes = green;   // okay
-enum color eyes = 2;       // okay
 
 
 {unscoped-enum}
-The enumerator is const and need 'not' be unique. <Q> shall be unique? By default, start at 0 and
-inc by 1.
+The enumerator names in unscoped enum are placed into the same scope as the
+enumeration. 
 
-enum color { red, yellow, green };           // unscoped
-enum stoplight { red, yellow, green };       // error: redefines enumerators
-error: conflicting declaration ‘red’
-error: ‘red’ has a previous declaration as ‘main()::color red’
+enum color { red, yellow, green };          // unscoped
+enum stoplight { red, yellow, green };      // error since redefines enumerators
+// error: conflicting declaration "red" error: red has a previous declaration as
+// main()::color red
 
-enum class peppers { red, yellow, green };   // okay: enumerators are hidden
+enum class peppers { red, yellow, green };  // okay. enumerators are hidden
+color eyes = green;                         // okay. enumerators are in scope
 
-color eyes = green;                          // okay for C++ unlike C
-
-// error: enumerators from peppers are not in scope. color::green is in scope but has the wrong
-// type.
-// error: cannot convert ‘main()::color’ to ‘main()::peppers’ in initialisation
 peppers p = green;
+// error: enumerators from peppers are not in scope. color::green is in scope
+// but has the wrong type. error: cannot convert "main()::color" to
+// "main()::peppers" in initialisation
 
-color hair = color::red;
-peppers pp = peppers::red;
-
-enum { floatPrec = 6, doublePrec = 10, double_doublePrec = 10 };  // unnamed, unscoped
-
-<key> C++11 enum support scope and type checks
+color hair = color::red;                    // okay
+peppers pp = peppers::red;                  // okay
 
 
-{conversion} {enum-hack}
-The 'unscoped' enumerators are implicitly converted to 'int' but not vice versa. Can be used where
-an integral value is required. Called <enum-hack>. By default scoped enums have int as the
-underlying type. There is no default for unscoped enums; all we know is that the underlying type is
-large enough to hold the enumerator values.
+{enum-hack}
+The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
+be used where an integral value is required. Called `enum-hack`. 
 
-int i = color::red;
-int j = peppers::red;   // error <Q> why is this?
+int i = color::red;                       // ok
+int j = peppers::red;                     // error since it is scoped
+
+open_modes readfile = open_modes::input;  // ok
+open_modes readfile = 2;                  // error
+
+enum color eyes = green;                  // ok
+enum color eyes = 2;                      // ok
 
 class GamePlayer {
   private:
@@ -22061,9 +22069,22 @@ class GamePlayer {
 };
 
 
+{underlying-type}
+Although each enum defines a unique type, it is represented by one of the
+built-in integral type. If do not specify, then by default for scoped enum have
+`int` as the underlying type.
+
+There is no default for unscoped enums; all we know is that the underlying type
+is large enough to hold the enumerator values.
+
+Being able to specify the underlying type lets us control the type used across
+different implementation.
+
+note: real use case?
+
+
 {func-with-enum-arg}
-Cannot pass an integral value to an enum parameter but can pass an object or enumerator of unscoped
-enumaration to a parameter of integral type; the enum promotes to int or to a larger integral type.
+The enum is type and cannot pass the same integral value to an enum parameter. 
 
 enum Tokens { INLINE = 128, VIRTUAL = 129 }
 
@@ -22075,6 +22096,18 @@ Tokens curr = INLINE;
 ff(128);       // ff(int)
 ff(INLINE);    // ff(Tokens)
 ff(curr);      // ff(Tokens)
+
+But can pass an object or enumerator of unscoped enumaration to a parameter of
+integral type; the enum promotes to int or to a larger integral type depending
+on the underlying type of the implementaion.
+
+void newf(unsigned char);
+void newf(int);
+
+unsigned char uc = VIRTUAL;
+
+newf(VIRTUAL);    // newf(int);
+newf(uc);         // newf(unsigned char);
 
 
 ={============================================================================
@@ -32757,7 +32790,7 @@ namespace std {
 
 
 ={============================================================================
-*kt_dev_stl_064* function-object: function-type
+*kt_dev_stl_064* function-object-function-type
 
 {function-type}
 Assume to build a simple desk calculator and to define a function table to store
