@@ -86,7 +86,7 @@
 *kt_dev_uv_stack_250* mr-web: binding
 *kt_dev_uv_stack_250* mr-web: run sport app on atk
 *kt_dev_uv_stack_250* mr-web-remote debug
-*kt_dev_uv_stack_250* mr-web: java scripts to check on video
+*kt_dev_uv_stack_250* mr-web-java scripts to check on video
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
 *kt_dev_uv_stack_250* mr-web: from html to mr. yv-mr-dbus-client
 *kt_dev_uv_stack_250* mr-web: callback from mr to html
@@ -115,8 +115,10 @@
 *kt_dev_uv_stack_408* mr-dash-create-and-plugin
 *kt_dev_uv_stack_408* mr-dash-create-gst
 *kt_dev_uv_stack_408* mr-dash-create-gst-revised to support bin injection
-*kt_dev_uv_stack_408* mr-dash-create-gst-pipeline
-*kt_dev_uv_stack_408* mr-dash-load-play
+*kt_dev_uv_stack_408* mr-create-ctor-dtor
+*kt_dev_uv_stack_408* mr-load-play
+*kt_dev_uv_stack_408* mr-load-play-dbus-log
+*kt_dev_uv_stack_408* mr-load-play-issue-play conflict
 *kt_dev_uv_stack_408* mr-dash-sync and async
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
@@ -129,13 +131,11 @@
 *kt_dev_uv_stack_408* mr-dash: output-control-visibility
 *kt_dev_uv_stack_408* mr-dash: seek and resume
 *kt_dev_uv_stack_408* mr-dash-load-play-issue-slow play on t1000
-*kt_dev_uv_stack_408* mr-load-play-issue-play conflict
 *kt_dev_uv_stack_408* mr-dash: live or vod
 *kt_dev_uv_stack_408* mr-help-app
 
 *kt_dev_uv_stack_408* mr-nickeld-killed
 *kt_dev_uv_stack_408* mr-dash: dbus log
-*kt_dev_uv_stack_408* mr-dash-load-play-dbus-log
 *kt_dev_uv_stack_254* mr-dash: event listener
 *kt_dev_uv_stack_254* mr-dash: natual size
 *kt_dev_uv_stack_254* mr-dash: test web server
@@ -154,11 +154,11 @@
 *kt_dev_uv_stack_400* mr-dash: gst-
 *kt_dev_uv_stack_400* mr-dash: gst-elements
 *kt_dev_uv_stack_400* mr-dash: gst-libs and packages
-*kt_dev_uv_stack_400* mr-dash: gst-nexussink
-*kt_dev_uv_stack_400* gst-nexussink-pes-writer
-*kt_dev_uv_stack_400* mr-dash: gst-nexussink: release on pause
-*kt_dev_uv_stack_400* mr-dash: gst-nexussink: callbacks
-*kt_dev_uv_stack_400* mr-dash: gst-nexussink: frame rate
+*kt_dev_uv_stack_400* gst-nexus-sink
+*kt_dev_uv_stack_400* gst-nexus-sink-pes-writer
+*kt_dev_uv_stack_400* gst-nexus-sink-release on pause
+*kt_dev_uv_stack_400* gst-nexus-sink-callbacks
+*kt_dev_uv_stack_400* gst-nexus-sink-frame rate
 *kt_dev_uv_stack_400* mr-dash: gst-tsnexusbin
 *kt_dev_uv_stack_400* mr-dash: gst-linearsourced
 *kt_dev_uv_stack_400* mr-dash: gst-zmp 
@@ -10227,7 +10227,7 @@ http://172.20.32.153:9223/
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: java scripts to check on video
+*kt_dev_uv_stack_250* mr-web-java scripts to check on video
 
 video.addEventListener("timeupdate", function() {
     equal(video.currentTime, 6, "Unexpected currentTime");
@@ -14825,7 +14825,7 @@ DEVARCH-10602:
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash-create-gst-pipeline
+*kt_dev_uv_stack_408* mr-create-ctor-dtor
 
 class GstMediaRouter : public MediaRouterAsync,
 {
@@ -14861,8 +14861,16 @@ void GstMediaRouter::init()
 }
 
 
+GstMediaRouter::~GstMediaRouter()
+{
+    NICKEL_FUNC_TRACE;
+    deinit();
+}
+
 void GstMediaRouter::deinit()
 {
+    NICKEL_FUNC_TRACE;
+
     stopReportingPositionChange();
     g_source_remove(watchId);
     watchId = 0;
@@ -14877,8 +14885,315 @@ void GstMediaRouter::deinit()
 }
 
 
+<ref>
+This is about a problem of destruction. The issue is that it is possible to
+access pipeline after the pipeline has already gone. 
+
+    DEVARCH-10980: Nickel.System.GStreamer: Fix crash in
+    GstMediaRouter::positionChangeEventTimerCallback
+    
+    PositionChangeSignal is a signal fired by the MediaRouter every second
+    during playback. This is to inform the client of the current playback
+    position. YV MediaRouter uses GStreamer's timer to periodically call
+    GstMediaRouter::positionChangeEventTimerCallback which gathers all required
+    information and fires the signal.
+    
+    There's a race condition caused by the fact that there's no guarantee that
+    clock's callback will not be executed after a call to unscheduled it. To fix
+    this problem PositionChangeSignal holds a weak pointer to the MediaRouter
+    and just bails out when it fails to lock it.
+    
+    This commit also fixes a minor resource leak.
+
+
+// log snippet from the ticket
+
+Nickel.System.GStreamer/src/GstMediaRouter.cpp:816 ENTER: virtual nickel::system::
+    GstMediaRouter::~GstMediaRouter()
+Nickel.System.GStreamer/src/GstMediaRouter.cpp:768 ENTER: void nickel::system::
+    GstMediaRouter::deinit()
+Nickel.System.GStreamer/src/GstMediaRouter.cpp:644 ENTER: void nickel::system::
+    GstMediaRouter::stopReportingPositionChange()
+Nickel.System.GStreamer/src/GstMediaRouter.cpp:644 EXIT:  void nickel::system::
+    GstMediaRouter::stopReportingPositionChange()
+Bus error
+
+
+<change>
++namespace {
++void deleteUserData(gpointer user_data)
++{
++    // At this point gst_clock_id_unschedule should be called so this would
++    // be the last time positionChangeEventTimerCallback is called.
++    delete static_cast<boost::weak_ptr<GstMediaRouter>*>(user_data);
++}
++} // namespace anonymous
++
+ gboolean  GstMediaRouter::positionChangeEventTimerCallback (
+     GstClock* /*clock*/, GstClockTime /*time*/, GstClockID /*id*/, gpointer user_data)
+ {
+-    GstMediaRouter* mr = static_cast<GstMediaRouter*>(user_data);
+-    mr->emitPositionChangeEvent();
++    auto weak_mr = static_cast<boost::weak_ptr<GstMediaRouter>*>(user_data);
++
++    if (const auto mr = weak_mr->lock()) {
++        mr->emitPositionChangeEvent();
++    }
++
+     return true;
+ }
+ 
+@@ -732,8 +745,8 @@ void GstMediaRouter::startReportingPositionChange()
+     (void)gst_clock_id_wait_async (
+         positionChangeEventClockId,
+         &GstMediaRouter::positionChangeEventTimerCallback,
+-        static_cast<gpointer>(this),
+-        NULL);
++        static_cast<gpointer>(new boost::weak_ptr<GstMediaRouter>(shared_from_this())),
++        deleteUserData);
+ }
+ 
+ void GstMediaRouter::stopReportingPositionChange()
+@@ -742,6 +755,7 @@ void GstMediaRouter::stopReportingPositionChange()
+ 
+     if (positionChangeEventClockId) {
+         gst_clock_id_unschedule(positionChangeEventClockId);
++        gst_clock_id_unref(positionChangeEventClockId);
+         positionChangeEventClockId = NULL;
+     }
+ }
+
+
+<how-about>
+
+// eos path:
+
+    case GST_MESSAGE_EOS:
+            (void)stop_locked(StatusEventValue::complete);
+
+NS_ZINC::Future<void> GstMediaRouter::stop_locked(
+    StatusEventValue::Enum eventValue)
+{
+    if (!stopped) {
+        stopReportingPositionChange();
+
+        // note: PAUSED
+        gst_element_set_state(pipeline.get(), GST_STATE_PAUSED);
+        ...
+    }
+}
+
+
+// stop() path:
+
+NS_ZINC::Future<void> GstMediaRouter::stop();
+void GstMediaRouter::stop_async();
+{
+    NICKEL_FUNC_TRACE;
+
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    stop_locked(StatusEventValue::stopped);
+}
+
+
+// dtor path:
+
+void GstMediaRouter::deinit()
+{
+    stopReportingPositionChange();
+}
+
+void GstMediaRouter::stopReportingPositionChange()
+{
+    NICKEL_FUNC_TRACE;
+
+    if (positionChangeEventClockId) {
+        gst_clock_id_unschedule(positionChangeEventClockId);
+        gst_clock_id_unref(positionChangeEventClockId);
+        positionChangeEventClockId = NULL;
+    }
+}
+
+
+<gdb-bt>
+
+Thread 1 (Thread 0x77ae0000 (LWP 1352)):
+#0  0x77945d00 in __lll_lock_wait () from /lib/libpthread.so.0
+#1  0x7794d6fc in pthread_mutex_lock () from /lib/libpthread.so.0
+#2  0x760fbfcc in g_mutex_lock () from /opt/zinc-trunk/oss/lib/libglib-2.0.so.0
+#3  0x72db1650 in gst_base_sink_change_state 
+    (element=0x54f3f0, transition=GST_STATE_CHANGE_PAUSED_TO_READY) at gstbasesink.c:5180
+
+#4  0x70bffa9c in gst_nexus_sink_change_state_locked 
+    (transition=GST_STATE_CHANGE_PAUSED_TO_READY, sink=0x54f3f0) 
+    at /Polonium.GSTNexus/src/gstnexussink.c:1404
+
+#5  gst_nexus_sink_change_state (element=<optimized out>, transition=GST_STATE_CHANGE_PAUSED_TO_READY) at /home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1361
+#6  0x740b88a8 in gst_element_change_state (element=0x54f3f0, transition=<optimized out>) at gstelement.c:2604
+#7  0x740b947c in gst_element_set_state_func (element=0x54f3f0, state=<optimized out>) at gstelement.c:2560
+#8  0x7408ae94 in gst_bin_element_set_state (next=GST_STATE_READY, current=GST_STATE_PAUSED, start_time=0, base_time=92538232835991, element=0x54f3f0, bin=0x605070) at gstbin.c:2341
+#9  gst_bin_change_state_func (element=0x605070, transition=GST_STATE_CHANGE_PAUSED_TO_READY) at gstbin.c:2694
+#10 0x740b88a8 in gst_element_change_state (element=0x605070, transition=<optimized out>) at gstelement.c:2604
+#11 0x740b947c in gst_element_set_state_func (element=0x605070, state=<optimized out>) at gstelement.c:2560
+#12 0x7408ae94 in gst_bin_element_set_state (next=GST_STATE_READY, current=GST_STATE_PAUSED, start_time=0, base_time=92538232835991, element=0x605070, bin=0x575620) at gstbin.c:2341
+#13 gst_bin_change_state_func (element=0x575620, transition=GST_STATE_CHANGE_PAUSED_TO_READY) at gstbin.c:2694
+#14 0x740b88a8 in gst_element_change_state (element=0x575620, transition=<optimized out>) at gstelement.c:2604
+#15 0x740b947c in gst_element_set_state_func (element=0x575620, state=<optimized out>) at gstelement.c:2560
+#16 0x7408ae94 in gst_bin_element_set_state (next=GST_STATE_READY, current=GST_STATE_PAUSED, start_time=0, base_time=92538232835991, element=0x575620, bin=0x575508) at gstbin.c:2341
+#17 gst_bin_change_state_func (element=0x575508, transition=GST_STATE_CHANGE_PAUSED_TO_READY) at gstbin.c:2694
+#18 0x740b88a8 in gst_element_change_state (element=0x575508, transition=<optimized out>) at gstelement.c:2604
+#19 0x740b947c in gst_element_set_state_func (element=0x575508, state=<optimized out>) at gstelement.c:2560
+#20 0x7408ae94 in gst_bin_element_set_state (next=GST_STATE_READY, current=GST_STATE_PAUSED, start_time=0, base_time=92538232835991, element=0x575508, bin=0x5761b8) at gstbin.c:2341
+#21 gst_bin_change_state_func (element=0x5761b8, transition=GST_STATE_CHANGE_PAUSED_TO_READY) at gstbin.c:2694
+#22 0x740b88a8 in gst_element_change_state (element=0x5761b8, transition=<optimized out>) at gstelement.c:2604
+#23 0x740b947c in gst_element_set_state_func (element=0x5761b8, state=<optimized out>) at gstelement.c:2560
+
+#24 0x74208e84 in nickel::system::GstMediaRouter::deinit (this=0x68c8f8) at /home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:904
+#25 0x742118d4 in nickel::system::GstMediaRouter::~GstMediaRouter (this=0x68c8f8, __in_chrg=<optimized out>, __vtt_parm=<optimized out>)
+    at /home/kpark/builds-src-dev/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp:945
+#26 0x742126e4 in destroy (this=0x68c8f0) at /home/kpark/builds-src-dev/_virtual_/humax.2100/zinc-install-root/release/humax-dtr_t2100/opt/zinc-trunk/oss/include/boost/smart_ptr/make_shared_object.hpp:57
+#27 operator() (this=0x68c8f0) at /home/kpark/builds-src-dev/_virtual_/humax.2100/zinc-install-root/release/humax-dtr_t2100/opt/zinc-trunk/oss/include/boost/smart_ptr/make_shared_object.hpp:91
+#28 boost::detail::sp_counted_impl_pd<nickel::system::GstMediaRouter*, boost::detail::sp_ms_deleter<nickel::system::GstMediaRouter> >::dispose (this=0x68c8e0)
+    at /home/kpark/builds-src-dev/_virtual_/humax.2100/zinc-install-root/release/humax-dtr_t2100/opt/zinc-trunk/oss/include/boost/smart_ptr/detail/sp_counted_impl.hpp:153
+#29 0x766cce3c in boost::detail::shared_count::~shared_count() () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+#30 0x766e9ae0 in nickel::system::ProxyMediaRouter::~ProxyMediaRouter() () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+#31 0x766fa184 in boost::detail::sp_counted_impl_pd<nickel::system::ProxyMediaRouter*, boost::detail::sp_ms_deleter<nickel::system::ProxyMediaRouter> >::dispose() () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+#32 0x004101cc in boost::detail::shared_count::~shared_count() ()
+#33 0x004302f0 in Zinc::Media::MediaRouterAsyncToDBus::~MediaRouterAsyncToDBus() ()
+#34 0x00460604 in boost::detail::sp_counted_impl_pd<Zinc::Media::MediaRouterAsyncToDBus*, boost::detail::sp_ms_deleter<Zinc::Media::MediaRouterAsyncToDBus> >::dispose() ()
+#35 0x004101cc in boost::detail::shared_count::~shared_count() ()
+#36 0x0046238c in DBus::detail::AdaptorWrapper<zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus> >::free(DBusConnection*, void*) ()
+#37 0x7774cff0 in _dbus_object_tree_unregister_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#38 0x7773bb38 in dbus_connection_unregister_object_path () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#39 0x7779f304 in DBus::Connection::Private::dispatch_and_wait_void<boost::_bi::bind_t<unsigned int, unsigned int (*)(DBusConnection*, char const*), boost::_bi::list2<boost::_bi::value<DBusConnection*>, boost::_bi::value<char const*> > > > () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#40 0x7779f5c8 in DBus::Connection::unregister_object_path(char const*) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#41 0x7783d7b0 in zinc::binding::dbus::RefCountedAdaptor::dropPeer(DBus::Connection, char const*) () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#42 0x7783d9f0 in zinc::binding::dbus::RefCountedAdaptor::dropRef(DBus::Connection, char const*, unsigned int) () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#43 0x7783e4f8 in zinc::binding::dbus::RefCountedAdaptor::operator()(DBus::Connection, DBus::CallMessage&) () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#44 0x004634a0 in zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus>::operator()(DBus::Connection&, DBus::Message&) ()
+#45 0x00463678 in DBus::detail::AdaptorWrapper<zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus> >::call(DBusConnection*, DBusMessage*, void*) ()
+#46 0x7774d2fc in _dbus_object_tree_dispatch_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#47 0x7773a1fc in dbus_connection_dispatch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#48 0x777987f8 in DBus::drain_pending_messages(DBus::Connection::Private*) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#49 0x777376f0 in _dbus_connection_update_dispatch_status_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#50 0x77738cc0 in _dbus_connection_handle_watch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#51 0x77758ee0 in dbus_watch_handle () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#52 0x777ab484 in DBus::Watch::handle(int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#53 0x777b6f6c in DBus::DefaultWatch::do_callback() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#54 0x777b7444 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#55 0x777b9030 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#56 0x777ba704 in DBus::BusDispatcher::run() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#57 0x778229bc in zinc::binding::dbus::MainLoop::run() () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#58 0x00409674 in main ()
+
+
+<case-ok>
+             GST_STATES gstbin.c:2591:gst_bin_change_state_func:<pipeline> 
+             changing state of children from PAUSED to READY
+
+             GST_STATES gstelement.c:2481:gst_element_set_state_func:
+             <nexussink> set_state to READY
+             GST_STATES gstelement.c:2506:gst_element_set_state_func:
+             <nexussink> setting target state to READY
+             GST_STATES gstelement.c:2519:gst_element_set_state_func:
+             <nexussink> current PAUSED, old_pending VOID_PENDING, next VOID_PENDING, old return SUCCESS
+             GST_STATES gstelement.c:2553:gst_element_set_state_func:
+             <nexussink> final: setting state from PAUSED to READY
+       GST_ELEMENT_PADS gstelement.c:2747:gst_element_pads_activate:
+             <nexussink> deactivate pads
+               GST_PADS gstpad.c:1070:gst_pad_set_active:<nexussink:sink> deactivating pad from push mode
+               GST_PADS gstpad.c:959:pre_activate:<nexussink:sink> setting PAD_MODE NONE, set flushing
+
+               basesink gstbasesink.c:4141:gst_base_sink_set_flushing:
+               <nexussink> flushing out data thread, need preroll to TRUE
+
+               basesink gstbasesink.c:2222:gst_base_sink_wait_preroll:
+               <nexussink> preroll interrupted because of flush
+
+               basesink gstbasesink.c:3571:gst_base_sink_chain_unlocked:
+               <nexussink> sink is flushing
+
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x580a7008
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x67a5e8
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x660968
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x650b00
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x651b58
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x6774e0
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x678538
+             GST_MEMORY gstmemory.c:87:_gst_memory_free: free memory 0x679590
+         GST_SCHEDULING gstpad.c:4089:gst_pad_chain_data_unchecked:<nexussink:sink> called chainfunction &gst_base_sink_chain with buffer 0x658220, returned flushing
+         GST_SCHEDULING gstpad.c:4089:gst_pad_chain_data_unchecked:<parser:sink> called chainfunction &0x70f2e110 with buffer 0x658220, returned flushing
+               GST_PADS gstpad.c:1007:post_activate:<nexussink:sink> stopped streaming
+               GST_PADS gstpad.c:447:remove_events:<nexussink:sink> notify caps
+               GST_PADS gstpad.c:1197:gst_pad_activate_mode:<nexussink:sink> deactivated in push mode
+         GST_SCHEDULING gstpad.c:4089:gst_pad_chain_data_unchecked:<videosink:sink> called chainfunction &gst_proxy_pad_chain_default with buffer 0x658220, returned flushing
+       GST_ELEMENT_PADS gstelement.c:2766:gst_element_pads_activate:<nexussink> pad deactivation successful
+               basesink gstbasesink.c:5214:gst_base_sink_change_state:<nexussink> PAUSED to READY, don't need_preroll
+         GST_SCHEDULING gstpad.c:4089:gst_pad_chain_data_unchecked:<bin0:sink> called chainfunction &gst_proxy_pad_chain_default with buffer 0x658220, returned flushing
+              nexussink gstnexussink.c:1424:gst_nexus_sink_change_state_locked:<nexussink> change state GST_STATE_CHANGE_PAUSED_TO_READY
+         GST_SCHEDULING gstpad.c:4089:gst_pad_chain_data_unchecked:<VirtualBinSink:sink_0x5bfea0> called chainfunction &gst_proxy_pad_chain_default with buffer 0x658220, returned flushing
+              nexussink gstnexussink.c:1621:gst_nexus_sink_stop_locked:<nexussink> Stop decoder
+         GST_SCHEDULING gstpad.c:4089:gst_pad_chain_data_unchecked:<src_0_0x5c2200:proxypad8> called chainfunction &gst_proxy_pad_chain_default with buffer 0x658220, returned flushing
+             GST_STATES gstelement.c:2638:gst_element_change_state:<nexussink> element changed state SUCCESS
+         GST_SCHEDULING gstpad.c:4089:gst_pad_chain_data_unchecked:<src_0:proxypad7> called chainfunction &gst_proxy_pad_chain_default with buffer 0x658220, returned flushing
+             GST_STATES gstelement.c:2330:gst_element_continue_state:<nexussink> completed state change to READY
+             GST_STATES gstelement.c:2235:_priv_gst_element_state_changed:<nexussink> notifying about state-changed PAUSED to READY (VOID_PENDING pending)
+
+
+<case-fail>
+             GST_STATES gstbin.c:2591:gst_bin_change_state_func:
+             <pipeline> changing state of children from PAUSED to READY
+
+             GST_STATES gstelement.c:2481:gst_element_set_state_func:
+             <nexussink> set_state to READY
+             GST_STATES gstelement.c:2506:gst_element_set_state_func:
+             <nexussink> setting target state to READY
+             GST_STATES gstelement.c:2519:gst_element_set_state_func:
+             <nexussink> current PAUSED, old_pending VOID_PENDING, next VOID_PENDING, old return SUCCESS
+             GST_STATES gstelement.c:2553:gst_element_set_state_func:
+             <nexussink> final: setting state from PAUSED to READY
+
+       GST_ELEMENT_PADS gstelement.c:2747:gst_element_pads_activate:
+             <nexussink> deactivate pads
+
+               GST_PADS gstpad.c:1070:gst_pad_set_active:<nexussink:sink> deactivating pad from push mode
+               GST_PADS gstpad.c:959:pre_activate:<nexussink:sink> setting PAD_MODE NONE, set flushing
+
+               basesink gstbasesink.c:4141:gst_base_sink_set_flushing:
+             <nexussink> flushing out data thread, need preroll to TRUE
+
+               basesink gstbasesink.c:2222:gst_base_sink_wait_preroll:
+             <nexussink> preroll interrupted because of flush
+
+               basesink gstbasesink.c:2330:gst_base_sink_do_preroll:
+               <nexussink> preroll failed: flushing
+
+               basesink gstbasesink.c:2604:gst_base_sink_do_sync:
+               <nexussink> preroll failed
+
+               // EFifoEmpty = 0x0101,
+              nexussink gstnexussink.c:1765:gst_nexus_sink_on_error:
+              <nexussink> Error: 0x0101
+
+               GST_PADS gstpad.c:1007:post_activate:<nexussink:sink> stopped streaming
+
+               GST_PADS gstpad.c:447:remove_events:<nexussink:sink> notify caps
+
+               GST_PADS gstpad.c:1197:gst_pad_activate_mode:
+               <nexussink:sink> deactivated in push mode
+
+       GST_ELEMENT_PADS gstelement.c:2766:gst_element_pads_activate:
+       <nexussink> pad deactivation successful
+
+before reaching to:
+
+              GST_STATES gstbin.c:2591:gst_bin_change_state_func:
+              <pipeline> changing state of children from READY to NULL
+
+
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash-load-play
+*kt_dev_uv_stack_408* mr-load-play
 
 <mr-load>
 void VanadiumMediaPlayer::load(const std::string& url)
@@ -15494,6 +15809,216 @@ GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
 <stop>
 ProxyMediaRouter.cpp:862 ENTER: 
   virtual zinc::Future<void> nickel::system::ProxyMediaRouter::stop()
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-load-play-dbus-log
+
+starts from HAVE_NOTHING, NETWORK_EMPTY
+
+method call sender=:1.131 -> dest=Zinc.MediaProxy serial=25 
+path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
+member=*createMediaRouter*
+
+// KT-HTML: selectMediaResource: n(2), r(0): loadstartEvent
+// KT-HTML: loadResource: n(2), r(0): ->load()
+// VanadiumMediaPlayer.load() sets NET = NETWORK_LOADING
+
+method call sender=:1.121 -> dest=:1.72 serial=29 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*setSource*
+   string "http://vod-hls-uk-live.bbcfmt.vo.llnwd.net/usp/auth/vod/piff_abr_full_hd/beb516-p034nsgv/vf_p034nsgv_ef27e25c-5275-46cd-9909-2b36738e4133.ism.hlsv2.ism/iptv_sdlow_abr_v1_hls_master.m3u8?s=1448440401&e=1448483601&h=746324fd8226beda57d6dd92f26539ef"
+   int32 1
+
+note: change_complete is not used in Vanadium
+
+signal sender=:1.72 -> dest=(null destination) serial=5133
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=*SourceEvent* 
+    int32 1   // change_complete = 1,
+    int32 1
+
+method call sender=:1.121 -> dest=:1.72 serial=30 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*setSink*
+   string "decoder://0"
+
+<mr-load>
+method call sender=:1.121 -> dest=:1.72 serial=31
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=*startBuffering*
+    -> fire "buffering_started"
+
+signal sender=:1.72 -> dest=(null destination) serial=5136
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=*BufferStatusEvent* 
+    int32 0   // buffering_started = 0,
+    -> this set "currentNetworkState = NETWORK_LOADING(2)"
+
+signal sender=:1.72 -> dest=(null destination) serial=5139
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=*SourceEvent*
+   int32 3    // source_config_complete = HAVE_FUTURE_DATA(3)
+   int32 1
+   note: got source config complete which moves state to HAVE_FUTURE_DATA
+
+//KT-HTML: setReadyState: n(2), r(3): loadeddataEvent
+
+
+// GstMediaRouter.cpp:1545 KT: setSink_async: startPreRoll_locked
+//
+// void GstMediaRouter::startPreRoll_locked()
+// {
+//     // Set up a callback to fire once the pipeline has transitioned into
+//     // the paused state
+//     OneShotFunctionCall callback(
+//             boost::bind(&GstMediaRouter::preRollComplete,
+//                 this), GST_STATE_PAUSED);
+// 
+//     boost::signals2::connection conn = onAsyncEvent.connect_extended(callback);
+// 
+//     if(GST_STATE_CHANGE_FAILURE == gst_element_set_state(pipeline.get(),
+//                 GST_STATE_PAUSED))
+//     {
+//         gst_element_get_state(pipeline.get(), &state, &pendingState, 0);
+//         if(state == GST_STATE_PAUSED && pendingState == GST_STATE_VOID_PENDING)
+//         {
+//             // Pipeline is already paused so call the callback explicitly
+//             preRollComplete();
+//         }
+//     }
+// }
+// 
+// void GstMediaRouter::preRollComplete()
+// {
+//     produceSourceEvent(SourceEventValue::source_config_complete,
+//             setSourceReason);
+// }
+
+
+member=setVideoWindow
+
+method call sender=:1.121 -> dest=:1.72 serial=35 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=getSourceInformation
+method return sender=:1.79 -> dest=:1.131 reply_serial=35
+   array [
+      dict entry(
+         string "CONFIGURATION"
+         string "ONDEMAND.ABR"
+      )
+      dict entry(
+         string "VIDEO_HEIGHT"
+         string "0"
+      )
+      dict entry(
+         string "VIDEO_WIDTH"
+         string "0"
+      )
+   ]
+
+member=getPosition
+member=getMediaDuration
+...
+
+method call sender=:1.121 -> dest=:1.72 serial=49
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=*setPlaySpeed* 
+    double 1
+
+
+<mr-play>
+// KT-HTML: playInternal: n(2), r(3): playingEvent
+// VanadiumMediaPlayer.play()
+
+method call sender=:1.121 -> dest=:1.72 serial=50
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*start*
+
+
+note: StatusEvent::stared => HAVE_ENOUGH_DATA(4)
+
+note: see source_information_change after start and this means decoded a stream.
+
+signal sender=:1.72 -> dest=(null destination) serial=5160
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=*SourceEvent* 
+    int32 2     // source_information_change = 2,
+    int32 0
+
+note: see setVideoWindow with right values
+
+// from Vanadium::resizeVideo()
+method call sender=:1.121 -> dest=:1.72 serial=62 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=*setVideoWindow*
+   struct {
+      double 0
+      double 0
+      double 1
+      double 1
+      double 0
+      double 0
+      double 1
+      double 1
+   }
+
+note: getPosition starts to show a change of current position
+
+method call sender=:1.131 -> dest=:1.79 serial=64 
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
+member=getPosition
+method return sender=:1.79 -> dest=:1.131 reply_serial=64
+   struct {
+      int32 0
+      int32 440         *current-pos*
+      int32 1737000
+   }
+
+// keep calling getPosition and getDuration ...
+
+
+// end of play when gets EOS
+signal sender=:1.72 -> dest=(null destination) serial=9845
+path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
+member=StatusEvent 
+    int32 1     // note: completed
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-load-play-issue-play conflict
+
+method call sender=:1.177 -> dest=:1.7 serial=40 
+path=/Zinc/Media/MediaRouters/5; interface=Zinc.Media.MediaRouter; member=setSource
+   string "dvr://ipc/1"
+   int32 1
+
+838   :1.7                     /opt/zinc/bin/bronzemediad.oem                  
+838   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
+838   Zinc.OEMSystem           /opt/zinc/bin/bronzemediad.oem                  
+
+2425  :1.177                   /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
+2425  Zinc.MediaProxy          /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
+
+method call sender=:1.175 -> dest=:1.177 serial=160 
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=start
+
+method call sender=:1.177 -> dest=:1.7 serial=60 
+path=/Zinc/Media/MediaRouters/5; interface=Zinc.Media.MediaRouter; member=start
+
+error sender=:1.7 -> dest=:1.177 error_name=Zinc.Media.Error.PlayConflict 
+reply_serial=60
+r"
+
+error sender=:1.177 -> dest=:1.175 error_name=Zinc.Media.Error.PlayConflict 
+reply_serial=160
+r"
+
+signal sender=org.freedesktop.DBus -> dest=(null destination) serial=12 
+path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged
+   string ":1.175"
+   string ":1.175"
+   string ""
 
 
 ={============================================================================
@@ -17176,41 +17701,6 @@ event loop default which not only fix the issue and also start a play a
 lot quicker than before.
 
 
-={============================================================================
-*kt_dev_uv_stack_408* mr-load-play-issue-play conflict
-
-method call sender=:1.177 -> dest=:1.7 serial=40 
-path=/Zinc/Media/MediaRouters/5; interface=Zinc.Media.MediaRouter; member=setSource
-   string "dvr://ipc/1"
-   int32 1
-
-838   :1.7                     /opt/zinc/bin/bronzemediad.oem                  
-838   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
-838   Zinc.OEMSystem           /opt/zinc/bin/bronzemediad.oem                  
-
-2425  :1.177                   /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
-2425  Zinc.MediaProxy          /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
-
-method call sender=:1.175 -> dest=:1.177 serial=160 
-path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=start
-
-method call sender=:1.177 -> dest=:1.7 serial=60 
-path=/Zinc/Media/MediaRouters/5; interface=Zinc.Media.MediaRouter; member=start
-
-error sender=:1.7 -> dest=:1.177 error_name=Zinc.Media.Error.PlayConflict 
-reply_serial=60
-r"
-
-error sender=:1.177 -> dest=:1.175 error_name=Zinc.Media.Error.PlayConflict 
-reply_serial=160
-r"
-
-signal sender=org.freedesktop.DBus -> dest=(null destination) serial=12 
-path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged
-   string ":1.175"
-   string ":1.175"
-   string ""
-
 
 ={============================================================================
 *kt_dev_uv_stack_408* mr-dash: live or vod
@@ -17616,180 +18106,6 @@ path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorE
    int32 6    note: this is error value
    int32 1
    string "Not Found
-
-
-={============================================================================
-*kt_dev_uv_stack_408* mr-dash-load-play-dbus-log
-
-starts from HAVE_NOTHING, NETWORK_EMPTY
-
-method call sender=:1.131 -> dest=Zinc.MediaProxy serial=25 
-path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
-member=*createMediaRouter*
-
-// KT-HTML: selectMediaResource: n(2), r(0): loadstartEvent
-// KT-HTML: loadResource: n(2), r(0): ->load()
-// VanadiumMediaPlayer.load() sets NET = NETWORK_LOADING
-
-method call sender=:1.121 -> dest=:1.72 serial=29 
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
-member=*setSource*
-   string "http://vod-hls-uk-live.bbcfmt.vo.llnwd.net/usp/auth/vod/piff_abr_full_hd/beb516-p034nsgv/vf_p034nsgv_ef27e25c-5275-46cd-9909-2b36738e4133.ism.hlsv2.ism/iptv_sdlow_abr_v1_hls_master.m3u8?s=1448440401&e=1448483601&h=746324fd8226beda57d6dd92f26539ef"
-   int32 1
-
-note: change_complete is not used in Vanadium
-
-signal sender=:1.72 -> dest=(null destination) serial=5133
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=*SourceEvent* 
-    int32 1   // change_complete = 1,
-    int32 1
-
-method call sender=:1.121 -> dest=:1.72 serial=30 
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
-member=*setSink*
-   string "decoder://0"
-
-<mr-load>
-method call sender=:1.121 -> dest=:1.72 serial=31
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=*startBuffering*
-    -> fire "buffering_started"
-
-signal sender=:1.72 -> dest=(null destination) serial=5136
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=*BufferStatusEvent* 
-    int32 0   // buffering_started = 0,
-    -> this set "currentNetworkState = NETWORK_LOADING(2)"
-
-signal sender=:1.72 -> dest=(null destination) serial=5139
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=*SourceEvent*
-   int32 3    // source_config_complete = HAVE_FUTURE_DATA(3)
-   int32 1
-   note: got source config complete which moves state to HAVE_FUTURE_DATA
-
-//KT-HTML: setReadyState: n(2), r(3): loadeddataEvent
-
-
-// GstMediaRouter.cpp:1545 KT: setSink_async: startPreRoll_locked
-//
-// void GstMediaRouter::startPreRoll_locked()
-// {
-//     // Set up a callback to fire once the pipeline has transitioned into
-//     // the paused state
-//     OneShotFunctionCall callback(
-//             boost::bind(&GstMediaRouter::preRollComplete,
-//                 this), GST_STATE_PAUSED);
-// 
-//     boost::signals2::connection conn = onAsyncEvent.connect_extended(callback);
-// 
-//     if(GST_STATE_CHANGE_FAILURE == gst_element_set_state(pipeline.get(),
-//                 GST_STATE_PAUSED))
-//     {
-//         gst_element_get_state(pipeline.get(), &state, &pendingState, 0);
-//         if(state == GST_STATE_PAUSED && pendingState == GST_STATE_VOID_PENDING)
-//         {
-//             // Pipeline is already paused so call the callback explicitly
-//             preRollComplete();
-//         }
-//     }
-// }
-// 
-// void GstMediaRouter::preRollComplete()
-// {
-//     produceSourceEvent(SourceEventValue::source_config_complete,
-//             setSourceReason);
-// }
-
-
-member=setVideoWindow
-
-method call sender=:1.121 -> dest=:1.72 serial=35 
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
-member=getSourceInformation
-method return sender=:1.79 -> dest=:1.131 reply_serial=35
-   array [
-      dict entry(
-         string "CONFIGURATION"
-         string "ONDEMAND.ABR"
-      )
-      dict entry(
-         string "VIDEO_HEIGHT"
-         string "0"
-      )
-      dict entry(
-         string "VIDEO_WIDTH"
-         string "0"
-      )
-   ]
-
-member=getPosition
-member=getMediaDuration
-...
-
-method call sender=:1.121 -> dest=:1.72 serial=49
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=*setPlaySpeed* 
-    double 1
-
-
-<mr-play>
-// KT-HTML: playInternal: n(2), r(3): playingEvent
-// VanadiumMediaPlayer.play()
-
-method call sender=:1.121 -> dest=:1.72 serial=50
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
-member=*start*
-
-
-note: StatusEvent::stared => HAVE_ENOUGH_DATA(4)
-
-note: see source_information_change after start and this means decoded a stream.
-
-signal sender=:1.72 -> dest=(null destination) serial=5160
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=*SourceEvent* 
-    int32 2     // source_information_change = 2,
-    int32 0
-
-note: see setVideoWindow with right values
-
-// from Vanadium::resizeVideo()
-method call sender=:1.121 -> dest=:1.72 serial=62 
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
-member=*setVideoWindow*
-   struct {
-      double 0
-      double 0
-      double 1
-      double 1
-      double 0
-      double 0
-      double 1
-      double 1
-   }
-
-note: getPosition starts to show a change of current position
-
-method call sender=:1.131 -> dest=:1.79 serial=64 
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
-member=getPosition
-method return sender=:1.79 -> dest=:1.131 reply_serial=64
-   struct {
-      int32 0
-      int32 440         *current-pos*
-      int32 1737000
-   }
-
-// keep calling getPosition and getDuration ...
-
-
-// end of play when gets EOS
-signal sender=:1.72 -> dest=(null destination) serial=9845
-path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
-member=StatusEvent 
-    int32 1     // note: completed
 
 
 ={============================================================================
@@ -19906,7 +20222,7 @@ ls -al /opt/zinc-trunk/lib/gstreamer-1.0/libgstcenccrypto.so.0.0.0
 
 
 ={============================================================================
-*kt_dev_uv_stack_400* mr-dash: gst-nexussink
+*kt_dev_uv_stack_400* gst-nexus-sink
 
 nexussink YouView's Polonium sink element that connects to NexusMgr
 
@@ -20354,7 +20670,7 @@ void pes_data_source_pause_flush(PesDataSource* source)
 
 
 ={============================================================================
-*kt_dev_uv_stack_400* mr-dash: gst-nexussink: release on pause
+*kt_dev_uv_stack_400* gst-nexus-sink-release on pause
 
 DEVARCH-9186: Get rid of inherently racy gst_nexus_mgr_decoder_is_playing()
 
@@ -20423,7 +20739,7 @@ gstnexussink.c:
 
 
 ={============================================================================
-*kt_dev_uv_stack_400* gst-nexussink-callbacks
+*kt_dev_uv_stack_400* gst-nexus-sink-callbacks
 
 Hmax only provides 1 playpump.
 
