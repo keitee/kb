@@ -5028,20 +5028,24 @@ The content of each line in the debug output is:
   gstfilesrc.c:1044:gst_file_src_start:<filesrc0> error: No such file
   "non-existing-file.webm"
 
-0:00:00.868050000	Time stamp in HH:MM:SS.sssssssss format since the start of the
-program
+0:00:00.868050000
+Time stamp in HH:MM:SS.sssssssss format since the start of the program
 
-1592	Process ID from which the message was issued. Useful when your problem
-involves multiple processes
+1592
+Process ID from which the message was issued. Useful when your problem involves
+multiple processes
 
-09F62420	Thread ID from which the message was issued. Useful when your problem
-involves multiple threads
+09F62420
+Thread ID from which the message was issued. Useful when your problem involves
+multiple threads
 
-filesrc	Debug Category of the message
+filesrc
+Debug Category of the message
 
-<filesrc0>	Name of the object that issued the message. It can be an element, a
-Pad, or something else. Useful when you have multiple elements of the same kind
-and need to distinguish among them.
+<filesrc0>
+Name of the object that issued the message. It can be an element, a Pad, or
+something else. Useful when you have multiple elements of the same kind and need
+to distinguish among them.
 
 Naming your elements with the name property will make this debug output more
 readable (otherwise, GStreamer assigns each new element a unique name).
@@ -10686,18 +10690,10 @@ If sync is FALSE, use "own" synchronisation?
 
 <do-sink>
 
+<0>
 static gboolean
 gst_base_sink_pad_activate (GstPad * pad, GstObject * parent)
 {
-  gboolean result = FALSE;
-  GstBaseSink *basesink;
-  GstQuery *query;
-  gboolean pull_mode;
-
-  basesink = GST_BASE_SINK (parent);
-
-  GST_DEBUG_OBJECT (basesink, "Trying pull mode first");
-
   gst_base_sink_set_flushing (basesink, pad, FALSE);
 }
 
@@ -10749,27 +10745,8 @@ gst_base_sink_set_flushing (GstBaseSink * basesink, GstPad * pad,
   return TRUE;
 }
 
-gst_base_sink_wait_preroll (GstBaseSink * sink)
-{
-  sink->have_preroll = TRUE;
-  GST_DEBUG_OBJECT (sink, "waiting in preroll for flush or PLAYING");
-  /* block until the state changes, or we get a flush, or something */
-  GST_BASE_SINK_PREROLL_WAIT (sink);
-  sink->have_preroll = FALSE;
 
-  if (G_UNLIKELY (sink->flushing))
-    goto stopping;
-
-  /* ERRORS */
-stopping:
-  {
-    // note  
-    GST_DEBUG_OBJECT (sink, "preroll interrupted because of flush");
-    return GST_FLOW_FLUSHING;
-  }
-}
-
-
+<1>
 /* with STREAM_LOCK, PREROLL_LOCK
  *
  * Make sure we are in PLAYING and synchronize an object to the clock.
@@ -10801,6 +10778,8 @@ again:
   /* first do preroll, this makes sure we commit our state
    * to PAUSED and can continue to PLAYING. We cannot perform
    * any clock sync in PAUSED because there is no clock. */
+
+  <1-1>
   ret = gst_base_sink_do_preroll (basesink, obj);
   if (G_UNLIKELY (ret != GST_FLOW_OK))
     goto preroll_failed;
@@ -10814,7 +10793,7 @@ preroll_failed:
 
 }
 
-
+<1-1>
 /**
  * gst_base_sink_do_preroll:
  * @sink: the sink
@@ -10835,27 +10814,13 @@ gst_base_sink_do_preroll (GstBaseSink * sink, GstMiniObject * obj)
 {
   GstFlowReturn ret;
 
+  // note:
   while (G_UNLIKELY (sink->need_preroll)) {
-    GST_DEBUG_OBJECT (sink, "prerolling object %p", obj);
 
     /* if it's a buffer, we need to call the preroll method */
     if (sink->priv->call_preroll) {
       GstBaseSinkClass *bclass;
       GstBuffer *buf;
-
-      if (GST_IS_BUFFER_LIST (obj)) {
-        buf = gst_buffer_list_get (GST_BUFFER_LIST_CAST (obj), 0);
-        gst_base_sink_set_last_buffer (sink, buf);
-        gst_base_sink_set_last_buffer_list (sink, GST_BUFFER_LIST_CAST (obj));
-        g_assert (NULL != buf);
-      } else if (GST_IS_BUFFER (obj)) {
-        buf = GST_BUFFER_CAST (obj);
-        /* For buffer lists do not set last buffer for now */
-        gst_base_sink_set_last_buffer (sink, buf);
-        gst_base_sink_set_last_buffer_list (sink, NULL);
-      } else {
-        buf = NULL;
-      }
 
       if (buf) {
         GST_DEBUG_OBJECT (sink, "preroll buffer %" GST_TIME_FORMAT,
@@ -10884,6 +10849,8 @@ gst_base_sink_do_preroll (GstBaseSink * sink, GstMiniObject * obj)
     /* need to recheck here because the commit state could have
      * made us not need the preroll anymore */
     if (G_LIKELY (sink->need_preroll)) {
+
+      <1-2>
       /* block until the state changes, or we get a flush, or something */
       ret = gst_base_sink_wait_preroll (sink);
       if ((ret != GST_FLOW_OK) && (ret != GST_FLOW_STEP))
@@ -10899,6 +10866,29 @@ preroll_failed:
     return ret;
   }
 }
+
+<1-2>
+gst_base_sink_wait_preroll (GstBaseSink * sink)
+{
+  sink->have_preroll = TRUE;
+  GST_DEBUG_OBJECT (sink, "waiting in preroll for flush or PLAYING");
+  /* block until the state changes, or we get a flush, or something */
+  GST_BASE_SINK_PREROLL_WAIT (sink);
+  sink->have_preroll = FALSE;
+
+  if (G_UNLIKELY (sink->flushing))
+    goto stopping;
+
+  /* ERRORS */
+stopping:
+  {
+    // note  
+    GST_DEBUG_OBJECT (sink, "preroll interrupted because of flush");
+    return GST_FLOW_FLUSHING;
+  }
+}
+
+
 
 
 /* with STREAM_LOCK, PREROLL_LOCK

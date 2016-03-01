@@ -88,14 +88,14 @@
 *kt_dev_uv_stack_250* mr-web-remote debug
 *kt_dev_uv_stack_250* mr-web-java scripts to check on video
 *kt_dev_uv_stack_250* mr-web: build webkit plugin
-*kt_dev_uv_stack_250* mr-web: from html to mr. yv-mr-dbus-client
+*kt_dev_uv_stack_250* mr-create-vanadium-stack from html to mr
 *kt_dev_uv_stack_250* mr-web: callback from mr to html
 *kt_dev_uv_stack_250* mr-web: media player interface
 *kt_dev_uv_stack_250* mr-web: media element and attribute
 *kt_dev_uv_stack_250* mr-web: media event
 *kt_dev_uv_stack_250* mr-web: ended event
 *kt_dev_uv_stack_250* mr-web: ended event: release nexus
-*kt_dev_uv_stack_250* mr-web: ended event: duration
+*kt_dev_uv_stack_250* mr-ended-event-duration
 *kt_dev_uv_stack_250* mr-web-play, ready, network state attribute 
 *kt_dev_uv_stack_250* mr-web-server
 *kt_dev_uv_stack_250* mr-web-local server to play
@@ -112,11 +112,11 @@
 *kt_dev_uv_stack_408* mr-spec
 *kt_dev_uv_stack_255* mr-spec-status, source, event value
 *kt_dev_uv_stack_408* mr-dash: todo list
-*kt_dev_uv_stack_408* mr-dash-create-and-plugin
-*kt_dev_uv_stack_408* mr-dash-create-gst
-*kt_dev_uv_stack_408* mr-dash-create-gst-revised to support bin injection
+*kt_dev_uv_stack_408* mr-create-and-plugin
+*kt_dev_uv_stack_408* mr-create-gst
+*kt_dev_uv_stack_408* mr-create-gst-revised to support bin injection
 *kt_dev_uv_stack_408* mr-create-ctor-dtor
-*kt_dev_uv_stack_408* mr-load-play
+*kt_dev_uv_stack_408* mr-create-load-play
 *kt_dev_uv_stack_408* mr-load-play-dbus-log
 *kt_dev_uv_stack_408* mr-load-play-issue-play conflict
 *kt_dev_uv_stack_408* mr-dash-sync and async
@@ -124,8 +124,8 @@
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
 *kt_dev_uv_stack_408* mr-dash: disable dash on master
 *kt_dev_uv_stack_408* mr-dash-switch-mrs
-*kt_dev_uv_stack_408* mr-dash: position
-*kt_dev_uv_stack_408* mr-dash: position change
+*kt_dev_uv_stack_408* mr-position
+*kt_dev_uv_stack_408* mr-position-change
 *kt_dev_uv_stack_408* mr-dash: seekable range
 *kt_dev_uv_stack_408* mr-dash: output-control-manager
 *kt_dev_uv_stack_408* mr-dash: output-control-visibility
@@ -10369,7 +10369,7 @@ scp ./qtwebkit/lib/libQt5WebKit.so.5.1.0 root@humax-04535:/opt/zinc-trunk/oss/li
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: stack from html to mr
+*kt_dev_uv_stack_250* mr-create-vanadium-stack from html to mr
 
 HTMLMediaElement
  ^
@@ -10806,8 +10806,49 @@ WebCore::QMediaPlayerInterface* createMediaPlayerImplementation(
 
 class VanadiumMediaPlayer 
 {
+private:
     boost::shared_ptr<MediaPlayerListener> listener;
+
+    boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
+
+VanadiumMediaPlayer::VanadiumMediaPlayer(
+        QMediaPlayerCallbackInterface& callbacks_,
+        MediaPlayerManager& playerManager_)
+    : dispatcher(boost::make_shared<GlibEventDispatcher>()),
+    callbacks(callbacks_),
+    preloadPolicy(QMediaPlayerInterface::AUTO),
+    // Should really be NO_SOURCE but this is not exposed on the MediaPlayer API
+    currentNetworkState(QMediaPlayerInterface::NETWORK_EMPTY),
+    currentReadyState(QMediaPlayerInterface::HAVE_NOTHING),
+    seekCount(0),
+
+    listener(boost::make_shared<MediaPlayerListener>(this)),
+
+    playbackPaused(false),
+    mediaRouterPresenting(false),
+    mediaRouterVolume(0.0),
+    playerManager(playerManager_)
+    {
+        // note:
+        // 1. this makes a dbus link to the media proxy
+
+        // Vanadium/Vanadium.WebKit.VideoElement/data$ cat system-factory.plugin-config 
+        //  libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
+
+        FilePluginConfig pluginConfig(PackageDataFinder().find("system-factory.plugin-config"));
+        NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
+            PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
+
+        boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactory> mediaRouterFactory
+            = nickelSystemFactory.createMediaRouterFactory();
+
+        // note: this returns a future and future.get() returns a SP<MediaRouter>
+        // NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::createMediaRouter();
+
+        mediaRouter = mediaRouterFactory->createMediaRouter().get();
+    }
 };
+
 
 void VanadiumMediaPlayer::load(const std::string& url)
 {
@@ -10850,45 +10891,6 @@ void VanadiumMediaPlayer::play()
     }
     currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
 }
-
-VanadiumMediaPlayer::VanadiumMediaPlayer(
-        QMediaPlayerCallbackInterface& callbacks_,
-        MediaPlayerManager& playerManager_)
-    : dispatcher(boost::make_shared<GlibEventDispatcher>()),
-    callbacks(callbacks_),
-    preloadPolicy(QMediaPlayerInterface::AUTO),
-    // Should really be NO_SOURCE but this is not exposed on the MediaPlayer API
-    currentNetworkState(QMediaPlayerInterface::NETWORK_EMPTY),
-    currentReadyState(QMediaPlayerInterface::HAVE_NOTHING),
-    seekCount(0),
-
-    listener(boost::make_shared<MediaPlayerListener>(this)),
-
-    playbackPaused(false),
-    mediaRouterPresenting(false),
-    mediaRouterVolume(0.0),
-    playerManager(playerManager_)
-{
-  // note:
-  // 1. this makes a dbus link to the media proxy
-
-  // Vanadium/Vanadium.WebKit.VideoElement/data$ cat system-factory.plugin-config 
-  //  libNickelSystemDbusClient.so createDbusSystemFactory(Zinc.MediaProxy)
-
-  FilePluginConfig pluginConfig(PackageDataFinder().find("system-factory.plugin-config"));
-  NS_NICKEL_SYSTEM::SystemFactory& nickelSystemFactory =
-    PluginFactory::getInstance<NS_NICKEL_SYSTEM::SystemFactory>(pluginConfig);
-
-  boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouterFactory> mediaRouterFactory
-    = nickelSystemFactory.createMediaRouterFactory();
-
-  // note: this returns a future and future.get() returns a SP<MediaRouter>
-  // NS_ZINC::Future<boost::shared_ptr<MediaRouter> > ProxyMediaRouterFactory::createMediaRouter();
-
-  mediaRouter = mediaRouterFactory->createMediaRouter().get();
-}
-
-boost::shared_ptr<NS_NICKEL_SYSTEM::MediaRouter> mediaRouter;
 
 
 ={============================================================================
@@ -12028,7 +12030,7 @@ note: no problem
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: ended event: duration
+*kt_dev_uv_stack_250* mr-ended-event: duration
 
 0:02:40.111841275  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:751:
 playbackPosition: Position 0:02:36.900000000
@@ -13543,7 +13545,7 @@ https://wiki.youview.co.uk/display/canvas/MPEG+DASH+to-do+list?src=search
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash-create-and-plugin
+*kt_dev_uv_stack_408* mr-create-and-plugin
 
 <before>
     w3c:
@@ -14080,7 +14082,7 @@ class ZINC_LOCAL SetSourceContinuation :
       const SetSourceReason::Enum reason_) 
   {
     // note: find 'factory' function pointer depending on "source"
-    boost::shared_ptr<MediaRouterFactory> 
+    factory = boost::shared_ptr<MediaRouterFactory> 
       ProxyMediaRouter::findFactoryGivenSource(source);
 
     continueOnSuccess(
@@ -14248,7 +14250,6 @@ NS_ZINC::Plugin* createGstSystemFactory()
 note:
 from void nickel::system::SetSourceContinuation::start()
 
-
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouterFactory.cpp
 
 boost::shared_ptr<MediaRouterFactoryAsync> createGstMediaRouterFactory(
@@ -14327,7 +14328,7 @@ boost::shared_ptr<MediaRouterAsync>  createGstMediaRouter(
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash-create-gst
+*kt_dev_uv_stack_408* mr-create-gst
 
 {creation}
 
@@ -15002,6 +15003,8 @@ void GstMediaRouter::stop_async();
 void GstMediaRouter::deinit()
 {
     stopReportingPositionChange();
+
+    gst_element_set_state(pipeline.get(), GST_STATE_NULL));
 }
 
 void GstMediaRouter::stopReportingPositionChange()
@@ -15141,6 +15144,10 @@ Thread 1 (Thread 0x77ae0000 (LWP 1352)):
              GST_STATES gstelement.c:2235:_priv_gst_element_state_changed:<nexussink> notifying about state-changed PAUSED to READY (VOID_PENDING pending)
 
 
+             GST_STATES gstbin.c:2830:gst_bin_change_state_func:
+             <pipeline> done changing bin's state from READY to NULL, now in READY, ret SUCCESS
+
+
 <case-fail>
              GST_STATES gstbin.c:2591:gst_bin_change_state_func:
              <pipeline> changing state of children from PAUSED to READY
@@ -15193,7 +15200,7 @@ before reaching to:
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-load-play
+*kt_dev_uv_stack_408* mr-create-load-play
 
 <mr-load>
 void VanadiumMediaPlayer::load(const std::string& url)
@@ -15256,6 +15263,7 @@ ProxyMediaRouter::setSource(const std::string& mediaLocator_in,
   sourcing = true;
 
   // note: <0>
+  // create() returns Future<T> ?
   return SetSourceContinuation::create(
       *dispatcher, shared_from_this(), mediaLocator_in, reason_in);
 }
@@ -15271,7 +15279,7 @@ class ZINC_LOCAL SetSourceContinuation
   private:
 
   // note: <continuation-start>
-  // Why start()? This is from "Contiunation" since create() creates an object
+  // Why start()? This is from "Contiunation" since create() 'creates' an object
   // then calls start().
 
   void start(boost::shared_ptr<ProxyMediaRouter> proxy_, 
@@ -15357,9 +15365,14 @@ class ZINC_LOCAL SetSourceContinuation
     proxy->setSourceComplete(source, impl, factory);
   }
 
+  // note: holds pointers
+
   boost::shared_ptr<ProxyMediaRouter> proxy;
+
   ProxyMediaRouter::UnsourcedProperties properties;
+
   boost::shared_ptr<MediaRouter> impl;
+
   std::string source;
   SetSourceReason::Enum reason;
 
@@ -16518,7 +16531,7 @@ lsr-config --bool platform.settings.webkit-use-media-router
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: position
+*kt_dev_uv_stack_408* mr-position
 
 /**
  * A three field structure holding the position values of a MediaRouter.
@@ -16622,7 +16635,7 @@ complete = 1,
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: position change
+*kt_dev_uv_stack_408* mr-position-change
 
 From Nickel/Nickel.Client.API/include/MediaRouterEventListener.h
 
@@ -16668,6 +16681,94 @@ void VanadiumMediaPlayer::PositionChangeEvent(const Position&)
 }
 
 void HTMLMediaElement::mediaPlayerTimeChanged(MediaPlayer*)
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-position-get-position-get-duration
+
+Vanadium:
+  float VanadiumMediaPlayer::currentTime() const
+  {
+    // The Media Router API represents times in milliseconds whereas HTML uses
+    // seconds
+    Position position = mediaRouter->getPosition().get();
+  }
+
+NS_ZINC::Future< Position > ProxyMediaRouter::getPosition() const {
+    NICKEL_FUNC_TRACE;
+    // only check if it's sourced
+    return deferForwardOrDefault(boost::bind(&MediaRouter::getPosition, _1), Position());
+}
+
+NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
+{
+    NICKEL_FUNC_TRACE;
+
+    if(stopped) NICKEL_ERROR("** KT: getPosition()");
+    return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
+            boost::bind(&GstMediaRouter::getPosition_async, this));
+}
+
+
+const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+{
+    NICKEL_FUNC_TRACE;
+
+    const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
+
+    // this calls to VirtualBinSink
+    int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
+    ...
+}
+
+
+gint64 getDuration (const RefObj<GstElement>& pipeline, const GstFormat format)
+{
+    gint64 duration = GST_CLOCK_TIME_NONE;
+
+    RefObj<GstQuery> q(gst_query_new_duration(format));
+
+    if (!q) {
+        throw std::runtime_error("Failed to create duration query");
+    }
+
+    // to print out only before gst started
+    if(gstopped) NICKEL_ERROR("** KT: getDuration {");
+
+    if (!gst_element_query(pipeline.get(), q.get())) {
+        NICKEL_ERROR("failed duration query: " << duration);
+        return duration;
+    }
+
+    if(gstopped) NICKEL_ERROR("** KT: getDuration }");
+
+    gst_query_parse_duration(q.get(), NULL, &duration);
+
+    NICKEL_TRACE("duration query: " << duration);
+
+    return duration;
+}
+
+std::pair< gint64, gint64 >
+getBufferPosition (const RefObj<GstElement>& pipeline, const bool mode)
+{
+    std::pair<gint64, gint64> pos(0, 0);
+
+    if (mode) {
+        // linear mode
+        RefObj<GstQuery> sq(gst_query_new_seeking(GST_FORMAT_TIME));
+
+        if (!gst_element_query (pipeline.get(),sq.get())) {
+            NICKEL_ERROR("seeking query failed");
+        }
+        gst_query_parse_seeking (sq.get(), NULL, NULL, &pos.first, &pos.second);
+    } else {
+        pos.first = 0 ;
+        pos.second = getDuration(pipeline, GST_FORMAT_TIME) ;
+    }
+
+    return pos;
+}
 
 
 ={============================================================================
