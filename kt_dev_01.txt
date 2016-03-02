@@ -19786,10 +19786,12 @@ Exception classes are defined in four headers.
     string _M_msg;
 
   public:
+    // note: takes message in ctor
     /** Takes a character string describing the error.  */
     explicit 
     runtime_error(const string& __arg);
 
+    // note: see noexcept on dtor
     virtual ~runtime_error() _GLIBCXX_USE_NOEXCEPT;
 
     /** Returns a C-style character string describing the general cause of
@@ -19816,7 +19818,7 @@ class myexception: public exception
 int main () {
   try
   {
-    throw myex;      // see myex but not myex()
+    throw myex;      // or throw myexception();
   }
   catch (exception& e)
   {
@@ -20292,7 +20294,7 @@ A function can specify that it does not `throw` exception by providing a
 noexcept specificaton.
 
 void recoup(int) noexcept;    // won't `throw`
-void alloc(int);              // moght `throw`
+void alloc(int);              // might `throw`
 
 
 Earlier C++ allowed us to specify the types of exception that a function might
@@ -20675,7 +20677,7 @@ class NetworkProblemException : public BrokerException
 {
     try
     {
-        ...
+        throw NetworkProblemException("Error in somewhere");
     }
     catch(const ServiceNotFoundException& e)
     {
@@ -33029,6 +33031,75 @@ a reference.
 auto f = bind(&string::empty, _1);
 f(*svec.begin());     // object; f uses .*
 f(&svec[0]);          // pointer; f uses ->*
+
+
+={============================================================================
+*kt_dev_stl_064* function-object-cases
+
+{1}
+The idea is that function object keep state, playspeed, in this case and use
+that state when is asked to raise an event.
+
+class SpeedChangeSender
+{
+public:
+    SpeedChangeSender(const boost::shared_ptr<MockMediaRouter>& mock)
+        : mock(mock),
+        playSpeed(std::numeric_limits<double>::quiet_NaN())
+    {}
+
+    void sendSpeedChangeEvent(double newPlaySpeed)
+    {
+        if(newPlaySpeed != playSpeed)
+        {
+            VANADIUM_TRACE("Sending SpeedChangeEvent old speed: " << playSpeed
+                    << " newPlaySpeed " << newPlaySpeed);
+            mock->emitSpeedChangeEvent();
+            playSpeed = newPlaySpeed;
+        }
+    }
+
+private:
+    boost::shared_ptr<MockMediaRouter> mock;
+    double playSpeed;
+};
+
+
+void registerMockForCanPlayAndPauseVideo()
+{
+    Sequence s;
+
+    // create a mock object
+    boost::shared_ptr<MockMediaRouter> mock = makeMock("http://bb.mpd");
+
+    // create a function object
+    boost::shared_ptr<SpeedChangeSender> speedChangeSender
+        = boost::make_shared<SpeedChangeSender>(mock);
+
+    // first play call and will update function object
+    // NS_ZINC::Future<void> GstMediaRouter::setPlaySpeed(const double speed);
+    // _1 is "1.0"
+
+    EXPECT_CALL(*mock, setPlaySpeed(1.0)).InSequence(s).WillOnce(
+                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
+                            speedChangeSender, _1)),
+                    Return(makeCompletedFuture())));
+
+    EXPECT_CALL(*mock, start()).WillOnce(
+            Return(makeCompletedFuture()));
+
+    // pause and will update function object
+    EXPECT_CALL(*mock, setPlaySpeed(0.0)).InSequence(s).WillOnce(
+                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
+                            speedChangeSender, _1)),
+                    Return(makeCompletedFuture())));
+
+    // second play call and will update function object
+    EXPECT_CALL(*mock, setPlaySpeed(1.0)).InSequence(s).WillOnce(
+                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
+                            speedChangeSender, _1)),
+                    Return(makeCompletedFuture())));
+}
 
 
 {member-function}
