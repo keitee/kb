@@ -13162,23 +13162,19 @@ class ZINC_LOCAL MockMediaRouterRepository
 
 
 <careful>
+Great care about "name"
 
-1. Great care about "name"
+1. When have mismatched name between test name and mock name.
 
 void registerMockForErrorHandlingDataToNotSupported()
 {
   ...
-  registerMock("ErrorHandlingDataNotSupported", mock);  // note:
+  registerMock("ErrorHandlingDataNotSupported", mock);  // note: missed "To"
 }
 
 // from js
 var onlyRunTheseTests = ["ErrorHandlingDataToNotSupported"];
 
-note: must be char string
-
-var onlyRunTheseTests = [ErrorHandlingDataToNotSupported];
-
-Here missed "To" and got:
 
 Could not find mock [ErrorHandlingDataToNotSupported]
 Activating ErrorHandlingDataToNotSupported
@@ -13187,6 +13183,21 @@ terminate called after throwing an instance of 'std::runtime_error'
     Function call: setSource(@0x7fff88b295c0 "http://bbc.co.uk/ErrorHandlingSink.mpd", 1)
     The mock function has no default action set, and its return type has no default value set.
 Aborted
+
+
+2. When not use as a string literal.
+
+var onlyRunTheseTests = [PlayConflictException];
+
+*** loadStarted()
+ReferenceError: Can't find variable: PlayConflictException
+*** loadFinished()  [OK]
+global failure ...
+Assertion failed: ReferenceError: Can't find variable: PlayConflictException
+global failure FAILED.
+
+Must be:
+var onlyRunTheseTests = ["PlayConflictException"];
 
 
 ={============================================================================
@@ -13335,6 +13346,89 @@ public:
     virtual ~PlayConflictException() throw();
 
 };
+
+
+<test>
+asyncTestCase("ErrorHandlingPlayConflictException", function() {
+    expect(2);
+    video = document.createElement('video');
+
+    video.addEventListener("error", function() {
+        console.log("PlayConflict error");
+        equal(video.readyState, video.HAVE_NOTHING, 
+                "Expected readyState = HAVE_NOTHING");
+        equal(video.error.code, MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED,
+            "Expected MEDIA_ERR_SRC_NOT_SUPPORTED");
+
+        // note: if not have this, fails on checking mock cleanup at the end.
+        removeVideoElement(video);
+
+        start();
+    });
+
+    video.setAttribute('src', 'dvr://ipc/1');
+    video.load();
+    video.play();
+});
+
+
+    void registerMockForErrorHandlingPlayConflictException()
+    {
+        Sequence s;
+
+        boost::shared_ptr<MockMediaRouter> mock 
+            = boost::make_shared<MockMediaRouter>();
+
+        // note: removes the code raising source completed event since there is
+        // a race between source completed event and play call. If Vanadium gets
+        // the source completed event after play, then network status will not
+        // be nothing and which fails the test.
+        //
+        // VanadiumMediaPlayer::SourceEvent:
+        //      currentReadyState = HAVE_FUTURE_DATA;
+        //
+        // play: when gets an exception
+        //      currentReadyState = HAVE_NOTHING;
+        //
+        // also uses sequence features.
+        
+        EXPECT_CALL(*mock,
+                setSource("dvr://ipc/1",
+                    SetSourceReason::mhegstandard)).InSequence(s).WillOnce(
+                    Return(makeCompletedFuture()));
+
+        EXPECT_CALL(*mock,
+                setSink(std::string(sink))).WillOnce(
+                Return(makeCompletedFuture()));
+
+        EXPECT_CALL(*mock,
+                startBuffering()).WillOnce(
+                DoAll(Invoke(boost::bind(&sendBufferStatusEvent, mock,
+                            BufferStatusEventValue::buffering_started)),
+                Return(makeCompletedFuture())));
+
+        expectGetSourceInformation(mock, "ONDEMAND.ABR");
+
+        EXPECT_CALL(*mock, stop()).WillRepeatedly(
+                DoAll(Invoke(boost::bind(&sendStatusEvent, mock, StatusEventValue::stopped)),
+                    Return(makeCompletedFuture())));
+
+        mock->setDispatcher(dispatcher);
+
+        EXPECT_CALL(*mock, getPosition()).WillRepeatedly(
+                Return(completedFuture(Position(0, 0, 1000000))));
+
+        EXPECT_CALL(*mock, getMediaDuration()).WillRepeatedly(
+                Return(makeCompletedFuture(1000000)));
+
+        EXPECT_CALL(*mock, setPlaySpeed(_)).WillRepeatedly(
+                    Return(makeCompletedFuture()));
+
+        EXPECT_CALL(*mock, start()).InSequence(s).WillOnce(
+                Return(makeErrorFuture<void, PlayConflictException>("Play Conflict Error")));
+
+        registerMock("ErrorHandlingPlayConflictException", mock);
+    }
 
 
 ={============================================================================
@@ -13907,6 +14001,7 @@ ps -eAL -o command,wchan | grep -E 'w3[c]' | sort
 ={============================================================================
 *kt_dev_uv_stack_250* mr-ng-browser-validation
 
+<host-side>
 $ git clone ssh://git@stash.dev.youview.co.uk/tvos/browservalidation.git
 $ npm install
 
@@ -13950,6 +14045,7 @@ npm install gulp
 11:58:09 (master) ~/browservalidation$
 
 
+<box-side>
 https://stash.dev.youview.co.uk/projects/TVOS/repos/browservalidation/browse
 
 // Copy "browser validation suite" on the box. Note that need to make file
@@ -13969,6 +14065,12 @@ the following command, and when the box reboots, repeat this last scp command.
 ssh root@humax-XXXX "sed -i 's%appstart -L; umount /opt/ui%appstart -L; umount /opt/ui; umount /opt/ui2%' ${DISK}/bin/setup_dbus.sh && reboot"
 
 
+<do-every-time>
+zb-deploy
+zb-deploy -o <box-variant> -- -D
+
+
+<switch>
 Enable Next Gen UI
 Enable with remote controller
 
@@ -13992,7 +14094,11 @@ setItem platform.uimanagement.application.default /opt/ui2
 killall uimanagerd
 start-service-over-dbus.sh Zinc.Application
 
-Switching between UI versions
+To go back to the Flash (old) UI
+
+setItem platform.uimanagement.application.default /opt/ui/pmui
+killall uimanagerd
+start-service-over-dbus.sh Zinc.Application
 
 Switching with remote controller
 
@@ -14002,7 +14108,6 @@ HELP U I V E R 2    =>  switch to HTML (Next Gen) UI
 
 
 // To see the one test case
-
 12:20:52 (master) ~/browservalidation/src/scripts/apps$
 CrashBrowser.js
 
@@ -18468,7 +18573,7 @@ gint64 getDuration (const RefObj<GstElement>& pipeline, const GstFormat format)
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-nickeld-killed
+*kt_dev_uv_stack_408* mr-issue-nickeld-killed
 
 [root@HUMAX /]# pidof w3cEngine
 1949
