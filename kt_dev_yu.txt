@@ -130,6 +130,7 @@
 *kt_dev_uv_stack_408* mr-dash-switch-mrs
 *kt_dev_uv_stack_408* mr-position
 *kt_dev_uv_stack_408* mr-position-change
+*kt_dev_uv_stack_408* mr-position-get-position-get-duration
 *kt_dev_uv_stack_408* mr-dash: seekable range
 *kt_dev_uv_stack_408* mr-dash: output-control-manager
 *kt_dev_uv_stack_408* mr-dash: output-control-visibility
@@ -13285,41 +13286,62 @@ Only when:
 *kt_dev_uv_stack_250* mr-test-vanadium-conflict-exception
 
 <issue>
-DEVARCH-10999: play one from OEM MR and the other from YV MR. Got the exception
-when try to play OEM one. No handling for this and a browser gets killed.
+Play one from OEM MR via Tuner and the other from YV MR which
+goes to OEM MR. Then got the exception and no handling for this and a browser
+gets killed.
 
 
-method call sender=:1.177 -> dest=:1.7 serial=40 
-path=/Zinc/Media/MediaRouters/5; interface=Zinc.Media.MediaRouter; member=setSource
+<commit>
+DEVARCH-10999: Vanadium/Vanadium.WebKit.VideoElement: Add support for
+PlayConflictException.
+
+The `PlayConflictException` gets raised when creates the second play on OEM MR
+without stopping the first and this causes a browser crash since there is no
+handling of this. That is not good enough when a browser is the main UI.
+
+To add support for this, updates SOLDES-584 to handle it and to translate to
+HTML `MediaError` so that an application handle this in the way that is
+appropriate to them.
+
+This commit comes with corresponding test in Vanadium test harness.
+
+[1] https://jira.youview.co.uk/browse/SOLDES-584
+
+
+<log>
+method call sender=:1.87 -> dest=:1.7 serial=259 
+path=/Zinc/Media/MediaRouters/7; interface=Zinc.Media.MediaRouter; member=setSource
    string "dvr://ipc/1"
    int32 1
+
+method call sender=:1.186 -> dest=:1.87 serial=174 
+path=/Zinc/Media/MediaRouters/6; interface=Zinc.Media.MediaRouter; member=start
+
+method call sender=:1.87 -> dest=:1.7 serial=279 
+path=/Zinc/Media/MediaRouters/7; interface=Zinc.Media.MediaRouter; member=start
+
+error sender=:1.7 -> dest=:1.87 error_name=Zinc.Media.Error.PlayConflict reply_serial=279
+   string "Play Conflict Error"
+
+error sender=:1.87 -> dest=:1.186 error_name=Zinc.Media.Error.PlayConflict reply_serial=174
+   string "Play Conflict Error"
+
+signal sender=org.freedesktop.DBus -> dest=(null destination) serial=30 
+path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged
+   string ":1.186"
+   string ":1.186"
+   string ""
+
+method call sender=:1.87 -> dest=:1.7 serial=281 
+path=/Zinc/Media/MediaRouters/7; interface=Zinc.DBus.RefCounted; member=DropRef
+   uint32 1
 
 838   :1.7                     /opt/zinc/bin/bronzemediad.oem                  
 838   Zinc.Media               /opt/zinc/bin/bronzemediad.oem                  
 838   Zinc.OEMSystem           /opt/zinc/bin/bronzemediad.oem                  
 
-2425  :1.177                   /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
-2425  Zinc.MediaProxy          /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
-
-method call sender=:1.175 -> dest=:1.177 serial=160 
-path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=start
-
-method call sender=:1.177 -> dest=:1.7 serial=60 
-path=/Zinc/Media/MediaRouters/5; interface=Zinc.Media.MediaRouter; member=start
-
-error sender=:1.7 -> dest=:1.177 error_name=Zinc.Media.Error.PlayConflict 
-reply_serial=60
-r"
-
-error sender=:1.177 -> dest=:1.175 error_name=Zinc.Media.Error.PlayConflict 
-reply_serial=160
-r"
-
-signal sender=org.freedesktop.DBus -> dest=(null destination) serial=12 
-path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged
-   string ":1.175"
-   string ":1.175"
-   string ""
+1412  :1.87                    /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
+1412  Zinc.MediaProxy          /opt/zinc-trunk/bin/nickelmediad -b Zinc.MediaProxy        
 
 
 <fix>
@@ -13327,6 +13349,7 @@ Updated https://jira.youview.co.uk/browse/SOLDES-584
 
 mr::start():
 PlayConflict: networkState=EMPTY, readyState=NOTHING, error=MEDIA_ERR_SRC_NOT_SUPPORTED
+
 
 <code>
 /**
@@ -13379,18 +13402,28 @@ asyncTestCase("ErrorHandlingPlayConflictException", function() {
         boost::shared_ptr<MockMediaRouter> mock 
             = boost::make_shared<MockMediaRouter>();
 
-        // note: removes the code raising source completed event since there is
+        // note: 
+        // FOR mater, QT5.5 :
+        // removes the code raising source completed event since there is
         // a race between source completed event and play call. If Vanadium gets
         // the source completed event after play, then network status will not
-        // be nothing and which fails the test.
+        // be nothing and which fails the test. This is the case for master
+        // branch.
         //
-        // VanadiumMediaPlayer::SourceEvent:
+        // VanadiumMediaPlayer::SourceEvent::source_config_complete
         //      currentReadyState = HAVE_FUTURE_DATA;
         //
         // play: when gets an exception
         //      currentReadyState = HAVE_NOTHING;
         //
         // also uses sequence features.
+        //
+        // However, this fails on FR15 branch since play() do not gets called
+        // for the same js code and calls stop(). So expectation broken on
+        // start().
+        //
+        // When get the code to raise source completed, works fine. This
+        // suggests the difference between QT 5.1 and 5.5?
         
         EXPECT_CALL(*mock,
                 setSource("dvr://ipc/1",
@@ -15525,6 +15558,11 @@ void GstMediaRouter::init()
     elem.swap(this->pipeline);
 }
 
+void GstMediaRouter::startPipeline()
+{
+    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
+}
+
 
 GstMediaRouter::~GstMediaRouter()
 {
@@ -17284,7 +17322,8 @@ From Nickel/Nickel.Client.API/include/MediaRouterEventListener.h
    virtual void PositionChangeEvent(boost::shared_ptr<Position> position) = 0;
 
 
-signal sender=:1.169 -> dest=(null destination) serial=8794 path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
+signal sender=:1.169 -> dest=(null destination) serial=8794 
+    path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter; member=PositionChangeEvent
    struct {
       int32 0
       int32 195720
@@ -17342,7 +17381,8 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
 {
     NICKEL_FUNC_TRACE;
 
-    const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
+    const std::pair<gint64, gint64> bufPos = 
+        getBufferPosition(pipeline,liveMode);
 
     // this calls to VirtualBinSink
     int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
@@ -20198,8 +20238,7 @@ This commit comes with corresponding test in Vanadium test harness.
 /Polonium.GSTHLSDemux/src/gsthlsdemux.c:1268:  ssize_t tries_left = demux->num_retries;
 /Polonium.GSTHLSDemux/src/gsthlsdemux.h:84:  guint num_retries;            /* number of retries to be attempted */
 
-$ gl DEFAULT_CONNECTION_RETRIES
-DEFAULT_CONNECTION_RETRIES   92 Polonium/Polonium.GSTHLSDemux/src/gsthlsdemux.c #define DEFAULT_CONNECTION_RETRIES    5
+$ gl DEFAULT_CONNECTION_RETRIES DEFAULT_CONNECTION_RETRIES   92 Polonium/Polonium.GSTHLSDemux/src/gsthlsdemux.c #define DEFAULT_CONNECTION_RETRIES    5
 
 <in-run-browser>
 GST_HLSDEMUX_RETRIES=$(get_lsr_int_with_default
@@ -22871,6 +22910,7 @@ declare -a env_vars=(
 )                                                                    
 
 
+<log-on-file>
 note: 
 Not able to log file in sandbox since this requires write permission but able to
 get GST_DEBUG on console. However, outputting on console slows down to load
@@ -22909,6 +22949,14 @@ note:
 The trick is to use /var/corefiles or any directory to log gst log:
     * have that in the sandbox conf
     * run chmod 777 on that
+
+[root@HUMAX /]# cat /opt/zinc/bin/nickelmediad-launch
+#!/bin/sh
+ulimit -c unlimited
+program_name=$(basename $0)
+target="/opt/zinc-trunk/bin/${program_name}"
+GST_DEBUG_NO_COLOR=1 GST_DEBUG_FILE=/var/corefiles/gst-nickel.log GST_DEBUG=5 \
+LD_LIBRARY_PATH="/opt/zinc-trunk/lib:/opt/zinc-trunk/devel/lib:/opt/zinc-trunk/oss/lib:${LD_LIBRARY_PATH}" exec "${target}" "${@}"
 
 
 ={============================================================================
