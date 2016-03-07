@@ -106,7 +106,7 @@
 *kt_dev_uv_stack_250* mr-test-vanadium-invalid-url
 *kt_dev_uv_stack_250* mr-test-vanadium-conflict-exception
 *kt_dev_uv_stack_250* mr-test-vanadium-can-play-and-pause
-*kt_dev_uv_stack_250* mr-test-vanadium-play-conflict
+*kt_dev_uv_stack_250* mr-test-vanadium-multiple-video-tag
 *kt_dev_uv_stack_250* mr-test-vanadium-play-videoextended
 *kt_dev_uv_stack_250* mr-web: yv webkit plugin, vanadium
 *kt_dev_uv_stack_250* mr-web: qt patches
@@ -122,7 +122,7 @@
 *kt_dev_uv_stack_408* mr-create-gst-revised to support bin injection
 *kt_dev_uv_stack_408* mr-create-ctor-dtor
 *kt_dev_uv_stack_408* mr-create-load-play
-*kt_dev_uv_stack_408* mr-load-play-dbus-log
+*kt_dev_uv_stack_408* mr-play-dbus-log
 *kt_dev_uv_stack_408* mr-dash-sync and async
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
@@ -5550,7 +5550,7 @@ Iron.System.DBusClient/src/getScheduledEvents.cpp
 
 
 ={============================================================================
-*kt_dev_uv_stack_105* zinc-dbus: commands
+*kt_dev_uv_stack_105* zinc-dbus-commands
 
 <dbus-completion>
 # source /opt/zinc/oss/etc/bash_completion.d/dbus-bash-completion.sh
@@ -5586,7 +5586,7 @@ method return sender=:1.154 -> dest=:1.227 reply_serial=2
 dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy2' /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getPosition
 
 <dbus-getsource>
-dbus-send --session --type=method_call --dest=Zinc.MediaProxy2 /Zinc/Media/MediaRouters/0 Zinc.Media.MediaRouter.getSourceInformation
+dbus-send --session --type=method_call --dest=Zinc.MediaProxy /Zinc/Media/MediaRouters/5 Zinc.Media.MediaRouter.getSourceInformation
 
 <dbus-position-report>
 
@@ -13295,9 +13295,10 @@ gets killed.
 DEVARCH-10999: Vanadium/Vanadium.WebKit.VideoElement: Add support for
 PlayConflictException.
 
-The `PlayConflictException` gets raised when creates the second play on OEM MR
-without stopping the first and this causes a browser crash since there is no
-handling of this. That is not good enough when a browser is the main UI.
+A `PlayConflictException` is raised when client code attempts to call play on an
+OEM MR while another OEM media router is playing and this causes a browser crash
+since there is no handler for this. That is not good enough when a browser is
+the main UI.
 
 To add support for this, updates SOLDES-584 to handle it and to translate to
 HTML `MediaError` so that an application handle this in the way that is
@@ -13557,7 +13558,7 @@ asyncTestCase("CanPlayAndPauseVideo", function() {
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-test-vanadium-play-conflict
+*kt_dev_uv_stack_250* mr-test-vanadium-multiple-video-tag
 
 note:
 This is designed to run in the same MR.
@@ -15460,6 +15461,8 @@ GstSystemFactory::createMediaRouterFactory()
 
     initParams->dispatcher = dispatcher;
     createUserAgent(initParams);
+
+    // *create-virtual-bins*
     createVirtualBins(initParams,auth);
 
     initParams->pipelineFactory = boost::bind(gst_pipeline_new, "pipeline");
@@ -15529,6 +15532,12 @@ class GstMediaRouter : public MediaRouterAsync,
 {
     boost::function<GstElement*(void)> pipelineFactory;
     mutable RefObj<GstElement> pipeline;
+
+    boost::shared_ptr<VirtualBin> typefindBin;
+    boost::shared_ptr<VirtualBin> srcBin;
+    boost::shared_ptr<VirtualBin> sinkBin;
+
+    const boost::shared_ptr<VirtualBinFactory> sinkBinFactory;
 };
 
 GstMediaRouter::GstMediaRouter(const GstMediaRouterInit& initParams) :
@@ -15539,6 +15548,8 @@ GstMediaRouter::GstMediaRouter(const GstMediaRouterInit& initParams) :
 
 void GstMediaRouter::init()
 {
+    sinkBin = sinkBinFactory->create();
+
     RefObj<GstElement> elem = pipelineFactory();
 
     g_signal_connect(elem.get(), "child-added",
@@ -16527,7 +16538,7 @@ ProxyMediaRouter.cpp:862 ENTER:
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-load-play-dbus-log
+*kt_dev_uv_stack_408* mr-play-dbus-log
 
 starts from HAVE_NOTHING, NETWORK_EMPTY
 
@@ -16698,6 +16709,74 @@ signal sender=:1.72 -> dest=(null destination) serial=9845
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=StatusEvent 
     int32 1     // note: completed
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-play-recording-log
+
+// when play a recording throuth OEM MR
+
+note: no getSourceInformation since there are no SourceEvent from OEM MR that
+Vanadium expect to see and without these, Vanadium will not call
+getSourceInformation.
+
+    SourceEventValue::source_config_complete)
+    SourceEventValue::source_information_change)
+
+The OEM MR reports only
+
+signal sender=:1.80 -> dest=(null destination) serial=1124 
+path=/Zinc/Media/MediaRouters/4; interface=Zinc.Media.MediaRouter; 
+member=SourceEvent
+   int32 4      // track changed
+   int32 0
+
+When remove getSouceInfo expection, tests fails. Why? Since Vanadium has a
+code to mimick ONDEMAND configuration for LOCAL.FILE as it konws OEM MR do
+not. See isDVRURL() in load().
+
+
+// OEM returns nothig
+
+dbus-send --session --print-reply --type=method_call --dest=Zinc.Media /Zinc/Media/MediaRouters/6 Zinc.Media.MediaRouter.getSourceInformation
+method return sender=:1.7 -> dest=:1.181 reply_serial=2
+   array [
+   ]
+
+
+<log>
+method call sender=:1.82 -> dest=:1.80 serial=565 
+path=/Zinc/Media/MediaRouters/2; interface=Zinc.Media.MediaRouter; 
+member=setSource
+   string "dvr://record/BBC.News.at.Five-2016-Jan-11.17:36:22.108306"
+   int32 0
+
+method call sender=:1.80 -> dest=Zinc.Media serial=286 
+path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
+member=createMediaRouter
+
+method call sender=:1.80 -> dest=:1.7 serial=290 
+path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; 
+member=setSource
+   string "dvr://record/BBC.News.at.Five-2016-Jan-11.17:36:22.108306"
+   int32 0
+
+method call sender=:1.82 -> dest=:1.80 serial=566 
+path=/Zinc/Media/MediaRouters/2; interface=Zinc.Media.MediaRouter; 
+member=setSink
+   string "decoder://0"
+
+method call sender=:1.80 -> dest=:1.7 serial=292 
+path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; 
+member=setSink
+   string "decoder://0"
+
+method call sender=:1.80 -> dest=:1.7 serial=309 
+path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; 
+member=getSource
+
+method return sender=:1.7 -> dest=:1.80 reply_serial=309
+   string "dvr://record/BBC.News.at.Five-2016-Jan-11.17:36:22.108306"
 
 
 ={============================================================================
@@ -17362,24 +17441,37 @@ Vanadium:
   }
 
 NS_ZINC::Future< Position > ProxyMediaRouter::getPosition() const {
-    NICKEL_FUNC_TRACE;
+
     // only check if it's sourced
     return deferForwardOrDefault(boost::bind(&MediaRouter::getPosition, _1), Position());
 }
 
 NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
 {
-    NICKEL_FUNC_TRACE;
 
     if(stopped) NICKEL_ERROR("** KT: getPosition()");
     return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
             boost::bind(&GstMediaRouter::getPosition_async, this));
 }
 
+NS_ZINC::Future<int32_t> GstMediaRouter::getMediaDuration() const
+{
+
+    return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
+        boost::bind(&GstMediaRouter::getMediaDuration_async, this));
+}
+
+
+Position GstMediaRouter::getPosition_async() const
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    return getPosition_locked(mediaType == LIVE);
+}
+
 
 const Position GstMediaRouter::getPosition_locked(bool liveMode) const
 {
-    NICKEL_FUNC_TRACE;
 
     const std::pair<gint64, gint64> bufPos = 
         getBufferPosition(pipeline,liveMode);
@@ -17389,7 +17481,7 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
     ...
 }
 
-
+// this is global function
 gint64 getDuration (const RefObj<GstElement>& pipeline, const GstFormat format)
 {
     gint64 duration = GST_CLOCK_TIME_NONE;
