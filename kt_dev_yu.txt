@@ -123,6 +123,8 @@
 *kt_dev_uv_stack_408* mr-create-ctor-dtor
 *kt_dev_uv_stack_408* mr-create-load-play
 *kt_dev_uv_stack_408* mr-play-dbus-log
+*kt_dev_uv_stack_408* mr-play-state-changes
+*kt_dev_uv_stack_408* mr-play-recording-log
 *kt_dev_uv_stack_408* mr-dash-sync and async
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
@@ -140,7 +142,6 @@
 *kt_dev_uv_stack_408* mr-help-app
 
 *kt_dev_uv_stack_408* mr-nickeld-killed
-*kt_dev_uv_stack_408* mr-dash: dbus log
 *kt_dev_uv_stack_254* mr-dash: event listener
 *kt_dev_uv_stack_254* mr-dash: natual size
 *kt_dev_uv_stack_254* mr-dash: test web server
@@ -187,9 +188,9 @@
 
 *kt_dev_uv_stack_301* zinc-lsr: copper: client factory
 *kt_dev_uv_stack_302* zinc-lsr: lsr-config
-*kt_dev_uv_stack_009* zinc-lsr: keys
-*kt_dev_uv_stack_009* zinc-lsr: hwei: to revert back the previous version
-*kt_dev_uv_stack_009* zinc-lsr: platform config
+*kt_dev_uv_stack_009* zinc-lsr-keys
+*kt_dev_uv_stack_009* zinc-lsr-hwei: to revert back the previous version
+*kt_dev_uv_stack_009* zinc-lsr-platform config
 
 *kt_dev_uv_stack_351* zinc-sandbox: on box
 |kt_dev_uv_stack_351| zinc-sandbox: daemon
@@ -217,7 +218,7 @@
 
 *kt_dev_uv_oem_001* oem-box-hwei: pkgconfig
 *kt_dev_uv_oem_001* oem-box-hwei:
-*kt_dev_uv_oem_001* oem-box-hmax-ctk-atk
+*kt_dev_uv_oem_001* hmax-ctk-atk
 *kt_dev_uv_oem_001* hmax-flash
 *kt_dev_uv_oem_001* oem-box: staging and toolchanis
 *kt_dev_uv_oem_001* zinc-jira: deploy the prebuilt binary
@@ -3551,22 +3552,31 @@ surprising.
 *kt_dev_uv_stack_010* zinc-push
 
 <stash>
-$ git push origin DEVARCH-9135:review/DEVARCH-9135/0
 
-$ git push -n origin kit/support-corrupted-dash-stream
+// push topic to stash as a review branch with different name
+git push -n origin pr/DEVARCH-10999-playconflict:review/DEVARCH-10999-playconflict
+git push -f origin pr/DEVARCH-10999-playconflict:review/DEVARCH-10999-playconflict
 
-// to update PR
-$ git push -f origin kit/support-corrupted-dash-stream
+// to update PR for review comments
+git push -f origin pr/DEVARCH-10999-playconflict:review/DEVARCH-10999-playconflict
+
+// to update with the latest master
+git co pr/DEVARCH-10999-playconflict
+git pull --rebase origin master
 
 // to push to master
-$ git push -n origin kit/support-corrupted-dash-stream:master
+git push -n origin pr/DEVARCH-10999-playconflict:master
+git push origin pr/DEVARCH-10999-playconflict:master
 
-$ git push origin kit/support-corrupted-dash-stream:master
+// do not need to pull master
 
-// to merge PR
-$ git push -f origin kit/support-corrupted-dash-stream
+// to make PR merged state
+git push -n origin review/DEVARCH-10999-playconflict
+git push -f origin review/DEVARCH-10999-playconflict
 
-$ git pull --rebase origin master
+// to updated master 
+// master and pr/DEVARCH-10999-playconflict will be on the same
+git pull --rebase origin master
 
 
 ={============================================================================
@@ -5599,6 +5609,37 @@ signal sender=:1.169 -> dest=(null destination) serial=8794 path=/Zinc/Media/Med
       int32 3559000
    }
 
+<dbus-source-event>
+# will only display MediaRouter SourceEvent messages:
+dbus-monitor | grep -C 2 "member=SourceEvent"
+
+<dbus-error-event>
+dbus-monitor "interface=Zinc.Media.MediaRouter,member=ErrorEvent"
+
+signal sender=:1.147 -> dest=(null destination) serial=3959
+path=/Zinc/Media/MediaRouters/23; interface=Zinc.Media.MediaRouter;
+member=ErrorEvent
+
+   int32 6
+   int32 1
+   string "Not Found
+GStreamer error domain: gst-resource-error-quark
+Additional debug:
+gstsouphttpsrc.c(1623): gst_soup_http_src_parse_status ():
+  /GstPipeline:pipeline/GstBin:VirtualBinTypefind/GstURIDecodeBin:uri-decoder/GstSoupHTTPSrc:source:
+   Not Found (404), URL:
+   http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd,
+   Redirect to: (NULL)"
+
+path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorEvent
+   int32 6    note: this is error value
+   int32 1
+   string "Not Found
+
+dbus-monitor "type=method_call" "type=method_return" "type=error"
+
+dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
+   "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
 
 <serial-pair>
 See the pair between send and receive.
@@ -15083,6 +15124,7 @@ boost::shared_ptr<MediaRouterAsync>  createGstMediaRouter(
     return boost::make_shared<GstMediaRouter>(initParams);
 }
 
+// this is the old way 
 class GstMediaRouter : public MediaRouterAsync
 {
   GstMediaRouter(
@@ -15092,6 +15134,7 @@ class GstMediaRouter : public MediaRouterAsync
       pipelineFactory(pipelineFactory),
     ...
   {
+    // creates pads  
     typefindPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
     srcPadFactory_srcpads = boost::make_shared<VirtualPadFactoryInProcess>();
     srcPadFactory_sinkpads = boost::make_shared<VirtualPadFactoryInProcess>();
@@ -15112,7 +15155,7 @@ class GstMediaRouter : public MediaRouterAsync
 // ----------------------------------------------------------------------
 //  TF bin             VSRC bin          VSINK bin
 //  (uridecodebin)     (decodebin)       (qtdemux, h264parse, nexussink)
-//  sinkPF   srcPF     sinkPF   scrPF     siniPF   srcPF
+//  sinkPF   srcPF     sinkPF   scrPF     sinkPF   srcPF
 //  default  tyepePF   _srcpad  _sinkpad  _sinkpad default
 
 void GstMediaRouter::init()
@@ -15155,6 +15198,7 @@ void GstMediaRouter::init()
 
   RefObj<GstElement> elem = pipelineFactory();
 
+  // add three bins to the pipeline
   gst_bin_add_many(GST_BIN(elem.get()),
       typefindBin->getParent().retain(),
       srcBin->getParent().retain(),
@@ -15215,6 +15259,8 @@ class VirtualBinTypefind : public VirtualBin
       boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
       boost::shared_ptr<VirtualPadFactory> srcPadFactory,
       VirtualBin::CallbackType callback)
+
+      // pass to virtualbin
     : VirtualBin(sinkPadFactory, srcPadFactory, "VirtualBinTypefind", callback)
   {
     uridecodebin = gst_element_factory_make("uridecodebin", "uri-decoder");
@@ -15223,6 +15269,7 @@ class VirtualBinTypefind : public VirtualBin
       throw std::runtime_error("Couldn't create element!");
     }
 
+    // *bin-add*
     if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get())) {
       uridecodebin.retain();
 
@@ -15241,9 +15288,6 @@ class VirtualBinTypefind : public VirtualBin
     }
   }
 };
-
-
-note: this "newPadCb" leads to call <callback-chain> from typefinder
 
 
 <create-binsrc>
@@ -15270,8 +15314,12 @@ upstream = it->second();
 gst_bin_add(GST_BIN(container.get()), upstream.get());
 
 
-// This create 'decodebin', set property to support hls and dash, and connect
-// signal. However, not add it to the bin 'yet'
+note:
+This create 'decodebin', set property to support hls and dash, and connect
+signal. However, 'not' add it to the bin 'yet' since when `start()` is called,
+    `newPadCb` will be called and this will starts 'callback-chain' from TF to
+    build Virtual elements.
+
 
 class VirtualBinSrc : public VirtualBin
 {
@@ -15402,7 +15450,7 @@ class VirtualBinSink : public VirtualBin
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash-create-gst-revised to support bin injection
+*kt_dev_uv_stack_408* mr-create-gst-revised to support bin injection
 
 1. GstMediaRouter creates "bins" directly without using bin factory.
   -> should use "bin factory", createXXXBinFactory instead.
@@ -15482,17 +15530,25 @@ void GstSystemFactory::createVirtualBins(
     boost::shared_ptr<GstMediaRouterInit> initParams,
     const boost::shared_ptr<NS_TITANIUM_DEVICEAUTHORITY::Authoriser> auth)
 {
-  boost::shared_ptr<VirtualPadFactory> typefindPadFactory_sinkpads =
-    boost::make_shared<VirtualPadFactoryInProcess>();
+    boost::shared_ptr<VirtualPadFactory> typefindPadFactory_sinkpads =
+        boost::make_shared<VirtualPadFactoryInProcess>();
 
-  initParams->typefindBinFactory =
-    createTypefindBinFactory(
-        initParams->dispatcher,
-        boost::shared_ptr<VirtualPadFactoryInProcess>(),
-        typefindPadFactory_sinkpads);
-  ...
+    initParams->typefindBinFactory =
+        createTypefindBinFactory(
+                initParams->dispatcher,
+                boost::shared_ptr<VirtualPadFactoryInProcess>(),
+                typefindPadFactory_sinkpads);
 
+    initParams->sinkBinFactory =
+        createSinkBinFactory(
+                initParams->dispatcher,
+                sinkPadFactory_sinkpads,
+                boost::shared_ptr<VirtualPadFactoryInProcess>(),
+                // Disabling CENC is necessary because someone could inject an
+                // MP4 stream with CENC and trigger CencDec element to be instantiated.
+                dashCencEnable);
 }
+
 
 GstMediaRouterFactory::GstMediaRouterFactory(
     boost::shared_ptr<GstMediaRouterInit> initParams)
@@ -15506,27 +15562,6 @@ GstMediaRouterFactory::GstMediaRouterFactory(
   start();
 }
 
-void GstMediaRouter::init()
-{
-  // do not create BINs but set these up
-}
-
-
-note: the point is that bin factory can be on dbus which means in the different
-process. Gst MR can be created with bins on dbus.
-
-DEVARCH-10602:
-
-    To enhance testability, allow for future IPC-split and to allow for finer
-    control over internals of the MR it is desirable to inject VirtualBin
-    factories into MR rather then allow MR to construct them.
-    
-    This opens a range of possibilities for testing, security upgrade with a
-    process split architecture, etc.
-
-
-={============================================================================
-*kt_dev_uv_stack_408* mr-create-ctor-dtor
 
 class GstMediaRouter : public MediaRouterAsync,
 {
@@ -15546,20 +15581,24 @@ GstMediaRouter::GstMediaRouter(const GstMediaRouterInit& initParams) :
     init();
 }
 
+
 void GstMediaRouter::init()
 {
+    // do not create BINs but set these up
+
+    // calls other creates 
     sinkBin = sinkBinFactory->create();
 
     RefObj<GstElement> elem = pipelineFactory();
 
     g_signal_connect(elem.get(), "child-added",
-                     G_CALLBACK(GstMediaRouter::childAddedCallback),
-                     const_cast<std::string::value_type*>(userAgent.c_str()));
+            G_CALLBACK(GstMediaRouter::childAddedCallback),
+            const_cast<std::string::value_type*>(userAgent.c_str()));
 
     gst_bin_add_many(GST_BIN(elem.get()),
-                     typefindBin->getParent().retain(),
-                     srcBin->getParent().retain(),
-                     sinkBin->getParent().retain(), NULL);
+            typefindBin->getParent().retain(),
+            srcBin->getParent().retain(),
+            sinkBin->getParent().retain(), NULL);
 
     const RefObj<GstBus> bus =
         gst_pipeline_get_bus(GST_PIPELINE(elem.get()));
@@ -15569,11 +15608,22 @@ void GstMediaRouter::init()
     elem.swap(this->pipeline);
 }
 
-void GstMediaRouter::startPipeline()
-{
-    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
-}
 
+note: the point is that bin factory can be on dbus which means in the different
+process. Gst MR can be created with bins on dbus.
+
+DEVARCH-10602:
+
+    To enhance testability, allow for future IPC-split and to allow for finer
+    control over internals of the MR it is desirable to inject VirtualBin
+    factories into MR rather then allow MR to construct them.
+    
+    This opens a range of possibilities for testing, security upgrade with a
+    process split architecture, etc.
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-create-ctor-dtor
 
 GstMediaRouter::~GstMediaRouter()
 {
@@ -16232,8 +16282,8 @@ void GstMediaRouter::startPipeline()
     gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
 }
 
-// {{{
-// note: -> call "pad-added" callback from uridecodebin since it added into
+// {{{ *pad-added*
+// note: -> call "pad-added" callback from uridecodebin since it 'added' into
 // the pipleline from TF(TypeFinder) ctor.
 
 void VirtualBinTypefind::newPadCb
@@ -16540,7 +16590,25 @@ ProxyMediaRouter.cpp:862 ENTER:
 ={============================================================================
 *kt_dev_uv_stack_408* mr-play-dbus-log
 
+<use-different-mr>
+note: see different 'path'
+
+path=/Zinc/Media/DefaultMediaRouter;
+path=/Zinc/Media/MediaRouters/0;
+
+method call sender=:1.81 -> dest=Zinc.Media serial=969
+path=/Zinc/Media/DefaultMediaRouter; interface=Zinc.Media.MediaRouter;
+member=setVideoWindow
+
+signal sender=:1.114 -> dest=(null destination) serial=49
+path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter;
+member=PositionChangeEvent
+
+
+<logs>
 starts from HAVE_NOTHING, NETWORK_EMPTY
+
+note: called per a play
 
 method call sender=:1.131 -> dest=Zinc.MediaProxy serial=25 
 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; 
@@ -16693,7 +16761,7 @@ note: getPosition starts to show a change of current position
 
 method call sender=:1.131 -> dest=:1.79 serial=64 
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; 
-member=getPosition
+member=*getPosition*
 method return sender=:1.79 -> dest=:1.131 reply_serial=64
    struct {
       int32 0
@@ -16709,6 +16777,228 @@ signal sender=:1.72 -> dest=(null destination) serial=9845
 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter;
 member=StatusEvent 
     int32 1     // note: completed
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-play-state-changes
+
+// simplified test code
+
+void GstMediaRouterTest::test_thatGetPositionReturnsStableValues()
+{
+    EXPECT_CALL(
+            *listener, SourceEvent(_, _))
+        .Times(AnyNumber());
+
+    EXPECT_CALL(
+            *listener, BufferStatusEvent(_))
+        .Times(AnyNumber());
+
+    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::started))
+        .Times(3)
+        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
+                        boost::bind(&NS_ZINC::AtomicBool::set,
+                            boost::ref(done), true))));
+
+    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::seek_started))
+        .Times(2)
+        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
+                        boost::bind(&NS_ZINC::AtomicBool::set,
+                            boost::ref(done), false))));
+
+    mr->setSource(server.getManifestUrl(), SetSourceReason::unspecified).get();
+    mr->setSink("decoder://headless").get();
+    mr->start().get();
+
+    mr->setPlaySpeed(0.0).get();
+    mr->seekPosition(SeekReference::end, 0, SeekMode::prioritise_speed).get();
+
+    const int32_t seek_amount = 10000;
+    const int32_t position_slack = 200;
+
+    mr->seekPosition(SeekReference::end, seek_amount, SeekMode::prioritise_speed).get();
+}
+
+
+// starts
+
+void GstMediaRouter::startPipeline()
+{
+    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
+}
+
+
+case GST_MESSAGE_STATE_CHANGED:
+    onStateChange(oldstate, newstate, pending);
+
+
+// waits for playing (newstate)
+
+/GstMediaRouter.cpp:1580 ENTER: GstMediaRouter::setSink_async(const string&)
+/GstMediaRouter.cpp:1580 EXIT:  GstMediaRouter::setSink_async(const string&)
+/GstMediaRouter.cpp:632 State transition NULL -> READY wanted PAUSED
+/GstMediaRouter.cpp:634 KT: CHANGED: 
+
+...
+
+/GstMediaRouter.cpp:632 State transition READY -> PAUSED wanted PLAYING
+/GstMediaRouter.cpp:634 KT: CHANGED: 
+
+...
+
+// now got the `playing(4)` states so fires up `started(0)` event and call
+// `startReportPositionChange`
+
+/GstMediaRouter.cpp:632 State transition PAUSED -> PLAYING wanted VOID_PENDING
+/GstMediaRouter.cpp:634 KT: CHANGED: 
+/GstMediaRouter.cpp:750 KT: produceEvent: 0
+
+/GstMediaRouter.cpp:699 ENTER: GstMediaRouter::startReportingPositionChange()
+/GstMediaRouter.cpp:699 EXIT:  GstMediaRouter::startReportingPositionChange()
+
+
+// setPlaySpeed(0) which connects the signal with `paused` and
+// `stopReportingPosition`
+
+/GstMediaRouter.cpp:1296 ENTER: GstMediaRouter::setPlaySpeed_async(double)
+/GstMediaRouter.cpp:1296 EXIT:  GstMediaRouter::setPlaySpeed_async(double)
+
+// the first seek
+
+/GstMediaRouter.cpp:1532 ENTER: void GstMediaRouter::seekPosition_async
+    (Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+
+/GstMediaRouter.cpp:634 State transition PLAYING -> PAUSED wanted VOID_PENDING
+/GstMediaRouter.cpp:636 KT: CHANGED: 
+/GstMediaRouter.cpp:88 KT: OneShotFunctionCall: 3
+/GstMediaRouter.cpp:719 ENTER: void GstMediaRouter::stopReportingPositionChange()
+/GstMediaRouter.cpp:719 EXIT:  void GstMediaRouter::stopReportingPositionChange()
+
+
+// seekPosition uses the other signal and fires `started` event with no
+// condition.
+
+void GstMediaRouter::seekPosition_async()
+{
+    if (!seekInFlight) {
+        onAsyncEvent.connect_extended(
+            OneShotFunctionCall(
+            boost::bind(&GstMediaRouter::seekPositionFinish_locked, this)));
+    }
+}
+
+
+// GstMediaRouter::seekPosition_locked() uses gst call to do seek. this causes
+// this event?
+
+case GST_MESSAGE_ASYNC_DONE:
+    onAsyncEvent();
+    break;
+
+void GstMediaRouter::seekPositionFinish_locked()
+{
+    produceStatusEvent(StatusEventValue::started);
+    seekInFlight = false;
+}
+
+// fires `started`
+
+/GstMediaRouter.cpp:96 KT: OneShotFunctionCall()
+/GstMediaRouter.cpp:1492 KT: StatusEventValue::started
+/GstMediaRouter.cpp:752 KT: produceEvent: 0
+
+// changed but no action
+
+/GstMediaRouter.cpp:634 State transition PAUSED -> PAUSED wanted PAUSED
+/GstMediaRouter.cpp:636 KT: CHANGED: StatusEventValue::started
+
+
+// the second seek
+
+/GstMediaRouter.cpp:1532 ENTER: void GstMediaRouter::seekPosition_async
+    (Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
+
+
+// changed but no action
+
+/GstMediaRouter.cpp:634 State transition PAUSED -> PAUSED wanted VOID_PENDING
+/GstMediaRouter.cpp:636 KT: CHANGED: StatusEventValue::started
+
+// fires `started`
+
+/GstMediaRouter.cpp:96 KT: OneShotFunctionCall()
+/GstMediaRouter.cpp:1492 KT: StatusEventValue::started
+/GstMediaRouter.cpp:752 KT: produceEvent: 0
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-play-zinc-log
+
+ ProxyMediaRouterFactory.cpp:40 EXIT:  ::ProxyMediaRouterFactory::createMediaRouter()
+
+2016-03-08 16:25:42,719
+ y/src/ProxyMediaRouter.cpp:450 ENTER: ::ProxyMediaRouter::setSource
+    (const std::string&, Zinc::Media::SetSourceReason::Enum)
+
+ y/src/ProxyMediaRouter.cpp:172 ENTER: ::SetSourceContinuation::start
+    (boost::shared_ptr<nickel::system::ProxyMediaRouter>, 
+     const std::string&, Zinc::Media::SetSourceReason::Enum)
+
+ /src/ProxyMediaRouter.cpp:1007 ENTER: ::ProxyMediaRouter::findFactoryGivenSource
+    (const std::string&) const
+
+ /GstMediaRouterFactory.cpp:105 ENTER: ::GstMediaRouterFactory::createMediaRouter()
+
+ mer/src/GstMediaRouter.cpp:958 ENTER: ::GstMediaRouter::GstMediaRouter
+    (::GstMediaRouterInit&)
+ mer/src/GstMediaRouter.cpp:855 ENTER: ::GstMediaRouter::init()
+
+2016-03-08 16:25:42,740:
+ /src/VirtualBinTypefind.cpp:34 ENTER: nickel::system::VirtualBinTypefind::VirtualBinTypefind(boost::shared_ptr<nickel::system::VirtualPadFactory>, boost::shared_ptr<nickel::system::VirtualPadFactory>)
+ /src/VirtualBinTypefind.cpp:34 EXIT:  nickel::system::VirtualBinTypefind::VirtualBinTypefind(boost::shared_ptr<nickel::system::VirtualPadFactory>, boost::shared_ptr<nickel::system::VirtualPadFactory>)
+
+ mer/src/GstMediaRouter.cpp:906 ** KT: GstMR init done
+ mer/src/GstMediaRouter.cpp:845 ** KT: issue getPosition on purpose by 100
+ er/src/GstMediaRouter.cpp:1652 ENTER: Zinc::Media::Position nickel::system::GstMediaRouter::getPosition_async() const
+ er/src/GstMediaRouter.cpp:1605 ENTER: const Zinc::Media::Position nickel::system::GstMediaRouter::getPosition_locked(bool) const
+ mer/src/GstMediaRouter.cpp:547 ** KT: getBufferPosition.vod } in stopped state 
+ mer/src/GstMediaRouter.cpp:513 ** KT: getDuration { in stopped state
+ mer/src/GstMediaRouter.cpp:855 EXIT:  void nickel::system::GstMediaRouter::init()
+
+ mer/src/GstMediaRouter.cpp:958 EXIT:  ::GstMediaRouter::GstMediaRouter()
+ mer/src/GstMediaRouter.cpp:516 failed duration query: -1
+ /GstMediaRouterFactory.cpp:105 EXIT:  ::GstMediaRouterFactory::createMediaRouter()
+
+ keep calling getPos...
+
+2016-03-08 16:25:43,506
+mer/src/GstMediaRouter.cpp:973 ENTER: void nickel::system::GstMediaRouter::setSource_async
+    (const std::string&, Zinc::Media::SetSourceReason::Enum)
+/src/VirtualBinTypefind.cpp:43 ENTER: virtual void nickel::system::VirtualBinTypefind::setSource
+    (const std::string&)
+
+2016-03-08 16:25:43,728 
+y/src/ProxyMediaRouter.cpp:246 EXIT:  void nickel::system::SetSourceContinuation::complete()
+er/src/GstMediaRouter.cpp:1597 EXIT:  virtual zinc::Future<void> nickel::system::GstMediaRouter::setSink(const std::string&)
+y/src/ProxyMediaRouter.cpp:525 EXIT:  virtual zinc::Future<void> nickel::system::ProxyMediaRouter::setSink(const std::string&)
+er/src/GstMediaRouter.cpp:1572 ENTER: void nickel::system::GstMediaRouter::setSink_async(const std::string&)
+er/src/GstMediaRouter.cpp:1572 EXIT:  void nickel::system::GstMediaRouter::setSink_async(const std::string&)
+mer/src/GstMediaRouter.cpp:670 ** KT: State transition NULL -> READY wanted PAUSED
+
+2016-03-08 16:25:44,056 
+y/src/ProxyMediaRouter.cpp:908 ENTER: virtual zinc::Future<void> nickel::system::ProxyMediaRouter::startBuffering()
+
+2016-03-08 16:25:44,427 
+y/src/ProxyMediaRouter.cpp:731 ENTER: virtual zinc::Future<void> nickel::system::ProxyMediaRouter::setVideoWindow(const Zinc::Media::VideoWindowDescriptor&)
+
+ y/src/ProxyMediaRouter.cpp:409 ENTER: zinc::Future<void> nickel::system::ProxyMediaRouter::deferForwardOrIgnore(Functor) const [with Functor = boost::_bi::bind_t<zinc::Future<void>, boost::_mfi::mf1<zinc::Future<void>, Zinc::Media::MediaRouterAsync, const Zinc::Media::VideoWindowDescriptor&>, boost::_bi::list2<boost::arg<1>, boost::_bi::value<Zinc::Media::VideoWindowDescriptor> > >]
+
+ er/src/GstMediaRouter.cpp:1307 ENTER: ::GstMediaRouter::setVideoWindow
+    (const Zinc::Media::VideoWindowDescriptor&)
+ er/src/GstMediaRouter.cpp:1312 SetVideoWindow: {0, 0, 1, 1}, => {0, 0, 1, 0.888889}
+ mer/src/VirtualBinSink.cpp:189 VirtualBinSink::setVideoWindow: {0, 0, 1, 1} => {0, 0, 1, 0.888889}
+ er/src/GstMediaRouter.cpp:1307 EXIT:  ::GstMediaRouter::setVideoWindow(const Zinc::Media::VideoWindowDescriptor&)
+ mer/src/VirtualBinSink.cpp:219 Can't find sink element
 
 
 ={============================================================================
@@ -17476,7 +17766,8 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
     const std::pair<gint64, gint64> bufPos = 
         getBufferPosition(pipeline,liveMode);
 
-    // this calls to VirtualBinSink
+    // this calls to VirtualBinSink when it is not in seeking.
+    // return sinkBin->getPresentationTime(timeFormat);
     int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
     ...
 }
@@ -18733,240 +19024,6 @@ Pid 2032 has died. Going to cleanup.
 Nexus resources are owned by PID 2032
 
 Releasing Nexus resources
-
-
-={============================================================================
-*kt_dev_uv_stack_408* mr-dash: starts and state changes
-
-// simplified test code
-
-void GstMediaRouterTest::test_thatGetPositionReturnsStableValues()
-{
-    EXPECT_CALL(
-            *listener, SourceEvent(_, _))
-        .Times(AnyNumber());
-
-    EXPECT_CALL(
-            *listener, BufferStatusEvent(_))
-        .Times(AnyNumber());
-
-    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::started))
-        .Times(3)
-        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
-                        boost::bind(&NS_ZINC::AtomicBool::set,
-                            boost::ref(done), true))));
-
-    EXPECT_CALL(*listener, StatusEvent(StatusEventValue::seek_started))
-        .Times(2)
-        .WillRepeatedly(InvokeWithoutArgs(boost::function<void(void)>(
-                        boost::bind(&NS_ZINC::AtomicBool::set,
-                            boost::ref(done), false))));
-
-    mr->setSource(server.getManifestUrl(), SetSourceReason::unspecified).get();
-    mr->setSink("decoder://headless").get();
-    mr->start().get();
-
-    mr->setPlaySpeed(0.0).get();
-    mr->seekPosition(SeekReference::end, 0, SeekMode::prioritise_speed).get();
-
-    const int32_t seek_amount = 10000;
-    const int32_t position_slack = 200;
-
-    mr->seekPosition(SeekReference::end, seek_amount, SeekMode::prioritise_speed).get();
-}
-
-
-// starts
-
-void GstMediaRouter::startPipeline()
-{
-    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
-}
-
-
-case GST_MESSAGE_STATE_CHANGED:
-    onStateChange(oldstate, newstate, pending);
-
-
-// waits for playing (newstate)
-
-/GstMediaRouter.cpp:1580 ENTER: GstMediaRouter::setSink_async(const string&)
-/GstMediaRouter.cpp:1580 EXIT:  GstMediaRouter::setSink_async(const string&)
-/GstMediaRouter.cpp:632 State transition NULL -> READY wanted PAUSED
-/GstMediaRouter.cpp:634 KT: CHANGED: 
-
-...
-
-/GstMediaRouter.cpp:632 State transition READY -> PAUSED wanted PLAYING
-/GstMediaRouter.cpp:634 KT: CHANGED: 
-
-...
-
-// now got the `playing(4)` states so fires up `started(0)` event and call
-// `startReportPositionChange`
-
-/GstMediaRouter.cpp:632 State transition PAUSED -> PLAYING wanted VOID_PENDING
-/GstMediaRouter.cpp:634 KT: CHANGED: 
-/GstMediaRouter.cpp:750 KT: produceEvent: 0
-
-/GstMediaRouter.cpp:699 ENTER: GstMediaRouter::startReportingPositionChange()
-/GstMediaRouter.cpp:699 EXIT:  GstMediaRouter::startReportingPositionChange()
-
-
-// setPlaySpeed(0) which connects the signal with `paused` and
-// `stopReportingPosition`
-
-/GstMediaRouter.cpp:1296 ENTER: GstMediaRouter::setPlaySpeed_async(double)
-/GstMediaRouter.cpp:1296 EXIT:  GstMediaRouter::setPlaySpeed_async(double)
-
-// the first seek
-
-/GstMediaRouter.cpp:1532 ENTER: void GstMediaRouter::seekPosition_async
-    (Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
-
-/GstMediaRouter.cpp:634 State transition PLAYING -> PAUSED wanted VOID_PENDING
-/GstMediaRouter.cpp:636 KT: CHANGED: 
-/GstMediaRouter.cpp:88 KT: OneShotFunctionCall: 3
-/GstMediaRouter.cpp:719 ENTER: void GstMediaRouter::stopReportingPositionChange()
-/GstMediaRouter.cpp:719 EXIT:  void GstMediaRouter::stopReportingPositionChange()
-
-
-// seekPosition uses the other signal and fires `started` event with no
-// condition.
-
-void GstMediaRouter::seekPosition_async()
-{
-    if (!seekInFlight) {
-        onAsyncEvent.connect_extended(
-            OneShotFunctionCall(
-            boost::bind(&GstMediaRouter::seekPositionFinish_locked, this)));
-    }
-}
-
-
-// GstMediaRouter::seekPosition_locked() uses gst call to do seek. this causes
-// this event?
-
-case GST_MESSAGE_ASYNC_DONE:
-    onAsyncEvent();
-    break;
-
-void GstMediaRouter::seekPositionFinish_locked()
-{
-    produceStatusEvent(StatusEventValue::started);
-    seekInFlight = false;
-}
-
-// fires `started`
-
-/GstMediaRouter.cpp:96 KT: OneShotFunctionCall()
-/GstMediaRouter.cpp:1492 KT: StatusEventValue::started
-/GstMediaRouter.cpp:752 KT: produceEvent: 0
-
-// changed but no action
-
-/GstMediaRouter.cpp:634 State transition PAUSED -> PAUSED wanted PAUSED
-/GstMediaRouter.cpp:636 KT: CHANGED: StatusEventValue::started
-
-
-// the second seek
-
-/GstMediaRouter.cpp:1532 ENTER: void GstMediaRouter::seekPosition_async
-    (Zinc::Media::SeekReference::Enum, int32_t, Zinc::Media::SeekMode::Enum)
-
-
-// changed but no action
-
-/GstMediaRouter.cpp:634 State transition PAUSED -> PAUSED wanted VOID_PENDING
-/GstMediaRouter.cpp:636 KT: CHANGED: StatusEventValue::started
-
-// fires `started`
-
-/GstMediaRouter.cpp:96 KT: OneShotFunctionCall()
-/GstMediaRouter.cpp:1492 KT: StatusEventValue::started
-/GstMediaRouter.cpp:752 KT: produceEvent: 0
-
-
-={============================================================================
-*kt_dev_uv_stack_408* mr-dash: dbus log
-
-<mr-create>
-
-note: called per a play
-
-method call sender=:1.108 -> dest=Zinc.MediaProxy serial=92401
-path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory;
-member=createMediaRouter
-
-method call sender=:1.125 -> dest=Zinc.MediaProxy serial=25
-path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory;
-member=createMediaRouter
-
-
-<mr-get-pos>
-method call sender=:1.145 -> dest=:1.147 serial=3328
-path=/Zinc/Media/MediaRouters/13; interface=Zinc.Media.MediaRouter;
-member=getPosition
-
-
-<mr-set-source>
-path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=setSource
-   string "http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd"
-   int32 1
-
-<use-different-media-router>
-
-note: see different 'path'
-
-path=/Zinc/Media/DefaultMediaRouter;
-path=/Zinc/Media/MediaRouters/0;
-
-method call sender=:1.81 -> dest=Zinc.Media serial=969
-path=/Zinc/Media/DefaultMediaRouter; interface=Zinc.Media.MediaRouter;
-member=setVideoWindow
-
-signal sender=:1.114 -> dest=(null destination) serial=49
-path=/Zinc/Media/MediaRouters/0; interface=Zinc.Media.MediaRouter;
-member=PositionChangeEvent
-
-
-<source-event>
-# will only display MediaRouter SourceEvent messages:
-dbus-monitor | grep -C 2 "member=SourceEvent"
-
-dbus-monitor "type=method_call" "type=method_return" "type=error"
-
-dbus-monitor --profile "interface=Zinc.Application.ApplicationManager,member=launchApplication" \ 
-   "interface=Zinc.Application.ApplicationManager,member=ApplicationLifecycleEvent"
-
-
-<error-event>
-dbus-monitor "interface=Zinc.Media.MediaRouter,member=ErrorEvent"
-
-signal sender=org.freedesktop.DBus -> dest=:1.149 serial=2
-path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
-string ":1.149"
-
-signal sender=:1.147 -> dest=(null destination) serial=3959
-path=/Zinc/Media/MediaRouters/23; interface=Zinc.Media.MediaRouter;
-member=ErrorEvent
-
-   int32 6
-   int32 1
-   string "Not Found
-GStreamer error domain: gst-resource-error-quark
-Additional debug:
-gstsouphttpsrc.c(1623): gst_soup_http_src_parse_status ():
-  /GstPipeline:pipeline/GstBin:VirtualBinTypefind/GstURIDecodeBin:uri-decoder/GstSoupHTTPSrc:source:
-   Not Found (404), URL:
-   http://live-dash-clear.dev.youview.co.uk/channel13/channel13.isml/channel13.mpd,
-   Redirect to: (NULL)"
-
-
-path=/Zinc/Media/MediaRouters/3; interface=Zinc.Media.MediaRouter; member=ErrorEvent
-   int32 6    note: this is error value
-   int32 1
-   string "Not Found
 
 
 ={============================================================================
@@ -23973,7 +24030,7 @@ git format-patch zinc-pristine
 
 
 ={============================================================================
-*kt_dev_uv_stack_009* zinc-lsr: keys
+*kt_dev_uv_stack_009* zinc-lsr-keys
 
 <box-uuid>
 [root@HUMAX /]# getItem oem.device.duid
@@ -24080,7 +24137,7 @@ root# setItem platform.settings.enable-ipcrb 1
 
 
 ={============================================================================
-*kt_dev_uv_stack_009* zinc-lsr: hwei: to revert back the previous version
+*kt_dev_uv_stack_009* zinc-lsr-hwei-downgrade
 
 touch /opt/cds/download/smdebug
 
@@ -24096,7 +24153,7 @@ note: Only for ATK.
 
 
 ={============================================================================
-*kt_dev_uv_stack_009* zinc-lsr: platform config
+*kt_dev_uv_stack_009* zinc-lsr-platform config
 
 {process}
 To add lst to the master config.
@@ -25843,7 +25900,7 @@ ZB_CFG=huawei.372 zb-make
 
 
 ={============================================================================
-*kt_dev_uv_oem_001* oem-box-hmax-ctk-atk
+*kt_dev_uv_oem_001* hmax-ctk-atk
 
 <box-type>
 [root@HUMAX /]# getItem oem.device.model.variant    
@@ -25901,7 +25958,7 @@ humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 /.ssh -> /var/tmp/authorized_keys
 
 {hmax-cds}
-http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T1000/rootfs/ATK/DTR-T1000_CDS.80B07002.bin
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.13.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
 
 note: will wipe out a box including writable nfs.
@@ -25931,8 +25988,7 @@ from the root@HUMAX command prompt:
 
 cd /mnt/hd1 &&
 
-wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.12.0/T1000/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
-
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T1000/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.13.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
 
 chmod +x humax-hdd-install.sh
@@ -25941,7 +25997,7 @@ chmod +x humax-hdd-install.sh
 <script>
 note: cannot run this when already booted from HDD.
 
-./humax-hdd-install.sh -s -r H23.13.0
+./humax-hdd-install.sh -s -r H23.14.0
 
 // do not work for me. why?
 ./humax-hdd-install.sh -l http://devnfs2.dev.youview.co.uk/HUMAX/H23.8.0/T2100/rootfs/
@@ -26066,6 +26122,7 @@ rootfs on / type rootfs (rw)
 Need to erase eeprom.
 
 wget http://devnfs2.dev.youview.co.uk/HUMAX/archived/eeprom_eraser/ATK/DTRT2100_upgrade.hdf
+wget http://devnfs2.dev.youview.co.uk/HUMAX/archived/eeprom_eraser/ATK/DTR_T1000_upgrade.hdf
 
 
 ={============================================================================
