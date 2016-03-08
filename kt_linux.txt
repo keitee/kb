@@ -236,8 +236,9 @@
 *kt_linux_tool_300* gdb-break: dprintf
 *kt_linux_tool_310* gdb-dprintf
 
-*kt_linux_tool_400* gdb-stl: step into stl code
-*kt_linux_tool_400* gdb-stl: gdb-stl-views, pretty-printer
+*kt_linux_tool_400* gdb-stl-step-into-code
+*kt_linux_tool_400* gdb-stl-debug-mode
+*kt_linux_tool_400* gdb-stl-pretty-printer-gdb-stl-views
 *kt_linux_tool_400* gdb-stl: asm, registers, and colored 
 
 
@@ -16780,35 +16781,73 @@ in the manner of fprintf and similar functions. Otherwise, the dprintf format
 
 
 ={============================================================================
-*kt_linux_tool_400* gdb-stl: step into stl code
+*kt_linux_tool_400* gdb-stl-step-into-code
 
-To be able to step into stl code, need to have the debug version of C++ library
-and this is libstdc++6 in Debian Wheezy case.
+note:
+This seems wrong since able to step into stl code without building gcc. Why
+thought that needs to build gcc in the first place?
 
-https://packages.debian.org/wheezy/libstdc++6
+// To be able to step into stl code, need to have the debug version of C++ library
+// and this is libstdc++6 in Debian Wheezy case.
+// 
+// https://packages.debian.org/wheezy/libstdc++6
+// 
+// (on pc vm, gcc-4.7)
+// $ ldd a.out 
+// 	linux-gate.so.1 =>  (0xb771f000)
+// 	libstdc++.so.6 => /usr/lib/i386-linux-gnu/libstdc++.so.6 (0xb761a000)
+// 	libm.so.6 => /lib/i386-linux-gnu/i686/cmov/libm.so.6 (0xb75f4000)
+// 	libgcc_s.so.1 => /lib/i386-linux-gnu/libgcc_s.so.1 (0xb75d6000)
+// 	libc.so.6 => /lib/i386-linux-gnu/i686/cmov/libc.so.6 (0xb7471000)
+// 	/lib/ld-linux.so.2 (0xb7720000)
+// 
+// (on pc Debian Jessie, gcc-4.9)
+// 09:26:35 ~/work$ ldd a.out 
+// 	linux-vdso.so.1 (0x00007fff73fd5000)
+// 	libstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fcba2103000)
+// 	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fcba1e02000)
+// 	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fcba1bec000)
+// 	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fcba1841000)
+// 	/lib64/ld-linux-x86-64.so.2 (0x00007fcba240e000)
+// 
+// $ readelf --debug-dump=decodedline /usr/lib/i386-linux-gnu/libstdc++.so.6
+// $ 
+// 
+// This shows that the release version.
 
-(on pc vm, gcc-4.7)
-$ ldd a.out 
-	linux-gate.so.1 =>  (0xb771f000)
-	libstdc++.so.6 => /usr/lib/i386-linux-gnu/libstdc++.so.6 (0xb761a000)
-	libm.so.6 => /lib/i386-linux-gnu/i686/cmov/libm.so.6 (0xb75f4000)
-	libgcc_s.so.1 => /lib/i386-linux-gnu/libgcc_s.so.1 (0xb75d6000)
-	libc.so.6 => /lib/i386-linux-gnu/i686/cmov/libc.so.6 (0xb7471000)
-	/lib/ld-linux.so.2 (0xb7720000)
+a.out.rel : g++ -g -std=c++0x $1
+a.out     : g++ -g -O0 -std=c++0x -D_GLIBCXX_DEBUG $1
 
-(on pc Debian Jessie, gcc-4.9)
-09:26:35 ~/work$ ldd a.out 
-	linux-vdso.so.1 (0x00007fff73fd5000)
-	libstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fcba2103000)
-	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fcba1e02000)
-	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fcba1bec000)
-	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fcba1841000)
-	/lib64/ld-linux-x86-64.so.2 (0x00007fcba240e000)
+$ ll a.out*
+-rwxr-xr-x 1 keitee keitee  61920 Mar  7 23:27 a.out*
+-rwxr-xr-x 1 keitee keitee  41069 Mar  7 23:22 a.out.rel*
+
+$ ldd a.out
+	linux-gate.so.1 =>  (0xb775d000)
+	libstdc++.so.6 => /usr/lib/i386-linux-gnu/libstdc++.so.6 (0xb7658000)
+	libm.so.6 => /lib/i386-linux-gnu/i686/cmov/libm.so.6 (0xb7632000)
+	libgcc_s.so.1 => /lib/i386-linux-gnu/libgcc_s.so.1 (0xb7614000)
+	libc.so.6 => /lib/i386-linux-gnu/i686/cmov/libc.so.6 (0xb74af000)
+	/lib/ld-linux.so.2 (0xb775e000)
+
+$ ldd a.out.rel 
+	linux-gate.so.1 =>  (0xb7701000)
+	libstdc++.so.6 => /usr/lib/i386-linux-gnu/libstdc++.so.6 (0xb75fc000)
+	libm.so.6 => /lib/i386-linux-gnu/i686/cmov/libm.so.6 (0xb75d6000)
+	libgcc_s.so.1 => /lib/i386-linux-gnu/libgcc_s.so.1 (0xb75b8000)
+	libc.so.6 => /lib/i386-linux-gnu/i686/cmov/libc.so.6 (0xb7453000)
+	/lib/ld-linux.so.2 (0xb7702000)
 
 $ readelf --debug-dump=decodedline /usr/lib/i386-linux-gnu/libstdc++.so.6
 $ 
 
-This shows that the release version.
+Interestingly, the both case shows the same when do info sharedlibrary in gdb
+
+(gdb) i sharedlibrary 
+From                To                  Syms Read   Shared Object Library
+0x00007ffff7b2c8b0  0x00007ffff7b94b1f  Yes (*)     /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+(*): Shared library is 'missing' debugging information.
+
 
 // note:
 // DO NOT USE THIS method since fails to build gcc and there seems to be a
@@ -16910,23 +16949,51 @@ Using built-in specs.
 COLLECT_GCC=../install/bin/g++4.9.2
 COLLECT_LTO_WRAPPER=/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/lto-wrapper
 Target: x86_64-unknown-linux-gnu
-Configured with: ../gcc-4.9.2/configure --disable-checking --enable-languages=c,c++ --enable-multiarch --enable-shared --enable-threads=posix --enable-libstdcxx-debug --program-suffix=4.9.2 --with-gmp=/usr/local/lib --with-mpc=/usr/lib --with-mpfr=/usr/lib --without-included-gettext --with-system-zlib --with-tune=generic --prefix=/home/kpark/gcc-build/install
-Thread model: posix
-gcc version 4.9.2 (GCC) 
-COLLECT_GCC_OPTIONS='-g' '-std=c++11' '-shared-libgcc' '-mtune=generic' '-march=x86-64'
- /home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/cc1plus -quiet -imultiarch x86_64-linux-gnu -D_GNU_SOURCE tstring.cpp -quiet -dumpbase tstring.cpp "-mtune=generic" "-march=x86-64" -auxbase tstring -g "-std=c++11" -o /tmp/ccd6wNFy.s
-COLLECT_GCC_OPTIONS='-g' '-std=c++11' '-shared-libgcc' '-mtune=generic' '-march=x86-64'
- as --64 -o /tmp/ccu61RXa.o /tmp/ccd6wNFy.s
+Configured with: ../gcc-4.9.2/configure --disable-checking
+--enable-languages=c,c++ --enable-multiarch --enable-shared
+--enable-threads=posix --enable-libstdcxx-debug --program-suffix=4.9.2
+--with-gmp=/usr/local/lib --with-mpc=/usr/lib --with-mpfr=/usr/lib
+--without-included-gettext --with-system-zlib --with-tune=generic
+--prefix=/home/kpark/gcc-build/install Thread model: posix gcc version 4.9.2
+(GCC) COLLECT_GCC_OPTIONS='-g' '-std=c++11' '-shared-libgcc' '-mtune=generic'
+'-march=x86-64'
+/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/cc1plus
+-quiet -imultiarch x86_64-linux-gnu -D_GNU_SOURCE tstring.cpp -quiet -dumpbase
+tstring.cpp "-mtune=generic" "-march=x86-64" -auxbase tstring -g "-std=c++11" -o
+/tmp/ccd6wNFy.s COLLECT_GCC_OPTIONS='-g' '-std=c++11' '-shared-libgcc'
+'-mtune=generic' '-march=x86-64' as --64 -o /tmp/ccu61RXa.o /tmp/ccd6wNFy.s
 COMPILER_PATH=/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/:/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/:/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/:/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/:/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/
 LIBRARY_PATH=/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/:/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/../../../:/lib/:/usr/lib/
-COLLECT_GCC_OPTIONS='-g' '-std=c++11' '-shared-libgcc' '-mtune=generic' '-march=x86-64'
- /home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/collect2 -plugin /home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/liblto_plugin.so "-plugin-opt=/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/lto-wrapper" "-plugin-opt=-fresolution=/tmp/ccWBUZfN.res" "-plugin-opt=-pass-through=-lgcc_s" "-plugin-opt=-pass-through=-lgcc" "-plugin-opt=-pass-through=-lc" "-plugin-opt=-pass-through=-lgcc_s" "-plugin-opt=-pass-through=-lgcc" --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/crti.o /home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/crtbegin.o -L/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2 -L/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/../../.. /tmp/ccu61RXa.o "-lstdc++" -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/crtend.o /usr/lib/x86_64-linux-gnu/crtn.o
+COLLECT_GCC_OPTIONS='-g' '-std=c++11' '-shared-libgcc' '-mtune=generic'
+'-march=x86-64'
+/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/collect2
+-plugin
+/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/liblto_plugin.so
+"-plugin-opt=/home/kpark/gcc-build/install/libexec/gcc/x86_64-unknown-linux-gnu/4.9.2/lto-wrapper"
+"-plugin-opt=-fresolution=/tmp/ccWBUZfN.res" "-plugin-opt=-pass-through=-lgcc_s"
+"-plugin-opt=-pass-through=-lgcc" "-plugin-opt=-pass-through=-lc"
+"-plugin-opt=-pass-through=-lgcc_s" "-plugin-opt=-pass-through=-lgcc"
+--eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2
+/usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/crti.o
+/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/crtbegin.o
+-L/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2
+-L/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/../../../../lib64
+-L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu
+-L/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/../../..
+/tmp/ccu61RXa.o "-lstdc++" -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc
+/home/kpark/gcc-build/install/lib/gcc/x86_64-unknown-linux-gnu/4.9.2/crtend.o
+/usr/lib/x86_64-linux-gnu/crtn.o
 
 
-Build with debug version
-------------------------------------
+={============================================================================
+*kt_linux_tool_400* gdb-stl-debug-mode
 
-https://gcc.gnu.org/onlinedocs/libstdc++/manual/debug_mode_using.html#debug_mode.using.mode
+https://gcc.gnu.org/onlinedocs/libstdc++/index.html
+http://gcc.gnu.org/onlinedocs/libstdc++/manual/debug_mode_using.html#debug_mode.using.mode
+
+Chapter 17. Debug Mode
+
+Using
 
 Using the Debug Mode
 
@@ -16936,6 +17003,9 @@ class templates such as std::vector, and therefore you can only link code
 compiled with debug mode and code compiled without debug mode if no
 instantiation of a container is passed between the two translation units.
 
+By default, error messages are formatted to fit on lines of about 78 characters.
+The environment variable GLIBCXX_DEBUG_MESSAGE_LENGTH can be used to request a
+different length.  
 
 Using a Specific Debug Container
 
@@ -16945,35 +17015,97 @@ These debugging containers are functionally equivalent to the standard drop-in
 containers used in debug mode, but they are available in a separate namespace as
 GNU extensions and may be used in programs compiled with either release mode or
 with debug mode. The following table provides the names and headers of the
-debugging containers: 
+debugging containers:
 
-../install/bin/g++4.9.2 -g -std=c++0x -D_GLIBCXX_DEBUG $1
+Table 17.1. Debugging Containers
 
-Now gdb can step into the stl code.
+Container           Header    Debug container       Debug header
+std::bitset         bitset    __gnu_debug::bitset   <debug/bitset>
+std::deque          deque     __gnu_debug::deque    <debug/deque>
+std::list           list      __gnu_debug::list     <debug/list>
+std::map            map       __gnu_debug::map      <debug/map>
+std::multimap       map       __gnu_debug::multimap <debug/map>
+std::multiset       set       __gnu_debug::multiset <debug/set>
+std::set            set       __gnu_debug::set      <debug/set>
+...
 
--rwxr-xr-x 1 kpark kpark 87496 Feb  8 11:27 a.out*  // with -D_GLIBCXX_DEBUG
--rwxr-xr-x 1 kpark kpark 44952 Feb  8 11:48 a.out*
+In addition, when compiling in C++11 mode, these additional containers have
+additional debug capability.
+
+Table 17.2. Debugging Containers C++11
+...
 
 
-note: WHY cannot see libraries that are debug versions?
+{debug-version}
+/toolchain/mipsel-linux-uclibc/include/c++/4.4.5/debug$ ll
+-rw-r--r--  1 root root 10042 Nov 15  2010 bitset
+-rw-r--r--  1 root root  5250 Nov 15  2010 debug.h
+-rw-r--r--  1 root root 12814 Nov 15  2010 deque
+-rw-r--r--  1 root root 11235 Nov 15  2010 formatter.h
+-rw-r--r--  1 root root 13046 Nov 15  2010 functions.h
+-rw-r--r--  1 root root 16527 Nov 15  2010 list
+-rw-r--r--  1 root root 10924 Nov 15  2010 macros.h
+-rw-r--r--  1 root root  1328 Nov 15  2010 map
+-rw-r--r--  1 root root 12014 Nov 15  2010 map.h
+-rw-r--r--  1 root root 11874 Nov 15  2010 multimap.h
+-rw-r--r--  1 root root 11665 Nov 15  2010 multiset.h
+-rw-r--r--  1 root root  7900 Nov 15  2010 safe_base.h
+-rw-r--r--  1 root root 21599 Nov 15  2010 safe_iterator.h
+-rw-r--r--  1 root root  4412 Nov 15  2010 safe_iterator.tcc
+-rw-r--r--  1 root root  6206 Nov 15  2010 safe_sequence.h
+-rw-r--r--  1 root root  1322 Nov 15  2010 set
+-rw-r--r--  1 root root 11592 Nov 15  2010 set.h
+-rw-r--r--  1 root root 30299 Nov 15  2010 string
+-rw-r--r--  1 root root 17180 Nov 15  2010 unordered_map
+-rw-r--r--  1 root root 17013 Nov 15  2010 unordered_set
+-rw-r--r--  1 root root 15055 Nov 15  2010 vector
 
-(gdb) s
-std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string (this=0x7fffffffdbe0, __s=0x402732 "string mesg: ", __a=...) at /home/kpark/gcc-build/install/include/c++/4.9.2/bits/basic_string.tcc:215
-215				       __s + npos, __a), __a)
-(gdb) i sharedlibrary 
-From                To                  Syms Read   Shared Object Library
-0x00007ffff7ddcae0  0x00007ffff7df5130  Yes         /lib64/ld-linux-x86-64.so.2
-                                        No          linux-vdso.so.1
-0x00007ffff7b2c8b0  0x00007ffff7b94b1f  Yes (*)     /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-0x00007ffff77d5580  0x00007ffff7840d96  Yes         /lib/x86_64-linux-gnu/libm.so.6
-0x00007ffff75bcab0  0x00007ffff75cc9a5  Yes (*)     /lib/x86_64-linux-gnu/libgcc_s.so.1
-0x00007ffff722e4a0  0x00007ffff735b043  Yes         /lib/x86_64-linux-gnu/libc.so.6
-(*): Shared library is missing debugging information.
-(gdb) 
+
+{debug-release-mix}
+Mixing debug and release code is bad practice. The problem is that the different
+versions can depend on different fundamental parts of the C++ runtime library,
+         such as how memory is allocated, structures for things like iterators
+         might be different, extra code could be generated to perform operations
+         (e.g. checked iterators).
+
+It's the same as mixing library files built with any other different settings.
+Imagine a case where a header file contains a structure that is used by both
+application and library. The library is built with structure packing and
+alignment set to one value and the application built with another. There are no
+guarantees that passing the structure from the application into the library will
+work since they could vary in size and member positions.
+
+Is it possible to build your 3rd party libraries as DLLs? Assuming the interface
+to any functions is cleaner and does not try to pass any STL objects you will be
+able to mix a debug application with release DLLs without problems.
+
+
+Q:
+When this parameter is defined I want all my std::vectors to check their
+boundarys when accesing an element, the way when using vector::at().
+
+When the parameter is omitted I want all vectors to behave as if the normal []
+operator is used, meaning no performance is "wasted" for boundary checking.
+
+You can activate runtime iterator and bounds checking by compiling with
+-D_GLIBCXX_DEBUG. Also note that random-access containers provide the always
+bounds-checking at() operation in addition to operator [].
+
+
+<safe-stl>
+The STL is not required to protect you from yourself and the STL is as error
+prone as pointers are in C. Thus, it is a good idea to use a "safe" STL, at
+least during software development.
+
+Cay S. Horstmann. Safe STL
+http://www.horstmann.com/safestl.html
+
+STLport
+http://www.stlport.org/
 
 
 ={============================================================================
-*kt_linux_tool_400* gdb-stl: gdb-stl-views
+*kt_linux_tool_400* gdb-stl-pretty-printer-gdb-stl-views
 
 https://sourceware.org/gdb/wiki/STLSupport
 
