@@ -218,11 +218,13 @@
 *kt_linux_tool_300* gdb-core: stack frame
 |kt_linux_tool_300| gdb-core-case-analysis
 |kt_linux_tool_300| gdb-core-case-kernel crash on mips 
-|kt_linux_tool_300| gdb-run-stepping
+*kt_linux_tool_300* gdb-core-case-crash on mips
+|kt_linux_tool_300| gdb-step
+*kt_linux_tool_300* gdb-print-gdb-set
 *kt_linux_tool_309* gdb-break
-*kt_linux_tool_309* gdb-break: specifying a location
-*kt_linux_tool_309* gdb-break: specifying a location in cpp
-*kt_linux_tool_309* gdb-break: set
+*kt_linux_tool_309* gdb-break-set-location
+*kt_linux_tool_309* gdb-break-set-location-in-cpp
+*kt_linux_tool_309* gdb-break-set
 *kt_linux_tool_309* gdb-break: conditional ex
 *kt_linux_tool_309* gdb-break: info. get you quickly where
 *kt_linux_tool_309* gdb-break: ignore
@@ -15144,7 +15146,6 @@ bt
 
 (gdb) f n
 
-
 <case>
 
 (gdb) bt
@@ -15283,7 +15284,7 @@ Dump of assembler code for function MHWMemCheckBank:
 
 (gdb) info locals
 ind_bank = <value optimized out>
-bank = (MemWholeMemory *) 0x0 ~
+bank = (MemWholeMemory *) 0x0           // note: "bank = mpool->sWholeMem;"
 pool_max = (uint32_t *) 0xc
 
 (gdb) x/16wx 0x0131bc40 	// value of a0
@@ -15322,7 +15323,7 @@ following on the serial or in the dmesg buffer (just run the dmesg command to
 
 <4>Unhandled kernel unaligned access[#1]:
 <4>Cpu 0
-<4>$ 0   : 00000000 10008400 <f7ffdfdf> 80070000  // <v0>
+<4>$ 0   : 00000000 10008400 <f7ffdfdf> 80070000                    // note: `v0`
 <4>$ 4   : c06e27c0 000ee208 8123a000 898d2680
 <4>$ 8   : 00000000 7edbffff ffdeff7f fffb7fff
 <4>$12   : fdf7fed7 000ee247 00000001 00000001
@@ -15332,7 +15333,7 @@ following on the serial or in the dmesg buffer (just run the dmesg command to
 <4>$28   : 89cd2000 89cd3830 000ee208 c050cbe4
 <4>Hi    : 00000128
 <4>Lo    : 003e5708
-<4>epc   : c050cc54 XHddLowIO+0x124/0x3d8 [xtvfs]     Tainted: P    # {pc} 
+<4>epc   : c050cc54 XHddLowIO+0x124/0x3d8 [xtvfs]     Tainted: P    // note `pc`
 <4>ra    : c050cbe4 XHddLowIO+0xb4/0x3d8 [xtvfs]
 <4>Status: 10008403    KERNEL EXL IE 
 <4>Cause : 00800010
@@ -15381,13 +15382,11 @@ bit CPUs this means an address not divisble by 4. Often this will generate an
 exception and some software will handle the access by reading adjacent words and
 piecing things together. But in our case the exception is unhandled. 
 
-
-$0, $4, etc
-
 *mips-register*
 This output shows the value of the registers. We are on a MIPS CPU and many of
 the registers have defined uses. This
 document(http://msdn.microsoft.com/en-us/library/aa448706.aspx) describes them.
+
 For example, $4 to $7 are used to store the first 4 words of function arguments
 when calling a function. In assembler these registers are referred to as a0 to
 a3. You can't know this in advance, you have to read the MIPS documentation to
@@ -15395,7 +15394,7 @@ find it out.
 
 epc c050cc54 XHddLowIO+0x124/0x3d8 [xtvfs] 
 
-This is the {exception-program-counter}. It shows the address that the exception
+This is the `exception-program-counter`. It shows the address that the exception
 occurred at, and that this is 0x124 bytes into the function XHddLowIO in the
 module xtvfs.ko. 
 
@@ -15422,6 +15421,11 @@ epc trace above. It starts like this:
 
 From the call trace we can calculate the address offset in use. Recall: 
 <4>[<c050cc54>] XHddLowIO+0x124/0x3d8 [xtvfs]
+
+Virtual         
+0xxxxxx         00045b30
+    +0x124          +0x124
+c050cc54        00045c54
 
 So c050cc54 - 0x124 - 45b30 = offset = c04c7000 (the start of loadded in memory
     for this xtvfs.ko). The crash happened at c050cc54 which will appear as
@@ -15471,13 +15475,13 @@ addresses in the code.
 
 The first column is the address in the code, the second column is the type of
 relocation to do, and the third column is the address to relocate. So the code
-at address 45c50 and 45c58 will get overwritten with the address of __getblk.
+at address 45c50 and 45c58 will get 'overwritten' with the address of __getblk.
 That makes the disassembly of the code near our crash look like this: 
 
    45c44:       08011728        j       45ca0 <XHddLowIO+0x170>
    45c48:       00008821        move    s1,zero
    45c4c:       8fa2001c        lw      v0,28(sp)
-   45c50:       3c030000        lui     v1,__getblk
+   45c50:       3c030000        lui     v1,__getblk     // note: replaced?
    45c54:       8c440094        lw      a0,148(v0)
    45c58:       24630000        addiu   v1,v1,0
    45c5c:       0060f809        jalr    v1
@@ -15489,8 +15493,8 @@ Understanding __getblk
 At 45c5c there is a jump instruction to v1 which has been loaded with the
 address of __getblk. But we crashed immediately before that.
 
-	So it seems we crashed while preparing to call __getblk. 
-	
+    "So it seems we crashed while 'preparing' to call __getblk." 
+
 So it would help to understand this function. We can look it up in the kernel
 code: http://lxr.free-electrons.com/source/fs/buffer.c?v=2.6.30;a=mips#L1363
 
@@ -15536,7 +15540,7 @@ __getblk or sb_getblk. In XHddLowIO in the XTVFS code we can see:
 
 /* allocate sector buffers */
 for(i = 0; i < cnt; i++){
-    bh_array[i] = sb_getblk(sb,  block++);
+    bh_array[i] = sb_getblk(sb,  block++);                          // note
     if(!bh_array[i]){ /* no sufficient buffers */
         printk("\n BH_ArrayXHddLowIO: bh = 0, i = %d !!!!!", i);
         if(0 == i){ /* no at all */
@@ -15557,8 +15561,10 @@ Recall the instruction that crashed:
 
 What does that notation mean? We can look up information about the MIPS
 instructions: Description: A word is loaded into a register from the specified
-address.  Operation: $t = MEM[$s + offset]; advance_pc (4); Syntax: lw $t,
-  offset($s) The whole instruction means: load a0 with the address in v0 + 148. 
+address. 
+
+Operation: $t = MEM[$s + offset]; advance_pc (4); Syntax: lw $t, offset($s) The
+whole instruction means: load a0 with the address in v0 + 148. 
 
 
 *mips-registers*
@@ -15567,10 +15573,12 @@ Understanding the MIPS registers
 In MIPS, registers tend to have special functions, such as return addresses or
 function parameters. We can read about this online. 
 
-a0, the register we are writing to, is the first of the "function argument
+`a0`, the register we are writing to, is the first of the "function argument
 registers that hold the first four words of integer type arguments." So a0 is
-the first argument to the function we are calling.  v0 is a "function result
-register" and is also called $2. So we know its value from the original trace: 
+the first argument to the function we are calling.  
+
+`v0` is a "function result register" and is also called $2. So we know its value
+from the original trace: 
 
 <4>$ 0   : 00000000 10008400 f7ffdfdf 80070000
 
@@ -15585,15 +15593,113 @@ We are executing this line of C:
 
 bh_array[i] = sb_getblk(sb,  block++);
 
+<conclusion>
 Because sb_getblk is an inline function, it has been expanded by the compiler
-  into: __getblk(sb->s_bdev, block, sb->s_blocksize); So our crashing
-  instruction is adding 148 because 148 is the offset of s_bdev withing the sb
-  struct. We hav verify this by looking at struct super_block in the code.
-  However, sb has somehow become and odd number, and THAT is our bug. 
+into: __getblk(sb->s_bdev, block, sb->s_blocksize); So our crashing instruction
+is adding 148 because 148 is the offset of s_bdev withing the sb struct. We hav
+verify this by looking at struct super_block in the code.  However, sb has
+somehow become and odd number, and THAT is our bug. 
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-step-stepping
+*kt_linux_tool_300* gdb-core-case-crash on mips
+
+(gdb) bt
+#0  getPresentationTimeCached (timeFormat=GST_FORMAT_TIME, this=0x56b900) 
+    at /r.cpp:1433
+
+(gdb) disassemble $pc
+Dump of assembler code for function nickel::system::GstMediaRouter::getPosition_locked(bool) const:
+   0x73a1dac0 <+0>:	lui	gp,0x8
+   0x73a1dac4 <+4>:	addiu	gp,gp,7440
+   0x73a1dac8 <+8>:	addu	gp,gp,t9
+   0x73a1dacc <+12>:	addiu	sp,sp,-328
+   0x73a1dad0 <+16>:	sw	s7,316(sp)
+   0x73a1dad4 <+20>:	lw	s7,-29712(gp)
+   0x73a1dad8 <+24>:	sw	s3,300(sp)
+   0x73a1dadc <+28>:	lw	s3,0(s7)
+   0x73a1dae0 <+32>:	sw	gp,24(sp)
+   0x73a1dae4 <+36>:	sw	s8,320(sp)
+   0x73a1dae8 <+40>:	sw	s1,292(sp)
+   0x73a1daec <+44>:	sw	s0,288(sp)
+   0x73a1daf0 <+48>:	sw	ra,324(sp)
+   0x73a1daf4 <+52>:	sw	s6,312(sp)
+   0x73a1daf8 <+56>:	sw	s5,308(sp)
+   0x73a1dafc <+60>:	sw	s4,304(sp)
+   0x73a1db00 <+64>:	sw	s2,296(sp)
+   0x73a1db04 <+68>:	move	s1,a0
+   0x73a1db08 <+72>:	move	s0,a1
+   0x73a1db0c <+76>:	beqz	s3,0x73a1df18 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+1112>
+   0x73a1db10 <+80>:	andi	s8,a2,0xff
+   0x73a1db14 <+84>:	lw	a1,-32724(gp)
+   0x73a1db18 <+88>:	lw	t9,-30044(gp)
+   0x73a1db1c <+92>:	addiu	s2,sp,36
+   0x73a1db20 <+96>:	move	a0,s2
+   0x73a1db24 <+100>:	addiu	a1,a1,27172
+   0x73a1db28 <+104>:	jalr	t9
+   0x73a1db2c <+108>:	addiu	a2,sp,32
+   0x73a1db30 <+112>:	lw	gp,24(sp)
+   0x73a1db34 <+116>:	addiu	v0,sp,64
+---Type <return> to continue, or q <return> to quit---q
+
+
+Use `disassemble` and  get the same result but don't need to work out
+function address.
+
+
+(gdb) x/10i $pc
+=> 0x73a1de64 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+932>:	lw	v0,0(a0)
+   0x73a1de68 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+936>:	lw	t9,44(v0)
+   0x73a1de6c <nickel::system::GstMediaRouter::getPosition_locked(bool) const+940>:	jalr	t9
+   0x73a1de70 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+944>:	li	a1,3
+   0x73a1de74 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+948>:	lw	gp,24(sp)
+   0x73a1de78 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+952>:	sw	v0,276(sp)
+   0x73a1de7c <nickel::system::GstMediaRouter::getPosition_locked(bool) const+956>:	b	0x73a1dbac <nickel::system::GstMediaRouter::getPosition_locked(bool) const+236>
+   0x73a1de80 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+960>:	move	s5,v1
+   0x73a1de84 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+964>:	bne	s5,s2,0x73a1dc48 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+392>
+   0x73a1de88 <nickel::system::GstMediaRouter::getPosition_locked(bool) const+968>:	move	v0,zero
+(gdb) 
+
+(gdb) p getPresentationTimeCached
+$3 = {int64_t (const nickel::system::GstMediaRouter * const, GstFormat)} 0x73a1c7c4 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const>
+
+(gdb) x/50i 0x73a1c7c4
+   0x73a1c7c4 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const>:	lbu	v0,40(a0)
+   0x73a1c7c8 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+4>:	beqz	v0,
+        0x73a1c7dc <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+24>
+   0x73a1c7cc <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+8>:	nop
+   0x73a1c7d0 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+12>:	lw	v1,124(a0)
+   0x73a1c7d4 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+16>:	jr	ra
+   0x73a1c7d8 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+20>:	lw	v0,120(a0)
+   0x73a1c7dc <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+24>:	lw	a0,144(a0)
+   0x73a1c7e0 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+28>:	lw	v0,0(a0)
+   0x73a1c7e4 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+32>:	lw	t9,44(v0)
+   0x73a1c7e8 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+36>:	jr	t9
+   0x73a1c7ec <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+40>:	nop
+   0x73a1c7f0 <nickel::system::GstMediaRouter::getControlCapabilities_async() const>:	lui	gp,0x8
+   0x73a1c7f4 <nickel::system::GstMediaRouter::getControlCapabilities_async() const+4>:	addiu	gp,gp,12256
+
+
+(gdb) p getPosition_locked
+$6 = {const Zinc::Media::Position (const nickel::system::GstMediaRouter * const, bool)} 0x73a1dac0 <nickel::system::GstMediaRouter::getPosition_locked(bool) const>
+
+(gdb) x/500i 0x73a1dac0
+
+   0x73a1db7c <nickel::system::GstMediaRouter::getPosition_locked(bool) const+188>:	bal	0x73a1d60c <nickel::system::(anonymous namespace)::getBufferPosition(RefObj<_GstElement> const&, bool)>
+
+const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+{
+    const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
+    int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
+    ...
+}
+
+Couldn't see getPresentationTimeCached in getPositon_locked disassemled code as
+getBufferPosition does. Why?
+
+
+={============================================================================
+*kt_linux_tool_300* gdb-step
 
 5.2 Continuing and Stepping
 
@@ -15711,7 +15817,7 @@ ni
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-print: gdb-set
+*kt_linux_tool_300* gdb-print-gdb-set
 
 {gdb-print}
 p (print) to see their values.
@@ -15781,7 +15887,7 @@ operated on.
 
 
 ={============================================================================
-*kt_linux_tool_309* gdb-break: specifying a location
+*kt_linux_tool_309* gdb-break-set-location
 
 5.1.1 Setting Breakpoints
 
@@ -15900,7 +16006,7 @@ characters from the option name, e.g., break -s main.c -li 3.
 
 
 ={============================================================================
-*kt_linux_tool_309* gdb-break: specifying a location in cpp
+*kt_linux_tool_309* gdb-break-set-location-in-cpp
 
 <1>
 (gdb) break lib.cpp:5
@@ -15954,7 +16060,7 @@ setSubtitleTrack(int, std::string const&)
 
 
 ={============================================================================
-*kt_linux_tool_309* gdb-break: set
+*kt_linux_tool_309* gdb-break-set
 
 5.1.1 Setting Breakpoints
 
