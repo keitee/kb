@@ -80,7 +80,8 @@
 
 *kt_dev_uv_stack_211* stack-tunerd:
 
-*kt_dev_uv_stack_250* mr-web-runbrowser, nexus-inspect
+*kt_dev_uv_stack_250* mr-runbrowser-nexus-inspect
+*kt_dev_uv_stack_250* mr-runbrowser-from-dbus
 *kt_dev_uv_stack_250* mr-runbrowser-play
 *kt_dev_uv_stack_250* mr-web: binding
 *kt_dev_uv_stack_250* mr-web: run sport app on atk
@@ -2903,8 +2904,8 @@ setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.34
 *kt_dev_uv_stack_002* tool-core
 
 <setup-humax-core>
-The setup-humax scripts install scripts and setup core pattern. Hoerver, the
-below reset those so need to remove those lines. This comes from read-only
+The setup-humax scripts install scripts and setup core pattern. Howerver,
+something reset those so need to remove those lines. This comes from read-only
 system and means that comes from humax. Checked on H23.13.0
 
     /etc/profile    
@@ -2941,7 +2942,7 @@ do_enable_core_dumps() {
     warn_as_needed_that_stagecraft_need_to_be_restarted
 }
 
-echo "|/bin/bash /usr/local/bin/core-dump /mnt/hd1/ %p 10000000" > /proc/sys/kernel/core_pattern
+echo "|/bin/bash /usr/local/bin/core-dump /var/corefiles/ %p 100000000" > /proc/sys/kernel/core_pattern
 
 ./setup-humax/scripts/core-dump
 
@@ -9945,6 +9946,163 @@ detachSharedMemory
 
 
 ={============================================================================
+*kt_dev_uv_stack_250* mr-runbrowser-from-dbus
+
+Vanadium/Vanadium.W3CEngine/scripts/launch-browser.py ------------
+
+// from baby
+#!/opt/zinc/oss/bin/python
+
+
+from dbus.mainloop.glib import DBusGMainLoop
+from dbus.exceptions import DBusException
+import dbus
+import os
+import glob
+import sys
+import time
+import re
+import copy
+
+dest = '''Zinc.BabySitter'''
+path = '''/Zinc/BabySitter/Launcher'''
+
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+        self.obj = self.bus.get_object(dest, path)
+        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.BabySitter.Launcher')
+        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
+        self.args = [
+            "/opt/zinc/bin/radiumairlauncher",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "--app-launch-parameters",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier",
+            "uk.co.bbc",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "launch_context.ui.youview.com",
+            "broadcast.mheg",
+            "location.broadcast.youview.com",
+            "?#&*history=broadcast",
+            "urlbase.broadcast.youview.com",
+            "http://www.bbc.co.uk/redbuttonhtml/",
+            "channel.broadcast.youview.com",
+            "dvb://233a..1044"
+        ]
+
+    def launch(self, instanceId):
+        self._cleanJailDir(instanceId)
+        self.env = [
+            "YV_APP_RUNTIME_INSTANCE_ID=" + str(instanceId),
+            "DBUS_SYSTEM_BUS_ADDRESS=%s" % self.dbus_bus_address ]
+
+        self.processPath = self.iface.launch(self.args, self.env)
+        self.process = self.bus.get_object("Zinc.BabySitter", self.processPath)
+        self.processIface = dbus.Interface(self.process, "Zinc.BabySitter.Process")
+
+    def getPid(self):
+        if not self.processIface is None:
+            return self.processIface.pid()
+
+    def kill(self):
+        self.processIface.kill(1000)
+
+    def _cleanJailDir(self, instanceId):
+        try:
+            # Clean up the sandbox
+            os.removedirs(os.path.join('/run/youview/jail/applications',
+                          str(instanceId)))
+            os.removedirs(os.path.join('/tmp/youview/applications',
+                          str(instanceId)))
+        except:
+            print ("Error removing jail directories (hopefully because they're empty). Carrying on...")
+
+    def isAlive(self):
+        import subprocess
+        try:
+            subprocess.check_call(['killall', '-0', 'w3cEngine'])
+            return True
+        except:
+            return False
+            
+
+def main(argv):
+    try:
+        instanceId = 999
+        if (len(argv) > 0):
+            instanceId = int(argv[1])
+        else:
+            idFile = open("instanceid", "a+")
+
+            instanceId = idFile.read()
+
+            if not instanceId:
+                    instanceId = 2
+            else:
+                    instanceId = int(instanceId)
+            instanceId += 1
+            idFile.truncate(0)
+            idFile.write(str(instanceId))
+
+	print ('Using instance id %i' % instanceId)
+
+        browser = Browser()
+
+        if len(argv) > 3 and argv[2] == '--restart-interval':
+            restart_interval = int(argv[3])
+            while True:
+                print ('Launching instance %i' % instanceId)
+                browser.launch(instanceId)
+                #print ('pid %s' % str(browser.getPid()))
+                time.sleep(restart_interval)
+                if not browser.isAlive():
+                    print ('Browser died early! app id = %i' % instanceId)
+                else:
+                    print ('Killing after sleeping for %i' % restart_interval)
+                browser.kill()
+                found_corefiles = glob.glob('/var/corefiles/core.*')
+                if len(found_corefiles) > 0:
+                    print ('Found %i corefiles for app id %i (pid: %i)!' %
+                            (len(found_corefiles), instanceid,
+                             browser.getPid()))
+                instanceId += 1
+        else:
+            raw_input("Enter to exit")
+            browser.kill()
+
+    except Exception, e:
+        print e
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
+
+
+#!/bin/bash
+echo "Removing props files to disable logging"
+
+cd /opt/zinc-trunk/share/
+
+# Stash the default props file away
+mv zinc-common/zinc.common.props zcp.default
+
+# Delete all the props files
+find -name '*.props' | xargs rm
+
+# Move the stashed default back again
+mv zcp.default zinc-common/zinc.common.props
+
+echo "Running the test in a loop, ever 20 seconds"
+
+mkdir /var/log/dbus-monitor
+dbus-monitor &> /var/log/dbus-monitor/$(date +%s).log &
+
+launch-browser.py 17 --restart-interval 20
+
+
+={============================================================================
 *kt_dev_uv_stack_250* mr-runbrowser-play
 
 <dev-version>
@@ -14664,8 +14822,7 @@ typedef std::vector<MIMEMediaRouterFactoryMap>
   ProtocolMediaRouterFactoryMap;
 
 
-note: single thread dispacther
-
+*mr-dispatcher* 
 ProxySystemFactory::ProxySystemFactory()
     : dispatcher(boost::make_shared<NS_ZINC::SingleThreadDispatcher>()) {
     loadImplementations();
@@ -14720,6 +14877,7 @@ void ProxySystemFactory::loadImplementations()
   //   {"http", { "application/dash+xml", factory-function}} in vector
   //   {"https", { "application/dash+xml", factory-function}} in vector
 
+  *mr-create-media-router-factory*
   SystemFactory& factory(
       PluginFactory::getInstance<SystemFactory>(pluginConfig));
 
@@ -14743,6 +14901,7 @@ ProxyMediaRouterFactory::ProxyMediaRouterFactory(
         boost::shared_ptr<MediaRouterFactory> defaultMediaRouterFactory_,
         ProtocolMediaRouterFactoryMap protocolMediaRouterFactoryMap_) :
 
+    *mr-dispatcher* 
     dispatcher(dispatcher_),
     defaultMediaRouterFactory(defaultMediaRouterFactory_),
 
@@ -14772,7 +14931,9 @@ ProxySystemFactory::createLocalMediaLibrary() {
 NS_ZINC::Future<boost::shared_ptr<MediaRouter> > 
   ProxyMediaRouterFactory::createMediaRouter() 
 {
-  // note: here pass a map to "createMediaRouter()"
+
+  // note: here pass a map to "createMediaRouter()" and dispatcher
+  *mr-dispatcher* 
   return NS_ZINC::completedFuture(
       *dispatcher, boost::shared_ptr<MediaRouter>(new ProxyMediaRouter(
           dispatcher, defaultMediaRouterFactory, protocolMediaRouterFactoryMap,
@@ -14794,7 +14955,8 @@ ProxyMediaRouter::ProxyMediaRouter(
         boost::shared_ptr<MediaRouterFactory> defaultMediaRouterFactory_,
         ProtocolMediaRouterFactoryMap protocolMediaRouterFactoryMap_,
         boost::shared_ptr<mime::MIMETypes> mimeTypes_) :
-
+   
+    *mr-dispatcher* 
     dispatcher(dispatcher_),
     defaultMediaRouterFactory(defaultMediaRouterFactory_),
 
@@ -14820,9 +14982,11 @@ class ZINC_LOCAL SetSourceContinuation :
       const std::string& source_, 
       const SetSourceReason::Enum reason_) 
   {
-    // note: find 'factory' function pointer depending on "source"
-    factory = boost::shared_ptr<MediaRouterFactory> 
-      ProxyMediaRouter::findFactoryGivenSource(source);
+    // note: find *mr-create-media-router-factory* depending on "source" and
+    // create MR using the found factory function.
+    
+    factory = boost::shared_ptr<MediaRouterFactory>
+        ProxyMediaRouter::findFactoryGivenSource(source);
 
     continueOnSuccess(
         factory->createMediaRouter(), &SetSourceContinuation::onMediaRouterCreated);
@@ -14949,7 +15113,7 @@ application/dash+xml               mpd
 application/vnd.apple.mpegurl      m3u8
 
 
-<gst-factory>
+<gst-system-factory>
 libNickelSystemGStreamer.so.0.0.0
 libNickelSystemVirtualBin.so.0.0.0
 
@@ -14958,68 +15122,122 @@ Nickel.System.Proxy/data/http-application%2Fdash%2Bxml.plugin-config
 
 // Nickel/Nickel.System.GStreamer/src/GstSystemFactory.cpp
 
-class GstSystemFactory : virtual public SystemFactory
-{
-  boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory()
-  {
-    mrf = createGstMediaRouterFactory(dispatcher);
-  }
-
-  boost::shared_ptr<MediaRouter> createDefaultMediaRouter();
-
-  boost::shared_ptr<LocalMediaLibrary> createLocalMediaLibrary();
-
-  boost::shared_ptr<MediaSettings> createMediaSettings();
-
-  boost::shared_ptr<OutputManager> createOutputManager();
-
-  boost::shared_ptr<ServiceListBuilder> createServiceListBuilder();
-};
-
 NS_ZINC::Plugin* createGstSystemFactory()
 {
   try
   {
+    *mr-gst-dispatcher*
     return new GstSystemFactory(
         boost::make_shared<NS_ZINC::SingleThreadDispatcher>());
   }
 }
 
+class GstSystemFactory : virtual public SystemFactory
+{
+    // this is the new way
+    GstSystemFactory::GstSystemFactory(boost::shared_ptr<NS_ZINC::Dispatcher> d)
+        : dispatcher(d)
+    {
+        *mr-gst-init* /* init GStreamer */
+        gst_init(NULL, NULL);
+    }
 
-note:
-from void nickel::system::SetSourceContinuation::start()
+    *mr-create-media-router-factory* 
+    // called from void nickel::system::SetSourceContinuation::start()
+    boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory()
+    {
+        boost::shared_ptr<GstMediaRouterInit> initParams =
+            boost::make_shared<GstMediaRouterInit>();
 
+        *mr-gst-dispatcher*
+        initParams->dispatcher = dispatcher;
+
+        // *create-virtual-bins*
+        createVirtualBins(initParams,auth);
+
+        initParams->pipelineFactory = boost::bind(gst_pipeline_new, "pipeline");
+
+        // pass down BINs via init params
+
+        mrf = createGstMediaRouterFactory(initParams);
+        mediaRouterFactory = mrf;
+        return mrf;
+    }
+
+    boost::shared_ptr<MediaRouter> createDefaultMediaRouter();
+
+    boost::shared_ptr<LocalMediaLibrary> createLocalMediaLibrary();
+
+    boost::shared_ptr<MediaSettings> createMediaSettings();
+
+    boost::shared_ptr<OutputManager> createOutputManager();
+
+    boost::shared_ptr<ServiceListBuilder> createServiceListBuilder();
+};
+
+
+<gst-mr-factory>
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouterFactory.cpp
 
 boost::shared_ptr<MediaRouterFactoryAsync> createGstMediaRouterFactory(
     boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher)
 {
-    return boost::make_shared<GstMediaRouterFactory>(dispatcher);
+    *mr-gst-dispatcher*
+    return boost::make_shared<GstMediaRouterFactory>(initParams);
 }
 
+class GstMediaRouterFactory : public MediaRouterFactoryAsync, boost::noncopyable
+{
+    GstMediaRouterFactory(
+        boost::shared_ptr<GstMediaRouterInit> initParams);
+    virtual ~GstMediaRouterFactory();
 
-note:
+    virtual NS_ZINC::Future<boost::shared_ptr<MediaRouterAsync> >
+    createMediaRouter();
 
-    // data member
+private:
+    struct Semaphore
+    {
+        boost::mutex m;
+        boost::condition_variable cond;
+    };
+
+    static gboolean startFunc(gpointer data);
+    void start();
+
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher;
+
     GMainLoop* loop;
     boost::thread glibMainThread;
 
-GstMediaRouterFactory::GstMediaRouterFactory(
-    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher) : dispatcher(dispatcher)
-{
-    /* init GStreamer */
-    gst_init(NULL, NULL);
+    bool enabled;
+    boost::shared_ptr<GstMediaRouterInit> initParams;
+};
 
+GstMediaRouterFactory::GstMediaRouterFactory(
+    boost::shared_ptr<GstMediaRouterInit> initParams)
+
+    *mr-gst-dispatcher*
+    : dispatcher(initParams->dispatcher),
+      initParams(initParams)
+{
     loop = g_main_loop_new(NULL, FALSE);
+
     boost::thread(g_main_loop_run, loop).swap(glibMainThread);
 
     /*
-     * We do not want to return until the main loop has started. This is to
+     * We do not want to return until the main loop has started.  This is to
      * avoid race conditions like this object being destroyed and trying to join
      * the main loop thread right after the main loop entered "poll" sequence
      * without noticing it's been stopped.
      */
     start();
+}
+
+GstMediaRouterFactory::~GstMediaRouterFactory()
+{
+    g_main_loop_quit(loop);
+    glibMainThread.join();
 }
 
 void GstMediaRouterFactory::start()
@@ -15042,19 +15260,14 @@ gboolean GstMediaRouterFactory::startFunc(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
-GstMediaRouterFactory::~GstMediaRouterFactory()
-{
-    g_main_loop_quit(loop);
-    glibMainThread.join();
-}
-
 
 NS_ZINC::Future<boost::shared_ptr<MediaRouterAsync> >
 GstMediaRouterFactory::createMediaRouter()
 {
-    NICKEL_FUNC_TRACE;
-    return NS_ZINC::completedFuture(*dispatcher,
-                                    createGstMediaRouter(dispatcher));
+    *mr-gst-dispatcher*
+    return NS_ZINC::completedFuture(
+            *dispatcher,
+            createGstMediaRouter(*initParams));
 }
 
 // Nickel/Nickel.System.GStreamer/src/GstMediaRouter.cpp
@@ -15067,7 +15280,7 @@ boost::shared_ptr<MediaRouterAsync>  createGstMediaRouter(
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-create-gst
+*kt_dev_uv_stack_408* mr-create-gst-mr
 
 {creation}
 
@@ -15108,8 +15321,6 @@ class ZINC_EXPORT MediaRouterAsync :
 NS_ZINC::Future<boost::shared_ptr<MediaRouterAsync> >
 GstMediaRouterFactory::createMediaRouter()
 {
-    NICKEL_FUNC_TRACE;
-
     return NS_ZINC::completedFuture(
             *dispatcher,
             createGstMediaRouter(*initParams));
@@ -15196,6 +15407,7 @@ void GstMediaRouter::init()
         boost::shared_ptr<VirtualPadFactoryInProcess>(),
         boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
 
+  *mr-create-pipeline*
   RefObj<GstElement> elem = pipelineFactory();
 
   // add three bins to the pipeline
@@ -15576,7 +15788,13 @@ class GstMediaRouter : public MediaRouterAsync,
 };
 
 GstMediaRouter::GstMediaRouter(const GstMediaRouterInit& initParams) :
+
+    *mr-set-dispatcher*
+    NS_ZINC::DispatchingEventProducer<MediaRouterEventListener>(initParams.dispatcher),
+
     pipelineFactory(initParams.pipelineFactory),
+    srcBinFactory(initParams.srcBinFactory),
+    sinkBinFactory(initParams.sinkBinFactory),
 {
     init();
 }
@@ -15623,31 +15841,9 @@ DEVARCH-10602:
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-create-ctor-dtor
+*kt_dev_uv_stack_408* mr-create-dtor-issue
 
-GstMediaRouter::~GstMediaRouter()
-{
-    NICKEL_FUNC_TRACE;
-    deinit();
-}
-
-void GstMediaRouter::deinit()
-{
-    NICKEL_FUNC_TRACE;
-
-    stopReportingPositionChange();
-    g_source_remove(watchId);
-    watchId = 0;
-
-    // setting state to NULL is a blocking operation
-    if (GST_STATE_CHANGE_SUCCESS !=
-        gst_element_set_state(pipeline.get(), GST_STATE_NULL)) {
-        NICKEL_ERROR("Failed to set pipeline state to NULL");
-    }
-
-    pipeline.reset();
-}
-
+{issue-when-access-pipeline-after-dtor}
 
 <ref>
 This is about a problem of destruction. The issue is that it is possible to
@@ -15683,7 +15879,29 @@ Nickel.System.GStreamer/src/GstMediaRouter.cpp:644 EXIT:  void nickel::system::
 Bus error
 
 
-<change>
+<code>
+GstMediaRouter::~GstMediaRouter()
+{
+    NICKEL_FUNC_TRACE;
+    deinit();
+}
+
+void GstMediaRouter::deinit()
+{
+    stopReportingPositionChange();
+    g_source_remove(watchId);
+    watchId = 0;
+
+    // setting state to NULL is a blocking operation
+    if (GST_STATE_CHANGE_SUCCESS !=
+        gst_element_set_state(pipeline.get(), GST_STATE_NULL)) {
+        NICKEL_ERROR("Failed to set pipeline state to NULL");
+    }
+
+    pipeline.reset();
+}
+
+<fix>
 +namespace {
 +void deleteUserData(gpointer user_data)
 +{
@@ -15698,6 +15916,7 @@ Bus error
  {
 -    GstMediaRouter* mr = static_cast<GstMediaRouter*>(user_data);
 -    mr->emitPositionChangeEvent();
+
 +    auto weak_mr = static_cast<boost::weak_ptr<GstMediaRouter>*>(user_data);
 +
 +    if (const auto mr = weak_mr->lock()) {
@@ -15713,6 +15932,7 @@ Bus error
          &GstMediaRouter::positionChangeEventTimerCallback,
 -        static_cast<gpointer>(this),
 -        NULL);
+
 +        static_cast<gpointer>(new boost::weak_ptr<GstMediaRouter>(shared_from_this())),
 +        deleteUserData);
  }

@@ -237,9 +237,10 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_063* function-object-predefined
 *kt_dev_stl_064* function-object-function-type
 *kt_dev_stl_064* function-object-function-pointer
-*kt_dev_stl_064* function-object-member-function
 *kt_dev_stl_064* function-object-cases
-*kt_dev_stl_065* function-object-bind
+*kt_dev_stl_064* fobj-member-function
+*kt_dev_stl_065* fobj-bind
+*kt_dev_stl_066* fobj-bind-member-function
 *kt_dev_stl_066* function-object-bind-code
 |kt_dev_stl_066| function-object-bind-cases
 |kt_dev_stl_067| algorithm: address of member function
@@ -260,8 +261,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_080| bitset
 
 |kt_dev_stl_100| sp-raii
+*kt_dev_stl_101* sp-shared-code
 |kt_dev_stl_101| sp-shared
 |kt_dev_stl_102| sp-weak
+*kt_dev_stl_102* sp-exception
 *kt_dev_stl_103* sp-unique
 *kt_dev_stl_104* smartp: points not to misuse
 *kt_dev_stl_105* smart pointer: gotw #102: exception safety
@@ -33061,7 +33064,87 @@ CPR 249 for more.
 
 
 ={============================================================================
-*kt_dev_stl_064* function-object-member-function
+*kt_dev_stl_064* function-object-cases
+
+{1}
+The idea is that function object keep state, playspeed, in this case and use
+that state when is asked to raise an event.
+
+class SpeedChangeSender
+{
+public:
+    SpeedChangeSender(const boost::shared_ptr<MockMediaRouter>& mock)
+        : mock(mock),
+        playSpeed(std::numeric_limits<double>::quiet_NaN())
+    {}
+
+    void sendSpeedChangeEvent(double newPlaySpeed)
+    {
+        if(newPlaySpeed != playSpeed)
+        {
+            VANADIUM_TRACE("Sending SpeedChangeEvent old speed: " << playSpeed
+                    << " newPlaySpeed " << newPlaySpeed);
+            mock->emitSpeedChangeEvent();
+            playSpeed = newPlaySpeed;
+        }
+    }
+
+private:
+    boost::shared_ptr<MockMediaRouter> mock;
+    double playSpeed;
+};
+
+
+void registerMockForCanPlayAndPauseVideo()
+{
+    Sequence s;
+
+    // create a mock object
+    boost::shared_ptr<MockMediaRouter> mock = makeMock("http://bb.mpd");
+
+    // create a function object
+    boost::shared_ptr<SpeedChangeSender> speedChangeSender
+        = boost::make_shared<SpeedChangeSender>(mock);
+
+    // first play call and will update function object
+    // NS_ZINC::Future<void> GstMediaRouter::setPlaySpeed(const double speed);
+    // _1 is "1.0"
+
+    EXPECT_CALL(*mock, setPlaySpeed(1.0)).InSequence(s).WillOnce(
+                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
+                            speedChangeSender, _1)),
+                    Return(makeCompletedFuture())));
+
+    EXPECT_CALL(*mock, start()).WillOnce(
+            Return(makeCompletedFuture()));
+
+    // pause and will update function object
+    EXPECT_CALL(*mock, setPlaySpeed(0.0)).InSequence(s).WillOnce(
+                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
+                            speedChangeSender, _1)),
+                    Return(makeCompletedFuture())));
+
+    // second play call and will update function object
+    EXPECT_CALL(*mock, setPlaySpeed(1.0)).InSequence(s).WillOnce(
+                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
+                            speedChangeSender, _1)),
+                    Return(makeCompletedFuture())));
+}
+
+
+{member-function}
+
+void SystemClientEventRepository::eventsReceived(
+  boost::shared_ptr<X> command, const NS_ZINC::FutureValue<Y>& eventsFV)
+{}
+
+void (SystemClientEventRepository::*masCallback)
+   (boost::shared_ptr<X>, const NS_ZINC::FutureValue<Y> &) = 
+   &SystemClientEventRepository::eventsReceived;
+
+
+={============================================================================
+*kt_dev_stl_064* fobj-member-function
 
 CPR 19.4 835
 
@@ -33203,14 +33286,14 @@ class C {
 
 std::function<void(const C&, int, int)> mf;
 mf = &C::memfunc;
-mf(C(),42,77);
+mf(C(),42,77);                      // speficy the target
 
 note:
 that performing a function call without having a 'target' to call throws an
 exception of type std::bad_function_call (see Section 4.3.1, page 43):
 
 std::function<void(int,int)> f;
-f(33,66);                         // throws std::bad_function_call
+f(33,66);                           // throws std::bad_function_call
 
 
 <2>
@@ -33239,8 +33322,8 @@ auto it = find_if (svec.begin(), sven.end(),
 As with `function`, must make 'explicit' the 'object' on which the member
 function will operate and which is normally implicit parameter.
 
-As with `mem_fn`, the first argument to the callable can be either a pointer or
-a reference.
+As with `mem_fn`, the 'first' argument to the callable can be either a pointer
+or a reference.
 
 auto f = bind(&string::empty, _1);
 f(*svec.begin());     // object; f uses .*
@@ -33248,87 +33331,7 @@ f(&svec[0]);          // pointer; f uses ->*
 
 
 ={============================================================================
-*kt_dev_stl_064* function-object-cases
-
-{1}
-The idea is that function object keep state, playspeed, in this case and use
-that state when is asked to raise an event.
-
-class SpeedChangeSender
-{
-public:
-    SpeedChangeSender(const boost::shared_ptr<MockMediaRouter>& mock)
-        : mock(mock),
-        playSpeed(std::numeric_limits<double>::quiet_NaN())
-    {}
-
-    void sendSpeedChangeEvent(double newPlaySpeed)
-    {
-        if(newPlaySpeed != playSpeed)
-        {
-            VANADIUM_TRACE("Sending SpeedChangeEvent old speed: " << playSpeed
-                    << " newPlaySpeed " << newPlaySpeed);
-            mock->emitSpeedChangeEvent();
-            playSpeed = newPlaySpeed;
-        }
-    }
-
-private:
-    boost::shared_ptr<MockMediaRouter> mock;
-    double playSpeed;
-};
-
-
-void registerMockForCanPlayAndPauseVideo()
-{
-    Sequence s;
-
-    // create a mock object
-    boost::shared_ptr<MockMediaRouter> mock = makeMock("http://bb.mpd");
-
-    // create a function object
-    boost::shared_ptr<SpeedChangeSender> speedChangeSender
-        = boost::make_shared<SpeedChangeSender>(mock);
-
-    // first play call and will update function object
-    // NS_ZINC::Future<void> GstMediaRouter::setPlaySpeed(const double speed);
-    // _1 is "1.0"
-
-    EXPECT_CALL(*mock, setPlaySpeed(1.0)).InSequence(s).WillOnce(
-                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
-                            speedChangeSender, _1)),
-                    Return(makeCompletedFuture())));
-
-    EXPECT_CALL(*mock, start()).WillOnce(
-            Return(makeCompletedFuture()));
-
-    // pause and will update function object
-    EXPECT_CALL(*mock, setPlaySpeed(0.0)).InSequence(s).WillOnce(
-                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
-                            speedChangeSender, _1)),
-                    Return(makeCompletedFuture())));
-
-    // second play call and will update function object
-    EXPECT_CALL(*mock, setPlaySpeed(1.0)).InSequence(s).WillOnce(
-                DoAll(Invoke(boost::bind(&SpeedChangeSender::sendSpeedChangeEvent,
-                            speedChangeSender, _1)),
-                    Return(makeCompletedFuture())));
-}
-
-
-{member-function}
-
-void SystemClientEventRepository::eventsReceived(
-  boost::shared_ptr<X> command, const NS_ZINC::FutureValue<Y>& eventsFV)
-{}
-
-void (SystemClientEventRepository::*masCallback)
-   (boost::shared_ptr<X>, const NS_ZINC::FutureValue<Y> &) = 
-   &SystemClientEventRepository::eventsReceived;
-
-
-={============================================================================
-*kt_dev_stl_065* function-object-bind
+*kt_dev_stl_065* fobj-bind
 
 C++11 from boost::bind and defined in <functional>. 
 
@@ -33349,7 +33352,7 @@ The `bind()` allows you to:
 
 * Call global functions
 
-* Call member functions for objects, pointers to objects, and smart pointers
+* Call member functions for objects, 'pointers' to objects, and 'smart' pointers
   to objects
 
 <code>
@@ -33366,7 +33369,7 @@ The `bind()` allows you to:
       typedef typename __helper_type::__maybe_type __maybe_type;
       typedef typename __helper_type::type __result_type;
       return __result_type(__maybe_type::__do_wrap(std::forward<_Func>(__f)),
-			   std::forward<_BoundArgs>(__args)...);
+        std::forward<_BoundArgs>(__args)...);
     }
 
 
@@ -33444,7 +33447,6 @@ invdiv: 0.142857
 
 
 <ex>
-
 #include<iostream>
 #include<set>
 #include<deque>
@@ -33533,7 +33535,6 @@ __x is not "bind(greater_equal<int>(), _1, 50)" and is return value.
 How does the new callable know the number of arguments to use with?
 
 <ex>
-
 int main()
 {
   cout << bind(plus<int>(), _1, 10)(30) << endl;
@@ -33548,8 +33549,8 @@ $ ./a.out
 40
 40
 
-<ex>
 
+<ex>
 int main()
 {
   multiplies<int> mt;
@@ -33784,7 +33785,9 @@ int main()
 }
 
 
-{bind-with-member-function}
+={============================================================================
+*kt_dev_stl_066* fobj-bind-member-function
+
 The bind() works with member function, modifying member function, and 'virtual'
 function. The first argument is a member function and the next argument defines
 the 'object' for which this member function gets called.
@@ -33895,6 +33898,7 @@ for_each (cp.begin(), cp.end(), bind(&Person::print, _1));
 std::vector<std::shared_ptr<Person>> sp;
 for_each (sp.begin(), sp.end(), bind(&Person::print, _1));
 
+
 <ex> CLR 4.4
 
 int main()
@@ -33903,19 +33907,47 @@ int main()
   std::shared_ptr<C> sp(new C);
 
   // bind() uses callable objects to bind arguments:
-  std::bind(func,77,33)();            // calls: func(77,33)
-  std::bind(l,77,33)();               // calls: l(77,33
-  std::bind(C(),77,33)();             // calls: C::operator()(77,33)
-  std::bind(&C::memfunc,c,77,33)();   // calls: c.memfunc(77,33)
-  std::bind(&C::memfunc,sp,77,33)();  // calls: sp->memfunc(77,33)
+  std::bind(func, 77,33)();             // calls: func(77,33)
+  std::bind(l, 77,33)();                // calls: l(77,33)
+  std::bind(C(), 77,33)();              // calls: C::operator()(77,33)
+  std::bind(&C::memfunc, c, 77,33)();   // calls: c.memfunc(77,33)
+  std::bind(&C::memfunc, sp, 77,33)();  // calls: sp->memfunc(77,33)
 
   // async() uses callable objects to start (background) tasks:
-  std::async(func,42,77);             // calls: func(42,77)
-  std::async(l,42,77);                // calls: l(42,77)
-  std::async(c,42,77);                // calls: c.operator()(42,77)
-  std::async(&C::memfunc,&c,42,77);   // calls: c.memfunc(42,77)
-  std::async(&C::memfunc,sp,42,77);   // calls: sp->memfunc(42,77)
+  std::async(func, 42,77);              // calls: func(42,77)
+  std::async(l, 42,77);                 // calls: l(42,77)
+  std::async(c, 42,77);                 // calls: c.operator()(42,77)
+  std::async(&C::memfunc, &c, 42,77);   // calls: c.memfunc(42,77)
+  std::async(&C::memfunc, sp, 42,77);   // calls: sp->memfunc(42,77)
 }
+
+
+<ex> from boost bind
+
+struct X
+{
+    bool f(int a);
+};
+
+X x;
+
+shared_ptr<X> p(new X);
+
+int i = 5;
+
+bind(&X::f, ref(x), _1)(i);     // x.f(i)
+bind(&X::f, &x, _1)(i);         //(&x)->f(i)
+bind(&X::f, x, _1)(i);          // (internal copy of x).f(i)
+bind(&X::f, p, _1)(i);          // (internal copy of p)->f(i)
+
+The last two examples are interesting in that they produce "self-contained"
+function objects. 
+
+bind(&X::f, x, _1) 'stores' a 'copy' of x. 
+
+bind(&X::f, p, _1) stores a copy of p, and since p is a boost::shared_ptr, the
+function object 'retains' a reference to its instance of X and will remain valid
+'even' when p goes out of scope or is reset(). 
 
 
 <bind-with-virtual>
@@ -33925,7 +33957,7 @@ derived class gets called.
 
 
 ={============================================================================
-*kt_dev_stl_066* function-object-bind-code
+*kt_dev_stl_066* fobj-bind-code
 
 The call trace for a bind.
 
@@ -36459,6 +36491,76 @@ copied ownership of the resource is transfered.
 
 
 ={============================================================================
+*kt_dev_stl_101* sp-shared-code
+
+/bits/shared_ptr_base.h
+
+  template<typename _Tp, _Lock_policy _Lp>
+    class __shared_ptr
+    {
+    public:
+      typedef _Tp   element_type;
+
+      constexpr __shared_ptr() noexcept
+      : _M_ptr(0), _M_refcount()
+      { }
+
+      void
+      reset() noexcept
+      { __shared_ptr().swap(*this); }
+
+      ...
+    }
+
+/bits/shared_ptr.h
+
+namespace std {
+  template<typename _Tp>
+    class shared_ptr : public __shared_ptr<_Tp>
+    {
+    public:
+      /**
+       *  @brief  Construct an empty %shared_ptr.
+       *  @post   use_count()==0 && get()==0
+       */
+      constexpr shared_ptr() noexcept
+      : __shared_ptr<_Tp>() { }
+
+      // Allow class instantiation when _Tp is [cv-qual] void.
+      typename std::add_lvalue_reference<_Tp>::type
+      operator*() const noexcept
+      {
+          _GLIBCXX_DEBUG_ASSERT(_M_ptr != 0);
+          return *_M_ptr;
+      }
+
+      _Tp*
+      operator->() const noexcept
+      {
+          _GLIBCXX_DEBUG_ASSERT(_M_ptr != 0);
+          return _M_ptr;
+      }
+    };
+
+  /**
+   *  @brief  Create an object that is owned by a shared_ptr.
+   *  @param  __args  Arguments for the @a _Tp object's constructor.
+   *  @return A shared_ptr that owns the newly created object.
+   *  @throw  std::bad_alloc, or an exception thrown from the
+   *          constructor of @a _Tp.
+   */
+  template<typename _Tp, typename... _Args>
+    inline shared_ptr<_Tp>
+    make_shared(_Args&&... __args)
+    {
+      typedef typename std::remove_const<_Tp>::type _Tp_nc;
+      return std::allocate_shared<_Tp>(std::allocator<_Tp_nc>(),
+              std::forward<_Args>(__args)...);
+    }
+}
+
+
+={============================================================================
 *kt_dev_stl_101* sp-shared
 
 This implements the concept of 'shared' ownership so that the object and its
@@ -36491,59 +36593,6 @@ p.use_count();
 // Swap pointers in p and q
 swap(p, q);
 p.swap(q);
-
-
-{sp-shared-code}
-
-/bits/shared_ptr_base.h
-  template<typename _Tp, _Lock_policy _Lp>
-    class __shared_ptr
-    {
-    public:
-      typedef _Tp   element_type;
-
-      constexpr __shared_ptr() noexcept
-      : _M_ptr(0), _M_refcount()
-      { }
-
-      void
-      reset() noexcept
-      { __shared_ptr().swap(*this); }
-
-      ...
-    }
-
-/bits/shared_ptr.h
-namespace std {
-  template<typename _Tp>
-    class shared_ptr : public __shared_ptr<_Tp>
-    {
-    public:
-      /**
-       *  @brief  Construct an empty %shared_ptr.
-       *  @post   use_count()==0 && get()==0
-       */
-      constexpr shared_ptr() noexcept
-      : __shared_ptr<_Tp>() { }
-
-    };
-
-  /**
-   *  @brief  Create an object that is owned by a shared_ptr.
-   *  @param  __args  Arguments for the @a _Tp object's constructor.
-   *  @return A shared_ptr that owns the newly created object.
-   *  @throw  std::bad_alloc, or an exception thrown from the
-   *          constructor of @a _Tp.
-   */
-  template<typename _Tp, typename... _Args>
-    inline shared_ptr<_Tp>
-    make_shared(_Args&&... __args)
-    {
-      typedef typename std::remove_const<_Tp>::type _Tp_nc;
-      return std::allocate_shared<_Tp>(std::allocator<_Tp_nc>(),
-              std::forward<_Args>(__args)...);
-    }
-}
 
 
 {make-shared}
@@ -37218,6 +37267,114 @@ dtor for b2
 
 // why not b1? since name is copied using the syn copy assign in b1=b2.
 dtor for b2    
+
+
+={============================================================================
+*kt_dev_stl_102* sp-exception
+
+As with STL, boost do not raise exception when dereferencing.
+
+namespace boost {
+  template<class T> class shared_ptr {
+    public:
+
+      T & operator*() const; // never throws; only valid when T is not an array type
+      T * operator->() const; // never throws; only valid when T is not an array type
+  };
+};
+
+
+#include <boost/shared_ptr.hpp>
+#include <boost/weak_ptr.hpp>
+#include <boost/utility/result_of.hpp>
+
+/** WeakFunctor
+ *
+ * When a member function is bound to an object by shared_ptr, the object is
+ * preserved for the lifetime of the returned functor.
+ *
+ * This is not always desirable, and WeakFunctor allows a bind to be made on
+ * a object using weak_ptr semantics. If the weak_ptr has expired at functor
+ * evaluation time, the WeakFunctor is a null function (ie: does nothing).
+ *
+ * WeakFunctors are intended to be passed by value.
+ *
+ * Typically it will be used like:
+ *     makeWeakFunctor(bind(&Class::ObjectMethod, _1, methodParams...), objectWeakPtr)
+ *
+ */
+template<typename Functor, typename T, typename ResultType = typename boost::result_of<Functor(boost::shared_ptr<T>)>::type>
+class WeakFunctor
+{
+public:
+    typedef ResultType result_type;
+
+    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_): f(f_), object(object_) {}
+
+    ~WeakFunctor() {}
+
+    result_type operator() ()
+    {
+        boost::shared_ptr<T> o = object.lock();
+        return o ? f(o) : result_type();
+    }
+
+private:
+    const Functor f;
+    const boost::weak_ptr<T> object;
+};
+
+/**
+ * Specialisation of WeakFunctor for void because you can't return a void value
+ * even in a statement in a function returning void, unfortunately.
+ */
+template<typename Functor, typename T>
+class WeakFunctor<Functor, T, void>
+{
+public:
+    typedef void result_type;
+
+    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_): f(f_), object(object_) {}
+
+    ~WeakFunctor() {}
+
+    void operator() ()
+    {
+        boost::shared_ptr<T> o = object.lock();
+        if (o)
+        {
+            f(o);
+        }
+    }
+
+private:
+    const Functor f;
+    const boost::weak_ptr<T> object;
+};
+
+/**
+ * Make a WeakFunctor given a functor and a weak_ptr.
+ */
+template <typename Functor, typename T>
+inline WeakFunctor<Functor,	T>
+makeWeakFunctor(Functor f, boost::weak_ptr<T> object)
+{
+    return WeakFunctor<Functor, T>(f, object);
+}
+
+/**
+ * Make a WeakFunctor given a functor and a shared_ptr.
+ */
+template <typename Functor, typename T>
+inline WeakFunctor<Functor,	T>
+makeWeakFunctor(Functor f, boost::shared_ptr<T> object)
+{
+    return WeakFunctor<Functor, T>(f, boost::weak_ptr<T>(object));
+}
+
+#define WEAK_FUNCTOR(f, p) WeakFunctor<typeof( ## f ## ), p::element_type>(f, p)
+
+#define ZINC_WEAKFUNCTOR_DEFINED_
 
 
 ={============================================================================
