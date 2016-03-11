@@ -241,8 +241,8 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_064* fobj-member-function
 *kt_dev_stl_065* fobj-bind
 *kt_dev_stl_066* fobj-bind-member-function
-*kt_dev_stl_066* function-object-bind-code
-|kt_dev_stl_066| function-object-bind-cases
+*kt_dev_stl_066* fobj-bind-code
+|kt_dev_stl_066| fobj-bind-cases
 |kt_dev_stl_067| algorithm: address of member function
 |kt_dev_stl_068| algorithm: which is better?
 |kt_dev_stl_069| algorithm: nonmodifying: equal, is_permutation
@@ -37282,99 +37282,6 @@ namespace boost {
       T * operator->() const; // never throws; only valid when T is not an array type
   };
 };
-
-
-#include <boost/shared_ptr.hpp>
-#include <boost/weak_ptr.hpp>
-#include <boost/utility/result_of.hpp>
-
-/** WeakFunctor
- *
- * When a member function is bound to an object by shared_ptr, the object is
- * preserved for the lifetime of the returned functor.
- *
- * This is not always desirable, and WeakFunctor allows a bind to be made on
- * a object using weak_ptr semantics. If the weak_ptr has expired at functor
- * evaluation time, the WeakFunctor is a null function (ie: does nothing).
- *
- * WeakFunctors are intended to be passed by value.
- *
- * Typically it will be used like:
- *     makeWeakFunctor(bind(&Class::ObjectMethod, _1, methodParams...), objectWeakPtr)
- *
- */
-template<typename Functor, typename T, typename ResultType = typename boost::result_of<Functor(boost::shared_ptr<T>)>::type>
-class WeakFunctor
-{
-public:
-    typedef ResultType result_type;
-
-    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_): f(f_), object(object_) {}
-
-    ~WeakFunctor() {}
-
-    result_type operator() ()
-    {
-        boost::shared_ptr<T> o = object.lock();
-        return o ? f(o) : result_type();
-    }
-
-private:
-    const Functor f;
-    const boost::weak_ptr<T> object;
-};
-
-/**
- * Specialisation of WeakFunctor for void because you can't return a void value
- * even in a statement in a function returning void, unfortunately.
- */
-template<typename Functor, typename T>
-class WeakFunctor<Functor, T, void>
-{
-public:
-    typedef void result_type;
-
-    explicit WeakFunctor(Functor f_, boost::weak_ptr<T> object_): f(f_), object(object_) {}
-
-    ~WeakFunctor() {}
-
-    void operator() ()
-    {
-        boost::shared_ptr<T> o = object.lock();
-        if (o)
-        {
-            f(o);
-        }
-    }
-
-private:
-    const Functor f;
-    const boost::weak_ptr<T> object;
-};
-
-/**
- * Make a WeakFunctor given a functor and a weak_ptr.
- */
-template <typename Functor, typename T>
-inline WeakFunctor<Functor,	T>
-makeWeakFunctor(Functor f, boost::weak_ptr<T> object)
-{
-    return WeakFunctor<Functor, T>(f, object);
-}
-
-/**
- * Make a WeakFunctor given a functor and a shared_ptr.
- */
-template <typename Functor, typename T>
-inline WeakFunctor<Functor,	T>
-makeWeakFunctor(Functor f, boost::shared_ptr<T> object)
-{
-    return WeakFunctor<Functor, T>(f, boost::weak_ptr<T>(object));
-}
-
-#define WEAK_FUNCTOR(f, p) WeakFunctor<typeof( ## f ## ), p::element_type>(f, p)
-
-#define ZINC_WEAKFUNCTOR_DEFINED_
 
 
 ={============================================================================

@@ -55,7 +55,8 @@
 |kt_dev_uv_stack_104| stack: binding and makefile 
 
 *kt_dev_uv_stack_105* zinc-dbus: monitor
-*kt_dev_uv_stack_105* zinc-dbus: commands
+*kt_dev_uv_stack_105* dbus-commands
+*kt_dev_uv_stack_105* dbus-py
 *kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
 *kt_dev_uv_stack_105* zinc-dbus-mock-generation-mr case
 *kt_dev_uv_stack_105* zinc-dbus-mock-use-mr-case-vanadium
@@ -121,7 +122,7 @@
 *kt_dev_uv_stack_408* mr-create-and-plugin
 *kt_dev_uv_stack_408* mr-create-gst
 *kt_dev_uv_stack_408* mr-create-gst-revised to support bin injection
-*kt_dev_uv_stack_408* mr-create-ctor-dtor
+*kt_dev_uv_stack_408* mr-create-dtor-issue
 *kt_dev_uv_stack_408* mr-create-load-play
 *kt_dev_uv_stack_408* mr-play-dbus-log
 *kt_dev_uv_stack_408* mr-play-state-changes
@@ -5561,7 +5562,7 @@ Iron.System.DBusClient/src/getScheduledEvents.cpp
 
 
 ={============================================================================
-*kt_dev_uv_stack_105* zinc-dbus-commands
+*kt_dev_uv_stack_105* dbus-commands
 
 <dbus-completion>
 # source /opt/zinc/oss/etc/bash_completion.d/dbus-bash-completion.sh
@@ -5649,6 +5650,194 @@ method call sender=:1.78 -> dest=Zinc.MediaProxy
 serial=*91* path=/Zinc/Media/OutputManager; interface=Zinc.Media.OutputManager; member=unmuteVolume
 
 method return sender=:1.75 -> dest=:1.78 reply_serial=*91*
+
+
+<dbus-change-channel>
+dbus-send --print-reply --session --dest=Zinc.Tuner /Zinc/Tuner/TunerControl Zinc.Tuner.TunerControl.setTargetService string:dvb://233a..1044 int32:0
+
+// from log to change to '1', bbc one.
+
+[11-03-2016 11:55:28.417107] method call sender=:1.25976 -> dest=Zinc.Tuner serial=1351 path=/Zinc/Tuner/TunerControl; interface=Zinc.Tuner.TunerControl; member=setTargetService
+   string "dvb://233a..1044"
+   int32 0
+
+dbus-send --print-reply --session --dest=Zinc.Tuner /Zinc/Tuner/TunerControl Zinc.Tuner.TunerControl.setTargetService string:dvb://233a..1044 int32:0
+
+// quest channel, 37,
+dbus-send --print-reply --session --dest=Zinc.Tuner /Zinc/Tuner/TunerControl Zinc.Tuner.TunerControl.setTargetService string:dvb://233a..38a2 int32:0
+
+
+={============================================================================
+*kt_dev_uv_stack_105* dbus-py
+
+Vanadium/Vanadium.W3CEngine/scripts/launch-browser.py ------------
+
+// from baby
+#!/opt/zinc/oss/bin/python
+
+
+from dbus.mainloop.glib import DBusGMainLoop
+from dbus.exceptions import DBusException
+import dbus
+import os
+import glob
+import sys
+import time
+import re
+import copy
+
+dest = '''Zinc.BabySitter'''
+path = '''/Zinc/BabySitter/Launcher'''
+
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+        self.obj = self.bus.get_object(dest, path)
+        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.BabySitter.Launcher')
+        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
+        self.args = [
+            "/opt/zinc/bin/radiumairlauncher",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "--app-launch-parameters",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier",
+            "uk.co.bbc",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "launch_context.ui.youview.com",
+            "broadcast.mheg",
+            "location.broadcast.youview.com",
+            "?#&*history=broadcast",
+            "urlbase.broadcast.youview.com",
+            "http://www.bbc.co.uk/redbuttonhtml/",
+            "channel.broadcast.youview.com",
+            "dvb://233a..1044"
+        ]
+
+    def launch(self, instanceId):
+        self._cleanJailDir(instanceId)
+        self.env = [
+            "YV_APP_RUNTIME_INSTANCE_ID=" + str(instanceId),
+            "DBUS_SYSTEM_BUS_ADDRESS=%s" % self.dbus_bus_address ]
+
+        self.processPath = self.iface.launch(self.args, self.env)
+        self.process = self.bus.get_object("Zinc.BabySitter", self.processPath)
+        self.processIface = dbus.Interface(self.process, "Zinc.BabySitter.Process")
+
+    def getPid(self):
+        if not self.processIface is None:
+            return self.processIface.pid()
+
+    def kill(self):
+        self.processIface.kill(1000)
+
+    def _cleanJailDir(self, instanceId):
+        try:
+            # Clean up the sandbox
+            os.removedirs(os.path.join('/run/youview/jail/applications',
+                          str(instanceId)))
+            os.removedirs(os.path.join('/tmp/youview/applications',
+                          str(instanceId)))
+        except:
+            print ("Error removing jail directories (hopefully because they're empty). Carrying on...")
+
+    def isAlive(self):
+        import subprocess
+        try:
+            subprocess.check_call(['killall', '-0', 'w3cEngine'])
+            return True
+        except:
+            return False
+            
+
+def main(argv):
+    try:
+        instanceId = 999
+        if (len(argv) > 0):
+            instanceId = int(argv[1])
+        else:
+            idFile = open("instanceid", "a+")
+
+            instanceId = idFile.read()
+
+            if not instanceId:
+                    instanceId = 2
+            else:
+                    instanceId = int(instanceId)
+            instanceId += 1
+            idFile.truncate(0)
+            idFile.write(str(instanceId))
+
+	print ('Using instance id %i' % instanceId)
+
+        browser = Browser()
+
+        if len(argv) > 3 and argv[2] == '--restart-interval':
+            restart_interval = int(argv[3])
+            while True:
+                print ('Launching instance %i' % instanceId)
+                browser.launch(instanceId)
+                #print ('pid %s' % str(browser.getPid()))
+                time.sleep(restart_interval)
+                if not browser.isAlive():
+                    print ('Browser died early! app id = %i' % instanceId)
+                else:
+                    print ('Killing after sleeping for %i' % restart_interval)
+                browser.kill()
+                found_corefiles = glob.glob('/var/corefiles/core.*')
+                if len(found_corefiles) > 0:
+                    print ('Found %i corefiles for app id %i (pid: %i)!' %
+                            (len(found_corefiles), instanceid,
+                             browser.getPid()))
+                instanceId += 1
+        else:
+            raw_input("Enter to exit")
+            browser.kill()
+
+    except Exception, e:
+        print e
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
+
+
+#!/bin/bash
+echo "Removing props files to disable logging"
+
+cd /opt/zinc-trunk/share/
+
+# Stash the default props file away
+mv zinc-common/zinc.common.props zcp.default
+
+# Delete all the props files
+find -name '*.props' | xargs rm
+
+# Move the stashed default back again
+mv zcp.default zinc-common/zinc.common.props
+
+echo "Running the test in a loop, ever 20 seconds"
+
+mkdir /var/log/dbus-monitor
+dbus-monitor &> /var/log/dbus-monitor/$(date +%s).log &
+
+launch-browser.py 17 --restart-interval 20
+
+
+<change-channel>
+tcdest = '''Zinc.Tuner'''
+tcpath = '''/Zinc/Tuner/TunerControl'''
+
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+
+        self.tcobj = self.bus.get_object(tcdest, tcpath)
+        self.tciface = dbus.Interface(self.tcobj, dbus_interface = 'Zinc.Tuner.TunerControl')
+
+    def changeToOne(self):
+        print ("change channel to bbc one...")
+        self.tciface.setTargetService("dvb://233a..1044", 0)
 
 
 ={============================================================================
@@ -6476,6 +6665,66 @@ method call sender=:1.117 -> dest=Zinc.Application serial=18644 path=/Zinc/Appli
 signal sender=:1.19 -> dest=(null destination) serial=2556 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=ApplicationLifecycleEvent
    uint32 3         // terminated
    int32 19
+
+
+<launch-application>
+
+include/ApplicationManagerSync.h
+
+63:	virtual int32_t launchApplication(const std::string& uri_in, const std::map< std::string, std::string >& launchParameters_in) = 0;
+
+[11-03-2016 14:25:46.923819] method call sender=:1.100 -> dest=Zinc.Application serial=81 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=launchApplication
+   string "crid://bbc.co.uk/iplayer/flash_player/1"
+   array [
+      dict entry(
+         string "channel.broadcast.youview.com"
+         string "dvb://233a..1044"
+      )
+      dict entry(
+         string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
+         string "uk.co.bbc"
+      )
+      dict entry(
+         string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.linearEnhancement"
+         string "uk.co.bbc"
+      )
+      dict entry(
+         string "launch_context.ui.youview.com"
+         string "broadcast.mheg"
+      )
+      dict entry(
+         string "location.broadcast.youview.com"
+         string "?#&*history=broadcast"
+      )
+      dict entry(
+         string "urlbase.broadcast.youview.com"
+         string "http://www.bbc.co.uk/redbuttonhtml/"
+      )
+   ]
+
+
+[11-03-2016 14:25:46.951837] method call sender=:1.139 -> dest=Zinc.BabySitter serial=422 path=/Zinc/BabySitter/Launcher; interface=Zinc.BabySitter.Launcher; member=launch
+   array [
+      string "/opt/zinc/bin/radiumairlauncher"
+      string "crid://bbc.co.uk/iplayer/flash_player/1"
+      string "--app-launch-parameters"
+      string "channel.broadcast.youview.com"
+      string "dvb://233a..1044"
+      string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
+      string "uk.co.bbc"
+      string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.linearEnhancement"
+      string "uk.co.bbc"
+      string "launch_context.ui.youview.com"
+      string "broadcast.mheg"
+      string "location.broadcast.youview.com"
+      string "?#&*history=broadcast"
+      string "urlbase.broadcast.youview.com"
+      string "http://www.bbc.co.uk/redbuttonhtml/"
+   ]
+   array [
+      string "YV_APP_RUNTIME_INSTANCE_ID=5"
+      string "DBUS_SYSTEM_BUS_ADDRESS=unix:abstract=/tmp/dbus-CjdnWlL9xE,guid=e4d77abcb36b06e584f32ad8386d4384"
+   ]
 
 ={============================================================================
 *kt_dev_uv_stack_200* stack: uranium: stagecraft and air
@@ -9943,163 +10192,6 @@ Nexus resources are owned by PID 851  // from when it's not master in nexus-insp
                 Num displayed frames 0
 Not releasing Nexus resources which aren't owned by pid 1773  // from nexus-inspect
 detachSharedMemory
-
-
-={============================================================================
-*kt_dev_uv_stack_250* mr-runbrowser-from-dbus
-
-Vanadium/Vanadium.W3CEngine/scripts/launch-browser.py ------------
-
-// from baby
-#!/opt/zinc/oss/bin/python
-
-
-from dbus.mainloop.glib import DBusGMainLoop
-from dbus.exceptions import DBusException
-import dbus
-import os
-import glob
-import sys
-import time
-import re
-import copy
-
-dest = '''Zinc.BabySitter'''
-path = '''/Zinc/BabySitter/Launcher'''
-
-class Browser(object):
-    def __init__(self):
-        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
-        self.obj = self.bus.get_object(dest, path)
-        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.BabySitter.Launcher')
-        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
-        self.args = [
-            "/opt/zinc/bin/radiumairlauncher",
-            "crid://bbc.co.uk/iplayer/flash_player/1",
-            "--app-launch-parameters",
-            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application",
-            "crid://bbc.co.uk/iplayer/flash_player/1",
-            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier",
-            "uk.co.bbc",
-            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer",
-            "crid://bbc.co.uk/iplayer/flash_player/1",
-            "launch_context.ui.youview.com",
-            "broadcast.mheg",
-            "location.broadcast.youview.com",
-            "?#&*history=broadcast",
-            "urlbase.broadcast.youview.com",
-            "http://www.bbc.co.uk/redbuttonhtml/",
-            "channel.broadcast.youview.com",
-            "dvb://233a..1044"
-        ]
-
-    def launch(self, instanceId):
-        self._cleanJailDir(instanceId)
-        self.env = [
-            "YV_APP_RUNTIME_INSTANCE_ID=" + str(instanceId),
-            "DBUS_SYSTEM_BUS_ADDRESS=%s" % self.dbus_bus_address ]
-
-        self.processPath = self.iface.launch(self.args, self.env)
-        self.process = self.bus.get_object("Zinc.BabySitter", self.processPath)
-        self.processIface = dbus.Interface(self.process, "Zinc.BabySitter.Process")
-
-    def getPid(self):
-        if not self.processIface is None:
-            return self.processIface.pid()
-
-    def kill(self):
-        self.processIface.kill(1000)
-
-    def _cleanJailDir(self, instanceId):
-        try:
-            # Clean up the sandbox
-            os.removedirs(os.path.join('/run/youview/jail/applications',
-                          str(instanceId)))
-            os.removedirs(os.path.join('/tmp/youview/applications',
-                          str(instanceId)))
-        except:
-            print ("Error removing jail directories (hopefully because they're empty). Carrying on...")
-
-    def isAlive(self):
-        import subprocess
-        try:
-            subprocess.check_call(['killall', '-0', 'w3cEngine'])
-            return True
-        except:
-            return False
-            
-
-def main(argv):
-    try:
-        instanceId = 999
-        if (len(argv) > 0):
-            instanceId = int(argv[1])
-        else:
-            idFile = open("instanceid", "a+")
-
-            instanceId = idFile.read()
-
-            if not instanceId:
-                    instanceId = 2
-            else:
-                    instanceId = int(instanceId)
-            instanceId += 1
-            idFile.truncate(0)
-            idFile.write(str(instanceId))
-
-	print ('Using instance id %i' % instanceId)
-
-        browser = Browser()
-
-        if len(argv) > 3 and argv[2] == '--restart-interval':
-            restart_interval = int(argv[3])
-            while True:
-                print ('Launching instance %i' % instanceId)
-                browser.launch(instanceId)
-                #print ('pid %s' % str(browser.getPid()))
-                time.sleep(restart_interval)
-                if not browser.isAlive():
-                    print ('Browser died early! app id = %i' % instanceId)
-                else:
-                    print ('Killing after sleeping for %i' % restart_interval)
-                browser.kill()
-                found_corefiles = glob.glob('/var/corefiles/core.*')
-                if len(found_corefiles) > 0:
-                    print ('Found %i corefiles for app id %i (pid: %i)!' %
-                            (len(found_corefiles), instanceid,
-                             browser.getPid()))
-                instanceId += 1
-        else:
-            raw_input("Enter to exit")
-            browser.kill()
-
-    except Exception, e:
-        print e
-
-if __name__ == '__main__':
-    sys.exit(main(sys.argv))
-
-
-#!/bin/bash
-echo "Removing props files to disable logging"
-
-cd /opt/zinc-trunk/share/
-
-# Stash the default props file away
-mv zinc-common/zinc.common.props zcp.default
-
-# Delete all the props files
-find -name '*.props' | xargs rm
-
-# Move the stashed default back again
-mv zcp.default zinc-common/zinc.common.props
-
-echo "Running the test in a loop, ever 20 seconds"
-
-mkdir /var/log/dbus-monitor
-dbus-monitor &> /var/log/dbus-monitor/$(date +%s).log &
-
-launch-browser.py 17 --restart-interval 20
 
 
 ={============================================================================
@@ -15882,7 +15974,6 @@ Bus error
 <code>
 GstMediaRouter::~GstMediaRouter()
 {
-    NICKEL_FUNC_TRACE;
     deinit();
 }
 
