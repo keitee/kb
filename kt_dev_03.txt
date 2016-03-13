@@ -12437,78 +12437,126 @@ boost::shared_ptr<NS_ZINC::Dispatcher> makeGlibEventDispatcher()
 
 Listener(s) -> Producer(s) <T> -> ProducerHoisted -> DD -> Listeners
 
-
 {flow}
+1. Add the shared pointer to the listener object using producer's addListener().
+In this example, this is EventWindowEventListener class. This is the target
+object for member function call using functor.
 
-1. When future barrier is completed, calls:
+virtual void DispatchingEventProducer::addListener
+    (boost::shared_ptr<ListenerT> listener)
+{
+    // Hoisting note: we cast to void* here, and cast back down in
+    // DowncastingCaller so everything is lovely and symmetrical
+    impl.addListener(listener);
+}
+
+void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
+    boost::shared_ptr<EventDispatcher> 
+    clientDispatcher=boost::shared_ptr<EventDispatcher>());
+
+note: no warning on implicit cast??
+
+
+2. When future barrier for dbus calls is completed, calls the registered
+function with that future.
 
 void SystemClientEventRepository::eventWindowDataRetrievalComplete();
 
-2. This leads to notifyWindowChanged:
 
-// this defines APIs for application and also have 'producer' implementation
-// by deriving from EventProducer.
+3. This leads to call producer's member function and calls produceEvent. This
+really produce a functor which will be posted to the registered dispatcher and
+be called againsted the registered listener, the target object.
 
-class ZINC_EXPORT EventWindow : 
-    virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> 
-
-// SystemClientEventRepository::createEventWindow() creates SCEW and pass DD,
-// inline diapatcher, to SystemClientEventWindow.
+// SystemClientEventRepository::createEventWindow() creates SCEW and pass
+// default dispatcher and inline diapatcher to SystemClientEventWindow which
+// derives from producer chain.
+//
+// class ZINC_EXPORT EventWindow : 
+//    virtual public NS_ZINC::DispatchingEventProducer<EventWindowEventListener> 
+//
+// class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow
 //
 // SystemClientEventWindow->setDispatcher(DD);
-
-class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow 
-    virtual void EventWindowChanged();
 
 void SystemClientEventWindow::notifyWindowChanged()
 {
    produceEvent(bind(&EventWindowEventListener::EventWindowChanged, _1));
 }
 
+Therefore, `_1` is the shared pointer registered with addListener() and this
+shows that `bind()` works well with shared pointer.
 
-<producer>
-// defines abstract interface to add/remove listener
 
-class ZINC_EXPORT EventProducer<ListenerT> : virtual public Polymorphic 
+{functor-chain} from bottom to top
+
+template<class ListenerT>
+class ZINC_LOCAL DispatchingEventProducer 
+  : virtual public EventProducer<ListenerT> 
 {
-   + typedef ListenerT listener_type;
-   + virtual void addListener(boost::shared_ptr<ListenerT> listener) = 0;
-};
-
-class ZINC_LOCAL DispatchingEventProducer : virtual public EventProducer<T> 
-{
-   + mutable detail::DispatchingEventProducerHoisted impl;
-
-   //           -> EventWindowEventListener::EventWindowChanged();
-   //           -> void f(ListenerT*);
-   //           -> void f(boost::shared_ptr<detail::hoisted_event_listener>);
-   // *callback*  -> void f();
-
-   + template <typename Functor>
+    template <typename Functor>
         void produceEvent(Functor f) const {
             ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
             impl.produceEvent(DowncastingCaller<Functor>(f));
         }
 
-   + virtual void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher);
-         impl.setDispatcher(dispatcher);
+    // typedef void hoisted_event_listener;
+
+    private:
+    template <typename Functor>
+        struct DowncastingCaller {
+            explicit DowncastingCaller(Functor f_) : f(f_) {}
+
+            void 
+                operator()(boost::shared_ptr<detail::hoisted_event_listener> listener) {
+                    // We implicitly casted to void* in add/removeListener above so
+                    // this is safe.
+                    f(static_cast<ListenerT*>(listener.get()));
+                }
+
+            Functor f;
+        };
 };
+
+
+This copies the given functor. This DowncastingCaller instantiates in producer
+class which is SystemClientEventWindow in this case. Is it listener??  Because
+SystemClientEventWindow is a producer and a listener at the same time.
+
 
 class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
 {
-    1. have std::list<listener> which has entry:
-    listener_entry pair{wp<listener>, sp<event dispatcher>}
+    void produceEvent
+        (boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event)
+        {
+            // have std::list<listener_entry>:
+            //    listener_entry pair{wp<void>, sp<event dispatcher>}
+            // 
+            // produceEvent 'post' user code(functor) using the dispatcher
+            // registered with the listener or default dispatcher.
+            
+            // makeWeakFunctor(functor, target);
 
-    2. produceEvent 'post' user code(functor) with event using the dispatcher
-    registered with the listener or default dispatcher.
+            localListeners[i].second->post(
+                    makeWeakFunctor(event, localListeners[i].first));
 
-   + void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
-         boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
-   + void setDispatcher(boost::shared_ptr<EventDispatcher> dispatcher_);
-
-   + void produceEvent(
-       boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event);
+            // virtual void post(boost::function<void ()> handler) = 0;
+        }
 };
+
+When a dispatcher calls a functor:
+
+boost::function<void ()>
+
+    -> WeakFunctor x()
+        // if convert weak pointer to shared pointer, then calls f(sp).
+        { f(sp); }
+        
+    -> DowncastingCaller(shared_ptr<void> listener);
+
+    -> callable from `bind()`(shared_ptr<ListenerT>);
+
+    -> EventWindowEventListener::EventWindowChanged();
+       bind(&EventWindowEventListener::EventWindowChanged, _1)
 
 
 {code}
@@ -13095,6 +13143,25 @@ size_t DispatchingEventProducerHoisted::getListenerCount() const {
 NS_ZINC_CLOSE
 
 ////////////////////////////////////////
+#ifndef ZINC_EVENTDISPATCHER_H_
+#define ZINC_EVENTDISPATCHER_H_
+
+#include "macros.h"
+#include "async/Dispatcher.h"
+
+NS_ZINC_OPEN
+
+typedef Dispatcher EventDispatcher;
+
+NS_ZINC_CLOSE
+
+#endif /* ZINC_EVENTDISPATCHER_H_ */
+
+
+={============================================================================
+*kt_dev_code_017* async-weak-functor
+
+////////////////////////////////////////
 #ifndef ZINC_COMMON_WEAKFUNCTOR_H_
 #define ZINC_COMMON_WEAKFUNCTOR_H_
 
@@ -13201,26 +13268,19 @@ NS_ZINC_CLOSE
 #endif /* ZINC_COMMON_WEAKFUNCTOR_H_ */
 
 
-////////////////////////////////////////
-#ifndef ZINC_EVENTDISPATCHER_H_
-#define ZINC_EVENTDISPATCHER_H_
-
-#include "macros.h"
-#include "async/Dispatcher.h"
-
-NS_ZINC_OPEN
-
-typedef Dispatcher EventDispatcher;
-
-NS_ZINC_CLOSE
-
-#endif /* ZINC_EVENTDISPATCHER_H_ */
-
-
 ={============================================================================
-*kt_dev_code_017* asyc: dispatcher use ex
+*kt_dev_code_017* asyc-use-case
 
 <use-case>
+SystemClientEventWindow is a producer and a listener at the same time.
+
+class ZINC_EXPORT MetadataChangeListener : public NS_ZINC::EventListener;
+
+class ZINC_EXPORT SystemClientEventWindow : virtual public EventWindow,
+    public boost::enable_shared_from_this<SystemClientEventWindow>,
+    virtual public MetadataChangeListener;
+
+
 1. APP calls SystemClientFactory
    - create a system client factory, DD(inline D) and FD(thread)
 
