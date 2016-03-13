@@ -222,7 +222,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_050| iter-range
 |kt_dev_stl_051| iter-adaptors 
 |kt_dev_stl_052| iterator: subscript for sequential and associative
-|kt_dev_stl_053| iterator: invalid iterator, insert, remove
+|kt_dev_stl_053| iter-invalid, iter-erase, iter-insert
+|kt_dev_stl_053| iter-invalid-loop
+*kt_dev_stl_053* iter-remove
 |kt_dev_stl_054| iterator: external and internal
 
 |kt_dev_stl_060| algorithm
@@ -30062,7 +30064,7 @@ from 4.6
 
 Two points:
 
-* range-for caches begin and end so has risk of using 'invalidated' iterators.
+* range-for caches `begin()` and `end()` so has risk of using 'invalidated' iterators.
 * shall use `const&` in for loop statement to avoid unnecessary copy.
 
 for( const T &r : vec )
@@ -30727,9 +30729,42 @@ insert a new element. Also use at() not to insert element accidentally in which 
 
 
 ={============================================================================
-*kt_dev_stl_053* iter-invalid, insert, remove
+*kt_dev_stl_053* iter-invalid, iter-erase, iter-insert
 
-{erase}
+{iter-invalid} CPR p353.
+Operations that add or remove elements from a container could invalidate
+pointers, references, or iterator to container elements. Using an invalidated
+pointer is the same kind of problems as using an unitialized pointer. 
+
+This is only for sequential containers that use 'contiguous' memory.
+
+After add an element:
+
+* Iterators, pointers, and references to a 'vector' or 'string' are invalid if
+  the container was reallocated. If no rellocation happens, indirect references
+  before the insertion remain valid; those after insertion are invalid.
+
+* Same for 'deque' if we add elements anywhere but at the front or back. If we
+  add at the front or back, iterators are invalidated but references and
+  pointers to exisiting elements are not.
+
+* Iterators, pointers, and references to 'list' or 'forward_list' remain valid.
+
+After remove an element:
+
+* All other iterators, references, and pointers to a 'vector' or 'string' remain
+  valid 'before' the removal point. The off-the-end iterator is always
+  invalidated.
+
+* All others to a 'deque' are invalidated if the removed elements are anywhere
+  but the front or back.
+
+* All others to 'list' or 'forward_list' remains valid.
+
+note: here iterators includes off-the-end iterator.
+
+
+{iter-erase}
 
 <list>
 list.erase( start, end );
@@ -30739,80 +30774,54 @@ m/set.erase(val);             // return # of erased elements
 m/set.erase(pos);             // note 2
 m/set.erase(beg,end);
 
-note 1: why cannot use modifying algorithm on set. copied again from set
+note: 
+Why cannot use modifying algorithm on set? Copied again from set.
 
-Again, bidirectional iterator and from an iterator's point of view, all elements are considered
-'constant'. Means that iterators are also constant.
+Again, bidirectional iterator and from an iterator's point of view, all elements
+are considered 'constant'. Means that iterators are also constant.
 
-As a result, you can't call any 'modifying' algorithm on the elements of a set or a multiset. For
-example, you can't call the algorithm-remove, because it "removes" by overwriting "removed" elements
-with the following elements. To remove elements in sets and multisets, you can use only 'member'
-functions provided by the container.
+As a result, you can't call any 'modifying' algorithm on the elements of a set
+or a multiset. For example, you can't call the algorithm-remove, because it
+"removes" by overwriting "removed" elements with the following elements. To
+remove elements in sets and multisets, you can use only 'member' functions
+provided by the container.
 
-note 2:
-These removes the element at iterator position pos or range[beg, eng) and returns the 'following'
-position. Returned nothing before C++11.
-
-
-{invalidated-iterator} from Primers p353.
-After add an element:
-
-Operations that add or remove elements from a container can invalidate pointers, references, or
-iterator to container elements. Using an invalidated pointer is the same kind of problems as using
-an unitialized pointer. <key> this is only for sequential containers that use 'contiguous' memory.
-
-1. Iterators, pointers, and references to a 'vector' or 'string' are invalid if the container was
-reallocated. If no rellocation happens, indirect references before the insertion remain valid; those
-after insertion are invalid.
-
-2. Same for 'deque' if we add elements anywhere but at the front or back. If we add at the front or
-back, iterators are invalidated but references and pointers to exisiting elements are not.
-
-3. Iterators, pointers, and references to 'list' or 'forward_list' remain valid.
-
-After remove an element:
-
-1. All other iterators, references, and pointers to a 'vector' or 'string' remain valid 'before' the
-removal point. The off-the-end iterator is always invalidated.
-
-2. All others to a 'deque' are invalidated if the removed elements are anywhere but the front or
-back.
-
-3. All others to 'list' or 'forward_list' remains valid.
-
-note: here iterators includes off-the-end iterator.
+note:
+These removes the element at iterator position pos or range[beg, eng) and
+returns the 'following' position. Returned nothing before C++11.
 
 
-{insert}
-All predefined containers except array and forward_list have such an insert() member function. There
-are overloads and each containers have some differences.
+{iter-insert}
+All predefined containers except array and forward_list have such an `insert()`
+member function. There are overloads and each containers have some differences.
 
-<insert-interface>
-The difference is that all sequence containers except array has only insert(pos, val) but
-associatives have insert(val) and insert(pos, val). That's why associatives has two versions for the
-same purpose.
+<interface>
+The difference is that all sequence containers except array has only insert(pos,
+    val) but associatives have insert(val) and insert(pos, val). That's why
+associatives has two versions for the same purpose.
 
-<position>
-The text reads "c.insert(pos, elem): inserts a copy of elem 'before' iterator position pos and returns
-the position of the new element"
+<return-position>
+The text reads "c.insert(pos, elem): inserts a copy of elem 'before' iterator
+position pos and returns the position of the new element"
 
 This text says rather 'imaginary' pos by saying before.
 
    [ pos-1 ] [ pos ] [pos+1]
 
-In my words, insert() member insert value at pos and return pos by making a space at pos. Updated.
-Better to think 'before' in the sense that insert(pos,val) invalidate pos and invalidate pos after
-insertion position. So insert before pos.
+In my words, insert() member insert value at pos and return pos by making a
+space at pos. Updated. Better to think 'before' in the sense that
+insert(pos,val) invalidate pos and invalidate pos after insertion position. So
+insert before pos.
 
 
 <position-hint>
-Passing a position(iterator) to insert doesn't sound useful? So for associative and unordered
-containers, the position is taken as a 'hint' to start the search for the correct position. However,
-containers are free to ignore it.
+Passing a position(iterator) to insert doesn't sound useful? So for associative
+and unordered containers, the position is taken as a 'hint' to start the search
+for the correct position. However, containers are free to ignore it.
 
 note: This is why should be careful about using range for.
 
-<example>
+<ex>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -30829,7 +30838,8 @@ int main()
     it = veci.insert( it, 6 );
     it = veci.insert( it, 5 );
 
-    // <Q> This seems okay since inserting element at the same pos,2? what will happen?
+    // Q: This seems okay since inserting element at the same pos,2? what will
+    // happen?
     // veci.insert( it, 7 );
     // veci.insert( it, 6 );
     // veci.insert( it, 5 );
@@ -30844,25 +30854,27 @@ int main()
   std::cout << std::endl;
 }
 
-1:5:6:7:2:3:4:                   // note: see the order of 5:6:7:
+// note: see the order of 5:6:7: and moves the others.
+1:5:6:7:2:3:4:                   
 
-<A> Core dumped since insert element in the middle and invalidate pos "it". However, set uses
-insert(elem) without pos.
+A: Core dumped since insert element in the middle and invalidate pos "it".
+However, set uses insert(elem) without pos.
 
-<example> use list initializer from C++11
+
+<ex> use list initializer from C++11
 
 // insert additional values:
 unordered_multiset<string> cities;
 cities.insert( {"London", "Munich", "Hanover", "Braunschweig"} );
 
-<example> see end() call
+<ex> see end() call
 vec<int> veci;
 veci.push_back(1); .. to (3); // [1,2,3,E)
 veci.insert( veci.end(), 4 );
 
-Q: What's the output if print veci?  A: 1 2 3 4
+What's the output if print veci?  A: 1 2 3 4
 
-<example>
+<ex>
 list<string> lst;
 auto iter = lst.begin();
 
@@ -30876,14 +30888,21 @@ while(...)
 
 [one, two, three]                       // see no iter update
 
-note: see the different output. why? since iter remains the same(off-the-end) in list and works
-fine. However, this approach will creates core dump in case of vector because addition and deletion
-will invalidate iterator of vector.
+note: 
+See the different output. Why? since iter remains the same(off-the-end) in list
+and works fine. However, this approach will creates core dump in case of vector
+because addition and deletion will invalidate iterator of vector.
 
-<insert-loop>
-So the recommened is to refresh on each trip through the loop. 
 
-// This is to remove even-valued elements and insert a duplicate of odd-valued elements.
+={============================================================================
+*kt_dev_stl_053* iter-invalid-loop
+
+So the recommened is to 'refresh' on each trip through the loop. 
+
+<ex>
+This is to remove even-valued elements and insert a duplicate of odd-valued
+elements.
+
 vector<int> vi = {0,1,2,3,4,5,6,7,8,9};
 auto iter = vi.begin();
 
@@ -30898,23 +30917,30 @@ while( iter != vi.end() )              // note: keep calling end()
     iter = vi.erase(iter);
 }
 
+
 note: Two thing from ESTL09 to clarify:
-1. said that invalidated iterators also apply to associative containers. Yes, see erase for map
-which invalidate iterators for erased elements.
-2. said that erase()/insert() returns void for associative containers. not any more since C++11 and
-see map cases.
 
-Primers p344. Under the new standard, the version of insert that take a count or range return
-iterator to the 'first' element that was inserted. This seems to be the same for erase() which
-returns 'after' the one deleted.
+* Said that invalidated iterators also apply to associative containers. Yes, see
+  erase for map which invalidate iterators for erased elements.
+
+* Said that `erase()`/`insert()` returns void for associative containers. not any
+  more since C++11 and see map cases.
+
+* CPR p344. Under the new standard, the version of insert that take a count or
+  range return iterator to the 'first' element that was inserted. This seems to
+  be the same for erase() which returns 'after' the one deleted.
 
 
-{manipulate-containers} algorithm-remove
-In practice, there are some limits and workarounds you should know. Many of these have to do with
-modifications. These aspects are surprising and show the 'price' of the STL concept that separates
-containers and algorithms with great flexibility.
+={============================================================================
+*kt_dev_stl_053* iter-remove
 
-<example>
+{for-sequential} *ex-algo-remove* 
+In practice, there are some limits and workarounds you should know. Many of
+these have to do with modifications. These aspects are surprising and show the
+'price' of the STL concept that separates containers and algorithms with great
+flexibility.
+
+<ex>
 #include <iostream>
 #include <list>
 #include <algorithm>
@@ -30952,23 +30978,28 @@ pre : 12 elements
 post: 12 elements
 6 5 4 2 1 1 2 4 5 6 5 6 
 
-When runs algorithm-remove, it will reorder like:
+So algo-remove reorder like:
 
 <elemenets not matched> <elements matched>
                        |
                         += return the past of the last element
 
-<key> Thus, remove() did not change the number of elements in the collection for which it was
-called. Revised the code to actually remove by calling 'member' function. 
+Thus, `remove()` did not change the number of elements in the collection for
+which it was called. Revised the code to actually remove by calling 'member'
+function. 
 
-note: coll.remove() is only for list and forward_list since no such member function for others.
+note: 
+coll.remove() is only for list and forward_list since no such member function
+for others.
 
-Why don't algorithms call erase() by themselves? This question highlights the price of the
-flexibility of the STL. The STL separates data structures and algorithms by using iterators as the
-interface. However, iterators are an abstraction to represent a 'position' in a container. In
-general, iterators do not know their containers. Thus, the algorithms, which use the iterators to
+Why don't algorithms call erase() by themselves? This question highlights the
+price of the flexibility of the STL. The STL separates data structures and
+algorithms by using iterators as the interface. However, iterators are an
+abstraction to represent a 'position' in a container. In general, iterators do
+not know their containers. Thus, the algorithms, which use the iterators to
 access the elements of the container, can't call any member function for it.
 
+<ex-revised>
 #include <iostream>
 #include <list>
 #include <algorithm>
@@ -30992,7 +31023,7 @@ int main()
   copy( coll.cbegin(), coll.cend(), ostream_iterator<int>(cout, " "));
   cout << endl;
 
-  // remove all with value 3. algorithm-remove
+  // remove all with value 3. algo-remove
   // note: get the logical end
   list<int>::iterator end = remove( coll.begin(), coll.end(), 3);
 
@@ -31002,7 +31033,7 @@ int main()
   cout << endl;
 
   // print number of removed elements
-  // algorithm-distance
+  // *ex-algo-distance*
   cout << "number of removed elements: " << distance( end, coll.end()) << endl;
 
   // note: actually remove "removed" elements
@@ -31014,19 +31045,23 @@ int main()
   cout << endl;
 }
 
-<manipulate-associative>
-Manipulation algorithms-those that remove elements and those that reorder or modify elements-have
-another 'problem' when you try to use them with associative or unordered containers:
 
-Associative and unordered containers can't be used as a destination. The reason is simple:
+{for-associative}
+Manipulation algorithms-those that remove elements and those that reorder or
+modify elements-have another 'problem' when you try to use them with associative
+or unordered containers:
 
-If they would work for associative or unordered containers, modifying algorithms could change the
-value or position of elements, thereby violating the order maintained by the container
+Associative and unordered containers can't be used as a destination. The reason
+is simple:
 
-In order to maintain internal order, every iterator for an associative and unordered container is
-declared as an iterator for a 'constant' value or key.
+If they would work for associative or unordered containers, modifying algorithms
+could change the value or position of elements, thereby violating the order
+maintained by the container
 
-<example>
+In order to maintain internal order, every iterator for an associative and
+unordered container is declared as an iterator for a 'constant' value or key.
+
+<ex>
 #include <iostream>
 #include <set>
 #include <algorithm>
@@ -31059,10 +31094,11 @@ sam01.cpp:17:39:   instantiated from here
 /usr/include/c++/4.6/bits/stl_algo.h:1106:13: error: assignment of read-only location 
    '__result.std::_Rb_tree_const_iterator<_Tp>::operator* [with _Tp = int, std::_Rb_tree_const_iterator<_Tp>::reference = const int&]()'
 
-<key> How does one remove elements in associative containers? The answer is simple: Call their
-member functions
 
-<example>
+How does one remove elements in associative containers? The answer is simple:
+Call their member functions
+
+<ex>
 #include <iostream>
 #include <set>
 #include <algorithm>
@@ -31096,35 +31132,39 @@ number of removed elements: 1
 pre : 8 elements
 1 2 4 5 6 7 8 9 
 
-<algorithm-or-member-function>
-Even if you are able to use an algorithm, it might be a bad idea to do so. A container might have
-member functions that provide much better performance.
 
-Calling remove(val) for elements of a 'list' is a good example of this. If you call remove() for
-elements of a list, the algorithm doesn't know that it is operating on a list and thus does what it
-does for any container: reorder the elements by changing their values. If, for example, the
-algorithm removes the first element, all the following elements are assigned to their previous
-elements. This behavior contradicts the main advantage of lists: the ability to insert, move, and
-remove elements by modifying the links instead of the values.
+{algorithm-or-member-function}
+Even if you are able to use an algorithm, it might be a bad idea to do so. A
+container might have member functions that provide much better performance.
 
-note: remove family is only for list and forward_list and erase for others.
+Calling remove(val) for elements of a 'list' is a good example of this. If you
+call remove() for elements of a list, the algorithm doesn't know that it is
+operating on a list and thus does what it does for any container: reorder the
+elements by changing their values. If, for example, the algorithm removes the
+first element, all the following elements are assigned to their previous
+elements. This behavior contradicts the main advantage of lists: the ability to
+insert, move, and remove elements by modifying the links instead of the values.
 
-To avoid bad performance, lists provide special member functions for all manipulating algorithms.
-You should 'always' prefer them. 
+note: 
+The `remove()` family is only for list and forward_list and erase for others.
 
-The problem is, you have to know that a member function exists that has significantly better
-performance for a certain container. You have to change the code when you switch to another
-container type.
+To avoid bad performance, lists provide special member functions for all
+manipulating algorithms. You should 'always' prefer them. 
+
+The problem is, you have to know that a member function exists that has
+significantly better performance for a certain container. You have to change the
+code when you switch to another container type.
 
 <container-specific>
-The list and forward_list define several algorithms as memebers because can use generic ones with
-list but at a cost in performance. These container spscific ones are merge, sort, unique, remove and
-reserse. The member version should be used in preference to the generic for list and forward_list.
+The `list` and `forward_list` define several algorithms as memebers because can
+use generic ones with list but at a cost in performance. These container
+spscific ones are merge, sort, unique, remove and reserse. The member version
+should be used in preference to the generic for list and forward_list.
 
-Also, a important difference between the list-specific and the generic is that the list version
-change the underlying containers.
+Also, a important difference between the list-specific and the generic is that
+the list version change the underlying containers.
 
-// algorithm-remove
+// *ex-algo-remove*
 int main()
 {
   list<int> coll;
