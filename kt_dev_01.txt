@@ -239,7 +239,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_063* function-object-predefined
 *kt_dev_stl_064* function-object-function-type
 *kt_dev_stl_064* function-object-function-pointer
-*kt_dev_stl_064* function-object-cases
+*kt_dev_stl_064* fobj-cases
 *kt_dev_stl_064* fobj-member-function
 *kt_dev_stl_065* fobj-bind
 *kt_dev_stl_066* fobj-bind-member-function
@@ -16681,7 +16681,7 @@ okay in that case because those classes otherwise have no need for one.
 
 
 ={============================================================================
-*kt_dev_cpp_008* const-this, overload, member function
+*kt_dev_cpp_008* const-this, const-overload, const-member-function
 
 <overload-condition>
 Member functions differing only in their constness can be overloaded. Conditons
@@ -16711,8 +16711,8 @@ Record lookup(const account *);   // const version
 {why-const-member-func}
 EC++03. Two points:
 
--. Clearer interface to show which member func can change state; read or write.
--. Make it possible to work with const objects. 
+* Clearer interface to show which member func can change state; read or write.
+* Make it possible to work with const objects. 
 
 
 <this-pointer>
@@ -16829,7 +16829,57 @@ If it were written:
 Screen& display() const
 { cout << "dis: this is const member" << endl; return *this; }
 
-<const-to-nonconst-error>
+<approach-two> Have one implementation for both const and non-const <const_cast>
+
+From EC++03. Why need? If member function is big, code duplication. So implement
+once and use it twice. Have one const implementation and nonconst version simply
+calls const one.
+
+Why this direction? If you were to call a nonconst from a const, would run the
+risk that that object you'd promised not to modify would be changed. 
+
+class TextBlock {
+  const char& operator[]( std::szie_t position ) const 
+  {
+    ...
+    return text[position];
+  }
+
+  char& operator[]( std::size_t position )
+  {
+    // Use static_cast to set const and const_cast to remove const
+
+    return const_cast<char&> ( static_cast<const TextBlock&>(*this)[position] );
+  }
+};
+
+From CPR 233, const_cast is most useful in the conext of overloaded functions.
+
+const string &shorterString( const string &s1, const string &s2 )
+{
+  return s1.size() <= s2.size() ? s1 : s2;
+}
+
+string &shorterString( string &s1, string &s2 )
+{
+  auto &r = shorterString(const_cast<const string&>(s1), 
+                          const_cast<const string&>(s2));
+
+  return const_cast< string& >(r);
+}
+
+This is safe to cast the const string back to a plain string and return it
+because it is one of original nonconst arguments.
+
+<approach-three> Change the order
+
+myscreen.set_set(10).display();
+const_screen.display();
+
+
+{const-to-nonconst-error}
+
+<1>
 test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&'
 from expression of type 'const Screen'
@@ -16878,53 +16928,32 @@ const T func( ... ) const // OK
 T func( ... ) const       // NO 
 
 
-<approach-two> Have one implementation for both const and non-const <const_cast>
+<2>
 
-From EC++03. Why need? If member function is big, code duplication. So implement
-once and use it twice. Have one const implementation and nonconst version simply
-calls const one.
-
-Why this direction? If you were to call a nonconst from a const, would run the
-risk that that object you'd promised not to modify would be changed. 
-
-class TextBlock {
-  const char& operator[]( std::szie_t position ) const 
-  {
-    ...
-    return text[position];
-  }
-
-  char& operator[]( std::size_t position )
-  {
-    // Use static_cast to set const and const_cast to remove const
-
-    return const_cast<char&> ( static_cast<const TextBlock&>(*this)[position] );
-  }
-};
-
-From CPR 233, const_cast is most useful in the conext of overloaded functions.
-
-const string &shorterString( const string &s1, const string &s2 )
+NS_ZINC::Future<Position> Gst::getPosition() const
 {
-  return s1.size() <= s2.size() ? s1 : s2;
+    return returnDefault(
+                Position(0,
+                    int32_t(GST_TIME_AS_MSECONDS(cachedCurrent)),
+                    int32_t(GST_TIME_AS_MSECONDS(cachedCurrent))));
 }
 
-string &shorterString( string &s1, string &s2 )
+template<typename T>
+NS_ZINC::Future<T> Gst::returnDefault(const T& val)
 {
-  auto &r = shorterString(const_cast<const string&>(s1), 
-                          const_cast<const string&>(s2));
-
-  return const_cast< string& >(r);
+    return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
+            boost::bind(&GstMediaRouter::getPosition_async, this));
 }
 
-This is safe to cast the const string back to a plain string and return it
-because it is one of original nonconst arguments.
+This emits an error:
 
+.cpp:1686:78: error: passing 'const nickel::system::GstMediaRouter' as 'this'
+argument of 'zinc::Future<T>
+nickel::system::GstMediaRouter::returnDefaultIfStopped(const T&) [with T =
+Zinc::Media::Position]' discards qualifiers
 
-<approach-three> Change the order
-
-myscreen.set_set(10).display();
-const_screen.display();
+Because returnDefault() is called in getPosition which is const member function
+and to make returnDefault() succeeds, needs to const to nonconst so fails.
 
 
 {const-in-func-definition}
@@ -33104,9 +33133,9 @@ CPR 249 for more.
 
 
 ={============================================================================
-*kt_dev_stl_064* function-object-cases
+*kt_dev_stl_064* fobj-cases
 
-{1}
+<ex>
 The idea is that function object keep state, playspeed, in this case and use
 that state when is asked to raise an event.
 
@@ -33170,17 +33199,6 @@ void registerMockForCanPlayAndPauseVideo()
                             speedChangeSender, _1)),
                     Return(makeCompletedFuture())));
 }
-
-
-{member-function}
-
-void SystemClientEventRepository::eventsReceived(
-  boost::shared_ptr<X> command, const NS_ZINC::FutureValue<Y>& eventsFV)
-{}
-
-void (SystemClientEventRepository::*masCallback)
-   (boost::shared_ptr<X>, const NS_ZINC::FutureValue<Y> &) = 
-   &SystemClientEventRepository::eventsReceived;
 
 
 ={============================================================================
@@ -33396,6 +33414,8 @@ The `bind()` allows you to:
   to objects
 
 <code>
+// functional
+
   /**
    *  @brief Function template for std::bind.
    *  @ingroup binders
@@ -34025,7 +34045,7 @@ The call trace for a bind.
 
 
 ={============================================================================
-*kt_dev_stl_066* function-object-bind-cases
+*kt_dev_stl_066* fobj-bind-cases
 
 <ex>
 Use member function. However, not use passed parameter but instead use 'this'
@@ -34060,6 +34080,169 @@ returns RefObj<GstElement>.
 RefObj<GstElement> 
     VirtualBinSrc::makeAndSetupDecodebin
         ("video/quicktime; audio/x-m4a; text/x-raw");
+
+
+<ex>
+
+// uses
+
+NS_ZINC::Future< int32_t > ProxyMediaRouter::getMediaDuration() const {
+
+    scoped_lock lock(mutex);
+
+    return deferForwardOrDefault(
+            boost::bind(&MediaRouter::getMediaDuration, _1),
+            properties.mediaDuration.get_value_or(0));
+}
+
+NS_ZINC::Future< Position > ProxyMediaRouter::getPosition() const {
+    return deferForwardOrDefault(
+            boost::bind(&MediaRouter::getPosition, _1), 
+            Position());
+}
+
+
+// deferred
+
+template <typename T>
+struct future_type;
+
+template <typename T>
+struct future_type<NS_ZINC::Future<T> > {
+    typedef T type;
+};
+
+template<typename Functor>
+struct returned_future_type {
+    typedef typename future_type<typename Functor::result_type>::type type;
+};
+
+// 
+
+struct AbstractDeferredCall {
+    virtual ~AbstractDeferredCall() {}
+
+    virtual void operator()(const MediaRouter* mediaRouter) = 0;
+};
+
+template<typename Functor, typename T>
+class DeferredCall : public AbstractDeferredCall {
+
+    public:
+
+        DeferredCall(boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher, Functor method_) :
+            promise(*dispatcher),
+            method(method_) {
+            }
+
+        NS_ZINC::Future<T> getFuture() {
+            return promise.getFuture();
+        }
+
+        void operator()(const MediaRouter* mediaRouter) {
+            method(const_cast<MediaRouter*>(mediaRouter))
+                .then(boost::bind(&chainedComplete<T>, promise, _1));
+        }
+
+    private:
+
+        NS_ZINC::Promise<T> promise;
+        Functor method;
+};
+
+
+class ZINC_LOCAL ProxyMediaRouter : public MediaRouter
+{
+    mutable boost::ptr_deque<AbstractDeferredCall> deferredCalls;
+};
+
+
+template<typename Functor>
+typename Functor::result_type ProxyMediaRouter::deferCall(Functor f) const {
+
+    typedef typename returned_future_type<Functor>::type T;
+
+    std::auto_ptr<DeferredCall<Functor, T> > deferred
+        (new DeferredCall<Functor, T>(dispatcher, f));
+
+    NS_ZINC::Future<T> future(deferred->getFuture());
+    deferredCalls.push_back(deferred);
+    return future;
+}
+
+
+// mmeber-template
+
+template<typename Functor> typename Functor::result_type 
+    ProxyMediaRouter::deferForwardOrDefault(Functor f,
+    const typename returned_future_type<Functor>::type& defaultValue) const
+{
+    typedef typename returned_future_type<Functor>::type T;
+
+    scoped_lock lock(mutex);
+
+    // flag if sourcing is completed or not and ture when it's not completed.
+    if (sourcing) {
+        // the sourcing is ongoing and defer a call.
+        return deferCall(f);
+    }
+
+    // return default
+    //
+    // lastSource is a string and is set when sourcing is completed. isSourced
+    // return 
+    //  true when the string is not empty.
+    //  false when the string is empty
+    if (!isSourced())
+    {
+        // 
+        return NS_ZINC::completedFuture<T>(*dispatcher, defaultValue);
+    }
+
+    // forward to impl
+    return f(impl.get());
+}
+
+
+// This is called by SetSourceContinuation::complete(). The idea is to contain
+// all the state manipulation in one place.
+//
+// That is when continuation which has many calles in chain completes and defer
+// any calls to be handled when complete() is called an this when the object is
+// in right state.
+
+void ProxyMediaRouter::setSourceComplete
+{
+    scoped_lock lock(mutex);
+
+    ...
+
+    // Some calls may have been deferred whilst we were setting the source.
+    // process those now, but stop if one of them is a call to setSource().
+    // FIXME Does not check for setSource() - should it?
+
+    while (!deferredCalls.empty() && !sourcing) {
+        deferredCalls.front()(this);
+        deferredCalls.pop_front();
+    }
+}
+
+
+<ex> member-function
+
+void SystemClientEventRepository::eventsReceived(
+  boost::shared_ptr<X> command, const NS_ZINC::FutureValue<Y>& eventsFV)
+{}
+
+
+// defines a function pointer to a member function and set it
+
+void (SystemClientEventRepository::*masCallback)
+   (boost::shared_ptr<X>, const NS_ZINC::FutureValue<Y> &) = 
+   &SystemClientEventRepository::eventsReceived;
+
+
+bar.addWithCallback(fMASEvents, boost::bind(masCallback, this, sharedCmd, _1));
 
 
 ={============================================================================
