@@ -96,8 +96,8 @@
 *kt_dev_uv_stack_250* mr-web: media player interface
 *kt_dev_uv_stack_250* mr-web: media element and attribute
 *kt_dev_uv_stack_250* mr-web: media event
-*kt_dev_uv_stack_250* mr-web-ended-event
-*kt_dev_uv_stack_250* mr-web: ended event: release nexus
+*kt_dev_uv_stack_250* mr-ended-event
+*kt_dev_uv_stack_250* mr-ended-event-release nexus
 *kt_dev_uv_stack_250* mr-ended-event-duration
 *kt_dev_uv_stack_250* mr-web-play, ready, network state attribute 
 *kt_dev_uv_stack_250* mr-web-server
@@ -11843,7 +11843,7 @@ interface HTMLVideoElement : HTMLMediaElement {
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web-ended-event
+*kt_dev_uv_stack_250* mr-ended-event
 
     enum ReadyState
     {
@@ -11906,6 +11906,8 @@ bool HTMLMediaElement::endedPlayback() const
   if (m_readyState < HAVE_METADATA)
     return false;
 
+  // note: should return true
+
   // and the current playback position is the end of the media resource and the
   // direction of playback is forwards, Either the media element does not have a
   // loop attribute specified, or the media element has a current media
@@ -11952,74 +11954,6 @@ bool HTMLMediaElement::ended() const
 ended called by time difference check player.min.js:1
 video.ended, video: [object Object] player.min.js:1
 Removing event listeners... player.min.js:1
-
-
-<gst-code> this is the 'previous' way before a fix(DEVARCH-10634)
-
-// gets EOS and arrange signal to fire "complete"
-
-case GST_MESSAGE_EOS:
-  (void)stop_locked(StatusEventValue::complete);
-  break;
-
-NS_ZINC::Future<void> GstMediaRouter::stop_locked(
-    StatusEventValue::Enum eventValue)
-{
-  if (!stopped) {
-
-    // add to signal
-
-    onStateChange.connect_extended(
-        OneShotFunctionCall(
-          boost::bind(&GstMediaRouter::produceStatusEvent,
-            this,
-            eventValue),
-          GST_STATE_PAUSED));
-
-    stopReportingPositionChange();
-
-    // set state change
-
-    const GstStateChangeReturn ret =
-      gst_element_set_state(pipeline.get(), GST_STATE_PAUSED);
-
-    if (ret == GST_STATE_CHANGE_FAILURE) {
-      NICKEL_INFO("Failed to stop the pipeline");
-    } else {
-      // This might be paranoid but I don't think we should
-      // release Drm restrictions until we're sure pipeline
-      // is stopped an decoder released. If there was state
-      // change error then maybe we should keep restrictions
-      // enforced.
-      sinkBin->stop();
-    }
-    stopped = true;
-  }
-
-  return NS_ZINC::completedFuture(*getDispatcher());
-}
-
-// wait for state change and fire up "complete" event
-
-case GST_MESSAGE_STATE_CHANGED:
-{
-  GstState oldstate, newstate, pending;
-
-  gst_message_parse_state_changed(msg, &oldstate, &newstate, &pending);
-
-  // sink state changes can be useful to determine tracks availability
-  if (pipeline == GST_ELEMENT(msg->src)) {
-      NICKEL_TRACE(
-          "State transition "
-          << gst_element_state_get_name(oldstate)
-          << " -> " << gst_element_state_get_name(newstate)
-          << " wanted " << gst_element_state_get_name(pending));
-
-      onStateChange(oldstate, newstate, pending);
-  }
-
-  break;
-}
 
 
 <when-no-ended-event>
@@ -12127,6 +12061,8 @@ note: this is when "pipeline" changes state
 /GstMediaRouter.cpp:1404 KT: currentTime: 0, VOD Position(0, 0, 360000)                           
 
 <from-qt-side>
+note: now is 0 when completed is fired
+
 ** KT-WEB **:mediaPlayerTimeChanged: now358.64: dur360
 ** KT-WEB **:mediaPlayerTimeChangedm_sentEndEvent is false
 ** KT-WEB **:endedPlayback: now358.68: dur360
@@ -12248,13 +12184,101 @@ WebKit when a play finishes and requests a current position.
 [1] https://html.spec.whatwg.org
 [2] 1125-S Media Router Specification v1.3
 
-GST_EOS             -> connect signel, pause gst pipeline
 
-GST_STATE_CHANGE    -> fire signal, ended event on dbus
+<gst-code> this is the 'previous' way before a fix(DEVARCH-10634)
+
+// gets EOS and arrange signal to fire "complete"
+
+case GST_MESSAGE_EOS:
+  (void)stop_locked(StatusEventValue::complete);
+  break;
+
+NS_ZINC::Future<void> GstMediaRouter::stop_locked(
+    StatusEventValue::Enum eventValue)
+{
+  if (!stopped) {
+
+    // add to signal
+
+    onStateChange.connect_extended(
+        OneShotFunctionCall(
+          boost::bind(&GstMediaRouter::produceStatusEvent,
+            this,
+            eventValue),
+          GST_STATE_PAUSED));
+
+    stopReportingPositionChange();
+
+    // set state change
+
+    const GstStateChangeReturn ret =
+      gst_element_set_state(pipeline.get(), GST_STATE_PAUSED);
+
+    if (ret == GST_STATE_CHANGE_FAILURE) {
+      NICKEL_INFO("Failed to stop the pipeline");
+    } else {
+      // This might be paranoid but I don't think we should
+      // release Drm restrictions until we're sure pipeline
+      // is stopped an decoder released. If there was state
+      // change error then maybe we should keep restrictions
+      // enforced.
+      sinkBin->stop();
+    }
+    stopped = true;
+  }
+
+  return NS_ZINC::completedFuture(*getDispatcher());
+}
+
+// wait for state change and fire up "complete" event
+
+case GST_MESSAGE_STATE_CHANGED:
+{
+  GstState oldstate, newstate, pending;
+
+  gst_message_parse_state_changed(msg, &oldstate, &newstate, &pending);
+
+  // sink state changes can be useful to determine tracks availability
+  if (pipeline == GST_ELEMENT(msg->src)) {
+      NICKEL_TRACE(
+          "State transition "
+          << gst_element_state_get_name(oldstate)
+          << " -> " << gst_element_state_get_name(newstate)
+          << " wanted " << gst_element_state_get_name(pending));
+
+      onStateChange(oldstate, newstate, pending);
+  }
+
+  break;
+}
+
+note:
+The EOS is raised in every play in series such as bbc news.
+
+GST_EOS             -> connect signel, pause gst pipeline, cache current
+GST_STATE_CHANGE    -> fire signal, completed event on dbus
+
+@@ -1572,10 +1569,19 @@ const Position GstMediaRouter::getPosition_locked(bool liveMode) const
++
++        if(isCompleted) {
++            return Position(
++                    0,
++                    int32_t(GST_TIME_AS_MSECONDS(cachedCurrent)),
++                    int32_t(perceivedBufferSize));
++        }
++        else {
++            return Position(
++                    0,
++                    int32_t(GST_TIME_AS_MSECONDS(currentTime)),
++                    int32_t(perceivedBufferSize));
++        }
+
+note:
+stopped variable is set first and isCompleted is set later when gets EOS.
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: ended event: release nexus
+*kt_dev_uv_stack_250* mr-ended-event-release nexus
 
 <1> when-no-ended-event, browser killed, and nexus mangled
 
@@ -12372,7 +12396,7 @@ note: no problem
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-ended-event: duration
+*kt_dev_uv_stack_250* mr-ended-event-duration
 
 0:02:40.111841275  webkitmediaplayer MediaPlayerPrivateGStreamer.cpp:751:
 playbackPosition: Position 0:02:36.900000000
@@ -16393,7 +16417,8 @@ ProxyMediaRouter::setSource(const std::string& mediaLocator_in,
   // note: <0>
   // create() returns Future<T> ?
   return SetSourceContinuation::create(
-      *dispatcher, shared_from_this(), mediaLocator_in, reason_in);
+      *dispatcher, 
+      shared_from_this(), mediaLocator_in, reason_in);
 }
 
 
@@ -16422,6 +16447,10 @@ class ZINC_LOCAL SetSourceContinuation
 
     // note: property comes from ProxyMediaRouter
 
+    *gst-mr-create*
+    impl = proxy->impl;
+
+    source = source_;
     properties = proxy->properties;
 
     // note: see uses of ProxyMediaRouter directly
@@ -16459,7 +16488,37 @@ class ZINC_LOCAL SetSourceContinuation
 
     NICKEL_FUNC_TRACE;
 
-    // note: save up gst media router
+    // *gst-mr-create* save up gst media router but in the
+    // SetSourceContinuation.
+    //
+    // This sp passed to the proxy:
+    //
+    // void complete() {
+    //  promise.complete();
+    //  proxy->setSourceComplete(source, impl, factory);
+    // }
+    //
+    // void ProxyMediaRouter::setSourceComplete(
+    //  const std::string& newSource, 
+    //  boost::shared_ptr<MediaRouter> newImpl, 
+    //  boost::shared_ptr<MediaRouterFactory> newFactory) {
+    //
+    //  lastSource = newSource;
+    //
+    //  // note: this is where GST MR DTOR is called?
+	 //  impl = newImpl;
+    //
+    // }
+
+    NICKEL_FUNC_TRACE;
+
+	scoped_lock lock(mutex);
+
+	lastSource = newSource;
+	impl = newImpl;
+    //
+  }
+    
     impl = impl_;
     impl->addListener(proxy);
     setProperties();
