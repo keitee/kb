@@ -150,12 +150,15 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_019| except-case
 |kt_dev_cpp_019| except-blanket catch and hidden exception
 *kt_dev_cpp_021* code-check()
-|kt_dev_cpp_022| inheritance {static-type} {subobject-and-derived-to-base-conversion} {base-class-pointer-container} {RTTI}
+|kt_dev_cpp_022| inheritance
 *kt_dev_cpp_022* inheritance-ctor-initializers
 *kt_dev_cpp_022* inheritance-rtti
-|kt_dev_cpp_023| inheritance-override {override-condition} {override-keyword}
+|kt_dev_cpp_023| inheritance-override
+*kt_dev_cpp_023* inheritance-override-hide-name
 *kt_dev_cpp_023* inheritance-private-or-public
 *kt_dev_cpp_023* inheritance-public
+*kt_dev_cpp_023* inheritance-template-pattern
+*kt_dev_cpp_023* inheritance-strategy-pattern
 |kt_dev_cpp_024| abstract base class {refactoring}
 |kt_dev_cpp_025| random
 |kt_dev_cpp_026| enum
@@ -312,7 +315,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_ecpp_007| 28: avoid returning handles to object internals
 |kt_dev_ecpp_008| 31: minimize compilation dependencies {pimpl-idiom} {interface-class} {factory-pattern}
 |kt_dev_ecpp_010| 34: interface and implementation inheritance
-|kt_dev_ecpp_011| 35: alternatives to virtual func {template-pattern} {strategy-pattern}
 |kt_dev_ecpp_012| 33: avoid hiding inherited names
 |kt_dev_ecpp_013| 22: data member must be private, encapsulation
 |kt_dev_ecpp_014| cpp-cast: minimize casting, named-cast
@@ -20984,20 +20986,21 @@ StrBlobPtr &StrBlobPtr::operator--()
 ={============================================================================
 *kt_dev_cpp_022* inheritance
 
-{subobject-and-derived-to-base-conversion}
-The dynamic-binding at run-time so called run-time binding because static-type is different from
-dynamic-type and it is from inheritance. This is:
+{static-dynamic-type}
+The `dynamic-binding` at run-time so called `run-time-binding` because
+`static-type` is different from `dynamic-type` 
 
-pointer or reference of base class = the one of derived class;
-<static-type>                        <dynamic-type>
+pointer or reference of base class = derived class objects;
+`static-type`                          `dynamic-type`
 
-1. this is an exception to normal type-match as this is a conversion between different types. See
-{type-match-exceptions}
+* This is an exception to normal type-match as this is a conversion between
+  different types. See {type-match-exceptions}
 
-2. do not know which object to bind until runtime. 
+* Do not know which object to bind until run-time. 
 
-Subobject is key to how inheritance and dynamic-binding works. From MEC++. Inheritance give rise to
-pointer and reference with two different types: static and dynamic type.
+The `subobject` is key to how inheritance and dynamic-binding works. MEC++:
+inheritance give rise to pointer and reference with two different types: static
+and dynamic type.
 
 
 {conceptual-structure-of-deirved-object}
@@ -21010,19 +21013,19 @@ pointer and reference with two different types: static and dynamic type.
 
 Quote item; Bulk_quote bulk;
 
-# implicit derived-to-base-conversion for ref and pointer.
+// implicit derived-to-base-conversion for ref and pointer.
 
 Quote* p = &item;
 p = &bulk;
 
 Quote& r = bulk;
 
-If do followings with p or r:
+See followings when use p or r:
 
-1. calls non-virtual funcs of base then get base version. static
-2. calls virtual funcs of base then get derived version. dynamic
-3. calls any func of derived then compile error. static
-4. deference and copy then sliced-off. static
+* Calls non-virtual funcs of base then get base version. `static-type`
+* Calls virtual funcs of base then get derived version. `dynamic-type`
+* Calls any func of derived then compile error. `static-type`
+* Deference and copy then `sliced-off`. `static-type`
 
 class Bulk_quote : public Quote {
   public:
@@ -21043,9 +21046,9 @@ print_total( item );          // Quote version
 print_total( bulk_item );     // Bulk version. dynamic-binding.
 
 
-{sliced-off} {static-binding} {dynamic-binding}
-The staic binding is done at compile-time. copy-ctor and copy-assign are func
-calls and derived-to-base-conversion happens when base's copy-int and
+{sliced-off}
+The `staic-binding` is done at compile-time. copy-ctor and copy-assign are func
+calls and derived-to-base-conversion happens when base's copy-ctor and
 copy-assign is called.
 
 class Foo {
@@ -21055,15 +21058,15 @@ class Foo {
 
 The compiler always use static-type and if it is a virtual call then will
 generate a code for run-time binding and could calls derived version. However,
-         this could be broken if fails to override in the derived.
+         this could be broken if the derived fails to override.
 
 // where item is base and bulk is derived
 
 Quote item(bulk);         // sliced-off
 item = bulk;              // sliced-off
 
-// example-two
 
+<ex>
 From MEC++33. When there are concrete classes like this:
 
 base <- derived1
@@ -21071,35 +21074,38 @@ base <- derived1
 
 The problem case is:
 
-obj = obj;               # the same class. fine
-baseobj = derivedobj;    # sliced-off
-derivedobj = baseobj;    # compile error
+obj = obj;               // the same class. fine
+baseobj = derivedobj;    // sliced-off
+derivedobj = baseobj;    // compile error
 
-From GCC:
-sam_slice.cpp:51:7: error: no match for 'operator=' in 'lo = bo'
-sam_slice.cpp:51:7: note: candidate is:
-sam_slice.cpp:30:8: note: Derived& Derived::operator=(const Left&)
-sam_slice.cpp:30:8: note:   no known conversion for argument 1 from 'Base' to 'const Derived&'
+// GCC
+: error: no match for 'operator=' in 'lo = bo'
+: note: candidate is:
+: note: Derived& Derived::operator=(const Left&)
+: note:   no known conversion for argument 1 from 'Base' to 'const Derived&'
 note: this is a syn coy-ctor that a compiler created.
 
-*baseptr = *baseptr;     # the same class. fine
-*baseptr = *baseptr;     # diff. base = derived. sliced-off. <1>
-*baseptr = *baseptr;     # diff. derived = base. sliced-off. <2> no-compile-error
+*baseptr = *baseptr;     // the same class. fine
+*baseptr = *baseptr;     // diff. base = derived. sliced-off. 1)
+*baseptr = *baseptr;     // diff. derived = base. sliced-off. 2) no-compile-error
 
-Why different in result? Because a compiler use <static-type> and only base part will be copied for
-<1> and <2>.
+Why different results, no comile error? Because a compiler use `static-type` and
+only base part will be copied for 1) and 2).
 
 So two problems here:
 
-1. sliced-off with no comiple error can happen when use pointer
-2. real programmers write code like this.
+* The sliced-off with no comiple error can happen when use pointer
+* Real programmers write code like this.
 
-How can we make it compile error to flag up two cases, <1> and <2>, in compile time? That is to make
-it difficult to use incorrectly. <Q> TODO: So what's the solution? need to summarise the followings again.
+How can make it compile error to flag up two cases, 1) and 2), in compile time?
+That is to make it difficult to use incorrectly. 
+
+TODO: So what's the solution? need to summarise the followings again.
 
 <approach-one> 
-Make operator= virtual. May thought it can use virtual mechanism. MEC++ said that derived's version
-will be called and shall have the same params for virual funcs. But the return can be different.
+Make operator= virtual. May thought it can use virtual mechanism. MEC++ said
+that derived's version will be called and shall have the same params for virual
+funcs. But the return can be different.
 
 class Base {
 private:
@@ -21113,11 +21119,11 @@ public:
 	...
 };
 
-However, in GCC 4.6.3, the params of virtual function can be different and derived's version is not
-called. Note: Q: Changed in C++11?
+However, in GCC 4.6.3, the params of virtual function can be different and
+derived's version is not called. Note: Q: Changed in C++11?
 
-Note: MEC++ seems to be wrong as a compiler use static-type and base version gets called. So don't
-need to consider.
+Note: MEC++ seems to be wrong as a compiler use static-type and base version
+gets called. So don't need to consider.
 
 Note: see {override-keyword} and need to sum up if needed.
 
@@ -21134,37 +21140,41 @@ So not a solution.
 
 
 <approach-to-make-abstract-class>
-To remove sliced-off cases, make the base abstract and all derived on the same level. MEC++ says it
-as make non-leaf classes abstract.
+To remove sliced-off cases, make the base abstract and all derived on the same
+level. MEC++ says it as make non-leaf classes abstract.
 
-This only enables copys between objects in the same class whether it is via object or pointer.
+This only enables copys between objects in the same class whether it is via
+object or pointer.
 
-But MEC++ says it is more about uncovering the design need to have abstract class out of derived
-classes.
+But MEC++ says it is more about uncovering the design need to have abstract
+class out of derived classes.
 
 
 {virtual-and-definition}
-Ordinarily if we do not use a function, do not need to supply a definition for that function.
-However must define every virtual function regardless of whether it is used because do not know
-which version of a function is called until run time. note: to make a vtable in compile time.
+Ordinarily if we do not use a function, do not need to supply a definition for
+that function. However must define every virtual function regardless of whether
+it is used because do not know which version of a function is called until run
+time. 
+
+note: To make a vtable in compile time.
 
 
 {virtual-and-resolution}
-The compiler generates code to decide at run time which function to call when a virtual function is
-called through a reference or pointer. This is run time binding and polymorphism in C++.
+The compiler generates code to decide at run time which function to call when a
+virtual function is called through a reference or pointer. This is run-time
+binding and polymorphism in C++.
 
 
 {preventing-inheritance}
 
-<1>
+* Use C++11 final keyward
 class Last 'final' : Base { ... };
 
-<2>
-Use private ctor. See {{control-the-number-of-object}}
+* Use private ctor. See {control-the-number-of-object}
 
 
 ={============================================================================
-*kt_dev_cpp_022* inheritance: ctor-initializers
+*kt_dev_cpp_022* inheritance-ctor-initializers
 
 <1>
 Unless we say otherwise, the base part of a derived is 'default' initialized.
@@ -21664,28 +21674,6 @@ d2: fcn
 base: fcn
 d1: fcn(int) 
 
-<name-hide-in-override>
-When argument is different, two things happens:
-
-* Used virtual but no override due to different argument. No vtable update and
-  hence base version.
-
-* Effectively defines a new function in the derived, inner scope, and 'hide' the
-  name in the base. To resolve a call use dp1->fcn() or using declaration.
-  Compiler look for name fcn in D1 since uses static type and found fcn and
-  stops the search. However, this name expects int argument so
-
-compile error:
-
-sam01.cpp:32:12: error: no matching function for call to ‘D1::fcn()’
-sam01.cpp:32:12: note: candidate is:
-sam01.cpp:13:9: note: int D1::fcn(int)
-sam01.cpp:13:9: note:   candidate expects 1 argument, 0 provided
-
-Effectively, D1 has two functions named fcn and can call fcn() explicitly.
-Hiding name affects name lookup. This is why name and arguments 'must' be the
-same to override.
-
 <return-type-in-override> 
 when return type is different, errors
 
@@ -21743,6 +21731,129 @@ class Rectangle : public Shape {
     virtual void draw( ShapeColor color = Green ) const;
     ...
 };
+
+
+={============================================================================
+*kt_dev_cpp_023* inheritance-override-hide-name
+
+<name-hide-in-override>
+When argument is different, two things happens:
+
+* Used virtual but no override due to different argument. No vtable update and
+  hence base version.
+
+* Effectively defines a new function in the derived, inner scope, and 'hide' the
+  name in the base. To resolve a call use dp1->fcn() or using declaration.
+  Compiler look for name fcn in D1 since uses static type and found fcn and
+  stops the search. However, this name expects int argument so
+
+compile error:
+
+sam01.cpp:32:12: error: no matching function for call to ‘D1::fcn()’
+sam01.cpp:32:12: note: candidate is:
+sam01.cpp:13:9: note: int D1::fcn(int)
+sam01.cpp:13:9: note:   candidate expects 1 argument, 0 provided
+
+Effectively, D1 has two functions named fcn and can call fcn() explicitly.
+Hiding name affects name lookup. This is why name and arguments 'must' be the
+same to override.
+
+
+<more>
+EC++33. As with {scope-in-inheritance}, names in the derived can hide names in
+the base. The other problem is that when base has overloads, derived must
+inherited all of them to have "is-a" relationship. However, if derived redefine
+or override only some of them then you would be hiding.
+
+class Base {
+  public:
+    virtual void mf1() = 0;
+    virtual void mf1(int);
+
+    virtual void mf2();
+    void mf3();
+    void mf3(double);
+};
+
+class Derived : public Base {
+  public:
+    virtual void mf1();
+    void mf3();
+    void mf4();
+};
+
+Derived d;
+
+d.mf1();
+d.mf1(x);      // error
+d.mf3();
+d.mf3(x);      // error
+
+To solve this, use using declaration to make all visible or inherit all.
+
+class Base {
+  public:
+    virtual void mf1() = 0;
+    virtual void mf1(int);
+
+    virtual void mf2();
+    void mf3();
+    void mf3(double);
+};
+
+class Derived : public Base {
+  public:
+    using Base::mf1;
+    using Base::mf3;
+
+    virtual void mf1();
+    void mf3();
+    void mf4();
+};
+
+Derived d;
+
+d.mf1();
+d.mf1(x);      // okay
+d.mf3();
+d.mf3(x);      // okay
+
+note: Used using declaration in public since it is public inheritance.
+
+On the other hand, want to inherit only some of them then use private
+inheritance and 'forwarding' function. Effectively, the below only inherits
+mf1() version from the base.
+
+class Base {
+  public:
+    virtual void mf1() = 0;
+    virtual void mf1(int);
+};
+
+class Derived : private Base {
+  public:
+    virtual void mf1() { Base::mf1(); }
+};
+
+Derived d;
+
+d.mf1();
+d.mf1(x);      // okay
+
+
+EC++36. If you redefine non-virtual, as you seen, it hides names. The other
+problem is to exhibit 'inconsistent' behavior depending on type of pointer used.
+
+class D: public B {
+  public:
+    void mf();
+};
+
+D x;
+B* pB = &x; D* pD = &x;
+
+pB->mf();      // same object but B::mf
+pD->mf();      // same object but D::mf
 
 
 ={============================================================================
@@ -21847,9 +21958,8 @@ std::size_t Set<T>::size() const
 
 
 {private-inheritance} EC++39
-The private inheritance is implementation inheritance and inherits
-impelementation only but not interface which means
-`is-implemented-in-terms-of-model` 
+The private inheritance is implementation inheritance; inherits impelementation
+only but not interface which means `is-implemented-in-terms-of-model` 
 
 The composition is also is-implemented-in-terms-of so which do we need to use
 between them? Use composition whenever possible. 
@@ -22016,6 +22126,325 @@ override, to request default implementation and if not override, emits errors.
 Non-virtual (non-overridable). invariant over specialization. To have interface
 and 'mandatory' implementation that is default implementation but not
 overridable. 
+
+
+={============================================================================
+*kt_dev_cpp_023* inheritance-template-pattern
+
+EC++35
+
+{template-pattern} 
+The design pattern [REF003] called it template-method and define skeleton of an
+algorithm in an operation.
+
+Deferring 'some' steps to subclass without default implementation of some steps.
+Must be overridden.
+
+note: Says that that template method is non-virtual function in base and
+protected pure virtual function in derived.
+
+note: The template method has "Don't call us, we'll call you" that means parent
+class calls derived compared with when derived calls parent class.
+
+<ex>
+Application framework where application subclass application and document to
+suit speficif needs. For example, a drawing application defines DrawApplication
+and DrawDocument subclass.
+
+Document                Application
++Save()                 +AddDocument()
++Open()                 +OpenDocument()
++Close()                +DoCreateDocument()*
++DoRead()*              +CanOpenDocument()*
+                        +AboutToOpenDocument()*
+
+MyDocument              MyApplication
++DoRead()               +DoCreateDocument()           // return new MyDocument
+                        +CanOpenDocument()
+                        +AboutToOpenDocument()
+
+// this is template method
+void Application::OpenDocument( const char* name ) {
+  if( !CanOpenDocument(name)) {
+    // cannot handle this document
+    return;
+  }
+
+  // factory-func to create application specific document
+  Document* doc = DoCreateDocument();  
+
+  if(doc) {
+    _docs->AddDocument(doc);
+    AboutToOpenDocument(doc);
+    doc->Open();
+    doc->DoRead();
+  }
+}
+
+Use case:
+
+* Without chaning the algorithm's structure, the template-method defines steps
+  in terms of abstract operations that subclass override to provide concrete
+  behavior. Or it is to define 'invariant' parts once and leave 'variant' part
+  to subclass.
+
+* Refactoring. To avoid code duplication, identify the differences among
+  existing subclasses and then separate the differences into new operations,
+  replace the differing code with a template method(in base) that calls one of
+  these new operations. This is also about code resuse but difference is
+  steps, that is template.
+
+* Hook operations.
+
+
+<private-virtual>
+EC++35. In the following example, different character may calculate their health
+in different ways. Use virtual? This is alternatives to usual virtual design.
+Called NVI(non-virtual interface) idiom as a 'public' non-virtual in the base
+call a 'private' virtual func that can be redefined but it's little more than
+window dressing as still use virtuals. There are 'how' and 'when':
+template-method means that base controls when and derived control how.
+
+note: EC++ limits template method when it uses private virtual and EXPC++ p84
+also says "avoid public virtial functions; prefer using the template method
+pattern instead."
+
+
+class GameCharacter {
+  public:
+    int healthValue() const
+    {
+      // do 'before' stuff 
+      int retVal = doHealthValue();
+      // do 'after' stuff
+    }
+
+  private:     // note: see this is private and {text-query-example}
+    virtual int doHealthValue() const
+    {
+      // default calc code
+    }
+};
+
+The base defines before and after stuff and when to call the derived part that
+is the derived dependent. The before and after can be lock/unlock, logging,
+   pre/post condition.
+
+note:
+For a naming convention of primitive operation which should be overridden,
+    prefix names with Do: DoRead. Often used with {factory-func} as
+    DoCreateDocument shown above.
+
+<ex> shows that virtual functions can be overridden regardless of access
+specifier 
+
+#include <iostream>
+
+using std::cout;
+using std::endl;
+
+class Base {
+  public:
+    Base() { cout << "bas: this is ctor" << endl; }
+
+    void doCalc()
+    {
+      cout << "bas: doCalc" << endl;
+      doMorePub();
+      doMorePri();
+      doMorePro();
+      cout << "bas: called doMore" << endl;
+    }
+
+    virtual void doMorePub() { cout << "bas: doMorePub" << endl; }
+
+  private:
+    virtual void doMorePri() { cout << "bas: doMorePri" << endl; }
+
+  protected:
+    virtual void doMorePro() { cout << "bas: doMorePro" << endl; }
+};
+
+class Derived : public Base {
+  public:
+    Derived() { cout << "der: this is ctor" << endl; }
+
+    virtual void doMorePub() { cout << "der: doMorePub" << endl; }
+
+  private:
+    virtual void doMorePri()
+    {
+      // error Base::doMorePri();
+      cout << "der: doMorePri" << endl;
+    }
+
+  protected:
+    virtual void doMorePro() { cout << "der: doMorePro" << endl; }
+};
+
+int main(int argc, char** argv)
+{
+  Derived drv;
+  drv.doCalc();
+  cout << "end of main" << endl;
+}
+
+bas: this is ctor
+der: this is ctor
+bas: doCalc
+der: doMorePub
+der: doMorePri
+der: doMorePro
+bas: called doMore
+
+note: why this works? This is like {bitwise-const} as compiler picks up physical things since
+virtual calls are indirect calls which uses vptr to vtable.
+
+<hook-operation>
+The template-method can be used to 'extend' parent class 'operation' but not a class. 
+
+virtual void DerivedClass::Operation() {
+  ParentClass::Operation();
+  // additional
+}
+
+But it is esay to forget to call the inherited function so can use template-method to give the
+parent class a control over how subclasses extend it. This is called 'hook'-operation. 
+
+void ParentClass::Operation() {
+  // parent class behavior
+  HookOperation();
+}
+
+virtual void ParentClass::HookOperation() { }
+
+virtual void DerivedClass::HookOperation() {
+  // derived class extension
+}
+
+<private-or-protected>
+This example is from <cast-create-a-temp-object> to show the problem of cast and to show case that
+virtual memeber function in derived calls base class conterparts first.
+
+class Window {
+  public:
+    virtual void onResize() { ... }
+    ...
+};
+
+class SpecialWindow : public Window {
+  public:
+    virtual void onResize() {
+      Window::onResize();
+      // additional to the derived
+    }
+    ...
+};
+
+As with hook operation, this is to extend operation and should the Do operation be protected or
+private? If it was private, then errors so should be protected. note: However, can use hook
+operation instead.
+
+usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
+usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
+usetemppattern.cpp:51:20: error: within this context
+
+
+={============================================================================
+*kt_dev_cpp_023* inheritance-strategy-pattern
+
+{strategy-pattern} TODO: more clearer
+As with the same example as template pattern, calculate a health for a different game character.
+This design use no virtual and that calculating a health is independent of the character's type. So
+take a calculation out of the class.
+
+<key> The idea is to use function pointer for a calculation. This is simple application of strategy
+pattern.
+
+class GameCharacter;
+
+// default calculation
+int defaultHealthCalc( const GameCharacter& gc );
+
+class GameCharacter {
+  public:
+    typedef int(*HealthCalcFunc)(const GameCharacter&);
+
+    explicit GameCharacter( HealthCalcFunc hcf = defaultHealthCalc ) : healthFunc(hcf) {}
+
+    int healthValue() const
+    { return healthFunc(*this); }
+    ...
+
+  private:
+      HealthCalcFunc healthFunc;
+};
+
+<comparison>
+Interesting flexibilities than virtual approach, template pattern:
+
+1. Each 'instance'(object) of the same type can have different calculation since use constructor to
+set calculation function.
+
+2. Can change the calculation function at runtime.
+
+The possible downside is that calculation function is not member function so could weaken
+encapsulation if need access to non-public part of class to calculation. For example, make it a
+friend or offer more public funcs that are private otherwise.
+
+<when-use-function-type>
+Can use function type to support different callables. See {function-type} for more.
+
+class GameCharacter {
+  public:
+
+    typedef std::tr1::function<int(const GameCharacter&)>HealthCalcFunc;
+    ...
+};
+
+The stl function type is 'generalized' function pointer and allow us to use any compatible callable
+entities such as function object, member funcs, and funcs with different return type.
+
+<classic-strategy-pattern>
+Use two hierarchy. One for characters and the other for calculations. Make calculation function a
+virtual member function of the calculation hierarchy.
+
+GameCharacter <--- CharacterX
+               |- CharacterY
+               |- ...
+    <*>
+    |
+    | composition aggregation
+   1|
+HealCalcFunc  <--- SlowHealthLoser
+               |- FastHealthLoser
+               |- ...
+
+class GameCharacter;
+
+class HealthCalcFunc {
+  public:
+    virtual int calc( const GameCharacter& gc ) const { ... }
+    ...
+};
+
+HealthCalcFunc defaultHealthCalc;
+
+class GameCharacter {
+  public:
+    explicit GameCharacter( HealthCalcFunc* phcf = &defaultHealthCalc )
+      : pHealthCalc( phcf ) {}
+
+    int healthValue() const
+    { return pHealthCalc->calc(*this); }     // see
+    ...
+
+  private:
+      HealthCalcFunc* pHealthCalc;           // see
+};
+
+Can add/change calc func later because can have the drived classes in separate hierarchy.
+
 
 
 ={============================================================================
@@ -42253,403 +42682,6 @@ Product* StandardCreator<T>::CreateProduct() {
 
 o Use naming convention for factory-funcs.
 For MacApp framework example, class* DoMakeClass() where Class is the product class. 
-
-
-
-={============================================================================
-*kt_dev_ecpp_011* 35: alternatives to virtual func
-
-{template-pattern} 
-The design pattern, {ref-003}, called it template-method and define skeleton of an algorithm in an
-operation.
-
-Deferring 'some' steps to subclass without default implementation of some steps. Must be overridden.
-
-note: it says that that template method is non-virtual function in base and protected pure virtual
-function in derived.
-
-note: The template method has "Don't call us, we'll call you" that means parent class calls derived
-compared with when derived calls parent class.
-
-<example>
-Application framework where application subclass application and document to suit speficif needs.
-For example, a drawing application defines DrawApplication and DrawDocument subclass.
-
-Document                Application
-+Save()                 +AddDocument()
-+Open()                 +OpenDocument()
-+Close()                +DoCreateDocument()*
-+DoRead()*              +CanOpenDocument()*
-                        +AboutToOpenDocument()*
-
-MyDocument              MyApplication
-+DoRead()               +DoCreateDocument()           // return new MyDocument
-                        +CanOpenDocument()
-                        +AboutToOpenDocument()
-
-// this is template method
-void Application::OpenDocument( const char* name ) {
-  if( !CanOpenDocument(name)) {
-    // cannot handle this document
-    return;
-  }
-
-  Document* doc = DoCreateDocument();  // factory-func to create application specific document
-
-  if(doc) {
-    _docs->AddDocument(doc);
-    AboutToOpenDocument(doc);
-    doc->Open();
-    doc->DoRead();
-  }
-}
-
-Use case:
-
-1. Without chaning the algorithm's structure, the template-method defines steps in terms of abstract
-operations that subclass override to provide concrete behavior. Or it is to define 'invariant' parts
-once and leave 'variant' part to subclass.
-
-2. Refactoring. To avoid code duplication, identify the differences among existing subclasses and
-then separate the differences into new operations, replace the differing code with a template
-method(in base) that calls one of these new operations. This is also about code resuse but
-difference is steps, that is template.
-
-3. Hook operations.
-
-<private-virtual>
-EC++35. In the following example, different character may calculate their health in different ways.
-Use virtual? This is alternatives to usual virtual design. Called NVI(non-virtual interface) idiom
-as a 'public' non-virtual in the base call a 'private' virtual func that can be redefined but it's
-little more than window dressing as still use virtuals. There are 'how' and 'when': template-method
-means that base controls when and derived control how.
-
-note: this book limits template method when it uses private virtual.
-
-class GameCharacter {
-  public:
-    int healthValue() const
-    {
-      // do 'before' stuff 
-      int retVal = doHealthValue();
-      // do 'after' stuff
-    }
-
-  private:     // note: see this is private and {text-query-example}
-    virtual int doHealthValue() const
-    {
-      // default calc code
-    }
-};
-
-The base defines before and after stuff and when to call the derived part that is the derived
-dependent. The before and after can be lock/unlock, logging, pre/post condition.
-
-note: name-and-related
-For a naming convention of primitive operation which should be overridden, prefix names with Do:
-DoRead. Often used with {factory-func} as DoCreateDocument shown above.
-
-<example> shows that virtual functions can be overridden regardless of access specifier
-#include <iostream>
-
-using std::cout;
-using std::endl;
-
-class Base {
-  public:
-    Base() { cout << "bas: this is ctor" << endl; }
-
-    void doCalc()
-    {
-      cout << "bas: doCalc" << endl;
-      doMorePub();
-      doMorePri();
-      doMorePro();
-      cout << "bas: called doMore" << endl;
-    }
-
-    virtual void doMorePub() { cout << "bas: doMorePub" << endl; }
-
-  private:
-    virtual void doMorePri() { cout << "bas: doMorePri" << endl; }
-
-  protected:
-    virtual void doMorePro() { cout << "bas: doMorePro" << endl; }
-};
-
-class Derived : public Base {
-  public:
-    Derived() { cout << "der: this is ctor" << endl; }
-
-    virtual void doMorePub() { cout << "der: doMorePub" << endl; }
-
-  private:
-    virtual void doMorePri()
-    {
-      // error Base::doMorePri();
-      cout << "der: doMorePri" << endl;
-    }
-
-  protected:
-    virtual void doMorePro() { cout << "der: doMorePro" << endl; }
-};
-
-int main(int argc, char** argv)
-{
-  Derived drv;
-  drv.doCalc();
-  cout << "end of main" << endl;
-}
-
-bas: this is ctor
-der: this is ctor
-bas: doCalc
-der: doMorePub
-der: doMorePri
-der: doMorePro
-bas: called doMore
-
-note: why this works? This is like {bitwise-const} as compiler picks up physical things since
-virtual calls are indirect calls which uses vptr to vtable.
-
-<hook-operation>
-The template-method can be used to 'extend' parent class 'operation' but not a class. 
-
-virtual void DerivedClass::Operation() {
-  ParentClass::Operation();
-  // additional
-}
-
-But it is esay to forget to call the inherited function so can use template-method to give the
-parent class a control over how subclasses extend it. This is called 'hook'-operation. 
-
-void ParentClass::Operation() {
-  // parent class behavior
-  HookOperation();
-}
-
-virtual void ParentClass::HookOperation() { }
-
-virtual void DerivedClass::HookOperation() {
-  // derived class extension
-}
-
-<private-or-protected>
-This example is from <cast-create-a-temp-object> to show the problem of cast and to show case that
-virtual memeber function in derived calls base class conterparts first.
-
-class Window {
-  public:
-    virtual void onResize() { ... }
-    ...
-};
-
-class SpecialWindow : public Window {
-  public:
-    virtual void onResize() {
-      Window::onResize();
-      // additional to the derived
-    }
-    ...
-};
-
-As with hook operation, this is to extend operation and should the Do operation be protected or
-private? If it was private, then errors so should be protected. note: However, can use hook
-operation instead.
-
-usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
-usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
-usetemppattern.cpp:51:20: error: within this context
-
-
-{strategy-pattern} TODO: more clearer
-As with the same example as template pattern, calculate a health for a different game character.
-This design use no virtual and that calculating a health is independent of the character's type. So
-take a calculation out of the class.
-
-<key> The idea is to use function pointer for a calculation. This is simple application of strategy
-pattern.
-
-class GameCharacter;
-
-// default calculation
-int defaultHealthCalc( const GameCharacter& gc );
-
-class GameCharacter {
-  public:
-    typedef int(*HealthCalcFunc)(const GameCharacter&);
-
-    explicit GameCharacter( HealthCalcFunc hcf = defaultHealthCalc ) : healthFunc(hcf) {}
-
-    int healthValue() const
-    { return healthFunc(*this); }
-    ...
-
-  private:
-      HealthCalcFunc healthFunc;
-};
-
-<comparison>
-Interesting flexibilities than virtual approach, template pattern:
-
-1. Each 'instance'(object) of the same type can have different calculation since use constructor to
-set calculation function.
-
-2. Can change the calculation function at runtime.
-
-The possible downside is that calculation function is not member function so could weaken
-encapsulation if need access to non-public part of class to calculation. For example, make it a
-friend or offer more public funcs that are private otherwise.
-
-<when-use-function-type>
-Can use function type to support different callables. See {function-type} for more.
-
-class GameCharacter {
-  public:
-
-    typedef std::tr1::function<int(const GameCharacter&)>HealthCalcFunc;
-    ...
-};
-
-The stl function type is 'generalized' function pointer and allow us to use any compatible callable
-entities such as function object, member funcs, and funcs with different return type.
-
-<classic-strategy-pattern>
-Use two hierarchy. One for characters and the other for calculations. Make calculation function a
-virtual member function of the calculation hierarchy.
-
-GameCharacter <--- CharacterX
-               |- CharacterY
-               |- ...
-    <*>
-    |
-    | composition aggregation
-   1|
-HealCalcFunc  <--- SlowHealthLoser
-               |- FastHealthLoser
-               |- ...
-
-class GameCharacter;
-
-class HealthCalcFunc {
-  public:
-    virtual int calc( const GameCharacter& gc ) const { ... }
-    ...
-};
-
-HealthCalcFunc defaultHealthCalc;
-
-class GameCharacter {
-  public:
-    explicit GameCharacter( HealthCalcFunc* phcf = &defaultHealthCalc )
-      : pHealthCalc( phcf ) {}
-
-    int healthValue() const
-    { return pHealthCalc->calc(*this); }     // see
-    ...
-
-  private:
-      HealthCalcFunc* pHealthCalc;           // see
-};
-
-Can add/change calc func later because can have the drived classes in separate hierarchy.
-
-
-={============================================================================
-*kt_dev_ecpp_012* 33: avoid hiding inherited names
-
-EC++33. As with {scope-in-inheritance}, names in the derived can hide names in the base. The other
-problem is that when base has overloads, derived must inherited all of them to have "is-a"
-relationship.  However, if derived redefine or override only some of them then you would be hiding.
-
-class Base {
-  public:
-    virtual void mf1() = 0;
-    virtual void mf1(int);
-
-    virtual void mf2();
-    void mf3();
-    void mf3(double);
-};
-
-class Derived : public Base {
-  public:
-    virtual void mf1();
-    void mf3();
-    void mf4();
-};
-
-Derived d;
-
-d.mf1();
-d.mf1(x);      // error
-d.mf3();
-d.mf3(x);      // error
-
-To solve this, use using declaration to make all visible or inherit all.
-
-class Base {
-  public:
-    virtual void mf1() = 0;
-    virtual void mf1(int);
-
-    virtual void mf2();
-    void mf3();
-    void mf3(double);
-};
-
-class Derived : public Base {
-  public:
-    using Base::mf1;
-    using Base::mf3;
-
-    virtual void mf1();
-    void mf3();
-    void mf4();
-};
-
-Derived d;
-
-d.mf1();
-d.mf1(x);      // okay
-d.mf3();
-d.mf3(x);      // okay
-
-note: Used using declaration in public since it is public inheritance.
-
-On the other hand, want to inherit only some of them then use private inheritance and 'forwarding'
-function. Effectively, the below only inherits mf1() version from the base.
-
-class Base {
-  public:
-    virtual void mf1() = 0;
-    virtual void mf1(int);
-};
-
-class Derived : private Base {
-  public:
-    virtual void mf1() { Base::mf1(); }
-};
-
-Derived d;
-
-d.mf1();
-d.mf1(x);      // okay
-
-
-EC++36. If you redefine non-virtual, as you seen, it hides names. The other problem is to exhibit
-'inconsistent' behavior depending on type of pointer used.
-
-class D: public B {
-  public:
-    void mf();
-};
-
-D x;
-B* pB = &x; D* pD = &x;
-
-pB->mf();      // same object but B::mf
-pD->mf();      // same object but D::mf
 
 
 ={============================================================================
