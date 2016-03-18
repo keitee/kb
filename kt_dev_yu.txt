@@ -127,6 +127,7 @@
 *kt_dev_uv_stack_408* mr-create-dtor-issue
 *kt_dev_uv_stack_408* mr-create-calls
 *kt_dev_uv_stack_408* mr-create-load-play
+*kt_dev_uv_stack_408* mr-create-async
 *kt_dev_uv_stack_408* mr-play-dbus-log
 *kt_dev_uv_stack_408* mr-play-state-changes
 *kt_dev_uv_stack_408* mr-play-recording-log
@@ -3962,6 +3963,7 @@ https://jira.youview.co.uk/browse/TESTAUT-1492
 
 {ex-result}
 PRK boxes are running
+http://stb-tester-master.dev.youview.co.uk/stbt-reports/
 http://stb-tester-master.dev.youview.co.uk/stbt-reports/5821_iplayer_launch_PRK/
 
 testaut-9-stb-1 : DTRT1000 PRK
@@ -14981,7 +14983,7 @@ void ProxySystemFactory::loadImplementations()
 
   // /opt/zinc-trunk/share/platform_data/mediarouter-plugin-config
   //
-  // <gst-factory>
+  // <gst-system-factory>
   // http-application%2Fdash%2Bxml.plugin-config:
   //  libNickelSystemGstreamer.so createGstSystemFactory
   // https-application%2Fdash%2Bxml.plugin-config:
@@ -15031,7 +15033,7 @@ ProxyMediaRouterFactory::ProxyMediaRouterFactory(
 {
 }
 
-// return PMRF
+// *mr-create-proxy-factory*
 boost::shared_ptr<MediaRouterFactory> 
 ProxySystemFactory::createMediaRouterFactory() {
     return proxyMediaRouterFactory;
@@ -15052,7 +15054,7 @@ NS_ZINC::Future<boost::shared_ptr<MediaRouter> >
 {
 
   // note: here pass a map to "createMediaRouter()" and dispatcher
-  *mr-dispatcher* 
+  *mr-dispatcher*  *mr-create-proxy*
   return NS_ZINC::completedFuture(
       *dispatcher, boost::shared_ptr<MediaRouter>(new ProxyMediaRouter(
           dispatcher, defaultMediaRouterFactory, protocolMediaRouterFactoryMap,
@@ -15092,7 +15094,8 @@ $ dbus-send --session --print-reply --type=method_call --dest='Zinc.MediaProxy' 
 > string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
 
 
-note: does it mean that create real media router when start() is called?
+note: 
+From *continuation-start* , MR::start() initiates:
 
 class ZINC_LOCAL SetSourceContinuation : 
   public NS_ZINC::Continuation<void, SetSourceContinuation> 
@@ -16416,6 +16419,10 @@ ProxyMediaRouter::setSource(const std::string& mediaLocator_in,
 
   // note: <0>
   // create() returns Future<T> ?
+  //
+  // boost::shared_ptr<MediaRouter> impl; is not inited and is passed down to
+  // SetSourceCont.
+  //
   return SetSourceContinuation::create(
       *dispatcher, 
       shared_from_this(), mediaLocator_in, reason_in);
@@ -16448,7 +16455,7 @@ class ZINC_LOCAL SetSourceContinuation
     // note: property comes from ProxyMediaRouter
 
     *gst-mr-create*
-    impl = proxy->impl;
+    impl = proxy_->impl;
 
     source = source_;
     properties = proxy->properties;
@@ -16484,16 +16491,14 @@ class ZINC_LOCAL SetSourceContinuation
     setProperties(); 
   }
 
-  void onMediaRouterCreated(boost::shared_ptr<MediaRouter> impl_) {
-
-    NICKEL_FUNC_TRACE;
-
-    // *gst-mr-create* save up gst media router but in the
-    // SetSourceContinuation.
+  void onMediaRouterCreated(boost::shared_ptr<MediaRouter> impl_) 
+  {
+    // *gst-mr-create* 
+    // GstMR is crated and pass it back to Proxy in the end.
     //
     // This sp passed to the proxy:
     //
-    // void complete() {
+    // void SetSourceContinuation::complete() {
     //  promise.complete();
     //  proxy->setSourceComplete(source, impl, factory);
     // }
@@ -16509,24 +16514,26 @@ class ZINC_LOCAL SetSourceContinuation
 	 //  impl = newImpl;
     //
     // }
-
-    NICKEL_FUNC_TRACE;
-
-	scoped_lock lock(mutex);
-
-	lastSource = newSource;
-	impl = newImpl;
     //
-  }
-    
+    // nickel::system::ProxyMediaRouterFactory::createMediaRouter()
+    // ProxyMediaRouter::ProxyMediaRouter()
+    // ProxyMediaRouter::setSource()
+    // SetSourceContinuation::start()
+    // GstMediaRouterFactory::createMediaRouter()
+    // EN GstMediaRouter::GstMediaRouter(::GstMediaRouterInit&)
+    // GstMediaRouter::init()
+    // EX GstMediaRouter::GstMediaRouter(::GstMediaRouterInit&)
+    //
+
     impl = impl_;
     impl->addListener(proxy);
+
+    // note: <2> 
     setProperties();
   }
 
   void setProperties()
   {
-    // note: <2> async call
     continueOnSuccess(SetPropertiesContinuation::create(getDispatcher(),
           proxy, impl, shared_from_this(), properties),
         &SetSourceContinuation::onPropertiesSet);
@@ -17012,6 +17019,221 @@ ProxyMediaRouter.cpp:862 ENTER:
 
 
 ={============================================================================
+*kt_dev_uv_stack_408* mr-create-async
+
+{sync}
+DEVARCH-10679
+
+The root cause of the problem is double-deadlock in GstMediaRouter and D-Bus
+mutexes - this is not real crash. Browser kill is a side effect.
+
+browser getPosition() call:  D-Bus -> libdbus -> Zinc.DBus-C++ -> dbus lock ->
+GstMediaRouter::getPosition() -> GstMR lock -> GStreamer call
+
+internal MR GStreamer callback:  callback function -> GstMR lock -> dbus lock ->
+Zinc.DBus-C++ -> libdbus -> D-Bus
+
+Both calls are made in same time, in parallel, so here is kind of situation
+which is happening:
+
+1. GStreamer fires up callback, GstMR mutex is locked now
+2. Client (browser) calls MR->getPosition() over DBus, DBus mutex is locked now
+3. GstMR tries to send data over dbus, gets stuck on already locked mutex [DBUS]
+4. getPosition() call tries to do its things in GstMR and gets stuck on already
+locked mutex [MR]
+5. Dbus call is timedout, browser is killed
+
+
+{sync-way}
+Vanadium:
+
+  float VanadiumMediaPlayer::currentTime() const
+  {
+    // The Media Router API represents times in milliseconds whereas HTML uses
+    // seconds
+    Position position = mediaRouter->getPosition().get();
+  }
+
+DBUS:
+
+GstMR:
+
+  virtual NS_ZINC::Future<Position> getPosition() const;
+
+  NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
+  {
+    boost::lock_guard<boost::mutex> l(lock);
+
+    // note: this is sync call
+    return NS_ZINC::completedFuture(
+        *getDispatcher(), getPosition_locked(mediaType == LIVE));
+  }
+
+  const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+  {
+    // sync calls to gst
+    const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
+    {
+        gst_element_query(pipeline.get(), q.get());
+    }
+    int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
+    {
+        return sinkBin->getPresentationTime(timeFormat);
+        { 
+            gst_bin_get_by_name (GST_BIN(getParent().get()), "videosink"); 
+            gst_element_query_position(sink.get(), format, &pos);
+        }
+    }
+    ...
+    return Position;
+  }
+
+
+<2>
+gst: GstMR:
+
+bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
+{
+  const boost::lock_guard<boost::mutex> l(lock);
+
+  case GST_MESSAGE_EOS:
+    produceStatusEvent(eventValue);
+}
+
+void GstMediaRouter::produceStatusEvent(
+    const StatusEventValue::Enum what)
+{
+  produceEvent(
+      boost::bind(&MediaRouterEventListener::StatusEvent,
+        _1,
+        what));
+}
+
+DBUS:
+
+
+{async-solution}
+So change API which run in dispatcher thread context and this is async.
+
+NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
+{
+  boost::lock_guard<boost::mutex> l(lock);
+  return NS_ZINC::completedFuture(
+      *getDispatcher(), getPosition_locked(mediaType == LIVE));
+}
+
+const Position GstMediaRouter::getPosition_locked(bool liveMode) const
+{
+  ...
+}
+
+To:
+
+note: The point is to use asyncInvoke()
+
+NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
+{
+  return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
+      boost::bind(&GstMediaRouter::doGetPosition, this));
+}
+
+Position GstMediaRouter::doGetPosition() const
+{
+  boost::lock_guard<boost::mutex> l(lock);
+  return getPosition_locked(mediaType == LIVE);
+}
+
+
+<log-from-console>
+2015-12-14 12:46:24,022 ERROR  1484772624 zinc 
+/data/ws/sources/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 
+Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include8
+all to /Zinc/Media/MediaRouters/1
+terminate called after throwing an instance of 'DBus::ErrorNoReply'
+  what():  Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken.
+(*) SaWMan/Watcher: Process 1673 [10] has exited ABNORMALLY!
+
+This shows that application is timedout from dbus call and gets killed since no
+handling of timeout exception.
+
+<dbus-bt>
+(gdb) bt
+#0  in __lll_lock_wait () from /lib/libpthread.so.0
+#1  in pthread_mutex_lock () from /lib/libpthread.so.0
+#2  in nickel::system::GstMediaRouter::getPosition() const () from /opt/zinc-trunk/lib/libNickelSystemGStreamer.so
+
+#3  in boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >::result_type nickel::system::ProxyMediaRouter::deferForwardOrDefault<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > > >(boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >, nickel::system::returned_future_type<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > > >::type const&) const () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+
+#4  in nickel::system::ProxyMediaRouter::getPosition() const () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
+
+#5  in Zinc::Media::(anonymous namespace)::getPosition_stub(Zinc::Media::MediaRouterAsync&, DBus::Connection::WeakRef&, DBus::CallMessage const&) ()
+
+#6  in Zinc::Media::MediaRouterAsyncToDBus::call_method_async(DBus::CallMessage const&) ()
+#7  in Zinc::Media::MediaRouterAsyncToDBus::handle_message(DBus::Message const&) ()
+#8  in zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus>::operator()(DBus::Connection&, DBus::Message&) ()
+#9  in DBus::detail::AdaptorWrapper<zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus> >::call(DBusConnection*, DBusMessage*, void*) ()
+#10 in _dbus_object_tree_dispatch_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#11 in dbus_connection_dispatch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#12 in DBus::drain_pending_messages(DBus::Connection::Private*) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#13 in _dbus_connection_update_dispatch_status_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#14 in _dbus_connection_handle_watch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#15 in dbus_watch_handle () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
+#16 in DBus::Watch::handle(int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#17 in DBus::DefaultWatch::do_callback() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#18 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#19 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#20 in DBus::BusDispatcher::run() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+#21 in zinc::binding::dbus::MainLoop::run() () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
+#22 in main ()
+
+(gdb) i thread
+  Id   Target Id         Frame 
+  ...
+* 1    Thread 0x77a71000 (LWP 1370) "nickelmediad" 0x778d6d1c in 
+    __lll_lock_wait () from /lib/libpthread.so.0
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-create-async-dtor
+
+CANTST-17989
+DEVARCH-11243
+
+This CANSTST showed that a user get back to live when starting a play. From dbug
+log, nickel daemon dies and hence a browser dies afterwards mostly at the
+beginning of play.
+
+Not easily reproducible but managed to reproduce by making lots of aync getPos
+call in deinit() since suspected getPos which the app keeps calling.
+
+Easy to get cores from nickel media and showes two pattern. 
+
+<1>
+One is the getPos functor tries to access GstMR structures when it's aleday
+null.
+
+<2>
+Two is the crash due to NULL interator handling in gst code starting from
+getPos.
+
+The fix is to use weakFunctor to asyncInvoke and to use check on the stopped
+state in that weak functor not to make call to gst if it's already stopped.
+
+<commit>
+DEVARCH-11243: Nickel/Nickel.System.GStreamer: Fix media daemon crash when
+plays a content
+
+A CANTST shows very intermittent media daemon crash which leads to a browser
+exit when starts a play from CRB application. This is because there are functors
+to access YV MR and GStreamer during destruction is under way which may or may
+not valid at a time when they run.
+
+To add support for this, uses weak functor instead to all APIs and checks on
+`stopped` state not to have a functor lingering behind when YV MR is in stopped
+state.
+
+
+={============================================================================
 *kt_dev_uv_stack_408* mr-play-dbus-log
 
 <use-different-mr>
@@ -17491,181 +17713,6 @@ member=getSource
 
 method return sender=:1.7 -> dest=:1.80 reply_serial=309
    string "dvr://record/BBC.News.at.Five-2016-Jan-11.17:36:22.108306"
-
-
-={============================================================================
-*kt_dev_uv_stack_408* mr-dash-sync and async
-
-{sync}
-DEVARCH-10679
-
-The root cause of the problem is double-deadlock in GstMediaRouter and D-Bus
-mutexes - this is not real crash. Browser kill is a side effect.
-
-browser getPosition() call:  D-Bus -> libdbus -> Zinc.DBus-C++ -> dbus lock ->
-GstMediaRouter::getPosition() -> GstMR lock -> GStreamer call
-
-internal MR GStreamer callback:  callback function -> GstMR lock -> dbus lock ->
-Zinc.DBus-C++ -> libdbus -> D-Bus
-
-Both calls are made in same time, in parallel, so here is kind of situation
-which is happening:
-
-1. GStreamer fires up callback, GstMR mutex is locked now
-2. Client (browser) calls MR->getPosition() over DBus, DBus mutex is locked now
-3. GstMR tries to send data over dbus, gets stuck on already locked mutex [DBUS]
-4. getPosition() call tries to do its things in GstMR and gets stuck on already
-locked mutex [MR]
-5. Dbus call is timedout, browser is killed
-
-
-{sync-way}
-Vanadium:
-
-  float VanadiumMediaPlayer::currentTime() const
-  {
-    // The Media Router API represents times in milliseconds whereas HTML uses
-    // seconds
-    Position position = mediaRouter->getPosition().get();
-  }
-
-DBUS:
-
-GstMR:
-
-  virtual NS_ZINC::Future<Position> getPosition() const;
-
-  NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
-  {
-    boost::lock_guard<boost::mutex> l(lock);
-
-    // note: this is sync call
-    return NS_ZINC::completedFuture(
-        *getDispatcher(), getPosition_locked(mediaType == LIVE));
-  }
-
-  const Position GstMediaRouter::getPosition_locked(bool liveMode) const
-  {
-    // sync calls to gst
-    const std::pair<gint64, gint64> bufPos = getBufferPosition(pipeline,liveMode);
-    {
-        gst_element_query(pipeline.get(), q.get());
-    }
-    int64_t presentationStreamTime = getPresentationTimeCached(GST_FORMAT_TIME);
-    {
-        return sinkBin->getPresentationTime(timeFormat);
-        { 
-            gst_bin_get_by_name (GST_BIN(getParent().get()), "videosink"); 
-            gst_element_query_position(sink.get(), format, &pos);
-        }
-    }
-    ...
-    return Position;
-  }
-
-
-<2>
-gst: GstMR:
-
-bool GstMediaRouter::handleBusCallback(GstBus* /*bus*/, GstMessage* msg)
-{
-  const boost::lock_guard<boost::mutex> l(lock);
-
-  case GST_MESSAGE_EOS:
-    produceStatusEvent(eventValue);
-}
-
-void GstMediaRouter::produceStatusEvent(
-    const StatusEventValue::Enum what)
-{
-  produceEvent(
-      boost::bind(&MediaRouterEventListener::StatusEvent,
-        _1,
-        what));
-}
-
-DBUS:
-
-
-{async-solution}
-So change API which run in dispatcher thread context and this is async.
-
-NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
-{
-  boost::lock_guard<boost::mutex> l(lock);
-  return NS_ZINC::completedFuture(
-      *getDispatcher(), getPosition_locked(mediaType == LIVE));
-}
-
-const Position GstMediaRouter::getPosition_locked(bool liveMode) const
-{
-  ...
-}
-
-To:
-
-note: The point is to use asyncInvoke()
-
-NS_ZINC::Future<Position> GstMediaRouter::getPosition() const
-{
-  return NS_ZINC::asyncInvoke(getDispatcher(), *getDispatcher(),
-      boost::bind(&GstMediaRouter::doGetPosition, this));
-}
-
-Position GstMediaRouter::doGetPosition() const
-{
-  boost::lock_guard<boost::mutex> l(lock);
-  return getPosition_locked(mediaType == LIVE);
-}
-
-
-<log-from-console>
-2015-12-14 12:46:24,022 ERROR  1484772624 zinc 
-/data/ws/sources/Zinc/Zinc.DBus.BindingRuntime/src/dbus/DBusClientCallback.cpp:41 
-Received remote error "org.freedesktop.DBus.Error.NoReply: Did not receive a reply. Possible causes include8
-all to /Zinc/Media/MediaRouters/1
-terminate called after throwing an instance of 'DBus::ErrorNoReply'
-  what():  Did not receive a reply. Possible causes include: the remote application did not send a reply, the message bus security policy blocked the reply, the reply timeout expired, or the network connection was broken.
-(*) SaWMan/Watcher: Process 1673 [10] has exited ABNORMALLY!
-
-This shows that application is timedout from dbus call and gets killed since no
-handling of timeout exception.
-
-<dbus-bt>
-(gdb) bt
-#0  in __lll_lock_wait () from /lib/libpthread.so.0
-#1  in pthread_mutex_lock () from /lib/libpthread.so.0
-#2  in nickel::system::GstMediaRouter::getPosition() const () from /opt/zinc-trunk/lib/libNickelSystemGStreamer.so
-
-#3  in boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >::result_type nickel::system::ProxyMediaRouter::deferForwardOrDefault<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > > >(boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > >, nickel::system::returned_future_type<boost::_bi::bind_t<zinc::Future<Zinc::Media::Position>, boost::_mfi::cmf0<zinc::Future<Zinc::Media::Position>, Zinc::Media::MediaRouterAsync>, boost::_bi::list1<boost::arg<1> > > >::type const&) const () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
-
-#4  in nickel::system::ProxyMediaRouter::getPosition() const () from /opt/zinc-trunk/lib/libNickelSystemProxy.so
-
-#5  in Zinc::Media::(anonymous namespace)::getPosition_stub(Zinc::Media::MediaRouterAsync&, DBus::Connection::WeakRef&, DBus::CallMessage const&) ()
-
-#6  in Zinc::Media::MediaRouterAsyncToDBus::call_method_async(DBus::CallMessage const&) ()
-#7  in Zinc::Media::MediaRouterAsyncToDBus::handle_message(DBus::Message const&) ()
-#8  in zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus>::operator()(DBus::Connection&, DBus::Message&) ()
-#9  in DBus::detail::AdaptorWrapper<zinc::binding::dbus::RefCountedAdaptorDecorator<Zinc::Media::MediaRouterAsyncToDBus> >::call(DBusConnection*, DBusMessage*, void*) ()
-#10 in _dbus_object_tree_dispatch_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#11 in dbus_connection_dispatch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#12 in DBus::drain_pending_messages(DBus::Connection::Private*) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#13 in _dbus_connection_update_dispatch_status_and_unlock () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#14 in _dbus_connection_handle_watch () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#15 in dbus_watch_handle () from /opt/zinc-trunk/oss/lib/libdbus-1.so.3
-#16 in DBus::Watch::handle(int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#17 in DBus::DefaultWatch::do_callback() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#18 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#19 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#20 in DBus::BusDispatcher::run() () from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-#21 in zinc::binding::dbus::MainLoop::run() () from /opt/zinc-trunk/lib/libZincDbusBindingRuntime.so.0
-#22 in main ()
-
-(gdb) i thread
-  Id   Target Id         Frame 
-  ...
-* 1    Thread 0x77a71000 (LWP 1370) "nickelmediad" 0x778d6d1c in 
-    __lll_lock_wait () from /lib/libpthread.so.0
 
 
 ={============================================================================
@@ -26409,7 +26456,7 @@ humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 
 {hmax-cds}
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T1000/rootfs/ATK/DTR-T1000_CDS.80B07002.bin
-wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.13.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
 
 note: will wipe out a box including writable nfs.
 
