@@ -127,8 +127,11 @@
 *kt_linux_tool_051* tool-dd:
 *kt_linux_tool_051* tool-hexdump:
 
-*kt_linux_tool_100* tool-profile: gprof
-*kt_linux_tool_100* tool-profile: valgrind
+*kt_linux_tool_100* tool-gprof
+*kt_linux_tool_100* tool-valgrind
+*kt_linux_tool_100* tool-valgrind-memcheck
+*kt_linux_tool_100* tool-valgrind-memcheck-doc
+*kt_linux_tool_100* tool-valgrind-memcheck-case
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -7034,11 +7037,418 @@ $ hexdump -C -n 100 DTT_Radio1_20150225_1603.ts
 # ============================================================================
 #{
 ={============================================================================
-*kt_linux_tool_100* tool-profile: gprof
+*kt_linux_tool_100* tool-gprof
 
 http://sourceware.org/binutils/docs/gprof/
 
-                    
+
+={============================================================================
+*kt_linux_tool_100* tool-valgrind
+
+1.1. An Overview of Valgrind
+
+Valgrind is an instrumentation framework for building dynamic analysis tools. It
+comes with a set of tools each of which performs some kind of debugging,
+profiling, or similar task that helps you improve your programs. Valgrind's
+  architecture is modular, so new tools can be created easily and without
+  disturbing the existing structure.
+
+A number of useful tools are supplied as standard.
+
+    Memcheck is a memory error detector. It helps you make your programs,
+    particularly those written in C and C++, more correct.
+
+    Cachegrind is a cache and branch-prediction profiler. It helps you make your
+    programs run faster.
+
+    Callgrind is a call-graph generating cache profiler. It has some overlap
+    with Cachegrind, but also gathers some information that Cachegrind does not.
+
+    Helgrind is a thread error detector. It helps you make your multi-threaded
+    programs more correct.
+
+    DRD is also a thread error detector. It is similar to Helgrind but uses
+    different analysis techniques and so may find different problems.
+
+    Massif is a heap profiler. It helps you make your programs use less memory.
+
+    DHAT is a different kind of heap profiler. It helps you understand issues of
+    block lifetimes, block utilisation, and layout inefficiencies.
+
+    SGcheck is an experimental tool that can detect overruns of stack and global
+    arrays. Its functionality is complementary to that of Memcheck: SGcheck
+    finds problems that Memcheck can't, and vice versa..
+
+    BBV is an experimental SimPoint basic block vector generator. It is useful
+    to people doing computer architecture research and development.
+
+
+1.2. How to navigate this manual
+
+This manual's structure reflects the structure of Valgrind itself. First, we
+describe the Valgrind core, how to use it, and the options it supports. Then,
+each tool has its own chapter in this manual. You only need to read the
+  documentation for the core and for the tool(s) you actually use, although you
+  may find it helpful to be at least a little bit familiar with what all tools
+  do. If you're new to all this, you probably want to run the Memcheck tool and
+    you might find the The Valgrind Quick Start Guide useful.
+
+Be aware that the core understands some command line options, and the tools have
+their own options which they know about. This means there is no central place
+describing all the options that are accepted -- you have to read the options
+documentation both for Valgrind's core and for the tool you want to use.
+
+
+={============================================================================
+*kt_linux_tool_100* tool-valgrind-memcheck
+
+http://valgrind.org/docs/manual/quick-start.html
+
+The Valgrind Quick Start Guide
+
+1. Introduction
+
+The Valgrind tool suite provides a number of debugging and profiling tools that
+help you make your programs faster and more correct. The most popular of these
+tools is called Memcheck. It can detect many memory-related errors that are
+common in C and C++ programs and that can lead to crashes and unpredictable
+behaviour.
+
+The rest of this guide gives the minimum information you need to start detecting
+memory errors in your program with Memcheck. For full documentation of Memcheck
+and the other tools, please read the User Manual.
+
+2. Preparing your program
+
+Compile your program with -g to include debugging information so that Memcheck's
+error messages include exact line numbers. Using -O0 is also a good idea, if you
+can tolerate the slowdown. With -O1 line numbers in error messages can be
+inaccurate, although generally speaking running Memcheck on code compiled at -O1
+works fairly well, and the speed improvement compared to running -O0 is quite
+significant. Use of -O2 and above is not recommended as Memcheck occasionally
+reports uninitialised-value errors which don't really exist.
+
+3. Running your program under Memcheck
+
+If you normally run your program like this:
+
+  myprog arg1 arg2
+
+Use this command line:
+
+  valgrind --leak-check=yes myprog arg1 arg2
+
+Memcheck is the default tool. The `--leak-check` option turns on the detailed
+memory leak detector.
+
+Your program will run much slower (eg. 20 to 30 times) than normal, and use a
+lot more memory. Memcheck will issue messages about memory errors and leaks that
+it detects.
+
+4. Interpreting Memcheck's output
+
+Here's an example C program, in a file called a.c, with a memory error and a
+memory leak.
+
+  #include <stdlib.h>
+
+  void f(void)
+  {
+     int* x = malloc(10 * sizeof(int));
+     x[10] = 0;        // problem 1: heap block overrun
+  }                    // problem 2: memory leak -- x not freed
+
+  int main(void)
+  {
+     f();
+     return 0;
+  }
+
+Most error messages look like the following, which describes problem 1, the heap
+  block overrun:
+
+  ==19182== Invalid write of size 4
+  ==19182==    at 0x804838F: f (example.c:6)
+  ==19182==    by 0x80483AB: main (example.c:11)
+  ==19182==  Address 0x1BA45050 is 0 bytes after a block of size 40 alloc'd
+  ==19182==    at 0x1B8FF5CD: malloc (vg_replace_malloc.c:130)
+  ==19182==    by 0x8048385: f (example.c:5)
+  ==19182==    by 0x80483AB: main (example.c:11)
+
+Things to notice:
+
+    There is a lot of information in each error message; read it carefully.
+
+    The 19182 is the process ID; it's usually unimportant.
+
+    The first line ("Invalid write...") tells you what kind of error it is.
+    Here, the program wrote to some memory it should not have due to a heap
+    block overrun.
+
+    Below the first line is a stack trace telling you where the problem
+    occurred. Stack traces can get quite large, and be confusing, especially if
+    you are using the C++ STL. Reading them from the bottom up can help. If the
+    stack trace is not big enough, use the `--num-callers` option to make it
+    bigger.
+
+    The code addresses (eg. 0x804838F) are usually unimportant, but occasionally
+    crucial for tracking down weirder bugs.
+
+    Some error messages have a second component which describes the memory
+    address involved. This one shows that the written memory is just past the
+    end of a block allocated with malloc() on line 5 of example.c.
+
+It's worth fixing errors in the order they are reported, as later errors can be
+caused by earlier errors. Failing to do this is a common cause of difficulty
+with Memcheck.
+
+Memory leak messages look like this:
+
+  ==19182== 40 bytes in 1 blocks are definitely lost in loss record 1 of 1
+  ==19182==    at 0x1B8FF5CD: malloc (vg_replace_malloc.c:130)
+  ==19182==    by 0x8048385: f (a.c:5)
+  ==19182==    by 0x80483AB: main (a.c:11)
+
+The stack trace tells you where the leaked memory was allocated. Memcheck cannot
+tell you why the memory leaked, unfortunately. (Ignore the
+    "vg_replace_malloc.c", that's an implementation detail.)
+
+There are several kinds of leaks; the two most important categories are:
+
+    "definitely lost": your program is leaking memory -- fix it!
+
+    "probably lost": your program is leaking memory, unless you're doing funny
+    things with pointers (such as moving them to point to the middle of a heap
+        block).
+
+Memcheck also reports uses of uninitialised values, most commonly with the
+message "Conditional jump or move depends on uninitialised value(s)". It can be
+difficult to determine the root cause of these errors. Try using the
+`--track-origins`=yes to get extra information. This makes Memcheck run slower,
+  but the extra information you get often saves a lot of time figuring out where
+    the uninitialised values are coming from.
+
+If you don't understand an error message, please consult Explanation of error
+messages from Memcheck in the Valgrind User Manual which has examples of all the
+error messages Memcheck produces.
+
+5. Caveats
+
+Memcheck is not perfect; it occasionally produces false positives, and there are
+mechanisms for suppressing these (see Suppressing errors in the Valgrind User
+    Manual). 
+
+However, it is typically right 99% of the time, so you should be wary of
+ignoring its error messages. After all, you wouldn't ignore warning messages
+produced by a compiler, right? The suppression mechanism is also useful if
+Memcheck is reporting errors in library code that you cannot change. The default
+suppression set hides a lot of these, but you may come across more.
+
+Memcheck cannot detect every memory error your program has. For example, it
+can't detect out-of-range reads or writes to arrays that are allocated
+statically or on the stack. But it should detect many errors that could crash
+your program (eg. cause a segmentation fault).
+
+Try to make your program so clean that Memcheck reports no errors. Once you
+achieve this state, it is much easier to see when changes to the program cause
+Memcheck to report new errors. Experience from several years of Memcheck use
+shows that it is possible to make even huge programs run Memcheck-clean. For
+example, large parts of KDE, OpenOffice.org and Firefox are Memcheck-clean, or
+very close to it.
+
+
+={============================================================================
+*kt_linux_tool_100* tool-valgrind-memcheck-doc
+
+http://valgrind.org/docs/manual/mc-manual.html#mc-manual.leaks
+
+To use this tool, you may specify --tool=memcheck on the Valgrind command line.
+You don't have to, though, since Memcheck is the 'default' tool.
+
+4.1. Overview
+
+Memcheck is a memory error detector. It can detect the following problems that
+are common in C and C++ programs.
+
+    Accessing memory you shouldn't, e.g. overrunning and underrunning heap
+    blocks, overrunning the top of the stack, and accessing memory after it has
+    been freed.
+
+    Using undefined values, i.e. values that have not been initialised, or that
+    have been derived from other undefined values.
+
+    Incorrect freeing of heap memory, such as double-freeing heap blocks, or
+    mismatched use of malloc/new/new[] versus free/delete/delete[]
+
+    Overlapping src and dst pointers in memcpy and related functions.
+
+    Passing a fishy (presumably negative) value to the size parameter of a
+    memory allocation function.
+
+    Memory leaks.
+
+Problems like these can be difficult to find by other means, often remaining
+undetected for long periods, then causing occasional, difficult-to-diagnose
+crashes.
+
+
+4.2.8. Memory leak detection
+
+Memcheck keeps track of all heap blocks issued in response to calls to
+malloc/new et al. So when the program 'exits', it knows which blocks have not
+been freed.
+
+If --leak-check is set appropriately, for each remaining block, Memcheck
+determines if the block is 'reachable' from pointers within the root-set. The
+root-set consists of (a) general purpose registers of all threads, and (b)
+initialised, aligned, pointer-sized data words in accessible client memory,
+including stacks.
+
+// skppied
+
+The following is an example leak summary.
+
+LEAK SUMMARY:
+   definitely lost: 48 bytes in 3 blocks.
+   indirectly lost: 32 bytes in 2 blocks.
+     possibly lost: 96 bytes in 6 blocks.
+   still reachable: 64 bytes in 4 blocks.
+        suppressed: 0 bytes in 0 blocks.
+
+If heuristics have been used to consider some blocks as reachable, the leak
+summary details the heuristically reachable subset of 'still reachable:' per
+heuristic. In the below example, of the 95 bytes still reachable, 87 bytes
+(56+7+8+16) have been considered heuristically reachable.
+
+LEAK SUMMARY:
+   definitely lost: 4 bytes in 1 blocks
+   indirectly lost: 0 bytes in 0 blocks
+     possibly lost: 0 bytes in 0 blocks
+   still reachable: 95 bytes in 6 blocks
+                      of which reachable via heuristic:
+                        stdstring          : 56 bytes in 2 blocks
+                        length64           : 16 bytes in 1 blocks
+                        newarray           : 7 bytes in 1 blocks
+                        multipleinheritance: 8 bytes in 1 blocks
+        suppressed: 0 bytes in 0 blocks
+
+If `--leak-check=full` is specified, Memcheck will give details for each
+definitely lost or possibly lost block, including where it was 'allocated'.
+(Actually, it merges results for all blocks that have the same leak kind and
+ sufficiently similar stack traces into a single "loss record". The
+ --leak-resolution lets you control the meaning of "sufficiently similar".) 
+
+It cannot tell you when or how or why the pointer to a leaked block was lost;
+you have to work that out for yourself. In general, you should attempt to ensure
+  your programs do not have any definitely lost or possibly lost blocks at exit.
+
+For example:
+
+8 bytes in 1 blocks are definitely lost in loss record 1 of 14
+   at 0x........: malloc (vg_replace_malloc.c:...)
+   by 0x........: mk (leak-tree.c:11)
+   by 0x........: main (leak-tree.c:39)
+
+88 (8 direct, 80 indirect) bytes in 1 blocks are definitely lost in loss record
+13 of 14
+   at 0x........: malloc (vg_replace_malloc.c:...)
+   by 0x........: mk (leak-tree.c:11)
+   by 0x........: main (leak-tree.c:25)
+
+The first message describes a simple case of a single 8 byte block that has been
+definitely lost. The second case mentions another 8 byte block that has been
+definitely lost; the difference is that a further 80 bytes in other blocks are
+indirectly lost because of this lost block. The loss records are not presented
+in any notable order, so the loss record numbers aren't particularly meaningful.
+The loss record numbers can be used in the Valgrind gdbserver to list the
+addresses of the leaked blocks and/or give more details about how a block is
+still reachable.
+
+
+The option `--show-leak-kinds=<set>` controls the set of leak kinds to show when
+--leak-check=full is specified.
+
+The <set> of leak kinds is specified in one of the following ways:
+
+    a comma separated list of one or more of definite indirect possible
+    reachable.
+
+    all to specify the complete set (all leak kinds).
+
+    none for the empty set.
+
+The 'default' value for the leak kinds to show is
+--show-leak-kinds=definite,possible.
+
+To also show the reachable and indirectly lost blocks in addition to the
+definitely and possibly lost blocks, you can use --show-leak-kinds=all. 
+
+To only show the reachable and indirectly lost blocks, use
+--show-leak-kinds=indirect,reachable. The reachable and indirectly lost blocks
+will then be presented as shown in the following two examples.
+
+64 bytes in 4 blocks are still reachable in loss record 2 of 4
+   at 0x........: malloc (vg_replace_malloc.c:177)
+   by 0x........: mk (leak-cases.c:52)
+   by 0x........: main (leak-cases.c:74)
+
+32 bytes in 2 blocks are indirectly lost in loss record 1 of 4
+   at 0x........: malloc (vg_replace_malloc.c:177)
+   by 0x........: mk (leak-cases.c:52)
+   by 0x........: main (leak-cases.c:80)
+
+Because there are different kinds of leaks with different severities, an
+interesting question is: which leaks should be counted as true "errors" and
+which should not?
+
+The answer to this question affects the numbers printed in the ERROR SUMMARY
+line, and also the effect of the --error-exitcode option. First, a leak is
+'only' counted as a true "error" if --leak-check=full is specified. Then, the
+option --errors-for-leak-kinds=<set> controls the set of leak kinds to consider
+as errors. The default value is --errors-for-leak-kinds=definite,possible 
+
+
+={============================================================================
+*kt_linux_tool_100* tool-valgrind-memcheck-case
+
+{double-free}
+When building on x86_64, it was found that linearsourcetest would fail with a
+segmentation fault. Running with:
+
+  valgrind --tool=memcheck ./linearsourcetest
+
+reported several errors which looked like double-free. For example:
+
+  ==27003==  Address 0xdab2c18 is 8 bytes inside a block of size 40 free'd
+  ==27003==    at 0x4A077E6: free (vg_replace_malloc.c:446)
+  ==27003==    by 0x54B3311: g_mutex_impl_free (in libglib-2.0.so.0.3200.4)
+  ==27003==    by 0x54B3411: g_mutex_clear (in libglib-2.0.so.0.3200.4)
+  ==27003==    by 0x4EA90A8: gst_object_finalize (gstobject.c:409)
+  ==27003==    by 0x4EDF344: gst_element_finalize (gstelement.c:2955)
+  ==27003==    by 0xB5360DA: gst_base_src_finalize (gstbasesrc.c:487)
+  ==27003==    by 0xF7E587C: gst_vqesrc_finalize (gstvqesrc.c:557)
+  ==27003==    by 0x51D8184: g_object_unref (in libgobject-2.0.so.0.3200.4)
+  ==27003==    by 0x4EA8B77: gst_object_unref (gstobject.c:275)
+  ==27003==    by 0x4EB0A18: gst_bin_remove_func (gstbin.c:1564)
+  ==27003==    by 0x4EB0C7B: gst_bin_remove (gstbin.c:1617)
+  ==27003==    by 0x4EADFBD: gst_bin_dispose (gstbin.c:528)
+
+`gst_vqesrc_finalize()` takes calls `finalize()` whilst holding a lock obtained
+with `GST_OBJECT_LOCK()`.
+
+This is a bad idea because finalize() will cause `g_mutex_clear()` to be called
+on the mutex on which the lock is held, and according to the glib documentation
+[1]:
+
+"Calling g_mutex_clear() on a locked mutex leads to undefined behaviour."
+
+This patch moves the call to `finalize()` such that it is called once the mutex
+is released. This makes the valgrind errors go away, `linearsourcetest` now
+completes successfully.
+
+[1] https://developer.gnome.org/glib/2.32/glib-Threads.html#g-mutex-clear                   
+
+
 # ============================================================================
 #{
 ={============================================================================
