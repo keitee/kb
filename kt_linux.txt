@@ -276,7 +276,8 @@
 |kt_linux_core_107| process: environment list
 |kt_linux_core_108| process: group
 |kt_linux_core_109| process: deamon
-|kt_linux_core_110| process: execution, exec call, <exec-wrapper-example>
+|kt_linux_core_110| process-exec-call <exec-wrapper-example>
+*kt_linux_core_110* process-resource
 
 |kt_linux_core_150| thread vs process. LPI 29
 |kt_linux_core_151| pthread and source
@@ -7097,6 +7098,105 @@ Be aware that the core understands some command line options, and the tools have
 their own options which they know about. This means there is no central place
 describing all the options that are accepted -- you have to read the options
 documentation both for Valgrind's core and for the tool you want to use.
+
+
+2.3. The Commentary
+
+Valgrind tools write a commentary, a stream of text, detailing error reports and
+other significant events. All lines in the commentary have following form:
+
+==12345== some-message-from-Valgrind
+
+The 12345 is the process ID. This scheme makes it easy to distinguish program
+output from Valgrind commentary, and also easy to differentiate commentaries
+from different processes which have become merged together, for whatever reason.
+
+By default, Valgrind tools write only essential messages to the commentary, so
+as to avoid flooding you with information of secondary importance. If you want
+more information about what is happening, re-run, passing the `-v` option to
+Valgrind. A second -v gives yet more detail.
+
+You can direct the commentary to three different places:
+
+    The default: send it to a file descriptor, which is by default 2 (stderr).
+    So, if you give the core no options, it will write commentary to the
+    standard error stream. If you want to send it to some other file descriptor,
+             for example number 9, you can specify --log-fd=9.
+
+    This is the simplest and most common arrangement, but can cause problems
+      when Valgrinding entire trees of processes which expect specific file
+      descriptors, particularly stdin/stdout/stderr, to be available for their
+      own use.
+
+    A less intrusive option is to write the commentary to a file, which you
+    specify by `--log-file=filename`. There are special format specifiers that can
+    be used to use a process ID or an environment variable name in the log file
+    name. These are useful/necessary if your program invokes multiple processes
+    (especially for MPI programs). See the basic options section for more
+    details.
+
+    The least intrusive option is to send the commentary to a network socket.
+    The socket is specified as an IP address and port number pair, like this:
+    --log-socket=192.168.0.1:12345 if you want to send the output to host IP
+    192.168.0.1 port 12345 (note: we have no idea if 12345 is a port of
+        pre-existing significance). You can also omit the port number:
+    --log-socket=192.168.0.1, in which case a default port of 1500 is used. This
+    default is defined by the constant VG_CLO_DEFAULT_LOGPORT in the sources.
+
+    // skipped
+
+
+2.5. Suppressing errors
+
+The error-checking tools detect numerous problems in the system libraries, such
+as the C library, which come pre-installed with your OS. You can't easily fix
+these, but you don't want to see these errors (and yes, there are many!) So
+Valgrind reads a list of errors to suppress at startup. A default suppression
+file is created by the ./configure script when the system is built.
+
+You can modify and add to the suppressions file at your leisure, or, better,
+    write your own. Multiple suppression files are allowed. This is useful if
+      part of your project contains errors you can't or don't want to fix, yet
+      you don't want to continuously be reminded of them.
+
+Note: By far the easiest way to add suppressions is to use the
+`--gen-suppressions=yes` option described in Core Command-line Options. This
+generates suppressions automatically. For best results, though, you may want to
+edit the output of --gen-suppressions=yes by hand, in which case it would be
+advisable to read through this section. 
+
+ --gen-suppressions=<yes|no|all> [default: no]
+
+    When set to yes, Valgrind will pause after every error shown and print the
+    line:
+
+        ---- Print suppression ? --- [Return/N/n/Y/y/C/c] ----
+
+    Pressing Ret, or N Ret or n Ret, causes Valgrind continue execution without
+    printing a suppression for this error.
+
+    Pressing Y Ret or y Ret causes Valgrind to write a suppression for this
+    error. You can then cut and paste it into a suppression file if you don't
+    want to hear about the error in the future.
+
+    When set to all, Valgrind will print a suppression for every reported error,
+    without querying the user.
+
+    This option is particularly useful with C++ programs, as it prints out the
+    suppressions with mangled names, as required.
+
+    Note that the suppressions printed are as specific as possible. You may want
+    to common up similar ones, by adding wildcards to function names, and by
+    using frame-level wildcards. The wildcarding facilities are powerful yet
+    flexible, and with a bit of careful editing, you may be able to suppress a
+    whole family of related errors with only a few suppressions.
+
+    Sometimes two different errors are suppressed by the same suppression, in
+    which case Valgrind will output the suppression more than once, but you only
+    need to have one copy in your suppression file (but having more than one
+        won't cause problems). Also, the suppression name is given as <insert a
+    suppression name here>; the name doesn't really matter, it's only used with
+    the -v option which prints out all used suppression records.
 
 
 ={============================================================================
@@ -20988,9 +21088,9 @@ error string correspond- ing to the current value of errno (i.e., the equivalent
 
 
 ={============================================================================
-*kt_linux_core_110* process: execution, exec call
+*kt_linux_core_110* process-execution, exec call
 
-LPI. 27
+LPI27
 
 {execve-system-call}
 Various library functions, all with names beginning with exec, are layered on
@@ -21323,6 +21423,106 @@ int main(int argc, char* argv[] )
 
     exit(EXIT_FAILURE);
 }
+
+
+={============================================================================
+*kt_linux_core_110* process-resource
+
+LPI36
+
+36.2 Process Resource Limits
+
+Each process has a set of resource limits that can be used to restrict the
+amounts of various system resources that the process may consume. For example,
+we may want to set resource limits on a process before execing an arbitrary
+  program, if we are concerned that it may consume excessive resources. 
+
+We can set the resource limits of the shell using the ulimit built-in command
+(limit in the C shell). These limits are inherited by the processes that the
+shell creates to execute user commands.
+
+Since kernel 2.6.24, the Linux-specific `/proc/PID/limits` file can be used to
+view all of the resource limits of any process. This file is owned by the real
+user ID of the corresponding process and its permissions allow reading only by
+that user ID (or by a privileged process).
+
+$ cat /proc/3576/limits 
+Limit                     Soft Limit           Hard Limit           Units     
+Max cpu time              unlimited            unlimited            seconds   
+Max file size             unlimited            unlimited            bytes     
+Max data size             unlimited            unlimited            bytes     
+Max stack size            8388608              unlimited            bytes     
+Max core file size        0                    unlimited            bytes     
+Max resident set          unlimited            unlimited            bytes     
+Max processes             3941                 3941                 processes 
+Max open files            1024                 4096                 files     
+Max locked memory         65536                65536                bytes     
+Max address space         unlimited            unlimited            bytes     
+Max file locks            unlimited            unlimited            locks     
+Max pending signals       3941                 3941                 signals   
+Max msgqueue size         819200               819200               bytes     
+Max nice priority         0                    0                    
+Max realtime priority     0                    0                    
+Max realtime timeout      unlimited            unlimited            us        
+
+
+struct rlimit {
+  rlim_t rlim_cur; /* Soft limit (actual process limit) */
+  rlim_t rlim_max; /* Hard limit (ceiling for rlim_cur) */
+};
+
+These fields correspond to the two associated limits for a resource: the soft
+(rlim_cur) and hard (rlim_max) limits. (The rlim_t data type is an integer
+    type.) 
+
+The soft limit governs the amount of the resource that may be consumed by the
+process. A process can adjust the soft limit to any value from 0 up to the hard
+limit. For most resources, the sole purpose of the hard limit is to provide this
+'ceiling' for the soft limit.
+
+In most cases, resource limits are enforced for both privileged and unprivileged
+processes. They are inherited by child processes created via fork() and are
+preserved across an exec().
+
+
+Although a resource limit is a per-process attribute, in some cases, the limit
+is measured against not just that process’s consumption of the corresponding
+resource, but also against the sum of resources consumed by all processes with
+the same real user ID. The RLIMIT_NPROC limit, which places a limit on the
+number of processes that can be created, is a good example of the rationale for
+this approach.
+
+If not otherwise specified, then a resource limit is measured 'only' against the
+process's own consumption of the resource.
+
+
+In this section, we provide details on each of the resource limits available on
+Linux, noting those that are Linux-specific.
+
+RLIMIT_AS
+The RLIMIT_AS limit specifies the maximum size for the process's virtual memory
+(address space), in bytes. Attempts (brk(), sbrk(), mmap(), mremap(), and
+    shmat()) to exceed this limit fail with the error ENOMEM. In practice, the
+most common place where a program may hit this limit is in calls to functions in
+the malloc package, which make use of sbrk() and mmap(). Upon encountering this
+limit, stack growth can also fail with the consequences listed below for
+RLIMIT_STACK.
+
+
+RLIMIT_STACK
+The RLIMIT_STACK limit specifies the maximum size of the process stack, in
+bytes. Attempts to grow the stack beyond this limit result in the generation of
+a `SIGSEGV` signal for the process. Since the stack is exhausted, the only way
+to catch this signal is by establishing an alternate signal stack, as described
+in Section 21.3.
+
+Since Linux 2.6.23, the RLIMIT_STACK limit also determines the amount of space
+available for holding the process's command-line arguments and environment
+variables. See the execve(2) manual page for details.
+
+
+RLIM_INFINITY
+What dose it really mean?
 
 
 ={============================================================================
