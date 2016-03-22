@@ -33,7 +33,7 @@
 |kt_linux_bash_019| bash: subshell and multiple command <execution-env>
 |kt_linux_bash_020| bash: list options
 |kt_linux_bash_021| sh-exit: exit status
-|kt_linux_bash_022| bash: && and ||
+|kt_linux_bash_022| sh-and-or
 *kt_linux_bash_023* sh-option: invoking options
 |kt_linux_bash_024| bash: builtin: exec
 |kt_linux_bash_025| bash: builtin: set
@@ -132,6 +132,7 @@
 *kt_linux_tool_100* tool-valgrind-memcheck
 *kt_linux_tool_100* tool-valgrind-memcheck-doc
 *kt_linux_tool_100* tool-valgrind-memcheck-case
+*kt_linux_tool_100* tool-valgrind-massif
 
 |kt_linux_tool_100| package: apt-xxx to get package
 |kt_linux_tool_101| package: pkg-config
@@ -278,6 +279,7 @@
 |kt_linux_core_109| process: deamon
 |kt_linux_core_110| process-exec-call <exec-wrapper-example>
 *kt_linux_core_110* process-resource
+*kt_linux_core_110* process-resource-case
 
 |kt_linux_core_150| thread vs process. LPI 29
 |kt_linux_core_151| pthread and source
@@ -352,12 +354,13 @@
 *kt_linux_core_400* uclibc: fail to find symbol
 
 *kt_linux_core_400* slib: shared library
-*kt_linux_core_400* slib: dynamic linker
+*kt_linux_core_400* slib-dl
 *kt_linux_core_401* slib: --as-needed flag and link error
 *kt_linux_core_402* slib: search and resolve
 *kt_linux_core_403* slib: case problem in name resolve. crash
 *kt_linux_core_404* slib: case problem in name resolve. pthread stub 
-*kt_linux_core_405* slib: dl, ABI, visibility
+*kt_linux_core_405* slib-dl-api
+*kt_linux_core_405* slib-visibility
 |kt_linux_core_406| slib-preload, debug and monitor ld
 |kt_linux_core_407| shared library: further information
 |kt_linux_core_408| shared library: md5sum
@@ -2475,7 +2478,7 @@ echo "exit code after call file test: $?"
 
 
 ={============================================================================
-*kt_linux_bash_022* bash: && and ||
+*kt_linux_bash_022* sh-and-or
 
 if [ "$(whoami)" != 'root' ]; then
    echo "You have no permission to run $0 as non-root user."
@@ -2558,11 +2561,10 @@ debugging.
 + [[ 0 = 1 ]]
 
 
-<example>
-The lsr-config returns "0/1" or "true/false" when use --bool and the problem
-is when a key is boolean and is not set in a database meaning 0, it still
-returns "0" which is not null string. So "if [ -z ]" check always becomes
-false.
+<ex>
+The lsr-config returns "0/1" or "true/false" when use --bool and the problem is
+when a key is boolean and is not set in a database meaning 0, it still returns
+"0" which is not NULL string. So "if [ -z ]" check always becomes false.
 
 The solution is that use variable's value depending on key value to set actual
 variable.
@@ -2584,6 +2586,11 @@ if [ -z "$USE_YV_MEDIA_ROUTER" ]; then
 else
 	echo "SET. $USE_YV_MEDIA_ROUTER. WILL USE YV MR"
 fi
+
+However, if use this then goes wrong.
+
+if [ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ]; then
+    // things to do when true case
 
 
 ={============================================================================
@@ -7547,6 +7554,33 @@ is released. This makes the valgrind errors go away, `linearsourcetest` now
 completes successfully.
 
 [1] https://developer.gnome.org/glib/2.32/glib-Threads.html#g-mutex-clear                   
+
+
+={============================================================================
+*kt_linux_tool_100* tool-valgrind-massif
+
+valgrind massif and massif-visualizer are powerful tools to examine memory use.
+
+valgrind --tool=massif --pages-as-heap=no --show-below-main=yes uimanagerd -A -N
+cp massif.out.* /mnt/hgfs/desktop_share/logs/uimanagerd/massif/
+
+Massif outputs a data file that is best viewed with a reporting tool. It comes
+with a basic plain text output tool (ms_print), but I find that hard to use. The
+best graphical viewer I've found is massif-visualizer.
+
+Building massif-visualizer
+
+Install the deps:
+sudo yum install graphviz-devel
+
+You may have other unfulfilled build deps. Use:
+sudo yum provides */<foo>
+
+to discover which package they are in.
+
+download, build, install kgraphviewer-2.1.1
+
+ditto massif-visualizer-0.2
 
 
 # ============================================================================
@@ -21526,6 +21560,53 @@ What dose it really mean?
 
 
 ={============================================================================
+*kt_linux_core_110* process-resource-case
+
+The daemon crashes when it shows huge numbers in vm memory status and shows a
+call trace. Believe that it has no memory to create a thread stack.
+
+VmPeak:	 1893244 kB
+VmSize:	 1535856 kB
+
+#0  0x77399418 in stack_list_add () from /lib/libpthread.so.0
+#1  0x7739af1c in pthread_create () from /lib/libpthread.so.0
+#2  0x773e1488 in direct_thread_create () from /usr/local/lib/libdirect.so
+#3  0x76d6cb70 in fusion_enter () from /usr/local/lib/libfusion-1.4.so.17
+#4  0x7742e05c in dfb_core_create () from /usr/local/lib/libdirectfb.so
+#5  0x774100a8 in DirectFBCreate () from /usr/local/lib/libdirectfb.so
+
+libpthread/nptl/pthread_create.c
+
+int
+__pthread_create_2_1 (
+     pthread_t *newthread,
+     const pthread_attr_t *attr,
+     void *(*start_routine) (void *),
+     void *arg)
+{
+  STACK_VARIABLES;
+
+  const struct pthread_attr *iattr = (struct pthread_attr *) attr;
+  if (iattr == NULL)
+    /* Is this the best idea?  On NUMA machines this could mean
+       accessing far-away memory.  */
+    iattr = &default_attr;
+
+  struct pthread *pd = NULL;
+  int err = ALLOCATE_STACK (iattr, &pd);
+  ...
+}
+
+static int
+allocate_stack (const struct pthread_attr *attr, struct pthread **pdp,
+		ALLOCATE_STACK_PARMS)
+{
+	  /* And add to the list of stacks in use.  */
+	  stack_list_add (&pd->list, &stack_used);
+}
+
+
+={============================================================================
 *kt_linux_core_150* thread vs process. LPI 29
 
 A process is an instance of an executing program and a thread is an instance of an executing a task.
@@ -31030,7 +31111,27 @@ $ nm thr | grep foo
 
 
 ={============================================================================
-*kt_linux_core_400* slib: dynamic linker
+*kt_linux_core_400* slib-dl
+
+When an executable starts, the `dynamic-linker` loads 'all' of the shared
+libraries in the program's dynamic dependency list. Sometimes, however, it can
+be useful to load libraries at a 'later' time. For example, a plug-in is loaded
+only when it is needed. This functionality is provided by an API to the dynamic
+linker.
+
+
+{version-check}
+The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2,
+    which is employed by every ELF executable that uses shared libraries.
+
+# for host:
+$ ls -l /lib/ld-linux.so.2 
+25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
+
+# for-embedded:
+# ls -al /lib/ld-linux.so.2 
+24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
+
 
 {dynamic-linker}
 note: From GCC doc, the dynamic loader is not part of GCC; it is part of the
@@ -31934,29 +32035,10 @@ $ nm -D libc.so.0 | ag pthread
 
 
 ={============================================================================
-*kt_linux_core_405* slib: dl, ABI, visibility
+*kt_linux_core_405* slib-dl-api
 
-When an executable starts, the dynamic linker loads 'all' of the shared
-libraries in the program's dynamic dependency list. Sometimes, however, it can
-be useful to load libraries at a 'later' time. For example, a plug-in is loaded
-only when it is needed. This functionality is provided by an API to the dynamic
-linker.
+{dl-apis} LPI42.1
 
-
-{version-check}
-The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2,
-    which is employed by every ELF executable that uses shared libraries.
-
-# for host:
-$ ls -l /lib/ld-linux.so.2 
-25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
-
-# for-embedded:
-# ls -al /lib/ld-linux.so.2 
-24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
-
-
-{dlopen-apis} from LPI 42.1
 <dlopen>
 #include <dlfcn.h>
 
@@ -31993,7 +32075,26 @@ Symbols in this library and its dependency tree are made available for resolving
 references in other libraries loaded by this process and also for lookups via
 dlsym().
 
-<dlsym>
+
+{dlerror}
+If we receive an error return from dlopen() or one of the other functions in the
+dlopen API, we can use dlerror() to obtain a pointer to a string that indicates
+the cause of the error.
+
+#include <dlfcn.h>
+const char *dlerror(void);
+
+Returns pointer to error-diagnostic string, or NULL if 'no' error has occurred
+since previous call to dlerror()
+
+The dlerror() function returns NULL if no error has occurred since the last call
+to dlerror(). We'll see how this is useful in the next section.
+
+<ex>
+(void) dlerror(); /* Clear dlerror() */
+
+
+{dlsym}
 #include <dlfcn.h>
 
 void *dlsym(void *handle, char *symbol);
@@ -32001,18 +32102,53 @@ void *dlsym(void *handle, char *symbol);
 Returns address of symbol, or NULL if symbol is not found
 
 searches a library for a symbol (a string containing the name of a function or
-    variable) and returns its address.
+variable) and returns its address.
 
-The value of a symbol returned by dlsym() may be NULL, which is
-indistinguishable from the "symbol not found" return. In order to differentiate
-the two possibilities, we must call dlerror() beforehand (to make sure that any
-    previously held error string is cleared) and then if, after the call to
-dlsym(), dlerror() returns a non-NULL value, we know that an error occurred.
+The value of a symbol returned by dlsym() 'may' be NULL, which is
+'indistinguishable' from the "symbol not found" return. 
 
+In order to differentiate the two possibilities, we must call dlerror()
+    beforehand (to make sure that any previously held error string is cleared)
+    and then if, after the call to dlsym(), dlerror() returns a non-NULL value,
+    we know that an error occurred.
+
+<ex>
+
+From dlsym(3):
+
+    Since the value of the symbol could actually be NULL (so that a NULL return
+            from dlsym() need not indicate an error), the correct way to test
+    for an error is to call dlerror(3) to clear any old error conditions, then
+    call dlsym(), and then call dlerror(3) again, saving its return value into a
+    variable, and check whether this saved value is not NULL.
+
+
+typedef bool (*BcmInit)(void);
+BcmInit bcmInit = (BcmInit)dlsym(nexusSharedLibHandle, "BcmNexus_Platform_Init");
+const char* err = dlerror();
+
+// This assumes that when `dlsym` is NULL, `dlerror` should return some value so
+// err should not be NULL. However, dlerror can return NULL when dlsym return
+// NULL and this code runs to else-if and can crash since bcmInit() is a call.
+//
+if (!bcmInit && err) {
+    NICKEL_ERROR("dlsym failed: " << err);
+} else if (!bcmInit()) { 
+    ...
+}
+
+
+Should be:
+
+if (!bcmInit) {
+    const char* const err = dlerror();
+    ERROR("dlsym failed: " << (err ? err : "(unknown error)"));
+} else if (!bcmInit()) {
+
+
+{dlclose}
 The dlclose() function closes a library previously opened by dlopen().
 
-The dlerror() function returns an error-message string, and is used after a
-fail- ure return from one of the preceding functions.
 
 <to-link>
 To build programs that use the dlopen API on Linux, we must specify the -ldl
@@ -32034,6 +32170,9 @@ $ gcc -export-dynamic main.c
 Using either of these options allows a dynamically loaded library to access
 global symbols in the main program.
 
+
+={============================================================================
+*kt_linux_core_405* slib-visibility
 
 {visibility}
 A well-designed shared library should make visible only those symbols (functions

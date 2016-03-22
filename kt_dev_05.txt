@@ -110,7 +110,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_600* glib-object: floating reference
 *kt_dev_bcast_600* glib-property
 
-*kt_dev_bcast_600* glib-debug
+*kt_dev_bcast_600* gdebug
 *kt_dev_bcast_600* glib-signal
 *kt_dev_bcast_600* glib: gatomic
 *kt_dev_bcast_600* glib: gthread
@@ -10151,6 +10151,69 @@ DEBUG GST_CAPS gstpad.c:2114:gst_pad_link_check_compatible_unlocked:<nexussink1:
 
 
 ={============================================================================
+*kt_dev_bcast_500* gst-gst
+
+https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-Gst.html
+
+The GStreamer library should be initialized with gst_init() before it can be
+used. You should pass pointers to the main argc and argv variables so that
+GStreamer can process its own command line options, as shown in the following
+example.
+
+The gst_deinit() call is used to clean up all internal resources used by
+GStreamer. It is mostly used in unit tests to check for leaks.
+
+gst_init ()
+--------------------------
+void
+gst_init (int *argc,
+          char **argv[]);
+
+Initializes the GStreamer library, setting up internal path lists, registering
+    built-in elements, and loading standard plugins.
+
+Unless the plugin registry is disabled at compile time, the registry will be
+loaded. By default this will also check if the registry cache needs to be
+updated and rescan all plugins if needed. See gst_update_registry() for details
+and section
+
+Running GStreamer Applications
+
+for how to disable automatic registry updates.
+
+This function will terminate your program if it was unable to initialize
+    GStreamer for some reason. If you want your program to fall back, use
+    gst_init_check() instead.
+
+WARNING: This function does not work in the same way as corresponding functions
+in other glib-style libraries, such as gtk_init(). In particular, unknown
+command line options cause this function to abort program execution. 
+
+
+Parameters
+
+argc
+pointer to application's argc. [inout][allow-none]
+
+argv
+pointer to application's argv. [inout][array length=argc][allow-none]
+
+
+gst_deinit ()
+--------------------------
+void
+gst_deinit (void);
+
+Clean up any resources created by GStreamer in gst_init().
+
+It is normally not needed to call this function in a normal application as the
+resources will automatically be freed when the program terminates. This function
+is therefore mostly used by testsuites and other memory profiling tools.
+
+After this call GStreamer (including this method) should not be used anymore.
+
+
+={============================================================================
 *kt_dev_bcast_500* gst-object
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html
@@ -14506,44 +14569,86 @@ http://library.gnome.org/devel/glib/stable/
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-debug
+*kt_dev_bcast_600* gdebug
 
 gstreamer-1.5.0/docs/gst/running.xml
 
 <formalpara id="G_DEBUG">
   <title><envar>G_DEBUG</envar></title>
 
-  <para>
-  Useful GLib environment variable. Set G_DEBUG=fatal_warnings to make GStreamer
-  programs abort when a critical warning such as an assertion failure occurs.
-  This is useful if you want to find out which part of the code caused that
-  warning to be triggered and under what circumstances. Simply set G_DEBUG as
-  mentioned above and run the program in gdb (or let it core dump). Then get a
-  stack trace in the usual way.  
-  </para>
+  Useful GLib environment variable. Set `G_DEBUG=fatal_warnings` to make
+  GStreamer programs abort when a critical warning such as an assertion failure
+  occurs.  This is useful if you want to find out which part of the code caused
+  that warning to be triggered and under what circumstances. Simply set G_DEBUG
+  as mentioned above and run the program in gdb (or let it core dump). Then get
+  a stack trace in the usual way.
 
 https://developer.gnome.org/glib/stable/glib-Message-Logging.html
 https://developer.gnome.org/glib/stable/glib-running.html
 
 G_DEBUG.  
-This environment variable can be set to a list of debug options, which cause
+This environment variable can be set to a 'list' of debug options, which cause
 GLib to print out different types of debugging information.
 
 fatal-warnings
-Causes GLib to abort the program at the first call to g_warning() or
+Causes GLib to `abort()` the program at the first call to g_warning() or
 g_critical().
 
 fatal-criticals
-Causes GLib to abort the program at the first call to g_critical().
+Causes GLib to `abort()` the program at the first call to g_critical().
+
+
+g_error()
+-----------------
+#define             g_error(...)
+
+A convenience function/macro to log an error message.
+
+This is not intended for end user error reporting. Use of GError is preferred
+for that instead, as it allows calling functions to perform actions conditional
+    on the type of error.
+
+Error messages are always fatal, resulting in a call to `abort()` to terminate
+the application. This function will result in a core dump; don't use it for
+errors you expect. Using this function indicates a bug in your program, i.e. an
+assertion failure.
+
+If g_log_default_handler() is used as the log handler function, a new-line
+character will automatically be appended to @..., and need not be entered
+manually.
+
+Parameters
+
+...
+
+format string, followed by parameters to insert into the format string (as with
+        printf())
+
+
+<ex>
+
+For some reason g_error() doesn't abort on devices (at least not on DTR-2100)
+but does abort on PC. Instead it returns and executes the following statement:
+
+for (;;) ;
+
+A comment in GLib glib/gmessages.h explains the intention:
+
+for(;;) ; so that GCC knows that control doesn't go past g_error().
+
+The problem could be related to some compiler optimisations and rather old
+toolchains used for devices.
+
 
 g_critical()
-
+-----------------
 #define             g_critical(...)
 
 Logs a "critical warning" (G_LOG_LEVEL_CRITICAL). It's more or less
-application-defined what constitutes a critical vs. a regular warning. You could
-call g_log_set_always_fatal() to make critical warnings exit the program, then
-use g_critical() for fatal errors, for example.
+application-defined what constitutes a critical vs. a regular warning. 
+
+You could call g_log_set_always_fatal() to make critical warnings exit the
+program, then use g_critical() for fatal errors, for example.
 
 You can also make critical warnings 'fatal' at runtime by setting the G_DEBUG
 environment variable (see Running GLib Applications).
