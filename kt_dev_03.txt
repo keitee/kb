@@ -22,7 +22,7 @@ KT KB. DEVELOPMENT. CODE.
 |kt_dev_code_014| async-future barrier
 |kt_dev_code_015| async-dispatcher
 |kt_dev_code_015| async-dispatcher-use-gmainloop
-|kt_dev_code_016| async-listener
+|kt_dev_code_016| as-producer-listener
 *kt_dev_code_017* async-weak-functor
 *kt_dev_code_017* asyc: dispatcher use ex
 *kt_dev_code_017* asyc: dispatcher use
@@ -9523,7 +9523,7 @@ bool FutureContextCommonImpl::dispatchNextResult()
 
 
 ={============================================================================
-*kt_dev_code_012* asyc: future-context
+*kt_dev_code_012* as-future-context
 
  * FutureContextBase.h
  * FutureContextBase.cpp
@@ -10286,7 +10286,7 @@ NS_ZINC_CLOSE
 
 
 ={============================================================================
-*kt_dev_code_012* asyc: future-base
+*kt_dev_code_012* as-future-base
 
 ////////////////////////////////////////
 /*
@@ -10579,7 +10579,7 @@ class Future : public FutureBase
       Future<typename boost::result_of<Functor(FutureValue<T>)>::type> then(
           Functor transformRtoT);
 
-    // <future-get>
+    *future-get*
     /**
      * Synchronously wait for and retrieve the value.
      *
@@ -11378,7 +11378,7 @@ class Promise : public PromiseBase
      */
     void swap(Promise<T> & other);
 
-    // <promise-get-future>
+    *promise-get-future*
     /**
      * Create a Future for this Promise.
      *
@@ -12364,7 +12364,7 @@ boost::shared_ptr<NS_ZINC::Dispatcher> makeGlibEventDispatcher()
 
 
 ={============================================================================
-*kt_dev_code_016* async-listener
+*kt_dev_code_016* as-producer-listener
 
 Listener(s) -> Producer(s) <T> -> ProducerHoisted -> DD -> Listeners
 
@@ -12381,14 +12381,16 @@ virtual void DispatchingEventProducer::addListener
     impl.addListener(listener);
 }
 
-void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
-    boost::shared_ptr<EventDispatcher> 
-    clientDispatcher=boost::shared_ptr<EventDispatcher>());
+void DispatchingEventProducerHoisted::addListener
+    (boost::shared_ptr<hoisted_event_listener> listener, 
+    boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
 
-note: no warning on implicit cast??
+note: 
+shared_ptr<ListenerT> listener to shared_ptr<void> listner since "typedef void
+hoisted_event_listener". No warning on implicit cast??
 
 
-2. When future barrier for dbus calls is completed, calls the registered
+2. When future barrier on dbus calls is completed, calls the registered
 function with that future.
 
 void SystemClientEventRepository::eventWindowDataRetrievalComplete();
@@ -12424,6 +12426,7 @@ template<class ListenerT>
 class ZINC_LOCAL DispatchingEventProducer 
   : virtual public EventProducer<ListenerT> 
 {
+    *producer-produce-event*
     template <typename Functor>
         void produceEvent(Functor f) const {
             ZINC_CHECK_CONCEPT(f(static_cast<ListenerT*>(NULL)));
@@ -12451,12 +12454,14 @@ class ZINC_LOCAL DispatchingEventProducer
 
 
 This copies the given functor. This DowncastingCaller instantiates in producer
-class which is SystemClientEventWindow in this case. Is it listener?? Because
+class which is SystemClientEventWindow. Is that listener? Yes, because
 SystemClientEventWindow is a producer and a listener at the same time.
 
 
 class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable 
 {
+    *producer-produce-event*
+    // note: Here "evnet" is functor
     void produceEvent
         (boost::function<void (boost::shared_ptr<hoisted_event_listener>)> event)
         {
@@ -12466,7 +12471,7 @@ class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable
             // produceEvent 'post' user code(functor) using the dispatcher
             // registered with the listener or default dispatcher.
             
-            // makeWeakFunctor(functor, target);
+            // makeWeakFunctor(functor, target sp);
 
             localListeners[i].second->post(
                     makeWeakFunctor(event, localListeners[i].first));
@@ -12475,7 +12480,7 @@ class ZINC_EXPORT DispatchingEventProducerHoisted : boost::noncopyable
         }
 };
 
-When a dispatcher calls a functor:
+Now, when a dispatcher calls a functor:
 
 boost::function<void ()>
 
@@ -12655,7 +12660,7 @@ class ZINC_LOCAL DispatchingEventProducer
     explicit DispatchingEventProducer(boost::shared_ptr<EventDispatcher>
         dispatcher_) : impl(dispatcher_) {}
 
-    *produce-add-listener*
+    *producer-add-listener*
     /**
      * Add an event listener.
      * The event listener methods will be invoked on the default dispatcher.
@@ -12686,7 +12691,6 @@ class ZINC_LOCAL DispatchingEventProducer
      *
      * @acl all
      */
-
     virtual void addListener(boost::shared_ptr<EventDispatcher> clientDispatcher, 
         boost::shared_ptr<ListenerT> listener) {
 
@@ -12748,7 +12752,7 @@ class ZINC_LOCAL DispatchingEventProducer
       produceEvent(static_cast<boost::shared_ptr<Event> >(event));
     }
 
-    *produce-event*
+    *producer-produce-event*
     /**
      * Derived implementations should call this method to dispatch an event.
      *
@@ -12825,6 +12829,7 @@ public:
     explicit DispatchingEventProducerHoisted(boost::shared_ptr<EventDispatcher> dispatcher_);
     ~DispatchingEventProducerHoisted();
 
+    *producer-add-listener*
     void addListener(boost::shared_ptr<hoisted_event_listener> listener, 
          boost::shared_ptr<EventDispatcher> clientDispatcher=boost::shared_ptr<EventDispatcher>());
 
@@ -12899,6 +12904,7 @@ DispatchingEventProducerHoisted::~DispatchingEventProducerHoisted() {
 	}
 }
 
+*producer-add-listener*
 void DispatchingEventProducerHoisted::addListener(
     boost::shared_ptr<hoisted_event_listener> listener, 
     boost::shared_ptr<EventDispatcher> clientDispatcher) 
@@ -13645,7 +13651,7 @@ void ProxyMediaRouter::setSourceComplete(
 
 
 ={============================================================================
-*kt_dev_code_017* as-asyncInvoke, async-helpers
+*kt_dev_code_017* as-asyncInvoke as-helpers
 
 <use>
 

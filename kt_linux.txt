@@ -357,8 +357,8 @@
 *kt_linux_core_400* slib-dl
 *kt_linux_core_401* slib: --as-needed flag and link error
 *kt_linux_core_402* slib: search and resolve
-*kt_linux_core_403* slib: case problem in name resolve. crash
-*kt_linux_core_404* slib: case problem in name resolve. pthread stub 
+*kt_linux_core_403* slib-case-problem in name resolve. crash
+*kt_linux_core_404* slib-case-problem in name resolve. pthread stub 
 *kt_linux_core_405* slib-dl-api
 *kt_linux_core_405* slib-visibility
 |kt_linux_core_406| slib-preload, debug and monitor ld
@@ -14850,15 +14850,15 @@ DESCRIPTION
        Since kernel 2.6.19, Linux supports an alternate syntax for the
        /proc/sys/kernel/core_pattern file. If the first character of this file
        is a pipe symbol (|), then the remainder of the line is interpreted as a
-       'program' to be executed. Instead of being written to a disk file, the core
-       dump is given as standard input to the program. Note the following
+       'program' to be executed. Instead of being written to a disk file, the
+       core dump is given as standard input to the program. Note the following
        points:
 
        *  The program must be specified using an 'absolute' pathname (or a
           pathname relative to the root directory, /), and must immediately
           follow the '|' character.
 
-       *  The process created to run the program runs as user and group root.
+       *  The process created to run the program runs as user and group 'root'.
 
        *  Command-line arguments can be supplied to the program (since Linux
           2.6.24), delimited by white space (up to a total line length of 128
@@ -31734,7 +31734,7 @@ symbol.
 
 
 ={============================================================================
-*kt_linux_core_403* slib: case problem in name resolve. crash
+*kt_linux_core_403* slib-case-problem in name resolve. crash
 
 03/07/2014. At samsung. 
 When moves application which was a process and uses static link to the shared
@@ -31760,7 +31760,7 @@ note: So this was a problem of symbols between shared libraries.
 <Q> so when say 'symbol' in runtime resolution, does it mean 'name' only or the
 whole signature?
 
-# foo.c
+// foo.c
 
 #include <stdio.h>
 
@@ -31770,7 +31770,7 @@ void foo(int x)      <2>
   printf("foo: this is foo... %d \n", x );
 }
 
-# main.c
+// main.c
 
 #include <stdio.h>
 
@@ -31799,27 +31799,28 @@ $ gcc -o prog main.c libfoo.so
 $ LD_LIBRARY_PATH=. ./prog
 main: this is foo...
 
-note: Unlike the case-example, this is a problem between main and shared library.
+note: 
+* Unlike the case-example, this is a problem between main and shared library.
 
-<Q> So always picks up the main version and suggest that only use 'name' in C.
-Given the real-case above, C++ may be different?
+* So always picks up the main version and suggest that only use 'name' in C.
+  Given the real-case above, C++ may be different?
 
-<Q> If multiple shared library are used in a process, all constitute a single
-lookup space?
-
-NO. As noted above, symbols in main overrides others.
+* If multiple shared library are used in a process, all constitute a single
+  lookup space? NO. As noted above, symbols in main overrides others.
 
 
 <solution> to the case-example
 
-1. As the case-example, can use namespace which effectively make a different
-symbol.
+* As the case-example, can use namespace which effectively make a different
+  symbol.
 
-2. As shown here, can use linker option, -Bsymbolic to ensure that the
-invocation of the same symbol in the shared library actually called the version
-of the function defined 'within' the library.
+* As shown here, can use linker option, `-Bsymbolic` to ensure that the
+  invocation of the same symbol 'in' the shared library actually called the
+  version of the function defined 'within' the library.
 
-$ gcc -g -shared -Wl,-Bsymbolic -o libfoo.so foo.o
+  $ gcc -shared -Wl,-Bsymbolic -o libfoo.so foo.o
+
+  This shows the same main's foo version.
 
 note: this means that main version gets called for the above example but would
 solve the case-example since it force to pick up the one in the same library.
@@ -32176,46 +32177,52 @@ global symbols in the main program.
 
 {visibility}
 A well-designed shared library should make visible only those symbols (functions
-    and variables) that form part of its specified application binary interface
-(ABI). The reasons for this are as follows:
+        and variables) that form part of its specified application binary
+interface (ABI). The reasons for this are as follows:
 
-o If the shared library designer accidentally exports unspecified interfaces,
+* If the shared library designer accidentally exports unspecified interfaces,
   then authors of applications that use the library may choose to employ these
   interfaces. This creates a 'compatibility' problem for future upgrades of the
   shared library.
 
-The library developer expects to be able to change or remove any interfaces
-'other' than those in the documented ABI, while the library user expects to
-continue using the same interfaces (with the same semantics) that they currently
-employ.
+  The library developer expects to be able to change or remove any interfaces
+  'other' than those in the documented ABI, while the library user expects to
+  continue using the same interfaces (with the same semantics) that they
+  currently employ.
 
-o During run-time symbol resolution, any symbols that are exported by a shared
-library might interpose definitions that are provided in other shared libraries.
+* During run-time symbol resolution, any symbols that are exported by a shared
+  library might interpose definitions that are provided in other shared
+  libraries.
 
-note: this is a problem as <resolve-real-problem>?
+  note: this is a problem as <resolve-real-problem>?
 
-o Exporting unnecessary symbols increases the size of the dynamic symbol table
-that must be loaded at runtime. note: also means 'faster' loading time?
+* Exporting unnecessary symbols increases the size of the dynamic symbol table
+  that must be loaded at runtime. note: also means 'faster' loading time?
 
-All of these problems can be minimized or avoided altogether if the library designer ensures that
-only the symbols required by the library's specified ABI are exported. 
+All of these problems can be minimized or avoided altogether if the library
+designer ensures that only the symbols required by the library's specified ABI
+are exported. 
 
 The following techniques can be used to control the export of symbols:
 
-In a C program, we can use the static keyword to make a symbol private to a source-code module, thus
-rendering it unavailable for binding by other object files.
+In a C program, we can use the static keyword to make a symbol private to a
+source-code module, thus rendering it unavailable for binding by other object
+files.
 
 note:
-As well as making a symbol private to a source-code module, the static keyword also has a converse
-effect. If a symbol is marked as static, then all references to the symbol in the same source file
-will be bound to that definition of the symbol. Consequently, these references won't be subject to
-run-time interposition by definitions from other shared libraries in the manner described in Section
-41.12. This effect of the static keyword is similar to the -Bsymbolic linker option described in
-Section 41.12, with the difference that the static keyword affects a 'single' symbol within a single
-source file.
+As well as making a symbol private to a source-code module, the static keyword
+also has a converse effect. If a symbol is marked as static, then all references
+to the symbol 'in' the same source file will be bound to that definition of the
+symbol. Consequently, these references won't be subject to run-time
+interposition by definitions from other shared libraries in the manner described
+in Section 41.12. 
 
-@ The GNU C complier, gcc, provides a compiler-specific attribute declaration that performs a
-similar task to the static keyword:
+This effect of the static keyword is similar to the `-Bsymbolic` linker option
+described in Section 41.12, with the difference that the static keyword affects
+a 'single' symbol within a single source file.
+
+@ The GNU C complier, gcc, provides a compiler-specific attribute declaration
+that performs a similar task to the static keyword:
 
 void __attribute__ ((visibility("hidden")))
 func(void) {
@@ -32224,12 +32231,13 @@ func(void) {
 
 note: see *kt_dev_gcc_110* gcc: attributes
 
-Whereas the static keyword limits the visibility of a symbol to a single source code file, the
-hidden attribute makes the symbol available across all source code files that compose the shared
-library, but prevents it from being visible outside the library.
+Whereas the static keyword limits the visibility of a symbol to a single source
+code file, the hidden attribute makes the symbol available across all source
+code files that compose the shared library, but prevents it from being visible
+outside the library.
 
-As with the static keyword, the hidden attribute also has the converse effect of preventing symbol
-interposition at runtime.
+As with the static keyword, the hidden attribute also has the converse effect of
+preventing symbol interposition at runtime.
 
 note: there are more ways in LPI 42.3.
 

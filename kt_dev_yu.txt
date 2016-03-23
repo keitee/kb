@@ -26,7 +26,7 @@
 
 *kt_dev_uv_stack_002* tool-jirafy:
 *kt_dev_uv_stack_002* tool-git-hook:
-|kt_dev_uv_stack_002| tool-zb-deploy
+|kt_dev_uv_stack_002| tool-deploy
 *kt_dev_uv_stack_002* tool-setup-humax
 *kt_dev_uv_stack_002* tool-patch-a-tron
 *kt_dev_uv_stack_002* tool-deploy the prebuilt binary
@@ -134,7 +134,7 @@
 *kt_dev_uv_stack_408* mr-play-recording-log
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr
 *kt_dev_uv_stack_408* mr-dash: use signal in gst mr: fix to gstmediaroutertest
-*kt_dev_uv_stack_408* mr-dash: disable dash on master
+*kt_dev_uv_stack_408* mr-dash-disable
 *kt_dev_uv_stack_408* mr-switch-mrs
 *kt_dev_uv_stack_408* mr-position
 *kt_dev_uv_stack_408* mr-position-change
@@ -199,8 +199,8 @@
 *kt_dev_uv_stack_009* zinc-lsr-platform config
 
 *kt_dev_uv_stack_351* zinc-sandbox: on box
-|kt_dev_uv_stack_351| zinc-sandbox: daemon
-*kt_dev_uv_stack_351* zinc-sandbox: application
+|kt_dev_uv_stack_351| zinc-sandbox-daemon
+*kt_dev_uv_stack_351* zinc-sandbox-app
 *kt_dev_uv_stack_351* zinc-sandbox: source 
 
 |kt_dev_uv_stack_450| stack: cobalt
@@ -1814,13 +1814,13 @@ ZB_DONT_UPDATE_HOOKS
 
 
 ={============================================================================
-*kt_dev_uv_stack_002* tool-zb-deploy
+*kt_dev_uv_stack_002* tool-deploy
 
 <zb-deploy> 
 
 zb-deploy -o humax.1000 -- -r
 zb-deploy -o humax.1000 -m 172.20.2.2 
-zb-deploy -- -X -K  // note: args for setup-humax
+zb-deploy -- -X -K                      // note: args for *tool-setup-humax*
 
 note: 
 
@@ -1957,16 +1957,7 @@ zb-deploy -o huawei.370 -- -r
 ={============================================================================
 *kt_dev_uv_stack_002* tool-setup-humax
 
-
-  -T <tools>    Install the given tool (or tools) on the box. Multiple tools
-                can be passed by passing a comma-separated list:
-                    eg. '-T tool1,tool2'
-                Tar files are also accepted (but not zipped tars).
-                A full list of available tools can be seen at:
-                    http://devnfs/DEVARCH/tools-humax/.
-
 $ setup-humax.sh -T vim74.tar 172.20.33.57
-
 
 <setup-humax-sh>
 note: no zinc-trunk handling. okay to run it as a standalone.
@@ -1988,6 +1979,13 @@ note: this requires RW rfs.
 #/                 this may cause strange and terrible things to happen. You have
 #/                 been warned.
 
+#/   -T <tools>    Install the given tool (or tools) on the box. Multiple tools
+#/                 can be passed by passing a comma-separated list:
+#/                     eg. '-T tool1,tool2'
+#/                 Tar files are also accepted (but not zipped tars).
+#/                 A full list of available tools can be seen at:
+#/                     http://devnfs2/DEVARCH/tools-humax/.
+#/   -D            Disable device authorisation for various features
 
 # firstTimeSetup() {
 # 
@@ -2178,10 +2176,11 @@ setup-humax:main
   + rsync -av /home/kpark/builds-src-dev/_virtual_/humax.2100/zinc-install-root/
     release/humax-dtr_t2100/opt/zinc-trunk/oss/etc/bash_completion.d/dbus-bash-completion.sh 
     zinc@humax-04535::Root/usr/local/share/dbus-send-completion
-  
 
+
+// *disable-auth*
   debug "Running patch-a-tron with /opt/zinc-trunk"
-  $ssh "/usr/local/bin/patch-host-for-yv-zinc.sh /opt/zinc-trunk"
+  $ssh "/usr/local/bin/patch-host-for-yv-zinc.sh $disable_device_authorisation /opt/zinc-trunk"
 
   note: run "patch-a-tron"
 
@@ -2601,6 +2600,7 @@ function fixUpForSandboxing {
 
 }
 
+*disable-auth*
 function disableDeviceAuthoriser() {
   echo "Disabling feature authorisation.  Use -D to preserve it."
 
@@ -2947,7 +2947,12 @@ do_enable_core_dumps() {
     warn_as_needed_that_stagecraft_need_to_be_restarted
 }
 
-echo "|/bin/bash /usr/local/bin/core-dump /var/corefiles/ %p 100000000" > /proc/sys/kernel/core_pattern
+note:
+Need to change sandbox configuration or permission on /var/corefiles? Seems not
+since no need to chagne at all since core dumping run as root.
+
+echo "|/bin/bash /usr/local/bin/core-dump /var/corefiles/ %p 268435456" > /proc/sys/kernel/core_pattern
+echo "/var/corefiles/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
 ./setup-humax/scripts/core-dump
 
@@ -3307,11 +3312,31 @@ A file containing the application identifier prefixed with either "youview:" or
 and to read the application identifier in the client API (mainly for the client
         API access controls).
 
+
+={============================================================================
+*kt_dev_uv_stack_003* stack-launch-user-agent
+
 User-Agent
 A file containing a value for the User-Agent HTTP header (see 1122-S User-Agent
         specification. It is stored individually for each application as it has
         to remain the same since the application particular version of the
         application was launched for the first time.
+
+User-Agent = “User-Agent” “:” ApplicationPart DevicePart CapabilityPart
+ManufacturerPart
+
+By splitting the User-Agent string into separate parts, different HTTP clients
+on the device can be distinguished, while all HTTP clients can be identified as
+being part of a YouView device. All software components must be able to include
+the common YouView elements of the User-Agent template.
+
+Examples:
+
+AdobeAIR/2.5 AdobeFlash/10.1 (Superbox; SB1000; YVretail/1; CDS/3.3; API/1.0;
+    PS/22) (+DVR+FLASH+MHEG)
+
+UK-MHEG/2 FEG001/103 MHGFEG/056 (Cooltek; CTK30; YouView; CDS/3.1; API/1.0;
+    PS/19) (+DVR+FLASH+HTML+MHEG)
 
 
 ={============================================================================
@@ -14421,6 +14446,7 @@ ssh root@humax-XXXX "sed -i 's%appstart -L; umount /opt/ui%appstart -L; umount /
 
 <do-every-time>
 zb-deploy
+*disable-auth*
 zb-deploy -o <box-variant> -- -D
 
 
@@ -17947,7 +17973,7 @@ changes.
 
 
 ={============================================================================
-*kt_dev_uv_stack_408* mr-dash: disable dash on master
+*kt_dev_uv_stack_408* mr-dash-disable
 
 1. Use different auth string and check on a box:
 
@@ -18010,6 +18036,9 @@ Date:   Mon Nov 9 13:50:42 2015 +0000
 +            // MP4 stream with CENC and trigger CencDec element to be instantiated.
 +            dashCencEnable);
 }
+
+See *disable-auth*
+zb-deploy -o <box-variant> -- -D
 
 
 ={============================================================================
@@ -24544,14 +24573,11 @@ ModelVariant      oem.device.model.variant
 
 note: "manufacture software" in settings
 CDS/<version> Current version of the Core Device Software.
-oem.activatedsoftware.coredevicesoftware.version
+oem.activatedsoftware.`coredevicesoftware.version`
 
 note: "component software" in settings
-API/<version> Current supported version of the YouView API.
-oem.activatedsoftware.coredevicesoftware.platformapiversion
-
 PS/<version> Current version of the Platform Software.
-oem.activatedsoftware.platformsoftware.version
+oem.activatedsoftware.`platformsoftware.version`=3.0.29
 
 +DVR Device supports DVR functionality (as defined by D-Book) 
 oem.device.capabilities.dvr.available
@@ -24568,70 +24594,28 @@ oem.device.capabilities.html.available
 +MHEG Device is able to execute MHEG applications
 oem.device.capabilities.mheg.available
 
+note:
+The hdd and flash has different rfs.
+
 <updated-rfs>
 [root@HUMAX /]# getChildItems oem | grep version
-oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
 oem.activatedsoftware.coredevicesoftware.version=23.12.0
-oem.activatedsoftware.manufacturerconfiguration.version=1
 oem.activatedsoftware.platformconfiguration.version=1521
 oem.activatedsoftware.platformsoftware.version=2.11.29
-oem.software.ispconfig.version=0
-oem.software.manufacturerconfig.version=0
-oem.software.platformapi.version=0.11.0
-oem.software.platformconfig.version=1
 
-
-<before-update-nfs>
+<before-update-rfs>
 [root@HUMAX /]# getChildItems.oem | grep version
-oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
 oem.activatedsoftware.coredevicesoftware.version=23.8.0
-oem.activatedsoftware.manufacturerconfiguration.version=1
 oem.activatedsoftware.platformconfiguration.version=1517
 oem.activatedsoftware.platformsoftware.version=2.11.22
 
 
-<after-updated-nfs-but-not-flash>
+<after-updated-rfs-but-not-flash>
 [root@HUMAX /]# getChildItems oem | grep version
-oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
 oem.activatedsoftware.coredevicesoftware.version=23.12.0 ~
-oem.activatedsoftware.manufacturerconfiguration.version=1
 oem.activatedsoftware.platformconfiguration.version=1510 ~
 oem.activatedsoftware.platformsoftware.version=2.11.29 ~
-oem.software.ispconfig.version=0
-oem.software.manufacturerconfig.version=0
-oem.software.platformapi.version=0.11.0
-oem.software.platformconfig.version=1
 
-
-<when-flahsed-cds>
-[root@HUMAX /]# getChildItems oem | grep version
-oem.activatedsoftware.coredevicesoftware.platformapiversion=2.11.2
-oem.activatedsoftware.coredevicesoftware.version=23.12.0
-oem.activatedsoftware.manufacturerconfiguration.version=1
-oem.activatedsoftware.platformconfiguration.version=1521
-oem.activatedsoftware.platformsoftware.version=2.11.29
-oem.software.ispconfig.version=0
-oem.software.manufacturerconfig.version=0
-oem.software.platformapi.version=0.11.0
-oem.software.platformconfig.version=1
-
-note: now see the same values for flash and nfs boot.
-
-
-root# getChildItems oem | grep softwre
-oem.activatedsoftware.coredevicesoftware.platformapiversion=2.9.1
-oem.activatedsoftware.coredevicesoftware.version=70.37.05
-oem.activatedsoftware.coredevitesoftware.version=1.0.0
-oem.activatedsoftware.ispconfiguration.version=10002
-oem.activatedsoftware.manufacturerconfiguration.version=4
-oem.activatedsoftware.platformconfig=
-oem.activatedsoftware.platformconfiguration.version=1304
-oem.activatedsoftware.platformsoftware.version=2.9.6
-oem.software.version=70.37.05
-oem.softwaremanagement.coredevicesoftware.manifest.baseurl=http://su.tv.talktalk.net
-oem.softwaremanagement.coredevicesoftware.updatepolicy=standard
-oem.softwaremanagement.manufacturerconfiguration.baseurl=http://su.tv.talktalk.net
-oem.softwaremanagement.manufacturerconfiguration.updatepolicy=standard
 
 root# setItem platform.settings.enable-ipcrb 1
 
@@ -24679,7 +24663,7 @@ lrwxrwxrwx    1 root     root            33 Jan  1  1970 ./zinc/lib/
 
 
 ={============================================================================
-*kt_dev_uv_stack_351* zinc-sandbox: daemon
+*kt_dev_uv_stack_351* zinc-sandbox-daemon
 
 {sandbox}
 Generally this is about what to import from a real file system in to "sandbox"
@@ -24917,7 +24901,7 @@ CDS to be installed on a read-write partition.
 
 
 ={============================================================================
-*kt_dev_uv_stack_351* zinc-sandbox: application
+*kt_dev_uv_stack_351* zinc-sandbox-app
 
 {sandbox-application}
 /opt/zinc-trunk/lib/sandbox/application-yv.conf
@@ -26461,6 +26445,8 @@ humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T1000/rootfs/ATK/DTR-T1000_CDS.80B07002.bin
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
 
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H26.15.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
+
 note: will wipe out a box including writable nfs.
 
 
@@ -26498,6 +26484,7 @@ chmod +x humax-hdd-install.sh
 note: cannot run this when already booted from HDD.
 
 ./humax-hdd-install.sh -s -r H23.14.0
+./humax-hdd-install.sh -s -r H26.15.0
 
 // do not work for me. why?
 ./humax-hdd-install.sh -l http://devnfs2.dev.youview.co.uk/HUMAX/H23.8.0/T2100/rootfs/
