@@ -1,4 +1,4 @@
-*kt_dev_01*                                                           tw=100, utf-8
+*kt_dev_01*                                                     tw=100, utf-8
 
 /^[#=]{
 Use #{ for a group and ={ for a item
@@ -16003,12 +16003,10 @@ inline void swap( HasPtr& lhs, HasPtr& rhs )
 }
 
 note: 
-Although doesn't matter in this case since there is no type specific swap for
-built-in types because ps is a pointer to string, 'must' use 'unqualified' swap
-but not std::swap to try type specific version first.
+Although doesn't matter in this case if use std::swap or swap since there is no
+type specific swap for built-in types because ps is a pointer to string, 'must'
+use 'unqualified' swap but not std::swap to try type specific version first.
 
-This mans that, std::swap() do the same work since data members are built-in
-types.
 
 note:
 If it was pointerlike, own swap is not necessary. The pointerlike is good for
@@ -16018,28 +16016,27 @@ copy-control and swap.
 2. exception-safety
 
 Like STL containers, provide both memeber and non-member swap. To have the
-member version swap never throw exception (because it use swap on built-in types
-    that never throw exception.) This offers the strong excepiton-safety
-gurantee.
+member version swap never throw exception because it use swap on built-in types
+that never throw exception. This offers the strong excepiton-safety guarantee.
 
 
 {swap-resolution}
 
-How "try type version and std version next" works? Two things:
+How "try type version and std version next if there isn't" works? Two things:
 
 {
   using std::swap;
   swap( T, T );
 }
 
-1. Type specific version is a better match in function matching and std::swap is
-template.
+* Type specific version is a better match in function matching since std::swap
+  is template.
 
-2. Use 'arg-dependent-lookup' in *kt_dev_cpp_007* in swap( HasPtr&, HasPtr& ).
+* Use *arg-dependent-lookup* in swap( HasPtr&, HasPtr& ).
 
 note: 
-Why not "using std::swap" hide swap(T)? Since arg-dependant-lookup adds swap(T)
-in to search which is better match than std::swap.
+Why not "using std::swap" hide swap(T)? Since it simply add name in the
+name-lookup search and the swap(T) is better match than std::swap.
 
 
 {copy-and-swap-idiom}
@@ -16071,40 +16068,46 @@ from the function body to parameter construction.
 
 
 {define-swap-use-specialisation}
-EC++25. pimpl-idiom. See *kt_dev_ecpp_008* for pimpl-idiom.
+EC++25. pimpl-idiom-pattern.
 
-class WidgetImpl {                           // class for Widget data;
-   public:                                   // details are unimportant
+class WidgetImpl {                          // class for Widget data;
+   public:                                  // details are unimportant
       ...
 
    private:
-      std::vector<double> v;                 // possibly lots of data expensive to copy!
+      std::vector<double> v;                // possibly lots of data 
+                                            // expensive to copy!
 };
 
-class Widget {                               // class using the pimpl idiom
+class Widget {                              // class using the pimpl-idiom
    public:
       Widget(const Widget& rhs);
 >
-      Widget& operator=(const Widget& rhs)      // to copy a Widget, copy its
-      {                                         // WidgetImpl object. For
-       ...                                      // details on implementing
-       *pImpl = *(rhs.pImpl);                   // operator= in general,
-       ...                                      // see Items 10, 11, and 12.
+      Widget& operator=(const Widget& rhs)  // to copy a Widget, copy its
+      {                                     // WidgetImpl object. For
+       ...                                  // details on implementing
+       *pImpl = *(rhs.pImpl);               // operator= in general,
+       ...                                  // see Items 10, 11, and 12.
       }
 <
    private:
-      WidgetImpl *pImpl;                        // ptr to object with this
+      WidgetImpl *pImpl;                    // ptr to object with this
 };                                              
 
-Imagine how expensive it may be when there's no swap for Widget and when use std::swap:
+Imagine how expensive it may be when there's no swap for Widget and when use
+`std::swap()`
 
-Widget A, B; swap(A,B);
+Widget A, B; 
+swap(A,B);
 
-All we really need to do is swap their pImpl pointers, but the default swap algorithm has no way to
-know that. Instead, it would copy not only three Widgets, but also three WidgetImpl objects. Very
-inefficient. In other words, cost three copies that use 'operator=' of valuelike class. For some
-types such as pimpl-idiom, none of these copies are really necessary. How to avoid these cost? To
-address this, should provide 'type' 'specific' swap to be used by clients:
+All we really need to do is swap their pImpl pointers, but the default swap
+algorithm has no way to know that. Instead, it would copy not only three
+Widgets, but also three WidgetImpl objects. Very inefficient. Cost three copies
+that use 'operator=' of valuelike class. For some types such as
+pimpl-idiom-pattern none of these copies are really necessary. How to avoid
+these cost? To address this, should provide 'type' 'specific' swap to be used by
+clients:
+
 
 <attempt-one> total-template-specialization
 
@@ -16119,37 +16122,43 @@ namespace std {
   }
 }
 
-This is a way to say that to specialize std::swap for Widget. This is called 'total' template
-specialization. Why? Since it specify T as Widget so it is from generic to speficic one. 
+This is a way to say that to specialize std::swap for Widget. This is called
+`total-template-specialization`. See *template-specialization* 
 
-namespace std {                              // note see in 'std'
+namespace std {                              
 
-  template<>                                 // this is a specialized version of std::swap when T is Widget
-  void swap<Widget>(Widget& a, Widget& b)    // note syntax
+  // note 
+  // 1. in std namespace
+  // 2. this is a specialized version of std::swap when T is Widget.
+  // 3. syntax and own definition.
+
+  template<>                                 
+  void swap<Widget>(Widget& a, Widget& b)    
   {
-    swap(a.pImpl, b.pImpl);                  // to swap Widgets, just swap their pImpl pointers
+    // to swap Widgets, just swap their pImpl pointers
+    swap(a.pImpl, b.pImpl);                  
   }
 }
 
-We are 'not' permitted to 'alter' the contents of the std namespace, but we are allowed to totally
-specialize standard templates (like swap) for types of our own creation (such as Widget).
+We are 'not' permitted to 'alter' the contents of the std namespace, but we are
+allowed to totally specialize standard templates (like swap) for types of our
+own creation (such as Widget).
 
-This function will not compile. That is because it is trying to access the pImpl pointers inside a
-and b, and they are 'private' so other ways might be:
+This function will not compile because it is trying to access the pImpl pointers
+inside a and b, and they are 'private' so other ways might be:
 
-1. could declare our specialization a friend, but the convention is different: so not
-consider. 
+  * Could declare our specialization a friend, but the convention is different:
+    so not consider. 
 
-2. have a public swap member and specialized std::swap calls this member swap. 'okay' since do not
-use friend here.
+  * Have a 'public' swap member and specialized std::swap calls this member swap.
+    It's okay since do not use friend here.
 
 class Widget {                     // same as above, except for the
 public:                            // addition of the swap mem func
   ...
   void swap(Widget& other)
   {
-    using std::swap;               // the need for this declaration is explained later in this Item
-
+    using std::swap;               // the need for this declaration
     swap(pImpl, other.pImpl);      // to swap Widgets, swap their pImpl pointers
   }
   ...
@@ -16157,16 +16166,18 @@ public:                            // addition of the swap mem func
 
 namespace std {
 
-  template<>                       // revised specialization of std::swap
+  template<>
   void swap<Widget>(Widget& a, Widget& b)
   {
-    a.swap(b);                     // to swap Widgets, call their swap member function
+    a.swap(b);                     // to swap Widgets, call member function
   }
 }
 
+
 <attempt-two> use-template-specialization for class template
-However, suppose that Widget and WidgetImpl were class templates instead of classes. Needs more
-generic solution but cannot use the same as before since the specialization would look like:
+However, suppose that Widget and WidgetImpl were class templates instead of
+classes. Needs more generic solution but cannot use the same as before since the
+specialization would look like:
 
 namespace std {
 
@@ -16177,16 +16188,19 @@ namespace std {
   }                                // swap member function
 }
 
-This is 'illegal' code since C++ do not allow 'partial' specialization for function template. If this is
-possible, then it means that can add a template into std namespace.
+This is 'illegal' code since C++ do not allow 'partial' specialization for
+function template. If this is possible, then it means that can add a template
+into std namespace.
 
-The overloading function-template is fine, but std is a special namespace, and the rules governing
-it are special, too. It's okay to totally specialize templates in std, but it's not okay to add new
-templates (or classes or functions or anything else) to std. Undefined behavior.
+The overloading function-template is fine, but std is a special namespace, and
+the rules governing it are special, too. It's okay to totally specialize
+templates in std, but it's not okay to add new templates (or classes or
+    functions or anything else) to std. Undefined behavior.
+
 
 <attempt-three> solution
-This works as well for classes as for class templates. Just don't declare the non-member to be a
-specialization or overloading of std::swap.
+This works as well for classes as for class templates. Just don't declare the
+non-member to be a specialization or overloading of std::swap.
 
 namespace WidgetStuff {
   ...                                     // templatized WidgetImpl, etc.
@@ -16205,16 +16219,19 @@ namespace WidgetStuff {
 
 This use swap(Widget<T>&, Widget<T>&) through {arg-dependent-lookup}
 
+
 <why-using-std-swap>
-What you desire is to call a type-specific version if there is one, but to fall back on the general
-version in std if there's not. Here's how you fulfill your desire:
+What you desire is to call a type-specific version if there is one, but to fall
+back on the general version in std if there's not. Here's how you fulfill your
+desire:
 
 template<typename T>
 void doSomething(T& obj1, T& obj2)
 {
   using std::swap;           // make std::swap available in this function
   ...
-  swap(obj1, obj2);          // try the best swap for objects of type T via ADT(arg-dependent-lookup)
+  // try the best swap for objects of type T via ADT *arg-dependent-lookup* 
+  swap(obj1, obj2);          
   ...
 }
 
@@ -25698,7 +25715,7 @@ template <size_t N, size_t M> int compare(const char (&) [N], const (&) [M])
     return strcmp(p1, p2);
 }
 
-If call compare() with character pointers, the first version will be called
+If calls compare() with character pointers, the first version will be called
 because nontype version will be called only when pass a string literal or an
 array but want to compare pointers by strcmp() rather than by comparing the
 pointer values.
@@ -25714,9 +25731,10 @@ A 'separate' definition of the template, specific instantiation in which one or
 more template parameters are specified to have particular types.
 
 note:
-Then can use template-explicit-argument here because it specifies the types? No
-becuase explict-argument specifies the type with the same defintion(code) but
-specialization has different definition.
+Then can use `template-explicit-argument` here because it specifies the types?
+No becuase explict-argument specifies the type with the same defintion(code) but
+specialization has different 'definition'. Hence sometimes called
+`total-template-specitialzation`?
 
 
 <for-function-template>
