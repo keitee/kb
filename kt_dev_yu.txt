@@ -125,6 +125,7 @@
 *kt_dev_uv_stack_408* mr-create-and-plugin
 *kt_dev_uv_stack_408* mr-create-gst-mr
 *kt_dev_uv_stack_408* mr-create-gst-revised to support bin injection
+*kt_dev_uv_stack_408* mr-create-backend
 *kt_dev_uv_stack_408* mr-create-dtor-issue
 *kt_dev_uv_stack_408* mr-create-calls
 *kt_dev_uv_stack_408* mr-create-load-play
@@ -15017,7 +15018,7 @@ void ProxySystemFactory::loadImplementations()
 
   // /opt/zinc-trunk/share/platform_data/mediarouter-plugin-config
   //
-  // <gst-system-factory>
+  // *gst-system-factory*
   // http-application%2Fdash%2Bxml.plugin-config:
   //  libNickelSystemGstreamer.so createGstSystemFactory
   // https-application%2Fdash%2Bxml.plugin-config:
@@ -15032,10 +15033,10 @@ void ProxySystemFactory::loadImplementations()
   //   {"http", { "application/dash+xml", factory-function}} in vector
   //   {"https", { "application/dash+xml", factory-function}} in vector
 
-  *mr-create-media-router-factory*
   SystemFactory& factory(
       PluginFactory::getInstance<SystemFactory>(pluginConfig));
 
+  *mr-create-media-router-factory*
   protMapIter->second.push_back(
       std::make_pair(mimeType, factory.createMediaRouterFactory()));
 
@@ -15279,6 +15280,8 @@ Nickel.System.Proxy/data/http-application%2Fdash%2Bxml.plugin-config
 
 // Nickel/Nickel.System.GStreamer/src/GstSystemFactory.cpp
 
+*gst-system-factory* used in the proxy map.
+
 NS_ZINC::Plugin* createGstSystemFactory()
 {
   try
@@ -15295,12 +15298,17 @@ class GstSystemFactory : virtual public SystemFactory
     GstSystemFactory::GstSystemFactory(boost::shared_ptr<NS_ZINC::Dispatcher> d)
         : dispatcher(d)
     {
+        // note:
+        // DO nexus platform init 'once' here in DEVARCH-11290. Why does the
+        // previous work? Since BcmNexus_Platform_Init() have a flag to set if
+        // it's initialized so no effect if it's called many times. 
+
         *mr-gst-init* /* init GStreamer */
         gst_init(NULL, NULL);
     }
 
     *mr-create-media-router-factory* 
-    // called from void nickel::system::SetSourceContinuation::start()
+    // called from building a map in the proxy
     boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory()
     {
         boost::shared_ptr<GstMediaRouterInit> initParams =
@@ -15310,12 +15318,12 @@ class GstSystemFactory : virtual public SystemFactory
         initParams->dispatcher = dispatcher;
 
         // *create-virtual-bins*
+        // this is a new way to get bin factories in "initParams"
         createVirtualBins(initParams,auth);
 
         initParams->pipelineFactory = boost::bind(gst_pipeline_new, "pipeline");
 
-        // pass down BINs via init params
-
+        // pass down bin factories via init params
         mrf = createGstMediaRouterFactory(initParams);
         mediaRouterFactory = mrf;
         return mrf;
@@ -15642,7 +15650,7 @@ class VirtualBinTypefind : public VirtualBin
       throw std::runtime_error("Couldn't create element!");
     }
 
-    // *bin-add*
+    // *bin-add* which starts the pipeline building
     if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get())) {
       uridecodebin.retain();
 
@@ -15851,34 +15859,34 @@ private:
 
 3. Use setPlugCallback(CallbackType callback) to set callback.
 
-<before>
-
-class GstSystemFactory : virtual public SystemFactory
-{
-  boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory()
-  {
-    mrf = createGstMediaRouterFactory(dispatcher);
-  }
-}
-
-GstMediaRouterFactory::GstMediaRouterFactory(
-    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher) : dispatcher(dispatcher)
-{
-  /* init GStreamer */
-  gst_init(NULL, NULL);
-
-  loop = g_main_loop_new(NULL, FALSE);
-  boost::thread(g_main_loop_run, loop).swap(glibMainThread);
-
-  start();
-}
-
-Leads to: 
-  GstMediaRouterFactory::createMediaRouter();
-    boost::shared_ptr<MediaRouterAsync> createGstMediaRouter();
-      GstMediaRouter();
-        creates BINs
-
+// <before>
+// 
+// class GstSystemFactory : virtual public SystemFactory
+// {
+//   boost::shared_ptr<MediaRouterFactory> createMediaRouterFactory()
+//   {
+//     mrf = createGstMediaRouterFactory(dispatcher);
+//   }
+// }
+// 
+// GstMediaRouterFactory::GstMediaRouterFactory(
+//     boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher) : dispatcher(dispatcher)
+// {
+//   /* init GStreamer */
+//   gst_init(NULL, NULL);
+// 
+//   loop = g_main_loop_new(NULL, FALSE);
+//   boost::thread(g_main_loop_run, loop).swap(glibMainThread);
+// 
+//   start();
+// }
+// 
+// Leads to: 
+//   GstMediaRouterFactory::createMediaRouter();
+//     boost::shared_ptr<MediaRouterAsync> createGstMediaRouter();
+//       GstMediaRouter();
+//         creates BINs
+// 
 
 <after>
 
@@ -15902,21 +15910,18 @@ GstSystemFactory::createMediaRouterFactory()
     initParams->dispatcher = dispatcher;
     createUserAgent(initParams);
 
-    // *create-virtual-bins*
+    // *create-virtual-bins* *mr-use-bin-factory*
     createVirtualBins(initParams,auth);
 
     initParams->pipelineFactory = boost::bind(gst_pipeline_new, "pipeline");
 
-    // pass down BINs via init params
+    // pass down bin factories via init params
 
     mrf = createGstMediaRouterFactory(initParams);
     mediaRouterFactory = mrf;
     return mrf;
   }
 }
-
-
-// creates BINs via each factory and set these in "initParams"
 
 void GstSystemFactory::createVirtualBins(
     boost::shared_ptr<GstMediaRouterInit> initParams,
@@ -15984,7 +15989,9 @@ void GstMediaRouter::init()
 {
     // do not create BINs but set these up
 
-    // calls other creates 
+    // calls other creates *mr-use-bin-factory*
+    typefindBin = typefindBinFactory->create();
+    srcBin = srcBinFactory->create();
     sinkBin = sinkBinFactory->create();
 
     RefObj<GstElement> elem = pipelineFactory();
@@ -16018,6 +16025,231 @@ DEVARCH-10602:
     
     This opens a range of possibilities for testing, security upgrade with a
     process split architecture, etc.
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-create-backend
+
+* Changes "nickelmediad" to "nickelmediasourced". no source changes to this.
+* GstMR becomes a process which is a so file before.
+
+Nickel/Nickel.System.GStreamer$ ag OBJECT_PATH_FACTORY
+src/bus-name.h
+18:char const* const OBJECT_PATH_FACTORY = "/Zinc/MediaBackend/Factory";
+
+
+// mediabackendd.cpp
+// register a factory to dbus?
+
+void MediaBackendDaemon::start()
+{
+    boost::shared_ptr<Zinc::Media::Backend::Factory> factory =
+        createIPCSrcBinFactory(
+                boost::shared_ptr<NS_ZINC::Dispatcher>(&futureDispatcher),
+                createSinkBinFactory(
+                    boost::shared_ptr<NS_ZINC::Dispatcher>(&futureDispatcher),
+                    dashCencEnable));
+}
+
+*ipc-source*
+
+// VirtualBinIPCSrc.cpp
+// create a `VirtualBinIPCSrc` which has `interslavepipeline` gst element and
+// `VirtualBinSink` from a bin sink factory
+//
+// class VirtualBinSinkFactory : public VirtualBinFactory
+// {
+//     boost::shared_ptr<VirtualBin> create()
+//     {
+//         const boost::shared_ptr<VirtualBin> bin =
+//             boost::make_shared<VirtualBinSink>(gst_bin_new("sink"), enableCenc);
+//         bin->setDispatcher(getDispatcher());
+//         return bin;
+//     }
+// };
+
+
+class VirtualBinIPCSrcFactory : public Zinc::Media::Backend::Factory
+{
+public:
+    VirtualBinIPCSrcFactory(
+        boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
+        boost::shared_ptr<VirtualBinFactory> binImplFactory)
+        : binImplFactory(binImplFactory),
+        dispatcher(dispatcher)
+    {
+    }
+
+    NS_ZINC::Future<boost::shared_ptr<Zinc::Media::Backend::SinkInstance> > create()
+    {
+        const boost::shared_ptr<Zinc::Media::Backend::SinkInstance> bin =
+            boost::make_shared<VirtualBinIPCSrc>(dispatcher,
+                    gst_element_factory_make("interslavepipeline", "IPCSrcBin"),
+                    binImplFactory->create());
+
+        return NS_ZINC::completedFuture(*dispatcher, bin);
+    }
+};
+
+boost::shared_ptr<Zinc::Media::Backend::Factory> createIPCSrcBinFactory(
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
+    boost::shared_ptr<VirtualBinFactory> binImplFactory)
+{
+    return boost::make_shared<VirtualBinIPCSrcFactory>(dispatcher, binImplFactory);
+}
+
+
+// VirtualBinSink.cpp
+//
+
+boost::shared_ptr<VirtualBinFactory> createSinkBinFactory(
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
+    bool enableCenc)
+{
+    return boost::make_shared<VirtualBinSinkFactory>(
+        dispatcher, enableCenc);
+}
+
+
+*ipc-sink* nickelmediad
+
+note:
+Different from FR15 which add uridecodebin from TF. Here do the same in
+VirtualBinSrc.
+
+void VirtualBinSrc::setSource(const std::string& sourceUri)
+{
+    if (!uridecodebin) {
+        uridecodebin = gst_element_factory_make("uridecodebin", "uri-decoder");
+
+        if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get())) {
+            uridecodebin.retain();
+        } else {
+            NICKEL_ERROR("gst_bin_add failed!");
+        }
+
+        const RefObj<GstCaps> caps = gst_caps_from_string(
+                "application/dash+xml; "
+                "application/x-hls; "
+                "video/quicktime");
+
+        g_object_set(uridecodebin.get(), "caps", caps.get(), NULL);
+
+        if (0 == g_signal_connect(uridecodebin.get(), "pad-added",
+                                  G_CALLBACK(newUridecodebinPadCb),
+                                  static_cast<gpointer>(this))) {
+            NICKEL_ERROR("g_signal_connect failed!");
+        }
+    }
+
+    g_object_set(G_OBJECT(uridecodebin.get()),
+                 "uri", sourceUri.c_str(),
+                 NULL);
+}
+
+
+void GstSystemFactory::createVirtualBins(boost::shared_ptr<GstMediaRouterInit> initParams,
+    const boost::shared_ptr<NS_TITANIUM_DEVICEAUTHORITY::Authoriser> auth)
+{
+
+    const bool dashCencEnable = convertToSync(auth)->isFeatureEnabled("yv-mediarouter-dash");
+
+    initParams->srcBinFactory =
+        createSrcBinFactory(
+            initParams->dispatcher,
+            dashCencEnable);
+
+    initParams->sinkBinFactory =
+        createIPCSinkBinFactory(initParams->dispatcher, 
+                // note: *ipc-peer-factory* 
+                createFactoryDBusClient(initParams->dispatcher));
+}
+
+
+void GstMediaRouter::init()
+{
+    // created a VSRC
+    srcBin = srcBinFactory->create();
+
+    // class VirtualBinIPCSinkFactory : public VirtualBinFactory
+    // {
+    // public:
+    //     boost::shared_ptr<VirtualBin> create()
+    //     {
+    //         // note:
+    //         // ipcPeerFactory->create() returns "ipc-peer-bin" and all calls
+    //         // to VBIPCSINK are forwarded to that peer bin.
+    //
+    //         const boost::shared_ptr<VirtualBin> bin =
+    //             boost::make_shared<VirtualBinIPCSink>(
+    //                 gst_bin_new("IPCSinkBin"), convertToSync(ipcPeerFactory->create()));
+    //
+    //         bin->setDispatcher(getDispatcher());
+    // 
+    //         return bin;
+    //     }
+    // 
+    //     boost::shared_ptr<Zinc::Media::Backend::FactorySync> ipcPeerFactory;
+    // };
+
+    sinkBin = sinkBinFactory->create();
+
+    srcBin->setPlugCallback(
+        boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+
+    RefObj<GstElement> elem = pipelineFactory();
+}
+
+note:
+Creates `intersink` gst elements.
+
+RefObj<GstElement> VirtualBinIPCSink::makeIPCSink()
+{
+    NICKEL_FUNC_TRACE;
+
+    const RefObj<GstElement> elem =
+        gst_element_factory_make("intersink", NULL);
+
+    try {
+
+        if (!elem) {
+            throw std::runtime_error("Couldn't create element intersink");
+        }
+
+        int fds[2] = { -1, -1};
+
+        const int socketDomain = AF_UNIX;
+        const int socketType = SOCK_STREAM | SOCK_NONBLOCK;
+
+        if (0 != socketpair(socketDomain, socketType, 0, fds)) {
+            throw std::runtime_error("Couldn't create socket pair for intersink/intersrc");
+        }
+
+        g_object_set(elem.get(),
+                    "fdin", fds[0], "fdout", fds[0], NULL);
+
+        g_object_set(elem.get(), "async", FALSE, NULL);
+
+        // fds[1] will be closed implicitly by UnixFD
+        ipcPeerBin->connect(::DBus::UnixFD(fds[1]));
+
+        // we need to store and eventually close the FD because intersink will not close it
+        socketFDs.push_back(fds[0]);
+
+    } catch (const std::exception& e) {
+        NICKEL_ERROR("Failed: " << e.what());
+    }
+    return elem;
+}
+
+VirtualBinIPCSink::VirtualBinIPCSink(
+    RefObj<GstElement> container,
+    boost::shared_ptr<Zinc::Media::Backend::SinkInstanceSync> ipcPeerBin)
+    : VirtualBin(container),
+    ipcPeerBin(ipcPeerBin)
+{
+    elementFactory["ANY"] = boost::bind(&VirtualBinIPCSink::makeIPCSink, this);
+}
 
 
 ={============================================================================
@@ -26557,7 +26789,7 @@ again.
 
 1. Back to boot from flash and see if it works fine.
 
-Boot to the CFE prompt by holding down the down arrow on your keyboard over
+Boot to the CFE prompt by holding 'down' the down arrow on your keyboard over
 serial. At the CFE> prompt type the following commands:
 
 unsetenv KERNEL_OPT
