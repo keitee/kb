@@ -5038,14 +5038,14 @@ Element Signals:
 
 gst-init can use a gst-registry cache that can store information about existing
 plugins. This greatly improves performance, as the discovery of plugins can be
-only done when gst-init() is ran for the first time.  We configure this cache
+only done when gst-init() is ran for the first time. We configure this cache
 using runBrowser.sh script, and if it does not exist, with the use of
 gst-inspect tool we force it to be populted.
 
 Unfortunately, gstreamer performs a limited validation of this cache, checking
-only for it's version. This leads to potential problems, when plugins are
+'only' for it's version. This leads to potential problems, when plugins are
 changed / renamed. Such a problem was discovered by CANTST-16517 Error 02100
-when playing iPlayer programmes.  Between two affected releases name of one of
+when playing iPlayer programmes. Between two affected releases name of one of
 the gst-plugins has changed (DEVARCH-9248), namely: libgstfragmented became
 ibgsthlsdemux.
 
@@ -5072,13 +5072,103 @@ if [ ! -s "${gst_registry_file}" ]; then
 fi
 
 
+https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstRegistry.html
+
+Description
+
+One registry holds the 'metadata' of a set of plugins.
+
+Design:
+
+The GstRegistry object is a list of plugins and some functions for dealing with
+them. Each GstPlugin is matched 1-1 with a file on disk, and may or may not be
+loaded at a given time.
+
+The primary source, at all times, of plugin information is each plugin file
+itself. Thus, if an application wants 'information' about a particular plugin,
+  or wants to search for a 'feature' that satisfies given criteria, the primary
+    means of doing so is to load every plugin and look at the resulting
+    information that is gathered in the `default-registry`. Clearly, this is a
+    time consuming process, so we 'cache' information in the 'registry' file.
+    The format and location of the cache file is internal to gstreamer.
+
+On startup, plugins are searched for in the plugin search path. The following
+locations are checked in this order:
+
+    location from --gst-plugin-path commandline option.
+
+    the GST_PLUGIN_PATH environment variable.
+
+    the GST_PLUGIN_SYSTEM_PATH environment variable.
+
+    default locations (if GST_PLUGIN_SYSTEM_PATH is not set). Those default
+    locations are: $XDG_DATA_HOME/gstreamer-$GST_API_VERSION/plugins/ and
+    $prefix/libs/gstreamer-$GST_API_VERSION/. $XDG_DATA_HOME defaults to
+    $HOME/.local/share.
+
+The registry cache file is loaded from
+$XDG_CACHE_HOME/gstreamer-$GST_API_VERSION/registry-$ARCH.bin (where
+    $XDG_CACHE_HOME defaults to $HOME/.cache) or the file listed in the
+`GST_REGISTRY` env var. One reason to change the registry location is for
+testing.
+
+For each plugin that is found in the plugin search path, there could be 3
+possibilities for cached information:
+
+    the cache may not contain information about a given file.
+
+    the cache may have stale information.
+
+    the cache may have current information.
+
+In the first two cases, the plugin is loaded and the cache updated. In addition
+to these cases, the cache may have entries for plugins that are not relevant to
+the current process. These are marked as not available to the current process.
+If the cache is updated for whatever reason, it is marked dirty.
+
+A dirty cache is written out at the end of initialization. Each entry is checked
+to make sure the information is minimally valid. If not, the entry is simply
+dropped.
+
+Implementation notes:
+
+The "cache" and "registry" are different concepts and can represent different
+sets of plugins. For various reasons, at init time, the cache is stored in the
+`default-registry`, and plugins not relevant to the current process are marked
+with the GST_PLUGIN_FLAG_CACHED bit. These plugins are removed at the end of
+initialization.
+
+<source>
+gstreamer/gst/gstregistry.c
+
+ensure_current_registry (GError ** error)
+{
+  gchar *registry_file;
+  GstRegistry *default_registry;
+  gboolean ret = TRUE;
+  gboolean do_update = TRUE;
+  gboolean have_cache = TRUE;
+
+  default_registry = gst_registry_get ();
+
+  registry_file = g_strdup (g_getenv ("GST_REGISTRY_1_0"));
+  if (registry_file == NULL)
+    registry_file = g_strdup (g_getenv ("GST_REGISTRY"));
+  if (registry_file == NULL) {
+    registry_file = g_build_filename (g_get_user_cache_dir (),
+        "gstreamer-" GST_API_VERSION, "registry." TARGET_CPU ".bin", NULL);
+  }
+
+  scan_and_update_registry (default_registry, registry_file, TRUE, error);
+}
+
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gst-running.html
 
 GST_REGISTRY, GST_REGISTRY_1_0.  
 
 Set this environment variable to make GStreamer use a different file for the
 plugin cache / registry than the default one. This is useful when operating in a
-separate environment which should not affect the default cache in the user's
+separate environment which should not affect the `default-cache` in the user's
 home directory. 
 
 
