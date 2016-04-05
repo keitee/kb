@@ -124,11 +124,11 @@
 *kt_dev_uv_stack_408* mr-dash: todo list
 *kt_dev_uv_stack_408* mr-create-and-plugin
 *kt_dev_uv_stack_408* mr-create-gst-mr
+*kt_dev_uv_stack_408* mr-create-load-play
 *kt_dev_uv_stack_408* mr-create-gst-revised to support bin injection
 *kt_dev_uv_stack_408* mr-create-backend
 *kt_dev_uv_stack_408* mr-create-dtor-issue
 *kt_dev_uv_stack_408* mr-create-calls
-*kt_dev_uv_stack_408* mr-create-load-play
 *kt_dev_uv_stack_408* mr-create-async
 *kt_dev_uv_stack_408* mr-create-async-dtor
 *kt_dev_uv_stack_408* mr-play-dbus-log
@@ -187,6 +187,7 @@
 *kt_dev_uv_stack_413* mr-play-ts-via-hls
 
 *kt_dev_uv_stack_413* mr-debug-gst
+*kt_dev_uv_stack_413* mr-debug-gst-registry
 *kt_dev_uv_stack_413* mr-debug-gst-nickel
 *kt_dev_uv_stack_413* mr-debug-gdb-run
 
@@ -196,7 +197,7 @@
 |kt_dev_uv_stack_415| zinc-mr: boot failure when use wrong plugin name
 
 *kt_dev_uv_stack_301* zinc-lsr: copper: client factory
-*kt_dev_uv_stack_302* zinc-lsr: lsr-config
+*kt_dev_uv_stack_302* zinc-lsr-config
 *kt_dev_uv_stack_009* zinc-lsr-keys
 *kt_dev_uv_stack_009* zinc-lsr-hwei: to revert back the previous version
 *kt_dev_uv_stack_009* zinc-lsr-platform config
@@ -2907,6 +2908,17 @@ mipsgdb-7.9.tar
 
 setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.34 
 
+<two-versions>
+// when use the default
+[root@HUMAX var]# which gdb
+/bin/gdb
+[root@HUMAX var]# gdb
+GNU gdb (GDB) 7.3.1
+
+// when use the installed
+[root@HUMAX var]# /usr/local/bin/gdb
+GNU gdb (GDB) 7.9
+
 
 ={============================================================================
 *kt_dev_uv_stack_002* tool-core
@@ -2988,7 +3000,8 @@ echo "/var/corefiles/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 ##
 
 note:
-gdb_path=/opt/zinc/oss/debugtools/bin/gdb
+#gdb_path=/opt/zinc/oss/debugtools/bin/gdb
+gdb_path=/usr/local/bin/gdb
 
 ...
 
@@ -3341,6 +3354,8 @@ AdobeAIR/2.5 AdobeFlash/10.1 (Superbox; SB1000; YVretail/1; CDS/3.3; API/1.0;
 UK-MHEG/2 FEG001/103 MHGFEG/056 (Cooltek; CTK30; YouView; CDS/3.1; API/1.0;
     PS/19) (+DVR+FLASH+HTML+MHEG)
 
+2016-04-05 15:43:32,025 TRACE  2001339504 nickel r/src/GstSystemFactory.cpp:161 user agent string for YV MR: YouView (Humax; DTRT2100; 84B08502; CDS/26.15.0; API/3.0.2; PS/3.0.29) (+DVR+FLASH+HTML+MHEG+IPCMC)
+
 
 ={============================================================================
 *kt_dev_uv_stack_005* stack: brcm debug level
@@ -3413,9 +3428,13 @@ The latest driver do not work.
 
 
 <hmax-2100>
-cp libyouviewrcu.so /opt/zinc/lib
-cp libyouviewrcushim.so /usr/local/lib/directfb-1.4-17-pure/inputdrivers/
-cp libyouviewrcushim.so /opt/zinc-trunk/oss/lib/directfb-1.4-17-pure/inputdrivers/
+scp libyouviewrcu.so root@humax-03126:/opt/zinc/lib
+scp libyouviewrcushim.so root@humax-03126:/usr/local/lib/directfb-1.4-17-pure/inputdrivers/
+scp libyouviewrcushim.so root@humax-03126:/opt/zinc-trunk/oss/lib/directfb-1.4-17-pure/inputdrivers/
+
+scp libyouviewrcu.so root@humax-04535:/opt/zinc/lib
+scp libyouviewrcushim.so root@humax-04535:/usr/local/lib/directfb-1.4-17-pure/inputdrivers/
+scp libyouviewrcushim.so root@humax-04535:/opt/zinc-trunk/oss/lib/directfb-1.4-17-pure/inputdrivers/
 
 Tamas Koloti
 
@@ -15534,6 +15553,9 @@ class GstMediaRouter : public MediaRouterAsync
 //  sinkPF   srcPF     sinkPF   scrPF     sinkPF   srcPF
 //  default  tyepePF   _srcpad  _sinkpad  _sinkpad default
 
+// *uridecodebin* -> *decodebin(video)* -> *qtdemux* -> *h264parse* -> *nexussink*
+//                 *decodebin(audio)* -> *fakesink*
+
 void GstMediaRouter::init()
 {
   // VirtualBinTypefind(boost::shared_ptr<VirtualPadFactory> sinkPadFactory,
@@ -15650,7 +15672,7 @@ class VirtualBinTypefind : public VirtualBin
       throw std::runtime_error("Couldn't create element!");
     }
 
-    // *bin-add* which starts the pipeline building
+    // *bin-add-start* which starts the pipeline building
     if (gst_bin_add(GST_BIN(getParent().get()), uridecodebin.get())) {
       uridecodebin.retain();
 
@@ -15663,7 +15685,7 @@ class VirtualBinTypefind : public VirtualBin
 
       // *pad-added* which register CB
       if (0 == g_signal_connect(uridecodebin.get(), "pad-added",
-            G_CALLBACK(newPadCb),
+            G_CALLBACK(`newPadCb`),
             static_cast<gpointer>(this))) {
       }
     }
@@ -15680,8 +15702,12 @@ typedef std::map<std::string,
 FactoryContainer elementFactory;
 
 elementFactory["application/dash+xml"] =
-  boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
-    "video/quicktime; audio/x-m4a; text/x-raw");
+    boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
+        "video/quicktime; audio/x-m4a; text/x-raw");
+
+elementFactory["application/x-hls"] = // note: used as a key on the first element
+    boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
+    "video/mpegts");                  // note: used to set cap on the second element
 
 RefObj<GstElement> VirtualBinSrc::makeAndSetupDecodebin(
         const char* const outputCaps)
@@ -15696,10 +15722,13 @@ gst_bin_add(GST_BIN(container.get()), upstream.get());
 
 
 note:
-This create 'decodebin', set property to support hls and dash, and connect
+1. This create 'decodebin', set property to support hls and dash, and connect
 signal. However, 'not' add it to the bin 'yet' since when `start()` is called,
     `newPadCb` will be called and this will starts 'callback-chain' from TF to
-    build Virtual elements.
+    build Virtual elements through autoplug().
+
+2. Since all virtual bins are created, `elementFactory` map is fully made with
+mine type and function which used by autoplug().
 
 
 class VirtualBinSrc : public VirtualBin
@@ -15715,7 +15744,7 @@ class VirtualBinSrc : public VirtualBin
         "caps", gst_caps_from_string(outputCaps),
         NULL);
 
-    // *pad-added* : newDecodebinPadCb
+    // *pad-added* `newDecodebinPadCb`
 
     g_signal_connect(decodebin.get(), "pad-added",
         G_CALLBACK(newDecodebinPadCb),
@@ -15847,6 +15876,675 @@ public:
 private:
     boost::shared_ptr<VirtualPadFactory> factory;
 };
+
+
+={============================================================================
+*kt_dev_uv_stack_408* mr-create-load-play
+
+<mr-load>
+void VanadiumMediaPlayer::load(const std::string& url)
+{
+    try
+    {
+        if(!currentSource.empty())
+        {
+            playerManager.clearDrmError(currentSource);
+        }
+        currentSource = url;
+
+        mediaRouter->addListener(dispatcher, listener);
+        mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
+        mediaRouter->setSink("decoder://0").get();
+
+        // WebKit expects the media player to start in the paused state
+        pauseState = PAUSED;
+
+        if(preloadPolicy != QMediaPlayerInterface::NONE)
+        {
+            // Call startBuffering before getSourceInformation so we don't waste
+            // any time before starting to acquire media, but defer notifying
+            // the state change until we know the media router mode
+            mediaRouter->startBuffering();
+            currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+            callbacks.networkStateChanged();
+        }
+    }
+    catch(const InvalidLocatorException& ex)
+    {
+        currentNetworkState = QMediaPlayerInterface::FORMAT_ERROR;
+        callbacks.networkStateChanged();
+    }
+}
+
+
+dbus-send --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR
+Zinc.Media.MediaRouter.setSource 
+string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
+
+
+// Nickel/Nickel.System.Proxy/src/ProxyMediaRouter.cpp
+// See spec A.1.1
+
+NS_ZINC::Future< void > 
+ProxyMediaRouter::setSource(const std::string& mediaLocator_in, 
+  const SetSourceReason::Enum reason_in) 
+{
+  scoped_lock lock(mutex);
+
+  if (sourcing) {
+    return deferCall(
+        boost::bind(&MediaRouter::setSource, _1, mediaLocator_in, reason_in));
+  }
+
+  sourcing = true;
+
+  // note: <0>
+  // create() returns Future<T> ?
+  //
+  // boost::shared_ptr<MediaRouter> impl; is not inited and is passed down to
+  // SetSourceCont.
+  //
+  return SetSourceContinuation::create(
+      *dispatcher, 
+      shared_from_this(), mediaLocator_in, reason_in);
+}
+
+
+class ZINC_LOCAL SetSourceContinuation 
+  : public NS_ZINC::Continuation<void, SetSourceContinuation> 
+{
+  friend class NS_ZINC::Continuation<void, SetSourceContinuation>;
+
+  public:
+
+  private:
+
+  // note: *continuation-start*
+  // Why start()? This is from "Contiunation" since create() 'creates' an object
+  // then calls start().
+
+  void start(boost::shared_ptr<ProxyMediaRouter> proxy_, 
+      const std::string& source_, const SetSourceReason::Enum reason_) 
+  {
+    // I take copies of the proxy state, in case it is modified before the
+    // continuation completes.
+    //
+    // This start() method will be called by the same thread that calls
+    // ProxyMediaRouter::setSource(), so I assume it is OK to access proxy state
+    // from here (as lock will already be held).
+
+    // note: property comes from ProxyMediaRouter
+
+    *gst-mr-create*
+    impl = proxy_->impl;
+
+    source = source_;
+    properties = proxy->properties;
+
+    // note: see uses of ProxyMediaRouter directly
+
+    else 
+    {
+      // note: this is where map used and get the corresponding factory.
+      //
+      factory = proxy->findFactoryGivenSource(source);
+
+      // This covers the cases where we have no implementation MediaRouter, or
+      // a recycled one that is not compatible with the source media.
+      // In both cases, we create a new one of the appropriate type.
+
+      // note: <1> async call
+      if (factory != proxy->lastFactory) {
+        continueOnSuccess(
+
+            *gst-mr-create*
+            factory->createMediaRouter(), 
+            &SetSourceContinuation::onMediaRouterCreated);
+
+        return;
+      }
+    }
+
+    // We only reach here if we have a recycled MediaRouter implementation
+    // already, or we have an existing dvb MediaRouter and we are setting
+    // another dvb source.
+    //
+    // In these cases, we do not have to create a new MediaRouter
+    // implementation, so we move straight on to setting the properties.
+
+    setProperties(); 
+  }
+
+  void onMediaRouterCreated(boost::shared_ptr<MediaRouter> impl_) 
+  {
+    // *gst-mr-create* 
+    // GstMR is crated and pass it back to Proxy in the end.
+    //
+    // This sp passed to the proxy:
+    //
+    // void SetSourceContinuation::complete() {
+    //  promise.complete();
+    //  proxy->setSourceComplete(source, impl, factory);
+    // }
+    //
+    // void ProxyMediaRouter::setSourceComplete(
+    //  const std::string& newSource, 
+    //  boost::shared_ptr<MediaRouter> newImpl, 
+    //  boost::shared_ptr<MediaRouterFactory> newFactory) {
+    //
+    //  lastSource = newSource;
+    //
+    //  // note: this is where GST MR DTOR is called?
+	 //  impl = newImpl;
+    //
+    // }
+    //
+    // nickel::system::ProxyMediaRouterFactory::createMediaRouter()
+    // ProxyMediaRouter::ProxyMediaRouter()
+    // ProxyMediaRouter::setSource()
+    // SetSourceContinuation::start()
+    // GstMediaRouterFactory::createMediaRouter()
+    // EN GstMediaRouter::GstMediaRouter(::GstMediaRouterInit&)
+    // GstMediaRouter::init()
+    // EX GstMediaRouter::GstMediaRouter(::GstMediaRouterInit&)
+    //
+
+    impl = impl_;
+    impl->addListener(proxy);
+
+    // note: <2> 
+    setProperties();
+  }
+
+  void setProperties()
+  {
+    continueOnSuccess(SetPropertiesContinuation::create(getDispatcher(),
+          proxy, impl, shared_from_this(), properties),
+        &SetSourceContinuation::onPropertiesSet);
+  }
+
+  void onPropertiesSet()
+  {
+    // note: <6> async call.
+    //
+    // Future<void> 
+    // GstMediaRouter::setSource
+    // (const std::string&, Zinc::Media::SetSourceReason::Enum);
+
+    continueOnSuccess
+      (impl->setSource(source, reason), &SetSourceContinuation::complete);
+  }
+
+  void complete() {
+
+    promise.complete();
+
+    // note: *continuation-complete*
+    proxy->setSourceComplete(source, impl, factory);
+  }
+
+  // note: holds pointers
+
+  boost::shared_ptr<ProxyMediaRouter> proxy;
+
+  ProxyMediaRouter::UnsourcedProperties properties;
+
+  boost::shared_ptr<MediaRouter> impl;
+
+  std::string source;
+  SetSourceReason::Enum reason;
+
+  boost::shared_ptr<MediaRouterFactory> factory;
+
+  boost::optional<std::string> setPropertiesFailureMessage;
+};
+
+
+class ZINC_LOCAL SetPropertiesContinuation
+    : public NS_ZINC::Continuation<void, SetPropertiesContinuation> 
+{
+    friend class NS_ZINC::Continuation<void, SetPropertiesContinuation>;
+
+private:
+
+    // note: <3>. calls bunch of async calls and end a chain
+    //
+    void start(boost::shared_ptr<ProxyMediaRouter> proxy_,
+            boost::shared_ptr<MediaRouter> impl_,
+            boost::shared_ptr<SetSourceContinuation> parentContinuation_,
+            const ProxyMediaRouter::UnsourcedProperties& mrProperties_)
+    {
+        proxy = proxy_;
+        parentContinuation = parentContinuation_;
+        properties = mrProperties_;
+        impl = impl_;
+
+        NS_ZINC::FutureBarrier barrier(getDispatcher());
+        if (properties.mediaDuration) {
+            barrier.add(impl->setMediaDuration(*properties.mediaDuration));
+        }
+        if (properties.sink) {
+            barrier.add(impl->setSink(*properties.sink));
+        }
+        if (properties.captureMode) {
+            barrier.add(impl->setCaptureMode(*properties.captureMode));
+        }
+        if (properties.videoWindow) {
+            barrier.add(impl->setVideoWindow(*properties.videoWindow));
+        }
+        if (properties.playSpeed) {
+            barrier.add(impl->setPlaySpeed(*properties.playSpeed));
+        }
+        if (properties.endTime) {
+            barrier.add(impl->setEndTime(*properties.endTime));
+        }
+        if (properties.bufferingMode) {
+            barrier.add(impl->setBufferingMode(*properties.bufferingMode));
+        }
+        if (properties.videoTerminationMode) {
+            barrier.add(impl->setVideoTerminationMode(
+                        *properties.videoTerminationMode));
+        }
+        if (properties.volume) {
+            barrier.add(impl->setVolume(*properties.volume));
+        }
+
+        // note: <4>
+        continueOnSuccess(barrier, &SetPropertiesContinuation::onPropertiesSet);
+    }
+
+    void SetPropertiesContinuation::onPropertiesSet()
+    {
+        // note: <5> this ends "continuation chain"
+        promise.complete();
+    }
+
+    boost::shared_ptr<ProxyMediaRouter> proxy;
+    ProxyMediaRouter::UnsourcedProperties properties;
+    boost::shared_ptr<MediaRouter> impl;
+    boost::shared_ptr<SetSourceContinuation> parentContinuation;
+};
+
+
+// note: <7>
+NS_ZINC::Future<void> GstMediaRouter::setSource( const std::string& mediaLocator,
+    const SetSourceReason::Enum reason)
+{
+    const boost::lock_guard<boost::mutex> l(lock);
+
+    if (!src.empty()) {
+        return
+            NS_ZINC::exceptionalFuture<void>(*getDispatcher(),
+                                             IllegalReconfigurationException());
+    }
+
+    if (boost::starts_with(mediaLocator, "dvb://")) {
+        return NS_ZINC::exceptionalFuture<void>(*getDispatcher(),
+                                                InvalidLocatorException());
+    } else if (boost::starts_with(mediaLocator, "linear:")) {
+        return NS_ZINC::exceptionalFuture<void>(*getDispatcher(),
+                                                InvalidLocatorException());
+    } else {
+        src = mediaLocator;
+    }
+
+    // note: <8>
+    // TODO: work out whether the source is live
+    typefindBin->setSource(src);
+
+    // send CHANGE_COMPLETE signal
+    // TODO: in the future move to a place when we know that source if configured
+    produceEvent(
+        boost::bind(
+            &MediaRouterEventListener::SourceEvent, _1,
+            SourceEventValue::change_complete, reason));
+
+    return NS_ZINC::completedFuture(*getDispatcher());
+}
+
+
+// <8>
+// note: uri set to "uridecodebin"
+void VirtualBinTypefind::setSource(const std::string& sourceUri)
+{
+    g_object_set(G_OBJECT(uridecodebin.get()),
+                 "uri", sourceUri.c_str(),
+                 NULL);
+}
+
+
+*mr-play* *mr-start*
+
+// Calls from play() from player interface
+
+void VanadiumMediaPlayer::play()
+{
+    if(!mediaRouterPresenting)
+    {
+        playerManager.playbackStarting(this, mediaRouter);
+        mediaRouter->start().get();
+        mediaRouterPresenting = true;
+    }
+    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
+    callbacks.networkStateChanged();
+}
+
+
+*mr-start*
+
+NS_ZINC::Future<void> GstMediaRouter::start()
+
+void GstMediaRouter::startPipeline()
+{
+    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
+}
+
+// *pad-added* which registered in TF. *bin-add-start*
+// -> call "pad-added" callback from uridecodebin since it 'added' into the
+// pipleline from TF(TypeFinder) ctor from init(). The data is *TF.
+
+void VirtualBinTypefind::`newPadCb`
+  (GstElement* element, GstPad* pad, gpointer data)
+{
+  VirtualBinTypefind* const vbin = static_cast<VirtualBinTypefind*>(data);
+  vbin->newPad(element, pad);
+}
+
+void VirtualBinTypefind::newPad(GstElement*, GstPad* pad)
+{
+  const boost::shared_ptr<VirtualPad> wrappedPad = wrapSrcPad(pad);
+
+  // The parentCallback is from VirtualBin and this calls callable from `bind()`
+  // in TF ctor in init(). That is
+  //
+  // TF(,, boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
+  
+  parentCallback(
+      VirtualBinCallbackAction::RequestPadConnection,
+      shared_from_this(),
+      wrappedPad);
+}
+
+
+// note:
+// getSrcPadFactory() returns VirtualFactoryInProcess() created from GstMR ctor
+// and now retuns VirtualPadInProcess which it creates. Hence factory.
+//
+// boost::shared_ptr<VirtualPad> VirtualBin::wrapSrcPad(GstPad* pad)
+// {
+//     return getSrcPadFactory()->wrap(
+//         mirrorPad(RefObj<GstPad>(pad, true), container).retain());
+// }
+//
+// boost::shared_ptr<VirtualPad> VirtualPadFactoryInProcess::wrap(GstPad* pad)
+// {
+//     return boost::make_shared<VirtualPadInProcess>(pad, shared_from_this());
+// }
+//
+// note:
+// create a ghost pad.
+//
+// from VirtualBin.h
+//
+// RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
+//                          const RefObj<GstElement>& bin,
+//                         const char* padName = NULL);
+//
+// from VirtualBin.cpp
+//
+// RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
+//                          const RefObj<GstElement>& bin,
+//                          const char* const padName)
+// {
+//     RefObj<GstPad> ghostPad;
+// 
+//     if (padName) {
+//         ghostPad = gst_ghost_pad_new(padName, pad.get());
+//     } else {
+//         const NS_ZINC::ScopedObj<gchar> staticPadName(
+//             gst_pad_get_name(pad.get()), gcharFree);
+// 
+//         if (!staticPadName) {
+//             return ghostPad;
+//         }
+// 
+//         const NS_ZINC::ScopedObj<gchar> uniquePadName(
+//             g_strdup_printf("%s_%p", staticPadName.get(), pad.get()),
+//             gcharFree);
+//         if (!uniquePadName) {
+//             NICKEL_ERROR("Failed to create unique pad name");
+//             return ghostPad;
+//         }
+// 
+//         ghostPad = gst_ghost_pad_new(uniquePadName.get(), pad.get());
+//     }
+// 
+//     if (!ghostPad) {
+//         NICKEL_ERROR("Failed to create ghost pad!");
+//     }
+// 
+//     if (!gst_pad_set_active(ghostPad.get(), TRUE)) {
+//         NICKEL_ERROR("gst_pad_set_active failed!");
+//     }
+// 
+//     if (gst_element_add_pad(GST_ELEMENT(bin.get()),
+//                             ghostPad.get())) {
+//         ghostPad.retain();
+//     } else {
+//         NICKEL_ERROR("gst_element_add_pad failed!");
+//     }
+// 
+//     return ghostPad;
+// }
+
+
+
+// note:
+// This is "sort-of" autoplug implemenatation programmatically which links
+// elements.
+//
+// bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
+//     boost::shared_ptr<VirtualBin> bin,
+//     boost::shared_ptr<VirtualPad> vpad)
+// {
+//     boost::lock_guard<boost::mutex> l(lock);
+// 
+//     // note: sinkBin and srcBin are sp created in init()
+//     // so when bin is srcBin and calls sink->autoplug
+// 
+//     if (action == VirtualBinCallbackAction::RequestPadConnection) {
+//         if (bin == typefindBin && `srcBin->autoplug(vpad)`) {
+//             NICKEL_TRACE("connected typefindbin to srcbin!");
+// 
+//         } else if (bin == srcBin && `sinkBin->autoplug(vpad)`) {
+//             NICKEL_TRACE("srcbin requested connection");
+// 
+//         } else if (bin == sinkBin) {
+//             NICKEL_TRACE("sinkbin shouldn't request pad connection!");
+//         } else {
+//             NICKEL_ERROR("Pad linking failed!");
+//             return false;
+//         }
+//     }
+//     return true;
+// }
+
+
+(BinTypefind, pad from uridecode)
+
+bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
+    boost::shared_ptr<VirtualBin> bin,
+    boost::shared_ptr<VirtualPad> vpad)
+{
+   // note: calls <bin-scr> srcBin->autoplug(srcPad from Typefind)
+   
+   VirtualBinCallbackAction::RequestPadConnection
+
+   if (bin == typefindBin && srcBin->autoplug(vpad));
+}
+
+// note:
+// All uses base implementation of autoplug().
+// 
+// VirtualBin::elementFactory
+// VirtualBin::autoplug
+//
+// because this map, elementfactory, is protected member in the base and each
+// derived has its own copy and add items in ctor. However, autoplug has
+// common code but actually run on derived copy of map.
+
+bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
+{
+    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
+    //
+    // Element has current caps, get mime 'from' caps, get element for
+    // application/dash+xml
+    //
+    // BinTypefind has an entry in the map ["application/dash+xml"] =
+    // VirtualBinSrc::`makeAndSetupDecodebin`
+    //
+    // plug_unlocked:: upstream = it->second();
+    //
+    // calls VirtualBinSrc::makeAndSetupDecodebin:
+    //  creates decodebin, 
+    //  'set' pad-add handler('this')
+    //  'set' caps video/quicktime; audio/x-m4a; text/x-raw
+
+    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>&
+            scrPad);
+
+    // *uridecodebin* -> *decodebin*
+    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
+}
+
+NICKEL_TRACE("connected typefindbin to srcbin!");
+
+
+// {{{
+// note: -> call "pad-added" callback from decodebin for video
+// pad(video/quicktime)
+
+void VirtualBinSrc::`newDecodebinPadCb`(GstElement* element, GstPad* pad,
+    gpointer data)
+{
+   VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);    // BinSrc
+   vbin->newDecodebinPad(element, pad);
+}
+
+note: (BinSrc, pad from uridecode)
+
+bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
+    boost::shared_ptr<VirtualBin> bin,
+    boost::shared_ptr<VirtualPad> vpad)
+{
+   // SINK AUTOPLUG
+   // note: sinkBin->autoplug(srcPad from BinSrc)
+
+   else if (bin == srcBin && sinkBin->autoplug(vpad)) {
+}
+
+bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
+{
+    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
+    //
+    // Element has current caps, making element for: video/quicktime
+    //
+    // BinSrc = "video/quicktime; audio/x-m4a; text/x-raw");
+    // BinSrc has an entry in the map
+    //   elementFactory["video/quicktime"] = VirtualBinSink::makeMp4Element.
+    //
+    // calls VirtualBinSink::makeMp4Element
+    //   creates qtdemux, and set pad-add handler
+    //   no cap set
+    //
+    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
+
+    // *decodebin(video)* -> *qtdemux*
+    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
+}
+
+NICKEL_TRACE("srcbin requested connection");
+
+
+// {{{
+// note: -> call "pad-added" callback from decodebin. for audio pad(audio/x-m4a)
+
+void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
+    gpointer data)
+{
+   VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);
+   vbin->newDecodebinPad(element, pad);
+}
+
+note: (BinSrc, pad from uridecode)
+
+bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
+    boost::shared_ptr<VirtualBin> bin,
+    boost::shared_ptr<VirtualPad> vpad)
+{
+   // SINK AUTOPLUG
+   // note: sinkBin->autoplug(srcPad from BinSrc)
+
+   else if (bin == srcBin && sinkBin->autoplug(vpad)) {
+}
+
+bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
+{
+    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
+    //
+    // Element has current caps, making element for: audio/x-m4a
+    //
+    // BinSrc = "video/quicktime; audio/x-m4a; text/x-raw");
+    // BinSrc has an entry in the map
+    //   elementFactory["audio/x-m4a"] = VirtualBinSink::makeElementSimple;
+    //
+    // VirtualBinSink::makeElementSimple
+    //   creates fakesink
+    //
+    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
+
+    // *decodebin(audio)* -> *fakesink*
+    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
+}
+
+NICKEL_TRACE("srcbin requested connection");
+
+// {{{ 
+// note: -> call "pad-added" callback from qtdemux. for video/x-h264
+// note: THIS IS NOT A CAP REQUESTED
+
+NewPadCallback::callback(GstElement*, GstPad*, void*)
+{
+    // return sink
+    RefObj<GstPad> VirtualBin::plug(const RefObj<GstPad>& pad)
+    {
+        const boost::lock_guard<boost::mutex> l(lock);
+        return plug_unlocked(pad);
+    }
+
+    // plug_unlocked() returns *h264parse-nexussink* based on cap of srcPad since:
+    //
+    // Element has current caps, making element for: video/x-h264
+    //
+    // BinSrc has an entry in the map
+    //   elementFactory["video/x-h264"] = VirtualBinSink::makeH264Element;
+    //
+    // calls VirtualBinSink::makeH264Element
+    //   creates element(h264 ! nexussink)
+    //
+
+    // *qtdemux* -> *h264parse-nexussink*
+    gst_pad_link_full(pad.get(), sinkpad);
+}
+
+
+GstMediaRouter.cpp:300 State transition READY -> PAUSED wanted PLAYING
+GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
+
+
+<stop>
+ProxyMediaRouter.cpp:862 ENTER: 
+  virtual zinc::Future<void> nickel::system::ProxyMediaRouter::stop()
 
 
 ={============================================================================
@@ -16033,89 +16731,16 @@ DEVARCH-10602:
 * Changes "nickelmediad" to "nickelmediasourced". no source changes to this.
 * GstMR becomes a process which is a so file before.
 
-Nickel/Nickel.System.GStreamer$ ag OBJECT_PATH_FACTORY
-src/bus-name.h
-18:char const* const OBJECT_PATH_FACTORY = "/Zinc/MediaBackend/Factory";
 
+*ipc-front-end*
 
-// mediabackendd.cpp
-// register a factory to dbus?
-
-void MediaBackendDaemon::start()
-{
-    boost::shared_ptr<Zinc::Media::Backend::Factory> factory =
-        createIPCSrcBinFactory(
-                boost::shared_ptr<NS_ZINC::Dispatcher>(&futureDispatcher),
-                createSinkBinFactory(
-                    boost::shared_ptr<NS_ZINC::Dispatcher>(&futureDispatcher),
-                    dashCencEnable));
-}
-
-*ipc-source*
-
-// VirtualBinIPCSrc.cpp
-// create a `VirtualBinIPCSrc` which has `interslavepipeline` gst element and
-// `VirtualBinSink` from a bin sink factory
-//
-// class VirtualBinSinkFactory : public VirtualBinFactory
-// {
-//     boost::shared_ptr<VirtualBin> create()
-//     {
-//         const boost::shared_ptr<VirtualBin> bin =
-//             boost::make_shared<VirtualBinSink>(gst_bin_new("sink"), enableCenc);
-//         bin->setDispatcher(getDispatcher());
-//         return bin;
-//     }
-// };
-
-
-class VirtualBinIPCSrcFactory : public Zinc::Media::Backend::Factory
-{
-public:
-    VirtualBinIPCSrcFactory(
-        boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
-        boost::shared_ptr<VirtualBinFactory> binImplFactory)
-        : binImplFactory(binImplFactory),
-        dispatcher(dispatcher)
-    {
-    }
-
-    NS_ZINC::Future<boost::shared_ptr<Zinc::Media::Backend::SinkInstance> > create()
-    {
-        const boost::shared_ptr<Zinc::Media::Backend::SinkInstance> bin =
-            boost::make_shared<VirtualBinIPCSrc>(dispatcher,
-                    gst_element_factory_make("interslavepipeline", "IPCSrcBin"),
-                    binImplFactory->create());
-
-        return NS_ZINC::completedFuture(*dispatcher, bin);
-    }
-};
-
-boost::shared_ptr<Zinc::Media::Backend::Factory> createIPCSrcBinFactory(
-    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
-    boost::shared_ptr<VirtualBinFactory> binImplFactory)
-{
-    return boost::make_shared<VirtualBinIPCSrcFactory>(dispatcher, binImplFactory);
-}
-
-
-// VirtualBinSink.cpp
-//
-
-boost::shared_ptr<VirtualBinFactory> createSinkBinFactory(
-    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
-    bool enableCenc)
-{
-    return boost::make_shared<VirtualBinSinkFactory>(
-        dispatcher, enableCenc);
-}
-
-
-*ipc-sink* nickelmediad
+nickelmediad -b Zinc.MediaProxy
+/opt/zinc/var/daemons/nickelmediasourced/
 
 note:
 Different from FR15 which add uridecodebin from TF. Here do the same in
-VirtualBinSrc.
+VirtualBinSrc to add callback chain which will be called when pipeline gets
+started.
 
 void VirtualBinSrc::setSource(const std::string& sourceUri)
 {
@@ -16136,7 +16761,7 @@ void VirtualBinSrc::setSource(const std::string& sourceUri)
         g_object_set(uridecodebin.get(), "caps", caps.get(), NULL);
 
         if (0 == g_signal_connect(uridecodebin.get(), "pad-added",
-                                  G_CALLBACK(newUridecodebinPadCb),
+                                  G_CALLBACK(`newUridecodebinPadCb`),
                                   static_cast<gpointer>(this))) {
             NICKEL_ERROR("g_signal_connect failed!");
         }
@@ -16148,11 +16773,66 @@ void VirtualBinSrc::setSource(const std::string& sourceUri)
 }
 
 
-void GstSystemFactory::createVirtualBins(boost::shared_ptr<GstMediaRouterInit> initParams,
+The `newUridecodebinPadCb` starts building chains, then newUridecodebinPad() and
+autoplug().
+
+// *uridecodebin* -> *decodebin(video/audio)* -> *intersink* -> *h264parse* -> *nexussink*
+//                                           IPCSINK      IPCSOURCE
+// 1.
+// elementFactory["application/x-hls"] =
+//    boost::bind(&VirtualBinSrc::makeAndSetupDecodebin, this,
+//         "video/mpegts");
+//
+// State transition NULL -> READY wanted PAUSED
+// 
+// ENTER: void nickel::system::VirtualBinSrc::newUridecodebinPad(GstElement*, GstPad*)
+// ENTER: bool nickel::system::VirtualBin::autoplug(RefObj<_GstPad>)
+// ENTER: RefObj<_GstPad> nickel::system::VirtualBin::plug_unlocked(const RefObj<_GstPad>&, GstCaps*)
+// Element has current caps, making element for: application/x-hls
+// ENTER: RefObj<_GstElement> nickel::system::VirtualBinSrc::makeAndSetupDecodebin(const char*)
+// decoderbin: caps requested: video/mpegts
+// Pads linked.
+// 
+// 2. to ANY
+//
+// if (!g_signal_connect(decodebin.get(), "pad-added",
+//     G_CALLBACK(newDecodebinPadCb),
+//
+// ENTER: static void nickel::system::VirtualBinSrc::newDecodebinPadCb()
+// ENTER: void nickel::system::VirtualBinSrc::newDecodebinPad()
+// ENTER: bool nickel::system::VirtualBin::parentCallback()
+// ENTER: bool nickel::system::GstMediaRouter::plugVirtualPad()
+// ENTER: bool nickel::system::VirtualBin::autoplug(RefObj<_GstPad>)
+// ENTER: RefObj<_GstPad> nickel::system::VirtualBin::plug_unlocked()
+// Element has current caps, making element for: video/mpegts
+// Couldn't find  factory function for: video/mpegts trying to make for ANY
+//
+// RefObj<GstPad> VirtualBin::plug_unlocked()
+// {
+//     if (it == elementFactory.end()) {
+//         // We couldn't find a specific element factory function
+//         // So try to find a 'catch all' case
+//         NICKEL_TRACE("Couldn't find  factory function for: "
+//                 << mediaType << " trying to make for ANY");
+//         it = elementFactory.find("ANY");
+//     }
+// }
+//
+// 3. to IPCSINK
+//
+// ENTER: RefObj<_GstElement> nickel::system::VirtualBinIPCSink::makeIPCSink()
+// EXIT:  RefObj<_GstPad> nickel::system::VirtualBin::plug_unlocked(const RefObj<_GstPad>&, GstCaps*)
+// Pads linked.
+
+
+// GstSystemFactory::createMediaRouterFactory() calls this
+
+void GstSystemFactory::createVirtualBins(
+    boost::shared_ptr<GstMediaRouterInit> initParams,
     const boost::shared_ptr<NS_TITANIUM_DEVICEAUTHORITY::Authoriser> auth)
 {
-
-    const bool dashCencEnable = convertToSync(auth)->isFeatureEnabled("yv-mediarouter-dash");
+    const bool dashCencEnable =
+        convertToSync(auth)->isFeatureEnabled("yv-mediarouter-dash");
 
     initParams->srcBinFactory =
         createSrcBinFactory(
@@ -16161,14 +16841,31 @@ void GstSystemFactory::createVirtualBins(boost::shared_ptr<GstMediaRouterInit> i
 
     initParams->sinkBinFactory =
         createIPCSinkBinFactory(initParams->dispatcher, 
-                // note: *ipc-peer-factory* 
-                createFactoryDBusClient(initParams->dispatcher));
+            *ipc-peer-factory* 
+            createFactoryDBusClient(initParams->dispatcher));
 }
 
+
+// GstMediaRouter() calls
 
 void GstMediaRouter::init()
 {
     // created a VSRC
+    //
+    // class VirtualBinSrcFactory : public VirtualBinFactory
+    // {
+    // public:
+    //     boost::shared_ptr<VirtualBin> create()
+    //     {
+    //         const boost::shared_ptr<VirtualBin> bin =
+    //             boost::make_shared<VirtualBinSrc>(gst_bin_new("src"), enableDash);
+    //         bin->setDispatcher(getDispatcher());
+    //         return bin;
+    //     }
+    // 
+    //     bool enableDash;
+    // };
+
     srcBin = srcBinFactory->create();
 
     // class VirtualBinIPCSinkFactory : public VirtualBinFactory
@@ -16176,9 +16873,10 @@ void GstMediaRouter::init()
     // public:
     //     boost::shared_ptr<VirtualBin> create()
     //     {
-    //         // note:
-    //         // ipcPeerFactory->create() returns "ipc-peer-bin" and all calls
-    //         // to VBIPCSINK are forwarded to that peer bin.
+    //         note:
+    //         VirtualBinIPCSrcFactory is *ipc-peer-factory* and create() returns
+    //         VirtualBinIPCSrc that is `ipc-peer-bin`. Forwards all to that
+    //         ipc-peer-bin.
     //
     //         const boost::shared_ptr<VirtualBin> bin =
     //             boost::make_shared<VirtualBinIPCSink>(
@@ -16229,6 +16927,9 @@ RefObj<GstElement> VirtualBinIPCSink::makeIPCSink()
                     "fdin", fds[0], "fdout", fds[0], NULL);
 
         g_object_set(elem.get(), "async", FALSE, NULL);
+    
+        note:
+        calls connect.
 
         // fds[1] will be closed implicitly by UnixFD
         ipcPeerBin->connect(::DBus::UnixFD(fds[1]));
@@ -16249,6 +16950,121 @@ VirtualBinIPCSink::VirtualBinIPCSink(
     ipcPeerBin(ipcPeerBin)
 {
     elementFactory["ANY"] = boost::bind(&VirtualBinIPCSink::makeIPCSink, this);
+}
+
+
+*ipc-back-end*
+
+Nickel/Nickel.System.GStreamer$ ag OBJECT_PATH_FACTORY
+src/bus-name.h
+18:char const* const OBJECT_PATH_FACTORY = "/Zinc/MediaBackend/Factory";
+
+/opt/zinc/var/daemons/nickelmediad
+drwx------    2 31756    31756       4.0K Apr  5 15:40 log/
+drwx------    2 31756    31756       4.0K Apr  4 14:56 mediabackendd-gst/
+
+// mediabackendd.cpp
+// register a factory to dbus?
+
+void MediaBackendDaemon::start()
+{
+    boost::shared_ptr<Zinc::Media::Backend::Factory> factory =
+        createIPCSrcBinFactory(
+                boost::shared_ptr<NS_ZINC::Dispatcher>(&futureDispatcher),
+                createSinkBinFactory(
+                    boost::shared_ptr<NS_ZINC::Dispatcher>(&futureDispatcher),
+                    dashCencEnable));
+}
+
+
+// VirtualBinIPCSrc.cpp
+// create a `VirtualBinIPCSrc` which has `interslavepipeline` gst element and
+// `VirtualBinSink` from a bin sink factory
+//
+// class VirtualBinSinkFactory : public VirtualBinFactory
+// {
+//     boost::shared_ptr<VirtualBin> create()
+//     {
+//         const boost::shared_ptr<VirtualBin> bin =
+//             boost::make_shared<VirtualBinSink>(gst_bin_new("sink"), enableCenc);
+//         bin->setDispatcher(getDispatcher());
+//         return bin;
+//     }
+// };
+
+
+*ipc-peer-factory* 
+
+class VirtualBinIPCSrcFactory : public Zinc::Media::Backend::Factory
+{
+public:
+    VirtualBinIPCSrcFactory(
+        boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
+        boost::shared_ptr<VirtualBinFactory> binImplFactory)
+        : binImplFactory(binImplFactory),
+        dispatcher(dispatcher)
+    {
+    }
+
+    NS_ZINC::Future<boost::shared_ptr<Zinc::Media::Backend::SinkInstance> > create()
+    {
+        const boost::shared_ptr<Zinc::Media::Backend::SinkInstance> bin =
+            boost::make_shared<VirtualBinIPCSrc>(dispatcher,
+                    gst_element_factory_make("interslavepipeline", "IPCSrcBin"),
+                    binImplFactory->create());
+
+        return NS_ZINC::completedFuture(*dispatcher, bin);
+    }
+};
+
+boost::shared_ptr<Zinc::Media::Backend::Factory> createIPCSrcBinFactory(
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
+    boost::shared_ptr<VirtualBinFactory> binImplFactory)
+{
+    return boost::make_shared<VirtualBinIPCSrcFactory>(dispatcher, binImplFactory);
+}
+
+
+// VirtualBinIPCSrc.cpp
+//
+VirtualBinIPCSrc::VirtualBinIPCSrc(
+    const boost::shared_ptr<NS_ZINC::Dispatcher>& dispatcher,
+    const RefObj<GstElement>& container,
+    const boost::shared_ptr<VirtualBin>& binImpl)
+    : dispatcher(dispatcher),
+    container(container),
+    binImpl(binImpl)
+{
+    if (container.get() && gst_bin_add(GST_BIN(container.get()),
+                binImpl->getParent().retain())) {
+
+        const RefObj<GstElement> elem =
+            gst_element_factory_make("multiqueue", "multiqueue");
+
+        if(gst_bin_add(GST_BIN(container.get()),
+                    elem.retain())) {
+            g_signal_connect(elem.get(), "pad-added",
+                    G_CALLBACK(newMultiqueuePadCb),
+                    static_cast<gpointer>(this));
+
+            g_signal_connect(elem.get(), "overrun",
+                    G_CALLBACK(newMultiqueueOverrunCb),
+                    static_cast<gpointer>(this));
+
+        } else {
+            NICKEL_ERROR("Couldn't add multiqueue to parent container!");
+        }
+    } else {
+        NICKEL_ERROR("Couldn't add vbin to parent container!");
+    }
+}
+
+boost::shared_ptr<VirtualBinFactory> createSinkBinFactory(
+    boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher,
+    bool enableCenc)
+{
+    return boost::make_shared<VirtualBinSinkFactory>(
+        dispatcher, enableCenc);
 }
 
 
@@ -16642,673 +17458,6 @@ ProxyMediaRouter.cpp
 616:		   return impl->recycle();
 634:        return impl->setVolume(volume_in);
 893:	      return impl->setBufferingMode(bufferingMode_in);
-
-
-={============================================================================
-*kt_dev_uv_stack_408* mr-create-load-play
-
-<mr-load>
-void VanadiumMediaPlayer::load(const std::string& url)
-{
-    try
-    {
-        if(!currentSource.empty())
-        {
-            playerManager.clearDrmError(currentSource);
-        }
-        currentSource = url;
-
-        mediaRouter->addListener(dispatcher, listener);
-        mediaRouter->setSource(url, SetSourceReason::mhegstandard).get();
-        mediaRouter->setSink("decoder://0").get();
-
-        // WebKit expects the media player to start in the paused state
-        pauseState = PAUSED;
-
-        if(preloadPolicy != QMediaPlayerInterface::NONE)
-        {
-            // Call startBuffering before getSourceInformation so we don't waste
-            // any time before starting to acquire media, but defer notifying
-            // the state change until we know the media router mode
-            mediaRouter->startBuffering();
-            currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
-            callbacks.networkStateChanged();
-        }
-    }
-    catch(const InvalidLocatorException& ex)
-    {
-        currentNetworkState = QMediaPlayerInterface::FORMAT_ERROR;
-        callbacks.networkStateChanged();
-    }
-}
-
-
-*uridecodebin* -> *decodebin(video)* -> *qtdemux* -> *h264parse-nexussink*
-                *decodebin(audio)* -> *fakesink*
-
-dbus-send --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR
-Zinc.Media.MediaRouter.setSource 
-string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
-
-
-// Nickel/Nickel.System.Proxy/src/ProxyMediaRouter.cpp
-// See spec A.1.1
-
-NS_ZINC::Future< void > 
-ProxyMediaRouter::setSource(const std::string& mediaLocator_in, 
-  const SetSourceReason::Enum reason_in) 
-{
-  scoped_lock lock(mutex);
-
-  if (sourcing) {
-    return deferCall(
-        boost::bind(&MediaRouter::setSource, _1, mediaLocator_in, reason_in));
-  }
-
-  sourcing = true;
-
-  // note: <0>
-  // create() returns Future<T> ?
-  //
-  // boost::shared_ptr<MediaRouter> impl; is not inited and is passed down to
-  // SetSourceCont.
-  //
-  return SetSourceContinuation::create(
-      *dispatcher, 
-      shared_from_this(), mediaLocator_in, reason_in);
-}
-
-
-class ZINC_LOCAL SetSourceContinuation 
-  : public NS_ZINC::Continuation<void, SetSourceContinuation> 
-{
-  friend class NS_ZINC::Continuation<void, SetSourceContinuation>;
-
-  public:
-
-  private:
-
-  // note: *continuation-start*
-  // Why start()? This is from "Contiunation" since create() 'creates' an object
-  // then calls start().
-
-  void start(boost::shared_ptr<ProxyMediaRouter> proxy_, 
-      const std::string& source_, const SetSourceReason::Enum reason_) 
-  {
-    // I take copies of the proxy state, in case it is modified before the
-    // continuation completes.
-    //
-    // This start() method will be called by the same thread that calls
-    // ProxyMediaRouter::setSource(), so I assume it is OK to access proxy state
-    // from here (as lock will already be held).
-
-    // note: property comes from ProxyMediaRouter
-
-    *gst-mr-create*
-    impl = proxy_->impl;
-
-    source = source_;
-    properties = proxy->properties;
-
-    // note: see uses of ProxyMediaRouter directly
-
-    else 
-    {
-      // note: this is where map used and get the corresponding factory.
-      //
-      factory = proxy->findFactoryGivenSource(source);
-
-      // This covers the cases where we have no implementation MediaRouter, or
-      // a recycled one that is not compatible with the source media.
-      // In both cases, we create a new one of the appropriate type.
-
-      // note: <1> async call
-      if (factory != proxy->lastFactory) {
-        continueOnSuccess(
-            factory->createMediaRouter(), 
-            &SetSourceContinuation::onMediaRouterCreated);
-        return;
-      }
-    }
-
-    // We only reach here if we have a recycled MediaRouter implementation
-    // already, or we have an existing dvb MediaRouter and we are setting
-    // another dvb source.
-    //
-    // In these cases, we do not have to create a new MediaRouter
-    // implementation, so we move straight on to setting the properties.
-    //
-    setProperties(); 
-  }
-
-  void onMediaRouterCreated(boost::shared_ptr<MediaRouter> impl_) 
-  {
-    // *gst-mr-create* 
-    // GstMR is crated and pass it back to Proxy in the end.
-    //
-    // This sp passed to the proxy:
-    //
-    // void SetSourceContinuation::complete() {
-    //  promise.complete();
-    //  proxy->setSourceComplete(source, impl, factory);
-    // }
-    //
-    // void ProxyMediaRouter::setSourceComplete(
-    //  const std::string& newSource, 
-    //  boost::shared_ptr<MediaRouter> newImpl, 
-    //  boost::shared_ptr<MediaRouterFactory> newFactory) {
-    //
-    //  lastSource = newSource;
-    //
-    //  // note: this is where GST MR DTOR is called?
-	 //  impl = newImpl;
-    //
-    // }
-    //
-    // nickel::system::ProxyMediaRouterFactory::createMediaRouter()
-    // ProxyMediaRouter::ProxyMediaRouter()
-    // ProxyMediaRouter::setSource()
-    // SetSourceContinuation::start()
-    // GstMediaRouterFactory::createMediaRouter()
-    // EN GstMediaRouter::GstMediaRouter(::GstMediaRouterInit&)
-    // GstMediaRouter::init()
-    // EX GstMediaRouter::GstMediaRouter(::GstMediaRouterInit&)
-    //
-
-    impl = impl_;
-    impl->addListener(proxy);
-
-    // note: <2> 
-    setProperties();
-  }
-
-  void setProperties()
-  {
-    continueOnSuccess(SetPropertiesContinuation::create(getDispatcher(),
-          proxy, impl, shared_from_this(), properties),
-        &SetSourceContinuation::onPropertiesSet);
-  }
-
-  void onPropertiesSet()
-  {
-    // note: <6> async call.
-    //
-    // Future<void> 
-    // GstMediaRouter::setSource
-    // (const std::string&, Zinc::Media::SetSourceReason::Enum);
-
-    continueOnSuccess
-      (impl->setSource(source, reason), &SetSourceContinuation::complete);
-  }
-
-  void complete() {
-
-    promise.complete();
-
-    // note: *continuation-complete*
-    proxy->setSourceComplete(source, impl, factory);
-  }
-
-  // note: holds pointers
-
-  boost::shared_ptr<ProxyMediaRouter> proxy;
-
-  ProxyMediaRouter::UnsourcedProperties properties;
-
-  boost::shared_ptr<MediaRouter> impl;
-
-  std::string source;
-  SetSourceReason::Enum reason;
-
-  boost::shared_ptr<MediaRouterFactory> factory;
-
-  boost::optional<std::string> setPropertiesFailureMessage;
-};
-
-
-class ZINC_LOCAL SetPropertiesContinuation
-    : public NS_ZINC::Continuation<void, SetPropertiesContinuation> 
-{
-    friend class NS_ZINC::Continuation<void, SetPropertiesContinuation>;
-
-private:
-
-    // note: <3>. calls bunch of async calls and end a chain
-    //
-    void start(boost::shared_ptr<ProxyMediaRouter> proxy_,
-            boost::shared_ptr<MediaRouter> impl_,
-            boost::shared_ptr<SetSourceContinuation> parentContinuation_,
-            const ProxyMediaRouter::UnsourcedProperties& mrProperties_)
-    {
-        proxy = proxy_;
-        parentContinuation = parentContinuation_;
-        properties = mrProperties_;
-        impl = impl_;
-
-        NS_ZINC::FutureBarrier barrier(getDispatcher());
-        if (properties.mediaDuration) {
-            barrier.add(impl->setMediaDuration(*properties.mediaDuration));
-        }
-        if (properties.sink) {
-            barrier.add(impl->setSink(*properties.sink));
-        }
-        if (properties.captureMode) {
-            barrier.add(impl->setCaptureMode(*properties.captureMode));
-        }
-        if (properties.videoWindow) {
-            barrier.add(impl->setVideoWindow(*properties.videoWindow));
-        }
-        if (properties.playSpeed) {
-            barrier.add(impl->setPlaySpeed(*properties.playSpeed));
-        }
-        if (properties.endTime) {
-            barrier.add(impl->setEndTime(*properties.endTime));
-        }
-        if (properties.bufferingMode) {
-            barrier.add(impl->setBufferingMode(*properties.bufferingMode));
-        }
-        if (properties.videoTerminationMode) {
-            barrier.add(impl->setVideoTerminationMode(
-                        *properties.videoTerminationMode));
-        }
-        if (properties.volume) {
-            barrier.add(impl->setVolume(*properties.volume));
-        }
-
-        // note: <4>
-        continueOnSuccess(barrier, &SetPropertiesContinuation::onPropertiesSet);
-    }
-
-    void SetPropertiesContinuation::onPropertiesSet()
-    {
-        // note: <5> this ends "continuation chain"
-        promise.complete();
-    }
-
-    boost::shared_ptr<ProxyMediaRouter> proxy;
-    ProxyMediaRouter::UnsourcedProperties properties;
-    boost::shared_ptr<MediaRouter> impl;
-    boost::shared_ptr<SetSourceContinuation> parentContinuation;
-};
-
-
-// note: <7>
-NS_ZINC::Future<void> GstMediaRouter::setSource( const std::string& mediaLocator,
-    const SetSourceReason::Enum reason)
-{
-    const boost::lock_guard<boost::mutex> l(lock);
-
-    if (!src.empty()) {
-        return
-            NS_ZINC::exceptionalFuture<void>(*getDispatcher(),
-                                             IllegalReconfigurationException());
-    }
-
-    if (boost::starts_with(mediaLocator, "dvb://")) {
-        return NS_ZINC::exceptionalFuture<void>(*getDispatcher(),
-                                                InvalidLocatorException());
-    } else if (boost::starts_with(mediaLocator, "linear:")) {
-        return NS_ZINC::exceptionalFuture<void>(*getDispatcher(),
-                                                InvalidLocatorException());
-    } else {
-        src = mediaLocator;
-    }
-
-    // note: <8>
-    // TODO: work out whether the source is live
-    typefindBin->setSource(src);
-
-    // send CHANGE_COMPLETE signal
-    // TODO: in the future move to a place when we know that source if configured
-    produceEvent(
-        boost::bind(
-            &MediaRouterEventListener::SourceEvent, _1,
-            SourceEventValue::change_complete, reason));
-
-    return NS_ZINC::completedFuture(*getDispatcher());
-}
-
-
-// <8>
-// note: uri set to "uridecodebin"
-void VirtualBinTypefind::setSource(const std::string& sourceUri)
-{
-    g_object_set(G_OBJECT(uridecodebin.get()),
-                 "uri", sourceUri.c_str(),
-                 NULL);
-}
-
-
-*mr-play* *mr-start*
-
-// Calls from play() from player interface
-
-void VanadiumMediaPlayer::play()
-{
-    if(!mediaRouterPresenting)
-    {
-        playerManager.playbackStarting(this, mediaRouter);
-        mediaRouter->start().get();
-        mediaRouterPresenting = true;
-    }
-    currentNetworkState = QMediaPlayerInterface::NETWORK_LOADING;
-    callbacks.networkStateChanged();
-}
-
-
-NS_ZINC::Future<void> GstMediaRouter::start()
-
-void GstMediaRouter::startPipeline()
-{
-    gst_element_set_state(pipeline.get(), GST_STATE_PLAYING));
-}
-
-// {{{ *pad-added* which registered in TF
-// -> call "pad-added" callback from uridecodebin since it 'added' into the
-// pipleline from TF(TypeFinder) ctor. The data is *TF.
-
-void VirtualBinTypefind::newPadCb
-  (GstElement* element, GstPad* pad, gpointer data)
-{
-  VirtualBinTypefind* const vbin = static_cast<VirtualBinTypefind*>(data);
-  vbin->newPad(element, pad);
-}
-
-void VirtualBinTypefind::newPad(GstElement*, GstPad* pad)
-{
-  const boost::shared_ptr<VirtualPad> wrappedPad = wrapSrcPad(pad);
-
-  // Comes from VirtualBin and this calls callable from `bind()` in TF ctor.
-  // That is
-  //
-  // TF(,, boost::bind(&GstMediaRouter::plugVirtualPad, this, _1, _2, _3));
-  
-  parentCallback(
-      VirtualBinCallbackAction::RequestPadConnection,
-      shared_from_this(),
-      wrappedPad);
-}
-
-
-// note:
-// getSrcPadFactory() returns VirtualFactoryInProcess() created from GstMR ctor
-// and now retuns VirtualPadInProcess which it creates. Hence factory.
-//
-// boost::shared_ptr<VirtualPad> VirtualBin::wrapSrcPad(GstPad* pad)
-// {
-//     return getSrcPadFactory()->wrap(
-//         mirrorPad(RefObj<GstPad>(pad, true), container).retain());
-// }
-//
-// boost::shared_ptr<VirtualPad> VirtualPadFactoryInProcess::wrap(GstPad* pad)
-// {
-//     return boost::make_shared<VirtualPadInProcess>(pad, shared_from_this());
-// }
-//
-// note:
-// create a ghost pad.
-//
-// from VirtualBin.h
-//
-// RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
-//                          const RefObj<GstElement>& bin,
-//                         const char* padName = NULL);
-//
-// from VirtualBin.cpp
-//
-// RefObj<GstPad> mirrorPad(const RefObj<GstPad>& pad,
-//                          const RefObj<GstElement>& bin,
-//                          const char* const padName)
-// {
-//     RefObj<GstPad> ghostPad;
-// 
-//     if (padName) {
-//         ghostPad = gst_ghost_pad_new(padName, pad.get());
-//     } else {
-//         const NS_ZINC::ScopedObj<gchar> staticPadName(
-//             gst_pad_get_name(pad.get()), gcharFree);
-// 
-//         if (!staticPadName) {
-//             return ghostPad;
-//         }
-// 
-//         const NS_ZINC::ScopedObj<gchar> uniquePadName(
-//             g_strdup_printf("%s_%p", staticPadName.get(), pad.get()),
-//             gcharFree);
-//         if (!uniquePadName) {
-//             NICKEL_ERROR("Failed to create unique pad name");
-//             return ghostPad;
-//         }
-// 
-//         ghostPad = gst_ghost_pad_new(uniquePadName.get(), pad.get());
-//     }
-// 
-//     if (!ghostPad) {
-//         NICKEL_ERROR("Failed to create ghost pad!");
-//     }
-// 
-//     if (!gst_pad_set_active(ghostPad.get(), TRUE)) {
-//         NICKEL_ERROR("gst_pad_set_active failed!");
-//     }
-// 
-//     if (gst_element_add_pad(GST_ELEMENT(bin.get()),
-//                             ghostPad.get())) {
-//         ghostPad.retain();
-//     } else {
-//         NICKEL_ERROR("gst_element_add_pad failed!");
-//     }
-// 
-//     return ghostPad;
-// }
-
-
-
-// note:
-// This is "sort-of" autoplug implemenatation programmatically which links
-// elements.
-//
-// bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
-//     boost::shared_ptr<VirtualBin> bin,
-//     boost::shared_ptr<VirtualPad> vpad)
-// {
-//     boost::lock_guard<boost::mutex> l(lock);
-// 
-//     // note: sinkBin and srcBin are sp created in init()
-//     // so when bin is srcBin and calls sink->autoplug
-// 
-//     if (action == VirtualBinCallbackAction::RequestPadConnection) {
-//         if (bin == typefindBin && srcBin->autoplug(vpad)) {
-//             NICKEL_TRACE("connected typefindbin to srcbin!");
-// 
-//         } else if (bin == srcBin && sinkBin->autoplug(vpad)) {
-//             NICKEL_TRACE("srcbin requested connection");
-// 
-//         } else if (bin == sinkBin) {
-//             NICKEL_TRACE("sinkbin shouldn't request pad connection!");
-//         } else {
-//             NICKEL_ERROR("Pad linking failed!");
-//             return false;
-//         }
-//     }
-//     return true;
-// }
-
-
-(BinTypefind, pad from uridecode)
-
-bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
-    boost::shared_ptr<VirtualBin> bin,
-    boost::shared_ptr<VirtualPad> vpad)
-{
-   // note: calls <bin-scr> srcBin->autoplug(srcPad from Typefind)
-   
-   VirtualBinCallbackAction::RequestPadConnection
-
-   if (bin == typefindBin && srcBin->autoplug(vpad));
-}
-
-// note:
-// why "derived->autoplug()" although all uses base implementation?
-// 
-// VirtualBin::elementFactory
-// VirtualBin::autoplug
-//
-// because this map, elementfactory, is protected member in the base and each
-// derived has its own copy and add items in ctor. However, autoplug has
-// common code but actually run on derived copy of map.
-
-bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
-{
-    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
-    //
-    // Element has current caps, get mime 'from' caps, get element for
-    // application/dash+xml
-    //
-    // BinTypefind has an entry in the map ["application/dash+xml"] =
-    // VirtualBinSrc::makeAndSetupDecodebin
-    //
-    // plug_unlocked:: upstream = it->second();
-    //
-    // calls VirtualBinSrc::makeAndSetupDecodebin:
-    //  creates decodebin, 
-    //  'set' pad-add handler('this')
-    //  'set' caps video/quicktime; audio/x-m4a; text/x-raw
-
-    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>&
-            scrPad);
-
-    // *uridecodebin* -> *decodebin*
-    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
-}
-
-NICKEL_TRACE("connected typefindbin to srcbin!");
-
-
-// {{{
-// note: -> call "pad-added" callback from decodebin for video
-// pad(video/quicktime)
-
-void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
-    gpointer data)
-{
-   VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);    // BinSrc
-   vbin->newDecodebinPad(element, pad);
-}
-
-note: (BinSrc, pad from uridecode)
-
-bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
-    boost::shared_ptr<VirtualBin> bin,
-    boost::shared_ptr<VirtualPad> vpad)
-{
-   // SINK AUTOPLUG
-   // note: sinkBin->autoplug(srcPad from BinSrc)
-
-   else if (bin == srcBin && sinkBin->autoplug(vpad)) {
-}
-
-bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
-{
-    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
-    //
-    // Element has current caps, making element for: video/quicktime
-    //
-    // BinSrc = "video/quicktime; audio/x-m4a; text/x-raw");
-    // BinSrc has an entry in the map
-    //   elementFactory["video/quicktime"] = VirtualBinSink::makeMp4Element.
-    //
-    // calls VirtualBinSink::makeMp4Element
-    //   creates qtdemux, and set pad-add handler
-    //   no cap set
-    //
-    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
-
-    // *decodebin(video)* -> *qtdemux*
-    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
-}
-
-NICKEL_TRACE("srcbin requested connection");
-
-
-// {{{
-// note: -> call "pad-added" callback from decodebin. for audio pad(audio/x-m4a)
-
-void VirtualBinSrc::newDecodebinPadCb(GstElement* element, GstPad* pad,
-    gpointer data)
-{
-   VirtualBinSrc* const vbin = static_cast<VirtualBinSrc*>(data);
-   vbin->newDecodebinPad(element, pad);
-}
-
-note: (BinSrc, pad from uridecode)
-
-bool GstMediaRouter::plugVirtualPad(VirtualBinCallbackAction::Enum action,
-    boost::shared_ptr<VirtualBin> bin,
-    boost::shared_ptr<VirtualPad> vpad)
-{
-   // SINK AUTOPLUG
-   // note: sinkBin->autoplug(srcPad from BinSrc)
-
-   else if (bin == srcBin && sinkBin->autoplug(vpad)) {
-}
-
-bool VirtualBin::autoplug(boost::shared_ptr<VirtualPad> srcPad)
-{
-    // plug_unlocked() returns *decodebin* based on cap of srcPad since:
-    //
-    // Element has current caps, making element for: audio/x-m4a
-    //
-    // BinSrc = "video/quicktime; audio/x-m4a; text/x-raw");
-    // BinSrc has an entry in the map
-    //   elementFactory["audio/x-m4a"] = VirtualBinSink::makeElementSimple;
-    //
-    // VirtualBinSink::makeElementSimple
-    //   creates fakesink
-    //
-    sinkpad = RefObj<GstPad> VirtualBin::plug_unlocked(const RefObj<GstPad>& pad);
-
-    // *decodebin(audio)* -> *fakesink*
-    gst_pad_link_full(unwrappedSrcPad.get(), sinkpad);
-}
-
-NICKEL_TRACE("srcbin requested connection");
-
-// {{{ 
-// note: -> call "pad-added" callback from qtdemux. for video/x-h264
-// note: THIS IS NOT A CAP REQUESTED
-
-NewPadCallback::callback(GstElement*, GstPad*, void*)
-{
-    // return sink
-    RefObj<GstPad> VirtualBin::plug(const RefObj<GstPad>& pad)
-    {
-        const boost::lock_guard<boost::mutex> l(lock);
-        return plug_unlocked(pad);
-    }
-
-    // plug_unlocked() returns *h264parse-nexussink* based on cap of srcPad since:
-    //
-    // Element has current caps, making element for: video/x-h264
-    //
-    // BinSrc has an entry in the map
-    //   elementFactory["video/x-h264"] = VirtualBinSink::makeH264Element;
-    //
-    // calls VirtualBinSink::makeH264Element
-    //   creates element(h264 ! nexussink)
-    //
-
-    // *qtdemux* -> *h264parse-nexussink*
-    gst_pad_link_full(pad.get(), sinkpad);
-}
-
-
-GstMediaRouter.cpp:300 State transition READY -> PAUSED wanted PLAYING
-GstMediaRouter.cpp:300 State transition PAUSED -> PLAYING wanted VOID_PENDING
-
-
-<stop>
-ProxyMediaRouter.cpp:862 ENTER: 
-  virtual zinc::Future<void> nickel::system::ProxyMediaRouter::stop()
 
 
 ={============================================================================
@@ -23886,6 +24035,76 @@ gst_zmp_sink_plugin_init (GstPlugin * plugin)
 
 
 ={============================================================================
+*kt_dev_uv_stack_413* mr-debug-gst-registry
+
+gstregistry.bin is a gstreamer registry cache file. It gets created per
+application (because of sandboxing), and this is to speed-up the gst_init()
+function, executed when the playback is initialised.
+
+09:54:56 (topic) ~/source/DEVARCH/Nickel$ git show 0865ba8
+commit 0865ba8dde328fb14575c5a11a3cb24d0a229ae3
+Author: Lukasz Forynski <lukasz.forynski@youview.com>
+Date:   Thu Jun 11 15:36:54 2015 +0100
+
+    DEVARCH-9643: gstreamer cache is not invalidated whenever gst plugins change
+    
+    (addresses CANTST-16517 Error 02100 when playing iPlayer programmes)
+    
+    gst-init can use a gst-registry cache that can store information about
+    existing plugins. This greatly improves startup performance, as the
+    discovery of plugins can be only done when gst-init() is run for the first
+    time. We configure this cache using runBrowser.sh script, and if it does
+    not exist, with the use of gst-inspect tool we force it to be populated.
+    
+    Unfortunately, gstreamer performs a limited validation of this cache,
+    checking only for it's version. This leads to potential problems, when
+    plugins are changed / renamed. Such a problem was discovered by
+    CANTST-16517 Error 02100 when playing iPlayer programmes.
+    Between two affected releases name of one of the gst-plugins has
+    changed (DEVARCH-9248), namely: libgstfragmented became
+    ibgsthlsdemux.
+    
+    It appears that gst plugin (gstregistry.bin) is not automatically rebuilt
+    by the gstreamer following the software upgrade, and non-existing plugins
+    were refered to in attempt to build the playback pipeline.
+    
+    Ideally, the gstreamer could invalidate the registry in such a case,
+    and it would have been re-built automatically to match the changes
+    performed during the upgrade. For now runBrowser.sh script will
+    simply reflect that there were changes by using a new name for the
+    cachefile (gstregistry.bin) appending a suffix with a version and deleting
+    all of the previous versions if a cache-file of the latest version does not
+    exist.
+    
+    DEVARCH-9646 was created to provide an automated solution to avoid
+    similar changes in the future.
+
++gst_registry_file="$app_data_dir/gstregistry.bin.1"
+
+
+commit 03eedc8477bf8dff73fdf01e8cbe959e62876b92
+Author: Darren Garvey <darren.garvey@youview.com>
+Date:   Mon Jun 22 16:35:12 2015 +0100
+
+    DEVARCH-9711: runBrowser.sh: Bump the version of the GStreamer registry file.
+    
+    To speed up starting the browser, information about the GStreamer plugins
+    is cached in a file `gstregistry.bin.N`, where `N` is the version of the
+    registry. In theory GStreamer will detect when the file needs to be
+    updated but in practice this doesn't always work properly [1].
+    
+    With the new version of GStreamer, another bump of the registry version is
+    necessary.
+    
+    [1] See DEVARCH-9643, commit 0865ba8d.
+
++gst_registry_file="$app_data_dir/gstregistry.bin.2"
+
+
+gst_registry_file="$app_data_dir/gstregistry.bin.$(lsr-config oem.activatedsoftware.coredevicesoftware.version)"
+
+
+={============================================================================
 *kt_dev_uv_stack_413* mr-debug-gst-nickel
 
 /opt/valgrind/bin/valgrind --leak-check=full /opt/zinc-trunk/bin/nickelmediad
@@ -23910,6 +24129,12 @@ G_MESSAGES_DEBUG=drmwasabi get you:
   Failed at /.../DEVARCH/Polonium/Polonium.Drm/src/gdrmwasabi.c:986
 
 /opt/zinc-trunk/bin/nickelmediad-launch
+
+# The idea is that whenever we know the registry really needs to be
+# updated, we will increment the gst_registry_file suffix so that a
+# new registry is created and all old versions deleted.
+declare -r gst_registry_dir="$prefix/var/nickelmediad-gst"
+declare -r gst_registry_file="$gst_registry_dir/registry.bin.1"
 
 declare -a env_vars=(                                                        
     G_DEBUG=fatal-criticals                                                  
@@ -24832,7 +25057,7 @@ SystemClientFactory::createMetadataConfig()
 
 
 ={============================================================================
-*kt_dev_uv_stack_302* zinc-lsr: lsr-config
+*kt_dev_uv_stack_302* zinc-lsr-config
 
 https://wiki.youview.co.uk/pages/viewpage.action?pageId=67737064&src=search
 
@@ -26806,7 +27031,7 @@ from the root@HUMAX command prompt:
 cd /mnt/hd1 &&
 
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T1000/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
-wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.13.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.15.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
 
 chmod +x humax-hdd-install.sh
 

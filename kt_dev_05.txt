@@ -5036,9 +5036,11 @@ Element Signals:
 ={============================================================================
 *kt_dev_bcast_310* gst-registry
 
-gst-init can use a gst-registry cache that can store information about existing
+DEVARCH-9643
+
+gst_init can use a gst-registry cache that can store information about existing
 plugins. This greatly improves performance, as the discovery of plugins can be
-only done when gst-init() is ran for the first time. We configure this cache
+only done when gst_init() is ran for the first time. We configure this cache
 using runBrowser.sh script, and if it does not exist, with the use of
 gst-inspect tool we force it to be populted.
 
@@ -5047,7 +5049,7 @@ Unfortunately, gstreamer performs a limited validation of this cache, checking
 changed / renamed. Such a problem was discovered by CANTST-16517 Error 02100
 when playing iPlayer programmes. Between two affected releases name of one of
 the gst-plugins has changed (DEVARCH-9248), namely: libgstfragmented became
-ibgsthlsdemux.
+libgsthlsdemux.
 
 It appears that gst plugin (gstregistry.bin) was not automatically rebuilt by
 the gstreamer following the software upgrade, and non-existing plugins were
@@ -5058,18 +5060,28 @@ have been re-built automatically to match the changes performed during the
 upgrade. As a quick solution, as part of DEVARCH-9643, runBrowser.sh script was
 updated to reflect that there were changes by using a new name for the cachefile
 (gstregistry.bin) appending a suffix with a version and deleting all of the
-previous versions if a cache-file of the latest version did not exist. This,
-however, would require updates to release validation process to make sure the
-    version was increased whenever there was a need for it.
+previous versions if a cache-file of the latest version did not exist. 
 
-This change should make it less error-prone and fully automated.
+-# enable gstreamer plugin registy
++# Enable gstreamer plugin registy.
++# The idea is that whenever we know the registry really needs
++# to be updated, we will increment the gst_registry_file suffix
++# so that a new registry is created and all old versions deleted.
+ GST_INSPECT_CMD="${GST_INSPECT_CMD:-$prefix/oss/bin/gst-inspect-1.0}"
+-gst_registry_file="$app_data_dir/gstregistry.bin"
++gst_registry_file="$app_data_dir/gstregistry.bin.1"
+ if [ ! -s "${gst_registry_file}" ]; then
++
++    # delete all old versions of the registry
++    rm -f $app_data_dir/gstregistry.bin*
++
++    # once GST_REGISTRY is set, running GST_INSPECT_CMD will
++    # cause it to be re-built
+     GST_REGISTRY="$gst_registry_file" $GST_INSPECT_CMD &> /dev/null
 
-# enable gstreamer plugin registy
-GST_INSPECT_CMD="${GST_INSPECT_CMD:-$prefix/oss/bin/gst-inspect-1.0}"
-gst_registry_file="$app_data_dir/gstregistry.bin"
-if [ ! -s "${gst_registry_file}" ]; then
-    GST_REGISTRY="$gst_registry_file" $GST_INSPECT_CMD &> /dev/null
-fi
+note:
+The issue is that when the element name changes the registry cache was not
+updated. Which causes to use non-existing element to build a pipeline.
 
 
 https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstRegistry.html
@@ -5086,11 +5098,12 @@ loaded at a given time.
 
 The primary source, at all times, of plugin information is each plugin file
 itself. Thus, if an application wants 'information' about a particular plugin,
-  or wants to search for a 'feature' that satisfies given criteria, the primary
-    means of doing so is to load every plugin and look at the resulting
-    information that is gathered in the `default-registry`. Clearly, this is a
-    time consuming process, so we 'cache' information in the 'registry' file.
-    The format and location of the cache file is internal to gstreamer.
+    or wants to search for a 'feature' that satisfies given criteria, the
+        primary means of doing so is to load every plugin and look at the
+        resulting information that is gathered in the `default-registry`.
+        Clearly, this is a time consuming process, so we 'cache' information in
+        the `registry-file`.  The format and location of the cache file is
+        internal to gstreamer.
 
 On startup, plugins are searched for in the plugin search path. The following
 locations are checked in this order:
@@ -5106,9 +5119,9 @@ locations are checked in this order:
     $prefix/libs/gstreamer-$GST_API_VERSION/. $XDG_DATA_HOME defaults to
     $HOME/.local/share.
 
-The registry cache file is loaded from
+The `registry-cache-file` is loaded from
 $XDG_CACHE_HOME/gstreamer-$GST_API_VERSION/registry-$ARCH.bin (where
-    $XDG_CACHE_HOME defaults to $HOME/.cache) or the file listed in the
+        $XDG_CACHE_HOME defaults to $HOME/.cache) or the file listed in the
 `GST_REGISTRY` env var. One reason to change the registry location is for
 testing.
 
@@ -5132,7 +5145,7 @@ dropped.
 
 Implementation notes:
 
-The "cache" and "registry" are different concepts and can represent different
+The "cache" and "registry" are different concepts and can represent 'different'
 sets of plugins. For various reasons, at init time, the cache is stored in the
 `default-registry`, and plugins not relevant to the current process are marked
 with the GST_PLUGIN_FLAG_CACHED bit. These plugins are removed at the end of
@@ -5170,6 +5183,10 @@ Set this environment variable to make GStreamer use a different file for the
 plugin cache / registry than the default one. This is useful when operating in a
 separate environment which should not affect the `default-cache` in the user's
 home directory. 
+
+note:
+This means that when use this env var, gst uses that cache file to find plugin
+and no look further. This may cause the problem as above.
 
 
 DEBUG           GST_REGISTRY gstregistry.c:476:gst_registry_add_plugin:<registry0> 
