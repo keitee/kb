@@ -15,16 +15,19 @@
 *kt_dev_uv_stack_000* zinc-build: zb-config
 *kt_dev_uv_stack_000* zinc-build: zb-virtual-slave, zb-shell
 *kt_dev_uv_stack_000* zinc-build: zb-make
-*kt_dev_uv_stack_000* zinc-build: zb-build-with-progress
+*kt_dev_uv_stack_000* zb-build-with-progress
 *kt_dev_uv_stack_000* zinc-build: makefile
 *kt_dev_uv_stack_001* zinc-build: build commands and build vars
 *kt_dev_uv_stack_000* zinc-build: debug or release
 *kt_dev_uv_stack_003* zinc-build: autotool structures
 *kt_dev_uv_stack_003* zinc-build: exclude files
-*kt_dev_uv_stack_003* zinc-build: setvar-common
+*kt_dev_uv_stack_003* zb-setvar-common
 *kt_dev_uv_stack_003* zinc-build: setvars
 
-*kt_dev_uv_stack_002* tool-jirafy:
+*kt_dev_uv_stack_003* z-3rd-party-qt
+*kt_dev_uv_stack_003* z-3rd-party-to-gitify
+
+*kt_dev_uv_stack_002* to-jirafy
 *kt_dev_uv_stack_002* tool-git-hook:
 |kt_dev_uv_stack_002| tool-deploy
 *kt_dev_uv_stack_002* tool-setup-humax
@@ -35,7 +38,6 @@
 |kt_dev_uv_stack_005| stack: brcm debug level
 |kt_dev_uv_stack_006| stack: netflix ps line
 *kt_dev_uv_stack_007* tool-rcu-virtual
-|kt_dev_uv_stack_008| stack: startup mw
 *kt_dev_uv_stack_010* zinc-commit
 |kt_dev_uv_stack_010| zinc-push
 |kt_dev_uv_stack_011| zinc-log
@@ -93,7 +95,6 @@
 *kt_dev_uv_stack_250* mr-web: run sport app on atk
 *kt_dev_uv_stack_250* mr-web-remote debug
 *kt_dev_uv_stack_250* mr-web-java scripts to check on video
-*kt_dev_uv_stack_250* mr-web: build webkit plugin
 *kt_dev_uv_stack_250* mr-create-vanadium-stack from html to mr
 *kt_dev_uv_stack_250* mr-create-callback from mr to html
 *kt_dev_uv_stack_250* mr-web: media player interface
@@ -116,7 +117,7 @@
 *kt_dev_uv_stack_250* mr-test-vanadium-multiple-video-tag
 *kt_dev_uv_stack_250* mr-test-vanadium-play-videoextended
 *kt_dev_uv_stack_250* mr-web: yv webkit plugin, vanadium
-*kt_dev_uv_stack_250* mr-web: qt patches
+*kt_dev_uv_stack_250* z-qt-patches
 *kt_dev_uv_stack_250* mr-web-crb-launch
 *kt_dev_uv_stack_250* mr-web: get w3c threads
 *kt_dev_uv_stack_250* mr-ng-browser-validation
@@ -993,15 +994,44 @@ yv-start-services.sh*
 
 
 ={============================================================================
-*kt_dev_uv_stack_000* zinc-build: zb-build-with-progress
+*kt_dev_uv_stack_000* zb-build-with-progress
+
+zb-build-with-progress -- -i
+
+		--)
+			# Pass all other arguments after -- to build-with-progress.sh.
+			shift;
+			break;
+			;;
 
 ZB_BUILD_CMD=./build-with-progress.sh zb-make "$@"
 
+
 ./Zinc/Zinc.Build/build-with-progress.sh
+
+// /Zinc/Zinc.Build/update-build-progress.sh
+update_build_progress=${update_build_progress=${makefile_dir}/update-build-progress.sh}
+
+
+Usage: ${invoked_as} [-h] [-i] [-k] [ -j <num jobs> ] [ -T <project max hang
+secs> ] [ -I <hang check interval secs> ] ${extra_options_synopsis:-} [ all |
+buildtools | ... ]
+
+Where:
 
   -i                            enable incremental building. 
 
-./Zinc/Zinc.Build/update-build-progress.sh
+	i) let incremental_build=1; install_program="/usr/bin/install -C";;
+
+
+if (( projects_to_build == 0 )); then
+	INSTALL="${install_program}" ZINC_INCREMENTAL="${incremental_build}" ZINC_BUILD_SPLIT_LOG=1 BASH=${BASH} \
+		make ${make_continue_on_failure} ${parallel_jobs} -f ${makefile} ${@}
+else
+	INSTALL="${install_program}" ZINC_INCREMENTAL="${incremental_build}" ZINC_BUILD_SPLIT_LOG=1 BASH=${BASH} \
+		make ${make_continue_on_failure} ${parallel_jobs} -f ${makefile} ${@} 2>&1 | grep --line-buffered "+++ " | \
+		"${BASH}" ${update_build_progress} ${update_build_progress_opts:-} -T ${health_check_max_inactivity_secs} -I ${health_check_interval_secs} ${projects_to_build}
+fi 
 
 
 ={============================================================================
@@ -1568,7 +1598,7 @@ Zinc/Zinc.Build/excluded-files-production.txt
 
 
 ={============================================================================
-*kt_dev_uv_stack_003* zinc-build: setvar-common
+*kt_dev_uv_stack_003* zb-setvar-common
 
 {
    <load-config>
@@ -1708,6 +1738,10 @@ Zinc/Zinc.Build/excluded-files-production.txt
    } <setvars-end>
 }
 
+// Used Zinc/Zinc.Build/list-buildable-projects.sh
+
+project_excludes="${project_excludes:-} ${ZINC_EXCLUDE_PROJECTS:-}"
+
 
 ={============================================================================
 *kt_dev_uv_stack_003* zinc-build: setvars
@@ -1749,12 +1783,65 @@ export LDFLAGS
 
 
 ={============================================================================
-*kt_dev_uv_stack_003* zinc-build: gitify
+*kt_dev_uv_stack_003* z-3rd-party-qt
 
+zinc-build-root/release-humax-dtr_t2100/Zinc/Zinc.3rdPartyStack/
+qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/
+graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+
+
+// note: can use this script but it will builds whole qt and more importantly
+// applies patches.
+
+./run-3ps-make-standalone.sh qt-everywhere-opensource-sr
+
+
+// go to this directory under zb-shell and see the Makefile in the same
+// directory for other targets.
+
+cd $ZINC_NATIVE_BUILD_ROOT/release-humax-dtr_t2100/Zinc/Zinc.3rdPartyStack/\
+qt-everywhere-opensource-src-5.1.0
+
+make module-qtwebkit-clean (optional)
+make module-qtwebkit
+
+// note: do NOT use this since it copies from installed directory.
+// zb-copy libQt5WebKit.so.5.1.0
+
+scp ./qtwebkit/lib/libQt5WebKit.so.5.1.0 root@humax-04535:/opt/zinc-trunk/oss/lib
+
+
+={============================================================================
+*kt_dev_uv_stack_003* z-3rd-party-gitify
+
+10:52:37 {topic} ~/source/DEVARCH/Zinc/Zinc.3rdPartyStack$ ll
+total 92
+drwxr-xr-x 10 kpark kpark  4096 Jan  5 10:23 ./
+drwxr-xr-x 33 kpark kpark  4096 Jan 28 08:36 ../
+drwxr-xr-x  4 kpark kpark  4096 Apr  5 14:35 config/
+drwxr-xr-x  2 kpark kpark  4096 Jan  7  2015 doc/
+-rwxr-xr-x  1 kpark kpark  3362 Oct 27 08:22 gitify.sh*
+-rwxr-xr-x  1 kpark kpark  1036 Jan  7  2015 gitify-upgrade.sh*
+drwxr-xr-x  2 kpark kpark  4096 Oct 27 08:22 licence/
+-rw-r--r--  1 kpark kpark 14023 Jan  5 10:23 Makefile
+drwxr-xr-x  2 kpark kpark  4096 Jan  5 10:23 packages/
+drwxr-xr-x 22 kpark kpark  4096 Jan  5 10:23 patches/
+-rw-r--r--  1 kpark kpark   222 Jan  7  2015 .project
+-rw-r--r--  1 kpark kpark  9562 Oct 27 08:22 rules.mk
+-rwxr-xr-x  1 kpark kpark   660 Jan  7  2015 run-3ps-make-standalone.sh*
+drwxr-xr-x 56 kpark kpark  4096 Mar 14 08:50 source-packages/
+drwxr-xr-x  2 kpark kpark  4096 Jan  7  2015 targetScripts/
+-rwxr-xr-x  1 kpark kpark  3193 Aug  5  2015 ungitify.sh*
+drwxr-xr-x  2 kpark kpark  4096 Jan  7  2015 website/
+-rw-r--r--  1 kpark kpark   605 Jan  7  2015 zinc-3rd-party-stack.spec
+
+
+<ex>
 5:48:18 ~$ cd tmp/
 05:48:20 ~/tmp$ mkdir log4cplus 
 05:48:26 ~/tmp$ cd !$
 cd log4cplus
+
 05:48:27 ~/tmp/log4cplus$ /home/kpark/source/DEVARCH/Zinc/Zinc.3rdPartyStack/gitify.sh log4cplus
 ls: cannot access /home/kpark/source/DEVARCH/Zinc/Zinc.3rdPartyStack/packages/log4cplus*.tar.*: No such file or directory
 Trying source-packages
@@ -1790,16 +1877,59 @@ Switched to a new branch 'i686-pc-linux-gnu'
 Switched to a new branch 'mipsel-linux'
 Switched to a new branch 'arm-linux'
 Switched to branch 'master'
+
 05:48:49 ~/tmp/log4cplus$ cd log4cplus-1.0.4/
 05:48:51 (master) ~/tmp/log4cplus/log4cplus-1.0.4$ ls
 
 05:48:51 (master) ~/tmp/log4cplus/log4cplus-1.0.4$ git grep pthread_self
 include/log4cplus/helpers/thread-config.h:38:#   define LOG4CPLUS_GET_CURRENT_THREAD pthread_self()
-05:48:55 (master) ~/tmp/log4cplus/log4cplus-1.0.4$ vim include/log4cplus/helpers/thread-config.h 
+
+<log>
+
+anyone got advice about best way to work on 3rd party stack patches? Do you work incrementally in the expanded sources zinc-build-root dir outside of git control, until everything works and then push patches into git, and build and test again? Or create a local git directory for the sources and create/re-create the 000n-foo patches using git diff?
+Tom Bailey
+10:33
+gitify.sh will unpack the tarball into a local git repo and then apply all our patches
+Piers Lomax
+10:34
+ah, that's what I want. thanks. Heard about it but never looked up what it did. thanks
+Christina Brien
+10:34
+gitify, work-work-work, ungitify
+Piers Lomax
+10:34
+ok - cheers.
+Christina Brien
+10:34
+You need to tell Zinc.Build to use your local version.
+Tom Bailey
+10:34
+I usually make the changes I want in $ZINC_BUILD_DIR and rebuild incrementally, then copy the files into the repo created by gitify, then ungitify to create the new patch
+Christina Brien
+10:35
+I create a symlink from /data/builds/branch/zinc-build-root/Zinc/Zinc.3rdPartyStack/qt-everywhere-opensrc-5.50 to ~/sources/qt
+Tom Bailey
+10:36
+But then you'd haven to rebuild QT from scratch wouldn't you?
+Christina Brien
+10:36
+And touch ~/sources/qt/zinc-build-setup.marker to some far off future date to stop Zinc.Build
+Piers Lomax
+10:36
+@ChristinaBrien - that sounds good. I'm using docker but I can rsync to a volume, (once the symlink is in place).
+Christina Brien
+10:36
+Every time you want to rebuild, you need to rm <blah>/Zinc.3rdPartyStack/<package>.built
+zb-build-with-progress can then do a fast incremental build.
+It's not a great system, but it's apparently what we have.
+Piers Lomax
+10:38
+not ideal. but it's better than me creating something from scratch to do the same thing.
+thanks again everyone
 
 
 ={============================================================================
-*kt_dev_uv_stack_002* tool-jirafy:
+*kt_dev_uv_stack_002* to-jirafy
 
 // raise ticket with no restriction.
 $ zg-jirafy 
@@ -3157,83 +3287,6 @@ root# cat /proc/1007/maps | grep youview
 root# printf "D\tMENU\n\0U\tMENU\n\0" | /opt/zinc/oss/bin/busybox nc localhost 2033
 
 note: The latest eng release from huawei do not load these so. So do not work.
-
-
-={============================================================================
-*kt_dev_uv_stack_008* stack: startup mw
-
-/data/builds/master/huawei.370/zinc-install-root/release/huawei-bcm7409/opt/zinc-trunk/bin/yv-start-services.sh
-
-#!/bin/sh
-
-prefix="/opt/zinc-trunk"
-
-start() {
-    echo "Starting $1"
-    "${prefix}/bin/start-service-over-dbus.sh" "$@"
-}
-
-start Zinc.DIAL
-start Zinc.Crb
-
-exit 0
-
-
-/opt/zinc-trunk/bin$ cat start-service-over-dbus.sh 
-#!/bin/bash
-
-#
-# Launch a dbus service using dbus activation
-#
-# Author: morgan.henry@youview.com
-#
-
-#
-# Usage: ./start-service-over-dbus.sh Zinc.Metadata [ --requires Zinc.System ]
-#
-
-busname=$1
-
-if [[ $2 == "--requires" ]]; then
-	# If we know the service we are about to start requires some other service
-	# that has an initialisation period that is potentially greater that the dbus method_call timeout
-	# then we can explicitly wait for the required service to start
-	# This should be avoided where possible, since it is sub-optimial
-	requires=$3
-	dbuswaitbusname --timeout 30 $requires
-fi
-
-# Send a ping to a known dbus service daemon to cause dbus activation trigger daemon launch
-dbus-send --session --type=method_call --print-reply --dest=$busname / org.freedesktop.DBus.Peer.Ping &
-
-
-{nickelmediad} {onscreenidd}
-/source/DEVARCH/Nickel/NickelOnScreenId.System.DBusServer/Makefile.am
-bin_PROGRAMS = \
-	onscreenidd
-
-/source/DEVARCH/Nickel/Nickel.System.DBusServer/Makefile.am
-bin_PROGRAMS = nickelmediad
-
-/source/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp
-
-int main(int argc, char *argv[]) {
-  NICKEL_INFO("Launching Fake Media Router Service Daemon...");
-  int result = EXIT_SUCCESS;
-
-  try {
-    MainLoop mainloop(BusName::MEDIA);
-    MediaDaemon daemon(mainloop);
-    mainloop.post(boost::bind(&MediaDaemon::start, &daemon, argc, argv));
-    result = mainloop.run();
-  } catch (std::exception& e) {
-    std::cerr << e.what() << endl;
-    result = EXIT_FAILURE;
-  }
-
-  NICKEL_INFO("Fake Media Router Service Daemon shutting down...");
-  return result;
-}
 
 
 ={============================================================================
@@ -6285,6 +6338,34 @@ Exec=/opt/zinc/bin/bronzemediad > x.log 2>&1
 *kt_dev_uv_stack_003* app-launch-manually
 
 killall uimanagerd; start-service-over-dbus Zinc.Application
+
+
+/opt/zinc-trunk/bin$ cat start-service-over-dbus.sh 
+#!/bin/bash
+
+#
+# Launch a dbus service using dbus activation
+#
+# Author: morgan.henry@youview.com
+#
+
+#
+# Usage: ./start-service-over-dbus.sh Zinc.Metadata [ --requires Zinc.System ]
+#
+
+busname=$1
+
+if [[ $2 == "--requires" ]]; then
+	# If we know the service we are about to start requires some other service
+	# that has an initialisation period that is potentially greater that the dbus method_call timeout
+	# then we can explicitly wait for the required service to start
+	# This should be avoided where possible, since it is sub-optimial
+	requires=$3
+	dbuswaitbusname --timeout 30 $requires
+fi
+
+# Send a ping to a known dbus service daemon to cause dbus activation trigger daemon launch
+dbus-send --session --type=method_call --print-reply --dest=$busname / org.freedesktop.DBus.Peer.Ping &
 
 
 ={============================================================================
@@ -10706,35 +10787,6 @@ note: to print out periodically
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: build webkit plugin
-
-zinc-build-root/release-humax-dtr_t2100/Zinc/Zinc.3rdPartyStack/
-qt-everywhere-opensource-src-5.1.0/qtwebkit/Source/WebCore/platform/
-graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
-
-
-// note: can use this script but it will builds whole qt and more importantly
-// applies patches.
-
-./run-3ps-make-standalone.sh qt-everywhere-opensource-sr
-
-
-// go to this directory under zb-shell and see the Makefile in the same
-// directory for other targets.
-
-cd $ZINC_NATIVE_BUILD_ROOT/release-humax-dtr_t2100/Zinc/Zinc.3rdPartyStack/\
-qt-everywhere-opensource-src-5.1.0
-
-make module-qtwebkit-clean (optional)
-make module-qtwebkit
-
-// note: do NOT use this since it copies from installed directory.
-// zb-copy libQt5WebKit.so.5.1.0
-
-scp ./qtwebkit/lib/libQt5WebKit.so.5.1.0 root@humax-04535:/opt/zinc-trunk/oss/lib
-
-
-={============================================================================
 *kt_dev_uv_stack_250* mr-create-vanadium-stack from html to mr
 
 HTMLMediaElement
@@ -14288,10 +14340,11 @@ $ scp $BLD/qtwebkit/lib/libQt5WebKit.so root@humax-01351:/opt/zinc-trunk/oss/lib
 
 
 ={============================================================================
-*kt_dev_uv_stack_250* mr-web: qt patches
+*kt_dev_uv_stack_250* z-qt-patches
+
+// qt patches related to DFB
 
 source/DEVARCH/Zinc/Zinc.3rdPartyStack/source-packages/qt-everywhere-opensource-src-5.1.0/patches$ 
-
 
 qt-everywhere-opensource-src-5.1.0/qtbase/src/plugins/platforms/directfb/qdirectfbwindow.cpp
 
@@ -16794,8 +16847,8 @@ The `newUridecodebinPadCb` starts building chains, then newUridecodebinPad() and
 autoplug().
 
 // *uridecodebin* -> *decodebin(video/audio)* 
-//      -> *intersink* -> *interslavepipeline* -> *intersrc* -> *multiqueue*
-//         IPCSINK      IPCSOURCE
+//      -> *intersink* - (IPC) -> *interslavepipeline* -> *intersrc* -> *multiqueue*
+//         IPCSINK                                    IPCSOURCE
 //
 //          -> *qtdemux* -> *h264parse* -> *nexussink*
 //

@@ -7072,6 +7072,48 @@ $ hexdump -C -n 100 DTT_Radio1_20150225_1603.ts
 /opt/zinc/oss/bin/busybox uptime; /opt/zinc/oss/bin/busybox lsof | wc -l
 
 
+={============================================================================
+*kt_linux_tool_051* tool-fdisk
+
+       -l, --list
+              List the partition tables for the specified devices and then exit.
+              If no devices are given, those mentioned in /proc/partitions (if
+                      that file exists) are used.
+
+
+={============================================================================
+*kt_linux_tool_051* tool-fs-lvm
+
+http://www.howtogeek.com/howto/40702/how-to-manage-and-use-lvm-logical-volume-management-in-ubuntu/
+
+
+={============================================================================
+*kt_linux_tool_051* tool-fs-btrfs
+
+https://btrfs.wiki.kernel.org/index.php/Main_Page
+
+Btrfs is a new copy on write (CoW) filesystem for Linux aimed at implementing
+advanced features while focusing on fault tolerance, repair and easy
+administration. Jointly developed at multiple companies, Btrfs is licensed under
+the GPL and open for contribution from anyone. Not too many companies have said
+that they are using Btrfs in production, but we welcome those who can say so on
+the production users page.
+
+The main Btrfs features available at the moment include:
+
+Writable snapshots, read-only snapshots 
+Efficient Incremental Backup
+
+Does it support SSD optimizations?
+
+    Yes, Debian Jessie and later automatically detect non-rotational hard disks
+    and ssd is added to the btrfs mount options. For more details on using SSDs
+    with Debian, refer to SSDOptimization. 
+    https://wiki.debian.org/SSDOptimization
+
+$ sudo apt-get install btrfs-tools
+
+
 # ============================================================================
 #{
 ={============================================================================
@@ -34130,7 +34172,492 @@ and decide what to do based on that.
 
 
 ={============================================================================
-*kt_linux_core_701* dbus introspection
+*kt_linux_core_700* dbus-case
+
+// MediaDaemon.cpp
+
+int main(int argc, char *argv[]) {
+  NICKEL_INFO("Launching Fake Media Router Service Daemon...");
+  int result = EXIT_SUCCESS;
+
+  try {
+    MainLoop mainloop(BusName::MEDIA);
+    MediaDaemon daemon(mainloop);
+    mainloop.post(boost::bind(&MediaDaemon::start, &daemon, argc, argv));
+    result = mainloop.run();
+  } catch (std::exception& e) {
+    std::cerr << e.what() << endl;
+    result = EXIT_FAILURE;
+  }
+
+  return result;
+}
+
+
+<wrapper>
+/////////////////////////////////////
+
+#ifndef ZINC_DBUS_BINDING_MAINLOOP_H_
+#define ZINC_DBUS_BINDING_MAINLOOP_H_
+
+#include "macros.h"
+
+#include <dbus-c++/connection.h>
+#include <dbus-c++/dispatcher.h>
+#include <dbus-c++/eventloop-integration.h>
+#include <zinc-common/AsynchronousEventDispatcher.h>
+
+#include <boost/make_shared.hpp>
+#include <boost/noncopyable.hpp>
+#include <boost/shared_ptr.hpp>
+
+NS_ZINC_DBUS_BINDING_OPEN
+
+/**
+ *  MainLoop class wraps dispatchers and make those dispatchers have a unique
+ *  interface to work in different situation.
+ *
+ *  It adapts a single dispatcher loop such that it can be used as any types of
+ *  dispatcher. It worth to do further modifying on the dispatchers to have
+ *  fewer dispatcher types for simplification
+ *
+ */
+
+class ZINC_EXPORT MainLoop : boost::noncopyable {
+public:
+	explicit MainLoop(const std::string& daemonName);
+
+	/**
+	 * Post a command to be run by any thread currently running the dispatcher
+	 * loop.
+	 */
+	void post(boost::function<void(void)> cb);
+
+    /**
+     * Break the dispatching loop, allowing graceful shutdown
+     */
+    void leave();
+
+	/**
+	 * Run the dispatcher loop.
+	 */
+	int run();
+
+	/**
+	 * Get different dispatchers maintained in mainloop
+	 */
+	boost::shared_ptr<NS_ZINC::Dispatcher> getZincDispatcher();
+	boost::shared_ptr<DBus::Dispatcher> getDbusDispatcher();
+	boost::shared_ptr<DBus::DefaultMainLoop> getDefaultMainLoop();
+
+private:
+	void initialization();
+	boost::shared_ptr<NS_ZINC::Dispatcher> dispatcher;
+	boost::shared_ptr<DBus::Dispatcher> dbusDispatcher;
+	boost::shared_ptr<DBus::DefaultMainLoop> defaultMainloop;
+	std::string name;
+};
+
+NS_ZINC_DBUS_BINDING_CLOSE
+
+#endif /* MAINLOOP_H_ */
+
+
+/////////////////////////////////////
+
+#include "../../include/dbus/MainLoop.h"
+
+#include <iostream>
+
+#include <cstdlib>
+
+namespace {
+/**
+ * Type conversion class to convert from DBus::DefaultMainLoop to NS_ZINC::Dispatcher
+ */
+class DBusMainLoopDispatcher: public NS_ZINC::Dispatcher {
+
+public:
+	explicit DBusMainLoopDispatcher(boost::shared_ptr<DBus::DefaultMainLoop> d_) :
+			d(d_) {
+	}
+
+	void post(boost::function<void(void)> fn) {
+		d->post_function(fn);
+	}
+
+	void onWorkAdded() {
+		d->add_external_work();
+	}
+
+	void onWorkRemoved() {
+		d->remove_external_work();
+	}
+
+	boost::shared_ptr<DBus::DefaultMainLoop> d;
+};
+
+} //anon namespace
+
+NS_ZINC_DBUS_BINDING_OPEN
+
+MainLoop::MainLoop(const std::string& daemonName) : name(daemonName) {
+	initialization();
+}
+
+
+// note: create dbus-dispatcher and dbus-main-loop
+
+void MainLoop::initialization(){
+
+	boost::shared_ptr<DBus::BusDispatcher> busDispatcher = 
+       boost::make_shared<DBus::BusDispatcher>();
+
+   // DBus::Dispatcher = DBus::BusDispatcher;
+	dbusDispatcher = busDispatcher;
+
+	// DBus::DefaultMainLoop = DBus::BusDispatcher;
+   // HOW?
+	defaultMainloop = busDispatcher;
+
+   // create wrapper(defaultMainloop);
+	dispatcher = boost::make_shared<DBusMainLoopDispatcher>(defaultMainloop);
+}
+
+void MainLoop::post(boost::function<void(void)> cb) {
+	dispatcher->post(cb);
+}
+
+
+void MainLoop::leave() {
+    dbusDispatcher->leave();
+}
+
+
+int MainLoop::run() {
+	int result = EXIT_FAILURE;
+	try {
+		dbusDispatcher->run();
+		result = EXIT_SUCCESS;
+	} catch (const std::exception& e) {
+		std::cerr << name << " ERROR: " << e.what() << std::endl;
+		throw;
+	} catch (...) {
+		std::cerr << name << " ERROR: Unknown\n";
+		throw;
+	}
+	return result;
+}
+
+boost::shared_ptr<NS_ZINC::Dispatcher> MainLoop::getZincDispatcher() {
+	return dispatcher;
+}
+boost::shared_ptr<DBus::Dispatcher> MainLoop::getDbusDispatcher() {
+	return dbusDispatcher;
+}
+boost::shared_ptr<DBus::DefaultMainLoop> MainLoop::getDefaultMainLoop() {
+	return defaultMainloop;
+}
+NS_ZINC_DBUS_BINDING_CLOSE
+
+
+<dbus-eventloop>
+
+// Zinc/Zinc.DBus-C++/include/dbus-c++/eventloop-integration.h
+
+namespace DBus {
+
+/* 
+ * Glue between the event loop and the DBus library
+ */
+class DXXAPI BusDispatcher 
+	: public Dispatcher, public DefaultMainLoop
+{
+public:
+	BusDispatcher(boost::shared_ptr<ErrorConverter> = DefaultErrorConverter::get());
+
+	~BusDispatcher();
+
+	bool running() { return _running; }
+
+	virtual void enter();
+
+	virtual void leave();
+
+	virtual void start_iteration();
+
+	virtual Timeout* add_timeout(Timeout::Internal *);
+
+	virtual void rem_timeout(Timeout *);
+
+	virtual Watch* add_watch(DBusWatch*);
+
+	virtual void rem_watch(Watch *);
+
+	void wakeup();
+
+	bool isThisDispatchThread() const {
+		return DefaultMainLoop::isThisDispatchThread();
+	}
+
+	bool shouldQueueCommand() const {
+		return DefaultMainLoop::shouldQueueCommand();
+	}
+	std::size_t run();
+	std::size_t poll();
+
+protected:
+	
+	void post_function(boost::function<void ()> command)
+	{
+		DefaultMainLoop::post_function(command);
+	}
+
+private:
+
+	volatile bool _running;
+};
+
+}
+
+
+// Zinc/Zinc.DBus-C++/src/eventloop-integration.cpp
+
+BusDispatcher::BusDispatcher(boost::shared_ptr<ErrorConverter> ec)
+	: Dispatcher()
+	, DefaultMainLoop(ec)
+	, _running(false)
+{
+	dbus_threads_init_default();
+}
+
+BusDispatcher::~BusDispatcher()
+{
+}
+
+
+// <dbus-busdispatcher>
+// From Makefile. DO not use these.
+// 
+// #am__objects_4 =  \
+// #	libdbus_c___1_la-glib-integration.lo
+// #am__objects_5 =  \
+// #	libdbus_c___1_la-ecore-integration.lo
+// 
+// Assumes that uses Glib since there are two options: Ecore and Glib.
+// 
+// // Defines ABC
+// // Zinc/Zinc.DBus-C++/include/dbus-c++/dispatcher.h
+// 
+// class DXXAPI Dispatcher;
+// 
+// 
+// // Zinc/Zinc.DBus-C++/include/dbus-c++/ecore-integration.h
+// // Zinc/Zinc.DBus-C++/include/dbus-c++/glib-integration.h
+// 
+// namespace DBus {
+// namespace Glib {
+// 
+// class DXXAPI BusDispatcher : public Dispatcher
+// {
+// public:
+// 
+// 	BusDispatcher();
+// 	~BusDispatcher();
+// 
+// 	void attach(GMainContext *);
+// 
+// 	void enter() {}
+// 
+// 	void leave() {}
+// 
+// 	Timeout *add_timeout(Timeout::Internal *);
+// 
+// 	void rem_timeout(Timeout *);
+// 
+// 	Watch* add_watch(DBusWatch*);
+// 
+// 	void rem_watch(Watch *);
+// 
+// 	void set_priority(int priority);
+// 
+// private:
+// 
+// 	GMainContext *_ctx;
+// 	int _priority;
+// 	GSource *_source;
+// };
+// 
+// } /* namespace Glib */
+// } /* namespace DBus */
+// 
+// 
+// // Zinc/Zinc.DBus-C++/src/glib-integration.cpp
+// 
+// Glib::BusDispatcher::BusDispatcher()
+// : _ctx(NULL), _priority(G_PRIORITY_DEFAULT), _source(NULL)
+// {
+// }
+
+
+<dbus-defaultmainloop>
+
+// Zinc/Zinc.DBus-C++/include/dbus-c++/eventloop.h
+
+/*
+ *
+ *  D-Bus++ - C++ bindings for D-Bus
+ *
+ *  Copyright (C) 2005-2009  Paolo Durante <shackan@gmail.com>
+ */
+
+#ifndef __DBUSXX_EVENTLOOP_H
+#define __DBUSXX_EVENTLOOP_H
+
+namespace DBus {
+
+/*
+ * these Default *classes implement a very simple event loop which
+ * is used here as the default main loop, if you want to hook
+ * a different one use the Bus *classes in eventloop-integration.h
+ * or the Glib::Bus *classes as a reference
+ */
+
+class DXXAPI DefaultMainLoop
+{
+public:
+
+	DefaultMainLoop(boost::shared_ptr<ErrorConverter>);
+
+	virtual ~DefaultMainLoop();
+
+	void wakeup();
+
+	bool isThisDispatchThread() const;
+	bool shouldQueueCommand() const;
+
+	void post_function(boost::function<void ()>);
+
+	/**
+	 * Register for a callback after the specified amount of time.
+	 *
+	 * @param interval_ms The amount of time to wait before calling the
+	 *                    callback in milliseconds
+	 * @param repeat      A value of false will cause the callback to be called
+	 *                    exactly once.  i.e. the callback is canceled
+	 *                    immediately after it is first called.
+	 * @param callback    The callback functor to call after/every interval_ms
+	 *                    milliseconds.
+	 *
+	 * @return A pointer to a DefaultTimeout object which can be used to cancel
+	 *         the timeout.
+	 */
+	DefaultTimeout* add_timeout(int interval_ms, bool repeat, boost::function<void (DefaultTimeout&)> callback);
+
+	/**
+	 * Register for a callback when a file descriptor becomes ready for I/O
+	 *
+	 * @param fd      The file descriptor to watch
+	 * @param flags   Flags describing under what circumstances the callback
+	 *                should be called.  These are the same as what should be
+	 *                passed to poll as the events member of the pollfd
+	 *                structure.  This will typically be several of POLLIN,
+	 *                POLLPRI, POLLOUT, POLLRDHUP, POLLERR, POLLHUP and
+	 *                POLLNVAL.  See man 2 poll for more information.
+	 * @param handler The callback functor to call when the fd becomes ready
+	 *                for I/O
+	 *
+	 * @return A pointer to a DefaultWatch object which can be used to stop
+	 *         watching the file descriptor.
+	 */
+	DefaultWatch* add_watch(int fd, int flags, boost::function<void (DefaultWatch&)> handler);
+
+	/**
+	 * The way of doing graceful exit of a dispatcher is by removing works from
+	 * it and letting it exit after it's run out of works.
+	 *
+	 * In order to avoid the dispatcher run down before all the Dispatcher::work
+	 * objects destroyed, it is necessary to maintain a ref count of the works.
+	 *
+	 * Working with the ref count, Flags of BLOCK_FOR_EXTERNAL_WORK can be set
+	 * to decide whether polling in dispatcher should block(for some timeout)
+	 * when there is any work has not been finished on the dispatcher.
+	 *
+	 */
+	void add_external_work();
+
+	void remove_external_work();
+
+	/**
+	 * Do as much work (call as many callbacks) as possible without blocking
+	 * on any of the watchers or timeouts.
+	 *
+	 * @return The number of callbacks that were called.
+	 */
+	size_t poll();
+protected:
+
+	virtual unsigned dispatch(unsigned flags);
+
+	void enteredLoop();
+
+	void leftLoop();
+
+	bool has_cmds();
+	bool has_timeouts();
+	bool has_watches();
+
+	/**
+	 * check whether there is any work has not been finished on the dispatcher
+	 */
+	bool has_external_work();
+
+	/**
+	 * This struct follows RAII(Resource Acquisition Is Initialization), in
+	 * order to make sure that the leftloop is always called even there is an
+	 * exception thrown.
+	 *
+	 */
+	struct LoopScope {
+		LoopScope(DefaultMainLoop* loop_)
+		 : loop(loop_) {
+			loop->enteredLoop();
+		}
+		~LoopScope(){
+			loop->leftLoop();
+		}
+		DefaultMainLoop* loop;
+	};
+private:
+	unsigned processCommands();
+
+	boost::mutex _mutex_cmds;
+	std::list<boost::function<void ()> > _cmds;
+
+	boost::mutex _mutex_t;
+	std::list<DefaultTimeout> _timeouts;
+
+	boost::mutex _mutex_w;
+	std::list<DefaultWatch> _watches;
+
+	unsigned externalWorkCount;
+
+	int wakeupReadFd;
+	int wakeupWriteFd;
+
+	bool enteredDispatch;
+	pthread_t dispatchThread;
+
+	boost::shared_ptr<ErrorConverter> errorConverter;
+};
+
+} /* namespace DBus */
+
+#endif//__DBUSXX_EVENTLOOP_H
+
+
+={============================================================================
+*kt_linux_core_701* dbus-introspection
 
 {introspection}
 D-Bus objects may support the interface org.freedesktop.DBus.Introspectable. This interface has one

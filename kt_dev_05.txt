@@ -43,7 +43,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_bcast_302| gst-h264parse
 *kt_dev_bcast_302* gst: elements: tsparse
 *kt_dev_bcast_302* gst-identity
-*kt_dev_bcast_302* gst: elements: queue
+*kt_dev_bcast_302* gst-queue
+*kt_dev_bcast_302* gst-multiqueue
 *kt_dev_bcast_302* gst: elements: typefind
 *kt_dev_bcast_302* gst-fakesink
 *kt_dev_bcast_302* gst-hlsdemux
@@ -4564,10 +4565,39 @@ Element Signals:
 
 
 ={============================================================================
-*kt_dev_bcast_302* gst: elements: queue
+*kt_dev_bcast_302* gst-queue
 
 <element>
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/gstreamer-plugins-queue.html
+
+Description
+
+Data is queued until one of the limits specified by the “max-size-buffers”,
+“max-size-bytes” and/or “max-size-time” properties has been reached. Any attempt
+    to push more buffers into the queue will block the pushing thread until more
+    space becomes available.
+
+The queue will create a new thread on the source pad to decouple the processing
+on sink and source pad.
+
+You can query how many buffers are queued by reading the “current-level-buffers”
+property. You can track changes by connecting to the
+notify::current-level-buffers signal (which like all signals will be emitted
+        from the streaming thread). The same applies to the “current-level-time”
+and “current-level-bytes” properties.
+
+The default queue size limits are 200 buffers, 10MB of data, or one second worth
+of data, whichever is reached first.
+
+As said earlier, the queue blocks by default when one of the specified maximums
+(bytes, time, buffers) has been reached. You can set the “leaky” property to
+specify that instead of blocking it should leak (drop) new or old buffers.
+
+The “underrun” signal is emitted when the queue has less data than the specified
+minimum thresholds require (by default: when the queue is empty). The “overrun”
+signal is emitted when the queue is filled up. Both signals are emitted from the
+context of the streaming thread.
+
 
 // to give a delay
 ! queue min-threshold-time=2000000000
@@ -4695,6 +4725,66 @@ Element Signals:
                                    gpointer user_data);
   "pushing" :  void user_function (GstElement* object,
                                    gpointer user_data);
+
+
+={============================================================================
+*kt_dev_bcast_302* gst-multiqueue
+
+https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-plugins/html/gstreamer-plugins-multiqueue.html
+
+Description
+
+Multiqueue is similar to a normal GstQueue with the following additional features:
+
+    Multiple streamhandling
+
+        The element handles queueing data on more than one stream at once. To
+        achieve such a feature it has request sink pads (sinku) and 'sometimes'
+        src pads (srcu).
+
+        When requesting a given sinkpad with gst_element_request_pad(), the
+        associated srcpad for that stream will be created. Example: requesting
+        sink1 will generate src1.
+
+    Non-starvation on multiple streams
+
+        If more than one stream is used with the element, the streams' queues
+        will be dynamically grown (up to a limit), in order to ensure that no
+        stream is risking data starvation. This guarantees that at any given
+        time there are at least N bytes queued and available for each individual
+        stream.
+
+        If an EOS event comes through a srcpad, the associated queue will be
+        considered as 'not-empty' in the queue-size-growing algorithm.
+
+    Non-linked srcpads graceful handling
+
+        In order to better support dynamic switching between streams, the
+        multiqueue (unlike the current GStreamer queue) continues to push
+        buffers on non-linked pads rather than shutting down.
+
+        In addition, to prevent a non-linked stream from very quickly consuming
+        all available buffers and thus 'racing ahead' of the other streams, the
+        element must ensure that buffers and inlined events for a non-linked
+        stream are pushed in the same order as they were received, relative to
+        the other streams controlled by the element. This means that a buffer
+        cannot be pushed to a non-linked pad any sooner than buffers in any
+        other stream which were received before it.
+
+Data is queued until one of the limits specified by the “max-size-buffers”,
+“max-size-bytes” and/or “max-size-time” properties has been reached. Any attempt
+    to push more buffers into the queue will block the pushing thread until more
+    space becomes available. “extra-size-buffers”,
+
+“extra-size-bytes” and “extra-size-time” are currently unused.
+
+The default queue size limits are 5 buffers, 10MB of data, or two second worth
+of data, whichever is reached first. Note that the number of buffers will
+dynamically grow depending on the fill level of other queues.
+
+The “underrun” signal is emitted when all of the queues are empty. The “overrun”
+signal is emitted when one of the queues is filled. Both signals are emitted
+from the context of the streaming thread.
 
 
 ={============================================================================
@@ -5389,9 +5479,89 @@ to point to the folder where you want the files to be placed. gst-launch will
 create a .dot file at each state change, so you can see the evolution of the
 caps negotiation. Unset the variable to disable this facility. 
 
+
+<from-app>
 From within your application, you can use the GST_DEBUG_BIN_TO_DOT_FILE() and
 GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS() macros to generate .dot files at your
 convenience.
+
+    case GST_MESSAGE_STATE_CHANGED:
+    {
+        GstState oldstate, newstate, pending;
+
+        gst_message_parse_state_changed(msg, &oldstate, &newstate, &pending);
+
+        if (newstate == GST_STATE_PLAYING) {
+
+            NICKEL_ERROR("KT-GEN-DOT?");
+
+            GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(
+                GST_BIN(pipeline.get()),
+                GST_DEBUG_GRAPH_SHOW_ALL, GST_ELEMENT_NAME(msg->src));
+        }
+
+        break;
+    }
+
+gstreamer/gst/gstdebugutils.h
+
+/**
+ * GstDebugGraphDetails:
+ * @GST_DEBUG_GRAPH_SHOW_MEDIA_TYPE: show caps-name on edges
+ * @GST_DEBUG_GRAPH_SHOW_CAPS_DETAILS: show caps-details on edges
+ * @GST_DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS: show modified parameters on
+ *                                           elements
+ * @GST_DEBUG_GRAPH_SHOW_STATES: show element states
+ * @GST_DEBUG_GRAPH_SHOW_FULL_PARAMS: show full element parameter values even
+ *                                    if they are very long
+ * @GST_DEBUG_GRAPH_SHOW_ALL: show all the typical details that one might want
+ * @GST_DEBUG_GRAPH_SHOW_VERBOSE: show all details regardless of how large or
+ *                                verbose they make the resulting output
+ *
+ * Available details for pipeline graphs produced by GST_DEBUG_BIN_TO_DOT_FILE()
+ * and GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS().
+ */
+typedef enum {
+  GST_DEBUG_GRAPH_SHOW_MEDIA_TYPE         = (1<<0),
+  GST_DEBUG_GRAPH_SHOW_CAPS_DETAILS       = (1<<1),
+  GST_DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS = (1<<2),
+  GST_DEBUG_GRAPH_SHOW_STATES             = (1<<3),
+  GST_DEBUG_GRAPH_SHOW_FULL_PARAMS        = (1<<4),
+  GST_DEBUG_GRAPH_SHOW_ALL                = ((1<<4)-1),
+  GST_DEBUG_GRAPH_SHOW_VERBOSE            = (-1)
+} GstDebugGraphDetails;
+
+/**
+ * GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS:
+ * @bin: the top-level pipeline that should be analyzed
+ * @details: details to show in the graph, e.g. #GST_DEBUG_GRAPH_SHOW_ALL or
+ *    one or more other #GstDebugGraphDetails flags.
+ * @file_name: output base filename (e.g. "myplayer")
+ *
+ * This works like GST_DEBUG_BIN_TO_DOT_FILE(), but adds the current timestamp
+ * to the filename, so that it can be used to take multiple snapshots.
+ */
+#define GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(bin, details, file_name) \
+    gst_debug_bin_to_dot_file_with_ts (bin, details, file_name)
+
+gstreamer/gst/gstdebugutils.c
+
+/*
+ * gst_debug_bin_to_dot_file:
+ * @bin: the top-level pipeline that should be analyzed
+ * @file_name: output base filename (e.g. "myplayer")
+ *
+ * To aid debugging applications one can use this method to write out the whole
+ * network of gstreamer elements that form the pipeline into an dot file.
+ * This file can be processed with graphviz to get an image.
+ * <informalexample><programlisting>
+ *  dot -Tpng -oimage.png graph_lowlevel.dot
+ * </programlisting></informalexample>
+ */
+void
+gst_debug_bin_to_dot_file (GstBin * bin, GstDebugGraphDetails details,
+    const gchar * file_name);
+
 
 dot -Tjpeg gst-launch.PLAYING_PAUSED.dot -o gst-launch.PLAYING_PAUSED.jpg
 
