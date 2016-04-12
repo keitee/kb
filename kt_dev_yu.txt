@@ -57,7 +57,6 @@
 
 *kt_dev_uv_stack_105* zinc-dbus: monitor
 *kt_dev_uv_stack_105* dbus-commands
-*kt_dev_uv_stack_105* dbus-py
 *kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
 *kt_dev_uv_stack_105* zinc-dbus-mock-generation-mr case
 *kt_dev_uv_stack_105* zinc-dbus-mock-use-mr-case-vanadium
@@ -70,6 +69,9 @@
 *kt_dev_uv_stack_105* app-ui-version
 *kt_dev_uv_stack_105* app-crid app-resource-filename
 *kt_dev_uv_stack_105* app-appmgr-mercury
+*kt_dev_uv_stack_105* app-launch-params
+*kt_dev_uv_stack_105* app-launch-dbus-py
+*kt_dev_uv_stack_105* app-launch-crb
 *kt_dev_uv_stack_105* app-power
 *kt_dev_uv_stack_200* app-stagecraft and air
 
@@ -117,7 +119,6 @@
 *kt_dev_uv_stack_250* mr-test-vanadium-play-videoextended
 *kt_dev_uv_stack_250* mr-web: yv webkit plugin, vanadium
 *kt_dev_uv_stack_250* z-qt-patches
-*kt_dev_uv_stack_250* mr-web-crb-launch
 *kt_dev_uv_stack_250* mr-web: get w3c threads
 *kt_dev_uv_stack_250* mr-ng-browser-validation
 
@@ -381,19 +382,6 @@ https://wiki.youview.co.uk/display/canvas/HOWTO+Install+Humax+DTR-T1000+T1000+H2
 sudo screen /dev/ttyS0 115200
 
 to close screen use Ctrl-A, k, y. Do not use Ctrl-C as it can kill processes running on the box.
-
-
-={============================================================================
-*kt_dev_uv_set_006* set-filegateway
-
-scp -r kit.park@filegateway.youview.co.uk:/export/repos/\
-huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP33_Eng_Release_20150331_for_YVHUAWEI-6751 ./
-
-ssh kit.park@filegateway.youview.co.uk ls -alR 
-
-/export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP46_Release_20150424/
-
-/export/repos/humax/from_humax/
 
 
 ={============================================================================
@@ -1453,7 +1441,8 @@ AM_CXXFLAGS = \
 bin_PROGRAMS = nickelmediad
 
 nickelmediad_SOURCES = src/MediaDaemon.cpp
-nickelmediad_CPPFLAGS = -g
+nickelmediad_CPPFLAGS = $(AM_CPPFLAGS) -g
+nickelmediad_CPPFLAGS = -g      // DO NOT WORK
 
 nickelmediad_LDADD = $(LIBADDS) @BOOST_PROGRAM_OPTIONS_LIBS@ libNickelSystemDbusAdaptor.la libNickelSystemDbus.la 
 #nickelmediad_CPPFLAGS = -g     // DO NOT WORK
@@ -3049,6 +3038,7 @@ http://devnfs/DEVARCH/tools-humax/
 mipsgdb-7.9.tar
 
 setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.34 
+setup-humax.sh -T mipsgdb-7.9.tar 172.20.32.153 
 
 <two-versions>
 // when use the default
@@ -5423,181 +5413,6 @@ dbus-send --print-reply --session --dest=Zinc.Tuner /Zinc/Tuner/TunerControl Zin
 
 
 ={============================================================================
-*kt_dev_uv_stack_105* dbus-py
-
-Vanadium/Vanadium.W3CEngine/scripts/launch-browser.py ------------
-
-// from baby
-#!/opt/zinc/oss/bin/python
-
-
-from dbus.mainloop.glib import DBusGMainLoop
-from dbus.exceptions import DBusException
-import dbus
-import os
-import glob
-import sys
-import time
-import re
-import copy
-
-dest = '''Zinc.BabySitter'''
-path = '''/Zinc/BabySitter/Launcher'''
-
-class Browser(object):
-    def __init__(self):
-        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
-        self.obj = self.bus.get_object(dest, path)
-        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.BabySitter.Launcher')
-        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
-        self.args = [
-            "/opt/zinc/bin/radiumairlauncher",
-            "crid://bbc.co.uk/iplayer/flash_player/1",
-            "--app-launch-parameters",
-            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application",
-            "crid://bbc.co.uk/iplayer/flash_player/1",
-            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier",
-            "uk.co.bbc",
-            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer",
-            "crid://bbc.co.uk/iplayer/flash_player/1",
-            "launch_context.ui.youview.com",
-            "broadcast.mheg",
-            "location.broadcast.youview.com",
-            "?#&*history=broadcast",
-            "urlbase.broadcast.youview.com",
-            "http://www.bbc.co.uk/redbuttonhtml/",
-            "channel.broadcast.youview.com",
-            "dvb://233a..1044"
-        ]
-
-    def launch(self, instanceId):
-        self._cleanJailDir(instanceId)
-        self.env = [
-            "YV_APP_RUNTIME_INSTANCE_ID=" + str(instanceId),
-            "DBUS_SYSTEM_BUS_ADDRESS=%s" % self.dbus_bus_address ]
-
-        self.processPath = self.iface.launch(self.args, self.env)
-        self.process = self.bus.get_object("Zinc.BabySitter", self.processPath)
-        self.processIface = dbus.Interface(self.process, "Zinc.BabySitter.Process")
-
-    def getPid(self):
-        if not self.processIface is None:
-            return self.processIface.pid()
-
-    def kill(self):
-        self.processIface.kill(1000)
-
-    def _cleanJailDir(self, instanceId):
-        try:
-            # Clean up the sandbox
-            os.removedirs(os.path.join('/run/youview/jail/applications',
-                          str(instanceId)))
-            os.removedirs(os.path.join('/tmp/youview/applications',
-                          str(instanceId)))
-        except:
-            print ("Error removing jail directories (hopefully because they're empty). Carrying on...")
-
-    def isAlive(self):
-        import subprocess
-        try:
-            subprocess.check_call(['killall', '-0', 'w3cEngine'])
-            return True
-        except:
-            return False
-            
-
-def main(argv):
-    try:
-        instanceId = 999
-        if (len(argv) > 0):
-            instanceId = int(argv[1])
-        else:
-            idFile = open("instanceid", "a+")
-
-            instanceId = idFile.read()
-
-            if not instanceId:
-                    instanceId = 2
-            else:
-                    instanceId = int(instanceId)
-            instanceId += 1
-            idFile.truncate(0)
-            idFile.write(str(instanceId))
-
-	print ('Using instance id %i' % instanceId)
-
-        browser = Browser()
-
-        if len(argv) > 3 and argv[2] == '--restart-interval':
-            restart_interval = int(argv[3])
-            while True:
-                print ('Launching instance %i' % instanceId)
-                browser.launch(instanceId)
-                #print ('pid %s' % str(browser.getPid()))
-                time.sleep(restart_interval)
-                if not browser.isAlive():
-                    print ('Browser died early! app id = %i' % instanceId)
-                else:
-                    print ('Killing after sleeping for %i' % restart_interval)
-                browser.kill()
-                found_corefiles = glob.glob('/var/corefiles/core.*')
-                if len(found_corefiles) > 0:
-                    print ('Found %i corefiles for app id %i (pid: %i)!' %
-                            (len(found_corefiles), instanceid,
-                             browser.getPid()))
-                instanceId += 1
-        else:
-            raw_input("Enter to exit")
-            browser.kill()
-
-    except Exception, e:
-        print e
-
-if __name__ == '__main__':
-    sys.exit(main(sys.argv))
-
-
-<script-to-run>
-
-#!/bin/bash
-echo "Removing props files to disable logging"
-
-cd /opt/zinc-trunk/share/
-
-# Stash the default props file away
-mv zinc-common/zinc.common.props zcp.default
-
-# Delete all the props files
-find -name '*.props' | xargs rm
-
-# Move the stashed default back again
-mv zcp.default zinc-common/zinc.common.props
-
-echo "Running the test in a loop, ever 20 seconds"
-
-mkdir /var/log/dbus-monitor
-dbus-monitor &> /var/log/dbus-monitor/$(date +%s).log &
-
-launch-browser.py 17 --restart-interval 20
-
-
-<change-channel>
-tcdest = '''Zinc.Tuner'''
-tcpath = '''/Zinc/Tuner/TunerControl'''
-
-class Browser(object):
-    def __init__(self):
-        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
-
-        self.tcobj = self.bus.get_object(tcdest, tcpath)
-        self.tciface = dbus.Interface(self.tcobj, dbus_interface = 'Zinc.Tuner.TunerControl')
-
-    def changeToOne(self):
-        print ("change channel to bbc one...")
-        self.tciface.setTargetService("dvb://233a..1044", 0)
-
-
-={============================================================================
 *kt_dev_uv_stack_105* zinc-dbus: Error.NoReply
 
 <1>
@@ -6646,30 +6461,30 @@ down your application, this will in turn trigger an onTerminationImminent event.
 
 data/introspection-xml/enum-ApplicationLifecycleState.xml
 
-	<yv:enum type="u" name="Zinc.Application.ApplicationLifecycleState">
-		<yv:enumvalue name="ACTIVATED" value="0" />
-		<yv:enumvalue name="DEACTIVATED" value="1" />
-		<yv:enumvalue name="TERMINATION_IMMINENT" value="2" />
-        <yv:enumvalue name="TERMINATED" value="3" />
-        <yv:enumvalue name="TERMINATED_REUSED" value="4" />
-	</yv:enum>
+<yv:enum type="u" name="Zinc.Application.ApplicationLifecycleState">
+  <yv:enumvalue name="ACTIVATED" value="0" />
+  <yv:enumvalue name="DEACTIVATED" value="1" />
+  <yv:enumvalue name="TERMINATION_IMMINENT" value="2" />
+    <yv:enumvalue name="TERMINATED" value="3" />
+    <yv:enumvalue name="TERMINATED_REUSED" value="4" />
+</yv:enum>
 
-    	<signal name="ApplicationLifecycleEvent">
-    		<yv:docstring>
-				This signal is emitted in response to an Application becoming Active, Inactive or prior to 
-				the Application terminating.
-			</yv:docstring>
-			<arg type="u" yv:type="[ApplicationLifecycleState]" name="applicationLifecycleState">
-				<yv:docstring>
-					The Application’s Lifecycle State.
-				</yv:docstring>
-			</arg>
-			<arg type="i" name="applicationRuntimeInstanceID">
-				<yv:docstring>
-					The unique Identifier which identifies the Application to which the state change pertains.
-				</yv:docstring>
-			</arg>
-    	</signal>
+  <signal name="ApplicationLifecycleEvent">
+     <yv:docstring>
+        This signal is emitted in response to an Application becoming Active, Inactive or prior to 
+        the Application terminating.
+     </yv:docstring>
+     <arg type="u" yv:type="[ApplicationLifecycleState]" name="applicationLifecycleState">
+        <yv:docstring>
+           The Application’s Lifecycle State.
+        </yv:docstring>
+     </arg>
+     <arg type="i" name="applicationRuntimeInstanceID">
+        <yv:docstring>
+           The unique Identifier which identifies the Application to which the state change pertains.
+        </yv:docstring>
+     </arg>
+  </signal>
 
 ApplicationManagerEventListener.h
 
@@ -6718,11 +6533,14 @@ signal sender=:1.19 -> dest=(null destination) serial=2556 path=/Zinc/Applicatio
    int32 19
 
 
-<launch-application>
+={============================================================================
+*kt_dev_uv_stack_105* app-launch-params
+
+<launch-app-via-crb>
 
 include/ApplicationManagerSync.h
 
-63:	virtual int32_t launchApplication(const std::string& uri_in, const std::map< std::string, std::string >& launchParameters_in) = 0;
+63: virtual int32_t launchApplication(const std::string& uri_in, const std::map< std::string, std::string >& launchParameters_in) = 0;
 
 [11-03-2016 14:25:46.923819] method call sender=:1.100 -> dest=Zinc.Application serial=81 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=launchApplication
    string "crid://bbc.co.uk/iplayer/flash_player/1"
@@ -6754,6 +6572,42 @@ include/ApplicationManagerSync.h
    ]
 
 
+<launch-app-via-player>
+[12-04-2016 17:51:02.474250] method call sender=:1.111 -> dest=Zinc.Application serial=1672 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=launchApplication
+   string "crid://bbc.co.uk/iplayer/flash_player/1"
+   array [
+      dict entry(
+         string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application"
+         string "crid://bbc.co.uk/iplayer/flash_player/1"
+      )
+      dict entry(
+         string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
+         string "uk.co.bbc"
+      )
+      dict entry(
+         string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer"
+         string "crid://bbc.co.uk/iplayer/flash_player/1"
+      )
+      dict entry(
+         string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.onDemandPlayer"
+         string "uk.co.bbc"
+      )
+      dict entry(
+         string "launch_context.ui.youview.com"
+         string "portal"
+      )
+      dict entry(
+         string "selected_service.ui.youview.com"
+         string "tag:bbc.co.uk,2015:iplayer"
+      )
+      dict entry(
+         string "tvp.bbc.co.uk"
+         string "iplayer"
+      )
+   ]
+
+// UIME -> BS
+
 [11-03-2016 14:25:46.951837] method call sender=:1.139 -> dest=Zinc.BabySitter serial=422 path=/Zinc/BabySitter/Launcher; interface=Zinc.BabySitter.Launcher; member=launch
    array [
       string "/opt/zinc/bin/radiumairlauncher"
@@ -6779,6 +6633,348 @@ include/ApplicationManagerSync.h
 
 
 ={============================================================================
+*kt_dev_uv_stack_105* app-launch-dbus-py
+
+<launch-app-via-crb>
+// note: to launch a browser with crb web page
+// works for FR15 but see an error when used on master.
+// Zinc.Application.Error.UnsupportedContentType: Invalid suffix for non local-application-library application
+
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+
+        self.tcobj = self.bus.get_object(tcdest, tcpath)
+        self.tciface = dbus.Interface(self.tcobj, dbus_interface = 'Zinc.Tuner.TunerControl')
+
+        self.obj = self.bus.get_object(dest, path)
+        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.Application.ApplicationManager')
+        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
+        self.args = "crid://bbc.co.uk/iplayer/flash_player/1"
+        self.params = {
+            "channel.broadcast.youview.com"
+            : "dvb://233a..1044",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
+            : "uk.co.bbc",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.linearEnhancement"
+            : "uk.co.bbc",
+            "launch_context.ui.youview.com"
+            : "broadcast.mheg",
+            "location.broadcast.youview.com"
+            : "?#&*history=broadcast",
+            "urlbase.broadcast.youview.com"
+            : "http://www.bbc.co.uk/redbuttonhtml/"
+       }
+
+    def launch(self, instanceId):
+        self._cleanJailDir(instanceId)
+        self.env = [
+            "YV_APP_RUNTIME_INSTANCE_ID=" + str(instanceId),
+            "DBUS_SYSTEM_BUS_ADDRESS=%s" % self.dbus_bus_address ]
+
+        self.processPath = self.iface.launchApplication(self.args, self.params)
+
+
+<launch-app-via-player>
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+
+        self.tcobj = self.bus.get_object(tcdest, tcpath)
+        self.tciface = dbus.Interface(self.tcobj, dbus_interface = 'Zinc.Tuner.TunerControl')
+
+        self.obj = self.bus.get_object(dest, path)
+        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.Application.ApplicationManager')
+        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
+        self.args = "crid://bbc.co.uk/iplayer/flash_player/1"
+        self.params = {
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application"
+            : "crid://bbc.co.uk/iplayer/flash_player/1",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
+            : "uk.co.bbc",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer"
+            : "crid://bbc.co.uk/iplayer/flash_player/1",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.onDemandPlayer"
+            : "uk.co.bbc",
+            "launch_context.ui.youview.com"
+            : "portal",
+            "selected_service.ui.youview.com"
+            : "tag:bbc.co.uk,2015:iplayer",
+            "tvp.bbc.co.uk"
+            : "iplayer"
+       }
+
+
+<launch-app-via-player> 26.19 (master)
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+
+        self.tcobj = self.bus.get_object(tcdest, tcpath)
+        self.tciface = dbus.Interface(self.tcobj, dbus_interface = 'Zinc.Tuner.TunerControl')
+
+        self.obj = self.bus.get_object(dest, path)
+        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.Application.ApplicationManager')
+        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
+        self.args = "crid://bbc.co.uk/iplayer/flash_player/1"
+        self.params = {
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application"
+            : "crid://bbc.co.uk/iplayer/flash_player/1",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
+            : "uk.co.bbc",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer"
+            : "crid://bbc.co.uk/iplayer/flash_player/1",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.onDemandPlayer"
+            : "uk.co.bbc",
+            "launch_context.ui.youview.com"
+            : "portal",
+            "tvp.bbc.co.uk"
+            : "iplayer"
+       }
+
+
+//
+
+Vanadium/Vanadium.W3CEngine/scripts/launch-browser.py ------------
+
+// from baby
+#!/opt/zinc/oss/bin/python
+
+
+from dbus.mainloop.glib import DBusGMainLoop
+from dbus.exceptions import DBusException
+import dbus
+import os
+import glob
+import sys
+import time
+import re
+import copy
+
+dest = '''Zinc.BabySitter'''
+path = '''/Zinc/BabySitter/Launcher'''
+
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+        self.obj = self.bus.get_object(dest, path)
+        self.iface = dbus.Interface(self.obj, dbus_interface = 'Zinc.BabySitter.Launcher')
+        self.dbus_bus_address = os.getenv("DBUS_SESSION_BUS_ADDRESS")
+        self.args = [
+            "/opt/zinc/bin/radiumairlauncher",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "--app-launch-parameters",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2011-10-22#groupId.application",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier",
+            "uk.co.bbc",
+            "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2014-09-25#groupId.application.ondemandPlayer",
+            "crid://bbc.co.uk/iplayer/flash_player/1",
+            "launch_context.ui.youview.com",
+            "broadcast.mheg",
+            "location.broadcast.youview.com",
+            "?#&*history=broadcast",
+            "urlbase.broadcast.youview.com",
+            "http://www.bbc.co.uk/redbuttonhtml/",
+            "channel.broadcast.youview.com",
+            "dvb://233a..1044"
+        ]
+
+    def launch(self, instanceId):
+        self._cleanJailDir(instanceId)
+        self.env = [
+            "YV_APP_RUNTIME_INSTANCE_ID=" + str(instanceId),
+            "DBUS_SYSTEM_BUS_ADDRESS=%s" % self.dbus_bus_address ]
+
+        self.processPath = self.iface.launch(self.args, self.env)
+        self.process = self.bus.get_object("Zinc.BabySitter", self.processPath)
+        self.processIface = dbus.Interface(self.process, "Zinc.BabySitter.Process")
+
+    def getPid(self):
+        if not self.processIface is None:
+            return self.processIface.pid()
+
+    def kill(self):
+        self.processIface.kill(1000)
+
+    def _cleanJailDir(self, instanceId):
+        try:
+            # Clean up the sandbox
+            os.removedirs(os.path.join('/run/youview/jail/applications',
+                          str(instanceId)))
+            os.removedirs(os.path.join('/tmp/youview/applications',
+                          str(instanceId)))
+        except:
+            print ("Error removing jail directories (hopefully because they're empty). Carrying on...")
+
+    def isAlive(self):
+        import subprocess
+        try:
+            subprocess.check_call(['killall', '-0', 'w3cEngine'])
+            return True
+        except:
+            return False
+            
+
+def main(argv):
+    try:
+        instanceId = 999
+        if (len(argv) > 0):
+            instanceId = int(argv[1])
+        else:
+            idFile = open("instanceid", "a+")
+
+            instanceId = idFile.read()
+
+            if not instanceId:
+                    instanceId = 2
+            else:
+                    instanceId = int(instanceId)
+            instanceId += 1
+            idFile.truncate(0)
+            idFile.write(str(instanceId))
+
+	print ('Using instance id %i' % instanceId)
+
+        browser = Browser()
+
+        if len(argv) > 3 and argv[2] == '--restart-interval':
+            restart_interval = int(argv[3])
+            while True:
+                print ('Launching instance %i' % instanceId)
+                browser.launch(instanceId)
+                #print ('pid %s' % str(browser.getPid()))
+                time.sleep(restart_interval)
+                if not browser.isAlive():
+                    print ('Browser died early! app id = %i' % instanceId)
+                else:
+                    print ('Killing after sleeping for %i' % restart_interval)
+                browser.kill()
+                found_corefiles = glob.glob('/var/corefiles/core.*')
+                if len(found_corefiles) > 0:
+                    print ('Found %i corefiles for app id %i (pid: %i)!' %
+                            (len(found_corefiles), instanceid,
+                             browser.getPid()))
+                instanceId += 1
+        else:
+            raw_input("Enter to exit")
+            browser.kill()
+
+    except Exception, e:
+        print e
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
+
+
+<script-to-run>
+
+#!/bin/bash
+echo "Removing props files to disable logging"
+
+cd /opt/zinc-trunk/share/
+
+# Stash the default props file away
+mv zinc-common/zinc.common.props zcp.default
+
+# Delete all the props files
+find -name '*.props' | xargs rm
+
+# Move the stashed default back again
+mv zcp.default zinc-common/zinc.common.props
+
+echo "Running the test in a loop, ever 20 seconds"
+
+mkdir /var/log/dbus-monitor
+dbus-monitor &> /var/log/dbus-monitor/$(date +%s).log &
+
+launch-browser.py 17 --restart-interval 20
+
+
+<change-channel>
+tcdest = '''Zinc.Tuner'''
+tcpath = '''/Zinc/Tuner/TunerControl'''
+
+class Browser(object):
+    def __init__(self):
+        self.bus = dbus.SessionBus(mainloop = DBusGMainLoop())
+
+        self.tcobj = self.bus.get_object(tcdest, tcpath)
+        self.tciface = dbus.Interface(self.tcobj, dbus_interface = 'Zinc.Tuner.TunerControl')
+
+    def changeToOne(self):
+        print ("change channel to bbc one...")
+        self.tciface.setTargetService("dvb://233a..1044", 0)
+
+
+={============================================================================
+*kt_dev_uv_stack_105* app-launch-crb
+
+<dbus>
+2640  :1.174                   /opt/zinc-trunk/bin/w3cEngine -cache 
+    /app-data/client-cache -cache-size 50000000 -dbus -jar 
+    /app-data/cookies.sqlite 
+    -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 
+    -src http://www.arqiva.net http://app.arqiva.tv        
+
+2640  :1.175                   /opt/zinc-trunk/bin/w3cEngine -cache 
+    /app-data/client-cache -cache-size 50000000 -dbus -jar 
+    /app-data/cookies.sqlite 
+    -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 
+    -src http://www.arqiva.net http://app.arqiva.tv        
+
+2640  :1.176                   /opt/zinc-trunk/bin/w3cEngine -cache /app-data/client-cache -cache-size 50000000 -dbus -jar /app-data/cookies.sqlite -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 -src http://www.arqiva.net http://app.arqiva.tv        
+
+2640  Zinc.W3C                 /opt/zinc-trunk/bin/w3cEngine -cache /app-data/client-cache -cache-size 50000000 -dbus -jar /app-data/cookies.sqlite -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 -src http://www.arqiva.net http://app.arqiva.tv        
+
+
+
+// /opt/zinc-trunk/bin/uimanagerd
+
+method call sender=:1.23 -> dest=Zinc.BabySitter serial=250 path=/Zinc/BabySitter/Launcher; interface=Zinc.BabySitter.Launcher; member=launch
+   array [
+      string "/opt/zinc/bin/radiumairlauncher"
+      string "crid://arqiva.co.uk/application/1/CRB/"
+      string "--app-launch-parameters"
+      string "channel.broadcast.youview.com"
+      string "dvb://233a..3de0"
+      string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
+      string "tv.arqiva.app"
+      string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.linearEnhancement"
+      string "tv.arqiva.app"
+      string "launch_context.ui.youview.com"
+      string "broadcast.mheg"
+      string "location.broadcast.youview.com"
+      string "/index.php?sid=15840"
+      string "urlbase.broadcast.youview.com"
+      string "http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018"
+   ]
+   array [
+      string "YV_APP_RUNTIME_INSTANCE_ID=2"
+      string "DBUS_SYSTEM_BUS_ADDRESS=unix:abstract=/tmp/dbus-UNcxQz1oYt,guid=8cfe8b3e402cb81b54646d9a386d4384"
+   ]
+
+// from bronze
+
+method call sender=:1.6 -> dest=Zinc.Application serial=264 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=killApplication
+   int32 -2147483647
+
+// stagecraft
+method call sender=:1.150 -> dest=Zinc.Application serial=400 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=deactivateApplication
+   int32 0
+
+// from tunerd
+
+method call sender=:1.100 -> dest=Zinc.Media serial=413 path=/Zinc/Media/DefaultMediaRouter; interface=Zinc.Media.MediaRouter; member=stop
+
+method call sender=:1.175 -> dest=Zinc.MediaProxy serial=29 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; member=createMediaRouter
+
+method call sender=:1.175 -> dest=:1.76 serial=33 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setSource
+   string "http://stream.arqiva.tv/hls/vintagetv/playlist.m3u8"
+   int32 1
+
+
+={============================================================================
 *kt_dev_uv_stack_105* app-power
 
 https://jira.youview.co.uk/browse/SOLDES-525
@@ -6801,6 +6997,10 @@ seconds in a week. You might need to modify those values according to the
 duration of your tests. I’m not sure if there is any limitation for those LSR
 keys, you can double check with Balbir or Darren Garvey. Please remember to
 reboot the box after setting the LSR key values.
+
+setItem platform.powermanagement.standbyoninactivity 604800
+setItem platform.powermanagement.ui.lifetime 604800
+setItem platform.powermanagement.viewerstandby.graceperiod 604800
 
 
 ={============================================================================
@@ -14322,73 +14522,6 @@ qt-everywhere-opensource-src-5.1.0/qtbase/src/plugins/platforms/directfb/qdirect
 /platforms/directfb/qdirectfbblitter.cpp        |    6 +--
 /platforms/directfb/qdirectfbconvenience.cpp    |   30 ++++++++++++++++++++
 /platforms/directfb/qdirectfbconvenience.h      |    8 +++++
-
-
-={============================================================================
-*kt_dev_uv_stack_250* mr-web-crb-launch
-
-<dbus>
-2640  :1.174                   /opt/zinc-trunk/bin/w3cEngine -cache 
-    /app-data/client-cache -cache-size 50000000 -dbus -jar 
-    /app-data/cookies.sqlite 
-    -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 
-    -src http://www.arqiva.net http://app.arqiva.tv        
-
-2640  :1.175                   /opt/zinc-trunk/bin/w3cEngine -cache 
-    /app-data/client-cache -cache-size 50000000 -dbus -jar 
-    /app-data/cookies.sqlite 
-    -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 
-    -src http://www.arqiva.net http://app.arqiva.tv        
-
-2640  :1.176                   /opt/zinc-trunk/bin/w3cEngine -cache /app-data/client-cache -cache-size 50000000 -dbus -jar /app-data/cookies.sqlite -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 -src http://www.arqiva.net http://app.arqiva.tv        
-
-2640  Zinc.W3C                 /opt/zinc-trunk/bin/w3cEngine -cache /app-data/client-cache -cache-size 50000000 -dbus -jar /app-data/cookies.sqlite -url http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018/index.php?sid=15840 -src http://www.arqiva.net http://app.arqiva.tv        
-
-
-
-// /opt/zinc-trunk/bin/uimanagerd
-
-method call sender=:1.23 -> dest=Zinc.BabySitter serial=250 path=/Zinc/BabySitter/Launcher; interface=Zinc.BabySitter.Launcher; member=launch
-   array [
-      string "/opt/zinc/bin/radiumairlauncher"
-      string "crid://arqiva.co.uk/application/1/CRB/"
-      string "--app-launch-parameters"
-      string "channel.broadcast.youview.com"
-      string "dvb://233a..3de0"
-      string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2012-11-08#applicationPublisherIdentifier"
-      string "tv.arqiva.app"
-      string "http://refdata.youview.com/mpeg7cs/YouViewIdentifierTypeCS/2015-02-23#applicationPublisherIdentifier.linearEnhancement"
-      string "tv.arqiva.app"
-      string "launch_context.ui.youview.com"
-      string "broadcast.mheg"
-      string "location.broadcast.youview.com"
-      string "/index.php?sid=15840"
-      string "urlbase.broadcast.youview.com"
-      string "http://app.arqiva.tv/products/youview/app/linear_streaming/v_2_018"
-   ]
-   array [
-      string "YV_APP_RUNTIME_INSTANCE_ID=2"
-      string "DBUS_SYSTEM_BUS_ADDRESS=unix:abstract=/tmp/dbus-UNcxQz1oYt,guid=8cfe8b3e402cb81b54646d9a386d4384"
-   ]
-
-// from bronze
-
-method call sender=:1.6 -> dest=Zinc.Application serial=264 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=killApplication
-   int32 -2147483647
-
-// stagecraft
-method call sender=:1.150 -> dest=Zinc.Application serial=400 path=/Zinc/Application/ApplicationManager; interface=Zinc.Application.ApplicationManager; member=deactivateApplication
-   int32 0
-
-// from tunerd
-
-method call sender=:1.100 -> dest=Zinc.Media serial=413 path=/Zinc/Media/DefaultMediaRouter; interface=Zinc.Media.MediaRouter; member=stop
-
-method call sender=:1.175 -> dest=Zinc.MediaProxy serial=29 path=/Zinc/Media/MediaRouterFactory; interface=Zinc.Media.MediaRouterFactory; member=createMediaRouter
-
-method call sender=:1.175 -> dest=:1.76 serial=33 path=/Zinc/Media/MediaRouters/1; interface=Zinc.Media.MediaRouter; member=setSource
-   string "http://stream.arqiva.tv/hls/vintagetv/playlist.m3u8"
-   int32 1
 
 
 ={============================================================================
@@ -27257,6 +27390,20 @@ CTK don't have since it has those in rfs
 
 
 ={============================================================================
+*kt_dev_uv_set_006* hmax-filegateway
+
+scp -r kit.park@filegateway.youview.co.uk:/export/repos/\
+huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP33_Eng_Release_20150331_for_YVHUAWEI-6751 ./
+
+ssh kit.park@filegateway.youview.co.uk ls -alR 
+
+/export/repos/huawei/from_huawei/PVR1_DN370T/Huawei_DN370T_B37SP46_Release_20150424/
+
+/export/repos/humax/from_humax/
+/export/repos/humax/from_humax/T4000
+
+
+={============================================================================
 *kt_dev_uv_oem_001* hmax-flash
 
 {hmax} 
@@ -27268,11 +27415,19 @@ humax-0873   humax-0873.dev.youview.co.uk    172.20.35.27   00:03:78:4B:7A:2B
 /.ssh -> /var/tmp/authorized_keys
 
 {hmax-cds}
+| devnfs2, IP: 172.20.34.3
+| filegateway, IP: 172.20.16.33
+
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T1000/rootfs/ATK/DTR-T1000_CDS.80B07002.bin
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
 
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H26.15.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H26.14.0/T2100/rootfs/ATK/DTR-T2100_CDS.84B08502.bin
+
+
+scp kit.park@filegateway.youview.co.uk:/export/repos/humax/from_humax/T4000/20160105-H23.12.0.ATK/DTR-T4000_CDS.87B08502.bin .
+
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H26.19.0/T4000/rootfs/ATK/DTR-T4000_CDS.87B08502.bin
 
 note: will wipe out a box including writable nfs.
 
@@ -27305,17 +27460,35 @@ wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.14.0/T1000/scripts/humax-hdd-ins
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H23.15.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
 wget http://devnfs2.dev.youview.co.uk/HUMAX/H26.15.0/T2100/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
 
+// T4000
+wget http://devnfs2.dev.youview.co.uk/HUMAX/archived/H23.12.0/T4000/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
+wget http://devnfs2.dev.youview.co.uk/HUMAX/H26.19.0/T4000/scripts/humax-hdd-install.sh -O humax-hdd-install.sh
+
 chmod +x humax-hdd-install.sh
 
 
 <script>
 note: cannot run this when already booted from HDD.
 
+    -r    release - Humax release version to install on box,
+          H15.1.0, H12.7.0. nfsroot is fetched remotely
+
+    -l    use local nfsroot tarball (instead of downloading from
+          ${ARCHIVE_SERVER}. You must specify the tarball to use.
+
+    -s    show properties - Show box properties after set-up completes. 
+          It provides as much info about the box as possible to help make 
+          sure sure this is the correct box, versions and settings.
+
+note: need to change this when want to download from else
+
+ARCHIVE_SERVER="http://devnfs2.dev.youview.co.uk/HUMAX"
+
+
 ./humax-hdd-install.sh -s -r H23.14.0
 ./humax-hdd-install.sh -s -r H26.15.0
 
-// do not work for me. why?
-./humax-hdd-install.sh -l http://devnfs2.dev.youview.co.uk/HUMAX/H23.8.0/T2100/rootfs/
+./humax-hdd-install.sh -s -r H26.19.0
 
 note:
 In case of this error since there is on lsr-config tool in a box:

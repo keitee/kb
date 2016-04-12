@@ -387,7 +387,11 @@
 |kt_linux_core_606| time: sleep
 
 |kt_linux_core_700| dbus
-|kt_linux_core_701| dbus: introspection
+*kt_linux_core_700* dbus-libdbus
+*kt_linux_core_700* dbus-bindings
+*kt_linux_core_700* dbus-case
+*kt_linux_core_700* dbus-case-service
+|kt_linux_core_701| dbus-introspection
 |kt_linux_core_702| dbus: dbus-send tool
 |kt_linux_core_703| dbus: lsdbus tool
 |kt_linux_core_704| dbus: dbus-monitor tool
@@ -16442,6 +16446,67 @@ ni
     An argument is a repeat count, as in next. 
 
 
+<ex>
+The "at lineno" means the line to be run next.
+
+(gdb) n
+main () at sample.c:28
+28	    printf("ends main\n");
+(gdb)
+
+<ex>
+This shows something puzzling.
+
+template<typename T, typename A1>
+void expose_impl(DBus::Connection conn, const char* path,
+        boost::shared_ptr<T> obj, A1 a1) {
+    using namespace std;
+
+// note: the first break
+46:	expose(conn, path, obj, a1);
+}
+
+template<typename T, typename A1>
+void DBusService::expose(const char* path, boost::shared_ptr<T> obj, A1 a1) {
+    using namespace std;
+145:	detail::expose_impl(conn, path, obj, a1);
+      objects.push_back(path);
+}
+
+
+// note: the first break
+(gdb) bt
+#0  expose_impl<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
+    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, conn=<incomplete type>, path=<optimized out>)
+    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:46
+
+#1  expose<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
+    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, this=0x7fff6510, path=<optimized out>)
+    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
+
+#2  (anonymous namespace)::MediaDaemon::start (this=0x7fff64e4, argc=<optimized out>, argv=<optimized out>)
+    at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:123
+#3  0x77e57404 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc/lib/libdbus-c++-1.so.0
+#4  0x77e58ff0 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc/lib/libdbus-c++-1.so.0
+#5  0x77e5a6c4 in DBus::BusDispatcher::run() () from /opt/zinc/lib/libdbus-c++-1.so.0
+#6  0x77ec24ec in zinc::binding::dbus::MainLoop::run (this=0x7fff64c8)
+    at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/MainLoop.cpp:70
+#7  0x00408150 in main (argc=1, argv=0x7fff6864) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:234
+
+
+// note: when do n(next) the line 46 has no effect and goes back to where
+// expose_impl gets called.
+
+(gdb) n
+expose<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
+    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, this=0x7fff6510, path=<optimized out>)
+    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
+145		detail::expose_impl(conn, path, obj, a1);
+
+
 ={============================================================================
 *kt_linux_tool_300* gdb-print-gdb-set
 
@@ -16639,7 +16704,7 @@ characters from the option name, e.g., break -s main.c -li 3.
 Breakpoint 2 at 0xb7fd846e: file lib.cpp, line 5.
 
 
-<2>
+<namespace>
 ProxyMediaRouter.cpp
 448: NS_ZINC::Future< void > ProxyMediaRouter::setSource(
     const std::string& mediaLocator_in, const SetSourceReason::Enum reason_in)
@@ -16657,6 +16722,7 @@ $ nm --defined-only --demangle Nickel.System.Proxy/src/.libs/
     std::string const&, Zinc::Media::SetSourceReason::Enum)
 
 (gdb) b ProxyMediaRouter.cpp:nickel::system::ProxyMediaRouter::setSource  // okay
+
 
 <completion>
 Press the TAB key whenever you want gdb to fill out the rest of a word; command,
@@ -16683,6 +16749,61 @@ setSourceComplete(std::string const&, boost::shared_ptr<Zinc::Media::MediaRouter
 setSourceFailed(zinc::ErrorCode const&)
 setSubtitleTrack(int, std::string const&)
 (gdb) b nickel::system::ProxyMediaRouter::setS
+
+
+<template>
+template <typename T> void coin(T v);
+template<typename T> class Foo;
+
+(gdb) b Foo<int>::bar(int)
+Breakpoint 2 at 0x804871d: file main.cpp, line 16.
+(gdb) b void coin<int>(int)
+Breakpoint 1 at 0x804872a: file main.cpp, line 6.
+
+
+<read>
+Setting Breakpoint in Templates:
+
+Templates can be much harder to set breakpoints in because we have to specify
+the exact prototype for the fully-defined template. We as programmers are used
+to the compiler handling the template type stuff for us, so it can be difficult
+to guess the correct type.
+
+For example, assume we have some abstract class BarAbstract that uses the
+template Foo<> to make it concrete. Now assume we’re really clever and we want
+to hide this from the users of our class. We could use a typedef to hide the
+true type:
+
+typedef Foo<BarAbstract> Bar;
+
+Now, all the user needs to do is instantiate Bar without a thought to the Foo<>
+    template.
+
+int DoSomething()
+{
+Bar b;
+return b.Baz();
+}
+
+So far so good? Okay, now how the heck do you set a breakpoint in the Baz()
+    method of class Bar?
+
+The quick answer: use objdump, c++filt, and grep to find the complete definition
+that GDB will need.
+
+$ objdump -t libMyLib.so | c++filt | grep ‘BarAbstract.*Baz’
+0000d2d6 w F .text 0000000a     MY_PLUGIN_A::Foo<MY_PLUGIN_A::BarAbstract>::Baz()
+
+Now, simply copy-n-paste the full method definition to GDB when setting the breakpoint:
+
+(gdb) b MY_PLUGIN_A::Foo<MY_PLUGIN_A::BarAbstract>::Baz()
+Breakpoint 6 at 0×8048890: file Source/Bar.cpp, line 355
+
+
+$ man c++filt
+
+NAME
+       c++filt - Demangle C++ and Java symbols.
 
 
 ={============================================================================
@@ -34053,15 +34174,8 @@ particular object instance, a number of nested components have to be named:
 
 Address -> [Bus Name] -> Path -> Interface -> Method
 
-dbus-send --session --print-reply --type=method_call \
-    --dest='Zinc.MediaProxy' \
-    /Zinc/Media/MediaRouters/1 \
-    Zinc.Media.MediaRouter.setSource \
-    string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
-
-const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
-
 dbus.expose(
+        // const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
         ObjectPath::MEDIA_ROUTER_FACTORY, 
         factoryMediaRouter.createMediaRouterFactory(),
         boost::make_shared<NonInheritingAdaptorFactory<MediaRouter> > (
@@ -34069,14 +34183,22 @@ dbus.expose(
              "/Zinc/Media/MediaRouters/")
             );
 
-dbus-send --session --print-reply --type=method_call \
-    --dest='Zinc.Media' \              // bus name
-    /Zinc/Media/DefaultMediaRouter  \  // OBJECT_PATH
-    Zinc.Media.MediaRouter.stop     \  // INTERFACE.MEMBER [CONTENTS...]
+method call sender=:1.127 -> dest=Zinc.MediaProxy serial=44 
+path=/Zinc/Media/MediaRouterFactory; 
+interface=Zinc.Media.MediaRouterFactory; 
+member=createMediaRouter
 
-const char* const DEFAULT_MEDIA_ROUTER = "/Zinc/Media/DefaultMediaRouter";
+// :1.129 == Zinc.MediaProxy
+method call sender=:1.127 -> dest=:1.129 serial=48 
+path=/Zinc/Media/MediaRouters/0; 
+interface=Zinc.Media.MediaRouter; 
+member=setSource
+   string "http://=1460458249&e=1460501449&h=b42724e238b5e67cbc99e24d435763f3"
+   int32 1
 
-dbus.expose(ObjectPath::DEFAULT_MEDIA_ROUTER, factoryMediaRouterDefault.createDefaultMediaRouter());
+dbus-send --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR
+Zinc.Media.MediaRouter.setSource 
+string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
 
 
 {dbus-messages}
@@ -34333,6 +34455,7 @@ private:
     MainLoop& mainloop;
     SignalReceiver sr;
 
+    // note:
     DBusService dbus;
 
     NS_ZINC::InlineDispatcher futureDispatcher;
@@ -34367,9 +34490,19 @@ void MediaDaemon::start()
                 dashCencEnable));
 
     bnm.reset(new BusNameMonitor(conn));
+
+    <ex>
     dbus.expose(OBJECT_PATH_FACTORY, factory,
         boost::make_shared<NonInheritingAdaptorFactory<Zinc::Media::Backend::SinkInstance> >(
             RefCountedAdaptorFactory<Zinc::Media::Backend::SinkInstance>(*bnm), conn, OBJECT_PATH_CONTROL));
+
+    <ex> 
+    dbus.expose(
+            ObjectPath::MEDIA_ROUTER_FACTORY, 
+            factory.createMediaRouterFactory(),
+            boost::make_shared<NonInheritingAdaptorFactory<MediaRouter> >(
+                NS_ZINC_DBUS_BINDING::RefCountedAdaptorFactory<MediaRouter>(*bnm), conn, "/Zinc/Media/MediaRouters/")
+              );
 
     dbus.request_name(BUS_NAME);
 }
@@ -34888,6 +35021,70 @@ void DefaultMainLoop::post_function(boost::function<void ()> fn)
 ={============================================================================
 *kt_linux_core_700* dbus-case-service
 
+// The line 46 has no effect. WHAT is that for?
+//
+// template<typename T, typename A1>
+// void expose_impl(DBus::Connection conn, const char* path,
+//         boost::shared_ptr<T> obj, A1 a1) {
+//     using namespace std;
+// 46:	expose(conn, path, obj, a1);
+// }
+// 
+// template<typename T, typename A1>
+// void DBusService::expose(const char* path, boost::shared_ptr<T> obj, A1 a1) {
+//     using namespace std;
+// 145:	detail::expose_impl(conn, path, obj, a1);
+//       objects.push_back(path);
+// }
+// 
+// (gdb) bt
+// #0  expose_impl<Zinc::Media::MediaRouterFactoryAsync, 
+// boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > 
+// (
+//     a1=<error reading variable: access outside bounds of object referenced 
+//          via synthetic pointer>, 
+//     obj=<error reading variable: access outside bounds of object referenced 
+//          via synthetic pointer>, 
+//     conn=<incomplete type>, 
+//     path=<optimized out>
+// )
+//     at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:46
+// 
+// #1  expose<
+//  Zinc::Media::MediaRouterFactoryAsync, 
+//  boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > 
+//  (
+//     a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+//     obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+//     this=0x7fff6510, 
+//     path=<optimized out>
+//  )
+//     at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
+// 
+// #2  (anonymous namespace)::MediaDaemon::start (this=0x7fff64e4, argc=<optimized out>, argv=<optimized out>)
+//     at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:123
+// #3  0x77e57404 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc/lib/libdbus-c++-1.so.0
+// #4  0x77e58ff0 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc/lib/libdbus-c++-1.so.0
+// #5  0x77e5a6c4 in DBus::BusDispatcher::run() () from /opt/zinc/lib/libdbus-c++-1.so.0
+// #6  0x77ec24ec in zinc::binding::dbus::MainLoop::run (this=0x7fff64c8)
+//     at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/MainLoop.cpp:70
+// #7  0x00408150 in main (argc=1, argv=0x7fff6864) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:234
+// 
+// 
+// (gdb) n
+// expose<
+//  Zinc::Media::MediaRouterFactoryAsync, 
+//  boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > 
+//  (
+//     a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+//     obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+//     this=0x7fff6510, 
+//     path=<optimized out>
+//  )
+//     at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
+// 145		detail::expose_impl(conn, path, obj, a1);
+//
+
 /////////////////////////////////////
 // Zinc.DBus.BindingRuntime/include/dbus/DBusService.h
 /*
@@ -34923,10 +35120,13 @@ void expose_impl(DBus::Connection conn, const char* path,
 	expose(conn, path, obj);
 }
 
+// note:
 template<typename T, typename A1>
 void expose_impl(DBus::Connection conn, const char* path,
 		boost::shared_ptr<T> obj, A1 a1) {
 	using namespace std;
+
+   // note: WHERE this leads to?
 	expose(conn, path, obj, a1);
 }
 
@@ -34934,8 +35134,6 @@ template<typename T, typename A1, typename A2>
 void expose_impl(DBus::Connection conn, const char* path,
 		boost::shared_ptr<T> obj, A1 a1, A2 a2) {
 	using namespace std;
-
-   // note: WHERE this leads to?
 	expose(conn, path, obj, a1, a2);
 }
 
@@ -34973,6 +35171,7 @@ public:
 	template<typename T>
 	void expose(const char* path, boost::shared_ptr<T> obj);
 
+   // note:
 	template<typename T, typename A1>
 	void expose(const char* path, boost::shared_ptr<T> obj, A1 a1);
 
@@ -35021,6 +35220,7 @@ void DBusService::expose(const char* path, boost::shared_ptr<T> obj) {
 	objects.push_back(path);
 }
 
+// note:
 template<typename T, typename A1>
 void DBusService::expose(const char* path, boost::shared_ptr<T> obj, A1 a1) {
 	using namespace std;
@@ -35065,7 +35265,7 @@ DBusService::DBusService(MainLoop& mainloop_) :
 void DBusService::start() {
     // Zinc/Zinc.DBus-C++/include/dbus-c++/connection.h
     // class DXXAPI StandardConnectionFactory
-    conn =DBus::StandardConnectionFactory(mainloop.getDbusDispatcher(), SingletonDBusErrorConverter::get()).connectToSessionBus();
+    conn=DBus::StandardConnectionFactory(mainloop.getDbusDispatcher(), SingletonDBusErrorConverter::get()).connectToSessionBus();
 
     NS_ZINC_DBUS_BINDING::DBusConnectionManager::instance().setSessionConnection(conn);
     bus_Async = NS_ZINC_DBUS_BINDING::createMessageBusProxy(conn,mainloop.getZincDispatcher());
