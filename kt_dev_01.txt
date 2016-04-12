@@ -178,8 +178,9 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_050* template-efficiency-deleter-case
 |kt_dev_cpp_050| template-explicit-argument
 |kt_dev_cpp_051| template-type-traits
-|kt_dev_cpp_052| template-argument deduction
+|kt_dev_cpp_052| template-argument-deduction
 *kt_dev_cpp_053* template-argument deduction: std-forward
+*kt_dev_cpp_053* template-function-overload
 |kt_dev_cpp_053| template-variadic
 |kt_dev_cpp_053| template-variadic: forward
 |kt_dev_cpp_054| template-specialization
@@ -13880,6 +13881,7 @@ The lvalue binding properties is that cannot bind regular(lvalue) reference to
 expression that requires a conversion, to literals, or to expression that return
 an rvalue. 
 
+*cannot-bind-rvalue*
 The rvalue binding have the opposite; can bind an rvalue reference to these but
 cannot 'directly' bind an rvalue reference to an lvalue.
 
@@ -13890,13 +13892,13 @@ An rvalue reference is obtained by using '&&' rather than '&'.
 
 int i = 42;
 
-int &r = i;             // okay  bind lvalue to lref
-int &&rr = i;           // error since cannot bind an rref to lvalue
+int &r = i;             // okay
+int &&rr = i;           // error, cannot bind `rvalue-reference` to `lvalue`
 
-const int &r3 = i*42;   // okay  bind rvalue to 
+const int &r3 = i*42;   // okay  bind `rvalue` to `const-lvalue-reference`
 
-int &r2 = i*42;         // error bind rvalue to lref.
-int &&r2 = i*42;        // okay  bind rvalue to rref.
+int &r2 = i*42;         // error, cannot bind `rvalue` to `lvalue-reference`
+int &&r2 = i*42;        // okay
 
 Functions that return a nonreference type, along with the arithmetic,
 relational, bitwise, and postfix operations, all yield rvalues.
@@ -24153,7 +24155,11 @@ bind to the parameter T.
 Use the deduced template parameters to instantiate a specific version of the
 function. Creates a new 'instance' of the template.
 
-template <typename T>         // "<typename T>" is template-parameter-list
+// `function-argument` T is "int", instantiates "int compare(const int&, const int&)"
+cout << compare( 1, 0 ) << endl;
+
+// `template-parameter-list` is "<typename T>"
+template <typename T>
 int compare(const T& v1, const T& v2)
 {
   if( v1 < v2 ) return -1;
@@ -24161,9 +24167,7 @@ int compare(const T& v1, const T& v2)
   return 0;
 }
 
-// T is "int", instantiates "int compare(const int&, const int&)"
-cout << compare( 1, 0 ) << endl;
-
+// `template-parameter-type` T is "int"
 int compare(const int& v1, const int& v2)
 {
   if( v1 < v2 ) return -1;
@@ -25192,12 +25196,12 @@ namespace std {
 
 
 ={============================================================================
-*kt_dev_cpp_052* template-argument deduction
+*kt_dev_cpp_052* template-argument-deduction
 
 {template-argument-deduction}
-For function template, this is process of determining the template arguments
-from the function arguments. This generates a version of the function that best
-matches the given call.
+For function template, deduction is process of determining the template
+arguments type from the function arguments. This generates a version of the
+function that best matches the given call.
 
 <limited-conversion>
 Only allows two converison in a call to function template but not others such as
@@ -25297,13 +25301,13 @@ func(compare);     // error. Which instantiation of compare?
 However, by looking at the function's parameter, not possible to determine a
 unique type for the template arguments.
 
-To solve this ambiguity, use explicit template arguments.
+To solve this ambiguity, use template-explicit-argument.
 
 func(compare<int>);
 
 
 {deduction-and-reference}
-When function parameter is reference, two important points:
+When function parameter is `reference`, two important points:
 
 template <typename T> void f(T &p);
 
@@ -25313,7 +25317,7 @@ template <typename T> void f1(T &v1);
 
 f1(i);    // T is `int`
 f1(ci);   // T is `const` `int`
-f1(5);    // error since cannot bound to rvalue and must be an lvalue.
+f1(5);    // error since cannot bind rvalue to lvalue reference.
           // <const-reference-to-literal>
           // const int &ri = 42; ok but int &ri = 42 is an error
 
@@ -25324,7 +25328,7 @@ f2(ci);   // T is `int`
 f1(5);    // okay since `const &` can be bound to rvalue. T is `int`
 
 The `const` is part of function parameter type but not part of template
-parameter type.
+parameter list.
 
 The point is that use "const T&" to pass 'any' type.
 
@@ -25339,7 +25343,7 @@ How about this?
 
 f3(i);
 
-illegal? Since cannot bind an rvalue reference to an lvalue? Allows two
+Error? Since cannot bind an rvalue reference to an lvalue? Allows two
 exception.
 
 note: CPR 688
@@ -25437,7 +25441,7 @@ note: For more details on how this works, see CPR 690.
 *std-forward*
 Some function need to forward their arguments with types 'unchanged' to another
 function. In such cases, need to 'preserve' everything including whether or not
-type is `const` and whether the argument is an lvalue or an rvalue.
+type is `const` and whether the argument is an `lvalue` or an `rvalue`.
 
 template <typename F, typename T1, typename T2>
 void flip1(F f, T1 t1, T2 t2)
@@ -25452,10 +25456,11 @@ void f(int v1, int &v2)
   cout << v1 << " " << ++v2 << endl;
 }
 
-flip1(f, j, 42);
+flip1(f, j, 42);        // f(42, j);
 
-The problem is that the parameter in flip1 is `int`, not an int&, and the
-changes made by f do not affect the original argument.
+The problem is that the parameters in flip1 is deduced as `int`, not an int&, and
+the changes made by f do not affect the original argument since it is local to
+flip1.
 
 Solution? A function parameter that is an rvalue reference to a template
 parameter 'preserves' constness and lvalue/rvalue property of its corresponding
@@ -25495,7 +25500,7 @@ To preserve type information is two-step process, 1 and 2.
 
 
 ={============================================================================
-*kt_dev_cpp_053* template-function: overload
+*kt_dev_cpp_053* template-function-overload
 
 A function return a string representation of a given object.
 
