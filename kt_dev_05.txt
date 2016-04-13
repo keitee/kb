@@ -106,11 +106,13 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst-error
 *kt_dev_bcast_500* gst-clock
 
-*kt_dev_bcast_600* glib-object-model
-*kt_dev_bcast_600* glib-object-type
-*kt_dev_bcast_600* glib-object-reference-count
-*kt_dev_bcast_600* glib-object: floating reference
-*kt_dev_bcast_600* glib-property
+*kt_dev_bcast_600* gst-plugin-case
+
+*kt_dev_bcast_600* gobject-model
+*kt_dev_bcast_600* gobject-type
+*kt_dev_bcast_600* gobject-reference-count
+*kt_dev_bcast_600* gobject-floating reference
+*kt_dev_bcast_600* gproperty
 
 *kt_dev_bcast_600* gdebug
 *kt_dev_bcast_600* glib-signal
@@ -11100,23 +11102,43 @@ http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/Gst
 
 GstBaseSink is the base class for sink elements in GStreamer, such as
 xvimagesink or filesink. It is a layer on top of GstElement that provides a
-simplified interface to plugin writers. GstBaseSink handles many details for
-you, for example: preroll, clock 'synchronization', state changes, activation in
-push or pull mode, and queries.
+simplified interface to plugin writers. 
+
+    "GstBaseSink handles many details for you, for example: preroll, clock
+    'synchronization', state changes, activation in push or pull mode, and
+    queries."
 
 In most cases, when writing sink elements, there is no need to implement class
 methods from GstElement or to set functions on pads, because the GstBaseSink
 infrastructure should be sufficient.
 
-GstBaseSink provides support for exactly one sink pad, which should be named
-"sink". A sink implementation (subclass of GstBaseSink) should install a pad
+GstBaseSink provides support for exactly 'one' sink pad, which should be named
+"sink". A sink 'implementation' (subclass of GstBaseSink) should install a pad
 template in its class_init function, like so:
+
+static void
+my_element_class_init (GstMyElementClass *klass)
+{
+    GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
+
+    // sinktemplate should be a #GstStaticPadTemplate with direction
+    // %GST_PAD_SINK and name "sink"
+    gst_element_class_add_pad_template (gstelement_class,
+            gst_static_pad_template_get (&sinktemplate));
+
+    gst_element_class_set_static_metadata (gstelement_class,
+            "Sink name",
+            "Sink",
+            "My Sink element",
+            "The author <my.sink@my.email>");
+}
+
 
 *gst-preroll*
 GstBaseSink will handle the prerolling correctly. This means that it will return
 GST_STATE_CHANGE_ASYNC from a state change to PAUSED until the first buffer
 arrives in this element. The base class will call the GstBaseSinkClass.preroll()
-vmethod with this preroll buffer and will then commit the state change to the
+'vmethod' with this preroll buffer and will then commit the state change to the
 next asynchronously pending state.
 
 note: GstBaseSinkClass means a subclass like gst-nexus
@@ -11143,11 +11165,13 @@ example is an audiosink. These 'subclasses' can use gst_base_sink_wait_preroll()
 to perform the blocking wait.
 
 
+<eos>
 Upon receiving the EOS event in the PLAYING state, GstBaseSink will wait for the
 clock to reach the time indicated by the stop time of the last
-GstBaseSinkClass.get_times() call before posting an EOS message. When the
+GstBaseSinkClass.get_times() call before 'posting' an EOS message. When the
 element receives EOS in PAUSED, preroll completes, the event is queued and an
 EOS message is posted when going to PLAYING.
+
 
 <sink-segment-event>
 GstBaseSink will internally use the GST_EVENT_SEGMENT events to schedule
@@ -14185,7 +14209,195 @@ note:
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-object-model
+*kt_dev_bcast_600* gst-plugin-case
+
+struct _GstNexusSink {
+  /** The base object relies on its own thread-safety mechanisms. */
+  GstBaseSink parent;
+
+  struct {
+    GMutex mutex; /**< Protects other members of this struct. */
+    GCond cond;
+
+    /**
+     * Set to TRUE before asking Nexus for a playpump buffer. Set to FALSE from
+     * gst_nexus_sink_space_available() callback and on a few other occations.
+     * Checked when about to block waiting for buffer space to become available.
+     */
+    gboolean can_wait;
+  }
+  space_available;
+};
+
+G_DEFINE_TYPE( GstNexusSink, gst_nexus_sink, GST_TYPE_BASE_SINK )
+
+
+static void gst_nexus_sink_class_init( GstNexusSinkClass * klass )
+{
+    GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+    GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
+    GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS (klass);
+
+    GST_DEBUG_CATEGORY_INIT (gst_nexus_sink_debug, "nexussink", 0,
+            "nexussink element");
+
+    gobject_class->set_property = gst_nexus_sink_set_property;
+    gobject_class->get_property = gst_nexus_sink_get_property;
+    gobject_class->finalize = gst_nexus_sink_finalize;
+
+    gstbasesink_class->event = GST_DEBUG_FUNCPTR (gst_nexus_sink_event);
+    gstbasesink_class->query = GST_DEBUG_FUNCPTR (gst_nexus_sink_query);
+    gstbasesink_class->get_times = GST_DEBUG_FUNCPTR (gst_nexus_sink_get_times);
+    gstbasesink_class->wait_event = GST_DEBUG_FUNCPTR (gst_nexus_sink_wait_event);
+
+    gstbasesink_class->render = GST_DEBUG_FUNCPTR (gst_nexus_sink_render);
+    gstbasesink_class->get_caps = GST_DEBUG_FUNCPTR (gst_nexus_sink_get_caps);
+    gstbasesink_class->set_caps = GST_DEBUG_FUNCPTR (gst_nexus_sink_set_caps);
+    gstbasesink_class->unlock = GST_DEBUG_FUNCPTR (gst_nexus_sink_unlock);
+    gstbasesink_class->unlock_stop = GST_DEBUG_FUNCPTR (gst_nexus_sink_unlock_stop);
+
+    gstelement_class->set_context = gst_nexus_sink_set_context;
+    gstelement_class->change_state = gst_nexus_sink_change_state;
+    klass->basesink_element_query = gstelement_class->query;
+    gstelement_class->query = GST_DEBUG_FUNCPTR (gst_nexus_sink_element_query);
+
+    g_object_class_install_property( gobject_class, PROP_VIDEO_PID,
+            g_param_spec_int( "pcrpid", "PCR PID", "The PCR PID that will be  "
+                "used for sync.", 0x10, 0x1FFE, 0x1FFE, G_PARAM_READWRITE) );
+
+    gst_element_class_set_static_metadata ( gstelement_class,
+            "Nexus sink",
+            "Sink/Video" /* "Codec/Decoder/Video" */,
+            "Demux, decode and display via Broadcom Nexus",
+            "Will Manley <william.manley@youview.com>, "
+            "Chris Bass <chris.bass@rd.bbc.co.uk>, "
+            "Atish Nazir <atish.nazir@youview.com>, "
+            "Alex Ashley <alex.ashley@youview.com>" );
+
+    gst_element_class_add_pad_template( gstelement_class, gst_static_pad_template_get( &sinktemplate ) );
+}
+
+
+static void gst_nexus_sink_init( GstNexusSink * sink )
+{
+    GstClockTime delay;
+
+    g_mutex_init(&sink->mutex);
+
+    ...
+    sink->current_caps=NULL;
+    sink->unlocked=0;
+    sink->check_status=0;
+    sink->videoRegionX1 = 0.0;
+    sink->videoRegionY1 = 0.0;
+    sink->videoRegionX2 = 1.0;
+    sink->videoRegionY2 = 1.0;
+    sink->framerate_d=0;
+    sink->framerate_n=0;
+    sink->width=0;
+    sink->height=0;
+    sink->aspect_ratio_d=0;
+    sink->aspect_ratio_n=0;
+    sink->first_pts_passed=FALSE;
+    sink->first_pts=-1;
+    sink->last_position = GST_CLOCK_TIME_NONE;
+    sink->release_on_pause=FALSE;
+    sink->control_visibility=DEFAULT_CONTROL_VISIBILITY;
+    sink->last_dts = GST_CLOCK_TIME_NONE;
+    g_atomic_int_set(&sink->eos_received,FALSE);
+
+    g_mutex_init( &sink->space_available.mutex );
+    g_cond_init( &sink->space_available.cond );
+    sink->space_available.can_wait = TRUE;
+
+    gst_segment_init (&sink->output_segment, GST_FORMAT_TIME);
+    sink->destination_window=NULL;
+
+    gst_base_sink_set_sync (GST_BASE_SINK (sink), FALSE);
+    delay = 4*GST_SECOND / 25; /* assumes 25Hz and max 4 frames of re-order delay */
+    gst_base_sink_set_render_delay (GST_BASE_SINK (sink), delay);
+    g_object_set (sink, "enable-last-sample", FALSE, NULL);
+}
+
+
+// not defined in the plugin. That means that gst_nexus_sink_parent_class is
+// automatically defined somewhere?
+
+static void gst_nexus_sink_on_error( void* context, int reason )
+{
+    GstNexusSink* sink = (GstNexusSink*) context;
+    GstMessage *msg=NULL;
+    GError *err=NULL;
+
+    /* The reason for using warning message rather than error messages is that
+     * an error message will typically cause the pipeline to stop. Most of the
+     * errors reported by this function should not cause the pipeline to stop 
+     */
+    switch(reason){
+        case EFifoEmpty:
+            if ( g_atomic_int_get(&sink->eos_received) ) {
+                GST_TRACE_OBJECT(sink, "FIFO empty, sending EOS");
+
+                // note:
+                // The plugin overrides this function.
+                GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )->event( &sink->parent, gst_event_new_eos() );
+            }
+            else {
+                GST_TRACE_OBJECT(sink, "FIFO empty");
+                msg = gst_nexus_sink_create_warning(sink, &err, GST_STREAM_ERROR, GST_STREAM_ERROR_FAILED,
+                        "FIFO empty");
+            }
+            break;
+    }
+}
+
+
+static gboolean gst_nexus_sink_event( GstBaseSink* basesink, GstEvent* event )
+{
+  GstNexusSink* sink = GST_NEXUS_SINK( basesink );
+  gboolean ret;
+
+  g_mutex_lock(&sink->mutex);
+  ret = gst_nexus_sink_event_locked(sink, event);
+  g_mutex_unlock(&sink->mutex);
+
+  return ret;
+}
+
+static gboolean gst_nexus_sink_event_locked( GstNexusSink* sink, GstEvent* event )
+{
+    gboolean ret = TRUE;
+
+    switch( GST_EVENT_TYPE( event ) ) {
+        case GST_EVENT_EOS:
+            GST_DEBUG_OBJECT (sink, "End of stream");
+            g_atomic_int_set(&sink->eos_received,TRUE);
+            break;
+        default:
+            GST_TRACE_OBJECT (sink, "Event other 0x%x", GST_EVENT_TYPE( event ) );
+            break;
+    }
+
+    if (ret && GST_BASE_SINK_CLASS (gst_nexus_sink_parent_class)->event) {
+        GST_LOG_OBJECT (sink,"calling GstBaseSink::event");
+
+        g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
+
+        // note: this pass eos up to the parent
+        
+        ret = GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )->event( GST_BASE_SINK(sink), event );
+        g_mutex_lock(&sink->mutex);
+    }
+    else{
+        gst_event_unref (event);
+    }
+
+    return ret;
+}
+
+
+={============================================================================
+*kt_dev_bcast_600* gobject-model
 
 http://library.gnome.org/devel/gobject/stable/
 
@@ -14210,12 +14422,61 @@ A type, as manipulated by the GLib type system, is much more generic than what
 is usually understood as an Object type.
 
 <register-new-type>
+A type, as manipulated by the GLib type system, is much more generic than what
+is usually understood as an Object type. It is best explained by looking at the
+structure and the functions used to register new types in the type system.
+
+note: `class`, `interface`, and `instance`
+
+typedef struct _GTypeInfo               GTypeInfo;
+
+struct _GTypeInfo
+{
+  /* interface types, classed types, instantiated types */
+  guint16                class_size;
+  
+  GBaseInitFunc          base_init;
+  GBaseFinalizeFunc      base_finalize;
+  
+  /* classed types, instantiated types */
+  GClassInitFunc         `class_init`;
+  GClassFinalizeFunc     class_finalize;
+  gconstpointer          class_data;
+  
+  /* instantiated types */
+  guint16                instance_size;
+  guint16                n_preallocs;
+  GInstanceInitFunc      instance_init;
+  
+  /* value handling */
+  const GTypeValueTable *value_table;
+};
+
 g_type_register_static, g_type_register_dynamic and g_type_register_fundamental
 are the C functions, defined in gtype.h and implemented in gtype.c which you
 should use to register a new GType in the program's type system.
 
 Fundamental types are top-level types which do not derive from any other type
 while other non-fundamental types derive from other types.
+
+Fundamental and non-fundamental types are defined by:
+
+    class size: the class_size field in GTypeInfo.
+
+    class initialization functions (C++ constructor): 
+        the `base_init` and class_init fields in GTypeInfo.
+
+    class destruction functions (C++ destructor): 
+        the `base_finalize` and class_finalize fields in GTypeInfo.
+
+    instance size (C++ parameter to new): the instance_size field in GTypeInfo.
+
+    instantiation policy (C++ type of new operator): 
+        the n_preallocs field in GTypeInfo.
+
+    copy functions (C++ copy operators): the value_table field in GTypeInfo.
+
+    type characteristic flags: GTypeFlags.
 
 
 Copy functions
@@ -14231,17 +14492,16 @@ g_value_copy copies the content of a GValue to another GValue. This is similar
 to a C++ assignment which invokes the C++ copy operator to modify the default
 bit-by-bit copy semantics of C++/C structures/classes.
 
-https://developer.gnome.org/gobject/stable/gobject-Generic-values.html#GValue
-
 The GValue structure is basically a variable container that consists of a type
 'identifier' and a specific 'value' of that type. The type identifier within a
 GValue structure always determines the type of the associated value. To create a
 undefined GValue structure, simply create a zero-filled GValue structure. To
-initialize the GValue, use the g_value_init() function. A GValue cannot be used
-until it is initialized. The basic type operations (such as freeing and copying)
-are determined by the GTypeValueTable 'associated' with the type ID stored in
-the GValue. Other GValue operations (such as converting values between types)
-are provided by this interface.
+initialize the GValue, use the g_value_init() function. 
+
+A GValue 'cannot' be used until it is initialized. The basic type operations
+(such as freeing and copying) are determined by the GTypeValueTable 'associated'
+with the type ID stored in the GValue. Other GValue operations (such as
+        converting values between types) are provided by this interface.
 
 The following code shows how you can copy around a 64 bit integer, as well as a
 GObject instance pointer: 
@@ -14314,30 +14574,33 @@ to define a class:
 
 G_DEFINE_TYPE (MamanBar, maman_bar, G_TYPE_OBJECT)
 
-'otherwise', the maman_bar_get_type function must be implemented manually:
-
-GType maman_bar_get_type (void)
-{
-  static GType type = 0;
-  if (type == 0) {
-    const GTypeInfo info = {
-      /* You fill this structure. */
-    };
-    type = g_type_register_static (G_TYPE_OBJECT,
-                                   "MamanBarType",
-                                   &info, 0);
-  }
-  return type;
-}
+// DON'T NEED TO DO MANUALLY, DONE BY G_DEFINE_TYPE
+//
+// otherwise, the maman_bar_get_type function must be implemented manually:
+// 
+// GType maman_bar_get_type (void)
+// {
+//   static GType type = 0;
+//   if (type == 0) {
+//     const GTypeInfo info = {
+//       /* You fill this structure. */
+//     };
+//     type = g_type_register_static (G_TYPE_OBJECT,
+//                                    "MamanBarType",
+//                                    &info, 0);
+//   }
+//   return type;
+// }
 
 note:
-This shows how class and init functions get linked together.
+This shows how class, parent, and init functions get linked together. Defines
+functions but not provide implementation. User provide them to 'override'
 
 /* --- GType boilerplate --- */
 /**
  * G_DEFINE_TYPE:
- * @TN: The name of the new type, in Camel case.
- * @t_n: The name of the new type, in lowercase, with words 
+ * @TN: The 'name' of the new type, in Camel case.
+ * @t_n: The 'name' of the new type, in lowercase, with words 
  *  separated by '_'.
  * @T_P: The #GType of the 'parent' type.
  * 
@@ -14346,8 +14609,8 @@ This shows how class and init functions get linked together.
  * for information about these) and a static variable named @t_n<!--
  * -->_parent_class pointing to the parent class. 
  *
- * Furthermore, it defines a *_get_type() function. See G_DEFINE_TYPE_EXTENDED()
- * for an example.
+ * Furthermore, it 'defines' a *_get_type() function. See
+ * G_DEFINE_TYPE_EXTENDED() for an example.
  * 
  * Since: 2.4
  */
@@ -14371,16 +14634,16 @@ This shows how class and init functions get linked together.
  * G_DEFINE_TYPE(), etc are based.
  *
  * |[
- * G_DEFINE_TYPE_EXTENDED (GtkGadget,
- *                         gtk_gadget,
- *                         GTK_TYPE_WIDGET,
+ * G_DEFINE_TYPE_EXTENDED (GtkGadget,               // <1>
+ *                         gtk_gadget,              // <2>
+ *                         GTK_TYPE_WIDGET,         // <3>
  *                         0,
  *                         G_IMPLEMENT_INTERFACE (TYPE_GIZMO,
  *                                                gtk_gadget_gizmo_init));
  * ]|
  * expands to
  * |[
- * static void     gtk_gadget_init       (GtkGadget      *self);
+ * static void     gtk_gadget_*init*       (GtkGadget      *self);
  * static void     gtk_gadget_*class_init* (GtkGadgetClass *klass);
  * static gpointer gtk_gadget_parent_class = NULL;
  * static void     gtk_gadget_class_intern_init (gpointer klass)
@@ -14436,48 +14699,191 @@ For example, the code below shows how you could register such a fundamental
 object type in the type system (using none of the GObject convenience API):
 
 typedef struct {
-  GObject parent;
-  /* instance members */
-  int field_a;
-} MamanBar;
+  GObject parent;           // note
+
+  /* `instance` members */
+  gchar *filename;
+} ViewerFile;
+
+
+note:
+Does tht `instance` means data parts of object and init functions to initialize?
 
 typedef struct {
-  GObjectClass parent;
-  /* class members */
-  void (*do_action_public_virtual) (MamanBar *self, guint8 i);
+  GObjectClass parent;      // note
 
-  void (*do_action_public_pure_virtual) (MamanBar *self, guint8 i);
-} MamanBarClass;
+  /* `class` members */
+  /* the first is public, pure and virtual */
+  void (*open)  (ViewerFile  *self,
+                 GError     **error);
 
-#define MAMAN_TYPE_BAR (maman_bar_get_type ())
+  /* the second is public and virtual */
+  void (*close) (ViewerFile  *self,
+                 GError     **error);
+} ViewerFileClass;
+
+#define VIEWER_TYPE_FILE (viewer_file_get_type ())
 
 GType 
-maman_bar_get_type (void)
+viewer_file_get_type (void)
 {
   static GType type = 0;
   if (type == 0) {
     const GTypeInfo info = {
-      sizeof (MamanBarClass),           /* class size */
-      NULL,                             /* base_init */
-      NULL,                             /* base_finalize */
-      (GClassInitFunc) foo_class_init,  /* class_init */
-      NULL,                             /* class_finalize */
-      NULL,                             /* class_data */
-      sizeof (MamanBar),                /* instance size */
-      0,                                /* n_preallocs */
-      (GInstanceInitFunc) NULL          /* instance_init */
+      sizeof (ViewerFileClass),
+      NULL,           /* base_init */
+      NULL,           /* base_finalize */
+      (GClassInitFunc) viewer_file_class_init,
+      NULL,           /* class_finalize */
+      NULL,           /* class_data */
+      sizeof (ViewerFile),
+      0,              /* n_preallocs */
+      (GInstanceInitFunc) NULL /* instance_init */
     };
     type = g_type_register_static (G_TYPE_OBJECT,
-                                   "BarType",
+                                   "ViewerFile",
                                    &info, 0);
   }
   return type;
 }
 
-
-<register-type>
 Upon the first call to maman_bar_get_type, the type named BarType will be
 'registered' in the type system as 'inheriting' from the type G_TYPE_OBJECT.
+
+
+Initialization and Destruction
+
+instantiation of these types can be done with g_type_create_instance, which will
+look up the type information structure associated with the type requested. 
+
+Then, the instance size and instantiation policy (if the n_preallocs field is
+        set to a non-zero value, the type system allocates the object's instance
+        structures in chunks rather than mallocing for every instance) declared
+by the user are used to get a buffer to hold the object's instance structure.
+
+If this is the 'first' instance of the object ever created, the type system must
+create a class structure. It allocates a buffer to hold the object's class
+structure and initializes it. 
+
+The first part of the class structure (ie: the embedded parent class structure)
+    is initialized by 'copying' the contents from the class structure of the
+    parent class. The rest of class structure is initialized to zero. If there
+    is no parent, the entire class structure is initialized to zero. The type
+    system then 'invokes' the base_class_initialization functions
+    (GBaseInitFunc) from topmost fundamental object to bottom-most most derived
+    object. The object's class_init (GClassInitFunc) function is invoked
+    afterwards to complete initialization of the class structure. Finally, the
+    object's interfaces are initialized (we will discuss interface
+            initialization in more detail later).
+
+Once the type system has a pointer to an initialized class structure, it sets
+the object's instance class pointer to the object's class structure and invokes
+the object's `instance_init` (GInstanceInitFunc) functions, from top-most
+fundamental type to bottom-most most-derived type.
+
+Object instance destruction through g_type_free_instance is very simple: the
+instance structure is returned to the instance pool if there is one and if this
+was the last living instance of the object, the class is destroyed.
+
+Class destruction (the concept of destruction is sometimes partly referred to as
+        finalization in GType) is the symmetric process of the initialization:
+interfaces are destroyed first. Then, the most derived class_finalize
+(GClassFinalizeFunc) function is invoked. Finally, the base_class_finalize
+(GBaseFinalizeFunc) functions are invoked from bottom-most most-derived type to
+top-most fundamental type and the class structure is freed.
+
+The base initialization/finalization process is very similar to the C++
+constructor/destructor paradigm. The practical details are different though and
+it is important not to get confused by superficial similarities. GTypes have no
+instance destruction mechanism. It is the user's responsibility to implement
+correct destruction semantics on top of the existing GType code. (This is what
+        GObject does: see The GObject base class.) Furthermore, C++ code
+equivalent to the base_init and class_init callbacks of GType is usually not
+needed because C++ cannot really create object types at runtime.
+
+The instantiation/finalization process can be summarized as follows: 
+
+Table 1. GType Instantiation/Finalization
+
+Invocation              Each call to g_type_create_instance for target type 	
+Function invoked        target type's instance_init function 	
+Function's parameters   On object's instance
+
+
+<interface>
+GType's interfaces are very similar to Java's interfaces. They allow to describe
+a common API that several classes will adhere to. Imagine the play, pause and
+stop buttons on hi-fi equipment — those can be seen as a playback interface.
+Once you know what they do, you can control your CD player, MP3 player or
+anything that uses these symbols. To declare an interface you have to register a
+non-instantiable classed type which derives from GTypeInterface. The following
+piece of code declares such an interface. 
+
+#define VIEWER_TYPE_EDITABLE viewer_editable_get_type ()
+
+G_DECLARE_INTERFACE (ViewerEditable, viewer_editable, VIEWER, EDITABLE, GObject)
+
+struct _ViewerEditableInterface {
+  GTypeInterface parent;
+
+  void (*save) (ViewerEditable  *self,
+                GError         **error);
+};
+
+void viewer_editable_save (ViewerEditable  *self,
+                           GError         **error);
+
+The interface function, viewer_editable_save is implemented in a pretty simple
+way:
+
+void
+viewer_editable_save (ViewerEditable  *self,
+                      GError         **error)
+{
+  ViewerEditableinterface *iface;
+
+  g_return_if_fail (VIEWER_IS_EDITABLE (self));
+  g_return_if_fail (error == NULL || *error == NULL);
+
+  iface = VIEWER_EDITABLE_GET_INTERFACE (self);
+  g_return_if_fail (iface->save != NULL);
+  iface->save (self);
+}
+
+viewer_editable_get_type registers a type named ViewerEditable which inherits
+from `G_TYPE_INTERFACE`. All interfaces must be children of G_TYPE_INTERFACE in
+the inheritance tree.
+
+An interface is defined by only one structure which must contain as first member
+a GTypeInterface structure. The interface structure is expected to contain the
+function 'pointers' of the interface methods. It is good style to define helper
+functions for each of the interface methods which simply call the interface's
+method directly: viewer_editable_save is one of these.
+
+If you have no special requirements you can use the G_IMPLEMENT_INTERFACE macro
+to implement an interface:
+
+static void
+viewer_file_save (ViewerEditable *self)
+{
+  g_print ("File implementation of editable interface save method.\n");
+}
+
+static void
+viewer_file_editable_interface_init (ViewerEditableInterface *iface)
+{
+  iface->save = viewer_file_save;
+}
+
+G_DEFINE_TYPE_WITH_CODE (ViewerFile, viewer_file, VIEWER_TYPE_FILE,
+    G_IMPLEMENT_INTERFACE (VIEWER_TYPE_EDITABLE,
+    viewer_file_editable_interface_init));
+
+If your code does have special requirements, you must write a 'custom' get_type
+function to register your GType which inherits from some GObject and which
+implements the interface ViewerEditable. 
+
+// skipped
 
 
 <class-and-instance>
@@ -14558,7 +14964,7 @@ typedef struct {
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-object-type
+*kt_dev_bcast_600* gobject-type
 
 GObject is a fundamental classed instantiable type. It implements:
 
@@ -14577,65 +14983,70 @@ how it works.
 
 Object instantiation
 
-The g_object_new family of functions can be used to 'instantiate' any GType
+The `g_object_new` family of functions can be used to 'instantiate' any GType
 which 'inherits' from the GObject base type. All these functions make sure the
 class and instance structures have been correctly initialized by GLib's type
 system and then invoke at one point or another the constructor class method
 which is used to:
 
-    Allocate and clear memory through g_type_create_instance,
+    Allocate and clear memory through `g_type_create_instance`,
 
     Initialize the object's instance with the construction properties.
 
-Objects which inherit from GObject are allowed to override this constructed
+Objects which inherit from GObject are allowed to `override` this constructed
 class method. The example below shows how MamanBar overrides the parent's
 construction process:
 
-#define MAMAN_TYPE_BAR maman_bar_get_type ()
-G_DECLARE_FINAL_TYPE (MamanBar, maman_bar, MAMAN, BAR, GObject)
 
-struct _MamanBar
+#define VIEWER_TYPE_FILE viewer_file_get_type ()
+G_DECLARE_FINAL_TYPE (ViewerFile, viewer_file, VIEWER, FILE, GObject)
+
+struct _ViewerFile
 {
   GObject parent_instance;
 
   /* instance members */
 };
 
-/* will create maman_bar_get_type and set maman_bar_parent_class */
-G_DEFINE_TYPE (MamanBar, maman_bar, G_TYPE_OBJECT);
+/* will create viewer_file_get_type and set viewer_file_parent_class */
+G_DEFINE_TYPE (ViewerFile, viewer_file, G_TYPE_OBJECT)
 
 static void
-maman_bar_constructed (GObject *obj)
+viewer_file_constructed (GObject *obj)
 {
   /* update the object state depending on constructor properties */
 
   /* Always chain up to the parent constructed function to complete object
    * initialisation. */
-  G_OBJECT_CLASS (maman_bar_parent_class)->constructed (obj);
+  G_OBJECT_CLASS (viewer_file_parent_class)->constructed (obj);
 }
 
 static void
-maman_bar_class_init (MamanBarClass *klass)
+viewer_file_*class_init* (ViewerFileClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-  object_class->constructed = maman_bar_constructed;
+  // note: override?
+  object_class->constructed = viewer_file_constructed;
 }
 
 static void
-maman_bar_init (MamanBar *self)
+viewer_file_*init* (ViewerFile *self)
 {
   /* initialize the object */
 }
 
-note:
-Here pass maman_bar_get_type ()
+If the user instantiates an object ViewerFile with:
 
-MamanBar *bar = g_object_new (MAMAN_TYPE_BAR, NULL);
+ViewerFile *file = g_object_new (VIEWER_TYPE_FILE, NULL);
+
+note:
+Here user provides own "init" functions which gets used when this type is
+created.
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-object-reference-count
+*kt_dev_bcast_600* gobject-reference-count
 
 https://developer.gnome.org/gobject/stable/gobject-memory.html
 
@@ -14677,7 +15088,7 @@ Table 5. g_object_unref
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-object: floating reference
+*kt_dev_bcast_600* gobject-floating reference
 
 https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html
 
@@ -14731,7 +15142,7 @@ note: since C do not have smart pointers.
 
 
 ={============================================================================
-*kt_dev_bcast_600* glib-property, glib-gparam, glib-value
+*kt_dev_bcast_600* gproperty, glib-gparam, glib-value
 
 Object properties
 
@@ -16204,7 +16615,9 @@ const gchar * g_intern_static_string ()
 ={============================================================================
 *kt_dev_bcast_600* gvalue
 
-Generic values — A polymorphic type that can hold values of any other type
+https://developer.gnome.org/gobject/unstable/gobject-Generic-values.html
+
+Generic values — A polymorphic type that can hold values of 'any' other type
 
 The GValue structure is basically a variable container that consists of a type
 identifier and a specific value of that type. The type identifier within a
@@ -16269,6 +16682,23 @@ the GValue structure that has been passed in.
  * #GValue structure.
  */
 
+
+g_value_copy ()
+--------------------------
+void
+g_value_copy (const GValue *src_value,
+              GValue *dest_value);
+
+Copies the value of src_value into dest_value .
+
+Parameters
+
+src_value
+An initialized GValue structure.
+
+dest_value
+An initialized GValue structure of the same type as src_value .
+	 
 
 ={============================================================================
 *kt_dev_bcast_600* gtime-gdate
