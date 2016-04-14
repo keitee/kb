@@ -96,7 +96,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_bcast_500* gst-event
 *kt_dev_bcast_500* gst: gstvideo
 *kt_dev_bcast_500* gst-ref-pipeline
-*kt_dev_bcast_500* gst-ref-element
+*kt_dev_bcast_500* gst-element
 *kt_dev_bcast_500* gst-element-factory
 *kt_dev_bcast_500* gst-ghostpad
 *kt_dev_bcast_500* gst-structure
@@ -11818,6 +11818,13 @@ Override this to handle events arriving on the sink pad
 note: Q: return TRUE or FALSE mean? Looks like return TRUE means it used up?
 
 
+<eos>
+The basesink gets EOS first and then calls subclass `event` method.
+
+DEBUG              basesink gstbasesink.c:3229:gst_base_sink_event:<nexussink> received event 0x6111b8 eos event: 0x6111b8, time 99:99:99.999999999, seq-num 1034, (NULL)
+DEBUG              nexussink gstnexussink.c:1007:gst_nexus_sink_event:<nexussink> event
+DEBUG              nexussink gstnexussink.c:1076:gst_nexus_sink_event_locked:<nexussink> End of stream
+
 {time-log}
 // for video, nexussink0 and for audio nexussink1
 
@@ -12433,7 +12440,7 @@ a GstClock, unref after usage.
 
 
 ={============================================================================
-*kt_dev_bcast_500* gst-ref-element
+*kt_dev_bcast_500* gst-element
 
 http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html
 
@@ -12450,7 +12457,7 @@ gst_element_post_message ()
 gboolean
 gst_element_post_message (GstElement *element, GstMessage *message);
 
-Post a message on the element's GstBus. This function takes ownership of the
+Post a message on the element's GstBus. This function takes 'ownership' of the
   message; if you want to access the message after this call, you should add an
   additional reference before calling.  
   
@@ -12460,7 +12467,7 @@ element
 a GstElement 'posting' the message
 
 message
-a GstMessage to post.  [transfer full]
+a GstMessage to post.  ['transfer' full]
 
 Returns
 
@@ -12468,6 +12475,30 @@ TRUE if the message was successfully posted. The function returns FALSE if the
 element did not have a bus.
 
 MT safe.
+
+note:
+Might be worth a quick check to make sure that doesn't cause a memory leak.
+
+// gstreamer/gst/gstelement.c
+
+gst_element_post_message_default (GstElement * element, GstMessage * message)
+{
+    // snipped
+
+    if (G_UNLIKELY (bus == NULL))
+        goto no_bus;
+
+    /* ERRORS */
+no_bus:
+    {
+        GST_CAT_DEBUG_OBJECT (GST_CAT_MESSAGE, element,
+                "not posting message %p: no bus", message);
+        GST_OBJECT_UNLOCK (element);
+        gst_message_unref (message);
+        return FALSE;
+    }
+}
+
 
 note:
 It turns out we don't have to execute gst_element_post_message() on the main
@@ -14320,6 +14351,109 @@ static void gst_nexus_sink_init( GstNexusSink * sink )
 }
 
 
+<EOS-WRONG>
+DEBUG              basesink gstbasesink.c:3229:gst_base_sink_event:<nexussink> received event 0x6111b8 eos event: 0x6111b8, time 99:99:99.999999999, seq-num 1034, (NULL)
+DEBUG              nexussink gstnexussink.c:1007:gst_nexus_sink_event:<nexussink> event
+DEBUG              nexussink gstnexussink.c:1076:gst_nexus_sink_event_locked:<nexussink> End of stream
+
+
+    When EOS event is received in Nexussink we can't simply process it stratight
+    away becase there's usually a large amount of data buffered in the playpump
+    that needs to be played out. For that reason Nexussink is "swallowing" the
+    original EOS event and generates a new one once Nexus playpump is empty.
+
+Here 'swallow' EOS and instead fifoEmpty event from nexus.
+
+static gboolean gst_nexus_sink_event( GstBaseSink* basesink, GstEvent* event );
+static gboolean gst_nexus_sink_event_locked( GstNexusSink* sink, GstEvent* event )
+{
+    case GST_EVENT_EOS:
+        GST_DEBUG_OBJECT (sink, "End of stream");
+        g_atomic_int_set(&sink->eos_received,TRUE);
+        if(sink->settings.contentType!=CTAudioElementaryStream){
+            gst_event_unref (event);
+
+            return FALSE;   // note: return
+        }
+        break;
+}
+
+    So far that secondary EOS was sent by calling event() "virtual" method in
+    GstBaseSink. This turned out to be incorrect because GstBaseSink makes a
+    number of assumptions about it's internal locking state and expects event()
+    to be called only in specific conditions, namely synchrounous to serialised
+    events.
+    
+    This incorrect usage was causing a deadlock in specific circumstances.
+    
+    More information available in GStreamer bugzilla:
+    https://bugzilla.gnome.org/show_bug.cgi?id=764939 .
+
+
+DEBUG              nexussink gstnexussink.c:1111:gst_nexus_sink_wait_event:<nexussink> wait_event
+DEBUG              nexussink gstnexussink.c:1124:gst_nexus_sink_wait_event_locked:<nexussink> wait_event
+DEBUG              nexussink gstnexussink.c:1128:gst_nexus_sink_wait_event_locked:<nexussink> End of stream
+DEBUG              nexussink gstnexussink.c:1136:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - waiting until all data consumed
+DEBUG              nexussink gstnexussink.c:1138:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - done
+
+
+/* wait for eos or gap, subclasses should chain up to parent first */
+static GstFlowReturn gst_nexus_sink_wait_event_locked(GstNexusSink *sink, GstEvent *event)
+{
+    GstFlowReturn ret;
+
+    GST_DEBUG_OBJECT (sink,"wait_event");
+
+    switch( GST_EVENT_TYPE( event ) ) {
+        case GST_EVENT_EOS:
+            GST_DEBUG_OBJECT (sink, "End of stream");
+            if(sink->nexusMgr){
+                GstNexusMgr* mgr = sink->nexusMgr;
+                GstNexusStreamSetting settings = sink->settings;
+                gst_nexus_mgr_ref(mgr);
+
+                g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
+                {
+                    GST_DEBUG_OBJECT (sink, "End of stream - waiting until all data consumed");
+
+                    // note:
+                    // do while checking nexus decoder state to check if all
+                    // data is drained.
+                    
+                    gst_nexus_mgr_wait_until_empty(mgr, &settings);
+                    GST_DEBUG_OBJECT (sink, "End of stream - done");
+                }
+                g_mutex_lock(&sink->mutex);
+
+                gst_nexus_mgr_unref(mgr);
+            }
+            break;
+            //TODO: implement GAP
+        default:
+            break;
+    }
+
+    g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
+    ret = GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )->wait_event( GST_BASE_SINK(sink), event );
+    g_mutex_lock(&sink->mutex);
+
+    return ret;
+}
+
+DEBUG              nexussink gstnexussink.c:1111:gst_nexus_sink_wait_event:<nexussink> KT: wait_event
+DEBUG              nexussink gstnexussink.c:1124:gst_nexus_sink_wait_event_locked:<nexussink> wait_event
+DEBUG              nexussink gstnexussink.c:1128:gst_nexus_sink_wait_event_locked:<nexussink> End of stream
+TRACE              nexussink gstnexusmgr.c:374:gst_nexus_mgr_ref: ref 6664904 3
+DEBUG              nexussink gstnexussink.c:1136:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - waiting until all data consumed
+DEBUG              nexussink gstnexussink.c:1138:gst_nexus_sink_wait_event_locked:<nexussink> End of stream - done
+TRACE              nexussink gstnexusmgr.c:384:gst_nexus_mgr_unref: unref 6664904 3
+
+TRACE              nexussink gstnexussink.c:1711:gst_nexus_sink_on_error:<nexussink> FIFO empty, sending EOS
+
+DEBUG               basesink gstbasesink.c:3097:gst_base_sink_default_event:<nexussink> Now posting EOS
+DEBUG               basesink gstbasesink.c:3100:gst_base_sink_default_event:<nexussink> Got seqnum #769
+
+
 // not defined in the plugin. That means that gst_nexus_sink_parent_class is
 // automatically defined somewhere?
 
@@ -14340,7 +14474,15 @@ static void gst_nexus_sink_on_error( void* context, int reason )
 
                 // note:
                 // The plugin overrides this function.
+                //
+                // #define GST_BASE_SINK_CLASS(klass)      
+                //  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_BASE_SINK,GstBaseSinkClass))
                 GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )->event( &sink->parent, gst_event_new_eos() );
+
+                // note:
+                // This is proper way
+                GstMessage *message = gst_message_new_eos (GST_OBJECT_CAST (sink));
+                gst_element_post_message (GST_ELEMENT_CAST (sink), message);
             }
             else {
                 GST_TRACE_OBJECT(sink, "FIFO empty");
@@ -14352,47 +14494,56 @@ static void gst_nexus_sink_on_error( void* context, int reason )
 }
 
 
-static gboolean gst_nexus_sink_event( GstBaseSink* basesink, GstEvent* event )
+gst_base_sink_default_event (GstBaseSink * basesink, GstEvent * event)
 {
-  GstNexusSink* sink = GST_NEXUS_SINK( basesink );
-  gboolean ret;
+  gboolean result = TRUE;
+  GstBaseSinkClass *bclass;
 
-  g_mutex_lock(&sink->mutex);
-  ret = gst_nexus_sink_event_locked(sink, event);
-  g_mutex_unlock(&sink->mutex);
+  bclass = GST_BASE_SINK_GET_CLASS (basesink);
 
-  return ret;
-}
+  switch (GST_EVENT_TYPE (event)) {
 
-static gboolean gst_nexus_sink_event_locked( GstNexusSink* sink, GstEvent* event )
-{
-    gboolean ret = TRUE;
+    case GST_EVENT_EOS:
+    {
+      GstMessage *message;
+      guint32 seqnum;
 
-    switch( GST_EVENT_TYPE( event ) ) {
-        case GST_EVENT_EOS:
-            GST_DEBUG_OBJECT (sink, "End of stream");
-            g_atomic_int_set(&sink->eos_received,TRUE);
-            break;
-        default:
-            GST_TRACE_OBJECT (sink, "Event other 0x%x", GST_EVENT_TYPE( event ) );
-            break;
+      /* we set the received EOS flag here so that we can use it when testing if
+       * we are prerolled and to refuse more buffers. */
+      basesink->priv->received_eos = TRUE;
+
+      /* wait for EOS */
+      if (G_UNLIKELY (gst_base_sink_wait_event (basesink,
+                  event) != GST_FLOW_OK)) {
+        result = FALSE;
+        goto done;
+      }
+
+      /* the EOS event is completely handled so we mark
+       * ourselves as being in the EOS state. eos is also
+       * protected by the object lock so we can read it when
+       * answering the POSITION query. */
+      GST_OBJECT_LOCK (basesink);
+      basesink->eos = TRUE;
+      GST_OBJECT_UNLOCK (basesink);
+
+      /* ok, now we can post the message */
+      GST_DEBUG_OBJECT (basesink, "Now posting EOS");
+
+      seqnum = basesink->priv->seqnum = gst_event_get_seqnum (event);
+      GST_DEBUG_OBJECT (basesink, "Got seqnum #%" G_GUINT32_FORMAT, seqnum);
+
+      message = gst_message_new_eos (GST_OBJECT_CAST (basesink));
+      gst_message_set_seqnum (message, seqnum);
+      gst_element_post_message (GST_ELEMENT_CAST (basesink), message);
+      break;
     }
-
-    if (ret && GST_BASE_SINK_CLASS (gst_nexus_sink_parent_class)->event) {
-        GST_LOG_OBJECT (sink,"calling GstBaseSink::event");
-
-        g_mutex_unlock(&sink->mutex); /* Temporarily unlock sink->mutex. */
-
-        // note: this pass eos up to the parent
-        
-        ret = GST_BASE_SINK_CLASS( gst_nexus_sink_parent_class )->event( GST_BASE_SINK(sink), event );
-        g_mutex_lock(&sink->mutex);
-    }
-    else{
-        gst_event_unref (event);
-    }
-
-    return ret;
+    default:
+      break;
+  }
+done:
+  gst_event_unref (event);
+  return result;
 }
 
 
