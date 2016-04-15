@@ -12,11 +12,12 @@
 *kt_dev_uv_set_100* env-cco:
 
 *kt_dev_uv_stack_000* zb-jenkins
+*kt_dev_uv_stack_000* zb-repos
 *kt_dev_uv_stack_000* zb-config
 *kt_dev_uv_stack_000* zb-virtual-slave, zb-shell
 *kt_dev_uv_stack_000* zb-make
 *kt_dev_uv_stack_000* zb-build-with-progress
-*kt_dev_uv_stack_000* zinc-build: makefile
+*kt_dev_uv_stack_000* zb-makefile
 *kt_dev_uv_stack_001* zinc-build: build commands and build vars
 *kt_dev_uv_stack_000* zb-debug-release
 *kt_dev_uv_stack_003* zinc-build: autotool structures
@@ -245,6 +246,7 @@
 *kt_dev_uv_oem_004* nexus-stc
 *kt_dev_uv_oem_005* nexus-audio
 *kt_dev_uv_oem_006* nexus-video
+*kt_dev_uv_oem_006* nexus-surface
 
 |kt_dev_uv_task_002| task:02: DEVARCH-8869: about IP connection.
 |kt_dev_uv_task_003| task:02: DEVARCH-7508: runBrowser-test.sh
@@ -447,7 +449,7 @@ $ ccoSwitcher.sh ext04
 
 
 ={============================================================================
-*kt_dev_uv_stack_000* zinc-build-jenkins
+*kt_dev_uv_stack_000* zb-jenkins
 
 https://wiki.youview.co.uk/display/canvas/How+access+Jenkins+build+slaves
 
@@ -541,6 +543,12 @@ T1000 - 05c44df - zinc-trunk - origin/review/DEVARCH-11046_add_json_files_to_dis
 <from-console-log>
 10:52:52 [description-setter] Description set: T1000 - Slave=Mrbenn - zinc-trunk -
 05c44dfbc888d41bb8be5ba3e32b9a984a863a44
+
+
+={============================================================================
+*kt_dev_uv_stack_000* zb-repos
+
+$ git clone ssh://git@stash.dev.youview.co.uk/tvos/devarch.git
 
 
 ={============================================================================
@@ -1021,7 +1029,7 @@ fi
 
 
 ={============================================================================
-*kt_dev_uv_stack_000* zinc-build: makefile
+*kt_dev_uv_stack_000* zb-makefile
 
 Zinc/Zinc.Build/project-deps-rules.mk
 
@@ -29262,21 +29270,6 @@ to see examples:
 
 
 ={============================================================================
-*kt_dev_uv_oem_003* nexus-surface
-
-// when boots up and do nothing on t2100
-
-==========================================
-Launching instance 1671
-Error removing jail directories (hopefully because they're empty). Carrying on...
-Write failed: Broken pipe
-02:51:39 ~$ h22ssh
-
-[root@HUMAX /]# cat /proc/brcm/surface
-SurfaceModule: 406 surfaces, 29070380 bytes
-
-
-={============================================================================
 *kt_dev_uv_oem_003* nexus-dfb
 
 https://github.com/lancebaiyouview/DirectFB
@@ -29997,7 +29990,7 @@ NEXUS_VideoDecoder_P_DecodeError_isr(void *data, int unused, void *unused2)
 
 
 ={============================================================================
-*kt_dev_uv_oem_006* nexus-proc
+*kt_dev_uv_oem_006* nexus-surface
 
 https://stash.dev.youview.co.uk/projects/STB
 
@@ -30010,7 +30003,57 @@ g_NEXUS_surface_compositorModule = NEXUS_Module_Create("surface_compositor", &mo
 NEXUS_Module_Create  793 src/refsw/nexus/modules/core/src/nexus_core.c     
 g_NexusCore.module = NEXUS_Module_Create("core", &moduleSettings);
 
+
+T2100:
+/* Memory features */
+#define NEXUS_NUM_MEMC 1
+/* default heap indices */
+#define NEXUS_MEMC0_MAIN_HEAP           0
+#define NEXUS_MEMC0_PICTURE_BUFFER_HEAP 2
+#define NEXUS_MEMC0_GRAPHICS_HEAP       1
+
+T1000:
+
+#define NEXUS_NUM_MEMC 2
+/* default heap indices */
+#define NEXUS_MEMC0_MAIN_HEAP           0
+#define NEXUS_MEMC1_MAIN_HEAP           1
+#define NEXUS_MEMC1_GRAPHICS_HEAP       2
+#define NEXUS_MEMC0_GRAPHICS_HEAP       3
+
+
+// when boots up and do nothing on t2100
+[root@HUMAX /]# cat /proc/brcm/surface
+SurfaceModule: 406 surfaces, 29070380 bytes
+
+
 // src/refsw/nexus/modules/surface/src/nexus_surface.c
+
+[root@HUMAX /]# cat /proc/brcm/core 
+Core:
+heap offset     size       mapping used peak largestavail
+0    0x20000000 0x0c000000 eFull    70%  70% 0x0383db78     // size 201,326,592 
+1    0x2c000000 0x08000000 eApp     31%  37% 0x0574f980
+2    0x34000000 0x02300000 eDevice  97%  97% 0x000eef00
+
+
+    NEXUS_HeapHandle heap;     /* Optional handle for memory heap. If NULL, the
+                                  surface and palette will be allocated from
+                                  heap[0]. */
+
+
+<debug>
+    moduleSettings.dbgModules = "nexus_surface";
+
+
+NEXUS_SurfaceHandle NEXUS_Surface_Create:
+        g_NEXUS_SurfaceModuleData.stats.memory += sz;
+
+NEXUS_Surface_P_Finalizer: 
+    if (surface->buffer && NULL == surface->createSettings.pMemory) {
+        BMEM_Free(surface->heap, surface->buffer);
+        g_NEXUS_SurfaceModuleData.stats.memory -= surface->mem.bufferSize;
+    }
 
 static void NEXUS_SurfaceModule_P_Print(void)
 {

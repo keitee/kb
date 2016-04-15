@@ -6544,6 +6544,32 @@ filesystem Linux was instructed to boot (root parameter):
 root=/dev/sda1 rw  macaddr=28:32:C5:3F:59:4E bmem=360M@512M wakeup=REBOOT ...
 
 
+       -o, --options opts
+              Use the specified mount options.  The opts argument is a
+              comma-separated list.  For example:
+
+                     mount LABEL=mydisk -o noatime,nodev,nosuid
+
+              For more details, see the FILESYSTEM-INDEPENDENT MOUNT OPTIONS and
+              FILESYSTEM-SPECIFIC MOUNT OPTIONS sections.
+
+
+<when-cannot-run>
+./yv-free: Permission denied
+
+is it on a mount point with noexec?
+
+/dev/mapper/sda5 on /var type ext3 (rw,nosuid,nodev,noexec,relatime,errors=continue,barrier=0,data=ordered)
+
+/tmp is a link to /var/tmp
+
+Try
+
+mount -o remount,exec /var
+
+that looks to have done the trick
+
+
 ={============================================================================
 *kt_linux_tool_039* tool-mount --bind and nfs
 
@@ -33958,6 +33984,10 @@ An application sends a message to the bus daemon over its spoke, and the bus
 daemon forwards the message to other connected applications as appropriate.
 Think of the daemon as a 'router'. 
 
+// from a box, dbus_glib-0.100.2
+dbus       671  0.0  0.3   3644  2056 ?        Ss   Apr13   2:45 /opt/zinc/oss/bin/dbus-daemon --fork --print-pid 4 --print-address 6 --session
+
+
 <binding> high-level binding
 'wrapper' libraries or 'bindings' based on particular application frameworks.
 For example libdbus-glib and libdbus-qt. There are also bindings to languages
@@ -33965,6 +33995,7 @@ such as Python. These wrapper libraries are the API most people should use, as
 they simplify the details of D-Bus programming.  libdbus is intended to be a
 low-level backend for the higher level bindings. Much of the libdbus API is only
 useful for binding implementation. 
+
 
 <session-and-system>
 D-Bus applications. D-Bus is designed for 'two' specific 'cases':
@@ -34099,9 +34130,9 @@ base Object, or whatever. Let's call this a native object.
 The low-level D-Bus protocol, and corresponding libdbus API, does not care about
 native objects.
 
-However, it provides a concept called an object path. The idea of an object path
-is that higher-level bindings can 'name' native object instances, and allow
-remote applications to refer to them. 
+However, low-level protocal provides a concept called an `object-path`. The idea
+of an object path is that higher-level bindings can 'name' native object
+'instances', and allow remote applications to refer to them. 
 
 The object path looks like a filesystem path, for example an object could be
 named /org/kde/kspread/sheets/3/cells/4/5. Human-readable paths are nice, but
@@ -34175,13 +34206,15 @@ particular object instance, a number of nested components have to be named:
 Address -> [Bus Name] -> Path -> Interface -> Method
 
 dbus.expose(
-        // const char* const MEDIA_ROUTER_FACTORY = "/Zinc/Media/MediaRouterFactory";
-        ObjectPath::MEDIA_ROUTER_FACTORY, 
-        factoryMediaRouter.createMediaRouterFactory(),
-        boost::make_shared<NonInheritingAdaptorFactory<MediaRouter> > (
-             NS_ZINC_DBUS_BINDING::RefCountedAdaptorFactory<MediaRouter>(*bnm), conn, 
-             "/Zinc/Media/MediaRouters/")
-            );
+    // <1> path "/Zinc/Media/MediaRouterFactory";
+    ObjectPath::MEDIA_ROUTER_FACTORY, 
+    // <2> obj
+    factoryMediaRouter.createMediaRouterFactory(),
+    // <3>
+    boost::make_shared<NonInheritingAdaptorFactory<MediaRouter> > (
+        NS_ZINC_DBUS_BINDING::RefCountedAdaptorFactory<MediaRouter>(*bnm), conn, 
+        "/Zinc/Media/MediaRouters/")
+           );
 
 method call sender=:1.127 -> dest=Zinc.MediaProxy serial=44 
 path=/Zinc/Media/MediaRouterFactory; 
@@ -34196,7 +34229,7 @@ member=setSource
    string "http://=1460458249&e=1460501449&h=b42724e238b5e67cbc99e24d435763f3"
    int32 1
 
-dbus-send --print-reply --type=method_call --dest='Zinc.MediaProxy' $MR
+dbus-send --print-reply --type=method_call --dest='Zinc.MediaProxy' /Zinc/Media/MediaRouters/0
 Zinc.Media.MediaRouter.setSource 
 string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32:0
 
@@ -34204,14 +34237,15 @@ string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32
 {dbus-messages}
 There are 4 message 'types':
 
-1. Method call messages ask to invoke a method on an object.  you send a method call message, and
-receive either a method return message or an error message in reply. 
+1. `method-call-messages` ask to invoke a method on an object.  you send a
+method call message, and receive either a method return message or an error
+message in reply. 
 
-2. Method return messages return the results of invoking a method.
+2. `method-return-messages` return the results of invoking a method.
 
-3. Error messages return an exception caused by invoking a method.
+3. `error-messages` return an exception caused by invoking a method.
 
-4. Signal messages are notifications that a given signal has been emitted that
+4. `signal-messages` are notifications that a given signal has been emitted that
 an 'event' has occurred. You could also think of these as "event" messages. 
 
 A method call maps very simply to messages: you send a method call message, and
@@ -34230,50 +34264,50 @@ body as the payload. Header fields might include the sender bus name,
 A method call in DBus consists of two messages; a method call message sent from
 process A to process B, and a matching method reply message sent from process B
 to process A. Both the call and the reply messages are routed through the bus
-daemon. The caller includes a different serial number in each call message, and
-the reply message includes this number to allow the caller to match replies to
-calls.
+daemon. The caller includes a different `serial-number` in each call message,
+    and the reply message includes this number to allow the caller to 'match'
+    replies to calls.
 
 The call message will contain any arguments to the method. The reply message may
 indicate an error, or may contain data returned by the method.
 
 A method invocation in DBus happens as follows:
 
-o The language binding may provide a proxy, such that invoking a method on an
-in-process object invokes a method on a remote object in another process. If so,
-    the application calls a method on the proxy, and the proxy constructs a
-    method call message to send to the remote process.
+* The language binding may provide a proxy, such that invoking a method on an
+  in-process object invokes a method on a remote object in another process. If
+  so, the application calls a method on the proxy, and the proxy constructs a
+  method call message to send to the remote process.
 
-o For more low-level APIs, the application may construct a method call message
-itself, without using a proxy.
+* For more low-level APIs, the application may construct a method call message
+  itself, without using a proxy.
 
-o In either case, the method call message contains: a bus name belonging to the
-remote process; the name of the method; the arguments to the method; an object
-path inside the remote process; and optionally the name of the interface that
-specifies the method.
+* In either case, the method call message contains: a bus name belonging to the
+  remote process; the name of the method; the arguments to the method; an object
+  path inside the remote process; and optionally the name of the interface that
+  specifies the method.
 
-o The method call message is sent to the bus daemon.
+* The method call message is sent to the bus daemon.
 
-o The bus daemon looks at the destination bus name. If a process owns that name,
-  the bus daemon forwards the method call to that process. Otherwise, the bus
-  daemon creates an error message and sends it back as the reply to the method
-  call message.
+* The bus daemon looks at the destination bus name. If a process owns that name,
+  the bus daemon forwards the method call to that process. Otherwise, the
+  bus daemon creates an error message and sends it back as the reply to the
+  method call message.
 
-o The receiving process unpacks the method call message. In a simple low-level
-API situation, it may immediately run the method and send a method reply message
-to the bus daemon. When using a high-level binding API, the binding might
-examine the object path, interface, and method name, and convert the method call
-message into an invocation of a method on a native object sucn as
-java.lang.Object, QObject, etc., then convert the return value from the native
-method into a method , reply message.
+* The receiving process unpacks the method call message. In a simple low-level
+  API situation, it may immediately run the method and send a method reply
+  message to the bus daemon. When using a high-level binding API, the binding
+  might examine the object path, interface, and method name, and convert the
+  method call message into an invocation of a method on a native object sucn as
+  java.lang.Object, QObject, etc., then convert the return value from the native
+  method into a method, reply message.
 
-o The bus daemon receives the method reply message and sends it to the process
-that made the method call.
+* The bus daemon receives the method reply message and sends it to the process
+  that made the method call.
 
-o The process that made the method call looks at the method reply and makes use
-of any return values included in the reply. The reply may also indicate that an
-error occurred. When using a binding, the method reply message may be converted
-into the return value of of a proxy method, or into an exception. 
+* The process that made the method call looks at the method reply and makes use
+  of any return values included in the reply. The reply may also indicate that
+  an error occurred. When using a binding, the method reply message may be
+  converted into the return value of of a proxy method, or into an exception. 
 
 The bus daemon 'never' reorders messages. That is, if you send two method call
 messages to the same recipient, they will be received in the order they were
@@ -34286,10 +34320,10 @@ messages to call messages.
 
 {emitting-a-signal} Behind the Scenes
 A signal in DBus consists of a single message, sent by one process to any number
-of other processes.  That is, a signal is a unidirectional broadcast. The signal
-may contain arguments (a data payload), but because it is a broadcast, it never
-has a "return value." Contrast this with a method call where the method call
-message has a matching method reply message.
+of other processes.  That is, a signal is a `unidirectional-broadcast`. The
+signal may contain arguments (a data payload), but because it is a broadcast, it
+'never' has a "return value." Contrast this with a method call where the method
+call message has a matching method reply message.
 
 The emitter (aka sender) of a signal has no knowledge of the signal recipients.
 Recipients register with the bus daemon to receive signals based on "match
@@ -34299,24 +34333,24 @@ that signal.
 
 A signal in DBus happens as follows:
 
-o A signal message is created and sent to the bus daemon. When using the
-low-level API this may be done manually, with certain bindings it may be done
-for you by the binding when a native object emits a native signal or event.
+* A signal message is created and sent to the bus daemon. When using the
+  low-level API this may be done manually, with certain bindings it may be done
+  for you by the binding when a native object emits a native signal or event.
 
-o The signal message contains the name of the interface that specifies the
-signal; the name of the signal; the bus name of the process sending the signal;
-and any arguments
+* The signal message contains the name of the interface that specifies the
+  signal; the name of the signal; the bus name of the process sending the
+  signal; and any arguments
 
-o Any process on the message bus can register "match rules" indicating which
-signals it is interested in. The bus has a list of registered match rules.
+* Any process on the message bus can register "match rules" indicating which
+  signals it is interested in. The bus has a list of registered match rules.
 
-o The bus daemon examines the signal and determines which processes are
-interested in it. It sends the signal message to these processes.
+* The bus daemon examines the signal and determines which processes are
+  interested in it. It sends the signal message to these processes.
 
-o Each process receiving the signal decides what to do with it; if using a
-binding, the binding may choose to emit a native signal on a proxy object. If
-using the low-level API, the process may just look at the signal sender and name
-and decide what to do based on that. 
+* Each process receiving the signal decides what to do with it; if using a
+  binding, the binding may choose to emit a native signal on a proxy object. If
+  using the low-level API, the process may just look at the signal sender and
+  name and decide what to do based on that. 
 
 
 ={============================================================================
@@ -34346,7 +34380,6 @@ stable branch in future.
 
 
 <doc>
-
 https://dbus.freedesktop.org/doc/api/html/group__DBusThreads.html
 
 DBUS_EXPORT dbus_bool_t dbus_threads_init_default 	(void) 	
@@ -34382,6 +34415,8 @@ _dbus_rmutex_new_at_location().
 *kt_linux_core_700* dbus-bindings
 
 https://www.freedesktop.org/wiki/Software/DBusBindings/
+
+// used dbus_python-0.83.1
 
 dbus-python
 
