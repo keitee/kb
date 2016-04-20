@@ -161,7 +161,9 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_023* inheri-template-pattern
 *kt_dev_cpp_023* inheri-pimpl-pattern
 *kt_dev_cpp_023* inheri-strategy-pattern
-*kt_dev_cpp_023* inheri-case
+*kt_dev_cpp_023* inheri-class-relationship
+*kt_dev_cpp_023* inheri-class-relationship abuse-of-inheritance
+*kt_dev_cpp_024* class-empty-base-class-optimization
 |kt_dev_cpp_024| abstract base class {refactoring}
 |kt_dev_cpp_025| random
 |kt_dev_cpp_026| enum
@@ -365,6 +367,8 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_ccon_002| std::future
 
+
+*kt_dev_exer_001* write PRINT_ELEMENTS template function
 
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
@@ -10403,7 +10407,8 @@ type.
 5. When applied to a class type, the result is the size of an object of that
 class 'plus' any additional padding required to place such object in an array.
 
-6. When applied to an empty class type, always returns 1. 
+6. When applied to an empty class type, always returns 1.
+`empty-base-class-optimization`
 
 
 <sizeof-which-version>
@@ -21101,6 +21106,9 @@ StrBlobPtr &StrBlobPtr::operator--()
 ={============================================================================
 *kt_dev_cpp_022* inheri
 
+The inheritance provides `overriding` and `polymorphism`.
+
+
 {static-dynamic-type}
 The `dynamic-binding` at run-time so called `run-time-binding` because
 `static-type` is different from `dynamic-type` 
@@ -23145,11 +23153,12 @@ Can add/change calc func later because can have the drived classes in separate h
 
 
 ={============================================================================
-*kt_dev_cpp_023* inheri-case
+*kt_dev_cpp_023* inheri-class-relationship
 
-EXC++23 From template-pattern to strategy-pattern
+EXC++23. How to avoid public-inheritance using from template-pattern to
+strategy-pattern.
 
-{from-template-pattern}
+<public-inheritance-from-template-pattern>
 
 class GenericTableAlgorithm
 {
@@ -23195,12 +23204,25 @@ int main()
 }
 
 
-This holds two responsibilities to support different audiences. Always prefer to
-give each piece of code-module, class, function-a single, well-defined
-responsibility.
+The `pimpl-pattern` hides the implementation behind an opaque pointer so that
+any changes to them will not require client code to compile. Called
+`compiler-firewall-idiom` and `opaque-pointer` is a pointer to a declared but
+undefined class.
+
+struct XxxxImpl; XxxxImpl* pimpl_;
 
 
-{to-strategy-pattern}
+This holds two responsibilities to support different audiences;
+
+* Client code uses the algorithm.
+* GenericTableAlgorithm uses the specialized concrete "details" class to
+  specialize its operation for a specific case or usage.
+
+Always prefer to give each piece of code-module, class, function-a single,
+       well-defined responsibility.
+
+
+<no-inheritance-to-strategy-pattern>
 
 // responsibility one: providing public interface for external user.
 
@@ -23261,11 +23283,14 @@ The good things are:
 * Any concrete worker class can be used with any other algorithm using
   Filter()/ProcessRow() interface.
 
-This is an example of level of indirection.
+
+Remember the computer science motto:
+  "Most problems can be solved by adding a level of indirection."
 
 
-note:
-If does not need to keep 'state' across invocations, could replace it with:
+<to-template>
+As GenericTableAlgorithm do not have member data, it does not need to keep
+'state' across invocations. So could replace it with function.
 
 bool GenericTableAlgorithm(const string& table, GTAClient& worker)
 {
@@ -23289,8 +23314,163 @@ bool GenericTableAlgorithm(const string& table)
 
 int main()
 {
+  // `template-explicit-argument`
   GenericTableAlgorithm<MyWorker>("Customer");
 }
+
+
+={============================================================================
+*kt_dev_cpp_023* inheri-class-relationship abuse-of-inheritance
+
+EXC++24.
+
+The inheritance is overused which is strongest and tightly coupled relationship.
+Second to friendship. Should use `containment` to avoid needless coupling and
+dependencies.
+
+<when-inheritance-needless>
+template <class T>
+class MyList
+{
+  public:
+    bool    Insert( const T&, size_t index );
+    T       Access( size_t index ) const;
+    size_t  Size() const;
+
+  private:
+    T*      buf_;
+    size_t  bufSize_;
+};
+
+Two ways to write a MySet `is-implemented-in-terms-of` MyList;
+`nonpublic-inheritance` and `containment`.
+
+template <class T>
+class MySet1 : private MyList<T>
+{
+  public:
+    bool    Add( const T& );            // calls Insert()
+    T       Get( size_t index ) const;  // calls Access()
+    using MyList<T>::Size;
+    // ...
+};
+
+template <class T>
+class MySet2
+{
+  public:
+    bool    Add( const T& );            // calls impl_.Insert()
+    T       Get( size_t index ) const;  // calls impl_.Access()
+    size_t  Size() const;               // calls impl_.Size()
+    // ...
+
+  private:
+    MyList<T> impl_;
+};
+
+
+The containment is `has-a`, `composition`, `delagation`, and the inheritance is
+a superset of single containment since it has a subobject.
+
+
+<containment-in-generic-way>
+This is flexible and is `implentable`-in-terms-of 'any' class that supports the
+required functions that we need.
+
+Different user code may choose to instantiate MySet using implementations with
+different performance characteristics. Write code that does many more inserts
+than searches and want to use an implementation that optimizes inserts.
+
+Difficult to have this flexibility with inheritance since it fix an
+implementation decision at design time.
+
+
+template <class T, class Impl = MyList<T>> 
+class MySet3
+{
+  public:
+    bool    Add( const T& );            // calls impl_.Insert()
+    T       Get( size_t index ) const;  // calls impl_.Access()
+    size_t  Size() const;               // calls impl_.Size()
+    // ...
+
+  private:
+    Impl impl_;
+};
+
+
+<when-inheritance-appropriate>
+Even when inheritance is appropriate to override or to access protected member,
+can avoid this.
+
+The only way to get the right behavior is to override Func1.
+
+class Base
+{
+  public:
+    virtual int Func1();
+  protected:
+    bool Func2();
+  private:
+    bool Func3();   // uses Func1
+};
+
+
+Allows Derived to override Func1 but grants access to Func2 to all members of
+Derived. Needless made all Derived's members depend upon Base's protected
+interface.
+
+class Derived : private Base
+{
+  public:
+    int Func1();
+    // some of functions use Base::Func2 and some of which don't
+};
+
+
+Introduce as much couling as really need.
+
+class DerivedImpl : private Base
+{
+  public:
+    int Func1();
+    // functions that use Func2
+};
+
+class Derived
+{
+  // functions that don't use Func2
+  private:
+    DerivedImpl impl_;
+};
+
+
+Much better since:
+
+* Separates and encapsulates the dependencies on Base.
+* Follows `one-class-one-resposibility` guideline; coustomizing Base and
+  implementaimplementing itself in-terms-of Base.
+
+
+={============================================================================
+*kt_dev_cpp_024* class-empty-base-class-optimization
+
+The class has no data members at all and there can be space advantage. Compilers
+are allowrd to let an empty base subobject occupy zero space; whereas an empty
+member object must occupy nonzero space.
+
+class B { // functions only, no data };
+
+class D
+{
+  // b_ must occupy at least one byte even though B is an empty class.
+  B b_;
+};
+
+class D : private B
+{
+  // the B base subobject need not occupy any space at all
+};
 
 
 ={============================================================================
@@ -24998,8 +25178,8 @@ alternative_sum<long long, int, long>(i, lng);
 note: does it have real case?
 
 <normal-conversion>
-As with ordinary argument, normal conversion applies on explicit arguments since
-no deduction involved.
+As with ordinary argument, normal conversion applies on
+`template-explicit-argument` since no deduction involved.
 
 template <typename T> int compare(const T& v1, const T& v2);
 
@@ -25384,7 +25564,7 @@ The point is that use "const T&" to support 'any' type. The `const` is part of
 function parameter type but not part of template parameter list.
 
 
-<when-use--rvalue-reference>
+<when-use-rvalue-reference>
 template <typename T> void f3( const T&& );
 
 f3(5);      // T is `int`
@@ -25881,16 +26061,16 @@ template <typename T> int compare(const T&, const T&)
   return 0;
 }
 
-// Second version for string literals. Uses 'nontype' template parameters
+// Second version for string literals. Uses `nontype-template` parameters
 template <size_t N, size_t M> int compare(const char (&) [N], const (&) [M])
 {
     return strcmp(p1, p2);
 }
 
 If calls compare() with character pointers, the first version will be called
-because nontype version will be called only when pass a string literal or an
-array but want to compare pointers by strcmp() rather than by comparing the
-pointer values.
+because `nontype-template` version will be called only when pass a string
+literal or an array but want to compare pointers by strcmp() rather than by
+comparing the pointer values.
 
 const char *p1 = "hi", *p2 = "mom";
 
@@ -31736,7 +31916,9 @@ from 4.6
 
 Two points:
 
-* range-for caches `begin()` and `end()` so has risk of using 'invalidated' iterators.
+* range-for caches `begin()` and `end()` so has risk of using 'invalidated'
+  iterators.
+
 * shall use `const&` in for loop statement to avoid unnecessary copy.
 
 for( const T &r : vec )
@@ -31751,7 +31933,7 @@ for( auto beg = vec.begin(), end = vec.end(); beg != end; ++beg )
 }
 
 note:
-This code is wrong since cannot change r through const reference.
+The above code is wrong since cannot change r through const reference.
 
 template <typename T>
 void PRINT_ELEMENTS( const T& coll, const string optstr="" )
@@ -47630,6 +47812,72 @@ pair with user data.
 
 The C++PL says: There is no get_promise() operation to match get_future(). The use of the promise is
 completely handled by the packaged_task.
+
+
+# ============================================================================
+#{
+={============================================================================
+*kt_dev_exer_001* write PRINT_ELEMENTS template function
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+template<typename T>
+void PRINT_ELEMENTS( note:1 T &con, note:2 std::string &delm = " " )
+{
+  note:3: This works but requires more typing.
+  for( const typename T::value_type &elem : con )
+    std::cout << elem << delm;
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  note:4
+  // std::vector<int> vcon = {"1", "2", "3", "4", "5"};
+  // std::vector<int> vcon{"1", "2", "3", "4", "5"};
+  std::vector<int> vcon{1, 2, 3, 4, 5};
+
+  std::cout << "-----------" << std::endl;
+  PRINT_ELEMENTS(vcon);
+  PRINT_ELEMENTS(vcon, ","); note:2
+  std::cout << "-----------" << std::endl;
+}
+
+In note:2, there must be `const` since cannot bind `rvalue` to
+`lvalue-reference` but can do that with const. Otherwise, gets compile error:
+
+.cpp: In function ‘void PRINT_ELEMENTS(T&, std::string&) 
+  [with T = std::vector<int>; std::string = std::basic_string<char>]’:
+.cpp:22:22: error: default argument for parameter of type 
+  ‘std::string& {aka std::basic_string<char>&}’ has type ‘const char [2]’
+
+
+<updated>
+#include <iostream>
+#include <string>
+#include <vector>
+
+template<typename T>
+void PRINT_ELEMENTS( const T &con, const std::string &delm = " " )
+{
+  for( const auto &elem : con )
+    std::cout << elem << delm;
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  std::vector<int> vcon{1, 2, 3, 4, 5};
+
+  std::cout << "-----------" << std::endl;
+  PRINT_ELEMENTS(vcon);
+  PRINT_ELEMENTS(vcon, ",");
+  std::cout << "-----------" << std::endl;
+}
 
 
 # ============================================================================
