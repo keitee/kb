@@ -181,13 +181,13 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_050| template-explicit-argument
 |kt_dev_cpp_051| template-type-traits
 |kt_dev_cpp_052| template-argument-deduction
-*kt_dev_cpp_053* template-argument deduction: std-forward
+*kt_dev_cpp_053* template-argument-deduction std-forward
 *kt_dev_cpp_053* template-function-overload
 |kt_dev_cpp_053| template-variadic
 |kt_dev_cpp_053| template-variadic: forward
 |kt_dev_cpp_054| template-specialization
 *kt_dev_cpp_054* template-inheritance
-|kt_dev_cpp_060| template: how to initialize T member
+*kt_dev_cpp_060* template-initialize-type-member
 
 |kt_dev_cpp_100| ref: C++ under the hood, Jan Gray
 |kt_dev_cpp_101| ref: C++ under the hood, Scott Meyers
@@ -25574,7 +25574,7 @@ How about this?
 f3(i);
 
 CPR 688. Error? Since cannot bind an `rvalue-reference` to an `lvalue`? The
-exception which are the foundation for how `move` operate.
+exception which are the foundation for how `std::move()` operate.
 
 The first is when pass an `lvalue` to `rvalue-reference` function `parameter`,
     deduce it as argument's `lvalue-reference`.
@@ -25600,11 +25600,10 @@ f3(ci);     // T is `const int&`
 void f3<int&>(int& &&); to void f3<int&>(int&);
 
 The point is that to pass 'any' type. So both way so the same; support any type.
-Which one to use?
 
 
-<implication>
-This matters when write template.
+<which-one>
+Which one to use? This matters when write template.
 
 template <typename T> void f3(T &&val)
 { 
@@ -25649,8 +25648,9 @@ Like const, can bind lvalue to rvalue but cannot bind rvalue to lvalue. So in
 the second assign, both are viable but copy assign requires conversion to const.
 Hence move is used since it is exact match.
 
-In other words, cannot directly bind an rvalue reference to lvalue but can use
-move() to obtain an rvalue reference bound to an lvalue.
+In other words, cannot directly bind `rvalue-reference` to `lvalue` but can
+'indirectly' as `reference-collapsing`. Use std::move() to obtain an
+`rvalue-reference` bound to an lvalue.
 
 The standard defines std::move() which is example that works on rvalue and
 lvalue arguments.
@@ -25658,7 +25658,8 @@ lvalue arguments.
 template <typename T>
 typename remove_reference<T>::type&& move( T&& t )
 {
-    return static_cast<typename remove_reference<T>::type &&> (t);
+  // get `rvalue-reference` of the referred-to type
+  return static_cast<typename remove_reference<T>::type &&> (t);
 }
 
 string s1("hi!"), s2;
@@ -25670,7 +25671,7 @@ note: For more details on how this works, see CPR 690.
 
 
 ={============================================================================
-*kt_dev_cpp_053* template-argument deduction: std-forward
+*kt_dev_cpp_053* template-argument-deduction std-forward
 
 *std-forward*
 Some function need to forward their arguments with types 'unchanged' to another
@@ -25714,15 +25715,17 @@ void g(int &&i, int& j)
   cout << i << " " << j << endl;
 }
 
-flip2(g, i, 42);    // g(t2, t1);
+flip2(g, i, 42);    // g(42, i); g(t2, t1);
 
 Why? Since a function parameter, like any other variable, is an lvalue
-expression. The t2 is lvaue and cannot 'directly' bind lvalue to rvalue
-parameter in g.
+expression. The t2 is lvaue(to rvalue-reference) and cannot 'directly' bind
+lvalue to `rvalue-reference` parameter in g. 
 
-Use std::forward to preserve the types of the original arguments. Unlike
-std::move, std::forward must be called with an explicit template argument and
-returns rvalue reference to that type, T &&. 
+note: WHY not reference-collapsing? Because g() is not template.
+
+Use `std::forward()` to preserve the types of the original arguments. Unlike
+std::move(), std::forward() 'must' be called with an explicit template argument
+and returns rvalue reference to that type, T &&. 
 
 template <typename F, typename T1, typename T2>
 void flip(F f, T1 &&t1, T2 &&t2)                    // 1
@@ -25789,7 +25792,7 @@ t_templ.cpp:15:9: error: cannot bind 'std::basic_ostream<char>' lvalue to 'std::
          ^
 In file included from /home/kpark/gcc-build/install/include/c++/4.9.2/iostream:39:0,
                  from t_templ.cpp:1:
-/home/kpark/gcc-build/install/include/c++/4.9.2/ostream:602:5: note: initializing argument 1 of 'std::basic_ostream<_CharT, _Traits>& std::operator<<(std::basic_ostream<_CharT, _Traits>&&, const _Tp&) [with _CharT = char; _Traits = std::char_traits<char>; _Tp = My]'
+/include/c++/4.9.2/ostream:602:5: note: initializing argument 1 of 'std::basic_ostream<_CharT, _Traits>& std::operator<<(std::basic_ostream<_CharT, _Traits>&&, const _Tp&) [with _CharT = char; _Traits = std::char_traits<char>; _Tp = My]'
      operator<<(basic_ostream<_CharT, _Traits>&& __os, const _Tp& __x)
      ^
 
@@ -25838,7 +25841,7 @@ int main()
 
 
 note:
-When there are several overloaded templates that provide an eaually good match
+When there are several overloaded templates that provide an eqaually good match
 for a call, the most specialized version is perferred.
 
 note:
@@ -26364,7 +26367,7 @@ So in the above example, all other cases works other than <1>
 
 
 ={============================================================================
-*kt_dev_cpp_060* template: how to initialize T member
+*kt_dev_cpp_060* template-initialize-type-member
 
 No problem to define T member when use template. How set initial value to them?
 
