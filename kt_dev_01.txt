@@ -32005,42 +32005,93 @@ int main()
 
 
 ={============================================================================
-*kt_dev_stl_051* iter-adaptors
+*kt_dev_stl_051* iter-adapters
 
-These are several predefined special iterators, called iterator adaptors: 
+These are several predefined special iterators, called iterator adapters: 
 insert, stream, reverse, and move iterators
 
-{iter-inserter}
-Insert iterators, or inserters, are used to let algorithms operate in 'insert'
-mode rather than in overwrite mode. (for overwrite example, algorithms using
-    multiple range) They fall under the category of 'output' iterators, which
-are able to write/assign values only 'while' iterating forward.
-
-Three different insert iterators: at the front, at the end, or at a given
-position.
+{inserters}
+`insert-iterator`, or inserters, are used to let algorithms operate in 'insert'
+mode rather than in overwrite mode by transforming an assignment of an new value
+into an insertion. (for overwrite example, algorithms using multiple range) They
+fall under the category of 'output' iterators, which are able to write/assign
+values only 'while' iterating forward.
 
 The inserters calls a container operation to add and must use front_inserter
 only if the container has push_front and use back_inserter only if it has
-push_back. These are back_inserter, front_inserter, inserter which bind iterator
-to container operations.
+push_back. These are `back_inserter`, `front_inserter`, `inserter` which bind
+iterator to container operations.
 
-<why-useful>
-1. There is 'no' need to increase or decrease iter but still need to care about underlying
-container. note: Seems less convincing.
-2. Less 'generic' since need to know about element type. However, it's convenient. note: Can use
-usual interator interface in code while doing insertion. How? increment operator is no-op as i the
-reference 9.4.2.
+Consider *algo-copy* :
 
-<inserter>
-Calls insert(pos, val) member and insert elements directly in front of the position that is passed
-as the argument of its initialization and as the start to insert. For all containers except array
-and forward_list.
+namespace std {
+  template <typename InputIterator, typename OutputIterator>
+    OutputIterator copy (InputIterator from_pos,  // beginning of source
+        InputIterator from_end,                   // end of source
+        OutputIterator to_pos)                    // beginning of dest.
+    {
+      while (from_pos != from_end) {
+        *to_pos = *from_pos;  // copy values
+        ++from_pos;           // increment iterators
+        ++to_pos;
+      }
+      return to_pos;
+    }
+}
 
-Passing a position(iterator) to insert doesn't sound useful? So for associative and unordered
-containers, the position is taken as a 'hint' to start the search for the correct position. However,
-containers are free to ignore it.
+The interesting part is the assignment of the new value:
 
-<ex> *ex-algo-copy*
+*to_pos = value
+
+An insert iterator transforms such an assignment into an insertion. However, two
+operations are involved: First, operator * returns the current element of the
+iterator; second, operator = assigns the new value. Implementations of insert
+iterators usually use the following two-step trick:
+
+* Operator * is implemented as a no-op that simply returns *this. Thus, for
+  insert iterators, *pos is equivalent to pos.
+
+  template<typename _Container>
+    class insert_iterator
+    : public iterator<output_iterator_tag, void, void, void, void>
+    {
+      /// Simply returns *this.
+      insert_iterator&
+      operator*()
+      { return *this; }
+
+    };
+
+* The assignment operator is implemented so that it gets transferred into an
+  insertion. In fact, the insert iterator calls the push_back(), push_front(),
+  or insert() member function of the container.
+
+Each kind of insert iterator has a convenience function for its creation and
+initialization.
+
+note:
+* Need to care about underlying container.
+
+// TBD
+// <why-useful>
+// * There is 'no' need to increase or decrease iter but still need to care about
+//   underlying container. note: Seems less convincing.
+// 
+// * Less 'generic' since need to know about element type. However, it's
+//   convenient. note: Can use usual interator interface in code while doing
+//   insertion. How? increment operator is no-op as i the CLR 9.4.2.
+
+
+{inserter}
+Calls insert(pos, val) member and insert elements directly in front of the
+position that is passed as the argument of its initialization and as the start
+to insert. For all containers except array and forward_list.
+
+Passing a position(iterator) to insert doesn't sound useful? So for associative
+and unordered containers, the position is taken as a 'hint' to start the search
+for the correct position. However, containers are free to ignore it.
+
+<ex> *algo-copy*
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -32109,7 +32160,7 @@ The general inserter does followings; update and increase pos.
 pos = container.insert(pos,value);
 ++pos;
 
-<example>
+<ex>
 #include <iostream>
 #include <list>
 #include <iterator>     // note:
@@ -32131,7 +32182,7 @@ int main()
 {
   list<int> coll1, coll2;
 
-  // note: inconvenient way to create inserter
+  // note: inconvenient way to create `inserter`
   insert_iterator<list<int>> iter( coll1, coll1.begin() );
 
   // use usual iterator interface which has the same result
@@ -32160,9 +32211,77 @@ list2: : {1,2,3,44,55,}
 list3: : {1,2,3,44,55,}
 list3: : {1,1,2,3,44,55,2,3,44,55,}
 
-<back-inserter>
-Calls push_back so back inserters can be used 'only' for containers that provide push_back() as a
-member function: these containers are vector, deque, list, and strings.
+
+{back-inserter}
+Calls push_back so back inserters can be used 'only' for containers that provide
+push_back() as a member function: these containers are vector, deque, list, and
+strings.
+
+<code>
+// c++/4.7/bits/stl_iterator.h
+
+  // 24.4.2.2.1 back_insert_iterator
+  /**
+   *  @brief  Turns assignment into insertion.
+   *
+   *  These are output iterators, constructed from a container-of-T.
+   *  Assigning a T to the iterator appends it to the container using
+   *  push_back.
+   *
+   *  Tip:  Using the back_inserter function to create these iterators can
+   *  save typing.
+  */
+  template<typename _Container>
+    class back_insert_iterator
+    : public iterator<output_iterator_tag, void, void, void, void>
+    {
+    protected:
+      _Container* container;
+
+    public:
+      /// A nested typedef for the type of whatever container you used.
+      typedef _Container          container_type;
+
+      /// The only way to create this %iterator is with a container.
+      explicit
+      back_insert_iterator(_Container& __x) : container(&__x) { }
+
+      /**
+       *  @param  __value  An instance of whatever type
+       *                 container_type::const_reference is; presumably a
+       *                 reference-to-const T for container<T>.
+       *  @return  This %iterator, for chained operations.
+       *
+       *  This kind of %iterator doesn't really have a @a position in the
+       *  container (you can think of the position as being permanently at
+       *  the end, if you like).  Assigning a value to the %iterator will
+       *  always append the value to the end of the container.
+      */
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+      back_insert_iterator&
+      operator=(typename _Container::const_reference __value)
+      {
+        container->push_back(__value);
+        return *this;
+      }
+#else
+      back_insert_iterator&
+      operator=(const typename _Container::value_type& __value)
+      {
+        container->push_back(__value);
+        return *this;
+      }
+
+      back_insert_iterator&
+      operator=(typename _Container::value_type&& __value)
+      {
+        container->push_back(std::move(__value));
+        return *this;
+      }
+#endif
+    }
+};
+
 
 <example>
 #include <iostream>
@@ -33316,7 +33435,7 @@ int main()
   cout << endl;
 }
 
-<ex> *ex-algo-transform* 
+<ex> *algo-transform* 
 #include <iostream>
 #include <vector>
 #include <set>
