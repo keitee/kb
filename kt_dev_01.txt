@@ -109,7 +109,8 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_004* copy-control: move
 *kt_dev_cpp_004* copy-control: move: rvalue reference
 *kt_dev_cpp_004* copy-control: move: std-move
-*kt_dev_cpp_004* copy-control: preventing-copies
+*kt_dev_cpp_004* copy-control-preventing-copies
+*kt_dev_cpp_004* copy-control-self-assign
 |kt_dev_cpp_007| overload-function-matching
 |kt_dev_cpp_021| overload-operator
 *kt_dev_cpp_005* type-bool
@@ -152,6 +153,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_022| inheri
 *kt_dev_cpp_022* inheri-virtual
 *kt_dev_cpp_022* inheri-ctor-initializers
+*kt_dev_cpp_022* inheri-access-specifier
 *kt_dev_cpp_022* inheri-rtti
 |kt_dev_cpp_023| inheri-override
 *kt_dev_cpp_023* inheri-override-hide-name
@@ -281,6 +283,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_102| sp-weak
 *kt_dev_stl_102* sp-exception
 *kt_dev_stl_103* sp-unique
+|kt_dev_stl_103| sp-unique-ref: can store unique_ptr in a container?
 *kt_dev_stl_104* sp-misuse
 *kt_dev_stl_104* sp-shared-from-this
 *kt_dev_stl_105* smart pointer: gotw #102: exception safety
@@ -294,7 +297,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_111| gcc stl impl files
 
 #{ STL Q
-|kt_dev_stl_200| ref: can store unique_ptr in a container?
 
 #{ SYSTEM 
 |kt_dev_sys_001| <empty>
@@ -14302,21 +14304,21 @@ class Foo {
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-control: preventing-copies
+*kt_dev_cpp_004* copy-control-preventing-copies
 
 {preventing-copies} delete-keywords
 CPR 507 and EC++06. How can define a class to prevent copy or assign like
 `iostream` class? Do not defining copy-controls? This do not work as syn version
-will be made. Two ways: delete keyword and private access control.
+will be made. Two ways: `delete-keyword` and `private-access-control`.
 
 <delete-keyword> since C++11
 Signal to the compiler not to define these members and lead to compile error
-when try to use it. Or syn version will be deleted when compiler cannot make it.
+when try to use it. Or syn version will be `deleted` when compiler cannot make it.
 
 struct NoCopy {
   NoCopy() = default;
-  NoCopy(const NoCopy&) = delete;                 # NO copy-ctor 
-  NoCopy& operator=(const NoCopy&) = delete;      # NO copy-assign
+  NoCopy(const NoCopy&) = delete;                 // NO copy-ctor 
+  NoCopy& operator=(const NoCopy&) = delete;      // NO copy-assign
   ~NoCopy() = default;
   ...
 };
@@ -14332,7 +14334,7 @@ type.
 To prevent copies before C++11:
 
 class PrivateCopy {
-  // private:
+  private:
   // declare but not define 
     PrivateCopy(const PrivateCopy&);
     PrivateCopy &operator=(const PrivateCopy&);
@@ -14347,9 +14349,9 @@ copy such objects.
 
 
 <ex>
-This is an example and see 'compile' errors when use private to prevent copies
-and note that won't compile regardless of whether there is copy control
-definition(implementation) in base class.
+This is an example and see 'compile' errors when use `private-access-control` to
+prevent copies and note that won't compile regardless of whether there is copy
+control definition(implementation) in base class.
 
 #include <iostream>
 
@@ -14361,7 +14363,7 @@ class Base {
     ~Base() = default;
   private:
     int m_iDataABCAnimal;
-    Base(const Base& base) { cout << "copy-ctor: base" << endl; }         // 11
+    Base(const Base& base) { cout << "copy-ctor: base" << endl; }   // @11
     Base& operator=(const Base& base) { cout << "copy-assign: base" << endl; }
 };
 
@@ -14377,7 +14379,7 @@ int main()
 
   Base b1, b2;
 
-  Base b3(b1);       // note: 01. line: 21
+  Base b3(b1);       // note: 01 @21
 
   D d1, d2;
 
@@ -14472,7 +14474,7 @@ int main()
 
   // errors only when add followings
   Foo o;
-  o = f;                                                      // 26
+  o = f;                                                      // @26
 }
 
 : In function ‘int main()’:
@@ -14509,6 +14511,9 @@ int main()
   test_f(fo);
 }
 
+
+={============================================================================
+*kt_dev_cpp_004* copy-control-self-assign
 
 {self-assign}
 EC++11. When implement copy-assign, must think about self-assign and exception-safe. See
@@ -21389,7 +21394,7 @@ class X : public Y, public Z {
 
 
 ={============================================================================
-*kt_dev_cpp_022* inheritance-ctor-initializers
+*kt_dev_cpp_022* inheri-ctor-initializers
 
 <1>
 Unless we say otherwise, the base part of a derived is 'default' initialized.
@@ -21572,24 +21577,77 @@ for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
 }
 
 
-{derivation-access-specifier}
-This has no effect on the single inheritance which is between direct base and the derived. The
-purpose is to control the access of 'users'; user of derived class and derived class from the
-derived. If omits this, it will be private by default. 
+={============================================================================
+*kt_dev_cpp_022* inheri-access-specifier
 
-class X : publuc/private/protected B {
-  ...
+<member-access-specifier>
+Members defined after a `private` specifier are accessible to the member
+functions of the class but are not accessible to code that uses the class. The
+`private` section encapsulate the implementation.
+
+A derived class 'may' access the `public` and `protected` members of its base
+class.
+
+So derived class cannot access `private` of its base class.
+
+
+<derivation-access-specifier>
+Access to a member that a class inherits is controlled by a combination of the
+`member-access-specifier` in the base class and the
+`derivation-access-specifier` in the derivation list.
+
+The `derivation-access-specifier` do not affect access of base class in the
+derived class. The purpose of `derivation-access-specifier` is to control the
+access that "`users-of-derived-class` including other classes derived from the
+derived class" have to the members inherited from base class.
+
+This has no effect on the single inheritance which is between direct base and
+the derived. If omits this, it will be private by default. 
+
+class Base {
+  public:
+    void pub_mem();
+  protected:
+    int prot_mem;
+  private:
+    char priv_mem;
 };
 
-<on-derived-base-conversion>
-As with this, this remains the same when derived to base conversion happens. That is: 
+struct Pub_Derv : public Base {
+  // can access pub_mem, prot_mem but cannot access priv_mem.
+};
 
-User code may use the derived to base conversion only if inherits publicly from base and may not
-for other derivations.
+struct Priv_Derv : private Base {
+  // can access pub_mem, prot_mem but cannot access priv_mem.
+  // regardless of derivation, cannot access priv_mem. derivation doesn't affect
+  // in the derived class.
+};
+
+
+However, that affects `users-of-derived-class`
+
+Pub_Derv d1;
+Priv_Derv d2;
+
+d1.pub_mem();
+d2.pub_mem();     // error, pub_mem is `private` in the derived class
+
+struct Derived_from_Private : public Priv_Derv {
+  // error, prot_mem is `private` in Priv_Derv
+  int use_base() { return prot_mem; }
+};
+
+
+<on-derived-base-conversion>
+As with this, this remains the same when derived to base conversion happens.
+That is: 
+
+User code may use the derived to base conversion only if inherits publicly from
+base and may not for other derivations.
 
 
 ={============================================================================
-*kt_dev_cpp_022* inheritance-rtti
+*kt_dev_cpp_022* inher-rtti
 
 {rtti} CPR 19.2 825
 The RTTI(run-time type identification) is provided through two operators:
@@ -33611,12 +33669,53 @@ Not every unary or binary function that returns a boolean value is a valid
 predicate. In addition, the STL requires that predicates be 'stateless', meaning
 that they should always yield the same result for the same value.
 
-<ex> *ex-algo-sort*
+<code> *algo-sort*
 template< class RandomIt>
 void sort( RandomIt first, RandomIt last );
 
 template< class RandomIt, class Compare>
 void sort( RandomIt first, RandomIt last, Compare comp );
+
+// c++/4.7/bits/stl_algo.h, @5484
+
+  /**
+   *  @brief Sort the elements of a sequence using a predicate for comparison.
+   *  @ingroup sorting_algorithms
+   *  @param  __first   An iterator.
+   *  @param  __last    Another iterator.
+   *  @param  __comp    A comparison functor.
+   *  @return  Nothing.
+   *
+   *  Sorts the elements in the range @p [__first,__last) in ascending order,
+   *  such that @p __comp(*(i+1),*i) is false for every iterator @e i in the
+   *  range @p [__first,__last-1).
+   *
+   *  The relative ordering of equivalent elements is not preserved, use
+   *  @p stable_sort() if this is needed.
+  */
+  template<typename _RandomAccessIterator, typename _Compare>
+    inline void
+    sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
+	 _Compare __comp)
+    {
+      typedef typename iterator_traits<_RandomAccessIterator>::value_type
+        _ValueType;
+
+      // note: _BinaryPredicateConcept
+      // concept requirements
+      __glibcxx_function_requires(_Mutable_RandomAccessIteratorConcept<
+          _RandomAccessIterator>)
+        __glibcxx_function_requires(_BinaryPredicateConcept<_Compare, _ValueType,
+            _ValueType>)
+        __glibcxx_requires_valid_range(__first, __last);
+
+      if (__first != __last)
+      {
+        std::__introsort_loop(__first, __last,
+            std::__lg(__last - __first) * 2, __comp);
+        std::__final_insertion_sort(__first, __last, __comp);
+      }
+    }
 
 
 <ex-stable-sort> *ex-algo-stable-sort* *ex-algo-unique*
@@ -39593,9 +39692,23 @@ namespace boost {
 A pointer that implements the concept of 'exclusive' ownership and is a kind of
 a smart pointer that helps to avoid resource leaks when 'exceptions' are thrown.
 
-This was auto_ptr before C++11 and it has only one user because
-`no-ordinary-copy-and-assign-supported`. Only 'one' unique_ptr at a time can
+This was `auto_ptr` before C++11 and it has only one user because
+`no-ordinary-copy-and-assign-supported`. Only 'one' `unique_ptr` at a time can
 point to a given object. So limit the use and it transfer ownerships.
+
+<code>
+  /// 20.7.12.2 unique_ptr for single objects.
+  template <typename _Tp, typename _Dp = default_delete<_Tp> >
+    class unique_ptr
+    {
+      //...
+
+      // Disable copy from lvalue.
+      unique_ptr(const unique_ptr&) = delete;             // @262
+      unique_ptr& operator=(const unique_ptr&) = delete;  // @263
+    };
+
+But supports copy from rvalue whih is move.
 
 <ex>
 #include <iostream>
@@ -39612,24 +39725,31 @@ int main()
   p3 = p2;                        // 12: error
 }
 
-:10:27: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >; std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
 In file included from /usr/include/c++/4.7/memory:86:0,
                  from t_sp_uni.cpp:3:
 /usr/include/c++/4.7/bits/unique_ptr.h:262:7: error: declared here
 
-:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>& std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >; std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
 In file included from /usr/include/c++/4.7/memory:86:0,
                  from t_sp_uni.cpp:3:
 /usr/include/c++/4.7/bits/unique_ptr.h:263:19: error: declared here
 
+
 note: 
 In contrast to shared pointers, a 'minimum' space and time overhead is the focus
 of this class.
 
-The unique_ptr tries to solve the exactly same problem of raii. Say that
-unique_ptr is one of raii implementations.
+The unique_ptr tries to solve the exactly same problem of raii; unique_ptr is
+one of raii implementations.
 
 
 <operations>
@@ -39641,7 +39761,8 @@ std::string* sp = up.release(); // 'transfer' ownership. "up" loses ownership
 sp.reset(up.release());         // 'transfer' ownership. "up" loses ownership
 
 
-You can check whether a unique pointer owns an object by calling operator bool():
+<check>
+You can check whether a unique_ptr owns an object by calling operator bool():
 
 if (up) {   // if up is not empty
    std::cout << *up << std::endl;
@@ -39649,6 +39770,7 @@ if (up) {   // if up is not empty
 
 u.reset() 
 delete the object to which u points. same as u = nullptr.
+
 
 <ex>
 #include <iostream>
@@ -39684,9 +39806,9 @@ Foo dtor(1)
 
 
 {ownership}
-The unique_ptr do not support copy so have to transfer ownership. Two options:
+The `unique_ptr` do not support copy so `have-to` transfer ownership. Two options:
 
-1. Use release and reset pair
+1. Use release() and reset() pair
 
 The release() return the pointer it held and make the unique ptr null so using
 reset/release pair to transfer ownerships.
@@ -39716,14 +39838,15 @@ std::unique_ptr<ClassA> up2; // create another unique_ptr
 // error since no copy support
 up2 = up1;              
 
-// assign the unique_ptr - transfers ownership from up1 to up2
+// assign the unique_ptr since supports `rvalue` assign. transfers ownership
+// from up1 to up2
 up2 = std::move(up1);   
 
 
 <return-unique-ptr> move-operation
 One exception to the rule that cannot copy a unique_ptr; that according to the
 language rules of C++11, the compiler will try a 'move' automatically. Can copy
-or assign a unique_ptr thatis about to be destoryed.
+or assign a unique_ptr that is about to be destoryed.
 
 unique_ptr<int> clone(int p) {
   ...
@@ -39739,10 +39862,9 @@ unique_ptr<int> clone(int p) {
 }
 
 
-<source-sink-pattern>
+<source-and-sink-idiom>
 
 // sink() gets ownership when gets called.
-
 void sink(std::unique_ptr<ClassA> up)  
 {
 ...
@@ -39750,13 +39872,18 @@ void sink(std::unique_ptr<ClassA> up)
 
 std::unique_ptr<ClassA> up(new ClassA);
 ...
-sink(std::move(up));                   // up loses ownership
+sink(std::move(up));                  // up loses ownership
 
+
+note:
+Since `auto_ptr` supports copy, would be as below in that case.
+
+sink(up);                             // up loses ownership
 
 note: 
-Why not rvalue argument? As with "copy-or-move", whether or not to use copy or
-move constructor depends on function matching and that's why std::move() is used
-in sink() call.
+Why not rvalue argument in sink()? As with "copy-or-move", whether or not to use
+copy or move constructor depends on function matching and that's why std::move()
+is used in sink() call.
 
 
 // source: when exit, transfer ownership 
@@ -39788,21 +39915,24 @@ In any case, 'no' resource leak is possible. Even if an exception is thrown, any
 unique_ptr that owns data ensures that this data is deleted.
 
 
-<mis-use-unique-pointer>
-# lost pointer
-
+<misuse-unique-pointer>
+// lost pointer
 // WRONG. p2 won't free the memory and have lost the pointer.
 p2.release();
 
 // OK. but must remember to delete(p).
 auto p = p2.release();
 
+
 <use-as-members> exception-in-ctor
-A unique_ptr helps to avoid resource leaks caused by exceptions thrown during the initialization of
-an object. Note that destructors are called 'only' if any construction is completed. So, if an
-exception occurs inside a constructor, destructors are called 'only' for objects that have been fully
-constructed. This can result in resource leaks for classes with multiple raw pointers if during the
-construction the first new was successful but the second was not.
+A unique_ptr helps to avoid resource leaks caused by exceptions thrown during
+the initialization of an object. Note that destructors are called 'only' if any
+construction is completed. 
+
+So, if an exception occurs inside a constructor, destructors are called 'only'
+for objects that have been fully constructed. This can result in resource leaks
+for classes with multiple raw pointers if during the construction the first new
+was successful but the second was not.
 
 class ClassB {
   private:
@@ -39810,7 +39940,8 @@ class ClassB {
     ClassA* ptr2;
 
   public:
-    // constructor that initializes the pointers - will cause resource leak if second new throws
+    // constructor that initializes the pointers - will cause resource leak if
+    // second new throws
     ClassB (int val1, int val2)
       : ptr1(new ClassA(val1)), ptr2(new ClassA(val2)) {
       }
@@ -39848,22 +39979,552 @@ class ClassB {
     // (default destructor lets ptr1 and ptr2 delete their objects)
 };
 
-note: First, that you can skip the destructor now because unique_ptr does the job for you. 
-note: You also have to implement the copy constructor and assignment operator. By default, both
-would try to copy or assign the members, which isn't possible. If you don't provide them, ClassB
-also would provide only move semantics. <Q> by compiler? Here valuelike used.
+
+note: 
+* Can skip the destructor now because unique_ptr does the job for you. 
+
+* Also have to implement the copy constructor and assignment operator. By
+  default, both would try to copy or assign the members, which isn't possible.
+  If you don't provide them, ClassB also would provide only move semantics. <Q>
+  by compiler? Here valuelike used.
+
+  note: TODO more about copy ctor and assign when used as a member.
 
 
 <use-with-containers>
-In auto_ptr, it is not possible to store an auto_ptr in a container, nor could we return one from a
-function. See *kt_dev_stl_100* ref: can store unique_ptr in a container?
+In `auto_ptr`, it is not possible to store an auto_ptr in a container, nor could
+we return one from a function. How about `unique_ptr`?
 
+
+={============================================================================
+*kt_dev_stl_103* sp-unique-ref: can store unique_ptr in a container?
+
+For unique-ptr, no copy support and has to transfer ownership. For containers,
+the element to store had to be `copyable`.
+
+<try>
+#include <iostream>
+#include <memory>
+#include <vector>
+
+using namespace std;
+
+class Foo 
+{
+  private:
+    int id;
+  public:
+    Foo(int val):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
+    ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+};
+
+int main()
+{
+  unique_ptr<Foo> p1( new Foo(1) );
+  unique_ptr<Foo> p2( new Foo(2) );
+  unique_ptr<Foo> p3( new Foo(3) );
+  unique_ptr<Foo> p4( new Foo(4) );
+
+  // put them into a container
+  vector< unique_ptr<Foo>> pvec;
+  pvec.push_back(p1);
+}
+
+error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>::unique_ptr(const
+           std::unique_ptr<_Tp, _Dp>&) [with _Tp = Foo, _Dp =
+std::default_delete<Foo>, std::unique_ptr<_Tp, _Dp> = std::unique_ptr<Foo>]’
+
+This error means that there is no copy ctor since unique_ptr do not support
+copy. Hence deleted. So cannot store unique_ptr in a container? NO, can since
+C++11 since not copyable but moveable.
+
+note: Even if unique_ptr is copyable, it's difficult to get the expected result
+right. For example, when get a pointer from a container and use it which means
+pointer in a container is no longer vaild. What will happen when container
+destructor runs?
+
+http://eli.thegreenplace.net/2012/06/20/c11-using-unique_ptr-with-standard-library-containers/
+
+C++11: using unique_ptr with standard library containers
+June 20th, 2012 at 8:46 pm
+
+Before C++11, the only "smart" pointer available in the standard C++ library was
+auto_ptr. Alas, auto_ptr isn't very smart. It has very problematic copy
+semantics that make it difficult to use in several important scenarios. In
+particular, auto_ptr can not be used with standard containers and algorithms!
+
+To quote from Herb Sutter:
+
+auto_ptr is most charitably characterized as a valiant attempt to create a
+unique_ptr before C++ had move semantics. auto_ptr is now deprecated, and should
+not be used in new code. When you get a chance, try doing a global
+search-and-replace of auto_ptr to unique_ptr in your code base
+
+So what is this unique_ptr thing, and what can it be used for?
+
+Basic capabilities
+
+To put it simply, `unique_ptr` 'should' be the 'default' smart pointer used by
+new C++ code, replacing "raw" pointers as much as possible. unique_ptr cleanly
+represents the single ownership idiom - it cannot be copied and assigned, and it
+cleans up the pointed object when it's destructed.
+
+Here's some code to demonstrate this [1]:
+
+#include <iostream>
+#include <cstdlib>
+#include <memory>          // note header
+
+using namespace std;
+
+struct Foo {
+    // note use of `this` to get address 
+    Foo() {cerr << "Foo [" << this << "] constructed\n";}
+    virtual ~Foo() {cerr << "Foo [" << this << "] destructed\n";}
+};
+
+int main(int argc, char** argv) 
+{
+  // .. some code
+  {
+    unique_ptr<Foo> fp(new Foo());
+
+    unique_ptr<Foo> fp2(fp);    // ERROR! can't copy unique_ptr
+    unique_ptr<Foo> fp3;
+    fp3 = fp;                   // ERROR! can't assign unique_ptr
+
+    cerr << "Exiting scope\n";
+  } // fp will be destroyed, and will destruct the pointed object
+
+  return 0;
+}
+
+The lines marked with the ERROR! comment won't actually compile. The compiler
+will complain saying something like:
+
+error: use of deleted function
+ 'std::unique_ptr<_Tp, _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&)
+
+If these two lines are commented out, the code will print:
+
+Foo [0x845010] constructed
+Exiting scope
+Foo [0x845010] destructed
+
+In addition to managing the pointed object's lifetime, unique_ptr provides the
+other expected capabilities of a smart pointer: it overloads operator* and
+operator->, provides a means to obtain the raw pointer (get), to relinquish
+control of the pointed object (release), and to replace the object it manages
+(reset). It also lets you customize the way the pointed object is deleted (if
+    you don't want it to be the default delete operator), and has some other
+niceties - just consult your favorite C++ reference.
+
+What about sources and sinks?
+
+In this article I want to focus not on the grocery list of unique_ptr's
+features, but its interesting move semantics. Specifically, given that
+unique_ptr forbids copying and assignment, one may wonder how it can fit in the
+`source-and-sink-idiom` which is so useful for smart pointers.
+
+In other words, we'd like this to work:
+
+// source creates a Foo object, wraps it in a smart pointer for safety and
+// provides the result to the caller, giving it the ownership of the object in
+// the process.
+
+unique_ptr<Foo> source();
+
+// sink gets a Foo object wrapped in a smart pointer for safety. It also assumes
+// ownership of the provided object.
+
+void sink(unique_ptr<Foo> p);
+
+And in C++11, it does! Even though unique_ptr can't be copied, it can be
+'moved'. Move semantics are a perfect match for unique_ptr - the two concepts
+reinforce each other. With move semantics, unique_ptr is both safe and
+efficient. Here's some code to demonstrate this:
+
+#include <iostream>
+#include <cstdlib>
+#include <memory>
+
+using namespace std;
+
+struct Foo {
+  Foo() {cerr << "Foo [" << this << "] constructed\n";}
+  virtual ~Foo() {cerr << "Foo [" << this << "] destructed\n";}
+};
+
+void sink(unique_ptr<Foo> p) {
+  cerr << "Sink owns Foo [" << p.get() << "]\n";
+}
+
+unique_ptr<Foo> source() {
+  cerr << "Creating Foo in source\n";
+  return unique_ptr<Foo>(new Foo);
+}
+
+int main(int argc, char** argv) {
+  cerr << "Calling source\n";
+  unique_ptr<Foo> pmain = source();  // Can be written as auto pmain = source();
+
+  cerr << "Now pmain owns Foo [" << pmain.get() << "]\n";
+  cerr << "Passing it to sink\n";
+  sink(pmain);                    // ERROR! can't copy unique_ptr
+  sink(move(pmain));              // OK: can move it!    // meant std::move
+
+  cerr << "Main done\n";
+  return 0;
+}
+
+Again, there's a line marked with ERROR! here - it demonstrates once again that
+a unique_ptr can't be copied. However, it can be explicitly moved, as the next
+line shows [2]. When the erroneous line is commented out, this code prints:
+
+[2] It can also be taken from an rvalue: sink(unique_ptr<Foo>(new Foo)) would
+work, because rvalue references can be moved directly. note: here again temp
+object hence rvalue
+
+Calling source
+Creating Foo in source
+Foo [0x1767010] constructed
+Now pmain owns Foo [0x1767010]
+Passing it to sink
+Sink owns Foo [0x1767010]
+Foo [0x1767010] destructed
+Main done
+
+Note how cleanly the ownership is being passed between the functions in this
+code. At each point in time, only a single unique_ptr owns the pointed Foo
+object. Moreover, this is efficient - the actual pointed object only gets
+constructed once and destructed once.
+
+
+Containers - motivation
+
+So unique_ptr is a useful single-ownership smart pointer. But what makes it
+really shine (especially when compared to auto_ptr) is that it can be used in
+standard containers.
+
+Why is it so important to be able to place smart pointers into containers?
+Because holding objects by value is sometimes very expensive. 
+
+Containers, especially when coupled with algorithms, tend to move objects
+around. Large objects are expensive to copy, hence we'd like to keep pointers to
+objects inside containers instead.
+
+What follows is a very simplistic example that demonstrates this. It shows how
+much more expensive it is to sort a vector of large objects that are stored
+`by-value`, than it is when they're stored by pointer [3].
+
+Also, I explicitly said to take the container example with a grain of salt as it
+was synthetically built to demonstrate the point. Yes, it is best to avoid huge
+objects, but that's not always possible.
+
+First, let's create a synthetic "large" object that has well defined ordering
+properties by some numeric ID:
+
+struct SomeLargeData {
+    SomeLargeData(int id_)
+        : id(id_)
+    {}
+    int id;
+    int arr[100];
+};
+
+We also need a function to compare two such objects. Actually, we need two - one
+for a container that holds object by value, and another for the by pointer
+version:
+
+bool compare_by_value(const SomeLargeData& a, const SomeLargeData& b) {
+    return a.id < b.id;
+}
+
+bool compare_by_ptr(const SomeLargeData* a, const SomeLargeData* b) {
+    return a->id < b->id;
+}
+
+Let's now create two vectors and populate them with random objects:
+
+vector<SomeLargeData> vec_byval;
+vector<SomeLargeData*> vec_byptr;
+
+for (int i = 0; i < n; ++i) {
+    int id = rand() % 500000;
+    vec_byval.push_back(SomeLargeData(id));
+    vec_byptr.push_back(new SomeLargeData(id));
+}
+
+Finally, we'll sort the two vectors with the standard sort algorithm, and
+measure the runtime for some large n:
+
+sort(vec_byval.begin(), vec_byval.end(), compare_by_value);
+sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
+
+The timing results I get are quite consistent - the by-pointer sorting is 2-3x
+faster than the by-value sorting [4]. That's a very significant difference, and
+it's all due to the copying sort has to do for moving the objects around inside
+the container.
+
+[4] The speedup grows as the size of the object grows. Increasing the arr member
+to hold 1000 integers makes the speedup 10x.
+
+So holding objects of non-trivial size inside standard containers is not a good
+idea in terms of performance. But holding raw pointers to them is also not so
+great, because of all the safety issues that come with raw pointers. The
+container can't own the pointed objects because its destructor will just
+"destruct" the pointer(note not pointed object), which does nothing. So the
+calling code(note client) has to own the actual objects which are being shuffled
+around by the container. Add exceptions and/or early returns to the mix, and
+this is a recipe for memory leaks or even worse problems.
+
+What we'd really like to do is let our objects be managed by a smart pointer and
+put that into a container. This would guarantee a clean ownership strategy - the
+container destroys its contents when it gets destroyed itself - just the way it
+should be. This is why unique_ptr is so exciting.
+
+
+Containers of unique_ptr
+
+note:
+Why cannot use `auto_ptr` with containers? The auto_ptr supports copy but copies
+of auto_ptr are not equivalent since it transfers owenrship. Containers assumes
+that copies are the same and after finishing internal works involving make
+copies, would have use auto_ptr object which do not own real object. So
+undefined. Now `uniqur_ptr` do copy explicitly.
+
+Adapting the by-pointer version of the code above to hold unique_ptr is very
+simple. First, we need another comparison function:
+
+bool compare_by_uniqptr(const unique_ptr<SomeLargeData>& a,
+                        const unique_ptr<SomeLargeData>& b) {
+    return a->id < b->id;
+}
+
+And then we just need to create the vector, populate it and then sort it,
+    similarly to the way we've done for the other vectors:
+
+vector<unique_ptr<SomeLargeData>> vec_byuniqptr;
+
+for (int i = 0; i < n; ++i) {
+    int id = rand() % 500000;
+    // ...
+    vec_byuniqptr.push_back(
+        unique_ptr<SomeLargeData>(new SomeLargeData(id)));  
+    // note `temporty-unique-ptr` object. shall be this form since no copy
+    // supported or use std::move
+}
+
+sort(vec_byuniqptr.begin(), vec_byuniqptr.end(), compare_by_uniqptr);
+
+That's it! And the performance? 'almost' identical to the by-pointer version (I
+    measured differences of 1-5%, depending on the data).
+
+
+What about shared pointers?
+
+Another smart pointer C++11 brings with it is the shared_ptr/weak_ptr pair,
+        implementing a reference-counted approach to shared ownership. While
+        much more flexible than unique_ptr, shared_ptr is slower and consumes
+        more memory; managing the reference count is not free [5].
+
+[5] For the sorting benchmark demonstrated in this article shared_ptr is about
+10% slower than unique_ptr. As for size, while the size of unique_ptr is exactly
+the size of a raw pointer, shared_ptr is about twice as large.
+
+Which one to use depends on your exact needs, but I agree with Herb Sutter's
+proposal of using unique_ptr by default and switching to shared_ptr if the need
+arises.
+
+In addition, it is my personal opinion that preferring unique_ptr imposes a
+certain memory management discipline on the code, since you know at each point
+exactly who owns what. Shared pointers give you a sense of security you can over
+use and end up with reference leaks, which are tricky to debug (just like when
+    writing Python C extension code). 
+
+Moreover, shared pointers signal the intention of APIs less clearly than owning
+pointers. When some factory returns a shared pointer, does it mean it keeps a
+reference to the object too? With an owning pointer, the API is self documenting
+(source returns a unique_ptr? then source is for sure giving away ownership).
+With a shared pointer, it does not, and need external documentation to clarify.
+
+Conclusion
+
+I have mentioned how rvalue references and move semantics can make code more
+efficient with C++11. unique_ptr is another great example that makes me want to
+use a C++11-capable compiler as soon as possible.
+
+unique_ptr provides an excellent mix of efficiency and safe memory management.
+IMHO it's a great example of how several ideas in language design interact to
+create a whole that is larger than its parts.
+
+Replies:
+
+<1>
+fanNo Gravatar Says:
+June 25th, 2012 at 14:48
+
+Can't we get the best of all worlds, by doing this:
+
+vector<SomeLargeData> vec_byval;
+vector<SomeLargeData*> vec_byptr;
+
+for (int i = 0; i < n; ++i) {
+    int id = rand() % 500000;
+    vec_byval.push_back(SomeLargeData(id));
+    vec_byptr.push_back(&vec_byval.back());   // saves up the inserted entry
+}
+
+sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
+
+This gives us fast by-pointer sorting AND ownership of the pointed objects. So I
+don't get the excitement about unique_ptr.
+
+<2>
+westforkNo Gravatar Says:
+November 5th, 2012 at 12:22
+
+Nice article. But my results are different from what you wrote.  I implemented
+your code using gcc 4.7 (g++ (Ubuntu/Linaro 4.7.2-4precise1) 4.7.2) on my
+desktop (OS xubuntu 12.04, Intel(R) Core(TM)2 Duo CPU, E8400 @ 3.00GHz).  I
+build a vector of 2010000 containing SomeLargeData objects, raw pointers to
+SomeLargeData objects and unique-pointers to SomeLargeData objects. The results
+are that raw pointer container is the faster to sort (as expected) but the
+container with the unique pointers is the slower!!!  Here a dump of my tests
+
+By value test
+TIMESTAMP-START 11:18:23:127277 (ms ~ 40703127)
+TIMESTAMP-END 11:18:27:378556 (ms ~ 40707378)
+ELAPSED TIME (ms) 4251
+
+By pointer test
+TIMESTAMP-START 11:18:27:378658 (ms ~ 40707378)
+TIMESTAMP-END 11:18:29:841735 (ms ~ 40709841)
+ELAPSED TIME (ms) 2463
+
+By unique_pointer test
+TIMESTAMP-START 11:18:29:841816 (ms ~ 40709841)
+TIMESTAMP-END 11:18:35:674064 (ms ~ 40715674)
+ELAPSED TIME (ms) 5833
+
+What do you think? The overhead of the unique-ptr over the raw pointer is so
+heavy?
+
+
+<3>
+SqeakyNo Gravatar Says:
+March 19th, 2013 at 11:58
+
+@Fan The first time the value vector grows it will invalidate all the pointers
+in the pointer vector. Since it never tells you when this happens, but can
+happen on any insertion, you have to assume that the pointer is invalid after
+the next insertion.
+
+@Westfork I would guess that the implementation just hasn't had enough time to
+mature yet. There must be at least as much over with the unique_ptr as raw
+pointers, but double does seem excessive.  Did you remember to delete in the raw
+pointer example?
+
+
+<4>
+This is my result on the VM in a laptop.
+
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <sys/time.h>
+#include <algorithm>
+
+using namespace std;
+
+typedef uint64_t u64;
+
+static u64 nsec() {
+  struct timeval tv;
+  if(gettimeofday(&tv, 0) < 0)
+    return -1;
+  return (u64)tv.tv_sec*1000*1000*1000 + tv.tv_usec*1000;
+}
+
+struct SomeLargeData {
+  SomeLargeData(int id_)
+    : id(id_)
+  {}
+
+  // SomeLargeData(int id_)
+  //   : id(id_)
+  // { cout << "Foo[" << this << "] ctor(" << id << ")" << endl; }
+  // ~SomeLargeData() { cout << "Foo[" << this << "] dtor(" << id << ")" << endl; }
+
+  int id;
+  int arr[100];
+};
+
+bool compare_by_value(const SomeLargeData& a, const SomeLargeData& b) {
+  return a.id < b.id;
+}
+
+bool compare_by_ptr(const SomeLargeData* a, const SomeLargeData* b) {
+  return a->id < b->id;
+}
+
+bool compare_by_uniqptr(const unique_ptr<SomeLargeData>& a, const unique_ptr<SomeLargeData>& b) {
+  return a->id < b->id;
+}
+
+int main()
+{
+  uint64_t be, af;
+  int n = 400;
+
+  vector<SomeLargeData> vec_byval;
+  vector<SomeLargeData*> vec_byptr;
+  vector<unique_ptr<SomeLargeData>> vec_byuniqptr;
+
+  for (int i = 0; i < n; ++i) {
+    int id = rand() % 500000;
+    vec_byval.push_back(SomeLargeData(id));
+    vec_byptr.push_back(new SomeLargeData(id));    // note. shall be deleted later
+    vec_byuniqptr.push_back(unique_ptr<SomeLargeData>(new SomeLargeData(id)));
+  }  
+
+  be = nsec();
+  sort(vec_byval.begin(), vec_byval.end(), compare_by_value);
+  af = nsec();
+  cout << "by value: diff(ns): " << af-be << endl;
+  cout << "by value: diff(ms): " << (af-be)/(1000) << endl;
+
+  be = nsec();
+  sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
+  af = nsec();
+  cout << "by ptr: diff(ns): " << af-be << endl;
+  cout << "by ptr: diff(ms): " << (af-be)/(1000) << endl;
+
+  be = nsec();
+  sort(vec_byuniqptr.begin(), vec_byuniqptr.end(), compare_by_uniqptr);
+  af = nsec();
+  cout << "by uptr: diff(ns): " << af-be << endl;
+  cout << "by uptr: diff(ms): " << (af-be)/(1000) << endl;
+}
+
+$ ./a.out 
+by value: diff(ns): 302000
+by value: diff(ms): 302
+by ptr: diff(ns): 127000
+by ptr: diff(ms): 127
+by uptr: diff(ns): 585000
+by uptr: diff(ms): 585
+
+
+={============================================================================
+*kt_dev_stl_103* sp-unique-ref: can store unique_ptr in a container?
 
 <get-vs-conversion>
-EC++15. Have to provide access to raw underlying resource? There are two ways: implicit and explicit
-conversion. Explicit conversion is safer. Said it converts an RAII object into the raw resource.
+EC++15. Have to provide access to raw underlying resource? There are two ways:
+implicit and explicit conversion. Explicit conversion is safer. Said it converts
+an RAII object into the raw resource.
 
-# explicit-conversion
+// explicit-conversion
 
 Provide get() funtion.
 
@@ -41451,490 +42112,6 @@ chrono           cstdbool            deque            iosfwd               paral
 bits dir has actual STL files.
 
 
-={============================================================================
-*kt_dev_stl_200* ref: can store unique_ptr in a container?
-
-For unique-ptr,  no copy support and has to transfer ownership. For containers, the element to store
-had to be copyable.
-
-<try>
-#include <iostream>
-#include <memory>
-#include <vector>
-
-using namespace std;
-
-class Foo 
-{
-  private:
-    int id;
-  public:
-    Foo(int val):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
-    ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
-};
-
-int main()
-{
-  unique_ptr<Foo> p1( new Foo(1) );
-  unique_ptr<Foo> p2( new Foo(2) );
-  unique_ptr<Foo> p3( new Foo(3) );
-  unique_ptr<Foo> p4( new Foo(4) );
-
-  // put them into a container
-  vector< unique_ptr<Foo>> pvec;
-  pvec.push_back(p1);
-}
-
-error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>::unique_ptr(const std::unique_ptr<_Tp,
-_Dp>&) [with _Tp = Foo, _Dp = std::default_delete<Foo>, std::unique_ptr<_Tp, _Dp> =
-std::unique_ptr<Foo>]’
-
-This error means that there is no copy ctor since unique_ptr do not support copy. Hence deleted. So
-cannot store unique_ptr in a container? No can since C++11 since not copyable but moveable.
-
-note: Even if unique_ptr is copyable, it's difficult to get the expected result right. For example,
-when get a pointer from a container and use it which means pointer in a container is no longer
-vaild. What will happen when container destructor runs?
-
-http://eli.thegreenplace.net/2012/06/20/c11-using-unique_ptr-with-standard-library-containers/
-
-C++11: using unique_ptr with standard library containers
-June 20th, 2012 at 8:46 pm
-
-Before C++11, the only "smart" pointer available in the standard C++ library was auto_ptr. Alas,
-auto_ptr isn't very smart. It has very problematic copy semantics that make it difficult to use in
-several important scenarios. In particular, auto_ptr can not be used with standard containers and
-algorithms!
-
-To quote from Herb Sutter:
-
-auto_ptr is most charitably characterized as a valiant attempt to create a unique_ptr before C++ had
-move semantics. auto_ptr is now deprecated, and should not be used in new code. When you get a
-chance, try doing a global search-and-replace of auto_ptr to unique_ptr in your code base
-
-So what is this unique_ptr thing, and what can it be used for?
-
-Basic capabilities
-
-To put it simply, unique_ptr 'should' be the 'default' smart pointer used by new C++ code, replacing
-"raw" pointers as much as possible. unique_ptr cleanly represents the single ownership idiom - it
-cannot be copied and assigned, and it cleans up the pointed object when it's destructed.
-
-Here's some code to demonstrate this [1]:
-
-#include <iostream>
-#include <cstdlib>
-#include <memory>          // note header
-
-using namespace std;
-
-struct Foo {
-    Foo() {cerr << "Foo [" << this << "] constructed\n";}  // note use of this to get address 
-    virtual ~Foo() {cerr << "Foo [" << this << "] destructed\n";}
-};
-
-int main(int argc, char** argv) 
-{
-  // .. some code
-  {
-    unique_ptr<Foo> fp(new Foo());
-
-    unique_ptr<Foo> fp2(fp);    // ERROR! can't copy unique_ptr
-    unique_ptr<Foo> fp3;
-    fp3 = fp;                   // ERROR! can't assign unique_ptr
-
-    cerr << "Exiting scope\n";
-  } // fp will be destroyed, and will destruct the pointed object
-
-  return 0;
-}
-
-The lines marked with the ERROR! comment won't actually compile. The compiler will complain saying
-something like:
-
-error: use of deleted function
- 'std::unique_ptr<_Tp, _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&)
-
-If these two lines are commented out, the code will print:
-
-Foo [0x845010] constructed
-Exiting scope
-Foo [0x845010] destructed
-
-In addition to managing the pointed object's lifetime, unique_ptr provides the other expected
-capabilities of a smart pointer: it overloads operator* and operator->, provides a means to obtain
-the raw pointer (get), to relinquish control of the pointed object (release), and to replace the
-object it manages (reset). It also lets you customize the way the pointed object is deleted (if you
-don't want it to be the default delete operator), and has some other niceties - just consult
-your favorite C++ reference.
-
-What about sources and sinks?
-
-In this article I want to focus not on the grocery list of unique_ptr's features, but its
-interesting move semantics. Specifically, given that unique_ptr forbids copying and assignment, one
-may wonder how it can fit in the source and sink idiom which is so useful for smart pointers.
-
-In other words, we'd like this to work:
-
-// source creates a Foo object, wraps it in a smart pointer for safety and provides the result to
-// the caller, giving it the ownership of the object in the process.
-unique_ptr<Foo> source();
-
-// sink gets a Foo object wrapped in a smart pointer for safety. It also assumes ownership of the
-// provided object.
-void sink(unique_ptr<Foo> p);
-
-And in C++11, it does! Even though unique_ptr can't be copied, it can be 'moved'. Move semantics are a
-perfect match for unique_ptr - the two concepts reinforce each other. With move semantics,
-unique_ptr is both safe and efficient. Here's some code to demonstrate this:
-
-#include <iostream>
-#include <cstdlib>
-#include <memory>
-
-using namespace std;
-
-struct Foo {
-  Foo() {cerr << "Foo [" << this << "] constructed\n";}
-  virtual ~Foo() {cerr << "Foo [" << this << "] destructed\n";}
-};
-
-void sink(unique_ptr<Foo> p) {
-  cerr << "Sink owns Foo [" << p.get() << "]\n";
-}
-
-unique_ptr<Foo> source() {
-  cerr << "Creating Foo in source\n";
-  return unique_ptr<Foo>(new Foo);
-}
-
-int main(int argc, char** argv) {
-  cerr << "Calling source\n";
-  unique_ptr<Foo> pmain = source();  // Can also be written as auto pmain = source();
-
-  cerr << "Now pmain owns Foo [" << pmain.get() << "]\n";
-  cerr << "Passing it to sink\n";
-  sink(pmain);                    // ERROR! can't copy unique_ptr
-  sink(move(pmain));              // OK: can move it!    // meant std::move
-
-  cerr << "Main done\n";
-  return 0;
-}
-
-Again, there's a line marked with ERROR! here - it demonstrates once again that a unique_ptr can't
-be copied. However, it can be explicitly moved, as the next line shows [2]. When the erroneous line
-is commented out, this code prints:
-
-[2] It can also be taken from an rvalue: sink(unique_ptr<Foo>(new Foo)) would work, because rvalue
-references can be moved directly. note. here again temp object hence rvalue
-
-Calling source
-Creating Foo in source
-Foo [0x1767010] constructed
-Now pmain owns Foo [0x1767010]
-Passing it to sink
-Sink owns Foo [0x1767010]
-Foo [0x1767010] destructed
-Main done
-
-Note how cleanly the ownership is being passed between the functions in this code. At each point in
-time, only a single unique_ptr owns the pointed Foo object. Moreover, this is efficient - the actual
-pointed object only gets constructed once and destructed once.
-
-Containers - motivation
-
-So unique_ptr is a useful single-ownership smart pointer. But what makes it really shine (especially
-when compared to auto_ptr) is that it can be used in standard containers.
-
-Why is it so important to be able to place smart pointers into containers? Because holding objects
-by value is sometimes very expensive. Containers, especially when coupled with algorithms, tend to
-move objects around. Large objects are expensive to copy, hence we'd like to keep pointers to
-objects inside containers instead.
-
-What follows is a very simplistic example that demonstrates this. It shows how much more expensive
-it is to sort a vector of large objects that are stored by value, than it is when they're stored by
-pointer [3].
-
-Also, I explicitly said to take the container example with a grain of salt as it was synthetically
-built to demonstrate the point. Yes, it is best to avoid huge objects, but that's not always
-possible.
-
-First, let's create a synthetic "large" object that has well defined ordering properties by some
-numeric ID:
-
-struct SomeLargeData {
-    SomeLargeData(int id_)
-        : id(id_)
-    {}
-    int id;
-    int arr[100];
-};
-
-We also need a function to compare two such objects. Actually, we need two - one for a container
-that holds object by value, and another for the by pointer version:
-
-bool compare_by_value(const SomeLargeData& a, const SomeLargeData& b) {
-    return a.id < b.id;
-}
-
-bool compare_by_ptr(const SomeLargeData* a, const SomeLargeData* b) {
-    return a->id < b->id;
-}
-
-Let's now create two vectors and populate them with random objects:
-
-vector<SomeLargeData> vec_byval;
-vector<SomeLargeData*> vec_byptr;
-
-for (int i = 0; i < n; ++i) {
-    int id = rand() % 500000;
-    vec_byval.push_back(SomeLargeData(id));
-    vec_byptr.push_back(new SomeLargeData(id));
-}
-
-Finally, we'll sort the two vectors with the standard sort algorithm, and measure the runtime for
-some large n:
-
-sort(vec_byval.begin(), vec_byval.end(), compare_by_value);
-sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
-
-The timing results I get are quite consistent - the by-pointer sorting is 2-3x faster than the
-by-value sorting [4]. That's a very significant difference, and it's all due to the copying sort has
-to do for moving the objects around inside the container.
-
-[4] The speedup grows as the size of the object grows. Increasing the arr member to hold 1000
-integers makes the speedup 10x.
-
-So holding objects of non-trivial size inside standard containers is not a good idea in terms of
-performance. But holding raw pointers to them is also not so great, because of all the safety issues
-that come with raw pointers. The container can't own the pointed objects because its destructor will
-just "destruct" the pointer(note not pointed object), which does nothing. So the calling code(note
-client) has to own the actual objects which are being shuffled around by the container. Add
-exceptions and/or early returns to the mix, and this is a recipe for memory leaks or even worse
-problems.
-
-What we'd really like to do is let our objects be managed by a smart pointer and put that into a
-container. This would guarantee a clean ownership strategy - the container destroys its contents
-when it gets destroyed itself - just the way it should be. This is why unique_ptr is so exciting.
-
-Containers of unique_ptr
-
-Adapting the by-pointer version of the code above to hold unique_ptr is very simple. First, we need
-another comparison function:
-
-bool compare_by_uniqptr(const unique_ptr<SomeLargeData>& a,
-                        const unique_ptr<SomeLargeData>& b) {
-    return a->id < b->id;
-}
-
-And then we just need to create the vector, populate it and then sort it, similarly to the way we've
-done for the other vectors:
-
-vector<unique_ptr<SomeLargeData>> vec_byuniqptr;
-
-for (int i = 0; i < n; ++i) {
-    int id = rand() % 500000;
-    // ...
-    vec_byuniqptr.push_back(
-        unique_ptr<SomeLargeData>(new SomeLargeData(id)));  
-    // note temp object. shall be this form since no copy supported or use std::move
-}
-
-sort(vec_byuniqptr.begin(), vec_byuniqptr.end(), compare_by_uniqptr);
-
-That's it! And the performance? 'almost' identical to the by-pointer version (I measured differences
-of 1-5%, depending on the data).
-
-What about shared pointers?
-
-Another smart pointer C++11 brings with it is the shared_ptr/weak_ptr pair, implementing a
-reference-counted approach to shared ownership. While much more flexible than unique_ptr, shared_ptr
-is slower and consumes more memory; managing the reference count is not free [5].
-
-[5] For the sorting benchmark demonstrated in this article shared_ptr is about 10% slower than
-unique_ptr. As for size, while the size of unique_ptr is exactly the size of a raw pointer,
-shared_ptr is about twice as large.
-
-Which one to use depends on your exact needs, but I agree with Herb Sutter's proposal of using
-unique_ptr by default and switching to shared_ptr if the need arises.
-
-In addition, it is my personal opinion that preferring unique_ptr imposes a certain memory
-management discipline on the code, since you know at each point exactly who owns what. Shared
-pointers give you a sense of security you can over use and end up with reference leaks, which are
-tricky to debug (just like when writing Python C extension code). 
-
-Moreover, shared pointers signal the intention of APIs less clearly than owning pointers. When some
-factory returns a shared pointer, does it mean it keeps a reference to the object too? With an
-owning pointer, the API is self documenting (source returns a unique_ptr? then source is for sure
-giving away ownership). With a shared pointer, it does not, and need external documentation to
-clarify.
-
-Conclusion
-
-I have mentioned how rvalue references and move semantics can make code more efficient with C++11.
-unique_ptr is another great example that makes me want to use a C++11-capable compiler as soon as
-possible.
-
-unique_ptr provides an excellent mix of efficiency and safe memory management. IMHO it's a great
-example of how several ideas in language design interact to create a whole that is larger than its
-parts.
-
-Replies:
-
-<1>
-fanNo Gravatar Says:
-June 25th, 2012 at 14:48
-
-Can’t we get the best of all worlds, by doing this:
-
-vector<SomeLargeData> vec_byval;
-vector<SomeLargeData*> vec_byptr;
-
-for (int i = 0; i < n; ++i) {
-    int id = rand() % 500000;
-    vec_byval.push_back(SomeLargeData(id));
-    vec_byptr.push_back(&vec_byval.back());
-}
-
-sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
-
-This gives us 'fast' by-pointer sorting AND 'ownership' of the pointed objects. So I don't get the
-excitement about unique_ptr.
-
-<2>
-westforkNo Gravatar Says:
-November 5th, 2012 at 12:22
-
-Hi
-
-Nice article. But my results are different from what you wrote.  I implemented your code using gcc
-4.7 (g++ (Ubuntu/Linaro 4.7.2-4precise1) 4.7.2) on my desktop (OS xubuntu 12.04, Intel(R) Core(TM)2
-Duo CPU, E8400 @ 3.00GHz).  I build a vector of 2010000 containing SomeLargeData objects, raw
-pointers to SomeLargeData objects and unique-pointers to SomeLargeData objects. The results are that
-raw pointer container is the faster to sort (as expected) but the container with the unique pointers
-is the slower!!!  Here a dump of my tests
-
-By value test
-TIMESTAMP-START 11:18:23:127277 (ms ~ 40703127)
-TIMESTAMP-END 11:18:27:378556 (ms ~ 40707378)
-ELAPSED TIME (ms) 4251
-
-By pointer test
-TIMESTAMP-START 11:18:27:378658 (ms ~ 40707378)
-TIMESTAMP-END 11:18:29:841735 (ms ~ 40709841)
-ELAPSED TIME (ms) 2463
-
-By unique_pointer test
-TIMESTAMP-START 11:18:29:841816 (ms ~ 40709841)
-TIMESTAMP-END 11:18:35:674064 (ms ~ 40715674)
-ELAPSED TIME (ms) 5833
-
-What do you think? The overhead of the unique-ptr over the raw pointer is so heavy?
-
-Regards
-westfork
-
-<3>
-SqeakyNo Gravatar Says:
-March 19th, 2013 at 11:58
-
-@Fan The first time the value vector grows it will invalidate all the pointers in the pointer
-vector. Since it never tells you when this happens, but can happen on any insertion, you have to
-assume that the pointer is invalid after the next insertion.
-
-@Westfork I would guess that the implementation just hasn’t had enough time to mature yet. There
-must be at least as much over with the unique_ptr as raw pointers, but double does seem excessive.
-Did you remember to delete in the raw pointer example?
-
-
-<4>
-This is my result on the VM in a laptop.
-
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <sys/time.h>
-#include <algorithm>
-
-using namespace std;
-
-typedef uint64_t u64;
-
-static u64 nsec() {
-  struct timeval tv;
-  if(gettimeofday(&tv, 0) < 0)
-    return -1;
-  return (u64)tv.tv_sec*1000*1000*1000 + tv.tv_usec*1000;
-}
-
-struct SomeLargeData {
-  SomeLargeData(int id_)
-    : id(id_)
-  {}
-
-  // SomeLargeData(int id_)
-  //   : id(id_)
-  // { cout << "Foo[" << this << "] ctor(" << id << ")" << endl; }
-  // ~SomeLargeData() { cout << "Foo[" << this << "] dtor(" << id << ")" << endl; }
-
-  int id;
-  int arr[100];
-};
-
-bool compare_by_value(const SomeLargeData& a, const SomeLargeData& b) {
-  return a.id < b.id;
-}
-
-bool compare_by_ptr(const SomeLargeData* a, const SomeLargeData* b) {
-  return a->id < b->id;
-}
-
-bool compare_by_uniqptr(const unique_ptr<SomeLargeData>& a, const unique_ptr<SomeLargeData>& b) {
-  return a->id < b->id;
-}
-
-int main()
-{
-  uint64_t be, af;
-  int n = 400;
-
-  vector<SomeLargeData> vec_byval;
-  vector<SomeLargeData*> vec_byptr;
-  vector<unique_ptr<SomeLargeData>> vec_byuniqptr;
-
-  for (int i = 0; i < n; ++i) {
-    int id = rand() % 500000;
-    vec_byval.push_back(SomeLargeData(id));
-    vec_byptr.push_back(new SomeLargeData(id));    // note. shall be deleted later
-    vec_byuniqptr.push_back(unique_ptr<SomeLargeData>(new SomeLargeData(id)));
-  }  
-
-  be = nsec();
-  sort(vec_byval.begin(), vec_byval.end(), compare_by_value);
-  af = nsec();
-  cout << "by value: diff(ns): " << af-be << endl;
-  cout << "by value: diff(ms): " << (af-be)/(1000) << endl;
-
-  be = nsec();
-  sort(vec_byptr.begin(), vec_byptr.end(), compare_by_ptr);
-  af = nsec();
-  cout << "by ptr: diff(ns): " << af-be << endl;
-  cout << "by ptr: diff(ms): " << (af-be)/(1000) << endl;
-
-  be = nsec();
-  sort(vec_byuniqptr.begin(), vec_byuniqptr.end(), compare_by_uniqptr);
-  af = nsec();
-  cout << "by uptr: diff(ns): " << af-be << endl;
-  cout << "by uptr: diff(ms): " << (af-be)/(1000) << endl;
-}
-
-$ ./a.out 
-by value: diff(ns): 302000
-by value: diff(ms): 302
-by ptr: diff(ns): 127000
-by ptr: diff(ms): 127
-by uptr: diff(ns): 585000
-by uptr: diff(ms): 585
 
 
 # ============================================================================
