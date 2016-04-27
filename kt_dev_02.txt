@@ -17838,10 +17838,21 @@ where a floating-point number may be followed by e or E and an optionally signed
 <itoa>
 NONE since it is not part of glibc and should use sprintf instead.
 
-{code}
+{1}
+// * supports 10 base
+// * not use reverse()
+// * supports the sign
+// * return the allocated string
+//
+// char* itoa(int n);
+//
+// Key points:
+//
+// * % and / operation
+// * do-while which is necessary since at least one char must be installed in
+//   the array even if n is zero.
 
-<1> This only handles 10 base. poor.
-
+<code>
 char* itoa(int n)
 {
   char* ret = NULL;
@@ -17879,76 +17890,111 @@ char* itoa(int n)
   return ret;
 }
 
-<2> From internet.
-https://android.googlesource.com/kernel/lk/+/qcom-dima-8x74-fixes/lib/libc
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- * * Redistributions of source code must retain the above copyright
- *  notice, this list of conditions and the following disclaimer.
- *  * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following
- * disclaimer in the documentation and/or other materials provided
- *  with the distribution.
- *   * Neither the name of The Linux Foundation nor the names of its
- * contributors may be used to endorse or promote products derived
- * from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+<mine>
+#include <iostream>
+#include <string>
+#include <memory>
 
-int itoa(int num, unsigned char* str, int len, int base)
+using namespace std;
+
+char* itoa_one(int n)
 {
-  int sum = num;
-  int i = 0;
-  int digit;
+  unsigned int num_chars = 0;
+  bool sign = false;
+  char* buffer = NULL;
 
-  if (len == 0)
-    return -1;
-
-  do
+  // check sign and make it positive
+  if( n < 0 )
   {
-    // sign will remain after %
-    digit = sum % base;
+    sign = true;
+    n = -n;
+  }
 
-    if (digit < 0xA)
-      str[i++] = '0' + digit;
-    else
-      str[i++] = 'A' + digit - 0xA; // what is it?
+  // needs a space for the sign?
+  if(sign)
+    num_chars++;
 
-    sum /= base;
+  // works out num_chars
+  int temp = n;
+  do {
+    temp /= 10;
+    num_chars++;
+  } while(temp);
 
-  }while (sum && (i < (len - 1)));
+  // allocate string and null
+  buffer = new char[num_chars+1];
 
-  if (i == (len - 1) && sum)
-    return -1;
+  // note: missed
+  buffer[num_chars] = 0;
 
-  str[i] = '\0';
-  strrev(str); // reverse a string. note this is not part of standard c
+  // needs the sign?
+  if(sign)
+    buffer[0] = '-';
 
-  return 0;
+  // converts integer from the end
+
+  // note: missed
+  num_chars--;
+
+  do {
+    buffer[num_chars--] = '0' + n % 10;
+  } while(n/=10);
+
+  return buffer;
 }
 
-<3> ansic, p64
-The do-while example. This is necessary since at least one char must be installed in the array even
-if n is zero.
+int main()
+{
+  char *str = itoa_one(-256);
+  cout << "converted string: " << str << endl;
+}
 
+// <2> From internet.
+// https://android.googlesource.com/kernel/lk/+/qcom-dima-8x74-fixes/lib/libc
+// /* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+//  */
+// 
+// #include <stdlib.h>
+// #include <string.h>
+// #include <ctype.h>
+// 
+// int itoa(int num, unsigned char* str, int len, int base)
+// {
+//   int sum = num;
+//   int i = 0;
+//   int digit;
+// 
+//   if (len == 0)
+//     return -1;
+// 
+//   do
+//   {
+//     // sign will remain after %
+//     digit = sum % base;
+// 
+//     if (digit < 0xA)
+//       str[i++] = '0' + digit;
+//     else
+//       str[i++] = 'A' + digit - 0xA; // what is it?
+// 
+//     sum /= base;
+// 
+//   }while (sum && (i < (len - 1)));
+// 
+//   if (i == (len - 1) && sum)
+//     return -1;
+// 
+//   str[i] = '\0';
+//   strrev(str); // reverse a string. note this is not part of standard c
+// 
+//   return 0;
+// }
+
+
+{2} ansic, p64
+
+<code>
 void itoa( int n, char s[] )
 {
   int i, sign;
@@ -17970,10 +18016,62 @@ void itoa( int n, char s[] )
   reverse(s);
 }
 
-<exercise>
-The ansic, page 64, exercise 3-5. Write the function itob(n,s,b) that converts the integer n into a
-base b character representation in the string s . In particular, itob(n,s,16) formats n as a
-hexadecimal integer in s. 
+
+<mine>
+#include <iostream>
+#include <string>
+#include <cstring>
+
+using namespace std;
+
+void reverse(char *s)
+{
+  int start, end, temp;
+
+  // note: strlen(s)-1 ?
+  for(start = 0, end = strlen(s)-1; start < end; start++, end--)
+  {
+    temp = s[start];
+    s[start] = s[end];
+    s[end] = temp;
+  }
+}
+
+void itoa_two( int n, char s[] )
+{
+  int num_chars = 0, sign = 0;
+
+  // note: can be shorten as code
+  if( n < 0 )
+  {
+    sign = 1;
+    n = -n;
+  }
+
+  do {
+    s[num_chars++] = '0' + n % 10;
+  } while( n/=10 );
+
+  if( sign )
+    s[num_chars++] = '-';
+
+  s[num_chars] = 0;
+
+  reverse(s);
+}
+
+int main()
+{
+  char text[100] = {0};
+  itoa_two( -256, text );
+  cout << "converted string: " << text << endl;
+}
+
+
+<ex>
+The ansic, page 64, exercise 3-5. Write the function itob(n,s,b) that converts
+the integer n into a base b character representation in the string s. In
+particular, itob(n,s,16) formats n as a hexadecimal integer in s. 
 
 #include <stdio.h>
 #include <string.h>
@@ -17986,10 +18084,12 @@ void reverse(char s[])
     c = s[i], s[i] = s[j], s[j] = c;
 }
 
-// The point is that bit representation is the same regardless of base and so do the mod operation.
-// The problem is that char set from 0 to Z used is not contiguous in ASCII and the below is handy.
-// http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_3:Exercise_5
-// Of course, this version do not support XXX_MIN handling.
+// The point is that bit representation is the same regardless of base and so do
+// the mod operation. The problem is that char set from 0 to Z used is not
+// contiguous in ASCII and the below is handy.
+// http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_3:Exercise_5 Of course,
+// this version do not support XXX_MIN handling.
+
 void itob_one(int n, char s[], int b) 
 {
   static char digits[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -18102,9 +18202,10 @@ itoa'ed string:100
 
 
 <exercise>
-The ansic, page 64, exercise 3-6. Write a version of itoa that accepts three arguments instead of
-two. The third argument is a minimum field width; the converted number must be padded with blanks on
-the left if necessary to make it wide enough.
+The ansic, page 64, exercise 3-6. Write a version of itoa that accepts three
+arguments instead of two. The third argument is a minimum field width; the
+converted number must be padded with blanks on the left if necessary to make it
+wide enough.
 
 void itoa_w(int n, char s[], int w)
 {
@@ -18122,8 +18223,8 @@ void itoa_w(int n, char s[], int w)
   if(sign < 0)
     s[i++] = '-';
 
-  // here, the value of i is both the number of characters in number representation and the index of
-  // array for a next char.
+  // here, the value of i is both the number of characters in number
+  // representation and the index of array for a next char.
   // '2' '5' '6' '\0'
   //  0   1   2   3 
 
@@ -19233,8 +19334,8 @@ SYNOPSIS
        size_t strlen(const char *s);
 
 DESCRIPTION
-       The  strlen()  function  calculates the length of the string s, 'excluding' the terminating
-       null byte ('\0').
+       The  strlen()  function  calculates the length of the string s,
+       'excluding' the terminating null byte ('\0').
 
 RETURN VALUE
        The strlen() function returns the number of characters in s.
