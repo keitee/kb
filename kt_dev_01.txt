@@ -84,7 +84,10 @@ KT KB. DEVELOPMENT.
 *kt_dev_lang_010* ex-text-query
 |kt_dev_lang_011| literal type
 *kt_dev_cpp_0004* pointer-and-array
-|kt_dev_lang_012| pointer, array {option-handling} {std::begin} {sizeof-operator}
+*kt_dev_cpp_0004* pointer-null
+*kt_dev_cpp_0004* pointer-reading
+*kt_dev_cpp_0004* pointer-cstring
+*kt_dev_cpp_0004* op-sizeof
 |kt_dev_lang_013| std-begin
 |kt_dev_lang_014| printf-format
 |kt_dev_lang_015| control flow {control-for-vs-while} {switch-under-the-hood}
@@ -8155,24 +8158,6 @@ this is a program to squeeze
 this is a program to squz
 
 
-<ex> *ex-strcat* 
-Concatenate t to end of s. s must be big enough. The lib version returns a
-pointer of resulting string
-
-void strcat( char s[], char t[] )
-{
-  int i, j;
-
-  i = j = 0;
-  while( s[i] != '\0' )               // find end of
-    i++;
-
-  // while( s[i++] = t[j++] )         // copy t
-  while( (s[i++] = t[j++]) != '\0' )  // copy t
-    ;
-}
-
-
 <ex> *ex-squeeze-two* ansic, exercise 2-4.
 Write an alternate version of squeeze(s1,s2) that deletes each character in the
 string s1 that matches 'any' character in the string s2.
@@ -9356,11 +9341,13 @@ information. See *ex-qsort*
 *p++ = val;    // push val onto stack
 val = *--p;    // pop top of stack into val
 
-Here *--p decrements p before fetching the character that p points to since right-to-left applies.
+Here *--p decrements p before fetching the character that p points to since
+`right-to-left` applies.
+
 
 <read-and-write>
-note that variable is a readable lable of address whether or not a pointer, so read or write to it
-means to get its content but not the address. 
+variable is a readable lable of address whether or not a pointer, so read or
+write to it means to get its content but not the address. 
 
 variable = xxx;   // this is an write operation to a memory.
 xxx = variable;   // this is an read operation(fetch) from a memory.
@@ -9391,19 +9378,20 @@ void swap(int *x, int *y)
   *y = temp;
 }
 
-TODO: C++ reference example
-
 
 {pointer-and-array}
-An array is a data structure that is similar to the library vector type but offers different
-trade-off. Like vector, is a container of unnamed object of a 'single' type. Unlike vector, has
-'fixed' size. That run-time advantage comes at the cost of lost flexibility.
+An array is a data structure that is similar to the library vector type but
+offers different trade-off. Like vector, array is a container of unnamed object
+of a 'single' type. Unlike vector, has 'fixed' size. That run-time advantage
+comes at the cost of lost flexibility.
 
-In C++ pointers and arrays are closely interwined. The elements in an array are objects. When
-subscript an array, the result is the object at that location in the array. Array has special
-property. the compiler automatically substitute array(name) with a pointer to the first element.
+In C++ pointers and arrays are closely interwined. The elements in an array are
+objects. When subscript an array, the result is the object at that location in
+the array. Array has special property. the compiler automatically substitute
+array(name) with a pointer to the first element.
 
-The ansic said the name of array is a 'synonym' for the location of the initial element.
+The ansic said the name of array is a 'synonym' for the location of the initial
+element.
 
 string name[] = {"one", "two", "three"};
 string* p = &name[0];   // same
@@ -9411,63 +9399,165 @@ string* p = name;       // same
 
 This means that operations on array are really operations on pointers.
 
+
 <indexing> from-ansic, indexing and pointer arithmetic
-In short, an array-and-index expression is equivalent to one written as a pointer and offset. The
-pointer version will in general be 'faster'. There is one difference between an array name and a
-pointer that must be kept in mind. A pointer is variable but array name is 'not' a variable. However
-when pass an array to a function call as a argument? This is a variable such as strlen(char *);
+An array-and-index expression is equivalent to one written as a pointer and
+offset. The pointer version will in general be 'faster'. There is one difference
+between an array name and a pointer that must be kept in mind. A pointer is
+variable but array name is 'not' a variable. However when pass an array to a
+function call as a argument? This is a variable such as strlen(char *);
 
 a[i] can also be written as *(a+i)
 
 int a[10]; int *pa;
 
 pa = a; pa++;     // okay
-a = pa; a++;      // yako since array name is not variable
+a = pa; a++;      // no since array name is not variable
 
-- a[n] has [0, n-1]. so a+n points to the off-the-end.
-- q-p+1 means the number of elements from p to q 'inclusive' when q > p and p and q are pointers
-within the array. q-p is the size when p is &arr[0] and q is &arr[off-the-end]
-- a length of a has +1 than a index. Run loop from [0, n-1] or [1, n]
+* a[n] has [0, n-1]. So a+n points to the off-the-end.
+
+* q-p+1 means the number of elements from p to q 'inclusive' when q > p and p
+  and q are pointers within the array. (inclusive so +1)
+  
+* q-p is the size when arr[size], p is &arr[0] and q is &arr[off-the-end]
+
+* a length of a has +1 than a index. Run loop from [0, n-1] or [1, n]
 
 // index
-char array[length];  // 10
+char array[length];             // 10
 
-[0,9] // 10 loops
+[0,9]                           // 10 loops
 for( i = 0; i < length; i++ )
    array[i];
 
-[1,10] // 10 loops when not need index
+[1,10]                          // 10 loops when not need index
 while( length-- > 0 )
   *ptr++;
 
-<exercise> strlen: ansic, p103. excluding NULL.
-int strlen( char *s )
-{
-  char *p = s;
-
-  while( *p != '\0' )
-    p++;
-
-  return p-s;  // this means size-1 when s[size]
-}
 
 <defining-array>
-An array declarator has the form a[d], where a is the name and d is the dimension. note that the
-number of elements in an array is 'part' of the array's 'type' so must be known at compile time.
-That means the dimension is constant expression.
+An array declarator has the form a[d], where a is the name and d is the
+dimension. note that the number of elements in an array is 'part' of the array's
+'type' so must be known at compile time.  That means the dimension is constant
+expression.
+
 
 <array-subscript>
-For library types such as string and vector, subscript type is size_type which is 'unsigned'. So if
-use negative value, then will be 'converted' to the unsigned. However, for built-in array, it is not
-so can have negative subscript. ansic p100.
+For library types such as string and vector, subscript type is size_type which
+is `unsigned`. So if use negative value, then will be 'converted' to the
+unsigned. However, for built-in array, it is not so can have negative subscript.
+ansic p100.
 
 int *p = &ia[2];
 int j = p[1];
 int k = p[-2];
 
+
 <array-init>
 int a3[5] = { 0, 1, 2 };   // { 0, 1, 2, 0, 0 } since value-init the rest
 int a4[11] = {};           // { 0,...0 } since value-init all
+
+
+<difference-between-arr-and-parr>
+int main () {
+
+  int arr[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+  int* parr = new int[100];
+
+  std::vector<int> ivec( std::begin(arr), std::end(arr) );     // 1. okay
+  std::vector<int> ivec( std::begin(parr), std::end(parr) );   // 2. error
+  std::vector<int> ivec( std::begin(*parr), std::end(*parr) ); // 3. error
+  
+  return 0;
+}
+
+For 2, error: no matching function for call to ‘begin(int*&)’  // typename int*
+For 3, error: no matching function for call to ‘begin(int&)’   // typename int
+
+sam01.cpp:14:41: note: candidates are:
+/usr/include/c++/4.6/bits/range_access.h:48:5: note: 
+  template<class _Container> decltype (__cont.begin()) std::begin(_Container&)
+/usr/include/c++/4.6/bits/range_access.h:58:5: note: 
+  template<class _Container> decltype (__cont.begin()) std::begin(const _Container&)
+/usr/include/c++/4.6/bits/range_access.h:87:5: note: 
+  template<class _Tp, unsigned int _Nm> _Tp* std::begin(_Tp (&)[_Nm])
+/usr/include/c++/4.6/initializer_list:86:5: note: 
+  template<class _Tp> constexpr const _Tp* std::begin(std::initializer_list<_Tp>)
+
+Why? std::begin() shall work with array? Array is different from block of
+memory. Here are the libary implementation:
+
+/usr/include/c++/4.6/bits/range_access.h:87:5:
+
+/**
+ *  @brief  Return an iterator pointing to the first element of the array.
+ *  @param  arr  Array.
+ */
+template<class _Tp, size_t _Nm>
+  inline _Tp*
+  begin(_Tp (&__arr)[_Nm])    // note see the size
+  { return __arr; }
+
+/**
+ *  @brief  Return an iterator pointing to one past the last element
+ *          of the array.
+ *  @param  arr  Array.
+ */
+template<class _Tp, size_t _Nm>
+  inline _Tp*
+  end(_Tp (&__arr)[_Nm])
+  { return __arr + _Nm; }
+
+
+* Array is 'sized' data structure and size is known at 'compile' time and can be
+  used implicitly.
+
+* Array is different.
+
+
+char parray[] = "this is sample string";
+char *pnew = "this is sample string";
+
+printf("0: %0x 1: %0x \n", &parray, &parray[0] );
+printf("0: %0x 1: %0x \n", &pnew, &pnew[0] );
+
+0: bfc09896 1: bfc09896
+0: bfc09890 1: 80489c5 
+
+
+<3> decltype seems return char * for both but typeid are different. Why?
+decltype( parray ) x;
+decltype( pnew ) x;
+
+tid: A22_c  // parray
+tid: Pc     // pnew
+
+Since the special conversion in array do not happen when use decltype. Really?
+YES.
+
+decltype(arr) x = 100;
+
+$ ./comp.sh sam01.cpp 
+.cpp: In function ‘int main()’:
+.cpp:13:21: error: array must be initialised with a brace-enclosed initialiser
+
+decltype(arr) x;
+int y = x;
+
+$ ./comp.sh sam01.cpp 
+.cpp: In function ‘int main()’:
+.cpp:14:11: error: invalid conversion from ‘int*’ to ‘int’ [-fpermissive]
+
+
+<4> `op-sizeof` 
+cout << "size: " << sizeof(arr) << endl;
+cout << "size: " << sizeof(parr) << endl;
+cout << "size: " << sizeof(*parr) << endl;
+
+size: 40
+size: 4
+size: 4
+
 
 <complicated-array-declaration>
 int arr[6];
@@ -9475,9 +9565,10 @@ int arr[6];
 arr     0        5
 [ ] -> [ ][ ]...[ ]
 
-Here arr, &arr[0], &arr have the same address and arr type is int(*arr)[6]. note that this is
-similar to function pointer definition. The size is part of type, that is, int(&)[10] in the
-following case. The parentheses are needed and read from inside to outside. 
+Here arr, &arr[0], &arr have the same address and arr type is int(*arr)[6]. This
+is similar to function pointer definition. The size is part of type, that is,
+   int(&)[10] in the following case. The parentheses are needed and read from
+   inside to outside. 
 
 int (&arrRef) [ 10 ] = arr;   // refers to an array of ten ints
 
@@ -9489,10 +9580,12 @@ void print( int (&arr) [ 10 ])
     cout << elem << endl;
 }
 
-This could also means the first low of multidimensional array and the both are the same.
+This could also means the first low of multidimensional array and the both are
+the same.
 
 void print( int (*matrix)[10], int rowsize );
 void print( int matrix[][10], int rowsize );
+
 
 <complicated-array-type>
 As seen above, array arr type is int(*)[6]. Likewise, state_list is **.
@@ -9519,29 +9612,26 @@ static Fsm::fsm_event_t bootEventList[] = {
 
 fsm_instance fsm = { "...", &bootStateList, &bootEventList, ... };
 
+
 <pointers-to-pointers>
-From ansic, p107. A stripped-down sort utility. Can use shell and qsort but need a data
-representation that will cope efficiently and conveniently with variable-length text lines. The
-array of pointers elimiates the twin problems of complicated storage management and high overhead of
-moving elements. This is similar to difference between contiguous and linked list of sort
-algorithms. 
+From ansic, p107. A stripped-down sort utility. Can use shell and qsort but need
+a data representation that will cope efficiently and conveniently with
+variable-length text lines. The array of pointers elimiates the twin problems of
+complicated storage management and high overhead of moving elements. This is
+similar to difference between contiguous and linked list of sort algorithms. 
 
 [ ] -> defghi         [ ]  +->      defghi      
 [ ] -> jklmnopqrst    [ ] -+ +->    jklmnopqrst 
 [ ] -> abc            [ ] ---+   -> abc         
 
-<code>
+<ex>
 #include <stdio.h>
 #include <string.h>
 
-#define MAXLINES 5000         // max #lines to be sorted
+// max #lines to be sorted
+#define MAXLINES 5000         
 
-// char lineptr[MAXLINES];
-// char *lineptr[MAXLINES];
-// char *lineptr;
-//
-// Here "char *lineptr[MAXLINES]" means that 1) is a pointer, 2) an array, and 3) has char * type
-// element.
+// Means that 1) is a pointer, 2) an array, and 3) has char * type element.
 char *lineptr[MAXLINES];
 
 int readlines( char *lineptr[], int nlines );
@@ -9616,6 +9706,7 @@ void swap( char *v[], int i, int j )
   temp = v[i], v[i] = v[j], v[j] = temp;
 }
 
+*ex-qsort*
 void qsort( char *v[], int left, int right )
 {
   int i, last;
@@ -9647,6 +9738,17 @@ How to use malloc to have pointer array?
 
 int main( int argc, char *argv[] )
 {
+  // Can use "char* result = malloc(...);" However problem is how to use/access
+  // allocated memory afterwards. If use result[0] or result++, it moves 1 but
+  // not 4. The compiler warns you as:
+  //
+  // c:21:13: warning: assignment makes integer from pointer without a cast [enabled by default]
+  // c:26:9: warning: assignment from incompatible pointer type [enabled by default]
+  //
+  // After all, memory is memory and address is address. The 'type' is all about
+  // how a compiler 'view' it; how to access it via [] or ++. sub script is
+  // pointer arithmetic after all.
+
   // char *result[5];
   char** result = malloc(5*sizeof(*result));
 
@@ -9656,11 +9758,14 @@ int main( int argc, char *argv[] )
   result[3] = strdup("four");
   result[4] = NULL; // strdup("five");
 
-  // Since it is 'pointer' type array, pointer++ always moves 4 bytes wheather or not array element
-  // has char or int pointer. In other words, pointer size is the same regardless of type.
+  // Since it is 'pointer' type array, pointer++ always moves 4 bytes wheather
+  // or not array element has char or int pointer. In other words, pointer size
+  // is the same regardless of type.
 
   char** it;
-  for(it=result; it && *it; ++it)   // to end loop there should be an element which has NULL.
+
+  // to end loop there should be an element which has NULL.
+  for(it=result; it && *it; ++it)
   {
     printf("%s\n", *it);
     free(*it);
@@ -9669,30 +9774,21 @@ int main( int argc, char *argv[] )
   free(result);
 }
 
-Can use "char* result = malloc(...);" However problem is how to use/access allocated memory
-afterwards. If use result[0] or result++, it moves 1 but not 4. The compiler warns you as:
-
-test2.c:21:13: warning: assignment makes integer from pointer without a cast [enabled by default]
-test2.c:26:9: warning: assignment from incompatible pointer type [enabled by default]
-
-After all, memory is memory and address is address. The 'type' is all about how a compiler 'view'
-it; how to access it via [] or ++. sub script is pointer arithmetic after all.
-
 
 <pointers-vs-multi-dimensional>
-From ansic, p112. When pass two dimensional array to a function f, can be declared as
+From ansic, p112. When pass two dimensional array to a function f, can be
+declared as
 
 f( int daytab[2][13] );
 f( int daytab[][13] );
 f( int (*daytab)[13] );
 
-The last needs () since [] is higher than *. Othewise, it is an array of 13 pointers to integers.
-The key is that the number of rows is irrelevant to a compiler and this is how a compiler see an
-array in contiguous memory.
+The last needs () since [] is higher than *. Othewise, it is an array of 13
+pointers to integers. The key is that the number of rows is irrelevant to a
+compiler and this is how a compiler see an array in contiguous memory.
 
 [0][13]                [1][13]                [2][13]                ...
-<-------- 13 ---------><-------- 13 ---------><-------- 13 ---------><-------- 13 --------->
-
+<-------- 13 ---------><-------- 13 ---------><-------- 13 --------->
 
 The other case is that followings are the same.
 
@@ -9700,20 +9796,20 @@ void print( const int* );
 void print( const int[] );
 void print( const int[10] );
 
-
 From ansic, p113. Given the definitions:
 
 int a[10][20];
 int *b[10];
 
-then a[3][4] and b[3][4] are 'both' syntactically legal references to a single int. Here legal means
-both type is the same but can have different representation. The a is a true two dimensional array;
-200 int-sized locations have been set aside; 20*row+col. For b, however, only allocates 10 pointers.
+Then a[3][4] and b[3][4] are 'both' syntactically legal references to a single
+int. Here legal means both type is the same but can have different
+representation. The a is a true two dimensional array; 200 int-sized locations
+have been set aside; 20*row+col. For b, however, only allocates 10 pointers.
 When each of b has 20 long, it has 200 plus 10 pointers.
 
-The important advantage of the pointer array is that the rows of the array may be of different
-length. So can be one int or array of int. In other words, int *b[10], int **b[10], int ***b[10] are
-the same.
+The important advantage of the pointer array is that the rows of the array may
+be of different length. So can be one int or array of int. In other words, int
+*b[10], int **b[10], int ***b[10] are the same.
 
 char *names[] = { "Illegal month", "Jan", "Feb", "Mar" };
 
@@ -9732,7 +9828,7 @@ names:
 [] -> "Mar\0          "
 
 
-<example>
+<ex>
 ansic, p116. argv example of option handling such as:
 
 // echo command-line arguments
@@ -9843,47 +9939,50 @@ int main(int argc, char* argv[])
 } 
 
 
-<exercise> tail: was a question of google first phone screening.
-The ansic, page 118, exercise 5-13. Write the <tail-program>, which prints the last n lines of its
-input. By default, n is 10, say, but it can be changed by an optional argument, so that
-
-tail -n
-
-prints the last n lines. The program should behave rationally no matter how unreasonable the input
-or the value of n. Write the program so it makes the best use of available storage; lines should be
-stored as in the sorting program of Section 5.6, not in a two-dimensional array of fixed size.
-
+<ex> *ex-tail* *ex-interview*
 see *kt_dev_glib_006* tail-program for a solution.
-
-
-{null-pointer}
-C gurantees that zero is never a valid address for data. Pointer and integers are not
-interchangeable but zero is the sole exception. NULL symbolic constant.
 
 
 {pointer-and-string}
 char amessage[] = "now is the time";
 char *pmessage = "now is the time";
 
-The important difference is that amessage is an array that is 'initialised' with string constant.
-Individual characters may be changed. On the other hand, pmessage is a pointer, initialised to point
-to a string constant and can be modified but undefined if you try to modify the string contents.
+The important difference is that amessage is an array that is 'initialised' with
+string constant. Individual characters may be changed. 
 
-<article>
+On the other hand, pmessage is a pointer, initialised to point to a string
+constant and can be modified but undefined if you try to modify the string
+contents.
+
+
+={============================================================================
+*kt_dev_cpp_0004* pointer-null
+
+{null-pointer} 
+C gurantees that zero is never a valid address for data. Pointer and integers
+are not interchangeable but zero is the sole exception. NULL `symbolic-constant`
+
+
+={============================================================================
+*kt_dev_cpp_0004* pointer-reading
+
 Difference between char *a and char a[]
 
-char * and char [] both are used to access character array, Though functionally both are same, they
-are syntactically different. See how both works in order to access string.
+char * and char [] both are used to access character array, Though functionally
+both are same, they are syntactically different. See how both works in order to
+access string.
 
 A. How char a[] works?
 
-Consider following example for storing and accessing string using character array -
+Consider following example for storing and accessing string using character
+array.
 
 char a[] = "HELLO";
 
-In the example string "Hello" is stored in character array 'a'. Character array is used to store
-characters in 'contiguous' memory location. It will take following form after 'initialization'. We
-have not specified array size in this example. Each array location will get following values -
+In the example string "Hello" is stored in character array 'a'. Character array
+  is used to store characters in 'contiguous' memory location. It will take
+  following form after 'initialization'. We have not specified array size in
+  this example. Each array location will get following values -
 
 a[0] = 'H'
 a[1] = 'E'
@@ -9898,15 +9997,16 @@ array a :  H    E    L    L    O '\0'
 
 
 Accessing Individual Element :
-Suppose we have to find out a[3] then firstly compiler will check whether 'a' is array or pointer.
-If 'a' is array variable then it starts at the location 'a', goes three elements past it, and
-returns the character there. In this method element is accessed sequentially
+Suppose we have to find out a[3] then firstly compiler will check whether 'a' is
+array or pointer.  If 'a' is array variable then it starts at the location 'a',
+      goes three elements past it, and returns the character there. In this
+        method element is accessed sequentially
 
 B. How char *a works?
 
-String "Hello" will be stored at any anonymous location in the form of array. We even don't know the
-location where we have stored string, However string will have its starting address. Syntax of char
-*a :
+String "Hello" will be stored at any anonymous location in the form of array. We
+even don't know the location where we have stored string, However string will
+have its starting address. Syntax of char *a :
 
 char *a = "HELLO";
 
@@ -9916,33 +10016,96 @@ pointer a :  H    E    L    L    O '\0'
            a[0] a[1] a[2] a[3] a[4]
            anonymous array
 
-We have declared pointer of type character i.e pointer variable is able to hold the address of
-character variable. Now base address of anonymous array is stored in character pointer variable. 'a'
-stores base address of the anonymous array(unknown array)
+We have declared pointer of type character i.e pointer variable is able to hold
+the address of character variable. Now base address of anonymous array is stored
+in character pointer variable. 'a' stores base address of the anonymous
+array(unknown array)
 
 Address = [Base Address of Anonymous Array]  + [i]
 
 Accessing Individual Element :
 
-Consider we have to access a[3] then -
-In short if 'a' is a pointer, it starts at the location "a", gets the pointer value there, adds 3 to
-the pointer value, and gets the character pointed to by that value. In both cases a[3] returns same
-character but procedure is different.
+Consider we have to access a[3] then
 
-<c-string>
+In short if 'a' is a pointer, it starts at the location "a", gets the pointer
+value there, adds 3 to the pointer value, and gets the character pointed to by
+that value. In both cases a[3] returns same character but procedure is
+different.
+
+
+={============================================================================
+*kt_dev_cpp_0004* pointer-cstring
+
+<ex> *ex-strlen* 
+ansic, p103. excluding NULL which means `size-1`
+
+* `cstring` needs an extra space for NULL
+* "*run++" has `effect` even when see NULL and has `off-the-end` 
+
+int strlen( char *s )
+{
+  char *p = s;
+
+  while( *p != '\0' )
+    p++;
+
+  return p-s;             // size-1 when s[size]
+}
+
+int wrong_mstrlen(char s[])
+{
+  char *run = s;
+
+  while( *run++ )         // `postfix-issue`
+    ;
+
+  return run-s;
+}
+
+int mstrlen(char s[])
+{
+  char *run = s;
+
+  while( *run )
+    run++;
+
+  return run-s;
+}
+
+int nstrlen(char s[])
+{
+  int i = 0;
+
+  while( s[i] )
+    ++i;
+
+  return i;
+}
+
 int main(int argc, char* argv[])
 {
-  //char *str1 = "\n";
-  //char *str2 = "";
-  //char *str3 = "one";
+  char input[] = "pointer";
+
+  printf("len: %d, size: %d\n", mstrlen(input), sizeof(input));
+  printf("len: %d, size: %d\n", nstrlen(input), sizeof(input));
+}
+
+len: 7, size: 8     // use right version
+len: 7, size: 8
+
+len: 8, size: 8     // use wrong version
+len: 7, size: 8
+
+
+<cstring-in-memory>
+
+int main(int argc, char* argv[])
+{
+  // '\n' is character constant(single character) and "\n" is s string constant 
 
   char str1[] = "\n"; 
-  // note: '\n' is character constant(single character) and "\n" is s string constant 
   char str2[] = ""; 
   char str3[] = "one"; 
-
-  printf("size is %d\n", sizeof(str2));
-  printf("size is 0x%x\n", '\n');
 }
 
 (gdb) p str1
@@ -9958,80 +10121,52 @@ $4 = {0xa, 0x0}
 $5 = {0x0}
 (gdb) p /x str3
 $6 = {0x6f, 0x6e, 0x65, 0x0}
-(gdb) 
 
 
-<exercise> strcat: shows the same problem of control-for-vs-while
-From ansic, exercise 5-3. Write a pointer version of the function strcat that we showed in Chapter
-2: strcat(s,t) copies the string t to the end of s.
+<ex> *ex-strcpy*
+note: Why not show `postfix-issue` as *ex-strlen* ? Since do not use `effect`
+after while.
 
-#include <stdio.h>
-
-#define STR_BUFFER 10000
-
-void mstrcat_one(char *, char *);
-void mstrcat_two(char *s, char *t);
-void mstrcat_three(char *s, char *t);
-void mstrcat_four(char *s, char *t);
-
-int main(int argc, char *argv[])
+void strcpy( char *s, char *t )
 {
-  //char string1[STR_BUFFER] = "What A ";
-  char string1[STR_BUFFER] = "";
-  char string2[STR_BUFFER] = "Wonderful World!";
-
-  printf ("String 1:%s\n", string1);
-
-  //mstrcat_one(string1, string2);
-  //mstrcat_two(string1, string2);
-  mstrcat_three(string1, string2);
-
-  printf ("String 2:%s\n", string2);
-  printf ("Cat Result:%s\n", string1);
-
-  return 0;
+  while( *s++ = *t++ ) 
+    ;
 }
+
+
+<ex> *ex-strcat* 
+Concatenate t to end of s. s must be big enough. The lib version returns a
+pointer of resulting string
+
+void strcat( char s[], char t[] )
+{
+  int i, j;
+
+  i = j = 0;
+  while( s[i] != '\0' )               // find end of
+    i++;
+
+  // while( s[i++] = t[j++] )         // copy t
+  while( (s[i++] = t[j++]) != '\0' )  // copy t, no `postfix-issue`
+    ;
+}
+
+
+<ex> *ex-strcat* 
+From ansic, exercise 5-3. Write a pointer version of the function strcat that we
+showed in Chapter 2: strcat(s,t) copies the string t to the end of s.
 
 // NOT OK when s is empty
 // http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_5:Exercise_3
-/* Concatenate t to s. */
 void mstrcat_one(char *s, char *t)
 {
-  /* note: this is the comment for mstrcat_three
-   * '*++s' is used to reference the pointer before incremmenting it so
-   * that the check for falsehood ('\0') is done with the next character
-   * instead of '*s++' which would check, then increment. Using '*s++'
-   * would increment the pointer to the base string past the null
-   * termination character. When outputting the string, this made it
-   * appear that no concatenation occurred because the base string is
-   * cut off by the null termination character ('\0') that was never
-   * copied over.
-   */
   while(*++s); /* Get to the end of the string */
   while((*s++ = *t++));
 }
 
-// http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_5:Exercise_3
-void mstrcat_two(char *s, char *t)
+void wrong_strcat(char *s, char *t)
 {
-  /* run through the destination string until we point at the terminating '\0' */ 
-  while('\0' != *s)
-  {
-    ++s;
-  }
-
-  /* now copy until we run out of string to copy */
-  while('\0' != (*s = *t))
-  {
-    ++s;
-    ++t;
-  }
-}
-
-// NOT OK since s points after null char and this is the same problem as control-for-vs-while
-void mstrcat_three(char *s, char *t)
-{
-  while(*s++)
+  while(*s++)     // `postfix-issue`
     ;
 
   while(*s++ = *t++)
@@ -10047,23 +10182,26 @@ void mstrcat_four(char *s, char *t)
     ;
 }
 
-<exercise> strend: from ansic, exercise 5-4. pointer arithmetic
-Write the function strend(s,t), which returns 1 if the string t occurs at the end of the string s,
-and zero otherwise.
 
-Is the same approach as the above exercise 4-1? Not necessarily.
+<ex> *ex-strend* 
+From ansic, exercise 5-4. pointer arithmetic
+Write the function strend(s,t), which returns 1(found) if the string t occurs at
+the end of the string s, and 0 otherwise.
 
 // http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_5:Exercise_4
+// note: Assumption that s is bigger than t.
+// note: Use `postfix-issue` but not a problem here since `effect` used to check
+// NULL end.
+
 int strend(char *s, char *t)
 {
   s += (strlen(s) - strlen(t));     // increments to the point of comparison
   while (*s++ == *t++)              // tests for equality
-    if (*s == '\0')                 // or *t == '\0'; checks for null character while lines are equal
+    if (*s == '\0')                 // NULL end check
       return 1;
   return 0;
 }
 
-The above has an assumption that s is bigger than t. So a version has a check:
 
 int strend(char *s, char *t)
 {
@@ -10072,10 +10210,10 @@ int strend(char *s, char *t)
 
   if( slen >= tlen )
   {
-    s += (slen - tlen);     //increments to the point of comparison
+    s += (slen - tlen);
 
-    while (*s++ == *t++)              //tests for equality
-      if (*s == '\0')                 //checks for null character while lines are equal
+    while (*s++ == *t++)
+      if (*s == '\0')
         return 1;
 
     return 0;
@@ -10084,17 +10222,39 @@ int strend(char *s, char *t)
   return -1;
 }
 
-<key> The key is "s += (strlen(s) - strlen(t));" since this reduces cases to when s and t ends at
-the same point. There are many cases when move t window from the start of s.
-
 
 {off-the-end}
-Pointer arithmetic or comparison is 'undefined' when use pointers that do not point to members of
-the 'same' array. It is not legal to add two pointers while pointer addition is legal; pointer add
-integer. There is one exception: the address of the first element past the end of an array can be
-used in pointer arithmetic.
+Pointer arithmetic or comparison is 'undefined' when use pointers that do not
+point to members of the 'same' array. It is not legal to add two pointers while
+pointer addition is legal; pointer add integer. There is one exception: the
+address of the first element past the end of an array can be used in pointer
+arithmetic.
 
-<exercise> keyword counting program, ansic p137.
+<pointers-are-iterator>
+Like, `off-the-end` iterator, can use off-the-end pointer which is the address
+of the 'nonexistent' element one past the last element of an array. note that
+just take address but not element(not access it). So must not derefernce or
+increment an off-the-end pointer.
+
+#include <iostream>
+
+using namespace std;
+
+int main()
+{
+  int arr[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+
+  cout << "{";
+
+  for( int* b = arr, *e = &arr[10]; b != e; ++b )
+    cout << *b << ", ";
+
+  cout << "}" << endl;
+}
+
+
+<ex> *ex-count-keyword*
+ansic p137, Keyword counting program.
 
 #include <stdio.h>
 #include <ctype.h>
@@ -10155,126 +10315,9 @@ struct key *binsearch( char *word, struct key *tab, int n)
 }
 
 
-<pointers-are-iterator>
-Like, off-the-end iterator, can use off-the-end pointer which is the address of the 'nonexistent'
-element one past the last element of an array. note that just take address but not element(not
-access it). So must not derefernce or increment an off-the-end pointer.
+={============================================================================
+*kt_dev_cpp_0004* op-sizeof
 
-#include <iostream>
-
-using namespace std;
-
-int main()
-{
-  
-  int arr[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-
-  cout << "{";
-
-  for( int* b = arr, *e = &arr[10]; b != e; ++b )
-    cout << *b << ", ";
-
-  cout << "}" << endl;
-}
-
-
-<difference-between-arr-and-parr>
-int main () {
-
-  int arr[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-  int* parr = new int[100];
-
-  std::vector<int> ivec( std::begin(arr), std::end(arr) );     // 1
-  std::vector<int> ivec( std::begin(parr), std::end(parr) );   // 2
-  std::vector<int> ivec( std::begin(*parr), std::end(*parr) ); // 3
-  
-  return 0;
-}
-
-The "1" is okay but this "2" and 3 causes an error:
-
-For 2, error: no matching function for call to ‘begin(int*&)’  // here typename int*
-For 3, error: no matching function for call to ‘begin(int&)’   // here typename int
-
-sam01.cpp:14:41: note: candidates are:
-/usr/include/c++/4.6/bits/range_access.h:48:5: note: 
-  template<class _Container> decltype (__cont.begin()) std::begin(_Container&)
-/usr/include/c++/4.6/bits/range_access.h:58:5: note: 
-  template<class _Container> decltype (__cont.begin()) std::begin(const _Container&)
-/usr/include/c++/4.6/bits/range_access.h:87:5: note: 
-  template<class _Tp, unsigned int _Nm> _Tp* std::begin(_Tp (&)[_Nm])
-/usr/include/c++/4.6/initializer_list:86:5: note: 
-  template<class _Tp> constexpr const _Tp* std::begin(std::initializer_list<_Tp>)
-
-Why? std::begin shall work with array? Array is different from block of memory. Here are the libary
-implementation:
-
-/usr/include/c++/4.6/bits/range_access.h:87:5:
-
-/**
- *  @brief  Return an iterator pointing to the first element of the array.
- *  @param  arr  Array.
- */
-template<class _Tp, size_t _Nm>
-  inline _Tp*
-  begin(_Tp (&__arr)[_Nm])    // note see the size
-  { return __arr; }
-
-/**
- *  @brief  Return an iterator pointing to one past the last element
- *          of the array.
- *  @param  arr  Array.
- */
-template<class _Tp, size_t _Nm>
-  inline _Tp*
-  end(_Tp (&__arr)[_Nm])
-  { return __arr + _Nm; }
-
-<1> Array is 'sized' data structure and size is known at 'compile' time and can be used implicitly.
-<2> Array is different.
-
-char parray[] = "this is sample string";
-char *pnew = "this is sample string";
-
-printf("0: %0x 1: %0x \n", &parray, &parray[0] );
-printf("0: %0x 1: %0x \n", &pnew, &pnew[0] );
-
-0: bfc09896 1: bfc09896
-0: bfc09890 1: 80489c5 
-
-<3> decltype seems return char * for both but typeid are different. Why?
-decltype( parray ) x;
-decltype( pnew ) x;
-
-tid: A22_c  // parray
-tid: Pc     // pnew
-
-Since the special conversion in array do not happen when use decltype. Really? YES.
-
-decltype(arr) x = 100;
-
-$ ./comp.sh sam01.cpp 
-sam01.cpp: In function ‘int main()’:
-sam01.cpp:13:21: error: array must be initialised with a brace-enclosed initialiser
-
-decltype(arr) x;
-int y = x;
-
-$ ./comp.sh sam01.cpp 
-sam01.cpp: In function ‘int main()’:
-sam01.cpp:14:11: error: invalid conversion from ‘int*’ to ‘int’ [-fpermissive]
-
-<4> sizeof see {sizeof-operator} for more
-cout << "size: " << sizeof(arr) << endl;
-cout << "size: " << sizeof(parr) << endl;
-cout << "size: " << sizeof(*parr) << endl;
-
-size: 40
-size: 4
-size: 4
-
-
-{sizeof-operator}
 Queries size of the 'object' or 'type'. Used when actual size of the object
 must be known at compile time:
 
@@ -10285,26 +10328,24 @@ Both versions return a constant of type std::size_t.
 
 Explanation
 
--. returns size in bytes of the object representation of type.
--. returns size in bytes of the object representation of the type, that would
-be returned by expression, if evaluated.  
+* returns size in bytes of the object representation of type.
+* returns size in bytes of the object representation of the type, that would be
+  returned by expression, if evaluated.  
 
-1. Depending on the computer architecture, a byte may consist of 8 or more
-bits, the exact number being recorded in CHAR_BIT.
+* Depending on the computer architecture, a byte may consist of 8 or more bits,
+  the exact number being recorded in CHAR_BIT.
 
-2. sizeof(char), sizeof(signed char), and sizeof(unsigned char) always return
-1.
+* sizeof(char), sizeof(signed char), sizeof(unsigned char) always return 1.
 
-3. Cannot be used with function types, incomplete types, or bit-field lvalues.
+* Cannot be used with function types, incomplete types, or bit-field lvalues.
 
-4. When applied to a reference type, the result is the size of the referenced
-type.
+* When applied to a reference, the result is the size of the `referenced-type`
 
-5. When applied to a class type, the result is the size of an object of that
-class 'plus' any additional padding required to place such object in an array.
+* When applied to a class type, the result is the size of an object of that
+  class 'plus' any additional padding required to place such object in an array.
 
-6. When applied to an empty class type, always returns 1.
-`empty-base-class-optimization`
+* When applied to an empty class type, always returns 1.
+  `empty-base-class-optimization`
 
 
 <sizeof-which-version>
@@ -10343,11 +10384,13 @@ int main( int argc, char *argv[] )
 
 Here a pointer points to a 'type' and this is a struct in this case.
 
+
 <to-get-array-size>
 Two forms and the 'latter' is 'better' since do not need to be changed if the
 type changes.
 
-int length= sizeof(arr)/sizeof(int); or int length= sizeof(arr)/sizeof(arr[0]);
+int length= sizeof(arr)/sizeof(int);
+int length= sizeof(arr)/sizeof(arr[0]);
 
 <caveat>
 int func()
@@ -10400,41 +10443,10 @@ length is 1
 length is 5
 
 The strlen() function calculates the length of the string s, 'excluding' the
-terminating null byte ('\0'). In other words, strlen knows about a c string
-but sizeof do not. Hence sizeof returns +1 more. KT. sizeof is better since it
-is not a func call and done in compile.
+terminating null byte ('\0'). In other words, strlen knows about a c string but
+sizeof do not. Hence sizeof returns +1 more. 
 
-
-{function-pointer}
-In the past, void (*fptr)(); can define a func that has <any-args> but that is not the case any more
-when tested with gcc and VC as of 2013.03. This is wrong:
-
-typedef int ENTRYTYPE;
-
-typedef void(*)(int) TFUNC; // error
-
-void stacktraverse( stack* stack, TFUNC func)
-{
-  func(val);
-}
-
-This is right:
-
-typedef void(*TFUNC)(int);
-
-void stacktraverse( stack* stack, TFUNC func)
-{
-  func(val);
-}
-
-Also, the following causes error:
-
-queue-contig.cpp:60:35: error: expected identifier before '(' token
-queue-contig.cpp:60:41: error: expected ',' or '...' before '*' token
-
-void stacktraverse( stack* stack, (void)*func(int))
-{
-}
+sizeof is better since it is not a func call and done in compile.
 
 
 ={============================================================================
@@ -10828,15 +10840,18 @@ switch( events )
 
 
 {control-for-vs-while}
-<exercise> escape: from ansic, exercise 3-2. 
-Write a function escape(s,t) that converts characters like newline and tab into visible escape
-sequences like \n and \t as it copies the string t to s. Use a switch. Write a function for the
-other direction as well, converting escape sequences into the real characters.
+<ex> *ex-escape* 
+From ansic, exercise 3-2. Write a function escape(s,t) that converts characters
+like newline and tab into visible escape sequences like \n and \t as it copies
+the string t to s. Use a switch. Write a function for the other direction as
+well, converting escape sequences into the real characters.
 
 // mine to show idea
 void escape(char* s, char* t)
 {
-  // while( *t++ )
+  // note: When use "while(*t++)", the result missed out the first char due to
+  // `postfix-issue` 
+
   while( *t )
   {
     switch(*t)
@@ -10857,13 +10872,6 @@ void escape(char* s, char* t)
   *s = '\0';
 }
 
-note: When use "while(*t++)", the result missed out the first char. Why? When think about strcpy:
-
-void strcpy( char *s, char *t )
-{
-  while( *s++ = *t++ ) 
-    ;
-}
 
 while(expression)
   statement
@@ -10872,6 +10880,7 @@ while(expression)
 copied by evaluating and increased by the side effect. Not used in statement. This means that if use
 "s" or "t" in the statement then will get the side effect, that is, increased one. See the
 following.
+
 
 <exercise> atoi: atoi second version in ansic p61
 The for is preferable when there is a simple initialization and increment since it keeps the loop
@@ -11828,15 +11837,17 @@ declaration = base type + declarators
 
 There are two style choices:
 
-1. This emphasizes that the variable has the indicated compound type.
+* This emphasizes that the variable has the indicated compound type.
 
 int *p1, *p2;
 
-2. This place the type modifier with the type but defines only one variable per
-statement.
+* This place the type modifier with the type but defines only one variable per
+  statement.
 
 int* p1;
 int* p2;
+
+int* p1, p2;    // p1 is int pointer and p2 is int
 
 
 ={============================================================================
