@@ -72,6 +72,7 @@ KT KB. DEVELOPMENT.
 
 
 *kt_dev_cpp_0001* static
+*kt_dev_cpp_0001* volatile
 *kt_dev_cpp_0001* idiom-singleton-pattern
 *kt_dev_cpp_0001* idiom-factory-pattern
 |kt_dev_lang_002| stdio
@@ -176,7 +177,6 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_024| abstract base class {refactoring}
 |kt_dev_cpp_025| random
 |kt_dev_cpp_026| enum
-|kt_dev_cpp_027| volatile
 |kt_dev_cpp_028| namespace {case-example} {unnamed-namespace}
 |kt_dev_cpp_029| type-member nested-class
 
@@ -7023,6 +7023,7 @@ The `file-static` is private to a file and will not conflict with the same names
 in other files of the same program. The `file-static` can be used on both
 variables and functions.
 
+`internal-linkage` refers to everything only in scope of a translation unit.
 
 `global-static` `file-static`
 global(file) static has a file scope.
@@ -7128,6 +7129,23 @@ Directory& tempDir()
 { >
   static Directory td(tempDir); return td;
 }
+
+
+={============================================================================
+*kt_dev_cpp_0001* volatile
+
+This is non-portable feature. For values that is controlled by processes outside
+the direct control of the program and might be changed in ways outside the
+control of the program.
+
+It's a `directive` to the compiler telling that is shoud not perform
+'optimisations' on such objects.
+
+static volatile int T=10;
+
+static storage qualifier gives T static storage duration (C++11 §3.7) and
+internal linkage, while volatile still governs the optimization and
+reordering.
 
 
 ={============================================================================
@@ -12245,9 +12263,9 @@ reference is a sub set of pointer which is limited in use?
 
 
 {differences}
-<1>
-No 'null' reference hence 'must' be initialized. From MEC++01. Always refer to an object. Unlike
-pointer, no need to check its validity.
+
+1. No 'null' reference hence 'must' be initialized. From MEC++01. Always refer
+to an object. Unlike pointer, no need to check its validity.
 
 void printDouble( const double& rd )
 { cout << rd; }
@@ -12267,10 +12285,9 @@ Used operator funcs such as operator[]. {Q}
 
 vector<T> v; v[5] = 10;
 
-<4>
-All operations on that reference are actually operations on the object to which the reference is
-bound. Reference is bound 'once' but for pointer, can change pointer itself and can point any other
-objects.
+3. All operations on that reference are actually operations on the object to
+which the reference is bound. Reference is bound 'once' but for pointer, can
+change pointer itself and can point any other objects.
 
 <5> 
 There is no reference to a reference. but there's a pointer to a pointer. 
@@ -24395,15 +24412,6 @@ unsigned char uc = VIRTUAL;
 
 newf(VIRTUAL);    // newf(int);
 newf(uc);         // newf(unsigned char);
-
-
-={============================================================================
-*kt_dev_cpp_027* volatile
-
-This is non-portable feature. For values that is controlled by processes outside the direct control
-of the program and might be changed in ways outside the control of the program.
-
-It's a directive to the compiler telling that is shoud not perform 'optimisations' on such objects.
 
 
 ={============================================================================
@@ -41820,7 +41828,7 @@ class mshared_ptr {
     }
 
     // copy assign
-    const mshared_ptr<T>
+    const mshared_ptr<T> &
       operator=(const mshared_ptr<T> &rhs)
       {
         if(this == &rhs)
@@ -41919,6 +41927,81 @@ int main()
 *kt_dev_stl_101* sp-shared-code
 
 // bits/shared_ptr_base.h @759
+
+  template<_Lock_policy _Lp>  // @442
+    class __shared_count
+    {
+      public:
+        constexpr __shared_count() noexcept : _M_pi(0)
+        { }
+
+        template<typename _Ptr>
+          explicit
+          __shared_count(_Ptr __p) : _M_pi(0)
+          {
+            __try
+            {
+              _M_pi = new _Sp_counted_ptr<_Ptr, _Lp>(__p);
+            }
+            __catch(...)
+            {
+              delete __p;
+              __throw_exception_again;
+            }
+          }
+
+        ~__shared_count() noexcept
+        {
+          if (_M_pi != 0)
+            _M_pi->_M_release();
+        }
+
+        __shared_count(const __shared_count& __r) noexcept
+          : _M_pi(__r._M_pi)
+          {
+            if (_M_pi != 0)
+              _M_pi->_M_add_ref_copy();
+          }
+
+        __shared_count&
+          operator=(const __shared_count& __r) noexcept
+          {
+            _Sp_counted_base<_Lp>* __tmp = __r._M_pi;
+            if (__tmp != _M_pi)
+            {
+              if (__tmp != 0)
+                __tmp->_M_add_ref_copy();
+              if (_M_pi != 0)
+                _M_pi->_M_release();
+              _M_pi = __tmp;
+            }
+            return *this;
+          }
+
+        void
+          _M_swap(__shared_count& __r) noexcept
+          {
+            _Sp_counted_base<_Lp>* __tmp = __r._M_pi;
+            __r._M_pi = _M_pi;
+            _M_pi = __tmp;
+          }
+
+        long
+          _M_get_use_count() const noexcept
+          { return _M_pi != 0 ? _M_pi->_M_get_use_count() : 0; }
+
+        bool
+          _M_unique() const noexcept
+          { return this->_M_get_use_count() == 1; }
+
+        // Friend function injected into enclosing namespace and found by ADL
+        friend inline bool
+          operator==(const __shared_count& __a, const __shared_count& __b) noexcept
+          { return __a._M_pi == __b._M_pi; }
+
+      private:
+        _Sp_counted_base<_Lp>*  _M_pi;
+    };
 
   template<typename _Tp, _Lock_policy _Lp>
     class __shared_ptr

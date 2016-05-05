@@ -83,6 +83,7 @@
 |kt_linux_tool_014| ssh and putty {scp}
 *kt_linux_tool_015* tool-pgrep, tool-pidof
 *kt_linux_tool_017* tool-ldd
+*kt_linux_tool_017* tool-ldd: check libc version and path
 |kt_linux_tool_018| tool-ls
 |kt_linux_tool_019| tool-strace
 |kt_linux_tool_020| tool-time-tool-date
@@ -168,12 +169,12 @@
 |kt_linux_tool_160| ccache
 
 |kt_linux_tool_200| bin-:
-*kt_linux_tool_201* bin-readelf
+*kt_linux_tool_201* tool-readelf
 *kt_linux_tool_202* tool-nm-binutil
 *kt_linux_tool_203* tool-objdump-binutil
 |kt_linux_tool_204| binutil: addr2line
 |kt_linux_tool_205| binutil: ld
-*kt_linux_tool_250* bin-busybox
+*kt_linux_tool_250* tool-busybox
 
 #{ gdb
 |kt_linux_tool_300| gdb-term and links
@@ -264,24 +265,25 @@
 |kt_linux_core_008| score: file ownership and permissions
 
 |kt_linux_core_050| signal
+*kt_linux_core_051* signal-names
 |kt_linux_core_051| signal: example: use signal as synchronization
 |kt_linux_core_052| signal: kill: checking for the existence of a process
-*kt_linux_core_052* signal-list
-*kt_linux_core_052* signal: sigtrap
+*kt_linux_core_052* signal-raise-call
 
 |kt_linux_core_100| process
-|kt_linux_core_101| process: creation
-|kt_linux_core_102| process: termination
-|kt_linux_core_103| process: monitor child process
-|kt_linux_core_104| process: zombie
-|kt_linux_core_105| process: memory layout
-|kt_linux_core_106| process: virtual memory, user and kernel stack, stack frame
+|kt_linux_core_101| process-creation
+|kt_linux_core_102| process-termination
+|kt_linux_core_103| process-monitor-child-process
+*kt_linux_core_104* process-zombie *ex-interview*
+|kt_linux_core_105| process-memory-layout
+|kt_linux_core_106| process-virtual-memory, user and kernel stack, stack frame
 |kt_linux_core_107| process: environment list
 |kt_linux_core_108| process: group
 |kt_linux_core_109| process: deamon
 |kt_linux_core_110| process-exec-call <exec-wrapper-example>
 *kt_linux_core_110* process-resource
 *kt_linux_core_110* process-resource-case
+*kt_linux_core_050* process-function-reentrant
 
 |kt_linux_core_150| thread vs process. LPI 29
 |kt_linux_core_151| pthread and source
@@ -399,8 +401,9 @@
 |kt_linux_core_710| dbus: kdbus
 
 |kt_linux_core_800| proc: /proc/mounts
-|kt_linux_core_801| proc-status /proc/PID/status
-|kt_linux_core_802| proc: /proc/PID/maps
+|kt_linux_core_801| proc-status: /proc/PID/status
+|kt_linux_core_802| proc-maps: /proc/PID/maps
+*kt_linux_core_802* proc-maps: check shared libraries that process uses
 |kt_linux_core_803| proc: /proc/PID/exe
 |kt_linux_core_804| proc: /proc/PID/fd. which file does process open?
 |kt_linux_core_813| proc: /proc/sys/kernel, system resource limits
@@ -3910,22 +3913,21 @@ $ killall -0 `name`             // when the process is running
 $
 $ killall -0 `name`             // when no process is running
 killall: `name`: no process killed
-$
 
 
-{kill-l}
+{kill}
        -l, --list [signal]
               List  signal  names.   This  option has optional argument, which
               will convert signal number to signal name, or other way round.
 
 
-// from embedded
+// for embedded
 
 # kill -l
 HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM USR1 USR2
 CHLD PWR WINCH URG IO STOP TSTP CONT TTIN TTOU VTALRM PROF XCPU XFSZ
 
-// from pc
+// for pc
 
 $ kill -l
  1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP
@@ -3935,11 +3937,7 @@ $ kill -l
 21) SIGTTIN	22) SIGTTOU	23) SIGURG	24) SIGXCPU	25) SIGXFSZ
 26) SIGVTALRM	27) SIGPROF	28) SIGWINCH	29) SIGIO	30) SIGPWR
 31) SIGSYS	34) SIGRTMIN	35) SIGRTMIN+1	36) SIGRTMIN+2	37) SIGRTMIN+3
-38) SIGRTMIN+4	39) SIGRTMIN+5	40) SIGRTMIN+6	41) SIGRTMIN+7	42) SIGRTMIN+8
-43) SIGRTMIN+9	44) SIGRTMIN+10	45) SIGRTMIN+11	46) SIGRTMIN+12	47) SIGRTMIN+13
-48) SIGRTMIN+14	49) SIGRTMIN+15	50) SIGRTMAX-14	51) SIGRTMAX-13	52) SIGRTMAX-12
-53) SIGRTMAX-11	54) SIGRTMAX-10	55) SIGRTMAX-9	56) SIGRTMAX-8	57) SIGRTMAX-7
-58) SIGRTMAX-6	59) SIGRTMAX-5	60) SIGRTMAX-4	61) SIGRTMAX-3	62) SIGRTMAX-2
+...
 63) SIGRTMAX-1	64) SIGRTMAX	
 
 
@@ -3963,18 +3961,23 @@ processes
               using name or number.  The behavior of signals is explained in
               signal(7) manual page.
 
-note:
-These causes to core dump of that process.
-
-kill -11 `pidof w3cEngine`
-kill -s 11 `pidof w3cEngine`
-
 
 {killall}
 killall - kill processes by name
 
 killall sends a signal to all processes running any of the specified commands.
 If no signal name is specified, SIGTERM is sent.
+
+
+<ex> from core(5) man example
+
+           $ sleep 100
+           ^\                     # type control-backslash
+           Quit (core dumped)
+
+           argc[4]=<sig=3>
+
+^\ causes SIGQUIT and quit but not cause a core.
 
 
 ={============================================================================
@@ -4745,7 +4748,7 @@ $ pgrep -l linearsourced
 *kt_linux_tool_017* tool-ldd
 
 To see library dependancy of a application. This is a script file and shows a
-dynamic library dependancy. If not, shows 'not a dynamic executable' message.
+`dynamic-library-dependancy`. If not, shows 'not a dynamic executable' message.
 
 The simplest approach is to pick a binary that you consider is typical (e.g.
     /bin/ls and run ldd on it. One of the listed libraries should be libc -
@@ -4756,7 +4759,7 @@ $ ldd /bin/ls
         /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x40000000)
 
 
-{case}
+<case>
 The ldd is script. Although the binary uses shared library, ldd don't understand it.
 
 $ readelf -d nexus-inspect | grep NEED
@@ -4811,6 +4814,41 @@ checking sub-depends for '/opt/zinc/oss/lib/libffi.so.5'
 
 
 ={============================================================================
+*kt_linux_tool_017* tool-ldd: check libc version and path
+
+Use ldd to find out the path and when run libc, it shows version.
+
+$ ldd ~/bin/vim | grep libc
+   libc.so.6 => /lib/i386-linux-gnu/i686/cmov/libc.so.6 (0xb6915000)
+
+
+note:
+How this shared object prints out messages when run?
+
+$ /lib/i386-linux-gnu/i686/cmov/libc.so.6
+GNU C Library (Debian EGLIBC 2.13-38+deb7u6) stable release version 2.13, by Roland McGrath et al.
+Copyright (C) 2011 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.
+There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.
+Compiled by GNU CC version 4.4.7.
+Compiled on a Linux 3.2.60 system on 2014-10-16.
+Available extensions:
+	crypt add-on version 2.1 by Michael Glad and others
+	GNU Libidn by Simon Josefsson
+	Native POSIX Threads Library by Ulrich Drepper et al
+	BIND-8.2.3-T5B
+libc ABIs: UNIQUE IFUNC
+For bug reporting instructions, please see:
+<http://www.debian.org/Bugs/>.
+
+Can use macro at compile time or use a call at runtime to check libc version:
+
+#include <gnu/libc-version.h>
+const char *gnu_get_libc_version(void);
+
+
+={============================================================================
 *kt_linux_tool_018* tool-ls
 
 {get-filename-only}
@@ -4832,30 +4870,37 @@ man dir_colors for help.
 ={============================================================================
 *kt_linux_tool_019* tool-strace
 
-strace - trace system calls and signals 
+strace - trace `system-calls` and `signals` 
 
 -f
-Trace child processes as they are created by currently traced processes as a result of the fork(2)
-system call. 
+Trace child processes as they are created by currently traced processes as a
+result of the fork(2) system call. 
+
 
 -o filename
-Write the trace output to the file filename rather than to stderr. Use filename.pid if -ff is used.
-If the argument begins with '|' or with '!' then the rest of the argument is treated as a command
-and all output is piped to it. This is convenient for piping the debugging output to a program
-without affecting the redirections of executed programs. 
+Write the trace output to the file filename rather than to stderr. Use
+filename.pid if -ff is used.  If the argument begins with '|' or with '!' then
+the rest of the argument is treated as a command and all output is piped to it.
+This is convenient for piping the debugging output to a program without
+affecting the redirections of executed programs. 
+
 
 -ff         
-If the -o filename option is in effect, each processes trace is written to filename.pid where pid is
-the numeric process id of each process.  This is incompatible with -c, since no per-process counts
-are kept.
+If the -o filename option is in effect, each processes trace is written to
+filename.pid where pid is the numeric process id of each process.  This is
+incompatible with -c, since no per-process counts are kept.
 
-note: This is important to get every thread output into a separate file (-ff option).
+note: 
+This is important to get every thread output into a separate file (-ff option).
+
 
 -p pid      
-Attach to the process with the process ID pid and begin tracing. The trace may be terminated at any
-time by a keyboard interrupt signal (CTRL-C).  strace will respond by detaching itself from the
-traced process(es) leaving it (them) to continue running.  Multiple -p options can be used to attach
-to up to 32 processes in addition to command (which is optional if at least one -p option is given).
+Attach to the process with the process ID pid and begin tracing. The trace may
+be terminated at any time by a keyboard interrupt signal (CTRL-C).  strace will
+respond by detaching itself from the traced process(es) leaving it (them) to
+continue running.  Multiple -p options can be used to attach to up to 32
+processes in addition to command (which is optional if at least one -p option is
+    given).
 
 -s strsize  
 Specify the maximum string size to print (the default is 32).  Note that filenames are not
@@ -11575,7 +11620,7 @@ Copyright 2011 Free Software Foundation, Inc.
 
 
 ={============================================================================
-*kt_linux_tool_250* bin-busybox
+*kt_linux_tool_250* tool-busybox
 
 http://www.busybox.net/source.html
 http://www.busybox.net/downloads/BusyBox.html
@@ -15818,12 +15863,10 @@ note: now has debugging info
 ={============================================================================
 *kt_linux_tool_300* gdb-core: force core
 
-// SIGSEGV 11 Core Invalid memory reference 
-// -s signal Specify the signal to send. The signal may be given as a signal
-// name or number.
-
 kill -s SIGSEGV 113
 kill -s 11 113
+kill -11 `pidof w3cEngine`
+kill -s 11 `pidof w3cEngine`
 
 note:
 kill -9 do not create a core.
@@ -15839,15 +15882,6 @@ SIGSEGV(segmentation fault)
         M(SIGQUIT)   |  M(SIGILL)    |  M(SIGTRAP)   |  M(SIGABRT)   | \
         M(SIGFPE)    |  M(SIGSEGV)   |  M(SIGBUS)    |  M(SIGSYS)    | \
         M(SIGXCPU)   |  M(SIGXFSZ)   |  M_SIGEMT                     )
-
-$ kill -l
-
- 3) SIGQUIT
- 6) SIGABRT
- 7) SIGBUS
- 8) SIGFP
-11) SIGSEGV
-31) SIGSYS
 
 
 ={============================================================================
@@ -15956,7 +15990,7 @@ Dump of assembler code for function memset:
 0x2ab251b8 <memset+88>: bne a0,a3,0x2ab251b0 <memset+80>
 
 note: This shows that a0 which is the first argument of memset fuction and is
-NULL. Hence SIGSEGV.
+NULL. Hence SIGSEGV. *sigseg*
 
 
 <case>
@@ -18981,51 +19015,10 @@ git clone git://gitorious.org/performance-scripts/mainline.git performance-scrip
 # ============================================================================
 #{
 ={============================================================================
-*kt_linux_core_001* check shared libraries that process uses
-
-cat /proc/NNNN/maps | awk '{print $6}' | grep '\.so' | sort | uniq
-
-or
-
-can use ldd.
-
-
-={============================================================================
 *kt_linux_core_002* stdin, stderr, and stdout
 
 On program startup, the integer file descriptors associated with the streams stdin, stdout, and
 stderr are 0, 1, and 2, respectively.
-
-
-={============================================================================
-*kt_linux_core_003* check libc version and path
-
-Use ldd to find out the path and when run libc, it shows version.
-
-keitee@debian-keitee:~/github/kb$ ldd ~/bin/vim | grep libc
-   libc.so.6 => /lib/i386-linux-gnu/i686/cmov/libc.so.6 (0xb6915000)
-
-$ /lib/i386-linux-gnu/i686/cmov/libc.so.6
-GNU C Library (Debian EGLIBC 2.13-38+deb7u6) stable release version 2.13, by Roland McGrath et al.
-Copyright (C) 2011 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.
-There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE.
-Compiled by GNU CC version 4.4.7.
-Compiled on a Linux 3.2.60 system on 2014-10-16.
-Available extensions:
-	crypt add-on version 2.1 by Michael Glad and others
-	GNU Libidn by Simon Josefsson
-	Native POSIX Threads Library by Ulrich Drepper et al
-	BIND-8.2.3-T5B
-libc ABIs: UNIQUE IFUNC
-For bug reporting instructions, please see:
-<http://www.debian.org/Bugs/>.
-
-Can use macro at compile time or use a call at runtime to check libc version:
-
-#include <gnu/libc-version.h>
-const char *gnu_get_libc_version(void);
 
 
 ={============================================================================
@@ -19565,154 +19558,205 @@ area that indicates the file/folder does not have executable permissions for
 'all' users on that particular file/folder.
 
 
-# ============================================================================
-#{ SIGNAL
 ={============================================================================
 *kt_linux_core_050* signal
 
 {signal-is-notification}
-A signal is a notification to a process that an event has occurred. Sometimes described as software
-interrupts and are analogous to hardware interrupts in that they interrupt the normal flow of
-execution of a program.
+A signal is a notification to a process that an event has occurred. Sometimes
+described as `software-interrupts` and are analogous to hardware interrupts in
+that they interrupt the normal flow of execution of a program.
 
 {signal-and-kernel}
-One process can (if it has suitable permissions) send a signal to another process. Can be employed
-as a synchronization technique, or even as a primitive form of interprocess communication (IPC). It
-is also possible for a process to send a signal to itself. However, the usual source of many signals
-sent to a process is the kernel.
+One process can (if it has suitable permissions) send a signal to another
+process. Can be employed as a synchronization technique, or even as a primitive
+form of interprocess communication (IPC). It is also possible for a process to
+send a signal to itself. However, the usual source of many signals sent to a
+process is the kernel.
 
 {signal-symbolic-names}
-Each signal is defined as a unique (small) integer, starting sequentially from 1. These integers are
-defined in <signal.h> with symbolic names of the form SIGxxxx. Since the actual numbers used for
-each signal vary across implementations, it is these symbolic names that are always used in
-programs. note: $kill -l to see signals.
+Each signal is defined as a unique (small) integer, starting sequentially from
+1. These integers are defined in <signal.h> with symbolic names of the form
+SIGxxxx. Since the actual numbers used for each signal vary across
+implementations, it is these symbolic names that are always used in programs.
+
+note: 
+$kill -l to see symbolic names.
+
 
 {pending}
-A signal is said to be generated by some event. Once generated, a signal is later delivered to a
-process, which then takes some action in response to the signal. Between the time it is generated
-and the time it is delivered, a signal is said to be pending. Why pending since do not know when it
-is next scheduled to run, or immediately if the process is already running
+A signal is said to be generated by some event. Once generated, a signal is
+later delivered to a process, which then takes some action in response to the
+signal. Between the time it is generated and the time it is delivered, a signal
+is said to be pending. Why pending since do not know when it is next scheduled
+to run, or immediately if the process is already running
+
 
 {signal-mask-per-process} {signal-block}
-Sometimes, however, we need to ensure that a segment of code is 'not' interrupted by the delivery of a
-signal. To do this, we can add a signal to the process's signal mask-a set of signals whose delivery
-is currently blocked. If a signal is generated while it is blocked, it remains pending until it is
+Sometimes, however, we need to ensure that a segment of code is 'not'
+interrupted by the delivery of a signal. To do this, we can add a signal to the
+process's `signal-mask`; a set of signals whose delivery is currently blocked.
+If a signal is generated while it is blocked, it `remains-pending` until it is
 later unblocked (removed from the signal mask).
 
-If a process receives a signal that it is currently blocking, that signal is added to the processâs
-set of pending signals.
+If a process receives a signal that it is currently blocking, that signal is
+added to the process's `set-of-pending-signals`.
 
-That delivery of a signal is blocked during the execution of its handler (unless we specify the
-SA_NODEFER flag to sigaction()). If the signal is (again) generated while the handler is
-executing, then it is marked as pending and later delivered when the handler returns.
+That delivery of a signal is blocked during the execution of its handler (unless
+    we specify the SA_NODEFER flag to sigaction()). If the signal is (again)
+generated while the handler is executing, then it is marked as pending and later
+delivered when the handler returns.
+
+note:
+Signals can be pending due to either blocked or its handling running.
 
 <signal-is-queued-or-not>
-Standard signals can't be queued; delivered only once. The set of pending signals is only a mask; it
-indicates whether or not a signal has occurred, but not how many times it has occurred. In other
-words, if the same signal is generated multiple times while it is blocked, then it is recorded in
-the set of pending signals, and later delivered, just once. One of the differences between standard
-and realtime signals is that realtime signals are queued.
+`standard-signals` can't be queued; delivered only once. The set of pending
+signals is only a mask; it indicates whether or not a signal has occurred, but
+not how many times it has occurred. In other words, if the same signal is
+generated multiple times while it is blocked, then it is recorded in the set of
+pending signals, and later delivered, just once. One of the differences between
+standard and realtime signals is that `realtime-signals` are queued.
+
 
 {signal-handler}
-Instead of accepting the default for a particular signal, a program can change the action that
-occurs when the signal is delivered. Can be used to ignore signals or to change the default. To
-change a default is usually referred to as installing or establishing a signal handler. When a
-signal handler is invoked in response to the delivery of a signal, we say that the signal has been
-handled or, synonymously, caught.
+Instead of accepting the default for a particular signal, a program can change
+the action that occurs when the signal is delivered. Can be used to ignore
+signals or to change the default. To change a default is usually referred to as
+`installing` or establishing a signal handler. When a signal handler is invoked
+in response to the delivery of a signal, we say that the signal has been handled
+or, synonymously, caught.
 
 <not-for-all-signals>
-It isn't possible to set the disposition of a signal to terminate or dump core unless one of these
-is the default disposition of the signal. The nearest we can get to this is to install a handler for
-the signal that then calls either exit() or abort().  The abort() function generates a SIGABRT
-signal for the process, which causes it to dump core and terminate.
+It isn't possible to set the disposition of a signal to terminate or dump core
+unless one of these is the default disposition of the signal. The nearest we can
+get to this is to install a handler for the signal that then calls either exit()
+  or abort(). 
+  
+*coredump*
+The abort() function generates a SIGABRT signal for the process, which causes it
+to dump core and terminate.
+
+note:
+After all, can install signal handler only for signals which do exit() or
+abort() by default?
 
 
-{signal-reentrant} {async-signal-safe-function}
-Because a signal handler may asynchronously interrupt the execution of a program at any point in
-time, the main program and the signal handler in effect form two independent (although not
-concurrent) threads of execution within the same process.
+{signal-reentrant}
+Because a signal handler may asynchronously interrupt the execution of a program
+at any point in time, the main program and the signal handler in effect form
+`two-independent` (although not concurrent) threads of execution within the same
+process.
 
-A function is said to be reentrant if it can safely be simultaneously executed by multiple threads
-of execution in the same process. In this context, "safe" means that the function achieves its
-expected result, regardless of the state of execution of any other thread of execution.
 
-A function may be nonreentrant if it updates global or static data structures. A function that
-employs only local variables is guaranteed to be reentrant because of race-condition. This book
-shows an example using crypt() in both main and signal handler. This corrupts internal buffer which
-is statically allocated and crypt uses when calls it with differnt parameter.
+A function is said to be `reentrant` if it can safely be simultaneously executed
+by multiple threads of execution in the `same-process`. In this context, "safe"
+means that the function achieves its expected result, regardless of the state of
+execution of any other thread of execution.
 
-{Q} In short, it is reentrant if it do not cause race-condition. Even if it uses only local
-variables, it can still cause race-condition. Doesn't it?
+A function may be `nonreentrant` if it updates global or static data structures. A
+function that employs only local variables is guaranteed to be reentrant because
+of race-condition. This book shows an example using crypt() in both main and
+signal handler. This corrupts internal buffer which is statically allocated and
+crypt uses when calls it with differnt parameter.
 
-Such possibilities are in fact rife within the standard C library. For example, we already noted in
-Section 7.1.3 that malloc() and free() maintain a linked list of freed memory blocks available for
-reallocation from the heap. If a call to malloc() in the main program is interrupted by a signal
-handler that also calls malloc(), then this linked list can be corrupted. For this reason, the
-malloc() family of functions, and other library functions that use them, are nonreentrant.
+note:
+`nonreentrant` means that function is not safe when gets called by multiple
+threads. Using only local variables means reentrant. Why mentions race
+condition?
 
-Even if we are not using nonreentrant library functions, reentrancy issues can still be relevant. If
-a signal handler updates programmer-defined global data structures that are also updated within the
-main program, then we can say that the signal handler is nonreentrant with respect to the main
-program.
+Such possibilities are in fact rife within the standard C library. For example,
+     we already noted in Section 7.1.3 that malloc() and free() maintain a
+     linked list of freed memory blocks available for reallocation from the
+     heap. If a call to malloc() in the main program is interrupted by a signal
+     handler that also calls malloc(), then this linked list can be corrupted.
+     For this reason, the malloc() family of functions, and other library
+     functions that use them, are nonreentrant.
 
-If a function is nonreentrant, then its manual page will normally provide an explicit or implicit
-indication of this fact. In particular, watch out for statements that the function uses or returns
-information in statically allocated variables.
+Even if we are not using nonreentrant library functions, reentrancy issues can
+still be relevant. If a signal handler updates programmer-defined global data
+structures that are also updated within the main program, then we can say that
+the signal handler is nonreentrant with respect to the main program.
+
+If a function is nonreentrant, then its manual page will normally provide an
+explicit or implicit indication of this fact. In particular, watch out for
+statements that the function uses or returns information in statically allocated
+variables.
+
 
 {async-signal-safe-function}
-An async-signal-safe function is one that the implementation guarantees to be safe when called from
-a signal handler. A function is async-signal-safe either because it is reentrant or because it is
-not interruptible by a signal handler.
+An `async-signal-safe` function is one that the implementation guarantees to be
+safe when called from a signal handler. A function is async-signal-safe either
+because it is reentrant or because it is not interruptible by a signal handler.
 
-Table 21-1: Functions required to be async-signal-safe by POSIX.1-1990, SUSv2, and SUSv3
+Table 21-1: Functions required to be async-signal-safe by POSIX.1-1990, SUSv2,
+      and SUSv3
 
-Real-world applications should avoid calling non-async-signal-safe functions from signal handlers.
+Real-world applications should avoid calling non-async-signal-safe functions
+from signal handlers.
 
 
 {signal-and-proc}
-The Linux-specific /proc/PID/status file contains various bit-mask fields that can be inspected to
-determine a processâs treatment of signals. The bit masks are displayed as hexadecimal numbers, with
-the least significant bit representing signal 1, the next bit to the left representing signal 2, and
-so on. 
+The Linux-specific /proc/PID/status file contains various bit-mask fields that
+can be inspected to determine a process's treatment of signals. The bit masks
+are displayed as hexadecimal numbers, with the least significant bit
+representing signal 1, the next bit to the left representing signal 2, and so
+on. 
 
-These fields are SigPnd (per-thread pending signals), ShdPnd (process-wide pending signals since
-Linux 2.6), SigBlk (blocked signals), SigIgn (ignored signals), and SigCgt (caught signals).
-(The difference between the SigPnd and ShdPnd fields will become clear when we describe the handling
- of signals in multithreaded processes in Section 33.2.) The same information can also be obtained
-using various options to the ps(1) command.
+<signals>
+SigQ: 0/3941
+SigPnd: 0000000000000000
+ShdPnd: 0000000000000000
+SigBlk: 0000000000000000
+SigIgn: fffffffe57f0d8fc
+SigCgt: 00000000280b2603
 
-note: signals for thread and process.
+These fields are 
+
+SigPnd (`per-thread` pending signals)
+ShdPnd (`process-wide` pending signals since Linux 2.6)
+SigBlk (blocked signals), SigIgn (ignored signals)
+SigCgt (caught signals)
+
+The difference between the SigPnd and ShdPnd fields will become clear when we
+describe the handling of signals in multithreaded processes in Section 33.2.
+The same information can also be obtained using various options to the ps(1)
+  command.
 
 
 {standard-and-realtime-signal}
-Signals fall into two broad categories; standard and realtime. On Linux, the standard signals are
-numbered from 1 to 31. We describe the standard signals in this chapter. The other set of signals
-consists of the realtime signals.
+Signals fall into two broad categories; standard and realtime. On Linux, the
+standard signals are numbered from 1 to 31. We describe the standard signals in
+this chapter. The other set of signals consists of the realtime signals.
 
 <why-reliable-signal>
-In early implementations, signals could be lost (i.e., not delivered to the target process) in
-certain circumstances. Furthermore, although facilities were provided to block delivery of signals
-while critical code was executed, in some circumstances, blocking was not reliable. These problems
-were remedied in 4.2BSD, which provided so-called reliable signals.
+In early implementations, signals could be lost (i.e., not delivered to the
+    target process) in certain circumstances. Furthermore, although facilities
+were provided to block delivery of signals while critical code was executed, in
+some circumstances, blocking was not reliable. These problems were remedied in
+4.2BSD, which provided so-called reliable signals.
 
-However, the Linux signal(7) manual page lists more than 31 signal names. The excess names can be
-accounted for in a variety of ways. Some of the names are simply synonyms for other names, and are
-defined for source compatibility with other UNIX implementations. Other names are defined but
-unused.
+However, the Linux signal(7) manual page lists more than 31 signal names. The
+excess names can be accounted for in a variety of ways. Some of the names are
+simply synonyms for other names, and are defined for source compatibility with
+other UNIX implementations. Other names are defined but unused.
 
 
-{signals}
+={============================================================================
+*kt_linux_core_051* signal-names
+
 <SIGHUP> see process group for more.
-When a terminal disconnect (hangup) occurs, this signal is sent to the 'controlling' process of the
-terminal. A second use of SIGHUP is with daemons (e.g., init, httpd, and inetd). Many daemons are
-designed to respond to the receipt of SIGHUP by reinitializing themselves and rereading their
-configuration files. The system administrator triggers these actions by manually sending SIGHUP to
-the daemon, either by using an explicit kill command or by executing a program or script that does
-the same.
+When a terminal disconnect (hangup) occurs, this signal is sent to the
+'controlling' process of the terminal. A second use of SIGHUP is with daemons
+(e.g., init, httpd, and inetd). Many daemons are designed to respond to the
+receipt of SIGHUP by reinitializing themselves and rereading their configuration
+files. The system administrator triggers these actions by manually sending
+SIGHUP to the daemon, either by using an explicit kill command or by executing a
+program or script that does the same.
 
-<SIGABRT>
-The abort() function (Section 21.2.2) generates a SIGABRT signal for the process, which causes it to
-dump core and terminate.
+
+<SIGABRT> *coredump*
+The abort() function (Section 21.2.2) generates a SIGABRT signal for the
+process, which causes it to dump core and terminate.
 
 <SIGINT>
 When the user types the terminal interrupt character (usually Control-C), the
@@ -19720,60 +19764,84 @@ terminal driver sends this signal to the foreground process group. The default
 action for this signal is to terminate the process.
 
 <SIGPIPE> broken-pipe
-This signal is generated when a process tries to write to a pipe, a FIFO, or a socket for which
-there is no corresponding reader process. This normally occurs because the reading process has
-closed its file descriptor for the IPC channel. See Section 44.2 for further details.
+This signal is generated when a process tries to write to a pipe, a FIFO, or a
+socket for which there is no corresponding reader process. This normally occurs
+because the reading process has closed its file descriptor for the IPC channel.
+See Section 44.2 for further details.
 
-<SIGSEGV>
-This very popular signal is generated when a program makes an invalid memory
-reference. A memory reference may be invalid because the referenced page doesn't
-exist e.g., it lies in an unmapped area somewhere between the heap and the
-stack, the process tried to update a location in read-only memory e.g., the
-program text segment or a region of mapped memory marked read-only, or the
-process tried to access a part of kernel memory while running in user mode
-(Section 2.1). In C, these events often result from dereferencing a pointer
-containing a bad address (e.g., an uninitialized pointer) or passing an invalid
-argument in a function call. The name of this signal derives from the term
-segmentation violation.
 
-<SIGKILL>
-This is the sure kill signal. It can't be blocked, ignored, or caught by a
+<SIGSEGV> *sigseg* 11
+This very popular signal is generated when a program makes an
+`invalid-memory-reference`. A memory reference may be invalid because:
+
+the referenced page doesn't exist e.g., it lies in an unmapped area somewhere
+between the heap and the stack, 
+
+the process tried to update a location in read-only memory e.g., the program
+  text segment or a region of mapped memory marked read-only, 
+
+the process tried to access a part of kernel memory while running in user mode
+  (Section 2.1). 
+
+In C, these events often result from dereferencing a pointer containing a bad
+address (e.g., an uninitialized pointer) or passing an invalid argument in a
+function call. 
+
+<case>
+Since there is no enough memory to create a thread stack due to memory leak,
+coredump is made. `process-resource-case`
+
+The name of this signal derives from the term segmentation violation.
+
+
+<SIGKILL> 9
+This is the `sure-kill-signal`. It can't be blocked, ignored, or caught by a
 handler, and thus always terminates a process.
 
-<SIGTERM>
-This is the standard signal used for terminating a process and is the 'default'
-signal sent by the 'kill' and 'killall' commands. 
+
+<SIGTERM> 15
+This is the `default-signal` used for terminating a process and is the signal
+sent by the 'kill' and 'killall' commands. 
+
 
 <difference-between-sigkill-and-sigterm>
-Users sometimes explicitly send the SIGKILL signal to a process using kill -KILL or kill -9.
-However, this is generally a mistake. A well-designed application will have a handler for SIGTERM
-that causes the application to exit 'gracefully', cleaning up temporary files and releasing other
-resources beforehand. Killing a process with SIGKILL bypasses the SIGTERM handler. Thus, we should
-always first attempt to terminate a process using SIGTERM, and reserve SIGKILL as a last resort for
-killing runaway processes that don't respond to SIGTERM. 
+Users sometimes explicitly send the SIGKILL signal to a process using kill -KILL
+or kill -9. 
 
-note: this means that if use sure kill, then can cause resource locked up and leaking.
+However, this is generally a mistake. A well-designed application will have a
+handler for SIGTERM that causes the application to exit 'gracefully', cleaning
+up temporary files and releasing other resources beforehand. Killing a process
+with SIGKILL `bypasses` the SIGTERM handler. Thus, we should always first
+attempt to terminate a process using SIGTERM, and reserve SIGKILL as a last
+resort for killing runaway processes that don't respond to SIGTERM. 
 
-note: what if there is no handler of SIGTERM? will be terminated by kernel anyway? when tried to
-kill a simple application which do sleep and loop, it is terminated when use kill, SIGTERM.
+note: 
+This means that if use sure kill, then can cause resource locked up and leaking.
+
+What if there is no handler of SIGTERM? will be terminated by kernel anyway?
+when tried to kill a simple application which do sleep and loop, it is
+terminated when use kill, SIGTERM.
 
 <SIGURG>
-This signal is sent to a process to indicate the presence of out-of-band (also known as urgent) data
-on a socket
+This signal is sent to a process to indicate the presence of out-of-band (also
+    known as urgent) data on a socket
 
 <SIGCHLD>
-This signal is sent (by the kernel) to a parent process when one of its children terminates: either
-by calling exit() or as a result of being killed by a signal. It may also be sent to a process when
-one of its children is stopped or resumed by a signal. By default, SIGCHLD is ignored.
+This signal is sent (by the kernel) to a parent process when one of its children
+terminates: either by calling exit() or as a result of being killed by a signal.
+It may also be sent to a process when one of its children is stopped or resumed
+by a signal. By default, SIGCHLD is ignored.
 
 <SIGUSR1>
-This signal and SIGUSR2 are available for programmer-defined purposes. The kernel never generates
-these signals for a process. Processes may use these signals to notify one another of events or to
-synchronize with each other. In early UNIX implementations, these were the only two signals that
-could be freely used in applications. In fact, processes can send one another any signal, but this
-has the potential for confusion if the kernel also generates one of the signals for a process.
-Modern UNIX implementations provide a large set of realtime signals that are also available for
-programmer-defined purposes (Section 22.8).
+This signal and SIGUSR2 are available for programmer-defined purposes. The
+kernel never generates these signals for a process. Processes may use these
+signals to notify one another of events or to synchronize with each other. In
+early UNIX implementations, these were the only two signals that could be freely
+used in applications. In fact, processes can send one another any signal, but
+this has the potential for confusion if the kernel also generates one of the
+signals for a process.  Modern UNIX implementations provide a large set of
+realtime signals that are also available for programmer-defined purposes
+(Section 22.8).
 
 
 ={============================================================================
@@ -19912,49 +19980,7 @@ process ID may, over time, refer to a different process.
 
 
 ={============================================================================
-*kt_linux_core_052* signal-list
-
-{kill-l}
-       -l, --list [signal]
-              List  signal  names.   This  option has optional argument, which
-              will convert signal number to signal name, or other way round.
-
-// from embedded
-
-# kill -l
-HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM USR1 USR2
-CHLD PWR WINCH URG IO STOP TSTP CONT TTIN TTOU VTALRM PROF XCPU XFSZ
-
-// from pc
-
-$ kill -l
- 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP
- 6) SIGABRT	 7) SIGBUS	 8) SIGFPE	 9) SIGKILL	10) SIGUSR1
-11) SIGSEGV	12) SIGUSR2	13) SIGPIPE	14) SIGALRM	15) SIGTERM
-16) SIGSTKFLT	17) SIGCHLD	18) SIGCONT	19) SIGSTOP	20) SIGTSTP
-21) SIGTTIN	22) SIGTTOU	23) SIGURG	24) SIGXCPU	25) SIGXFSZ
-26) SIGVTALRM	27) SIGPROF	28) SIGWINCH	29) SIGIO	30) SIGPWR
-31) SIGSYS	34) SIGRTMIN	35) SIGRTMIN+1	36) SIGRTMIN+2	37) SIGRTMIN+3
-38) SIGRTMIN+4	39) SIGRTMIN+5	40) SIGRTMIN+6	41) SIGRTMIN+7	42) SIGRTMIN+8
-43) SIGRTMIN+9	44) SIGRTMIN+10	45) SIGRTMIN+11	46) SIGRTMIN+12	47) SIGRTMIN+13
-48) SIGRTMIN+14	49) SIGRTMIN+15	50) SIGRTMAX-14	51) SIGRTMAX-13	52) SIGRTMAX-12
-53) SIGRTMAX-11	54) SIGRTMAX-10	55) SIGRTMAX-9	56) SIGRTMAX-8	57) SIGRTMAX-7
-58) SIGRTMAX-6	59) SIGRTMAX-5	60) SIGRTMAX-4	61) SIGRTMAX-3	62) SIGRTMAX-2
-63) SIGRTMAX-1	64) SIGRTMAX	
-
-<ex> from core(5) man example
-
-           $ sleep 100
-           ^\                     # type control-backslash
-           Quit (core dumped)
-
-           argc[4]=<sig=3>
-
-^\ causes SIGQUIT and quit but not cause a core.
-
-
-={============================================================================
-*kt_linux_core_052* signal: sigtrap
+*kt_linux_core_052* signal-raise-call
 
 RAISE(3)
 Linux Programmer's Manual
@@ -20046,68 +20072,74 @@ _g_log_abort (gboolean breakpoint)
 LPI 6.
 
 {process}
-A process is an abstract entity, defined by the kernel, to which system resources are allocated in
-order to execute a program.
+A process is an `abstract-entity`, defined by the kernel, to which system
+resources are allocated in order to execute a program.
 
 
 {process-id}
-PID is integer type and the Linux limits PIDs to 32767. Once it has reached 32,767, the process ID
-counter is reset to 300, rather than 1. This is done because many low-numbered process IDs are in
-permanent use by system processes and daemons, and thus time would be wasted searching for an unused
-process ID in this range. 
+PID is integer type and the Linux limits PIDs to 32767. Once it has reached
+32,767, the process ID counter is reset to 300, rather than 1. This is done
+because many low-numbered process IDs are in permanent use by system processes
+and daemons, and thus time would be wasted searching for an unused process ID in
+this range. 
 
-In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the kernel constant PID_MAX.
-With Linux 2.6, things change. While the default upper limit for process IDs remains 32,767, this
-limit is adjustable via the value in the Linux-specific /proc/sys/kernel/pid_max file (which is one
-greater than the maximum process ID). On 32-bit platforms, the maximum value for this file is
-32,768, but on 64-bit platforms, it can be adjusted to any value up to 222 (approximately 4
-million), making it possible to accommodate very large numbers of processes.
+In Linux 2.4 and earlier, the process ID limit of 32,767 is defined by the
+kernel constant PID_MAX.  With Linux 2.6, things change. While the default upper
+limit for process IDs remains 32,767, this limit is adjustable via the value in
+the Linux-specific /proc/sys/kernel/pid_max file (which is one greater than the
+    maximum process ID). On 32-bit platforms, the maximum value for this file is
+32,768, but on 64-bit platforms, it can be adjusted to any value up to 222
+(approximately 4 million), making it possible to accommodate very large numbers
+of processes.
 
 
 ={============================================================================
-*kt_linux_core_101* process creation
+*kt_linux_core_101* process-creation
 
 LPI 24.
 
 {process-creation}
-The wait(&status) system call has two purposes. First, if a child of this process has not yet
-terminated by calling exit(), then wait() suspends execution of the process until one of its
-children has terminated. Second, the termination status of the child is returned in the status
-argument of wait().
+The wait(&status) system call has `two-purposes`. First, if a child of this
+process has not yet terminated by calling exit(), then wait() suspends execution
+of the process until one of its children has terminated. Second, the termination
+status of the child is returned in the status argument of wait().
 
 <fork-and-exec>
-The UNIX approach is usually simpler and more elegant. Separating these two steps makes the APIs
-simpler and allows a program a great degree of flexibility in the actions it performs between the
-two steps. Moreover, it is often useful to perform a fork() without a following exec().
+The UNIX approach is usually simpler and more elegant. Separating these two
+steps makes the APIs simpler and allows a program a great degree of flexibility
+in the actions it performs between the two steps. Moreover, it is often useful
+to perform a fork() without a following exec().
 
 Parent process running program A
       |
       A
       |
-      child PID = fork(void);                   Child process running program A. 0 = fork(void);
-      |                                               |
-Parent may perform other atcions here                 A  
-      |                                               | 
-      wait(&status); // optional                Child may perform further actions here
-                                                      |
-                                                      execev( B, ... ); // optional
-                                                      |
-                                                      B
-                                                      |
-                                                Execution of program B
-                                                      |
-                                                      exit(status);
-                                                      1. Child status passed to parent and kernel
-                                                      restarts parent.
-                                                      2. Delivers SIGCHLD optionally.
+      child PID = fork(void);         Child process running program A. 
+                                      0 = fork(void);
+      |                                     |
+Parent may perform other atcions here       A  
+      |                                     | 
+      wait(&status); // optional      Child may perform further actions here
+                                            |
+                                            execev( B, ... ); // optional
+                                            |
+                                            B
+                                            |
+                                      Execution of program B
+                                            |
+                                            exit(status);
+                                            1. Child status passed to parent 
+                                            and kernel restarts parent.
+                                            2. Delivers SIGCHLD optionally.
 
 <pid-of-child>
-The PID of parent remains the same but child is not. Then when child pid is assigned and what pid 0
-check in the code is? 
+The PID of parent remains the same but child is not. Then when child pid is
+assigned and what pid 0 check in the code is? 
 
 The following idiom is sometimes employed when calling fork():
 
-pid_t childPid; /* Used in parent after successful fork() to record PID of child */
+/* Used in parent after successful fork() to record PID of child */
+pid_t childPid; 
 
 switch (childPid = fork()) {
   case -1: /* fork() failed */
@@ -20118,8 +20150,9 @@ switch (childPid = fork()) {
     /* Perform actions specific to parent */
 }
 
-note that child pid is assigned immediately after fork and has the same name in ps. So pid == 0
-check is to distinguish execution path in the same text.
+note 
+child pid is assigned immediately after fork and has the same name in ps. So pid
+== 0 check is to distinguish execution path in the same code in parent.
 
 $ pid (26337): before fork:  
 pid (26337): in parent before sleep:  
@@ -20134,17 +20167,20 @@ $ ps
 
 
 <sharing-between-parent-and-child>
-The child's stack, data, and heap segments are initially exact duplicates of the corresponding parts
-the parent's memory. The child receives duplicates of all of the parent's file descriptors.
+The child's stack, data, and heap segments are initially exact duplicates of the
+corresponding parts the parent's memory. The child receives duplicates of all of
+the parent's file descriptors.
+
 
 <race-condition-after-fork>
-After a fork(), it is indeterminate which of the two is next scheduled to use CPU. If we need to
-guarantee a particular order, we must use some kind of synchronization technique.
+After a fork(), it is indeterminate which of the two is next scheduled to use
+CPU. If we need to guarantee a particular order, we must use some kind of
+synchronization technique.
 
 <case-use-signal>
-Avoiding Race Conditions by Synchronizing with Signals. Although, in practice, such coordination is
-more likely to be done using semaphores, file locks, or message passing. See *kt_linux_core_401* for
-code example.
+Avoiding Race Conditions by Synchronizing with Signals. Although, in practice,
+         such coordination is more likely to be done using semaphores, file
+         locks, or message passing. 
 
 
 ={============================================================================
@@ -20191,20 +20227,23 @@ compilation options employed:
 Programs generally don't call _exit() directly, but instead call the exit()
 library function, which performs various actions before calling _exit().
 
+note:
+exit() is library function and _exit() is system call.
+
 #include <stdlib.h>
 void exit(int status);
 
 The following actions are performed by exit():
 
-1. Exit handlers (functions registered with atexit() and on_exit()) are called, in reverse order of
-their registration (Section 25.3).
+1. Exit handlers (functions registered with atexit() and on_exit()) are called,
+  in reverse order of their registration (Section 25.3).
 
 2. The stdio stream buffers are flushed.
 
 3. The _exit() system call is invoked, using the value supplied in status.
 
-Unlike _exit(), which is UNIX-specific, exit() is defined as part of the standard C library; that
-is, it is available with every C implementation.
+Unlike _exit(), which is UNIX-specific, exit() is defined as part of the
+standard C library; that is, it is available with every C implementation.
 
 
 {actions-on-termination}
@@ -20280,21 +20319,24 @@ Ciao
 Hello world.
 Hello world.
 
-<problem> Why different output order and duplicates?
+
+<q> Why different output order and duplicates?
 
 1. duplicates.
-Recall that the stdio buffers are maintained in a process's user-space memory (refer to 13.2).
-Therefore, these buffers are duplicated in the child by fork(). When standard output is directed to
-a terminal, it is line-buffered by default, with the result that the newline-terminated string
-written by printf() appears 'immediately'. 
+Recall that the stdio buffers are maintained in a process's user-space memory
+(refer to 13.2).  Therefore, these buffers are duplicated in the child by
+fork(). When standard output is directed to a terminal, it is `line-buffered` by
+default, with the result that the newline-terminated string written by printf()
+  appears 'immediately'. 
 
-However, when standard output is directed to a file, it is block-buffered by default. Thus the
-string written by printf() is still in the parent's stdio buffer at the time of the fork(), and this
-string is duplicated in the child. When the parent and the child later call exit(), they both flush
-their copies of the stdio buffers, resulting in duplicate output.
+However, when standard output is directed to a file, it is `block-buffered` by
+default. Thus the string written by printf() is still in the parent's stdio
+buffer at the time of the fork(), and this string is duplicated in the child.
+When the parent and the child later call exit(), they both flush their copies of
+the stdio buffers, resulting in duplicate output.
 
-To remedy this, can use setbuf() and fflush() to flush the stdio buffer prior to a fork() call.
-However, still have different order.
+To remedy this, can use setbuf() and fflush() to flush the stdio buffer prior to
+a fork() call.  However, still have different order.
 
 $ ./a.out 
 Hello world.
@@ -20306,38 +20348,42 @@ Ciao
 Hello world.
 
 2. the output order.
-The write() transfers data directly to a kernel buffer, and this buffer is not duplicated during a
-fork(). note: write is a system call.
+The write() transfers data directly to a kernel buffer, and this buffer is not
+duplicated during a fork(). note: write is a system call.
 
-The output of write() appears before that from printf() because the output of write() is immediately
-transferred to the kernel buffer cache, while the output from printf() is transferred only when the
-stdio buffers are flushed by the call to exit().
+The output of write() appears before that from printf() because the output of
+write() is immediately transferred to the kernel buffer cache, while the output
+from printf() is transferred only when the stdio buffers are flushed by the call
+to exit().
 
-note: In general, care is required when mixing stdio functions and system calls to perform I/O on
-the same file, as described in Section 13.7.
+note: In general, care is required when mixing stdio functions and system calls
+to perform I/O on the same file, as described in Section 13.7.
 
 
 ={============================================================================
-*kt_linux_core_103* process: monitor child process
+*kt_linux_core_103* process-monitor-child-process
 
-{monitoring-child-process}
-From #26 in ref-LPI. 
+LPI 26.  
+
 <wait-system-call>
-The wait() system call waits for one of the children of the calling process to terminate and returns
-the termination status of that child in the buffer pointed to by status.
+The wait() system call waits for one of the children of the calling process to
+terminate and returns the termination status of that child in the buffer pointed
+to by status.
 
 #include <sys/wait.h>
 pid_t wait(int *status);
 
-If no (previously unwaited-for) child of the calling process has yet terminated, the call blocks
-until one of the children terminates. If a child has already terminated by the time of the call,
-wait() returns immediately.
+If no (previously unwaited-for) child of the calling process has yet terminated,
+   the call blocks until one of the children terminates. If a child has already
+     terminated by the time of the call, wait() returns immediately.
 
-As its function result, wait() returns the process ID of the child that has terminated.
+As its function result, wait() returns the process ID of the child that has
+terminated.
 
-On error, wait() returns -1. One possible error is that the calling process has no previously
-unwaited-for children, which is indicated by the errno value ECHILD. This means that we can use the
-following loop to wait for all children of the calling process to terminate:
+On error, wait() returns -1. One possible error is that the calling process has
+no previously unwaited-for children, which is indicated by the errno value
+ECHILD. This means that we can use the following loop to wait for all children
+of the calling process to terminate:
 
 while ((childPid = wait(NULL)) != -1)
   continue;
@@ -20345,49 +20391,67 @@ if (errno != ECHILD) /* An unexpected error... */
   errExit("wait");
 
 <waitpid-system-call>
-The wait() system call has a number of limitations, which waitpid() was designed to address. See the
-reference for more details.
+The wait() system call has a number of limitations, which waitpid() was designed
+to address. See the reference for more details.
 
 #include <sys/wait.h>
 pid_t waitpid(pid_t pid, int *status, int options);
 
 
 ={============================================================================
-*kt_linux_core_104* process: zombie
+*kt_linux_core_104* process-zombie *ex-interview*
 
-{zombie-process} orphan process, init process 
-2014.02 from google phone interview. The lifetimes of parent and child processes are usually not the
-same-either the parent outlives the child or vice versa. This raises two questions: 
+2014.02 from google phone interview. 
 
-1. Who becomes the parent of an orphaned child? Each process has a parent-the process that created
-it. If a child process becomes orphaned because its "birth" parent terminates, then the child is
-adopted by the 'init' process, and subsequent calls to getppid() in the child return 1. See Section
-26.2. The process 1, init, the ancestor of all processes. The init process adopts the child and
-automatically performs a wait(), thus removing the zombie process from the system.
+The lifetimes of parent and child processes are usually not the same-either the
+parent outlives the child or vice versa. This raises two questions: 
 
-2. What happens to a child that terminates before its parent has had a chance to perform a wait()?
-The point here is that, although the child has finished its work, the parent should still be
-permitted to perform a wait() at some later time to determine how the child terminated. The kernel
-deals with this situation by 'turning' the child into a <zombie>. This means that most of the
-resources held by the child are released back to the system to be reused by other processes. The
-only part of the process that remains is an entry in the kernel's process table recording; among
-other things the child's process ID, termination status, and resource usage statistics. Section
-36.1.
+1. Who becomes the parent of an `orphaned-child`? 
 
-note: after all, kernel make a process a zombie when not able to call wait() on it.
+Each process has a parent-the process that created it. If a child process
+becomes orphaned because its "birth" parent terminates, then the child is
+adopted by the `init-process`, and subsequent calls to getppid() in the child
+return 1. See Section 26.2. The process 1, init, the ancestor of all processes.
+The init process adopts the child and automatically performs a wait(), thus
+removing the zombie process from the system.
 
-A zombie process can't be killed by a signal, not even the (silver bullet) SIGKILL. This ensures
-that the parent can always eventually perform a wait(). When the parent does perform a wait(), the
-kernel removes the zombie, since the last remaining information about the child is no longer
-required.
+2. What happens to a child that terminates before its parent has had a chance to
+perform a wait()?
 
-<why-zombie-can-be-a-problem> note: second case when zombie is created
-If a parent creates a child, but fails to perform a wait(), then an entry for the zombie child will
-be maintained indefinitely in the kernel's process table. If a large number of such zombie children
-are created, they will eventually fill the kernel process table, 'preventing' the creation of new
-processes. Since the zombies can't be killed by a signal, the only way to remove them from the
-system is to kill their parent (or wait for it to exit), at which time the zombies are adopted and
-waited on by init, and consequently removed from the system.
+The point here is that, although the child has finished its work, the parent
+should still be permitted to perform a wait() at some later time to determine
+how the child terminated. The kernel deals with this situation by 'turning' the
+child into a `zombie`. This means that most of the resources held by the child
+are released back to the system to be reused by other processes. 
+
+The only part of the process that remains is an entry in the kernel's process
+table recording; among other things the child's process ID, termination status,
+and resource usage statistics. Section 36.1.
+
+A zombie process can't be killed by a signal, not even the (silver bullet)
+SIGKILL. This ensures that the parent can always eventually perform a wait().
+When the parent does perform a wait(), the kernel removes the zombie, since the
+last remaining information about the child is no longer required.
+
+
+<why-zombie-can-be-a-problem>
+If a parent creates a child, but fails to perform a wait(), then an entry for
+the zombie child will be maintained indefinitely in the kernel's process table.
+If a large number of such zombie children are created, they will eventually fill
+the kernel process table, 'preventing' the creation of new processes. 
+
+note:
+zombie-process is different from orphaned-process since parent is still alive
+but fails to wait. So killing parent makes zombie orphaned process and then
+adopted by init-process.
+
+Since the zombies can't be killed by a signal, the only way to remove them from
+the system is to kill their parent (or wait for it to exit), at which time the
+zombies are adopted and waited on by init, and consequently removed from the
+system.
+
+note:
+TODO to check code to see how to makes zombies.
 
 $ ./make_zombie
 Parent PID=1013
@@ -20398,28 +20462,25 @@ After sending SIGKILL to make_zombie (PID=1014):
   1013 pts/4 00:00:00 make_zombie Output from ps(1)
   1014 pts/4 00:00:00 make_zombie <defunct>
 
-In the above output, we see that ps(1) displays the string <defunct> to indicate a process in the
-zombie state.
+In the above output, we see that ps(1) displays the string <defunct> to indicate
+a process in the zombie state.
 
-A common way of reaping dead child processes is to establish a handler for the SIGCHLD signal.
-
-<key> The zombie is created in two cases: child terminates early before parent calls wait and parent
-fail to wait for child. The second case is a real problem. The problem is that kernel's process
-table fills up and prevent creatring new processes. The zombies will be adopted by init process
-eventually and can be removed by killing init process.
+A common way of reaping dead child processes is to establish a handler for the
+SIGCHLD signal.
 
 
 ={============================================================================
-*kt_linux_core_105* process: memory layout
+*kt_linux_core_105* process-memory-layout
 
 LPI 6. This is a layout in virtual memory.
 
 <process-virtual-memory-address> figure 6.1
-The ** areas represent invalid ranges in the process's virtual address space; that is, areas for
-which page tables have 'not' been created.
+The ** areas represent invalid ranges in the process's virtual address space;
+that is, areas for which page tables have 'not' been created.
 
 High           +----------------+
-                  ** kernel. mapped into process virtual memory but not accessible to program.
+                  ** kernel. mapped into process virtual memory but 
+                             not accessible to program.
                +----------------+                  0xC0000000
                   argv, environ
                +----------------+
@@ -20438,91 +20499,108 @@ top of stack   +----------------+
                   **
 Low            +----------------+                  0x00000000
 
-note: what's the kernel in this digram?
+note: what's the kernel in this diagram?
 
-/proc/kallsyms provides addresses of kernel symbols in this region. /proc/ksyms in kernel 2.4 and
-earlier.
+/proc/kallsyms provides addresses of kernel symbols in this region. /proc/ksyms
+in kernel 2.4 and earlier.
 
 <text-segment> 
-The text segment contains the machine-language instructions of the program run by the process. The
-text segment is made 'read'-only so that a process doesn't accidentally modify its own instructions
-via a bad pointer value. Since many processes may be running the same program, the text segment is
-made 'sharable' so that a single copy of the program code can be mapped into the virtual address space
-of all of the processes.
+The text segment contains the machine-language instructions of the program run
+by the process. The text segment is made `read-only` so that a process doesn't
+accidentally modify its own instructions via a bad pointer value. Since many
+processes may be running the same program, the text segment is made 'sharable'
+so that a single copy of the program code can be mapped into the virtual address
+space of all of the processes.
 
 <initialized-data-segment>
-The initialized data segment contains 'global' and 'static' variables that are explicitly
-initialized. The values of these variables are read from the executable file when the program is
-loaded into memory.
+The initialized data segment contains 'global' and 'static' variables that are
+explicitly initialized. The values of these variables are read from the
+executable file when the program is loaded into memory.
 
 <uninitialized-data-segment> <bss>
-The uninitialized data segment contains 'global' and 'static' variables that are 'not' explicitly
-initialized. Before starting the program, the system initializes all memory in this segment to 0.
-For historical reasons, this is often called the bss segment, a name derived from an old assembler
-mnemonic for "block started by symbol." The main reason for placing global and static variables that
-are initialized into a separate segment from those that are uninitialized is that, when a program is
-stored on disk, it is not necessary to allocate space for the uninitialized data. Instead, the
-executable merely needs to record the location and size required for the uninitialized data segment,
-and this space is allocated by the program loader at 'runtime'.
+The uninitialized data segment contains 'global' and 'static' variables that are
+'not' explicitly initialized. Before starting the program, the system
+initializes all memory in this segment to 0.  For historical reasons, this is
+often called the bss segment, a name derived from an old assembler mnemonic for
+"block started by symbol." 
+
+The main reason for placing global and static variables that are initialized
+into a separate segment from those that are uninitialized is that, when a
+program is stored on disk, it is not necessary to allocate space for the
+uninitialized data. Instead, the executable merely needs to record the location
+and size required for the uninitialized data segment, and this space is
+allocated by the program loader at 'runtime'.
+
 
 <stack>
-The stack is a dynamically growing and shrinking segment containing stack frames. One stack frame is
-allocated for each currently called function. A frame stores the function's local variables
-(so-called automatic variables), arguments, and return value. Stack frames are discussed in more
-detail in Section 6.5.
+The stack is a dynamically growing and shrinking segment containing stack
+frames. One stack frame is allocated for each currently called function. A frame
+stores the function's local variables (so-called automatic variables),
+       arguments, and return value. Stack frames are discussed in more detail in
+         Section 6.5.
 
 <heap>
-The heap is an area from which memory (for variables) can be dynamically allocated at run time. The
-top end of the heap is called the program break.
+The heap is an area from which memory (for variables) can be dynamically
+allocated at run time. The top end of the heap is called the program break.
 
 <segment-and-section>
-Sometimes, the term section is used instead of segment, since section is more consistent with the
-terminology used in the now ubiquitous ELF specification for executable file formats.
+Sometimes, the term section is used instead of segment, since section is more
+consistent with the terminology used in the now ubiquitous ELF specification for
+executable file formats.
 
 <etext>
-Three global symbols: etext, edata, and end. These symbols can be used from within a program to
-obtain the addresses of the next byte past, respectively, the end of the program text, the end of
-the initialized data segment, and the end of the uninitialized data segment.
+Three global symbols: etext, edata, and end. These symbols can be used from
+within a program to obtain the addresses of the next byte past, respectively,
+the end of the program text, the end of the initialized data segment, and the
+  end of the uninitialized data segment.
 
 <size-command>
-The size(1) command displays the size of the text, initialized data, and uninitialized data (bss)
-segments of a binary executable.
+The size(1) command displays the size of the text, initialized data, and
+uninitialized data (bss) segments of a binary executable.
+
+$ size a.out
+   text	   data	    bss	    dec	    hex	filename
+   3552	    356	    148	   4056	    fd8	a.out
 
 
 ={============================================================================
-*kt_linux_core_106* process: virtual memory
+*kt_linux_core_106* process-virtual memory
 
 {virtual-memory} locality-of-reference
-The aim of this virtual memory is to make efficient use of both the CPU and RAM (physical memory) by
-exploiting a property that is typical of most programs: locality of reference. Most programs
-demonstrate two kinds of locality:
+The aim of this virtual memory is to make efficient use of both the CPU and RAM
+(physical memory) by exploiting a property that is typical of most programs:
+`locality-of-reference`. Most programs demonstrate two kinds of locality:
 
-1. 'spatial' locality is the tendency of a program to reference memory addresses that are 'near' those
-that were recently accessed (because of 'sequential' processing of instructions, and, sometimes,
-sequential processing of data structures).
+1. 'spatial' locality is the tendency of a program to reference memory addresses
+that are 'near' those that were recently accessed (because of 'sequential'
+    processing of instructions, and, sometimes, sequential processing of data
+    structures).
 
-2. 'temporal' locality is the tendency of a program to access the 'same' memory addresses in the near
-future that it accessed in the recent past (because of loops).
+2. 'temporal' locality is the tendency of a program to access the 'same' memory
+addresses in the near future that it accessed in the recent past (because of
+    loops).
 
-The upshot of locality of reference is that it is possible to execute a program while maintaining
-only 'part' of its address space in RAM.
+The upshot of locality of reference is that it is possible to execute a program
+while maintaining only 'part' of its address space in RAM.
 
 <paging>
-A virtual memory scheme splits the memory used by each program into small, fixed-size units called
-pages. Correspondingly, RAM is divided into a series of page frames of the same size. At any one
-time, only some of the pages of a program need to be resident in physical memory page frames; these
-pages form the so-called resident set. Copies of the unused pages of a program are maintained in the
-'swap' area-a reserved area of disk space used to supplement the computer's RAM-and loaded into
-physical memory only as required. 
+A virtual memory scheme splits the memory used by each program into small,
+  fixed-size units called `pages`. Correspondingly, RAM is divided into a series
+  of page frames of the same size. At any one time, only some of the pages of a
+  program need to be resident in physical memory page frames; these pages form
+  the so-called `resident-set`. Copies of the unused pages of a program are
+  maintained in the `swap-area` - a reserved area of disk space used to
+  supplement the computer's RAM - and loaded into physical memory only as
+  required. 
 
 <page-fault>
-When a process references a page that is 'not' currently 'resident' in physical memory, a page
-'fault' occurs, at which point the kernel suspends execution of the process while the page is loaded
-from disk into memory.
+When a process references a page that is 'not' currently 'resident' in physical
+memory, a `page-fault` occurs, at which point the kernel suspends execution of
+the process while the page is loaded from disk into memory.
 
-The kernel maintains a page table for 'each'-process (Figure 6-2). The page table describes the
-location of each page in the process's virtual address space (the set of all virtual memory pages
-available to the process). 
+The kernel maintains a `page-table` for `each-process` (Figure 6-2). The page
+table describes the location of each page in the process's virtual address space
+(the set of all virtual memory pages available to the process). 
 
 process virtual address space    page table        physical memory(RAM) page frames 
 low   page 0                           4                    0
@@ -20530,86 +20608,109 @@ low   page 0                           4                    0
       page 2                           7                    2
 high  page 3                           0                    3
 
-Each entry in the page table either 'indicates' the location of a virtual page in RAM or indicates
-that it currently resides on disk.
+Each entry in the page table either 'indicates' the location of a virtual page
+in RAM or indicates that it currently resides on disk.
 
-Not all address ranges in the process's virtual address space require page-table entries. Typically,
-large ranges of the potential virtual address space are unused, so that it isn't necessary to
-maintain corresponding page-table entries. If a process tries to access an address for which
-there is 'no' corresponding page-table entry, it receives a SIGSEGV signal.
+Not all address ranges in the process's virtual address space require page-table
+entries. Typically, large ranges of the potential virtual address space are
+unused, so that it isn't necessary to maintain corresponding page-table entries.
+
+If a process tries to access an address for which there is 'no' corresponding
+page-table entry, it receives a SIGSEGV signal. *sigseg*
+
+note:
+page-fault is different from seg-fault *sigseg* since page-fault happens when
+finds an entry in page table but not in the resident-set so raise page-fault to
+signal that reads from swap-space. But seg-fault happens when no entry in page
+table.
 
 
 {valid-virtual-addresses}
-A process's range of 'valid' virtual addresses can change over its lifetime, as the kernel allocates
-and deallocates pages (and page-table entries) for the process.
+A process's range of 'valid' virtual addresses can change over its lifetime, as
+the kernel allocates and deallocates pages (and page-table entries) for the
+process.
 
-o as the stack grows downward beyond limits previously reached;
+* as the stack grows downward beyond limits previously reached;
 
-o when memory is allocated or deallocated on the heap, by raising the program break using brk(),
-  sbrk(), or the malloc family of functions
+* when memory is allocated or deallocated on the heap, by raising the program
+  break using brk(), sbrk(), or the malloc family of functions
 
-o when System V shared memory regions are attached using shmat() and detached using shmdt()
+* when System V shared memory regions are attached using shmat() and detached
+  using shmdt()
 
-o when memory mappings are created using mmap() and unmapped using munmap()
+* when memory mappings are created using mmap() and unmapped using munmap()
 
 
 {advantages}
-o Processes are isolated from one another and from the kernel, so that one process can't read or
-modify the memory of another process or the kernel. This is accomplished by having the page-table
-entries for each process point to distinct sets of physical pages in RAM (or in the swap area).
 
-o Where appropriate, two or more processes can share memory. The kernel makes this possible by
-having page-table entries in different processes refer to the same pages of RAM. Memory sharing
-occurs in two common circumstances:
+* Processes are `isolated` from one another and from the kernel, so that one
+  process can't read or modify the memory of another process or the kernel. This
+  is accomplished by having the page-table entries for each process point to
+  distinct sets of physical pages in RAM (or in the swap area).
 
-- Multiple processes executing the same program can share a single (readonly) copy of the program
-code. This type of sharing is performed implicitly when multiple programs execute the same program
-file (or load the same shared library).
+* Where appropriate, two or more processes can share memory. The kernel makes
+  this possible by having page-table entries in different processes refer to the
+  same pages of RAM. Memory sharing occurs in two common circumstances:
 
-- Processes can use the shmget() and mmap() system calls to explicitly request sharing of memory
-regions with other processes. This is done for the purpose of interprocess communication.
+  - Multiple processes executing the same program can share a single (readonly)
+  copy of the program code. This type of sharing is performed implicitly when
+  multiple programs execute the same program file (or load the same shared
+      library).
 
-o The implementation of memory protection schemes is facilitated; that is, pagetable entries can be
-marked to indicate that the contents of the corresponding page are readable, writable, executable,
-       or some combination of these protections. Where multiple processes share pages of RAM, it is
-       possible to specify that each process has different protections on the memory; for example,
-       one process might have read-only access to a page, while another has read-write access.  
+  - Processes can use the shmget() and mmap() system calls to explicitly request
+  sharing of memory regions with other processes. This is done for the purpose
+  of interprocess communication.
+
+* The implementation of `memory-protection` schemes is facilitated; that is,
+  pagetable entries can be marked to indicate that the contents of the
+  corresponding page are readable, writable, executable, or some combination
+  of these protections. Where multiple processes share pages of RAM, it is
+  possible to specify that each process has different protections on the
+  memory; for example, one process might have read-only access to a page,
+  while another has read-write access.  
        
-o Programmers, and tools such as the compiler and linker, don't need to be concerned with the
-physical layout of the program in RAM.  
-       
-o Because only a part of a program needs to reside in memory, the program loads and runs faster.
-Furthermore, the memory footprint (i.e., virtual size) of a process can exceed the capacity of RAM.
+* Because only a part of a program needs to reside in memory, the program loads
+  and runs faster.  Furthermore, the memory footprint (i.e., virtual size) of a
+  process can exceed the capacity of RAM.
 
-o One final advantage of virtual memory management is that since each process uses less RAM, more
-processes can simultaneously be held in RAM. This typically leads to better CPU utilization, since
-it increases the likelihood that, at any moment in time, there is at least one process that the CPU
-can execute.
+* One final advantage of virtual memory management is that since each process
+  uses less RAM, more processes can simultaneously be held in RAM. This
+  typically leads to better CPU utilization, since it increases the likelihood
+  that, at any moment in time, there is at least one process that the CPU can
+  execute.
 
 
 {kernel-stack}
-Sometimes, the term "user stack" is used to distinguish the stack we describe here from the "kernel
-stack". The kernel stack is a "per-process" memory region maintained in kernel memory that is used
-as the stack for execution of the functions called internally during the execution of a system call.
-The kernel can't employ the user stack for this purpose since it resides in unprotected user memory.
+Sometimes, the term "user stack" is used to distinguish the stack we describe
+here from the "kernel stack". The kernel stack is a `per-process` memory region
+maintained in kernel memory that is used as the stack for execution of the
+functions called internally during the execution of a `system-call`.  The kernel
+can't employ the user stack for this purpose since it resides in unprotected
+user memory.
 
 
 {stack-frame}
 Each (user) stack frame contains the following information:
 
-o Function arguments and local variables: In C these are referred to as automatic variables, since
-they are automatically created when a function is called. These variables also automatically
-disappear when the function returns (since the stack frame disappears), and this forms the primary
-semantic distinction between automatic and static (and global) variables: the latter have a
-permanent existence independent of the execution of functions.
+* Function arguments and local variables: 
 
-o Call linkage information: Each function uses certain CPU registers, such as the program counter,
-  which points to the next machine-language instruction to be executed. Each time one function calls
-  another, a copy of these registers is saved in the called function’s stack frame so that when the
-  function returns, the appropriate register values can be restored for the calling function.
+In C these are referred to as automatic variables, since they are automatically
+created when a function is called. These variables also automatically disappear
+when the function returns (since the stack frame disappears), and this forms the
+primary semantic distinction between automatic and static (and global)
+  variables: the latter have a permanent existence independent of the execution
+  of functions.
 
-Referring to Listing 6-1, during the execution of the function square(), the stack will contain
-frames as:
+* `call-linkage` information: 
+
+Each function uses certain CPU registers, such as the program counter, which
+points to the next machine-language instruction to be executed. Each time one
+function calls another, a copy of these registers is saved in the called
+function's stack frame so that when the function returns, the appropriate
+register values can be restored for the calling function.
+
+Referring to Listing 6-1, during the execution of the function square(), the
+stack will contain frames as:
 
 +----------------+
  frames for c run-time startup functions  note:
@@ -21883,8 +21984,8 @@ RLIMIT_STACK
 The RLIMIT_STACK limit specifies the maximum size of the process stack, in
 bytes. Attempts to grow the stack beyond this limit result in the generation of
 a `SIGSEGV` signal for the process. Since the stack is exhausted, the only way
-to catch this signal is by establishing an alternate signal stack, as described
-in Section 21.3.
+to catch this signal is by establishing an alternate `signal-stack`, as
+described in Section 21.3.
 
 Since Linux 2.6.23, the RLIMIT_STACK limit also determines the amount of space
 available for holding the process's command-line arguments and environment
@@ -21899,7 +22000,8 @@ What dose it really mean?
 *kt_linux_core_110* process-resource-case
 
 The daemon crashes when it shows huge numbers in vm memory status and shows a
-call trace. Believe that it has no memory to create a thread stack.
+call trace in coredump. Believe that it has no memory to create a thread stack.
+See RLIMIT_STACK and SIGSEGV. *sigseg*
 
 VmPeak:	 1893244 kB
 VmSize:	 1535856 kB
@@ -21940,6 +22042,52 @@ allocate_stack (const struct pthread_attr *attr, struct pthread **pdp,
 	  /* And add to the list of stacks in use.  */
 	  stack_list_add (&pd->list, &stack_used);
 }
+
+
+={============================================================================
+*kt_linux_core_050* process-function-reentrant
+
+From LPI signal.
+
+Because a signal handler may asynchronously interrupt the execution of a program
+at any point in time, the main program and the signal handler in effect form
+`two-independent` (although not concurrent) threads of execution within the same
+process.
+
+
+A function is said to be `reentrant` if it can safely be simultaneously executed
+by multiple threads of execution in the `same-process`. In this context, "safe"
+means that the function achieves its expected result, regardless of the state of
+execution of any other thread of execution.
+
+A function may be `nonreentrant` if it updates global or static data structures. A
+function that employs only local variables is guaranteed to be reentrant because
+of race-condition. This book shows an example using crypt() in both main and
+signal handler. This corrupts internal buffer which is statically allocated and
+crypt uses when calls it with differnt parameter.
+
+note:
+`nonreentrant` means that function is not safe when gets called by multiple
+threads. Using only local variables means reentrant. Why mentions race
+condition?
+
+Such possibilities are in fact rife within the standard C library. For example,
+     we already noted in Section 7.1.3 that malloc() and free() maintain a
+     linked list of freed memory blocks available for reallocation from the
+     heap. If a call to malloc() in the main program is interrupted by a signal
+     handler that also calls malloc(), then this linked list can be corrupted.
+     For this reason, the malloc() family of functions, and other library
+     functions that use them, are nonreentrant.
+
+Even if we are not using nonreentrant library functions, reentrancy issues can
+still be relevant. If a signal handler updates programmer-defined global data
+structures that are also updated within the main program, then we can say that
+the signal handler is nonreentrant with respect to the main program.
+
+If a function is nonreentrant, then its manual page will normally provide an
+explicit or implicit indication of this fact. In particular, watch out for
+statements that the function uses or returns information in statically allocated
+variables.
 
 
 ={============================================================================
@@ -31105,7 +31253,7 @@ This libgstcencdec.so is a C library which depends on another C library:
 libdrm.so. The latter one depends on several C++ libraries, with one being
 SystemAPI.so. Because SystemAPI.so now depends on dbus-c++-1, the dynamic linker
 tries to load it. But due some unfortunate library and symbol ordering, it gets
-it wrong which results in a SEGFAULT while scanning for plug-ins:
+it wrong which results in a SIGSEGV while scanning for plug-ins:
 
 Program received signal SIGSEGV, Segmentation fault.
 
@@ -36245,10 +36393,10 @@ nonvoluntary_ctxt_switches:	127
 
 
 ={============================================================================
-*kt_linux_core_802* proc: /proc/PID/maps
+*kt_linux_core_802* proc-maps: /proc/PID/maps
 
-Using the Linux-specific /proc/PID/maps file, we can see the location of the shared memory segments
-and shared libraries mapped by a program.
+Using the Linux-specific /proc/PID/maps file, we can see the location of the
+shared memory segments and shared libraries mapped by a program.
 
 From LPI 48.5.
 
@@ -36347,6 +36495,17 @@ Swap:                  0 kB
 KernelPageSize:        4 kB
 MMUPageSize:           4 kB
 Locked:                0 kB
+
+
+={============================================================================
+*kt_linux_core_802* proc-maps: check shared libraries that process uses
+
+cat /proc/NNNN/maps | awk '{print $6}' | grep '\.so' | sort | uniq
+
+or
+
+can use ldd.
+
 
 
 ={============================================================================
