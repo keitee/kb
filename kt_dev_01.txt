@@ -107,9 +107,9 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_003| ctor
 *kt_dev_cpp_003* default-arg
 *kt_dev_cpp_003* copy-control
-*kt_dev_cpp_003* pass-by-reference
-*kt_dev_cpp_003* vexing parse
-|kt_dev_cpp_004| copy-control of dyn resource
+*kt_dev_cpp_003* expr-pass-by-reference
+*kt_dev_cpp_003* expr-vexing-parse
+*kt_dev_cpp_004* copy-dyn-resource
 *kt_dev_cpp_004* copy-control: valuelike
 *kt_dev_cpp_004* copy-control: message example, swap, move consideration
 *kt_dev_cpp_004* copy-control: move
@@ -119,10 +119,9 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_004* copy-control-self-assign
 |kt_dev_cpp_007| overload-function-matching
 |kt_dev_cpp_021| overload-operator
-*kt_dev_cpp_005* type-bool
 *kt_dev_cpp_005* type-conversion-implicit
 *kt_dev_cpp_005* type-conversion-ex
-*kt_dev_cpp_005* type-conversion-explicit, copy-form-initialization
+*kt_dev_cpp_005* type-conversion-explicit, copy-form-init
 *kt_dev_cpp_005* type-conversion-to-bool
 *kt_dev_cpp_005* type-conversion-to-bool-stringstream-case
 |kt_dev_cpp_005| list initialization. initializer_list
@@ -12429,6 +12428,14 @@ object does not assume its 'constness' until after the ctor completes the
 object's initialisation. Thus, ctor can write to const objects during their
 construction.
 
+note:
+Tried copy-ctor and compile error:
+
+    FooFoo(const FooFoo& arg) const : foo()
+    { cout << "FooFoo's copy ctor: " << endl; }
+
+:38:31: error: constructors may not be cv-qualified
+
 
 {default-keyword}
 To tell the compiler to create syn version for functions `but-not-limited` to
@@ -12676,8 +12683,8 @@ controls when use dyn allocated resource. *kt_dev_cpp_004*
 
 
 {copy-ctor} copy-init, pass-by-value
-Initialize object from the other of the 'same' type. Ask compiler to copy the
-right hand operand into the object being created, and to convert that operand if
+Initialize object from the other of the `same-type`. Ask compiler to copy the
+right-hand operand into the object being created, and to convert that operand if
 necessary.
 
 The first arg is a reference to a class and the rest args can be defaults. 
@@ -12689,22 +12696,21 @@ class Foo {
 
 Used in contexts:
 
-1. copy-form initialization
-2. function call pass by value. pass an object as an argument to a parameter of
-nonreference type.
-3. return an object by value, nonreference type. 
+* `copy-form-init` but not limited to copy-ctor
+* `pass-by-value` function call for `nonreference` type parameter
+* `return-by-value` 
 4. brace initialization.
 5. implicit 'coversion' using temp object. 
 
-For pass and return by value they are rightly non reference type, they are
-copy-inited. Hence called copy-ctor. In other words, defines how pass-by-value
-is implemented for that type.
+For pass and return by value they are rightly nonreference type and
+`copy-inited`. Hence called `copy-ctor`. Defines how pass-by-value is
+implemented for the type.
 
 
 <synthesized-copy-constructor>
-Do 'memberwise' copies the members of its argument. The type of each member
+Do `memberwise-copy` the members of its argument. The type of each member
 determines how that member is copied. Members of class type are copied by the
-copy constructor for that class and members of built-in are copied directly.
+copy ctor for that class and members of built-in are copied directly.
 
 class Sales_data
 {
@@ -12720,14 +12726,13 @@ class Sales_data
 The equivalent copy constructor that would be synthesized:
 
 Sales_data::Sales_data( const Sales_data& orig ):
-    bookNo( orig.bookNo ),          // note: use string copy constructor
-    units_sold( orig.units_sold ),  // direct copies orig.units_sold
+    bookNo( orig.bookNo ),          // use string copy constructor
+    units_sold( orig.units_sold ),  // use direct copy
     revenue( orig.revenue )
 {}
 
 
 <ex>
-
 #include<iostream>
 #include<string>
 #include<memory>
@@ -12759,25 +12764,17 @@ class FooFoo
     FooFoo(int val) : foo(val) 
   { cout << "FooFoo's ctor: " << val << endl; }
 
-    // note: this is an error when ctor is const
-    //
-    // error: passing 'const Foo' as 'this' argument of 'int Foo::get()' 
-    // discards qualifiers [-fpermissive]
-    //
-    // FooFoo(const FooFoo& arg) const : foo()
-    // { cout << "FooFoo's copy ctor: " << arg.foo.get() << endl; }
-
-    // note: calls foo's copy constructor.
+    // note: calls foo's `copy-ctor`.
     //
     // FooFoo(const FooFoo& arg): foo(arg.foo) 
     // { cout << "FooFoo's copy ctor: " << foo.get() << endl; }
 
-    // note: calls foo's default constructor. value-init
+    // note: calls foo's `default-ctor`. value-init
     //
     // FooFoo(const FooFoo& arg): foo() 
     // { cout << "FooFoo's copy ctor: " << foo.get() << endl; }
 
-    // note: calls foo's default constructor. value-init
+    // note: calls foo's `default-ctor`. value-init
     //
     // FooFoo(const FooFoo& arg) 
     // { cout << "FooFoo's copy ctor: " << foo.get() << endl; }
@@ -12791,28 +12788,35 @@ int main()
   FooFoo ax(100);
   FooFoo bx(200);
 
-  FooFoo cx = bx;
-
-  // note: this direct-form also has the same call as above. calls copy
-  // constructor.
-
-  FooFoo cx(bx);
+  // note: both shows the same result. calls copy-ctor.
+  FooFoo cx = bx;     // `copy-form`
+  FooFoo cx(bx);      // `direct-form`
 }
+
+FooFoo's ctor: 100
+FooFoo's ctor: 200
+Foo's copy ctor: 200
+FooFoo's copy ctor: 200
 
 
 <why-reference-parameter>
-Why the copy constructor's own parameter 'must' be a reference? If it is not a
-reference, then the call would never succeed. To call the copy constructor, need
-to use copy constructor to copy the argument and to copy the argument, need to
-use copy constructor. indefinite recursive call.
+Why copy-ctor own parameter `must-be-a-reference`? 
+
+If it is not a reference, then the call would never succeed. To copy-construct
+object, use copy-ctor and copy-ctor itself is a function. Need to use copy-ctor
+to copy argument and to copy the argument, use copy-ctor. `indefinite-recursive` 
+
+NO. Actualy, compile error:
+
+:35:28: error: invalid constructor; you probably meant ‘FooFoo (const FooFoo&)’
 
 
 {copy-assign} deleted-copy-controls. reference-member.
-As with copy-ctor, cannot use syn version when there are reference and const
-member data. Why? because syn copy assign is defined as 'deleted' if the class
-has a const or reference member. CPR 508.
+As with copy-ctor, cannot use synthesied `copy-assign` when there are reference
+and const member data. Because copy assign is 'deleted' if the class has a const
+or reference member. CPR 508.
 
-It uses op overloading and must be a 'member' because 'lhs' is this pointer.
+// uses operator-overload and must be a member
 
 class Foo {
   Foo& operator=(const Foo&);
@@ -12823,12 +12827,12 @@ The copy-assign controls how objects of its class are assigned
 Sales_data trans, accum;
 trans = accum;
 
-For assign with different types, need additional assign op and see
-*kt_dev_cpp_021*
+Assign with different types? Need additional copy-assign.
+
 
 <assignment-must-return-a-reference-to-this>
-EC++10. All assign ops must follow this convention like built-in types because
-of 'chain' of assignment and should behave the same as built-in types.
+EC++10. All assign operations must follow this convention like built-in types
+because of 'chain' of assignment and should behave the same as built-in types.
 
 x = y = z = 15;   // right associative
 
@@ -12846,7 +12850,7 @@ class Widget {
 
 
 ={============================================================================
-*kt_dev_cpp_003* pass-by-reference
+*kt_dev_cpp_003* expr-pass-by-reference
 
 {pass-by-reference-to-const} EC++20.
 
@@ -12875,16 +12879,19 @@ To bypass these cost of copying:
 
 bool validateStudent(const Student& s);
 
-The points: 
+The good points: 
 
-1. Less expensive since no object creation so more 'performance'. Typically, references are
-implemented as pointers. <key> So recommendation is that use pass-by-value for built-in, STL
-iterator, and function objects types and use pass-by-reference for class types.
+* Less expensive since no object creation so more 'performance'. So
+  recommendation is that: 
 
-2. The const is necessary since in pass-by-value case, the caller know that they are shielded from
-any changes the function might make. To have the same for pass-by-reference, need const. 
+  use `pass-by-value` for built-in, iterator, and `function-object` 
+  use `pass-by-reference` for class types.
 
-3. Avoid <sliced-off> problem. For example:
+* The `const` is necessary since in pass-by-value case, the caller know that
+  they are shielded from any changes the function might make. To have the same
+  for pass-by-reference, need const. 
+
+* Can avoid `sliced-off` problem. For example:
 
 class Window {
   public:
@@ -12908,9 +12915,9 @@ void printNameAndDisplay(Window w)  // see
 WindowWithScrollBars wwsb; 
 printNameAndDisplay(wwsb);
 
-Which version of display will be called? It will 'always' be the Window::display since it is
-pass-by-value using Window copy ctor and is sliced-offed. Hence Window object. To fix this, should
-use pass-by-reference.
+Which version of display will be called? Always be the Window::display() since
+it is pass-by-value using Window copy ctor and is sliced-offed. Hence Window
+object. To fix this, should use pass-by-reference.
 
 void printNameAndDisplay(const Window& w)
 {
@@ -12918,14 +12925,31 @@ void printNameAndDisplay(const Window& w)
   w.display();
 }
 
-EC++21. The pass-by-reference is great. Then always use reference? However, there are cases that
-must return a copy not a reference such as operator*(). This is a operator* not dereferene operator.
-See {smart-pointer-internal}. Q: How distinguish between two?
 
-These are tries to save a construction cost by using pass-by-reference but not right:
+EC++21. 
 
-<1> use stack but remember a refenrece is a name for some 'existing' object. Here returns a
-reference to object that no longer exist.
+The `pass-by-reference` is great so always use reference? However, there are
+cases that must return a copy not a reference such as operator*(). This is a
+operator to multiply not to dereferene.
+
+note:
+How distinguish between two multiply and dereferene?
+
+// dereferene operator, member
+T& operator*() { return *ptr_; }
+    
+// multiply operator, nonmmber
+friend const T operator*( const T &lhs, const T &rhs );
+
+
+{return-pass-by-value}
+
+These are tries to save a construction cost by using pass-by-reference. Not
+quite right.
+
+<1> 
+Use stack but remember a refenrece is a name for some 'existing' object. Here
+returns a reference to object that no longer exist.
 
 Rational c = a*b;
 
@@ -12937,7 +12961,10 @@ class Rational {
   }
 };
 
-<2> use heap? there is no way to delete in case: 
+
+<2> 
+Use heap but there is no way to delete in case: 
+
 Rational w, x, y, z;
 w = x*y*z;
 
@@ -12949,7 +12976,9 @@ class Rational {
   }
 };
 
-<3> use function static? Not right for multi-threaded and even for single-threaded.
+
+<3> 
+Use function static? Not right for multi-threaded and even for single-threaded.
 
 class Rational {
   friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
@@ -12970,9 +12999,10 @@ if( (a*b) == (c*d) )
 }
 
 This will always true since it is evaluated as
+
 if( operator==( operator*(a,b), operator*(c,d) ) )
 
-Therefore, in summary, should return a copy and pay a small cost for correct behavior.
+Therefore, should return a copy and pay a small cost for correct behavior.
 
 class Rational {
   friend const Rational operator*( const Rational& lhs, const Rational& rhs );
@@ -12980,89 +13010,65 @@ class Rational {
 };
 
 
-{avoid-unnecessary-default-ctor}
-From MEC++04. There are two categories:
-
-1. For class that can be inited meaningfully without inputs from outside, do use default-ctor.
-2. For calss cannot be inited meaningfully without inputs from outside, recommend not to use
-default-ctor.
-
-TODO: more on problems and example
-
-For example, think a class which has ID info and use default-ctor. This causes
-
-o Limit a use of class since not able to use array of it.
-o There should be checks in each member funcs to see if it is inited with a meaningful initial value
-for ID. This means more error checking, handling and penalty of size and speed.
-
-That means that a user provide a meaningful init value but once inited, can see efficient
-implementation.
-
-<example>
-struct SomeLargeData {
-
-  SomeLargeData(int id_)
-    : id(id_)
-  { cout << "Foo[" << this << "] ctor(" << id << ")" << endl; }
-  ~SomeLargeData() { cout << "Foo[" << this << "] dtor(" << id << ")" << endl; }
-  int id;
-  int arr[100];
-};
-
-int main()
-{
-  uint64_t be, af;
-  int n = 400;
-
-  vector<SomeLargeData> vec_byval;
-  vec_byval.push_back( SomeLargeData(100));     // note. this is copy-ctor
-}
-
-Foo[0xbfc60f4c] ctor(100)
-Foo[0xbfc60f4c] dtor(100)
-Foo[0x9aba008] dtor(100)
-
-
-{ctor-use}
-From C++BS 8.2.3. Constructors are needed if you need to reorder arguments, validate arguments,
-modify arguments. For example:
-
-struct Address {
-  string name; // "Jim Dandy"
-  int number; // 61
-  string street; // "South St"
-  string town; // "New Providence"
-  char state[2]; // ’N’ ’J’
-  char zip[5]; // 07974
-
-  Address(const string n, int nu, const string& s, const string& t, const string& st, int z);
-};
-
-note: this is a case to modify arguments and see conversion from
-
-struct Address {
-  ...
-  char state[2]; // ’N’ ’J’
-  char zip[5]; // 07974
-
-  Address(..., const string& st, int z);
-};
+// {avoid-unnecessary-default-ctor}
+// From MEC++04. There are two categories:
+// 
+// 1. For class that can be inited meaningfully without inputs from outside, do use default-ctor.
+// 2. For calss cannot be inited meaningfully without inputs from outside, recommend not to use
+// default-ctor.
+// 
+// TODO: more on problems and example
+// 
+// For example, think a class which has ID info and use default-ctor. This causes
+// 
+// o Limit a use of class since not able to use array of it.
+// o There should be checks in each member funcs to see if it is inited with a meaningful initial value
+// for ID. This means more error checking, handling and penalty of size and speed.
+// 
+// That means that a user provide a meaningful init value but once inited, can see efficient
+// implementation.
+// 
+// <example>
+// struct SomeLargeData {
+// 
+//   SomeLargeData(int id_)
+//     : id(id_)
+//   { cout << "Foo[" << this << "] ctor(" << id << ")" << endl; }
+//   ~SomeLargeData() { cout << "Foo[" << this << "] dtor(" << id << ")" << endl; }
+//   int id;
+//   int arr[100];
+// };
+// 
+// int main()
+// {
+//   uint64_t be, af;
+//   int n = 400;
+// 
+//   vector<SomeLargeData> vec_byval;
+//   vec_byval.push_back( SomeLargeData(100));     // note. this is copy-ctor
+// }
+// 
+// Foo[0xbfc60f4c] ctor(100)
+// Foo[0xbfc60f4c] dtor(100)
+// Foo[0x9aba008] dtor(100)
 
 
 ={============================================================================
-*kt_dev_cpp_003* vexing parse
+*kt_dev_cpp_003* expr-vexing-parse
 
 <ex>
 From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the the
 syntax can be the same as that of a fuction declaration.
 
 class background_task;
-std::thread my_thread( background_task() );     // T()
+std::thread my_thread( background_task() );     // not T()
 
-This declares the function my_thread that takes a single parameter which is type
+This declares the `function` my_thread that takes a single parameter which is
   pointer to a function taking no parameters and returning a background_task
-  object. However, the intention was to create std::thread instance with
-  function object to run.
+  object. 
+  
+However, the intention was to create std::thread `instance` with function object
+to run.
 
 Solution?
 
@@ -13098,12 +13104,12 @@ Sales_data obj;
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-control of dyn resource
+*kt_dev_cpp_004* copy-dyn-resource
 
 {when-use-resource-has-dyn-lifetime}
-1. don't know how many object is needed
-2. don't know the exact type of object
-3. share data between objects
+* Don't know how many object is needed
+* Don't know the exact type of object
+* Share data between objects
 
 
 {the-rule-of-three-or-five}
@@ -13111,13 +13117,17 @@ The rule of three (the rule of five in C++11) is a rule of thumb in C++ that
 claims that if a class defines one of the following it should probably
 explicitly define all three:[1]
 
-note: Nevertheless, needing either the copy-ctor or the copy-assign does not
+note: 
+Nevertheless, needing either the copy-ctor or the copy-assign does not
 (necessarily) indicate the need for a destructor.
 
+note:
+Why 3 or 5? Do not need ctor.
 
-<case-example> CPR 505
+
+<ex> CPR 505
 The need of own dtor for a class allocating dynamic resources is 'obvious'.
-Since if there's no dtor defined, the syn dtor will not run delete on the
+Since if there's no dtor defined, the syn dtor will `not-run-delete` on the
 pointer, ps, so must define own dtor. How possibly the compiler can know what
 pointer member points to?
 
@@ -13167,7 +13177,9 @@ will mean
 <for-const-reference-member>
 Must define own copy-controls when there are const and reference members because
 compiler will not create syn versions since cannot 'rebind' const and reference.
-<Q> How to define user copy controls for these cases? real use case?
+
+note:
+How to define user copy controls for these cases? real use case?
 
 
 ={============================================================================
@@ -15051,106 +15063,6 @@ cout << (*p).size() << endl;    // same as p->size()
 
 
 ={============================================================================
-*kt_dev_cpp_005* type-bool
-
-Do not have a minimum size. In VC, is the same as `int` type. 
-
-There is differece of meaning between return value from main and bool type. In
-return from main,
-
-int main()
-{
-   return 0; // for okay. true seems to be 0?
-   return ?; // any other value, error code, for not okay 
-}
-
-<gcc-case> on ubuntu linux
-#include <iostream>
-#include <bitset>
-
-using std::cout;
-using std::endl;
-
-int main () {
-
-  bool* parr = new bool(20);
-
-  cout << "size: " << sizeof(parr) << endl;
-  cout << "size: " << sizeof(*parr) << endl;
-  cout << "valu: " << *parr << endl;
-
-  return 0;
-}
-
-size: 4
-size: 1
-valu: 1
-
-
-{non-bool-to-bool}
-When assign non-bool to bool type, `type-conversion` happens and got 0 or 1
-depending on the value of non-bool. That is false for 0 and 'true' for 'any'
-other values other than 0.
-
-bool b = 42;    # b is true
-
-When bool to non-bool, has 1 or 0.
-
-
-{true-and-false} {bool-to-non-bool}
-The 'true' and 'false' are literals-of-type-bool. true is any `nonzero` but not
-only 1. 
-
-if( val == true ) { ... }
-
-If val is non-bool type, conversion to <non-bool> which is bigger type happens
-and this becomes 
-
-if( val == 1 ) { ... }
-
-This may not be what intented if meant for cases of nonzero because it runs only
-when val is 1. Therefore, want the case of when val is 1 then do it directly.
-
-The direct form is:
-
-if(val) or if(!val) 
-
-It is usually bad idea to use the boolean literals true and false as operands in
-a comparison. These literals should be used 'only' to compare to an object of
-type 'bool'.
-
-<case>
-In the mips gcc++, have bool variables but shows value in some cores rather then
-ture/false literals. So true is `nonzero`
-
-bool errorState;
-bool stopped;
-
-errorState = false, stopped = true
-errorState = 103, stopped = 101
-errorState = 101, stopped = 110
-
-http://stackoverflow.com/questions/4276207/is-c-c-bool-type-always-guaranteed-to-be-0-or-1-when-typecasted-to-int
-In C++ (§4.5/4):
-    An rvalue of type bool can be converted to an rvalue of type int, with false
-    becoming zero and true becoming one.
-
-In C, when a value is converted to _Bool, it becomes 0 or 1 (§6.3.1.2/1):
-    When any scalar value is converted to _Bool, the result is 0 if the value
-    compares equal to 0; otherwise, the result is 1.
-
-
-{not-use-in-computation}
-Do not use bool and char for computation since there is conversion. For example:
-
-bool b1 = true;
-bool b2 = -b1;
-
-b2 is true since b1 promoted to 1, negates to -1, and convert back to bool but
-it is nonzero hence true. <Q> why promoted? due to negate operator?
-
-
-={============================================================================
 *kt_dev_cpp_005* type-conversion-implicit
 
 {common-type}
@@ -15240,74 +15152,6 @@ for( int i = endi-1; i >= begi; --i )
 When begi is 0 and "i >= begi" cause implicit conversion to `unsigned` since it
 is comparison between signed and unsigned. note: this is a problem of
 string-npos.
-
-
-{bool-conversion} equal-misspell
-
-<1>
-The fact that we can use assignment in a condition can have surprising effects:
-
-if (i = j)
-
-<true-nonzero>
-The condition like this which assigns the value of j to i and then tests the
-result of the assignment. If j is nonzero, the condition will be true. This is
-what "true" means in the 'test' part of if, while, for, etc and 'true' means
-'nonzero' (all other value than zero). 
-
-The author of this code almost surely intended to test whether i and j have the
-same value:
-
-if (i == j)
-
-Bugs of this sort are notoriously difficult to find.
-
-
-<2> 
-auto loc = wordmap.find( sought );
-
-if( loc = wordmap.end() )  // meant if( loc == wordmap.end() )
-
-GCC error is:
-
-tquery.cpp:63: error: could not convert '(loc <unknown operator> ((const
-        std::_Rb_tree_const_iterator<std::pair<const std::basic_string<char,
-        std::char_traits<char>, std::allocator<char> >,
-        std::shared_ptr<std::set<long unsigned int, std::less<long unsigned
-        int>, std::allocator<long unsigned int> > > > >&)((const
-            std::_Rb_tree_const_iterator<std::pair<const std::basic_string<char,
-            std::char_traits<char>, std::allocator<char> >,
-            std::shared_ptr<std::set<long unsigned int, std::less<long unsigned
-            int>, std::allocator<long unsigned int> > > > >*)(&((const
-                  TextQuery*)this)->TextQuery::wordmap.std::map<_Key, _Tp,
-              _Compare, _Alloc>::end [with _Key = std::basic_string<char,
-              std::char_traits<char>, std::allocator<char> >, _Tp =
-              std::shared_ptr<std::set<long unsigned int, std::less<long
-              unsigned int>, std::allocator<long unsigned int> > >, _Compare =
-              std::less<std::basic_string<char, std::char_traits<char>,
-              std::allocator<char> > >, _Alloc = std::allocator<std::pair<const
-              std::basic_string<char, std::char_traits<char>,
-              std::allocator<char> >, std::shared_ptr<std::set<long unsigned
-              int, std::less<long unsigned int>, std::allocator<long unsigned
-              int> > > > >]()))))' 
-to 'bool'
-
-This happens when tries to covert loc iterator to bool. If it were ==, then
-operator== would return bool type.
-
-<3>
-Meant to be == and this if is always true.
-
-bool QueueFull(Queue* queue)
-{
-   if( queue->count = MAXSIZE )
-   {
-      std::cout << "full(" << queue->count << ")" << std::endl;
-      return true;
-   }
-
-   return false;
-}
 
 
 {integer-division}
@@ -15469,7 +15313,7 @@ fraction: 44
 
 
 ={============================================================================
-*kt_dev_cpp_005* type-conversion-explicit, copy-form-initialization
+*kt_dev_cpp_005* type-conversion-explicit, copy-form-init
 
 Converting ctors and conversion ops define class-type conversions.
 
@@ -15596,35 +15440,35 @@ explicit container::container (size_type num)
 x.member(10);  // error
 
 
-<copy-form-initialization>
-One context in which implicit conversions happen is when use the copy-form
-initialization. So cannot use explicit ctor with this form of initialization.
+{copy-form-init}
+`copy-form-init` do `implicit-conversion` using any ctor excluding `copy-ctor`
+and cannot use explicit ctor with `copy-form-init`.
 
 // explicit Sales_data(const std::string &s): bookNo(s) {};
 
-Sales_data item(null_book);     // okay, direct-form
-Sales_data item = null_book;    // error
+Sales_data item(null_book);     // okay, `direct-form`
+Sales_data item = null_book;    // error, `copy-form`
 
 note:
+* The explicit-keyword 'supress' conversion or use of constructor in a context
+  that requires an implicit conversion.
 
-    * The explicit-keyword 'supress' conversion or use of constructor in a
-      context that requires an implicit conversion.
+* The explicit ctor can be used 'only' with direct-form-init. 
+    
+* The explicit-keyword is meaningful 'only' on constructors that can be called
+  with a `single-arguments` since constructors with more arguments are 'not'
+  used to perform an implicit conversion.
+  
+  note:
+  Sales_data item = null_book, good_book;    // odd?
 
-    * The explicit-keyword is meaningful 'only' on constructors that can be
-      called with a 'single' arguments since constructors with more arguments
-      are 'not' used to perform an implicit conversion.
+* The explicit-keyword is used 'only' in constructor 'declaration' inside a
+  class.
 
-    * The explicit-keyword is used 'only' in constructor 'declaration' inside a
-      class.
+* The `copy-ctor` cannot be 'explicit' since used implicitly in cases as pass by
+  value. 
 
-    * The explicit ctor can be used 'only' with direct-form initialization. The
-      compiler will not use this in an automatic conversion.
-
-    * The copy ctor cannot be 'explicit' since used implicitly in cases as pass
-      by value. 
-
-
-<copy-form-ex>
+<ex>
 
 class Base {
   public:
@@ -15646,23 +15490,27 @@ int main()
   std::cout << "--{ main " << std::endl;
 
   Base ba(string("iam base"));
-  Base baa = string("iam base two");            <2>
+  Base baa = string("iam base two");            // 1
 
-  ba.message(string("this is mesg for base"));  <1>
+  ba.message(string("this is mesg for base"));  // 2
 
   std::cout << "--} main " << std::endl;
 }
 
-<1>
-:24:45: error: no matching function for call to ‘Base::message(std::string)’
-:24:45: note: candidate is:
-:9:10: note: void Base::message(const Base&)
-:9:10: note:   no known conversion for argument 1 from ‘std::string {aka
+When use `explicit-keyword`, two errors:
+
+: error: conversion from ‘std::string {aka std::basic_string<char>}’ to
+non-scalar type ‘Base’ requested
+
+: error: no matching function for call to ‘Base::message(std::string)’
+: note: candidate is:
+: note: void Base::message(const Base&)
+: note:   no known conversion for argument 1 from ‘std::string {aka
   std::basic_string<char>}’ to ‘const Base&’
 
-<2>
-:25:35: error: conversion from ‘std::string {aka std::basic_string<char>}’ to
-non-scalar type ‘Base’ requested
+note:
+After all, explicit-keyword surpress implicit-converson and as a side-effect
+cannot use copy-form-init.
 
 
 {conversion-op}
@@ -15715,30 +15563,183 @@ lhs to the left shift operator.
 ={============================================================================
 *kt_dev_cpp_005* type-conversion-to-bool
 
+{type-bool}
+Do not have a minimum size. In VC, is the same as `int` type. 
+
+<gcc-case> on ubuntu linux
+#include <iostream>
+#include <bitset>
+
+using std::cout;
+using std::endl;
+
+int main () {
+
+  bool* parr = new bool(20);
+
+  cout << "size: " << sizeof(parr) << endl;
+  cout << "size: " << sizeof(*parr) << endl;
+  cout << "valu: " << *parr << endl;
+
+  return 0;
+}
+
+size: 4
+size: 1
+valu: 1
+
+
+{nonbool-to-bool}
+When assign non-bool to bool type, `type-conversion` happens and got 0 or 1
+depending on the value of nonbool. That is false for 0 and 'true' for 'any'
+other values other than 0.
+
+bool b = 42;    // b is true
+
+
+{true-and-false} {bool-to-nonbool}
+The 'true' and 'false' are literals-of-type-bool. true is any `nonzero` but not
+only 1. 
+
+if( val == true ) { ... }
+
+If val is nonbool type, conversion to <non-bool> which is bigger type happens
+and this becomes 
+
+if( val == 1 ) { ... }
+
+This may not be what intented if meant for cases of nonzero because it runs only
+when val is 1. Therefore, want the case of when val is 1 then do it directly.
+
+The direct form is:
+
+if(val) or if(!val) 
+
+It is usually bad idea to use the boolean literals true and false as operands in
+a comparison. These literals should be used 'only' to compare to an object of
+type 'bool'.
+
+<case>
+In the mips gcc++, have bool variables but shows value in some cores rather then
+ture/false literals. So true is `nonzero`
+
+bool errorState;
+bool stopped;
+
+errorState = false, stopped = true
+errorState = 103, stopped = 101
+errorState = 101, stopped = 110
+
+http://stackoverflow.com/questions/4276207/is-c-c-bool-type-always-guaranteed-to-be-0-or-1-when-typecasted-to-int
+In C++ (§4.5/4):
+    An rvalue of type bool can be converted to an rvalue of type int, with false
+    becoming zero and true becoming one.
+
+In C, when a value is converted to _Bool, it becomes 0 or 1 (§6.3.1.2/1):
+    When any scalar value is converted to _Bool, the result is 0 if the value
+    compares equal to 0; otherwise, the result is 1.
+
+
+{not-use-in-computation}
+Do not use bool and char for computation since there is conversion. For example:
+
+bool b1 = true;
+bool b2 = -b1;
+
+b2 is true since b1 promoted to 1, negates to -1, and convert back to bool but
+it is nonzero hence true. <Q> why promoted? due to negate operator?
+
+
+{bool-conversion} equal-misspell
+
+<1>
+The fact that we can use assignment in a condition can have surprising effects:
+
+if (i = j)
+
+<true-nonzero>
+The condition like this which assigns the value of j to i and then tests the
+result of the assignment. If j is nonzero, the condition will be true in
+conditons. 'true' means `nonzero` (all other value than zero). 
+
+The author of this code almost surely intended to test whether i and j have the
+same value:
+
+if (i == j)
+
+Bugs of this sort are notoriously difficult to find.
+
+
+<2> 
+auto loc = wordmap.find( sought );
+
+if( loc = wordmap.end() )  // meant if( loc == wordmap.end() )
+
+GCC error is:
+
+tquery.cpp:63: error: could not convert '(loc <unknown operator> ((const
+        std::_Rb_tree_const_iterator<std::pair<const std::basic_string<char,
+        std::char_traits<char>, std::allocator<char> >,
+        std::shared_ptr<std::set<long unsigned int, std::less<long unsigned
+        int>, std::allocator<long unsigned int> > > > >&)((const
+            std::_Rb_tree_const_iterator<std::pair<const std::basic_string<char,
+            std::char_traits<char>, std::allocator<char> >,
+            std::shared_ptr<std::set<long unsigned int, std::less<long unsigned
+            int>, std::allocator<long unsigned int> > > > >*)(&((const
+                  TextQuery*)this)->TextQuery::wordmap.std::map<_Key, _Tp,
+              _Compare, _Alloc>::end [with _Key = std::basic_string<char,
+              std::char_traits<char>, std::allocator<char> >, _Tp =
+              std::shared_ptr<std::set<long unsigned int, std::less<long
+              unsigned int>, std::allocator<long unsigned int> > >, _Compare =
+              std::less<std::basic_string<char, std::char_traits<char>,
+              std::allocator<char> > >, _Alloc = std::allocator<std::pair<const
+              std::basic_string<char, std::char_traits<char>,
+              std::allocator<char> >, std::shared_ptr<std::set<long unsigned
+              int, std::less<long unsigned int>, std::allocator<long unsigned
+              int> > > > >]()))))' 
+to 'bool'
+
+This happens when tries to covert loc iterator to bool. If it were ==, then
+operator== would return bool type.
+
+<3>
+Meant to be == and this if is always true.
+
+bool QueueFull(Queue* queue)
+{
+   if( queue->count = MAXSIZE )
+   {
+      std::cout << "full(" << queue->count << ")" << std::endl;
+      return true;
+   }
+
+   return false;
+}
+
+
+{conversion-to-bool}
 The classes 'rarely' provide conversion operator but one important exception is
 convertion to bool.
 
-In earlier version of the library, the IO types defined a conversion to void to
-avoid the kind of problems above. Under the new standard, instead defines an
-explicit conversiton to bool.
+In earlier version of the library, the IO types defined a `conversion-to-void`
+to avoid the kind of problems above. Under the new standard, instead defines an
+`explicit-conversiton-to-bool`.
 
-
-<conversion-to-bool>
 However, even if uses explicit, this explicit has no effect when use stream in
 condition such as:
 
 if, while, for and do statements. logical operators. conditional operators.
  
-Why? Conversion to bool is 'intended' for use in conditions and hence ordinarily
+Why? `conversion-to-bool` is 'intended' for use in conditions and hence ordinarily
   should be defined as explicit to avoid problems in other uses:
 
 while(std::cin >> value)
 
-It reads into value, 'return' cin, and  cin converted to bool depending on cin
-  state. This bool conversion is the typical use of conversion-op.
+Reads input into value, 'return' cin, and  cin converted to bool depending on
+cin state. This bool conversion is the typical use of conversion-op.
 
-<class-state>
-note. Like cin, seems useful to have bool conversion when class has 'state'.
+note: 
+Like cin, seems useful to have bool conversion when class has 'state'.
 
 
 ={============================================================================
@@ -15752,7 +15753,8 @@ Returns whether the stream has not run into an error (corresponds to !fail())
 operator ! ()
 Returns whether the stream has run into an error (corresponds to fail())
 
-note: Before C++11, the operator bool() was declared as operator void*(), which
+note: 
+Before C++11, the operator bool() was declared as operator void*(), which
 could cause problems such as those described in Section 15.10.1, page 805.
 
 note: fail() is stream member function:
