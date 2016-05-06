@@ -220,12 +220,10 @@
 
 |kt_linux_tool_300| gdb-core-setting
 *kt_linux_tool_300* gdb-core-settting-run-commands when makes core
-*kt_linux_tool_300* gdb-core: force core
-*kt_linux_tool_300* gdb-core: force core from your program
+*kt_linux_tool_300* gdb-core-force-core-signal
+*kt_linux_tool_300* gdb-core-force-core-command
 *kt_linux_tool_300* gdb-core: stack frame
-|kt_linux_tool_300| gdb-core-case-analysis
-|kt_linux_tool_300| gdb-core-case-kernel crash on mips 
-*kt_linux_tool_300* gdb-core-case-crash on mips
+|kt_linux_tool_300| gdb-core-analysis-on-mips
 |kt_linux_tool_300| gdb-step
 *kt_linux_tool_300* gdb-print-gdb-set
 *kt_linux_tool_309* gdb-break
@@ -285,13 +283,13 @@
 *kt_linux_core_110* process-resource-case
 *kt_linux_core_050* process-function-reentrant
 
-|kt_linux_core_150| thread vs process. LPI 29
-|kt_linux_core_151| pthread and source
-|kt_linux_core_152| pthread errno. LPI 29.2
-|kt_linux_core_153| pthread compile
-|kt_linux_core_154| pthread create and exit
-|kt_linux_core_155| pthread join and detach. zombie-thread. LPI 29
-|kt_linux_core_156| pthread thread id. LPI 29
+*kt_linux_core_150* thread-and-process
+*kt_linux_core_151* thread-source
+*kt_linux_core_152* thread-errno
+|kt_linux_core_153| thread-compile
+*kt_linux_core_154* thread-create-and-exit
+*kt_linux_core_155* thread-join-and-detach
+|kt_linux_core_156| thread-id
 
 |kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
@@ -15861,7 +15859,7 @@ note: now has debugging info
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-core: force core
+*kt_linux_tool_300* gdb-core-force-core-signal
 
 kill -s SIGSEGV 113
 kill -s 11 113
@@ -15885,7 +15883,7 @@ SIGSEGV(segmentation fault)
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-core: force core from your program
+*kt_linux_tool_300* gdb-core-force-core-command
 
 10.19 How to Produce a Core File from Your Program
 
@@ -15927,7 +15925,7 @@ so on. The highest-numbered frame is the one for main.
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-core-case-analysis {frame-command}
+*kt_linux_tool_300* gdb-core-analysis-on-mips
 
 export LD_LIBRARY_PATH=/home/NDS-UK/parkkt/bins
 mips-gdb
@@ -15941,8 +15939,7 @@ bt
 
 (gdb) f n
 
-<case>
-
+{1}
 (gdb) bt
 #0 memset () at libc/string/mips/memset.S:132
 ...
@@ -15989,12 +15986,12 @@ Dump of assembler code for function memset:
 0x2ab251b4 <memset+84>: sw a1,-8(a0) ~
 0x2ab251b8 <memset+88>: bne a0,a3,0x2ab251b0 <memset+80>
 
-note: This shows that a0 which is the first argument of memset fuction and is
-NULL. Hence SIGSEGV. *sigseg*
+note: 
+This shows that a0 which is the first argument of memset fuction and is NULL.
+Hence SIGSEGV. *sigseg*
 
 
-<case>
-
+{2}
 (gdb) bt
 #0  MHWMemCheckBank (mpool=0x131bc38, size=64, mem_nb_bank=1) at mem_blockpool.c:271
 #1  0x007f09c8 in MHWMemAllocStatic (pool=0x131bc38, size=64) at mem_static.c:63
@@ -16088,16 +16085,14 @@ pool_max = (uint32_t *) 0xc
 0x131bc60:      0xffffffff      0x00000000      0x00000000      0x41445054
 0x131bc70:      0x5f444941      0x47000000      0x00000000      0x00000000
 
+note:
 This shows that structure passed in a0 has some NULLs and means that this pool
 was already destoried. When see destory func, it sets:
 
 poolHandle->s_WholeMem=NULL;
 
 
-={============================================================================
-*kt_linux_tool_300* gdb-core-case-kernel crash on mips
-
-<case>
+{3}
 When a crash in a kernel module happens, you should see output like the
 following on the serial or in the dmesg buffer (just run the dmesg command to
     see it). 
@@ -16215,6 +16210,8 @@ epc trace above. It starts like this:
    45b44:       afb7003c        sw      s7,60(sp)
 
 From the call trace we can calculate the address offset in use. Recall: 
+
+<4>epc   : c050cc54 XHddLowIO+0x124/0x3d8 [xtvfs]     Tainted: P    // note `pc`
 <4>[<c050cc54>] XHddLowIO+0x124/0x3d8 [xtvfs]
 
 Virtual         
@@ -16276,9 +16273,11 @@ That makes the disassembly of the code near our crash look like this:
    45c44:       08011728        j       45ca0 <XHddLowIO+0x170>
    45c48:       00008821        move    s1,zero
    45c4c:       8fa2001c        lw      v0,28(sp)
-   45c50:       3c030000        lui     v1,__getblk     // note: replaced?
-   45c54:       8c440094        lw      a0,148(v0)
+
+   45c50:       3c030000        lui     v1,__getblk     // note: overwritten
+   45c54:       8c440094        lw      a0,148(v0) ~
    45c58:       24630000        addiu   v1,v1,0
+
    45c5c:       0060f809        jalr    v1
    45c60:       8c46000c        lw      a2,12(v0)
    45c64:       ae020000        sw      v0,0(s0)
@@ -16396,9 +16395,7 @@ verify this by looking at struct super_block in the code.  However, sb has
 somehow become and odd number, and THAT is our bug. 
 
 
-={============================================================================
-*kt_linux_tool_300* gdb-core-case-crash on mips
-
+{4}
 (gdb) bt
 #0  getPresentationTimeCached (timeFormat=GST_FORMAT_TIME, this=0x56b900) 
     at /r.cpp:1433
@@ -16461,7 +16458,7 @@ $3 = {int64_t (const nickel::system::GstMediaRouter * const, GstFormat)} 0x73a1c
 (gdb) x/50i 0x73a1c7c4
    0x73a1c7c4 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const>:	lbu	v0,40(a0)
    0x73a1c7c8 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+4>:	beqz	v0,
-        0x73a1c7dc <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+24>
+   0x73a1c7dc <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+24>
    0x73a1c7cc <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+8>:	nop
    0x73a1c7d0 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+12>:	lw	v1,124(a0)
    0x73a1c7d4 <nickel::system::GstMediaRouter::getPresentationTimeCached(GstFormat) const+16>:	jr	ra
@@ -19038,34 +19035,6 @@ significantly more overhead than getppid().
 See LPI 3.1 for more.
 
 <form>
-Usually, an error is indicated by a return of -1. Thus, a system call can be checked with code such
-as the following:
-
-fd = open(pathname, flags, mode); /* system call to open a file */
-
-if (fd == -1) {
-   /* Code to handle the error */
-}
-
-
-{errno}
-When a system call fails, it sets the 'global' integer variable errno to a positive value that
-identifies the specific error. Including the <errno.h> header file provides a declaration of errno,
-as well as a set of constants for the various error numbers. All of these symbolic names
-commence with E.
-
-man errno
-
-EINVAL          Invalid argument (POSIX.1)
-
-<when-to-check>
-Successful system calls and library functions 'never' reset errno to 0, so this variable may have a
-nonzero value as a consequence of an error from a previous call. Furthermore, SUSv3 permits a
-successful function call to set errno to a nonzero value (although few functions do this).
-
-Therefore, when checking for an error, we should always first check if the function return value
-indicates an error, and only then examine errno to determine the cause of the error.
-
 <few-exception>
 A few system calls (e.g., getpriority()) can legitimately return -1 on success. To determine whether
 an error occurs in such calls, we set errno to 0 before the call, and then check it afterward. If
@@ -19091,20 +19060,6 @@ cause of errors depends on the particular function and is documented in the func
 For these functions, it is a mistake to use errno, perror(), or strerror() to diagnose errors.
 
 note: no 'uniform' way of error reporting when use system and library calls.
-
-<print-errnos>
-to print an error message based on the errno value. The perror() and strerror() library functions
-are provided for this purpose.
-
-#include <stdio.h>
-void perror(const char *msg);
-
-The perror() function prints the string pointed to by its msg argument, 'followed' by a message
-corresponding to the current value of errno.
-
-#include <string.h>
-char *strerror(int errnum);
-
 
 ={============================================================================
 *kt_linux_core_005* error handling codes from LPI
@@ -22091,31 +22046,41 @@ variables.
 
 
 ={============================================================================
-*kt_linux_core_150* thread vs process. LPI 29
+*kt_linux_core_150* thread-and-process
+  
+LPI 29
 
-A process is an instance of an executing program and a thread is an instance of an executing a task.
-In other words, a process is processor abstract, an abstract entity defined by kernel and with
-allocated resources in order to execute a program.  
+A process is an instance of an executing program and a thread is an instance of
+an executing a task. In other words, a process is `processor-abstract`, an
+abstract entity defined by kernel and with allocated resources in order to
+execute a program.  
 
-UNIX programs have a single thread of execution: the CPU processes instructions for a single logical
-flow of execution through the program. In a multithreaded program, there are multiple, independent,
-concurrent logical flows of execution within the same process.
+UNIX programs have a single thread of execution: the CPU processes instructions
+for a single logical flow of execution through the program. In a multithreaded
+  program, there are multiple, independent, concurrent logical
+    `flows-of-execution` within the same process.
 
-<key> In short, a process is an abstract(virtualisation) of a processor and a thread is an abstract
-of single flow of execution.
+note:
+A process is an instance of `processor-abstract` and a thread is an instance of
+single flow of execution.
 
 <on-linux>
 Two virtualisation in Linux: processer and memory.
 
-Linux don't distinguish a process(task) with a thread. The thread is just a special process: 
+Linux don't distinguish a process(task) with a thread. The thread is just a
+special process: 
 
-1. Linux kernel scheduler schedules based on 'thread'.
-2. Linux kernel has a double-linked list which has <thread_info> struct element which has
-thread_struct*.
-3. Thread is special since it shares resource (open files, pending signals, internal kernel data,
-process state, address space, text and data section) with others threads.
+* Linux kernel scheduler schedules based on 'thread'.
+ 
+* Linux kernel has a double-linked list which has <thread_info> struct element
+  which has thread_struct*.
 
-In other words, process is a single thread that don't share resources.
+* Thread is special since it shares resource (open files, pending signals,
+  internal kernel data, process state, address space, text and data section)
+  with others threads.
+
+note:
+A process is a single thread that don't share resources.
 
 This is clear when see how to create a thread:
 
@@ -22130,30 +22095,36 @@ Two usual steps to create a process:
 fork();  // copy a child from a parent and actually use clone() call
 exec*()  // load a new program text.
 
-{thread-vs-process-model}
-PM or TM?
-<PM>
-1. It is difficult to share information between processes. Since the parent and child don't share
-memory other than the read-only text segment, we must use IPC.
 
-2. Process creation with fork() is relatively expensive although 'copy-on-write' is used. The need
-to duplicate various process attributes such as page tables and file descriptor tables means that a
-fork() call is still time-consuming.
+{thread-vs-process-model}
+
+<PM>
+* It is difficult to share information between processes. Since the parent and
+  child don't share memory other than the read-only text segment, we must use
+  IPC.
+
+* Process creation with fork() is relatively expensive although 'copy-on-write'
+  is used. The need to duplicate various process attributes such as page tables
+  and file descriptor tables means that a fork() call is still time-consuming.
 
 <TM>
-1. Sharing information between threads is easy and fast since it is just a matter of copying data
-into shared (global or heap) variables. However, needs syncronization.
+* Sharing information between threads is easy and fast since it is just a matter
+  of copying data into shared (global or heap) variables. However, needs
+  syncronization.
 
-2. Thread creation is faster because many of the attributes that must be duplicated in a child
-created by fork() are instead shared between threads such as page table.
+* Thread creation is faster because many of the attributes that must be
+  duplicated in a child created by fork() are `instead-shared` between threads
+  such as page table.
+
 
 <TM-disadvantages>
-1. more efforts to ensure thread-safe
-2. buggy thread can damage all of the threads in the process. less protection.
-3. each thread is competing for use of the finite virtual address space of a host process.
-4. desirable to avoid the use of signals in multi-threaded since requires careful designs.
-5. should run the same program.
-6. more threads means more memory and context switching.
+* Buggy thread can damage all of the threads in the process. less protection.
+* More threads means more memory and `context-switching`.
+ 
+* more efforts to ensure thread-safe
+* each thread is competing for use of the finite virtual address space of a host process.
+* desirable to avoid the use of signals in multi-threaded since requires careful designs.
+// * should run the same program.
 
 
 {shared-and-not-shared-between-threads}
@@ -22178,7 +22149,7 @@ thread ID (Section 29.5);
 signal mask;
 thread-specific data (Section 31.3);
 alternate signal stack (sigaltstack());
-the errno variable;
+the `errno` variable;
 realtime 'scheduling' policy and priority (Sections 35.2 and 35.3);
 capabilities (Linux-specific, described in Chapter 39); and
 'stack' (local variables and function call linkage information).
@@ -22186,33 +22157,34 @@ capabilities (Linux-specific, described in Chapter 39); and
 
 
 {multithreaded-vs-singlethreaded}
-The mutiltithreaded means that a single process has multi threads, 'lightweight'-process. The
-singlethreaed means that a single process has a single thread. MT has less IPC but prone to error
-because shares resources; less protection. ST has more IPC but more protection. 
+The mutiltithreaded means that a single process has multiple threads. The
+singlethreaed means that a single process has a single thread. MT has less IPC
+but prone to error because shares resources; less protection. ST has more IPC
+but more protection. 
 
 note: tradeoff between IPC and protection.
 
 
-
-
 {user-and-kernel-stack}
-The kernel stack is a per-process memory region maintained in kernel memory that is used as the
-stack for execution of the functions called internally during the execution of a system call.
+The kernel stack is a per-process memory region maintained in kernel memory that
+is used as the stack for execution of the functions called internally during the
+execution of a system call.
 
 Each (user) stack frame contains the following information:
 
-1. Function arguments and local variables
-2. Some registers. RA.
+* Function arguments and local variables
+* Some registers. RA.
 
 note: needs more about difference?
 
 
 ={============================================================================
-*kt_linux_core_151* pthread and source
+*kt_linux_core_151* thread-source
 
-POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard defines an API for
-creating and manipulating threads. The two main Linux threading implementations - LinuxThreads and
-Native POSIX Threads Library (NPTL) - deviate from the standard.
+POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard
+defines an API for creating and manipulating threads. The two main Linux
+threading implementations - LinuxThreads and Native POSIX Threads Library (NPTL)
+- deviate from the standard.
 
 
 {pthread-apis}
@@ -22222,8 +22194,8 @@ http://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread.h.html
 Linux threading models compared: LinuxThreads and NPTL
 http://www-128.ibm.com/developerworks/linux/library/l-threading.html?ca=dgr-lnxw07LinuxThreadsAndNPTL
 
-From 2.6, NPTL(New Posix Threading Library) that supports futex(fast user space mutex) and is part
-of glibc.
+From 2.6, NPTL(New Posix Threading Library) that supports futex(fast user space
+mutex) and is part of glibc.
 
 
 {source}
@@ -22237,36 +22209,87 @@ uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\bits\pth
 
 
 ={============================================================================
-*kt_linux_core_152* pthread errno. LPI 29.2
+*kt_linux_core_152* thread-errno
+  
+LPI 29.2
+
+{global-errno}
+When a system call fails, it sets the 'global' integer variable errno to a
+positive value that identifies the specific error. Including the <errno.h>
+header file provides a declaration of errno, as well as a set of constants for
+the various error numbers. All of these symbolic names commence with E.
+
+man errno
+
+EINVAL          Invalid argument (POSIX.1)
+
+Usually, an error is indicated by a return of -1. Thus, a system call can be
+checked with code such as the following:
+
+fd = open(pathname, flags, mode); /* system call to open a file */
+
+if (fd == -1) {
+   /* Code to handle the error */
+}
+
+<print-errnos>
+To print an error message based on the errno value. The perror() and strerror()
+library functions are provided for this purpose.
+
+#include <stdio.h>
+void perror(const char *msg);
+
+The perror() function prints the string pointed to by its msg argument, 'followed' by a message
+corresponding to the current value of errno.
+
+#include <string.h>
+char *strerror(int errnum);
+
+
+<when-to-check>
+Successful system calls and library functions 'never' reset errno to 0, so this
+variable may have a nonzero value as a consequence of an error from a previous
+call. Furthermore, SUSv3 permits a successful function call to set errno to a
+nonzero value (although few functions do this).
+
+Therefore, when checking for an error, we should always first check if the
+function return value indicates an error, and only then examine errno to
+determine the cause of the error.
+
 
 {thread-errno}
-The traditional method of returning status from system calls and some library functions is to return
-0 on success and -1 on error, with errno being set to indicate the error. 
+The traditional method of returning status from system calls and some library
+functions is to return 0 on success and -1 on error, with errno being set to
+indicate the error. 
 
 The functions in the pthreads API do things differently. 
 
 <why>
-The errno is a global integer variable. However, this doesn't suffice for threaded programs. If a
-thread made a call that returned an error in a global errno variable, then this would confuse other
-threads that might also be making calls and checking errno. In other words, race conditions would
+The errno is a global integer variable. However, this doesn't suffice for
+threaded programs. If a thread made a call that returned an error in a
+`global-errno` variable, then this would confuse other threads that might also
+be making calls and checking errno. In other words, race conditions would
 result.
 
 <how>
-Each thread has its own errno value. On Linux, a thread-specific errno is achieved in a similar
-manner to most other UNIX: errno is defined as a 'macro' that expands into a function call returning
-a modifiable lvalue that is distinct for each thread. Since the lvalue is modifiable, it is still
-possible to write assignment statements of the form errno = value in threaded programs.
+Each thread has its own errno value. On Linux, a `thread-specific-errno` is
+achieved in a similar manner to most other UNIX: errno is defined as a 'macro'
+that expands into a function call returning a modifiable lvalue that is distinct
+for each thread. Since the lvalue is modifiable, it is still possible to write
+assignment statements of the form errno = value in threaded programs.
 
-To summarize, the errno mechanism has been adapted for threads in a manner that leaves error
-reporting unchanged from the traditional UNIX API.
+To summarize, the errno mechanism has been adapted for threads in a manner that
+leaves error reporting unchanged from the traditional UNIX API.
 
-note: after all, errno macro returns a per-thread errno.
-note: Nowadays, a program is required to declare errno by including <errno.h>, which enables the
-implementation of a per-thread errno.
+note: 
+After all, errno macro returns a per-thread errno. A program is required to
+declare errno by including <errno.h>, which enables the implementation of a
+per-thread errno.
 
 <value>
-All pthreads functions return 0 on success or a positive value on 'failure'. The failure value is
-one of the same values that can be placed in errno by traditional UNIX system calls. 
+All pthreads functions return 0 on success or a `positive-value` on 'failure'.
+The failure value is one of the same values that can be placed in errno by
+traditional UNIX system calls. 
 
 
 {LPI-approach}
@@ -22343,7 +22366,7 @@ if( error condition ) {
 
 
 ={============================================================================
-*kt_linux_core_153* pthread compile
+*kt_linux_core_153* thread-compile
 
 On Linux, programs that use the Pthreads API must be compiled with the cc -pthread option. The
 effects of this option include the following:
@@ -22357,7 +22380,7 @@ gcc -pthread sample.c
 
 
 ={============================================================================
-*kt_linux_core_154* pthread create and exit
+*kt_linux_core_154* thread-create-and-exit
 
 <pthread-create>
 #include <pthread.h>
@@ -22378,7 +22401,8 @@ gcc -pthread sample.c
 int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
 
 
-<pthread-exit>
+{pthread-exit}
+
 // The execution of a thread terminates in one of the following ways: 
 //
 // o The thread's start function performs a return specifying a return value for the thread. This is
@@ -22388,27 +22412,32 @@ int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(vo
 //
 // o The thread is canceled using pthread_cancel()
 //
-// o note: Any of the threads calls exit(), or the main thread performs a return (in the main() function),
-// which causes 'all' threads in the process to terminate immediately.
+// * `any-of-the-threads` calls exit(), or the main thread performs a return (in
+// the main() function), which causes 'all' threads in the process to terminate
+// immediately.
 // 
 // @retval
 //
-// Specifies a return value that can be obtained in 'another' thread by calling pthread_join(). The
-// value pointed to by retval should 'not' be located on the thread's stack, since the contents of
-// that stack become undefined on thread termination. The same statement applies to the value given
-// to a return statement in the thread's start function.
+// Specifies a return value that can be obtained in 'another' thread by calling
+// pthread_join(). The value pointed to by retval should 'not' be located on the
+// thread's stack, since the contents of that stack become undefined on thread
+// termination. The same statement applies to the value given to a return
+// statement in the thread's start function.
 //
-// <continue-after-main-thread-exit>
-// note: If the main thread calls pthread_exit() instead of calling exit() or performing a return,
-// then the other threads continue to execute.
+// <continue-after-main-thread-exit> 
+// If the main thread calls pthread_exit() instead of calling exit() or
+// performing a return, then the other threads continue to execute.
 
 void pthread_exit(void *retval);
 
 
 ={============================================================================
-*kt_linux_core_155* pthread-join and zombie thread. LPI 29
+*kt_linux_core_155* thread-join-and-detach
 
-<pthread-join> 
+LPI 29
+
+{pthread-join} 
+
 // return 0 if okay, positive Exxx on error. 
 //
 // To 'wait' for a given thread to terminate. If that thread has already
@@ -22425,7 +22454,9 @@ Calling pthread_join() for a thread ID that has been previously joined can lead
 to 'unpredictable' behavior; for example, it might instead join with a thread
 created later that happened to reuse the same thread ID.
 
-<pthread-detach>
+
+{pthread-detach}
+
 int pthread_detach(pthread_t tid);
 
 Thread is either 'joinable'(the 'default') or 'detached'. 
@@ -22443,7 +22474,7 @@ system to automatically clean up and remove the thread when it terminates. In
 this case, can mark the thread as detached, by making a call to
 pthread_detach().
 
-Detaching a thread does 'not' make it 'immune' to a call to exit() in another
+Detaching a thread does 'not' make it 'immune' to a call to `exit()` in another
 thread or a return in the main thread. In such an event, all threads in the
 process are immediately terminated, 'regardless' of whether they are joinable or
 detached. 
@@ -22451,14 +22482,11 @@ detached.
 To put things another way, pthread_detach() simply controls what happens after a
 thread terminates, not how or when it terminates.
 
-note: After all, detaching means cannot use join() to get retrun value but not
-like zombie process since still related to a process.
-
 
 {zombie-thread}
 If a thread is not detached, then we must join with it using pthread_join(). If
 not, then, when the thread terminates, it produces the thread 'equivalent of a
-zombie process. Aside from wasting system resources, if enough thread zombies
+`zombie-process`. Aside from wasting system resources, if enough thread zombies
 accumulate, we won't be able to create additional threads.
 
 
@@ -22484,7 +22512,9 @@ Section 30.2.4.
 
 
 ={============================================================================
-*kt_linux_core_156* pthread thread id. LPI 29
+*kt_linux_core_156* thread-id
+
+LPI 29
 
 {tid}
 Each thread within a process is uniquely identified by a thread ID. This ID is
