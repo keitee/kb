@@ -107,6 +107,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_003| ctor
 *kt_dev_cpp_003* default-arg
 *kt_dev_cpp_003* copy-control
+*kt_dev_cpp_004* copy-assign-self
 *kt_dev_cpp_003* expr-pass-by-reference
 *kt_dev_cpp_003* expr-vexing-parse
 *kt_dev_cpp_004* copy-dyn-resource
@@ -116,16 +117,16 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_004* copy-control: move: rvalue reference
 *kt_dev_cpp_004* copy-control: move: std-move
 *kt_dev_cpp_004* copy-control-preventing-copies
-*kt_dev_cpp_004* copy-control-self-assign
 |kt_dev_cpp_007| overload-function-matching
 |kt_dev_cpp_021| overload-operator
 *kt_dev_cpp_005* type-conversion-implicit
 *kt_dev_cpp_005* type-conversion-ex
-*kt_dev_cpp_005* type-conversion-explicit, copy-form-init
+*kt_dev_cpp_005* type-conversion-explicit
 *kt_dev_cpp_005* type-conversion-to-bool
-*kt_dev_cpp_005* type-conversion-to-bool-stringstream-case
-|kt_dev_cpp_005| list initialization. initializer_list
-*kt_dev_cpp_005* form-of-initialization
+*kt_dev_cpp_005* type-conversion-to-bool-stringstream
+*kt_dev_cpp_005* init-form
+*kt_dev_cpp_005* init-copy-form-init
+|kt_dev_cpp_005| init-list-form-init initializer_list
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
 |kt_dev_cpp_008| const. equal-misspell
 *kt_dev_cpp_008* const-temporary
@@ -281,7 +282,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_072| string-find 
 |kt_dev_stl_073| str-numeric-conversion
 |kt_dev_stl_074| stl-string: iterator support
-*kt_dev_stl_075* string-sstream
+*kt_dev_stl_075* str-sstream
 *kt_dev_stl_075* stl-string: seg fault
 
 |kt_dev_stl_080| bitset
@@ -12441,7 +12442,7 @@ Tried copy-ctor and compile error:
 To tell the compiler to create syn version for functions `but-not-limited` to
 default ctor. 
 
-For default ctor, if there are other ctor, then compiler will 'not' make a
+For `default-ctor`, if there are other ctor, then compiler will 'not' make a
 default ctor and can ask the compiler to create one.
 
 class Sales_data {
@@ -12699,7 +12700,7 @@ Used in contexts:
 * `copy-form-init` but not limited to copy-ctor
 * `pass-by-value` function call for `nonreference` type parameter
 * `return-by-value` 
-4. brace initialization.
+* `list-form-init`
 5. implicit 'coversion' using temp object. 
 
 For pass and return by value they are rightly nonreference type and
@@ -12847,6 +12848,72 @@ class Widget {
       return *this;
     }
 };
+
+
+={============================================================================
+*kt_dev_cpp_004* copy-assign-self
+
+{self-assign}
+EC++11. When implement `copy-assign`, must think about self-assign and
+exception-safe.
+
+Why? because there are 'less' obvious self-assignment cases and are the result
+of aliasing: having more than one way to refer to an object.
+
+<one> aliasing
+
+a[i] = a[j];   // potential assign to self when i==j
+*px = *py;     // potential assign to self when point to the same
+
+<two> aliasing in same class hierarchy since base ptr can point to derived.
+Here, rb and *pd might actually be the same.
+
+void doSomething( const Base& rb, Derived* pd );
+
+
+EXP++38.
+
+Use `direct-self-assign-check` for optimization and use `copy-and-swap-idiom`
+for correct implementation.
+
+
+{direct-self-assign-check}
+
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  if( this != &rhs )
+  {
+    // ...
+  }
+}
+
+
+{copy-and-swap-idiom}
+Classes that define `swap` often use it to define their `copy-assign`. This
+`swap`s the lhs operand with a 'copy' of the rhs.
+
+HasPtr& HasPtr::operator=(const HasPtr &rhs)
+{
+  auto newp = new string(*rhs.ps);
+  delete ps;
+  ps = newp;
+  return *this;
+}
+
+HasPtr& HasPtr::operator=(HasPtr rhs)   // note
+{
+  swap(*this, rhs);
+  return *this;                 // rhs is destroyed, which deletes the old ps.
+}
+
+The `copy-and-swap-idiom` is exception-safe which automatically handle
+self-assign "by copying the rhs before changing lhs operand"
+
+The only code that might throw is the new expression 'inside' the copy-ctor. If
+an exception occurs, it will happen before having changed the lhs.
+
+Also EC++11 says the compiler can generate more efficient code by moving copying
+from the function body to parameter construction. 
 
 
 ={============================================================================
@@ -14507,27 +14574,6 @@ int main()
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-control-self-assign
-
-{self-assign}
-EC++11. When implement copy-assign, must think about self-assign and exception-safe. See
-{self-assign-exception-safe} in *kt_dev_cpp_019*
-
-Why? because there are 'less' obvious self-assignment cases and are the result of aliasing: having
-more than one way to refer to an object.
-
-<one> aliasing
-
-a[i] = a[j];   // potential assign to self when i==j
-*px = *py;     // potential assign to self when point to the same
-
-<two> aliasing in same class hierarchy since base ptr can point to derived. Here, rb and *pd might
-actually be the same.
-
-void doSomething( const Base& rb, Derived* pd );
-
-
-={============================================================================
 *kt_dev_cpp_007* overload-function-matching
 
 Function overloading eliminates the need to invent and remember names that exist
@@ -15313,7 +15359,7 @@ fraction: 44
 
 
 ={============================================================================
-*kt_dev_cpp_005* type-conversion-explicit, copy-form-init
+*kt_dev_cpp_005* type-conversion-explicit
 
 Converting ctors and conversion ops define class-type conversions.
 
@@ -15407,14 +15453,14 @@ bool operator==(const Array<int> &lhs, const Array<int> &rhs);
 Array<int> a(10); Array<int> b(10);
 
 for( int i=0; i < 10; ++i )
-  if( a == b[i] ) {        # meant to be a[i] == b[i]
+  if( a == b[i] ) {                 // meant to be a[i] == b[i]
     ...
   }
   else {
     ...
   }
 
-There is no match candidate, operator==( Array< int>, int, and compiler do
+There is no match candidate, operator==( Array<int>, int), and compiler do
 convert the second arg to Array because there is converting-ctor. This
 is the same as:
 
@@ -15425,7 +15471,7 @@ iteration. How to prevent this?
 
 The implicit conversion is not always useful since temporary is made. More
 expensive, lost state(input), or making changes on temporary. So the point is
-about making it explicit in code and forcing user to know what they are doing.
+about making it explicit in code and `forcing-user-to-know-what-they-are-doing`.
 
 
 <stl-example-of-explicit>
@@ -15440,8 +15486,8 @@ explicit container::container (size_type num)
 x.member(10);  // error
 
 
-{copy-form-init}
-`copy-form-init` do `implicit-conversion` using any ctor excluding `copy-ctor`
+<copy-form-init>
+`copy-form-init` do `implicit-conversion` using `converting-ctor` but not `copy-ctor`
 and cannot use explicit ctor with `copy-form-init`.
 
 // explicit Sales_data(const std::string &s): bookNo(s) {};
@@ -15743,7 +15789,7 @@ Like cin, seems useful to have bool conversion when class has 'state'.
 
 
 ={============================================================================
-*kt_dev_cpp_005* type-conversion-to-bool-stringstream case
+*kt_dev_cpp_005* type-conversion-to-bool-stringstream
 
 Two stream functions are defined for the use of streams in Boolean expressions
 
@@ -15754,7 +15800,7 @@ operator ! ()
 Returns whether the stream has run into an error (corresponds to fail())
 
 note: 
-Before C++11, the operator bool() was declared as operator void*(), which
+Before C++11, the `operator-bool()` was declared as `operator-void*()`, which
 could cause problems such as those described in Section 15.10.1, page 805.
 
 note: fail() is stream member function:
@@ -15793,7 +15839,7 @@ if (! (std::cin >> x)) {
 }
 
 
-<problem>
+<ex>
 Use implicit conversion operator which is traditional. This is the way iostream
 uses so it is possible:
 
@@ -15803,7 +15849,7 @@ if(ifstream) ...
 template< class T>
 class SmartPtr {
   public:
-    operator void*(); // return 0 if smart pointer is null, non-zero otherwise.
+    operator void*(); // return 0 if smart pointer is null, nonzero otherwise.
     ...
 };
 
@@ -15819,7 +15865,7 @@ SmartPtr<Orange>:
 Since both smart pointers can be implicitly converted into void* pointers, and
 there is a built-in comparison function for built-in pointers.
 
-note: The problem may be:
+So the below fails although they points to the same.
 
 SmartPtr<Apple> pa; SmartPtr<Orange> po;
 
@@ -15827,14 +15873,15 @@ pa = po;
 
 if( pa == po ) ...
 
-This fails although they points to the same.
 
-
-<problem>
+<ex>
 Before C++11, a typical programming error when dealing with stringstreams was to
 forget to extract the string with the function str() and to write to the stream
 directly instead. This was, from a compiler's point of view, a possible and
 reasonable thing to do because there was an implicit conversion to void*. 
+
+ostringstream os;
+cout << os.str() << endl;       // right
 
 As a result, the issue is that instead of its value the state of the stream was
 written in the form of an address. 
@@ -15886,6 +15933,7 @@ stringstream s;
 -
 +    s >> st;
 +    ASSERT_THAT(s.good(), Eq(true));
+
 
 <problem>
 This member function prints "1" then the address. What happended?
@@ -15939,20 +15987,20 @@ class printer {
 
 
 ={============================================================================
-*kt_dev_cpp_005* form-of-initialization
+*kt_dev_cpp_005* init-form
 
-// default-form initialzation
+// `default-form-init`
 string s1;                 
 
 
-// direct-form initialzation
+// `direct-form-init`
 string s2( s1 );           
 string dots(10, '.');
 string s(dots);
 string null_book( "9-999-99999-9" );
 
 
-// copy-form initialzation 
+// `copy-form-init`
 string null_book = "9-999-99999-9";
 string s2 = s1;
 
@@ -15988,8 +16036,8 @@ vector<T> v3(n, val);         // has n elements with value val
 vector<T> v4(n);              // has n copies of a value-init objects
 
 note:
-The value-initialization uses the form `T()` and is a special or narrow case of
-    default-initialization.
+The `value-init` uses the form `T()` and is a special or narrow case of
+`default-init`. This matters for built-in types.
 
 <ex>
 #include <iostream>
@@ -16039,17 +16087,21 @@ value-inited:
 { 10, 10, 10, 10, 10, }
 
 
-{copy-form-use-copy-ctor}
-The direct-form initialization use ordinary function matching in searching for
-matching ctor among ctors 'including' copy-ctor.
+={============================================================================
+*kt_dev_cpp_005* init-copy-form-init
 
-The copy-form uses converting-ctor which uses implicitly class-type-conversion
-to make a call succeed However, if that converting constructor is explicit or is
-not defined, then cannot make it succeed and is in error.
+The `direct-form-init` use ordinary function matching in searching for matching
+ctor among ctors 'including' copy-ctor.
 
-<copy-form-initialization>
-The C++SLR says that you can't use the assignment notation, copy-form here
-because that is considered to be an implicit conversion.
+The `copy-form-init` uses `converting-ctor` which uses `implicit-conversion` to
+make a call succeed. Not use `copy-ctor`
+
+The both uses `converting-ctor` and `copy-form-init` uses it implicitly.
+
+
+{copy-form-init}
+The CLR says that you can't use the assignment notation, copy-form-init because
+that is considered to be an implicit conversion.
 
 
 <1> error since there is no converting-ctor
@@ -16224,21 +16276,74 @@ The both uses converting-ctor.
 
 
 ={============================================================================
-*kt_dev_cpp_005* list initialization. initializer_list 
+*kt_dev_cpp_005* init-list-form-init
 
-{why-list-initialization}
-Many different ways to initialize. So the generalized use of curly brace was
-introduced in new standard.
+{list-form-init} *c++11*
+There are many different ways to initialize. C++11 introduced the concept of
+generalized `uniform-initialization`, which means that for any initialization. 
+
+note: >
+Must use -std=c++0x or -std=gnu++0x. Otherwise, compile error.
+
+The followings are possible now:
 
 int units_sold = 0;
 int units_sold = {0};
-int units_sold{0};            // list initialzation.
+int units_sold{0};            // `list-form-init`
 int units_sold(0);
 int units_sold{};
 
+const std::string hybrid_str{"hybrid:"};
+int values[] { 1, 2, 3 };
+std::vector<int> v{ 2, 3, 5, 7, 11, 13, 17 };
+std::vector<std::string> cities{"Berlin", "New York", "London", "Braunschweig", 
+    "Cairo", "Cologne" };
+std::complex<double> c{4.0,3.0};    // equivalent to c(4.0,3.0)
+
+
+<advantage>
+
+The good things are:
+
+* `value-init` for built-in types
+
+An `list-form-init` 'forces' `value-init`, which means that even local variables
+of fundamental data types, which usually have an 'undefined' value, are
+initialized by zero, or nullptr, if it is a pointer.
+
+int i;      // i has undefined value
+int j{};    // j is initialized by 0
+int* p;     // p has undefined value
+int* q{};   // q is initialized by nullptr
+
+note: 
+Why for built-in type? class type will have default values since ctors would do
+if ctors do the right work.
+
+note: 
+CPR p44. Some classes require that every object be explicitly initialized. The
+compiler will complain if try to create an object of such a class with no
+initializer. HOW?
+
+
+* narrowing conversion
+
+The `list-form-init` do 'not' allow `narrow-conversion` of 'built-in' type.
+
+int x3{5.0};      // ERROR: narrowing
+int x4 = {5.3};   // ERROR: narrowing
+
+note: 
+Worthwhile to use this property? Since unlikely to directly initialize an int
+from a long double? However such initialization might happen unintentionally in
+template. So YES.
+
+* use `single-form-of-init` whether it is built-in or class type
+
+* avoid vexing-parse
 
 <ex>
-The list-from voids `exlpicit` on converting-ctor.
+As with `direct-form-init`, `list-form-init` do not care `exlpicit` on converting-ctor.
 
 #include<iostream>
 #include<string>
@@ -16268,75 +16373,17 @@ class MSTR
 
 int main()
 {
-    // copy-from
-    // note: this is an error as this is the same example as <3>
+    // copy-from, an error as this is the same example as <3>
     MSTR m3 = "mstring three";
 
-    // list-from
-    // note: no error and converting-ctor is used.
+    // `list-from-init` no error and converting-ctor is used.
     MSTR m3{"mstring three"};
 }
 
 
-{list-initialization} uniform initialization
-C++11 introduced the concept of uniform initialization, which means that for any
-initialization. 
-
-note: >
-Must use -std=c++0x or -std=gnu++0x. Otherwise, compile error.
-
-The followings are possible now:
-
-const std::string hybrid_str{"hybrid:"};
-int values[] { 1, 2, 3 };
-std::vector<int> v{ 2, 3, 5, 7, 11, 13, 17 };
-std::vector<std::string> cities{"Berlin", "New York", "London", "Braunschweig", 
-    "Cairo", "Cologne" };
-std::complex<double> c{4.0,3.0};    // equivalent to c(4.0,3.0)
-
-The good things are:
-
-1. default value for built-in types
-
-An initializer list 'forces' so-called value-initialization, which means that
-even local variables of fundamental data types, which usually have an
-'undefined' value, are initialized by zero, or nullptr, if it is a pointer.
-
-int i;      // i has undefined value
-int j{};    // j is initialized by 0
-int* p;     // p has undefined value
-int* q{};   // q is initialized by nullptr
-
-note: 
-Why it is for built-in type? class type will have default values since ctors
-would do if ctors do the right work.
-
-note: 
-C++P p44. Some classes require that every object be explicitly initialized. The
-compiler will complain if try to create an object of such a class with no
-initializer. HOW?
-
-
-2. narrowing conversion
-
-The list initialization do 'not' allow narrowing conversion of 'built-in' type.
-
-int x3{5.0};      // ERROR: narrowing
-int x4 = {5.3};   // ERROR: narrowing
-
-note: 
-Worthwhile to use this property? Since unlikely to directly initialize an int
-from a long double? However such initialization might happen unintentionally in
-template. 'todo'
-
-3. use single form of initialization
-
-4. avoid vexing-parse
-
-
 {initializer-list}
 To 'support' the concept of initializer lists for user-defined types. It is a
-library template type that repersents an 'array' of values of the 'same' type.
+library template type that repersents an 'array' of values of the `same-type`.
 The element in a list are always `const`.
 
 Can write a function that takes varying number of arguments.
@@ -16376,7 +16423,6 @@ void print( std::initializer_list<int> vals )
   for (auto p=vals.begin(); p!=vals.end(); ++p)  
     std::cout << *p << "\n";
 }
-
 
 
 ={============================================================================
@@ -16487,34 +16533,6 @@ How "try type version and std version next if there isn't" works? Two things:
 note: 
 Why not "using std::swap" hide swap(T)? Since it simply add name in the
 name-lookup search and the swap(T) is better match than std::swap.
-
-
-{copy-and-swap-idiom}
-Classes that define `swap` often use it to define their assignment operator.
-This `swap`s the lhs operand with a 'copy' of the rhs.
-
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
-{
-  auto newp = new string(*rhs.ps);
-  delete ps;
-  ps = newp;
-  return *this;
-}
-
-HasPtr& HasPtr::operator=(HasPtr rhs)   // note
-{
-  swap(*this, rhs);
-  return *this;      // rhs is destroyed, which deletes the old ps.
-}
-
-The copy-and-swap-idiom is exception-safe which automatically handle self-assign
-"by copying the rhs before changing lhs operand"
-
-The only code that might throw is the new expression 'inside' the copy-ctor. If
-an exception occurs, it will happen before having changed the lhs.
-
-Also EC++11 says the compiler can generate more efficient code by moving copying
-from the function body to parameter construction. 
 
 
 {define-swap-use-specialisation}
@@ -38559,12 +38577,12 @@ int main(int argc, char* argv[])
 
 
 ={============================================================================
-*kt_dev_stl_075* string-sstream
+*kt_dev_stl_075* str-sstream
 
 CLR 15.10
 
 The mechanisms of stream classes can also be used to read from strings or to
-write to strings. String streams provide a buffer but don't have an I/O channel.
+write to strings. `stringstream` provide a buffer but don't have an I/O channel.
 This buffer/string can be manipulated with special functions. 
 
 <usecase>
@@ -38573,7 +38591,7 @@ actual I/O. For example, text for output can be formatted in a string and then
 sent to an output channel sometime 'later'. Another use is reading input line by
 line and processing each line by using string streams.
 
-Supports in-memory IO and read from or write to a string as if the string were
+Supports in-memory IO and read from or write to a string `as-if-the-string-were`
 an IO stream. In other words, read(>>) and write(<<) to a stream are string
 manipulations. 
 
@@ -38630,6 +38648,8 @@ int main()
   // os << "dec: " << 15 << hex << " hex: " << 15; note: what difference?
   cout << os.str() << endl;
 
+  cout << "-------" << endl;
+
   bitset<15> b(5789);
   os << "float: " << 4.67 << " bitset: " << b << endl;
   cout << os.str() << endl;
@@ -38638,6 +38658,7 @@ int main()
 $ ./a.out 
 dec: 15 hex: f
 
+-------
 dec: 15 hex: f
 float: 4.67 bitset: 001011010011101
 
@@ -38677,11 +38698,10 @@ float: 4.67 bitset: 001011010011101
 
 $
 
-Using seekp(), the write position is moved to the beginning of the stream. 
-
-So, the following call of operator << writes at the beginning of the string,
-  thus overwriting the beginning of the existing string stream. However, the
-  characters that are not overwritten remain valid. 
+Using seekp(), the write position is moved to the beginning of the stream. The
+following call of operator << writes at the beginning of the string, thus
+overwriting the beginning of the existing string stream. However, the characters
+that are not overwritten remain valid. 
 
 
 <ex> istringstream example. file parsing example
