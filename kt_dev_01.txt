@@ -90,7 +90,8 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_0004* pointer-and-reference *ex-interview*
 *kt_dev_cpp_0004* expr-sizeof
 |kt_dev_lang_014| printf-format
-|kt_dev_lang_015| expr-control flow {control-for-vs-while} {switch-under-the-hood}
+|kt_dev_lang_015| expr-control-flow
+*kt_dev_lang_015* expr-for-while
 |kt_dev_lang_016| expr-operator-precedence
 *kt_dev_lang_016* expr-evaluation-order
 *kt_dev_lang_016* expr-unary
@@ -287,7 +288,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_075* str-sstream
 *kt_dev_stl_075* stl-string: seg fault
 
-|kt_dev_stl_080| bitset
+|kt_dev_stl_080| stl-bitset
 
 |kt_dev_stl_100| sp-raii
 |kt_dev_stl_101| sp-shared
@@ -3197,7 +3198,7 @@ The int type type on MIPS: size int: 4
 signed int  : -219874992
 unsigned int : 4075092304
 
-How to get the `twos-complement`" that is negated value? "NOT X + 1"
+How to get the `twos-complement` that is negated value? "NOT X + 1"
 
     23:    1 0111
 NOT 23: 1110 1000
@@ -3240,12 +3241,12 @@ uint32_t ins = 0x27BDFFE0
 0010.0111.1011.1101.1111.1111.1110.0000
 
 two's complement
-1101.1000.0100.0010.0000.0000.0001.1111      // ~X
+1101.1000.0100.0010.0000.0000.0001.1111      // ~X (not)
 +1                                           // +1
 --------------------------------------------------
-1101.1000.0100.0010.0000.0000.0010.0000      // -X
+1101.1000.0100.0010.0000.0000.0010.0000      // -X (negate)
 
-(-ins) = 0xD8420020                          // negate
+(-ins) = 0xD8420020                          // twos-complement, negate
 1101.1000.0100.0010.0000.0000.0010.0000
 
 
@@ -3256,15 +3257,11 @@ As with 8 bits pattern:
 
 As with 32 bits pattern:
 
-0111 1111 1111 1111 1111 1111 1111 1111     // 0x7fffffff
-1000 0000 0000 0000 0000 0000 0000 0000     // 0x80000000, [31...0]
+0111 1111 1111 1111 1111 1111 1111 1111     // 0x7fffffff, INT_MAX
+1000 0000 0000 0000 0000 0000 0000 0000     // 0x80000000, [31...0] INT_MIN
 
-Since the addition operation in the CPU is agnostic to whether the integer is
-signed or unsigned, the same goes for signed integers. For 32-bit signed
-integers, the minimum value is 0x80000000 (-2147483648, 31th MSB is on) and the
-maximum value is 0x7fffffff (2147483647). 
-
-There is no value that can hold 2147483648 for 32 bits or 128 for 8 bits:
+The addition operation in the CPU is agnostic to whether the integer is signed
+or unsigned. The bit representation is the same. 
 
 If you 'negate' (int)0x80000000, you get the same again and that is something to
 look out for because there is `no-change` in bit representation. This means
@@ -3273,15 +3270,15 @@ is 'agnostic' to whether it's signed or unsigned.
 
 int main()
 {
-  // get `max-negative-num` INT_MIN
-  int uint_max = ((unsigned int)(~0) >> 1)+1;
+  // `max-negative-num` INT_MIN
+  int value = ((unsigned int)(~0) >> 1)+1;
 
-  std::bitset<32> bitset2{uint_max};
+  std::bitset<32> bitset2{value};
   std::cout << bitset2 << std::endl;
 
   // negate `max-negative-num`
-  unsigned int minus_uint_max = -uint_max;
-  std::bitset<32> bitset3{minus_uint_max};
+  unsigned int minus_value = -value;
+  std::bitset<32> bitset3{value};
   std::cout << bitset3 << std::endl;
 }
 
@@ -3631,53 +3628,56 @@ From glibc and see exercise 2-1 for examples.
 #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
 # endif
 
-note: The key is 'must' use 'unsigned' for right shift to have guaranteed 0
-values. This is why glibc macro uses 'unsigned' type.
+note: 
+Must use `unsigned` for `right-shift` to have guaranteed 0 values.
+This is why glibc macro uses 'unsigned' type.
 
-note: The key is that when do "not" on 0 or 1, the result size is independant
-and signess as well. The result depends on the other operand and done at compile
-time. 
+note: 
+When use not operation, the result and signness is `independant`. The result
+depends on the other operand and done at `compile-time`. 
 
-note: The signess must be known to compiler when do shift to have guaranteed
-result and use signed by default.
+note: 
+The signess must be known to compiler when do shift to have guaranteed result
+and use `signed` by default.
 
 
-<1> INT_MAX is ((~0)>>1). Right?
+<1> To get INT_MAX,  ((~0)>>1) ?
 
-unsigned int val = ((~0) >> 1) +1;
+unsigned int val = ((~0) >> 1) +1;            // wrong
+unsigned int val = (((unsigned)~0) >> 1) +1;  // okay
+unsigned int val = ((unsigned)~0 >> 1) +1;    // okay, since cast is higher
 
-However, gets wrong value and to get it correct, use like
-
-unsigned int val = (((unsigned)~0) >> 1) +1; 
-unsigned int val = ((unsigned)~0 >> 1) +1;      // since cast is higher than shift
-
-Why? See this example:
 
 int main()
 {
-  unsigned int val1 = ((~0) >> 1);
-  std::bitset<16> bitset1{val1};
-  std::cout << bitset1 << std::endl;
+  unsigned int input1 = ~((unsigned int)0)>>1;
 
-  unsigned int val2 = ((~0) >> 1);              // do signed 
-  std::bitset<32> bitset2{val2};
-  std::cout << bitset2 << std::endl;
+  // since do not know signness, use signed by default and gets 1 when shift
 
-  unsigned int val3 = ((unsigned)(~0) >> 1);    // do unsigned
-  std::bitset<32> bitset3{val3};
-  std::cout << bitset3 << std::endl;
+  unsigned int input2 = (~(0)>>1);
+
+  // works since the result is `independant` but assigned to unsigned. the first
+  // version is shorter version of this.
+
+  unsigned int input3 = ~0;
+  input3 >>=1;
+
+  std::bitset<32> bset1{input1};
+  std::cout << bset1 << std::endl;
+  std::bitset<32> bset2{input2};
+  std::cout << bset2 << std::endl;
+  std::bitset<32> bset3{input3};
+  std::cout << bset3 << std::endl;
 }
 
-1111111111111111
+01111111111111111111111111111111
 11111111111111111111111111111111
 01111111111111111111111111111111
 
 
-note: The summary is that for `unsigned`, `zero-filled` when `right-shift` and
+note: 
+The summary is that for `unsigned`, `zero-filled` when `right-shift` and
 `zero-filled` when `left-shift` regardless of sign. 
-
-note: From above examples, means that compiler see it as 'signed' when do right
-shift by default. 
 
 
 http://msdn.microsoft.com/en-us/library/336xbhcz.aspx
@@ -10971,7 +10971,9 @@ switch( events )
 }
 
 
-{control-for-vs-while}
+={============================================================================
+*kt_dev_lang_015* expr-for-while
+
 <ex> *ex-escape* 
 From ansic, exercise 3-2. Write a function escape(s,t) that converts characters
 like newline and tab into visible escape sequences like \n and \t as it copies
@@ -11075,6 +11077,37 @@ int atoi(char s[])
   // skip white spaces
   while( isspace(s[i]) )
     i++;
+}
+
+
+<ex>
+#include <iostream>
+
+using namespace std;
+
+int main()
+{
+  // 1100 1110 0101, [11..0]
+  // unsigned int input = 3301;
+
+  unsigned int count = 0;
+
+  // Similar to ex-bitcount but this gets the number of interation while input
+  // has 1 bit so effectly gets MSB position.
+
+  // gets 12
+  for(count=0; input; input >>= 1)
+    ++count;
+
+  // gets 11
+  for(count=0; input && (input>>=1);)
+    ++count;
+  
+  // gets 11
+  while(input && (input >>= 1))
+    ++count;
+
+  cout << "count: " << count << endl;
 }
 
 
@@ -38973,10 +39006,11 @@ TODO: see further to find out more.
 
 
 ={============================================================================
-*kt_dev_stl_080* bitset
+*kt_dev_stl_080* stl-bitset
 
-The bitset is a class template and is defined in bitset header. Like array class, has a 'fixed' size.
-This is a exmple of a nontype template parameter and this is then considered part of the type.
+The bitset is a class template and is defined in bitset header. Like array
+class, has a 'fixed' size.  This is a exmple of a nontype template parameter and
+this is then considered part of the type.
 
 
 {why-bitset}
