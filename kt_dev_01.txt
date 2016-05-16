@@ -124,6 +124,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_007| overload-function-matching
 |kt_dev_cpp_021| overload-operator
 *kt_dev_cpp_005* type-conversion-implicit
+*kt_dev_cpp_005* type-integer-division
 *kt_dev_cpp_005* type-conversion-ex
 *kt_dev_cpp_005* type-conversion-explicit
 *kt_dev_cpp_005* type-conversion-to-bool
@@ -132,17 +133,17 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_005* init-copy-form-init
 |kt_dev_cpp_005| init-list-form-init initializer_list
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
-|kt_dev_cpp_008| const. equal-misspell
+|kt_dev_cpp_008| const
 *kt_dev_cpp_008* const-temporary
-*kt_dev_cpp_008* const-this, overload, member function
+*kt_dev_cpp_008* const-this, const-overload, const-member-function
 |kt_dev_cpp_008| const-bitwise, logical
 *kt_dev_cpp_008* const-logical, cases 
 *kt_dev_cpp_008* const-mutable
 *kt_dev_cpp_008* const-read: from the outside (interfaces first) or from the inside?
 *kt_dev_cpp_008* const-read: logical and physical state
 *kt_dev_cpp_008* const-read: constness on logical state
-*kt_dev_cpp_008* const-read: gotw: const-correctness, part 1
-*kt_dev_cpp_008* const-read: gotw: const-correctness, part 2
+*kt_dev_cpp_008* const-read-const-correctness, part 1
+*kt_dev_cpp_008* const-read-const-correctness, part 2
 |kt_dev_cpp_009| return: undefined result
 |kt_dev_cpp_010| temp-object
 |kt_dev_cpp_011| inline {empty-ctor-represenstaion}
@@ -15509,7 +15510,9 @@ is comparison between signed and unsigned. note: this is a problem of
 string-npos.
 
 
-{integer-division}
+={============================================================================
+*kt_dev_cpp_005* type-integer-division
+
 From ansic 1.2., this is a program to implement a formula "C = (5/9)(F-32)" to
 print a table of Fahrenheit and Celsius.
 
@@ -15749,7 +15752,10 @@ item.combine(static_cast<Sales_data>(cin));
 <avoid-implicit-conversion>
 From MEC++05. Recommend to use a member func to do the same.
 
-<problem-case>
+
+{automatic-conversion-problems}
+
+<1>
 template< typename T>
 class Array {
   public:
@@ -15784,6 +15790,16 @@ expensive, lost state(input), or making changes on temporary. So the point is
 about making it explicit in code and `forcing-user-to-know-what-they-are-doing`.
 
 
+<2>
+EXPC++39. The std-string has no implicit conversion to a const char*. Should it?
+If it had that conversion, this code would compile cleanly because the compiler
+would silently convert both strings to const char* and then substract those
+pointers.
+
+string s1, s2, s3;
+s1 = s2 - s3;           // oops, probably meant "+"
+
+
 <stl-example-of-explicit>
 The vector<T> v(number) is explicit so the following is in error.
 
@@ -15798,7 +15814,7 @@ x.member(10);  // error
 
 <copy-form-init>
 `copy-form-init` do `implicit-conversion` using `converting-ctor` but not `copy-ctor`
-and cannot use explicit ctor with `copy-form-init`.
+and cannot use `explicit` converting-ctor with `copy-form-init`.
 
 // explicit Sales_data(const std::string &s): bookNo(s) {};
 
@@ -15817,6 +15833,10 @@ note:
   
   note:
   Sales_data item = null_book, good_book;    // odd?
+
+  note:
+  EXPC++42. Prefer using `direct-form-init` to `copy-form-init` since works
+  wherever the latter works and can take multiple parameters.
 
 * The explicit-keyword is used 'only' in constructor 'declaration' inside a
   class.
@@ -16410,7 +16430,7 @@ The both uses `converting-ctor` and `copy-form-init` uses it implicitly.
 
 
 {copy-form-init}
-The CLR says that you can't use the assignment notation, copy-form-init because
+The CLR says that you can't use the assignment notation, `copy-form-init` because
 that is considered to be an implicit conversion.
 
 
@@ -16489,7 +16509,7 @@ int main()
 }
 
 The compiler do "function matching" to find the best match. No errors since
-converting ctor is defined and 'only' converting ctor is called.
+converting ctor is defined and 'only' `converting-ctor` is called.
 
 
 <3>
@@ -17123,14 +17143,12 @@ char line[MAXLINE+1];
 
 
 {const-scope}
-To support seperate compilation of const variable, the variable must be defined
-in every file so compiler make it 'local' to file as if had written definitions
-for separate variables in each file. CPR p60. So can have same name in different
-files.  
+To support seperate compilation of const variable, `const-variable` must be
+defined in every file and has `file-scope`. CPR p60. So can have same name in
+different files.  
 
-So want to use a single const in multiple files, must use 'extern' keyword on
-'both' definition and declaration which is different from file static
-<limit-scope-meaning> since extern keyword do not work in file static case.
+To use the same const-variable in multiple files, must use `extern` on 'both'
+definition and declaration while `file-static` cannot do that.
 
 The important principle is that shouldn't change const object.
 
@@ -17140,7 +17158,7 @@ extern const int gc_max = 100;
 // file two
 extern const int gc_max;
 
-<case>
+<ex>
 Suppose that a header has const definition like below and is included in
 multiple files. Is it a problem?
 
@@ -17154,36 +17172,32 @@ The reason:
 the C++ Standard, Annex C
 3.5 [also 7.1.6]
 Change: A name of file scope that is explicitly declared const, and not
-explicitly declared extern, has 'internal' linkage, while in C it would have
-'external' linkage
+explicitly declared extern, has `internal-linkage`, while in C it would have
+`external-linkage`
 
 Rationale: Because const objects can be used as compile-time values in C++, this
 feature urges programmers to provide explicit initializer values for each const.
 This feature allows the user to put constobjects in header files that are
 included in many compilation units.
 
-Effect on original feature: Change to semantics of well-defined feature.
-Difficulty of converting: Semantic transformation
-How widely used: Seldom
-
 
 {top-and-low-level-const}
 The reference and pointer are 'indirect' access so makes two level in terms of
 constness. This matters when copy an object.
 
-               const int *const <variable-name>
-               <-- 1 --> <- 2 ->
+  const int *const <variable-name>
+  <-- 1 --> <- 2 ->
 
-               const int * <variable-name>            // pointer to const
-               const int *const <variable-name>       // const pointer to const
-               int const *const <variable-name>       // const pointer to const
-               const int & <variable-name>            // reference to const
+  const int * <variable-name>            // pointer to const
+  const int *const <variable-name>       // const pointer to const
+  int const *const <variable-name>       // const pointer to const
+  const int & <variable-name>            // reference to const
 
-1. base type part which is for underlying object and for low-level. That is a
+1. `base-type` part which is for underlying object and for low-level. That is a
 object that point or reference to.
 
-2. declarator part which is for compound type, reference or pointer, and for
-top-level. That is pointer or reference itself.
+2. `declarator-type` part which is for compound type, reference or pointer, and
+for top-level. That is pointer or reference itself.
 
 The point is that it is compiler POV and for static type checking. To maintain
 constness, low-level 'never' be ignored but top-level can be since it's not
@@ -17215,7 +17229,7 @@ r2 = 0;              // error since r2 is reference-to-const
 
 
 {no-const-to-nonconst-conversion}
-This is an error because 'no' const to nonconst conversion is allowed.
+This is an error because `no-const-to-nonconst` conversion is allowed.
 
 int main()
 {
@@ -17237,13 +17251,20 @@ int main()
 }
 
 
-<const-non-const-version>
-Why neeeds const and nonconst version? When use reference to const argument for
-better performance and clearer interface about constness, required to have both
-version. 
+{use-reference-const-param}
+Use `reference-to-const` when possible since two implications when use 'plain'
+reference param in func:
 
-The const matters when copying vars and func params. That is why copy-ctor is
-usded here.
+  * A func that don't change a reference param, mislead its user to think it
+    does change.
+
+  * More importantly, it limit its use only to nonconst param.
+
+Why neeeds const and nonconst version? When use `reference-to-const` argument
+for better performance and clearer interface about constness, required to have
+both version. 
+
+The `const` matters when copying vars and func params.
 
 void fcn( const int i );
 fcn(j);     // const int i = j;
@@ -17253,36 +17274,43 @@ void fcn( int i );
 fcn(j);     // int i = j;
 fcn(cj);    // int i = cj;        // ERROR
 
-These are all explained by the fact that fcn(const int i) can be used both fcn(
-    const-pararm ) and fcn( non-const-param ).
+The point is that fcn(const int i) can be used both const-param and
+nonconst-param. In other words, `top-level-const` can be ignored, its parameter
+list doesn't differ and do both. 
 
-In other words, since top-level-const can be ignored, its parameter list doesn't
-differ from the list in the const version of fcn.
-
-
+<ex>
 const GstCaps *caps = gst_caps_from_string();
 GstCaps const *caps = gst_caps_from_string();
 gst_caps_unref(GetCaps *caps);
 
-
-<const-to-nonconst-error>
 :44: error: invalid conversion from 'const GstCaps*' to 'GstCaps*'
 :44: error:   initializing argument 1 of 'void gst_caps_unref(GstCaps*)'
 
+<ex>
+find_char(const string& s, char c);
+find_char("Hello", 'o');   // OK because const-to-ref can match to literal.
+
+find_char(string& s, char c);
+find_char("Hello", 'o');   // ERROR because literal is const
+
+So recommend reference-to-const-param over plain reference-param for
+flexibility: can use for both const and nonconst parameter. can use conversion.
+
 
 {const-return} equal-misspell
-EC++03. When use return by value as a return, use const to raise error when
-mistake happens:
+EC++03. When use `pass-by-value` for user type as a return, use const to raise
+error when mistake happens:
 
 const Rational operator*( const Rational& lhs, const Rational& rhs );
 
 // typo. was meant if( a*b == c )
 if( a*b = c )
 
-If these are built-in tyeps, this is flat-out error but don't for class type. It
-is never legal to modify the return value of a function that returns a built-in
-type. Even if it were legal, the fact that it returns object by value would mean
-that a copy would be modified and that's not the behavior you want. 
+If these are built-in tyeps, this is flat-out error but don't for class type. 
+
+* The returned `built-in` type is an `rvalue` and can't be modified. EXPC++43.
+* Even if it were legal, the fact that it returns object by value would mean
+  that a copy would be modified and that's not the behavior you want. 
 
 So better to be prepared for this kind of mistakes. Also this is an example of
 returning a copy than reference.
@@ -17297,7 +17325,7 @@ const pstring cstr = 0;    // cstr is a "const pointer to char"
 const pstring *ps;         // ps is a pointer to "const pointer to char"
 
 The important thing is that type alias is not "replacing string" but it a type
-and const applies on base type.
+and const applies on `base-type`.
 
 // wrong interpretation. base type is char and * is part of declarator. cstr is
 // pointer to "const char" 
@@ -17308,8 +17336,8 @@ const pstring cstr = 0;
 
 
 {const-on-iterators}
-In iterator, member begin() has overloads: const and non-const version because
-if it has only const version, *this is const and any data member is also const. 
+The `iterator-begin` has overloads: const and nonconst version because if it has
+only const version, *this is const and any data member is also const. 
 
 note: see how it has overloads 'depending' on object called upon and how to use
 const iterator.
@@ -17337,25 +17365,6 @@ const std::vector<T>::iterator iter = vec.begin();
 
 // like 'const T*' and *iter is const
 std::vector<T>::const_iterator iter = vec.begin();
-
-
-{use-reference-const-param}
-Use reference to const when possible since two implications when use 'plain'
-reference param in func:
-
-  * A func that don't change a ref param, mislead its user to think it does
-    change.
-
-  * More importantly, it limit its use only to non-const param.
-
-find_char(const string& s, char c);
-find_char("Hello", 'o');   // OK because const-to-ref can match to literal.
-
-find_char(string& s, char c);
-find_char("Hello", 'o');   // ERROR because literal is const
-
-So recommend reference-to-const-param over plain reference-param for
-flexibility: can use for both const and nonconst parameter. can use conversion.
 
 
 ={============================================================================
@@ -17542,28 +17551,31 @@ okay in that case because those classes otherwise have no need for one.
 ={============================================================================
 *kt_dev_cpp_008* const-this, const-overload, const-member-function
 
-<overload-condition>
+{overload-condition}
 Member functions differing only in their constness can be overloaded. Conditons
 for overloading
 
--. Shall be the same 'name'
--. Shall have different param list in the number or the type
--. Shall be in the same 'scope'
+* Shall be the `same-name`
+* Shall have different param list in the `number-or-type`
+* Shall be in the `same-scope`
 
-It is an error for two functions to differ only in terms of their return types.
-So don't see return type. See {virtual-copy-constructor} for override case.
+It is an error for two functions to differ only in their return types since
+don't see return type. See {virtual-copy-constructor} for override case.
 
 <constness-and-overload>
 The reason that the compiler can use the constness of the argument to
-distinguish which funtion to call is that there is 'no' conversion from const.
+distinguish which funtion to call is that there is `no-const-to-nonconst`
+conversion.
+
+// void fcn( const int i );       // support both const and nonconst
 
 Record lookup(account *);         // pointer
 Record lookup(account *const);    // const pointer. re-define. ignore top-level
 
-Record lookup(account &);         // non-const version
+Record lookup(account &);         // nonconst version
 Record lookup(const account &);   // const version
 
-Record lookup(account *);         // non-const version
+Record lookup(account *);         // nonconst version
 Record lookup(const account *);   // const version
 
 
@@ -17624,9 +17636,9 @@ void print( const TextBlock& cbt )
 }
 
 
-{case}
+{ex}
 If there is only a const version of display() then following is a compile error.
-Assume display() is const member func and set_set is non-const member func.
+Assume display() is const member func and set_set is nonconst member func.
 
 screen myscreen;
 myscreen.display().set_set(10);
@@ -17634,7 +17646,7 @@ myscreen.display().set_set(10);
 Since display() returns const and cannot call nonconst, set_set() on const
 object. Solution?
 
-<approach-one> Use overloads for nonconst and const
+<1> Use overloads for nonconst and const
 
 class screen{
   public:
@@ -17688,7 +17700,8 @@ If it were written:
 Screen& display() const
 { cout << "dis: this is const member" << endl; return *this; }
 
-<approach-two> Have one implementation for both const and non-const <const_cast>
+
+<2> Have one implementation for both const and nonconst `const_cast`
 
 From EC++03. Why need? If member function is big, code duplication. So implement
 once and use it twice. Have one const implementation and nonconst version simply
@@ -17730,7 +17743,8 @@ string &shorterString( string &s1, string &s2 )
 This is safe to cast the const string back to a plain string and return it
 because it is one of original nonconst arguments.
 
-<approach-three> Change the order
+
+<3> Change the order
 
 myscreen.set_set(10).display();
 const_screen.display();
@@ -17743,7 +17757,7 @@ test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&'
 from expression of type 'const Screen'
 
-This is an ERROR on "return *this" since there is no "const to nonconst
+This is an ERROR on "return *this" since there is `no-const-to-nonconst`
 conversion". So const member 'must' have this form since const applies to this
 pointer: 
 
@@ -17806,20 +17820,20 @@ NS_ZINC::Future<T> Gst::returnDefault(const T& val)
 
 This emits an error:
 
-.cpp:1686:78: error: passing 'const nickel::system::GstMediaRouter' as 'this'
+: error: passing 'const nickel::system::GstMediaRouter' as 'this'
 argument of 'zinc::Future<T>
 nickel::system::GstMediaRouter::returnDefaultIfStopped(const T&) [with T =
 Zinc::Media::Position]' discards qualifiers
 
 Because returnDefault() is called in getPosition which is const member function
-and to make returnDefault() succeeds, needs to const to nonconst so fails.
+and to make returnDefault() succeeds, needs to `const-to-nonconst` so fails.
 
 
 {const-in-func-definition}
 If miss out 'const' in the func definition then:
 
-usedeskcalc.cpp:28:6: error: prototype for 'bool Stack::empty()' does not match any in class 'Stack'
-usedeskcalc.cpp:13:7: error: candidate is: bool Stack::empty() const
+: error: prototype for 'bool Stack::empty()' does not match any in class 'Stack'
+: error: candidate is: bool Stack::empty() const
 
 class Stack {
   ...
@@ -18464,7 +18478,7 @@ are a normal user, every experiment you could perform (every method or sequence
 
 
 ={============================================================================
-*kt_dev_cpp_008* read: gotw: const-correctness, part 1
+*kt_dev_cpp_008* const-read-const-correctness, part 1
 
 http://herbsutter.com/2013/05/24/gotw-6a-const-correctness-part-1-3/
 
@@ -18489,8 +18503,8 @@ const operations on the same object are required to be safe without the calling
 code doing external synchronization.
 
 If you are implementing a type, unless you know objects of the type can never be
-shared (which is generally impossible), this means that each of your const
-member functions must be either:
+shared (which is generally impossible), this means that each of your
+`const-member-functions` must be either:
 
     truly physically/bitwise const with respect to this object, meaning that
     they perform no writes to the object's data; or else
@@ -18512,8 +18526,8 @@ requires that:
     note: that is, shall not modify if the objects are accessed via const
 
 
-Similarly, writing mutable on a member variable means what it has always meant:
-The variable is "writable but logically const." Note what this implies:
+Similarly, writing `mutable` on a member variable means what it has always
+meant: The variable is "writable but `logically-const`." Note what this implies:
 
     The "logically const" part now means "can be used safely by multiple
     concurrent const operations." The "mutable" and "writable" part further
@@ -18525,7 +18539,7 @@ The variable is "writable but logically const." Note what this implies:
 In general, remember:
 
     Guideline: Remember the "M&M rule": For a member variable, mutable and mutex
-    (or atomic) go together.
+    (or atomic) `go-together`.
 
 This applies in both directions, to wit:
 
@@ -18582,7 +18596,7 @@ rare.
         
 Summary
 
-Don’t shoot yourself (or your fellow programmers) in the foot. Write
+Don't shoot yourself (or your fellow programmers) in the foot. Write
 const-correct code.
 
 Using const consistently is simply necessary for correctly-synchronized code.
@@ -18590,8 +18604,8 @@ That by itself is ample reason to be consistently const-correct, but there's
 more: 
 
 It lets you document interfaces and invariants far more effectively than any
-mere /* I promise not to change this */ comment can accomplish. It’s a powerful
-part of "design by contract." 
+mere /* I promise not to change this */ comment can accomplish. It's a powerful
+part of `design-by-contract` 
 
 It helps the compiler to stop you from accidentally writing bad code. It can
 even help the compiler generate tighter, faster, smaller code. That being the
@@ -18614,7 +18628,9 @@ looking for a replacement product.
 
 
 ={============================================================================
-*kt_dev_cpp_008* read: gotw: const-correctness, part 2
+*kt_dev_cpp_008* const-read-const-correctness, part 2
+
+Same as EXPC++ 43.
 
 Problem 
 
@@ -18768,23 +18784,23 @@ it const.
 
     void  add_point( const point pt )
 
-In this particular case, because the function is defined inline, the const value
-parameter can make sense. This is because for inline functions the declaration
-and definition are the same. Otherwise, const value parameters should appear
-only on the definition, not on the declaration. Let's see why.
+In this particular case, because the function is `defined-inline`, the const
+value parameter can make sense. This is because for inline functions the
+declaration and definition are the same. Otherwise, const value parameters
+should appear only on the definition, not on the declaration. Let's see why.
 
 Putting the const on a 'value' parameter in a function declaration is irrelevant
-outside the function—it makes no difference to the caller and can only confuse
+outside the function; it makes no difference to the caller and can only confuse
 readers. 
 
 To the compiler, the function signature is the 'same' whether you include this
 const in front of a value parameter or not. For example:
 
-// value parameter: top-level const is not part of function signature
+// `value-parameter`: `top-level-const` is not part of function signature
 int f( int );
 int f( const int );    // redeclares f(int): this is the same function
 
-// non-value parameter: top-level const is part of function signature
+// `nonvalue-parameter`: `top-level-const` is part of function signature
 int g( int& );
 int g( const int& );   // overloads g(int&): these are two functions
 
@@ -18806,12 +18822,12 @@ int f( const int i ) { // definition: use const to express "read-only"
 
 }
 
-    Guideline: Consider not writing const on pass-by-value function parameters
-    when only forward-declaring a function. You can always add it on the
-    definition to express a read-only parameter.
+  Guideline: Consider not writing const on `pass-by-value` function parameters
+  when only forward-declaring a function. You can always add it on the
+  `definition` to express a read-only parameter.
 
 
-2. get_point and get_num_points should be const.
+2. get_point and get_num_points should be `const-member-function`
 
     point get_point( const int i ) { return points[i]; }
 
@@ -18821,7 +18837,7 @@ These functions should be marked const, because they don't change the state of
 the object.
 
 
-3. get_area should be const.
+3. get_area should be `const-member-function`
 
     double get_area() {
         if( area < 0 )   // if not yet calculated and cached
@@ -18831,12 +18847,12 @@ the object.
 
 Even though this function modifies the object's internal state, we should
 consider making it const. Why? Because this function does not modify the
-object's 'observable' state; we are doing some caching here, but that's an
-internal implementation detail and the object is logically const even if it
+object's `observable-state`; we are doing some caching here, but that's an
+internal implementation detail and the object is `logically-const` even if it
 isn't physically const.
 
 
-4. Therefore calc_area should also be const.
+4. Therefore calc_area should also be `const-member-function`
 
     void calc_area() {
         area = 0;
@@ -18857,9 +18873,7 @@ also need to do something about the member variable area, which should be:
     as discussed in GotW #6a.
 
 
-note: why 'ought'?
-
-<const-to-nonconst-error>
+note: why 'ought'?  `no-const-to-nonconst` error
 
 class Sample {
   public:
@@ -18906,7 +18920,7 @@ Combining all that, we get this simpler and const-correct code:
     loops when visiting the elements of the range in order.
 
 
-6. area should be mutable and synchronized.
+6. area should be `mutable` and synchronized.
 
     double        area;
 
@@ -18919,7 +18933,7 @@ synchronized—protected with a mutex or made atomic.
 Bonus Question: Before reading on, which should it be: Protected by a mutex? or
 made atomic<double>?
 
-Have you thought about it? All right, let's continue…
+Have you thought about it? All right, let's continue
 
 Both work, but a mutex is usually 'overkill' for a single variable.
 
@@ -18957,7 +18971,7 @@ necessary change, for two reasons:
     change area's 'type' then calc_area will no longer compile. That can be
     worked around, but leads us to the major reason...
 
-    The major reason is that, because calc_area is a 'compound' operation and
+    The major reason is that, because calc_area is a `compound-operation` and
     must be safe to run on multiple threads concurrently, we must restructure
     calc_area to be safe to run concurrently. In particular it should not
     perform intermediate updates to area, and should ensure that multiple
@@ -18982,7 +18996,7 @@ would have to wait anyway.
         auto tmp = 0.0;              // do all the work off to the side
         for( auto& pt : points )
             tmp += /* some work using pt */;
-        area = tmp;                  // then commit with a single write
+        area = tmp;                  // then commit with a `single-write`
     }
 
 private:
@@ -18999,7 +19013,7 @@ readers it won't and so this too is fine.
 note: "tmp" is local to a thread in thread stack
 
 
-7. operator+'s rhs parameter should be a reference to const.
+7. operator+'s rhs parameter should be a `reference-to-const`.
 
 polygon operator+( polygon& lhs, polygon& rhs ) {
 
@@ -19012,14 +19026,14 @@ The rhs parameter should be passed by reference to const, of course.
 it be const& too?" Actually, not so much:
 
 
-8. operator+'s lhs parameter should be passed by value.
+8. operator+'s lhs parameter should be `passed-by-value`.
 
 The key point is that we're going to copy from it anyway, in this case
 immediately:
 
     auto ret = lhs;
 
-When you're in the special case of "read-only parameter that you're going to
+When you're in the `special` case of "read-only parameter that you're going to
   take copy of anyway," there are several ways to accept the parameter, which
   I'll cover in detail in another GotW. For now, suffice it to say that usually
   you shouldn't overthink these options, and just use pass-by-value as the
@@ -19059,8 +19073,11 @@ Incidentally, notice that once we make rhs a reference-to-const parameter as
 noted above, we see another reason why get_point should be a const member
 function.
 
+note:
+Don't need to protect operator+()? No.
 
-10. f's const_cast may give undefined behavior, and is morally wrong anyway.
+
+10. f's const_cast may give `undefined` behavior, and is morally wrong anyway.
 
 void f( const polygon& poly ) {
     const_cast<polygon&>(poly).add_point( {0,0} );

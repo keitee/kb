@@ -11,12 +11,15 @@
 #{ syssetup
 
 #{ bash
-|kt_linux_bash_000| bash: reference
+|kt_linux_bash_000| sh-reference
+*kt_linux_bash_005* sh-quote
+*kt_linux_bash_019* sh-pipeline sh-subshell
+*kt_linux_bash_021* sh-script
+*kt_linux_bash_021* sh-exit-status
 |kt_linux_bash_001| bash: history and reverse search
 |kt_linux_bash_002| bash: variable <substitution> <expansion>
 |kt_linux_bash_003| bash: if and test command primaries <string-comparison> <[[>
 |kt_linux_bash_004| sh-globbing
-|kt_linux_bash_005| bash: quoting <grep>
 |kt_linux_bash_006| bash: shell and special parameters <shift-operator> <while>
 |kt_linux_bash_007| bash: set var using other commands <dirname> <readlink> <if>
 |kt_linux_bash_008| bash: for
@@ -30,9 +33,7 @@
 |kt_linux_bash_016| bash: here document
 |kt_linux_bash_017| sh-redirection
 |kt_linux_bash_018| bash: ':' command
-|kt_linux_bash_019| bash: subshell and multiple command <execution-env>
 |kt_linux_bash_020| bash: list options
-|kt_linux_bash_021| sh-exit: exit status
 |kt_linux_bash_022| sh-and-or
 *kt_linux_bash_023* sh-option: invoking options
 |kt_linux_bash_024| bash: builtin: exec
@@ -49,7 +50,6 @@
 |kt_linux_bash_033| bash: true and false
 |kt_linux_bash_034| bash: wait
 |kt_linux_bash_035| bash: help
-|kt_linux_bash_036| bash: shell and environment variable
 |kt_linux_bash_037| bash: builtin: command
 |kt_linux_bash_038| sh-declare
 *kt_linux_bash_038* bash-substitude
@@ -446,7 +446,7 @@
 # ============================================================================
 #{
 ={============================================================================
-*kt_linux_bash_000* bash: reference
+*kt_linux_bash_000* sh-reference
 
 http://www.gnu.org/software/bash/
 
@@ -457,6 +457,707 @@ http://www.tldp.org/LDP/abs/html/
 
 Bash Hackers Wiki Frontpage
 http://wiki.bash-hackers.org/start
+
+
+={============================================================================
+*kt_linux_bash_005* sh-quote
+
+3.1.2 Quoting
+
+
+Quoting is used to remove the special meaning of certain characters or words to
+the shell. Quoting can be used to disable special treatment for special
+characters, to prevent reserved words from being recognized as such, and to
+prevent parameter expansion.
+
+// metacharacter
+//    A character that, when unquoted, separates words. A metacharacter is a
+//    blank or one of the following characters: ‘|’, ‘&’, ‘;’, ‘(’, ‘)’, ‘<’, or
+//    ‘>’.
+
+There are three quoting mechanisms: the escape character, single quotes, and
+double quotes. 
+
+* Escape Character: How to remove the special meaning from a single character.
+ 
+A non-quoted backslash ‘\’ is the Bash `escape-character`. It preserves the
+literal value of the next `character` that follows
+
+<ex>
+$ echo You owe \$1250
+You owe $1250
+
+
+* Single Quotes: How to inhibit all interpretation of a sequence of characters.
+
+Enclosing `characters` in single quotes (‘'’) preserves the literal value of each
+character within the quotes. A single quote may not occur between single quotes,
+even when preceded by a backslash. 
+
+<ex>
+Quote all inside the single quote.
+
+$ echo '<-$1250.**>; (update?) [y|n]'
+<-$1250.**>; (update?) [y|n]
+
+
+* Double Quotes: How to suppress `most` of the interpretation of a sequence of
+  characters.
+
+Enclosing characters in double quotes (‘"’) preserves the literal value of all
+characters within the quotes, with the exception of ‘$’, ‘`’, ‘\’, and, when
+history expansion is enabled, ‘!’. 
+
+The characters ‘$’ and ‘`’ retain their special meaning within double quotes
+(see Shell Expansions). 
+
+The backslash retains its special meaning only when followed by one of the
+following characters: ‘$’, ‘`’, ‘"’, ‘\’, or newline. Within double quotes,
+backslashes that are followed by one of these characters are removed.
+  Backslashes preceding characters without a special meaning are left
+  unmodified. A double quote may be quoted within double quotes by preceding it
+  with a backslash. If enabled, history expansion will be performed unless an
+  ‘!’ appearing in double quotes is escaped using a backslash. The backslash
+  preceding the ‘!’ is not removed.
+
+The special parameters ‘*’ and ‘@’ have special meaning when in double quotes
+(see Shell Parameter Expansion). 
+
+<ex>
+Do not quote all (see below) so that can use 'variables' inside the quoted.
+
+$ echo '$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]'
+$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]
+
+$ echo "$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]"
+parkkt owes <-250.**>; [ as of (01/26) ]
+
+<ex>
+To prevent globbing by shell before passing params to grep command.
+
+$ grep '[0-9][0-9]*$' report2 report7
+
+
+={============================================================================
+*kt_linux_bash_019* sh-pipeline sh-subshell
+
+3.2.2 Pipelines
+
+A pipeline is a sequence of simple commands separated by one of the control
+operators | or |&.
+
+The format for a pipeline is
+
+[time [-p]] [!] command1 [ | or |& command2 ] ...
+
+The output of each command in the pipeline is connected via a pipe to the input
+of the next command.  That is, each command reads the previous command's output.
+This connection is performed before any redirections specified by the command.
+
+If |& is used, command1's standard error, in addition to its standard output, is
+connected to command2's standard input through the pipe; it is shorthand for
+2>&1 |. This implicit redirection of the standard error to the standard output
+is performed after any redirections specified by the command.
+
+If the pipeline is 'not' executed asynchronously (see Lists), the shell 'waits'
+for all commands in the pipeline to complete.
+
+'each' command in a pipeline is executed in its own `subshell`. The exit status
+  of a pipeline is the exit status of the `last-command` in the pipeline, unless
+  the `pipefail-option` is enabled (see The Set Builtin). 
+
+
+3.2.3 Lists of Commands
+
+A list is a sequence of one or more pipelines separated by one of the operators
+;, &, &&, or ||, and optionally terminated by one of ;, &, or a newline. 
+
+Commands separated by a ; are executed 'sequentially'; the shell waits for each
+command to terminate in turn. The return status is the exit status of the last
+command executed. 
+
+If a command is terminated by the control operator ‘&’, the shell executes the
+command `asynchronously` in a subshell. This is known as executing the command
+in the `background`. The shell does not wait for the command to finish, and the
+return status is 0 (true). 
+
+// When job control is not active (see Job Control), the standard input for
+// asynchronous commands, in the absence of any explicit redirections, is
+// redirected from /dev/null. 
+
+
+3.7.3 Command Execution Environment
+
+note: shell's execution-environment
+
+The shell has an `execution-environment`, which consists of the following:
+
+* open files inherited by the shell at invocation, as modified by redirections
+  supplied to the exec builtin
+
+* the current working directory as set by cd, pushd, or popd, or inherited by
+  the shell at invocation
+
+* the file creation mode mask as set by umask or inherited from the shell's
+  parent
+
+* current traps set by trap
+
+* shell parameters that are set by variable assignment or with set or inherited
+  from the shell's parent in the environment
+
+* shell functions defined during execution or inherited from the shell's parent
+  in the environment 
+
+* options enabled at invocation (either by default or with command-line arguments)
+  or by set 
+
+* options enabled by shopt (see The Shopt Builtin)
+
+* shell aliases defined with alias (see Aliases)
+
+* various process IDs, including those of background jobs (see Lists), the value
+  of $$, and the value of $PPID 
+
+
+note: subshell's execution-environment
+
+When a simple command other than a builtin or shell function is to be executed,
+     it is invoked in a 'separate' `execution-environment` that consists of the
+       following. Unless otherwise noted, the values are inherited from the
+       `shell`.
+
+* the shell's open files, plus any modifications and additions specified by
+  redirections to the command
+* the current working directory
+* the file creation mode mask
+
+* shell variables and functions `marked-for-export`, along with variables
+  exported for the command, passed in the `environment` (see Environment)
+
+A command invoked in this separate environment cannot affect the shell's
+execution environment.
+
+`command-substitution`, commands `grouped-with-parentheses`, and
+`asynchronous-commands` are invoked in a `subshell-environment` that is a
+duplicate of the shell environment, except that traps caught by the shell are
+reset to the values that the shell inherited from its parent at invocation. 
+
+Builtin commands that are invoked as part of a pipeline are also executed in a
+`subshell-environment`. Changes made to the subshell environment cannot affect
+the shell's execution environment.
+
+Subshells spawned to execute command substitutions inherit the value of the -e
+option from the parent shell. When not in POSIX mode, Bash clears the -e option
+in such subshells.
+
+
+3.7.4 Environment
+
+When a program is invoked it is given an array of strings called the
+`environment`. This is a list of `name-value` pairs, of the form name=value.
+
+Bash provides several ways to manipulate the environment. On invocation, the
+shell scans its own environment and creates a parameter for each name found,
+automatically marking it for export to child processes. Executed commands
+  inherit the environment. The export and ‘declare -x’ commands allow parameters
+  and functions to be added to and deleted from the environment. If the value of
+  a parameter in the environment is modified, the new value becomes part of the
+  environment, replacing the old. The environment inherited by any executed
+  command consists of the shell's initial environment, whose values may be
+  modified in the shell, less any pairs removed by the unset and ‘export -n’
+  commands, plus any additions via the export and ‘declare -x’ commands.
+
+The environment for any simple command or function may be augmented temporarily
+by prefixing it with parameter assignments, as described in Shell Parameters.
+These assignment statements affect only the environment seen by that command.
+
+If the -k option is set (see The Set Builtin), then all parameter assignments
+are placed in the environment for a command, not just those that precede the
+command name.
+
+When Bash invokes an external command, the variable ‘$_’ is set to the full
+pathname of the command and passed to that command in its environment. 
+
+<ex>
+When works on some issue, have to set some environment variables before running
+some commands which are affected by these settings. This is repetative and
+thought it's better to have a script to set these.
+
+#!/bin/sh
+export LD_LIBRARY_PATH="/opt/zinc-trunk/lib:${LD_LIBRARY_PATH}"
+export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/lib/libpthread.so.0
+
+Great. Now runs commands like this:
+
+$ ./run-settings.sh
+$ commands..
+
+However, start to see that the expected shared library are not loaded. Why?
+Suspects gdb settings or configuration for not running as expected since it was
+an investigation under gdb. 
+
+After all, the reason is that by setting env vars in the shell script and run
+commands outside of script then command don't see these settings done in the
+script. Use env vars with default settings.
+
+note:
+The shell script uses subshell.
+
+
+3.2.4.3 Grouping Commands
+
+Bash provides two ways to group a list of commands to be executed `as-a-unit`.
+When commands are grouped, redirections may be applied to the entire command
+list. For example, the output of all the commands in the list may be redirected
+to a single stream.
+
+()
+( list )
+
+Placing a list of commands between `parentheses` causes a `subshell-environment`
+to be created, and each of the commands in list to be executed 'in' that
+subshell. Since the list is executed in a subshell, variable assignments do not
+remain in effect after the subshell completes.
+
+<ex>
+$ global strlen                 # strlen() is not found
+$ (cd /usr/src/lib; gtags)      # library source
+$ (cd /usr/src/sys; gtags)      # kernel source
+
+
+{}
+{ list; }
+
+Placing a list of commands between curly braces causes the list to be executed
+in the `current-shell` context. No subshell is created. The semicolon (or
+    newline) following list is required. 
+
+There is a subtle difference between these two constructs due to historical
+reasons. The braces are reserved words, so they `must-be-separated` from the
+list by blanks or other shell metacharacters. The parentheses are operators, and
+are recognized as separate tokens by the shell even if they are not separated
+from the list by whitespace.
+
+The exit status of both of these constructs is the exit status of list. 
+
+<ex>
+Must be spaces between {}.
+
+$ { date;time; }
+$ { date;time; } > mylog
+
+
+={============================================================================
+*kt_linux_bash_021* sh-script
+
+3.8 Shell Scripts
+
+A shell script is a text file containing shell commands. When such a file is
+used as the first non-option argument when invoking Bash, and neither the -c nor
+-s option is supplied (see Invoking Bash), Bash reads and executes commands from
+the file, then exits. This mode of operation creates a `non-interactive` shell.
+
+The shell first searches for the file in the current directory, and looks in the
+directories in $PATH if not found there.
+
+When Bash runs a shell script, it sets the special parameter 0 to the name of
+the file, rather than the name of the shell, and the positional parameters are
+set to the remaining arguments, if any are given. If no additional arguments are
+supplied, the positional parameters are unset.
+
+A shell script may be `made-executable` by using the chmod command to turn on
+the execute bit. When Bash finds such a file while searching the $PATH for a
+command, it spawns a `subshell` to execute it. In other words, executing
+
+filename arguments
+
+is equivalent to executing
+
+bash filename arguments
+
+if filename is an executable shell script. This subshell reinitializes itself,
+   so that the effect is as if a new shell had been invoked to interpret the
+   script, with the exception that the locations of commands remembered by the
+   parent (see the description of hash in Bourne Shell Builtins) are retained by
+   the child.
+
+Most versions of Unix make this a part of the operating system’s command
+execution mechanism. If the first line of a script begins with the two
+characters ‘#!’, the remainder of the line specifies an interpreter for the
+program. Thus, you can specify Bash, awk, Perl, or some other interpreter and
+write the rest of the script file in that language.
+
+The arguments to the interpreter consist of a single optional argument following
+the interpreter name on the first line of the script file, followed by the name
+of the script file, followed by the rest of the arguments. Bash will perform
+this action on operating systems that do not handle it themselves. Note that
+some older versions of Unix limit the interpreter name and argument to a maximum
+of 32 characters.
+
+Bash scripts often begin with #! /bin/bash (assuming that Bash has been
+    installed in /bin), since this ensures that Bash will be used to interpret
+the script, even if it is executed under another shell. 
+
+
+={============================================================================
+*kt_linux_bash_021* sh-exit-status
+
+3.2.1 Simple Commands
+
+The return status (see Exit Status) of a simple command is its exit status as
+provided by the POSIX 1003.1 waitpid function, or 128+n if the command was
+terminated by signal n. 
+
+The $? expands to the exit status of the 'most' recently executed foreground
+pipeline. Can be used in test construct.
+
+The following example demonstrates that TEST COMMANDS might be 'any' UNIX
+command that returns an exit status, and that if again returns an exit status of
+zero:
+
+<ex>
+note: The grep return 0 when found and 1 when not found. The test in shell see
+that 0 is true and 1 is false.
+
+$ if grep KB readme; then echo "found"; fi
+readme:1:this is KB for keitee.
+found
+
+$ if ! grep KB readme; then echo "found"; fi
+readme:1:this is KB for keitee.
+$ 
+
+$ if true; then echo "found"; fi
+found
+
+<ex>
+while kill -0 "${parent_pid}" &>/dev/null;
+do
+   usleep 500
+done
+
+<ex>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char** argv)
+{
+  printf(" this is a main function.\n");
+
+  if( 2 == argc )
+    exit(EXIT_FAILURE);
+
+  exit(EXIT_SUCCESS);
+}
+
+$ ./a.out && echo "return success"
+ this is a main function.
+return success
+$ 
+
+$ echo $?
+0
+
+$ ./a.out xx && echo "return success"
+ this is a main function.
+$ 
+
+$ echo $?
+1
+
+<ex>
+Stash away the output of program and only use its exit status to see if it has
+found a element in the system.
+
+$ gst-inspect-1.0 nexussink &>/dev/null && echo "true" || echo "false"
+true
+$ gst-inspect-1.0 xx &>/dev/null && echo "true" || echo "false"
+false
+$   
+
+
+<read>
+http://bencane.com/2014/09/02/understanding-exit-codes-and-how-to-use-them-in-bash-scripts/
+
+What are exit codes?
+
+On Unix and Linux systems, programs can pass a value to their parent process
+while terminating. This value is referred to as an exit code or exit status. On
+POSIX systems the standard convention is for the program to pass 0 for
+successful executions and 1 or higher for failed executions.
+
+Why is this important? If you look at exit codes in the context of scripts
+written to be used for the command line the answer is very simple. Any script
+that is useful in some fashion will inevitably be either used in another script,
+     or wrapped with a bash one liner. This becomes especially true if the
+     script is used with automation tools like SaltStack or monitoring tools
+     like Nagios, these programs will execute scripts and check the status code
+     to determine whether that script was successful or not.
+
+On top of those reasons, exit codes exist within your scripts even if you don't
+define them. By not defining proper exit codes you could be falsely reporting
+successful executions which can cause issues depending on what the script does.
+What happens if I don't specify an exit code
+
+In Linux any script run from the command line has an exit code. With Bash
+scripts, if the exit code is not specified in the script itself the exit code
+used will be the exit code of the 'last' command run. To help explain exit codes
+a little better we are going to use a quick sample script.
+
+Sample Script:
+
+#!/bin/bash
+touch /root/test
+echo created file
+
+The above sample script will execute both the touch command and the echo
+command. When we execute this script (as a non-root user) the touch command will
+fail, ideally since the touch command failed we would want the exit code of the
+script to indicate failure with an appropriate exit code. To check the exit code
+we can simply print the $? special variable in bash. This variable will print
+the exit code of the last run command.
+
+Execution:
+
+$ ./tmp.sh 
+touch: cannot touch '/root/test': Permission denied
+created file
+$ echo $?
+0
+
+As you can see after running the ./tmp.sh command the exit code was 0 which
+indicates success, even though the touch command failed. The sample script runs
+two commands touch and echo, since we did not specify an exit code the script
+exits with the exit code of the last run command. In this case, the last run
+command is the echo command, which did execute successfully.
+
+Script:
+
+#!/bin/bash
+touch /root/test
+
+If we remove the echo command from the script we should see the exit code of the
+touch command.
+
+Execution:
+
+$ ./tmp.sh 
+touch: cannot touch '/root/test': Permission denied
+$ echo $?
+1
+
+As you can see, since the last command run was touch the exit code reflects the
+true status of the script; failed.  Using exit codes in your bash scripts
+
+While removing the echo command from our sample script worked to provide an exit
+code, what happens when we want to perform one action if the touch was
+successful and another if it was not. Actions such as printing to stdout on
+success and stderr on failure.
+
+Testing for exit codes
+
+Earlier we used the $? special variable to print the exit code of the script. We
+can also use this variable within our script to test if the touch command was
+successful or not.
+
+Script:
+
+#!/bin/bash
+
+touch /root/test 2> /dev/null
+
+if [ $? -eq 0 ]
+then
+  echo "Successfully created file"
+else
+  echo "Could not create file" >&2
+fi
+
+In the above revision of our sample script; if the exit code for touch is 0 the
+script will echo a successful message. If the exit code is anything other than 0
+this indicates failure and the script will echo a failure message to stderr.
+
+Execution:
+
+$ ./tmp.sh
+Could not create file
+
+Providing your own exit code
+
+While the above revision will provide an error message if the touch command
+fails, it still provides a 0 exit code indicating success.
+
+$ ./tmp.sh
+Could not create file
+$ echo $?
+0
+
+Since the script failed, it would not be a good idea to pass a successful exit
+code to any other program executing this script. To add our own exit code to
+this script, we can simply use the exit command.
+
+Script:
+
+#!/bin/bash
+
+touch /root/test 2> /dev/null
+
+if [ $? -eq 0 ]
+then
+  echo "Successfully created file"
+  exit 0
+else
+  echo "Could not create file" >&2
+  exit 1
+fi
+
+With the exit command in this script, we will exit with a successful message and
+0 exit code if the touch command is successful. If the touch command fails
+however, we will print a failure message to stderr and exit with a 1 value which
+indicates failure.
+
+Execution:
+
+$ ./tmp.sh
+Could not create file
+$ echo $?
+1
+
+Using exit codes on the command line
+
+Now that our script is able to tell both users and programs whether it finished
+successfully or unsuccessfully we can use this script with other administration
+tools or simply use it with bash one liners.
+
+Bash One Liner:
+
+$ ./tmp.sh && echo "bam" || (sudo ./tmp.sh && echo "bam" || echo "fail")
+Could not create file
+Successfully created file
+bam
+
+The above grouping of commands use what is called list constructs in bash. List
+constructs allow you to chain commands together with simple && for and and ||
+for or conditions. The above command will execute the ./tmp.sh script, and if
+the exit code is 0 the command echo "bam" will be executed. If the exit code of
+./tmp.sh is 1 however, the commands within the parenthesis will be executed
+next. Within the parenthesis the commands are chained together using the && and
+|| constructs again.
+
+The list constructs use exit codes to understand whether a command has
+successfully executed or not. If scripts do not properly use exit codes, any
+user of those scripts who use more advanced commands such as list constructs
+will get unexpected results on failures.
+
+More exit codes
+
+The exit command in bash accepts integers from 0 - 255, in most cases 0 and 1
+will suffice however there are other reserved exit codes that can be used for
+more specific errors. The Linux Documentation Project has a pretty good table of
+reserved exit codes and what they are used for.
+
+
+<case>
+After migrates to the new linux distribution, the interactive shell script fails
+to run. The thing was that it reads .bashrc but fails to contiune.
+
+# from ~/.bashc
+
+# enable programmable completion features (you don't need to enable
+# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
+# sources /etc/bash.bashrc).
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
+fi
+
+# /usr/share/bash-completion/bash_completion
+
+# This function sets correct SysV init directories
+#
+_sysvdirs()
+{
+    sysvdirs=( )
+    [[ -d /etc/rc.d/init.d ]] && sysvdirs+=( /etc/rc.d/init.d )
+    [[ -d /etc/init.d ]] && sysvdirs+=( /etc/init.d )
+    # Slackware uses /etc/rc.d
+    [[ -f /etc/slackware-version ]] && sysvdirs=( /etc/rc.d )
+}
+
+However, /etc/slackware-version do not exist and this scripts quit since the
+parent script uses "-ie" option.
+
+To see how this happen:
+
+#!/bin/bash -i
+
+echo "call file test"
+
+# this file does not exist and so exit code is 1.
+# [[ -f /etc/slackware-version ]]
+
+# this file does exist and so exit code is 0.
+[[ -f /etc/fstab ]]
+
+echo "exit code after call file test: $?"
+
+
+={============================================================================
+*kt_linux_bash_001* sh-looping-construct
+
+3.2.4 Compound Commands
+
+* Looping Constructs:     Shell commands for iterative action.
+* Conditional Constructs: Shell commands for conditional execution.
+* Command Grouping:       Ways to group commands.
+
+`compound-commands` are the shell programming constructs. Each construct begins
+with a reserved word or control operator and is terminated by a corresponding
+reserved word or operator. Any redirections (see Redirections) associated with a
+compound command apply to all commands within that compound command unless
+explicitly overridden.
+
+In most cases a list of commands in a compound command's description may be
+separated from the rest of the command by one or more newlines, and may be
+followed by a newline `in-place-of` a semicolon.
+
+Bash provides looping constructs, conditional commands, and mechanisms to group
+commands and execute them as a unit. 
+
+
+{for-loop}
+
+for
+
+    The syntax of the for command is:
+
+    for name [ [in [words ...] ] ; ] do commands; done
+
+    Expand words, and execute commands once for each member in the resultant
+    list, with name bound to the current member. If ‘in words’ is not present,
+    the for command executes the commands once for each positional parameter
+    that is set, as if ‘in "$@"’ had been specified (see Special Parameters).
+    The return status is the exit status of the last command that executes. If
+    there are no items in the expansion of words, no commands are executed, and
+    the return status is zero.
+
+    An alternate form of the for command is also supported:
+
+    for (( expr1 ; expr2 ; expr3 )) ; do commands ; done
+
+    First, the arithmetic expression expr1 is evaluated according to the rules
+    described below (see Shell Arithmetic). The arithmetic expression expr2 is
+    then evaluated repeatedly until it evaluates to zero. Each time expr2
+    evaluates to a non-zero value, commands are executed and the arithmetic
+    expression expr3 is evaluated. If any expression is omitted, it behaves as
+    if it evaluates to 1. The return value is the exit status of the last
+    command in commands that is executed, or false if any of the expressions is
+    invalid. 
 
 
 ={============================================================================
@@ -1275,46 +1976,6 @@ treated specially.
 
 
 ={============================================================================
-*kt_linux_bash_005* bash: quoting
-
-<backslash>
-$ echo You owe \$1250
-You owe $1250
-
-<single>
-Quote all inside the single quote.
-
-$ echo '<-$1250.**>; (update?) [y|n]'
-<-$1250.**>; (update?) [y|n]
-
-<double> <use>
-Do not quote all (see below) so that can use 'variables' inside the quoted string.
-
-$ for parameter substitution.
-
-All other \ characters are literal (not special).
-
-`  for command substitution.
-\$ to enable literal dollar signs.
-\Â´ to enable literal backquotes.
-\" to enable embedded double quotes.
-\\ to enable embedded backslashes.
-
-$ echo '$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]'
-$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]
-
-$ echo "$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]"
-parkkt owes <-250.**>; [ as of (01/26) ]
-
-<quote-parms-to-other-command> <use>
-To prevent globbing by shell before passing params to grep command.
-
-$ grep '[0-9][0-9]*$' report2 report7
-
-
-
-
-={============================================================================
 *kt_linux_bash_007* bash: set var using other commands
 
 Two ways to set var by running other commands.
@@ -2063,135 +2724,6 @@ a command that must be read from a disk file, if you are in the Bourne shell.
 
 
 ={============================================================================
-*kt_linux_bash_019* bash: subshell and multiple commands
-
-3.7.3 Command Execution Environment
-
-The shell has an execution environment, which consists of the following:
-
-open files inherited by the shell at invocation, as modified by redirections supplied to the exec builtin
-
-the current working directory as set by cd, pushd, or popd, or inherited by the shell at invocation
-the file creation mode mask as set by umask or inherited from the shell's parent
-
-current traps set by trap
-
-shell parameters that are set by variable assignment or with set or inherited from the shell's
-parent in the environment
-
-shell functions defined during execution or inherited from the shell's parent in the environment
-options enabled at invocation (either by default or with command-line arguments) or by set options
-enabled by shopt (see The Shopt Builtin)
-
-shell aliases defined with alias (see Aliases)
-
-various process IDs, including those of background jobs (see Lists), the value of $$, and the value of $PPID 
-
-<separate>
-When a simple command other than a builtin or shell function is to be executed, it is invoked in a
-'separate' execution environment that consists of the following. Unless otherwise noted, the values
-are inherited from the shell.
-
-- the shell's open files, plus any modifications and additions specified by redirections to the command
-
-- the current working directory
-- the file creation mode mask
-
-- note: shell variables and functions marked for export, along with variables exported for the
-command, passed in the environment (see Environment)
-
-A command invoked in this separate environment cannot affect the shell's execution environment.
-
-Command substitution, commands grouped with parentheses, and asynchronous commands are invoked in a
-subshell environment that is a duplicate of the shell environment, except that traps caught by the
-shell are reset to the values that the shell inherited from its parent at invocation. 
-
-Builtin commands that are invoked as part of a pipeline are also executed in a 'subshell' environment.
-Changes made to the subshell environment cannot affect the shell's execution environment.
-
-Subshells spawned to execute command substitutions inherit the value of the -e option from the
-parent shell. When not in POSIX mode, Bash clears the -e option in such subshells.
-
-
-3.2.2 Pipelines
-
-A pipeline is a sequence of simple commands separated by one of the control operators | or |&.
-
-The format for a pipeline is
-
-[time [-p]] [!] command1 [ | or |& command2 ] ...
-
-The output of each command in the pipeline is connected via a pipe to the input of the next command.
-That is, each command reads the previous command's output. This connection is performed before any
-redirections specified by the command.
-
-If |& is used, command1's standard error, in addition to its standard output, is connected to
-command2's standard input through the pipe; it is shorthand for 2>&1 |. This implicit redirection of
-the standard error to the standard output is performed after any redirections specified by the
-command.
-
-If the pipeline is 'not' executed asynchronously (see Lists), the shell 'waits' for all commands in
-the pipeline to complete.
-
-'each' command in a pipeline is executed in its own subshell (see Command Execution Environment). The
-exit status of a pipeline is the exit status of the last command in the pipeline, unless the
-pipefail option is enabled (see The Set Builtin). 
-
-
-3.2.3 Lists of Commands
-
-A list is a sequence of one or more pipelines separated by one of the operators ;, &, &&, or ||, and
-optionally terminated by one of ;, &, or a newline. 
-
-Commands separated by a ; are executed 'sequentially'; the shell waits for each command to terminate
-in turn. The return status is the exit status of the last command executed. 
-
-If a command is terminated by the control operator &, the shell executes the command asynchronously
-in a subshell. This is known as executing the command in the background.
-
-
-3.2.4.3 Grouping Commands
-
-Bash provides two ways to group a list of commands to be executed as a unit. When commands are
-grouped, redirections may be applied to the entire command list. For example, the output of all the
-commands in the list may be redirected to a single stream.
-
-()
-
-( list )
-
-Placing a list of commands between parentheses causes a 'subshell' environment to be created (see
-    Command Execution Environment), and each of the commands in list to be executed 'in' that
-subshell. Since the list is executed in a subshell, variable assignments do not remain in effect
-after the subshell completes.
-
-<example>
-$ global strlen                 # strlen() is not found
-$ (cd /usr/src/lib; gtags)      # library source
-$ (cd /usr/src/sys; gtags)      # kernel source
-
-
-{}
-
-{ list; }
-
-Placing a list of commands between curly braces causes the list to be executed in the 'current'
-shell context. No subshell is created. The semicolon (or newline) following list is required. 
-
-In addition to the creation of a subshell, there is a subtle difference between these two constructs
-due to historical reasons. The braces are reserved words, so they must be separated from the list by
-blanks or other shell metacharacters. The parentheses are operators, and are recognized as separate
-tokens by the shell even if they are not separated from the list by whitespace.
-
-The exit status of both of these constructs is the exit status of list. 
-
-note: must be spaces between {}.
-
-$ { date;time; }
-$ { date;time; } > mylog
-
-
-={============================================================================
 *kt_linux_bash_020* bash: list options
 
 keitee@debian-keitee:~/github/kb$ set -o
@@ -2289,307 +2821,6 @@ restricted_shell	off
 shift_verbose  	off
 sourcepath     	on
 xpg_echo       	off
-
-
-={============================================================================
-*kt_linux_bash_021* sh-exit: exit status
-
-The $? expands to the exit status of the 'most' recently executed foreground
-pipeline. Can be used in test construct.
-
-The following example demonstrates that TEST COMMANDS might be 'any' UNIX
-command that returns an exit status, and that if again returns an exit status of
-zero:
-
-<ex>
-note: The grep return 0 when found and 1 when not found. The test in shell see
-that 0 is true and 1 is false.
-
-$ if grep KB readme; then echo "found"; fi
-readme:1:this is KB for keitee.
-found
-
-$ if ! grep KB readme; then echo "found"; fi
-readme:1:this is KB for keitee.
-$ 
-
-$ if true; then echo "found"; fi
-found
-
-<ex>
-while kill -0 "${parent_pid}" &>/dev/null;
-do
-   usleep 500
-done
-
-<ex>
-
-#include <stdio.h>
-#include <stdlib.h>
-
-int main(int argc, char** argv)
-{
-  printf(" this is a main function.\n");
-
-  if( 2 == argc )
-    exit(EXIT_FAILURE);
-
-  exit(EXIT_SUCCESS);
-}
-
-$ ./a.out && echo "return success"
- this is a main function.
-return success
-$ 
-
-$ echo $?
-0
-
-$ ./a.out xx && echo "return success"
- this is a main function.
-$ 
-
-$ echo $?
-1
-
-<ex>
-Stash away the output of program and only use its exit status to see if it has
-found a element in the system.
-
-$ gst-inspect-1.0 nexussink &>/dev/null && echo "true" || echo "false"
-true
-$ gst-inspect-1.0 xx &>/dev/null && echo "true" || echo "false"
-false
-$   
-
-
-<read>
-http://bencane.com/2014/09/02/understanding-exit-codes-and-how-to-use-them-in-bash-scripts/
-
-What are exit codes?
-
-On Unix and Linux systems, programs can pass a value to their parent process
-while terminating. This value is referred to as an exit code or exit status. On
-POSIX systems the standard convention is for the program to pass 0 for
-successful executions and 1 or higher for failed executions.
-
-Why is this important? If you look at exit codes in the context of scripts
-written to be used for the command line the answer is very simple. Any script
-that is useful in some fashion will inevitably be either used in another script,
-     or wrapped with a bash one liner. This becomes especially true if the
-     script is used with automation tools like SaltStack or monitoring tools
-     like Nagios, these programs will execute scripts and check the status code
-     to determine whether that script was successful or not.
-
-On top of those reasons, exit codes exist within your scripts even if you don't
-define them. By not defining proper exit codes you could be falsely reporting
-successful executions which can cause issues depending on what the script does.
-What happens if I don't specify an exit code
-
-In Linux any script run from the command line has an exit code. With Bash
-scripts, if the exit code is not specified in the script itself the exit code
-used will be the exit code of the 'last' command run. To help explain exit codes
-a little better we are going to use a quick sample script.
-
-Sample Script:
-
-#!/bin/bash
-touch /root/test
-echo created file
-
-The above sample script will execute both the touch command and the echo
-command. When we execute this script (as a non-root user) the touch command will
-fail, ideally since the touch command failed we would want the exit code of the
-script to indicate failure with an appropriate exit code. To check the exit code
-we can simply print the $? special variable in bash. This variable will print
-the exit code of the last run command.
-
-Execution:
-
-$ ./tmp.sh 
-touch: cannot touch '/root/test': Permission denied
-created file
-$ echo $?
-0
-
-As you can see after running the ./tmp.sh command the exit code was 0 which
-indicates success, even though the touch command failed. The sample script runs
-two commands touch and echo, since we did not specify an exit code the script
-exits with the exit code of the last run command. In this case, the last run
-command is the echo command, which did execute successfully.
-
-Script:
-
-#!/bin/bash
-touch /root/test
-
-If we remove the echo command from the script we should see the exit code of the
-touch command.
-
-Execution:
-
-$ ./tmp.sh 
-touch: cannot touch '/root/test': Permission denied
-$ echo $?
-1
-
-As you can see, since the last command run was touch the exit code reflects the
-true status of the script; failed.  Using exit codes in your bash scripts
-
-While removing the echo command from our sample script worked to provide an exit
-code, what happens when we want to perform one action if the touch was
-successful and another if it was not. Actions such as printing to stdout on
-success and stderr on failure.
-
-Testing for exit codes
-
-Earlier we used the $? special variable to print the exit code of the script. We
-can also use this variable within our script to test if the touch command was
-successful or not.
-
-Script:
-
-#!/bin/bash
-
-touch /root/test 2> /dev/null
-
-if [ $? -eq 0 ]
-then
-  echo "Successfully created file"
-else
-  echo "Could not create file" >&2
-fi
-
-In the above revision of our sample script; if the exit code for touch is 0 the
-script will echo a successful message. If the exit code is anything other than 0
-this indicates failure and the script will echo a failure message to stderr.
-
-Execution:
-
-$ ./tmp.sh
-Could not create file
-
-Providing your own exit code
-
-While the above revision will provide an error message if the touch command
-fails, it still provides a 0 exit code indicating success.
-
-$ ./tmp.sh
-Could not create file
-$ echo $?
-0
-
-Since the script failed, it would not be a good idea to pass a successful exit
-code to any other program executing this script. To add our own exit code to
-this script, we can simply use the exit command.
-
-Script:
-
-#!/bin/bash
-
-touch /root/test 2> /dev/null
-
-if [ $? -eq 0 ]
-then
-  echo "Successfully created file"
-  exit 0
-else
-  echo "Could not create file" >&2
-  exit 1
-fi
-
-With the exit command in this script, we will exit with a successful message and
-0 exit code if the touch command is successful. If the touch command fails
-however, we will print a failure message to stderr and exit with a 1 value which
-indicates failure.
-
-Execution:
-
-$ ./tmp.sh
-Could not create file
-$ echo $?
-1
-
-Using exit codes on the command line
-
-Now that our script is able to tell both users and programs whether it finished
-successfully or unsuccessfully we can use this script with other administration
-tools or simply use it with bash one liners.
-
-Bash One Liner:
-
-$ ./tmp.sh && echo "bam" || (sudo ./tmp.sh && echo "bam" || echo "fail")
-Could not create file
-Successfully created file
-bam
-
-The above grouping of commands use what is called list constructs in bash. List
-constructs allow you to chain commands together with simple && for and and ||
-for or conditions. The above command will execute the ./tmp.sh script, and if
-the exit code is 0 the command echo "bam" will be executed. If the exit code of
-./tmp.sh is 1 however, the commands within the parenthesis will be executed
-next. Within the parenthesis the commands are chained together using the && and
-|| constructs again.
-
-The list constructs use exit codes to understand whether a command has
-successfully executed or not. If scripts do not properly use exit codes, any
-user of those scripts who use more advanced commands such as list constructs
-will get unexpected results on failures.
-
-More exit codes
-
-The exit command in bash accepts integers from 0 - 255, in most cases 0 and 1
-will suffice however there are other reserved exit codes that can be used for
-more specific errors. The Linux Documentation Project has a pretty good table of
-reserved exit codes and what they are used for.
-
-
-<case>
-After migrates to the new linux distribution, the interactive shell script fails
-to run. The thing was that it reads .bashrc but fails to contiune.
-
-# from ~/.bashc
-
-# enable programmable completion features (you don't need to enable
-# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
-# sources /etc/bash.bashrc).
-if ! shopt -oq posix; then
-  if [ -f /usr/share/bash-completion/bash_completion ]; then
-    . /usr/share/bash-completion/bash_completion
-  elif [ -f /etc/bash_completion ]; then
-    . /etc/bash_completion
-  fi
-fi
-
-# /usr/share/bash-completion/bash_completion
-
-# This function sets correct SysV init directories
-#
-_sysvdirs()
-{
-    sysvdirs=( )
-    [[ -d /etc/rc.d/init.d ]] && sysvdirs+=( /etc/rc.d/init.d )
-    [[ -d /etc/init.d ]] && sysvdirs+=( /etc/init.d )
-    # Slackware uses /etc/rc.d
-    [[ -f /etc/slackware-version ]] && sysvdirs=( /etc/rc.d )
-}
-
-However, /etc/slackware-version do not exist and this scripts quit since the
-parent script uses "-ie" option.
-
-To see how this happen:
-
-#!/bin/bash -i
-
-echo "call file test"
-
-# this file does not exist and so exit code is 1.
-# [[ -f /etc/slackware-version ]]
-
-# this file does exist and so exit code is 0.
-[[ -f /etc/fstab ]]
-
-echo "exit code after call file test: $?"
 
 
 ={============================================================================
@@ -3399,31 +3630,6 @@ wait: wait [id]
 
 
 ={============================================================================
-*kt_linux_bash_036* bash: shell and environment variable
-
-{problem}
-When works on some issue, have to set some environment variables before running some commands which
-are affected by these settings. This is repetative and thought it's better to have a script to set
-these.
-
-#!/bin/sh
-export LD_LIBRARY_PATH="/opt/zinc-trunk/lib:${LD_LIBRARY_PATH}"
-export LD_PRELOAD=/usr/local/lib/libdirectfb.so:/lib/libpthread.so.0
-
-Great. Now runs commands like this:
-
-$ ./run-settings.sh
-$ commands..
-
-However, start to see that the expected shared library are not loaded and the picture is complicated
-since is doing investigation with gdb. So suspects gdb settings or configuration for not running as
-expected. 
-
-After all, the reason is that by setting env vars in the shell script and run commands outside of
-script then command don't see these settings done in the script. Use env vars with default settings.
-
-
-={============================================================================
 *kt_linux_bash_037* bash: builtin: command
 
 command
@@ -3456,8 +3662,6 @@ Running on a Nexus enabled system
 
 ={============================================================================
 *kt_linux_bash_038* sh-declare
-
-declare
 
 declare [-aAfFgilnrtux] [-p] [name[=value] ...]
 
@@ -3495,6 +3699,8 @@ Each name is an associative array variable (see Arrays).
 -r
 Make names readonly. These names cannot then be assigned values by subsequent
 assignment statements or unset.
+
+-x     Mark  names  for  export  to  subsequent commands via the environment.
 
 
 ={============================================================================
@@ -4955,7 +5161,9 @@ LD_PRELOAD=/libyouviewrcushim.so strace /bin/true
 ={============================================================================
 *kt_linux_tool_020* tool-time-tool-date
 
-kit@kit-vb:~/tizencore$ time -f "%E real,%U user,%S sys" ls -Fs
+{tool-time}
+
+~/tizencore$ time -f "%E real,%U user,%S sys" ls -Fs
 -f: command not found
 
 real	0m0.143s
@@ -4968,9 +5176,10 @@ total 24
 0:00.00 real,0.00 user,0.00 sys
 kit@kit-vb:~/tizencore$ 
 
-Users of the bash shell need to use an explicit path in order to run the external time command and
-not the shell builtin variant. On system where time is installed in /usr/bin, the first example
-would become /usr/bin/time wc /etc/hosts
+Users of the bash shell need to use an explicit path in order to run the
+external time command and not the shell builtin variant. On system where time is
+installed in /usr/bin, the first example would become /usr/bin/time wc
+/etc/hosts
 
 
 {tool-date}
