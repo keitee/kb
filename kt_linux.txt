@@ -14,28 +14,35 @@
 |kt_linux_bash_000| sh-reference
 *kt_linux_bash_005* sh-quote
 *kt_linux_bash_019* sh-pipeline sh-subshell
+*kt_linux_bash_019* sh-list-construct
 *kt_linux_bash_021* sh-script
 *kt_linux_bash_021* sh-exit-status
+*kt_linux_bash_001* sh-looping-construct sh-compound-command
+*kt_linux_bash_001* sh-looping-construct-getopt
+*kt_linux_bash_001* sh-conditional-construct
+*kt_linux_bash_001* sh-conditional-expression
+*kt_linux_bash_001* sh-pattern-match
+*kt_linux_bash_001* sh-function
+*kt_linux_bash_001* sh-variable
+*kt_linux_bash_001* sh-expansion
+*kt_linux_bash_001* sh-expansion-brace
+*kt_linux_bash_001* sh-expansion-tilde
+*kt_linux_bash_001* sh-expansion-parameter
+*kt_linux_bash_001* sh-expansion-command
 |kt_linux_bash_001| bash: history and reverse search
-|kt_linux_bash_002| bash: variable <substitution> <expansion>
-|kt_linux_bash_003| bash: if and test command primaries <string-comparison> <[[>
 |kt_linux_bash_004| sh-globbing
 |kt_linux_bash_006| bash: shell and special parameters <shift-operator> <while>
 |kt_linux_bash_007| bash: set var using other commands <dirname> <readlink> <if>
-|kt_linux_bash_008| bash: for
 |kt_linux_bash_009| bash: select
 |kt_linux_bash_010| bash: case
-|kt_linux_bash_011| bash: process options using while and getopts
-|kt_linux_bash_012| bash: break and continue
 |kt_linux_bash_013| sh-read
-|kt_linux_bash_014| bash: function
 |kt_linux_bash_015| bash: basename
 |kt_linux_bash_016| bash: here document
 |kt_linux_bash_017| sh-redirection
 |kt_linux_bash_018| bash: ':' command
 |kt_linux_bash_020| bash: list options
-|kt_linux_bash_022| sh-and-or
 *kt_linux_bash_023* sh-option: invoking options
+*kt_linux_bash_024* sh-builtin
 |kt_linux_bash_024| bash: builtin: exec
 |kt_linux_bash_025| bash: builtin: set
 *kt_linux_bash_025* bash: builtin: trap
@@ -464,7 +471,6 @@ http://wiki.bash-hackers.org/start
 
 3.1.2 Quoting
 
-
 Quoting is used to remove the special meaning of certain characters or words to
 the shell. Quoting can be used to disable special treatment for special
 characters, to prevent reserved words from being recognized as such, and to
@@ -501,6 +507,7 @@ $ echo '<-$1250.**>; (update?) [y|n]'
 <-$1250.**>; (update?) [y|n]
 
 
+{sh-double-quote}
 * Double Quotes: How to suppress `most` of the interpretation of a sequence of
   characters.
 
@@ -559,31 +566,12 @@ connected to command2's standard input through the pipe; it is shorthand for
 2>&1 |. This implicit redirection of the standard error to the standard output
 is performed after any redirections specified by the command.
 
-If the pipeline is 'not' executed asynchronously (see Lists), the shell 'waits'
-for all commands in the pipeline to complete.
+If the pipeline is 'not' executed asynchronously (see `list-construct`), the
+shell 'waits' for all commands in the pipeline to complete.
 
 'each' command in a pipeline is executed in its own `subshell`. The exit status
   of a pipeline is the exit status of the `last-command` in the pipeline, unless
   the `pipefail-option` is enabled (see The Set Builtin). 
-
-
-3.2.3 Lists of Commands
-
-A list is a sequence of one or more pipelines separated by one of the operators
-;, &, &&, or ||, and optionally terminated by one of ;, &, or a newline. 
-
-Commands separated by a ; are executed 'sequentially'; the shell waits for each
-command to terminate in turn. The return status is the exit status of the last
-command executed. 
-
-If a command is terminated by the control operator ‘&’, the shell executes the
-command `asynchronously` in a subshell. This is known as executing the command
-in the `background`. The shell does not wait for the command to finish, and the
-return status is 0 (true). 
-
-// When job control is not active (see Job Control), the standard input for
-// asynchronous commands, in the absence of any explicit redirections, is
-// redirected from /dev/null. 
 
 
 3.7.3 Command Execution Environment
@@ -666,7 +654,7 @@ automatically marking it for export to child processes. Executed commands
   environment, replacing the old. The environment inherited by any executed
   command consists of the shell's initial environment, whose values may be
   modified in the shell, less any pairs removed by the unset and ‘export -n’
-  commands, plus any additions via the export and ‘declare -x’ commands.
+  commands, plus any additions via the `export` and ‘declare -x’ commands.
 
 The environment for any simple command or function may be augmented temporarily
 by prefixing it with parameter assignments, as described in Shell Parameters.
@@ -749,6 +737,146 @@ $ { date;time; } > mylog
 
 
 ={============================================================================
+*kt_linux_bash_019* sh-list-construct
+
+3.2.3 Lists of Commands
+
+A list is a sequence of one or more pipelines separated by one of the operators
+;, &, &&, or ||, and optionally terminated by one of ;, &, or a newline. 
+
+<semicolon>
+Commands separated by a ; are executed 'sequentially'; the shell waits for each
+command to terminate in turn. The return status is the exit status of the last
+command executed. 
+
+If a command is terminated by the control operator ‘&’, the shell executes the
+command `asynchronously` in a subshell. This is known as executing the command
+in the `background`. The shell does not wait for the command to finish, and the
+return status is 0 (true). 
+
+// When job control is not active (see Job Control), the standard input for
+// asynchronous commands, in the absence of any explicit redirections, is
+// redirected from /dev/null. 
+
+
+<and-and-or>
+AND and OR lists are sequences of one or more pipelines separated by the control
+operators ‘&&’ and ‘||’, respectively. AND and OR lists are executed with left
+associativity.
+
+An AND list has the form
+
+command1 && command2
+
+command2 is executed if, and only if, command1 returns an exit status of `zero`.
+
+An OR list has the form
+
+command1 || command2
+
+command2 is executed if, and only if, command1 returns a non-zero exit status.
+
+The return status of AND and OR lists is the exit status of the last command
+executed in the list. 
+
+<ex>
+if [ "$(whoami)" != 'root' ]; then
+   echo "You have no permission to run $0 as non-root user."
+   exit 1;
+fi
+
+With Bash, you can shorten this type of construct. The compact equivalent of the
+above test is as follows:
+
+[ "$(whoami)" != 'root' ] && ( echo you are using a non-privileged account; exit 1 )
+
+Similar to the "&&" expression which indicates what to do if the test proves
+true, "||" specifies what to do if the test is false.
+
+<ex>
+* Check if loginscript is not set. If it's set(defined) then run -f. 
+  * if file exist then test return true so no fail() call.
+  * if file not exist then test return false so run fail() call.
+* If loginscript is not set, no run -f and test return true(0) so no fail() call.
+
+[[ -z "$loginscript" || -f "$loginscript" ]] ||
+    fail "Loginscript '$loginscript' doesn't exist."
+
+Progress to next cond when only cond1 is true. [[ cond1 || cond2 ]] || exec
+
+<ex>
+To see if meet at least one of options.
+
+[[ -n "$release" || -n "$zincdir" || -n "$jenkinshost" || -n "$jenkinsurl" ||
+   -n "$galliumurl" || -n "$localgallium" || -n "$platformconfigurl" ||
+   "$virtualinputdriver" -ne 0 || -n "$irdriver" || "$enabledbustcp" -ne 0 ||
+   "$directfbsrc" -ne 0 || "$killzincdaemons" -ne 0 || -n "$toolnames" ||
+   -n "$networkmanager" || -n "$loginscript" || -n "$startupscript" ||
+   "$forcefirsttime" -ne 0 || "$needsreboot" -ne 0 || "$vidmemcapture" -ne 0 ]] ||
+{
+    fail "You must specify at least one of -[ZzjugcdeEtsknlbTfrv]."
+}
+
+<ex>
+function x {
+  ...
+
+  [[ 
+    "$cacheOptionCorrectAtExpectedPosition" = 1 &&
+    "$cacheValueCorrectAtExpectedPosition" = 1 &&
+    "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
+    "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
+    "$jarOptionCorrectAtExpectedPosition" = "1" && 
+    "$jarValueCorrectAtExpectedPosition" = "1" && 
+    "$urlOptionCorrectAtExpectedPosition" = "1" && 
+    "$urlValueCorrectAtExpectedPosition" = "1" 
+  ]] 
+}
+
+From the debug output, shows only 4 since stops as soon as see flase. This may
+be confusing when debugging.
+
++ [[ 1 = 1 ]]
++ [[ 1 = 1 ]]
++ [[ 1 = 1 ]]
++ [[ 0 = 1 ]]
+
+<ex>
+The lsr-config returns "0/1" or "true/false" when use --bool and the problem is
+when a key is boolean and is not set in a database meaning 0, it still returns
+"0" which is not NULL string. So "if [ -z ]" check always becomes false.
+
+The solution is that use variable's value depending on key value to set actual
+variable.
+
+#!/bin/sh
+
+# when key is not set or returns "false" then run "echo false" and ends here.
+# enable_yv_media="".
+#
+# when key set and returns "true" then enable_yv_media="true" since lsr-config
+# returns zero exit status.
+
+enable_yv_media=""
+[ "false" = "$(lsr-config --bool platform.settings.enable-yv-media || echo false)" ] || {
+    enable_yv_media="true"
+}
+
+USE_YV_MEDIA_ROUTER="$enable_yv_media"
+
+if [ -z "$USE_YV_MEDIA_ROUTER" ]; then
+	echo "NOT SET. $USE_YV_MEDIA_ROUTER. WILL USE OEM MR"
+else
+	echo "SET. $USE_YV_MEDIA_ROUTER. WILL USE YV MR"
+fi
+
+However, if use this then goes wrong.
+
+if [ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ]; then
+    // things to do when true case
+
+
+={============================================================================
 *kt_linux_bash_021* sh-script
 
 3.8 Shell Scripts
@@ -817,12 +945,12 @@ command that returns an exit status, and that if again returns an exit status of
 zero:
 
 <ex>
-note: The grep return 0 when found and 1 when not found. The test in shell see
-that 0 is true and 1 is false.
+The grep returns 0(success) when found and 1(fail) when not found.
 
 $ if grep KB readme; then echo "found"; fi
 readme:1:this is KB for keitee.
 found
+$ 
 
 $ if ! grep KB readme; then echo "found"; fi
 readme:1:this is KB for keitee.
@@ -838,7 +966,6 @@ do
 done
 
 <ex>
-
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -888,17 +1015,20 @@ while terminating. This value is referred to as an exit code or exit status. On
 POSIX systems the standard convention is for the program to pass 0 for
 successful executions and 1 or higher for failed executions.
 
-Why is this important? If you look at exit codes in the context of scripts
-written to be used for the command line the answer is very simple. Any script
-that is useful in some fashion will inevitably be either used in another script,
-     or wrapped with a bash one liner. This becomes especially true if the
-     script is used with automation tools like SaltStack or monitoring tools
-     like Nagios, these programs will execute scripts and check the status code
-     to determine whether that script was successful or not.
+Why is this important? 
+
+If you look at exit codes in the context of scripts written to be used for the
+command line the answer is very simple. Any script that is useful in some
+fashion will inevitably be either used in another script, or wrapped with a bash
+one liner. 
+     
+This becomes especially true to check the status code to determine whether that
+script was successful or not.
 
 On top of those reasons, exit codes exist within your scripts even if you don't
 define them. By not defining proper exit codes you could be falsely reporting
 successful executions which can cause issues depending on what the script does.
+
 What happens if I don't specify an exit code
 
 In Linux any script run from the command line has an exit code. With Bash
@@ -1108,7 +1238,7 @@ echo "exit code after call file test: $?"
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-looping-construct
+*kt_linux_bash_001* sh-looping-construct sh-compound-command
 
 3.2.4 Compound Commands
 
@@ -1122,6 +1252,7 @@ reserved word or operator. Any redirections (see Redirections) associated with a
 compound command apply to all commands within that compound command unless
 explicitly overridden.
 
+<semicolon-newline>
 In most cases a list of commands in a compound command's description may be
 separated from the rest of the command by one or more newlines, and may be
 followed by a newline `in-place-of` a semicolon.
@@ -1130,7 +1261,7 @@ Bash provides looping constructs, conditional commands, and mechanisms to group
 commands and execute them as a unit. 
 
 
-{for-loop}
+{sh-for}
 
 for
 
@@ -1158,6 +1289,1365 @@ for
     if it evaluates to 1. The return value is the exit status of the last
     command in commands that is executed, or false if any of the expressions is
     invalid. 
+
+<ex>
+'no' need to specify index and to shift.
+
+for name in word1 word2 ... wordN
+do
+   list
+done
+
+for f in $(ls); do echo "var is: $f"; done
+
+for f in $( ls /var/ ); do
+   echo $f
+done
+
+for FILE in $HOME/.bash*
+do
+   cp $FILE ${HOME}/public_html
+   chmod a+r ${HOME}/public_html/${FILE}
+done
+
+
+{sh-while}
+
+while
+
+    The syntax of the while command is:
+
+    while test-commands; do consequent-commands; done
+
+    Execute consequent-commands as long as test-commands has an exit status of
+    `zero`. The return status is the exit status of the last command executed in
+    consequent-commands, or zero if none was executed.
+
+<ex>
+while command
+do
+   list
+done
+
+<ex>
+while :     # this cause infinite loop.
+do
+   read CMD
+   case $CMD in
+      [qQ]|[qQ][uU][iI][tT]) break ;;
+   *) process $CMD ;;
+   esac
+done
+
+
+{break-continue}
+The `break` and `continue` builtins (see Bourne Shell Builtins) may be used to
+control loop execution. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-looping-construct-getopt
+
+<ex>
+note: can use true only in the script but not command line.
+
+read case;
+case $case in
+    1) echo "You selected bash";;
+    2) echo "You selected perl";;
+    3) echo "You selected phyton";;
+    4) echo "You selected c++";;
+    5) exit
+esac
+
+
+while [ true ] ; do ls -l; echo Wait 1 sec ; sleep 1; done
+
+while [ "$1" != "" ]; do
+  case $1 in
+    -h | -help | --help)
+      usage
+      exit
+      ;;
+    -p | --platform | -b | --box)
+      shift
+      PLATFORM=$1
+      ;;
+    --project)
+      shift
+      PROJECT=$1
+      ;;
+    release)
+      RELEASE="true"
+      ;;
+    *)
+      echo "USAGE ERROR"
+      usage
+      exit
+      ;;
+  esac
+  shift
+done
+
+<ex>
+This code breaks up when use "--h" because (*) let it contine to run after
+while. So should use exit 0 in case (*).
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        (-h | -help | --help)
+            grep '^#/' "$0" | cut -c 4-
+            exit 0;;
+
+        (-d | --debug)
+            debug="1"
+            shift;;
+
+        (-l | --list)
+            list_assets
+            exit 0;;
+
+        (*)
+            break;;
+    esac
+done
+
+
+{getopts} shell built-in
+
+getopts optstring name [args]
+
+getopts is used by shell scripts to parse positional parameters. 'optstring'
+contains the option characters to be recognized; if a character is followed by a
+colon, the option is expected to have an argument, which should be separated
+from it by whitespace. 
+
+<option>
+Each time it is invoked, getopts 'places' the next option in the shell variable
+'name', initializing name if it does not exist, and the 'index' of the next
+argument to be processed into the variable 'OPTIND'. OPTIND is initialized to 1
+each time the shell or a shell script is invoked. 
+
+<arg>
+When an option requires an argument, getopts places that 'argument' into the
+variable OPTARG. 
+
+<return>
+When the end of options is encountered, getopts exits with a return value
+greater than zero. note: false. OPTIND is set to the index of the first
+'non'-option argument, and name is set to '?'.
+
+
+={============================================================================
+*kt_linux_bash_001* sh-conditional-construct
+
+3.2.4.2 Conditional Constructs
+
+{sh-if}
+
+if
+
+    The syntax of the if command is:
+
+    if test-commands; then
+      consequent-commands;
+    [elif more-test-commands; then
+      more-consequents;]
+    [else alternate-consequents;]
+    fi
+
+    The test-commands list is executed, and if its return status is zero, the
+    consequent-commands list is executed. If test-commands returns a non-zero
+    status, each elif list is executed in turn, and if its exit status is zero,
+      the corresponding more-consequents is executed and the command completes.
+
+
+{sh-case}
+
+case
+
+    The syntax of the case command is:
+
+    case word in [ [(] pattern [| pattern]...) command-list ;;]... esac
+
+    case will selectively execute the command-list corresponding to the first
+    `pattern` that matches word. If the shell option nocasematch (see the
+        description of shopt in The Shopt Builtin) is enabled, the match is
+    performed without regard to the case of alphabetic characters. The ‘|’ is
+    used to separate multiple patterns, and the ‘)’ operator `terminates` a
+    pattern list. A list of patterns and an associated command-list is known as
+    a `clause`.
+
+    Each clause `must-be-terminated` with ‘;;’, ‘;&’, or ‘;;&’. The word
+    undergoes tilde expansion, parameter expansion, command substitution,
+    arithmetic expansion, and quote removal before matching is attempted. Each
+    pattern undergoes tilde expansion, parameter expansion, command
+    substitution, and arithmetic expansion.
+
+    There may be an arbitrary number of case clauses, each terminated by a ‘;;’,
+    ‘;&’, or ‘;;&’. The first pattern that matches determines the command-list
+    that is executed. It’s a common idiom to use ‘*’ as the `final-pattern` to
+    define the default case, since that pattern will always match.
+
+    Here is an example using case in a script that could be used to describe one interesting feature of an animal:
+
+    echo -n "Enter the name of an animal: "
+    read ANIMAL
+    echo -n "The $ANIMAL has "
+    case $ANIMAL in
+      horse | dog | cat) echo -n "four";;
+      man | kangaroo ) echo -n "two";;
+      *) echo -n "an unknown number of";;
+    esac
+    echo " legs."
+
+    If the ‘;;’ operator is used, no subsequent matches are attempted after the
+    first pattern match. Using ‘;&’ in place of ‘;;’ causes execution to
+    continue with the command-list associated with the next clause, if any.
+    Using ‘;;&’ in place of ‘;;’ causes the shell to test the patterns in the
+    next clause, if any, and execute any associated command-list on a successful
+    match.
+
+    The return status is zero if no pattern is matched. Otherwise, the return
+    status is the exit status of the command-list executed.
+
+
+{sh-select}
+
+select
+
+    The select construct allows the easy generation of `menus`. It has almost the
+    same syntax as the for command:
+
+    select name [in words ...]; do commands; done
+
+    The list of words following in is expanded, generating a list of items. The
+    set of expanded words is printed on the standard error output stream, each
+    preceded by a number. If the ‘in words’ is omitted, the positional
+    parameters are printed, as if ‘in "$@"’ had been specified. The PS3 prompt
+    is then displayed and a line is read from the standard input. If the line
+    consists of a number corresponding to one of the displayed words, then the
+    value of name is set to that word. If the line is empty, the words and
+    prompt are displayed again. If EOF is read, the select command completes.
+    Any other value read causes name to be set to null. The line read is saved
+    in the variable REPLY.
+
+    The commands are executed after each selection until a break command is
+    executed, at which point the select command completes.
+
+    Here is an example that allows the user to pick a filename from the current
+    directory, and displays the name and index of the file selected.
+
+    select fname in *;
+    do
+    	echo you picked $fname \($REPLY\)
+    	break;
+    done
+
+
+{sh-[[}
+
+Use [] whenever you want your script to be 'portable' across shells. Use [[]] if
+you want `conditional-expressions` not supported by [] and don't need to be
+portable.
+
+[[ is bash's improvement to the [ command. It has several enhancements that make
+it a better choice if you write scripts that target bash. My favorites are:
+
+1. It is a syntactical feature of the shell, so it has some special behavior
+that [ doesn't have. You no longer have to quote variables because [[ handles
+empty strings and strings with whitespace more intuitively. For example, with [
+  you have to write
+
+    if [ -f "$FILE" ]
+
+to correctly handle empty strings or file names with spaces in them. With [[ the
+quotes are unnecessary:
+
+    if [[ -f $FILE ]]
+
+2. Because it is a syntactical feature, it lets you use && and || operators for
+boolean tests and < and > for string comparisons. [ cannot do this because it is
+a regular command and > &&, ||, <, and > are not passed to regular commands as
+command-line arguments.
+
+3. It has a wonderful =~ operator for doing regular expression matches. With [
+  you might write
+
+    if [ "$ANSWER" = y -o "$ANSWER" = yes ]
+
+    With [[ you can write this as
+
+    if [[ $ANSWER =~ ^y(es)?$ ]]
+
+It even lets you access the captured groups which it stores in BASH_REMATCH. For
+instance, ${BASH_REMATCH[1]} would be "es" if you typed a full "yes" above.
+
+4. You get pattern matching aka globbing for free. Maybe you're less strict
+about how to type yes.  Maybe you're okay if the user types y-anything. Got you
+covered:
+
+    if [[ $ANSWER = y* ]]
+
+Keep in mind that it is a `bash-extension`, so if you are writing sh-compatible
+scripts then you need to stick with [. Make sure you have the #!/bin/bash
+`shebang` line for your script if you use double brackets.
+
+
+[]
+
+4.1 Bourne Shell Builtins
+
+note: NO pattern and expansion support
+
+test
+[
+
+    test expr
+
+    Evaluate a `conditional-expression` expr and return a status of 0 (true) or
+    1 (false). Each operator and operand must be a separate argument.
+    Expressions are composed of the `primaries`. test does not accept any
+    options, nor does it accept and ignore an argument of -- as signifying the
+    end of options.
+
+    When the [ form is used, the last argument to the command must be a ].
+
+    Expressions may be combined using the following operators, listed in
+    decreasing order of precedence. The evaluation depends on the number of
+    arguments; see below. Operator precedence is used when there are five or
+    more arguments. 
+
+
+[[...]]
+
+    [[ expression ]]
+
+    Return a status of 0 or 1 depending on the evaluation of the
+    `conditional-expression` expression. Expressions are composed of the
+    `primaries`. 
+    
+    note: this is enhancement?
+
+    Word splitting and filename expansion are not performed on the words between
+    the [[ and ]]; tilde expansion, parameter and variable expansion, arithmetic
+    expansion, command substitution, process substitution, and quote removal are
+    performed.  Conditional operators such as ‘-f’ must be unquoted to be
+    recognized as primaries.
+
+    When used with [[, the ‘<’ and ‘>’ operators sort lexicographically using
+    the current locale.
+
+    When the ‘==’ and ‘!=’ operators are used, the string to the right of the
+    operator is considered a `pattern` and matched according to the rules
+    described below in Pattern Matching, as if the extglob shell option were
+    enabled. 
+    
+    note: The ‘=’ operator is identical to ‘==’. 
+    
+    If the shell option `nocasematch` is enabled, the match is performed without
+    regard to the case of alphabetic characters. 
+    
+    The return value is 0 if the string matches (‘==’) or does not match
+    (‘!=’)the pattern, and 1 otherwise.
+
+    Any part of the pattern may be quoted to force the quoted portion to be
+    matched as a string.
+
+    // An additional binary operator, ‘=~’, is available, with the same
+    // precedence as ‘==’ and ‘!=’. When it is used, the string to the right of
+    // the operator is considered an `extended-regular-expression` and matched
+    // accordingly (as in regex3)). 
+    // ...
+        
+
+note: These are specific to [[ operator.
+
+Expressions may be combined using the following operators, listed in decreasing
+order of precedence:
+
+( expression )
+
+    Returns the value of expression. This may be used to override the normal
+    precedence of operators.
+
+! expression
+
+    True if expression is false.
+
+expression1 && expression2
+
+    True if both expression1 and expression2 are true.
+
+expression1 || expression2
+
+    True if either expression1 or expression2 is true. 
+
+The && and || operators do not evaluate expression2 if the value of expression1
+is sufficient to determine the return value of the entire conditional
+expression. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-conditional-expression
+
+6.4 Bash Conditional Expressions
+
+`conditional-expressions` are used by the [[ compound command and the test and [
+builtin commands.
+
+Expressions may be unary or binary. Unary expressions are often used to examine
+the status of a file. There are string operators and numeric comparison
+operators as well. If the file argument to one of the primaries is of the form
+/dev/fd/N, then file descriptor N is checked. If the file argument to one of the
+primaries is one of /dev/stdin, /dev/stdout, or /dev/stderr, file descriptor 0,
+1, or 2, respectively, is checked.
+
+When used with [[, the ‘<’ and ‘>’ operators sort lexicographically using the
+current locale. The test command uses ASCII ordering.
+
+Unless otherwise specified, `primaries` that operate on files follow symbolic
+links and operate on the target of the link, rather than the link itself.
+
+-a file
+    True if file exists.
+
+-f file
+    True if file exists and is a regular file.
+
+-x file
+    True if file exists and is executable.
+
+-z string
+    True if the length of string is zero. `null-string`
+
+<ex>
+if [ -z "${ZB_CFG}" ]; then
+   # when not set
+else
+   # when set
+fi
+
+-n string
+string
+    True if the length of string is non-zero.
+
+string1 == string2
+string1 = string2
+    True if the strings are equal. When used with the [[ command, this performs
+    `pattern` matching as described above (see `conditional-constructs`.)
+
+    ‘=’ should be used with the test command for POSIX conformance.
+
+<ex>
+gender="female"
+if [[ "$gender" == f* ]]
+
+
+={============================================================================
+*kt_linux_bash_001* sh-pattern-match
+
+<ex>
+Suppose that there are shell scipts files to be run at boot up and which are
+numbered like, S01xx.sh, S02xx.sh, and so on.
+
+steps=$(echo /etc/init.d/S??*)
+
+How to make sure that scripts runs in the numbered order? The answer is that the
+globbing returns the `sorted-list`.
+
+
+3.5.8.1 Pattern Matching
+
+Any character that appears in a pattern, other than the special pattern
+characters described below, matches itself. The NUL character may not occur in a
+pattern. A backslash escapes the following character; the escaping backslash is
+discarded when matching. The special pattern characters must be quoted if they
+are to be matched literally.
+
+The `special-pattern-characters` have the following meanings:
+
+*
+    Matches any string, including the null string. When the globstar shell
+    option is enabled, and ‘*’ is used in a filename expansion context, two
+    adjacent ‘*’s used as a single pattern will match all files and zero or more
+    directories and subdirectories. If followed by a ‘/’, two adjacent ‘*’s will
+    match only directories and subdirectories.  
+
+?
+    Matches any single character. 
+
+[...]
+    Matches any one of the enclosed characters. A pair of characters separated
+    by a hyphen denotes a range expression; any character that falls between
+    those two characters, inclusive, using the current locale’s collating
+    sequence and character set, is matched. If the first character following the
+    ‘[’ is a ‘!’ or a ‘^’ then any character not enclosed is matched. A ‘-’ may
+    be matched by including it as the first or last character in the set. A ‘]’
+    may be matched by including it as the first character in the set. The
+    sorting order of characters in range expressions is determined by the
+    current locale and the values of the LC_COLLATE and LC_ALL shell variables,
+if set.
+
+    For example, in the default C locale, ‘[a-dx-z]’ is equivalent to
+      ‘[abcdxyz]’. Many locales sort characters in dictionary order, and in
+      these locales ‘[a-dx-z]’ is typically not equivalent to ‘[abcdxyz]’; it
+      might be equivalent to ‘[aBbCcDdxXyYz]’, for example. To obtain the
+      traditional interpretation of ranges in bracket expressions, you can force
+      the use of the C locale by setting the LC_COLLATE or LC_ALL environment
+      variable to the value ‘C’, or enable the globasciiranges shell option.
+
+    Within ‘[’ and ‘]’, character classes can be specified using the syntax
+    [:class:], where class is one of the following classes defined in the POSIX
+               standard:
+
+    alnum   alpha   ascii   blank   cntrl   digit   graph   lower
+    print   punct   space   upper   word    xdigit
+
+    A character class matches any character belonging to that class. The word
+    character class matches letters, digits, and the character ‘_’.
+
+    Within ‘[’ and ‘]’, an equivalence class can be specified using the syntax
+    [=c=], which matches all characters with the same collation weight (as
+        defined by the current locale) as the character c.
+
+    Within ‘[’ and ‘]’, the syntax [.symbol.] matches the collating symbol
+    symbol. 
+
+
+If the `extglob` shell option is enabled using the shopt builtin, several
+extended pattern matching operators are recognized. In the following
+description, a pattern-list is a list of one or more patterns separated by a
+‘|’. Composite patterns may be formed using one or more of the following
+sub-patterns:
+
+?(pattern-list)
+    Matches zero or one occurrence of the given patterns.
+
+*(pattern-list)
+    Matches zero or more occurrences of the given patterns.
+
++(pattern-list)
+    Matches one or more occurrences of the given patterns.
+
+@(pattern-list)
+    Matches one of the given patterns.
+
+!(pattern-list)
+    Matches anything except one of the given patterns. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-function
+
+3.3 Shell Functions
+
+Shell functions are a way to group commands for later execution using a single
+name for the group. They are executed just like a "regular" command. When the
+name of a shell function is used as a simple command name, the list of commands
+associated with that function name is executed. Shell functions are executed in
+the `current-shell` context; no new process is created to interpret them.
+
+Functions are declared using this syntax:
+
+name () compound-command [ redirections ]
+
+or
+
+function name [()] compound-command [ redirections ]
+
+This defines a shell function named name. The reserved word `function` is
+`optional`. If the function reserved word is supplied, the parentheses are
+`optional`. The body of the function is the compound command `compound-command`.
+That command is usually a `list` enclosed `between` { and }, but may be any
+compound command listed above. compound-command is executed whenever name is
+specified as the name of a command. 
+
+Any redirections (see Redirections) associated with the shell function are
+performed when the function is executed.
+
+A function definition may be deleted using the -f option to the unset builtin
+(see Bourne Shell Builtins).
+
+The exit status of a function definition is zero unless a syntax error occurs or
+a readonly function with the same name already exists. When executed, the exit
+status of a function is the exit status of the `last-command` executed in the
+body.
+
+<ex>
+#!/bin/bash
+# BASH FUNCTIONS CAN BE DECLARED IN ANY ORDER
+
+function function_B {
+  echo "{ fb"
+  echo Function B.
+  echo "} fb"
+}
+
+function function_A {
+  echo "{ fa"
+  echo $1
+  echo "} fa"
+}
+
+function function_D {
+  echo "{ fd"
+  echo Function D.
+  echo "} fd"
+}
+
+# function function_C {
+function_C () {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
+}
+
+# FUNCTION CALLS
+
+# Pass parameter to function A
+function_A "Function A via pass"
+function_B
+
+# Pass parameter to function C
+function_C "Function C via pass"
+function_D 
+
+$ ./sbash.sh list 
+{ fa
+Function A via pass
+} fa
+{ fb
+Function B.
+} fb
+{ fc
+Function C via pass
+} fc
+{ fd
+Function D.
+} fd
+
+
+note: this causes an error as:
+
+function_C {
+  echo "{ fc"
+  echo $1
+  echo "} fc"
+}
+
+./sample.sh: line 23: function_C: command not found
+{ fc
+
+} fc
+./sample.sh: line 27: syntax error near unexpected token `}'
+./sample.sh: line 27: `}'
+
+
+<ex>
+get_available_space() {
+    declare -a fs_info=( $(stat -f -c "%d %s" "$core_output_path") )
+    echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
+}
+
+# break the loop if the available space is above the threshold
+[ "$(get_available_space)" -lt "$threshold" ] || break
+
+
+Note that for historical reasons, in the most common usage the curly braces that
+surround the body of the function must be separated from the body by blanks or
+newlines. This is because the braces are reserved words and are only recognized
+as such when they are separated from the command list by whitespace or another
+shell metacharacter. Also, when using the braces, the list must be terminated by
+a semicolon, a ‘&’, or a newline.
+
+When a function is executed, the arguments to the function `become` the
+`positional-parameters` during its execution. The special parameter ‘#’ that
+expands to the number of positional parameters is updated to reflect the change.
+Special parameter 0 is unchanged. The first element of the FUNCNAME variable is
+set to the name of the function while the function is executing.
+
+All other aspects of the shell execution environment are identical between a
+function and its caller with these exceptions: the DEBUG and RETURN traps are
+not inherited unless the function has been given the trace attribute using the
+declare builtin or the -o functrace option has been enabled with the set
+builtin, (in which case all functions inherit the DEBUG and RETURN traps), and
+the ERR trap is not inherited unless the -o errtrace shell option has been
+enabled. See Bourne Shell Builtins, for the description of the trap builtin.
+
+If the builtin command `return` is executed in a function, the function
+completes and execution resumes with the next command after the function call.
+Any command associated with the RETURN trap is executed before execution
+resumes. When a function completes, the values of the positional parameters and
+the special parameter ‘#’ are `restored` to the values they had prior to the
+function’s execution. If a numeric argument is given to `return`, that is the
+function’s return status; otherwise the function’s return status is the exit
+status of the `last-command` executed before the return.
+
+Variables local to the function may be declared with the `local` builtin. These
+variables are visible only to the function and the commands it invokes.
+
+Function names and definitions may be listed with the -f option to the `declare`
+(typeset) builtin command (see Bash Builtins). The -F option to `declare` or
+`typeset` will list the function names only (and optionally the source file and
+    line number, if the `extdebug` shell option is enabled). Functions may be
+exported so that subshells automatically have them defined with the -f option to
+the export builtin (see Bourne Shell Builtins). Note that shell functions and
+variables with the same name may result in multiple identically-named entries in
+the environment passed to the shell’s children. Care should be taken in cases
+where this may cause a problem.
+
+Functions may be `recursive`. The FUNCNEST variable may be used to limit the
+depth of the function call stack and restrict the number of function
+invocations. By default, no limit is placed on the number of recursive calls. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-variable
+
+3.4 Shell Parameters
+
+A parameter is an entity that stores values. It can be a 'name', a 'number', or
+one of the `special-characters` listed below. A variable is a parameter denoted by
+a 'name'. 
+
+A variable has a value and zero or more attributes. Attributes are assigned
+using the `declare` builtin command (see the description of the declare builtin
+    in Bash Builtins).
+
+A parameter is set if it has been assigned a value. Once a variable is set, it
+may be unset only by using the `unset` builtin command.
+
+A variable may be assigned to by a statement of the form
+
+name=[value]
+
+If value is not given, the variable is assigned the `null-string` and the null
+string is a 'valid' value. 
+
+note:
+What's the difference between that value is not given and that variable is not
+set? Same since both has the same `null-string`.
+
+<ex>
+
+# No difference if or not it has the following
+#VAR_DEFINED_BUT_NOT_SET=
+
+if [ -n ${VAR_DEFINED_BUT_NOT_SET} ]; then
+  echo "1 non-zero and null-string"
+else
+  echo "1 zero"
+fi
+
+if [ -n $VAR_DEFINED_BUT_NOT_SET ]; then
+  echo "1 non-zero and null-string"
+else
+  echo "1 zero"
+fi
+
+if [ -n "$VAR_DEFINED_BUT_NOT_SET" ]; then
+  echo "1 non-zero and null-string"
+else
+  echo "1 zero"
+fi
+
+if [ -n "${VAR_DEFINED_BUT_NOT_SET}" ]; then
+  echo "1 non-zero and null-string"
+else
+  echo "1 zero"
+fi
+
+##
+
+if [[ -n ${VAR_DEFINED_BUT_NOT_SET} ]]; then
+  echo "2 non-zero and null-string"
+else
+  echo "2 zero"
+fi
+
+if [[ -n $VAR_DEFINED_BUT_NOT_SET ]]; then
+  echo "2 non-zero and null-string"
+else
+  echo "2 zero"
+fi
+
+if [[ -n "$VAR_DEFINED_BUT_NOT_SET" ]]; then
+  echo "2 non-zero and null-string"
+else
+  echo "2 zero"
+fi
+
+if [[ -n "${VAR_DEFINED_BUT_NOT_SET}" ]]; then
+  echo "2 non-zero and null-string"
+else
+  echo "2 zero"
+fi
+
+# output
+1 non-zero and null-string
+1 non-zero and null-string
+1 zero
+1 zero
+2 zero
+2 zero
+2 zero
+2 zero
+
+# debug on
++ '[' -n ']'                          
++ echo '1 non-zero and null-string'
+1 non-zero and null-string
++ '[' -n ']'
++ echo '1 non-zero and null-string'
+1 non-zero and null-string
++ '[' -n '' ']'
++ echo '1 zero'
+1 zero
++ '[' -n '' ']'
++ echo '1 zero'
+1 zero
+
+After all, shows why need to double-quote in [] and shows `null-string` is ''.
+
+
+note:
+Although it do not say how to refer a variable, have to use `$`.
+
+
+All values undergo tilde 'expansion', parameter and variable expansion, command
+substitution, arithmetic expansion, and quote removal. 
+
+If the variable has its `integer` attribute set, then value is evaluated as an
+arithmetic expression even if the $((...)) expansion is not used (see Arithmetic
+    Expansion). 
+
+Word splitting is not performed, with the exception of "$@" as explained below.
+Filename expansion is not performed.  
+
+Assignment statements may also appear as arguments to the alias, declare,
+typeset, export, readonly, and local builtin commands. 
+
+
+{"+="-operator}
+In the context where an assignment statement is assigning a value to a shell
+variable or array index (see Arrays), the ‘+=’ operator can be used to append to
+or add to the variable's previous value. 
+
+When ‘+=’ is applied to a variable for which the integer attribute has been set,
+     value is evaluated as an arithmetic expression and added to the variable's
+     current value, which is also evaluated.
+
+When ‘+=’ is applied to an array variable using compound assignment (see
+    Arrays), the variable's value is not unset (as it is when using ‘=’), and
+new values are appended to the array beginning at one greater than the array's
+maximum index (for indexed arrays), or added as additional key-value pairs in an
+associative array. When applied to a string-valued variable, value is expanded
+and appended to the variable’s value.
+
+
+3.4.1 Positional Parameters
+
+A positional parameter is a parameter denoted by one or more digits, other than
+the single digit 0. note: not use '0'.
+
+`positional-parameters` are assigned from the shell's arguments when it is
+invoked, and may be reassigned using the set builtin command. Positional
+parameter N may be referenced as ${N}, or as $N when N consists of a
+`single-digit`. Positional parameters may not be assigned to with assignment
+statements. The `set` and `shift` builtins are used to set and unset them (see
+    Shell Builtin Commands).
+
+note: uses in sh-function
+The positional parameters are temporarily replaced when a shell function is
+executed (see Shell Functions).
+
+note: use brace to use more parameters than 10
+When a positional parameter consisting of more than a single digit is expanded,
+it must be enclosed in `braces`. 
+
+
+3.4.2 Special Parameters
+
+The shell treats several parameters specially. These parameters may only be
+referenced; assignment to them is not allowed. 
+
+*
+($*) Expands to the `positional-parameters`, starting from one. When the
+expansion is not within double quotes, each positional parameter expands to a
+separate word. In contexts where it is performed, those words are subject to
+further word splitting and pathname expansion. 
+
+When the expansion occurs "within double quotes", it expands to a single word
+with the value of each parameter separated by the first character of the `IFS`
+special variable. That is, "$*" is equivalent to "$1c$2c..." where c is the
+first character of the value of the IFS variable. If IFS is unset, the
+parameters are separated by spaces. If IFS is null, the parameters are joined
+without intervening separators.
+
+note: "unset" is different from "null"
+
+<ex>
+This function is to make a single line from a array(list) separated by ":". 
+
+note:
+Q: How to redirect output from function call? Why use () in the function? To
+crate a subshell?
+
+function list_join() {
+    local sep="$1"
+    shift
+
+    (
+        IFS="$sep"
+        echo "$*"
+    )
+}
+
+declare -ar preload_libs=(
+    /usr/local/lib/libdirectfb.so
+    /usr/local/lib/libdirect.so
+    /usr/local/lib/libinit.so
+    /lib/libpthread.so.0
+)
+
+vars+=(LD_PRELOAD=$(list_join ":" ${preload_libs[@]}))
+
+
+@
+($@) Expands to the `positional-parameters`, starting from one. When the
+expansion occurs "within double quotes", each parameter expands to a separate
+word. That is, "$@" is equivalent to "$1" "$2"... 
+
+If the double-quoted expansion occurs within a word, the expansion of the first
+parameter is joined with the beginning part of the original word, and the
+expansion of the last parameter is joined with the last part of the original
+word. When there are no positional parameters, "$@" and $@ expand to nothing
+(i.e., they are removed).
+
+<ex> arrayfy
+args=("$@");   # to get 'all' args and set it to array.
+echo ${args[0]} ${args[1]} ${args[2]}
+
+echo $@        # to print all args in a one go
+
+
+0
+($0) Expands to the name of the shell or shell script. This is set at shell
+initialization. If Bash is invoked with a file of commands (see Shell Scripts),
+  $0 is set to the name of that file. If Bash is started with the -c option (see
+      Invoking Bash), then $0 is set to the first argument after the string to
+  be executed, if one is present. Otherwise, it is set to the filename used to
+  invoke Bash, as given by argument zero.
+
+<ex>
+This variable is commonly used to determine the behavior of scripts that can be
+invoked with more than one name.
+
+$ ln -s mytar listtar
+$ ln -s mytar maketar
+
+$ listtar or maketar
+
+#!/bin/sh
+case $0 in
+   *listtar) TARGS="-tvf $1" ;;
+   *maketar) TARGS="-cvf $1.tar $1" ;;
+esac
+tar $TARGS
+
+
+#
+($#) Expands to `the-number-of` positional parameters in decimal. the number of
+args passed in the command line. exclued 0th.
+
+
+?
+($?) Expands to the `exit-status` of the most recently executed foreground
+pipeline.
+
+
+{global-and-local}
+Global variables or 'environment' variables are available in all shells. The env
+or printenv commands can be used to display environment variables.
+
+Local variables are only available in the current shell. Using the set built-in
+command without any options will display a list of all variables (including
+    environment variables) and functions.
+
+
+{set-variable}
+Putting spaces around the equal sign will cause errors.
+
+VARNAME="value"
+
+A variable created like the ones in the example above is only available to the
+current shell. It is a local variable: child processes of the current shell will
+not be aware of this variable. In order to pass variables to a subshell, we need
+to export them using the export built-in command.
+
+export VARNAME="value"
+
+note: parent can export variables to child but not vice versa.
+
+<set-variable-for-child>
+In the Bourne shell and its descendants (e.g., bash and the Korn shell), the
+following syntax can be used to add values to the environment used to execute a
+single program, without affecting the parent shell (and subsequent commands):
+
+$ NAME=value program
+
+This adds a definition to the environment of 'just' the child process executing
+the named program. If desired, multiple assignments (delimited by white space)
+  can precede the program name.
+
+
+{constant}
+The readonly built-in marks each specified variable as unchangeable. When tried
+to set, displays error but execution continues.
+
+readonly CONST=100
+echo "my const var is $CONST.."
+CONST=200
+echo "my const var is $CONST.."
+
+bash: CONST: readonly variable
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion
+
+3.5 Shell Expansions
+
+Expansion is performed on the `command-line` after it has been split into
+tokens. There are seven kinds of expansion performed:
+
+note:
+Not in the script?
+
+* Brace Expansion: Expansion of expressions within braces.
+* Tilde Expansion: Expansion of the ~ character.
+* Shell Parameter Expansion: How Bash expands variables to their values.
+* Command Substitution: Using the output of a command as an argument.
+* Arithmetic Expansion: How to use arithmetic in shell expansions.
+* Process Substitution: A way to write and read to and from a command.
+* Word Splitting: How the results of expansion are split into separate arguments.
+* Filename Expansion: A shorthand for specifying filenames matching patterns.
+* Quote Removal: How and when quote characters are removed from words.
+
+The order of expansions is: brace expansion; tilde expansion, parameter and
+variable expansion, arithmetic expansion, and command substitution (done in a
+    left-to-right fashion); word splitting; and filename expansion.
+
+On systems that can support it, there is an additional expansion available:
+process substitution. This is performed at the same time as tilde, parameter,
+variable, and arithmetic expansion and command substitution.
+
+Only brace expansion, word splitting, and filename expansion can change the
+number of words of the expansion; other expansions expand a single word to a
+single word. The only exceptions to this are the expansions of "$@" (see Special
+    Parameters) and "${name[@]}" (see Arrays).
+
+After all expansions, quote removal (see Quote Removal) is performed. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion-brace
+
+3.5.1 Brace Expansion
+
+Brace expansion is a mechanism by which arbitrary strings may be generated. This
+mechanism is similar to filename expansion, but the filenames generated need not
+exist. Patterns to be brace expanded take the form of an optional preamble,
+  followed by either a series of comma-separated strings or a sequence
+  expression between a pair of braces, followed by an optional postscript. The
+  preamble is prefixed to each string contained within the braces, and the
+  postscript is then appended to each resulting string, expanding left to right.
+
+Brace expansions may be nested. The results of each expanded string are not
+sorted; left to right order is preserved. For example,
+
+bash$ echo a{d,c,b}e
+ade ace abe
+
+A sequence expression takes the form {x..y[..incr]}, where x and y are either
+integers or single characters, and incr, an optional increment, is an integer.
+When integers are supplied, the expression expands to each number between x and
+y, inclusive. Supplied integers may be prefixed with ‘0’ to force each term to
+have the same width. When either x or y begins with a zero, the shell attempts
+to force all generated terms to contain the same number of digits, zero-padding
+where necessary. 
+
+When characters are supplied, the expression expands to each character
+lexicographically between x and y, inclusive, using the default C locale. Note
+that both x and y must be of the same type. When the increment is supplied, it
+is used as the difference between each term. The default increment is 1 or -1 as
+appropriate.
+
+Brace expansion is performed before any other expansions, and any characters
+special to other expansions are preserved in the result. It is strictly textual.
+Bash does not apply any syntactic interpretation to the context of the expansion
+or the text between the braces. To avoid conflicts with parameter expansion, the
+string ‘${’ is not considered eligible for brace expansion.
+
+A correctly-formed brace expansion must contain unquoted opening and closing
+  braces, and at least one unquoted comma or a valid sequence expression. Any
+  incorrectly formed brace expansion is left unchanged.
+
+A { or ‘,’ may be quoted with a backslash to prevent its being considered part
+  of a brace expression. To avoid conflicts with parameter expansion, the string
+    ‘${’ is not considered eligible for brace expansion.
+
+This construct is typically used as shorthand when the common prefix of the
+  strings to be generated is longer than in the above example:
+
+mkdir /usr/local/src/bash/{old,new,dist,bugs}
+
+# $ echo /usr/bash/{old,new,dist,bugs}
+# /usr/bash/old /usr/bash/new /usr/bash/dist /usr/bash/bugs
+
+or
+
+chown root /usr/{ucb/{ex,edit},lib/{ex?.?*,how_ex}}
+
+# $ echo /usr/{ucb/{ex,edit},lib/{ex?.?*,how_ex}}
+# /usr/ucb/ex /usr/ucb/edit /usr/lib/ex?.?* /usr/lib/how_ex
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion-tilde
+
+3.5.2 Tilde Expansion
+
+If a word begins with an unquoted tilde character (‘~’), all of the characters
+up to the first unquoted slash (or all characters, if there is no unquoted
+    slash) are considered a tilde-prefix. 
+
+If none of the characters in the tilde-prefix are quoted, the characters in the
+tilde-prefix following the tilde are treated as a possible `login-name`. 
+
+If this login name is the null string, the tilde is replaced with the value of
+the HOME shell variable. If HOME is unset, the home directory of the user
+executing the shell is substituted instead.  Otherwise, the tilde-prefix is
+replaced with the home directory associated with the specified login name.
+
+
+If the characters following the tilde in the tilde-prefix consist of a number N,
+optionally prefixed by a ‘+’ or a ‘-’, the tilde-prefix is replaced with the
+  corresponding element from the directory stack, as it would be displayed by
+  the `dirs` builtin invoked with the characters following tilde in the
+  tilde-prefix as an argument. If the tilde-prefix, sans the tilde, consists of
+  a number without a leading ‘+’ or ‘-’, ‘+’ is assumed.
+
+
+Each `variable-assignment` is checked for unquoted tilde-prefixes immediately
+following a ‘:’ or the first ‘=’. In these cases, tilde expansion is also
+performed. Consequently, one may use filenames with tildes in assignments to
+PATH, MAILPATH, and CDPATH, and the shell assigns the expanded value.
+
+The following table shows how Bash treats unquoted tilde-prefixes:
+
+~ 
+    The value of $HOME 
+
+~/foo
+    $HOME/foo
+
+~fred/foo
+    The subdirectory foo of the home directory of the user fred
+
+~N
+    The string that would be displayed by ‘dirs +N’
+~+N
+    The string that would be displayed by ‘dirs +N’
+~-N
+    The string that would be displayed by ‘dirs -N’ 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion-parameter
+
+3.5.3 Shell Parameter Expansion
+
+note:
+parammeter is variable and this explains why use $ and brace to refer variable.
+
+The ‘$’ character introduces `parameter-expansion`, command substitution, or
+arithmetic expansion. The parameter name or symbol to be expanded may be
+enclosed in `braces`, which are `optional` but serve to `protect` the variable
+to be expanded from characters immediately following it which could be
+interpreted as part of the name.
+
+When braces are used, the matching ending brace is the first ‘}’ not escaped by
+a backslash or within a quoted string, and not within an embedded arithmetic
+expansion, command substitution, or parameter expansion.
+
+The basic form of parameter expansion is ${parameter}. The value of parameter is
+substituted. 
+
+The parameter is a shell parameter as described above (see *sh-variable*) or an
+array reference (see Arrays). The braces are required when parameter is a
+positional parameter with more than one digit, or when parameter is followed by
+a character that is not to be interpreted as part of its name.
+
+In each of the cases below, `word` is subject to `tilde-expansion`,
+`parameter-expansion`, `command-substitution`, and arithmetic expansion.
+
+When not performing substring expansion, using the form described below (e.g.,
+    ‘:-’), Bash tests for a parameter that is `unset-or-null`. Omitting the
+colon results in a test only for a parameter that is unset. Put another way, if
+the colon is included, the operator tests for both parameter’s `existence` and
+that its value is not null; if the colon is omitted, the operator tests only for
+existence. 
+
+${parameter:-word}
+    If parameter is `unset-or-null`, the expansion of word is substituted.
+    Otherwise, the value of parameter is substituted.
+
+    note:
+    Use value of parameter or word
+
+<ex>
+The value of parameter does not change. Here TEST is not defined.
+
+$ echo $TEST
+$ echo ${TEST:-test}
+test
+$ echo $TEST
+$
+
+<ex>
+Use 'default' to make sure that the prompt is always set correctly.
+
+PS1=${HOST:-localhost}"$ " ; export PS1 ;
+
+<ex>
+To set default 80 when it is not defined before. Why not use {parameter:=word}
+form? 
+
+# [ -z STRING ] True of the length of "STRING" is zero.
+
+[ -z "${COLUMNS:-}" ] && COLUMNS=80
+
+It is a shorter notation for
+
+if [ -z "${COLUMNS:-}" ]; then
+   COLUMNS=80
+fi
+
+
+<ex>
+[ -z "${COLUMNS:-}" ] && COLUMNS=80
+echo "${COLUMNS}"
+
+unset COLUMNS
+
+# error when use "${COLUMNS:=80}" or ${COLUMNS:=80} since 80 command not found.
+# Here [] `evaluate` and return status which are not used.
+
+[ ${COLUMNS:=80} ]
+echo "${COLUMNS}"
+
+80
+80
+
+
+${parameter:=word}
+    If parameter is `unset-or-null`, the expansion of word is `assigned-to`
+      parameter. The value of parameter is then substituted. Positional
+      parameters and special parameters may not be assigned to in this way.
+
+
+${parameter:offset}
+${parameter:offset:length}
+    This is referred to as `substring-expansion`. It expands to up to `length`
+      characters of the value of parameter starting at the character specified
+      by `offset`. 
+      
+<ex>
+$ STRING="thisisaverylongname"
+$ echo ${STRING:4}
+isaverylongname
+$ echo ${STRING:6:5}
+avery
+
+
+<expansion-on-arg>
+If parameter is @, the result is length positional parameters 'beginning' at
+offset. A negative offset is taken relative to one greater than the greatest
+positional parameter, so an offset of -1 evaluates to the last positional
+parameter. It is an expansion error if length evaluates to a number less than
+zero.
+
+The following examples illustrate substring expansion using positional
+parameters:
+
+$ set -- 1 2 3 4 5 6 7 8 9 0 a b c d e f g h
+$ echo ${@:7}
+7 8 9 0 a b c d e f g h
+$ echo ${@:7:0}
+
+$ echo ${@:7:2}
+7 8
+
+$ echo ${@:7:-2}
+bash: -2: substring expression < 0
+
+$ echo ${@: -7:2}
+b c
+
+note: this shows all args
+$ echo ${@}
+1 2 3 4 5 6 7 8 9 0 a b c d e f g h
+
+$ echo ${@:0}
+./bash 1 2 3 4 5 6 7 8 9 0 a b c d e f g h
+
+$ echo ${@:0:2}
+./bash 1
+
+
+note: Q? this works as it has default value when parameter is not set, null.
+what is it?
+
+box_ip=${2-localhost}
+box_port=${3-2033}
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion-command
+
+3.5.4 Command Substitution
+
+`command-substitution` allows the output of a command to replace the command
+itself. Command substitution occurs when a command is enclosed as follows:
+
+$(command)
+
+or
+
+` command` 
+
+Bash performs the expansion by executing command and replacing the command
+substitution with the standard output of the command, with any trailing newlines
+deleted. Embedded newlines are not deleted, but they may be removed during word
+splitting. 
+
+note:
+The command substitution $(cat file) can be replaced by the equivalent but
+faster $(< file).
+
+When the old-style backquote form of substitution is used, backslash retains its
+literal meaning except when followed by ‘$’, ‘`’, or ‘\’. The first backquote
+not preceded by a backslash terminates the command substitution. When using the
+$(command) form, all characters between the parentheses make up the command;
+none are treated specially.
+
+Command substitutions may be nested. To nest when using the backquoted form,
+        escape the inner backquotes with backslashes.
+
+If the substitution appears within `double-quotes`, word splitting and filename
+expansion are not performed on the results. 
 
 
 ={============================================================================
@@ -1257,225 +2747,6 @@ operation of Up/Down.
 After you modify ~/.inputrc, restart your shell or use Ctrl+X, Ctrl+R to tell it to re-read
 ~/.inputrc. By the way, if you're looking for relevant documentation: Bash uses The GNU Readline
 Library for the shell prompt and history.
-
-
-={============================================================================
-*kt_linux_bash_002* bash: variable
-
-{global-and-local}
-Global variables or 'environment' variables are available in all shells. The env or printenv
-commands can be used to display environment variables.
-
-Local variables are only available in the current shell. Using the set built-in command without any
-options will display a list of all variables (including environment variables) and functions.
-
-
-{set-variable}
-Putting spaces around the equal sign will cause errors.
-
-VARNAME="value"
-
-A variable created like the ones in the example above is only available to the current shell. It is
-a local variable: child processes of the current shell will not be aware of this variable. In order
-to pass variables to a subshell, we need to export them using the export built-in command.
-
-export VARNAME="value"
-
-note: parent can export variables to child but not vice versa.
-
-<set-variable-for-child>
-In the Bourne shell and its descendants (e.g., bash and the Korn shell), the following syntax can be
-used to add values to the environment used to execute a single program, without affecting the parent
-shell (and subsequent commands):
-
-$ NAME=value program
-
-This adds a definition to the environment of 'just' the child process executing the named program.
-If desired, multiple assignments (delimited by white space) can precede the program name.
-
-<reserved-variables>
-PATH        A colon-separated list of directories in which the shell looks for commands.
-PS1         The primary prompt string. The default value is "'\s-\v\$ '".
-PS2         The secondary prompt string. The default value is "'> '".
-
-
-<special-variable>
-$$          Expands to the process ID of the shell.
-$?          The exit status
-
-{constant}
-The readonly built-in marks each specified variable as unchangeable. When tried to set, displays
-error but execution continues.
-
-readonly CONST=100
-echo "my const var is $CONST.."
-CONST=200
-echo "my const var is $CONST.."
-
-bash: CONST: readonly variable
-
-
-3.4 Shell Parameters
-
-A parameter is an entity that stores values. It can be a 'name', a 'number', or one of the special
-characters listed below. A variable is a parameter denoted by a 'name'. 
-
-A variable has a value and zero or more attributes. Attributes are assigned using the declare
-builtin command (see the description of the declare builtin in Bash Builtins).
-
-A parameter is set if it has been assigned a value. Once a variable is set, it may be unset only by
-using the unset builtin command.
-
-A variable may be assigned to by a statement of the form
-
-name=[value]
-
-If value is not given, the variable is assigned the null string and the null string is a 'valid' value. 
-
-All values undergo tilde 'expansion', parameter and variable expansion, command substitution,
-arithmetic expansion, and quote removal. If the variable has its integer attribute set, then value
-    is evaluated as an arithmetic expression even if the $((...)) expansion is not used (see
-            Arithmetic Expansion). Word splitting is not performed, with the exception of "$@" as
-    explained below. Filename expansion is not performed.  Assignment statements may also appear as
-    arguments to the alias, declare, typeset, export, readonly, and local builtin commands. When in
-    POSIX mode (see Bash POSIX Mode), these builtins may appear in a command after one or more
-    instances of the command builtin and retain these assignment statement properties.
-
-
-about "+=" operator:
-
-In the context where an assignment statement is assigning a value to a shell variable or array index
-(see Arrays), the ‘+=’ operator can be used to append to or add to the variable's previous value.
-When ‘+=’ is applied to a variable for which the integer attribute has been set, value is evaluated
-as an arithmetic expression and added to the variable's current value, which is also evaluated. When
-‘+=’ is applied to an array variable using compound assignment (see Arrays), the variable's value is
-not unset (as it is when using ‘=’), and new values are appended to the array beginning at one
-greater than the array's maximum index (for indexed arrays), or added as additional key-value pairs
-in an associative array. When applied to a string-valued variable, value is expanded and appended to
-the variable’s value.
-
-TODO: about nameref which is call by reference. 
-
-
-3.4.1 Positional Parameters
-
-The shell's command-line arguments.
-
-A positional parameter is a parameter denoted by one or more digits, other than the single digit 0.
-note: not use '0'.
-
-Positional parameters are assigned from the shell's arguments when it is invoked, and may be
-reassigned using the set builtin command. Positional parameter N may be referenced as ${N}, or as $N
-when N consists of a single digit. Positional parameters may not be assigned to with assignment
-statements. The set and shift builtins are used to set and unset them (see Shell Builtin Commands).
-The positional parameters are temporarily replaced when a shell function is executed (see Shell
-        Functions).
-
-When a positional parameter consisting of more than a single digit is expanded, it must be enclosed
-in braces. 
-
-
-<no-parameter-not-set>
-If not given in the command line, not set.
-
-#!/bin/bash
-echo $1 $2 $3 ' -> echo $1 $2 $3'
-
-$./runsh.sh 1 2
-1 2
-
-
-3.4.2 Special Parameters
-
-The shell treats several parameters specially. These parameters may only be referenced; assignment
-to them is not allowed. 
-
-
-*
-($*) Expands to the positional parameters, starting from one. When the expansion is not within
-double quotes, each positional parameter expands to a separate word. In contexts where it is
-performed, those words are subject to further word splitting and pathname expansion. 
-
-When the expansion occurs "within double quotes", it expands to a single word with the value of each
-parameter separated by the first character of the IFS special variable. That is, "$*" is equivalent
-to "$1c$2c..." where c is the first character of the value of the IFS variable. If IFS is unset, the
-parameters are separated by spaces. If IFS is null, the parameters are joined without intervening
-separators.
-
-note: "unset" is different from "null"
-
-<code>
-This function is to make a single line from a array(list) separated by ":".
-
-function list_join() {
-    local sep="$1"
-    shift
-
-    (
-        IFS="$sep"
-        echo "$*"
-    )
-}
-
-declare -ar preload_libs=(
-    /usr/local/lib/libdirectfb.so
-    /usr/local/lib/libdirect.so
-    /usr/local/lib/libinit.so
-    /lib/libpthread.so.0
-)
-
-vars+=(LD_PRELOAD=$(list_join ":" ${preload_libs[@]}))
-
-
-@
-($@) Expands to the positional parameters, starting from one.  When the expansion occurs "within
-double quotes", each parameter expands to a separate word. That is, "$@" is equivalent to "$1"
-"$2"... 
-
-If the double-quoted expansion occurs within a word, the expansion of the first parameter is joined
-with the beginning part of the original word, and the expansion of the last parameter is joined with
-the last part of the original word. When there are no positional parameters, "$@" and $@ expand to
-nothing (i.e., they are removed).
-
-<arrayfy>
-args=("$@");   # to get 'all' args and set it to array.
-echo ${args[0]} ${args[1]} ${args[2]}
-
-echo $@        # to print all args in a one go
-
-
-0
-($0) Expands to the name of the shell or shell script. This is set at shell initialization. If Bash
-is invoked with a file of commands (see Shell Scripts), $0 is set to the name of that file. If Bash
-is started with the -c option (see Invoking Bash), then $0 is set to the first argument after the
-string to be executed, if one is present. Otherwise, it is set to the filename used to invoke Bash,
-as given by argument zero.
-
-<code>
-This variable is commonly used to determine the behavior of scripts that can be invoked with more
-than one name.
-
-$ ln -s mytar listtar
-$ ln -s mytar maketar
-
-$ listtar or maketar
-
-#!/bin/sh
-case $0 in
-   *listtar) TARGS="-tvf $1" ;;
-   *maketar) TARGS="-cvf $1.tar $1" ;;
-esac
-tar $TARGS
-
-
-#
-($#) Expands to the number of positional parameters in decimal. the number of args passed in the
-command line. exclued 0th.
-
-
-?
-($?) Expands to the exit status of the most recently executed foreground pipeline.
-
 
 
 ={============================================================================
@@ -1627,332 +2898,12 @@ EOF
 The unset built-in is used to destroy arrays or member variables of an array:
 
 
-{parameter-expansion}
-3.5.3 Shell Parameter Expansion
 
-The '$' character introduces parameter expansion, command substitution, or arithmetic expansion. The
-parameter name or symbol to be expanded may be enclosed in 'braces', which are 'optional' but serve to
-protect the variable to be expanded from characters immediately following it which could be
-interpreted as part of the name. 
 
-${parameter:-word} 
-If parameter is null or unset, word is substituted for parameter. The value of parameter does not
-change. In other words, if unset, word is used and if set, parameter used.
-
-This use 'default' to make sure that the prompt is always set correctly.
-PS1=${HOST:-localhost}"$ " ; export PS1 ;
-
-This from often used in conditional tests and this set 80 when it is not defined before. That is
-default. note: why not use {parameter:=word} form?
-
-# [ -z STRING ] True of the length of "STRING" is zero.
-
-[ -z "${COLUMNS:-}" ] && COLUMNS=80
-
-It is a shorter notation for
-
-if [ -z "${COLUMNS:-}" ]; then
-   COLUMNS=80
-fi
-
-note: In this form, the value of parameter does not change. Here TEST is not defined.
-
-$ echo $TEST
-$ echo ${TEST:-test}
-test
-$ echo $TEST
-$
-
-
-${parameter:=word} 
-If parameter is null or unset, parameter is set to the value of word.
-
-$ echo $TEST
-$ echo ${TEST:=test}
-test
-$ echo $TEST
-test
-$
-
-note: Q? this works as it has default value when parameter is not set, null. what is it?
-box_ip=${2-localhost}
-box_port=${3-2033}
-
-
-${parameter:+word}
-If parameter is null or unset, nothing is substituted, otherwise the expansion of word is
-substituted.
-
-
-<substring-expansion>
-
-${parameter:offset}
-${parameter:offset:length}
-
-The LENGTH parameter defines how many characters to keep, starting from the first character after
-the offset point. If LENGTH is omitted, the remainder of the variable content is taken
-
-${VAR:OFFSET:LENGTH}
-
-$ STRING="thisisaverylongname"
-$ echo ${STRING:4}
-isaverylongname
-$ echo ${STRING:6:5}
-avery
-
-
-{expansion-on-arg}
-If parameter is @, the result is length positional parameters 'beginning' at offset. A negative
-offset is taken relative to one greater than the greatest positional parameter, so an offset of -1
-evaluates to the last positional parameter. It is an expansion error if length evaluates to a number
-less than zero.
-
-The following examples illustrate substring expansion using positional parameters:
-
-$ set -- 1 2 3 4 5 6 7 8 9 0 a b c d e f g h
-$ echo ${@:7}
-7 8 9 0 a b c d e f g h
-$ echo ${@:7:0}
-
-$ echo ${@:7:2}
-7 8
-
-$ echo ${@:7:-2}
-bash: -2: substring expression < 0
-
-$ echo ${@: -7:2}
-b c
-
-note: this shows all args
-$ echo ${@}
-1 2 3 4 5 6 7 8 9 0 a b c d e f g h
-
-$ echo ${@:0}
-./bash 1 2 3 4 5 6 7 8 9 0 a b c d e f g h
-
-$ echo ${@:0:2}
-./bash 1
-
-
-={============================================================================
-*kt_linux_bash_003* bash: if and test command primaries
-
-http://www.gnu.org/software/bash/manual/html_node/Bash-Conditional-Expressions.html#Bash-Conditional-Expressions
-6.4 Bash Conditional Expressions
-
-if TEST-COMMANDS; then CONSEQUENT-COMMANDS; fi
-
-The TEST-COMMAND list is executed, and if its return status is zero, the CONSEQUENT-COMMANDS list is
-  executed. The return status is the exit status of the last command executed, or zero if no
-  condition tested true.
-
-<primaries-on-conditional>
-Primary        Meaning
-[ -a FILE ]    True if FILE exists.
-[ -x FILE ]    True if FILE exists and is excutable.
-[ -f FILE ]    True if FILE exists and is a regular file.
-
-[ -z string ]  True if the length of string is zero.
-[ -n string ]  True if the length of string is non-zero.
-
-note: can use on env variable.
-
-if [ -z "${ZB_CFG}" ]; then
-   # when not set
-else
-   # when set
-fi
-
-
-if [ -n "${ZB_FORCE_BRANCH}" ]; then
-   # when set
-else
-   # when not set
-fi
-
-<string-comparison>
-[ STRING1 == STRING2 ] 
-True if the strings are equal. 
-
-note: "=" may be used instead of "==" for strict POSIX compliance.
-
-[ STRING1 != STRING2 ] True if the strings are not equal.
-
-Regular expressions may also be used in comparisons:
-
-gender="female"
-if [[ "$gender" == f* ]]
-
-
-{test-expr}
-<single>
-test
-[
-
-    test expr
-
-Evaluate a conditional expression expr and return a status of 0 (true) or 1 (false). Each operator
-and operand must be a separate argument. Expressions are composed of the primaries described below
-in Bash Conditional Expressions. test does not accept any options, nor does it accept and ignore an
-argument of -- as signifying the end of options.
-
-When the [ form is used, the last argument to the command must be a ].
-
-Expressions may be combined using the following operators, listed in decreasing order of precedence.
-The evaluation depends on the number of arguments; see below. Operator precedence is used when there
-are five or more arguments.
-
-! expr 
-True if expr is false.
-
-( expr )
-Returns the value of expr. This may be used to override the normal precedence of operators.
-
-expr1 -a expr2
-True if both expr1 and expr2 are true.
-
-expr1 -o expr2
-True if 'either' expr1 or expr2 is true. 
-
-The test and [ builtins evaluate conditional expressions using a set of rules based on the number of
-arguments. 
-
-<double>
-http://www.gnu.org/software/bash/manual/bash.html#Conditional-Constructs
-
-note: Use [] whenever you want your script to be 'portable' across shells. Use [[]] if you want
-conditional expressions not supported by [] and don't need to be portable.
-
-[[ is bash's improvement to the [ command. It has several enhancements that make it a better choice
-if you write scripts that target bash. My favorites are:
-
-1. It is a syntactical feature of the shell, so it has some special behavior that [ doesn't have.
-You no longer have to quote variables like mad because [[ handles empty strings and strings with
-whitespace more intuitively. For example, with [ you have to write
-
-    if [ -f "$FILE" ]
-
-to correctly handle empty strings or file names with spaces in them. With [[ the quotes are
-unnecessary:
-
-    if [[ -f $FILE ]]
-
-2. Because it is a syntactical feature, it lets you use && and || operators for boolean tests and < and
-> for string comparisons. [ cannot do this because it is a regular command and &&, ||, <, and > are
-not passed to regular commands as command-line arguments.
-
-3. It has a wonderful =~ operator for doing regular expression matches. With [ you might write
-
-    if [ "$ANSWER" = y -o "$ANSWER" = yes ]
-
-    With [[ you can write this as
-
-    if [[ $ANSWER =~ ^y(es)?$ ]]
-
-It even lets you access the captured groups which it stores in BASH_REMATCH. For instance,
-   ${BASH_REMATCH[1]} would be "es" if you typed a full "yes" above.
-
-4. You get pattern matching aka globbing for free. Maybe you're less strict about how to type yes.
-Maybe you're okay if the user types y-anything. Got you covered:
-
-    if [[ $ANSWER = y* ]]
-
-Keep in mind that it is a bash extension, so if you are writing sh-compatible scripts then you need
-to stick with [. Make sure you have the #!/bin/bash shebang line for your script if you use double
-brackets.
 
 
 ={============================================================================
 *kt_linux_bash_004* sh-globbing
-
-<ex>
-Suppose that there are shell scipts files to be run at boot up and which are
-numbered like, S01xx.sh, S02xx.sh, and so on.
-
-steps=$(echo /etc/init.d/S??*)
-
-How to make sure that scripts runs in the numbered order? The answer is that the
-globbing returns the sorted list.
-
-
-3.5.8.1 Pattern Matching
-
-Any character that appears in a pattern, other than the special pattern
-characters described below, matches itself. The NUL character may not occur in a
-pattern. A backslash escapes the following character; the escaping backslash is
-discarded when matching. The special pattern characters must be quoted if they
-are to be matched literally.
-
-The special pattern characters have the following meanings:
-
-*
-    Matches any string, including the null string. When the globstar shell
-    option is enabled, and ‘*’ is used in a filename expansion context, two
-    adjacent ‘*’s used as a single pattern will match all files and zero or more
-    directories and subdirectories. If followed by a ‘/’, two adjacent ‘*’s will
-    match only directories and subdirectories.  
-
-?
-    Matches any single character. 
-
-[...]
-    Matches any one of the enclosed characters. A pair of characters separated
-    by a hyphen denotes a range expression; any character that falls between
-    those two characters, inclusive, using the current locale’s collating
-    sequence and character set, is matched. If the first character following the
-    ‘[’ is a ‘!’ or a ‘^’ then any character not enclosed is matched. A ‘-’ may
-    be matched by including it as the first or last character in the set. A ‘]’
-    may be matched by including it as the first character in the set. The
-    sorting order of characters in range expressions is determined by the
-    current locale and the values of the LC_COLLATE and LC_ALL shell variables,
-if set.
-
-    For example, in the default C locale, ‘[a-dx-z]’ is equivalent to
-      ‘[abcdxyz]’. Many locales sort characters in dictionary order, and in
-      these locales ‘[a-dx-z]’ is typically not equivalent to ‘[abcdxyz]’; it
-      might be equivalent to ‘[aBbCcDdxXyYz]’, for example. To obtain the
-      traditional interpretation of ranges in bracket expressions, you can force
-      the use of the C locale by setting the LC_COLLATE or LC_ALL environment
-      variable to the value ‘C’, or enable the globasciiranges shell option.
-
-    Within ‘[’ and ‘]’, character classes can be specified using the syntax
-    [:class:], where class is one of the following classes defined in the POSIX
-               standard:
-
-    alnum   alpha   ascii   blank   cntrl   digit   graph   lower
-    print   punct   space   upper   word    xdigit
-
-    A character class matches any character belonging to that class. The word
-    character class matches letters, digits, and the character ‘_’.
-
-    Within ‘[’ and ‘]’, an equivalence class can be specified using the syntax
-    [=c=], which matches all characters with the same collation weight (as
-        defined by the current locale) as the character c.
-
-    Within ‘[’ and ‘]’, the syntax [.symbol.] matches the collating symbol
-    symbol. 
-
-
-If the extglob shell option is enabled using the shopt builtin, several extended
-pattern matching operators are recognized. In the following description, a
-pattern-list is a list of one or more patterns separated by a ‘|’. Composite
-patterns may be formed using one or more of the following sub-patterns:
-
-?(pattern-list)
-    Matches zero or one occurrence of the given patterns.
-
-*(pattern-list)
-    Matches zero or more occurrences of the given patterns.
-
-+(pattern-list)
-    Matches one or more occurrences of the given patterns.
-
-@(pattern-list)
-    Matches one of the given patterns.
-
-!(pattern-list)
-    Matches anything except one of the given patterns. 
-
 
 3.5.8 Filename Expansion
 
@@ -2006,35 +2957,6 @@ readlink - print value of a symbolic link or canonical file name
 
 
 ={============================================================================
-*kt_linux_bash_008* bash: for
-
-<form>
-for name in word1 word2 ... wordN
-do
-   list
-done
-
-<example> in command line
-for f in $(ls); do echo "var is: $f"; done
-
-note: It is important to remember that the then and fi are considered to be separated statements in
-the shell. Therefore, when issued on the command line, they are separated by a semi-colon.
-
-for f in $( ls /var/ ); do
-   echo $f
-done
-
-note: 'no' need to specify index and to shift.
-
-<example>
-for FILE in $HOME/.bash*
-do
-   cp $FILE ${HOME}/public_html
-   chmod a+r ${HOME}/public_html/${FILE}
-done
-
-
-={============================================================================
 *kt_linux_bash_009* bash: select
 
 <form>
@@ -2081,184 +3003,6 @@ display. For example, the commands
 $ PS3="Please make a selection => " ; export PS3
 
 note: All loops has 'do .. done' block and careful the place of 'do'.
-
-
-={============================================================================
-*kt_linux_bash_010* bash: case
-
-Can use either in the loop or it alone.
-
-<form>
-case $variable in
- $condition1) or pattern1)
- command...
- ;;
-
- $condition2 )
- command...
- ;;
-esac
-
-
-<example>
-case $PLATFORM in 
-  sam_bcm )
-    PLATFORM_DIR=SAM_BCM_MIPS4K_LNUX_DARWIN_03
-    FUSIONOS=FUSIONOS_3
-    ENDIAN_TYPE=BigEndian
-    ;;    
-  pace_bcm )
-    PLATFORM_DIR=PACE_BCM_MIPS4K_LNUX_DARWIN_02
-    FUSIONOS=FUSIONOS_3
-    ENDIAN_TYPE=BigEndian
-    ;;
-  ams_bcm )
-    PLATFORM_DIR=AMS_BCM_MIPS4K_LNUX_DARWIN_01
-    FUSIONOS=FUSIONOS_2
-    ENDIAN_TYPE=BigEndian
-    ;;
-  tmm_bcm )
-    PLATFORM_DIR=TMM_BCM_MIPS4K_LNUX_DARWIN_02
-    FUSIONOS=FUSIONOS_3
-    ENDIAN_TYPE=BigEndian
-    ;;
-  * )
-    echo "USAGE ERROR"
-    usage
-    exit
-esac
-
-
-<example> note the use of pattern
-case "$TERM" in
-   *term)
-   TERM=xterm ;;
-   network | dialup | unknown | vt[0-9][0-9][0-9])
-   TERM=vt100 ;;
-esac
-
-
-<example> can get an input from a user
-read case;
-case $case in
-    1) echo "You selected bash";;
-    2) echo "You selected perl";;
-    3) echo "You selected phyton";;
-    4) echo "You selected c++";;
-    5) exit
-esac
-
-
-={============================================================================
-*kt_linux_bash_011* bash: process options using while and getopts
-
-<form>
-while command
-do
-   list
-done
-
-<example>
-note: can use true only in the script but not command line.
-
-while [ true ] ; do ls -l; echo Wait 1 sec ; sleep 1; done
-
-while [ "$1" != "" ]; do
-  case $1 in
-    -h | -help | --help)
-      usage
-      exit
-      ;;
-    -p | --platform | -b | --box)
-      shift
-      PLATFORM=$1
-      ;;
-    --project)
-      shift
-      PROJECT=$1
-      ;;
-    release)
-      RELEASE="true"
-      ;;
-    *)
-      echo "USAGE ERROR"
-      usage
-      exit
-      ;;
-  esac
-  shift
-done
-
-
-<ex>
-This code breaks up when use "--h" because (*) let it contine to run after
-while. So should use exit 0 in case (*).
-
-while [ $# -gt 0 ]; do
-    case "$1" in
-        (-h | -help | --help)
-            grep '^#/' "$0" | cut -c 4-
-            exit 0;;
-
-        (-d | --debug)
-            debug="1"
-            shift;;
-
-        (-l | --list)
-            list_assets
-            exit 0;;
-
-        (*)
-            break;;
-    esac
-done
-
-
-{getopts} shell built-in
-
-getopts optstring name [args]
-
-getopts is used by shell scripts to parse positional parameters. 'optstring' contains the option
-characters to be recognized; if a character is followed by a colon, the option is expected to have
-an argument, which should be separated from it by whitespace. 
-
-<option>
-Each time it is invoked, getopts 'places' the next option in the shell variable 'name', initializing
-name if it does not exist, and the 'index' of the next argument to be processed into the variable
-'OPTIND'. OPTIND is initialized to 1 each time the shell or a shell script is invoked. 
-
-<arg>
-When an option requires an argument, getopts places that 'argument' into the variable OPTARG. 
-
-<return>
-When the end of options is encountered, getopts exits with a return value greater than zero. note:
-false. OPTIND is set to the index of the first 'non'-option argument, and name is set to '?'.
-
-
-={============================================================================
-*kt_linux_bash_012* bash: break and continue
-
-
-while :     # this cause infinite loop.
-do
-   read CMD
-   case $CMD in
-      [qQ]|[qQ][uU][iI][tT]) break ;;
-   *) process $CMD ;;
-   esac
-done
-
-<continue>
-If one of the filenames in $FILES is not a file, this loop skips it, rather than exiting.
-
-for FILE in $FILES ;
-do
-   if [ ! -f "$FILE" ] ; then
-      echo "ERROR: $FILE is not a file."
-      continue
-   fi
-   # process the file
-done
 
 
 ={============================================================================
@@ -2451,121 +3195,6 @@ failed,returned value: E_FSSERVER_STATUS_INVALID_ALIGNMENT
 
 started = 1, MATCHED=1 started = 2 Time:[08:14:11]0946714451,  VRM_JOB_START: jtVRM=3 Picasso not
 shutting down properly - maybe Jira SI-3770
-
-
-={============================================================================
-*kt_linux_bash_014* bash: function
-
-note: must use bash and see how to pass args to function
-
-#!/bin/bash
-# BASH FUNCTIONS CAN BE DECLARED IN ANY ORDER
-
-function function_B {
-  echo "{ fb"
-  echo Function B.
-  echo "} fb"
-}
-
-function function_A {
-  echo "{ fa"
-  echo $1
-  echo "} fa"
-}
-
-function function_D {
-  echo "{ fd"
-  echo Function D.
-  echo "} fd"
-}
-
-# function function_C {
-function_C () {
-  echo "{ fc"
-  echo $1
-  echo "} fc"
-}
-
-# FUNCTION CALLS
-
-# Pass parameter to function A
-function_A "Function A via pass"
-function_B
-
-# Pass parameter to function C
-function_C "Function C via pass"
-function_D 
-
-$ ./sbash.sh list 
-{ fa
-Function A via pass
-} fa
-{ fb
-Function B.
-} fb
-{ fc
-Function C via pass
-} fc
-{ fd
-Function D.
-} fd
-
-
-{syntax}
-function function_C() {
-  echo "{ fc"
-  echo $1
-  echo "} fc"
-}
-
-function function_C {
-  echo "{ fc"
-  echo $1
-  echo "} fc"
-}
-
-function_C () {
-  echo "{ fc"
-  echo $1
-  echo "} fc"
-}
-
-note: this causes an error as:
-
-function_C {
-  echo "{ fc"
-  echo $1
-  echo "} fc"
-}
-
-./sample.sh: line 23: function_C: command not found
-{ fc
-
-} fc
-./sample.sh: line 27: syntax error near unexpected token `}'
-./sample.sh: line 27: `}'
-
-
-{use-return-value}
-get_available_space() {
-    declare -a fs_info=( $(stat -f -c "%d %s" "$core_output_path") )
-    echo $(( $(IFS="*"; echo "${fs_info[*]}") ))
-}
-
-# break the loop if the available space is above the threshold
-[ "$(get_available_space)" -lt "$threshold" ] || break
-
-
-function get_lsr_int_with_default() {
-    key_name="$1"
-    value="$(lsr-config "$key_name")"
-
-    if [ -z "$value" ]; then
-        value="$2"
-    fi
-
-    printf "$value"
-}
 
 
 ={============================================================================
@@ -2824,122 +3453,6 @@ xpg_echo       	off
 
 
 ={============================================================================
-*kt_linux_bash_022* sh-and-or
-
-if [ "$(whoami)" != 'root' ]; then
-   echo "You have no permission to run $0 as non-root user."
-   exit 1;
-fi
-
-With Bash, you can shorten this type of construct. The compact equivalent of the above test is as
-follows:
-
-[ "$(whoami)" != 'root' ] && ( echo you are using a non-privileged account; exit 1 )
-
-Similar to the "&&" expression which indicates what to do if the test proves true, "||" specifies
-what to do if the test is false.
-
-<and-and-or>
-3.2.3 Lists of Commands
-
-An AND list has the form
-
-command1 && command2
-
-command2 is executed if, and only if, command1 returns an exit status of
-zero(true).
-
-An OR list has the form
-
-command1 || command2
-
-command2 is executed if, and only if, command1 returns a non-zero(false) exit status.
-
-The return status of AND and OR lists is the exit status of the last command executed in the list. 
-
-<example>
-1. if loginscript is set(defined), run -f. 
-   if file exist then test return true so no fail() call.
-   if file not exist then test return false so run fail() call.
-2. if loginscript is not set, no run -f and test return true(0) so no fail() call.
-
-[[ -z "$loginscript" || -f "$loginscript" ]] ||
-    fail "Loginscript '$loginscript' doesn't exist."
-
-note: progress to next cond when only previous one is true. [[ cond || cond ]] || exec
-
-<example>
-To see if meet at least one of options.
-
-    [[ -n "$release" || -n "$zincdir" || -n "$jenkinshost" || -n "$jenkinsurl" ||
-       -n "$galliumurl" || -n "$localgallium" || -n "$platformconfigurl" ||
-       "$virtualinputdriver" -ne 0 || -n "$irdriver" || "$enabledbustcp" -ne 0 ||
-       "$directfbsrc" -ne 0 || "$killzincdaemons" -ne 0 || -n "$toolnames" ||
-       -n "$networkmanager" || -n "$loginscript" || -n "$startupscript" ||
-       "$forcefirsttime" -ne 0 || "$needsreboot" -ne 0 || "$vidmemcapture" -ne 0 ]] ||
-    {
-        fail "You must specify at least one of -[ZzjugcdeEtsknlbTfrv]."
-    }
-
-<example>
-
-function x {
-  ...
-
-  [[ 
-    "$cacheOptionCorrectAtExpectedPosition" = 1 &&
-    "$cacheValueCorrectAtExpectedPosition" = 1 &&
-    "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
-    "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
-    "$jarOptionCorrectAtExpectedPosition" = "1" && 
-    "$jarValueCorrectAtExpectedPosition" = "1" && 
-    "$urlOptionCorrectAtExpectedPosition" = "1" && 
-    "$urlValueCorrectAtExpectedPosition" = "1" 
-  ]] 
-}
-
-From the debug output, shows only 4 since stops as soon as see flase. This may be confusing when
-debugging.
-
-+ [[ 1 = 1 ]]
-+ [[ 1 = 1 ]]
-+ [[ 1 = 1 ]]
-+ [[ 0 = 1 ]]
-
-
-<ex>
-The lsr-config returns "0/1" or "true/false" when use --bool and the problem is
-when a key is boolean and is not set in a database meaning 0, it still returns
-"0" which is not NULL string. So "if [ -z ]" check always becomes false.
-
-The solution is that use variable's value depending on key value to set actual
-variable.
-
-#!/bin/sh
-
-# when key is not set or returns "false" then enable_yv_media="".
-# when key set and returns "true" then enable_yv_media="true".
-
-enable_yv_media=""
-[ "false" = "$(lsr-config --bool platform.settings.enable-yv-media || echo false)" ] || {
-    enable_yv_media="true"
-}
-
-USE_YV_MEDIA_ROUTER="$enable_yv_media"
-
-if [ -z "$USE_YV_MEDIA_ROUTER" ]; then
-	echo "NOT SET. $USE_YV_MEDIA_ROUTER. WILL USE OEM MR"
-else
-	echo "SET. $USE_YV_MEDIA_ROUTER. WILL USE YV MR"
-fi
-
-However, if use this then goes wrong.
-
-if [ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ]; then
-    // things to do when true case
-
-
-={============================================================================
 *kt_linux_bash_023* sh-option: invoking options
 
 6.1 Invoking Bash
@@ -3028,6 +3541,39 @@ set
 <ex>
 # in the script
 #!/bin/bash -eix
+
+
+={============================================================================
+*kt_linux_bash_024* sh-builtin
+
+4.2 Bash Builtin Commands
+
+This section describes builtin commands which are unique to or have been
+extended in Bash. Some of these commands are specified in the POSIX standard. 
+
+{sh-echo}
+
+echo
+
+    echo [-neE] [arg ...]
+
+    Output the args, separated by spaces, terminated with a `newline`. The
+    return status is 0 unless a write error occurs. If -n is specified, the
+    trailing newline is suppressed. If the -e option is given, interpretation of
+    the following backslash-escaped characters is enabled. The -E option
+    disables the interpretation of these escape characters, even on systems
+    where they are interpreted by default. The xpg_echo shell option may be used
+    to dynamically determine whether or not echo expands these escape characters
+    by default. echo does not interpret -- to mean the end of options.
+
+note:
+The `echo` prints out `newline` regardless of value of variable. The following
+prints out value of variable and newline. When variable is not set or do not
+have value, it prints out newline only and it the same as using echo only.
+
+echo $variable
+
+    echo interprets the following `escape-sequences`: 
 
 
 ={============================================================================
