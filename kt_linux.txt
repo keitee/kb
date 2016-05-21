@@ -29,35 +29,29 @@
 *kt_linux_bash_001* sh-expansion-tilde
 *kt_linux_bash_001* sh-expansion-parameter
 *kt_linux_bash_001* sh-expansion-command
+*kt_linux_bash_001* sh-expansion-arithmetic
+*kt_linux_bash_001* sh-expansion-process
+*kt_linux_bash_001* sh-expansion-word
+*kt_linux_bash_001* sh-expansion-filename
+*kt_linux_bash_001* sh-redirection
+*kt_linux_bash_001* sh-redirection-here
+*kt_linux_bash_001* sh-executing
 |kt_linux_bash_001| bash: history and reverse search
-|kt_linux_bash_004| sh-globbing
-|kt_linux_bash_006| bash: shell and special parameters <shift-operator> <while>
-|kt_linux_bash_007| bash: set var using other commands <dirname> <readlink> <if>
-|kt_linux_bash_009| bash: select
-|kt_linux_bash_010| bash: case
 |kt_linux_bash_013| sh-read
 |kt_linux_bash_015| bash: basename
-|kt_linux_bash_016| bash: here document
-|kt_linux_bash_017| sh-redirection
 |kt_linux_bash_018| bash: ':' command
 |kt_linux_bash_020| bash: list options
 *kt_linux_bash_023* sh-option: invoking options
 *kt_linux_bash_024* sh-builtin
-|kt_linux_bash_024| bash: builtin: exec
+*kt_linux_bash_024* sh-builtin-base
+*kt_linux_bash_024* sh-builtin-extd
 |kt_linux_bash_025| bash: builtin: set
-*kt_linux_bash_025* bash: builtin: trap
-*kt_linux_bash_025* bash: builtin: shift
-|kt_linux_bash_026| bash: which one when there are script and exe binary in the same dir?
-|kt_linux_bash_027| bash: test on file using which command
 |kt_linux_bash_028| bash: bash: builtin: programmable completion
-|kt_linux_bash_029| bash: variable arithmetic
 |kt_linux_bash_030| sh-interactive-or-not
 |kt_linux_bash_031| bash: double dash
 *kt_linux_bash_032* sh-readline: edit command line
-|kt_linux_bash_033| bash: true and false
 |kt_linux_bash_034| bash: wait
 |kt_linux_bash_035| bash: help
-|kt_linux_bash_037| bash: builtin: command
 |kt_linux_bash_038| sh-declare
 *kt_linux_bash_038* bash-substitude
 
@@ -136,6 +130,7 @@
 *kt_linux_tool_051* tool-hexdump
 *kt_linux_tool_051* tool-uptime
 *kt_linux_tool_051* tool-lsof
+*kt_linux_tool_051* tool-dirname
 
 *kt_linux_tool_100* tool-gprof
 *kt_linux_tool_100* tool-valgrind
@@ -317,8 +312,8 @@
 
 |kt_linux_core_300| ipc: socket: LPI 56
 
-|kt_linux_core_101| ipc: pipe
-|kt_linux_core_102| ipc: way to check pipe fd and setup
+*kt_linux_core_101* ipc-pipe
+*kt_linux_core_102* ipc-pipe-check-setup
 |kt_linux_core_103| ipc: fifo
 |kt_linux_core_104| ipc: semantics of read() and write() on pipes and fifo
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
@@ -940,9 +935,37 @@ terminated by signal n.
 The $? expands to the exit status of the 'most' recently executed foreground
 pipeline. Can be used in test construct.
 
-The following example demonstrates that TEST COMMANDS might be 'any' UNIX
-command that returns an exit status, and that if again returns an exit status of
-zero:
+
+3.7.5 Exit Status
+
+The exit status of an executed command is the value returned by the waitpid
+system call or equivalent function. Exit statuses fall between 0 and 255,
+though, as explained below, the shell may use values above 125 specially. 
+  
+For the shell’s purposes, a command which exits with a zero exit status has
+succeeded. A non-zero exit status indicates failure. This seemingly
+counter-intuitive scheme is used so there is one well-defined way to indicate
+success and a variety of ways to indicate various failure modes. When a command
+terminates on a fatal signal whose number is N, Bash uses the value 128+N as the
+exit status.
+
+If a command is not found, the child process created to execute it returns a
+status of 127. If a command is found but is not executable, the return status is
+126.
+
+If a command fails because of an error during expansion or redirection, the exit
+status is greater than zero.
+
+All of the Bash builtins return an exit status of zero if they succeed and a
+non-zero status on failure, so they may be used by the conditional and list
+constructs. All builtins return an exit status of 2 to indicate incorrect usage. 
+
+<ex>
+if which ssh-copy-id >/dev/null;
+then  
+  # ssh-copy-id always returns failure
+  ssh-copy-id -i $privatekey root@$stbip || true
+fi
 
 <ex>
 The grep returns 0(success) when found and 1(fail) when not found.
@@ -1543,6 +1566,46 @@ select
     	echo you picked $fname \($REPLY\)
     	break;
     done
+
+<ex>
+select COM in comp1 comp2 comp3 all none
+do
+   echo "is in do"
+done
+
+$ ./sample.sh  
+1) comp1
+2) comp2
+3) comp3
+4) all
+5) none
+#?
+
+Automatically make numbers and prompts. COM var will have whatever value
+entered. Also this example do infinite loop until press C-c since no break
+statement in do.
+
+<ex>
+select COM in comp1 comp2 comp3 all none
+do
+  case $COM in
+      comp1 | comp2 | comp3) echo "sel is $COM" ;;
+      all) echo "sel is $COM" ;;
+      none)
+          echo "sel is $COM"
+          break
+           ;;
+       *) echo "ERROR. sel is $REPLY" ;;
+   esac
+done
+
+You can change the prompt displayed by the select loop by altering the variable
+PS3. If PS3 is not set, the default prompt, #?, is displayed. Otherwise the
+value of PS3 is used as the prompt to display. For example, the commands
+
+$ PS3="Please make a selection => " ; export PS3
+
+note: All loops has 'do .. done' block and careful the place of 'do'.
 
 
 {sh-[[}
@@ -2335,9 +2398,11 @@ Not in the script?
 * Filename Expansion: A shorthand for specifying filenames matching patterns.
 * Quote Removal: How and when quote characters are removed from words.
 
-The order of expansions is: brace expansion; tilde expansion, parameter and
-variable expansion, arithmetic expansion, and command substitution (done in a
-    left-to-right fashion); word splitting; and filename expansion.
+The `order-of-expansions` is: 
+
+brace expansion; tilde expansion, parameter and variable expansion, arithmetic
+expansion, and command substitution (done in a left-to-right fashion); word
+splitting; and filename expansion.
 
 On systems that can support it, there is an additional expansion available:
 process substitution. This is performed at the same time as tilde, parameter,
@@ -2356,13 +2421,13 @@ After all expansions, quote removal (see Quote Removal) is performed.
 
 3.5.1 Brace Expansion
 
-Brace expansion is a mechanism by which arbitrary strings may be generated. This
-mechanism is similar to filename expansion, but the filenames generated need not
-exist. Patterns to be brace expanded take the form of an optional preamble,
-  followed by either a series of comma-separated strings or a sequence
-  expression between a pair of braces, followed by an optional postscript. The
-  preamble is prefixed to each string contained within the braces, and the
-  postscript is then appended to each resulting string, expanding left to right.
+`brace-expansion` is a mechanism by which arbitrary strings may be generated.
+This mechanism is similar to filename expansion, but the filenames generated
+need not exist. Patterns to be brace expanded take the form of an optional
+preamble, followed by either a series of comma-separated strings or a sequence
+expression between a pair of braces, followed by an optional postscript. The
+preamble is prefixed to each string contained within the braces, and the
+postscript is then appended to each resulting string, expanding left to right.
 
 Brace expansions may be nested. The results of each expanded string are not
 sorted; left to right order is preserved. For example,
@@ -2651,6 +2716,395 @@ expansion are not performed on the results.
 
 
 ={============================================================================
+*kt_linux_bash_001* sh-expansion-arithmetic
+
+3.5.5 Arithmetic Expansion
+
+Arithmetic expansion allows the evaluation of an arithmetic expression and the
+substitution of the result. The format for arithmetic expansion is:
+
+$(( expression ))
+
+The expression is treated as if it were within double quotes, but a double quote
+inside the parentheses is not treated specially. All tokens in the expression
+undergo parameter and variable expansion, command substitution, and quote
+removal. The result is treated as the arithmetic expression to be evaluated.
+Arithmetic expansions may be nested.
+
+The evaluation is performed according to the rules listed below (see
+    `shell-arithmetic`). If the expression is invalid, Bash prints a message
+indicating failure to the standard error and no substitution occurs. 
+
+<ex>
+The both makes the same result.
+
+COUNT=10
+
+while [ $COUNT -gt 0 ]; do
+   echo Value of count is: $COUNT
+   let COUNT=COUNT-1
+done
+
+COUNT=10
+
+while [ $COUNT -gt 0 ]; do
+   echo Value of count is: $COUNT
+   COUNT=$(( $COUNT-1 ))
+done
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion-process
+
+3.5.6 Process Substitution
+
+`process-substitution` is supported on systems that support named pipes (FIFOs)
+or the /dev/fd method of naming open files. It takes the form of
+
+<(list)
+
+or
+
+>(list)
+
+The process `list` is run with its input or output connected to a FIFO or some
+file in /dev/fd. The name of this file is passed as an argument to the current
+command as the result of the expansion. If the >(list) form is used, writing to
+the file will provide input for list. If the <(list) form is used, the file
+passed as an argument should be read to obtain the output of list. Note that no
+space may appear between the < or > and the left parenthesis, otherwise the
+construct would be interpreted as a redirection.
+
+When available, process substitution is performed simultaneously with parameter
+and variable expansion, command substitution, and arithmetic expansion. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion-word
+
+3.5.7 Word Splitting
+
+The shell scans the results of parameter expansion, command substitution, and
+arithmetic expansion that did not occur within double quotes for word splitting.
+
+The shell treats each character of $IFS as a delimiter, and splits the `results`
+of the other expansions into words using these characters as field terminators.
+
+If IFS is unset, or its value is exactly <space><tab><newline>, the default,
+then sequences of <space>, <tab>, and <newline> at the beginning and end of the
+  results of the previous expansions are ignored, and any sequence of IFS
+  characters not at the beginning or end serves to delimit words. 
+  
+If IFS has a value other than the default, then sequences of the whitespace
+characters space and tab are ignored at the beginning and end of the word, as
+long as the whitespace character is in the value of IFS (an IFS whitespace
+    character). Any character in IFS that is not IFS whitespace, along with any
+adjacent IFS whitespace characters, delimits a field. A sequence of IFS
+whitespace characters is also treated as a delimiter. If the value of IFS is
+null, no word splitting occurs.
+
+Explicit null arguments ("" or '') are retained. Unquoted implicit null
+arguments, resulting from the expansion of parameters that have no values, are
+removed. If a parameter with no value is expanded within double quotes, a null
+argument results and is retained.
+
+Note that if no expansion occurs, no splitting is performed. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-expansion-filename
+
+3.5.8 Filename Expansion
+
+After word splitting, unless the -f option has been set, Bash scans each word
+for the characters ‘*’, ‘?’, and ‘[’. If one of these characters appears, then
+  the word is regarded as a `pattern`, and replaced with an
+    `alphabetically-sorted` list of filenames matching the pattern. 
+    
+If no matching filenames are found, and the shell option `nullglob` is disabled,
+   the word is left unchanged. If the nullglob option is set, and no matches are
+     found, the word is removed. If the failglob shell option is set, and no
+     matches are found, an error message is printed and the command is not
+     executed. If the shell option nocaseglob is enabled, the match is performed
+     without regard to the case of alphabetic characters.
+
+When a pattern is used for filename expansion, the character ‘.’ at the start of
+a filename or immediately following a slash must be matched explicitly, unless
+the shell option dotglob is set. When matching a filename, the slash character
+must always be matched explicitly. In other cases, the ‘.’ character is not
+treated specially.
+
+See the description of shopt in The Shopt Builtin, for a description of the
+nocaseglob, nullglob, failglob, and dotglob options.
+
+The GLOBIGNORE shell variable may be used to restrict the set of filenames
+matching a pattern. If GLOBIGNORE is set, each matching filename that also
+matches one of the patterns in GLOBIGNORE is removed from the list of matches.
+The filenames . and .. are always ignored when GLOBIGNORE is set and not null.
+However, setting GLOBIGNORE to a non-null value has the effect of enabling the
+dotglob shell option, so all other filenames beginning with a ‘.’ will match. To
+get the old behavior of ignoring filenames beginning with a ‘.’, make ‘.*’ one
+of the patterns in GLOBIGNORE. The dotglob option is disabled when GLOBIGNORE is
+unset. 
+
+
+={============================================================================
+*kt_linux_bash_001* sh-redirection
+
+3.6 Redirections
+
+Before a command is executed, its input and output may be redirected using a
+special notation interpreted by the shell. Redirection allows commands’ file
+handles to be duplicated, opened, closed, made to refer to different files, and
+can change the files the command reads from and writes to. Redirection may also
+be used to modify file handles in the current shell execution environment. The
+following redirection operators may precede or appear anywhere within a simple
+command or may follow a command. Redirections are processed in the order they
+appear, from left to right. 
+
+In the following descriptions, if the file descriptor number is omitted, and the
+first character of the redirection operator is ‘<’, the redirection refers to
+the `standard-input` (file descriptor 0). If the first character of the
+redirection operator is ‘>’, the redirection refers to the `standard-output`
+(file descriptor 1).
+
+The `word` following the redirection operator in the following descriptions,
+unless otherwise noted, is subjected to brace expansion, tilde expansion,
+parameter expansion, command substitution, arithmetic expansion, quote removal,
+filename expansion, and word splitting. If it expands to more than one word,
+Bash reports an error.
+
+Note that the order of redirections is significant. For example, the command
+
+ls > dirlist 2>&1
+
+directs both standard output (file descriptor 1) and standard error (file
+    descriptor 2) to the file dirlist, while the command
+
+ls 2>&1 > dirlist
+
+directs only the standard output to file dirlist, because the standard error was
+made a copy of the standard output before the standard output was redirected to
+dirlist.
+
+Bash handles several filenames specially when they are used in redirections, as
+described in the following table:
+
+/dev/fd/fd
+    If fd is a valid integer, file descriptor fd is duplicated.
+
+/dev/stdin
+    File descriptor 0 is duplicated.
+/dev/stdout
+    File descriptor 1 is duplicated.
+/dev/stderr
+    File descriptor 2 is duplicated.
+
+/dev/tcp/host/port
+    If host is a valid hostname or Internet address, and port is an integer port
+    number or service name, Bash attempts to open the corresponding TCP socket.
+
+/dev/udp/host/port
+    If host is a valid hostname or Internet address, and port is an integer port
+    number or service name, Bash attempts to open the corresponding UDP socket. 
+
+A failure to open or create a file causes the redirection to fail.
+
+Redirections using file descriptors greater than 9 should be used with care, as
+they may conflict with file descriptors the shell uses internally. 
+
+3.6.1 Redirecting Input
+
+Redirection of input causes the file whose name results from the expansion of
+word to be opened for reading on file descriptor n, or the standard input (file
+    descriptor 0) if n is not specified.
+
+The general format for redirecting input is:
+
+[n]<word
+
+3.6.2 Redirecting Output
+
+Redirection of output causes the file whose name results from the expansion of
+word to be opened for writing on file descriptor n, or the standard output (file
+    descriptor 1) if n is not specified. If the file does not exist it is
+`created`; if it does exist it is truncated to `zero-size`.
+
+The general format for redirecting output is:
+
+[n]>[|]word
+
+If the redirection operator is ‘>’, and the `noclobber` option to the `set`
+builtin has been enabled, the redirection will fail if the file whose name
+results from the expansion of word exists and is a regular file. If the
+redirection operator is ‘>|’, or the redirection operator is ‘>’ and the
+noclobber option is not enabled, the redirection is attempted even if the file
+named by word exists. 
+
+
+3.6.4 Redirecting Standard Output and Standard Error
+
+This construct allows both the standard output (file descriptor 1) and the
+standard error output (file descriptor 2) to be redirected to the file whose
+name is the expansion of word.
+
+There are two formats for redirecting standard output and standard error:
+
+&>word
+
+and
+
+>&word
+
+Of the two forms, the first is `preferred`. This is semantically equivalent to
+
+>word 2>&1
+
+When using the second form, word may not expand to a number or ‘-’. If it does,
+other redirection operators apply (see Duplicating File Descriptors below) for
+  compatibility reasons. 
+
+<ex>
+One of the most common uses of file descriptors is to redirect STDOUT and STDERR
+to separate files.  The basic syntax is
+
+command 1> file1 2> file2
+
+Often the STDOUT file descriptor, 1, is not written, so a shorter form of the
+basic syntax is
+
+command > file1 2> file2
+
+<ex> the all are the same
+prog1 > /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log 2>&1
+prog1 2>&1 | tee /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log
+
+prog1 |& tee /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log
+
+$ (ZB_CFG=humax.2100 zb-make-g listprojects) > 2100.log 2>&1
+
+
+={============================================================================
+*kt_linux_bash_001* sh-redirection-here
+
+3.6.6 Here Documents
+
+This type of redirection instructs the shell to read input from the current
+source until a line containing only `word` (with no trailing blanks) is seen.
+All of the lines read up to that point are then used `as-the-standard-input` for
+a `command`.
+
+The format of here-documents is:
+
+<<[-]word
+        here-document
+delimiter
+
+No parameter and variable expansion, command substitution, arithmetic expansion,
+or filename expansion is performed on `word`. 
+  
+If any characters in `word` are quoted, the `delimiter` is the result of quote
+removal on word, and the lines in the here-document are not expanded. If word is
+unquoted, all lines of the here-document are subjected to parameter expansion,
+command substitution, and arithmetic expansion, the character sequence \newline
+  is ignored, and ‘\’ must be used to quote the characters ‘\’, ‘$’, and ‘`’.
+
+If the redirection operator is ‘<<-’, then all leading tab characters are
+stripped from input lines and the line containing delimiter. This allows
+here-documents within shell scripts to be indented in a natural fashion.
+
+
+3.6.7 Here Strings
+
+A variant of here documents, the format is:
+
+<<< word
+
+The word undergoes brace expansion, tilde expansion, parameter and variable
+expansion, command substitution, arithmetic expansion, and quote removal.
+
+Pathname expansion and word splitting are not performed. The result is supplied
+as a single string to the command on its standard input. 
+
+<ex>
+
+command << delimiter
+document
+delimiter
+
+The delimiter must be a single word that does not contain spaces or tabs. For
+example, to print a quick list of URLs, you could use the following here
+document:
+
+lpr << MYURLS
+http://www.csua.berkeley.edu/~ranga/
+http://www.cisco.com/
+http://www.marathon.org/story/
+http://www.gnu.org/
+MYURLS
+
+For example, you can use the following command to create a file with the short
+list of URLs given previously:
+
+cat > urls << MYURLS
+http://www.csua.berkeley.edu/~ranga/
+http://www.cisco.com/
+http://www.marathon.org/story/
+http://www.gnu.org/
+MYURLS
+
+note:
+Output as seen between delimeters so will have spaces.
+
+lpr << MYURLS
+    http://www.csua.berkeley.edu/~ranga/
+    http://www.cisco.com/
+    http://www.marathon.org/story/
+    http://www.gnu.org/
+MYURLS
+
+note:
+Syntax error. Seems that here shall starts from beginning of a line. 
+
+function() {
+    lpr << MYURLS
+    http://www.csua.berkeley.edu/~ranga/
+    http://www.cisco.com/
+    http://www.marathon.org/story/
+    http://www.gnu.org/
+    MYURLS
+}
+
+
+={============================================================================
+*kt_linux_bash_001* sh-executing
+
+3.7 Executing Commands
+
+Q: Which one when there are script and exe binary of the same name in the same
+dir?
+
+A: The executable binary gets executed.
+
+Since
+
+3.7.2 Command Search and Execution
+
+3. If the name is neither a shell function nor a builtin, and contains no
+slashes, Bash searches each element of $PATH for a directory containing an
+executable file by that name.
+
+4. If the search is successful, or if the command name contains one or more
+slashes, the shell executes the named program in a separate execution
+environment. Argument 0 is set to the name given, and the remaining arguments to
+the command are set to the arguments supplied, if any.
+
+5. If this execution fails because the file is not in executable format, and the
+file is not a directory, it is assumed to be a shell script and the shell
+executes it as described in Shell Scripts. 
+
+
+={============================================================================
 *kt_linux_bash_001* bash: history
 
 {erase-duplicates}
@@ -2898,113 +3352,6 @@ EOF
 The unset built-in is used to destroy arrays or member variables of an array:
 
 
-
-
-
-
-={============================================================================
-*kt_linux_bash_004* sh-globbing
-
-3.5.8 Filename Expansion
-
-After word splitting, unless the -f option has been set (see The Set Builtin),
-                 Bash scans each word for the characters ‘*’, ‘?’, and ‘[’. 
-
-If one of these characters appears, then the word is regarded as a pattern, and
-replaced with an 'alphabetically' 'sorted' list of filenames matching the
-pattern (see Pattern Matching). If no matching filenames are found, and the
-shell option nullglob is disabled, the word is left unchanged. If the nullglob
-option is set, and no matches are found, the word is removed. If the failglob
-shell option is set, and no matches are found, an error message is printed and
-the command is not executed. If the shell option nocaseglob is enabled, the
-match is performed without regard to the case of alphabetic characters.
-
-When a pattern is used for filename expansion, the character ‘.’ at the start of
-a filename or immediately following a slash must be matched explicitly, unless
-the shell option dotglob is set. When matching a filename, the slash character
-must always be matched explicitly. In other cases, the ‘.’ character is not
-treated specially.
-
-
-={============================================================================
-*kt_linux_bash_007* bash: set var using other commands
-
-Two ways to set var by running other commands.
-
-<one>
-DIR=$(dirname $0)
-
-<two>
-if [[ "$dir" != /* ]]
-then
-   echo "if"
-   CURDIR=`pwd`                       # back quote
-   DIR=$(readlink -f $CURDIR/$DIR)
-   echo "DIR:$DIR"
-fi
-
-if [[ "$dir" != /* ]]; then         # /* ?
-   echo "if"
-   CURDIR=`pwd`                       # back quote
-   DIR=$(readlink -f $CURDIR/$DIR)
-   echo "DIR:$DIR"
-fi
-
-note: here dirname and readlink are commands.
-
-dirname - strip last component from file name. eg. /usr/bin/ -> /usr
-readlink - print value of a symbolic link or canonical file name
-
-
-={============================================================================
-*kt_linux_bash_009* bash: select
-
-<form>
-select name in word1 word2 ... wordN
-do
-   list
-done
-
-<example>
-select COM in comp1 comp2 comp3 all none
-do
-   echo "is in do"
-done
-
-$ ./sample.sh  
-1) comp1
-2) comp2
-3) comp3
-4) all
-5) none
-#?
-
-note: Automatically make numbers and prompts. COM var will have whatever value entered. Also this
-example do infinite loop until press C-c since no break statement in do.
-
-<example>
-select COM in comp1 comp2 comp3 all none
-do
-  case $COM in
-      comp1 | comp2 | comp3) echo "sel is $COM" ;;
-      all) echo "sel is $COM" ;;
-      none)
-          echo "sel is $COM"
-          break
-           ;;
-       *) echo "ERROR. sel is $REPLY" ;;
-   esac
-done
-
-You can change the prompt displayed by the select loop by altering the variable PS3. If PS3 is not
-set, the default prompt, #?, is displayed. Otherwise the value of PS3 is used as the prompt to
-display. For example, the commands
-
-$ PS3="Please make a selection => " ; export PS3
-
-note: All loops has 'do .. done' block and careful the place of 'do'.
-
-
 ={============================================================================
 *kt_linux_bash_013* sh-read
 
@@ -3213,109 +3560,6 @@ $ basename cfgversion.out
 cfgversion.out
 $ basename cfgversion.out .out
 cfgversion
-
-
-={============================================================================
-*kt_linux_bash_016* sh-here
-
-The general form for a here document is
-
-command << delimiter
-document
-delimiter
-
-Here the shell interprets the << operator as an instruction to read 'input'
-until it finds a line containing the specified delimiter. All the input lines up
-to the line containing the delimiter are then fed into the standard 'input' of
-the command.
-
-The delimiter must be a single word that does not contain spaces or tabs. For
-example, to print a quick list of URLs, you could use the following here
-document:
-
-lpr << MYURLS
-http://www.csua.berkeley.edu/~ranga/
-http://www.cisco.com/
-http://www.marathon.org/story/
-http://www.gnu.org/
-MYURLS
-
-For example, you can use the following command to create a file with the short
-list of URLs given previously:
-
-cat > urls << MYURLS
-http://www.csua.berkeley.edu/~ranga/
-http://www.cisco.com/
-http://www.marathon.org/story/
-http://www.gnu.org/
-MYURLS
-
-
-note:
-Output as seen between delimeters so will have spaces.
-
-lpr << MYURLS
-    http://www.csua.berkeley.edu/~ranga/
-    http://www.cisco.com/
-    http://www.marathon.org/story/
-    http://www.gnu.org/
-MYURLS
-
-note:
-Syntax error. Seems that here shall starts from beginning of a line. 
-
-function() {
-    lpr << MYURLS
-    http://www.csua.berkeley.edu/~ranga/
-    http://www.cisco.com/
-    http://www.marathon.org/story/
-    http://www.gnu.org/
-    MYURLS
-}
-
-
-={============================================================================
-*kt_linux_bash_017* sh-redirection
-
-<form>
-command n> file
-command n>> file
-
-<example>
-One of the most common uses of file descriptors is to redirect STDOUT and STDERR
-to separate files.  The basic syntax is
-
-command 1> file1 2> file2
-
-Often the STDOUT file descriptor, 1, is not written, so a shorter form of the
-basic syntax is
-
-command > file1 2> file2
-
-Redirecting STDOUT and STDERR to the 'same' file
-
-list > file 2>&1
-
-n>&m. Here n and m are file descriptors (integers). If you let n=2 and m=1, you
-see that STDERR is redirected to STDOUT. By redirecting STDOUT to a file, you
-also redirect STDERR.
-
-<short>
-list &> file
-
-Bash allows for both standard output and standard error to be redirected to the
-file. This is the equivalent of > FILE 2>&1. note: cannot use tee in this case.
-
-<ex> the all are the same
-prog1 > /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log 2>&1
-prog1 2>&1 | tee /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log
-
-<use-tee>
-prog1 |& tee /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log
-
-
-<>
-$ (ZB_CFG=humax.2100 zb-make-g listprojects) > 2100.log 2>&1
 
 
 ={============================================================================
@@ -3546,53 +3790,61 @@ set
 ={============================================================================
 *kt_linux_bash_024* sh-builtin
 
-4.2 Bash Builtin Commands
+4 Shell Builtin Commands
 
-This section describes builtin commands which are unique to or have been
-extended in Bash. Some of these commands are specified in the POSIX standard. 
+`builtin-commands` are contained within the shell itself. When the name of a
+builtin command is used as the first word of a simple command (see Simple
+    Commands), the shell executes the command directly, without invoking another
+program. Builtin commands are necessary to implement functionality impossible or
+inconvenient to obtain with separate utilities.
 
-{sh-echo}
+Unless otherwise noted, each builtin command documented as accepting `options`
+preceded by ‘-’ accepts ‘--’ to signify the end of the options. 
 
-echo
-
-    echo [-neE] [arg ...]
-
-    Output the args, separated by spaces, terminated with a `newline`. The
-    return status is 0 unless a write error occurs. If -n is specified, the
-    trailing newline is suppressed. If the -e option is given, interpretation of
-    the following backslash-escaped characters is enabled. The -E option
-    disables the interpretation of these escape characters, even on systems
-    where they are interpreted by default. The xpg_echo shell option may be used
-    to dynamically determine whether or not echo expands these escape characters
-    by default. echo does not interpret -- to mean the end of options.
-
-note:
-The `echo` prints out `newline` regardless of value of variable. The following
-prints out value of variable and newline. When variable is not set or do not
-have value, it prints out newline only and it the same as using echo only.
-
-echo $variable
-
-    echo interprets the following `escape-sequences`: 
+The :, true, false, and test builtins do not accept options and do not treat
+‘--’ specially.  The exit, logout, break, continue, let, and shift builtins
+accept and process arguments beginning with ‘-’ without requiring ‘--’. Other
+builtins that accept arguments but are not specified as accepting options
+interpret arguments beginning with ‘-’ as invalid options and require ‘--’ to
+prevent this interpretation. 
 
 
 ={============================================================================
-*kt_linux_bash_024* bash: builtin: exec
+*kt_linux_bash_024* sh-builtin-base
 
+4.1 Bourne Shell Builtins
+
+The following shell builtin commands are inherited from the Bourne Shell. These
+commands are implemented as specified by the POSIX standard. 
+
+{sh-exec}
 exec
 
-exec [-cl] [-a name] [command [arguments]]
+    exec [-cl] [-a name] [command [arguments]]
 
-Two uses:
+    If command is supplied, it `replaces` the shell without creating a new
+    process. 
+    
+    If the -l option is supplied, the shell places a dash at the beginning of
+    the zeroth argument passed to command. This is what the login program does.
+    The -c option causes command to be executed with an empty environment. If -a
+    is supplied, the shell passes name as the zeroth argument to command. 
+    
+    If command cannot be executed for some reason, a non-interactive shell
+    exits, unless the execfail shell option is enabled. In that case, it returns
+    failure. An interactive shell returns failure if the file cannot be
+    executed. If no command is specified, redirections may be used to affect the
+    current shell environment. 
+    
+    If there are no redirection errors, the return status is zero; otherwise the
+    return status is non-zero.
 
-1. If command is supplied, it replaces the shell 'without' creating a new process. If command cannot
-be executed for some reason, a non-interactive shell exits, unless the execfail shell option is
-enabled. In that case, it returns failure. An interactive shell returns failure if the file cannot
-be executed. 
+    // This is the second use? Usecase?
+    // Set redirections for the program to execute or for the current shell. If
+    // only redirections are given, the redirections affect the current shell
+    // without executing any program. 
 
-Replace the shell with a given program (executing it, not as new process)
-
-<example>
+<ex>
 As you can see, the subshell is replaced by echo.
 
 user@host:~$ PS1="supershell$ "
@@ -3602,72 +3854,21 @@ subshell$ exec echo hello
 hello
 supershell$ 
 
-2. If no command is specified, redirections may be used to affect the current shell environment. If
-there are no redirection errors, the return status is zero; otherwise the return status is non-zero.
 
-Set redirections for the program to execute or for the current shell. If only redirections are
-given, the redirections affect the current shell without executing any program. 
+{sh-shift}
+shift
 
+    shift [n]
 
-={============================================================================
-*kt_linux_bash_025* bash: builtin: set
+    Shift the positional parameters `to-the-left` by n. The positional
+    parameters from n+1 ... $# are renamed to $1 ... $#-n. Parameters
+    represented by the numbers $# to $#-n+1 are unset. n must be a non-negative
+    number less than or equal to $#. If n is zero or greater than $#, the
+    positional parameters are not changed. If n is not supplied, it is assumed
+    to be 1. The return status is zero unless n is greater than $# or less than
+    zero, non-zero otherwise.
 
-4.3.1 The Set Builtin
-
-This builtin is so complicated that it deserves its own section. set allows you to change the values
-of shell options and set the positional parameters, or to display the names and values of shell
-variables.
-
-set
-
-    set [--abefhkmnptuvxBCEHPT] [-o option-name] [argument ...]
-    set [+abefhkmnptuvxBCEHPT] [+o option-name] [argument ...]
-
-If no options or arguments are supplied, set displays the names and values of all shell variables
-and functions, sorted according to the current locale, in a format that may be reused as input for
-setting or resetting the currently-set variables. Read-only variables cannot be reset. In POSIX
-mode, only shell variables are listed.
-
-When options are supplied, they set or unset shell attributes. Options, if specified, have the
-following meanings: 
-
--- 
-
-If no arguments follow this option, then the positional parameters are unset. Otherwise, the
-positional parameters are set to the arguments, even if some of them begin with a -.
-
-
-={============================================================================
-*kt_linux_bash_025* bash: builtin: trap
-
-4.1 Bourne Shell Builtins
-
-trap
-
-    trap [-lp] [arg] [sigspec …]
-
-    The commands in arg are to be read and executed when the shell receives signal sigspec. If arg is absent (and there is a single sigspec) or equal to ‘-’, each specified signal’s disposition is reset to the value it had when the shell was started. If arg is the null string, then the signal specified by each sigspec is ignored by the shell and commands it invokes. If arg is not present and -p has been supplied, the shell displays the trap commands associated with each sigspec. If no arguments are supplied, or only -p is given, trap prints the list of commands associated with each signal number in a form that may be reused as shell input. The -l option causes the shell to print a list of signal names and their corresponding numbers. Each sigspec is either a signal name or a signal number. Signal names are case insensitive and the SIG prefix is optional.
-
-    If a sigspec is 0 or EXIT, arg is executed when the shell exits. If a sigspec is DEBUG, the command arg is executed before every simple command, for command, case command, select command, every arithmetic for command, and before the first command executes in a shell function. Refer to the description of the extdebug option to the shopt builtin (see The Shopt Builtin) for details of its effect on the DEBUG trap. If a sigspec is RETURN, the command arg is executed each time a shell function or a script executed with the . or source builtins finishes executing.
-
-    If a sigspec is ERR, the command arg is executed whenever a pipeline (which may consist of a single simple command), a list, or a compound command returns a non-zero exit status, subject to the following conditions. The ERR trap is not executed if the failed command is part of the command list immediately following an until or while keyword, part of the test following the if or elif reserved words, part of a command executed in a && or || list except the command following the final && or ||, any command in a pipeline but the last, or if the command’s return status is being inverted using !. These are the same conditions obeyed by the errexit (-e) option.
-
-    Signals ignored upon entry to the shell cannot be trapped or reset. Trapped signals that are not being ignored are reset to their original values in a subshell or subshell environment when one is created.
-
-    The return status is zero unless a sigspec does not specify a valid signal.
-
-={============================================================================
-*kt_linux_bash_025* bash: builtin: shift
-
-shift [n]
-
-Shift the positional parameters to the left by n. The positional parameters from n+1 … $# are
-renamed to $1 … $#-n. Parameters represented by the numbers $# to $#-n+1 are unset. n must be a
-non-negative number less than or equal to $#. If n is zero or greater than $#, the positional
-parameters are not changed. If n is not supplied, it is assumed to be 1. The return status is zero
-unless n is greater than $# or less than zero, non-zero otherwise.
-
-
+<ex>
 See that use S1 all the way and $# decreases
 
 #!/bin/bash
@@ -3680,7 +3881,6 @@ shift;
 echo "this is 1 $1, num $#"
 shift;
 echo "this is 1 $1, num $#"
-
 
 $ ./sbash.sh 1 2 3 4 5 6 
 this is 1 1, num 6
@@ -3709,19 +3909,171 @@ while [ "$1" != "" ]; do
    shift
 done
 
+
+{sh-trap}
+trap
+
+    trap [-lp] [arg] [sigspec ...]
+
+    The commands in arg are to be read and executed when the shell receives
+    signal sigspec. 
+    
+    If arg is absent (and there is a single sigspec) or equal to ‘-’, each
+    specified signal’s disposition is reset to the value it had when the shell
+    was started. 
+    
+    If arg is the null string, then the signal specified by each sigspec is
+    `ignored` by the shell and commands it invokes. 
+    
+    If arg is not present and -p has been supplied, the shell displays the trap
+    commands associated with each sigspec. If no arguments are supplied, or only
+    -p is given, trap prints the list of commands associated with each signal
+    number in a form that may be reused as shell input. 
+    
+    The -l option causes the shell to print a list of signal names and their
+    corresponding numbers. 
+    
+    Each `sigspec` is either a signal name or a signal number. Signal names are
+    case insensitive and the SIG prefix is optional.
+
+    If a sigspec is 0 or `EXIT`, arg is executed when the `shell-exits`. 
+    
+    If a sigspec is DEBUG, the command arg is executed before every simple
+    command, for command, case command, select command, every arithmetic for
+    command, and before the first command executes in a shell function. Refer to
+    the description of the extdebug option to the shopt builtin (see The Shopt
+        Builtin) for details of its effect on the DEBUG trap. If a sigspec is
+    RETURN, the command arg is executed each time a shell function or a script
+    executed with the . or source builtins finishes executing.
+
+    If a sigspec is ERR, the command arg is executed whenever a pipeline (which
+        may consist of a single simple command), a list, or a compound command
+    returns a non-zero exit status, subject to the following conditions. The ERR
+    trap is not executed if the failed command is part of the command list
+    immediately following an until or while keyword, part of the test following
+    the if or elif reserved words, part of a command executed in a && or || list
+    except the command following the final && or ||, any command in a pipeline
+    but the last, or if the command’s return status is being inverted using !.
+    These are the same conditions obeyed by the errexit (-e) option.
+
+    Signals ignored upon entry to the shell cannot be trapped or reset. Trapped
+    signals that are not being ignored are reset to their original values in a
+    subshell or subshell environment when one is created.
+
+    The return status is zero unless a sigspec does not specify a valid signal.
+
+<ex>
+To execute function clean_up when shell exits and reset sigspec in that
+function.
+
+trap clean_up EXIT
+
+clean_up() {
+    trap - {0..15}
+
+    echo
+    echo "Cleaning up ..."
+
+    # NOTE: Since this is usually run in an interactive shell, Ctrl-C will send
+    #       SIGINT to child processes as well so they might be terminated
+    #       already.
+    echo "Terminating dbussenddaemon ..."
+    kill %?dbussenddaemon &>/dev/null
+}
+
+
 ={============================================================================
-*kt_linux_bash_026* bash: which one when there are script and exe binary in the same dir?
+*kt_linux_bash_024* sh-builtin-extd
 
-The executable binary gets executed.
+4.2 Bash Builtin Commands
+
+This section describes builtin commands which are unique to or have been
+extended in Bash. Some of these commands are specified in the POSIX standard. 
+
+{sh-echo}
+echo
+
+    echo [-neE] [arg ...]
+
+    Output the args, separated by spaces, terminated with a `newline`. The
+    return status is 0 unless a write error occurs. If -n is specified, the
+    trailing newline is suppressed. If the -e option is given, interpretation of
+    the following backslash-escaped characters is enabled. The -E option
+    disables the interpretation of these escape characters, even on systems
+    where they are interpreted by default. The xpg_echo shell option may be used
+    to dynamically determine whether or not echo expands these escape characters
+    by default. echo does not interpret -- to mean the end of options.
+
+note:
+The `echo` prints out `newline` regardless of value of variable. The following
+prints out value of variable and newline. When variable is not set or do not
+have value, it prints out newline only and it the same as using echo only.
+
+echo $variable
+
+    echo interprets the following `escape-sequences`: 
+
+
+{sh-command}
+command
+
+    command [-pVv] command [arguments …]
+
+    Runs command with arguments ignoring any `shell-function` named command.
+    Only shell builtin commands or commands found by searching the PATH are
+    executed. If there is a shell function named ls, running ‘command ls’ within
+    the function will execute the external command ls instead of calling the
+    function recursively. The -p option means to use a default value for PATH
+    that is guaranteed to find all of the standard utilities. The return status
+    in this case is 127 if command cannot be found or an error occurred, and the
+    exit status of command otherwise.
+
+    If either the -V or -v option is supplied, a description of command is
+    printed. The -v option causes a single word indicating the command or file
+    name used to invoke command to be displayed; the -V option produces a more
+    verbose description. In this case, the return status is zero if command is
+    found, and non-zero if not.
+
+<ex>
+if [ -x "$(command -v nexus-inspect)" ]; then
+    echo "Running on a Nexus enabled system"
+
+note: 
+-v returns a full path. On host, -v returns filename so shows the same when use
+which command. That is filename when there it is and null when not.
+
+++ command -v nexus-inspect
++ '[' -x /opt/zinc/bin/nexus-inspect ']'
++ echo 'Running on a Nexus enabled system'
+Running on a Nexus enabled system
 
 
 ={============================================================================
-*kt_linux_bash_027* bash: test on file using which command
+*kt_linux_bash_025* bash: builtin: set
 
-if which ssh-copy-id >/dev/null;
-then
-    ssh-copy-id -i $privatekey root@$stbip || true  # ssh-copy-id always returns failure
-fi
+4.3.1 The Set Builtin
+
+This builtin is so complicated that it deserves its own section. set allows you to change the values
+of shell options and set the positional parameters, or to display the names and values of shell
+variables.
+
+set
+
+    set [--abefhkmnptuvxBCEHPT] [-o option-name] [argument ...]
+    set [+abefhkmnptuvxBCEHPT] [+o option-name] [argument ...]
+
+If no options or arguments are supplied, set displays the names and values of all shell variables
+and functions, sorted according to the current locale, in a format that may be reused as input for
+setting or resetting the currently-set variables. Read-only variables cannot be reset. In POSIX
+mode, only shell variables are listed.
+
+When options are supplied, they set or unset shell attributes. Options, if specified, have the
+following meanings: 
+
+-- 
+
+If no arguments follow this option, then the positional parameters are unset. Otherwise, the
+positional parameters are set to the arguments, even if some of them begin with a -.
 
 
 ={============================================================================
@@ -3806,33 +4158,13 @@ func_D ... kpark@wll1p04345:$
 
 
 ={============================================================================
-*kt_linux_bash_029* bash: variable arithmetic
-
-The both makes the same result.
-
-COUNT=10
-
-while [ $COUNT -gt 0 ]; do
-   echo Value of count is: $COUNT
-   let COUNT=COUNT-1
-done
-
-COUNT=10
-
-while [ $COUNT -gt 0 ]; do
-   echo Value of count is: $COUNT
-   COUNT=$(( $COUNT-1 ))
-done
-
-
-={============================================================================
 *kt_linux_bash_030* sh-interactive-or-not
 
 http://www.gnu.org/software/bash/manual/html_node/Interactive-Shells.html#Interactive-Shells
 
 6.3.1 What is an Interactive Shell?
 
-An interactive shell is one started without non-option arguments, unless -s is
+An `interactive-shell` is one started without non-option arguments, unless -s is
 specified, without specifying the -c option, and whose input and error output
 are both connected to terminals (as determined by isatty(3)), or one started
 with the -i option.
@@ -3850,7 +4182,7 @@ ways.
 
     Startup files are read and executed as described in Bash Startup Files.
 
-    // omitted the rest
+    // ...
 
 
 6.2 Bash Startup Files
@@ -3893,7 +4225,7 @@ should be other way to keep that shell running.
 
 Invoked non-interactively
 
-When Bash is started non-interactively, to run a shell script, for example, it
+When Bash is started non-interactively, to run a `shell-script`, for example, it
 looks for the variable BASH_ENV in the environment, expands its value if it
 appears there, and uses the expanded value as the name of a file to read and
 execute. Bash behaves as if the following command were executed:
@@ -4106,36 +4438,6 @@ if you had typed an "i". Pressing ESC switches you into 'command' mode, where
 
 
 ={============================================================================
-*kt_linux_bash_033* bash: true and false
-
-echo "---------------------"
-
-if [ -n "${ZXXX:-}" ]; then
-    echo "ths is non zero"
-else
-    echo "ths is zero"
-fi
-
-$ ZXXX=1 ./sample.sh 
-ths is non zero
-
-$ ZXXX=true ./sample.sh 
-ths is non zero
-
-$ ZXXX=2 ./sample.sh 
-ths is non zero
-
-$ ZXXX=0 ./sample.sh 
-ths is non zero
-
-$ ZXXX=false ./sample.sh 
-ths is non zero
-
-$ ZXXX= ./sample.sh 
-ths is zero
-
-
-={============================================================================
 *kt_linux_bash_034* bash: wait
 
 How to wait in a bash script for several subprocesses spawned from that script to finish?
@@ -4173,37 +4475,6 @@ wait: wait [id]
     Exit Status:
     Returns the status of ID; fails if ID is invalid or an invalid option is
     given.
-
-
-={============================================================================
-*kt_linux_bash_037* bash: builtin: command
-
-command
-
-command [-pVv] command [arguments …]
-
-Runs command with arguments 'ignoring' any shell function named command. Only shell builtin commands
-or commands found by 'searching' the PATH are executed. If there is a shell function named ls,
-running 'command ls' within the function will execute the external command ls instead of calling the
-    function recursively. The -p option means to use a default value for PATH that is guaranteed to
-    find all of the standard utilities. The return status in this case is 127 if command cannot be
-    found or an error occurred, and the exit status of command otherwise.
-
-If either the -V or -v option is supplied, a description of command is printed. The -v option causes
-a single word indicating the command or file name used to invoke command to be displayed; the -V
-option produces a more verbose description. In this case, the return status is zero if command is
-found, and non-zero if not.
-
-<code>
-if [ -x "$(command -v nexus-inspect)" ]; then
-    echo "Running on a Nexus enabled system"
-
-note: -v returns a full path
-
-++ command -v nexus-inspect
-+ '[' -x /opt/zinc/bin/nexus-inspect ']'
-+ echo 'Running on a Nexus enabled system'
-Running on a Nexus enabled system
 
 
 ={============================================================================
@@ -8003,6 +8274,13 @@ $ hexdump -C -n 100 DTT_Radio1_20150225_1603.ts
 *kt_linux_tool_051* tool-lsof
 
 /opt/zinc/oss/bin/busybox uptime; /opt/zinc/oss/bin/busybox lsof | wc -l
+
+
+={============================================================================
+*kt_linux_tool_051* tool-dirname
+
+dirname - strip last component from file name. eg. /usr/bin/ -> /usr
+readlink - print value of a symbolic link or canonical file name
 
 
 ={============================================================================
@@ -25301,21 +25579,23 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr, int 
 
 
 ={============================================================================
-*kt_linux_core_101*  ipc: pipe and fifo
+*kt_linux_core_101* ipc-pipe
 
 {pipe}
-The pipe is 'unnamed' fifo and is an early form that can be used 'related'-processes such as parent
-and child. In other words, created using fork() call. Linux supports uni-directional pipe or
-half-duplex so need 'two' pipes for read and write.
+The pipe is `unnamed-fifo` and is an early form that can be used
+`related-processes` such as parent and child. In other words, created using
+fork() call. Linux supports uni-directional pipe or half-duplex so need 'two'
+pipes for read and write.
 
 
 <connect-two-process>
 
 $ ls | wc -l
 
-ls (stdout, fd 1)    ->             pipe: unidirectional byte stream    ->    (stdin, fd 0) wc
-                  write end                                             read end
-                  of pipe                                               of pipe
+ls                          pipe                           wc
+(stdout, fd 1)    ->        unidirectional byte stream  -> (stdin, fd 0)
+                  write end                             read end
+                  of pipe                               of pipe
 
 
 <byte-stream-and-sequential> LPI 44.1
@@ -25480,7 +25760,7 @@ After all, the reason that can use pipe between parent/child is that fds are sha
 
 
 ={============================================================================
-*kt_linux_core_102* ipc: way to check pipe fd and setup
+*kt_linux_core_102* ipc-pipe-check-setup
 
 [root@HUMAX 856]# ll /proc/846/fd
 ...
