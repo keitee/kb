@@ -14,6 +14,7 @@
 |kt_linux_bash_000| sh-reference
 *kt_linux_bash_005* sh-quote
 *kt_linux_bash_019* sh-pipeline sh-subshell
+*kt_linux_bash_019* sh-pipeline-case-problem
 *kt_linux_bash_019* sh-list-construct
 *kt_linux_bash_021* sh-script
 *kt_linux_bash_021* sh-exit-status
@@ -24,6 +25,7 @@
 *kt_linux_bash_001* sh-pattern-match
 *kt_linux_bash_001* sh-function
 *kt_linux_bash_001* sh-variable
+*kt_linux_bash_001* sh-variable-array
 *kt_linux_bash_001* sh-expansion
 *kt_linux_bash_001* sh-expansion-brace
 *kt_linux_bash_001* sh-expansion-tilde
@@ -36,20 +38,18 @@
 *kt_linux_bash_001* sh-redirection
 *kt_linux_bash_001* sh-redirection-here
 *kt_linux_bash_001* sh-executing
-|kt_linux_bash_001| bash: history and reverse search
-|kt_linux_bash_013| sh-read
-|kt_linux_bash_015| bash: basename
 |kt_linux_bash_018| bash: ':' command
 |kt_linux_bash_020| bash: list options
-*kt_linux_bash_023* sh-option: invoking options
 *kt_linux_bash_024* sh-builtin
 *kt_linux_bash_024* sh-builtin-base
 *kt_linux_bash_024* sh-builtin-extd
-|kt_linux_bash_025| bash: builtin: set
-|kt_linux_bash_028| bash: bash: builtin: programmable completion
+*kt_linux_bash_025* sh-special-variable
+*kt_linux_bash_023* sh-feature-invoking
 |kt_linux_bash_030| sh-interactive-or-not
-|kt_linux_bash_031| bash: double dash
-*kt_linux_bash_032* sh-readline: edit command line
+*kt_linux_bash_023* sh-command-history
+*kt_linux_bash_032* sh-command-edit
+*kt_linux_bash_032* sh-command-search
+*kt_linux_bash_032* sh-command-readline-init
 |kt_linux_bash_034| bash: wait
 |kt_linux_bash_035| bash: help
 |kt_linux_bash_038| sh-declare
@@ -130,7 +130,7 @@
 *kt_linux_tool_051* tool-hexdump
 *kt_linux_tool_051* tool-uptime
 *kt_linux_tool_051* tool-lsof
-*kt_linux_tool_051* tool-dirname
+*kt_linux_tool_051* tool-dirname tool-basename tool-readlink
 
 *kt_linux_tool_100* tool-gprof
 *kt_linux_tool_100* tool-valgrind
@@ -451,11 +451,14 @@
 *kt_linux_bash_000* sh-reference
 
 http://www.gnu.org/software/bash/
+http://www.gnu.org/software/bash/manual/
+http://www.gnu.org/software/bash/manual/bash.html
+
+http://mywiki.wooledge.org/BashGuide
 
 Advanced Bash-Scripting Guide
 https://wiki.kldp.org/HOWTO/html/Adv-Bash-Scr-HOWTO/
 http://www.tldp.org/LDP/abs/html/
-
 
 Bash Hackers Wiki Frontpage
 http://wiki.bash-hackers.org/start
@@ -564,9 +567,10 @@ is performed after any redirections specified by the command.
 If the pipeline is 'not' executed asynchronously (see `list-construct`), the
 shell 'waits' for all commands in the pipeline to complete.
 
-'each' command in a pipeline is executed in its own `subshell`. The exit status
-  of a pipeline is the exit status of the `last-command` in the pipeline, unless
-  the `pipefail-option` is enabled (see The Set Builtin). 
+*sh-pipeline-subshell*
+`each-command` in a pipeline is executed in its own `subshell`. The exit status
+of a pipeline is the exit status of the `last-command` in the pipeline, unless
+the `pipefail-option` is enabled (see The Set Builtin). 
 
 
 3.7.3 Command Execution Environment
@@ -732,12 +736,157 @@ $ { date;time; } > mylog
 
 
 ={============================================================================
+*kt_linux_bash_019* sh-pipeline-case-problem
+
+The problem is that if see below two lines in order in a log file then flag it
+up as an error.
+
+Line xx: ... > VRM_JOB_START: jtVRM=3, jhVRM=0x3000385
+Line xx: > XTVFS_WriteEx failed,returned value: E_FSSERVER_STATUS_INVALID_ALIGNMENT 290:
+
+The first approach:
+
+scan_for()
+{
+  while read line
+  do
+      echo "$line"
+  done
+}
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
+
+This don't work since sacn_for cannot get piped input.
+
+The second approach:
+
+scan_for()
+{
+  cat x.tmp | while read line
+  do
+      echo "$line"
+  done
+}
+
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" > x.tmp`
+scan_for()
+
+This solves the initial problem but causes the other problem.
+
+scan_for()
+{
+  STARTED=0
+  MATCHED=0
+
+  cat x.tmp | while read line
+  do
+    case $line in
+      *jtVRM=3*)
+          if [ $STARTED -ne 1 ]
+          then
+             STARTED=1;
+             STARTLINE=`echo $line`;
+          fi
+          ;;
+       *XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
+          if [ $STARTED -eq 1 ]
+          then
+             MATCHED=1;
+             LASTLINE=`echo $line`;
+
+             # note: can see variables as expected
+             echo "started = $STARTED, MATCHED=$MATCHED";
+
+          break;
+          fi
+          ;;
+    esac
+  done
+
+  # note: however, see variables are '0' WHY?
+  echo "started = $STARTED";
+  echo "matched = $MATCHED";
+
+  if [[ $STARTED -eq 1 && $MATCHED -eq 1 ]]
+  then
+      echo "$LASTLINE";
+  fi
+}
+
+The $A will have all lines which are echoed from scan_for().
+
+
+The reason:
+
+From *sh-pipeline-subshell*
+
+`each-command` in a pipeline is executed in its own `subshell`. The exit status
+of a pipeline is the exit status of the `last-command` in the pipeline, unless
+the `pipefail-option` is enabled (see The Set Builtin). 
+
+See for more details:
+http://mywiki.wooledge.org/BashFAQ/024
+I set variables in a loop that's in a pipeline. Why do they disappear after the
+loop terminates? Or, why can't I pipe data to read?
+
+Workarounds
+
+1. If the input is a file, a simple redirect will suffice. note: OK. 
+2. Use ProcessSubstitution (Bash/Zsh/Ksh93 only). note: OK 
+http://mywiki.wooledge.org/ProcessSubstitution
+
+#!/bin/bash
+
+scan_for()
+{
+  STARTED=0
+  MATCHED=0
+
+  while read line
+  do
+    case $line in
+      *jtVRM=3*)
+          if [ $STARTED -ne 1 ]
+          then
+             STARTED=1;
+             STARTLINE=`echo $line`;
+          fi
+          ;;
+       *XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
+          if [ $STARTED -eq 1 ]
+          then
+             MATCHED=1;
+             LASTLINE=`echo $line`;
+
+             # note: can get output of variables as expected
+             echo "started = $STARTED, MATCHED=$MATCHED";
+
+          break;
+          fi
+          ;;
+    esac
+  # done < <(cat x.tmp)
+  done < x.tmp
+
+  # note: however, the output of variables are '0'
+  echo "started = $STARTED";
+  echo "matched = $MATCHED";
+}
+
+A=$(scan_for)
+echo "A = $A";
+
+
+={============================================================================
 *kt_linux_bash_019* sh-list-construct
 
 3.2.3 Lists of Commands
 
-A list is a sequence of one or more pipelines separated by one of the operators
-;, &, &&, or ||, and optionally terminated by one of ;, &, or a newline. 
+A list is a sequence of one or more `pipelines` separated by one of the
+operators ;, &, &&, or ||, and optionally terminated by one of ;, &, or a
+newline. 
+
+note: means do on multiple pipelines
 
 <semicolon>
 Commands separated by a ; are executed 'sequentially'; the shell waits for each
@@ -942,8 +1091,8 @@ The exit status of an executed command is the value returned by the waitpid
 system call or equivalent function. Exit statuses fall between 0 and 255,
 though, as explained below, the shell may use values above 125 specially. 
   
-For the shell’s purposes, a command which exits with a zero exit status has
-succeeded. A non-zero exit status indicates failure. This seemingly
+For the shell’s purposes, a command which exits with a `zero-exit-status` has
+`succeeded`. A non-zero exit status indicates failure. This seemingly
 counter-intuitive scheme is used so there is one well-defined way to indicate
 success and a variety of ways to indicate various failure modes. When a command
 terminates on a fatal signal whose number is N, Bash uses the value 128+N as the
@@ -1271,9 +1420,11 @@ echo "exit code after call file test: $?"
 
 `compound-commands` are the shell programming constructs. Each construct begins
 with a reserved word or control operator and is terminated by a corresponding
-reserved word or operator. Any redirections (see Redirections) associated with a
-compound command apply to all commands within that compound command unless
-explicitly overridden.
+reserved word or operator. 
+
+*sh-redirection-on-compound-commands*
+Any redirections associated with a compound command apply to all commands within
+that compound command unless explicitly overridden.
 
 <semicolon-newline>
 In most cases a list of commands in a compound command's description may be
@@ -1342,9 +1493,9 @@ while
 
     while test-commands; do consequent-commands; done
 
-    Execute consequent-commands as long as test-commands has an exit status of
-    `zero`. The return status is the exit status of the last command executed in
-    consequent-commands, or zero if none was executed.
+    Execute consequent-commands as long as test-commands has an
+    `zero-exit-status`. The return status is the exit status of the last command
+    executed in consequent-commands, or zero if none was executed.
 
 <ex>
 while command
@@ -1512,7 +1663,8 @@ case
     that is executed. It’s a common idiom to use ‘*’ as the `final-pattern` to
     define the default case, since that pattern will always match.
 
-    Here is an example using case in a script that could be used to describe one interesting feature of an animal:
+    Here is an example using case in a script that could be used to describe one
+    interesting feature of an animal:
 
     echo -n "Enter the name of an animal: "
     read ANIMAL
@@ -1703,7 +1855,7 @@ test
 
     When the ‘==’ and ‘!=’ operators are used, the string to the right of the
     operator is considered a `pattern` and matched according to the rules
-    described below in Pattern Matching, as if the extglob shell option were
+    described below in `pattern-matching`, as if the extglob shell option were
     enabled. 
     
     note: The ‘=’ operator is identical to ‘==’. 
@@ -1717,12 +1869,42 @@ test
     Any part of the pattern may be quoted to force the quoted portion to be
     matched as a string.
 
-    // An additional binary operator, ‘=~’, is available, with the same
-    // precedence as ‘==’ and ‘!=’. When it is used, the string to the right of
-    // the operator is considered an `extended-regular-expression` and matched
-    // accordingly (as in regex3)). 
-    // ...
-        
+    <sh-regex>
+    An additional binary operator, ‘=~’, is available, with the same precedence
+    as ‘==’ and ‘!=’. When it is used, the string to the right of the operator
+    is considered an `extended-regular-expression` and matched accordingly (as
+        in regex3)). 
+
+    The return value is 0 if the string matches the pattern, and 1 otherwise. 
+    
+    If the regular expression is syntactically incorrect, the conditional
+    expression’s return value is 2. If the shell option `nocasematch` (see the
+        description of shopt in The Shopt Builtin) is enabled, the match is
+    performed without regard to the case of alphabetic characters. Any part of
+    the pattern may be quoted to force the quoted portion to be matched as a
+    string. 
+    
+    `bracket-expressions` in regular expressions must be treated carefully,
+    since normal quoting characters lose their meanings between brackets. If the
+    pattern is stored in a shell variable, quoting the variable expansion forces
+    the entire pattern to be matched as a string. Substrings matched by
+    parenthesized subexpressions within the regular expression are saved in the
+    array variable BASH_REMATCH. The element of BASH_REMATCH with index 0 is the
+    portion of the string matching the entire regular expression.  The element
+    of BASH_REMATCH with index n is the portion of the string matching the nth
+    parenthesized subexpression.
+
+    For example, the following will match a line (stored in the shell variable
+        `line`) if there is a sequence of characters in the value consisting of
+    any number, including zero, of space characters, zero or one instances of
+    ‘a’, then a ‘b’:
+
+    [[ $line =~ [[:space:]]*(a)?b ]]
+    
+    // [[:space:]]*, (a)? and b
+
+    That means values like ‘aab’ and ‘ aaaaaab’ will match, as will a line
+    containing a ‘b’ anywhere in its value. 
 
 note: These are specific to [[ operator.
 
@@ -1833,9 +2015,9 @@ The `special-pattern-characters` have the following meanings:
 *
     Matches any string, including the null string. When the globstar shell
     option is enabled, and ‘*’ is used in a filename expansion context, two
-    adjacent ‘*’s used as a single pattern will match all files and zero or more
-    directories and subdirectories. If followed by a ‘/’, two adjacent ‘*’s will
-    match only directories and subdirectories.  
+    adjacent ‘*’s used as a single pattern will match all files and
+    `zero-or-more` directories and subdirectories. If followed by a ‘/’, two
+    adjacent ‘*’s will match only directories and subdirectories.  
 
 ?
     Matches any single character. 
@@ -1860,15 +2042,22 @@ if set.
       the use of the C locale by setting the LC_COLLATE or LC_ALL environment
       variable to the value ‘C’, or enable the globasciiranges shell option.
 
-    Within ‘[’ and ‘]’, character classes can be specified using the syntax
+    Within ‘[’ and ‘]’, `character-classes` can be specified using the syntax
     [:class:], where class is one of the following classes defined in the POSIX
                standard:
 
     alnum   alpha   ascii   blank   cntrl   digit   graph   lower
     print   punct   space   upper   word    xdigit
 
-    A character class matches any character belonging to that class. The word
+    A character class matches any character belonging to that class. The `word`
     character class matches letters, digits, and the character ‘_’.
+
+    // http://www.gnu.org/software/grep/manual/html_node/Character-Classes-and-Bracket-Expressions.html
+    // ‘[:space:]’
+    // 
+    // Space characters: in the ‘C’ locale, this is tab, newline, vertical tab,
+    // form feed, carriage return, and space. See Usage, for more discussion of
+    // matching newlines.
 
     Within ‘[’ and ‘]’, an equivalence class can be specified using the syntax
     [=c=], which matches all characters with the same collation weight (as
@@ -2225,33 +2414,47 @@ note: uses in sh-function
 The positional parameters are temporarily replaced when a shell function is
 executed (see Shell Functions).
 
-note: use brace to use more parameters than 10
+note: use brace to use more parameters than 10 *sh-brace*
 When a positional parameter consisting of more than a single digit is expanded,
 it must be enclosed in `braces`. 
 
 
-3.4.2 Special Parameters
+3.4.2 Special Parameters *sh-special*
 
 The shell treats several parameters specially. These parameters may only be
 referenced; assignment to them is not allowed. 
 
 *
-($*) Expands to the `positional-parameters`, starting from one. When the
-expansion is not within double quotes, each positional parameter expands to a
-separate word. In contexts where it is performed, those words are subject to
-further word splitting and pathname expansion. 
+($*) Expands to the `positional-parameters`, starting from one. 
 
-When the expansion occurs "within double quotes", it expands to a single word
+When the expansion is `not-within-double-quotes`, each positional parameter
+expands to a separate word. In contexts where it is performed, those words are
+subject to further word splitting and pathname expansion. 
+
+When the expansion occurs `within-double-quotes`, it expands to a `single-word`
 with the value of each parameter separated by the first character of the `IFS`
 special variable. That is, "$*" is equivalent to "$1c$2c..." where c is the
 first character of the value of the IFS variable. If IFS is unset, the
 parameters are separated by spaces. If IFS is null, the parameters are joined
 without intervening separators.
 
-note: "unset" is different from "null"
+note:
+After all, not in double-quote, gets each word for each positional parameter and
+in double-quote, gets a single-word which has all parametes.
 
 <ex>
-This function is to make a single line from a array(list) separated by ":". 
+args2=($*)  # `compound-assignments` in array
+echo $args2 ${args2[0]} ${args2[1]} ${args2[2]}
+
+args3="$*"
+echo $args3
+
+$ ./t_var.sh. 1 2 3 4 5
+1 1 2 3
+1 2 3 4 5
+
+<ex>
+This function is to make a `single-word` from a array(list) separated by ":". 
 
 note:
 Q: How to redirect output from function call? Why use () in the function? To
@@ -2293,6 +2496,12 @@ args=("$@");   # to get 'all' args and set it to array.
 echo ${args[0]} ${args[1]} ${args[2]}
 
 echo $@        # to print all args in a one go
+
+note:
+Both do the same. Why two?
+
+echo $@
+echo $*
 
 
 0
@@ -2375,6 +2584,199 @@ CONST=200
 echo "my const var is $CONST.."
 
 bash: CONST: readonly variable
+
+
+={============================================================================
+*kt_linux_bash_001* sh-variable-array
+
+6.7 Arrays
+
+Bash provides one-dimensional `indexed` and `associative-array` variables. Any
+variable may be used as an indexed array; the `declare` builtin will explicitly
+declare an array. There is no maximum limit on the size of an array, nor any
+requirement that members be indexed or assigned contiguously. Indexed arrays are
+referenced using integers (including arithmetic expressions (see Shell
+      Arithmetic)) and are zero-based; associative arrays use arbitrary strings.
+Unless otherwise noted, indexed array indices must be non-negative integers.
+
+An `indexed-array` is created automatically if any variable is assigned to using
+the syntax
+
+name[subscript]=value
+
+The subscript is treated as an arithmetic expression that must evaluate to a
+number. To explicitly declare an array, use
+
+declare -a name
+
+The syntax
+
+declare -a name[subscript]
+
+is also accepted; the subscript is ignored.
+
+`associative-arrays` are created using
+
+declare -A name.
+
+Attributes may be specified for an array variable using the declare and readonly
+builtins. Each attribute applies to all members of an array.
+
+Arrays are assigned to using `compound-assignments` of the form
+
+name=(value1 value2 ... )
+
+where each value is of the form [subscript]=string. Indexed array assignments do
+not require anything but string. When assigning to indexed arrays, if the
+optional subscript is supplied, that index is assigned to; otherwise the index
+of the element assigned is the last index assigned to by the statement plus one.
+Indexing starts at `zero`.
+
+<ex>
+FRUIT[0]=apple
+FRUIT[1]=banana
+FRUIT[2]=orange
+
+FRUIT=(apple plum blackberry)
+
+
+When assigning to an associative array, the subscript is required.
+
+This syntax is also accepted by the declare builtin. Individual array elements
+may be assigned to using the name[subscript]=value syntax introduced above.
+
+When assigning to an indexed array, if name is subscripted by a negative number,
+that number is interpreted as relative to one greater than the maximum index of
+  name, so negative indices count back from the end of the array, and an index
+  of -1 references the last element.
+
+
+<to-reference> *sh-brace*
+Any element of an array may be referenced using ${name[subscript]}. The `braces`
+are required to avoid conflicts with the shell’s `filename-expansion` operators.
+
+If the subscript is ‘@’ or ‘*’, the word expands to `all-members` of the array
+name. 
+
+These subscripts differ only when the word appears within double quotes. If the
+word is double-quoted, ${name[*]} expands to a `single-word` with the value of
+each array member separated by the first character of the IFS variable, and
+${name[@]} expands each element of name to a separate word. When there are no
+array members, ${name[@]} expands to nothing. If the double-quoted expansion
+occurs within a word, the expansion of the first parameter is joined with the
+beginning part of the original word, and the expansion of the last parameter is
+joined with the last part of the original word. This is `analogous` to the
+expansion of the special parameters ‘@’ and ‘*’. 
+
+
+<ex>
+echo "all = ${FRUIT[*]}"      # single-word which has all
+echo "all = ${FRUIT[@]}"      # same as above
+
+
+<ex>
+farm_hosts=(web03 web04 web05 web06 web07)
+
+for i in ${farm_hosts[@]}; do   # same
+for i in ${farm_hosts[*]}; do   # same
+  su $login -c "scp $httpd_conf_new ${i}:${httpd_conf_path}"
+  su $login -c "ssh $i sudo /usr/local/apache/bin/apachectl graceful"
+done
+
+
+<ex> 
+A cron job that fills an array with the possible candidates, uses date +%W to
+find the week of the year, and does a modulo operation to find the correct
+index. The lucky person gets notified by e-mail.
+
+
+#!/bin/bash
+# This is get-tester-address.sh
+#
+# First, we test whether bash supports arrays. (Support for arrays was only
+# added recently.)
+whotest[0]='test' || (echo 'Failure: arrays not supported in this version of bash.' && exit 2)
+
+#
+# Our list of candidates. (Feel free to add or remove candidates.)
+#
+wholist=(
+  'Bob Smith <bob@example.com>'
+  'Jane L. Williams <jane@example.com>'
+  'Eric S. Raymond <esr@example.com>'
+  'Larry Wall <wall@example.com>'
+  'Linus Torvalds <linus@example.com>'
+)
+
+# Count the number of possible testers. (Loop until we find an empty string.)
+
+count=0
+while [ "x${wholist[count]}" != "x" ]
+do
+   count=$(( $count + 1 ))
+done
+
+# Now we calculate whose turn it is.
+
+week=`date '+%W'`             # The week of the year (0..53).
+week=${week#0}                # Remove possible leading zero.
+let "index = $week % $count"  # week modulo count = the lucky person
+email=${wholist[index]}       # Get the lucky person's e-mail address.
+echo $email                   # Output the person's e-mail address.
+
+This script is then used in other scripts, such as this one, which uses a here
+document:
+
+email=`get-tester-address.sh` # Find who to e-mail.
+hostname=`hostname` # This machine's name.
+
+# Send e-mail to the right person.
+
+mail $email -s '[Demo Testing]' <<EOF
+  The lucky tester this week is: $email
+  Reminder: the list of demos is here:
+  http://web.example.com:8080/DemoSites
+  (This e-mail was generated by $0 on ${hostname}.)
+EOF
+
+
+<ex>
+uri="$1"
+[[ $uri =~ [1-9][0-9]* ]] && uri="${urls[$uri]}"
+
+
+${#name[subscript]} expands to the length of ${name[subscript]}. If subscript is
+‘@’ or ‘*’, the expansion is the number of elements in the array. Referencing an
+array variable without a subscript is equivalent to referencing with a
+`subscript-of-0`. 
+
+If the subscript used to reference an element of an indexed array evaluates to a
+number less than zero, it is interpreted as relative to one greater than the
+maximum index of the array, so negative indices count back from the end of the
+array, and an index of -1 refers to the last element.
+
+An array variable is considered set if a subscript has been assigned a value.
+The null string is a valid value.
+
+It is possible to obtain the keys (indices) of an array as well as the values.
+${!name[@]} and ${!name[*]} expand to the indices assigned in array variable
+name. The treatment when in double quotes is similar to the expansion of the
+special parameters ‘@’ and ‘*’ within double quotes.
+
+The `unset` builtin is used to destroy arrays. unset name[subscript] destroys the
+array element at index subscript. Negative subscripts to indexed arrays are
+interpreted as described above. Care must be taken to avoid unwanted side
+effects caused by filename expansion. unset name, where name is an array,
+removes the entire array. A subscript of ‘*’ or ‘@’ also removes the entire
+  array.
+
+The declare, local, and readonly builtins each accept a -a option to specify an
+indexed array and a -A option to specify an associative array. If both options
+are supplied, -A takes precedence. The read builtin accepts a -a option to
+assign a list of words read from the standard input to an array, and can read
+values from the standard input into individual array elements. The set and
+declare builtins display array values in a way that allows them to be reused as
+input. 
 
 
 ={============================================================================
@@ -2529,6 +2931,22 @@ The following table shows how Bash treats unquoted tilde-prefixes:
     The string that would be displayed by ‘dirs -N’ 
 
 
+6.8.1 Directory Stack Builtins
+
+pushd
+
+    pushd [-n] [+N | -N | dir]
+
+    Save the current directory on the top of the directory stack and then `cd`
+    to dir. With no arguments, pushd exchanges the top two directories.
+
+    -n
+        Suppresses the normal change of directory when adding directories to the
+        stack, so that only the stack is manipulated. 
+
+        note: means no `cd`
+
+
 ={============================================================================
 *kt_linux_bash_001* sh-expansion-parameter
 
@@ -2550,10 +2968,11 @@ expansion, command substitution, or parameter expansion.
 The basic form of parameter expansion is ${parameter}. The value of parameter is
 substituted. 
 
+*sh-brace*
 The parameter is a shell parameter as described above (see *sh-variable*) or an
-array reference (see Arrays). The braces are required when parameter is a
-positional parameter with more than one digit, or when parameter is followed by
-a character that is not to be interpreted as part of its name.
+array reference (see *sh-varaibale-arrays*). The `braces` are required when
+parameter is a positional parameter with more than one digit, or when parameter
+is followed by a character that is not to be interpreted as part of its name.
 
 In each of the cases below, `word` is subject to `tilde-expansion`,
 `parameter-expansion`, `command-substitution`, and arithmetic expansion.
@@ -2751,6 +3170,24 @@ while [ $COUNT -gt 0 ]; do
    echo Value of count is: $COUNT
    COUNT=$(( $COUNT-1 ))
 done
+
+
+6.5 Shell Arithmetic
+
+The shell allows `arithmetic-expressions` to be evaluated, as one of the shell
+expansions or by the `let` and the -i option to the `declare` builtins.
+
+Evaluation is done in fixed-width integers with no check for overflow, though
+division by 0 is trapped and flagged as an error. The operators and their
+precedence, associativity, and values are the same as in the C language. The
+following list of operators is grouped into levels of equal-precedence
+operators. The levels are listed in order of decreasing precedence.
+
+id++ id--
+    variable post-increment and post-decrement
+
+++id --id
+    variable pre-increment and pre-decrement
 
 
 ={============================================================================
@@ -2984,6 +3421,37 @@ prog1 |& tee /home/NDS-UK/parkkt/fosh_build_home/FUSIONOS/log
 $ (ZB_CFG=humax.2100 zb-make-g listprojects) > 2100.log 2>&1
 
 
+<ex>
+How does "done < $1" work? This is `redirection` since:
+
+*sh-redirection-on-compound-commands*
+Any redirections associated with a compound command apply to all commands within
+that compound command unless explicitly overridden.
+
+
+#!/bin/sh
+
+if [ -f "$1" ] ; then
+  i=0
+  while read LINE
+  do
+    i=`echo "$i + 1" | bc`    # essentially, inc i
+    echo "inner $i..."
+  done < "$1"
+  echo $i
+fi
+
+echo $i
+
+$ ./sbash.sh list 
+inner 1...
+inner 2...
+inner 3...
+inner 4...
+4
+4
+
+
 ={============================================================================
 *kt_linux_bash_001* sh-redirection-here
 
@@ -3102,464 +3570,6 @@ the command are set to the arguments supplied, if any.
 5. If this execution fails because the file is not in executable format, and the
 file is not a directory, it is assumed to be a shell script and the shell
 executes it as described in Shell Scripts. 
-
-
-={============================================================================
-*kt_linux_bash_001* bash: history
-
-{erase-duplicates}
-# eliminate the continuous repeated entry across the whole history
-
-export HISTCONTROL=erasedups
-
-<history-per-terminal>
-# in .bash_profile
-echo $SSH_TTY
-export HISTFILE=/home/NDS-UK/parkkt/.bash_history_$(echo $SSH_TTY | cut -f 4 -d'/')
-export HISTFILESIZE=10000
-export HISTSIZE=10000 
-
-note: better to have TTY number in the prompt as well.
-
-
-# run multiple commands from the history
-
-fc [-e ename] [-lnr] [first] [last]
-fc -s [pat=rep] [cmd]
-
-Fix Command. In  the  first form, a range of commands from first to last is selected
-from the history list.  First and last may be specified as a string (to locate  the  last
-command  beginning  with  that string)  or  as  a  number (an index into the history list,
-where a negative number is used as an offset from the current command number).
-
-This is not quite what you want as it will launch an editor first, but that is probably a
-good thing since it gives you a chance to double check that you have the correct commands
-and even edit them using all the capabilities of your favorite editor. Once you save you
-changes and exit the editor, the commands will be run.
-
-e.g.
-
-$ fc 100 120
-
-
-{reverse-search-history}
-http://www.gnu.org/software/bash/manual/html_node/Commands-For-History.html
-
-<C-r> to search backward starting at the current line and moving 'up' through
-the history as necessary. This is an incremental search.
-
-Once you've found the command you have several options:
-
-1. Press enter to run it
-2. <C-r> to cycle through other commands that are filterd out with the letters
-you've typed.
-3. <C-g> to quit the search and back to the command line 'empty'-handed
-4. Press ESC to take one and edit the command.
-
-
-<edit-command-line>
-To set vi mode for editing command line:
-
-8.3.1 Readline Init File Syntax
-
-There are only a few basic constructs allowed in the Readline init file. Blank lines are ignored.
-Lines beginning with a `#' are comments. Lines beginning with a `$' indicate conditional constructs
-(see section 8.3.2 Conditional Init Constructs). Other lines denote variable settings and key
-bindings.
-
-Variable Settings
-You can modify the run-time behavior of Readline by altering the values of variables in Readline
-using the set command within the init file. The syntax is simple:
-
-    set variable value
-
-Here, for example, is how to change from the default Emacs-like key binding to use vi line editing
-commands:
-
-    set editing-mode vi
-
-To set binding to up/down key to history search:
-
-# ~/.inputrc
-"\e[A": history-search-backward
-"\e[B": history-search-forward
-
-or equivalently,
-
-# ~/.bashrc
-bind '"\e[A": history-search-backward'
-bind '"\e[B": history-search-forward'
-
-Normally, Up and Down are bound to the Readline functions previous-history and next-history
-respectively. I prefer to bind PgUp/PgDn to these functions, instead of displacing the normal
-operation of Up/Down.
-
-# ~/.inputrc
-"\e[5~": history-search-backward
-"\e[6~": history-search-forward
-
-After you modify ~/.inputrc, restart your shell or use Ctrl+X, Ctrl+R to tell it to re-read
-~/.inputrc. By the way, if you're looking for relevant documentation: Bash uses The GNU Readline
-Library for the shell prompt and history.
-
-
-={============================================================================
-*kt_linux_bash_003* bash: array
-
-<indexed-and-associateive>
-Bash provides one-dimensional indexed and associative array variables. Indexed arrays are referenced
-using integers and are zero-based; associative arrays use arbitrary strings.
-
-An indexed array is created automatically if any variable is assigned to using the syntax
-
-name[subscript]=value
-
-The subscript is treated as an arithmetic expression that must 'evaluate' to a number. 
-note: evaluates which means subcript can be a variable.
-
-To explicitly declare an array, use
-
-declare -a name
-
-Associative arrays are created using
-
-declare -A name.
-
-Attributes may be specified for an array variable using the declare and readonly builtins. Each
-attribute applies to all members of an array.
-
-Arrays are assigned to using compound assignments of the form
-
-name=(value1 value2 ... )
-
-where each value is of the form [subscript]=string. Indexed array assignments do not require
-anything but string. When assigning to indexed arrays, if the optional subscript is supplied, that
-index is assigned to; otherwise the index of the element assigned is the last index assigned to by
-the statement plus one. Indexing starts at 'zero'. 
-
-
-FRUIT[0]=apple
-FRUIT[1]=banana
-FRUIT[2]=orange
-
-Or,
-
-FRUIT=(apple plum blackberry)
-
-
-<reference>
-Any element of an array may be referenced using ${name[subscript]}. The braces are required to avoid
-conflicts with the shell's filename expansion operators. 
-
-If the subscript is ‘@’ or ‘*’, the word expands to all members of the array name. These subscripts
-differ 'only' when the word appears within double quotes. If the word is double-quoted, ${name[*]}
-expands to a single word with the value of each array member separated by the first character of the
-    IFS variable, and ${name[@]} expands each element of name to a separate word. 
-
-note: the difference is [*] uses IFS but [@] is not as with "special parameters"
-
-When there are no array members, ${name[@]} expands to nothing.
-If the double-quoted expansion occurs within a word, the expansion of the first parameter is joined
-with the beginning part of the original word, and the expansion of the last parameter is joined with
-the last part of the original word. This is analogous to the expansion of the special parameters ‘@’
-and ‘*’. ${#name[subscript]} expands to the length of ${name[subscript]}. If subscript is ‘@’ or
-‘*’, the expansion is the number of elements in the array. 
-
-Referencing an array variable without a subscript is equivalent to referencing with a subscript of 0. 
-
-If the subscript used to reference an element of an indexed array evaluates to a number less than
-zero, it is interpreted as relative to one greater than the maximum index of the array, so negative
-indices count back from the end of the array, and an index of -1 refers to the last element. 
-
-
-echo "idx 0 = ${FRUIT[0]}"    # idx 0 = apple. just a string
-echo "idx 1 = ${FRUIT[1]}"
-echo "idx 2 = ${FRUIT[2]}"
-
-echo "all = ${FRUIT[*]}"      # to reference all
-echo "all = ${FRUIT[@]}"      # same as above. note: this is to array'fy' from a long string.
-
-
-uri="$1"
-[[ $uri =~ [1-9][0-9]* ]] && uri="${urls[$uri]}"
-
-
-<example>
-farm_hosts=(web03 web04 web05 web06 web07)
-
-for i in ${farm_hosts[@]}; do
-  su $login -c "scp $httpd_conf_new ${i}:${httpd_conf_path}"
-  su $login -c "ssh $i sudo /usr/local/apache/bin/apachectl graceful"
-done
-
-<example> for use of array and here document
-A cron job that fills an array with the possible candidates, uses date +%W to find the week of the
-year, and does a modulo operation to find the correct index. The lucky person gets notified by
-e-mail.
-
-
-#!/bin/bash
-# This is get-tester-address.sh
-#
-# First, we test whether bash supports arrays. (Support for arrays was only added recently.)
-#
-whotest[0]='test' || (echo 'Failure: arrays not supported in this version of bash.' && exit 2)
-#
-# Our list of candidates. (Feel free to add or
-# remove candidates.)
-#
-wholist=(
-  'Bob Smith <bob@example.com>'
-  'Jane L. Williams <jane@example.com>'
-  'Eric S. Raymond <esr@example.com>'
-  'Larry Wall <wall@example.com>'
-  'Linus Torvalds <linus@example.com>'
-)
-#
-# Count the number of possible testers.
-# (Loop until we find an empty string.)
-#
-count=0
-while [ "x${wholist[count]}" != "x" ]
-do
-   count=$(( $count + 1 ))
-done
-#
-# Now we calculate whose turn it is.
-#
-week=`date '+%W'`             # The week of the year (0..53).
-week=${week#0}                # Remove possible leading zero.
-let "index = $week % $count"  # week modulo count = the lucky person
-email=${wholist[index]}       # Get the lucky person's e-mail address.
-echo $email                   # Output the person's e-mail address.
-
-This script is then used in other scripts, such as this one, which uses a here document:
-
-email=`get-tester-address.sh` # Find who to e-mail.
-hostname=`hostname` # This machine's name.
-
-# Send e-mail to the right person.
-
-mail $email -s '[Demo Testing]' <<EOF
-  The lucky tester this week is: $email
-  Reminder: the list of demos is here:
-  http://web.example.com:8080/DemoSites
-  (This e-mail was generated by $0 on ${hostname}.)
-EOF
-
-
-{unset}
-The unset built-in is used to destroy arrays or member variables of an array:
-
-
-={============================================================================
-*kt_linux_bash_013* sh-read
-
-The read command in bash is a magic builtin. It reads a line from stdin and
-assigns its contents to shell variables. It also has a return code when EOF is
-reached, allowing a clean exit from a loop. 
-
-A common use of input redirection in conjunction with the read command is the
-reading of a file one line at a time using the while loop.
-
-<ex>
-Reads a line at a time.
-
-#!/bin/bash
-
-cat list | while read f; do
-  echo "line $f"
-done
-
-
-<ex> 
-Read three tokens from a line and echo the second.
-
-$ grep 'sda' DF.LOG | grep 'FAT'
-/dev/sda1              63   976751999   488375968   1 FAT12
-
-$ echo "/dev/sda1              63   976751999   488375968   1 FAT12" | \
-    while read a b c; do echo $b; done
-63
-
-In the script:
-
-A=`grep 'sda' $F | grep 'FAT' | while read a b c;do echo $b;done`
-
-
-<ex>
-# what it's trying to do is that search through the same errors in logs which
-# was uploaded in Feburary and was under translation. For example,
-# translation/Zone9-Box5_Feb_18_09_38_42b3e5c9130e1d758acdc71bb9d12b2a
-
-ls translation/ \
-    | grep Feb | while read x; do pushd -n translation/$x;
-    pwd; egrep --color -ano 'btreePageFromDbPage' .detailed_output; popd -n; 
-    done 
-
-note: 
-WHY? pushd -n   
-
-Suppresses the normal change of directory when adding directories to the stack,
-           so that only the stack is manipulated. 
-
-
-{read-and-sub-process}
-
-<example> This cause the creation of sub process?
-while read LINE
-do
-   ... # manipulate file here
-done < file
-
-
-<ex>
-#!/bin/sh
-if [ -f "$1" ] ; then
-  i=0
-  while read LINE
-  do
-    i=`echo "$i + 1" | bc`
-    echo "inner $i..."
-  done < "$1"
-  echo $i
-fi
-
-echo $i
-
-$ ./sbash.sh list 
-inner 1...
-inner 2...
-inner 3...
-inner 4...
-4
-4
-
-note: in the original text, it got 0 than 4 since there is a sub-process
-created. However, when run it on PC linux, got 4 as shown. Is it difference
-between PC and embedded shell? Seems not since the below example seems to be run
-on build server.
-
-
-<ex>
-scan_for()
-{
-  while read line
-  do
-      echo "$line"
-  done
-}
-
-A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
-
-
-This example cannot get output inside a function. So make a changes to:
-
-scan_for()
-{
-  cat x.tmp | while read line
-  do
-      echo "$line"
-  done
-}
-
-A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" > x.tmp`
-scan_for()
-
-This enables us to use echo to get output but causes the other problem.
-
-scan_for()
-{
-  STARTED=0
-  MATCHED=0
-
-  # export STARTED MATCHED LASTLINE
-
-  cat x.tmp | while read line
-  do
-    case $line in
-      *jtVRM=3*)
-          if [ $STARTED -ne 1 ]
-          then
-             STARTED=1;
-             STARTLINE=`echo $line`;
-          fi
-          ;;
-       *XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
-          if [ $STARTED -eq 1 ]
-          then
-             MATCHED=1;
-             LASTLINE=`echo $line`;
-
-             # note: can get output of variables as expected
-             echo "started = $STARTED, MATCHED=$MATCHED";
-
-          break;
-          fi
-          ;;
-    esac
-  done
-
-  # note: however, the output of variables are '0'
-  echo "started = $STARTLINE";
-  echo "matched = $LASTLINE";
-
-  if [[ $STARTED -eq 1 && $MATCHED -eq 1 ]]
-  then
-      echo "$LASTLINE";    # note: here
-  fi
-}
-
-$ ./PicassoShutdownFail job.nds
-started = 1, MATCHED=1
-started = 0
-matched = 0
-started = 0
-matched = 0
-
-The reason is that "That's a tricky one, because the "while read line do done"
-spawns a subshell." So use "echo variable" inside the loop to make it available
-after the loop. But still not able to see the output inside the loop.
-
-A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
-echo "A = $A";
-
-So A will have all lines which are ecohed from the subshell 
-
-
-$ ./PicassoShutdownFail job.nds
---
-A = started = 1, MATCHED=1
-
-started = 2:1801:NDS: ^[08:14:11]0946714451.604390 !MIL -VRMS < p:000000b7 t:2b933100 T:VRM_SRV
-M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x3000385
-
-matched = 290:243541:NDS: ^[09:11:44]0946717904.242499 !FATAL -MSM_MS < p:000000b7 t:0144ce00
-T:FS_WT_THREAD1 M:fs_server.c F:PerformWrite L:01943 > XTVFS_WriteEx failed,returned value:
-E_FSSERVER_STATUS_INVALID_ALIGNMENT 290:243541:NDS: ^[09:11:44]0946717904.242499 !FATAL -MSM_MS <
-p:000000b7 t:0144ce00 T:FS_WT_THREAD1 M:fs_server.c F:PerformWrite L:01943 > XTVFS_WriteEx
-failed,returned value: E_FSSERVER_STATUS_INVALID_ALIGNMENT
-
-started = 1, MATCHED=1 started = 2 Time:[08:14:11]0946714451,  VRM_JOB_START: jtVRM=3 Picasso not
-shutting down properly - maybe Jira SI-3770
-
-
-={============================================================================
-*kt_linux_bash_015* bash: basename
-
-$ dirname /home/kt/kb
-/home/kt
-$ basename /home/kt/kb
-kb
-
-# DESCRIPTION
-# Print NAME with any leading directory components removed. If 'specified', also remove a trailing
-# SUFFIX.
-
-$ basename cfgversion.out  
-cfgversion.out
-$ basename cfgversion.out .out
-cfgversion
 
 
 ={============================================================================
@@ -3694,97 +3704,6 @@ restricted_shell	off
 shift_verbose  	off
 sourcepath     	on
 xpg_echo       	off
-
-
-={============================================================================
-*kt_linux_bash_023* sh-option: invoking options
-
-6.1 Invoking Bash
-
-bash [long-opt] 
-    [-ir] [-abefhkmnptuvxdBCDHP] [-o option] [-O shopt_option] [argument ...]
-bash [long-opt] 
-    [-abefhkmnptuvxdBCDHP] [-o option] [-O shopt_option] -c string [argument
-    ...]
-bash [long-opt] 
-    -s [-abefhkmnptuvxdBCDHP] [-o option] [-O shopt_option] [argument ...]
-
-All of the single-character options used with the set builtin (see The Set
-        Builtin) can be used as options when the shell is invoked. 
-
-In addition, there are several multi-character options that you can use. These
-options must appear on the 'command' line before the single-character options to
-be recognized. 
-
-
-There are several single-character options that may be supplied at invocation
-which are not available with the set builtin.
-
--i
-
-    Force the shell to run interactively. Interactive shells are described in
-    Interactive Shells.
-
-
-4.3.1 The Set Builtin
-
-This builtin is so complicated that it deserves its own section. set allows you
-to change the values of shell options and set the positional parameters, or to
-display the names and values of shell variables.
-
-set
-
-    set [--abefhkmnptuvxBCEHPT] [-o option-name] [argument …]
-    set [+abefhkmnptuvxBCEHPT] [+o option-name] [argument …]
-
-    If no options or arguments are supplied, set displays the names and values
-    of all shell variables and functions, sorted according to the current
-    locale, in a format that may be reused as input for setting or resetting the
-    currently-set variables. Read-only variables cannot be reset. In POSIX mode,
-    only shell variables are listed.
-
-    When options are supplied, they set or unset shell attributes. Options, if
-    specified, have the following meanings: 
-
--e
-
-    Exit immediately if a pipeline (see Pipelines), which may consist of a
-    single simple command (see Simple Commands), a list (see Lists), or a
-    compound command (see Compound Commands) returns a non-zero status. The
-    shell does not exit if the command that fails is part of the command list
-    immediately following a while or until keyword, part of the test in an if
-    statement, part of any command executed in a && or || list except the
-    command following the final && or ||, any command in a pipeline but the
-    last, or if the command’s return status is being inverted with !. If a
-    compound command other than a subshell returns a non-zero status because a
-    command failed while -e was being ignored, the shell does not exit. A trap
-    on ERR, if set, is executed before the shell exits.
-
-    This option applies to the shell environment and each subshell environment
-    separately (see Command Execution Environment), and may cause subshells to
-    exit before executing all the commands in the subshell.
-
-    If a compound command or shell function executes in a context where -e is
-    being ignored, none of the commands executed within the compound command or
-    function body will be affected by the -e setting, even if -e is set and a
-    command returns a failure status. If a compound command or shell function
-    sets -e while executing in a context where -e is ignored, that setting will
-    not have any effect until the compound command or the command containing the
-    function call completes.
-
-
--x
-
-    Print a trace of simple commands, for commands, case commands, select
-    commands, and arithmetic for commands and their arguments or associated word
-    lists after they are expanded and before they are executed. The value of the
-    PS4 variable is expanded and the resultant value is printed before the
-    command and its expanded arguments.
-
-
-<ex>
-# in the script
-#!/bin/bash -eix
 
 
 ={============================================================================
@@ -4048,113 +3967,238 @@ which command. That is filename when there it is and null when not.
 Running on a Nexus enabled system
 
 
+{sh-read}
+read
+
+    read [-ers] [-a aname] [-d delim] [-i text] [-n nchars]
+        [-N nchars] [-p prompt] [-t timeout] [-u fd] [`name` ...]
+
+    One line is read from the `standard-input`, or from the file descriptor fd
+    supplied as an argument to the -u option, and the first word is assigned to
+    the first `name`, the second word to the second name, and so on, with leftover
+    words and their intervening separators assigned to the last name. If there
+    are fewer words read from the input stream than names, the remaining names
+    are assigned empty values. 
+    
+    The characters in the value of the IFS variable are used to split the line
+    into words using the same rules the shell uses for expansion (described
+        above in Word Splitting). The backslash character ‘\’ may be used to
+    remove any special meaning for the next character read and for line
+    continuation. If no names are supplied, the line read is assigned to the
+    variable REPLY. 
+    
+    The return code is `zero-exit-status`, unless end-of-file is encountered,
+    read times out (in which case the return code is greater than 128), a
+    variable assignment error (such as assigning to a readonly variable) occurs,
+    or an invalid file descriptor is supplied as the argument to -u. 
+
+
+<ex>
+A common use of input redirection in conjunction with the read command is the
+reading of a file one line at a time using the while loop.
+
+#!/bin/bash
+
+cat list | while read f; do
+  echo "line $f"
+done
+
+
+<ex> 
+Get the second word from input line
+
+$ grep 'sda' DF.LOG | grep 'FAT'
+/dev/sda1              63   976751999   488375968   1 FAT12
+
+$ echo "/dev/sda1              63   976751999   488375968   1 FAT12" | \
+    while read a b c; do echo $b; done
+63
+
+In the script:
+
+A=`grep 'sda' $F | grep 'FAT' | while read a b c;do echo $b;done`
+
+
+<ex>
+To search through the same errors in logs which was uploaded in Feburary and was
+under translation. For example, translation/Zone9-Box5_Feb_18_09_38_42b3e5c91
+
+ls translation/ \
+    | grep Feb | while read x; do pushd -n translation/$x;
+    pwd; egrep --color -ano 'btreePageFromDbPage' .detailed_output; popd -n; 
+    done 
+
+WHY? Since "pushd -n" do not `cd` and means runs those command on the parent?   
+
+
 ={============================================================================
-*kt_linux_bash_025* bash: builtin: set
+*kt_linux_bash_025* sh-special-variable
+
+5.1 Bourne Shell Variables
+
+Bash uses certain shell variables in the same way as the Bourne shell. In some
+cases, Bash assigns a default value to the variable. 
+
+PATH
+    A `colon-separated` list of directories in which the shell looks for
+    commands. A zero-length (null) directory name in the value of PATH indicates
+    the current directory. A null directory name may appear as two adjacent
+    colons, or as an initial or trailing colon.
+
+PS1
+    The primary prompt string. The default value is ‘\s-\v\$ ’. See Controlling
+    the Prompt(6.9 Controlling the Prompt), for the complete list of escape
+    sequences that are expanded before PS1 is displayed.
+
+PS2
+    The secondary prompt string. The default value is ‘> ’.
+
+
+5.2 Bash Variables
+
+These variables are set or used by Bash, but other shells do not normally treat
+them specially. 
+
+
+={============================================================================
+*kt_linux_bash_023* sh-feature-invoking
+
+<ex>
+# in the script
+#!/bin/bash -eix
+
+
+6.1 Invoking Bash
+
+bash [long-opt] 
+    [-ir] [-abefhkmnptuvxdBCDHP] [-o option] [-O shopt_option] [argument ...]
+bash [long-opt] 
+    [-abefhkmnptuvxdBCDHP] [-o option] [-O shopt_option] -c string [argument
+    ...]
+bash [long-opt] 
+    -s [-abefhkmnptuvxdBCDHP] [-o option] [-O shopt_option] [argument ...]
+
+All of the `single-character` options used with the `set` builtin can be used as
+options when the shell is invoked. 
+
+In addition, there are several multi-character options that you can use. These
+options must appear on the 'command' line before the single-character options to
+be recognized. 
+
+--debugger
+    Arrange for the debugger profile to be executed before the shell starts.
+    Turns on extended debugging mode (see The Shopt Builtin for a description of
+        the extdebug option to the shopt builtin).
+
+    note: http://bashdb.sourceforge.net/bashdb.html
+
+There are several single-character options that may be supplied at invocation
+which are not available with the `set` builtin. 
+
+-i
+    Force the shell to run interactively. Interactive shells are described in
+    Interactive Shells.
+
+
+{end-of-option}
+--
+    A -- signals the `end-of-options` and disables further option processing.
+    Any arguments after the -- are treated as filenames and arguments. 
+
+<ex>
+From the below command line, what is "--"? The "--" signify the `end-of-options`
+
+xxx.sh -o humax.1000 -- -r
+
+xxx.sh:
+   ...
+	script-two "$@" "$host"
+
+So the "-r" is passed to script-two as `argument` which is from xxx.sh
+
+<ex>
+This syntax ensures that you can run commands on the remote server without ssh
+parsing them:
+
+ssh nixcraft@server1.cyberciti.biz -- command1 --arg1 --arg2
+
+The above syntax tell ssh not try to parse --arg1 and --arg2 after -- command
+line options. This ensures that command1 will accept --arg1 and --arg2 as
+arguments.
+
+# safe examples
+ssh nixcraft@server1.cyberciti.biz -- --commandName --arg1 --arg2
+
+This kind of behavior is mostly defined and handled by the ssh command and not
+by your bash/ksh/csh shell. This is also true for many other commands. 
+
+For example you can not create or view a file named --file or -f using cat
+command
+
+# fail
+cat --file    # cat: unrecognized option '--f'
+cat -f        # cat: invalid option -- 'f'
+
+Instead try passing double dash "--" to instruct cat command not to try to parse
+what comes after command line options:
+
+# works
+cat -- --file
+cat -- -f
+
 
 4.3.1 The Set Builtin
 
-This builtin is so complicated that it deserves its own section. set allows you to change the values
-of shell options and set the positional parameters, or to display the names and values of shell
-variables.
+This builtin is so complicated that it deserves its own section. `set` allows
+you to change the values of shell options and set the positional parameters, or
+to display the names and values of shell variables.
 
 set
 
     set [--abefhkmnptuvxBCEHPT] [-o option-name] [argument ...]
     set [+abefhkmnptuvxBCEHPT] [+o option-name] [argument ...]
 
-If no options or arguments are supplied, set displays the names and values of all shell variables
-and functions, sorted according to the current locale, in a format that may be reused as input for
-setting or resetting the currently-set variables. Read-only variables cannot be reset. In POSIX
-mode, only shell variables are listed.
+If no options or arguments are supplied, `set` displays the names and values of
+all shell variables and functions, sorted according to the current locale, in a
+format that may be reused as input for setting or resetting the currently-set
+variables. Read-only variables cannot be reset. In POSIX mode, only shell
+variables are listed.
 
-When options are supplied, they set or unset shell attributes. Options, if specified, have the
-following meanings: 
+When options are supplied, they set or unset shell attributes. Options, if
+specified, have the following meanings: 
 
--- 
+-e
+    Exit immediately if a pipeline (see Pipelines), which may consist of a
+    single simple command (see Simple Commands), a list (see Lists), or a
+    compound command (see Compound Commands) returns a non-zero status. The
+    shell does not exit if the command that fails is part of the command list
+    immediately following a while or until keyword, part of the test in an if
+    statement, part of any command executed in a && or || list except the
+    command following the final && or ||, any command in a pipeline but the
+    last, or if the command’s return status is being inverted with !. If a
+    compound command other than a subshell returns a non-zero status because a
+    command failed while -e was being ignored, the shell does not exit. A trap
+    on ERR, if set, is executed before the shell exits.
 
-If no arguments follow this option, then the positional parameters are unset. Otherwise, the
-positional parameters are set to the arguments, even if some of them begin with a -.
+    This option applies to the shell environment and each subshell environment
+    separately (see Command Execution Environment), and may cause subshells to
+    exit before executing all the commands in the subshell.
 
+    If a compound command or shell function executes in a context where -e is
+    being ignored, none of the commands executed within the compound command or
+    function body will be affected by the -e setting, even if -e is set and a
+    command returns a failure status. If a compound command or shell function
+    sets -e while executing in a context where -e is ignored, that setting will
+    not have any effect until the compound command or the command containing the
+    function call completes.
 
-={============================================================================
-*kt_linux_bash_028* bash: builtin: programmable completion
+-x
+    Print a trace of simple commands, for commands, case commands, select
+    commands, and arithmetic for commands and their arguments or associated word
+    lists after they are expanded and before they are executed. The value of the
+    PS4 variable is expanded and the resultant value is printed before the
+    command and its expanded arguments.
 
-https://www.gnu.org/software/bash/manual/html_node/Programmable-Completion-Builtins.html
-
-Three builtin commands are available to manipulate the programmable completion facilities: one to
-specify how the arguments to a particular command are to be completed, and two to modify the
-completion as it is happening.
-
-compgen
-
-compgen [option] [word]
-
-Generate possible completion matches for word according to the options, which may be any option
-accepted by the complete builtin with the exception of -p and -r, and write the matches to the
-standard output. 
-
-The matches will be generated in the same way as if the programmable completion code had generated
-them directly from a completion specification with the same flags. If word is specified, only those
-completions matching word will be displayed.
-
-The return value is true unless an invalid option is supplied, or no matches were generated.
-
-note: compgen is the same as complete command but limited. use to 'generate' matches.
-
-complete
-
-complete [-abcdefgjksuv] [-o comp-option] [-DE] [-A action] [-G globpat] [-W wordlist]
-    [-F function] [-C command] [-X filterpat]
-    [-P prefix] [-S suffix] name [name ¿]
-    complete -pr [-DE] [name ...
-
--A action
-The action may be one of the following to generate a list of possible completions: 
-
-function    Names of shell functions.
-
-<example>
-#!/bin/bash
-# BASH FUNCTIONS CAN BE DECLARED IN ANY ORDER
-
-function func_B {
-  echo "{ fb"
-  echo Function B.
-  echo "} fb"
-}
-
-function func_A {
-  echo "{ fa"
-  echo $1
-  echo "} fa"
-}
-
-function func_D {
-  echo "{ fd"
-  echo Function D.
-  echo "} fd"
-}
-
-# function function_C {
-function_C () {
-  echo "{ fc"
-  echo $1
-  echo "} fc"
-}
-
-## foreach test
-for test_fun in $(compgen -A function func_); do
-
-  echo -e -n "\n$test_fun ... "
-
-done
-
-
-func_D ... kpark@wll1p04345:$ ./sample.sh 
-
-func_A ... 
-func_B ... 
-func_D ... kpark@wll1p04345:$ 
 
 
 ={============================================================================
@@ -4295,77 +4339,87 @@ waiting for input that never comes.
 
 
 ={============================================================================
-*kt_linux_bash_031* bash: double dash
+*kt_linux_bash_023* sh-command-history
 
-For example, from the below command line, what is "--"?
+9.1 Bash History Facilities
 
-xxx.sh -o humax.1000 -- -r
+The value of the HISTSIZE shell variable is used as the number of commands to
+save in a history list.
 
-The "--" signify the end of 'options'.
+When the shell starts up, the history is initialized from the file named by the
+HISTFILE variable (default ~/.bash_history). The file named by the value of
+HISTFILE is truncated, if necessary, to contain no more than the number of lines
+specified by the value of the HISTFILESIZE variable. When a shell with history
+enabled exits, the last $HISTSIZE lines are copied from the history list to the
+file named by $HISTFILE. If the histappend shell option is set (see Bash
+    Builtins), the lines are appended to the history file, otherwise the history
+file is overwritten. If HISTFILE is unset, or if the history file is unwritable,
+the history is not saved. After saving the history, the history file is
+  truncated to contain no more than $HISTFILESIZE lines. If HISTFILESIZE is
+  unset, or set to null, a non-numeric value, or a numeric value less than zero,
+the history file is not truncated.
 
-4.3.1 The Set Builtin
 
-set [--abefhkmnptuvxBCEHPT] [-o option-name] [argument …]
+{erase-duplicates}
+export HISTCONTROL=erasedups
 
--- 
+5.2 Bash Variables
 
-If no arguments follow this option, then the positional parameters are unset. Otherwise, the
-positional parameters are set to the arguments, even if some of them begin with a ‘-’.
+HISTCONTROL
 
-$ set -- 1 2 3 4 5 6 7 8 9 0 a b c d e f g h
-$ echo ${@:7}
-7 8 9 0 a b c d e f g h
-$ echo ${@:7:0}
+    A colon-separated list of values controlling how commands are saved on the
+    history list. If the list of values includes ‘ignorespace’, lines which
+    begin with a space character are not saved in the history list. A value of
+    ‘ignoredups’ causes lines which match the previous history entry to not be
+    saved. A value of ‘ignoreboth’ is shorthand for ‘ignorespace’ and
+    ‘ignoredups’. A value of `erasedups` causes all previous lines matching the
+    current line to be removed from the history list before that line is saved.
+    Any value not in the above list is ignored. If HISTCONTROL is unset, or does
+    not include a valid value, all lines read by the shell parser are saved on
+    the history list, subject to the value of HISTIGNORE. The second and
+    subsequent lines of a multi-line compound command are not tested, and are
+    added to the history regardless of the value of HISTCONTROL.
 
-$ echo ${@:7:2}
-7 8
 
-The double dash "--" means "end of command line flags" i.e. it tells ssh command not to try to parse
-what comes after command line options. You will see something as follows when you use gcutil ssh
-vmNameHere python wrapper. It will display and execute ssh as follows:
+<history-per-terminal>
+# in .bash_profile
+echo $SSH_TTY
+export HISTFILE=/home/NDS-UK/parkkt/.bash_history_$(echo $SSH_TTY | cut -f 4 -d'/')
+export HISTFILESIZE=10000
+export HISTSIZE=10000 
 
-ssh -o UserKnownHostsFile=/dev/null -o CheckHostIP=no -o StrictHostKeyChecking=no -i
-/Users/vivek/.ssh/google_compute_engine -A -p 22 nixcraft@server1.cyberciti.biz --
+note: better to have TTY number in the prompt as well.
 
-This syntax ensures that you can run commands on the remote server without ssh parsing them:
 
-ssh nixcraft@server1.cyberciti.biz -- command1 --arg1 --arg2
+9.2 Bash History Builtins
 
-The above syntax tell ssh not try to parse --arg1 and --arg2 after -- command line options. This
-ensures that command1 will accept --arg1 and --arg2 as arguments.
+Bash provides two builtin commands which manipulate the history list and history
+file.
 
-## safe examples ##
-ssh nixcraft@server1.cyberciti.biz -- --commandName --arg1 --arg2
+fc
 
-This kind of behavior is mostly defined and handled by the ssh command and not by your bash/ksh/csh
-shell. This is also true for many other commands. For example you can not create or view a file
-named --file or -f using cat command
+    fc [-e ename] [-lnr] [first] [last]
+    fc -s [pat=rep] [command]
 
-## fail ##
-cat --file
-cat -f
+This is not quite what you want as it will launch an editor first, but that is
+probably a good thing since it gives you a chance to double check that you have
+the correct commands and even edit them using all the capabilities of your
+favorite editor. Once you save you changes and exit the editor, the commands
+will be run.
 
-Instead try passing double dash "--" to instruct cat command not to try to parse what comes after
-command line options:
+$ fc 100 120
 
-## works ##
-cat -- --file
-cat -- -f
+In the second form, command is re-executed after each instance of pat in the
+selected command is replaced by rep. command is intepreted the same as first
+above.
 
-<example>
-Can be used to pass args to a sub script:
-
-script-one -o h.1000 -- -r
-
-script-one:
-   ...
-	script-two "$@" "$host"
-
-So the "-r" is passed to script-two as arg which is called from script-one.
+A useful alias to use with the fc command is r='fc -s', so that typing ‘r cc’
+runs the last command `beginning` with cc and typing ‘r’ re-executes the last
+command (see Aliases). 
 
 
 ={============================================================================
-*kt_linux_bash_032* sh-readline: edit command line
+*kt_linux_bash_032* sh-command-edit
 
 https://www.gnu.org/software/bash/manual/bash.html#Command-Line-Editing
 
@@ -4374,14 +4428,111 @@ https://www.gnu.org/software/bash/manual/bash.html#Command-Line-Editing
 This chapter describes the basic features of the GNU command line editing
 interface. Command line editing is provided by the Readline library, which is
 used by several different programs, 'including' Bash. Command line editing is
-enabled by default when using an interactive shell, unless the --noediting
+enabled `by-default` when using an interactive shell, unless the --noediting
 option is supplied at shell invocation. Line editing is also used when using the
 -e option to the read builtin command (see Bash Builtins). 
 
 By default, the line editing commands are similar to those of Emacs. A vi-style
 line editing interface is also available. Line editing can be enabled at any
-time using the -o emacs or -o vi options to the set builtin command (see The Set
-    Builtin), or disabled using the +o emacs or +o vi options to set. 
+time using the `-o emacs` or `-o vi` options to the set builtin command (see The
+    Set Builtin), or disabled using the +o emacs or +o vi options to set. 
+
+
+8.1 Introduction to Line Editing
+
+The following paragraphs describe the notation used to represent keystrokes.
+
+The text C-k is read as ‘Control-K’ and describes the character produced when
+the k key is pressed while the Control key is depressed.
+
+The text M-k is read as ‘Meta-K’ and describes the character produced when the
+Meta key (if you have one) is depressed, and the k key is pressed. The Meta key
+is labeled `ALT` on many keyboards. 
+
+If you do not have a Meta or ALT key, or another key working as a Meta key, the
+identical keystroke can be generated by typing `ESC` first, and then typing k.
+Either process is known as metafying the k key. 
+
+
+8.2 Readline Interaction
+
+Often during an interactive session you type in a long line of text, only to
+notice that the first word on the line is misspelled. The Readline library gives
+you a set of commands for manipulating the text as you type it in, allowing you
+to just fix your typo, and not forcing you to retype the majority of the line.
+
+Using these editing commands, you move the cursor to the place that needs
+correction, and delete or insert the text of the corrections. Then, when you are
+satisfied with the line, you simply press RET. You do not have to be at the end
+of the line to press RET; the entire line is accepted regardless of the location
+of the cursor within the line. 
+
+
+*sh-edit-key*
+
+C-b
+    Move back one character. 
+
+C-f
+    Move forward one character. 
+
+DEL or Backspace
+    Delete the character to the left of the cursor. 
+
+C-d
+    Delete the character underneath the cursor. 
+
+C-a
+    Move to the start of the line. 
+
+C-e
+    Move to the end of the line. 
+
+M-f
+    Move forward a `word`, where a word is composed of letters and digits. 
+
+M-b
+    Move backward a word. 
+
+C-l
+    Clear the screen, reprinting the current line at the top. 
+
+C-k
+    Kill the text from the current cursor position to the `end-of-the-line`.
+
+M-d
+    Kill from the cursor to the `end` of the current word, or, if between words,
+to the end of the next word. Word boundaries are the same as those used by M-f.
+
+// note:
+// Do NOT work and instead use M-BACK
+// M-DEL
+//     Kill from the cursor the `start` of the current word, or, if between
+//     words, to the start of the previous word. Word boundaries are the same as
+//     those used by M-b.
+
+C-w
+    Kill from the cursor to the previous whitespace. This is different than
+    M-DEL because the word boundaries differ.
+
+// <ex>
+// use cut and paste
+//
+// git init --bare /path/to/repo.git
+// git remote add origin /path/to/repo.git
+// 
+// Notice that the second command uses the same path at the end. Instead of
+// typing that path twice, you could copy and paste it from the first command,
+// using this sequence of keystrokes:
+// 
+// Press the up arrow to bring back the previous command.
+// 
+// Press Ctrl-w to cut the path part: "/path/to/repo.git".
+// 
+// Press Ctrl-c to cancel the current command.
+// 
+// Type git remote add origin, and press Ctrl-y to paste the path. 
+
 
 8.5 Readline vi Mode
 
@@ -4399,42 +4550,93 @@ if you had typed an "i". Pressing ESC switches you into 'command' mode, where
     previous history lines with "k" and subsequent lines with "j", and so forth. 
 
 
-// http://web.mit.edu/gnu/doc/html/features_7.html
-// 
-// C-a      : jump to the beginning of the line.
-// C-e      : jump to the end of the line.
-// Esc-b    : jump one word backward.
-// Esc-f    : jump one word forward. 
-// 
-// C-w            : cut text backward until space.
-// Esc-Backspace  : cut one word backward.
-// Esc-Delete     : cut one word forward.
-// 
-// 
-// Readline Killing Commands
-// 
-// C-k      : cut from current position until the end of the line.
-// C-y      : paste the most recently cut text. 
-// 
-// <case> use cut and paste
-// 
-// git init --bare /path/to/repo.git
-// git remote add origin /path/to/repo.git
-// 
-// Notice that the second command uses the same path at the end. Instead of
-// typing that path twice, you could copy and paste it from the first command,
-// using this sequence of keystrokes:
-// 
-// Press the up arrow to bring back the previous command.
-// 
-// Press Ctrl-w to cut the path part: "/path/to/repo.git".
-// 
-// Press Ctrl-c to cancel the current command.
-// 
-// Type git remote add origin, and press Ctrl-y to paste the path. 
-// 
-// If you want to learn more, see the bash man page and search for "READLINE",
-// "Commands for Moving" and "Commands for Changing Text".
+={============================================================================
+*kt_linux_bash_032* sh-command-search
+
+8.2.5 Searching for Commands in the History
+
+Readline provides commands for searching through the command history
+*sh-history* for lines containing a specified string. There are two search
+modes: incremental and non-incremental.
+
+To `incremental-search` backward in the history for a particular string, type
+`C-r`. Typing C-s searches forward through the history. The characters present
+in the value of the isearch-terminators variable are used to terminate an
+incremental search. If that variable has not been assigned a value, the `ESC`
+and C-J characters will terminate an incremental search. `C-g` will abort an
+incremental search and restore the original line. When the search is terminated,
+the history entry containing the search string becomes the current line.
+
+To find other matching entries in the history list, type C-r or C-s as
+appropriate. This will search backward or forward in the history for the next
+entry matching the search string typed so far. 
+
+Any other key sequence bound to a Readline command will terminate the search and
+execute that command. For instance, a `RET` will terminate the search and accept
+the line, thereby executing the command from the history list. 
+
+A movement command will terminate the search, make the last line found the
+current line, and begin editing.
+
+Readline remembers the last incremental search string. If two C-rs are typed
+without any intervening characters defining a new search string, any remembered
+search string is used.
+
+<ex>
+Once you've found the command you have several options:
+
+1. Press RET to run it
+2. <C-r> to cycle through other commands that are filterd out with the letters
+you've typed.
+3. <C-g> to quit the search and back to the command line empty-handed
+4. Press ESC to take one and edit the command.
+
+
+={============================================================================
+*kt_linux_bash_032* sh-command-readline-init
+
+8.3.1 Readline Init File Syntax
+
+There are only a few basic constructs allowed in the Readline init file. Blank
+lines are ignored.  Lines beginning with a `#' are comments. Lines beginning
+with a `$' indicate conditional constructs (see section 8.3.2 Conditional Init
+    Constructs). Other lines denote variable settings and key bindings.
+
+Variable Settings
+You can modify the run-time behavior of Readline by altering the values of
+variables in Readline using the set command within the init file. The syntax is
+simple:
+
+    set variable value
+
+Here, for example, is how to change from the default Emacs-like key binding to
+use vi line editing commands:
+
+    set editing-mode vi
+
+To set binding to up/down key to history search:
+
+# ~/.inputrc
+"\e[A": history-search-backward
+"\e[B": history-search-forward
+
+or equivalently,
+
+# ~/.bashrc
+bind '"\e[A": history-search-backward'
+bind '"\e[B": history-search-forward'
+
+Normally, Up and Down are bound to the Readline functions previous-history and
+next-history respectively. I prefer to bind PgUp/PgDn to these functions,
+instead of displacing the normal operation of Up/Down.
+
+# ~/.inputrc
+"\e[5~": history-search-backward
+"\e[6~": history-search-forward
+
+After you modify ~/.inputrc, restart your shell or use Ctrl+X, Ctrl+R to tell it
+to re-read ~/.inputrc. By the way, if you're looking for relevant documentation:
+Bash uses The GNU Readline Library for the shell prompt and history.
 
 
 ={============================================================================
@@ -8277,10 +8479,34 @@ $ hexdump -C -n 100 DTT_Radio1_20150225_1603.ts
 
 
 ={============================================================================
-*kt_linux_tool_051* tool-dirname
+*kt_linux_tool_051* tool-dirname tool-basename tool-readlink
 
-dirname - strip last component from file name. eg. /usr/bin/ -> /usr
+*tool-readlink*
+
 readlink - print value of a symbolic link or canonical file name
+
+
+*tool-dirname*
+
+dirname - strip last component from file name 
+
+$ dirname /home/kt/kb
+/home/kt
+
+
+*tool-basename*
+
+DESCRIPTION
+
+Print NAME with any leading directory components removed. If 'specified', also
+remove a trailing SUFFIX.
+
+$ basename /home/kt/kb
+kb
+$ basename cfgversion.out  
+cfgversion.out
+$ basename cfgversion.out .out
+cfgversion
 
 
 ={============================================================================
