@@ -11502,12 +11502,11 @@ else
 
 http://en.cppreference.com/w/cpp/language/operator_precedence
 
+From CPR 4.12 P166.
+
 The following table lists the precedence and associativity of C++ operators.
 Operators are listed top to bottom, in descending precedence. Where no
-associativity follows the above one. 
-
-note
-From CPR 4.12 P166.
+associativity follows the above one and same precedence in each segment. 
 
 Precedence Operator, Description, Use, Associativity, (L)eft-to-right
 
@@ -11580,28 +11579,108 @@ Precedence Operator, Description, Use, Associativity, (L)eft-to-right
 17 ,              Comma                                     Left-to-right 
 
 
-{parentheses}
-CPP p136. The parentheses override the normal grouping since parenthesized
-expressions are evaluated by treating it 'subexpressions' as a 'unit' and
-otherwise applying the normal precedence rules.
+{io-operators}
+
+CPR p155.
+
+The IO operators are `overloaded-version` of shift operators for IO. An
+overloaded operator has the `same-precedence-and-associativity` as the built-in
+version of that operator and has `left-associative`.
+
+cout << "hi" << " there" << endl;
+
+executes as
+
+((cout << "hi") << " there") << endl;
 
 
 ={============================================================================
 *kt_dev_lang_016* expr-evaluation-order
 
-An expression, such as 'ival+5' becomes an expression statement when it is
-followed by a semicolon. An expression statement contains an expression that
-has a <side-effect> such as assigning a new value or printing a result when it
-is evaluated.
+{precedence-associativity}
 
+CPR p135.
+
+An expression with two or more operators is a `compound-expression`. Evaluating
+compound expression involves `grouping` the operand to the operators.
+
+The value of an expression depends on how the subexpressions are grouped.
+
+`precedence` and `associativity` determine how the operands are grouped. That
+is, they determine which parts of the expression are the operands for each of
+the operators in the expression. `associativity` determines how to group
+operands with the same `precedence`
+
+Users can override these rules by parenthesizing to force a particular grouping
+as a subexpression.
+
+`precedence` says nothing about the order in which the operands are evaluated.
+This is `order-of-operand-evaluation`.
+
+<ex>
+6 + 3 * 4 / 2 + 2;
+
+equivalent to:
+
+((6 + ((3 * 4) / 2)) + 2);
+
+Can think that `inner-group` is evaluated first even if the evaluation order in
+that group is unspecified? NO when involves `evaluation`
+
+
+CPR p138.
+
+The `order-of-operand-evaluation` is `independent` of `precedence` and
+`associativity`.
+
+f() + g() * h() + j();
+
+* `precedence` gurantees that the results of g() and h() are multiplied.
+
+* `associativity` guarantees that the result of f() is added to the product of
+  g() and h() and that the result of that addition is added to the value of j().
+
+* However, NO guarantees as to the order in which these functions are called.
+
+In other words, for operators that do not specify evaluation order, it is an
+`undefined` for an expression to refer to and change the same object. 
+
+note: in gcc, calls f, g, h, and j in order
+note: the logical AND(&&) operator guarantees that its lhs operand is evaluated
+first.
+
+<ex>
+cout << i << " " << ++i << endl;
+
+((((cout << i) << " " ) << ++i) << endl);     // `undefined`
+
+<ex>
+return string("size = ") + itoa(size_, buf, 10) +
+  ", used = " + itoa(used_, buf, 10);
+
+Use left-associative and:
+
+return 
+  operator+(operator+(operator+(string("size = ") + itoa(size_, buf, 10)), 
+                      ", used = "), 
+            itoa(used_, buf, 10));
+
+If size_ is 10 and used_ is 5, which output since uses the same buf which is
+overwritten depending on the order?
+
+size = 10, used = 5
+size = 10, used = 10
+
+
+{ansic}
 From ansic, p53. C do not specify the 'order' in which the operands of an
 operator are evaluated. 
 
-x = f() + g();                         // f may be evaluated before g or vice versa
+x = f() + g();    // f may be evaluated before g or vice versa
 
 Function calls, nested assignment statements, and increment and decrement
 operators cause "side effect" - some variable is changed as a by-product of the
-evaluation of an expression. In any expression involving side effects, there
+`evaluation` of an expression. In any expression involving side effects, there
 can be subtle dependencies on the 'order' in which variables taking part in the
 expression are updated.
 
@@ -11609,7 +11688,7 @@ printf("%d %d\n", ++n, power(2, n));   // WRONG this is not a comma operator
 
 a[i] = i++;
 
-When side effects take place is left to discretion of the compiler, since the
+When side effects take place is left to `discretion` of the compiler, since the
 best order depends strongly on machine architecture.
 
 <1>
@@ -11619,13 +11698,6 @@ while (fgets(line, 256, file))
       &Highs[i], &Lows[i++]);
 }
 
-Review comment from Ian Park.
-You made big mistake here. Increasing 'i' in the parameter is very dangerous.
-The evaluation order of function parameter is undefined in spec and usually they
-are evaluated in reverse order in most of compilers. Therefore 'i' will be
-increased firstly and the data for Stocks,Intervals,Volumes and Highs will be
-stored in the next row. The data will be totally mangled. Increase 'i' in the
-separated line.
 
 <2> see reverse polish calculator
 The + and * are commutative operators, the order in which the popped operands

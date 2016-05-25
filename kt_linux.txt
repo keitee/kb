@@ -2,7 +2,6 @@
 
 /^[#=]{ 
 
-#{ bash
 #{ tool
 #{ gdb
 #{ linux-core
@@ -10,7 +9,6 @@
 #{ sysadmin
 #{ syssetup
 
-#{ bash
 |kt_linux_bash_000| sh-reference
 *kt_linux_bash_005* sh-quote
 *kt_linux_bash_019* sh-pipeline sh-subshell
@@ -30,6 +28,7 @@
 *kt_linux_bash_001* sh-expansion-brace
 *kt_linux_bash_001* sh-expansion-tilde
 *kt_linux_bash_001* sh-expansion-parameter
+*kt_linux_bash_001* sh-expansion-parameter-substitude
 *kt_linux_bash_001* sh-expansion-command
 *kt_linux_bash_001* sh-expansion-arithmetic
 *kt_linux_bash_001* sh-expansion-process
@@ -38,32 +37,25 @@
 *kt_linux_bash_001* sh-redirection
 *kt_linux_bash_001* sh-redirection-here
 *kt_linux_bash_001* sh-executing
-|kt_linux_bash_018| bash: ':' command
-|kt_linux_bash_020| bash: list options
 *kt_linux_bash_024* sh-builtin
 *kt_linux_bash_024* sh-builtin-base
 *kt_linux_bash_024* sh-builtin-extd
+*kt_linux_bash_024* sh-builtin-set
+*kt_linux_bash_038* sh-builtin-declare
+*kt_linux_bash_024* sh-builtin-job
+*kt_linux_bash_024* sh-builtin-help
 *kt_linux_bash_025* sh-special-variable
-*kt_linux_bash_023* sh-feature-invoking
+*kt_linux_bash_023* sh-invoking
 |kt_linux_bash_030| sh-interactive-or-not
 *kt_linux_bash_023* sh-command-history
 *kt_linux_bash_032* sh-command-edit
 *kt_linux_bash_032* sh-command-search
 *kt_linux_bash_032* sh-command-readline-init
-|kt_linux_bash_034| bash: wait
-|kt_linux_bash_035| bash: help
-|kt_linux_bash_038| sh-declare
-*kt_linux_bash_038* bash-substitude
 
-|kt_linux_bash_100| bash: config: colour prompt
-|kt_linux_bash_101| bash: config: how to know shell nesting level
-
-|kt_linux_bash_200| bash: code: debug and printf
-|kt_linux_bash_201| bash: code: array from 0 and return 1 for success like c
-|kt_linux_bash_202| bash: code: recursion test
-*kt_linux_bash_202* bash: code: get filenames from comment in the script
-
-|kt_linux_bash_300| bash: faq: var# 
+*kt_linux_bash_100* sh-tip-colour-prompt
+*kt_linux_bash_101* sh-tip-nested-level
+|kt_linux_bash_202| sh-tip-recursion-test
+*kt_linux_bash_202* sh-tip-get-filenames-from-comment
 
 
 #{ tool
@@ -1081,6 +1073,7 @@ The return status (see Exit Status) of a simple command is its exit status as
 provided by the POSIX 1003.1 waitpid function, or 128+n if the command was
 terminated by signal n. 
 
+*sh-exit-status*
 The $? expands to the exit status of the 'most' recently executed foreground
 pipeline. Can be used in test construct.
 
@@ -1504,7 +1497,7 @@ do
 done
 
 <ex>
-while :     # this cause infinite loop.
+while :     # this cause infinite loop. see *sh-colon*
 do
    read CMD
    case $CMD in
@@ -2088,6 +2081,10 @@ sub-patterns:
 !(pattern-list)
     Matches anything except one of the given patterns. 
 
+note:
+Why you shouldn't parse the output of ls(1)
+http://mywiki.wooledge.org/ParsingLs
+
 
 ={============================================================================
 *kt_linux_bash_001* sh-function
@@ -2252,6 +2249,80 @@ where this may cause a problem.
 Functions may be `recursive`. The FUNCNEST variable may be used to limit the
 depth of the function call stack and restrict the number of function
 invocations. By default, no limit is placed on the number of recursive calls. 
+
+
+{exit-and-return}
+
+4.1 Bourne Shell Builtins
+
+exit
+
+    exit [n]
+
+    `exit-the-shell`, returning a status of n to the shell’s parent. If n is
+    omitted, the exit status is that of the last command executed. Any trap on
+    EXIT is executed before the shell terminates.
+
+
+return
+
+    return [n]
+
+    Cause a `shell-function` to stop executing and return the value n to its
+    caller. If n is not supplied, the return value is the exit status of the
+    last command executed in the function. return may also be used to terminate
+    execution of a script being executed with the . (source) builtin, returning
+    either n or the exit status of the last command executed within the script
+    as the exit status of the script. If n is supplied, the return value is its
+    least significant 8 bits. Any command associated with the RETURN trap is
+    executed before execution resumes after the function or script. The return
+    status is non-zero if return is supplied a non-numeric argument or is used
+    outside a function and not during the execution of a script by . or source.
+
+<ex>
+Unlike a shell convention which use 0 for success, return 1 (okay) when found a
+string in a array at the expected position. otherwise, return 0 (fail).
+
+function paramsContainStringAtPosition () {
+    local stringToSearchFor="$1"
+    local positionToExpectStringAt="$2"
+    local stringToSearch="${@:3}"
+    local stringToSearchAsArray=($stringToSearch)
+    local currentParamPos=0;
+    local currentSearchString
+        
+    for currentSearchString in "${stringToSearchAsArray[@]}"
+        do
+            if [ "$currentSearchString" == "$stringToSearchFor" ]; then
+                if [ "$positionToExpectStringAt" == "$currentParamPos" ]; then
+                    return 1;
+                fi
+            fi
+            currentParamPos=$(( $currentParamPos+1 ))
+        done
+    return 0
+}
+
+function x {
+
+   ... 
+   paramsContainStringAtPosition "$expected_url" 7 "$@"
+   urlValueCorrectAtExpectedPosition=$?   # *sh-exit-status*
+
+   // note: here convert c style return to shell return by comararing "return
+   // from function = 1"
+
+   [[
+     "$cacheOptionCorrectAtExpectedPosition" = 1 &&
+     "$cacheValueCorrectAtExpectedPosition" = 1 &&
+     "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
+     "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
+     "$jarOptionCorrectAtExpectedPosition" = "1" && 
+     "$jarValueCorrectAtExpectedPosition" = "1" && 
+     "$urlOptionCorrectAtExpectedPosition" = "1" && 
+     "$urlValueCorrectAtExpectedPosition" = "1" 
+   ]] 
+}
 
 
 ={============================================================================
@@ -3099,6 +3170,62 @@ box_port=${3-2033}
 
 
 ={============================================================================
+*kt_linux_bash_001* sh-expansion-parameter-substitude
+
+${parameter/pattern/string}
+
+    The pattern is expanded to produce a pattern just as in filename expansion.
+    `parameter` is expanded and the longest match of pattern against its value
+    is replaced with string. If pattern begins with ‘/’, all matches of pattern
+    are replaced with string. Normally only the first match is replaced. If
+    pattern begins with ‘#’, it must match at the beginning of the expanded
+    value of parameter. If pattern begins with ‘%’, it must match at the end of
+    the expanded value of parameter. 
+    
+    If string is null, matches of pattern are deleted and the / following
+    pattern may be omitted. 
+    
+    If parameter is ‘@’ or ‘*’, the substitution operation is applied to each
+    positional parameter in turn, and the expansion is the resultant list. If
+    parameter is an array variable subscripted with ‘@’ or ‘*’, the substitution
+    operation is applied to each member of the array in turn, and the expansion
+    is the resultant list.
+
+<ex>
+The both has the same result.
+
+LDFLAGS='-L/home/builds-src-dev/zinc-trunk/lib -Wl,--as-needed -Wl,-rpath-link'
+
+-LDFLAGS=`echo $LDFLAGS | sed -e 's/\s-Wl,--as-needed//g'`
+
++LDFLAGS="${LDFLAGS/[[:space:]]-Wl,--as-needed}"
+
+
+${parameter#word}
+${parameter##word}
+
+    The `word` is expanded to produce a pattern just as in filename expansion
+      (see Filename Expansion). If the pattern matches the beginning of the
+      expanded value of parameter, then the result of the expansion is the
+      expanded value of parameter with the `shortest` matching pattern (the ‘#’
+          case) or the longest matching pattern (the ‘##’ case) `deleted`. 
+      
+    If parameter is ‘@’ or ‘*’, the pattern removal operation is applied to each
+    positional parameter in turn, and the expansion is the resultant list. If
+    parameter is an array variable subscripted with ‘@’ or ‘*’, the pattern
+    removal operation is applied to each member of the array in turn, and the
+    expansion is the resultant list.
+
+
+<ex>
+test_fun=test_that_generates_url
+test_handler="${test_fun#test_*}_handler"
+
+echo $test_handler
+_that_generates_url
+
+
+={============================================================================
 *kt_linux_bash_001* sh-expansion-command
 
 3.5.4 Command Substitution
@@ -3573,140 +3700,6 @@ executes it as described in Shell Scripts.
 
 
 ={============================================================================
-*kt_linux_bash_018* bash: ':' command
-
-<example> can use as 'no-op'
-Can be used as a no-op, which is a command that does nothing and thus can be safely inserted
-anywhere a command is needed for purely syntactical reasons:
-
-if [ -x $CMD ]
-then :
-else
-   echo Error: $CMD is not executable >&2
-fi
-
-In this example, assume you are not quite ready to write the code to follow the then statement. The
-shell flags a syntax error if you leave that code out completely, so you insert the : command as a
-temporary noop command that can be replaced by the desired code later.
-
-
-<example>
-Because the : always returns a successful result, it is sometimes used to create an infinite loop:
-
-while :
-do
-  echo "Enter some input: \c"
-  read INPUT
-  [ "$INPUT" = stop ] && break
-Done
-
-Because the : always returns a successful or true result, the while loop will continue forever or
-until a break is executed within the loop. Sometimes you might find that "while true" used in place
-of while : but using the : is more efficient because it is a shell built-in command, whereas true is
-a command that must be read from a disk file, if you are in the Bourne shell.
-
-
-={============================================================================
-*kt_linux_bash_020* bash: list options
-
-keitee@debian-keitee:~/github/kb$ set -o
-allexport      	off
-braceexpand    	on
-emacs          	on
-errexit        	off
-errtrace       	off
-functrace      	off
-hashall        	on
-histexpand     	on
-history        	on
-ignoreeof      	off
-interactive-comments	on
-keyword        	off
-monitor        	on
-noclobber      	off
-noexec         	off
-noglob         	off
-nolog          	off
-notify         	off
-nounset        	off
-onecmd         	off
-physical       	off
-pipefail       	off
-posix          	off
-privileged     	off
-verbose        	off
-vi             	off
-xtrace         	off
-
-{shopt}
-
-shopt [-pqsu] [-o] [optname ...]
-
-Toggle  the values of variables controlling optional shell behavior.  With no options, or with the
--p option, a 'list' of all settable options is  displayed, with  an indication of whether or not
-each is set.  The -p option causes output to be displayed in a form that may be reused  as  input.
-Other  options have the following meanings:
-
--s     Enable (set) each optname.
-
-
-<direxpand>
-shopt -s direxpand
-
-direxpand
-
-If set, bash replaces directory names with the results of word expansion when performing filename
-completion.  This changes the  contents of  the  readline  editing buffer.  If not set, bash
-attempts to preserve what the user typed.
-
-
-$ shopt
-autocd         	off
-cdable_vars    	off
-cdspell        	off
-checkhash      	off
-checkjobs      	off
-checkwinsize   	on
-cmdhist        	on
-compat31       	off
-compat32       	off
-compat40       	off
-compat41       	off
-direxpand      	on
-dirspell       	off
-dotglob        	off
-execfail       	off
-expand_aliases 	on
-extdebug       	off
-extglob        	on
-extquote       	on
-failglob       	off
-force_fignore  	on
-globstar       	off
-gnu_errfmt     	off
-histappend     	on
-histreedit     	off
-histverify     	off
-hostcomplete   	off
-huponexit      	off
-interactive_comments	on
-lastpipe       	off
-lithist        	off
-login_shell    	off
-mailwarn       	off
-no_empty_cmd_completion	off
-nocaseglob     	off
-nocasematch    	off
-nullglob       	off
-progcomp       	on
-promptvars     	on
-restricted_shell	off
-shift_verbose  	off
-sourcepath     	on
-xpg_echo       	off
-
-
-={============================================================================
 *kt_linux_bash_024* sh-builtin
 
 4 Shell Builtin Commands
@@ -3901,6 +3894,66 @@ clean_up() {
 }
 
 
+{sh-colon}
+: (a colon)
+
+    : [arguments]
+
+    Do nothing beyond expanding `arguments` and performing redirections. The
+    return status is zero.
+
+<ex> can use as 'no-op'
+Used as a no-op, which is a command that does nothing and thus can be safely
+inserted anywhere a command is needed for purely syntactical reasons:
+
+if [ -x $CMD ]
+then :
+else
+   echo Error: $CMD is not executable >&2
+fi
+
+In this example, assume you are not quite ready to write the code to follow the
+then statement. The shell flags a syntax error if you leave that code out
+completely, so you insert the : command as a temporary noop command that can be
+replaced by the desired code later.
+
+<ex>
+Because the : always returns a successful result, it is sometimes used to create
+an infinite loop:
+
+while :
+do
+  echo "Enter some input: \c"
+  read INPUT
+  [ "$INPUT" = stop ] && break
+Done
+
+Because the : always returns a successful or true result, the while loop will
+continue forever or until a break is executed within the loop. Sometimes you
+might find that "while true" used in place of while : but using the : is more
+efficient because it is a shell built-in command, whereas true is a command that
+must be read from a disk file, if you are in the Bourne shell. *sh-true*
+
+
+{sh-export}
+
+export
+
+    export [-fn] [-p] [name[=value]]
+
+    Mark each name to be passed to child processes in the environment. If the -f
+    option is supplied, the names refer to shell functions; otherwise the names
+    refer to shell variables. The -n option means to no longer mark each name
+    for export. If no names are supplied, or if the -p option is given, a list
+    of names of all exported variables is displayed. The -p option displays
+    output in a form that may be reused as input. If a variable name is followed
+    by =value, the value of the variable is set to value.
+
+    The return status is zero unless an invalid option is supplied, one of the
+    names is not a valid shell variable name, or -f is supplied with a name that
+    is not a shell function.
+
+
 ={============================================================================
 *kt_linux_bash_024* sh-builtin-extd
 
@@ -3916,12 +3969,16 @@ echo
 
     Output the args, separated by spaces, terminated with a `newline`. The
     return status is 0 unless a write error occurs. If -n is specified, the
-    trailing newline is suppressed. If the -e option is given, interpretation of
-    the following backslash-escaped characters is enabled. The -E option
-    disables the interpretation of these escape characters, even on systems
-    where they are interpreted by default. The xpg_echo shell option may be used
-    to dynamically determine whether or not echo expands these escape characters
-    by default. echo does not interpret -- to mean the end of options.
+    trailing newline is suppressed. 
+    
+    If the -e option is given, interpretation of the following backslash-escaped
+    characters is enabled. 
+    
+    The -E option disables the interpretation of these escape characters, even
+    on systems where they are interpreted by default. The xpg_echo shell option
+    may be used to dynamically determine whether or not echo expands these
+    escape characters by default. echo does not interpret -- to mean the end of
+    options.
 
 note:
 The `echo` prints out `newline` regardless of value of variable. The following
@@ -4031,6 +4088,273 @@ ls translation/ \
 WHY? Since "pushd -n" do not `cd` and means runs those command on the parent?   
 
 
+{sh-printf}
+
+printf
+
+    printf [-v var] format [arguments]
+
+    Write the formatted `arguments` to the standard output under the control of
+    the `format`. The -v option causes the output to be assigned to the variable
+    var rather than being printed to the standard output.
+
+    The format is a character string which contains three types of objects:
+    plain characters, which are simply copied to standard output, character
+    escape sequences, which are converted and copied to the standard output, and
+    format specifications, each of which causes printing of the next successive
+    argument. In addition to the standard `printf(1)` formats, printf interprets
+    the following extensions:
+
+    %b
+        Causes printf to expand backslash escape sequences in the corresponding
+        argument, except that ‘\c’ terminates output, backslashes in ‘\'’, ‘\"’,
+        and ‘\?’ are not removed, and octal escapes beginning with ‘\0’ may
+        contain up to four digits. 
+
+    %q
+        Causes printf to output the corresponding argument in a format that can
+        be reused as shell input. 
+
+    %(datefmt)T
+        Causes printf to output the date-time string resulting from using
+        datefmt as a format string for strftime(3). The corresponding argument
+        is an integer representing the number of seconds since the epoch. Two
+        special argument values may be used: -1 represents the current time, and
+        -2 represents the time the shell was invoked. If no argument is
+        specified, conversion behaves as if -1 had been given. This is an
+        exception to the usual printf behavior. 
+
+    Arguments to non-string format specifiers are treated as C language
+    constants, except that a leading plus or minus sign is allowed, and if the
+    leading character is a single or double quote, the value is the ASCII value
+    of the following character.
+
+    The format is reused as necessary to consume all of the arguments. If the
+    format requires more arguments than are supplied, the extra format
+    specifications behave as if a zero value or null string, as appropriate, had
+    been supplied. The return value is zero on success, non-zero on failure.
+
+<ex>
+
+debug() {
+    # Note: echo -e doesn't work on OS X's default bash (3.2).
+    printf '\n\033[0;32m%s\n' "$*"
+    tput sgr0
+}
+
+
+={============================================================================
+*kt_linux_bash_024* sh-builtin-set
+
+4.3.1 The Set Builtin
+
+This builtin is so complicated that it deserves its own section. `set` allows
+you to change the values of shell options and set the positional parameters, or
+to display the names and values of shell variables. 
+
+<ex>
+$ set -o
+allexport      	off
+braceexpand    	on
+emacs          	on
+errexit        	off
+errtrace       	off
+functrace      	off
+hashall        	on
+histexpand     	on
+history        	on
+ignoreeof      	off
+interactive-comments	on
+keyword        	off
+monitor        	on
+noclobber      	off
+noexec         	off
+noglob         	off
+nolog          	off
+notify         	off
+nounset        	off
+onecmd         	off
+physical       	off
+pipefail       	off
+posix          	off
+privileged     	off
+verbose        	off
+vi             	off
+xtrace         	off
+
+
+4.3.2 The Shopt Builtin
+
+This builtin allows you to change additional shell `optional` behavior.
+
+shopt
+
+    shopt [-pqsu] [-o] [optname ...]
+
+
+direxpand
+    If set, Bash replaces directory names with the results of word expansion
+    when performing filename completion. This changes the contents of the
+    readline editing buffer. If not set, Bash attempts to preserve what the user
+    typed.
+
+
+With no options, or with the -p option, a list of all settable options is
+displayed, with an indication of whether or not each is set.
+
+$ shopt
+autocd         	off
+cdable_vars    	off
+cdspell        	off
+checkhash      	off
+checkjobs      	off
+checkwinsize   	on
+cmdhist        	on
+compat31       	off
+compat32       	off
+compat40       	off
+compat41       	off
+direxpand      	on
+dirspell       	off
+dotglob        	off
+execfail       	off
+expand_aliases 	on
+extdebug       	off
+extglob        	on
+extquote       	on
+failglob       	off
+force_fignore  	on
+globstar       	off
+gnu_errfmt     	off
+histappend     	on
+histreedit     	off
+histverify     	off
+hostcomplete   	off
+huponexit      	off
+interactive_comments	on
+lastpipe       	off
+lithist        	off
+login_shell    	off
+mailwarn       	off
+no_empty_cmd_completion	off
+nocaseglob     	off
+nocasematch    	off
+nullglob       	off
+progcomp       	on
+promptvars     	on
+restricted_shell	off
+shift_verbose  	off
+sourcepath     	on
+xpg_echo       	off
+
+
+={============================================================================
+*kt_linux_bash_038* sh-builtin-declare
+
+declare
+
+    declare [-aAfFgilnrtux] [-p] [name[=value] ...]
+
+    Declare variables and give them attributes. If no names are given, then
+    display the values of variables instead. 
+
+    The -p option will display the attributes and values of each name. When -p
+    is used with name arguments, additional options, other than -f and -F, are
+    ignored.
+
+    When -p is supplied without name arguments, declare will display the
+    attributes and values of all variables having the attributes specified by
+    the additional options. If no other options are supplied with -p, declare
+    will display the attributes and values of all shell variables. The -f option
+    will restrict the display to shell functions.
+
+    The -F option inhibits the display of function definitions; only the
+    function name and attributes are printed. If the extdebug shell option is
+    enabled using shopt (see The Shopt Builtin), the source file name and line
+    number where the function is defined are displayed as well. -F implies -f.
+
+    The -g option forces variables to be created or modified at the global
+    scope, even when declare is executed in a shell function. It is ignored in
+    all other cases.
+
+    The following options can be used to restrict output to variables with the
+    specified attributes or to give variables attributes: 
+
+    -a
+    Each name is an indexed array variable (see Arrays).
+
+    -A
+    Each name is an associative array variable (see Arrays).
+
+    -r
+    Make names readonly. These names cannot then be assigned values by
+    subsequent assignment statements or unset.
+
+    -x     
+    Mark  names  for  export  to  subsequent commands via the environment.
+
+
+={============================================================================
+*kt_linux_bash_024* sh-builtin-job
+
+7.2 Job Control Builtins
+
+kill
+
+    kill [-s sigspec] [-n signum] [-sigspec] jobspec or pid
+    kill -l [exit_status]
+
+    Send a signal specified by `sigspec` or `signum` to the process named by job
+    specification jobspec or process ID pid. sigspec is either a
+    case-insensitive signal name such as SIGINT (with or `without` the SIG
+        prefix) or a signal number; signum is a signal number. If sigspec and
+    signum are not present, SIGTERM is used. The -l option lists the signal
+    names. If any arguments are supplied when -l is given, the names of the
+    signals corresponding to the arguments are listed, and the return status is
+    zero. exit_status is a number specifying a signal number or the exit status
+    of a process terminated by a signal. The return status is zero if at least
+    one signal was successfully sent, or non-zero if an error occurs or an
+    invalid option is encountered.  
+    
+wait
+
+    wait [-n] [jobspec or pid ...]
+
+    Wait until the child process specified by each process ID pid or job
+    specification jobspec exits and return the exit status of the last command
+    waited for. If a job spec is given, all processes in the job are waited for.
+    If no arguments are given, all currently active child processes are waited
+    for, and the return status is zero. If the -n option is supplied, wait waits
+      for any job to terminate and returns its exit status. If neither jobspec
+        nor pid specifies an active child process of the shell, the return
+          status is 127.
+
+
+={============================================================================
+*kt_linux_bash_024* sh-builtin-help
+
+4.2 Bash Builtin Commands
+
+help
+
+    help [-dms] [pattern]
+
+    Display helpful information about builtin commands. If pattern is specified,
+    help gives detailed help on all commands matching pattern, otherwise a list
+    of the builtins is printed.
+
+    Options, if supplied, have the following meanings:
+
+    -d
+        Display a short description of each pattern 
+    -m
+        Display the description of each pattern in a manpage-like format 
+    -s
+        Display only a short usage synopsis for each pattern 
+
+    The return status is zero unless no command matches pattern.
+
+
 ={============================================================================
 *kt_linux_bash_025* sh-special-variable
 
@@ -4061,7 +4385,7 @@ them specially.
 
 
 ={============================================================================
-*kt_linux_bash_023* sh-feature-invoking
+*kt_linux_bash_023* sh-invoking
 
 <ex>
 # in the script
@@ -4198,7 +4522,6 @@ specified, have the following meanings:
     lists after they are expanded and before they are executed. The value of the
     PS4 variable is expanded and the resultant value is printed before the
     command and its expanded arguments.
-
 
 
 ={============================================================================
@@ -4472,27 +4795,24 @@ of the cursor within the line.
 
 C-b
     Move back one character. 
-
 C-f
     Move forward one character. 
+
+C-a
+    Move to the start of the line. 
+C-e
+    Move to the end of the line. 
+
+M-f
+    Move forward a `word`, where a word is composed of letters and digits. 
+M-b
+    Move backward a word. 
 
 DEL or Backspace
     Delete the character to the left of the cursor. 
 
 C-d
     Delete the character underneath the cursor. 
-
-C-a
-    Move to the start of the line. 
-
-C-e
-    Move to the end of the line. 
-
-M-f
-    Move forward a `word`, where a word is composed of letters and digits. 
-
-M-b
-    Move backward a word. 
 
 C-l
     Clear the screen, reprinting the current line at the top. 
@@ -4640,134 +4960,24 @@ Bash uses The GNU Readline Library for the shell prompt and history.
 
 
 ={============================================================================
-*kt_linux_bash_034* bash: wait
+*kt_linux_bash_100* sh-tip-colour-prompt
 
-How to wait in a bash script for several subprocesses spawned from that script to finish?
-
-$ help wait
-wait: wait [id]
-    Wait for job completion and return exit status.
-    
-    Waits for the process identified by ID, which may be a process ID or a
-    job specification, and reports its termination status.  
-    
-    If ID is not given, waits for 'all' currently active child processes, and the return
-    status is zero.  
-    
-    If ID is a a job specification, waits for all processes in the job's pipeline.
-    
-    Exit Status:
-    Returns the status of ID; fails if ID is invalid or an invalid option is
-    given.
+Uncomment the line that says force_color_prompt=yes then logout and back in in
+the .bashrc.
 
 
 ={============================================================================
-*kt_linux_bash_035* bash: help
+*kt_linux_bash_101* sh-tip-nested-level
 
-$ help wait
-wait: wait [id]
-    Wait for job completion and return exit status.
-    
-    Waits for the process identified by ID, which may be a process ID or a
-    job specification, and reports its termination status.  If ID is not
-    given, waits for all currently active child processes, and the return
-    status is zero.  If ID is a a job specification, waits for all processes
-    in the job's pipeline.
-    
-    Exit Status:
-    Returns the status of ID; fails if ID is invalid or an invalid option is
-    given.
+5.2 Bash Variables
 
+SHLVL
+    Incremented by one each time a new instance of Bash is started. This is
+    intended to be a count of how deeply your Bash shells are nested.
 
-={============================================================================
-*kt_linux_bash_038* sh-declare
-
-declare [-aAfFgilnrtux] [-p] [name[=value] ...]
-
-'declare' variables and give them attributes. If no names are given, then
-display the values of variables instead.
-
-    The -p option will display the attributes and values of each name. When -p
-    is used with name arguments, additional options, other than -f and -F, are
-    ignored.
-
-    When -p is supplied without name arguments, declare will display the
-    attributes and values of all variables having the attributes specified by
-    the additional options. If no other options are supplied with -p, declare
-    will display the attributes and values of all shell variables. The -f option
-    will restrict the display to shell functions.
-
-    The -F option inhibits the display of function definitions; only the
-    function name and attributes are printed. If the extdebug shell option is
-    enabled using shopt (see The Shopt Builtin), the source file name and line
-    number where the function is defined are displayed as well. -F implies -f.
-
-    The -g option forces variables to be created or modified at the global
-    scope, even when declare is executed in a shell function. It is ignored in
-    all other cases.
-
-The following options can be used to restrict output to variables with the
-specified attributes or to give variables attributes: 
-
--a
-Each name is an indexed array variable (see Arrays).
-
--A
-Each name is an associative array variable (see Arrays).
-
--r
-Make names readonly. These names cannot then be assigned values by subsequent
-assignment statements or unset.
-
--x     Mark  names  for  export  to  subsequent commands via the environment.
-
-
-={============================================================================
-*kt_linux_bash_038* bash-substitude
-
-<ex>
-The both has the same result.
-
--LDFLAGS=`echo $LDFLAGS | sed -e 's/\s-Wl,--as-needed//g'`
-
-+LDFLAGS="${LDFLAGS/[[:space:]]-Wl,--as-needed}"
-
-
-={============================================================================
-*kt_linux_bash_039* bash: builtin: export
-
-export
-
-export [-fn] [-p] [name[=value]]
-
-Mark each name to be passed to child processes in the environment. If the -f option is supplied, the
-names refer to shell functions; otherwise the names refer to shell variables. The -n option means to
-no longer mark each name for export. 
-
-If 'no' names are supplied, or if the -p option is given, a list of names of all exported variables
-is displayed. The -p option displays output in a form that may be reused as input. If a variable
-name is followed by =value, the value of the variable is set to value.
-
-The return status is zero unless an invalid option is supplied, one of the names is not a valid
-shell variable name, or -f is supplied with a name that is not a shell function.
-
-
-={============================================================================
-*kt_linux_bash_100* bash: config: colour prompt
-
-Uncomment the line that says force_color_prompt=yes then logout and back in in the .bashrc.
-
-
-={============================================================================
-*kt_linux_bash_101* bash: config: how to know shell nesting level
-
-SHLVL  Incremented by one each time an instance of bash is started.
 $ echo $SHLVL
 
-
-={============================================================================
-*kt_linux_bash_102* bash: config: prompt
-
+<ex>
 keitee@debian-keitee:~/github/kb$ echo $PS1
 \[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\u@\h:\w\$
 
@@ -4777,114 +4987,55 @@ keitee@debian-keitee:~/github/kb\:2$
 
 
 ={============================================================================
-*kt_linux_bash_200* bash: code: debug and printf
+*kt_linux_bash_202* sh-tip-recursion-test
 
-debug() {
-    # Note: echo -e doesn't work on OS X's default bash (3.2).
-    printf '\n\033[0;32m%s\n' "$*"
-    tput sgr0
-}
+The same script file is used to define tests and routines to check result using
+exec trick and communication between parent process that runs the the script and
+the subshell that runs each test case.
 
-
-={============================================================================
-*kt_linux_bash_201* bash: code: array from 0 and return 1 for success like c
-
-Use array from index 0 and return 1 for success. Unlike a shell convention which use 0 for success.
-
-// return 1 (okay) when found a string in a array at the expected position. otherwise, return 0 (fail).
-
-function paramsContainStringAtPosition () {
-    local stringToSearchFor="$1"
-    local positionToExpectStringAt="$2"
-    local stringToSearch="${@:3}"
-    local stringToSearchAsArray=($stringToSearch)
-    local currentParamPos=0;
-    local currentSearchString
-        
-    for currentSearchString in "${stringToSearchAsArray[@]}"
-        do
-            if [ "$currentSearchString" == "$stringToSearchFor" ]; then
-                if [ "$positionToExpectStringAt" == "$currentParamPos" ]; then
-                    return 1;
-                fi
-            fi
-            currentParamPos=$(( $currentParamPos+1 ))
-        done
-    return 0
-}
-
-function x {
-
-   ... 
-   paramsContainStringAtPosition "$expected_url" 7 "$@"
-   urlValueCorrectAtExpectedPosition=$?
-
-   // note: here convert c style return to shell return by comararing "return from function = 1"
-   
-   [[
-     "$cacheOptionCorrectAtExpectedPosition" = 1 &&
-     "$cacheValueCorrectAtExpectedPosition" = 1 &&
-     "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
-     "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
-     "$jarOptionCorrectAtExpectedPosition" = "1" && 
-     "$jarValueCorrectAtExpectedPosition" = "1" && 
-     "$urlOptionCorrectAtExpectedPosition" = "1" && 
-     "$urlValueCorrectAtExpectedPosition" = "1" 
-   ]] 
-}
-
-
-={============================================================================
-*kt_linux_bash_202* bash: code: recursion test
-
-The same script file is used to define tests and routines to check result using exec trick and
-communication between parent process that runs the the script and the subshell that runs each test
-case.
-
-test.sh
+// test.sh
 
 test_xxx () {
   set local vars
 
   run.sh args...        
-  " run.sh to exec the subprocess with the given cmd so the subprocess will run the cmd.
-
+  # run.sh to exec the subprocess with the given cmd so the subprocess will run
+  # the cmd.
 }
 
 test_xxx_handler() {
 
 }
 
+# when test_handler is zero
 if [ -z "$test_handler" ]; then
-   for each test case
+  for each test case
 
-   " create a subprocess
-   " run a test case that runs the other script and exec call eventually.
-   (
+  # create a subshell(subprocess)
+  # run a test case that runs the other script and exec call eventually.
+  (
     set env vars to pass to subprocess.
 
     " note: use env var to pass data to a subprocess
     " note: use a single line to run
 
-    cmd = test.sh \                       " set cmd as the same script so 
+    ENVS \
     test_handler="${test_xxx}_handler" \
     test_xxx
    )
    done
 
 else
-
   xxx_handler     " that checks the results
-
 fi
 
-So the parent process runs the test.sh and drives the whole test. For each test, set env vars and
-create a subprocess that exec and run the given cmd. By having cmd as the same test.sh and the
-test_handler env var set, subprocess runs the same script and env var set. So run the different path
-and run check call in this case. So looks like a recursion or callback.
+So the parent process runs the test.sh and drives the whole test. For each test,
+   set env vars and create a subprocess that exec and run the given cmd. By
+   having cmd as the same test.sh and the test_handler env var set, subprocess
+   runs the function in the same script and env var set. So run the different
+   path and run check call in this case. So looks like a recursion or callback.
 
 <code>
-
 test_that_generates_url() {
 
     local app_dir="$scratch_dir/app"
@@ -4903,8 +5054,8 @@ that_generates_url_handler() {
     echo "that_generates_url_handler() - Got args: '$@'"
 
     local expected_url="http://youview.tv/test-player?\
-launch_context.ui.youview.com=portal&some.test.param=some.test.param.value&\
-test.param.spaces=param%20value%20with%20spaces"
+    launch_context.ui.youview.com=portal&some.test.param=some.test.param.value&\
+    test.param.spaces=param%20value%20with%20spaces"
 
     paramsContainStringAtPosition "-cache" 0 "$@"
     cacheOptionCorrectAtExpectedPosition=$?
@@ -5001,7 +5152,7 @@ fi
 
 
 ={============================================================================
-*kt_linux_bash_202* bash: code: get filenames from comment in the script
+*kt_linux_bash_202* sh-tip-get-filenames-from-comment
 
 #!/bin/bash -x
 
@@ -5020,16 +5171,6 @@ set -e
 declare -ar urls=($(grep '^#/ http' "$0" | cut -c 4-))
 
 echo "urls 0 : ${urls[0]}"
-
-
-={============================================================================
-*kt_linux_bash_300* bash: faq: var#
-
-The both shows the same result. What is this "${test_func#test*}" for?
-
-test_handler="${test_fun#test*}_handler"
-test_handler_two="${test_fun}_handler"
-echo ">> $test_handler, $test_handler_two"
 
 
 # ============================================================================
