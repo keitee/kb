@@ -32940,8 +32940,8 @@ The interesting part is the assignment of the new value:
 
 *to_pos = value
 
-An insert iterator transforms such an assignment into an insertion. However, two
-operations are involved: First, operator * returns the current element of the
+An `insert-iterator` transforms an assignment into an insertion. However, two
+operations are involved: First, operator * returns the `current-element` of the
 iterator; second, operator = assigns the new value. Implementations of insert
 iterators usually use the following two-step trick:
 
@@ -32988,7 +32988,7 @@ Passing a position(iterator) to insert doesn't sound useful? So for associative
 and unordered containers, the position is taken as a 'hint' to start the search
 for the correct position. However, containers are free to ignore it.
 
-<ex> *algo-copy*
+<ex> *ex-algo-copy*
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -33029,7 +33029,7 @@ int main()
   PRINT_ELEMENTS( coll3, "deque " );
 
   // copy elements of coll1 into coll4
-  // note: 'only' inserter that works for 'associative' collections
+  // note: works for `associative` since it's empty
   set<int> coll4;
   copy (coll1.cbegin(), coll1.cend(), // source
       inserter(coll4,coll4.begin())); // destination
@@ -37602,16 +37602,26 @@ number of elememts than 4         : 5
 
 CLR 11.6
 
+There are two ways to modify elements:
+
+1. Modify them directly while iterating through a sequence.
+2. Modify them while copying them from a source range to a destination range.
+
+Can't use an associative or unordered container as a destination range, because
+the elements in these containers are constant. 
+
+All algorithms that have a separate destination range return the position after
+the last copied element of that (destination) range.
+
+
+{algo-copy}
+
 OutputIterator
 copy (InputIterator sourceBeg, InputIterator sourceEnd,
-OutputIterator destBeg)
+      OutputIterator destBeg)
 
-They return the position after the last copied element in the destination
-'range' (the first element that is not overwritten).
 
-note: range is a sequence
-
-<ex> ex-algo-copy
+<ex> *ex-algo-copy*
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -37647,10 +37657,10 @@ The first is coll.end() and the last is dereferencible iterator. The copy
 requires that first 'must' be a valid range. The likely symptom will be a
 difficult-to-diagnose core dump during or sometime after the copy.
 
-The real result is that it works find with release and emits errors with debug
+The real result is that it works fine with release and emits errors with debug
 build:
 
-keitee@debian-keitee:~/work$ ./a.out 
+$ ./a.out 
 1 2 3 4 5 6 
 -----------
 /usr/include/c++/4.7/bits/stl_algobase.h:450:error: function requires a 
@@ -37658,16 +37668,86 @@ keitee@debian-keitee:~/work$ ./a.out
 
 Objects involved in the operation:
 iterator "__first" @ 0x0xbfd49b18 {
-type = N11__gnu_debug14_Safe_iteratorIN9__gnu_cxx17__normal_iteratorIPiNSt9__cxx19986vectorIiSaIiEEEEENSt7__debug6vectorIiS6_EEEE (mutable iterator);
+type = N11__gnu_debug14_Safe_iteratorIN9__gnu_cxx17__normal_iteratorIPiNSt9
+       __cxx19986vectorIiSaIiEEEEENSt7__debug6vectorIiS6_EEEE (mutable iterator);
   state = past-the-end;
   references sequence with type `NSt7__debug6vectorIiSaIiEEE' @ 0x0xbfd49b18
 }
 iterator "__last" @ 0x0xbfd49b04 {
-type = N11__gnu_debug14_Safe_iteratorIN9__gnu_cxx17__normal_iteratorIPiNSt9__cxx19986vectorIiSaIiEEEEENSt7__debug6vectorIiS6_EEEE (mutable iterator);
+type = N11__gnu_debug14_Safe_iteratorIN9__gnu_cxx17__normal_iteratorIPiNSt9
+  __cxx19986vectorIiSaIiEEEEENSt7__debug6vectorIiS6_EEEE (mutable iterator);
   state = dereferenceable;
   references sequence with type `NSt7__debug6vectorIiSaIiEEE' @ 0x0xbfd49b04
 }
 Aborted
+
+
+<ex>
+From EXPC++ 05. Snippet to show the queston: How does algo-copy work when the
+type of source and dest is differen? That is when T and O different?
+
+template<typename T, size_t size>
+class fixed_vector
+{
+  private:
+    T v_[size];
+
+  public:
+    fixed_vector() {}
+
+    template<typename O, size_t osize>
+      fixed_vector( const fixed_vecto<O, osize>& other )
+      {
+        copy( other.begin(),
+              other.begin()+min(size, osize),
+              begin() );
+      }
+};
+
+Why? As all example of algo-copy uses the same element type, so the assignment
+is built-in assignment.
+
+        *to_pos = *from_pos;  // copy values
+
+When tries different types, shows the error:
+
+#include <iostream>
+#include <vector>
+#include <list>
+#include <string>
+#include <algorithm>
+
+using namespace std;
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  vector<int> coll{1,2,3,4,5,6};
+
+  PRINT_ELEMENTS(coll, "initialized: " );
+
+  // list<int> coll1;
+  list<string> coll1;
+  copy( coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
+
+  PRINT_ELEMENTS(coll1, "list       : " );
+}
+
+
+t_algo_copy.cpp:28:65:   required from here
+/usr/include/c++/4.7/bits/stl_algobase.h:329:8: error: invalid user-defined
+conversion from ‘int’ to ‘std::list<std::basic_string<char> >::value_type&& {aka
+  std::basic_string<char>&&}’ [-fpermissive]
 
 
 ={============================================================================
