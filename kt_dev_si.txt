@@ -5,8 +5,9 @@ kt.dev.si
 /^[#=]{
 Use #{ for a group and ={ for a item
 
-|kt_dev_si_0001| si-box
-|kt_dev_si_0001| si-git
+|kt_dev_si_0002| si-box
+|kt_dev_si_0002| si-git
+|kt_dev_si_0002| si-git-build
 |kt_dev_si_0002| si-sh-theyard
 |kt_dev_si_0002| si-sh-check-log
 |kt_dev_si_0002| si-sh-to-dates
@@ -18,6 +19,7 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_si_0001| comp-tree
 |kt_dev_si_0001| comp-term
+|kt_dev_si_0001| comp-build
 |kt_dev_si_0001| comp-jpa
 |kt_dev_si_0001| comp-jpa-print-systemstring
 |kt_dev_si_0001| comp-jvm
@@ -84,14 +86,153 @@ Use #{ for a group and ={ for a item
 # ============================================================================
 #{
 ={============================================================================
-|kt_dev_si_0001| si-box
+|kt_dev_si_0002| si-box
 
 The Amstrad DRX890 is a Broadcom 7335 based box
 The Amstrad DRX595 is a Broadcom 7350 based box
 
+<fsn_data>
+/mnt/nds/dev_6/part_0/FSN_DATA
+
 
 ={============================================================================
-|kt_dev_si_0001| si-git
+|kt_dev_si_0002| si-boot-script
+
+## trial-boot-scripts
+
+# from start-mw.sh on a box
+/usr/bin/bootlog.sh 15 1024 upload
+run CFG2BIN
+call SCD process
+
+# http://hoover.uk.nds.com/fusionmadesimple/index.php/Boot_Log
+# \vobs\FUSION_SYSTEM_INTEGRATION\BSKYB_INTEGRATION\build\tools\nds\si\bootlog\
+#
+# (bootlog-config.sh)
+# BLOG_mntpath="/mnt/nds/BLOGDIR" 		# before 21.15
+BLOG_mntpath="/tmp/dummydisk/BLOGDIR" 	# from 21.15
+FSN_DATAPATH="/mnt/nds/dev_5/part_0/FSN_DATA"
+
+BLOG_mntdev="/dev/sda1"
+BLOG_DATAPATH="${BLOG_mntpath}/FSN_DATA"
+
+#
+# [bootlog.sh] - main
+# Usage: bootlog.sh <rotate limit> <size limit> [upload]
+#
+# check if it's already mounted.
+grep -q "${BLOG_mntpath}" /proc/mounts
+
+# mounts
+mount "${BLOG_mntdev}" "${BLOG_mntpath}"
+#
+/usr/bin/bootlog-rotate.sh "$rotate_limit"
+#
+/usr/bin/bootlog-create.sh
+#
+/usr/bin/bootlog-diskusage.sh "$rotate_limit" "$size_limit"
+# upload
+[ -n "$upload" ] && /usr/bin/bootlog-upload.sh
+
+# Run crash monitor at high priority in background
+chrt -r 97 /usr/bin/crash-monitor.sh </dev/null &
+
+# COPY MEMPROF log in background 
+chrt -r 2 /usr/bin/bootlog-copymemprof.sh </dev/null &
+
+# umount. updated from 21.15 baseline
+umount "${BLOG_mntpath}"
+
+
+# [bootlog-rotate.sh]
+# Logs are rotated into numbered directories with the following naming scheme: 
+# Higher numbered directories are older. 
+# base="/mnt/nds/BLOGDIR/FSN_DATA/BOOTLOG.x"
+mv 'BOOTLOG' to 'BOOTLOG.1'
+
+# [bootlog-create.sh]
+cd /mnt/nds/BLOGDIR/FSN_DATA
+rm BOOTLOG
+mkdir /mnt/nds/BLOGDIR/FSN_DATA/VERINFO
+cp -a *.DB BOOTLOG/
+mv ${BLINFOPATH}/INFO.TXT LOG LOG.* *.LOG *.CUR *.COR *.TXT BOOTLOG/
+
+# [bootlog-mkinfo.sh] create info file, nvram file, etc..
+/usr/bin/bootlog-mkinfo.sh >${BLINFOPATH}/INFO.TXT
+# Middleware version
+grep NDS_SW_VERSION /NDS/config/version.cfg && echo
+
+# CDI version information properties
+/usr/bin/cdi-vi STBM_NAME MODEL_VER STB_ID && echo
+
+# Linux kernel version
+uname -a
+cat /proc/version && echo
+
+# CDI driver version
+cat /proc/callisto/version && echo
+
+
+# [bootlog-upload.sh]
+# Do upload
+logdir="${BLOG_DATAPATH}"/BOOTLOG
+if /usr/bin/bootlog-upload-1.sh "$logdir" &>/tmp/UPLOAD.LOG; then
+  echo '---- UPLOAD COMPLETE ----' >>"$logdir"/UPLOAD.LOG
+  cat /tmp/UPLOAD.LOG >>"$logdir"/UPLOAD.LOG
+
+  # Remove global log file if upload succeeded
+  rm -f "${BLOG_DATAPATH}"/UPLOAD.LOG
+else
+
+# Disable "online" LED
+/usr/bin/cdi-fpi 0 0 0
+
+
+# [bootlog-upload-1.sh]
+# FTP settings
+host=87.86.191.132
+user=anonymous
+pass=upload@sky.com
+path=upload
+
+# Enable "online" LED
+# "usage: cdi-fpi <index> <state> <luminosity>\n"
+/usr/bin/cdi-fpi 0 1 1
+
+# Create tarball. upload 'BOOTLOG'
+tar -c \
+  "${BLOG_DATAPATH}"/UPLOAD.LOG \
+  "$logdir"/LOG \
+  "$logdir"/*.LOG \			# previous binary DIAG log
+  "$logdir"/*.CUR \ 		# current binary DIAG log
+  "$logdir"/*.TXT \
+  "$logdir"/MFS.DB \
+  "$logdir"/PCAT.DB \
+  "$logdir"/REMBOOK.DB \
+  "$logdir"/NVRAM0.BIN \
+  "$logdir"/NVRAM1.BIN \
+  "$logdir"/*.COR \ 
+| gzip >"$logdir"/UPLOAD || exit $?
+
+
+# get mac
+# -sh-3.2# cat /sys/class/net/eth0/address
+# 00:10:18:00:12:00
+# 
+cut -c1-2,4-5,7-8,10-11,13-14,16-17 </sys/class/net/eth0/address
+
+# [crash-monitor.sh]
+# Set core dump location and format
+echo '/tmp/%p.COR' >/proc/sys/kernel/core_pattern
+
+# The crash monitor is a process which runs in the background checking for core dumps and then copying them to the disk when they appear. 
+# The core dumps are written to /tmp/<pid>.COR by the kernel. The crash monitor copies these to /FSN_DATA/. 
+# Looking at the date of the core files may give you a clue as to when a crash occurred. 
+
+
+
+={============================================================================
+|kt_dev_si_0002| si-git
 
 <register-ssh-key>
 https://wiki.cisco.com/display/GITFUSION/Getting+started+in+Git
@@ -102,6 +243,7 @@ The gerrit server is a git server and uses ssh config file.
 <si-git>
 http://hetty.cisco.com/fusionmadesimple/index.php/Git_Fusion_standard_workflow
 
+git clone ssh://wwwin-git-gpk-2.cisco.com:29418/STB_SW STB_SW
 git clone ssh://wwwin-git-gpk-2.cisco.com:29418/STB_SW STB_SW -b BSKYB_HQnnn_ETHAN_Int
 cd STB_SW
 ./initialise_hooks
@@ -140,6 +282,103 @@ CMS_SECURITY_SERVICES/NAGRA_CA_KERNEL/
 BUILD_SYSTEM/
 CMS_MEDIA_SERVICES/MPM/src/.doxygen.d/
 NDS_TOOLSETS/
+
+
+={============================================================================
+|kt_dev_si_0002| si-git-build
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Git_Fusion_standard_workflow
+
+
+cd STB_SW
+./initialise_hooks
+Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01
+
+  <Platform> parameter is one or more of the listed in: 
+  
+  $ more FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/git_scripts/load_rules.txt 
+  #
+  # This contains load rules for this stream. create_SI_bl_source.sh loads
+  # load rules by using this file. Hence this is not a regular text file.
+  # Be careful when making changes, especially space characters between rules.
+  #
+  # Hudkins also needs this file. Check below link for further details
+  # http://hudsonmaster1:9000/projects/hudsonadmin/wiki/Requirements_for_GetSourceToHudsonsh
+  #
+  
+  PLATFORM_ams_drx890="FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01"
+  PLATFORM_ams_drx595="FUSIONOS_5/BLD_DARWIN_SKYDRX595_BCM97350_LNUX_01"
+
+cd /home/NDS-UK/mariyapm/R11/R11/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
+
+1) ./build_mw_epg.sh -p "ams-drx890" --project "picasso"  --profile "Sky_Trials" --variant "debug"
+
+2) Upload jar files and replace it with car files. 
+note: requires hudson page to do that.
+
+3) Packaging => ./build_mw_epg.sh -p "ams-drx890" --project "picasso"  --profile "Sky_Trials" --variant "debug" -nm
+
+4) ./make_image.sh -c -p "ams-drx890" --project "picasso"  --profile "Sky_Trials" --variant "debug"
+
+5) Use image from /vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/
+
+
+<builds-commands>
+
+# make.sh: Build the Darwin middleware and/or application.
+# (but don't support 890 platform)
+#./make.sh --platform "ams-drx890" --profile "NDS_SI_Devel" 
+#./make.sh -c --platform "ams-drx890" --profile "NDS_SI_Devel"
+
+# build_mw_epg: Build the Darwin middleware and/or application.
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean [--output /home/NDS-UK/parkkt/cc/parkkt_BSKYB_INTEGRATION_MAIN_01/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build]
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean --baseline ENG_0603_PICA
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --use_sysinit_cfg 
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --memprof --baseline ENG_KT_SP
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean --mw_only --baseline ENG_KT_PCAT_05
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile sky_trials --baseline ENG_48.96.00U_4790_AEM_ENG
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile sky_trials --clean
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --memprof --bootlog --baseline ENG_SOC_03
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --memprof --baseline ENG_17_MP --clean
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel
+
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant preprod --profile cust_trials --clean
+
+# prod
+./build_mw_epg.sh --platform ams-drx595 --project picasso --variant prod --profile sky_prod --clean
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant prod --profile sky_prod --clean --baseline ENG_5854_SSM
+
+#./build_mw_epg.sh --platform "ams-drx780" --profile "NDS_SI_Devel" -nm
+
+# to get flash0.tar.gz. use this but not release.sh
+./utils/picasso_flash_H1.sh -b ams_bcm -p stripped_optim -s nds
+./picasso_flash_H1.sh -b ams_bcm -p debug -s nds
+
+# bsysconfig.bin
+/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig
+/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_001/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport CFG2BIN ./ *
+/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport CFG2BIN ./ *
+/home/NDS-UK/parkkt/cc/parkkt_BSKYB_HR006_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport CFG2BIN ./ *
+
+/home/NDS-UK/parkkt/cc/parkkt_BSKYB_HR006_001/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport BIN2XML x.xml bsysconfig.bin 
+
+# takes about 5 mins
+./make_image.sh --platform ams-drx890 --project picasso --profile "NDS_SI_Devel" 
+./make_image.sh --platform ams-drx890 --project picasso --profile "sky_trials" -c
+./make_image.sh --platform ams-drx890 --project picasso --variant preprod --profile cust_trials
+
+# prod
+./make_image.sh --platform ams-drx595 --project picasso --variant prod --profile sky_prod -c
+
+
+# takes about 37 mins
+./make_image.sh --platform ams-drx890 --project picasso --profile "NDS_SI_Devel" -c
+./make_image.sh --platform ams-drx890 --project picasso --profile "NDS_SI_Devel" --kernel_only 
+
+
+<build-gcc>
+/BLD_DARWIN_SKYDRX595_BCM97350_LNUX_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound/bin/mips-linux-gcc test.c
 
 
 ={============================================================================
@@ -343,6 +582,10 @@ also a name, because we know whose box this is.
 
 After this, select the file you want, and then refer to MyFirstCheckLog for
 how to decrypt that. 
+
+
+={============================================================================
+|kt_dev_si_0002| si-sh-get-logs
 
 
 ={============================================================================
@@ -654,6 +897,89 @@ VGC   VideoGuard Client
 VGV   VideoGuard Verifier
 VRM   Viewing And Recording Management
 SCI   Service Component Information
+
+
+={============================================================================
+|kt_dev_si_0001| comp-build
+
+1. component makefile
+
+../comp/src/makefile
+
+  COMPONENT_NAME := darwin_planner_src
+  COMPONENT_CC_DEFINES :=
+
+  # this starts the process of refering global make files.
+  include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
+
+2. global makefiles
+
+# build_options.mk
+FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk
+include $(NDS_ROOT)/projects/fusion2/build_options.mk
+
+# fusion2/build_options.mk
+ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),debug)
+  GLOBAL_DEFINES += DEBUG
+  GLOBAL_DEFINES += DIAG_DEBUG
+endif
+
+ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release)
+  GLOBAL_DEFINES += RELEASE
+  ifeq (YES,$(DIAG_RELEASE_MIL))
+    GLOBAL_DEFINES += DIAG_RELEASE_MIL
+  else
+    GLOBAL_DEFINES += DIAG_RELEASE
+  endif
+endif
+
+ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release_dbg)
+  ifeq (YES,$(DIAG_ENABLE_ALL_LEVELS))
+    GLOBAL_DEFINES += RELEASE_DBG
+    GLOBAL_DEFINES += DIAG_DEBUG
+  else
+    GLOBAL_DEFINES += RELEASE_DBG
+    GLOBAL_DEFINES += DIAG_RELEASE_DBG
+  endif
+endif
+
+
+# FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/platform.mk
+
+ifeq ($(NDS_BUILD_TYPE_$(COMPONENT_NAME)), debug)
+  LOCAL_PLATFORM_CC_FLAGS += -O0
+else
+  ifneq ($(NDS_GCOV_$(COMPONENT_NAME)), YES)
+    LOCAL_PLATFORM_CC_FLAGS += -Os
+  endif
+  LOCAL_PLATFORM_CC_FLAGS += -fno-strict-aliasing
+endif
+
+
+# note: to print custom message in make
+
+define PLATFORM_CC_BUILD_OBJECT
+     echo +++ Message from $(NDS_PLATFORM)/platform.mk - Creating object $@
+     echo "KT: $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@"
+     $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@
+endef
+
+define PLATFORM_BUILD_PROCESS_FROM_OBJECTS
+    @echo +++ Message from $(NDS_PLATFORM)/platform.mk Linking Process $@
+    @echo "KT: $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group $(^:$(PLATFORM_LIB_PREFIX)%$(PLATFORM_LIB_SUFFIX)=-l%) $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) -Xlinker --end-group -o $@"
+    $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group $(^:$(PLATFORM_LIB_PREFIX)%$(PLATFORM_LIB_SUFFIX)=-l%) $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) -Xlinker --end-group -o $@
+endef
+
+PLATFORM_STRIP := $(COMPILER_ROOT)/bin/$(MIPS)-linux-uclibc-strip
+
+# BUILD_SYSTEM/COMMON_MAKEFILES/process.mk
+ifeq (YES,$(NDS_STRIP_PROCESS))
+define LOCAL_PROCESS_STRIP_PROCESS
+    $(COMMANDS_MKDIR) $(NDS_BUILD_ROOT)/$(NDS_PLATFORM)/$(NDS_PLATFORM_ENDIAN)/unstripped_processes
+    $(COMMANDS_CP) $@ $(NDS_BUILD_ROOT)/$(NDS_PLATFORM)/$(NDS_PLATFORM_ENDIAN)/unstripped_processes/$(notdir $@)
+    @echo Removing debug information from $@
+    $(PLATFORM_STRIP) $@
+endef
 
 
 ={============================================================================
@@ -2793,8 +3119,9 @@ RELESE RB MC
 Making mem pool growable has been forbidden, even if the MEMMAN API propose it !
 
 # sample memcheck shot
-# ONLY WHEN #if (!defined(DIAG_RELEASE) && !defined(__DIAG_RELEASE)), means it'll be seen only in debug
-#
+# ONLY WHEN #if (!defined(DIAG_RELEASE) && !defined(__DIAG_RELEASE)), means
+# it'll be seen only in debug
+
 
 # (see AEM for more)
 MHWMemAllocStatic
@@ -2809,10 +3136,10 @@ MHWMemAllocStatic
 	(void) membuster_plus_pool_oom(POOL); \
 	(void) MemCheckMemory(POOL, MEMSTATUS_LOGLEVEL(MEMMAN_API_MEMSTATUS_ALL, MEMSTATUS_LOGLEVEL_WARN))
 
-# 
+ 
 # DUMP_USED_BLOCKS(g_planner_native_mem_pool);
 # MemCheckMemory(g_planner_native_mem_pool, MEMSTATUS_LOGLEVEL(MEMMAN_API_MEMSTATUS_ALL, MEMSTATUS_LOGLEVEL_WARN));
-#
+
 M:mem_static.c F:MHWMemAllocStatic L:00065 > Cannot allocate 132 bytes in pool ADPT_PLANNER, not enough memory
 M:mem_static.c F:MHWMemAllocStatic L:00068 >    Biggest block is 0 bytes
 M:mem_info.c F:MemCheckMemory L:00333 > MEMCHECK: BEGIN Check Pool: ADPT_PLANNER
@@ -2872,6 +3199,21 @@ M:mem_info.c F:MemCheckMemory L:00698 > MEMCHECK:  moveable |      0 blocks [   
 M:mem_info.c F:MemCheckMemory L:00762 > MEMCHECK: END Check Pool: ADPT_PLANNER
 
 # Note that there is 20 bytes overhead for each block. For example, if you allock 24 bytes and it will 44 bytes memman block like above.
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Debugging_memory_issues#Double_free
+
+<double-free>
+If you see a core dump with a crash in MHWMemFreeStatic or MHWMemElementIsFree
+then you are probably dealing with memory that has been freed twice.
+
+MHWMemFreeStatic checks MEMBLOCK_IS_HANDLED. The first time you call it, it
+returns false, which means the memory was allocated with malloc and MEMMAN
+does not have to do anything, but when it is freed all the MEMMAN flags get
+reset. This means that if you erroneously call MHWMemFreeStatic a second time
+on the same memory, MEMBLOCK_IS_HANDLED erroneously returns true, which causes
+IS_HANDLE and MHWMemElementIsFree to be called, which try to dereference some
+pointer that never pointed anywhere. In previous cases I've found it is caused
+by the same thing being freed from two different threads. 
 
 
 ={============================================================================
