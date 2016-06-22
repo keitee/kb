@@ -59,15 +59,15 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_107| gcc: link: sysroot and rpath-link
 *kt_dev_gcc_108* gcc-options-debug
 |kt_dev_gcc_108| gcc-options
-*kt_dev_gcc_109* gcc-options-dependancies
+*kt_dev_gcc_109* gcc-options-cpp-dependancies
 |kt_dev_gcc_110| gcc-attributes
 |kt_dev_gcc_111| gcc: profiling
 |kt_dev_gcc_112| gcc: options: optimization
 |kt_dev_gcc_113| gcc: options: warning
 
-|kt_dev_gcc_200| gcc: cpp: preprocessor
-*kt_dev_gcc_201* gcc: cpp: check processed result
-|kt_dev_gcc_201| gcc: cpp: define? 
+*kt_dev_gcc_200* gcc-cpp
+|kt_dev_gcc_201| gcc-cpp-header-guard
+*kt_dev_gcc_201* gcc-cpp-defined
 |kt_dev_gcc_202| gcc: cpp: how-to-get-filename-without-full-path
 
 
@@ -6189,7 +6189,7 @@ internal subroutine is '__main', used to ensure C++ constructors are called; see
 
 
 ={============================================================================
-*kt_dev_gcc_109* gcc-options-dependancies
+*kt_dev_gcc_109* gcc-options-cpp-dependancies
 
 https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html
 
@@ -6201,6 +6201,10 @@ options make sense only together with -E because they cause the preprocessor
 output to be 'unsuitable' for actual compilation. 
 
 $ g++ -std=c++0x -E useargs.cpp > out.txt
+
+note:
+Shows code replaced with define values.
+
 
 <save-temp>
 To produce three extra files with .i, .s and .o extension. The temporary files produced by
@@ -6296,7 +6300,7 @@ or reserved for future versions of GCC, and so are silently ignored. If you
    Instead of the normal output, generate a list of '#define' directives for all
    the macros defined during the execution of the preprocessor, including
    predefined macros. This gives you a way of 'finding' out what is predefined
-   in your version of the preprocessor. Assuming you have no file foo.h, the
+   in your version of the `preprocessor`. Assuming you have no file foo.h, the
    command
 
    touch foo.h; cpp -dM foo.h
@@ -6305,6 +6309,28 @@ or reserved for future versions of GCC, and so are silently ignored. If you
 
    If you use -dM without the -E option, -dM is interpreted as a synonym for
    -fdump-rtl-mach. See Debugging Options. 
+
+   note:
+   Have to use -E tgether to see user defines.
+
+https://gcc.gnu.org/onlinedocs/cpp/Invocation.html#Invocation
+
+<check-typedef>
+echo '#include <stdlib.h>' | cpp -I/usr/include | grep -n size_t
+gcc -E sample-two.c | egrep '\<size_t\>'
+
+note:
+Both do the job but using option -E requires c file.
+
+
+<check-macro>
+gcc -dM -E -std=gnu11 - < /dev/null | grep STDC_VER.
+
+$ mipsel-linux-gcc -dM -E - < /dev/null | ag GNUC
+#define __GNUC_PATCHLEVEL__ 3
+#define __GNUC__ 4
+#define __GNUC_MINOR__ 5
+#define __GNUC_GNU_INLINE__ 1
 
 
 -x c
@@ -6639,7 +6665,7 @@ embedded since taken from code on embedded system?
 
 
 ={============================================================================
-*kt_dev_gcc_200* gcc: cpp: preprocessor
+*kt_dev_gcc_200* gcc-cpp
 
 http://gcc.gnu.org/onlinedocs/cpp/
 
@@ -6652,45 +6678,17 @@ brief abbreviations for longer constructs.
 
 
 ={============================================================================
-*kt_dev_gcc_201* gcc: cpp: check processed resul and version
-
-https://gcc.gnu.org/onlinedocs/cpp/Invocation.html#Invocation
-
-$ echo '#include <stdlib.h>' | cpp -I/usr/include | grep -n size_t
-
-<check-macro>
-You can check the macro using 
-
-gcc -dM -E -std=gnu11 - < /dev/null | grep STDC_VER.
-
-~/source/DEVARCH$ mipsel-linux-gcc -dM -E - < /dev/null | ag GNUC
-#define __GNUC_PATCHLEVEL__ 3
-#define __GNUC__ 4
-#define __GNUC_MINOR__ 5
-#define __GNUC_GNU_INLINE__ 1
-
-~/source/DEVARCH$ mipsel-linux-gcc --version                     
-mipsel-linux-gcc (Broadcom stbgcc-4.5.3-2.4) 4.5.3
-
-
-={============================================================================
-*kt_dev_gcc_201* gcc: cpp: define? 
-
-Q: What's the difference between "define _LIMITS_H" and "define _LIMITS_H 1"?
-
-# ifndef _LIMITS_H
-#  define _LIMITS_H 1
-...
-# endif /* limits.h  */
+*kt_dev_gcc_201* gcc-cpp-header-guard
 
 2.4 Once-Only Headers
 
-If a header file happens to be included twice, the compiler will process its contents twice. This is
-very likely to cause an error, e.g. when the compiler sees the same structure definition twice. Even
-if it does not, it will certainly waste time.
+If a header file happens to be included twice, the compiler will process its
+contents twice. This is very likely to cause an error, e.g. when the compiler
+sees the same structure definition twice. Even if it does not, it will certainly
+waste time.
 
-The standard way to prevent this is to enclose the entire real contents of the file in a
-conditional, like this:
+The standard way to prevent this is to enclose the entire real contents of the
+file in a conditional, like this:
 
      /* File foo.  */
      #ifndef FILE_FOO_SEEN
@@ -6700,67 +6698,77 @@ conditional, like this:
      
      #endif /* !FILE_FOO_SEEN */
 
-This construct is commonly known as a "wrapper #ifndef". When the header is included again, the
-conditional will be false, because FILE_FOO_SEEN is defined. The preprocessor will skip over the
-entire contents of the file, and the compiler will not see it twice.
+This construct is commonly known as a "wrapper #ifndef". When the header is
+included again, the conditional will be false, because FILE_FOO_SEEN is defined.
+The preprocessor will skip over the entire contents of the file, and the
+compiler will not see it twice.
 
-CPP optimizes even further. It remembers when a header file has a wrapper ‘#ifndef’. If a subsequent
-‘#include’ specifies that header, and the macro in the ‘#ifndef’ is still defined, it does not
-bother to rescan the file at all.
+You can put comments outside the wrapper. They will not interfere with this
+optimization.
 
-You can put comments outside the wrapper. They will not interfere with this optimization.
+The macro FILE_FOO_SEEN is called the controlling macro or "guard macro". In a
+user header file, the macro name should 'not' begin with '_'. In a system header
+file, it 'should' begin with '__' to avoid conflicts with user programs. In any
+kind of header file, the macro name should contain the name of the file and some
+additional text, to avoid conflicts with other header files.  
 
-The macro FILE_FOO_SEEN is called the controlling macro or "guard macro". In a user header file, the
-macro name should 'not' begin with '_'. In a system header file, it 'should' begin with '__' to
-avoid conflicts with user programs. In any kind of header file, the macro name should contain the
-name of the file and some additional text, to avoid conflicts with other header files.  
 
-Q: Is it a problem to use '_' for user headers?
+={============================================================================
+*kt_dev_gcc_201* gcc-cpp-defined
 
 -D name 
 Predefine name as a macro, with definition 1. 
 
 -D name=definition
-The contents of definition are tokenized and processed as if they appeared during translation phase
-three in a '#define' directive. In particular, the definition will be truncated by embedded newline
-characters.
+The contents of definition are tokenized and processed as if they appeared
+during translation phase three in a '#define' directive. In particular, the
+definition will be truncated by embedded newline characters.
 
-If you are invoking the preprocessor from a shell or shell-like program you may need to use the
-shell's quoting syntax to protect characters such as spaces that have a meaning in the shell syntax.
+If you are invoking the preprocessor from a shell or shell-like program you may
+need to use the shell's quoting syntax to protect characters such as spaces that
+have a meaning in the shell syntax.
 
-If you wish to define a function-like macro on the command line, write its argument list with
-surrounding parentheses before the equals sign (if any). Parentheses are meaningful to most shells,
-so you will need to quote the option. With sh and csh, -D'name(args...)=definition' works.
+If you wish to define a function-like macro on the command line, write its
+argument list with surrounding parentheses before the equals sign (if any).
+Parentheses are meaningful to most shells, so you will need to quote the option.
+With sh and csh, -D'name(args...)=definition' works.
 
--D and -U options are processed in the order they are given on the command line. All -imacros file
-and -include file options are processed after all -D and -U options. 
+-D and -U options are processed in the order they are given on the command line.
+All -imacros file and -include file options are processed after all -D and -U
+options. 
 
 4.2.3 Defined
 
-The special operator defined is used in '#if' and '#elif' expressions to test whether a certain name
-is defined as a macro. "defined name" and "defined (name)" are both expressions whose value is <1>
-if name is defined as a macro at the current point in the program, and 0 otherwise. Thus, #if
-defined MACRO is precisely equivalent to #ifdef MACRO.
+The special operator defined is used in '#if' and '#elif' expressions to test
+whether a certain name is defined as a macro. "defined name" and "defined
+(name)" are both expressions whose value is `1` if name is defined as a macro at
+the current point in the program, and 0 otherwise. Thus, #if defined MACRO is
+precisely equivalent to #ifdef MACRO.
 
-defined is useful when you wish to test more than one macro for existence at once. For example,
+`defined` is useful when you wish to test more than one macro for existence at
+once. For example,
 
      #if defined (__vax__) || defined (__ns16000__)
 
-would succeed if either of the names __vax__ or __ns16000__ is defined as a macro.
+would succeed if either of the names __vax__ or __ns16000__ is defined as a
+macro.
 
 Conditionals written like this:
 
      #if defined BUFSIZE && BUFSIZE >= 1024
 
-can generally be simplified to just #if BUFSIZE >= 1024, since if BUFSIZE is not defined, it will be
-interpreted as having the value zero.
+can generally be simplified to just #if BUFSIZE >= 1024, since if BUFSIZE is not
+defined, it will be interpreted as having the value zero.
 
-If the defined operator appears as a result of a macro expansion, the C standard says the behavior
-is undefined. GNU cpp treats it as a genuine defined operator and evaluates it normally. It will
-warn wherever your code uses this feature if you use the command-line option -pedantic, since other
-compilers may handle it differently. 
+If the defined operator appears as a result of a macro expansion, the C standard
+says the behavior is undefined. GNU cpp treats it as a genuine defined operator
+and evaluates it normally. It will warn wherever your code uses this feature if
+you use the command-line option -pedantic, since other compilers may handle it
+differently. 
 
-<example>
+<ex>
+Q: What's the difference between "define _LIMITS_H" and "define _LIMITS_H 1"?
+
 #define SAMPLE
 #define SAMPLE 1
 #define SAMPLE 2
@@ -6770,21 +6778,20 @@ compilers may handle it differently.
   printf("sample is def\n");
 #endif
 
-// For 1, emit error like: 
-// sam01.c:39:12: error: operator '>' has no left operand
-// Only works for 2 case.
+// Only emit error for case 1: 
+// : error: operator '==' has no left operand
 #if SAMPLE == 1
   printf("sample is =1\n");
 #endif
 
-// For 1, emit error like: 
-// sam01.c:39:12: error: operator '>' has no left operand
-// Only works for 3 case.
+// Only emit error for case 1: 
+// : error: operator '>' has no left operand
 #if SAMPLE > 1
   printf("sample is >1 \n");
 #endif
 
-After all, "define MACRO x" is to use macro value and no real needs as a guard macro.
+After all, "define MACRO x" is to use macro value and no real needs as a guard
+macro.
 
 
 ={============================================================================
