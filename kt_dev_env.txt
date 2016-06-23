@@ -66,7 +66,8 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_vim_128* vim-search-selection
 |kt_dev_env_vim_129| global command {power}
 
-*kt_dev_env_vim_130* vim-hide-in-line:
+*kt_dev_env_vim_004* vim-syntax
+*kt_dev_env_vim_130* vim-syntax-conceal
 *kt_dev_env_vim_130* vim-spell
 |kt_dev_env_vim_131| vim-diff
 |kt_dev_env_vim_132| yank current filename to a register. expand
@@ -101,7 +102,6 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 
 |kt_dev_env_vim_002|	config {vimrc}
 |kt_dev_env_vim_003|	recovery, swap and backup
-|kt_dev_env_vim_004|	color and syntax
 |kt_dev_env_vim_005|	plugin: foldsearc
 |kt_dev_env_vim_008|	search and substitute {vim-subst} {vim-global}
 |kt_dev_env_vim_022|	format and wrap {tabstop}
@@ -4384,12 +4384,318 @@ mute these messages by prefixing our [cmd] with :silent (see :h :sil ):
 
 
 ={============================================================================
-*kt_dev_env_vim_130* vim-hide-in-line:
+*kt_dev_env_vim_004* vim-syntax
+
+From usr_44.txt
+
+To check which syntax items are currently defined, use this command:
+
+:syn[tax]
+
+You can use this to check which items have actually been defined.  Quite useful
+when you are experimenting with a new syntax file.  It also shows the colors
+used for each item, which helps to find out what is what.
+
+To list the items in a specific syntax group use:
+
+:syntax list {group-name}
+
+
+MATCHING CASE
+
+Others, such as C, are case sensitive.  You need to tell which type you have
+with the following commands:
+
+:syntax case match
+:syntax case ignore
+
+The "match" argument means that Vim will match the case of syntax elements.
+Therefore, "int" differs from "Int" and "INT".
+
+
+*44.2*	Keywords
+
+The most basic syntax elements are keywords.  To define a keyword, use the
+following form:
+
+:syntax keyword {group} {keyword} ...
+
+The {group} is the name of a syntax group.  
+
+With the ":highlight" command you can `assign colors` to a {group}.  
+
+The {keyword} argument is an `actual keyword`.  Here are a few examples:
+
+:syntax keyword xType int long char
+:syntax keyword xStatement if then else endif
+
+This example uses the group names "xType" and "xStatement".  By convention, each
+group name is prefixed by the filetype for the language being defined.  This
+example defines syntax for the x language.  In a syntax file for "csh" scripts
+the name "cshType" would be used.  Thus the prefix is equal to the value of
+'filetype'.
+
+These commands cause the words "int", "long" and "char" to be highlighted one
+way and the words "if", "then", "else" and "endif" to be highlighted another
+way. 
+
+Now you need to connect the x group names to standard Vim names.  You do this
+with the following commands:
+
+note:
+connect `syntax group` to `vim name`
+
+:highlight link xType Type
+:highlight link xStatement Statement
+
+This tells Vim to highlight "xType" like "Type" and "xStatement" like
+"Statement". See |group-name| for the standard names.
+
+
+<standard-name>
+To be able to allow each user to pick his favorite set of colors, there must be
+preferred names for highlight groups that are common for many languages.  These
+are the suggested group names (if syntax highlighting works properly you can see
+    the actual color, except for "Ignore"):
+
+	*Comment	any comment
+
+	*Statement	any statement
+	 Conditional	if, then, else, endif, switch, etc.
+	 Repeat		for, do, while, etc.
+	 Label		case, default, etc.
+	 Operator	"sizeof", "+", "*", etc.
+	 Keyword	any other keyword
+	 Exception	try, catch, throw
+
+...
+
+
+The x language allows for abbreviations.  For example, "next" can be
+abbreviated to "n", "ne" or "nex".  You can define them by using this command:
+
+:syntax keyword xStatement n[ext]
+
+This doesn't match "nextone", keywords always match whole words only.
+
+
+*44.3*	Matches
+
+Consider defining something a bit more complex.  You want to match ordinary
+identifiers.  To do this, you define a match `syntax item`.  This one matches
+any word consisting of only lowercase letters:
+
+:syntax match xIdentifier /\<\l\+\>/
+ 
+Note:
+keywords overrule any other syntax item.  Thus the keywords "if", "then", etc.,
+         will be keywords, as defined with the ":syntax keyword" commands above,
+         even though they also match the pattern for xIdentifier.
+
+The part at the end is a `pattern`, like it's used for searching.  The // is
+used to surround the pattern (like how it's done in a ":substitute" command).
+
+You can use any other character, like a plus or a `quote`.
+
+<ex> from cpp.vim
+syn match cppCast		"\<\(const\|static\|dynamic\|reinterpret\)_cast\
+s*$"
+
+
+Now define a match for a comment.  In the x language it is anything from # to
+the end of a line:
+
+:syntax match xComment /#.*/
+
+Since you can use any search pattern, you can highlight very complex things with
+a match item.
+
+
+*44.4*	Regions
+
+In the example x language, strings are enclosed in double quotation marks (").
+To highlight strings you define a region.  You need a region start (double
+    quote) and a region end (double quote).  The definition is as follows:
+
+:syntax region xString start=/"/ end=/"/
+
+The "start" and "end" directives define the patterns used to find the start
+and end of the region.  But what about strings that look like this?
+
+	"A string with a double quote (\") in it" 
+
+This creates a problem: The double quotation marks in the middle of the string
+will end the region.  You need to tell Vim to skip over any escaped double
+quotes in the string.  Do this with the skip keyword:
+
+:syntax region xString start=/"/ skip=/\\"/ end=/"/
+
+The double backslash matches a single backslash, since the backslash is a
+special character in search patterns.
+
+When to use a region instead of a match?  The `main difference` is that a match
+item is a single pattern, which must match as a whole.  A region starts as soon
+as the "start" pattern matches.  Whether the "end" pattern is found or not
+doesn't matter.  Thus when the item depends on the "end" pattern to match, you
+cannot use a region.  Otherwise, regions are often simpler to define.  And it is
+easier to use nested items, as is explained in the next section.
+
+
+*44.5*	Nested items
+
+Take a look at this comment:
+
+	%Get input  TODO: Skip white space 
+
+You want to highlight TODO in big yellow letters, `even though` it is in a
+comment that is highlighted blue.  To let Vim know about this, you define the
+following syntax groups:
+
+:syntax keyword xTodo TODO contained
+:syntax match xComment /%.*/ contains=xTodo
+
+In the first line, the "contained" argument tells Vim that this keyword can
+exist only inside another syntax item.  The next line has "contains=xTodo".
+This indicates that the xTodo syntax element is inside it.  The result is that
+the comment line as a whole is matched with "xComment" and made blue.  The word
+TODO inside it is matched by xTodo and highlighted yellow (highlighting for
+    xTodo was setup for this).
+
+
+*44.11*	Installing a syntax file
+
+When your new syntax file is ready to be used, drop it in a "syntax" directory
+in 'runtimepath'.  For Unix that would be "~/.vim/syntax".  The name of the
+syntax file must be equal to the file type, with ".vim" added.  Thus for the x
+language, the full path of the file would be:
+
+~/.vim/syntax/x.vim 
+
+You must also make the file type be recognized. See |43.2|.
+
+
+{colorscheme}
+
+:colorscheme evening
+
+{color-syntax}
+
+:syntax clear		# to disable
+:syntax off			# to turn off
+
+{user-syntax}
+
+.vim/syntax/nds.vim
+
+can use egrep style as below
+
+syntax match ndsMesg02          /UAM_DCM_PARAM_DATA_INTERNAL_TYPE_STANDBY_\(IN\|OUT\)/
+hi def link ndsMesg02 Type
+
+
+={============================================================================
+*kt_dev_env_vim_130* vim-syntax-conceal
+
+6. :syntax arguments *:syn-arguments*
+
+The :syntax commands that define syntax items take a number of arguments.
+The common ones are explained here.  The arguments may be given in any order
+and may be mixed with patterns.
+
+Not all commands accept all arguments.	This table shows which arguments
+can `not` be used for all commands:
+
+                contains  oneline   fold  display   extend  concealends~
+:syntax keyword   -         -         -     -         -         -
+:syntax match     yes       -         yes   yes       yes       -
+:syntax region    yes       yes       yes   yes       yes       yes
+
+These arguments can be used for all three commands:
+   conceal
+   cchar
+   contained
+   containedin
+   nextgroup
+   transparent
+   skipwhite
+   skipnl
+   skipempty
+
+
+conceal
+
+When the "conceal" argument is given, the item is marked as concealable.
+Whether or not it is actually concealed depends on the value of the
+'conceallevel' option.  
+
+The 'concealcursor' option is used to decide whether concealable items in the
+current line are displayed unconcealed to be able to edit the line.
 
 You can use matching, combined with syntax highlighting and the conceal feature
-to actually not show matched characters inside lines.
+to actually `not show` matched characters inside lines.
 
-To hide the first 25 chars of each line:
+
+cchar
+
+The "cchar" argument defines the character shown in place of the item when it is
+concealed (setting "cchar" only makes sense when the conceal argument is given.)
+If "cchar" is not set then the default conceal character defined in the
+'listchars' option is used.
+
+
+'conceallevel' 'cole'
+number (default 0)
+local to window
+{not available when compiled without the |+conceal| feature}
+
+Determine how text with the "conceal" syntax attribute |:syn-conceal| is shown:
+
+Valu  Effect 
+
+0     Text is shown normally
+
+1     Each block of concealed text is replaced with one
+      character.  If the syntax item does not have a custom
+      replacement character defined (see |:syn-cchar|) the
+      character defined in 'listchars' is used (default is a
+      space).
+      It is highlighted with the "Conceal" highlight group.
+
+2     Concealed text is completely hidden unless it has a
+      custom replacement character defined (see
+      |:syn-cchar|).
+
+3     Concealed text is completely hidden.
+
+Note: in the cursor line concealed text is not hidden, so that you can edit and
+copy the text. This can be changed with the 'concealcursor' option.
+
+
+'concealcursor' 'cocu' string (default: "")
+
+Sets the modes in which text in the cursor line can also be concealed.  When the
+current mode is listed then concealing happens just like in other lines.
+
+  n      Normal mode
+  v      Visual mode
+  i      Insert mode
+  c      Command line editing, for 'incsearch'
+
+'v' applies to all lines in the Visual area, not only the cursor.
+
+A useful value is "nc".  This is used in help files.  So long as you are moving
+around text is concealed, but when starting to insert text or selecting a Visual
+area the concealed text is displayed, so that you can see what you are doing.
+Keep in mind that the cursor position is not always where it's displayed.  E.g.,
+     when moving vertically it may change column.
+
+note:
+To prevent the cursor line from expanding.
+
+set concealcursor=nc
+
+<ex>
+To hide the first 25 chars of each line.
 
 :syn match Concealed '^.\{25\}' conceal
 :set conceallevel=2
@@ -4412,14 +4718,6 @@ will look like this after executing the first two commands:
 
 PID Name LogText
 PID Name LogText
-
-See also - inside vim:
-help :syn-match
-help :syn-conceal
-help 'conceallevel'
-help 'concealcursor'
-
-Do set concealcursor=nc to prevent the cursor line from expanding.
 
 <ex>
 :syn match Concealed '\/home.*\/src' conceal
@@ -6422,28 +6720,6 @@ To make Vim keep the original file, set the 'patchmode' option.  This specifies 
 for the first backup of a changed file.  Usually you would do this:
 
 :set patchmode=.orig
-
-
-==============================================================================
-*kt_dev_env_vim_004*	color and syntax
-
-{colorscheme}
-
-:colorscheme evening
-
-{color-syntax}
-
-:syntax clear		# to disable
-:syntax off			# to turn off
-
-{user-syntax}
-
-.vim/syntax/nds.vim
-
-can use egrep style as below
-
-syntax match ndsMesg02          /UAM_DCM_PARAM_DATA_INTERNAL_TYPE_STANDBY_\(IN\|OUT\)/
-hi def link ndsMesg02 Type
 
 
 ==============================================================================
