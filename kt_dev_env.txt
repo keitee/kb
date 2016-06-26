@@ -50,6 +50,8 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_vim_114| command mode: normal commands
 |kt_dev_env_vim_115| command completion, history, and command line window
 |kt_dev_env_vim_116| vim-cmdline: current filename
+*kt_dev_env_vim_117* vim-edit-two-files
+*kt_dev_env_vim_117* vim-edit-autowrite
 |kt_dev_env_vim_117| exit, file and buffer
 |kt_dev_env_vim_118| vim-window
 *kt_dev_env_vim_118* vim-window-scroll
@@ -90,6 +92,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 
 *kt_dev_env_vim_300* vim-tag-cscope
 *kt_dev_env_vim_301* vim-tag-ctag
+*kt_dev_env_vim_302* vim-tag-stack
 |kt_dev_env_vim_302| prog: move in c
 *kt_dev_env_vim_303* vim-tag-gtag
 *kt_dev_env_vim_303* vim-tag-unite-gtag
@@ -243,10 +246,8 @@ git clone https://github.com/vim/vim.git
 
 {install}
 cd src
-make distclean  # if you build Vim before
-make
-sudo make install
-./configure --prefix=/home/kit --enable-cscope
+make distclean  " if you build Vim before
+./configure     " see below
 make VIMRUNTIMEDIR=/home/kit/vim MAKE="make -e"
 make install
 
@@ -305,9 +306,9 @@ The following NEW packages will be installed
 
 apt-get install lua5.2 liblua5.2-dev
 
-./configure --prefix=/home/kit/viminst  --enable-luainterp=yes 
---with-features=huge --enable-gui=gnome2 --enable-cscope 
---enable-pythoninterp=yes
+./configure --prefix=/home/kit/bin --enable-luainterp=yes \
+--with-features=huge --enable-gui=gnome2 --enable-cscope \
+--enable-pythoninterp=yes \
 --with-python-config-dir=/usr/lib/python2.7/config
 
 note:
@@ -2728,6 +2729,31 @@ The % Is replaced with the current file name.
 
 
 ={============================================================================
+*kt_dev_env_vim_117* vim-edit-two-files
+
+CTRL-^   Edit the alternate file.  Mostly the alternate file is
+         the previously edited file.  This is a quick way to
+         toggle between two files.  It is equivalent to ":e #",
+         except that it also works when there is no file name.
+
+         If the 'autowrite' or 'autowriteall' option is on and
+         the buffer was changed, write it.
+
+
+={============================================================================
+*kt_dev_env_vim_117* vim-edit-autowrite
+
+'autowrite' 'aw' boolean (default off)
+
+Write the contents of the file, if it has been modified, on each
+:next, :rewind, :last, :first, :previous, :stop, :suspend, :tag, :!,
+:make, CTRL-] and CTRL-^ command; and when a :buffer, CTRL-O, CTRL-I,
+'{A-Z0-9}, or `{A-Z0-9} command takes one to another file.
+Note that for some commands the 'autowrite' option is not used, see
+'autowriteall' for that.
+
+
+={============================================================================
 *kt_dev_env_vim_117* exit, file and buffer
 
 {buffer}
@@ -2902,12 +2928,61 @@ Examples, when the file name is "src/version.c", current dir "/home/mool/vim": >
 The following commands reposition the edit window (the part of the buffer that
 you see) while keeping the cursor on the same line:
 
-      " from {move-screen}
-C-d	" down half screen. inoremap <C-d> <C-d>zz
-C-u	" up half screen (backward). inoremap <C-u> <C-u>zz
+*zz*
+zz       Like "z.", but leave the cursor in the same column.
+         Careful: If caps-lock is on, this command becomes
+         "ZZ": write buffer and exit!  {not in Vi}
 
-C-^	" switch between the previous and the next in the list
+" scrolling {{{
+   nnoremap <silent> n nzz
+   nnoremap <silent> N Nzz
+   nnoremap <silent> * *zz
+   nnoremap <silent> # #zz
+   nnoremap <silent> g* g*zz
+   nnoremap <silent> g# g#zz
+   nnoremap <silent> <C-o> <C-o>zz
+   nnoremap <silent> <C-i> <C-i>zz
+   nnoremap <silent> <C-d> <C-d>zz
+   nnoremap <silent> <C-u> <C-u>zz
+"}}}
 
+
+<want-to-keep-the-column>
+When use <C-d>zz in the middle of line, cursor goes to the beginning of line.
+However, zz stays on the same column. To stay on the same column:
+
+:set nostartofline
+:set ve=all
+
+'startofline' 'sol' boolean (default on)
+
+When "on" the commands listed below move the cursor to the first non-blank of
+the line. When off the cursor is kept in the same column (if possible). 
+
+This applies to the commands: CTRL-D, CTRL-U, CTRL-B, CTRL-F, "G", "H", "M",
+     "L", gg, and to the commands "d", "<<" and ">>" with a linewise operator,
+     with "%" with a count and to buffer changing commands (CTRL-^, :bnext,
+         :bNext, etc.).
+       
+Also for an Ex command that only has a line number, e.g., ":25" or ":+".  In
+  case of buffer changing commands the cursor is placed at the column where it
+  was the last time the buffer was edited.  NOTE: This option is set when
+  'compatible' is set.
+
+
+'virtualedit' 've' string (default "")
+{not available when compiled without the |+virtualedit| feature}
+
+   A comma separated list of these words:
+       block    Allow virtual editing in Visual block mode.
+       insert   Allow virtual editing in Insert mode.
+       all      Allow virtual editing in all modes.
+       onemore  Allow the cursor to move just past the end of the line
+
+   Virtual editing means that the cursor can be positioned where there is
+   no actual character.  This can be halfway into a tab or beyond the end
+   of the line.  Useful for selecting a rectangle in Visual mode and
+   editing a table.
 
 
 ={============================================================================
@@ -5484,18 +5559,26 @@ Exuberant Ctags 5.9~svn20110310, Copyright (C) 1996-2009 Darren Hiebert
   Optional compiled features: +wildcards, +regex
 
 
-{generate-a-tag-file}
+{generate-a-tag}
 
+<use-list>
   -L <file>
        A list of source file names are read from the specified file.
        If specified as "-", then standard input is read.
+
+note:
+By using the same list file, can use it for both ctag and gtag.
+
+
+<use-recursive>
 
 ctags -R .
 
 To set the place to create a tag:
 
 ctags -R -f ./.git/tags .
-ctags -R -f oem-hwei-7409.tags --c++-kinds=+p --fields=+iaS --extra=+q --tag-relative=yes /opt/oem-staging/huawei-bcm7409/usr/local
+ctags -R -f oem-hwei-7409.tags --c++-kinds=+p --fields=+iaS --extra=+q \
+         --tag-relative=yes /opt/oem-staging/huawei-bcm7409/usr/local
 
 note: -f should be before than --fields
 
@@ -5506,33 +5589,41 @@ ctags -R --c++-kinds=+p --fields=+iaS --extra=+q .
 <in-vim>
 :!ctags -R
 
+
 {automatic-tag-creation}
 
 :nnoremap <f5> :!ctags -R<CR>
 
-Vim's autocommand feature allows us to invoke a command on each occurrence of an event, such as a
-buffer being created, opened, or written to file. We could set up an autocommand that invokes ctags
-every time we save a file:
+but we still have to remember periodically to generate the tags file. Now
+let's consider a couple of options for automating this process.
+
+Practical Vim 16. Tip 102.
+
+Vim's autocommand feature allows us to invoke a command on each occurrence of
+an event, such as a buffer being created, opened, or written to file. We could
+set up an autocommand that invokes ctags every time we save a file:
 
 http://andrewradev.com/2011/06/08/vim-and-ctags/
 
 <solution-one> plugin:autotag
-1. The ctag has an -a flag that makes it append to a tag file instead of overwriting it. That way
-you can update the tags very quickly every time a file changes. With vim's autocommands, this could
-work like this:
+1. The ctag has an -a flag that makes it append to a tag file instead of
+overwriting it. That way you can update the tags very quickly every time a
+file changes. With vim's autocommands, this could work like this:
 
 autocmd BufWritePost *
       \ if filereadable('tags') |
       \   call system('ctags -a '.expand('%')) |
       \ endif
 
-Unfortunately, there's an issue with this approach. Ctags will only add new tags, it won't remove
-ones that are no longer present. If you delete a function, it will still appear in the tag file.
+Unfortunately, there's an issue with this approach. Ctags will only add new
+tags, it won't remove ones that are no longer present. If you delete a
+function, it will still appear in the tag file.
 
-That's where the autotag.vim plugin comes in. Whenever you save a file, it deletes all of its
-entries and invokes ctags in append mode. I've been using it for a long time and I haven't noticed
-any overhead at all, even on Windows boxes. Unfortunately, your vim build needs to have python
-support to use it. Even if it doesn't, though, no errors are raised, which is nice if you use the
+That's where the autotag.vim plugin comes in. Whenever you save a file, it
+deletes all of its entries and invokes ctags in append mode. I've been using
+it for a long time and I haven't noticed any overhead at all, even on Windows
+boxes. Unfortunately, your vim build needs to have python support to use it.
+Even if it doesn't, though, no errors are raised, which is nice if you use the
 same vimfiles across different vim builds like I do.
 
 autotag: http://www.vim.org/scripts/script.php?script_id=1343
@@ -5547,30 +5638,32 @@ control to re-index the repository every time we commit our code.
 
 
 <consideration>
-Using an autocommand to invoke ctags every time a buffer is saved ensures that our tags file is
-always up-to-date, but at what cost? Re-indexing our codebase on each commit strikes a good balance.
-The code that we're actively working on is the code we're least likely to want to navigate using
-tags.
+Using an autocommand to invoke ctags every time a buffer is saved ensures that
+our tags file is always up-to-date, but at what cost? Re-indexing our codebase
+on each commit strikes a good balance.  The code that we're actively working
+on is the code we're least likely to want to navigate using tags.
 
-note: think that it is a good balance to have the second solution and the way to run it manually
-such as key mapping.
+note: think that it is a good balance to have the second solution and the way
+to run it manually such as key mapping.
 
 <ctag-options>
 From ctags faq:
 7. Why can't I jump to class::member?
 
-Because, by default, ctags only generates tags for the separate identifiers found in the source
-files. If you specify the --extra=+q option, then ctags will also generate a second, class-qualified
-tag for each class member (data and function/method) in the form class::member for C++, and in the
-form class.method for Eiffel and Java. 
+Because, by default, ctags only generates tags for the separate identifiers
+found in the source files. If you specify the --extra=+q option, then ctags
+will also generate a second, class-qualified tag for each class member (data
+    and function/method) in the form class::member for C++, and in the form
+class.method for Eiffel and Java. 
 
+// --exclude=[pattern]
 --exclude=.git
 --languages=-sql
 
 
 {tags-for-external}
-When ./ is used in the tags option, Vim replaces it with the path of the currently active file. We
-can inspect the defaults:
+When ./ is used in the tags option, Vim replaces it with the path of the
+currently active file. We can inspect the defaults:
 
 :set tags?
    tags=./tags,tags
@@ -5585,12 +5678,13 @@ ctags -R --c++-kinds=+p --fields=+iaS --extra=+q /usr/include
 
 
 <solution-one> add only files that used in the project
-Why must we generate a tags file containing all the symbols in the system header? If we only
-generate the tags file 'only' for the header files that are 'related' to our projects, would it be
-faster? That's the point of this idea. We could first search for the header files that are included
-in our projects, and then we use ctags to generate a tags file for these files and our source files,
-in this way, a much smaller tags file that containing all the symbols that maybe useful for the
-project is generated. The solution is:
+Why must we generate a tags file containing all the symbols in the system
+header? If we only generate the tags file 'only' for the header files that are
+'related' to our projects, would it be faster? That's the point of this idea.
+We could first search for the header files that are included in our projects,
+   and then we use ctags to generate a tags file for these files and our
+   source files, in this way, a much smaller tags file that containing all the
+   symbols that maybe useful for the project is generated. The solution is:
 
 #!/bin/sh
 # ./ctags_with_dep.sh file1.c file2.c ... to generate a tags file for these files.
@@ -5611,12 +5705,13 @@ sed -e '/^$/d' -e '/\.o:[ \t]*$/d' | \
 ctags -L - --c++-kinds=+p --fields=+iaS --extra=+q 
 
 <solution-two>
-The other way is that create a tag file for system headers once and use when it is needed.
+The other way is that create a tag file for system headers once and use when
+it is needed.
 
 :se tags+=/usr/include/tags
 
-Here se is se[t] in vim and ctags read a tag file from the current directory so can set one in a
-different directory and 'add' it the 'database'.
+Here se is se[t] in vim and ctags read a tag file from the current directory
+so can set one in a different directory and 'add' it the 'database'.
 
 
 {tag-config}
@@ -5648,66 +5743,99 @@ note: Clojure is language and looks like this is how define new language for cta
 --regex-clojure=/\([ \t]*intern[ \t]+([-[:alnum:]*+!_:\/.?]+)/\1/v,intern/
 --regex-clojure=/\([ \t]*ns[ \t]+([-[:alnum:]*+!_:\/.?]+)/\1/n,namespace/
 
-<options>
--R
-Equivalent to --recurse
 
---tag-relative[=yes|no]
+={============================================================================
+*kt_dev_env_vim_302* vim-tag-stack
 
-Indicates that the file paths recorded in the tag file should be relative to the directory
-containing the tag file, rather than relative to the current directory, unless the files supplied on
-the command line are specified with absolute paths. This option must appear before the first file
-name. The default is yes when running in etags mode, no otherwise
+Practical Vim 16. Tip 103.
 
---exclude=[pattern]
+Vim's ctags integration turns the keywords in our code into a kind of
+hyperlink, allowing us to jump rapidly to a definition.
 
--L file
-Read from file a list of file names for which tags should be generated. If file is specified as "¿", then file names are read from standard input.
+{hyperlink}
+The hyperlink is a text enclosed in vertical bars (for example, |help|) and
+the destination is the notation *help.txt*. 
 
 
-{tag-hyperlink}
-The tag file has to be generated by a program like ctags, before the tag commands can be used. The
-hyperlink is a text enclosed in vertical bars (for example, |help|) and the destination is the
-notation *help.txt*. 
+{tag-stack}
+With the <C-]>, push command, the keyword on which the cursor is standing is
+used as the tag. If the cursor is not on a keyword, the first keyword to the
+right of the cursor is used. <C-t>, pop to [count] older entry in the tag
+stack (default 1).
 
-
-{tag-stack-push-pop}
-With the <C-]>, push command, the keyword on which the cursor is standing is used as the tag. If the
-cursor is not on a keyword, the first keyword to the right of the cursor is used. <C-t>, pop to
-[count] older entry in the tag stack (default 1).
-
-The most obvious way to use this is while browsing through the call graph of a program. Consider
-the following call graph:
+The most obvious way to use this is while browsing through the call graph of a
+program. Consider the following call graph:
 
              ---> <C-]>
      main  --->  FuncA  --->  FuncC
            --->  FuncB
              <--- <C-t>
 
-If the stack was full (it can hold up to 20 entries), the oldest entry is deleted and the older
-entries shift one position up (their index number is decremented by one). 
+If the stack was full (it can hold up to 20 entries), the oldest entry is
+deleted and the older entries shift one position up (their index number is
+    decremented by one). 
 
-<navigate-tag-list>
-If it has multiple matches, then the g<C-]> command presents us with a list of choices from the tag
-match list: note: <C-]> shows up the list.
 
-If a tag in the current buffer matches the keyword, it gets the highest priority. :h tag-priority
+<tell-tag-file>
+Tell Vim Where to Find the Tags File
+
+The `tags` option specifies where Vim should look to find a tags file (:h 'tags').
+
+When ./ is used in the `tags` option, Vim replaces it with the path of the
+currently active file. We can inspect the defaults:
+
+:set tags?
+ tags=./tags,tags
+
+With these settings, Vim looks for a tags file in the directory of the current
+file and in the working directory.
+
+
+<tag-files>
+Under certain conditions, if a match is found in the first tags file, Vim
+won't even look in the second file (see :h tags-option for more details).
+
+Using Vim's default settings, we could keep a tags file in every subdirectory
+of our project. Or we could keep it simple by creating a global tags file in
+the project root directory.  If you run ctags often enough to keep the index
+up-to-date, then your tags file (or files) could show up in every source code
+check-in. To keep your commit history clean, tell your source control to
+ignore tags files.
+
+
+<use-tag-list>
+If it has multiple matches, then the g<C-]> command presents us with a list of
+choices from the tag match list: note: <C-]> shows up the list.
+
+If a tag in the current buffer matches the keyword, it gets the highest
+priority. :h tag-priority
+
+Can choose which destination we want to jump to by typing its number and
+pressing <CR>.
 
 :tn   " next. note: see "key mapping: traverse a list"
 :tp   " prev
 :ts   " select. show a list to select
 
-:tags " history. To show the tags you've traversed since you opened vim
-:ltag " will load the tags into the location list window.  You can then view that window by executing :lopen.
+<use-excomman>
+We don't have to move the cursor on top of a keyword to jump to its tag. Can
+use Ex commands. 
 
-We don't have to move the cursor on top of a keyword to jump to its tag. Can use Ex commands. At
-times, typing these commands can be quicker than maneuvering the cursor onto a keyword in the
-document; especially since Vim provides tab-completion for all keywords in the tags file. Can accept
-a regular expression when used in the form 
+For example, :tag {keyword} and :tjump {keyword} behave like the <C-]> and
+g<C-]> commands, respectively (see :h :tag and :h :tjump ).
+
+At times, typing these commands can be quicker than maneuvering the cursor
+onto a keyword in the document; especially since Vim provides `tab-completion`
+for all keywords in the tags file. Can accept a regular expression when used
+in the form
 
 :ta[g] /{pattern}    note: leading '/' char in pattern.
 :ta /phone$
 :ta /^asserts_*
+
+// :tags " history. To show the tags you've traversed since you opened vim
+// :ltag " will load the tags into the location list window. You can then view
+// that window by executing :lopen.
 
 
 ={============================================================================
@@ -7963,6 +8091,10 @@ You can explicitly turn vim-gitgutter off and on (defaults to on):
     turn on with :GitGutterEnable
     toggle with :GitGutterToggle.
 
+note:
+  " to turn off vim-gitgutter by default
+  let g:gitgutter_enabled = 0
+
 You can turn the signs on and off (defaults to on):
 
     turn on with :GitGutterSignsEnable
@@ -8256,12 +8388,6 @@ This was one of PeepCode's all-time top three bestsellers and is now available
 at Pluralsight.
 
 You can read reviews on my website.
-
-
-Intellectual Property
----------------
-Copyright Andrew Stewart, AirBlade Software Ltd. Released under the MIT
-licence.
 
 
 ={============================================================================
