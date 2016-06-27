@@ -14,7 +14,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 *kt_dev_env_vim_002* vim-set-neobundle
 *kt_dev_env_vim_003* vim-set-vimproc
 *kt_dev_env_vim_002* vim-set-hack-font
-|kt_dev_env_vim_004| plugins: solarized
+*kt_dev_env_vim_004* vim-set-solarized
 |kt_dev_env_vim_005| plugins: status line
 *kt_dev_env_vim_006* vim-set-unite
 *kt_dev_env_vim_007* vim-set-tagbar-unite-tag (not use)
@@ -96,9 +96,11 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 |kt_dev_env_vim_302| prog: move in c
 *kt_dev_env_vim_303* vim-tag-gtag
 *kt_dev_env_vim_303* vim-tag-unite-gtag
-*kt_dev_env_vim_304* vim-build: 
-*kt_dev_env_vim_304* vim-quickfix
-|kt_dev_env_vim_305| prog: build: makeprg and filetype
+*kt_dev_env_vim_304* vim-make 
+*kt_dev_env_vim_304* vim-quickfix vim-location-list
+*kt_dev_env_vim_305* vim-make-external
+*kt_dev_env_vim_305* vim-filetype
+*kt_dev_env_vim_305* vim-make-external-case
 |kt_dev_env_vim_306| prog: build: man page in vim
 
 |kt_dev_env_vim_320| prog: folding
@@ -6473,13 +6475,19 @@ buffer_name("%") as filepath.
 
 
 ={============================================================================
-*kt_dev_env_vim_304* vim-build: 
+*kt_dev_env_vim_304* vim-make 
+
+Practical Vim 17. Tip 104.
 
 <run-make>
-:make!
+: make!
 
 The trailing ! character tells Vim to update the quickfix list without jumping
-to the first item.
+to the first item. Now suppose that we run :make and immediately realize that
+we should have used the bang version. How can we get back to where we were
+before we ran :make? Simple: use the <C-o> command to jump back to the
+previous position in the jump list.
+
 
 <makefile>
 To run make in vi, use makefile and simple makefile is:
@@ -6519,7 +6527,9 @@ errors?
 
 
 ={============================================================================
-*kt_dev_env_vim_304* vim-quickfix
+*kt_dev_env_vim_304* vim-quickfix vim-location-list
+
+Practical Vim 17. Tip 105.
 
 Calling an external compiler from Vim saves us from having to leave our editor
 and if the compiler reports any errors, Vim provides the means for us to jump
@@ -6540,9 +6550,11 @@ must be able to navigate these records.
 :cnfile     " Jump to first item in next file     note: what is the file here?
 :cpfile     " Jump to last item in previous file
 :cc N       " Jump to nth item
-:copen      " Open the quickfix window.           note: can use move keys in the window
+:copen      " Open the quickfix window.
 :cclose     " Close the quickfix window
 :cl[ist]    " list all items
+
+note: They all begin with :c.
 
 
 <multiple>
@@ -6550,7 +6562,10 @@ When we update the quickfix list, Vim doesn't overwrite the previous contents.
 It saves the results of older quickfix lists, allowing us to refer back to them.
 We can recall an older version of the quickfix list. 
 
-Vim holds onto the last 'ten' lists. This can be a real time saver, especially
+
+Practical Vim 17. Tip 106.
+
+Vim holds onto the last `ten lists` This can be a real time saver, especially
 if the command takes a long time to run.
 
 :cnewer     " To revert from an old quickfix list back to a newer one
@@ -6562,11 +6577,11 @@ note: See like "error list 4 of 5" in status
 {location-list}
 For every command that populates the quickfix list, there's a variant that
 places the results in a location list instead. While :make, :grep, and
-:vimgrep use the quickfix list, :lmake, :lgrep, and :lvimgrep use the location
-list. 
+:vimgrep use the quickfix list, `:lmake`, `:lgrep`, and `:lvimgrep` use the
+location list. 
 
 So what's the difference? At any given moment, there can be only one quickfix
-list, but we can create as 'many' location lists as we want.
+list, but we can create `as many location` lists as we want.
 
 Suppose that we've followed the steps in Tip 107, on page 265, so that running
 :make in a JavaScript file passes the contents of the file through JSLint. Now
@@ -6578,110 +6593,297 @@ run :lmake again. Rather than overwriting the existing location list, Vim
 creates a new one. Now we have two location lists, each containing errors for
 a different JavaScript file.
 
-Any commands that interact with a location list (:lnext, :lprev, and so on)
-  will act on the list that is bound to the currently active window. Compare
-  this with the quickfix list, which is available globally throughout Vim: no
-  matter which tab page or window is active, when you run :copen, the quickfix
-  window will show the same list.
+note: They all begin with :l.
+
+Any commands that interact with a location list will act on the list that is
+bound to the currently active window. 
+
+Compare this with the quickfix list, which is available globally throughout
+Vim: no matter which tab page or window is active, when you run :copen, the
+quickfix window will show the same list.
 
 
 ={============================================================================
-*kt_dev_env_vim_305* prog: build: makeprg and filetype
+*kt_dev_env_vim_305* vim-make-external
+
+Practical Vim 17. Tip 107.
+
+note: To see the current setting.
+:set makeprg?
+
+The `makeprg` setting allows us to specify the program that will be called
+when we run :make (see :h 'makeprg'). We can instruct Vim to run nodelint as
+follows:
+
+:setlocal makeprg=NODE_DISABLE_COLORS=1\ nodelint\ %
+
+The % symbol is expanded to the path for the current file. So if we were
+editing a file called ~/quickfix/fizzbuzz.js, then running :make inside Vim
+would be equivalent to running this in the shell:
+
+$ export NODE_DISABLE_COLORS=1
+$ nodelint ~/quickfix/fizzbuzz.js
+
+By default, nodelint highlights errors in red using ANSI color codes. Setting
+NODE_DISABLE_COLORS=1 mutes the colors, which makes it easier to parse the
+error messages.
+
+Next, we have to make Vim `parse` the output from nodelint so that it can build
+a quickfix list from the results. We can approach this problem in two ways:
+
+1. we could configure nodelint so that its output resembled the error messages
+generated by make, which Vim already understands, or 
+
+2. we could teach Vim how to parse the default output from nodelint. We'll use
+the latter technique.
+
+
+Populate the Quickfix List Using Nodelint's Output
+
+The `errorformat` setting allows us to teach Vim how to parse the output generated 
+by running :make (see :h 'errorformat'). We can inspect the default value
+by running the following:
+
+:setglobal errorformat?
+
+errorformat=%*[^"]"%f"%*\D%l: %m,"%f"%*\D%l: %m, ...[abridged]...
+
+If you're familiar with scanf (in C), then you'll recognize the concept. Each
+of the characters preceded by a `percent sign` has a special meaning: %f
+stands for the filename, %l for the line number, and %m for the error message.
+For the complete list, look up :h errorformat.
+
+
+To parse the output from nodelint, we could set the error format as follows:
+
+:setlocal efm=%A%f\,\ line\ %l\,\ character\ %c:%m,%Z%.%#,%-G%.%#
+
+Now when we run :make, Vim will use this error format to parse the output from
+nodelint. For each warning it will extract the filename, line number, and
+column number to generate an address, which becomes a record in the quickfix
+list.
+
+
+Set Up `makeprg` and `errorformat` with a Single Command
+
+This errorformat string is not something we would want to commit to memory.
+Instead, we can save it to a file and then activate it with the :compiler
+command, which is a convenient shortcut for setting both makeprg and
+errorformat options (see :h :compiler):
+
+:compiler nodelint
+
+The :compiler command activates a compiler plugin, which sets the makeprg and
+errorformat options to run and parse nodelint. It's roughly equivalent to
+sourcing these lines of configuration:
+
+// quickfix/ftplugin.javascript.vim
+setlocal makeprg=NODE_DISABLE_COLORS=1\ nodelint\ %
+let &l:efm='%A'
+let &l:efm.='%f\, '
+let &l:efm.='line %l\, '
+let &l:efm.='character %c:'
+let &l:efm.='%m' . ','
+let &l:efm.='%Z%.%#' . ','
+let &l:efm.='%-G%.%#'
+
+The internals of a compiler plugin are more elaborate, but this is a fair
+approximation of what goes on. You can familiarize yourself with the compiler
+plugins that are distributed with Vim by running this command:
+
+:args $VIMRUNTIME/compiler/*.vim
+
+note:
+/share/vim/vim74/compiler/gcc.vim
+
+Note that Vim doesn't ship with a nodelint compiler plugin, but we can easily
+install one.4 If we wanted to always use nodelint as the compiler for
+JavaScript files, we could either use an autocommand or a file-type plugin to
+make it so.
+
+In Vim's terminology, a compiler is any external program that does something
+with our document and produces a list of errors or warnings. The :make command
+simply invokes the external compiler and then parses the output to construct a
+navigable quickfix list from them.
+
+
+={============================================================================
+*kt_dev_env_vim_305* vim-filetype
+
+A1.3 Apply Customizations to Certain Types of Files
+
+Our preferences may vary from one type of file to another. For example, suppose
+that we work with a house style that advises two spaces for indentation
+in Ruby and four-column-wide tabs for JavaScript. We could apply these
+settings by putting the following lines in our vimrc:
+
+if has("autocmd")
+  filetype on
+  autocmd FileType ruby setlocal ts=2 sts=2 sw=2 et
+  autocmd FileType javascript setlocal ts=4 sts=4 sw=4 noet
+endif
+
+
+The `autocmd` declaration tells Vim to listen for an event and to execute the
+specified commands whenever that event fires (:h :autocmd). 
+
+In this case we're listening for the FileType event, which is triggered when
+Vim detects the type of the current file.
+
+We can have more than one autocommand listening for the same event.  Suppose
+that we want to use nodelint as the compiler for JavaScript files. We could
+add this line to the example above:
+
+autocmd FileType javascript compiler nodelint
+
+Both autocommands would be executed each time the FileType event was triggered
+on a JavaScript file.
+
+Putting autocommands in the vimrc file works fine if you only have to make one
+or two customizations for a file type. But if we wanted to apply lots of
+settings to a particular kind of file, then it starts to look messy. 
+
+The `ftplugin` is an alternative mechanism for applying customizations to file
+types. Instead of declaring our JavaScript preferences in the vimrc using
+autocommands, we could place them in a file called
+
+~/.vim/after/ftplugin/javascript.vim:
+
+setlocal ts=4 sts=4 sw=4 noet
+compiler nodelint
+
+This file is just like a regular vimrc, except that the settings will only be
+applied to JavaScript files. We could also create a ftplugin/ruby.vim file for
+Ruby customizations and another for each file type that we work with
+regularly. For more details, look up :h ftplugin-name.
+
+For the ftplugin mechanism to work, we must ensure that both file-type
+detection and plugins are enabled. Check that this line is present in your
+vimrc file: 
+
+filetype plugin on
+
+note:
+How vim detect file type?
+
+share/vim/vim74/filetype.vim has codes to detect file type like:
+
+" JavaScript, ECMAScript
+au BufNewFile,BufRead *.js,*.javascript,*.es,*.jsx   setf javascript
+
+http://learnvimscriptthehardway.stevelosh.com/chapters/44.html
+
+
+={============================================================================
+*kt_dev_env_vim_305* vim-make-external-case
 
 {makeprg-on-filetype}
 http://tuxion.com/2011/09/30/vim-makeprg.html
 
-This started out as a small post on how to preview markdown documents in Vim using makeprg, but
-somehow I got carried away. More on the markdown thing in a bit.
-
-When you type :make in Vim, the value of makeprg is executed in a subprocess. Traditionally this
-value is set to make, but you can set this to anything you like. You can see the current value by
-typing :set makeprg. When you combine this with Vim's support for filetype plugins, there's a decent
-amount of value that I think is sometimes overlooked. So this article is an attempt to explain some
-of the things you can do with makeprg and filetype detection.  
+When you type :make in Vim, the value of makeprg is executed in a subprocess.
+Traditionally this value is set to make, but you can set this to anything you
+like. You can see the current value by typing :set makeprg. When you combine
+this with Vim's support for filetype plugins, there's a decent amount of value
+that I think is sometimes overlooked. So this article is an attempt to explain
+some of the things you can do with makeprg and filetype detection.  
 
 Filetype Plugins
 
-A filetype plugin is like a global plugin, except that it sets options and defines mappings for the
-current buffer only.
+Using a filetype plugin, we can set makeprg to something useful depending on
+the type of a file it happens to be. Just create a file of the form:
 
-Using a filetype plugin, we can set makeprg to something useful depending on the type of a file it
-happens to be. Adding your own filetype plugin is easy, just create a file of the form:
-<filetype>.vim inside the ~/.vim/after/ftplugin directory. The after subdirectory is technically
-optional, but I prefer it as it keeps things isolated from other installed plugins. The after
-subdirectory is sourced last as Vim initializes itself, so putting your options there ensures they
-aren't clobbered by other plugins.
+<filetype>.vim inside the ~/.vim/after/ftplugin directory.
 
-For a given Vim buffer, you can see the filetype by typing :set ft. Some people put this information
-in their statusline, which can be helpful if you're writing Vim plugins or just want to make sure
-things are being detected correctly.
+The `after` subdirectory is technically optional, but I prefer it as it keeps
+things isolated from other installed plugins. The after subdirectory is
+sourced last as Vim initializes itself, so putting your options there ensures
+they aren't clobbered by other plugins.
 
-For example, if I want to define custom settings for the C filetype, I would create
-~/.vim/after/ftplugin/c.vim and put my settings there. Any time a file of type C is loaded, my
-settings are applied. We can use this mechanism to set a custom makeprg for certain filetypes.
+For a given Vim buffer, you can see the filetype by typing :set ft. Some
+people put this information in their statusline, which can be helpful if
+you're writing Vim plugins or just want to make sure things are being detected
+correctly.
+
+For example, if I want to define custom settings for the C filetype, I would
+create ~/.vim/after/ftplugin/c.vim and put my settings there. Any time a file
+of type C is loaded, my settings are applied. We can use this mechanism to set
+a custom makeprg for certain filetypes.
+
 
 Customizing makeprg for Markdown
 
-I take all of my notes in Markdown, which is nearly plain text with a tiny amount of markup. This
-allows me to quickly convert my personal notes into decent looking html documentation. It seems to
-be a regular occurrence that my notes become the initial documentation for the project or subproject
-that I'm working on. Many wiki's support Markdown, so it ends up saving me work by just keeping
-everything in that format.
+I take all of my notes in Markdown, which is nearly plain text with a tiny
+amount of markup. This allows me to quickly convert my personal notes into
+decent looking html documentation. It seems to be a regular occurrence that my
+notes become the initial documentation for the project or subproject that I'm
+working on. Many wiki's support Markdown, so it ends up saving me work by just
+keeping everything in that format.
 
-Even though Markdown's syntax is very lean and simple, I still end up forgetting some of it from
-time to time. I find it useful to generate and view the HTML output for the buffer that I'm working
-on periodically to make sure things look right. This is really easy by setting a custom makeprg for
-the markdown filetype.  
+Even though Markdown's syntax is very lean and simple, I still end up
+forgetting some of it from time to time. I find it useful to generate and view
+the HTML output for the buffer that I'm working on periodically to make sure
+things look right. This is really easy by setting a custom makeprg for the
+markdown filetype.  
 
 The Hammer Plugin
 
-Robert Gleeson wrote a Vim plugin called Hammer that basically does exactly what I explain here and
-quite a bit more. It might be perfect for you, but for me it's much more than I need. I've had
-problems when the version of Ruby on the system is not the same as what Vim was compiled with. Check
-it out though, you might love it.  
+Robert Gleeson wrote a Vim plugin called Hammer that basically does exactly
+what I explain here and quite a bit more. It might be perfect for you, but for
+me it's much more than I need. I've had problems when the version of Ruby on
+the system is not the same as what Vim was compiled with. Check it out though,
+    you might love it.  
 
 A Simpler Approach
 
-All I want is to type :make and have Vim generate an HTML version in /tmp that I can point my
-browser to. So I put the following in ~/.vim/after/ftplugin/markdown.vim:
+All I want is to type :make and have Vim generate an HTML version in /tmp that
+I can point my browser to. So I put the following in
+
+~/.vim/after/ftplugin/markdown.vim:
 
 set makeprg=redcarpet\ %\ >/tmp/%<.html
 
 Let's take a quick look at what's going on here:
 
-The above setting is applied only when editing a markdown buffer. Personally, I use redcarpet to
-parse markdown, but there are many others that you can substitute here. 
+The above setting is applied only when editing a markdown buffer. Personally,
+    I use redcarpet to parse markdown, but there are many others that you can
+    substitute here. 
 
 Spaces in option strings must be escaped so Vim knows when to stop parsing.
-    % expands to the name of the file currently being edited.
-    %< expands to the name of the file without the trailing extension. This allows us to change the
-    %name of the file and add the html extension.
 
-So the above command calls redcarpet on the filename and redirects the output to
-/tmp/<filename>.html. That's it, super simple. Once this completes, I point my browser to file:/tmp
-and load the file I'm interested in.
+% 
+expands to the name of the file currently being edited.
 
-This same approach can be taken with ReStructured Text by putting the following in
-~/.vim/after/ftplugin/rst.vim:
+%< 
+expands to the name of the file without the trailing extension. This allows us
+to change the name of the file and add the html extension.
+
+So the above command calls redcarpet on the filename and redirects the output
+to /tmp/<filename>.html. That's it, super simple. Once this completes, I point
+my browser to file:/tmp and load the file I'm interested in.
+
+This same approach can be taken with ReStructured Text by putting the
+following in ~/.vim/after/ftplugin/rst.vim:
 
 set makeprg=rst2html.py\ %\ /tmp/%<.html`
  
- [KT] bash alias do not work so make a script for that.
+note:
+bash alias do not work so make a script for that.
 
 Extra Credit
 
-For C, we could set makeprg to call gcc directly instead of make if a Makefile is not found in the
-current working directory. I find this very helpful when creating a scratch source file to test
-certain behaviour or a quick theory. Here's what the contents of ~/.vim/after/ftplugin/c.vim might
-look like:
+For C, we could set makeprg to call gcc directly instead of make if a Makefile
+is not found in the current working directory. I find this very helpful when
+creating a scratch source file to test certain behaviour or a quick theory.
+Here's what the contents of ~/.vim/after/ftplugin/c.vim might look like:
 
 if !filereadable(expand("%:p:h")."/Makefile")
     setlocal makeprg=gcc\ -Wall\ -Wextra\ -o\ %<\ %
 endif
 
-Now when you load a file of type C and there is no Makefile, typing :make will compile your source
-file into an executable of the same name (minus the extension). I use this all the time. You could
-do the same thing for C++ by changing the filename to cpp.vim and changing gcc to g++.
+Now when you load a file of type C and there is no Makefile, typing :make will
+compile your source file into an executable of the same name (minus the
+    extension). I use this all the time. You could do the same thing for C++
+by changing the filename to cpp.vim and changing gcc to g++.
 
 
 ={============================================================================
