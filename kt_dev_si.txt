@@ -247,9 +247,6 @@ http://hetty.cisco.com/fusionmadesimple/index.php/Git_Fusion_standard_workflow
 
 git clone ssh://wwwin-git-gpk-2.cisco.com:29418/STB_SW STB_SW
 git clone ssh://wwwin-git-gpk-2.cisco.com:29418/STB_SW STB_SW -b BSKYB_HQnnn_ETHAN_Int
-cd STB_SW
-./initialise_hooks
-Resolve_Deps/scripts/resolve_deps.sh <Platform>
 
 
 ag -U --nopager --follow --nocolor --nogroup --hidden -g '' > list.out
@@ -286,11 +283,40 @@ CMS_MEDIA_SERVICES/MPM/src/.doxygen.d/
 NDS_TOOLSETS/
 
 
+
 ={============================================================================
 |kt_dev_si_0002| si-git-build
 
-http://hetty.cisco.com/fusionmadesimple/index.php/Git_Fusion_standard_workflow
+<baseline>
 
+R014.083.57.00
+
+From
+http://hudsonmaster1.uk.nds.com:8080/hudson/view/Maintenance/job/generate_fullstack_table/lastSuccessfulBuild/artifact/FSI.htmlp
+
+BSKYB_HR014_Int
+
+BSKYB_INTEGRATION_BLD_83.57.00_BSKYB_HR014_Int
+
+ams-drx890
+
+cust_trials
+
+preprod
+
+No
+
+This is git baseline to look for:
+BSKYB_INTEGRATION_BLD_83.57.00_BSKYB_HR014_Int
+
+
+$ git tag | ag 83.57
+BSKYB_HR014_Int/BSKYB_INTEGRATION_BLD_83.57.00_BSKYB_HR014_Int
+
+$ git co BSKYB_HR014_Int/BSKYB_INTEGRATION_BLD_83.57.00_BSKYB_HR014_Int
+
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Git_Fusion_standard_workflow
 
 cd STB_SW
 ./initialise_hooks
@@ -6641,11 +6667,6 @@ NDS_BUILD_TYPE_darwin_player_src = debug
 /darwin_platform_components/darwin_player/src/makefile
 
 
-<define>
-// not defined
-!PLAYER_VTABLE_LEAK_DETECTION
-
-
 <vtable>
 
 // mapping
@@ -6660,6 +6681,84 @@ PLAYER_VTABLE_DeleteElement
 
 // only where increase ref count
 PLAYER_VTABLE_GetElement
+
+
+<vtable-debug>
+// not defined by default
+
+#ifdef PLAYER_VTABLE_LEAK_DETECTION
+#ifdef PLAYER_DUMP_VTABLES
+
+static void PLAYER_DumpVtables(void)
+{
+  // uses vtable pointer for each vtable
+  // static void PLAYER_VTABLE_DumpTable(const PLAYER_VTable_t* vtable)
+
+  // note: print out details where node is allocated?
+  PLAYER_VTABLE_DumpTable(&(g_player_component.list_array));
+  {
+    PLAYER_VTNode_t     *curNode = NULL;
+    DIAG_DECLARE_FUNCTION("PLAYER_VTABLE_DumpTable");
+
+    DIAG_LOG_WARN(g_player_api_diag_segment_id, ("vtable 0x%x",vtable ));
+
+    while ((curNode = GetNextNode(vtable, curNode)) != NULL )
+    {
+      DIAG_LOG_WARN(g_player_api_diag_segment_id, 
+          ("thread %s file:%s L:%i, handle 0x%x, el 0x%x, refCount %i",
+            curNode->thread,
+            curNode->file,
+            curNode->line,
+            curNode->handle,
+            curNode->elPointer,
+            curNode->refCount));
+    }
+  }
+  ...
+}
+
+
+note:
+Upon component initialization, the vtable gets initialized using unique id and
+then use PLAYER_VTABLE_Create to create a node.
+
+Therefore, when see the log like these, can figure out which vtable which is
+talking about.
+
+DIAG_LOG_FATAL(vtable->diagSegment, ("Leak detected in ref for VTable %u (ref count %u)",
+  vtable->id, node->refCount));
+
+
+// global which has lots of vtables
+PLAYER_COMPONENT_OBJECT_DATA g_player_component;
+{
+  PLAYER_VTable_t         list_array;     /** Array of client requested lists */
+  PLAYER_VTable_t         ca_listeners;   /** Linked list of CA listeners */
+
+  // #define PLAYER_VTABLE_ID_CONTEXTS (25U)
+  PLAYER_VTable_t         contexts;                   /** List of service contexts */
+  ...
+}
+
+
+// uses `vtable ids`
+
+PLAYER_VTABLE_InitTable(&(g_player_component.list_array),
+  g_player_mem_pool,
+  g_player_diag_detailed_segment_id,
+  NULL,
+  100,
+  PLAYER_VTABLE_ID_LISTS));
+...
+
+// defines `vtable ids`
+//
+// src/inc/player_vtable.h
+/* Identifiers of the vtables used in Player.  These are used for diagnostic
+ * output */
+#define PLAYER_VTABLE_ID_LISTS (1U)
+#define PLAYER_VTABLE_ID_CA_LNRS (2U)
+...
 
 
 <status>
