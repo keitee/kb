@@ -420,6 +420,19 @@ note: requires hudson page to do that.
 
 
 ={============================================================================
+|kt_dev_si_0002| si-git-build-jpa
+
+download tar:  
+BSKYB_JTH-BSKYB_JTH_trunk.97338_BSKYB_JTH_HR014_Int.tar.gz 
+
+jpa fron unzipped tree:
+THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa
+
+version.txt:
+83.51.00_BSKYB_HR014_Int
+
+
+={============================================================================
 |kt_dev_si_0002| si-sh-theyard
 
 Yard Link: http://theyard.cisco.com/si_logs/translation/
@@ -6737,22 +6750,28 @@ NDS_BUILD_TYPE_darwin_player_src = debug
 
 
 <vtable>
-
 // mapping
 #define PLAYER_VTABLE_Create(w,x,y,z) PLAYER_VTABLE_CreateNode(w,x,y,z,__FILE__,__LINE__)
 #define PLAYER_VTABLE_Create(w,x,y,z) PLAYER_VTABLE_CreateNode(w,x,y,z)
 
-// no mapping and delete node using ref count
+// no mapping and delete node using ref count. inc ref
 PLAYER_VTABLE_ReleaseElement
+
+// only where increase ref count. dec ref.
+PLAYER_VTABLE_GetElement
 
 // no mapping and delete node w/o using ref count
 PLAYER_VTABLE_DeleteElement
 
-// only where increase ref count
-PLAYER_VTABLE_GetElement
+
+<vtable-client>
+The client is responsible to match up Release/GetElement pair.
+
+PLAYER_Context_GetContextFromSession() do GetElement(context vtable) inside so
+have to ReleaseElement after this call.
 
 
-<vtable-debug>
+<vtable-dump>
 // not defined by default
 
 #ifdef PLAYER_VTABLE_LEAK_DETECTION
@@ -6785,6 +6804,24 @@ static void PLAYER_DumpVtables(void)
   }
   ...
 }
+
+This prints out all nodes in the vtable with filename where it's created:
+where PLAYER_VTABLE_Create() is called.
+
+note:
+For session, there can be as many as sessions which APP can create.
+
+F:PLAYER_DumpVtables L:1428 > sessions 
+F:PLAYER_VTABLE_DumpTable L:1399 > vtable 0x1070d04 
+F:PLAYER_VTABLE_DumpTable L:1409 > thread no name file:player_api.c L:169, handle 0x4, el 0x15b2c1c, refCount 1 
+F:PLAYER_VTABLE_DumpTable L:1409 > thread no name file:player_api.c L:169, handle 0x3, el 0x15a0d34, refCount 1 
+F:PLAYER_VTABLE_DumpTable L:1409 > thread LAE_THREAD file:player_api.c L:169, handle 0x2, el 0x1500954, refCount 1 
+F:PLAYER_VTABLE_DumpTable L:1409 > thread AEM_INPUT_MONITOR_THREAD file:player_api.c L:169, handle 0x1, el 0x1467fec, refCount 1 
+
+F:PLAYER_DumpVtables L:1419 > ** SI-10654 : KIT: dump vt contexts ** 
+F:PLAYER_VTABLE_DumpTable L:1399 > vtable 0x1070d58 
+F:PLAYER_VTABLE_DumpTable L:1409 > thread PLAYER_MAIN file:player_api_context.c L:113, handle 0x2, el 0x12af01c, refCount 1 
+F:PLAYER_VTABLE_DumpTable L:1409 > thread PLAYER_MAIN file:player_api_context.c L:113, handle 0x1, el 0x128d024, refCount 5 
 
 
 note:
@@ -6831,7 +6868,12 @@ PLAYER_VTABLE_InitTable(&(g_player_component.list_array),
 
 
 <status>
-# PLAYER_API_STATUS_PENDING 0x6801001
+0x6801001   // PLAYER_API_STATUS_PENDING
+              (PLAYER_COMP_ID, PLAYER_API_ID,SEVERITY_NONE,1)
+
+0x6821001   // PLAYER_API_STATUS_FAILURE 
+              ((PLAYER_COMP_ID, PLAYER_API_ID, SEVERITY_SEVERE,1))
+
 
 #define PLAYER_COMP_ID        (26)
 #define SEVERITY_NONE         (0)
@@ -6842,7 +6884,11 @@ PLAYER_VTABLE_InitTable(&(g_player_component.list_array),
 
 #define PLAYER_API_STATUS_PENDING (SYSTEM_MAKE_COMPONENT_STATUS(PLAYER_COMP_ID, PLAYER_API_ID,SEVERITY_NONE,1))
 
-hex(((26 & 0x3FF) << 22) | ((0 & 0x3) << 16) | ((1 & 0xF) << 12) | (1 & 0xFFF) )
+0x6801001
+  hex(((26 & 0x3FF) << 22) | ((0 & 0x3) << 16) | ((1 & 0xF) << 12) | (1 & 0xFFF) )
+
+0x6821001
+  hex(((26 & 0x3FF) << 22) | ((2 & 0x3) << 16) | ((1 & 0xF) << 12) | (1 & 0xFFF) )
 
 
 <fsm> state machine
