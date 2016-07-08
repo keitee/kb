@@ -104,6 +104,7 @@
 |kt_linux_tool_038| tool-minicom
 *kt_linux_tool_039* tool-mount
 |kt_linux_tool_039| tool-mount --bind and nfs
+*kt_linux_tool_039* tool-nfs
 |kt_linux_tool_040| install
 |kt_linux_tool_041| notify-send
 *kt_linux_tool_042* tool-tail: print multiple files with filename
@@ -8210,29 +8211,83 @@ mount --bind olddir newdir
 mount -o remount,ro,bind olddir newdir
 
 
-{nfs-mount}
-mount -o nolock -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob/logs /mnt/temp/
-mount -o nolock -t nfs 172.18.200.185:/mnt ./
-mount -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob /mnt/nfs
+={============================================================================
+*kt_linux_tool_039* tool-nfs
 
-
-{nfs}
+<install> 
 sudo apt-get install nfs-kernel-server
+sudo apt-get install nfs-common
 
-You can configure the directories to be exported by adding them to the
-/etc/exports file. For example:
+note:
+Install nfs-common for a client.
+
+
+<export>
+The `two different access modes` of the nfs server. 
+
+The directory /home/client1 is shared in standard mode, so all files written
+to this directory are stored as user `nobody` and group `nogroup`. 
+
+For the directory /var/www I use the no_root_squash option which instructs the
+nfs server to preserve permissions and ownerships of the files. 
+
+mkdir /home/client1
+chown nobody:nogroup /home/client1
+chmod 755 /home/client1
+
+mkdir /var/www
+chown root:root /var/www
+chmod 755 /var/www
+
+Now we must modify /etc/exports where we "export" our NFS shares. We specify
+/home/client1 and /var/www as NFS shares and tell NFS to make accesses to
+/home/client1 as user nobody.
+
+note
+To learn more about /etc/exports, its format and available options, take a
+look at `man 5 exports`
+
+
+// /etc/exports
+
+/home/client1   192.168.0.101(rw,sync,no_subtree_check)
+/var/www        192.168.0.101(rw,sync,fsid=0,crossmnt,no_subtree_check,no_root_squash)
+
+note: 
+You can replace * with one of the hostname formats. Make the hostname
+declaration as specific as possible so unwanted systems cannot access the NFS
+mount.
 
 /ubuntu  *(ro,sync,no_root_squash)
 /home    *(rw,sync,no_root_squash)
 
 
-note: You can replace * with one of the hostname formats. Make the hostname
-declaration as specific as possible so unwanted systems cannot access the NFS
-mount.
+<check-permission>
+The no_root_squash option makes that /var/www will be accessed as root.
 
-To start the NFS server, you can run the following command at a terminal prompt:
+note:
+See the user/group permission.
 
-$ sudo /etc/init.d/nfs-kernel-server stop/start
+client:
+
+touch /mnt/nfs/home/client1/test.txt
+touch /var/www/test.txt
+
+server:
+
+ls -l /home/client1/
+total 0
+-rw-r--r-- 1 nobody nogroup 0 Feb 02 16:58 test.txt
+
+ls -l /var/nfs
+-rw-r--r-- 1 root root 0 Feb 02 16:58 test.txt
+
+
+<restart>
+To apply the changes in /etc/exports, we restart the kernel nfs server
+
+/etc/init.d/nfs-kernel-server restart
+sudo /etc/init.d/nfs-kernel-server stop/start
 sudo service nfs-kernel-server restart
 sudo service idmapd restart 
 
@@ -8255,6 +8310,12 @@ Jul 06 12:06:00 kit-debian rpc.mountd[15489]: Version 1.2.8 starting
 Hint: Some lines were ellipsized, use -l to show in full.
 
 
+<mount>
+mount -o nolock -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob/logs /mnt/temp/
+mount -o nolock -t nfs 172.18.200.185:/mnt ./
+mount -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob /mnt/nfs
+
+
 note: "-o xxx" makes a 'difference' and this was from a board, that is busybox.
 
 http://lists.busybox.net/pipermail/busybox/2002-July/040613.html
@@ -8272,18 +8333,109 @@ mount: mounting 172.20.33.215:/home/kpark/src-dev on /mnt/tmp failed: Connection
 DEVARCH/         GPATH            GRTAGS           GTAGS            
 
 
-<showmount>
-root@kit-debian:/home/kit# showmount -e
+<check-on-client>
+df -h
+mount
+
+
+<check-on-server>
+root# showmount -e
 Export list for kit-debian:
 /home/kit/STB_SW *
 
 
-{exportfs}
-Normally  the  master  export  table is initialized with the contents of
-/etc/exports and files under /etc/exports.d by invoking exportfs -a. However, a
-system administrator can choose to add or delete exports without modifying
-/etc/exports or files under /etc/exports.d by using the exportfs command.
+<mount-on-fstab>
+Instead of mounting the NFS shares manually on the client, you could modify
+/etc/fstab so that the NFS shares get mounted automatically when the client
+boots. 
 
+// vi /etc/fstab
+
+192.168.0.100:/home/client1  /mnt/nfs/home/client1   nfs      rw,sync,hard,intr  0     0
+192.168.0.100:/var/www  /var/www   nfs      rw,sync,hard,intr  0     0
+
+Instead of rw,sync,hard,intr you can use different mount options. To learn
+more about available options, take a look at man nfs
+
+
+To test if your modified /etc/fstab is working, unmount the shares and run
+mount -a:
+
+umount /mnt/nfs/home/client1
+umount /var/www
+mount -a
+
+You should now see the two NFS shares in the outputs of
+
+df -h
+mount
+
+
+<nfs-check-version>
+This shows me that my NFS server offers versions 2, 3, and 4 of the NFS
+protocol all over UDP and TCP.
+
+$ rpcinfo -p localhost
+   program vers proto   port  service
+   ...
+    100003    2   tcp   2049  nfs
+    100003    3   tcp   2049  nfs
+    100003    4   tcp   2049  nfs
+    100227    2   tcp   2049  nfs_acl
+    100227    3   tcp   2049  nfs_acl
+    100003    2   udp   2049  nfs
+    100003    3   udp   2049  nfs
+    100003    4   udp   2049  nfs
+    100227    2   udp   2049  nfs_acl
+    100227    3   udp   2049  nfs_acl
+
+
+<user-mapping>
+
+kyoupark@ukstbuild2$ cat /etc/exports
+/home/           *(rw,no_root_squash,no_all_squash,sync,insecure)
+/tftpboot *(rw,no_root_squash,insecure)
+
+
+From `man 5 exports`
+
+   User ID Mapping
+       `nfsd` bases its access control to files on the server machine on the
+       uid and gid provided in each NFS  RPC  request.  The  normal behavior a
+       user would expect is that she can access her files on the server just
+       as she would on a nor‐ mal file system. This requires that the same
+       uids and gids are used on the client and the server machine.  This  is
+       not always true, nor is it always desirable.
+
+       Very often, it is not desirable that the root user on a client machine
+       is also treated as root when accessing files on the NFS server. 
+       
+       To this end, uid 0 is normally mapped to a different id: the so-called
+       anonymous or `nobody`  uid.  This mode of operation (called `root
+           squashing') is the `default`, and can be turned off with
+       no_root_squash.
+
+       By default, exportfs chooses a uid and gid of 65534 for squashed
+       access. These values can also be overridden by the `anonuid` and
+       `anongid` options.  Finally, you can map all user  requests  to  the
+       anonymous  uid  by  specifying  the `all_squash` option.
+
+       Here's the complete list of mapping options:
+
+       root_squash
+              Map  requests  from  uid/gid  0 to the anonymous uid/gid. Note
+              that this does `not` apply to any other uids or gids that might be
+              equally sensitive, such as user bin or group staff.
+
+       no_root_squash
+              Turn off root squashing. This option is mainly useful for
+              diskless clients.
+
+       all_squash
+              Map all uids and gids to the anonymous user. Useful for
+              NFS-exported  public  FTP  directories,  news  spool
+              directories, etc. The opposite option is `no_all_squash`, which is
+              the `default` setting.
 
 ={============================================================================
 *kt_linux_tool_040* install
