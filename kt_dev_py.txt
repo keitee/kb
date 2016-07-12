@@ -11,6 +11,7 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_py_0001| py-lib-sys
 |kt_dev_py_0001| py-lib-subprocess
+|kt_dev_py_0001| py-lib-built-in
 
 |kt_dev_py_0001| py-data-tuple
 |kt_dev_py_0001| py-data-list
@@ -362,7 +363,7 @@ objects.
 (4, 5, 6)
 
 
-# necessary to enclose the values in parentheses to create a tuple of tuples:
+# necessary to enclose the values in `parentheses` to create a tuple of tuples:
 
 >>> nested_tup=(4,5,6),(7,8)
 >>> nested_tup
@@ -418,9 +419,9 @@ note:
 `tuple of tuple` so sequence can have different types.
 
 
-# `unpacking` If you try to assign to a tuple-like expression of variables,
-# Python will attempt to unpack the value on the right-hand side of the equals
-# sign:
+{unpacking}
+# If you try to assign to a tuple-like expression of variables, Python will
+# attempt to unpack the value on the right-hand side of the equals sign:
 
 >>> a,b,c = tup
 >>> a
@@ -1076,6 +1077,270 @@ my_function(3.14, 7, 3.5)
 
 The main restriction on function arguments it that the keyword arguments must
 follow the positional arguments (if any).
+
+
+{namespace}
+Functions can access variables in two different scopes: global and local. An
+alternate and more descriptive name describing a variable scope in Python is a
+namespace.
+
+
+{return-multiple-values}
+If you think about tuple packing and unpacking from earlier in this chapter,
+   you may realize that what's happening here is that the function is actually
+   just returning `one` object, namely a tuple, which is then being unpacked
+   into the result variables.
+
+>>> def f():
+...     a=5
+...     b=6
+...     c=7
+...     return a,b,c
+... 
+>>> a
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+NameError: name 'a' is not defined
+
+>>> a,b,c = f()
+>>> a
+5
+>>> b
+6
+>>> c
+7
+
+
+{functions-are-objects}
+Since Python functions are objects, many constructs can be easily expressed
+that are difficult to do in other languages.
+
+Suppose we were doing some data cleaning and needed to apply a bunch of
+transformations to the following list of strings:
+
+>>> states = [' Alabama ', 'Georgia!', 'Georgia', 'georgia', 'FlOrIda', \
+  'south carolina##', 'West virginia?']
+>>> states
+[' Alabama ', 'Georgia!', 'Georgia', 'georgia', 'FlOrIda', 'south carolina##',\
+    'West virginia?']
+
+>>> import re
+>>> def clean_strings(strings):
+...     result=[]
+...     for value in strings:
+                # these are `str` methods
+...             value = value.strip()
+...             value = re.sub('[!#?]', '', value)
+...             value = value.title()
+...             result.append(value)
+...     return result
+... 
+
+# see address
+>>> clean_strings
+<function clean_strings at 0xb7509b1c>
+>>> clean_strings(states)
+['Alabama', 'Georgia', 'Georgia', 'Georgia', 'Florida', 'South Carolina', 'West Virginia']
+
+
+An alternate approach that you may find useful is to make a list of the
+operations you want to apply to a particular set of strings:
+
+>>> def remove_punctuation(value):
+...     return re.sub('!?#', '', value)
+... 
+>>> clean_ops=[str.strip, remove_punctuation, str.title]
+
+# see addresses
+>>> clean_ops
+[<method 'strip' of 'str' objects>, <function remove_punctuation at 0xb750979c>, 
+  <method 'title' of 'str' objects>]
+
+>>> def clean_strings_ops(strings, ops):
+...     result=[]
+...     for value in strings:
+...             for function in ops:
+...                     value = function(value)
+...             result.append(value)
+...     return result
+... 
+
+>>> states
+[' Alabama ', 'Georgia!', 'Georgia', 'georgia', 'FlOrIda', 'south carolina##', 
+  'West virginia?']
+
+# WTF? oops since have error in remove_punctuation function.
+>>> clean_strings_ops(states, clean_ops)
+['Alabama', 'Georgia!', 'Georgia', 'Georgia', 'Florida', 'South Carolina', 'West Virginia?']
+
+# going to work if define it again?
+>>> def remove_punctuation(value):
+...     return re.sub('[!?#]', '', value)
+... 
+
+# still not working?
+>>> clean_strings_ops(states, clean_ops)
+['Alabama', 'Georgia!', 'Georgia', 'Georgia', 'Florida', 'South Carolina', 'West Virginia?']
+
+# define clean_ops again and see different address for remove_punctuation
+>>> clean_ops
+[<method 'strip' of 'str' objects>, <function remove_punctuation at 0xb750979c>, 
+  <method 'title' of 'str' objects>]
+
+>>> clean_ops=[str.strip, remove_punctuation, str.title]
+>>> clean_ops
+[<method 'strip' of 'str' objects>, <function remove_punctuation at 0xb7509e9c>, 
+  <method 'title' of 'str' objects>]
+
+>>> clean_strings_ops(states, clean_ops)
+['Alabama', 'Georgia', 'Georgia', 'Georgia', 'Florida', 'South Carolina', 'West Virginia']
+
+
+A more `functional pattern` like this enables you to easily modify how the
+strings are transformed at a very high level. The clean_strings function is
+also now more reusable!
+
+Use functions as arguments to other functions like the built-in `map
+function`, which applies a function to a collection of some kind:
+
+>>> map(remove_punctuation, states)
+[' Alabama ', 'Georgia', 'Georgia', 'georgia', 'FlOrIda', 
+  'south carolina', 'West virginia']
+
+
+{lambda}
+Anonymous or lambda functions, which are really just simple functions
+consisting of a single statement, the result of which is the return value.
+They are defined using the `lambda keyword`
+
+They are especially convenient in data analysis because, as you'll see, there
+are many cases where data transformation functions will take functions as
+arguments. It's often less typing (and clearer) to pass a lambda function as
+opposed to writing a full-out function declaration or even assigning the
+lambda function to a local variable. For example, consider this silly example:
+
+>>> def apply_to_list(some_list, f):
+...     return [f(x) for x in some_list]
+... 
+
+>>> ints = [4,0,1,5,6]
+>>> apply_to_list(ints, lambda x: x*2)
+[8, 0, 2, 10, 12]
+
+You could also have written [x * 2 for x in ints], but here we were able to
+succintly pass a custom operator to the apply_to_list function.
+
+
+{closures}
+In a nutshell, a closure is any `dynamically-generated function` returned by
+another function. The key property is that the returned function has access to
+the variables in the local namespace where it was created. Here is a very
+simple example:
+
+>>> def make_closure(a):
+...     def closure():
+...             print('I know the secret: %d' % a)
+...     return closure
+... 
+
+>>> closure = make_closure(5)
+>>> closure
+<function closure at 0xb75125dc>
+>>> closure()
+I know the secret: 5
+>>> closure()
+I know the secret: 5
+
+
+The difference between a closure and a regular Python function is that the
+closure continues to have access to the namespace (the function) where it was
+created, even though that function is done executing. So in the above case,
+  the returned closure will always print "I know the secret: 5" whenever you
+  call it. 
+
+While it's common to create closures whose internal state (in this example,
+    only the `value` of a) is `static`, you can just as easily have a
+`mutable` object like a dict, set, or list that can be modified. For example,
+  here's a function that returns a function that keeps track of arguments it
+  has been called with:
+
+def make_watcher():
+  have_seen = {}
+
+  def has_been_seen(x):
+    if x in have_seen:
+      return True
+    else:
+      have_seen[x] = True
+      return False
+  return has_been_seen
+
+Using this on a sequence of integers I obtain:
+
+In [496]: watcher = make_watcher()
+In [497]: vals = [5, 6, 1, 5, 1, 6, 3, 5]
+In [498]: [watcher(x) for x in vals]
+Out[498]: [False, False, False, True, True, True, False, True]
+
+one technical limitation to keep in mind is that while you can mutate any
+internal state objects (like adding key-value pairs to a dict), you cannot
+bind variables in the enclosing function scope. One way to work around this is
+to modify a dict or list rather than binding variables:
+
+>>> def make_counter():
+...     count = [0]
+...     def counter():
+...             count[0] +=1
+...             return count[0]
+...     return counter
+... 
+>>> cnt = make_counter()
+>>> cnt
+<function counter at 0xb7512684>
+>>> cnt()
+1
+>>> cnt()
+2
+
+>>> def make_counter_two():
+...     count = 0
+...     def counter():
+...             count +=1
+...             return count
+...     return counter
+... 
+>>> cnt_two = make_counter_two()
+>>> cnt_two
+<function counter at 0xb75126f4>
+>>> cnt_two()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "<stdin>", line 4, in counter
+UnboundLocalError: local variable 'count' referenced before assignment
+
+
+Why this is useful? In practice, you can write very `general functions` with
+lots of options, then fabricate simpler, more specialized functions. Here's an
+example of creating a string formatting function:
+
+
+Here's an example of creating a string formatting function:
+
+def format_and_pad(template, space):
+  def formatter(x):
+    return (template % x).rjust(space)
+  return formatter
+
+You could then create a floating point formatter that always returns a
+length-15 string like so:
+
+In [500]: fmt = format_and_pad('%.4f', 15)
+In [501]: fmt(1.756)
+Out[501]: ' 1.7560'
+
+If you learn more about object-oriented programming in Python, you might
+observe that these patterns also could be implemented (albeit more verbosely)
+  using classes.
 
 
 ==============================================================================
