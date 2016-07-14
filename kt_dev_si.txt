@@ -32,7 +32,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-aem
 |kt_dev_si_0001| comp-lae
 |kt_dev_si_0001| comp-gfx
-|kt_dev_si_0001| comp-rmf
 |kt_dev_si_0001| comp-atg comp-oigc
 |kt_dev_si_0001| comp-bem
 |kt_dev_si_0001| comp-ctm
@@ -47,6 +46,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-ofs
 |kt_dev_si_0001| comp-mfs
 |kt_dev_si_0001| comp-msm
+|kt_dev_si_0001| comp-rmf
 |kt_dev_si_0001| comp-vrm
 |kt_dev_si_0001| comp-diag
 |kt_dev_si_0001| comp-mil
@@ -76,7 +76,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-systemutil
 |kt_dev_si_0001| comp-systemalarm
 |kt_dev_si_0001| comp-systemtime
-|kt_dev_si_0001| comp-systemcommon
+|kt_dev_si_0001| comp-systemcommon comp-systemexception
 |kt_dev_si_0001| comp-systemlocator
 |kt_dev_si_0001| comp-systemipc
 |kt_dev_si_0001| comp-systeminit
@@ -2104,627 +2104,6 @@ POOL_SIZE_GFX_REGION=125000
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-rmf
-
-Anna Silberman	Component Owner	Israel
-
-When a job wants to perform a task that requires resources, it must request
-permission from the RMF.  The RMF is responsible for the 'logical' aspect of
-granting permissions to use resources. It is not involved in allocating them
-physically. 
-
-The `job manager`, prior to requesting resources (or performing tasks that
-    require resources) from the `physical resource managers`, must call the
-RMF and get permissions to do so.
-
-RMF manages resources that are mapped to certain permissions according to the
-specific project requirements and characteristics of the STB. For example, in
-one project permission to perform playback may require a disk bandwidth
-resource and in another project it would not. (Actually, in all projects disk
-    bandwidth is required, but in some projects the disk bandwidth is not a
-    bottleneck and the RMF does not need to be aware of it.)
-
-Supporting a waiting `queue` (A physical resource manager)
-For instance, the MCM allows requesting a media connection and the request
-will be valid even if there are no free devices for the media connection. In
-such a case, the request shall be granted once the devices become available.
-On the other hand, the physical resource manager of the disk space (the file
-    system) does not support such a mechanism. 
-
-
-The MCM supports the following types of media connections:
-
-1) LIVEVIEWING 
-Used for viewing live streams from a tuner front end. This media connection
-type requires the following device managers: FEM, 'MPM', CAMM, SIM, FDM, SDM.
-
-2)	RECORDING 
-Used for recording streams from a tuner front end to files on disk. This media
-connection type requires the following device managers: FEM, MPM, MSM, CAMM,
-SIM, SDM.
-
-3)	PLAYBACK 
-Used for playing streams from disk. This media connection type requires the
-following device managers: MPM, MSM, CAMM, SIM.
-
-4)	CAPTURE 
-Used for capturing service information data. This media connection type
-requires the following device managers: FEM, MPM, CAMM, SIM, FDM, SDM.
-
-5)	SCAN 
-Used for determining what transponder frequencies contain valid streams. This
-media connection type requires the following device managers: FEM, MPM, SIM.
-
-
-<job-type>
-// 146746:!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c 
-// F:RMF_ALLOCATE_ControlPermissions L:1012 > 
-// job=0x201072f(0)[L] request=0x10000020 released=0xf0000000 change request if fails. 
-
-char* JobTypeToString(SYSTEMJOB_Type jobType)
-{
-    char *typeStr="Er";
-
-    switch(jobType)
-    {
-    case SYSTEMJOB_TYPE_SCAN:
-        typeStr = "S";
-        break;
-    case SYSTEMJOB_TYPE_CAPTURE:
-        typeStr = "C";
-        break;
-    case SYSTEMJOB_TYPE_LIVE_VIEWING:
-        typeStr = "L";
-        break;
-    case SYSTEMJOB_TYPE_RECORD:
-        typeStr = "R";
-        break;
-    case SYSTEMJOB_TYPE_REMINDER:
-        typeStr = "Rm";
-        break;
-    case SYSTEMJOB_TYPE_PLAYBACK:
-        typeStr = "P";
-        break;
-    case SYSTEMJOB_TYPE_IP_VOD_PLAYBACK:
-        typeStr = "Pv";
-        break;
-    case SYSTEMJOB_TYPE_RB_RECORD:
-        typeStr = "Rb";
-        break;
-    case SYSTEMJOB_TYPE_RB_PLAY:
-        typeStr = "Rp";
-        break;
-    case SYSTEMJOB_TYPE_LIVE_RESERVATION:
-        typeStr = "iA";
-        break;
-    case SYSTEMJOB_TYPE_DOWNLOAD:
-        typeStr = "D";
-        break;
-    case SYSTEMJOB_TYPE_DOWNLOAD_RESET_JOB:
-        typeStr = "Dr";
-        break;
-    case SYSTEMJOB_TYPE_AUTOMATIC_SYSTEM_MAINTAINANCE_TASK:
-        typeStr = "AU";
-        break;
-    case SYSTEMJOB_TYPE_MANUAL_SYSTEM_MAINTAINANCE_TASK:
-        typeStr = "MU";
-        break;
-    case SYSTEMJOB_TYPE_PASSIVE_STANDBY:
-        typeStr = "PS";
-        break;
-    case SYSTEMJOB_TYPE_LIVE_FROM_HTTP:
-        typeStr = "liveHTTP";
-        break;
-    case SYSTEMJOB_TYPE_PLAY_FROM_HTTP:
-        typeStr = "playHTTP";
-        break;
-    case SYSTEMJOB_TYPE_RB_PLAY_FROM_HTTP:
-        typeStr = "rbPlyHTTP";
-        break;
-    case SYSTEMJOB_TYPE_PLAY_NFF_TO_HTTP:
-        typeStr = "Pn2H";
-        break;
-    case SYSTEMJOB_TYPE_PLAY_NFF_FROM_HTTP:
-        typeStr = "NFFfromHTTP";
-        break;
-    case SYSTEMJOB_TYPE_PLAY_TO_HTTP:
-        typeStr = "P2H";
-        break;
-    case SYSTEMJOB_TYPE_LIVE_TO_HTTP:
-        typeStr = "L2H";
-        break;
-    case SYSTEMJOB_TYPE_SW_UPDATE_SCAN:
-        typeStr = "SU";
-        break;
-    case SYSTEMJOB_TYPE_BDL_RECORD:
-        typeStr = "B";
-        break;
-    case SYSTEMJOB_TYPE_PLAY_FROM_HORIZONTAL_FILE:
-        typeStr = "pH";
-        break;
-    case SYSTEMJOB_TYPE_OTT_ABR_LIVE:
-        typeStr = "OL";
-        break;
-    case SYSTEMJOB_TYPE_OTT_ABR_VOD:
-        typeStr = "OV";
-        break;
-    case SYSTEMJOB_TYPE_HEALTH_CHECK:
-        typeStr = "HL";
-        break;
-    case SYSTEMJOB_TYPE_IPTV_LIVE:
-        typeStr = "IL";
-        break;
-    case SYSTEMJOB_TYPE_IPTV_LIVE_TO_HTTP:
-        typeStr = "IL2H";
-        break;
-    case SYSTEMJOB_TYPE_GATEWAY_STANDBY:
-        typeStr = "GS";
-        break;
-    case SYSTEMJOB_TYPE_VOD:
-        typeStr = "VOD";
-        break;
-    case SYSTEMJOB_TYPE_VOD_TO_HTTP:
-        typeStr = "VOD2H";
-        break;
-    case SYSTEMJOB_TYPE_VOD_FROM_HTTP:
-        typeStr = "VODfrHTTP";
-        break;
-    case SYSTEMJOB_TYPE_MP2TS_IP_CAPTURE:
-    	typeStr = "IC";
-    	break;
-    case SYSTEMJOB_TYPE_MS_SMOOTH_STREAMING_VOD:
-    	typeStr = "SMOOTH_VOD";
-    	break;
-    case SYSTEMJOB_TYPE_MS_SMOOTH_STREAMING_LIVE:
-    	typeStr = "SMOOTH_LIVE";
-    	break;
-    case SYSTEMJOB_TYPE_SEGMENTED_DOWNLOAD:
-        typeStr = "SEG_D";
-        break;
-    case SYSTEMJOB_TYPE_TRANSCODE_RECORDING_TO_HTTP:
-        typeStr = "T2H";
-        break;
-    case SYSTEMJOB_TYPE_TRANSCODE_RB_PLAY_TO_HTTP:
-    	typeStr = "TRp2H";
-    	break;
-    case SYSTEMJOB_TYPE_RB_PLAY_TO_HTTP:
-    	typeStr = "Rp2H";
-    	break;
-    case SYSTEMJOB_TYPE_MS_SMOOTH_STREAM_TO_HTTP:
-    	typeStr = "SMOOTH2HTTP";
-    	break;
-    case SYSTEMJOB_TYPE_IPTV_RECORD:
-        typeStr = "IR";
-        break;
-    case SYSTEMJOB_TYPE_IPTV_RB_RECORD:
-    	typeStr = "IRB";
-    	break;
-    case SYSTEMJOB_TYPE_IPTV_VOD:
-    	typeStr = "IVOD";
-    	break;
-    case SYSTEMJOB_TYPE_TRANSCODING_RECORDING:
-        typeStr = "TR";
-        break;
-    case SYSTEMJOB_TYPE_ES_PLAYBACK:
-    	typeStr = "ES";
-    	break;
-    case SYSTEMJOB_TYPE_SOFTWARE_DOWNLOAD:
-        typeStr = "SWDL";
-        break;
-    case SYSTEMJOB_TYPE_TRANSCODED_CONTENT_TRANSFER:
-        typeStr = "TRCT";
-        break;    
-    default:
-    	typeStr = "Er";
-    	break;
-    }
-
-    return typeStr;
-}
-
-<conflict-quota>
-// CMS_SYSTEM_RESOURCE/RMF/src/plugins/quota_immediate_conflict.c
-
-        /* register to ControlPermission listener */
-        stat = RMF_SRV_Listener_Register(QIC_Listener, NULL,
-                &QICListenerHandle);
-
-// /* conflict due to fail assign */
-// QIC_Type_FailAssign,
-//
-// /* conflict due to trigger of quota resource */
-// QIC_Type_TriggerWarning,
-
-// raise quota conflict
-stat = QIC_Construct(QIC_Type_FailAssign, 
-    jobInJar, quota_part_id, cookieJar, successInAutoResolution, strategy);
-
-
-<conflict>
-
-// from RMF ppt
-A conflict can be characterized by: 
-Which resources are involved:
-	Tuner
-	Quota
-Time: 
-	Immediate 
-	Imminent (immediate conflict is expected shortly) 
-	Future (booking) 
-Trigger of conflict:
-	Solicited  - requested by EPG
-	Unsolicited - notified by RMF
-How it is resolved:
-	Automatically 
-	Involving the user 
-
-// channel change conflict
-
-if there's no response within the timeout, the platform cancels the
-channel-change request.
-
-
-# HOWTO artificially reduce the size of the user quota of the planner
-
-Edit flash0/fs/NDS/config/rmf.cfg and replace the section entitled [quota1
-internal] with the following:
-
-[quota1_internal]
-conflictCriticalLimitInMinutes=3
-conflictThresholdLimitInMinutes=7
-max_size_units="MB"
-max_size=4000
-partition_name="RECORDING"
-quota_name="user"
-quota_type="user_type"
-statistics_required=1
-strategy="Fixed"
-Change the value of max_size to suit the size of planner you want.
-
-# STATE
-# (COMP, SEV, IF, STA)
-hex(((30 & 0x3FF) << 22) | ((4 & 0x3) << 16) | ((2 & 0xF) << 12) | (1 & 0xFFF) )
-RMF_CONFLICT_STATUS_OK 			(0x7800000)
-RMF_CONFLICT_STATUS_FAILURE 	(0x7802001)
-
-#define RMF_QUOTA_IF_ID		(5) /*!< @brief File id for rmf_quota.h for creating specific statuses */
-#define RMF_QUOTA_STATUS_UNKNOWN_QUOTA	 RMF_COMP_ID, RMF_QUOTA_IF_ID, SEVERITY_SEVERE, 2	(0x07825002)
-
-
-#
-# ERRORS
-#
-NDS: ^0946699796.092852 !ERROR  -RMF      < T:VRM_SRV M:rmf_job.c F:RMF_JOB_SRV_GetJobByHandle L:917 > **** RMF_ET in rmf_job.c 917\n 
-
-RMF_JOB_SRV_GetJobByHandle
-{
-	# if cond is false(0), then print out mesg but if there's no more errors after that, it should be ignored.
-	CONDITION_CHECK_GO(RMF_JOB_HANDLE_ILLEGAL != handle);
-}
-
-#define CONDITION_CHECK_GO(cond) CONDITION_CHECK_GO_SET_ERROR(cond, stat, RMF_STATUS_FAILURE)
-#define CONDITION_CHECK_GO_SET_ERROR(cond, variable, status) \
-	if((cond)==0) {(variable) = (status); THROW_EXCEPTION}(void)0
-#define THROW_EXCEPTION {DIAG_LOG_ERROR( COMP_SGMNT_ID, ("**** RMF_ET in %s %d\n",__FILE__, __LINE__) ); goto exception_handler_label;}
-
-NDS: ^0946684997.681695 !ERROR  -RMF < T:SBM_UB_MAIN M:rmf_conflict.c F:RMF_CONFLICT_ReleaseConflictHandle L:805 > **** RMF_ET in rmf_conflict.c 805\n 
-#define CONDITION_CHECK_AB(cond) CONDITION_CHECK_AB_SET_ERROR(cond, stat, RMF_STATUS_FAILURE)
-#define CONDITION_CHECK_GO_SET_ERROR(cond, variable, status)
-
-RMF_STATUS_FAILURE(0x7821001)
-
-
-typedef enum RMF_CONFLICT_NOTIFICATION_TYPE_TAG
-{
-	RMF_CONFLICT_NOTIFICATION_TYPE_UNDEF = 0,
-	RMF_CONFLICT_NOTIFICATION_TYPE_CREATED, /*!< Conflict was created. This value also means the conflict is ready. */
-	RMF_CONFLICT_NOTIFICATION_TYPE_UPDATED, /*!< Conflict was updated */
-	RMF_CONFLICT_NOTIFICATION_TYPE_RESOLVED, /*!< Conflict was resolved without resolver intervention */
-	RMF_CONFLICT_NOTIFICATION_TYPE_LAST
-} RMF_CONFLICT_NOTIFICATION_TYPE;
-
-
-#
-picasso/bookingmgr/conflicts/ConflictResolver.java
-	notifyConflict
-NDS: !MIL   -EPG_CONF     < T:PLANNER_CB4 M:ConflictResolver F:notifyConflict L:00130 > PlannerConflictType=3 Imminent Tuner, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerImminentTunerConflictImpl
-
-# RESOLUTION_CANCEL(1)
-typedef enum PLANNER_API_ConflictResolutionTag
-{
-    PLANNER_API_CONFLICT_RESOLUTION_UNDEF = 0U,
-    PLANNER_API_CONFLICT_RESOLUTION_CANCEL,         /**< Cancel the cause of the conflict. */
-    PLANNER_API_CONFLICT_RESOLUTION_BASIC,          /**< Accept the automatic suggestion to resolve the conflict. */
-    PLANNER_API_CONFLICT_RESOLUTION_ADVANCED,       /**< Manual selection to resolve the conflict. */
-    PLANNER_API_CONFLICT_RESOLUTION_ACCEPT,         /**< Accept the conflict situation with no resolution. */
-    PLANNER_API_CONFLICT_RESOLUTION_CONTINUE,       /**< Continue with the original action that caused the conflict if it is automatically resolved */
-    PLANNER_API_CONFLICT_RESOLUTION_AUTO_RESOLVE    /**< Resolve the conflict automatically means without user interaction */
-} PLANNER_API_ConflictResolution;
-
-!MIL   -EPG_CONF     < M:BaseConflict F:trackStatic L:00137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl@5964e29] commitConflictResolution(resolutionType=1) <<<
-
-#
-# public interface PlannerSession
-checkForServiceConflict
-# Checks whether tuning to a given service will result in a channel change conflict. 
-# The result of the conflict check is returned as the status in the notify method of the callback. 
-# If there is no conflict or if the conflict was resolved in favour of the existing booking then the status will be OK, 
-# otherwise the status will be CONFLICT. 
-# If resolveConflict is TRUE, the conflict resolver will be called to allow resolution of the conflict. 
-# If FALSE, the callback returns immediately with notify. 
-	natPlannerApiSessionCheckForServiceConflict
-
-checkForBookingConflict
-# Check if adding a new booking will result in a conflict. Currently, this function can only be used 
-# to check whether changing the type of an EXISTING scheduled event (e.g. from a reminder to a recording) 
-# will result in a conflict. The result of the conflict check is returned as the status in the callback as notify method. 
-# If there is no conflict or if the conflict was resolved in favour of the existing booking then the status will be OK, 
-# otherwise the status will be CONFLICT. 
-# If resolveConflict is TRUE, the conflict resolver will be called to allow resolution of the conflict. 
-# If FALSE, the callback returns immediately with notify. 
-	natPlannerApiSessionCheckForBookingConflict
-		PLANNER_JAVA_ApiSessionCheckForServiceConflict
-
-
-void PLANNER_JAVA_ApiSessionCheckForServiceConflict(NDSJNI_ENV *env)
-{
-	# size(112) + 20 = 132
-	JPA_VTABLE_Create('&g_planner_adaptor_ABPRequest', &genPtr, &vtable_handle, sizeof(PLANNER_JAVA_ADD_BOOKED_PROGRAMME_REQUEST))
-
-	PLANNER_API_Session_CheckForServiceConflict( /* callback */ PLANNER_API_CheckForConflictCb 'PLANNER_JAVA_CheckForConflictListener' )
-			{
-				l_payload->payload_type = PLANNER_MSG_PAYLOAD_TYPE_CHECK_FOR_CONFLICT;
-	            l_payload->data.check_for_conflict.callback = callback;
-				l_payload->data.check_for_conflict.conflict_resolution_required = call_resolver;
-				
-				SBM_USERBOOKING_CheckForServiceConflict( (SBM_USERBOOKING_CheckForConflictCb) 'PLANNER_NotifySBMCheckForServiceConflictFinished' )
-					ipc_message.payload.userbooking_CheckForServiceConflict_request.callback = callback;
-			}
-		
-	SBM_SERVER_USERBOOKING_HandleExternalMessage	
-        case SBM_IPC_EVENT_USERBOOKING_CheckForServiceConflict_Request:
-			SBM_SERVER_USERBOOKING_CheckForServiceConflict
-			
-				l_payload->data.check_channel_change_conflict.callback = callback;
-				
-				SBM_USERBOOKING_PostMessage(SBM_USERBOOKING_EV_CHECK_SERVICE_CONFLICT)
-				
-				# sbm_server_ub_common.c
-				#
-				static const SBMUserBookingEventCallback_t f_function_table[] = {
-				
-				SBM_SERVER_USERBOOKING_CheckForServiceConflict_Handler(RMF_CONFLICT_TYPE_LIVE_TUNE)
-					SBM_SERVER_USERBOOKING_Conflict_CheckChannelChangeConflict(l_payload->data.check_channel_change_conflict.callback)
-					{
-						RMF_CONFLICT_CreateConflictParams
-						RMF_CONFLICT_SetJobHandle
-						RMF_CONFLICT_SetConflictType
-
-			            l_conflict->conflict_user_tag          = callback_user_tag;
-            			l_conflict->callback_user_tag          = callback_user_tag;
-					
-						RMF_CONFLICT_GetConflictHandle(&(l_conflict->conflict_handle))
-					}
-					
-}
-
-
-PLANNER_NotifySBMCheckForServiceConflictFinished
-	else if(status == SBM_USERBOOKING_STATUS_OK)
-	{
-		l_status = PLANNER_API_STATUS_OK;
-	}
-	else if(status == SBM_USERBOOKING_STATUS_CONFLICT)
-	{
-		l_status = PLANNER_API_STATUS_CONFLICT;
-	}
-
-	PLANNER_Callback_Post(PLANNER_EV_CB_CHECK_CONFLICT)
-	
-
-void 'PLANNER_JAVA_CheckForConflictListener'(PLANNER_API_UserTag l_user_tag, # this vtable handle
-                                           SYSTEM_STATUS l_completion_status)
-{
-    if (JPA_VTABLE_GetElement(&g_planner_adaptor_ABPRequest, l_user_tag, &genPtr) != JPA_VTABLE_STATUS_SUCCESS)
-	
-	if (!NDSJNI_CallJavaMethod2(&env, currentABPListenerObject,
-								"notify", "(Ljava/lang/Object;I)V",
-								currentUserTag, l_completion_status))
-}
-
-
-# natDeleteConflict
-#
-void PLANNER_JAVA_ConflictDeleteConflict(const NDSJNI_ENV *env)
-{
-	PLANNER_API_Conflict_Delete();
-
-    if (JPA_VTABLE_FindElement(&g_planner_adaptor_ABPRequest,
-                               &PLANNER_JAVA_FindConflictElement,
-                               (void *)jConflictHandle, &genPtr, &vtable_handle) != JPA_VTABLE_STATUS_SUCCESS)
-    {
-        DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("Failed to find conflict data: 0x%x", jConflictHandle));
-    }
-    else
-    {
-        conflict_data = genPtr;
-
-        /* Twice to destroy this item */
-        (void)JPA_VTABLE_ReleaseElement(&g_planner_adaptor_ABPRequest, vtable_handle);
-        (void)JPA_VTABLE_ReleaseElement(&g_planner_adaptor_ABPRequest, vtable_handle);
-    }
-}
-
-
-# RESOLVE CH from app and RELEASE 
-# -------------------------------
-commitConflictResolution(int resolutionType)
-	natCommitConflictResolution
-		PLANNER_JAVA_ConflictCommitConflictResolution
-			PLANNER_API_Conflict_CommitConflictResolution
-				PLANNER_Conflict_CommitResolution
-					SBM_CONFLICT_ReleaseConflictHandle
-
-					SBM_CONFLICT_ReleaseConflictHandle
-					SBM_SERVER_CONFLICT_ReleaseConflictHandle(conflictHandle)
-						RMF_CONFLICT_ReleaseConflictHandle((RMF_CONFLICT_Handle)conflictHandle)
-						# release SBM conflict structure
-						VTABLE_ReleaseElement(&g_sbm_userbooking_conflicts)
-
-
-
-# NOTY from RMF -> APP
-# -------------------------------
-RMF_CONFLICT_SRV_NotifyConfUpdated
-	RMF_CONFLICT_CLT_HandleIPCMsg
-		RMF_CONFLICT_CLT_NotifyConfStatus
-
-
-SBM_SERVER_CONFLICT_NotifyListener(RMF_CONFLICT_NOTIFICATION_TYPE notifyType, RMF_CONFLICT_Handle conflictHandle)
-	PostMessage(SBM_USERBOOKING_EV_CONFLICT_NOTIFICATION);
-
-/* SBM_USERBOOKING_EV_CONFLICT_NOTIFICATION,*/
-SBM_USERBOOKING_ConflictNotificationHandler
-{
-	notifyType == RMF_CONFLICT_NOTIFICATION_TYPE_CREATED
-	SBM_SERVER_CONFLICT_Call_NotifyListener(notifyType, conflictHandle, l_userData);
-}
-
-
-typedef enum PLANNER_API_ConflictTypeTag
-{
-    PLANNER_API_CONFLICTTYPE_UNDEF = 0U,
-    PLANNER_API_CONFLICTTYPE_BOOKING_TIME,      /**< Caused by insufficent resources at record time when adding a new booking */
-    PLANNER_API_CONFLICTTYPE_CHANNEL_CHANGE,    /**< Caused by insufficent resources when changing the Live play. */
-    PLANNER_API_CONFLICTTYPE_IMMINENT_TUNER,    /**< Caused by insufficent resources for an imminent recording. i.e clash with Live */
-    PLANNER_API_CONFLICTTYPE_IMMINENT_DISK,     /**< Caused by imminent insufficent disk resources for current recordings */
-    PLANNER_API_CONFLICTTYPE_BOOKING_DISK_FAIL, /**< Caused by insufficent disk resources at booking time */
-    PLANNER_API_CONFLICTTYPE_PDL_REPLACEMENT_DISK, /**< Caused by imminent insufficient disk resources for PDL recording replacement with PVOD asset */
-    PLANNER_API_CONFLICTTYPE_REMINDER_BOOKING,  /**< Caused by clashing reminders. */
-    PLANNER_API_CONFLICTTYPE_LIVE_RESERVATION,  /**< Caused by insufficient resources when reserving resources for an interactive application */
-    PLANNER_API_CONFLICTTYPE_IMMINENT_LIVE_RESERVATION, /**< Caused by insufficient resources for an imminent recording, when an interactive application is running. */
-    PLANNER_API_CONFLICTTYPE_UPDATED,            /* Caused by automatic conflict update */
-    PLANNER_API_CONFLICTTYPE_RESOLVED, (11, 0xb)            /* Caused by automatic conflict resolve, ie) without the resolver intervention */
-    PLANNER_API_CONFLICTTYPE_IMMEDIATE_RECORDING, /* Caused by booking a second child event while watching an interactive application and recording the current child event.*/
-    PLANNER_API_CONFLICTTYPE_QUOTA_CHANGE, /**< Caused by imminent insufficient disk resources when moving an asset to the user disk quota */
-    PLANNER_API_CONFLICTTYPE_EXTEND_DISK_QUOTA, /**< Caused by when the viewer performs SFRB for a past event, and the user disk quota does not contain enough space for the new booking  */
-    PLANNER_API_CONFLICTTYPE_LASTVALUE
-} PLANNER_API_ConflictType;
-
-PLANNER_ConflictNotificationHandler
-{
-	PLANNER_PRV_NotifyConflictListenersInAllSessions
-		PLANNER_PRV_NotifyConflictListeners
-			PLANNER_ExecuteUserCallback: PLANNER_EV_CB_CONFLICT
-				PLANNER_JAVA_Conflict_ResolverCb
-				{
-					PLANNER_JAVA_Conflict_ResolverCb_NewConflict # matches to PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
-						JPA_VTABLE_Create
-
-					PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
-				}
-}
-
-# from app to regieter a resolver callback
-PLANNER_JAVA_ApiSessionRegisterConflictResolver
-	# size(108) + 20 = 128 g_planner_adaptor_ConflictResolverListener
-	PLANNER_API_Session_RegisterConflictResolver(PLANNER_JAVA_Conflict_ResolverCb)
-
-
-#
-PLANNER_JAVA_Conflict_ResolverCb_NewBookingConflict L:02669 > JPA_VTABLE_Create failed (44bytes)
-
-# from SBM, register listeners.
-    else if (RMF_CONFLICT_STATUS_OK != RMF_CONFLICT_RegisterResolver(
-                SBM_SERVER_CONFLICT_NotifyListener,
-                SBM_SERVER_CONFLICT_ConflictControlListener,
-                SBM_SERVER_CONFLICT_QueryControlListener,
-                SBM_SERVER_CONFLICT_RequestResultListener,
-                &g_sbm_userbooking_conflict_resolver_handle))
-
-
-# PLANNER_API_CONFLICTTYPE_CHANNEL_CHANGE
--P_Planner    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0xcd, 0x44, 0x2 
--J_PLANNER    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0xcd, ConflictHandle: 0x0x44, ConflictType: 0x0x2 
-PLANNER_JAVA_Conflict_ResolverCb:PLANNER_JAVA_Conflict_ResolverCb_NewConflict
-
-# PLANNER_API_CONFLICTTYPE_RESOLVED
--P_Planner    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0xcd, 0x44, 0xb 
--J_PLANNER    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0xcd, ConflictHandle: 0x0x44, ConflictType: 0x0xb 
-PLANNER_JAVA_Conflict_ResolverCb:PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
-
-# PLANNER_JAVA_ConflictDeleteConflict
-# as below, called when there's no interest on it and in that case, there's no resolved event.
- -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x158, 0x78, 0x1 
- -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0x158, ConflictHandle: 0x0x78, ConflictType: 0x0x1 
--EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=1 Booking Time, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl
--EPG_CONF    137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl@59aa3bb] commitConflictResolution(resolutionType=2) <<<
- -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x159 
-
-
- -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x0, 0x79, 0x3 
- -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0, ConflictHandle: 0x0x79, ConflictType: 0x0x3 
--EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=3 Imminent Tuner, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerImminentTunerConflictImpl
--EPG_CONF    137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerImminentTunerConflictImpl@59cee23] commitConflictResolution(resolutionType=3) <<<
- -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x15d 
-
-
-# usual case, there's notification and delete
- -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x162, 0x7b, 0x1 
- -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0x162, ConflictHandle: 0x0x7b, ConflictType: 0x0x1 
--EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=1 Booking Time, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl
--EPG_CONF    137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl@59a70a7] commitConflictResolution(resolutionType=1) <<<
- -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x163 
-
- -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x169, 0x7f, 0xb 
- -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:'PLANNER_JAVA_Conflict_ResolverCb' L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0x169, ConflictHandle: 0x0x7f, ConflictType: 0x0xb 
--EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=RESOLVED, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
- -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x16a 
-
-# sequence logs
-#
-!INFO  -P_Planner    < M:planner_callback.c F:PLANNER_ExecuteUserCallback L:00209 > Executing the callback of type 13. (PLANNER_EV_CB_CHECK_CONFLICT)
-!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03136 > |-> PLANNER_JAVA_CheckForConflictListener
-
-# PLANNER_API_STATUS_OK in case there's no conflict
-#
-!ERROR -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03162 > KT: Listener: l_user_tag=0xe, l_comp_status=0x642200c (PLANNER_API_STATUS_CONFLICT)
-
-!INFO  -P_Planner    < M:planner_callback.c F:PLANNER_ExecuteUserCallback L:00209 > Executing the callback of type 13. (PLANNER_EV_CB_CHECK_CONFLICT)
-!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03136 > |-> PLANNER_JAVA_CheckForConflictListener
-!ERROR -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03141 > JPA_VTABLE_GetElement could not find usertag: 0xe
-!ERROR -SBMS_USERBOOKING < M:sbm_server_ub_conflict.c F:SBM_SERVER_CONFLICT_ReleaseConflictHandle L:01028 > KT: rmf_status(0x7804000), RMF_STATUS_FAILURE(0x7821001)
-
-
-!INFO  -P_Planner    < M:planner_callback.c F:PLANNER_ExecuteUserCallback L:00209 > Executing the callback of type 8. (PLANNER_EV_CB_CONFLICT)
-!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:03010 > |-> PLANNER_JAVA_Conflict_ResolverCb
-!WARN  -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:03032 > Could not find booking usertag in ABP  Vtable :0xe
-!WARN  -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:03042 > Could not find booking usertag in RBP  Vtable :0xe
-
-# PLANNER_API_CONFLICTTYPE_RESOLVED
-#
-!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict L:02861 > |-> PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
-!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb_GetConflictObject L:02905 > |-> PLANNER_JAVA_Conflict_ResolverCb_GetConflictObject
-!MIL   -EPG_CONF     < M:ConflictResolver F:notifyConflict L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=RESOLVED, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
-
-
-# EPG LOG
-47823:NDS: ^[03:00:53]0946695653.828404 !MIL   -EPG_CONF     < M:ConflictResolver F:notifyConflict L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=RESOLVED, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
-47708:NDS: ^[03:00:52]0946695652.115639 !MIL   -EPG_CONF     < M:ConflictResolver F:notifyConflict L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
-47320:NDS: ^[03:00:33]0946695633.667728 !MIL   -EPG_CONF     < M:BaseConflict F:trackStatic L:00137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl@59aa83d] commitConflictResolution(resolutionType=3) <<<
-
-# line number before hit OOM
-69926
-
-$ sed -n '1,69926p' LOGlast | egrep 'T:threadtracker:PlannerConflictType' | egrep 'RESOLVED' | wc -l
-120
-$ sed -n '1,69926p' LOGlast | egrep 'T:threadtracker:PlannerConflictType' | egrep 'TO-RESOLVE' | wc -l        
-180 (180-120=60, from MEMMAN log, there's about 64 items so it's about match)
-$ sed -n '1,69926p' LOGlast | egrep 'commitConflictResolution' | wc -l                                         
-179
-
-
-={============================================================================
 |kt_dev_si_0001| comp-atg comp-oigc
 
 COMPONENT_NAME:=darwin_atg
@@ -4711,16 +4090,637 @@ After the output buffer overflow, the MSM goes through a stop->free->prepare->ru
 
 
 ={============================================================================
+|kt_dev_si_0001| comp-rmf
+
+Anna Silberman	Component Owner	Israel
+
+When a job wants to perform a task that requires resources, it must request
+permission from the RMF.  The RMF is responsible for the 'logical' aspect of
+granting permissions to use resources. It is not involved in allocating them
+physically. 
+
+The `job manager`, prior to requesting resources (or performing tasks that
+    require resources) from the `physical resource managers`, must call the
+RMF and get permissions to do so.
+
+RMF manages resources that are mapped to certain permissions according to the
+specific project requirements and characteristics of the STB. For example, in
+one project permission to perform playback may require a disk bandwidth
+resource and in another project it would not. (Actually, in all projects disk
+    bandwidth is required, but in some projects the disk bandwidth is not a
+    bottleneck and the RMF does not need to be aware of it.)
+
+Supporting a waiting `queue` (A physical resource manager)
+For instance, the MCM allows requesting a media connection and the request
+will be valid even if there are no free devices for the media connection. In
+such a case, the request shall be granted once the devices become available.
+On the other hand, the physical resource manager of the disk space (the file
+    system) does not support such a mechanism. 
+
+
+The MCM supports the following types of media connections:
+
+1) LIVEVIEWING 
+Used for viewing live streams from a tuner front end. This media connection
+type requires the following device managers: FEM, 'MPM', CAMM, SIM, FDM, SDM.
+
+2)	RECORDING 
+Used for recording streams from a tuner front end to files on disk. This media
+connection type requires the following device managers: FEM, MPM, MSM, CAMM,
+SIM, SDM.
+
+3)	PLAYBACK 
+Used for playing streams from disk. This media connection type requires the
+following device managers: MPM, MSM, CAMM, SIM.
+
+4)	CAPTURE 
+Used for capturing service information data. This media connection type
+requires the following device managers: FEM, MPM, CAMM, SIM, FDM, SDM.
+
+5)	SCAN 
+Used for determining what transponder frequencies contain valid streams. This
+media connection type requires the following device managers: FEM, MPM, SIM.
+
+
+<job-type> see *vrm-job-type*
+// 146746:!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c 
+// F:RMF_ALLOCATE_ControlPermissions L:1012 > 
+// job=0x201072f(0)[L] request=0x10000020 released=0xf0000000 change request if fails. 
+
+char* JobTypeToString(SYSTEMJOB_Type jobType)
+{
+    char *typeStr="Er";
+
+    switch(jobType)
+    {
+    case SYSTEMJOB_TYPE_SCAN:
+        typeStr = "S";
+        break;
+    case SYSTEMJOB_TYPE_CAPTURE:
+        typeStr = "C";
+        break;
+    case SYSTEMJOB_TYPE_LIVE_VIEWING:
+        typeStr = "L";
+        break;
+    case SYSTEMJOB_TYPE_RECORD:
+        typeStr = "R";
+        break;
+    case SYSTEMJOB_TYPE_REMINDER:
+        typeStr = "Rm";
+        break;
+    case SYSTEMJOB_TYPE_PLAYBACK:
+        typeStr = "P";
+        break;
+    case SYSTEMJOB_TYPE_IP_VOD_PLAYBACK:
+        typeStr = "Pv";
+        break;
+    case SYSTEMJOB_TYPE_RB_RECORD:
+        typeStr = "Rb";
+        break;
+    case SYSTEMJOB_TYPE_RB_PLAY:
+        typeStr = "Rp";
+        break;
+    case SYSTEMJOB_TYPE_LIVE_RESERVATION:
+        typeStr = "iA";
+        break;
+    case SYSTEMJOB_TYPE_DOWNLOAD:
+        typeStr = "D";
+        break;
+    case SYSTEMJOB_TYPE_DOWNLOAD_RESET_JOB:
+        typeStr = "Dr";
+        break;
+    case SYSTEMJOB_TYPE_AUTOMATIC_SYSTEM_MAINTAINANCE_TASK:
+        typeStr = "AU";
+        break;
+    case SYSTEMJOB_TYPE_MANUAL_SYSTEM_MAINTAINANCE_TASK:
+        typeStr = "MU";
+        break;
+    case SYSTEMJOB_TYPE_PASSIVE_STANDBY:
+        typeStr = "PS";
+        break;
+    case SYSTEMJOB_TYPE_LIVE_FROM_HTTP:
+        typeStr = "liveHTTP";
+        break;
+    case SYSTEMJOB_TYPE_PLAY_FROM_HTTP:
+        typeStr = "playHTTP";
+        break;
+    case SYSTEMJOB_TYPE_RB_PLAY_FROM_HTTP:
+        typeStr = "rbPlyHTTP";
+        break;
+    case SYSTEMJOB_TYPE_PLAY_NFF_TO_HTTP:
+        typeStr = "Pn2H";
+        break;
+    case SYSTEMJOB_TYPE_PLAY_NFF_FROM_HTTP:
+        typeStr = "NFFfromHTTP";
+        break;
+    case SYSTEMJOB_TYPE_PLAY_TO_HTTP:
+        typeStr = "P2H";
+        break;
+    case SYSTEMJOB_TYPE_LIVE_TO_HTTP:
+        typeStr = "L2H";
+        break;
+    case SYSTEMJOB_TYPE_SW_UPDATE_SCAN:
+        typeStr = "SU";
+        break;
+    case SYSTEMJOB_TYPE_BDL_RECORD:
+        typeStr = "B";
+        break;
+    case SYSTEMJOB_TYPE_PLAY_FROM_HORIZONTAL_FILE:
+        typeStr = "pH";
+        break;
+    case SYSTEMJOB_TYPE_OTT_ABR_LIVE:
+        typeStr = "OL";
+        break;
+    case SYSTEMJOB_TYPE_OTT_ABR_VOD:
+        typeStr = "OV";
+        break;
+    case SYSTEMJOB_TYPE_HEALTH_CHECK:
+        typeStr = "HL";
+        break;
+    case SYSTEMJOB_TYPE_IPTV_LIVE:
+        typeStr = "IL";
+        break;
+    case SYSTEMJOB_TYPE_IPTV_LIVE_TO_HTTP:
+        typeStr = "IL2H";
+        break;
+    case SYSTEMJOB_TYPE_GATEWAY_STANDBY:
+        typeStr = "GS";
+        break;
+    case SYSTEMJOB_TYPE_VOD:
+        typeStr = "VOD";
+        break;
+    case SYSTEMJOB_TYPE_VOD_TO_HTTP:
+        typeStr = "VOD2H";
+        break;
+    case SYSTEMJOB_TYPE_VOD_FROM_HTTP:
+        typeStr = "VODfrHTTP";
+        break;
+    case SYSTEMJOB_TYPE_MP2TS_IP_CAPTURE:
+    	typeStr = "IC";
+    	break;
+    case SYSTEMJOB_TYPE_MS_SMOOTH_STREAMING_VOD:
+    	typeStr = "SMOOTH_VOD";
+    	break;
+    case SYSTEMJOB_TYPE_MS_SMOOTH_STREAMING_LIVE:
+    	typeStr = "SMOOTH_LIVE";
+    	break;
+    case SYSTEMJOB_TYPE_SEGMENTED_DOWNLOAD:
+        typeStr = "SEG_D";
+        break;
+    case SYSTEMJOB_TYPE_TRANSCODE_RECORDING_TO_HTTP:
+        typeStr = "T2H";
+        break;
+    case SYSTEMJOB_TYPE_TRANSCODE_RB_PLAY_TO_HTTP:
+    	typeStr = "TRp2H";
+    	break;
+    case SYSTEMJOB_TYPE_RB_PLAY_TO_HTTP:
+    	typeStr = "Rp2H";
+    	break;
+    case SYSTEMJOB_TYPE_MS_SMOOTH_STREAM_TO_HTTP:
+    	typeStr = "SMOOTH2HTTP";
+    	break;
+    case SYSTEMJOB_TYPE_IPTV_RECORD:
+        typeStr = "IR";
+        break;
+    case SYSTEMJOB_TYPE_IPTV_RB_RECORD:
+    	typeStr = "IRB";
+    	break;
+    case SYSTEMJOB_TYPE_IPTV_VOD:
+    	typeStr = "IVOD";
+    	break;
+    case SYSTEMJOB_TYPE_TRANSCODING_RECORDING:
+        typeStr = "TR";
+        break;
+    case SYSTEMJOB_TYPE_ES_PLAYBACK:
+    	typeStr = "ES";
+    	break;
+    case SYSTEMJOB_TYPE_SOFTWARE_DOWNLOAD:
+        typeStr = "SWDL";
+        break;
+    case SYSTEMJOB_TYPE_TRANSCODED_CONTENT_TRANSFER:
+        typeStr = "TRCT";
+        break;    
+    default:
+    	typeStr = "Er";
+    	break;
+    }
+
+    return typeStr;
+}
+
+<conflict-quota>
+// CMS_SYSTEM_RESOURCE/RMF/src/plugins/quota_immediate_conflict.c
+
+// this is only place to register QIC_Listener
+
+        /* register to ControlPermission listener */
+        stat = RMF_SRV_Listener_Register(QIC_Listener, NULL,
+                &QICListenerHandle);
+
+// /* conflict due to fail assign */
+// QIC_Type_FailAssign,
+//
+// /* conflict due to trigger of quota resource */
+// QIC_Type_TriggerWarning,
+
+// raise quota conflict
+stat = QIC_Construct(QIC_Type_FailAssign, 
+    jobInJar, quota_part_id, cookieJar, successInAutoResolution, strategy);
+
+
+<conflict>
+
+// from RMF ppt
+A conflict can be characterized by: 
+Which resources are involved:
+	Tuner
+	Quota
+Time: 
+	Immediate 
+	Imminent (immediate conflict is expected shortly) 
+	Future (booking) 
+Trigger of conflict:
+	Solicited  - requested by EPG
+	Unsolicited - notified by RMF
+How it is resolved:
+	Automatically 
+	Involving the user 
+
+// channel change conflict
+
+if there's no response within the timeout, the platform cancels the
+channel-change request.
+
+
+# HOWTO artificially reduce the size of the user quota of the planner
+
+Edit flash0/fs/NDS/config/rmf.cfg and replace the section entitled [quota1
+internal] with the following:
+
+[quota1_internal]
+conflictCriticalLimitInMinutes=3
+conflictThresholdLimitInMinutes=7
+max_size_units="MB"
+max_size=4000
+partition_name="RECORDING"
+quota_name="user"
+quota_type="user_type"
+statistics_required=1
+strategy="Fixed"
+Change the value of max_size to suit the size of planner you want.
+
+# STATE
+# (COMP, SEV, IF, STA)
+hex(((30 & 0x3FF) << 22) | ((4 & 0x3) << 16) | ((2 & 0xF) << 12) | (1 & 0xFFF) )
+RMF_CONFLICT_STATUS_OK 			(0x7800000)
+RMF_CONFLICT_STATUS_FAILURE 	(0x7802001)
+
+#define RMF_QUOTA_IF_ID		(5) /*!< @brief File id for rmf_quota.h for creating specific statuses */
+#define RMF_QUOTA_STATUS_UNKNOWN_QUOTA	 RMF_COMP_ID, RMF_QUOTA_IF_ID, SEVERITY_SEVERE, 2	(0x07825002)
+
+
+#
+# ERRORS
+#
+NDS: ^0946699796.092852 !ERROR  -RMF      < T:VRM_SRV M:rmf_job.c F:RMF_JOB_SRV_GetJobByHandle L:917 > **** RMF_ET in rmf_job.c 917\n 
+
+RMF_JOB_SRV_GetJobByHandle
+{
+	# if cond is false(0), then print out mesg but if there's no more errors after that, it should be ignored.
+	CONDITION_CHECK_GO(RMF_JOB_HANDLE_ILLEGAL != handle);
+}
+
+#define CONDITION_CHECK_GO(cond) CONDITION_CHECK_GO_SET_ERROR(cond, stat, RMF_STATUS_FAILURE)
+#define CONDITION_CHECK_GO_SET_ERROR(cond, variable, status) \
+	if((cond)==0) {(variable) = (status); THROW_EXCEPTION}(void)0
+#define THROW_EXCEPTION {DIAG_LOG_ERROR( COMP_SGMNT_ID, ("**** RMF_ET in %s %d\n",__FILE__, __LINE__) ); goto exception_handler_label;}
+
+NDS: ^0946684997.681695 !ERROR  -RMF < T:SBM_UB_MAIN M:rmf_conflict.c F:RMF_CONFLICT_ReleaseConflictHandle L:805 > **** RMF_ET in rmf_conflict.c 805\n 
+#define CONDITION_CHECK_AB(cond) CONDITION_CHECK_AB_SET_ERROR(cond, stat, RMF_STATUS_FAILURE)
+#define CONDITION_CHECK_GO_SET_ERROR(cond, variable, status)
+
+RMF_STATUS_FAILURE(0x7821001)
+
+
+typedef enum RMF_CONFLICT_NOTIFICATION_TYPE_TAG
+{
+	RMF_CONFLICT_NOTIFICATION_TYPE_UNDEF = 0,
+	RMF_CONFLICT_NOTIFICATION_TYPE_CREATED, /*!< Conflict was created. This value also means the conflict is ready. */
+	RMF_CONFLICT_NOTIFICATION_TYPE_UPDATED, /*!< Conflict was updated */
+	RMF_CONFLICT_NOTIFICATION_TYPE_RESOLVED, /*!< Conflict was resolved without resolver intervention */
+	RMF_CONFLICT_NOTIFICATION_TYPE_LAST
+} RMF_CONFLICT_NOTIFICATION_TYPE;
+
+
+#
+picasso/bookingmgr/conflicts/ConflictResolver.java
+	notifyConflict
+NDS: !MIL   -EPG_CONF     < T:PLANNER_CB4 M:ConflictResolver F:notifyConflict L:00130 > PlannerConflictType=3 Imminent Tuner, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerImminentTunerConflictImpl
+
+# RESOLUTION_CANCEL(1)
+typedef enum PLANNER_API_ConflictResolutionTag
+{
+    PLANNER_API_CONFLICT_RESOLUTION_UNDEF = 0U,
+    PLANNER_API_CONFLICT_RESOLUTION_CANCEL,         /**< Cancel the cause of the conflict. */
+    PLANNER_API_CONFLICT_RESOLUTION_BASIC,          /**< Accept the automatic suggestion to resolve the conflict. */
+    PLANNER_API_CONFLICT_RESOLUTION_ADVANCED,       /**< Manual selection to resolve the conflict. */
+    PLANNER_API_CONFLICT_RESOLUTION_ACCEPT,         /**< Accept the conflict situation with no resolution. */
+    PLANNER_API_CONFLICT_RESOLUTION_CONTINUE,       /**< Continue with the original action that caused the conflict if it is automatically resolved */
+    PLANNER_API_CONFLICT_RESOLUTION_AUTO_RESOLVE    /**< Resolve the conflict automatically means without user interaction */
+} PLANNER_API_ConflictResolution;
+
+!MIL   -EPG_CONF     < M:BaseConflict F:trackStatic L:00137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl@5964e29] commitConflictResolution(resolutionType=1) <<<
+
+#
+# public interface PlannerSession
+checkForServiceConflict
+# Checks whether tuning to a given service will result in a channel change conflict. 
+# The result of the conflict check is returned as the status in the notify method of the callback. 
+# If there is no conflict or if the conflict was resolved in favour of the existing booking then the status will be OK, 
+# otherwise the status will be CONFLICT. 
+# If resolveConflict is TRUE, the conflict resolver will be called to allow resolution of the conflict. 
+# If FALSE, the callback returns immediately with notify. 
+	natPlannerApiSessionCheckForServiceConflict
+
+checkForBookingConflict
+# Check if adding a new booking will result in a conflict. Currently, this function can only be used 
+# to check whether changing the type of an EXISTING scheduled event (e.g. from a reminder to a recording) 
+# will result in a conflict. The result of the conflict check is returned as the status in the callback as notify method. 
+# If there is no conflict or if the conflict was resolved in favour of the existing booking then the status will be OK, 
+# otherwise the status will be CONFLICT. 
+# If resolveConflict is TRUE, the conflict resolver will be called to allow resolution of the conflict. 
+# If FALSE, the callback returns immediately with notify. 
+	natPlannerApiSessionCheckForBookingConflict
+		PLANNER_JAVA_ApiSessionCheckForServiceConflict
+
+
+void PLANNER_JAVA_ApiSessionCheckForServiceConflict(NDSJNI_ENV *env)
+{
+	# size(112) + 20 = 132
+	JPA_VTABLE_Create('&g_planner_adaptor_ABPRequest', &genPtr, &vtable_handle, sizeof(PLANNER_JAVA_ADD_BOOKED_PROGRAMME_REQUEST))
+
+	PLANNER_API_Session_CheckForServiceConflict( /* callback */ PLANNER_API_CheckForConflictCb 'PLANNER_JAVA_CheckForConflictListener' )
+			{
+				l_payload->payload_type = PLANNER_MSG_PAYLOAD_TYPE_CHECK_FOR_CONFLICT;
+	            l_payload->data.check_for_conflict.callback = callback;
+				l_payload->data.check_for_conflict.conflict_resolution_required = call_resolver;
+				
+				SBM_USERBOOKING_CheckForServiceConflict( (SBM_USERBOOKING_CheckForConflictCb) 'PLANNER_NotifySBMCheckForServiceConflictFinished' )
+					ipc_message.payload.userbooking_CheckForServiceConflict_request.callback = callback;
+			}
+		
+	SBM_SERVER_USERBOOKING_HandleExternalMessage	
+        case SBM_IPC_EVENT_USERBOOKING_CheckForServiceConflict_Request:
+			SBM_SERVER_USERBOOKING_CheckForServiceConflict
+			
+				l_payload->data.check_channel_change_conflict.callback = callback;
+				
+				SBM_USERBOOKING_PostMessage(SBM_USERBOOKING_EV_CHECK_SERVICE_CONFLICT)
+				
+				# sbm_server_ub_common.c
+				#
+				static const SBMUserBookingEventCallback_t f_function_table[] = {
+				
+				SBM_SERVER_USERBOOKING_CheckForServiceConflict_Handler(RMF_CONFLICT_TYPE_LIVE_TUNE)
+					SBM_SERVER_USERBOOKING_Conflict_CheckChannelChangeConflict(l_payload->data.check_channel_change_conflict.callback)
+					{
+						RMF_CONFLICT_CreateConflictParams
+						RMF_CONFLICT_SetJobHandle
+						RMF_CONFLICT_SetConflictType
+
+			            l_conflict->conflict_user_tag          = callback_user_tag;
+            			l_conflict->callback_user_tag          = callback_user_tag;
+					
+						RMF_CONFLICT_GetConflictHandle(&(l_conflict->conflict_handle))
+					}
+					
+}
+
+
+PLANNER_NotifySBMCheckForServiceConflictFinished
+	else if(status == SBM_USERBOOKING_STATUS_OK)
+	{
+		l_status = PLANNER_API_STATUS_OK;
+	}
+	else if(status == SBM_USERBOOKING_STATUS_CONFLICT)
+	{
+		l_status = PLANNER_API_STATUS_CONFLICT;
+	}
+
+	PLANNER_Callback_Post(PLANNER_EV_CB_CHECK_CONFLICT)
+	
+
+void 'PLANNER_JAVA_CheckForConflictListener'(PLANNER_API_UserTag l_user_tag, # this vtable handle
+                                           SYSTEM_STATUS l_completion_status)
+{
+    if (JPA_VTABLE_GetElement(&g_planner_adaptor_ABPRequest, l_user_tag, &genPtr) != JPA_VTABLE_STATUS_SUCCESS)
+	
+	if (!NDSJNI_CallJavaMethod2(&env, currentABPListenerObject,
+								"notify", "(Ljava/lang/Object;I)V",
+								currentUserTag, l_completion_status))
+}
+
+
+# natDeleteConflict
+#
+void PLANNER_JAVA_ConflictDeleteConflict(const NDSJNI_ENV *env)
+{
+	PLANNER_API_Conflict_Delete();
+
+    if (JPA_VTABLE_FindElement(&g_planner_adaptor_ABPRequest,
+                               &PLANNER_JAVA_FindConflictElement,
+                               (void *)jConflictHandle, &genPtr, &vtable_handle) != JPA_VTABLE_STATUS_SUCCESS)
+    {
+        DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("Failed to find conflict data: 0x%x", jConflictHandle));
+    }
+    else
+    {
+        conflict_data = genPtr;
+
+        /* Twice to destroy this item */
+        (void)JPA_VTABLE_ReleaseElement(&g_planner_adaptor_ABPRequest, vtable_handle);
+        (void)JPA_VTABLE_ReleaseElement(&g_planner_adaptor_ABPRequest, vtable_handle);
+    }
+}
+
+
+# RESOLVE CH from app and RELEASE 
+# -------------------------------
+commitConflictResolution(int resolutionType)
+	natCommitConflictResolution
+		PLANNER_JAVA_ConflictCommitConflictResolution
+			PLANNER_API_Conflict_CommitConflictResolution
+				PLANNER_Conflict_CommitResolution
+					SBM_CONFLICT_ReleaseConflictHandle
+
+					SBM_CONFLICT_ReleaseConflictHandle
+					SBM_SERVER_CONFLICT_ReleaseConflictHandle(conflictHandle)
+						RMF_CONFLICT_ReleaseConflictHandle((RMF_CONFLICT_Handle)conflictHandle)
+						# release SBM conflict structure
+						VTABLE_ReleaseElement(&g_sbm_userbooking_conflicts)
+
+
+
+# NOTY from RMF -> APP
+# -------------------------------
+RMF_CONFLICT_SRV_NotifyConfUpdated
+	RMF_CONFLICT_CLT_HandleIPCMsg
+		RMF_CONFLICT_CLT_NotifyConfStatus
+
+
+SBM_SERVER_CONFLICT_NotifyListener(RMF_CONFLICT_NOTIFICATION_TYPE notifyType, RMF_CONFLICT_Handle conflictHandle)
+	PostMessage(SBM_USERBOOKING_EV_CONFLICT_NOTIFICATION);
+
+/* SBM_USERBOOKING_EV_CONFLICT_NOTIFICATION,*/
+SBM_USERBOOKING_ConflictNotificationHandler
+{
+	notifyType == RMF_CONFLICT_NOTIFICATION_TYPE_CREATED
+	SBM_SERVER_CONFLICT_Call_NotifyListener(notifyType, conflictHandle, l_userData);
+}
+
+
+typedef enum PLANNER_API_ConflictTypeTag
+{
+    PLANNER_API_CONFLICTTYPE_UNDEF = 0U,
+    PLANNER_API_CONFLICTTYPE_BOOKING_TIME,      /**< Caused by insufficent resources at record time when adding a new booking */
+    PLANNER_API_CONFLICTTYPE_CHANNEL_CHANGE,    /**< Caused by insufficent resources when changing the Live play. */
+    PLANNER_API_CONFLICTTYPE_IMMINENT_TUNER,    /**< Caused by insufficent resources for an imminent recording. i.e clash with Live */
+    PLANNER_API_CONFLICTTYPE_IMMINENT_DISK,     /**< Caused by imminent insufficent disk resources for current recordings */
+    PLANNER_API_CONFLICTTYPE_BOOKING_DISK_FAIL, /**< Caused by insufficent disk resources at booking time */
+    PLANNER_API_CONFLICTTYPE_PDL_REPLACEMENT_DISK, /**< Caused by imminent insufficient disk resources for PDL recording replacement with PVOD asset */
+    PLANNER_API_CONFLICTTYPE_REMINDER_BOOKING,  /**< Caused by clashing reminders. */
+    PLANNER_API_CONFLICTTYPE_LIVE_RESERVATION,  /**< Caused by insufficient resources when reserving resources for an interactive application */
+    PLANNER_API_CONFLICTTYPE_IMMINENT_LIVE_RESERVATION, /**< Caused by insufficient resources for an imminent recording, when an interactive application is running. */
+    PLANNER_API_CONFLICTTYPE_UPDATED,            /* Caused by automatic conflict update */
+    PLANNER_API_CONFLICTTYPE_RESOLVED, (11, 0xb)            /* Caused by automatic conflict resolve, ie) without the resolver intervention */
+    PLANNER_API_CONFLICTTYPE_IMMEDIATE_RECORDING, /* Caused by booking a second child event while watching an interactive application and recording the current child event.*/
+    PLANNER_API_CONFLICTTYPE_QUOTA_CHANGE, /**< Caused by imminent insufficient disk resources when moving an asset to the user disk quota */
+    PLANNER_API_CONFLICTTYPE_EXTEND_DISK_QUOTA, /**< Caused by when the viewer performs SFRB for a past event, and the user disk quota does not contain enough space for the new booking  */
+    PLANNER_API_CONFLICTTYPE_LASTVALUE
+} PLANNER_API_ConflictType;
+
+PLANNER_ConflictNotificationHandler
+{
+	PLANNER_PRV_NotifyConflictListenersInAllSessions
+		PLANNER_PRV_NotifyConflictListeners
+			PLANNER_ExecuteUserCallback: PLANNER_EV_CB_CONFLICT
+				PLANNER_JAVA_Conflict_ResolverCb
+				{
+					PLANNER_JAVA_Conflict_ResolverCb_NewConflict # matches to PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
+						JPA_VTABLE_Create
+
+					PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
+				}
+}
+
+# from app to regieter a resolver callback
+PLANNER_JAVA_ApiSessionRegisterConflictResolver
+	# size(108) + 20 = 128 g_planner_adaptor_ConflictResolverListener
+	PLANNER_API_Session_RegisterConflictResolver(PLANNER_JAVA_Conflict_ResolverCb)
+
+
+#
+PLANNER_JAVA_Conflict_ResolverCb_NewBookingConflict L:02669 > JPA_VTABLE_Create failed (44bytes)
+
+# from SBM, register listeners.
+    else if (RMF_CONFLICT_STATUS_OK != RMF_CONFLICT_RegisterResolver(
+                SBM_SERVER_CONFLICT_NotifyListener,
+                SBM_SERVER_CONFLICT_ConflictControlListener,
+                SBM_SERVER_CONFLICT_QueryControlListener,
+                SBM_SERVER_CONFLICT_RequestResultListener,
+                &g_sbm_userbooking_conflict_resolver_handle))
+
+
+# PLANNER_API_CONFLICTTYPE_CHANNEL_CHANGE
+-P_Planner    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0xcd, 0x44, 0x2 
+-J_PLANNER    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0xcd, ConflictHandle: 0x0x44, ConflictType: 0x0x2 
+PLANNER_JAVA_Conflict_ResolverCb:PLANNER_JAVA_Conflict_ResolverCb_NewConflict
+
+# PLANNER_API_CONFLICTTYPE_RESOLVED
+-P_Planner    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0xcd, 0x44, 0xb 
+-J_PLANNER    	< p:0x00000000 P: t:0x2b2bd9a0 T:PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0xcd, ConflictHandle: 0x0x44, ConflictType: 0x0xb 
+PLANNER_JAVA_Conflict_ResolverCb:PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
+
+# PLANNER_JAVA_ConflictDeleteConflict
+# as below, called when there's no interest on it and in that case, there's no resolved event.
+ -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x158, 0x78, 0x1 
+ -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0x158, ConflictHandle: 0x0x78, ConflictType: 0x0x1 
+-EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=1 Booking Time, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl
+-EPG_CONF    137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl@59aa3bb] commitConflictResolution(resolutionType=2) <<<
+ -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x159 
+
+
+ -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x0, 0x79, 0x3 
+ -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0, ConflictHandle: 0x0x79, ConflictType: 0x0x3 
+-EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=3 Imminent Tuner, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerImminentTunerConflictImpl
+-EPG_CONF    137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerImminentTunerConflictImpl@59cee23] commitConflictResolution(resolutionType=3) <<<
+ -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x15d 
+
+
+# usual case, there's notification and delete
+ -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x162, 0x7b, 0x1 
+ -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0x162, ConflictHandle: 0x0x7b, ConflictType: 0x0x1 
+-EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=1 Booking Time, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl
+-EPG_CONF    137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerBookedProgrammeConflictImpl@59a70a7] commitConflictResolution(resolutionType=1) <<<
+ -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x163 
+
+ -P_Planner  PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0x169, 0x7f, 0xb 
+ -J_PLANNER  PLANNER_CB4 M:natPlannerCommon.c F:'PLANNER_JAVA_Conflict_ResolverCb' L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0x169, ConflictHandle: 0x0x7f, ConflictType: 0x0xb 
+-EPG_CONF    ct L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=RESOLVED, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
+ -J_PLANNER  no name M:natPlannerConflictImpl.c F:PLANNER_JAVA_ConflictDeleteConflict L:187 > KT: Delete: vtable_handle=0x16a 
+
+# sequence logs
+#
+!INFO  -P_Planner    < M:planner_callback.c F:PLANNER_ExecuteUserCallback L:00209 > Executing the callback of type 13. (PLANNER_EV_CB_CHECK_CONFLICT)
+!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03136 > |-> PLANNER_JAVA_CheckForConflictListener
+
+# PLANNER_API_STATUS_OK in case there's no conflict
+#
+!ERROR -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03162 > KT: Listener: l_user_tag=0xe, l_comp_status=0x642200c (PLANNER_API_STATUS_CONFLICT)
+
+!INFO  -P_Planner    < M:planner_callback.c F:PLANNER_ExecuteUserCallback L:00209 > Executing the callback of type 13. (PLANNER_EV_CB_CHECK_CONFLICT)
+!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03136 > |-> PLANNER_JAVA_CheckForConflictListener
+!ERROR -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_CheckForConflictListener L:03141 > JPA_VTABLE_GetElement could not find usertag: 0xe
+!ERROR -SBMS_USERBOOKING < M:sbm_server_ub_conflict.c F:SBM_SERVER_CONFLICT_ReleaseConflictHandle L:01028 > KT: rmf_status(0x7804000), RMF_STATUS_FAILURE(0x7821001)
+
+
+!INFO  -P_Planner    < M:planner_callback.c F:PLANNER_ExecuteUserCallback L:00209 > Executing the callback of type 8. (PLANNER_EV_CB_CONFLICT)
+!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:03010 > |-> PLANNER_JAVA_Conflict_ResolverCb
+!WARN  -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:03032 > Could not find booking usertag in ABP  Vtable :0xe
+!WARN  -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:03042 > Could not find booking usertag in RBP  Vtable :0xe
+
+# PLANNER_API_CONFLICTTYPE_RESOLVED
+#
+!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict L:02861 > |-> PLANNER_JAVA_Conflict_ResolverCb_ResolvedConflict
+!ENTER -J_PLANNER    < M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb_GetConflictObject L:02905 > |-> PLANNER_JAVA_Conflict_ResolverCb_GetConflictObject
+!MIL   -EPG_CONF     < M:ConflictResolver F:notifyConflict L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=RESOLVED, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
+
+
+# EPG LOG
+47823:NDS: ^[03:00:53]0946695653.828404 !MIL   -EPG_CONF     < M:ConflictResolver F:notifyConflict L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=RESOLVED, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
+47708:NDS: ^[03:00:52]0946695652.115639 !MIL   -EPG_CONF     < M:ConflictResolver F:notifyConflict L:00154 > T:threadtracker:PlannerConflictType=2 Channel Change, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl
+47320:NDS: ^[03:00:33]0946695633.667728 !MIL   -EPG_CONF     < M:BaseConflict F:trackStatic L:00137 > T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl@59aa83d] commitConflictResolution(resolutionType=3) <<<
+
+# line number before hit OOM
+69926
+
+$ sed -n '1,69926p' LOGlast | egrep 'T:threadtracker:PlannerConflictType' | egrep 'RESOLVED' | wc -l
+120
+$ sed -n '1,69926p' LOGlast | egrep 'T:threadtracker:PlannerConflictType' | egrep 'TO-RESOLVE' | wc -l        
+180 (180-120=60, from MEMMAN log, there's about 64 items so it's about match)
+$ sed -n '1,69926p' LOGlast | egrep 'commitConflictResolution' | wc -l                                         
+179
+
+={============================================================================
 |kt_dev_si_0001| comp-vrm
 
-# Dan Toubiana
-#
+// Dan Toubiana
 COMPONENT_NAME := vrm_server
 
-# try this to get detailed MILs
+// try this to get detailed MILs
 #ifdef MW_DETAILED_MILESTONE_DEBUG
 
-
+<vrm-job-type>
 typedef enum SYSTEMJOB_TYPE_TAG
 {
     SYSTEMJOB_TYPE_UNDEF = 0,
@@ -4751,22 +4751,79 @@ typedef enum SYSTEMJOB_TYPE_TAG
     SYSTEMJOB_TYPE_LAST
 } SYSTEMJOB_Type;
 
-VRM_JOB_Create(SYSTEMJOB_TYPE_RB_RECORD, l_vrm_params, PLAYER_RB_EventListener, &l_rb_data->vrm_handle)
 
-NDS: ^[09:11:44]0946717904.151349 !MIL   -VRMS         < p:000000b7 t:2b933100 T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x30003f3
+// VRM_JOB_Create(SYSTEMJOB_TYPE_RB_RECORD, l_vrm_params, PLAYER_RB_EventListener, &l_rb_data->vrm_handle)
+// matches to
+!MIL   -VRMS         < T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x30003f3
 
-#
-239998:NDS: ^[09:10:51]0946717851.391693 !MIL   -EPG_ME       < p:000000b8 t:2be93520 T:no name M:MediaEngine F:playService L:01316 > TUNING TO BBC 1 London, 101
 
-32695:NDS: ^[4 days, 00:07:50]0947030870.225021 !MIL    -P_Api        		< p:0x00000000 P: t:0x2c0da520 T:no name M:player_api_session.c F:PLAYER_API_Session_Play L:3151 > PLAY 
+<vrm-tune-to-live>
+// Now it shows job-type as string
+//
+// #define DIAG_PMON_SYSTEMJOB_TYPE_RB_RECORD          "jb-rbrec" 				/*!< brief review buffer record job */
+//
 
-32726:NDS: ^[4 days, 00:07:50]0947030870.767771 !MIL    -P_Api        		< p:0x00000000 P: t:0x0101ea20 T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_CreateVRMJob L:763 > Job 0x03000048 Created on Display Target Main 
+// live
+// maps `VRM-FSM: job_man:0x300009a` -> `pleLive and hMC`
 
-240047:NDS: ^[09:10:51]0946717851.998916 !MIL   -VRMS         < p:000000b7 t:2b933100 T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x30003f1
-241275:NDS: ^[09:11:02]0946717862.483705 !MIL   -VRMS         < p:000000b7 t:2b933100 T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=5, jhVRM=0x30003f2
-243464:NDS: ^[09:11:44]0946717904.042552 !MIL   -EPG_ME       < p:000000b8 t:2beac520 T:no name M:MediaEngine F:playService L:01316 > TUNING TO Sky Living HD, 107
-243493:NDS: ^[09:11:44]0946717904.151349 !MIL   -VRMS         < p:000000b7 t:2b933100 T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x30003f3
-244676:NDS: ^[09:11:54]0946717914.275024 !MIL   -VRMS         < p:000000b7 t:2b933100 T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=5, jhVRM=0x30003f4
+!MIL    -EPG_ME       		< T:no name M:MediaEngine F:playService L:1485 > T:PooledExecutor#2:TUNING TO Sky News HD, 501 locator:5:3:FD2
+!MIL    -P_Api        		< T:no name M:player_api_session.c F:PLAYER_API_Session_Play L:4106 > PLAY 
+!MIL    -P_Api        		< T:no name M:player_api_session.c F:PLAYER_PRV_Session_Play L:6157 > PLAY on target MAIN_TARGET 
+!MIL    -P_Api        		< T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_CreateVRMJob L:1805 > Job 0x0300009a Created on Display Target MAIN_TARGET type=3 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x300009a: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:live.c F:LIVE_Create L:1361 > @@PMON@@,mark,job,job-create,3,job-create-type=,jb-live,job-srcloc=,locator:5:3:FD2,job-destloc=,locator:3:2E:47:0 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  0): E_LIVE_STATE_NONE -> (E_LIVE_INPUT_NEW_REQUEST) -> E_LIVE_STATE_CREATING 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  0): E_LIVE_STATE_CREATING -> (E_LIVE_INPUT_CREATED) -> E_LIVE_STATE_CREATED 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x300009a: E_JOB_MAN_SRV_INT_ST_CREATING -> (E_JOB_MAN_SRV_INP_CREATED) -> E_JOB_MAN_SRV_INT_ST_CREATED 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-live, jhVRM=0x300009a 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: pleLive:0xa80002: E_PLE_STATE_NONE -> (E_PLE_INPUT_SESSION_CREATED) -> E_PLE_STATE_SESSION_CREATED 
+!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,234,mc-create-mcid=,234,mc_create-str=,mc-live,fsnfmt=,hMC=0xea 
+!MIL    -P_Api        		< T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_JobStarted L:5829 > Job 0x0300009a STARTED on Display Target MAIN_TARGET 
+
+
+// rb-rec which seems to get created automatically
+// maps `VRM-FSM: job_man:0x300009b(50331803)` -> `rec_handle:0xb9001e, item_ID:0x2c0934bc`
+
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x300009b: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:rb_record.c F:RB_RECORD_Create L:3828 > @@PMON@@,mark,job,job-create,5,job-create-type=,jb-rbrec,job-srcloc=,locator:5:3:FD2,job-destloc=,locator:3:2E:47:0 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: RB Record h:0x3c: E_RB_RECORD_STATE_CREATING -> (E_RB_RECORD_INPUT_CREATED) -> E_RB_RECORD_STATE_CREATED 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Start L:1808 > @@PMON@@,mark,job,job-start,50331803,job-start-type=,jb-rbrec 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-rbrec, jhVRM=0x300009b 
+
+// *map-vrm-to-rmf*
+// maps `VRM-FSM: job_man:0x300009b(50331803)` -> `rmf job=0x20107af`
+
+!MIL    -RMF          		< T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_FindShrecSharing L:980 > No sharing found, create new shrec group. Job new assigned quota instance: 0x10000 
+!MIL    -RMF          		< T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_TriggerGetShrec L:381 > Job 0x20107af(0)[Rb] - shrec found: 0x0 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_GetShrecSharingInfo L:1106 > job=0x20107af - shrecLocator=0x0 
+
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:basic_rec.c F:RecordActiveInitialize L:6264 > Initiaizing Record FSM: rec_handle:0xb9001e, item_ID:0x2c0934bc 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0xb9001e,0x2c0934bc: E_RECORD_INT_STATE_NONE -> (E_RECORD_INPUT_START) -> E_RECORD_INT_STATE_STARTING 
+
+
+<vrm-record-from-rb>
+// map `RB rmf job 0x20107af` to `rmf job 0x20107b0(0)[R]`
+
+!MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(RECORD)e403 
+!MIL    -EPG_BOOK     		< T:no name M:ScheduledBookingAgent F:proceedWithBooking L:453 > T:PooledExecutor#4:Making booking with middleware - addScheduledBookedProgramme
+
+!MIL    -VRM_SERVER   		< T:`SBM_UB_MAIN` M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x2000082: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
+!MIL    -RMF          		< T:RMF_Server M:shrec_group_manager.c F:isSharingInActiveJob L:677 > shared active RB `0x20107af`, shrec locator 0x2e01808f 
+!MIL    -RMF          		< T:RMF_Server M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_FindShrecSharing L:1004 > Shared shrec locator 0x2e01808f, job `0x20107b0(0)[R]` final shrec quota instance: 0x10000 
+!MIL    -RMF          		< T:RMF_Server M:shrec_group_manager.c F:isSharingInActiveJob L:677 > shared active RB 0x20107af, shrec locator 0x2e01808f 
+
+!MIL    -RMF          		< T:RMF_Server M:quota_booking_conflict.c F:QuotaBookConf_GetConflictHandle L:299 > Quota booking conflict not found for job 0x20107b0 
+
+!MIL    -EPG_BOOK     		< T:no name M:ScheduledBookingAgent F:completeBooking L:477 > T:PooledExecutor#4:futurelistener booking completed: completionStatus = 104865794
+
+!MIL    -PCATS        		< T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_CommitJob L:3077 > client id = 0x5,bookingJobID = `0x290934c2`
+!MIL    -VRM_SERVER   		< T:SRM_HP_THREAD M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-record, jhVRM=0x2000082 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:basic_rec.c F:RecordActiveInitialize L:6264 > Initiaizing Record FSM: rec_handle:0xbc001d, item_ID:`0x290934c2` 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0xbc001d,0x290934c2: E_RECORD_INT_STATE_NONE -> (E_RECORD_INPUT_START) -> E_RECORD_INT_STATE_STARTING 
+
+// `Sxxx`
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0xbc001d,0x290934c2: E_RECORD_INT_STATE_ALLOCATING_DISK -> (E_RECORD_INPUT_DISK_ALLOCATED) -> E_RECORD_INT_STATE_DISK_ALLOCATED 
+!WARN   -MSM_MDI      		< T:VRM_SRV M:meta_mfs.c F:(MetaMfsGetCurrentRecordPosition) L:978 > Milestone : MetaMfsGetCurrentRecordPosition: bNeedAccuracy=true dir (/mnt/nds/dev_4/part_0/S79696) return time 0_000baf03 and" " packet 0_004edfe6 
 
 
 # 
@@ -6614,7 +6671,7 @@ sqlite3 PCAT.DB 'select is_viewed, keep, booking_type, actual_start_time, actual
 6 event_name, 
 7 shrec_locator, 
 8 logical_channel, 
-9 booking_exception, 	# error
+9 booking_exception,        // *booking-error*
 10 channel_name,
 11 series_id,			# f[10] in items.c
 12 push_locator,
@@ -10718,18 +10775,23 @@ NDS: ^[20:00:18]0946756818.527260 !MIL    -SYSTEMTIME           < p:0x00000000 P
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-systemcommon
+|kt_dev_si_0001| comp-systemcommon comp-systemexception
 
-system_exception.h defines SYSTEM_EXCEPTIONS_TYPEs and it links to 'SystemCommonFailureType.java'. In Picasso, RecordingFailureReason uses this.
+system_exception.h defines SYSTEM_EXCEPTIONS_TYPEs and it links to
+'SystemCommonFailureType.java'. 
+
+In Picasso, RecordingFailureReason uses this.
 
 /** @brief System exception types */
 typedef enum SYSTEM_EXCEPTIONS_TYPE_TAG
 {
-	SYSTEM_EXCEPTION_TYPE_VIEWER_STOPPED,		/*!< @brief Stopped by the viewer */ 0
-	SYSTEM_EXCEPTION_TYPE_NO_TUNER_AVAILABLE,                        /*!< @brief Tuner not available due to tuner conflict */ 15
+  SYSTEM_EXCEPTION_TYPE_VIEWER_STOPPED(0),          /*!< @brief Stopped by the viewer */ 0
+  SYSTEM_EXCEPTION_TYPE_VIEWER_BOOKED_TOO_LATE(3),  /*!< @brief Event booked after its scheduled start time */
+  SYSTEM_EXCEPTION_TYPE_NO_TUNER_AVAILABLE(15),     /*!< @brief Tuner not available due to tuner conflict */ 15
 }
 
-If there are mismatch between MW definitions in system_exception.h and JPA definitions in SystemCommonFailureType.java then Picasso displays wrong
+If there are mismatch between MW definitions in system_exception.h and JPA
+definitions in SystemCommonFailureType.java then Picasso displays wrong
 messages. 
 
 public class RecordingFailureReason
