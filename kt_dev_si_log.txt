@@ -37,6 +37,7 @@ Use #{ for a group and ={ for a item
 1493949:NDS: !ERROR  -EPG_ME   < M:MediaEngine F:dealWithMWError L:4031 > T:PooledExecutor#4:Play service failed anh@59427b3
 
 
+
 <2>
 LOGlastrun_part:[2016:06:21 01:12:31]!FATAL  -P_ApiD       T:PLAYER_MAIN M:player_vtable.c F:VTABLE_FindElement L:1153 > Leak detected in ref for VTable 25 (ref count 255) 
 LOGlastrun_part:[2016:06:21 01:12:31]!FATAL  -P_ApiD       T:no name M:player_vtable.c F:VTABLE_GetElement L:845 > Leak detected in ref for VTable 25 (ref count 255) 
@@ -54,7 +55,6 @@ LOGlastrun_part:[2016:06:21 01:12:31]!ERROR  -P_ApiD       T:PLAYER_MAIN M:playe
 1378005:!ERROR  -P_Api        		< p:0x00000246 P:APP t:0x2df0b520 T:no name M:player_api_session.c F:PLAYER_PRV_Session_Play L:6142 > Failed to get session structure 
 1378006:!ERROR  -J_PLAYER     		< p:0x00000246 P:APP t:0x2df0b520 T:no name M:modules/jpa-impl/src/c/src/natPlayerSessionImpl. F:Java_com_nds_fusion_playerimpl_PlayerSessionImpl_natPlayerApiSes L:302 > PLAYER_API_Session_Play live failed: (0x6821001)
 1378007:!ERROR  -EPG_ME       		< p:0x00000246 P:APP t:0x2df0b520 T:no name M:MediaEngine F:dealWithMWError L:4031 > T:PooledExecutor#1:Play service failed anh@594275a
-
 
 
 <from-run-with-dump>
@@ -93,15 +93,55 @@ http://theyard.cisco.com/si_logs/translation/darwin_0019fbb71c47_c4130c208206b80
 http://theyard.cisco.com/si_logs/translation/darwin_0019fbb71bb1_d23afbe329e75a1d9bcabc233373d398/index.html
 
 
-<tr02>
-NDS_SW_VERSION="99.99.99_5343"
-http://theyard.cisco.com/si_logs/translation/darwin_0019fb909093_ff09edf4031c28768b80e0dd835471f3/index.html
+PLAYER_VTABLE_FindElement()
 
-NDS_SW_VERSION="33.33.33_5347"
-http://theyard.cisco.com/si_logs/translation/darwin_0019fb110000_c2e3b9889d7b4de24507b7f22511deb6/index.html
+        if (SYSTEM_STATUS_IS_OK (SYSTEMUTIL_THR_MutexLock(vtable->mutex)))
+        {
+            isMutexLocked = true;
 
-NDS_SW_VERSION="44.44.44_5349"
-http://theyard.cisco.com/si_logs/translation/darwin_0019fb909091_edf5f8cfd5fa0ca6c84c9f3433bb50e3/index.html
+            /* Double check that VTABLE hasnt been terminated */
+            if (IS_VTABLE_INIT(vtable))
+            {
+                curNode = GetNextNode(vtable, curNode);
+
+                while ((curNode != NULL) && (stopVtableTraverse != true))           ----------------------
+                {
+                    curNode->refCount++;
+
+                    (void) SYSTEMUTIL_THR_MutexUnlock(vtable->mutex);               ----------------------
+                    isMutexLocked = false;
+
+                    if (check(curNode->elPointer, data))
+                    {
+                        *el = curNode->elPointer;
+                        *handle = curNode->handle;
+
+                        retVal = VTABLE_STATUS_SUCCESS;
+                        stopVtableTraverse = true;
+                    }
+                    else
+                    {
+                        if (SYSTEM_STATUS_IS_OK (SYSTEMUTIL_THR_MutexLock(vtable->mutex))) ---------------
+                        {
+                            isMutexLocked = true;
+
+                            /* Double check that VTABLE hasnt been terminated */
+                            if (IS_VTABLE_INIT(vtable))
+                            {
+                                nextNode = GetNextNode(vtable, curNode);
+
+                                if (--(curNode->refCount) <= 0U)
+                                {
+                                    (void) DelNode((PLAYER_VTable_t*)vtable, curNode);
+                                }
+
+                                curNode = nextNode;
+                            }
+                        }
+                    }
+                } // while
+            }
+        }
 
 
 ={============================================================================
@@ -222,7 +262,11 @@ Failed Recording INSUFFICIENT_DISK_SPACE ( Not enough disk space to record
 //  stat = RMF_SRV_Listener_SetEventsMask(QICListenerHandle,
 //                RMF_SRV_LISTENER_EVENT_CONTROL_PERMISSIONS);
 //
-// fire up
+//
+// from RMF_ALLOCATE_Status RMF_ALLOCATE_ControlPermissions() to check
+// permission
+//
+// fire up to notify permission result to client
 // stat = RMF_SRV_TriggerListeners(RMF_SRV_LISTENER_EVENT_CONTROL_PERMISSIONS, cookieJar);
 //
 // SYSTEM_STATUS RMF_SRV_TriggerListeners(uint32_t event, RMF_COOKIE_JarHandle cookieJar)
@@ -234,6 +278,11 @@ Failed Recording INSUFFICIENT_DISK_SPACE ( Not enough disk space to record
 //    bool						handleConflict = true;
 //
 //    // read the field from cookie and if it is set then "handleConflict = false"
+//
+/** @brief A cookie set during control permissions session which failed that
+	contains the request type wether retry only */
+#define RMF_COOKIE_TYPE_CTRL_PERM_FAILED_REQUEST_TYPE 12U
+
 //    stat = RMF_COOKIE_Jar_ReadCookie(cookieJar,
 //      RMF_COOKIE_TYPE_CTRL_PERM_FAILED_REQUEST_TYPE,
 //      (uint16_t)(sizeof(RMF_ALLOCATE_REQUEST_FLAGS)), &flags);
@@ -271,8 +320,10 @@ Failed Recording INSUFFICIENT_DISK_SPACE ( Not enough disk space to record
 //
 //   pConf->type = type;
 //
-//   note: return uiRequired 
-//
+//   DIAG_LOG_MIL(gRmfSegmentId, ("Building conflict of type %s on %s",
+//         ((type == QIC_Type_FailAssign) ? "FailAssign" : "TriggerWarning"),
+//         RMF_JOB_Instance_ToString(subject)));
+// 
 //   /* Find a resolution to the conflict */
 //   stat = QIC_Resolve(pConf, &uiRequired, cookieJar, successInAutoResolution, strategy);
 //   {
@@ -299,10 +350,8 @@ Failed Recording INSUFFICIENT_DISK_SPACE ( Not enough disk space to record
             break;
 //   }
 //
-//   DIAG_LOG_MIL(gRmfSegmentId, ("Building conflict of type %s on %s",
-//         ((type == QIC_Type_FailAssign) ? "FailAssign" : "TriggerWarning"),
-//         RMF_JOB_Instance_ToString(subject)));
-// 
+//   note: return uiRequired 
+//
 //   DIAG_LOG_MIL(gRmfSegmentId, ("Conflict on %s UI %s required",
 //         RMF_JOB_Instance_ToString(subject),
 //         (uiRequired ? "" : "NOT ")));
@@ -351,15 +400,44 @@ Failed Recording INSUFFICIENT_DISK_SPACE ( Not enough disk space to record
 289999:^[2016:06:30 00:01:59]!MIL    -VRM_SERVER   		< T:VRM_SRV M:record_state.c F:RecordStateCalculateBySkevt L:1604 > RecordState for itemId 0x290934c2 (by SKEVT): 
   RECORD_STATE_PAST_EGT 
 
+// 290004:NDS: ^[2016:06:30 00:01:59]
+//
 290004:!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0xbc001d,0x290934c2: E_RECORD_INT_STATE_RUNNING -> (E_RECORD_INPUT_STOP) -> E_RECORD_INT_STATE_STOPPING 
 290012:!MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: `rec:0xbc001d,0x290934c2`: E_RECORD_INT_STATE_WAIT_PLE_SESSION_DESTROY -> (E_RECORD_INPUT_VRM_PLE_SESSION_DESTROYED) -> E_RECORD_INT_STATE_WAIT_DESTROY 
 
+itemId: `0x290934c2` to `688469186`
 
 3: VIEWER_BOOKED_TOO_LATE
 
+Vued|Type|Start Time         |End Time           |Event Name                              |Loc  |Chan#|Err|Channel Name        |Series|SizeG|Expiry  |SLStat|#Rem|BookJobId
+====|====|===================|===================|========================================|=====|=====|===|====================|======|=====|========|======|====|=========
 Recd|Rec |2016:06:29 23:32:29|2016:06:30 00:01:59|Press Preview                           |s79696|  501|  3|Sky News HD         | 62250| 2.05|        |UNDF  |    |688469186
 Recd|Rec |2016:06:29 23:58:00|2016:06:30 00:31:59|Sky News On The Hour                    |s79696|  501|100|Sky News HD         |     0| 2.27|        |UNDF  |    |688469201
 
+
+SPACE USED (Gb): USER :167.24 PVOD :186.79 SLINK:51.62 DYNAM:24.19 
+Disk usage in quota "NDS_Dynamic": 24.19 Gb
+Disk usage in quota "user": 218.86 Gb
+
+// means booking failed?
+
+288244:NDS: ^[2016:06:29 23:45:22]0946739390.245158 !ERROR  -SBMS_USERBOOKING		< p:0x000003a8 P:MW t:0x01fe4520 
+T:SBM_UB_MAIN M:sbm_server_ub_common.c F:SBMUserBookingThread L:1389 > Failed in running callback message function [event_id 3] [event_name SBM_USERBOOKING_EV_VIEW_CHANGE_NOTIFICATION] 
+
+SBMUserBookingThread(void *data)
+
+                    else
+                    {
+                        /* Calling the right callback */
+                        l_status = CALL_HANDLER(f_sbm_userbooking_events[l_event].event_function, l_payload_handle);
+
+                        if((SBM_USERBOOKING_STATUS_NOT_OK == l_status) ||
+                                (SBM_USERBOOKING_STATUS_INVALID_PARAM == l_status))
+                        {
+                            DIAG_LOG_ERROR(g_sbm_userbooking_diag_segment_id,
+                                    ("Failed in running callback message function [event_id %u] [event_name %s]", l_event, f_sbm_userbooking_events[l_event].event_name));
+                        }
+                    }
 
 <2> `part` fail.
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019fb2d3660

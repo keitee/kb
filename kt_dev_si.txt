@@ -1312,7 +1312,7 @@ include $(NDS_ROOT)/projects/fusion2/build_options.mk
 # fusion2/build_options.mk
 ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),debug)
   GLOBAL_DEFINES += DEBUG
-  GLOBAL_DEFINES += DIAG_DEBUG
+  GLOBAL_DEFINES += DIAG_DEBUG    *diag-debug*
 endif
 
 ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release)
@@ -4328,6 +4328,25 @@ stat = QIC_Construct(QIC_Type_FailAssign,
     jobInJar, quota_part_id, cookieJar, successInAutoResolution, strategy);
 
 
+note:
+HOWTO artificially reduce the size of the user quota of the planner
+
+Edit `flash0/fs/NDS/config/rmf.cfg` and replace the section entitled [quota1
+internal] with the following:
+
+[quota1_internal]
+conflictCriticalLimitInMinutes=3
+conflictThresholdLimitInMinutes=7
+max_size_units="MB"
+max_size=4000
+partition_name="RECORDING"
+quota_name="user"
+quota_type="user_type"
+statistics_required=1
+strategy="Fixed"
+Change the value of max_size to suit the size of planner you want.
+
+
 <conflict>
 
 // from RMF ppt
@@ -4352,22 +4371,6 @@ if there's no response within the timeout, the platform cancels the
 channel-change request.
 
 
-# HOWTO artificially reduce the size of the user quota of the planner
-
-Edit flash0/fs/NDS/config/rmf.cfg and replace the section entitled [quota1
-internal] with the following:
-
-[quota1_internal]
-conflictCriticalLimitInMinutes=3
-conflictThresholdLimitInMinutes=7
-max_size_units="MB"
-max_size=4000
-partition_name="RECORDING"
-quota_name="user"
-quota_type="user_type"
-statistics_required=1
-strategy="Fixed"
-Change the value of max_size to suit the size of planner you want.
 
 # STATE
 # (COMP, SEV, IF, STA)
@@ -4974,10 +4977,6 @@ NDS: ^0946684945.950552 !MIL   -MSM          < p:000000bd t:0156b0b0 T:MCM_ITCMA
 
 Rochkind, Michael <MRochkind@nds.com>; Yakirevich, Yonatan <YYakirevich@nds.com>
 
-# for 595
-
-diag_binary.cfg:2:DIR_LOG_PATH="/mnt/nds/dev_2/part_0/FSN_DATA/"
-
 # FUSION_SYSTEM_INTEGRATION\BSKYB_INTEGRATION\build\projects\picasso\makefile
 
 # preprod. BUILD_TYPE=release_dbg
@@ -4996,6 +4995,7 @@ diag_binary.cfg:2:DIR_LOG_PATH="/mnt/nds/dev_2/part_0/FSN_DATA/"
 \CMS_SYSTEM_INFRASTRUCTURE\DIAG\src\helpers\src\debug\
 diag_hlp_debug.c
 
+*diag-debug*
 /* Define at compile time */
 #ifndef	__DIAG_DEBUG_LEVEL
 #if (defined(DIAG_DEBUG) || defined(__DIAG_DEBUG) || defined(DIAG_RELEASE_DBG) || defined(__DIAG_RELEASE_DBG))
@@ -5372,6 +5372,119 @@ DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MST_AR'
 DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_INIT'
 DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_AFRM'
 DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'VGC_JAVA'
+
+
+={============================================================================
+|kt_dev_si_0001| comp-diag-cli
+
+
+/mnt/nds/dev_7/part_0/FSN_DATA/LOG
+
+
+<diag-level>
+
+diag-level (refer to diag_log_formatter.c, DIAG_LOG_GetFormattedTraceBuffer)
+
+Please note that release debug will not give you any more debug than FEW.
+
+
+<diag-config>
+
+// diagctl.cfg
+/BSKYB_INTEGRATION/build/projects/picasso/fs/NDS/config/diagctl.cfg
+asterisk, dot, asterisk
+{
+        file
+    {
+        path = /DATA_PARTITION/LOG;
+        size = 209715200;
+        format = 3/3;
+        zlevel = 0;
+    };
+
+    stdout
+    {
+        buffersz = 1024;
+    };
+
+}
+
+// diag.cfg which defines format and level
+/CMS_SYSTEM_INFRASTRUCTURE/DIAG/inc/config/diag_master_config.xml
+
+
+<diag-cli>
+get table SYS
+
+possible trace levels: assert fatal error warn mil info fn_entry fn_exit event p
+arams return none all
+
+set level P_Api  assert fatal error warn mil info fn_entry event params
+get level P_Api
+
+set level SYSINIT_S info
+
+
+={============================================================================
+|kt_dev_si_0001| comp-config
+
+
+<config>
+
+// config overrides
+
+// make.sh
+
+mkdir -p ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config
+
+// run 'FusionConfigExport' which creates most cfg files.
+// /FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport
+// FusionConfigExport AUTO ./si/config/ projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 si_bskyb ams_bcm release_dbg pdl_nds_uk 
+
+echo "${OUTPUT}/FusionConfig/FusionConfigExport AUTO 
+${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/ 
+projects/${PROJECT}/"SI_config.xml" BASESET ${BSKYB_CONFIG_PROFILE} ${DMS_PLATFORM_CONFIG} si_bskyb ${PLATFORM} ${BUILD_TYPE} pdl_${PDL_SERVER} ${SERIALISATION}"
+
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport AUTO 
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/si/config/ 
+projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 si_bskyb ams_bcm release_dbg pdl_nds_uk 
+
+// Copy across Fusion formatted Platform config files for CFG2BIN conversion.
+cp -f ../../../${FUSIONOS}/BLD_${PLATFORM_DIR}/platform_cfg/linux/${ENDIAN}Endian/${OS_BUILD_TYPE}/config/fusion_os_cdi_labels.cfg ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/
+cp -f ../../../${FUSIONOS}/BLD_${PLATFORM_DIR}/platform_cfg/linux/${ENDIAN}Endian/${OS_BUILD_TYPE}/config/fusion_os_storage_labels.cfg ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/
+
+// Copy project config files that override DMS
+cp projects/${PROJECT}/fs/NDS/config/overrides/* ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/
+
+# run dms config
+${OUTPUT}/FusionConfig/FusionConfigExport AUTO ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/dms/config/ projects/${PROJECT}/SI_config.xml BASESET ${BSKYB_CONFIG_PROFILE} ${DMS_PLATFORM_CONFIG} ${PLATFORM} ${BUILD_TYPE}
+
+/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_003/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport AUTO /home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_003/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/dms/config/ projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 ams_bcm release_dbg
+
+# run cfg2bin
+${OUTPUT}/FusionConfig/FusionConfigImport CFG2BIN ./ *
+
+# copy configs across to output
+cp -f ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/* ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/fs/NDS/config
+
+
+// SI_config.xml
+#
+# SI_config.xml which defines 'si_bskyb' profile
+ <include name="projects/dms/fs/NDS/dms_master_config.xml" />
+
+# dms_master_config.xml which includes each comp's config and defines BASESET, and BSKYB_HD_PVR profile.
+ <include name="components/comms_services/ncm/inc/config/ncm_master_config.xml" />
+ ...
+
+// also SI_config.xml can override default values from the comp's xml.
+
+// build/projects/picasso/fs/NDS/config
+diagctl.cfg          guide_cms_cde_3.cfg  guide_cms_cde.cfg  guide_cms_num.cfg  siege_def.cfg  version.cfg
+guide_cms_cde_2.cfg  guide_cms_cde_4.cfg  guide_cms_dsc.cfg  lae.cfg            stbe.ini
+
+// build/projects/picasso/fs/NDS/etc
+sysinit.cfg
 
 
 ={============================================================================
@@ -8649,16 +8762,16 @@ NDS_BUILD_TYPE_darwin_planner_src = debug
 TRACE_LEVEL_P_Planner="AFEWM"
 # !INFO  -P_Planner
 
-#
-# DARWIN_PLATFORM\DARWIN_PLANNER_JAVA
-#
+// DARWIN_PLATFORM\DARWIN_PLANNER_JAVA
+
 COMPONENT_NAME:= darwin_planner_native
 NDS_BUILD_TYPE_darwin_planner_native = debug
-DARWIN_PLATFORM\DARWIN_PLANNER_JAVA\src\inc\natPlannerCommon.h: #define PLANNER_JAVA_DIAGNAME "J_PLANNER"
+DARWIN_PLATFORM\DARWIN_PLANNER_JAVA\src\inc\natPlannerCommon.h: 
+  #define PLANNER_JAVA_DIAGNAME "J_PLANNER"
 
 
-# picasso
-vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk
+// picasso
+/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk
 NDS_BUILD_TYPE_darwin_planner_src = debug
 NDS_BUILD_TYPE_darwin_planner_native = debug
 
