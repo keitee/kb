@@ -304,6 +304,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_102| smart pointer: internal: auto_ptr
 *kt_dev_stl_103* sp-shared-implement
 *kt_dev_stl_101* sp-shared-code
+*kt_dev_stl_104* sp-thread-safety
 |kt_dev_stl_104| smart pointer: examples
 |kt_dev_stl_106| when to use which containers
 |kt_dev_stl_107| sp-deleter
@@ -42596,6 +42597,62 @@ namespace std {
               std::forward<_Args>(__args)...);
     }
 }
+
+
+={============================================================================
+*kt_dev_stl_104* sp-thread-safety
+
+https://gcc.gnu.org/onlinedocs/libstdc++/manual/memory.html#shared_ptr.thread
+
+Thread Safety
+
+The Thread Safety section of the Boost shared_ptr documentation says
+"shared_ptr objects offer the same level of thread safety as built-in types."
+The implementation must ensure that concurrent updates to separate shared_ptr
+instances are correct even when those instances share a reference count e.g.
+
+shared_ptr<A> a(new A);
+shared_ptr<A> b(a);
+
+// Thread 1     // Thread 2
+   a.reset();      b.reset();
+
+The dynamically-allocated object must be destroyed by exactly one of the
+  threads. Weak references make things even more interesting. The shared state
+  used to implement shared_ptr must be transparent to the user and invariants
+  must be preserved at all times. 
+  
+The key pieces of shared state are the strong and weak `reference counts`
+
+Updates to these `need to be atomic` and visible to all threads to ensure
+correct cleanup of the managed resource (which is, after all, shared_ptr's
+    job!) 
+
+On multi-processor systems memory synchronisation may be needed so that
+reference-count updates and the destruction of the managed resource are
+race-free.
+
+The function _Sp_counted_base::_M_add_ref_lock(), called when obtaining a
+shared_ptr from a weak_ptr, has to test if the managed resource still exists
+and either increment the reference count or throw bad_weak_ptr. 
+
+In a multi-threaded program there is a potential race condition if the last
+reference is dropped (and the managed resource destroyed) between testing the
+reference count and incrementing it, which could result in a shared_ptr
+pointing to invalid memory.
+
+The Boost shared_ptr (as used in GCC) features a clever lock-free algorithm to
+avoid the race condition, but this relies on the processor supporting an
+atomic Compare-And-Swap instruction. 
+
+For other platforms there are fall-backs using mutex locks. Boost (as of
+    version 1.35) includes several different implementations and the
+preprocessor selects one based on the compiler, standard library, platform
+etc. 
+
+For the version of shared_ptr in libstdc++ the compiler and library are fixed,
+    which makes things much simpler: we have an atomic CAS or we don't, see
+      Lock Policy below for details. 
 
 
 ={============================================================================
