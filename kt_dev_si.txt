@@ -123,7 +123,9 @@ eth0      Link encap:Ethernet  HWaddr 00:19:FB:F2:D4:6B
 
 // from a box and 10.209.62.232 is ukstbuild02 which shares all under /home
 mount -o rw -t nfs 10.209.62.232:/home/NDS-UK/venkatr/RLOGimprove /mnt/nds/dev_5/part_0/LOGS
-mount -o rw -t nfs 10.209.62.232:/home/NDS-UK/kyoupark/STB_SW 
+
+// to kit-debian
+mount -o rw -t nfs 10.209.56.97:/home/kyoupark/si_logs /mnt/tmp
 
 
 ={============================================================================
@@ -4308,14 +4310,62 @@ char* JobTypeToString(SYSTEMJOB_Type jobType)
     return typeStr;
 }
 
-<conflict-quota>
+<conflict-quota> see *rmf-auto-resolution-to-qic*
+
+!INFO  -SBMS_USERBOOKING < p:000000eb t:021e5520 T:SBM_UB_MAIN M:sbm_server_ub_bookedprogramme_properties.c F:SBM_SERVER_USERBOOKING_GetQuotaStatus L:00435 > Quota (user): MaxSize 0x00000000,5c868d3e, UsedSize 0x00000000,001dc5fe, usedPct 0x0
+!INFO  -RMF          < p:000000eb t:021e5520 T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00590 > maxSize =  0,[2019:03:11 16:30:54]1552321854(high,low)
+!INFO  -RMF          < p:000000eb t:021e5520 T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00591 > usedSize =  0,1951230(high,low)
+!INFO  -RMF          < p:000000eb t:021e5520 T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00592 > UsedPercents = 0
+
+
 // CMS_SYSTEM_RESOURCE/RMF/src/plugins/quota_immediate_conflict.c
 
 // this is only place to register QIC_Listener
 
-        /* register to ControlPermission listener */
-        stat = RMF_SRV_Listener_Register(QIC_Listener, NULL,
+    /* register to ControlPermission listener */
+    stat = RMF_SRV_Listener_Register(QIC_Listener, NULL,
                 &QICListenerHandle);
+
+    stat = RMF_SRV_Listener_SetEventsMask(QICListenerHandle,
+      RMF_SRV_LISTENER_EVENT_CONTROL_PERMISSIONS);
+
+
+RMF_ALLOCATE_ControlPermissions() to check permission
+{
+  fire up to notify permission result to client
+    stat = RMF_SRV_TriggerListeners(RMF_SRV_LISTENER_EVENT_CONTROL_PERMISSIONS, cookieJar);
+
+  SYSTEM_STATUS RMF_SRV_TriggerListeners(uint32_t event, RMF_COOKIE_JarHandle cookieJar)
+    listenersTable[i].trigger(event, cookieJar, listenersTable[i].data);
+}
+
+PRVFUNC void QIC_Listener(uint32_t event, RMF_COOKIE_JarHandle	cookieJar, void *data)
+{
+  bool						handleConflict = true;
+
+  // read the field from cookie and if it is set then "handleConflict = false"
+
+  stat = RMF_COOKIE_Jar_ReadCookie(cookieJar,
+      RMF_COOKIE_TYPE_CTRL_PERM_FAILED_REQUEST_TYPE,
+      (uint16_t)(sizeof(RMF_ALLOCATE_REQUEST_FLAGS)), &flags);
+
+  if ( flags & RMF_ALLOCATE_REQUEST_FLAGS_RETRY)
+  {
+    DIAG_LOG_INFO(gRmfSegmentId, ("deny request with no conflict resolution!"));
+    handleConflict = false;
+  }
+
+  // RMF_ALLOCATE_REQUEST_FLAGS_RETRY  (0x01U)  /*!< @brief No conflict
+  // resolution required, request is called to insure job retry */
+
+  // note: This is not set and means that conclict is required
+
+  if (handleConflict == true)
+  {
+    stat = QIC_Construct(QIC_Type_FailAssign, jobInJar, quota_part_id, cookieJar, successInAutoResolution, strategy);
+    STATUS_CHECK_AB(stat);
+  }
+}
 
 // /* conflict due to fail assign */
 // QIC_Type_FailAssign,
@@ -4325,14 +4375,22 @@ char* JobTypeToString(SYSTEMJOB_Type jobType)
 
 // raise quota conflict
 stat = QIC_Construct(QIC_Type_FailAssign, 
-    jobInJar, quota_part_id, cookieJar, successInAutoResolution, strategy);
+    jobInJar, quota_part_id, cookieJar, successInAutoResolution, strategy)
+{
+
+  /* Find a resolution to the conflict */
+  stat = QIC_Resolve(pConf, &uiRequired, cookieJar, successInAutoResolution, strategy);
+
+  DIAG_LOG_MIL(gRmfSegmentId, ("Conflict on %s UI %s required",
+    RMF_JOB_Instance_ToString(subject),
+    (uiRequired ? "" : "NOT ")));
+}
 
 
-note:
+<conflit-quota-change-size>
 HOWTO artificially reduce the size of the user quota of the planner
 
-Edit `flash0/fs/NDS/config/rmf.cfg` and replace the section entitled [quota1
-internal] with the following:
+Edit `flash0/fs/NDS/config/rmf.cfg` and change max_size in section.
 
 [quota1_internal]
 conflictCriticalLimitInMinutes=3
@@ -4344,7 +4402,6 @@ quota_name="user"
 quota_type="user_type"
 statistics_required=1
 strategy="Fixed"
-Change the value of max_size to suit the size of planner you want.
 
 
 <conflict>
@@ -4371,15 +4428,64 @@ if there's no response within the timeout, the platform cancels the
 channel-change request.
 
 
+<state-code>
+# STATE (COMP, SEV, IF, STA)
+hex(((30 & 0x3FF) << 22) | ((0 & 0x3) << 16) | ((2 & 0xF) << 12) | (1 & 0xFFF) )
+hex(((30 & 0x3FF) << 22) | ((2 & 0x3) << 16) | ((2 & 0xF) << 12) | (1 & 0xFFF) )
 
-# STATE
-# (COMP, SEV, IF, STA)
-hex(((30 & 0x3FF) << 22) | ((4 & 0x3) << 16) | ((2 & 0xF) << 12) | (1 & 0xFFF) )
-RMF_CONFLICT_STATUS_OK 			(0x7800000)
-RMF_CONFLICT_STATUS_FAILURE 	(0x7802001)
+#define RMF_COMP_ID         ((uint32_t)(30)) 
+#define SEVERITY_SEVERE     ((uint32_t)(0x2))
+#define RMF_ALLOCATE_IF_ID  (2)
+
+#define RMF_ALLOCATE_STATUS_OK 
+(SYSTEM_MAKE_COMPONENT_STATUS(RMF_COMP_ID, RMF_ALLOCATE_IF_ID, SEVERITY_NONE,   0)) /*!< @brief Status for RMF_ALLOCATE */
+  0x07802000
+
+#define RMF_ALLOCATE_STATUS_FAILURE (SYSTEM_MAKE_COMPONENT_STATUS(RMF_COMP_ID, RMF_ALLOCATE_IF_ID, SEVERITY_SEVERE, 1)) /*!< @brief General failure status for RMF_ALLOCATE. */
+  0x07822001
+
+RMF_CONFLICT_STATUS_OK        (0x7800000)
+RMF_CONFLICT_STATUS_FAILURE   (0x7802001)
 
 #define RMF_QUOTA_IF_ID		(5) /*!< @brief File id for rmf_quota.h for creating specific statuses */
 #define RMF_QUOTA_STATUS_UNKNOWN_QUOTA	 RMF_COMP_ID, RMF_QUOTA_IF_ID, SEVERITY_SEVERE, 2	(0x07825002)
+
+
+<permission>
+/*
+   (perm1 & perm2), 
+   (perm1 | perm2): 
+   
+   Check if both operands are in the same permissions group. If yes, execute
+   the operator regularly. If not, return PERMISSION_NONE (because they are
+   not included in each other and they are not allowed to be added to each
+   other).  PERMISSION_BITWISE_AND special cases: 1. When 2 operands are from
+   the same group, but are not overlapping, the result might be 0x10000000
+   which means nothing and can cause errors on further bitwise operations. So
+   we identify this case and return PERMISSION_NONE instead.  2. When one of
+   the operands is 0xffffffff (this can come from ~(PERMISSION_NONE) ), then
+   perm1,perm2 are not from the same group, but we want to return the actual
+   bitwise AND operation on them.  PERMISSION_BITWISE_OR special case: when
+   one of the operands is NONE (so the "group bits" is 11111111), we don't
+   want the OR operation to return all the group bits of the result as 1, but
+   to return the real group of the other operand.
+*/
+
+
+#define PERMISSION_BITWISE_AND(perm1, perm2) RMF_ALLOCATE_permissionBitwiseAnd((perm1), (perm2))
+#define PERMISSION_BITWISE_OR(perm1, perm2)  RMF_ALLOCATE_permissionBitwiseOr((perm1), (perm2))
+
+RMF_ALLOCATE_REQUEST_STATUS_SUCCESS(1)
+
+RMF_ALLOCATE_PERMISSION_NONE    (0xf0000000U) /*!< @brief no permission */	
+RMF_ALLOCATE_PERMISSION_RECORD  (0x10000008U) /*!< @brief Recording to disk */	
+RMF_ALLOCATE_PERMISSION_EXTEND  (0x10001000U) /*!< @brief Extend quota storage  */	
+
+
+note:
+result and status returns okay but released permission is not.
+!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10000008 released=0xf0000000 change request if fails. 
+!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
 
 
 #
@@ -4766,7 +4872,7 @@ typedef enum SYSTEMJOB_TYPE_TAG
 // #define DIAG_PMON_SYSTEMJOB_TYPE_RB_RECORD          "jb-rbrec" 				/*!< brief review buffer record job */
 //
 
-// live
+// `live` uses `vrm-job-handle` across components
 // maps `VRM-FSM: job_man:0x300009a` -> `pleLive and hMC`
 
 !MIL    -EPG_ME       		< T:no name M:MediaEngine F:playService L:1485 > T:PooledExecutor#2:TUNING TO Sky News HD, 501 locator:5:3:FD2
@@ -4778,39 +4884,48 @@ typedef enum SYSTEMJOB_TYPE_TAG
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  0): E_LIVE_STATE_NONE -> (E_LIVE_INPUT_NEW_REQUEST) -> E_LIVE_STATE_CREATING 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  0): E_LIVE_STATE_CREATING -> (E_LIVE_INPUT_CREATED) -> E_LIVE_STATE_CREATED 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x300009a: E_JOB_MAN_SRV_INT_ST_CREATING -> (E_JOB_MAN_SRV_INP_CREATED) -> E_JOB_MAN_SRV_INT_ST_CREATED 
-!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-live, jhVRM=0x300009a 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: `jtVRM=jb-live`, jhVRM=0x300009a 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: pleLive:0xa80002: E_PLE_STATE_NONE -> (E_PLE_INPUT_SESSION_CREATED) -> E_PLE_STATE_SESSION_CREATED 
 !MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,234,mc-create-mcid=,234,mc_create-str=,mc-live,fsnfmt=,hMC=0xea 
 !MIL    -P_Api        		< T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_JobStarted L:5829 > Job 0x0300009a STARTED on Display Target MAIN_TARGET 
 
 
-// rb-rec which seems to get created automatically
+// `rb-rec` which seems to get created automatically
 // maps `VRM-FSM: job_man:0x300009b(50331803)` -> `rec_handle:0xb9001e, item_ID:0x2c0934bc`
 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x300009b: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:rb_record.c F:RB_RECORD_Create L:3828 > @@PMON@@,mark,job,job-create,5,job-create-type=,jb-rbrec,job-srcloc=,locator:5:3:FD2,job-destloc=,locator:3:2E:47:0 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: RB Record h:0x3c: E_RB_RECORD_STATE_CREATING -> (E_RB_RECORD_INPUT_CREATED) -> E_RB_RECORD_STATE_CREATED 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Start L:1808 > @@PMON@@,mark,job,job-start,50331803,job-start-type=,jb-rbrec 
-!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-rbrec, jhVRM=0x300009b 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: `jtVRM=jb-rbrec`, jhVRM=0x300009b 
 
 // *map-vrm-to-rmf*
-// maps `VRM-FSM: job_man:0x300009b(50331803)` -> `rmf job=0x20107af`
+// maps `VRM-FSM: job_man:0x300009b(50331803)` -> `rmf job instance=0x20107af, rec_handle, item_ID` 
 
 !MIL    -RMF          		< T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_FindShrecSharing L:980 > No sharing found, create new shrec group. Job new assigned quota instance: 0x10000 
-!MIL    -RMF          		< T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_TriggerGetShrec L:381 > Job 0x20107af(0)[Rb] - shrec found: 0x0 
+!MIL    -RMF          		< T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_TriggerGetShrec L:381 > Job `0x20107af(0)[Rb]` - shrec found: 0x0 
 !MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_GetShrecSharingInfo L:1106 > job=0x20107af - shrecLocator=0x0 
 
-!MIL    -VRM_SERVER   		< T:VRM_SRV M:basic_rec.c F:RecordActiveInitialize L:6264 > Initiaizing Record FSM: rec_handle:0xb9001e, item_ID:0x2c0934bc 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:basic_rec.c F:RecordActiveInitialize L:6264 > Initiaizing Record FSM: `rec_handle:0xb9001e, item_ID:0x2c0934bc` 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0xb9001e,0x2c0934bc: E_RECORD_INT_STATE_NONE -> (E_RECORD_INPUT_START) -> E_RECORD_INT_STATE_STARTING 
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=`0x20107af(0)[Rb]` request=0x10000008 released=0xf0000000 change request if fails. 
+
+
+// *tuner-status*
+!MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x52e hMC=0x81 tuner_id =1 and job_type =RECORD 
+!MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x4b0 hMC=0x6e tuner_id =0 and job_type =RECORD 
+!MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x529 hMC=0x80 tuner_id =1 and job_type =LIVE_VIEWING 
 
 
 <vrm-record-from-rb>
-// map `RB rmf job 0x20107af` to `rmf job 0x20107b0(0)[R]`
+// create a recording from review buffer
+// map `RB rmf job instance 0x20107af` to `rmf job instance 0x20107b0(0)[R]`
 
 !MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(RECORD)e403 
 !MIL    -EPG_BOOK     		< T:no name M:ScheduledBookingAgent F:proceedWithBooking L:453 > T:PooledExecutor#4:Making booking with middleware - addScheduledBookedProgramme
 
-!MIL    -VRM_SERVER   		< T:`SBM_UB_MAIN` M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x2000082: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
+!MIL    -VRM_SERVER   		< T:`SBM_UB_MAIN` M:fsm.c F:FSMRun L:921 > VRM-FSM: `job_man:0x2000082`: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
 !MIL    -RMF          		< T:RMF_Server M:shrec_group_manager.c F:isSharingInActiveJob L:677 > shared active RB `0x20107af`, shrec locator 0x2e01808f 
 !MIL    -RMF          		< T:RMF_Server M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_FindShrecSharing L:1004 > Shared shrec locator 0x2e01808f, job `0x20107b0(0)[R]` final shrec quota instance: 0x10000 
 !MIL    -RMF          		< T:RMF_Server M:shrec_group_manager.c F:isSharingInActiveJob L:677 > shared active RB 0x20107af, shrec locator 0x2e01808f 
@@ -4820,13 +4935,51 @@ typedef enum SYSTEMJOB_TYPE_TAG
 !MIL    -EPG_BOOK     		< T:no name M:ScheduledBookingAgent F:completeBooking L:477 > T:PooledExecutor#4:futurelistener booking completed: completionStatus = 104865794
 
 !MIL    -PCATS        		< T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_CommitJob L:3077 > client id = 0x5,bookingJobID = `0x290934c2`
-!MIL    -VRM_SERVER   		< T:SRM_HP_THREAD M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-record, jhVRM=0x2000082 
-!MIL    -VRM_SERVER   		< T:VRM_SRV M:basic_rec.c F:RecordActiveInitialize L:6264 > Initiaizing Record FSM: rec_handle:0xbc001d, item_ID:`0x290934c2` 
+!MIL    -VRM_SERVER   		< T:SRM_HP_THREAD M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=`jb-record`, `jhVRM=0x2000082` 
+!MIL    -VRM_SERVER   		< T:VRM_SRV M:basic_rec.c F:RecordActiveInitialize L:6264 > Initiaizing Record FSM: rec_handle:`0xbc001d`, item_ID:`0x290934c2` 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0xbc001d,0x290934c2: E_RECORD_INT_STATE_NONE -> (E_RECORD_INPUT_START) -> E_RECORD_INT_STATE_STARTING 
 
 // `Sxxx`
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0xbc001d,0x290934c2: E_RECORD_INT_STATE_ALLOCATING_DISK -> (E_RECORD_INPUT_DISK_ALLOCATED) -> E_RECORD_INT_STATE_DISK_ALLOCATED 
 !WARN   -MSM_MDI      		< T:VRM_SRV M:meta_mfs.c F:(MetaMfsGetCurrentRecordPosition) L:978 > Milestone : MetaMfsGetCurrentRecordPosition: bNeedAccuracy=true dir (/mnt/nds/dev_4/part_0/S79696) return time 0_000baf03 and" " packet 0_004edfe6 
+
+
+<rmf-auto-resolution-to-qic>
+// job=0x20107b0(0)[R] where 0x?? is rmj job instance
+// snprintf(str, (size_t)STR_LEN, "0x%x(%d)[%s]", RMF_JOB_Instance_GetHandle(original), generation, typeStr);
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10001008 released=0xf0000000 change request if fails. 
+!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type FailAssign on 0x20107b0(0)[R] 
+
+
+// 0x2010094 comes from candidateList[i].jobInstance and means candidates to
+// delete? Looks like to delete it and marks it with a reason.
+//
+//  case QIC_JobDeletionMode_Auto:
+//
+//    DIAG_LOG_MIL(gRmfSegmentId, ("Adding job 0x%x to Auto resolution",
+//      RMF_JOB_Instance_GetHandle(candidateList[i].jobInstance)));
+//
+//    stat = AddDeleteInstruction(candidateList[i].jobInstance, 
+//    SYSTEM_EXCEPTION_TYPE_INSUFFICIENT_DISK_SPACE);
+
+
+!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x2010094 to Auto resolution 
+
+// /** @brief Mask of permissions to release */
+// RMF_ALLOCATE_PERMISSION permissionsToRelease;
+// RMF_ALLOCATE_PERMISSION_STORE (0x10000004U)		/*!< @brief Store recording on disk */	
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_SRV_CommitResolution L:2756 > Instruction job=0x2010094 toRelease=0x10000004 
+
+!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20107b0(0)[R] UI NOT  required 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10000008 released=0x10001000 change request if fails. 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x2010094(0)[R] request=0xf0000000 released=0x10000004 change request if fails. 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
 
 
 # 
@@ -6960,20 +7113,6 @@ BOOKING_SOURCE INTEGER DEFAULT 0 ,  # typedef enum PCAT_CAT_BOOKING_SOURCE_
 SUB_GROUP_ID INTEGER DEFAULT 0 );
 
 INSERT INTO "DEL_BOOKING_JOBS" VALUES(687865875,553648147,1,5,4,2,1,0,0,0,1332167043,1332719998,1332167220,0,0,NULL,0,0,0,1,0,0,0,0,0,687865875,0,1,0);
-"RECORD_STATUS",/*PCAT_CAT_PROP_RECORD_STATUS*/
-typedef enum PCAT_CAT_RECORD_STATUS_{
-
-	PCAT_CAT_RECORD_STATUS_UNDEF=0				,			/**< @brief  No available status */
-	PCAT_CAT_RECORD_STATUS_TO_RECORD			,			/**< @brief  The program is scheduled to be recorded*/
-	PCAT_CAT_RECORD_STATUS_START_RECORDING		,			/**< @brief  The program is starting recording*/
-	PCAT_CAT_RECORD_STATUS_RECORDING			,			/**< @brief  The program is currently recording*/
-	PCAT_CAT_RECORD_STATUS_STOPPING				,           /**< @brief  The program is stopping*/
-	PCAT_CAT_RECORD_STATUS_ENDED(5)				,			/**< @brief  The program is ended*/
-	PCAT_CAT_RECORD_STATUS_PENDING				,			/**< @brief  The program status is not determined yet */
-	PCAT_CAT_RECORD_STATUS_LAST								/**< @brief  dummy - last enum value */
-} PCAT_CAT_RECORD_STATUS;
-
-
 
 
 ################
@@ -8813,6 +8952,47 @@ DARWIN_ADAPTOR_PLANNER_Init
 			DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id,("Failed PLANNER_JAVA_InitVTable: g_planner_adaptor_IteratorCreateRequest"));
 		}
 }
+
+
+<when-recording-completed>
+
+maps to `RECORD_STATUS` in pcat
+
+typedef enum PCAT_CAT_RECORD_STATUS_{
+
+	PCAT_CAT_RECORD_STATUS_UNDEF=0				,			/**< @brief  No available status */
+	PCAT_CAT_RECORD_STATUS_TO_RECORD			,			/**< @brief  The program is scheduled to be recorded*/
+	PCAT_CAT_RECORD_STATUS_START_RECORDING		,			/**< @brief  The program is starting recording*/
+	PCAT_CAT_RECORD_STATUS_RECORDING			,			/**< @brief  The program is currently recording*/
+	PCAT_CAT_RECORD_STATUS_STOPPING				,           /**< @brief  The program is stopping*/
+	PCAT_CAT_RECORD_STATUS_ENDED(5)				,			/**< @brief  The program is ended*/
+	PCAT_CAT_RECORD_STATUS_PENDING				,			/**< @brief  The program status is not determined yet */
+	PCAT_CAT_RECORD_STATUS_LAST								/**< @brief  dummy - last enum value */
+} PCAT_CAT_RECORD_STATUS;
+
+
+!INFO  -PLANNER      < p:000000ec t:015d3520 T:PLANNER_CB4 M:planner_bookedprogramme_properties.c 
+  F:PLANNER_BookedProgramme_MapPCATState L:03888 > record_state: 5 completion_state: 2 failed: 0
+
+PLANNER_API_BookingState PLANNER_BookedProgramme_MapPCATState(uint32_t record_state,uint32_t completion_state, bool failed)
+
+
+`completion_state`
+
+// Different statuses for property #PCAT_CAT_PROP_CONTENT_STATUS */
+
+typedef enum PCAT_CAT_CONTENT_STATUS_TAG{
+
+    PCAT_CAT_CONTENT_STATUS_UNDEF = 0,  /**< @brief  No available status */
+    PCAT_CAT_CONTENT_STATUS_NO_CONTENT,
+    PCAT_CAT_CONTENT_STATUS_PARTIAL,
+    PCAT_CAT_CONTENT_STATUS_ALL,
+    PCAT_CAT_CONTENT_STATUS_PENDING ,
+    PCAT_CAT_CONTENT_STATUS_SUSPENDED , /**< @brief  added for BDL content : only part of the A/V content was recorded , not ready for playback */
+    PCAT_CAT_CONTENT_STATUS_LAST        /**< @brief  dummy - last enum value */
+
+}PCAT_CAT_CONTENT_STATUS;
+
 
 #-----------------------------------------------------------
 # internal
