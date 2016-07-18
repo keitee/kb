@@ -8,6 +8,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-feature-team
 |kt_dev_si_0002| si-box
 |kt_dev_si_0002| si-box-mount
+|kt_dev_si_0002| si-boot-start-mw
 |kt_dev_si_0002| si-git
 |kt_dev_si_0002| si-git-build
 |kt_dev_si_0002| si-git-build-make
@@ -113,9 +114,23 @@ eth0      Link encap:Ethernet  HWaddr 00:19:FB:F2:D4:6B
 
 
 0019FBF2D46B  
+http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FBF2D46B
+
 
 <fsn_data>
 /mnt/nds/dev_6/part_0/FSN_DATA
+
+
+<mtd>
+# 595 box 
+# mtd devices
+sh-3.2# cat /proc/mtd 
+dev:    size   erasesize  name
+mtd0: 0f800000 00020000 "rootfs"
+mtd1: 0ff00000 00020000 "all"
+mtd2: 00400000 00020000 "kernel"
+mtd3: 00400000 00020000 "cfe"
+mtd4: 03c00000 00020000 "nor"
 
 
 ={============================================================================
@@ -126,6 +141,171 @@ mount -o rw -t nfs 10.209.62.232:/home/NDS-UK/venkatr/RLOGimprove /mnt/nds/dev_5
 
 // to kit-debian
 mount -o rw -t nfs 10.209.56.97:/home/kyoupark/si_logs /mnt/tmp
+
+
+={============================================================================
+|kt_dev_si_0002| si-boot-start-mw
+
+note:
+'build_mw_epg.sh' builds /etc and /NDS for images to flash
+# - snippet from the end of running
+#
+# Creating middleware epg package
+#./
+#./etc/
+#./etc/start-mw.sh
+#./NDS/
+#./NDS/bin/
+#./NDS/bin/SCD_Process
+#./NDS/bin/MW_Process
+#./NDS/bin/APP_Process
+#./NDS/bin/CA_Process
+
+<boot>
+// /etc/init.d/rcS
+
+if [ -e /etc/start-mw.sh ]; then
+    /etc/start-mw.sh
+fi
+
+<boot-start-mw>
+// generated from build_mw_epg.sh
+// /etc/start-mw.sh 
+
+#!/bin/sh
+echo
+echo "##########################"
+echo "# Loading NDS middleware #"
+echo "##########################"
+echo
+echo "####################################"
+echo "# Middleware starting in 5 seconds #"
+echo "# Hit ctrl-C to cancel             #"
+echo "####################################"
+echo
+stty brkint
+sleep 5 || exit
+ulimit -c unlimited
+mkdir -p /mnt/nds
+chgrp NDS_MW /mnt/nds
+chown NDS_U2 /mnt/nds
+mkdir -p /mnt/nds/disk/FSN_DATA && mount -t tmpfs none /mnt/nds/disk/FSN_DATA -o ro
+killall udhcpc || true
+OVERRIDE_LOCATION=asbo.bskyb.com:/home/asbo/mac
+SERVER=`echo ${OVERRIDE_LOCATION} | cut -d":" -f1`
+SCRIPT_PATH=`echo ${OVERRIDE_LOCATION} | cut -d":" -f2`
+OVERRIDE_DIR=/tmp/override_dir
+echo "Enabling udhcp"
+udhcpc -nR -t3 -T5
+ping -W 1 -c 1 ${SERVER} && (
+MAC_ADDR=`ifconfig eth0 | grep HWaddr | head -n1 | tr -s " " | cut -d" " -f5`
+mkdir -p ${OVERRIDE_DIR}
+echo "mount ${SERVER}:${SCRIPT_PATH}/${MAC_ADDR} ${OVERRIDE_DIR}"
+mount ${SERVER}:${SCRIPT_PATH}/${MAC_ADDR} ${OVERRIDE_DIR}
+if [ -x "${OVERRIDE_DIR}/runme.sh" ]; then
+    ${OVERRIDE_DIR}/runme.sh
+    umount ${OVERRIDE_DIR}
+else
+    echo "OVERRIDE script failed to be executed: ${OVERRIDE_LOCATION}"
+fi
+)
+killall udhcpc
+   udhcpc -nR -t3 -T5
+mkdir -p /mnt/nds/hudson_18_07_16_16_20_55
+mount -o mountport=892 theyard.cisco.com:/home/si_logs/si_devel_posts/hudson_18_07_16_16_20_55  /mnt/nds/hudson_18_07_16_16_20_55
+cp -f /mnt/nds/hudson_18_07_16_16_20_55/*_Process /NDS/bin/
+chmod a+x /NDS/bin/*_Process
+umount /mnt/nds/hudson_18_07_16_16_20_55
+rm -rf /mnt/nds/hudson_18_07_16_16_20_55
+   killall udhcpc
+mkdir /mnt/nds/tmp
+mount /dev/sda1 /mnt/nds/tmp
+UPNPUAID_PATH=/mnt/nds/tmp/FSN_DATA
+if [ ! -f ${UPNPUAID_PATH}/UPNPUAID ]; then
+   echo "######################"
+   echo "Creating UPNP Agent ID using MAC"
+   echo "######################"
+   echo "Grabbing MAC"
+   MACADDR=`ifconfig -a | grep ^eth0|sed -e s/.*HWaddr[[:space:]]// -e s/://g -e s/[[:space:]]//g`
+   echo "USERAGENTID=$MACADDR" > ${UPNPUAID_PATH}/UPNPUAID
+fi
+if [ -f ${UPNPUAID_PATH}/UPNPUAID ]; then
+   echo "######################"
+   echo "Changing UPNP Agent ID"
+   echo "######################"
+   UAID=`cat ${UPNPUAID_PATH}/UPNPUAID | sed s/USERAGENTID=//`
+   sed -i "s/FILTERING_ENABLED.*/FILTERING_ENABLED=TRUE/" /NDS/config/libupnp.cfg
+   sed -i "s/PRODUCTNAME=.*/PRODUCTNAME=\"$UAID\"/" /NDS/config/libupnp.cfg
+   sed -i "s/PRODUCTNAME_FILTER=.*/PRODUCTNAME_FILTER=\"$UAID\"/" /NDS/config/libupnp.cfg
+fi
+umount /mnt/nds/tmp
+rmdir /mnt/nds/tmp
+
+// *comp-config*
+cd /NDS/config
+/NDS/bin/FusionConfigImport CFG2BIN ./ *
+
+cd /etc
+PATH_RESCONF=`readlink /etc/resolv.conf`
+if [ -f ${PATH_RESCONF} ]; then
+   echo "resolv.conf exists. Deleting ${PATH_RESCONF}"
+   rm -f ${PATH_RESCONF}
+fi
+cd /tmp
+export LD_PRELOAD=/usr/lib/libforcesched.so:/lib/libresolv-refresh.so:/lib/libifnameindex.so
+/NDS/bin/PWM_Process
+
+
+<unified-startup>
+note:
+What is it for?
+deps/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/Scripts/unified_startup.sh
+
+# unified_startup.sh FORMAT NORUN
+#
+# In sum, 
+# FORMAT will format sda or delete db and recordings
+# NORUN will setup env for MW or for test env.
+#
+# 1. copy xtvfs_format on to box:/usr/bin (actually not used)
+# 2. make dirs. no effect appart from /NDS
+# 3. untar driver file on to box:/. This includes ko and script files:
+#        etc/bumpup.cfg
+#        etc/load-cdi-drivers.sh
+#        lib/modules/2.6.18.8/callisto_drx890.ko
+#        lib/modules/2.6.18.8/callisto_periph.ko
+#        lib/modules/2.6.18.8/callisto_tuner.ko
+# 
+# 4. run /etc/load-cdi-drivers.sh, nfs:/drivers/xtvfs.ko, nfs:/drivers/jhmknods_nds.sh, and nfs:/drivers/mhxnvramfs.ko
+#    if NOCLEAN=false(default), populate nvram?.bin to /dev/nds/nvram[01].bin. (actually no effect since no nvram?.bin in nfs.)
+
+# 5. if FORMAT=true, delete /dev/sda3,4 (no effect since there aren't 3, 4 partiiton in a box)
+# 6. if FORMAT=true, delete /dev/sda1,2. create /dev/sda1 with FAT12 and format it using xtvfs_format. formatting xtvfs will create own file and dirs.
+# 7. if NOCLEAN=false(default), delete /dev/sda1/FSN_DATA/* for dbs and /dev/sda1/* for recodring. Actually, has an effect only when not use FORMAT.
+# 8. copy nfs:/fs/NDS/* on to /NDS
+# 9. mount sysfs on /sys (no effect since already done after boot)
+# 10. copy nfs:/drivers/libs on to /usr/lib, run /etc/bumpup.sh (no effect), delete /tmp/* and /fifo/*
+#
+# Once system loaded, see that there are fs mounded. Done by MW?
+#   /dev/nds/nvram0 on /mnt/nds/dev_2/part_0 type MHNVRAMFS (rw,nosuid)
+#   /dev/sda1 on /mnt/nds/dev_5/part_0 type xtvfs (rw,nosuid)
+
+
+<ex>
+# to use with kernel only env.
+udhcpc
+mkdir /host
+mount -t nfs 172.18.253.143:/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_01/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian /host
+cd /host
+./unified_startup.sh . /host FORMAT NORUN
+./unified_startup.sh . /host NORUN
+LD_PRELOAD=/usr/lib/libforcesched.so /NDS/bin/SCD_Process
+LD_PRELOAD=/NDS/lib/cdi_tracker.so /usr/lib/libforcesched.so /NDS/bin/SCD_Process
+LD_PRELOAD=/NDS/lib/cdi_tracker.so /usr/lib/libfollrcesched.so /NDS/bin/SCD_Process_us
+LD_PRELOAD=/usr/lib/cdi_tracker.so /usr/lib/libforcesched.so /usr/lib/libresolv-refresh.so /usr/lib/libifnameindex.so /NDS/bin/SCD_Process
+
+# FOSH
+mount -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob/595/fosh/Darwin97350_BE/debug/FOSH/NDS /NDS
 
 
 ={============================================================================
@@ -372,7 +552,9 @@ Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_0
 
 cd /home/NDS-UK/mariyapm/R11/R11/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
 
-1. ./build_mw_epg.sh -p "ams-drx890" --project "picasso"  --profile "Sky_Trials" --variant "debug"
+1. 
+./build_mw_epg.sh -p "ams-drx890" --project "picasso"  --profile "Sky_Trials" --variant "debug"
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel
 
 2) Upload jar files and replace it with car files. 
 note: requires hudson page to do that.
@@ -413,14 +595,6 @@ note: requires hudson page to do that.
 ./utils/picasso_flash_H1.sh -b ams_bcm -p stripped_optim -s nds
 ./picasso_flash_H1.sh -b ams_bcm -p debug -s nds
 
-# bsysconfig.bin
-/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig
-/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_001/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport CFG2BIN ./ *
-/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport CFG2BIN ./ *
-/home/NDS-UK/parkkt/cc/parkkt_BSKYB_HR006_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport CFG2BIN ./ *
-
-/home/NDS-UK/parkkt/cc/parkkt_BSKYB_HR006_001/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport BIN2XML x.xml bsysconfig.bin 
-
 # takes about 5 mins
 ./make_image.sh --platform ams-drx890 --project picasso --profile "NDS_SI_Devel" 
 ./make_image.sh --platform ams-drx890 --project picasso --profile "sky_trials" -c
@@ -455,7 +629,6 @@ To see the output of -E option
 |kt_dev_si_0002| si-git-build-make
 
 See build.log
-
 
 <build-sh>
 //FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/build_mw_epg.sh
@@ -5563,7 +5736,7 @@ asterisk, dot, asterisk
 }
 
 // diag.cfg which defines format and level
-/CMS_SYSTEM_INFRASTRUCTURE/DIAG/inc/config/diag_master_config.xml
+// CMS_SYSTEM_INFRASTRUCTURE/DIAG/inc/config/diag_master_config.xml
 
 
 <diag-cli>
@@ -5581,26 +5754,21 @@ set level SYSINIT_S info
 ={============================================================================
 |kt_dev_si_0001| comp-config
 
-
 <config>
-
 // config overrides
-
 // make.sh
 
 mkdir -p ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config
 
 // run 'FusionConfigExport' which creates most cfg files.
-// /FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport
-// FusionConfigExport AUTO ./si/config/ projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 si_bskyb ams_bcm release_dbg pdl_nds_uk 
 
-echo "${OUTPUT}/FusionConfig/FusionConfigExport AUTO 
-${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/ 
-projects/${PROJECT}/"SI_config.xml" BASESET ${BSKYB_CONFIG_PROFILE} ${DMS_PLATFORM_CONFIG} si_bskyb ${PLATFORM} ${BUILD_TYPE} pdl_${PDL_SERVER} ${SERIALISATION}"
+STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport 
+  --ignore_missing_inc AUTO /STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/si/config/ 
+  projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 si_bskyb ams-drx890 release_dbg pdl_sky_production  sky_trials  si_filldisk_inactive
 
-/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport AUTO 
-/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/si/config/ 
-projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 si_bskyb ams_bcm release_dbg pdl_nds_uk 
+// echo "${OUTPUT}/FusionConfig/FusionConfigExport AUTO 
+// ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/ 
+// projects/${PROJECT}/"SI_config.xml" BASESET ${BSKYB_CONFIG_PROFILE} ${DMS_PLATFORM_CONFIG} si_bskyb ${PLATFORM} ${BUILD_TYPE} pdl_${PDL_SERVER} ${SERIALISATION}"
 
 // Copy across Fusion formatted Platform config files for CFG2BIN conversion.
 cp -f ../../../${FUSIONOS}/BLD_${PLATFORM_DIR}/platform_cfg/linux/${ENDIAN}Endian/${OS_BUILD_TYPE}/config/fusion_os_cdi_labels.cfg ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/
@@ -5609,28 +5777,94 @@ cp -f ../../../${FUSIONOS}/BLD_${PLATFORM_DIR}/platform_cfg/linux/${ENDIAN}Endia
 // Copy project config files that override DMS
 cp projects/${PROJECT}/fs/NDS/config/overrides/* ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/
 
+
 # run dms config
-${OUTPUT}/FusionConfig/FusionConfigExport AUTO ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/dms/config/ projects/${PROJECT}/SI_config.xml BASESET ${BSKYB_CONFIG_PROFILE} ${DMS_PLATFORM_CONFIG} ${PLATFORM} ${BUILD_TYPE}
 
-/home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_003/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport AUTO /home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_003/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/dms/config/ projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 ams_bcm release_dbg
+${OUTPUT}/FusionConfig/FusionConfigExport AUTO
+${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/dms/config/
+projects/${PROJECT}/SI_config.xml BASESET ${BSKYB_CONFIG_PROFILE}
+${DMS_PLATFORM_CONFIG} ${PLATFORM} ${BUILD_TYPE}
 
-# run cfg2bin
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigExport
+AUTO
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/dms/config/
+projects/picasso/SI_config.xml BASESET BSKYB_HD_PVR ams0201 ams_bcm
+release_dbg
+
+
+<bsysconfig>
+~/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/FusionConfig/FusionConfigImport BIN2XML x.xml bsysconfig.bin
+
+
+<cfg-to-bin>
+// this will create bin from cfgs and kepp cfgs once done.
 ${OUTPUT}/FusionConfig/FusionConfigImport CFG2BIN ./ *
 
 # copy configs across to output
 cp -f ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/* ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/fs/NDS/config
 
 
-// SI_config.xml
-#
+<SI_config.xml>
 # SI_config.xml which defines 'si_bskyb' profile
  <include name="projects/dms/fs/NDS/dms_master_config.xml" />
 
-# dms_master_config.xml which includes each comp's config and defines BASESET, and BSKYB_HD_PVR profile.
- <include name="components/comms_services/ncm/inc/config/ncm_master_config.xml" />
- ...
+// Exporting profile BASESET...
+// Exporting profile BSKYB_HD_PVR...
+// Overriding key ConnectionEstablishmentTimeout with same value in section
+// MS_SYSTEMCONFIG_SECTION in file MS.CFG in profile BSKYB_HD_PVR
+// ...
+//
+// Exporting profile ams0201...
+// Exporting profile si_bskyb...
+// Exporting profile ams-drx890...
+// Exporting profile release_dbg...
+// Exporting profile sky_trials...
+//
+
+<dms-master-config>
+// STB_SW/DARWIN_PLATFORM/dms/public/config/dms_master_config.xml
+`dms_master_config.xml` which includes each comp's config and defines BASESET,
+and BSKYB_HD_PVR profile.
+
+// <fusion_config_database>
+//  <include_path name="../../" />
+//  <include name="components/comms_services/ncm/inc/config/ncm_master_config.xml" />
+//  <include name="components/darwin_platform_components/darwin_atg/inc/config/darwin_atg_master_config.xml" />
+//  <include name="components/darwin_platform_components/darwin_ofs/inc/config/darwin_ofs_master_config.xml" />
+//  <include name="components/darwin_platform_components/darwin_planner/inc/config/darwin_planner_master_config.xml" />
+//  <include name="components/darwin_platform_components/darwin_search/inc/config/search_master_config.xml" />
+//  <include name="components/comms_services/ncm/inc/config/ncm_master_config.xml" />
+//  ...
+
+
+<ex-rmf>
+// STB_SW/CMS_SYSTEM_RESOURCE/RMF/inc/config/rmf_master_config.xml
+
+   <section name="quota1_internal">
+    <key name="quota_name" type="STRING" value="user">
+    </key>
+    <key name="quota_type" type="STRING" value="user_type">
+    </key>
+    <key name="statistics_required" type="INTEGER" value="1">
+    </key>
+    <key name="partition_name" type="STRING" value="RECORDING">
+    </key>
+    <key name="max_size" type="INTEGER" value="80000">
 
 // also SI_config.xml can override default values from the comp's xml.
+
+
+<outputs>
+Once build is done, can see outputs:
+
+drwxr-xr-x  3 kyoupark ccusers    4096 Jul 18 13:37 fs/
+drwxr-xr-x  3 kyoupark ccusers    4096 Jul 18 13:58 FusionConfigCommon/
+drwxr-xr-x  3 kyoupark ccusers    4096 Jul 18 13:59 si/
+
+note:
+Only can see cfg files in the output when cfg changes are right. If cfg
+changes is wrong then build goes okay but not give you an error. However, a
+box cannot boot up with that image. 
 
 // build/projects/picasso/fs/NDS/config
 diagctl.cfg          guide_cms_cde_3.cfg  guide_cms_cde.cfg  guide_cms_num.cfg  siege_def.cfg  version.cfg
@@ -8992,6 +9226,17 @@ typedef enum PCAT_CAT_CONTENT_STATUS_TAG{
     PCAT_CAT_CONTENT_STATUS_LAST        /**< @brief  dummy - last enum value */
 
 }PCAT_CAT_CONTENT_STATUS;
+
+
+<when-delete-recordings>
+From a high level, on the middleware side, the following modules are
+interacting during the deletion action. EPG sends a message to PLANNER to
+start the removal of the booking and the planner forwards this to System
+Booking Management (SBM) module on the middleware process. SBM does some
+checks with PCAT and then sends a request to the Resource Management Framework
+(RMF) to move the booking from the USER_QUOTA to the RECYCLE_QUOTA. PCAT
+actions this, asynchronously responds back to RMF and then the confirmation
+eventually reaches the PLANNER which forward it back to EPG. 
 
 
 #-----------------------------------------------------------
@@ -13042,12 +13287,15 @@ public interface IScreenType
 }
 
 
-# dialog
+<dialog>
 # Dialog IDs are listed in IDialogID.java.
-# The other important file is DialogConfig.java. This maps the dialog ids to the text thats displayed.
+# The other important file is DialogConfig.java. This maps the dialog ids to
+# the text that's displayed.
+
 ./picasso/dialogmgr/dialogs/config/DialogConfig.java
-/Picasso/src/java/picasso/common/dialogmgr/IDialogID.java # interface IDialogID
-vobs/THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso/common/dialogmgr/IDialogID.java
+THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso/common/dialogmgr/IDialogID.java
+
+	int LIVE_PAUSE_NOT_AVAILABLE_ID                                          = 1030;
 
 int AUTO_STANDBY_ID                                       = 1162;
 int DISK_FAIL_SYSTEM_FAULT_ID                             = 1299;
