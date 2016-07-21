@@ -232,7 +232,7 @@ Failed Recording INSUFFICIENT_DISK_SPACE ( Not enough disk space to record
 287864:!WARN   -MSM_MDI      		< T:VRM_SRV M:meta_mfs.c F:(MetaMfsGetCurrentRecordPosition) L:978 > Milestone : MetaMfsGetCurrentRecordPosition: bNeedAccuracy=true dir (/mnt/nds/dev_4/part_0/S79696) return time 0_000baf03 and" " packet 0_004edfe6 
 
 287874:!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10001008 released=0xf0000000 change request if fails. 
-287875:!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type FailAssign on 0x20107b0(0)[R] 
+287875:!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type `FailAssign` on 0x20107b0(0)[R] 
 
 287878:!WARN   -RMF          		< T:VRM_SRV M:rmp.c F:RMP_GetJobHandleByPcatObjId L:2528 > PCAT_VIEW_OBJECT_ID ID 0x2908f97d not in hash 
 287879:!ERROR  -RMF          		< T:VRM_SRV M:rmf_job.c F:RMF_JOB_SRV_GetJobByHandle L:969 > **** RMF_ET in rmf_job.c 969\n 
@@ -290,13 +290,13 @@ Disk usage in quota "user": 218.86 Gb
 booking-job
 "688469186"
 "554251458"	"1"	
-"5"
-"7"
+"5"   // PCAT_CAT_RECORD_STATUS_ENDED     (5),  // The program is ended
+"7"   // PCAT_CAT_RECORD_STATE_PAST_EGT   (7),  // The recording is in past end guard time state
 "6"	"0"	"1"		"0"	"1467243909"	"0"	"1467242820"	"0"	"0"		"0"	"0"	"0"	"1"	"0"	"0"	"0"	"0"	"0"	"0"	"0"	"1"	"0"			"0"	"X'6369BF0814305E73E675B473EDCB68B51D0C817D'"	"0"		"0"	"0"	"0"	"0"	"0"	"0"				"0"		"0"		"0"	"0"	"0"		
 
 booking-info
 "554251458"	
-"2"
+"2"   // PCAT_CAT_BOOKING_TYPE_RECORD     (2),  // The booking type is Record
 "2"
 "571028670"	"1"	"1"	"120000"	"120000"	"0"	"0"	"621360324"	"0"	"2"	"0"	"0"	
 "3"   // BOOKING_EXCEPTION
@@ -324,9 +324,41 @@ SBMUserBookingThread(void *data)
                     }
 
 
+	private void handleStopEvent(PlayerEventRBStop stopEvent)
+	{
+		try
+		{
+			int exceptionCode = stopEvent.getException();
+			/* LOGGER.logInfo("Received StopEvent with exception code " + exceptionCode); */
+
+			/* At the moment, the only kind of exception we think we have to deal with
+			 * is INSUFFICIENT_DISK_SPACE, so we don't even model the rest.  
+			 */
+			switch (exceptionCode)
+			{
+				case PlannerBookingFailureType.INSUFFICIENT_DISK_SPACE:
+					reviewBufferStateListener.notifyInsufficientDiskSpaceStop();
+					break;
+				case PlannerBookingFailureType.NO_TUNER_AVAILABLE:
+					// this happens when we tune to a new channel.
+					reviewBufferStateListener.notifyChannelChanged();
+					break;
+				default:
+					LOGGER.logWarn("Got a PlayerEventRBStop we don't know how to handle: " + exceptionCode);
+					break;
+
+			}
+		}
+		catch (PlayerDataUnavailableException e)
+		{
+			LOGGER.logError("failed to get exception code from event", e);
+		}
+	}
+
+
 <2> `part` fail.
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019fb2d3660
-http://theyard.cisco.com/si_logs/translation/darwin_0019fb2d3660_e1a3726db88bc9ca9e363413ec97ecdd/index.html
+http://theyard.cisco.com/si_logs/translation/darwin_20fb2d3660_e1a3726db88bc9ca9e363413ec97ecdd/index.html
 
 Zone6 - Box36	Recording Review	Part Recorded INSUFFICIENT_DISK_SPACE ( Not
     enough disk space to record event. ) 		11 July 2016			09/07/2016
@@ -454,6 +486,7 @@ HD - 501 - Sky News - 3.00 pm	7-2016
 
 179504:NDS: ^[2016:06:29 19:01:59]0946722233.683449 !MIL    -VRM_SERVER   		< p:0x0000038c P:MW t:0x01ca7520 T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0x81001d,0x2908fc4f: E_RECORD_INT_STATE_RUNNING -> (E_RECORD_INPUT_STOP) -> E_RECORD_INT_STATE_STOPPING 
 
+<pcat>
 100: NO_EXCEPTION
 
 Recd|Rec |2016:06:29 17:58:00|2016:06:29 19:02:00|The One Show                            |s69831|  101|100|BBC One South       | 39117| 1.59|        |UNDF  |    |688454735
@@ -537,6 +570,142 @@ Part Recorded INSUFFICIENT_DISK_SPACE ( Not enough disk space to record event.
 
 // once only
 214113:NDS: ^[2016:06:29 20:22:57]0946727171.619891 !MIL    -RMF                        < p:0x0000038c P:MW t:0x01afc520 T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201073c(0)[Rb]
+
+
+<5>
+From Glen
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbddef35_5d8159b8803db63b212a24fce70a241b/index.html
+
+41094:NDS: ^[2016:07:14 14:05:50]0946697312.426396 !ERROR  -EPG_DEV1                    < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+41095:NDS: ^[2016:07:14 14:05:50]0946697312.426659 !MIL    -EPG_MISC                    < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+48193:NDS: ^[2016:07:14 14:09:02]0946697504.732986 !MIL    -aem                         < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+48875:NDS: ^[2016:07:14 14:09:37]0946697539.646797 !MIL    -aem                         < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+52676:NDS: ^[2016:07:14 14:12:52]0946697734.959885 !MIL    -aem                         < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+71604:NDS: ^[2016:07:14 15:30:14]0946702376.937237 !MIL    -aem                         < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+77329:NDS: ^[2016:07:14 16:05:42]0946704504.628304 !MIL    -aem                         < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+593555:NDS: ^[2016:07:18 14:59:49]0947046151.718709 !ERROR  -EPG_DEV1                   < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+593556:NDS: ^[2016:07:18 14:59:49]0947046151.718975 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+593576:NDS: ^[2016:07:18 14:59:50]0947046152.104067 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "REWIND","title": "Key Press REWIND","label": "","currentscreen": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594132:NDS: ^[2016:07:18 15:00:44]0947046206.035336 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+594140:NDS: ^[2016:07:18 15:00:44]0947046206.047929 !ERROR  -EPG_DEV1                   < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+594141:NDS: ^[2016:07:18 15:00:44]0947046206.048201 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594207:NDS: ^[2016:07:18 15:02:01]0947046283.714655 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "TVGUIDE","title": "Key Press TVGUIDE","label": "","currentscreen": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594759:NDS: ^[2016:07:18 15:02:47]0947046329.067151 !ERROR  -EPG_DEV1                   < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+594760:NDS: ^[2016:07:18 15:02:47]0947046329.067391 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594817:NDS: ^[2016:07:18 15:02:50]0947046332.253715 !ERROR  -EPG_DEV1                   < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+594818:NDS: ^[2016:07:18 15:02:50]0947046332.253964 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+595565:NDS: ^[2016:07:18 15:11:36]0947046858.988660 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+595573:NDS: ^[2016:07:18 15:11:37]0947046859.003037 !ERROR  -EPG_DEV1                   < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+595574:NDS: ^[2016:07:18 15:11:37]0947046859.003338 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+595935:NDS: ^[2016:07:18 15:11:53]0947046875.039072 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+595942:NDS: ^[2016:07:18 15:11:53]0947046875.052422 !ERROR  -EPG_DEV1                   < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+595946:NDS: ^[2016:07:18 15:11:53]0947046875.143292 !MIL    -EPG_MISC                   < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+599767:NDS: ^[2016:07:18 15:38:19]0947048461.108021 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+600446:NDS: ^[2016:07:18 15:38:27]0947048469.770698 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+602178:NDS: ^[2016:07:18 15:38:53]0947048495.650449 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+602997:NDS: ^[2016:07:18 15:39:02]0947048504.695352 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+604143:NDS: ^[2016:07:18 15:39:54]0947048556.917650 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+605251:NDS: ^[2016:07:18 15:40:18]0947048580.154616 !MIL    -aem                        < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401
+
+
+// tune 01
+
+ 65143:^[2016:07:14 14:48:43]!MIL    -EPG_ME       		< T:no name M:MediaEngine F:playService L:1498 > T:PooledExecutor#4:TUNING TO Eurosport 1 HD, 410 locator:5:3:FA4
+
+ 70234:^[2016:07:14 15:15:30]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010256(0)[Rb] UI NOT  required 
+ 71604:^[2016:07:14 15:30:14]!MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+ 77329:^[2016:07:14 16:05:42]!MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+208922:^[2016:07:15 15:23:32]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010271(0)[R] 
+208950:^[2016:07:15 15:23:33]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010271(0)[R] UI NOT  required 
+209463:^[2016:07:15 15:28:32]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010272(0)[R] 
+209491:^[2016:07:15 15:28:33]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010272(0)[R] UI NOT  required 
+327749:^[2016:07:16 14:48:43]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010285(0)[R] 
+327777:^[2016:07:16 14:48:44]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010285(0)[R] UI NOT  required 
+329001:^[2016:07:16 15:03:43]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010286(0)[R] 
+329029:^[2016:07:16 15:03:44]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010286(0)[R] UI NOT  required 
+441291:^[2016:07:17 12:42:44]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
+441319:^[2016:07:17 12:42:44]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+445309:^[2016:07:17 13:28:14]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
+445337:^[2016:07:17 13:28:14]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+446251:^[2016:07:17 13:40:34]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
+446279:^[2016:07:17 13:40:35]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+448462:^[2016:07:17 14:09:04]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
+448490:^[2016:07:17 14:09:05]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+
+// tune 02
+
+564660:^[2016:07:18 10:59:04]!MIL    -EPG_ME       		< T:no name M:MediaEngine F:playService L:1498 > T:PooledExecutor#2:TUNING TO Eurosport 1 HD, 410 locator:5:3:FA4
+
+// start rb
+565347:^[2016:07:18 10:59:14]!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-rbrec, jhVRM=0x3000014 
+565350:^[2016:07:18 10:59:15]!MIL    -RMF          		< T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_TriggerGetShrec L:381 > Job `0x20102c1`(0)[Rb] - shrec found: 0x0 
+
+// did not get premissions
+565355:^[2016:07:18 10:59:15]!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20102c1(0)[Rb] request=0x10000008 released=0xf0000000 change request if fails. 
+565503:^[2016:07:18 10:59:15]!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20102c1(0)[Rb] request=0x10000008 released=0xf0000000 change request if fails. 
+
+571468:^[2016:07:18 11:28:03]!MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x469 hMC=0x8e tuner_id =0 and job_type =LIVE_VIEWING 
+571469:^[2016:07:18 11:28:03]!MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x46c hMC=0x8f tuner_id =0 and job_type =RECORD 
+571470:^[2016:07:18 11:28:03]!MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x4db hMC=0x91 tuner_id =1 and job_type =RECORD 
+
+577323:^[2016:07:18 12:13:02]!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:994 > Building conflict of type FailAssign on 0x20102c4(0)[R] 
+577349:^[2016:07:18 12:13:02]!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Resolve L:2234 > Adding job 0x20101da to Auto resolution 
+577351:^[2016:07:18 12:13:02]!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+
+// conflict on rb
+580427:^[2016:07:18 12:34:55]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c1(0)[Rb] 
+
+// rb deleted
+580453:^[2016:07:18 12:34:55]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2333 > Stopping subject 0x20102c1(0)[Rb] because there are no candidates 
+
+580455:^[2016:07:18 12:34:55]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c1(0)[Rb] UI NOT  required 
+580946:^[2016:07:18 12:40:25]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
+580972:^[2016:07:18 12:40:25]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101dc to Auto resolution 
+580974:^[2016:07:18 12:40:25]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+586603:^[2016:07:18 13:42:55]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:994 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
+586629:^[2016:07:18 13:42:56]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101e5 to Auto resolution 
+586631:^[2016:07:18 13:42:56]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+588826:^[2016:07:18 14:02:36]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
+588852:^[2016:07:18 14:02:36]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101e6 to Auto resolution 
+588854:^[2016:07:18 14:02:36]!MIL    -RMF          		< T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+
+599193:^[2016:07:18 15:38:13]!MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Destroy L:1601 > @@PMON@@,mark,job,job-destroy,50331668,job-destroy-type=,jb-rbrec 
+
+593555:^[2016:07:18 14:59:49]!ERROR  -EPG_DEV1     		< T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+593556:^[2016:07:18 14:59:49]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+593576:^[2016:07:18 14:59:50]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "REWIND","title": "Key Press REWIND","label": "","currentscreen": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594132:^[2016:07:18 15:00:44]!MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+594140:^[2016:07:18 15:00:44]!ERROR  -EPG_DEV1     		< T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+594141:^[2016:07:18 15:00:44]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594207:^[2016:07:18 15:02:01]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "TVGUIDE","title": "Key Press TVGUIDE","label": "","currentscreen": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594759:^[2016:07:18 15:02:47]!ERROR  -EPG_DEV1     		< T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+594760:^[2016:07:18 15:02:47]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594817:^[2016:07:18 15:02:50]!ERROR  -EPG_DEV1     		< T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+594818:^[2016:07:18 15:02:50]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+595565:^[2016:07:18 15:11:36]!MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+595573:^[2016:07:18 15:11:37]!ERROR  -EPG_DEV1     		< T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+595574:^[2016:07:18 15:11:37]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+595935:^[2016:07:18 15:11:53]!MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+595942:^[2016:07:18 15:11:53]!ERROR  -EPG_DEV1     		< T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+595946:^[2016:07:18 15:11:53]!MIL    -EPG_MISC     		< T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+599767:^[2016:07:18 15:38:19]!MIL    -aem          		< T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+
+
+
+"687866077"
+"553648349"	"1"	
+"5"   // PCAT_CAT_RECORD_STATUS_ENDED     (5),  // The program is ended
+"7"   // PCAT_CAT_RECORD_STATE_PAST_EGT   (7),  // The recording is in past end guard time state
+"6"	"0"	"1"	"NULL"	"0"	"1469007900"	"0"	"1469001420"	"0"	"0"	"NULL"	"0"	"0"	"0"	"1"	"0"	"0"	"0"	"0"	"0"	"0"	"0"	"1"	"0"	"NULL"	"NULL"	"0"	"Lގ�0�Ȗ�9�)���*2 ��"	"0"	"NULL"	"0"	"0"	"0"	"0"	"0"	"0"	"NULL"	"NULL"	"NULL"	"0"	"NULL"	"0"	"NULL"	"0"	"0"	"0"	"NULL"	"NULL"
+
+"553648349"
+"2"   // PCAT_CAT_BOOKING_TYPE_RECORD     (2),  // The booking type is Record
+"2"	
+"570425563"	"1"	"1"	"120000"	"120000"	"0"	"0"	"620757215"	"0"	"2"	"0"	"0"	
+"3"   // BOOKING_EXCEPTION
+"2"   // PCAT_CAT_CONTENT_STATUS_PARTIAL,
+"0"	"050005ffa4197573657200"	"0"	"0"	"0"	"0"	"0"	"NULL"	"1"	"0"	"0"	"0"	"0"	"NULL"	"0"	"1"	"NULL"	"1"	"0"	"NULL"	"NULL"	"NULL"	"NULL"	"NULL"	"NULL"	"0"	"0"	"0"
+
 
 ==============================================================================
 Copyright: see |ktkb|                              vim:tw=100:ts=3:ft=help:norl:
