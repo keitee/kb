@@ -12,6 +12,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_web_004* html standard
 *kt_dev_web_005* crome dev tool
 *kt_dev_web_005* user agent
+*kt_dev_web_005* w3-cgi
 
 # ============================================================================
 #{
@@ -266,6 +267,215 @@ product-version = token
 
 That part of the header field following the initial “User-Agent: ” is referred
 to here as the User-Agent string.
+
+
+={============================================================================
+*kt_dev_web_005* w3-cgi
+
+A CGI (Common Gateway Interface) is a program that runs on a web server. CGIs
+are typically called from HTML forms, and usually are designed to run quickly
+and return an HTML page someone can use in a browser. 
+
+A CGI script can be written in any language that can read STDIN, write to
+STDOUT, and read environment variables, i.e. virtually any programming
+language, including C, Perl, or even shell scripting
+
+
+http://<hostname>/cgi-bin/example-bash.sh
+
+<ex>
+#!/bin/bash
+
+# These two lines tell your browser that the rest of the content comming from
+# the program is HTML, and should be treated as such. Leaving these lines out
+# will often cause your browser to download the output of the program to disk
+# as a text file instead of displaying it, since it doesn't understand that it
+# is HTML!
+
+echo "Content-type: text/html"
+echo ""
+
+# This program uses the echo program to send text to a browser. If you can
+# read from STDIN and write to STDOUT, then you can write CGI scripts.
+
+echo "<html><head><title>Welcome</title></head>"
+echo "<body>"
+echo "Welcome to your Bash CGI!"
+echo "</body></html>"
+
+<ex>
+#!/bin/bash
+echo "Content-type: text/html"
+echo ''
+echo 'CGI Bash Example'
+
+<ex>
+#!/bin/bash
+echo "Content-type: text/html"
+echo ''
+echo 'CGI Bash example<br>'
+echo `df -h / | grep -v Filesystem`
+
+<ex>
+$ sudo gcc -o /usr/lib/cgi-bin/example-c example-c.c
+http://cgi-example.local/cgi-bin/example-c
+
+#include <stdio.h>
+int main(void)
+{
+  printf("Content-Type: text/plain \n\n");
+  printf("CGI C Example \n");
+}
+
+
+{process-data}
+HTML form that `submits` data to a CGI program
+
+<form action="http://www.example.com/cgi-bin/example.sh" method="get">
+Enter a username: <input type="text" name="username"></input><br>
+<input type="radio" name="whatToDo" value="remove" checked="checked">Value<br>
+<input type="radio" name="whatToDo" value="create">Create<br>
+<input type="submit" name="subbtn" value="Submit">
+<form> 
+
+Assuming the user entered "John Doe" into the text box and selected the
+"create" radio button. 
+
+CGI program sees the data submitted from this form, it sees something like
+this:
+
+username=John Doe
+whatToDo=create
+subbtn=Submit
+
+CGI program that does something with this data. Below is a simple Bash program
+that will tell the user what they entered:
+
+// cgi-bin/example.sh
+#!/bin/bash
+
+echo "Content-type: text/html"
+echo ""
+
+# replaces any occurances of %20 with a space, since when the form data is
+# transfered from the browser to the server, spaces are turned into %20 (so
+# "Hi there" becomes "Hi%20there"). 
+
+USERNAME=`echo "$QUERY_STRING" | sed -n 's/^.*username=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"
+WHATTODO=`echo "$QUERY_STRING" | sed -n 's/^.*whatToDo=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"
+echo "<html><head><title>What You Said</title></head>"
+echo "<body>Here's what you said:
+echo "You entered $USERNAME for username and wanted the action to be $ACTION.
+echo "</body></html>"
+
+
+Since the form uses the GET method to transmit data, the web server takes the
+data it receives from the form and puts it in an enviromental variable named
+`QUERY_STRING`. It then starts the CGI program referenced in the form, which is
+our Bash program.
+
+Script receives the form data as a set of name-value pairs. This set of
+name-value pairs is given to you as one long string, which you need to parse. 
+
+The long string is in one of these two formats:
+
+"name1=value1&name2=value2&name3=value3"
+"name1=value1;name2=value2;name3=value3" 
+
+So just split on the ampersands or semicolons, then on the equal signs. Then,
+   do two more things to each name and value:
+
+Convert all "+" characters to spaces, and
+Convert all "%xx" sequences to the single character whose ascii value is "xx",
+        in hex. For example, convert "%3d" to "=". 
+
+This is needed because the original long string is URL-encoded, to allow for
+equal signs, ampersands, and so forth in the user's input.
+
+So where do you get the long string? That depends on the HTTP method the form
+was submitted with:
+
+For GET submissions, it's in the environment variable QUERY_STRING.
+For POST submissions, read it from STDIN. The exact number of bytes to read is
+in the environment variable CONTENT_LENGTH. 
+
+
+{post-and-get}
+GET data is sent as part of the URL. You may notice when browsing URLs such as
+this nicely color-coded example: 
+
+http://www.example.com/cgi-bin/myProgram.sh?action=buy&item=Big%20Table&price=32.99&sub=Submit
+
+GET data is identified by a `?` after the CGI that will handle the data. The
+data is made up of the form form_element_name=value separated by ampersands
+(&). 
+
+In the example above, we see that an HTML form contained elements named
+"action", "item", "price", and "sub" and their values were "buy", "Big Table"
+, "32.99", and "Submit". 
+
+
+<nice-thing-about-get>
+One nice thing about GET data is that it doesn't necessarily have to come from
+an HTML form. Since it is simply part of a URL, you can create links to CGI
+scripts that accept GET data and simple pass the data you want to the program
+in the URL of the link, without having to create a form and have the user
+click "submit."
+
+For example, say I had a CGI program that displayed a page that showed either
+the date or time, depending on what something called "whatToShow" equaled. If
+"whatToShow" equals "date" it shows the date, if it equals "time" it shows the
+time. One way to access this CGI would be to create an HTML form and have the
+user submit this, as shown below:
+
+<form action="myprogram.sh" method="get">
+What do you want to do?<br>
+<input type="radio" name="whatToDo" value="date">Show the Date<br>
+<input type="radio" name="whatToDo" value="time">Show the Time<br>
+<input type="submit" name="submit" value="Go">
+</form>
+
+Alternatively, since GET data is just part of the URL, I could just create two
+links to the CGI, one for the date and one for the time, and get the same
+result, but with less typing and a different look:
+
+<a href="myprogram.sh?whatToDo=date">Show the Date</a><br>
+<a href="myprogram.sh?whatToDo=time">Show the Time</a>
+
+
+This trick is very useful for times when your CGI program only accepts some
+simple, predefined input that doesn't require a whole form to get, and you
+want the user to access the CGI by just clicking a link, instead of having to
+fill out and submit an entire form. 
+
+
+This trick is also useful for debugging CGIs that accept GET data: you can
+keep running them with different data without having to keep changing your
+HTML form; just change the URL to make the new data you want to submit your
+CGI. 
+
+
+<get-drawbacks>
+
+* It can only send a limited amount of data. URLs (and GET itself) are limited
+  in how long they can be, and this limits how much data GET can send.
+
+* The data sent in GET is clearly visible in the URL. While this is great for
+  debugging, it may be undesirable in the final product.
+
+* GET can't send any type of data. Its limited to regular characters. So, you
+  can't upload files with GET (it would be impracticable to do this given the
+  limit on the amount of data you can send with GET, anyway).
+
+
+Fortunately, an alternative to GET exists which solves most of these problems:
+POST. POST data is not sent as part of the URL. Instead, it is sent as its own
+separate stream. POST can send any type of data, can send any amount of data
+(no limitations of the amount of data like with GET), and the data isn't
+easily visible to the user in the URL. 
+
+For more to continue.
+http://www.team2053.org/docs/bashcgi/postdata.html
 
 
 ==============================================================================
