@@ -50,6 +50,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-mfs
 |kt_dev_si_0001| comp-msm
 |kt_dev_si_0001| comp-rmf
+|kt_dev_si_0001| comp-rmf-conclict
 |kt_dev_si_0001| comp-vrm
 |kt_dev_si_0001| comp-diag
 |kt_dev_si_0001| comp-mil
@@ -72,7 +73,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-player
 |kt_dev_si_0001| comp-sharedplanner
 |kt_dev_si_0001| comp-planner
-|kt_dev_si_0001| comp-planner-conclict
 |kt_dev_si_0001| comp-uam
 |kt_dev_si_0001| comp-prefs
 |kt_dev_si_0001| comp-systemobject
@@ -5023,6 +5023,225 @@ $ sed -n '1,69926p' LOGlast | egrep 'T:threadtracker:PlannerConflictType' | egre
 $ sed -n '1,69926p' LOGlast | egrep 'commitConflictResolution' | wc -l                                         
 179
 
+
+={============================================================================
+|kt_dev_si_0001| comp-rmf-conclict
+
+*si-jira* SI-10601
+
+"The reason of failure is No tuner Available and Technical fault - 10 (28)"
+
+To resolve the imminent tuner conflict in favor of going ahead with both
+recordings, picasso needs to tune away from the event it is currently tuned
+to.
+
+In order to determine what to tune to Picasso :
+
+1: Prioritizes the event it wishes to tune to (picks one of the recordings
+    channels according to business rules).
+
+2: Makes a call to middleware to retrieve a list of "Tuning Options", checks
+if the prioritized event is contained in the TuningOptions result set, and
+  tunes to it if it is.
+
+3: If the prioritized event is not contained in the result set then it tunes
+to the first event in the tuning options list.
+
+In the failure scenario, what we are seeing is that picasso fails to find it's
+`prioritized event` (one of the two recordings) in the `tuning options` result
+set. We then pick the `first event` from the tuning options and tune to that.
+In this failure scenario, It appears that this event is also not one of the
+recordings. This is what causes the failed recording.
+
+If the assumption is incorrect - then how can we ensure that both recordings
+are made ?
+
+the assumption made by EPG is `correct` i.e. TuningOptions will contain the
+recording event that `caused` the conflict. 
+
+
+<case>
+This is okay case when there is right options.
+
+???, UEFA           |
+136, records        | 
+                    | 133, failed record
+                    | 164, okay
+
+Seen|Rec |2016:06:16 22:28:00|2016:06:16 23:00:36|The Big Bang Theory                     | s1221|  136| 100|E4 HD        | rec x
+Book|Rec |2016:06:16 22:57:00|                   |Rick Stein's Food Heroes:...            |      |  133| 15 |Good Food HD | rec 1
+Seen|Rec |2016:06:16 23:00:04|2016:06:16 23:31:59|Bullseye                                | s1222|  164| 100|Challenge+1  | rec 0
+
+ 15: NO_TUNER_AVAILABLE
+ 28: UNKNOWN_ERROR
+
+// On ??? which is live. Gets conflict between 136 against 133 and 164.
+// "MOTD: UEFA Euro 2016 Highlights" is on and see conflict with 133 and 164
+
+^[2016:06:16 22:58:53]
+-EPG_CONF < M:ImminentTunerConflict F:retrieveSuccess L:243 > T:CEE-J EventQueue Reader 0:Subject created `for` -  MOTD: UEFA Euro 2016 Highlights
+-EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent Bullseye
+-EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent Rick Stein's Food Heroes:...
+ 
+// `first-conflict` from ???
+// EPG shows conflict dialog, choose 133, prioritizedEvent, and get tuning
+// options from MW 
+
+*rmf-conflict-dialog*
+-EPG_DLG < F:showDialog L:1400 > T:CEE-J EventQueue Reader 0:Showing dialog 1004
+
+^[2016:06:16 22:59:03]
+-EPG_CONF < M:ConflictTuner$1$1 F:run L:125 > T:PooledExecutor#2:prioritizedEvent guide service is Good Food HD, 133
+-EPG_CONF < M:ConflictResolver F:instructionEventReceived L:426 > T:PooledExecutor#1:*** INSTRUCTION EVENT ***
+
+-P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 0, tuning options service locator(URI) = locator:5:3:10EC 
+-P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 1, tuning options service locator(URI) = locator:5:3:FE3 
+-EPG_CONF < M:TuningOptions F:containsEvent L:30 > T:PooledExecutor#1:Found cached serviceLocator in tuning options list at (index = 1)
+
+// <rec-1> 133
+^[2016:06:16 22:59:54]
+-EPG_ME   < F:playService L:1485 > T:PooledExecutor#1:TUNING TO Good Food HD, 133 locator:5:3:FE3
+
+// <second-conflict> for 133 against 164 and 136
+
+-EPG_CONF < M:ChannelChangeConflict F:retrieveSuccess L:175 > T:CEE-J EventQueue Reader 0:Subject created for -  Rick Stein's Food Heroes:...
+-EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent Bullseye
+-EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent The Big Bang Theory
+-EPG_CONF < M:ChannelChangeConflict F:displayDialogOrAutoTune L:240 > T:CEE-J EventQueue Reader 0:Auto tuning
+
+// EPG gets options list returns one of the recording events. But one of them
+// is not a recording event(locator:5:3:FEC)
+
+-P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 0, tuning options service locator(URI) = locator:5:3:10EC 
+-P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 1, tuning options service locator(URI) = locator:5:3:FEC
+
+// <136>
+-EPG_ME   < M:MediaEngine F:playService L:1485 > T:PooledExecutor#4:TUNING TO E4 HD, 136 locator:5:3:FEC
+-EPG_ME   < M:MediaEngine F:channelChanged L:2027 > T:PooledExecutor#0:CHANNEL CHANGED TO E4 HD, 136
+
+-EPG_CONF < M:ConflictResolver F:instructionEventReceived L:426 > T:PooledExecutor#3:*** INSTRUCTION EVENT ***
+-EPG_CONF < M:ConflictAuthorizer F:mapInterestingStatusValues L:237 > T:PooledExecutor#2:Conflict check complete - CONFLICT STATUS = OK
+
+
+<rmf-conflict-resolve-log>
+!MIL    -EPG_CONF     < M:EpgConflict F:commitResolution L:205 > 
+  T:PooledExecutor#0:Committing resolution type 3
+
+
+We have analysed the logs so far. The current understanding is as follows
+
+LIVE      |
+REC0      | overrun by 8 seconds..
+          | REC1 | REC3
+          | REC2 | REC4
+
+    `get-first-conflit`
+
+    We have LIVE and recording (REC0) ongoing till the time of conflict, and 2
+    more recordings set to start at the same time (REC1 and REC2)
+
+    Just before the new recordings start and imminent conflict is raised with
+    REC1 and REC2 in suggestion list
+
+    No action is taken and at the time of actual conflict we have REC0
+    overrunning by about 8 seconds
+
+    EPG decides to tune to one of the recording channels (REC1)
+
+    EPG queries MW for tuning options which returns REC0 and REC2, which means
+    the EPG would chose one of these two. EPG makes choice to tune to REC0
+
+    "EPG resolve the first conflict (imminent tuner) in favor of making the
+     two new recordings by attempting to tune to one of them."
+
+    "The epg prioritizes the event to tune to here and we end up tuning to the
+    event which has overrun - which means one of the other recordings will
+    correctly not go ahead.
+    
+    When there is no user intervention via the conflict dialog, the default
+    behavior in R-11 is now to continue to record the over-run recording."
+
+    `get-second-conflict`
+
+    On channel change we get a channel-change conflict as REC1 and REC2 are
+    about to start, tuning to REC0 channel would cause conflict
+
+    The conflict is notified to EPG
+
+    `no channel change from EPG`
+
+    There is no action taken on this conflict as LIVE channel never changes
+
+    "This is standard behavior for the EPG perspective when a dialog times out
+    on a channel change conflict."
+
+    note:
+    Due to overrun event, no live changes from EPG and therefore record
+    failing is expected under current EPG design.
+
+    This results in REC1 failure and REC2 continues. 
+    
+    note:
+    Difference on R11.
+
+    "As stated at the beginning of this comment, in R-10, prior to the EPG
+    changes to retrieve/check against the tuning options - we would have
+    `blindly` tuned to REC1 in this scenario.  This would have resulted in the
+    recordings being successful on REC1 and REC2 - but we would have lost the
+    over-run portion of the recording. These changes were introduced to
+    address an issue whereby the EPG ended up locked out of one tuner
+    completely so the changes are necessary.
+
+    For more why EPG can lockup the tuner from R10:
+    https://www.stb.bskyb.com/jira/browse/SCR-12659
+    
+
+    note:
+    Up to this this explains NO_TUNER_AVAILABLE on failed records and
+    contiunes on "28: UNKNOWN_ERROR"
+
+    REC3 and REC4 are set to
+    start when REC2 finishes and should cause a conflict with LIVE. However,
+    there is no raised conflict
+
+    note:
+    Question is why MW not raise conflict on REC3 and REC4?
+
+    It appears that since channel-change conflict was never resolved MW is not
+    going to raise another conflict.
+
+
+On why MW not raise conflict?
+
+RMF state machine maintains a `protector state` variable, only when this is
+set to `enable`, it raises a conflict.
+
+By default, on a channel change this is set to Enable, but this will be set to
+Disable when an Imminent tuner conflict is resolved.
+
+In most of the cases the recordings are successful because on an imminent
+tuner conflict, EPG tunes away from the current Live channel.
+
+In the failure case, although it initiates a Tune to GOLD, but the tune
+request is not completed as RMF raises a channel change conflict. EPG resolves
+the channel change conflict by staying back on the same channel. This means
+protector state variable is Disable and no conflict will be raised until a
+channel change is performed. 
+
+EPG:
+The current behaviour for a channel-change conflict dialog time-out is to "to
+cancel the new channel change to resolve the conflict". 
+ 
+When the channel-change dialog times out, Picasso calls mw to resolve the
+conflict by:
+PLANNER_API_Conflict_CommitConflictResolution(PLANNER_API_CONFLICT_RESOLUTION_CANCEL);
+
+PLANNER_API_CONFLICT_RESOLUTION_CANCEL
+
+means "cancel the new channel change to resolve the conflict." according to
+the planner header file.
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-vrm
 
@@ -8229,7 +8448,9 @@ have to ReleaseElement after this call.
 
 
 <vtable-dump>
-// not defined by default
+note:
+1. not defined by default
+2. not useful to pair up where it's created and released.
 
 #ifdef PLAYER_VTABLE_LEAK_DETECTION
 #ifdef PLAYER_DUMP_VTABLES
@@ -8239,7 +8460,6 @@ static void PLAYER_DumpVtables(void)
   // uses vtable pointer for each vtable
   // static void PLAYER_VTABLE_DumpTable(const PLAYER_VTable_t* vtable)
 
-  // note: print out details where node is allocated?
   PLAYER_VTABLE_DumpTable(&(g_player_component.list_array));
   {
     PLAYER_VTNode_t     *curNode = NULL;
@@ -8263,9 +8483,8 @@ static void PLAYER_DumpVtables(void)
 }
 
 This prints out all nodes in the vtable with filename where it's created:
-where PLAYER_VTABLE_Create() is called.
+where CreateNode() is called.
 
-note:
 For session, there can be as many as sessions which APP can create.
 
 F:PLAYER_DumpVtables L:1428 > sessions 
@@ -11262,205 +11481,6 @@ PLANNER_API_Disk_GetDiskQuotaStatus
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-planner-conclict
-
-SI-10601
-
-The reason of failure is No tuner Available and Technical fault - 10 (28)
-
-To resolve the imminent tuner conflict in favor of going ahead with both
-recordings, picasso needs to tune away from the event it is currently tuned
-to.
-
-In order to determine what to tune to Picasso :
-
-1: Prioritizes the event it wishes to tune to (picks one of the recordings
-    channels according to business rules).
-
-2: Makes a call to middleware to retrieve a list of "Tuning Options", checks
-if the prioritized event is contained in the TuningOptions result set, and
-  tunes to it if it is.
-
-3: If the prioritized event is not contained in the result set then it tunes
-to the first event in the tuning options list.
-
-In the failure scenario, what we are seeing is that picasso fails to find it's
-prioritized event (one of the two recordings) in the tuning options result
-set. We then pick the first event from the tuning options and tune to that.
-In this failure scenario, It appears that this event is also not one of the
-recordings. This is what causes the failed recording.
-
-Question for Middleware :
-
-Picasso makes the assumption that the TuningOptions should always contain one
-of the events that has caused the conflict in the first place. In this case
-one of the recordings. Is this assumption correct? If not, then there must be
-a bug here in the resultset returned by m/w.
-
-If the assumption is incorrect - then how can we ensure that both recordings
-are made ?
-
-the assumption made by EPG is `correct` i.e. TuningOptions will contain the
-recording event that `caused` the conflict. 
-
-
-<case>
-This is okay case when there is right options.
-
-???, UEFA           |
-136, records        | 
-                    | 133, failed record
-                    | 164, okay
-
-Seen|Rec |2016:06:16 22:28:00|2016:06:16 23:00:36|The Big Bang Theory                     | s1221|  136| 100|E4 HD        | rec x
-Book|Rec |2016:06:16 22:57:00|                   |Rick Stein's Food Heroes:...            |      |  133| 15 |Good Food HD | rec 1
-Seen|Rec |2016:06:16 23:00:04|2016:06:16 23:31:59|Bullseye                                | s1222|  164| 100|Challenge+1  | rec 0
-
- 15: NO_TUNER_AVAILABLE
- 28: UNKNOWN_ERROR
-
-// <xxx>  for xxx against 133 and 164
-// "MOTD: UEFA Euro 2016 Highlights" is on and see conflict with 133 and 164
-
-^[2016:06:16 22:58:53]
--EPG_CONF < M:ImminentTunerConflict F:retrieveSuccess L:243 > T:CEE-J EventQueue Reader 0:Subject created `for` -  MOTD: UEFA Euro 2016 Highlights
--EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent Bullseye
--EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent Rick Stein's Food Heroes:...
- 
-// <first-conflict>
-// EPG shows conflict dialog, choose 133, prioritizedEvent, and get options
-// from MW 
-
--EPG_DLG < F:showDialog L:1400 > T:CEE-J EventQueue Reader 0:Showing dialog 1004
-
-^[2016:06:16 22:59:03]
--EPG_CONF < M:ConflictTuner$1$1 F:run L:125 > T:PooledExecutor#2:prioritizedEvent guide service is Good Food HD, 133
--EPG_CONF < M:ConflictResolver F:instructionEventReceived L:426 > T:PooledExecutor#1:*** INSTRUCTION EVENT ***
-
--P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 0, tuning options service locator(URI) = locator:5:3:10EC 
--P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 1, tuning options service locator(URI) = locator:5:3:FE3 
--EPG_CONF < M:TuningOptions F:containsEvent L:30 > T:PooledExecutor#1:Found cached serviceLocator in tuning options list at (index = 1)
-
-// <133>
-^[2016:06:16 22:59:54]
--EPG_ME   < F:playService L:1485 > T:PooledExecutor#1:TUNING TO Good Food HD, 133 locator:5:3:FE3
-
-// <second-conflict> for 133 against 164 and 136
-
--EPG_CONF < M:ChannelChangeConflict F:retrieveSuccess L:175 > T:CEE-J EventQueue Reader 0:Subject created for -  Rick Stein's Food Heroes:...
--EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent Bullseye
--EPG_CONF < M:EpgConflict F:getConflictEvent L:193 > T:CEE-J EventQueue Reader 0:Created ConflictEvent The Big Bang Theory
--EPG_CONF < M:ChannelChangeConflict F:displayDialogOrAutoTune L:240 > T:CEE-J EventQueue Reader 0:Auto tuning
-
-// EPG gets options list returns one of the recording events. But one of them is not a recording event(locator:5:3:FEC)
-
--P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 0, tuning options service locator(URI) = locator:5:3:10EC 
--P_Api    < F:PLAYER_API_Session_CreateLiveTuningOptionsList L:8774 > SI_BUILD_TEST: i = 1, tuning options service locator(URI) = locator:5:3:FEC
-
-// <136>
--EPG_ME   < M:MediaEngine F:playService L:1485 > T:PooledExecutor#4:TUNING TO E4 HD, 136 locator:5:3:FEC
--EPG_ME   < M:MediaEngine F:channelChanged L:2027 > T:PooledExecutor#0:CHANNEL CHANGED TO E4 HD, 136
-
--EPG_CONF < M:ConflictResolver F:instructionEventReceived L:426 > T:PooledExecutor#3:*** INSTRUCTION EVENT ***
--EPG_CONF < M:ConflictAuthorizer F:mapInterestingStatusValues L:237 > T:PooledExecutor#2:Conflict check complete - CONFLICT STATUS = OK
-
-
-The response from EPG team:
-
-  " 2: Regarding these latest logs,  the reason we have a failed recording is
-  due to the event overrun on an event which we are recording. The behavior is
-  correct here.
-
-  We resolve the first conflict (imminent tuner) in favor of making the two
-  new recordings by attempting to tune to one of them.
-
-  Because of the event overrun, This tune further generates a channel change
-  conflict.
-
-  The epg prioritizes the event to tune to here and we end up tuning to the
-  event which has overrun - which means one of the other recordings will
-  correctly not go ahead.
-
-  In real time, the user could have chosen to resolve the channel change
-  conflict in favor of cancelling the event overrun recording."
-
-So the change in behavior here from R-10 to R-11 is that in this scenario,
-when there is no user intervention via the conflict dialog, the default
-behavior in R-11 is now to continue to record the over-run recording. 
-
-
-<ex>
-Scenario setup :
-                          6:00
-130, tuned to and records  |
-111, records               | but somwhow overruns..
-                           | 152, records starts from 6
-                           | 121, records starts from 6
-
-Walk-through of the scenario :
-
-EPG is notified of an Imminent Tuner Conflict in respect of recordings about
-to start on channel number 152 and 121.  EPG prioritizes 152 as the event it
-will try to tune to when the instruction event arrives.
-
-The `instruction` event arrives and EPG retrieves the mw's List of tuning
-options from which it will try to find an entry that `matches` its prioritized
-event (152). On the list of tuning options are `111` and 121. 111 would NOT
-normally be on the list in this scenario but we can see that the event on 111
-has slightly overrun - so presumably that's why it's on the list -_ please
-check this with Middleware_
-
-Because we find that 152 is not on the list we go down the fail-safe path of
-tuning to the first item on a freshly retrieved tuning options list.  This new
-fetch of the tuning options interestingly this time does have 152 on its list
-as the overrun event on 111 has just completed - time is 6:00:07.  (It's just
-    a coincidence in this scenario that 152 is on the list the second time we
-    fetch it as once an event over-runs there is no guarantee on when it will
-    finish - therefore no guarantee that a recording which is currently
-    attempting to start (our prioritized event) will be on the list.)
-
-So we pick the first item on the list which is 121 and attempt to tune to this.
-
-There is a further complication here in that a skevt update has occurred and
-we are re-retrieving our service list at this point so we cannot complete the
-tune.  Again this is default current behavior in the EPG. If at any point
-during the lifecycle of the EPG - we discover that we do not have a service
-list (because of a skevt update) while attempting to tune then the tune cannot
-go ahead - it is simply ignored.
-
-note: this explains that hppends no tuning to 152.
-
-So the result of all this is that 
-
-the EPG hasn't tuned anywhere and we continue to be tuned to/viewing 130 
-the over-run event on 111 finishes out its recording.
-
-When the overrun event concludes thereby freeing up its tuner - middleware
-then auto-starts the recording on 121.
-
-The result of this whole scenario is : A part rec on 121, A full recording of
-the overrun event on 111, A failed recording on 152.
-
-note: why 152 failed?
-
-Don't think there is any other course of action that could have taken place
-here from an EPG perspective.
-
-As stated at the beginning of this comment, in R-10, prior to the EPG changes
-to retrieve/check against the tuning options - we would have `blindly` tuned
-to 152 in this scenario.  This would have resulted in the recordings being
-successful on 152 and 121 - but we would have lost the over-run portion of the
-recording on 111. These changes were introduced to address an issue whereby
-the EPG ended up locked out of one tuner completely so the changes are
-necessary.
-
-
-<conflict-resolve>
-!MIL    -EPG_CONF     < M:EpgConflict F:commitResolution L:205 > 
-  T:PooledExecutor#0:Committing resolution type 3
-
-
-={============================================================================
 |kt_dev_si_0001| comp-uam
 
 #-----------------------------------------------------------
@@ -13712,7 +13732,11 @@ NDS: ^[2012:12:20 19:12:54]0947290612.020435 !MIL    -EPG_FS                    
 logger.logMilestone("DISPLAYING NSS DIALOG WITH CODE " + dialogCode);
 #
 
-<dialog>
+
+<rmf-conflict-dialog>
+
+	int CURRENT_VIEWING_CONFLICT_ID                                          = 1004;
+
 !MIL    -EPG_DLG      < M:DialogManager F:showDialog L:1400 > 
   T:CEE-J EventQueue Reader 0:Showing dialog 1004
 
