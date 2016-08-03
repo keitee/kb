@@ -93,55 +93,63 @@ http://theyard.cisco.com/si_logs/translation/darwin_0019fbb71c47_c4130c208206b80
 http://theyard.cisco.com/si_logs/translation/darwin_0019fbb71bb1_d23afbe329e75a1d9bcabc233373d398/index.html
 
 
-PLAYER_VTABLE_FindElement()
+PLAYER_VTABLE_FindElement(const PLAYER_VTable_t* vtable, PLAYER_VTABLE_CheckElementFunc check, void *data, void **el, uint32_t *handle)
+{
+  if (SYSTEM_STATUS_IS_OK (SYSTEMUTIL_THR_MutexLock(vtable->mutex)))
+  {
+    isMutexLocked = true;
 
-        if (SYSTEM_STATUS_IS_OK (SYSTEMUTIL_THR_MutexLock(vtable->mutex)))
+    /* Double check that VTABLE hasnt been terminated */
+    if (IS_VTABLE_INIT(vtable))
+    {
+      curNode = GetNextNode(vtable, curNode);
+
+      while ((curNode != NULL) && (stopVtableTraverse != true))           ----------------------
+      {
+        curNode->refCount++;
+
+        (void) SYSTEMUTIL_THR_MutexUnlock(vtable->mutex);                     // }}
+          isMutexLocked = false;
+
+        // if found a node, then set flag which causes to exit a loop
+
+        if (check(curNode->elPointer, data))
         {
+          *el = curNode->elPointer;
+          *handle = curNode->handle;
+
+          retVal = VTABLE_STATUS_SUCCESS;
+          stopVtableTraverse = true;
+        }
+
+        // if not found, move to a next node
+        else
+        {
+          if (SYSTEM_STATUS_IS_OK (SYSTEMUTIL_THR_MutexLock(vtable->mutex)))  // {{
+          {
             isMutexLocked = true;
 
             /* Double check that VTABLE hasnt been terminated */
             if (IS_VTABLE_INIT(vtable))
             {
-                curNode = GetNextNode(vtable, curNode);
+              nextNode = GetNextNode(vtable, curNode);
 
-                while ((curNode != NULL) && (stopVtableTraverse != true))           ----------------------
-                {
-                    curNode->refCount++;
+              if (--(curNode->refCount) <= 0U)
+              {
+                (void) DelNode((PLAYER_VTable_t*)vtable, curNode);
+              }
 
-                    (void) SYSTEMUTIL_THR_MutexUnlock(vtable->mutex);               ----------------------
-                    isMutexLocked = false;
-
-                    if (check(curNode->elPointer, data))
-                    {
-                        *el = curNode->elPointer;
-                        *handle = curNode->handle;
-
-                        retVal = VTABLE_STATUS_SUCCESS;
-                        stopVtableTraverse = true;
-                    }
-                    else
-                    {
-                        if (SYSTEM_STATUS_IS_OK (SYSTEMUTIL_THR_MutexLock(vtable->mutex))) ---------------
-                        {
-                            isMutexLocked = true;
-
-                            /* Double check that VTABLE hasnt been terminated */
-                            if (IS_VTABLE_INIT(vtable))
-                            {
-                                nextNode = GetNextNode(vtable, curNode);
-
-                                if (--(curNode->refCount) <= 0U)
-                                {
-                                    (void) DelNode((PLAYER_VTable_t*)vtable, curNode);
-                                }
-
-                                curNode = nextNode;
-                            }
-                        }
-                    }
-                } // while
+              curNode = nextNode;
             }
-        }
+          }
+        } // if
+
+      } // while
+    }
+  }
+
+  return;
+}
 
 
 ={============================================================================
