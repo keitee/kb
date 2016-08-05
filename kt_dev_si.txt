@@ -11,17 +11,18 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-box-setup-screen
 |kt_dev_si_0002| si-box-mount
 |kt_dev_si_0002| si-boot-start-mw
-|kt_dev_si_0002| si-bootlog
+|kt_dev_si_0002| si-boot-log
 |kt_dev_si_0002| si-git
 |kt_dev_si_0002| si-build
 |kt_dev_si_0002| si-build-ci
+|kt_dev_si_0002| si-build-ci-flipper
 |kt_dev_si_0002| si-build-make
 |kt_dev_si_0002| si-build-make-image
 |kt_dev_si_0002| si-build-jpa
 |kt_dev_si_0002| si-sh-theyard
 |kt_dev_si_0002| si-sh-check-log
 |kt_dev_si_0002| si-sh-to-dates
-|kt_dev_si_0002| si-sh-test_log
+|kt_dev_si_0002| si-sh-test-log
 |kt_dev_si_0002| si-sh-alog
 |kt_dev_si_0002| si-sh-list-log
 |kt_dev_si_0002| si-sh-convert-logs
@@ -111,7 +112,6 @@ http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FBF2D46B | W.O.M.B.A
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FB63D645 | W.O.M.B.A.T | BOX 45
 http://hetty.cisco.com/fusionmadesimple/index.php/Log_Parser | FMS | Log Parser
 http://hetty.cisco.com/fusionmadesimple/index.php/FillDisk | FMS | FillDisk
-http://hetty.cisco.com/fusionmadesimple/index.php/Flipper_SI_scripts | FMS | Flipper SI scripts
 https://docs.cisco.com/share/page/site/nextgen-edcs/document-details?nodeRef=workspace://SpacesStore/df081074-9288-4b35-af48-34fe45cce120 | CEC | Doc Central » Document Details
 http://wwwin-tools.cisco.com/dir/details/kyoupark | CEC | Directory | Kyoungtaek Park
 https://www.stb.bskyb.com/confluence/display/Relmgmt/Release+Management | SKY | Release Management
@@ -128,6 +128,7 @@ http://theyard.cisco.com/missing/checklog.php?log=1f047ae19daf49d912235e7d884ee5
 http://blogs.atlassian.com/wp-content/uploads/HelloWorldEbook.pdf?utm_source=newsletter&utm_medium=email&utm_campaign=jira-insiders-newsletter_july | HelloWorldEbook.pdf
 https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Storage_Administration_Guide/ch-nfs.html | Chapter 9. Network File System (NFS)
 
+http://hetty.cisco.com/fusionmadesimple/index.php/Flipper_SI_scripts | FMS | Flipper SI scripts
 
 http://10.209.56.204/cgi-bin/t.sh | Compare Build Folders
 http://engci-maven.cisco.com/artifactory/STB_BIN-repo/third_party/BSKYB_JTH/ | Index of STB_BIN-repo/third_party/BSKYB_JTH
@@ -584,8 +585,8 @@ path=upload
 tar -c \
   "${BLOG_DATAPATH}"/UPLOAD.LOG \
   "$logdir"/LOG \
-  "$logdir"/*.LOG \			# previous binary DIAG log
-  "$logdir"/*.CUR \ 		# current binary DIAG log
+  "$logdir"/*.LOG \   # previous binary DIAG log
+  "$logdir"/*.CUR \   # current binary DIAG log
   "$logdir"/*.TXT \
   "$logdir"/MFS.DB \
   "$logdir"/PCAT.DB \
@@ -602,14 +603,37 @@ tar -c \
 # 
 cut -c1-2,4-5,7-8,10-11,13-14,16-17 </sys/class/net/eth0/address
 
+# Send the tarball
+if [ "$use_ftp" = "ftp" ] ; then
+  echo "BLL:bootlog-upload.sh: MILESTONE Send Tarball by FTP: ${srcfile} to ${destfile}"  >> "${BLLFILENAME}"
+  echo "67#        Uploading logs via FTP on ${interface}." >> "${UPLOAD_SCREEN_UPDATE}"
+  echo "Uploading to ftp://$user@$host/$destfile"
+  ftpput -u "$user" -p "$pass" "$host" "$destfile" "$srcfile" || exit $?
+  echo "BLL:bootlog-upload.sh: MILESTONE Upload complete"  >> "${BLLFILENAME}"
+  echo "ftp://$user@$host/$destfile" >"$logdir"/UPLOAD.URL
+elif [ "$use_ftp" = "http" ] ; then
+  # name of the file to be httpsend does not matter.Could be anything.
+  # The way the naming of the upload file works is: generate the file,any name (UPLOAD) --> using md5sum generate the name and for records store in UPLOAD.URL
+  # --> Upload the file, any name (UPLOAD)  --> in httpsend sky renames it as "2014-07-08_14-08-21_00:19:fb:f1:71:d8_10.10.8.54.tgz" --> On theyard, it regenerates the md5 sum name
+  echo "BLL:bootlog-upload.sh: MILESTONE Upload via HTTP on $interface , srcfile: ${srcfile}, md5name: $md5name"  >> "${BLLFILENAME}"
+  echo "67#        Uploading logs via HTTP on ${interface}." >> "${UPLOAD_SCREEN_UPDATE}"
+  /sbin/httpsend "$macaddr" "$srcfile" || exit $?
+  echo "$md5name" >"$logdir"/UPLOAD.URL
+  echo "BLL:bootlog-upload.sh: MILESTONE Delete compressed and zipped UPLOAD file: ${srcfile}"  >> "${BLLFILENAME}"
+  rm "$srcfile" || exit $?
+fi
+echo "BLL:bootlog-upload.sh: MILESTONE Upload finished"  >> "${BLLFILENAME}"
+
+
 # [crash-monitor.sh]
 # Set core dump location and format
 echo '/tmp/%p.COR' >/proc/sys/kernel/core_pattern
 
-# The crash monitor is a process which runs in the background checking for core dumps and then copying them to the disk when they appear. 
-# The core dumps are written to /tmp/<pid>.COR by the kernel. The crash monitor copies these to /FSN_DATA/. 
-# Looking at the date of the core files may give you a clue as to when a crash occurred. 
-
+# The crash monitor is a process which runs in the background checking for
+# core dumps and then copying them to the disk when they appear.  The core
+# dumps are written to /tmp/<pid>.COR by the kernel. The crash monitor copies
+# these to /FSN_DATA/.  Looking at the date of the core files may give you a
+# clue as to when a crash occurred. 
 
 
 ={============================================================================
@@ -814,6 +838,14 @@ make[2]: *** Waiting for unfinished jobs....
 
 
 cc1: warnings being treated as errors
+
+
+={============================================================================
+|kt_dev_si_0002| si-build-ci-flipper
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Flipper_SI_scripts
+
+Make a compilation in one go
 
 
 ={============================================================================
@@ -1432,7 +1464,6 @@ LOCALUSER=si_logs
 ...
 
 
-
 ={============================================================================
 |kt_dev_si_0002| si-sh-check-log
 
@@ -1482,7 +1513,29 @@ check_log darwin_0019fb0bad0c_f6b90f0bd7dd874e65817e34fea126af.tgz
 
 tar -cjvf ~/ktpark/SI-4453.bz2 .
 
-<ex>
+<sh>
+declare -ar list=(
+    darwin_0019fbd18c9a_487032cd821312aea3b11274c2ff7384
+    darwin_0019fbb71c47_c4130c208206b80b3963ee05c861b5c3
+    darwin_0019fbb71bb1_d23afbe329e75a1d9bcabc233373d398
+)
+
+for item in ${list[@]}; do echo ${item}; pushd ${item};egrep -anH "Leak de|Could not unravel" LOGlastrun_realtime;popd; done
+
+
+declare -ar list=(
+  0019fb2c562c
+  0019fb2c5624
+  0019fbc3572c
+  0019fbe9554c
+  0019fbd76222
+)
+
+for item in ${list[@]}; do echo ${item}; ssh thyard check_log ${item}; done
+
+
+<internal>
+
 [si_logs@theyard ~]$ check_log 85c768cdc006973f32b4e98c7c34d582
 Looking in /home/si_logs/mirrored/upload...
 ls: cannot access *85c768cdc006973f32b4e98c7c34d582*: No such file or directory
@@ -1507,29 +1560,6 @@ Done unpacking
 Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fb986706_85c768cdc006973f32b4e98c7c34d582/index.html
 If using sad-faced dog and auto-refresh doesn't work, try link above.
 
-
-<sh>
-declare -ar list=(
-    darwin_0019fbd18c9a_487032cd821312aea3b11274c2ff7384
-    darwin_0019fbb71c47_c4130c208206b80b3963ee05c861b5c3
-    darwin_0019fbb71bb1_d23afbe329e75a1d9bcabc233373d398
-)
-
-for item in ${list[@]}; do echo ${item}; pushd ${item};egrep -anH "Leak de|Could not unravel" LOGlastrun_realtime;popd; done
-
-
-declare -ar list=(
-  0019fb2c562c
-  0019fb2c5624
-  0019fbc3572c
-  0019fbe9554c
-  0019fbd76222
-)
-
-for item in ${list[@]}; do echo ${item}; ssh thyard check_log ${item}; done
-
-
-<internal>
 
 # use cfg file
 ++ CONFIGFILE=/home/si_logs/bin/.cfg
@@ -1624,8 +1654,10 @@ ssh -o ServerAliveInterval=10 -p 9199 si_logs@newyard.cisco.com build \
 Started USR_request_log #47724
 Completed USR_request_log #47724 : SUCCESS
 
-# looks like that runs command on newyard, copy files from newyard to
+# runs command on newyard, copy files from newyard to
 # /local/storage/translated_receive.
+#
+# note: the .lzma file is one that already translated
 
 # [si_logs@theyard ~]$ ls /local/storage/translated_receive/
 # ...
@@ -1642,6 +1674,9 @@ Completed USR_request_log #47724 : SUCCESS
 # `process_translated`
 
 Looking for /local/storage/translated_receive/darwin_0019fb0f53b4_b558b7a71573867c0b68cb77bfb97e57.lzma...
+
+# note: run check_log 2nd
+
 Running check_log -dir darwin_0019fb0f53b4_b558b7a71573867c0b68cb77bfb97e57.tgz
 
     echo "Running check_log -dir ${OTHER}.tgz"
@@ -1676,7 +1711,7 @@ Found /home/si_logs/translation/darwin_0019fb0f53b4_b558b7a71573867c0b68cb77bfb9
         cat $F | unlzma - | tar xvf - > .lzma.out 2>&1
         echo "Done unpacking"
 
-# run check_log again
+# note: run check_log 3nd
 # check_log -update_detail ${OTHER}.tgz > .check_log.out 2>&1
 + check_log -update_detail darwin_0019fbd18c68_a3d4781b9564b2b3d59838ea196ce12f.tgz
 
@@ -1693,9 +1728,9 @@ Found /home/si_logs/translation/darwin_0019fb0f53b4_b558b7a71573867c0b68cb77bfb9
 # then
 #     FULLVER=`get version`
 #     MACHINE=`get platform`
-#     A=`get parser_result`     # gets parser_result
+#     A=`get parser_result`       # gets parser_result from .detailed_output
 
-++ write_results -update_only
+++ write_results -update_only   # updates .detailed_output
 #    echo "BestGuess (P1): $A" >> .summary
 
 ++ HTML=http://theyard.cisco.com/si_logs/translation/darwin_0019fbd18c68_a3d4781b9564b2b3d59838ea196ce12f/index.html
@@ -1758,7 +1793,7 @@ NDS: ^[18:21:23]0946685692.827540 !MIL   -aem          < p:00000065 t:010d3c40 T
 -
 
 ={============================================================================
-|kt_dev_si_0002| si-sh-test_log
+|kt_dev_si_0002| si-sh-test-log
 
 #-----------------------------------------------------------
 # test_log: logparser
@@ -10400,21 +10435,33 @@ PLAYER_API_AVControl_PlayTone
 in Picasso to not call moveToNextCACondition in the period between starting playback and getting a PlayerEventSessionStartImpl event 
 
 
-#-----------------------------------------------------------
-# SetBackgroundColour
-#-----------------------------------------------------------
-# player.cfg 
+{standby}
+
+*player-blue-screen*
+
+// player.cfg 
+
 [BACKGROUND_COLORS]
 DEFAULT_BLANCKING_COLOUR=0xFF0C0B4F # blue
 DEFAULT_UNBLANCKING_COLOUR=0x0
 
-# refer to "S 4: Handle Video Status" in darwin arch diagrams. UCM-292
-# Exit Standby [UCM-3154 ] / __Main [ UCM-3157 ] 
+note:
+refer to "S 4: Handle Video Status" in darwin arch diagrams. UCM-292
+Exit Standby [UCM-3154 ] / __Main [ UCM-3157 ] 
+FSION-DSN-1823-WP100 - Scart Control.doc
 
+!MIL   -AMS          < T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:80 > STANDBY_OUT event 
+!MIL   -EPG_TVVM     < M:SystemCommonObjectHandler F:requestProcessAction L:901 > T:PooledExecutor#4:ACTION_TUNE_AFTER_EXITING_STANDBY
 
-!MIL   -UAM          < T:UAM_HP_THREAD M:internal_pbag.c F:Internal_Pbag_Print L:00420 > UAM_DCM_PARAM_DATA_INTERNAL_TYPE_STANDBY_OUT
-!MIL   -EPG_INIT     < T:no name M:InitialisationManager F:moveToActive L:00643 > T:PooledExecutor#4:MOVING TO ACTIVE
+!WARN  -PREFS_SRV    < P:MW t:0x017a9520 T:PREFS_PTHREAD M:prefs_hdmi_cec.c F:PREFS_HDMI_CEC_Process_OneTouchPlay_StateMachine L:826 > OTP state machine started... Attempting to wake-up TV 
+!WARN  -PREFS_SRV    < P:MW t:0x017a9520 T:PREFS_PTHREAD M:prefs_hdmi_cec.c F:iterate_next_state L:739 > OneTouchPlay:  ONE_TOUCH_STATE_IDLE --> ONE_TOUCH_STATE_TV_WAKEUP_IMAGE | ONE_TOUCH_EVENT_TRIGGER_TV_WAKEUP[1] 
+
+!MIL   -EPG_INIT     < P:APP T:PREFS_PTHREAD M:PowerOperatingModes F:notifyOperatingMode L:301 > T:threadtracker: notifyOperatingMode of state : 2
+!MIL   -EPG_INIT     < T:PREFS_PTHREAD M:PowerOperatingModes F:setState L:230 > T:threadtracker:setState > ON
+!MIL   -EPG_INIT     < T:no name M:InitialisationManager$OperatingEventListener F:moveToActive L:2201 > T:PooledExecutor#3:MOVING TO ACTIVE
+
 !MIL   -JAE          < T:no name M:ceej_bsp.c F:ooBSP_write L:00803 > %%%%%%%  PICASSO ACTIVE STATE...    REACHED  %%%%%%%
+
 !MIL   -EPG_ME       < T:no name M:MediaEngine F:playService L:01347 > T:PooledExecutor#1:TUNING TO Sky Intro, 998
 !MIL   -P_Api        < T:no name M:player_api_session.c F:PLAYER_API_Session_Play L:03558 > PLAY
 !MIL   -VRMS         < T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:04182 > VRM_JOB_START: jtVRM=jb-live, jhVRM=0x3000001
@@ -10426,11 +10473,112 @@ DEFAULT_UNBLANCKING_COLOUR=0x0
 
 
 !MIL   -EPG_INIT     < T:no name M:InitialisationManager F:moveToStandby L:00680 > T:PooledExecutor#4:MOVING TO STANDBY
+!MIL   -JAE          < M:modules/jvm-glue/src/c/src/ceej_bsp.c F:ooBSP_write L:1359 > %%%%%%%  PICASSO STANDBY STATE...   REACHED  %%%%%%%
+!MIL   -AMS          < T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:76 > STANDBY_IN event 
 !MIL   -MPM          < T:MPM_ITCMAIN_THREAD M:mpm_component_audio.c F:MPMComponentAudioStopDecodingReal L:00878 > DECODER_STOPPED: hMC=0x3
 !MIL   -UAM          < T:UAM_HP_THREAD M:internal_pbag.c F:Internal_Pbag_Print L:00415 > UAM_DCM_PARAM_DATA_INTERNAL_TYPE_STANDBY_IN
 !MIL   -MCM          < T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Free L:00502 > @@PMON@@,trace,mediacon,mc-free,3
 !ERROR -P_Api        < T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:01316 > KT: l_back_color(-15987889)
 !MIL   -MCM          < T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:00569 > @@PMON@@,trace,mediacon,mc-destroy,3
+
+
+picasso/java/picasso/initialisationmanager/InitialisationManager.java
+
+	class OperatingEventListener implements IOperatingEventListener
+	{
+		@Override public void doOn(IKeyCode keyCode)
+		{
+			wakingup.wokenWithKey(keyCode);
+			moveToActive();
+		}
+		private void moveToActive()
+		{
+			LOGGER.logMilestone("MOVING TO ACTIVE");
+			disableKeyEvents();
+      }
+   }
+
+
+private final IOperatingEventListener   operatingEventListener  = new OperatingEventListener();
+
+	private void runStartupTask()
+	{
+		try
+		{
+			notifier.notify(new RebootNotification(theTime.timestampMS(), spmSystem.getWakeupCause(), spmSystem.getPassiveStandbySleepReason()));
+		}
+		catch (Exception e)
+		{
+			LOGGER.logMilestone("Failed to notify reboot reason" + e);
+		}
+		awtExecutor.runLater(new Runnable()
+		{
+			@Override public void run()
+			{
+				powerOperatingModesControl.setScartOperatingModeEventListener(operatingEventListener);
+            }
+      }
+   }
+
+
+picasso/java/picasso/initialisationmanager/PowerOperatingModes.java
+
+// See WP100 - Scart Control
+class PowerOperatingModes implements PrefsOperatingModeListener, IPowerKeyListener, IKeyListener
+{
+	public synchronized void setScartOperatingModeEventListener(IOperatingEventListener listener)
+	{
+		this.listener = listener;
+	}
+
+	class GoToActiveTask extends BaseTask
+	{
+
+		private final IKeyCode useKeyCode;
+
+		GoToActiveTask(int mode, IKeyCode useKeyCode)
+		{
+			super(mode);
+			Loggers.EPG_INIT.logMilestone("constructing GoToActiveTask");
+			this.useKeyCode = useKeyCode;
+		}
+
+		@Override public void run()
+		{
+			Affirm.affirmNotNull(listener);
+
+			notifyOperatingMode(mode); // this go notifyOperatingMode()
+			listener.doOn(useKeyCode);
+		}
+	}
+
+	@Override public synchronized void notifyOperatingMode(int operatingMode)
+	{
+		Loggers.EPG_INIT.logMilestone(" notifyOperatingMode of state : " + operatingMode);
+
+      // /**  The power LED is illuminated and all outputs are enabled. */
+      // int ON                 = 2;
+      
+      case PrefsTerminal.OperatingModes.ON:
+      case PrefsTerminal.OperatingModes.ON_2ND:
+      case PrefsTerminal.OperatingModes.TV:
+         /* logger.logInfo("Got ON state"); */
+         setState(ON);
+         break;
+   }
+
+	@Override public synchronized void doOn()
+	{
+		actionOperatingMode(OperatingModeEvents.ON, IKeyCode.POWER);
+
+	}
+
+	private void actionOperatingMode(int mode, IKeyCode keyCode)
+   {
+      task = new `GoToActiveTask`(mode, decider.useKeyCode);
+   }
+
+}
 
 
 #
