@@ -10449,6 +10449,7 @@ note:
 refer to "S 4: Handle Video Status" in darwin arch diagrams. UCM-292
 Exit Standby [UCM-3154 ] / __Main [ UCM-3157 ] 
 FSION-DSN-1823-WP100 - Scart Control.doc
+Scart Control UCM-11437
 
 !MIL   -AMS          < T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:80 > STANDBY_OUT event 
 
@@ -10610,6 +10611,19 @@ class PowerOperatingModes implements PrefsOperatingModeListener, IPowerKeyListen
 
 	private void actionOperatingMode(int mode, IKeyCode keyCode)
    {
+      // interface OperatingModeEvents
+      // {
+      //     /**  TV Button pressed on 1st location remote control. */
+      //     int TV                 = 1;
+      //     /**  TV Button pressed on 2nd location remote control. */
+      //     int TV_2ND             = 2;
+      //     /**  Sky, TV Guide, Box Office, Services or Interactive Button pressed on 1st location remote control. */
+      //     int SKY                = 3;
+      //     /**  Sky, TV Guide, Box Office, Services or Interactive Button pressed on 2nd location remote control. */
+      //     int SKY_2ND            = 4;
+      //     /**  On/Off Button pressed on 1st location remote control. */
+      //     int ON_OFF             = 5;
+      // }
       task = new `GoToActiveTask`(mode, decider.useKeyCode);
    }
 
@@ -10621,7 +10635,55 @@ class PowerOperatingModes implements PrefsOperatingModeListener, IPowerKeyListen
 
 operatingMode      32 jpa/modules/jpa-api/src/java/com/nds/fusion/prefs/PrefsOperatingModeListener.java      void notifyOperatingMode(int operatingMode);
 
+<send-event>
 
+sendOperatingModeEvent  541 picasso/java/picasso/initialisationmanager/PowerOperatingModes.java                         
+  prefsTerminal.sendOperatingModeEvent(mode);
+
+// jpa/modules/jpa-api/src/java/com/nds/fusion/prefs/PrefsTerminal.java
+
+    /**
+     * Sends an operating mode to the terminal triggered by a user action
+     * @param operatingModeEvent
+     * {@link PrefsTerminal.OperatingModes} event.
+     */
+    void sendOperatingModeEvent(int operatingModeEvent);
+
+
+// jpa/modules/jpa-impl/src/c/src/natPrefsTerminalImpl.c
+
+JNIEXPORT void JNICALL Java_com_nds_fusion_prefsimpl_PrefsTerminalImpl_natPrefsApiTerminalSendOperatingModeEvent
+  (JNIEnv *env, jclass jClass, jint param1, jint param2)
+{
+    PREFS_API_TerminalHandle terminalHandle     = (PREFS_API_TerminalHandle)param1;
+    PREFS_API_TERMINAL_OperatingModeEvent event = (PREFS_API_TERMINAL_OperatingModeEvent)param2;
+    SYSTEM_STATUS status                        = PREFS_API_STATUS_FAILURE;
+
+    JPA_DIAG_DECLARE_FUNCTION;
+    DIAG_LOG_FN_ENTRY(g_prefs_adaptor_api_diag_segment_id);
+
+    status = PREFS_API_TERMINAL_SendOperatingModeEvent(terminalHandle, event);
+
+    (void)PREFS_JAVA_ParseReturn(env, status);
+
+    DIAG_LOG_FN_EXIT(g_prefs_adaptor_api_diag_segment_id, status);
+}
+
+/** @brief Send an operating mode event to the TERMINAL interface.
+  *
+  * @param[in] terminal_handle The handle for this terminal object
+  * @param[out] operating_mode_event Event that `has to be notified`
+  *
+  * @return PREFS_API_STATUS_OK on success.
+  * @return PREFS_API_STATUS_FAILURE in case of error.
+  */
+SYSTEM_STATUS PREFS_API_TERMINAL_SendOperatingModeEvent(
+    PREFS_API_TerminalHandle terminal_handle, PREFS_API_TERMINAL_OperatingModeEvent operating_mode_event)
+{
+
+}
+
+<callback>
 // jpa/modules/jpa-api/src/java/com/nds/fusion/prefs/PrefsOperatingModeListener.java
 
 /** Listener for notifications of operating modes
@@ -10633,10 +10695,10 @@ operatingMode      32 jpa/modules/jpa-api/src/java/com/nds/fusion/prefs/PrefsOpe
 * </p>
 */
 
-
 // jpa/modules/jpa-impl/src/java/com/nds/fusion/prefsimpl/PrefsTerminalImpl.java
+
 	/**
-	 * Registers a listener which is called whenever an operating mode changes.
+	 * Registers a listener which is called `whenever an operating mode changes`
 	 *
 	 * @param operatingModeListener An instance of a {@link com.nds.fusion.prefs.PrefsOperatingModeListener} object.
 	 * @return None.
@@ -10668,8 +10730,16 @@ JNIEXPORT void JNICALL Java_com_nds_fusion_prefsimpl_PrefsTerminalImpl_natPrefsA
 }
 
 
+// DARWIN_PLATFORM/DARWIN_PREFS/src/client/prefs_api_terminal.c
 // MW calls a callback directly
 
+/** @brief Calls all the registered listener of a specified terminal handle.
+  *
+  * @param[in] terminal_handle the terminal handle
+  * @param[in] mode it's the operating mode `coming from the server`
+  * @param[in] auto_reply specifies if only the listener that belongs to the specified terminal handle has to be
+  *            called or if all the listeners have to be called.
+  */
 void PREFS_TERMINAL_callOperatingModeListeners(PREFS_API_TerminalHandle terminal_handle,
                                                PREFS_API_TERMINAL_OperatingMode mode,
                                                bool auto_reply)
@@ -10677,22 +10747,7 @@ void PREFS_TERMINAL_callOperatingModeListeners(PREFS_API_TerminalHandle terminal
   f_PREFS_API_RegisterOperatingModeListeners[i].listener(mode, f_PREFS_API_RegisterOperatingModeListeners[i].user_tag);
 }
 
-JNIEXPORT void JNICALL Java_com_nds_fusion_prefsimpl_PrefsTerminalImpl_natPrefsApiTerminalSendOperatingModeEvent
-  (JNIEnv *env, jclass jClass, jint param1, jint param2)
-{
-    PREFS_API_TerminalHandle terminalHandle     = (PREFS_API_TerminalHandle)param1;
-    PREFS_API_TERMINAL_OperatingModeEvent event = (PREFS_API_TERMINAL_OperatingModeEvent)param2;
-    SYSTEM_STATUS status                        = PREFS_API_STATUS_FAILURE;
 
-    JPA_DIAG_DECLARE_FUNCTION;
-    DIAG_LOG_FN_ENTRY(g_prefs_adaptor_api_diag_segment_id);
-
-    status = PREFS_API_TERMINAL_SendOperatingModeEvent(terminalHandle, event);
-
-    (void)PREFS_JAVA_ParseReturn(env, status);
-
-    DIAG_LOG_FN_EXIT(g_prefs_adaptor_api_diag_segment_id, status);
-}
 
 
 UamMainRegisterToPrefs
@@ -14866,6 +14921,29 @@ logger.logMilestone("DISPLAYING NSS DIALOG WITH CODE " + dialogCode);
 
 !MIL    -EPG_DLG      < M:DialogManager F:showDialog L:1400 > 
   T:CEE-J EventQueue Reader 0:Showing dialog 1004
+
+
+={============================================================================
+|kt_dev_si_0001| comp-http
+
+<HTTP_POOL>  
+
+#define prvHTTP_MEMMAN_Malloc(size) \
+    MEMMAN_API_AllocStaticP(httpMemmanHandle, (uint32_t)size)
+
+#define SYSCONFIG_HTTP_POOL_PREFIX                  "HTTP_POOL"
+
+// Looks likes that it add MW/APP to the pool name.
+
+MW_MW_HTTP_POOL
+
+
+        /* Initialize main pool */
+        if (SYSTEMUTIL_THR_CreateMemoryPool(&httpMemmanHandle,
+                                            SYSCONFIG_HTTP_FILENAME, 
+                                            SYSCONFIG_HTTP_POOL_PREFIX, 
+                                            true)
+                                            != SYSTEMUTIL_STATUS_OK)
 
 
 ==============================================================================
