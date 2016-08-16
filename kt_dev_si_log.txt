@@ -97,6 +97,8 @@ STB 1
 http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2a5ef_09b20a3801c2037b91837a28a9752a27/membuster_report/MW_MW_HTTP_POOL.html
 
 <1>
+
+
 size=10817 (7c8db8 7a6c54 `7b1a78` 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e91518 ) [616dbc3c]
 1270:allocs:373
 
@@ -141,57 +143,6 @@ libcurl_portage.c:35
 Curl_cookie_add
 cookie.c:436 ~
 
-// struct Cookie {
-//   struct Cookie *next; /* next in the chain */
-//   char *name;        /* <this> = value */
-//   char *value;       /* name = <this> */
-//   char *path;         /* path = <this> */
-//   char *domain;      /* domain = <this> */
-//   ...
-// };
-//
-// struct Cookie *
-// Curl_cookie_add(struct SessionHandle *data,...)
-// {
-//   struct Cookie *co;
-// 
-//           co->name = strdup(name);
-//           co->value = strdup(whatptr);
-// 
-// /* now, we have parsed the incoming line, we must now check if this
-// superceeds an already existing cookie, which it may if the previous have
-// the same domain and path as this */
-//
-//
-// Q: What if a cookie is not in the list? Not freed and have to handle it in
-// the call site?
-//
-// clist = c->cookies;
-// replace_old = FALSE;
-// while(clist) {
-//
-//     if(replace_old) {
-//       co->next = clist->next; /* get the next-pointer first */
-//
-//       /* then free all the old pointers */
-//       free(clist->name);
-//       ...
-//
-//       *clist = *co;  /* then store all the new data */
-//
-//       free(co);   /* free the newly alloced memory */
-//       co = clist; /* point to the previous struct instead */
-//
-//     }
-//   clist = clist->next;
-// }
-// 
-//   c->numcookies++; /* one more cookie in the jar */
-//   return co;
-// }
-
-
-
 Curl_http_readwrite_headers
 *http.c:3711*
 
@@ -201,6 +152,167 @@ Transfer
 transfer.c:1479
 curl_easy_perform
 easy.c:552
+
+5952:NDS: ^[2016:08:16 14:08:26]0946685399.586018 !ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:755 > KIT: 
+Added cookie sky-pdl-client-credentials-a=\"ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89\" 
+  for domain cdn.sky.com, 
+  path /60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff, " "expire %" "lld" "\n 
+
+CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/lib/curl/curl_v7_26_0/src/easy.c
+CURLcode curl_easy_perform(CURL *curl)
+{
+  struct SessionHandle *data = (struct SessionHandle *)curl;
+
+  /* start NDS */
+  Curl_http_patch_expired_cookies(data);
+  /* end NDS */
+
+  CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/lib/curl/curl_v7_26_0/src/libcurl_http.c
+  void Curl_http_patch_expired_cookies(struct SessionHandle *data)
+    void Curl_cookie_cleanup_expired_cookies(struct CookieInfo *c)
+    {
+      co = c->cookies;
+
+      while(co->next)
+      {
+      }
+    }
+
+  // 
+  return Curl_perform(data);
+}
+
+// transfer.c
+
+struct Cookie {
+  struct Cookie *next; /* next in the chain */
+  char *name;        /* <this> = value */
+  char *value;       /* name = <this> */
+  char *path;         /* path = <this> */
+  char *domain;      /* domain = <this> */
+  ...
+};
+
+struct CookieInfo {
+  /* linked list of cookies we know of */
+  struct Cookie *cookies;
+
+  char *filename;  /* file we read from/write to */
+  bool running;    /* state info, for cookie adding information */
+  long numcookies; /* number of cookies in the "jar" */
+  bool newsession; /* new session, discard session cookies on load */
+};
+
+
+  CURLcode Curl_perform(struct SessionHandle *data)
+  {
+    Curl_do_perform
+    {
+      res = Transfer(conn); /* now fetch that URL please */
+      {
+        result = Curl_readwrite(conn, &done);
+        {
+          // static CURLcode readwrite_data(struct SessionHandle *data,
+          //     struct connectdata *conn,
+          //     struct SingleRequest *k,
+          //     int *didwhat, bool *done)
+          result = readwrite_data(data, conn, k, &didwhat, done);
+          {
+
+            // CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/lib/curl/curl_v7_26_0/src/http.c
+            result = Curl_http_readwrite_headers(data, conn, &nread, &stop_reading);
+            {
+              // note: data and c comes from outside.
+              
+              // @3712
+              //
+              else if(data->cookies && checkprefix("Set-Cookie:", k->p)) 
+              {
+                Curl_cookie_add(data, data->cookies, TRUE, k->p+11);
+                // struct Cookie *
+                // Curl_cookie_add(struct SessionHandle *data,
+                //                struct CookieInfo *c,
+                {
+                  struct Cookie *co;
+                  struct Cookie *lastc=NULL;
+                  bool replace_old = FALSE;
+
+                  co = calloc(1, sizeof(struct Cookie));
+
+                  /* now, we have parsed the incoming line, we must now check if
+                   * this superceeds an already existing cookie, which it may if
+                   * the previous have the same domain and path as this */
+
+                  // Q: What if a cookie is not in the list? Not freed and have
+                  // to handle it in the call site?
+
+                  clist = c->cookies;
+                  replace_old = FALSE;
+
+                  while(clist) {
+
+                    // check if have to `replace` it?
+                    
+                    if(replace_old) {
+                      co->next = clist->next; /* get the next-pointer first */
+
+                      /* then free all the old pointers */
+                      free(clist->name);
+                      // ...
+
+                      *clist = *co;  /* then store all the new data */
+
+                      free(co);   /* free the newly alloced memory */
+                      co = clist; /* point to the previous struct instead */
+                    }
+                    clist = clist->next;
+                  }
+
+                  // this is new one
+                  if(!replace_old) {
+
+                    /* then make the last item point on this new one */
+                    if(lastc)
+                      lastc->next = co;
+                    else
+                      c->cookies = co;
+                  }
+
+                  c->numcookies++; /* one more cookie in the jar */
+                  return co;
+                }
+              }
+
+              // @3789
+              result = Curl_client_write(conn, writetype, k->p, k->hbuflen);
+              {
+                if(wrote != len) {
+                  failf(data, "Failed writing body (%zu != %zu)", wrote, len);
+                  return CURLE_WRITE_ERROR;
+                }
+              }
+
+              if(result)
+                return result;
+            }
+            if(result)
+              return result;
+          }
+          if(result || *done)
+            return result;
+
+        }
+
+        return result;
+      }
+      return res;
+    }
+  }
+}
+
+
+// DBG_PRINT_E(("Perform failure. status : %#x", status));
+!ERROR  -HTTP         		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:http_api.c F:HTTP_API_Perform L:1811 > Perform failure. status : 0xd43000a 
 
 HTTP_API_Perform
 http_api.c:1789
@@ -216,8 +328,6 @@ ctm_svr_file_transfer_manager.c:2339
 // perform_info is local structure
 // http_perform_post_action = CTM_SVR_HTTP_PerformStandard(&perform_info);
 
-SYSTEMUTIL_THR_P_ThreadPrologue
-systemutil_thread.c:612
 
 
 <2>
@@ -345,7 +455,8 @@ STB 16
 http://theyard.cisco.com/si_logs/translation/darwin_0019fb7efd4c_a12465b429863b71f951e2ed70bba2d2/membuster_report/MW_MW_HTTP_POOL.html
 
 
-<xx>
+<pattern-01>
+
 Script: OD.03(R12_89x) - Start_Delete Downloads (11.03)
 Baseline(s):
 84.31M
@@ -389,8 +500,8 @@ http://theyard.cisco.com/si_logs/translation/darwin_0019fb603c38_6b0416724b71ed2
 STB 16: shows CTM_FTM_SetHTTPOptions on top.
 http://theyard.cisco.com/si_logs/translation/darwin_0019fb603c54_17242d2edffbe3672be8e3f715f153af/membuster_report/MW_MW_HTTP_POOL.html
 
-<xx>
 
+<pattern-02>
 prvHTTP_MEMMAN_Calloc
 http_mem.c:97
 HTTP_SAC_getUriParam
@@ -422,6 +533,19 @@ ctm_svr_file_transfer_manager.c:2334
 SYSTEMUTIL_THR_P_ThreadPrologue
 systemutil_thread.c:612 
 
++++ b/CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/http/src/http_sac_utils.c
+@@ -682,6 +682,13 @@ SYSTEM_STATUS HTTP_SAC_Create_SAC_Handle(HTTP_ASYNC_Handle_t * queueHandle,
+             (void)prvHTTP_MEMMAN_Free(sac_handle_int);
+             sac_handle_int = NULL;
+         }
++
++        /* IRH: HIJACK: */
++        if (auth_uri != NULL)
++        {
++            DBG_PRINT_E(("** KIT: SI-10728: IRH: HIJACK **"));
++            (void)prvHTTP_MEMMAN_Free(auth_uri);
++        }
+     }
 
 ={============================================================================
 |kt_dev_si_0002| SI-10654
@@ -568,6 +692,7 @@ PLAYER_VTABLE_FindElement(const PLAYER_VTable_t* vtable, PLAYER_VTABLE_CheckElem
 
 
 <from-tr-with-log>
+https://www.stb.bskyb.com/jira/browse/SI-10723
 
 // shows del node
 2020051:NDS: !FATAL  -P_ApiD           < P:APP t:0x2bfeb520 T:no name M:player_vtable.c F:VTABLE_GetElement L:875 > Leak detected in ref for VTable 25 (ref count 255)
@@ -622,6 +747,16 @@ static bool PLAYER_IdentifyScAndJob(uint32_t                      payload_id,
         (void)PLAYER_VTABLE_ReleaseElement(&(g_player_component.contexts), l_sc_data->sc_id);
     }
 }
+
+
+Get used and released at:
+
+DARWIN_PLATFORM/DARWIN_PLAYER/src/player_common.c
+
+                        /* 1. Get the session related to this event &
+                         * determine job type & slot */
+                        if (!PLAYER_IdentifyScAndJob(l_payload,
+                              l_payload_struct, &l_sc_data, &l_job))
 
 
 ={============================================================================

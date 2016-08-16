@@ -28,6 +28,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-sh-list-log
 |kt_dev_si_0002| si-sh-convert-logs
 |kt_dev_si_0002| si-sh-wombat
+|kt_dev_si_0002| si-sh-flipper
 
 |kt_dev_si_0003| si-log-lines
 |kt_dev_si_0003| si-log-lines-mil
@@ -97,6 +98,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-nvram
 |kt_dev_si_0001| comp-helper
 |kt_dev_si_0001| comp-app
+|kt_dev_si_0001| comp-http
 
 
 # ============================================================================
@@ -840,14 +842,6 @@ make[2]: *** Waiting for unfinished jobs....
 
 
 cc1: warnings being treated as errors
-
-
-={============================================================================
-|kt_dev_si_0002| si-build-ci-flipper
-
-http://hetty.cisco.com/fusionmadesimple/index.php/Flipper_SI_scripts
-
-Make a compilation in one go
 
 
 ={============================================================================
@@ -1998,11 +1992,40 @@ WOMBAT_DBNAME=uploads
 
 
 <ex> 
+// to set params
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?STREAM=&BASELINE=&PRIORITY=&LOGS=100&ERROR=
 
 // decoded string: <p1>Player VTable ref leak found, might cause serious errors once ref count is wrapped around (built by hudson)</p1>
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?STREAM=R014&PLATFORM=drx890&PRIORITY=1&ERROR=%3Cp1%3EPlayer%20VTable%20ref%20leak%20found%2C%20might%20cause%20serious%20errors%20once%20ref%20count%20is%20wrapped%20around%20%28built%20by%20hudson%29%3C/p1%3E&INTERVAL=3%20month&MACLIST=&LOGS=999999
+
+// Out of memory in " "MW_HTTP_POOL" pool
+// Out%20of%20memory%20in%20%22%20%22MW_HTTP_POOL%22%20pool
+http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?PLATFORM=drx890&PRIORITY=1&ERROR=Out%20of%20memory%20in%20%22%20%22MW_HTTP_POOL%22%20pool&INTERVAL=3%20month&MACLIST=&LOGS=999999
+
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FB63D645&ERROR=Tuner%20failed&LOGS=999999
+
+
+={============================================================================
+|kt_dev_si_0002| si-sh-flipper
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Flipper_SI_scripts
+
+{listtag}
+listTags.py Listing the existing tags in one branch
+
+* class BranchManagement has a dict with {branchname, {repo, branch, pattern}}.
+* listbranch is simply to look in that dict to show branch name.
+
+59f36a86e8581ff483f236d83c6fd7ceeede97d0        refs/tags/BSKYB_SI_ETHAN/BSKYB_INTEGRATION_BLD_09.34.00_BSKYB_HQ000_ETHAN_Int
+
+
+./listTags.py -t Q000 -m 3
+refs/tags/BSKYB_HQ000_ETHAN_Int/BSKYB_INTEGRATION_BLD_08.08.00_BSKYB_HQ000_ETHAN_Int
+refs/tags/BSKYB_HQ000_ETHAN_Int/BSKYB_INTEGRATION_BLD_08.07.00_BSKYB_HQ000_ETHAN_Int
+refs/tags/BSKYB_HQ000_ETHAN_Int/BSKYB_INTEGRATION_BLD_08.06.00_BSKYB_HQ000_ETHAN_Int
+
+
+{gettag}
 
 
 ={============================================================================
@@ -2377,7 +2400,7 @@ SCI   Service Component Information
 FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk
 include $(NDS_ROOT)/projects/fusion2/build_options.mk
 
-// fusion2/build_options.mk
+// fusion2/build_options.mk and if see "debug" = "debug"
 ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),debug)
   GLOBAL_DEFINES += DEBUG
   GLOBAL_DEFINES += DIAG_DEBUG    *diag-debug*
@@ -3258,22 +3281,6 @@ ATG_VODCL_Session_RetrievePvodThumbnails
 
 COMPONENT_NAME:=ms_bem_server_src
 COMPONENT_NAME:=ms_bem_client_src
-
-
-={============================================================================
-|kt_dev_si_0001| comp-ctm
-
-SBM uses CTM to download PDL
-
-static void *CTM_SVR_FTM_Download_Thread(void *p):
-  while(keep)
-  {
-    // gets a request
-    // alloc structure for a requst
-    // set options on strucures
-    // run a requset
-    // free structure
-  }
 
 
 ={============================================================================
@@ -4557,6 +4564,11 @@ MEMMAN_API_Init
 }
 
 
+<check-interval>
+mb_check_sleep = 180;
+membuster_plus_check_all()
+
+
 <output>
 // size is bt(backtrace)'s size
 
@@ -4569,6 +4581,16 @@ allocs:2
 ...
 
 // when see OOM, will list out a list of allocs.
+
+// CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mbuster_pinit.c
+    fprintf(of,
+            "OOM Detected at: %.3d:%.2d:%.2d.%.3d\n",
+            hour,
+            minute,
+            sec,
+            msec);
+
+start check at: 013:47:02.091
 OOM Detected at: 013:48:22.102
 pool MW_HTTP_POOL size=388036:
 size=192 (a399e0 a35ca0 9f616c 9f41b8 a424b0 9f3e70 ba2808 ) [c272294f]
@@ -4591,6 +4613,14 @@ size=192 (a399e0 a35ca0 9f616c 9f41b8 a424b0 9f3e70 ba2808 ) [c272294f]
 allocs:16
 ...
 estimated pool usage 6292/8000	# here 'usuage' is the sum of all bt.
+
+NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:1448 FreeSize:788 Bank:1 PoolMAX:387248 
+NDS: ^[2016:08:09 04:44:13] !WARN   -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 1448 bytes in pool " "MW_HTTP_POOL"  
+NDS: ^[2016:08:09 04:44:13] !WARN   -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 788 bytes
+NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 520, bt(007a87a0 00e944d8 007a8854 0079b3ac 006e26a0 00e91518 )
+NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 68, bt(007a87a0 00e97274 007b0b7c 0079b478 006e26a0 00e91518 )
+NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 40, bt(007a059c 007a020c 0079b558 006e26a0 00e91518 )
+NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 24, bt(007a0634 007b9b9c 007a8e4c 007a0440 0079b630 006e26a0 00e91518 )
 
 
 <ex>
@@ -4755,16 +4785,6 @@ membuster_plus_check_pool(*p)
 	# print out usage and initial size
 	pool_usage, p->initialSize
 }
-
-NDS: ^[2016:08:09 04:44:13]0946734631.826222 !ERROR  -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:1448 FreeSize:788 Bank:1 PoolMAX:387248 
-NDS: ^[2016:08:09 04:44:13]0946734631.826245 !WARN   -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 1448 bytes in pool " "MW_HTTP_POOL"  
-NDS: ^[2016:08:09 04:44:13]0946734631.826261 !WARN   -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 788 bytes 
-NDS: ^[2016:08:09 04:44:13]0946734631.828670 !ERROR  -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 520, bt(007a87a0 00e944d8 007a8854 0079b3ac 006e26a0 00e91518 ) 
-NDS: ^[2016:08:09 04:44:13]0946734631.828980 !ERROR  -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 68, bt(007a87a0 00e97274 007b0b7c 0079b478 006e26a0 00e91518 ) 
-NDS: ^[2016:08:09 04:44:13]0946734631.829281 !ERROR  -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 40, bt(007a059c 007a020c 0079b558 006e26a0 00e91518 ) 
-NDS: ^[2016:08:09 04:44:13]0946734631.829604 !ERROR  -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 24, bt(007a0634 007b9b9c 007a8e4c 007a0440 0079b630 006e26a0 00e91518 ) 
-NDS: ^[2016:08:09 04:44:13]0946734631.829938 !ERROR  -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 28, bt(007a0634 007b9a68 007b9bbc 007a8e4c 007a0440 0079b630 006e26a0 00e91518 ) 
-NDS: ^[2016:08:09 04:44:13]0946734631.830532 !ERROR  -MEMMAN       		< p:0x000001c0 P:MW t:0x01dc8520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 7 size 112, bt(007a0634 007a890c 007b9a84 007b9bbc 007a8e4c 007a0440 0079b630 006e26a0 00e91518 ) 
 
 
 ={============================================================================
@@ -6766,6 +6786,21 @@ __DIAG_LOG_FormatAndLogTraceBuffer
 	}
 
 
+<diag-macro>
+#if defined _USE_DIAG && (defined (DEBUG) || defined (RELEASE_DBG))
+#define CURL_DBG_PRINT_I(MESSAGE)    DIAG_LOG_INFO(libcurlDiagHandlerId, MESSAGE)
+#define CURL_DBG_PRINT_W(MESSAGE)    DIAG_LOG_WARN(libcurlDiagHandlerId, MESSAGE)
+#define CURL_DBG_PRINT_E(MESSAGE)    DIAG_LOG_ERROR(libcurlDiagHandlerId, MESSAGE)
+#define CURL_DBG_PRINT_F(MESSAGE)    DIAG_LOG_FATAL(libcurlDiagHandlerId, MESSAGE)
+#define CURL_DBG_PRINT_EV(MESSAGE)   DIAG_LOG_EVENT(libcurlDiagHandlerId,MESSAGE)
+
+#define CURL_DBG_DECLARE(MESSAGE)        DIAG_DECLARE_FUNCTION(MESSAGE)
+#define CURL_DBG_ENTER(MESSAGE)          DIAG_DECLARE_FUNCTION(MESSAGE); DIAG_LOG_FN_ENTRY(libcurlDiagHandlerId)
+#define CURL_DBG_RETURN(MESSAGE, ret)    do { DIAG_LOG_RETURN(libcurlDiagHandlerId, MESSAGE); DIAG_LOG_FN_EXIT(libcurlDiagHandlerId, ret); return(ret); } while (0)
+#define CURL_DBG_VOID_RETURN(MESSAGE)    do { DIAG_LOG_RETURN(libcurlDiagHandlerId, MESSAGE); DIAG_LOG_FN_EXIT(libcurlDiagHandlerId, 0); return; } while (0)
+#define CURL_DBG_PRINT_PARAMS(MESSAGE)   DIAG_LOG_PARAMS(libcurlDiagHandlerId, MESSAGE);
+
+
 <comp-diag-segments>
 registered diag segments as of 12th Sep 2011
 
@@ -7119,8 +7154,7 @@ DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'VGC_JAVA'
 
 <enable-comp-diag>
 // BUILD_SYSTEM/COMMON_MAKEFILES/projects/fusion2/build_options.mk
-
-COMPONENT_NAME := ms_mcm_src
+// COMPONENT_NAME := ms_mcm_src
 NDS_BUILD_TYPE_<name>= debug
 
 NDS_BUILD_TYPE_ms_mcm_src = debug
@@ -7164,6 +7198,22 @@ asterisk, dot, asterisk
 
 // diag.cfg which defines format and level
 // CMS_SYSTEM_INFRASTRUCTURE/DIAG/inc/config/diag_master_config.xml
+
+[DEFAULT_VALUES]
+TRACE_FORMAT=" %p %t %f @ %l"
+TRACE_LEVEL="AFEWM"
+[LOGGING]
+[OVERRIDDEN_VALUES]
+TRACE_FORMAT_FOR_ALL=" %p %t %T %m %f %l "
+TRACE_LEVEL_AMS="AFEWM"
+TRACE_LEVEL_ASM="AFEWM"
+TRACE_LEVEL_ATG_API="AFEWM"
+TRACE_LEVEL_ATG_LOCK="AFEWM"
+...
+
+
+CMS_SYSTEM_INFRASTRUCTURE/HTTP/inc/config/http_master_config.xml
+11:    <key name="TRACE_LEVEL_LIBCURL" type="STRING" value="AFEWM">
 
 
 <diag-cli>
@@ -15038,7 +15088,7 @@ logger.logMilestone("DISPLAYING NSS DIALOG WITH CODE " + dialogCode);
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-http
+|kt_dev_si_0001| comp-http comp-ctm
 
 <curl-version>
 CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/lib/curl/curl_v7_26_0/src/cookie.c
@@ -15093,6 +15143,186 @@ MW_MW_HTTP_POOL
 #endif /* HTTP_MEMMAN_USE_MACRO */
                 NDS_HTTP_strdup,
                 prvHTTP_MEMMAN_Calloc)) != CURLE_OK)
+
+
+<comp-ctm>
+SBM uses CTM to download PDL
+
+CMS_MEDIA_SERVICES/CTM/src/server/ctm_svr_file_transfer_manager.c
+
+note: From libcurl
+
+https://curl.haxx.se/libcurl/c/curl_easy_perform.html
+https://curl.haxx.se/libcurl/c/curl_easy_cleanup.html
+
+You can do any amount of calls to curl_easy_perform while using the same
+easy_handle. If you intend to transfer more than one file, you are even
+encouraged to do so. libcurl will then attempt to re-use the same connection
+for the following transfers, thus making the operations faster, less CPU
+  intense and using less network resources. Just note that you will have to
+    use curl_easy_setopt between the invokes to set options for the following
+    curl_easy_perform. 
+
+static CTM_SVR_FTM_P_DL_Context_t g_dl_ctx[FTM_NB_CTX];
+
+typedef struct _CTM_SVR_FTM_P_DL_Context_t
+{
+  CTM_Download_Request_t request;
+}
+
+
+dl_ctx = &g_dl_ctx[i];
+
+if (SYSTEMUTIL_THR_Create(&dl_ctx->download_thread,
+                    (i==FTM_ID_CONTENT) ? "CTM_SVR_DL_CONTENT" : "CTM_SVR_DL_TRAILER",
+                    CTM_SVR_FTM_Download_Thread,
+                    (void*)dl_ctx, g_ctm_svr_systemutil_ctx) == SYSTEMUTIL_STATUS_OK)
+
+
+CTM_SVR_FTM_Download_Thread()
+{
+  CTM_SVR_FTM_P_DL_Context_t * dl_ctx = (CTM_SVR_FTM_P_DL_Context_t*)p;
+
+  while(keep)
+  {
+    // `get global request` which is null at first  
+    const CTM_Download_Request_t* request = &dl_ctx->request;
+
+    /* Set the HTTP options depending on the request */
+
+    CTM_FTM_SetHTTPOptions( dl_ctx );
+    // static SYSTEM_STATUS CTM_FTM_SetHTTPOptions( CTM_SVR_FTM_P_DL_Context_t* dl_ctx )
+    // {
+    //   else if ( dl_ctx->request.http_request_type == REQUEST_TYPE_JSON_POST )
+    //   {
+    //     struct HTTP_API_Slist *l_http_list = dl_ctx->request.http_hdr_list;
+    // 
+    //     CTM_SVR_DBG_INFO(("- Configure HTTP for JSON POST requests"));
+    // 
+    //     l_http_list = HTTP_API_SlistAppend(l_http_list, "Content-Type: application/json");
+    //
+    //     // `update global request`
+    //     dl_ctx->request.http_hdr_list = l_http_list;
+    //   }
+    // }
+
+    // gets a request
+    // alloc structure for a requst
+    // set options on strucures
+    // run a requset
+    // free structure
+
+    perform_info.handle = dl_ctx->handle;
+
+    // ctm_svr_file_transfer_manager.c:2339
+    // perform_info is local structure
+    //
+    // ctm_svr_standard_communication.c:74
+    // still no allocation
+    // CTM_SVR_HTTP_PerformStandard(CTM_SVR_PerformInfo_t* download_info)
+    http_perform_post_action = CTM_SVR_HTTP_PerformStandard(&perform_info);
+    {
+      ret = HTTP_API_Perform(download_info->handle);
+      // SYSTEM_STATUS HTTP_API_Perform(HTTP_API_Handle_t * handle)
+      {
+        status = ConvErrorCodeLib2HTTP( (uint8_t)curl_easy_perform((CURL *)handle) );
+
+        else
+        {
+            /* If perform failed, we don't do any post processing but try to
+             * give the caller relevant information about the error */
+
+            DBG_PRINT_E(("Perform failure. status : %#x", status));
+            status = HTTP_SAC_SYNC_ProcessSACPerformError( status );
+        }
+      }
+
+      return http_perform_post_action;
+    }
+
+    /* We are finished with this request */
+    CTM_SVR_FTM_CleanUpRequest( const request );
+    // `use request`
+    // if ( request->http_hdr_list != NULL )
+    // {
+    //     CTM_SVR_DBG_ERROR(("** KIT: SI-10728: IRH: HIJACK } **"));
+    //     (void)HTTP_API_SlistFreeAll(request->http_hdr_list);
+    //
+    //     // note: this is missed. should be implemented?
+    //     // request->http_hdr_list = NULL;
+    // }
+  }
+}
+
+
+int32_t CTM_SVR_FTM_Term( void )
+{
+  // #define FTM_NB_CTX                  3
+  
+  for (i=0; i< FTM_NB_CTX; i++)
+  {
+    HTTP_API_SessionDestroy(dl_ctx->handle);
+    {
+      curl_easy_cleanup((CURL *) handle);
+    }
+  }
+}
+
+
+SYSTEM_STATUS CTM_SVR_FTM_Init(CTM_SVR_FTM_Callback_t *callback)
+{
+  HTTP_API_Handle_t *HTTP_API_SessionCreate(void)
+  {
+    handle = (HTTP_API_Handle_t *) curl_easy_init();
+  }
+}
+
+
+<status>
+
+#define HTTP_COMP_ID          ((uint32_t)(53)) /*!< @brief HTTP */
+#define HTTP_API_ID       (0)
+
+#define SEVERITY_NONE    ((uint32_t)(0x0))
+#define SEVERITY_WARNING ((uint32_t)(0x1))
+#define SEVERITY_SEVERE  ((uint32_t)(0x2))
+#define SEVERITY_FATAL   ((uint32_t)(0x3))
+
+(((COMP_COMP_ID & 0x3FF) << 22) | ((SEVERITY & 0x3) << 16) | ((COMP_IF_ID & 0xF) << 12) | (STATUS & 0xFFF) )
+
+hex(((53 & 0x3FF) << 22) | ((3 & 0x3) << 16) | ((0 & 0xF) << 12) | (0 & 0xFFF) )
+'0xd430000'
+
+arrayErrorCodeLibToHTTP[CURLE_WRITE_ERROR] = HTTP_API_E_WRITE_ERROR;
+'0xd43000a'
+
+/*! @brief  HTTP fatal error definition */
+#define _HTTP_FATAL(e)  \
+        SYSTEM_MAKE_COMPONENT_STATUS(\
+                                HTTP_COMP_ID,\
+                                HTTP_API_ID,\
+                                SEVERITY_FATAL,\
+                                (e))
+
+!ERROR  -HTTP         		< T:CTM_SVR_DL_CONTENT M:http_api.c 
+  F:HTTP_API_Perform L:1811 > Perform failure. status : 0xd43000a 
+
+
+<diag>
+
+CTM_SVR_DBG_ERROR(("** KIT: SI-10728: IRH: HIJACK } **"));
+
+!ERROR  -CTM_SVR                   < T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_CleanUpRequest L:2099 > *
+* KIT: SI-10728: IRH: HIJACK { **
+
+CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/lib/curl/curl_v7_26_0/makefile
+
+COMPONENT_NAME:=http_curl
+include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
+
+
+CMS_SYSTEM_INFRASTRUCTURE/HTTP/inc/config/http_master_config.xml
+11:    <key name="TRACE_LEVEL_LIBCURL" type="STRING" value="AFEWM">
 
 
 ==============================================================================
