@@ -2026,6 +2026,97 @@ refs/tags/BSKYB_HQ000_ETHAN_Int/BSKYB_INTEGRATION_BLD_08.06.00_BSKYB_HQ000_ETHAN
 
 
 {gettag}
+Clone the repository and check-out a tag.
+
+* receives three parameters: the branch, tag, as listed by listTag.py and the
+  directory where the repository is created. This directory must be empty. 
+* clone, run initialize_hooks script, and check-out a tag.
+* create jenkins job file
+
+./getTag.py Q000 refs/tags/BSKYB_HQ000_ETHAN_Int/BSKYB_INTEGRATION_BLD_08.08.00_BSKYB_HQ000_ETHAN_Int ~/provis/example/
+
+
+<jenkins-job-file>
+
+"""
+        The job files have roughly two "sections" what I call the normal
+        parameters and the extra parameters.
+
+        The normal parameters are between the two '#######' lines. The extra
+        parameters are added at a later stage after the second '######'. We
+        are trying to follow the format that hudkins uses with WALRUS builds.
+
+        Example:
+
+#######
+stream_prefix=Q000
+baseline=ENG_07.93.00_F4489
+must_pass_test=False
+override1=AMS:AFEIMPRW<>
+debug_1=AMS:AFEIMPRW<>
+debug_2=BEM:AFEIMPRW<!
+project=bskybgen2
+pvob=BSKYB_INTEGRATION_BLD_07.93.00_BSKYB_HQ000_ETHAN_Int
+branch=BSKYB_HQ000_ETHAN_Int
+test=False
+output=/home/NDS-UK/gonzaler/provis/perro
+ca_cleanup=False
+emailsubject=Manually triggered build
+bin_to_sky=False
+#######
+
+BUILD_NUMBER=4489
+UseEmailSubject=Re: FLIPPER build: Manually triggered build
+SERVER=theyard.cisco.com
+
+    The last three are extra parameters.
+
+"""
+
+<jenkins-module>
+After all, this module is to create 
+
+jobfile.txt, baseline_details.txt
+
+import scripts.common.JenkinsJob as JenkinsJob
+
+note:
+
+# This script creates a jobfile in the parent directory of the git repository.
+# You need this file before calling uploadTarball.py. The getTag script will
+# generate one but if you have a `random repository` then you need to use this
+# script
+
+createJobfile.py
+
+
+{diag}
+
+* getsegment() build a dict from reading a "http://theyard.cisco.com/diagconf.txt"
+[
+  ...
+  [["NCM_SERVER"],	["ncm_server"]],
+  [["NCM_CLIENT"],	["ncm_client"]],
+  [["WLM_SERVER"],	["wlm_server"]],
+  [["WLM_CLIENT"],	["wlm_client"]],
+]
+
+
+* update
+
+parser.add_argument ("-u", "--update", help="List of segment:config values. <> must be escaped. For example AMS:AFEIMPRW\<\>", nargs='+')
+parser.add_argument ("-d", "--dir", help="Folder containing the repository to configure.")
+
+./diag.py -u  AMS:AFEIMPRW\<\>  MSM:AFEIMPRW\<\> -d ~/provis/example/Ethan/
+
+1. build a dict, {'AMS', ['A', 'F', 'E'...] }
+
+2. set diag and debug file.
+"darwin":"FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/SI_config.xml",
+"darwin":"FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk",
+
+3. for each key(component segment) in a dict, processSegment(key, value)
+    add "NDS_BUILD_TYPE_xxx=debug" in debug file.
 
 
 ={============================================================================
@@ -6799,6 +6890,37 @@ __DIAG_LOG_FormatAndLogTraceBuffer
 #define CURL_DBG_RETURN(MESSAGE, ret)    do { DIAG_LOG_RETURN(libcurlDiagHandlerId, MESSAGE); DIAG_LOG_FN_EXIT(libcurlDiagHandlerId, ret); return(ret); } while (0)
 #define CURL_DBG_VOID_RETURN(MESSAGE)    do { DIAG_LOG_RETURN(libcurlDiagHandlerId, MESSAGE); DIAG_LOG_FN_EXIT(libcurlDiagHandlerId, 0); return; } while (0)
 #define CURL_DBG_PRINT_PARAMS(MESSAGE)   DIAG_LOG_PARAMS(libcurlDiagHandlerId, MESSAGE);
+
+
+CMS_SYSTEM_INFRASTRUCTURE/DIAG/inc/diag_common.h
+
+    /**
+     * @def DIAG_DECLARE_FUNCTION
+     * 
+     * Declare the function name to the DIAG component.
+     *
+     * `Must` be declared just after variable declaration block:
+     * @code
+     * void fn(int arg)
+     * {
+     *	int ivar;
+     *      short svar;
+     *	DIAG_DECLARE_FUNCTION("fn");
+     *	[...]
+     * }
+     * @endcode
+     * and, avoid:
+     * @code
+     * void fn(int arg)
+     * {
+     *	DIAG_DECLARE_FUNCTION("fn");
+     *	int ivar;
+     *      short svar;
+     *	[...]
+     * }
+     * @endcode 
+     */
+#define DIAG_DECLARE_FUNCTION(fcn)	__DIAG_DECLARE_FUNCTION(fcn)
 
 
 <comp-diag-segments>
@@ -15108,6 +15230,18 @@ Use curl_v7_26_0
 
 <HTTP_POOL>  
 
+http.cfg
+52:HTTP_POOL_FLAGS=0
+53:HTTP_POOL_NAME="APP_HTTP_POOL"
+54:HTTP_POOL_SIZE=224288
+68:HTTP_POOL_FLAGS=0
+69:HTTP_POOL_NAME="CA_HTTP_POOL"
+70:HTTP_POOL_SIZE=38912
+81:HTTP_POOL_FLAGS=0
+82:HTTP_POOL_NAME="MW_HTTP_POOL"
+83:HTTP_POOL_SIZE=388036
+
+
 #define prvHTTP_MEMMAN_Malloc(size) \
     MEMMAN_API_AllocStaticP(httpMemmanHandle, (uint32_t)size)
 
@@ -15201,7 +15335,7 @@ CTM_SVR_FTM_Download_Thread()
     // 
     //     l_http_list = HTTP_API_SlistAppend(l_http_list, "Content-Type: application/json");
     //
-    //     // `update global request`
+    //     // `update global request` which is the fix made and update `request` as well.
     //     dl_ctx->request.http_hdr_list = l_http_list;
     //   }
     // }
@@ -15255,6 +15389,8 @@ CTM_SVR_FTM_Download_Thread()
 }
 
 
+// note: when cookies are freed? Here.
+
 int32_t CTM_SVR_FTM_Term( void )
 {
   // #define FTM_NB_CTX                  3
@@ -15264,6 +15400,10 @@ int32_t CTM_SVR_FTM_Term( void )
     HTTP_API_SessionDestroy(dl_ctx->handle);
     {
       curl_easy_cleanup((CURL *) handle);
+      { 
+        Curl_close(data);
+          Curl_flush_cookies(data, 1);
+      }
     }
   }
 }
@@ -15292,6 +15432,9 @@ SYSTEM_STATUS CTM_SVR_FTM_Init(CTM_SVR_FTM_Callback_t *callback)
 
 hex(((53 & 0x3FF) << 22) | ((3 & 0x3) << 16) | ((0 & 0xF) << 12) | (0 & 0xFFF) )
 '0xd430000'
+
+#define HTTP_API_E_COULDNT_CONNECT         (_HTTP_FATAL(7))   /*!< @brief Couldn't connect to server */
+#define HTTP_API_E_WRITE_ERROR             (_HTTP_FATAL(10))  /*!< @brief Failed writing received data */
 
 arrayErrorCodeLibToHTTP[CURLE_WRITE_ERROR] = HTTP_API_E_WRITE_ERROR;
 '0xd43000a'
@@ -15323,6 +15466,19 @@ include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
 
 CMS_SYSTEM_INFRASTRUCTURE/HTTP/inc/config/http_master_config.xml
 11:    <key name="TRACE_LEVEL_LIBCURL" type="STRING" value="AFEWM">
+
+
+!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:257 > KIT: co = calloc(56) 
+!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 444) Strdup: sky-pdl-client-credentials-a 
+!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 445) Strdup: ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89 
+!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: 1800 
+!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: /60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff 
+!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: cdn.sky.com 
+!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:755 > KIT: Added cookie sky-pdl-client-credentials-a=\"ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89\" for domain cdn.sky.com, path /60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff, " "expire %" "lld" "\n 
+!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:760 > KIT: replace_old is null. make it last? 
+!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:http_api.c F:debugFunction L:224 > HTTP 0 HEADER IN: Set-Cookie: sky-pdl-client-credentials-a=ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89;Max-Age=1800;Path=/60448/bsky_skydisney/MOVIE/b 
+!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:http.c F:Curl_http_readwrite_headers L:3791 > KIT: from Curl_client_write(): result = 0 
+!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:http.c F:Curl_http_readwrite_headers L:3711 > KIT: call Curl_cookie_add() 
 
 
 ==============================================================================
