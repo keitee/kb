@@ -8,14 +8,14 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-links
 |kt_dev_si_0002| si-feature-team
 |kt_dev_si_0002| si-box
-|kt_dev_si_0002| si-box-setup-screen
+|kt_dev_si_0002| si-box-secret-screen
 |kt_dev_si_0002| si-box-mount
 |kt_dev_si_0002| si-boot-start-mw
 |kt_dev_si_0002| si-boot-log
 |kt_dev_si_0002| si-git
 |kt_dev_si_0002| si-build
-|kt_dev_si_0002| si-build-ci
-|kt_dev_si_0002| si-build-ci-flipper
+|kt_dev_si_0002| si-build-baseline
+|kt_dev_si_0002| si-build-errors
 |kt_dev_si_0002| si-build-make
 |kt_dev_si_0002| si-build-make-image
 |kt_dev_si_0002| si-build-map-file
@@ -30,12 +30,16 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-sh-wombat
 |kt_dev_si_0002| si-sh-flipper
 
+|kt_dev_si_0002| si-tcpdump
+|kt_dev_si_0002| si-dmalloc
+
+|kt_dev_si_0003| si-log-commands
 |kt_dev_si_0003| si-log-lines
 |kt_dev_si_0003| si-log-lines-mil
 
 |kt_dev_si_0001| comp-tree
 |kt_dev_si_0001| comp-term
-|kt_dev_si_0001| comp-build
+|kt_dev_si_0001| comp-build enable-comp-diag
 |kt_dev_si_0001| comp-jpa
 |kt_dev_si_0001| comp-jpa-print-systemstring
 |kt_dev_si_0001| comp-jvm
@@ -52,6 +56,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-mdm
 |kt_dev_si_0001| comp-memman
 |kt_dev_si_0001| comp-membuster
+|kt_dev_si_0001| comp-memman-membuster
 |kt_dev_si_0001| comp-memprof
 |kt_dev_si_0001| comp-ofs
 |kt_dev_si_0001| comp-mfs
@@ -98,7 +103,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-nvram
 |kt_dev_si_0001| comp-helper
 |kt_dev_si_0001| comp-app
-|kt_dev_si_0001| comp-http
+|kt_dev_si_0001| comp-http comp-ctm
 
 
 # ============================================================================
@@ -245,7 +250,10 @@ team, which is why we use the mailing lists).
 The Amstrad DRX890 is a Broadcom 7335 based box
 The Amstrad DRX595 is a Broadcom 7350 based box
 
-<box>
+<box-up> dynamic ip
+http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FB63D645
+
+<box-down> dynamic ip
 eth0      Link encap:Ethernet  HWaddr 00:19:FB:F2:D4:6B  
           inet addr:10.209.60.60  Bcast:10.209.60.255  Mask:255.255.255.0
 
@@ -271,7 +279,7 @@ mtd4: 03c00000 00020000 "nor"
 
 
 ={============================================================================
-|kt_dev_si_0002| si-box-setup-screen
+|kt_dev_si_0002| si-box-secret-screen
 
 1. Press "Services" button on remote control
 2. Enter "001" and press "Select" to access setup screen 
@@ -492,24 +500,47 @@ call SCD process
 
 # http://hoover.uk.nds.com/fusionmadesimple/index.php/Boot_Log
 # /FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/bootlog
-#
-# (bootlog-config.sh)
-# BLOG_mntpath="/mnt/nds/BLOGDIR" 		# before 21.15
-BLOG_mntpath="/tmp/dummydisk/BLOGDIR" 	# from 21.15
-FSN_DATAPATH="/mnt/nds/dev_5/part_0/FSN_DATA"
 
-BLOG_mntdev="/dev/sda1"
-BLOG_DATAPATH="${BLOG_mntpath}/FSN_DATA"
 
-#
-# [bootlog.sh] - main
+<bootlog-config>
+# -sh-3.2# cat /etc/hostname
+# drx890
+
+  # Source storage device to mount
+  `BLOG_mntdev`="/dev/sda1"
+
+  # Mount point of data partition
+  BLOG_mntpath="/tmp/dummydisk/BLOGDIR"
+
+  # Path where data/logs are stored
+  `BLOG_DATAPATH`="${BLOG_mntpath}/FSN_DATA"
+
+  # Maximum memory available  and maximum number of log rotations on reboot i.e Bootlogs
+  MAX_MEM_FOR_LOG_MB=1024
+  MAX_OLD_BOOTLOG_ROTATE=15
+  MAX_BOOTLOG_ROTATE=6
+  # RLOG step size is now set to 20 Mb in diag_binary.cfg
+  MAX_RLOG_ROTATE_COPY=19
+
+FSN_ROOT="/mnt/nds"
+
+# Rotated LOG Path where rotated logs will be moved
+BLROTATED="${BLOG_DATAPATH}/RLOG"
+
+# Path where INFO.TXT file is stored;
+# INFO.TXT includes version info about the system;
+BLINFOPATH="${BLOG_DATAPATH}/VERINFO"
+
+
+<bootlog> main
 # Usage: bootlog.sh <rotate limit> <size limit> [upload]
 #
 # check if it's already mounted.
 grep -q "${BLOG_mntpath}" /proc/mounts
 
-# mounts
-mount "${BLOG_mntdev}" "${BLOG_mntpath}"
+  # mounts
+  mount "${`BLOG_mntdev`}" "${`BLOG_mntpath`}" || exit $?
+
 #
 /usr/bin/bootlog-rotate.sh "$rotate_limit"
 #
@@ -529,14 +560,18 @@ chrt -r 2 /usr/bin/bootlog-copymemprof.sh </dev/null &
 umount "${BLOG_mntpath}"
 
 
-# [bootlog-rotate.sh]
+<bootlog-rotate>
 # Logs are rotated into numbered directories with the following naming scheme: 
 # Higher numbered directories are older. 
 # base="/mnt/nds/BLOGDIR/FSN_DATA/BOOTLOG.x"
 mv 'BOOTLOG' to 'BOOTLOG.1'
 
-# [bootlog-create.sh]
-cd /mnt/nds/BLOGDIR/FSN_DATA
+
+<bootlog-create>
+
+# `BLOG_DATAPATH`="${BLOG_mntpath}/FSN_DATA"
+cd "${BLOG_DATAPATH}"/ || exit $?
+
 rm BOOTLOG
 mkdir /mnt/nds/BLOGDIR/FSN_DATA/VERINFO
 cp -a *.DB BOOTLOG/
@@ -716,14 +751,12 @@ preprod
 No
 
 
-$ git clone ssh://wwwin-git-gpk-2.cisco.com:29418/STB_SW STB_SW_o
+git clone ssh://wwwin-git-gpk-2.cisco.com:29418/STB_SW STB_SW_o
 
-$ git tag | ag 83.57
-BSKYB_HR014_Int/BSKYB_INTEGRATION_BLD_83.57.00_BSKYB_HR014_Int
+$ git tag | grep "BLD_.*_HR015"
 
-git co BSKYB_HR014_Int/BSKYB_INTEGRATION_BLD_83.57.00_BSKYB_HR014_Int
-git co BSKYB_HR015_Int/BSKYB_INTEGRATION_BLD_84.31.00_BSKYB_HR015_Int
-
+git co BSKYB_HR014_Int
+git co BSKYB_HR015_Int
 
 http://hetty.cisco.com/fusionmadesimple/index.php/Git_Fusion_standard_workflow
 
@@ -824,11 +857,176 @@ mips-linux-uclibc-gcc (GCC) 4.2.0 20070124 (prerelease) - BRCM 10tsHound-2014050
 <build-cpp>
 To see the output of -E option
 
-/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gcc -E -Os -fno-strict-aliasing -Wall -g -fno-builtin -DNeedFunctioPrototypes=1 -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations   -DAPP_MGMT_SIGNAL_24_7_SERVICE_TYPE_82H -DAPP_MGMT_SIGNAL_ETV_OTV_TRIGGER_MOD -DAPP_MGMT_SIGNAL_RECOMMENDATION_OTV_PROMO_MOD -DAUTHENTICATION_NDS_SAC -DBSKYB_SUPPORT_HEP_WITH_OIG -DCALLBACK_PSTN -DCAPTION_TELETEXT_LEGACY_LAYOUT -DCAROUSEL_MHC -DCAROUSEL_OTV -DCA_VIDEOGUARD_NDS_SECURE_RETURN_PATH -DCA_VIDEOGUARD_PARENTAL_RESTRICT -DCA_VIDEOGUARD_WATERSHED -DFRONT_END_DTT_USB -DFRONT_END_SAT -DFRONT_END_SAT_SCR -DFUSION_APP_MGMT_SUPPORTED -DFUSION_AUTHENTICATION_SUPPORTED -DFUSION_BDL_SUPPORTED -DFUSION_CA_VIDEOGUARD_SUPPORTED -DFUSION_DYNAMIC_TSA_SUPPORTED -DFUSION_HEADEND_METADATA_SUPPORTED -DFUSION_HOME_NETWORK_SUPPORTED -DFUSION_METADATA_SUPPORTED -DFUSION_NETWORK_SUPPORTED -DFUSION_PDL_SUPPORTED -DFUSION_PVOD_SUPPORTED -DFUSION_PVR_SUPPORTED -DFUSION_TARGETED_MESSAGING_SERVICE_SUPPORTED -DFUSION_USER_ACTIVITY_SUPPORTED -DFUSION_VIDEOGUARD_NOTIFY_SUPPORTED -DFUSION_VWS_SUPPORTED -DGUIDE_BSKYB_FORMAT_LOGICAL_CHAN_NO -DGUIDE_BSKYB_SUBSCRIBER_PROPERTIES_USED -DHEADEND_METADATA_OIGC -DHOME_NETWORK_MEDIA_RENDERER -DHOME_NETWORK_PLANNER_SERVER -DHOME_NETWORK_REMOTE_UI -DHOTPLUG_SUPPORT -DIPPV -DMCM_PVR_RECORD_CA_HOLES -DMETADATA_SI_XSI_SSR -DNETWORK_CONFIGURE_LAN -DPDL_NDS_SECURE_AUTH -DPLAYER_PIN_HANDLING_A -DPLAYER_REMOTE_UI_HTTP -DPVOD_LINEAR_TRANSPORT -DPVR_CHECK_XTV_STATUS -DPVR_CLASSIC_REVIEW_BUFFER -DSERIES_IMPLICIT_SERIES_DELETION -DSERIES_SYNCHRONIZE_BOOKINGS_WITH_SIGNUPS -DSI_SERVICE_SCAN_XSI -DSOFTWARE_DOWNLOAD_OTV -DSRM_ELEMENTARY_STREAMS_SELECTION_A -DSRM_USE_PI_SCHEDULE_FLAG_FOR_AVAILABILITY -DUSBTUNER_SUPPORTED -DUSB_SUPPORTED -DUSER_ACTIVITY_BARB -DUSER_ACTIVITY_SSP -DWIFI_SUPPORTED -DWLM_SUPPORTED -DRELEASE_DBG -DDIAG_RELEASE_DBG -DDIAG_BINARY_MODE -DDIAG_PERFORMANCE_MODE -DOTV_CAROUSEL_SUPPORTED -DXSI_SUPPORTED -DLINT_ERRORS_ONLY= -DLINT_RESTORE= -DMEMLIST -DMEMLIST_SLEEP_PERIOD=60 -DMEMPROF -DPROFILE_A -DDIAG_LOG_NDEBUG -DNDEBUG -DMEMMAN_TRUSTED_CLIENT -DGFX_NO_SHAPE -DGFX_IMAGE_NO_DITHERING -DGFX_PAINTER_NO_ARGB16_4444 -DGFX_PAINTER_NO_ARGB16_4444_PREMULT -DGFX_PAINTER_NO_RGB16_565 -DGFX_PAINTER_NO_SURFACE_RW -DMSCQ189287_CLOCK_MONOTONIC_NOT_SUPPORTED -DCQ171339 -DLEGACY_MIGRATION_SUPPORT -DSUN_BUILD -DNDS_APP_TYPE_PICASSO -DDIAG_JAVA_DEBUG -D_XOPEN_SOURCE=600 -DAMS_BCM_MIPS4K_LNUX_DARWIN_01 -DFUSION_PROFILE -DMEMMAN_TRUSTED_CLIENT -DMSCQ1854424_SP_SCHEMA_ONLY -DMSCQ2375670_SET_PROVIDER_CLASS_MEMBERSHIP -DCQ380004_USE_STB_SW_01 -DMEMMAN_FORCE_USE_MALLOC_DIRECTLY -DPLAYER_DUMP_VTABLES -DPLAYER_VTABLE_LEAK_DETECTION -DCAPTIONS_SUBTITLES -DCDI_IOCTL_DEFINITIONS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/ioctl_magic.h" -DCDI -DIS_BIG_ENDIAN -D__BIG_ENDIAN -D_XOPEN_SOURCE=600 -D__USE_XOPEN2K -D_GNU_SOURCE -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemcommon/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlang/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlocator/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemstring/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemtime/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemobject/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemitc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemconfig/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/diag/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/memman/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/misc_libraries/httpserver/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_control_and_diagnostics/sysinit/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_player/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_planner/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_player/src/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_guide/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_prefs/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_system_platform_components/darwin_spm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_system_platform_components/darwin_uam/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/vrm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/msm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/fem/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/mcm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/bem/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/mdm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/mpm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/camm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/sim/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/pcat/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/rmf/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/presentation_services/gfx/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemutil/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/presentation_services/cappres/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/ssm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/security_services/vgv/darwin/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/security_services/vgv/darwin/carange -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemalarm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/fdm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/fdm/fdm_optv -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/tests/CUnit-2.0-2/CUnit/Headers -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/ipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/CDI_INC/include -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/nds -include /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc/clocks.h -ffunction-sections -fdata-sections -DDIAG_FILE_ID=260 -c /home/NDS-UK/kyoupark/STB_SW/DARWIN_PLATFORM/DARWIN_PLAYER/src/player_api_session.c > out.txt
+FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gcc -E -Os -fno-strict-aliasing -Wall -g -fno-builtin -DNeedFunctioPrototypes=1 -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations   -DAPP_MGMT_SIGNAL_24_7_SERVICE_TYPE_82H -DAPP_MGMT_SIGNAL_ETV_OTV_TRIGGER_MOD -DAPP_MGMT_SIGNAL_RECOMMENDATION_OTV_PROMO_MOD -DAUTHENTICATION_NDS_SAC -DBSKYB_SUPPORT_HEP_WITH_OIG -DCALLBACK_PSTN -DCAPTION_TELETEXT_LEGACY_LAYOUT -DCAROUSEL_MHC -DCAROUSEL_OTV -DCA_VIDEOGUARD_NDS_SECURE_RETURN_PATH -DCA_VIDEOGUARD_PARENTAL_RESTRICT -DCA_VIDEOGUARD_WATERSHED -DFRONT_END_DTT_USB -DFRONT_END_SAT -DFRONT_END_SAT_SCR -DFUSION_APP_MGMT_SUPPORTED -DFUSION_AUTHENTICATION_SUPPORTED -DFUSION_BDL_SUPPORTED -DFUSION_CA_VIDEOGUARD_SUPPORTED -DFUSION_DYNAMIC_TSA_SUPPORTED -DFUSION_HEADEND_METADATA_SUPPORTED -DFUSION_HOME_NETWORK_SUPPORTED -DFUSION_METADATA_SUPPORTED -DFUSION_NETWORK_SUPPORTED -DFUSION_PDL_SUPPORTED -DFUSION_PVOD_SUPPORTED -DFUSION_PVR_SUPPORTED -DFUSION_TARGETED_MESSAGING_SERVICE_SUPPORTED -DFUSION_USER_ACTIVITY_SUPPORTED -DFUSION_VIDEOGUARD_NOTIFY_SUPPORTED -DFUSION_VWS_SUPPORTED -DGUIDE_BSKYB_FORMAT_LOGICAL_CHAN_NO -DGUIDE_BSKYB_SUBSCRIBER_PROPERTIES_USED -DHEADEND_METADATA_OIGC -DHOME_NETWORK_MEDIA_RENDERER -DHOME_NETWORK_PLANNER_SERVER -DHOME_NETWORK_REMOTE_UI -DHOTPLUG_SUPPORT -DIPPV -DMCM_PVR_RECORD_CA_HOLES -DMETADATA_SI_XSI_SSR -DNETWORK_CONFIGURE_LAN -DPDL_NDS_SECURE_AUTH -DPLAYER_PIN_HANDLING_A -DPLAYER_REMOTE_UI_HTTP -DPVOD_LINEAR_TRANSPORT -DPVR_CHECK_XTV_STATUS -DPVR_CLASSIC_REVIEW_BUFFER -DSERIES_IMPLICIT_SERIES_DELETION -DSERIES_SYNCHRONIZE_BOOKINGS_WITH_SIGNUPS -DSI_SERVICE_SCAN_XSI -DSOFTWARE_DOWNLOAD_OTV -DSRM_ELEMENTARY_STREAMS_SELECTION_A -DSRM_USE_PI_SCHEDULE_FLAG_FOR_AVAILABILITY -DUSBTUNER_SUPPORTED -DUSB_SUPPORTED -DUSER_ACTIVITY_BARB -DUSER_ACTIVITY_SSP -DWIFI_SUPPORTED -DWLM_SUPPORTED -DRELEASE_DBG -DDIAG_RELEASE_DBG -DDIAG_BINARY_MODE -DDIAG_PERFORMANCE_MODE -DOTV_CAROUSEL_SUPPORTED -DXSI_SUPPORTED -DLINT_ERRORS_ONLY= -DLINT_RESTORE= -DMEMLIST -DMEMLIST_SLEEP_PERIOD=60 -DMEMPROF -DPROFILE_A -DDIAG_LOG_NDEBUG -DNDEBUG -DMEMMAN_TRUSTED_CLIENT -DGFX_NO_SHAPE -DGFX_IMAGE_NO_DITHERING -DGFX_PAINTER_NO_ARGB16_4444 -DGFX_PAINTER_NO_ARGB16_4444_PREMULT -DGFX_PAINTER_NO_RGB16_565 -DGFX_PAINTER_NO_SURFACE_RW -DMSCQ189287_CLOCK_MONOTONIC_NOT_SUPPORTED -DCQ171339 -DLEGACY_MIGRATION_SUPPORT -DSUN_BUILD -DNDS_APP_TYPE_PICASSO -DDIAG_JAVA_DEBUG -D_XOPEN_SOURCE=600 -DAMS_BCM_MIPS4K_LNUX_DARWIN_01 -DFUSION_PROFILE -DMEMMAN_TRUSTED_CLIENT -DMSCQ1854424_SP_SCHEMA_ONLY -DMSCQ2375670_SET_PROVIDER_CLASS_MEMBERSHIP -DCQ380004_USE_STB_SW_01 -DMEMMAN_FORCE_USE_MALLOC_DIRECTLY -DPLAYER_DUMP_VTABLES -DPLAYER_VTABLE_LEAK_DETECTION -DCAPTIONS_SUBTITLES -DCDI_IOCTL_DEFINITIONS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/ioctl_magic.h" -DCDI -DIS_BIG_ENDIAN -D__BIG_ENDIAN -D_XOPEN_SOURCE=600 -D__USE_XOPEN2K -D_GNU_SOURCE -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemcommon/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlang/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlocator/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemstring/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemtime/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemobject/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemitc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemconfig/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/diag/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/memman/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/misc_libraries/httpserver/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_control_and_diagnostics/sysinit/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_player/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_planner/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_player/src/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_guide/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_prefs/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_system_platform_components/darwin_spm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_system_platform_components/darwin_uam/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/vrm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/msm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/fem/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/mcm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/bem/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/mdm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/mpm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/media_services/camm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/sim/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/pcat/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/rmf/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/presentation_services/gfx/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemutil/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/presentation_services/cappres/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/ssm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/security_services/vgv/darwin/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/security_services/vgv/darwin/carange -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemalarm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/fdm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/information_services/fdm/fdm_optv -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/tests/CUnit-2.0-2/CUnit/Headers -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/ipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/CDI_INC/include -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/nds -include /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc/clocks.h -ffunction-sections -fdata-sections -DDIAG_FILE_ID=260 -c /home/NDS-UK/kyoupark/STB_SW/DARWIN_PLATFORM/DARWIN_PLAYER/src/player_api_session.c > out.txt
+
+
+<build-output>
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg$
+drwxr-xr-x  3 kyoupark ccusers 4096 Jul 22 09:08 applications/
+drwxr-xr-x 15 kyoupark ccusers 4096 Jul 22 09:29 components/
+drwxr-xr-x  4 kyoupark ccusers 4096 Jul 22 09:28 dyn/
+drwxr-xr-x  3 kyoupark ccusers 4096 Jul 22 09:28 engines/
+drwxr-xr-x  2 kyoupark ccusers 4096 Aug 26 15:06 processes/
+drwxr-xr-x  3 kyoupark ccusers 4096 Jul 22 09:28 projects/
+
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/components/media_services/bem/src/server$ ls
+bem_cec.deps                      bem_composition_table.deps  bem_device_denc_conf.deps  bem_link_discovery.deps  bem_path_determine.deps  bem_plane_table.deps    bem_server_oc.deps             bem_terminal.deps
+bem_cec.o                         bem_composition_table.o     bem_device_denc_conf.o     bem_link_discovery.o     bem_path_determine.o     bem_plane_table.o       bem_server_oc.o                bem_terminal.o
+bem_channel.deps                  bem_connection.deps         bem_device_discovery.deps  bem_link_table.deps      bem_path_release.deps    bem_port.deps           bem_source.deps                bem_track.deps
+bem_channel.o                     bem_connection.o            bem_device_discovery.o     bem_link_table.o         bem_path_release.o       bem_port.o              bem_source.o                   bem_track.o
+bem_channel_table.deps            bem_connection_table.deps   bem_device_table.deps      bem_lock.deps            bem_path_reserve.deps    bem_server.deps         bem_source_table.deps          bem_track_table.deps
+bem_channel_table.o               bem_connection_table.o      bem_device_table.o         bem_lock.o               bem_path_reserve.o       bem_server_ipc.deps     bem_source_table.o             bem_track_table.o
+bem_composition.deps              bem_db.deps                 bem_eedid.deps             bem_monitor.deps         bem_path_utils.deps      bem_server_ipc.o        bem_teletext_frame.deps        libms_bem_server_src.a
+bem_composition_links_table.deps  bem_db.o                    bem_eedid.o                bem_monitor.o            bem_path_utils.o         bem_server_ipc_oc.deps  bem_teletext_frame.o           temp2_libms_bem_server_src.a
+bem_composition_links_table.o     bem_device_configure.deps   bem_internal_event.deps    bem_path_attach.deps     bem_plane.deps           bem_server_ipc_oc.o     bem_teletext_frame_table.deps  temp_libms_bem_server_src.a
+bem_composition.o                 bem_device_configure.o      bem_internal_event.o       bem_path_attach.o        bem_plane.o              bem_server.o            bem_teletext_frame_table.o
+
+
+<build-spk>
+/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir/mips-linux-uclibc
+/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir/mips-linux-uclibc/include/asm/errno.h
 
 
 ={============================================================================
-|kt_dev_si_0002| si-build-ci
+|kt_dev_si_0002| si-build-core
+
+// 890
+~/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gdb
+
+$ file 498.COR
+498.COR: ELF 32-bit MSB core file, MIPS, MIPS-I version 1 (SYSV), SVR4-style
+
+$ file MW_Process
+MW_Process: ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked (uses shared libs), not stripped
+
+
+={============================================================================
+|kt_dev_si_0002| si-build-baseline
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Creating_and_Releasing_a_Darwin_SI_Baseline_via_Git
+
+
+{dms}
+#------------------------------------------------------------------------------
+# Bring in a new DMS
+#------------------------------------------------------------------------------
+
+SI_BRANCH=BSKYB_HR015_Int
+DMS_BRANCH=DMS_BSKYB_HR015
+OLD_DMS="D91.0.1"
+NEW_DMS="D91.0.2"
+
+echo -e "\nSI_BRANCH:  ${SI_BRANCH}\nDMS_BRANCH: ${DMS_BRANCH}\nOLD_DMS: ${OLD_DMS}\nNEW_DMS: ${NEW_DMS}\n"
+
+git merge ${DMS_BRANCH}/${NEW_DMS} --no-commit
+
+# Git will report (possibly amongst other conflicts):
+...
+CONFLICT (file/directory): There is a directory with name THIRD_PARTY_LIBRARIES/BSKYB_JTH in ${DMS_BRANCH}/${NEW_DMS}. Adding THIRD_PARTY_LIBRARIES/BSKYB_JTH as THIRD_PARTY_LIBRARIES/BSKYB_JTH~HEAD
+...
+# To resolve that conflict, just type:
+git add THIRD_PARTY_LIBRARIES/BSKYB_JTH
+
+# If there's been a merge conflict for resolve_deps.ini:
+$ git mergetool Resolve_Deps/ini_files/resolve_deps.ini
+
+# Otherwise, check for upstream changes to resolve_deps.ini between old and new DMS:
+git log -p ${DMS_BRANCH}/${OLD_DMS}..${DMS_BRANCH}/${NEW_DMS} -- Resolve_Deps/ini_files/resolve_deps.ini
+
+# If the output of the previous command is *not* empty:
+# {
+$ git checkout ${SI_BRANCH} -- Resolve_Deps/ini_files/resolve_deps.ini
+$ emacs Resolve_Deps/ini_files/resolve_deps.ini  # edit as appropriate
+$ git add Resolve_Deps/ini_files/resolve_deps.ini
+# }
+
+$ git commit
+
+# Reflect any merged-in changes to submodules in the workspace:
+$ git submodule update --init
+
+
+{picasso}
+this is submodule and have own git repo.
+
+NEW_PICASSO_BRANCH="HR015_Int"
+NEW_PICASSO="pvrR12.98895"
+
+echo -e "\nNEW_PICASSO \t\t: ${NEW_PICASSO}\nNEW_PICASSO_BRANCH \t: ${NEW_PICASSO_BRANCH}\n"
+
+// from log
+3b527a2 (HEAD, tag: BSKYB_JTH_pvrR12.98680_BSKYB_JTH_HR015_Int) Automated Picasso import script
+0dd05ad (tag: BSKYB_JTH_pvrR12.98535-MID-6851_BSKYB_JTH_HR015_Int) MID-6851-US12477-PlannerAPIupdate
+
+// from email
+FW: R12  Release-picasso__BSKYB_HR015_Integration__pvrR12__98832
+
+note:
+# A new Picasso baseline might come from GM or from branch, e.g.:
+# BSKYB_JTH_trunk.94366_BSKYB_JTH_GM_Integration / BSKYB_JTH_trunk.97292_BSKYB_JTH_HR014_Int
+#                                 ^^^^^^^^^^^^^^                                   ^^^^^^^^^
+
+cd THIRD_PARTY_LIBRARIES/BSKYB_JTH; git fetch
+
+// check if it is already imported in git
+// http://hudsonmaster1.uk.nds.com:8080/hudson/view/import_releases/
+// or 
+// inspect fetch
+
+# * [new tag]         BSKYB_JTH_pvrR12.98832_BSKYB_JTH_HR015_Int -> BSKYB_JTH_pvrR12.98832_BSKYB_JTH_HR015_Int
+# * [new tag]         BSKYB_JTH_pvrR12.98863_BSKYB_JTH_HR015_Int -> BSKYB_JTH_pvrR12.98863_BSKYB_JTH_HR015_Int
+# * [new tag]         BSKYB_JTH_pvrR12.98895_BSKYB_JTH_HR015_Int -> BSKYB_JTH_pvrR12.98895_BSKYB_JTH_HR015_Int
+
+# git co BSKYB_JTH_pvrR12.98832_BSKYB_JTH_HR015_Int
+
+git checkout BSKYB_JTH_${NEW_PICASSO}_BSKYB_JTH_${NEW_PICASSO_BRANCH}
+
+$ cd ../..
+$ git status
+git add THIRD_PARTY_LIBRARIES/BSKYB_JTH
+
+# git commit -m "Switch to new Picasso (pvrR12.98863)"
+echo git commit -m "Switch to new Picasso (${NEW_PICASSO}) and new DMS(${NEW_DMS})"
+
+
+{baseline}
+SI_BRANCH=BSKYB_HR015_Int
+NEW_SI_BL="84.41.00"
+
+echo -e "\nSI_BRANCH:  ${SI_BRANCH}\nNEW_SI_BL: ${NEW_SI_BL}\n"
+
+# Create the new SI BL tag:-
+
+echo git tag ${SI_BRANCH}/BSKYB_INTEGRATION_BLD_${NEW_SI_BL}_${SI_BRANCH} \
+-am "SI baseline ${NEW_SI_BL} with new Picasso (${NEW_PICASSO})"
+
+# - new DMS and Picasso:
+echo git tag ${SI_BRANCH}/BSKYB_INTEGRATION_BLD_${NEW_SI_BL}_${SI_BRANCH} \
+-am "SI baseline ${NEW_SI_BL} with new DMS (${NEW_DMS}) and new Picasso (${NEW_PICASSO})"
+
+git tag BSKYB_HR015_Int/BSKYB_INTEGRATION_BLD_84.40.00_BSKYB_HR015_Int -am "SI baseline 84.40.00 with new Picasso (pvrR12.98863)"
+
+SI_BRANCH=BSKYB_HR015_Int       # R12
+
+# Push the committed changes to Gerrit:
+$ git push origin HEAD:refs/for/${SI_BRANCH}
+git push origin HEAD:refs/for/BSKYB_HR015_Int
+
+# Go to Gerrit (the URL is in the output of the previous command), get the
+# changes reviewed ('Code-Review +2') and then 'Submit' them.
+
+# Push the new SI BL tag:
+git push -n origin ${SI_BRANCH}/BSKYB_INTEGRATION_BLD_${NEW_SI_BL}_${SI_BRANCH}
+
+# Goto http://hudsonmaster1:8080/hudson/job/AutoSI_GetBaseline/, log in, select
+# 'Build with Parameters' on the left hand side, fill in the appropriate values
+# and start the baseline build.
+# NB: Use if possible 'ukstbuild3_bskyb' as CC_SERVER; the Bash shell on
+# 'hudsconccspur' appears to be set up slightly differently.
+
+
+={============================================================================
+|kt_dev_si_0002| si-build-errors
 
 quota_resource.c: In function 'QuotasOnDevice_Add':
 quota_resource.c:3475: error: 'Idx' undeclared (first use in this function)
@@ -842,6 +1040,12 @@ make[2]: *** Waiting for unfinished jobs....
 
 
 cc1: warnings being treated as errors
+
+
+={============================================================================
+|kt_dev_si_0002| si-build-process
+
+STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/APP_Process
 
 
 ={============================================================================
@@ -1006,7 +1210,18 @@ note:
     recursive invocations of make (see Recursive Use of make).
 
 
+<project-picasso-makefile>
 // FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/makefile
+
+ifeq ($(MEMBUSTER), YES)
+    # updating NDS_DEFINE here as memman src.mk requires this.
+    override NDS_DEFINES += MEMMAN_MEMBUSTER
+    override NDS_DEFINES += MEMBUSTER_SHORT_LOG
+    override NDS_DEFINES += MEMBUSTER_NO_DOUBLE_FREE_MSG
+endif
+
+# using dynamic memory allocation for all platforms
+override PROJECT_DEFINES+=`MEMMAN_FORCE_USE_MALLOC_DIRECTLY`
 
 ifneq ($(BUILD_CARANGE_LIB_ONLY), YES)
     LOCAL_COMPONENTS += ../processes/APP_Process
@@ -1251,14 +1466,29 @@ configure_spk()
 # if SCS FLAG is set to "" then it means that SCS has to be included
 #
 # ./configure O=${SPK_BUILD_OUTPUT_DIR} $SPK_PLATFORM $SPK_VARIANT $SPK_CONFIG
-#
-# (for sky_trials)
-# (to get a console. OK.)
-#  # nds_si_devel profile does not boot up with noconsole - but not required as of Nov '09.
-#  if [ "${PROFILE}" ==  "sky_prod" ] || [ "${PROFILE}" ==  "sky_tpt" ] || [ "${PROFILE}" ==  "sky_trials" ] || [ "${PROFILE}" ==  "cust_trials" ]; then
-#    SPK_CONFIG+=" console"
-#  fi
-#
+
+
+<to-enable-console>
+// from:
+//
+// # nds_si_devel profile does not boot up with noconsole - but not required as of Nov '09.
+// if [ "${PROFILE}" ==  "sky_prod" ] || [ "${PROFILE}" ==  "sky_tpt" ] || [ "${PROFILE}" ==  "sky_trials" ] || [ "${PROFILE}" ==  "mem_trials" ] || [ "${PROFILE}" ==  "cust_trials" ]; then
+//   SPK_CONFIG+=" noconsole"
+// fi
+//
+// to:
+//
+// # nds_si_devel profile does not boot up with noconsole - but not required as of Nov '09.
+// if [ "${PROFILE}" ==  "sky_prod" ] || [ "${PROFILE}" ==  "sky_tpt" ] || [ "${PROFILE}" ==  "sky_trials" ] || [ "${PROFILE}" ==  "cust_trials" ]; then
+//   SPK_CONFIG+=" console"
+// fi
+//
+// or simply enable for all
+//
+// SPK_CONFIG+=" console"
+//
+
+
 # (use debug SPK) 
 # KT: ./configure O=/home/NDS-UK/parkkt/cc/parkkt_BSKYB_HR006_001/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug ams-drx890 debug initramfs otv fullstack    noconsole
 #
@@ -1766,46 +1996,17 @@ echo "If using sad-faced dog and auto-refresh doesn't work, try link above."
 
 
 ={============================================================================
-|kt_dev_si_0002| si-sh-to-dates
-
-#-----------------------------------------------------------
-# to_dates
-#-----------------------------------------------------------
-Readable Any Date
-
-to_dates converts any possible timestamp into a date format.
-
-Usage guide: cat something | to_dates
-
-Example usage:
-
-tail -1 LOGlastrun | to_dates 
-
-NDS: ^[16:28:22]0946744102.035999 ...
-
-To save this to a file, just do
-
-cat LOGlastrun | to_dates > LOG.converted
-
-It is also possible to convert the file "in place":
-
-to_dates LOGlastrun
-
-Additionally, if the time desired is the actual time from the stream, rather than the time related to the box's last boot-time, it is possible to use
-
-to_dates -real LOGlastrun
-
-This uses the first SYSTEMTIME message "Time has been updated to" as callibration, and amends all times relative to that, e.g.
-
--
-NDS: ^[18:21:16]0946685685.229684 !MIL   -SYSTEMTIME   < p:00000064 t:2aeb4830 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD 
- M:systemtime.c F:SYSTEMTIME_SetTime L:00911 > Time has been updated to 18:21:16
-NDS: ^[18:21:23]0946685692.827540 !MIL   -aem          < p:00000065 t:010d3c40 T:AEM_INPUT_MONITOR_THREAD 
- M:aem_userinput.c F:AEM_InputMonitorThread L:00429 > KEY_PRESS: code=0x(INFO)e00e
--
-
-={============================================================================
 |kt_dev_si_0002| si-sh-test-log
+
+# run_log_parser
+$WHERE/test_log $1 >> $OUTFILE
+
+# test_log
+test_log.py $FILE $FORCE
+
+# test_log.py
+# makes .bestguess
+
 
 #-----------------------------------------------------------
 # test_log: logparser
@@ -1819,10 +2020,7 @@ NDS: ^[18:21:23]0946685692.827540 !MIL   -aem          < p:00000065 t:010d3c40 T
 #
 # <testlist> PATTERN MATCHING
 # * runs simple reg pattern match using each entry in `testlist.txt` or
-# `testlist_full.txt` 'generic_tester.sh'
-#
-#
-# TODO: testlist format example
+# `testlist_full.txt` 'generic_tester.sh' in theyard:bin
 #
 # 3 Error iterating through calls to
 # PLANNER_DBINTERFACE_ResetIncoherentBooking
@@ -1864,6 +2062,74 @@ ftpsky "dir *$1*"
 ftpsky "ls *_001018001200_*" | grep 'Mar 27'
 ./ftpsky "get darwin_001018001200_30c26f7d966c03ff4f850a19380182b4.tgz"
 
+
+={============================================================================
+|kt_dev_si_0002| si-sh-test-log-parser
+
+{testlist-full}
+
+<1>
+10	2	"SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)" message from EPG.Example: NDS: ^[2014:08:17 17:05:52]0946730023.344540 !ERROR  -EPG_ME       < p:0x000001d0 P:APP t:0x2bbab520 T:no name M:SatelliteSignalGainedLostHandler F:handlePlayerEventComponentFail L:214 > T:PooledExecutor#0:SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)	SOMETHING TIMEDOUT		"SOMETHING TIMEDOUT" message from EPG (NSS/TF code 30): PLAYER timeout on media selection. Check VRM/MCM/MDM.		Imported	2012-01-06		None
+
+# !ERROR  -EPG_ME       		< p:0x000001e1 P:APP t:0x2df24520 T:no name M:SatelliteSignalGainedLostHandler F:handlePlayerEventComponentFail L:229 > T:PooledExecutor#2:SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)
+
+note:
+Timeout for 10 secs and looks valid. See *player-events-to-app*
+
+
+<2>
+247	2	This indicates some sort of lockup. Here Planner calls SBM which in-turn calls RMF, but no reply is received at planner.	planner_disk.c F:PLANNER_Disk_GetQuotaStatusFromSBM.*Wait timeout	SI-7792	Indicates some sort of lockup in the system.		Vinay Acharya	2013-08-09		None
+
+!ERROR  -PLANNER < M:planner_disk.c F:PLANNER_Disk_GetQuotaStatusFromSBM L:385 > Wait timeout
+
+if(PLANNER_Cond_TimedWaitRel(&(l_payload->data.sbm_quota_status.cond), 10) !=  PLANNER_API_STATUS_OK)
+{
+  DIAG_LOG_ERROR(g_planner_diag_segment_id, ("Wait timeout"));
+}
+
+note:
+Waits for 10 secs and looks valid
+
+
+
+={============================================================================
+|kt_dev_si_0002| si-sh-to-dates
+
+#-----------------------------------------------------------
+# to_dates
+#-----------------------------------------------------------
+Readable Any Date
+
+to_dates converts any possible timestamp into a date format.
+
+Usage guide: cat something | to_dates
+
+Example usage:
+
+tail -1 LOGlastrun | to_dates 
+
+NDS: ^[16:28:22]0946744102.035999 ...
+
+To save this to a file, just do
+
+cat LOGlastrun | to_dates > LOG.converted
+
+It is also possible to convert the file "in place":
+
+to_dates LOGlastrun
+
+Additionally, if the time desired is the actual time from the stream, rather than the time related to the box's last boot-time, it is possible to use
+
+to_dates -real LOGlastrun
+
+This uses the first SYSTEMTIME message "Time has been updated to" as callibration, and amends all times relative to that, e.g.
+
+-
+NDS: ^[18:21:16]0946685685.229684 !MIL   -SYSTEMTIME   < p:00000064 t:2aeb4830 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD 
+ M:systemtime.c F:SYSTEMTIME_SetTime L:00911 > Time has been updated to 18:21:16
+NDS: ^[18:21:23]0946685692.827540 !MIL   -aem          < p:00000065 t:010d3c40 T:AEM_INPUT_MONITOR_THREAD 
+ M:aem_userinput.c F:AEM_InputMonitorThread L:00429 > KEY_PRESS: code=0x(INFO)e00e
+-
 
 ={============================================================================
 |kt_dev_si_0002| si-sh-alog
@@ -1999,8 +2265,8 @@ http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?STREAM=&BASELINE=&PRIORITY=&
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?STREAM=R014&PLATFORM=drx890&PRIORITY=1&ERROR=%3Cp1%3EPlayer%20VTable%20ref%20leak%20found%2C%20might%20cause%20serious%20errors%20once%20ref%20count%20is%20wrapped%20around%20%28built%20by%20hudson%29%3C/p1%3E&INTERVAL=3%20month&MACLIST=&LOGS=999999
 
 // Out of memory in " "MW_HTTP_POOL" pool
-// Out%20of%20memory%20in%20%22%20%22MW_HTTP_POOL%22%20pool
-http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?PLATFORM=drx890&PRIORITY=1&ERROR=Out%20of%20memory%20in%20%22%20%22MW_HTTP_POOL%22%20pool&INTERVAL=3%20month&MACLIST=&LOGS=999999
+http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?STREAM=R015&PLATFORM=drx890&PRIORITY=1&ERROR=SOMETHING%20TIMEDOUT&INTERVAL=3%20month&MACLIST=&LOGS=999999
+http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?STREAM=R015&PLATFORM=drx890&PRIORITY=1&ERROR=systemobject&INTERVAL=3%20month&MACLIST=&LOGS=999999
 
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FB63D645&ERROR=Tuner%20failed&LOGS=999999
 
@@ -2113,10 +2379,83 @@ parser.add_argument ("-d", "--dir", help="Folder containing the repository to co
 
 2. set diag and debug file.
 "darwin":"FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/SI_config.xml",
+
+adds overrides for all profiles:
+
+   <file name="diag.cfg">
+    <section name="OVERRIDDEN_VALUES">
+     <key name="TRACE_LEVEL_LIBCURL" type="STRING" value="AFEWMI"></key>
+    </section>
+  </file>
+
+
 "darwin":"FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk",
 
 3. for each key(component segment) in a dict, processSegment(key, value)
     add "NDS_BUILD_TYPE_xxx=debug" in debug file.
+
+
+={============================================================================
+|kt_dev_si_0002| si-tcpdump
+
+For instructions, see SI-10771
+
+
+={============================================================================
+|kt_dev_si_0002| si-dmalloc
+
+
+<dmalloc-build>
+
+1. change app_process_main.c
+
+/* Token 12 */
+dmalloc_debug_setup("log-stats,log-non-free,check-fence,error-free-null,print-messages");
+
+pagesize = dmalloc_page_size();
+printf("APP_Process dmalloc pagesize = %d system pagesize = %d\n", pagesize, getpagesize());
+printf("APP_Process size of long = %d\n", sizeof(long));
+
+
+2. change makefile to link with dmalloc lib for each process
+
+/build/processes/APP_Process/makefile
+
+COMPONENT_SOURCE_LIBRARIES+=\
+	$(NDS_ROOT)/libdmallocth.a
+COMPONENT_PREBUILT_OBJECTS+=\
+	$(NDS_ROOT)/libdmallocth.a
+
+
+3. enable console
+
+/build/make_image.sh
+
+  SPK_CONFIG+=" console"
+
+
+4. copy two files
+
+vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/dmalloc.h
+vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/libdmallocth.a
+
+
+25:08:16 15:46:17 946684826: 593: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 593:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 593:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 593: ERROR: free: pointer is null (err 20) 
+25:08:16 15:46:17 946684826: 600: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 600:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 600:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 600: ERROR: free: pointer is null (err 20) 
+25:08:16 15:46:17 946684826: 607: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 607:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 607:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 607: ERROR: free: pointer is null (err 20) 
+25:08:16 15:46:17 946684826: 628: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 628:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 628:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 628: ERROR: free: pointer is null (err 20) 
 
 
 ={============================================================================
@@ -2472,49 +2811,63 @@ SCI   Service Component Information
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-build
+|kt_dev_si_0001| comp-build enable-comp-diag
 
-1. component makefile
+<component-makefile>
 
-../comp/src/makefile
+Each component makefile defines:
+
+$/comp/src/makefile
 
   COMPONENT_NAME := darwin_planner_src
   COMPONENT_CC_DEFINES :=
 
   # this starts the process of refering global make files.
   include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
+  {
+    // *enable-comp-diag*
+    // To enable diag for a component, set NDS_BUILD_TYPE_$COMPONENT_NAME = debug
+    // this is where flipper makes changes
+
+    NDS_BUILD_TYPE_darwin_planner_src = debug
+    NDS_BUILD_TYPE_ms_mcm_src = debug
+    NDS_BUILD_TYPE_rmfplugin = debug      *comp-rmf*
+
+    include $(NDS_ROOT)/projects/fusion2/build_options.mk
+  }
 
 
-2. global makefiles
+  // include $(NDS_ROOT)/projects/fusion2/build_options.mk
+  {
+    // For example, suppose build "darwin_planner_src" and if NDS_BUILD_TYPE
+    // is defined for this component, define macros for debug diag build.
+    //
+    // ifeq (NDS_BUILD_TYPE_darwin_planner_src, debug)
 
-// build_options.mk
-FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk
-include $(NDS_ROOT)/projects/fusion2/build_options.mk
+    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),debug)
+      GLOBAL_DEFINES += DEBUG
+      GLOBAL_DEFINES += DIAG_DEBUG    *diag-debug*
+    endif
 
-// fusion2/build_options.mk and if see "debug" = "debug"
-ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),debug)
-  GLOBAL_DEFINES += DEBUG
-  GLOBAL_DEFINES += DIAG_DEBUG    *diag-debug*
-endif
+    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release)
+      GLOBAL_DEFINES += RELEASE
+      ifeq (YES,$(DIAG_RELEASE_MIL))
+        GLOBAL_DEFINES += DIAG_RELEASE_MIL
+      else
+        GLOBAL_DEFINES += DIAG_RELEASE
+      endif
+    endif
 
-ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release)
-  GLOBAL_DEFINES += RELEASE
-  ifeq (YES,$(DIAG_RELEASE_MIL))
-    GLOBAL_DEFINES += DIAG_RELEASE_MIL
-  else
-    GLOBAL_DEFINES += DIAG_RELEASE
-  endif
-endif
-
-ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release_dbg)
-  ifeq (YES,$(DIAG_ENABLE_ALL_LEVELS))
-    GLOBAL_DEFINES += RELEASE_DBG
-    GLOBAL_DEFINES += DIAG_DEBUG
-  else
-    GLOBAL_DEFINES += RELEASE_DBG
-    GLOBAL_DEFINES += DIAG_RELEASE_DBG
-  endif
-endif
+    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release_dbg)
+      ifeq (YES,$(DIAG_ENABLE_ALL_LEVELS))
+        GLOBAL_DEFINES += RELEASE_DBG
+        GLOBAL_DEFINES += DIAG_DEBUG
+      else
+        GLOBAL_DEFINES += RELEASE_DBG
+        GLOBAL_DEFINES += DIAG_RELEASE_DBG
+      endif
+    endif
+  }
 
 
 <platform-mk>
@@ -2552,19 +2905,75 @@ define PLATFORM_CC_BUILD_DEPENDENCY
   $(LOCAL_PLATFORM_CC) -MM $(LOCAL_PLATFORM_DEP_FLAGS) -MT $@ $< -o $(@:$(PLATFORM_OBJ_SUFFIX)=$(PLATFORM_DEPS_SUFFIX))
 endef
 
-<outputs>
+<build-outputs> <build-defines>
 # +++ Message from AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform.mk - 
 # building dependencies for /home/NDS-UK/kyoupark/STB_SW/\
 # FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/\
 # /AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/components/\
 # darwin_platform_components/darwin_player/src/player_xx_.o
 
-
+@472
 define PLATFORM_CC_BUILD_OBJECT
      echo +++ Message from $(NDS_PLATFORM)/platform.mk - Creating object $@
      echo "KT: $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@"
      $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@
 endef
+
+// as of 02/09/2016
+//
+KT:CC: /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gcc 
+-Os -fno-strict-aliasing -Wall -g -fno-builtin -DNeedFunctioPrototypes=1 -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations   
+
+-DAPP_MGMT_SIGNAL_24_7_SERVICE_TYPE_82H -DAPP_MGMT_SIGNAL_ETV_OTV_TRIGGER_MOD -DAPP_MGMT_SIGNAL_RECOMMENDATION_OTV_PROMO_MOD 
+-DAUTHENTICATION_NDS_SAC -DBSKYB_SUPPORT_HEP_WITH_OIG -DCALLBACK_PSTN -DCAPTION_TELETEXT_LEGACY_LAYOUT -DCAROUSEL_MHC -DCAROUSEL_OTV -DCA_VIDEOGUARD_NDS_SECURE_RETURN_PATH 
+-DCA_VIDEOGUARD_PARENTAL_RESTRICT -DCA_VIDEOGUARD_WATERSHED -DFRONT_END_DTT_USB -DFRONT_END_SAT 
+-DFRONT_END_SAT_SCR -DFUSION_APP_MGMT_SUPPORTED -DFUSION_AUTHENTICATION_SUPPORTED -DFUSION_BDL_SUPPORTED 
+-DFUSION_CA_VIDEOGUARD_SUPPORTED -DFUSION_DYNAMIC_TSA_SUPPORTED -DFUSION_HEADEND_METADATA_SUPPORTED 
+-DFUSION_HOME_NETWORK_SUPPORTED -DFUSION_METADATA_SUPPORTED -DFUSION_NETWORK_SUPPORTED -DFUSION_PDL_SUPPORTED 
+-DFUSION_PVOD_SUPPORTED -DFUSION_PVR_SUPPORTED -DFUSION_TARGETED_MESSAGING_SERVICE_SUPPORTED 
+-DFUSION_USER_ACTIVITY_SUPPORTED -DFUSION_VIDEOGUARD_NOTIFY_SUPPORTED -DFUSION_VWS_SUPPORTED -DGUIDE_BSKYB_FORMAT_LOGICAL_CHAN_NO 
+-DGUIDE_BSKYB_SUBSCRIBER_PROPERTIES_USED -DHEADEND_METADATA_OIGC -DHOME_NETWORK_MEDIA_RENDERER 
+-DHOME_NETWORK_PLANNER_SERVER -DHOME_NETWORK_REMOTE_UI -DHOTPLUG_SUPPORT -DIPPV -DMCM_PVR_RECORD_CA_HOLES 
+-DMETADATA_SI_XSI_SSR -DNETWORK_CONFIGURE_LAN -DPDL_NDS_SECURE_AUTH -DPLAYER_PIN_HANDLING_A 
+-DPLAYER_REMOTE_UI_HTTP -DPVOD_LINEAR_TRANSPORT -DPVR_CHECK_XTV_STATUS -DPVR_CLASSIC_REVIEW_BUFFER 
+-DSERIES_IMPLICIT_SERIES_DELETION -DSERIES_SYNCHRONIZE_BOOKINGS_WITH_SIGNUPS -DSI_SERVICE_SCAN_XSI 
+-DSOFTWARE_DOWNLOAD_OTV -DSRM_ELEMENTARY_STREAMS_SELECTION_A -DSRM_USE_PI_SCHEDULE_FLAG_FOR_AVAILABILITY 
+-DUSBTUNER_SUPPORTED -DUSB_SUPPORTED -DUSER_ACTIVITY_BARB -DUSER_ACTIVITY_SSP 
+-DWIFI_SUPPORTED -DWLM_SUPPORTED -DRELEASE_DBG -DDIAG_RELEASE_DBG 
+-DDIAG_MIN_FOOTPRINT -DOTV_CAROUSEL_SUPPORTED -DXSI_SUPPORTED -DLINT_ERRORS_ONLY= 
+-DLINT_RESTORE= -DPROFILE_A -DDIAG_LOG_NDEBUG -DNDEBUG -DMEMMAN_TRUSTED_CLIENT 
+-DGFX_NO_SHAPE -DGFX_IMAGE_NO_DITHERING -DGFX_PAINTER_NO_ARGB16_4444 
+-DGFX_PAINTER_NO_ARGB16_4444_PREMULT -DGFX_PAINTER_NO_RGB16_565 
+-DGFX_PAINTER_NO_SURFACE_RW -DMSCQ189287_CLOCK_MONOTONIC_NOT_SUPPORTED 
+-DCQ171339 -DLEGACY_MIGRATION_SUPPORT -DSUN_BUILD -DNDS_APP_TYPE_PICASSO 
+-DDIAG_JAVA_DEBUG -D_XOPEN_SOURCE=600 -DAMS_BCM_MIPS4K_LNUX_DARWIN_01 
+-DFUSION_PROFILE -DMEMMAN_TRUSTED_CLIENT -DMSCQ1854424_SP_SCHEMA_ONLY 
+-DMSCQ2375670_SET_PROVIDER_CLASS_MEMBERSHIP -DCQ380004_USE_STB_SW_01 
+-D`MEMMAN_FORCE_USE_MALLOC_DIRECTLY` -DBUILDING_DISK_PARTITION 
+
+-DCDI_IOCTL_DEFINITIONS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/ioctl_magic.h" 
+-DCDI -DIS_BIG_ENDIAN -D__BIG_ENDIAN -D_XOPEN_SOURCE=600 -D__USE_XOPEN2K -D_GNU_SOURCE 
+
+-I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/fusion2/helper_libraries/storage_helper/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_S
+YSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemcommon/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlang/
+inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlocator/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/b
+uild/components/system_libraries/systemutil/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemstring/inc -I/home/NDS-UK/kyoupark/STB_SW/FU
+SION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemtime/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemi
+tc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemconfig/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION
+/build/components/system_libraries/systemobject/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/diag/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION
+_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/memman/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemitc/inc -
+I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/ssm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
+components/system_libraries/ipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/common_middleware/xipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRA
+TION/BSKYB_INTEGRATION/build/components/system_control_and_diagnostics/sysinit/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/i
+nc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/src/server/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INT
+EGRATION/build/components/system_resource_management/pdm/src/common/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/tests/CUnit-2.0-2/CUnit/Headers -I/home/NDS
+-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemalarm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linu
+x/inc/CDI_INC/include -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BL
+D_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/nds -include /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/
+BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc/clocks.h -ffunction-sections -fdata-sections   -c /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSK
+YB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/components/system_resource_management/pdm/makefile_generated_config.c -o /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTE
+GRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/components/system_resource_management/pdm/src/disk_partition//home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION
+/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/components/system_resource_management/pdm/makefile_generated_config.o
 
 // $(LOCAL_PLATFORM_CC)
 // /STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/\
@@ -2951,16 +3360,85 @@ DIAG_LOG_RegisterTraceSegment("JAE", 3, NULL, &g_javaengine_segment_id))
 
 # Function for initialising the JavaEngine component, and registering 
 # its callbacks with the AEM component. 
-JE_Register
-	callback.terminate_fn = JE_TerminateFunctionCB; 
-	callback.user_input_fn = JE_UserInputFunctionCB; 
-	...(more callbacks)
+#
+jpa/modules/jvm-glue/src/c/src/je_aem.c
 
-	AEM_API_RegisterApplicationEngine(callback); 
+SYSTEM_STATUS JE_AEM_Register(void)
+{
+  .launch_fn              = JE_AEM_LaunchCallback,
+  .user_input_fn          = JE_AEM_UserInputCallback,
+
+  callback.terminate_fn = JE_TerminateFunctionCB; 
+  callback.user_input_fn = JE_UserInputFunctionCB; 
+  ...(more callbacks)
+
+  AEM_API_RegisterApplicationEngine(callback); 
+}
+
 
 (vobs\THIRD_PARTY_LIBRARIES\BSKYB_JTH\build\engines\java\src\ceej_bsp.c)
 JE_UserInputFunctionCB
 	CEEJ_BSP_PostKeyEvent # point where pumping keys to app
+
+
+<mem>
+[JAVAENGINE_MEM_CONFIG]
+POOL_FLAGS=123
+POOL_NAME="JAVAENGINE"
+POOL_SIZE=24117248
+
+jpa/modules/jvm-glue/src/c/src/ceej_bsp.c
+
+static BSP sBSPStorage = {
+	.version                        = BSP_VERSION,
+
+	.InitPostflight                 = InitPostflight,
+
+	.Memory_Alloc                   = Memory_Alloc,
+	.Memory_AllocCode               = Memory_AllocCode,
+	.Memory_Dispose                 = Memory_Dispose,
+	.Memory_DisposeCode             = Memory_DisposeCode,
+	.Memory_TotalPhysical           = Memory_TotalPhysical,
+	.Memory_MaximumHeapSize         = Memory_MaximumHeapSize,
+};
+
+
+/** -----------------------------------------------------------------------------*
+* @function Memory_Alloc
+*
+* @description
+* This method is used by the VM to allocate memory.  Since the VM
+* has its own internal memory manager, it will only allocate
+* large chuncks of memory with this method.
+* 
+* @param inBSP The BSP pointer.
+* @param outPtr The returned memory allocated.
+* @param inSize The amount of memory to allocate.
+*                 
+* @return Returns BSP_NOERR on success, BSP_ERR otherwise.  If
+* successful, the pointer to the memory is returned in outPtr.
+* -----------------------------------------------------------------------------*/
+static ooInt BSPCALL Memory_Alloc(BSP* inBSP, void** outPtr, UInt32 inSize)
+{
+	return CEEJ_Memory_Alloc(outPtr,inSize);
+}
+
+jpa/modules/jvm-glue/src/c/src/ceej_mem.c
+
+ooInt CEEJ_Memory_Alloc(void** outPtr, UInt32 inSize)
+{
+	DIAG_DECLARE_FUNCTION(__FUNCTION__);
+
+ 	if (hMemoryPool == 0L)
+	{
+		CEEJ_Memory_Init();
+	}
+
+	ooInt result = BSP_NOERR;
+	*outPtr = MEMMAN_API_AllocStaticP(hMemoryPool, inSize);
+
+	return result;
+}
 
 
 ={============================================================================
@@ -3251,8 +3729,10 @@ void AEM_JAVA_API_RegisterApplicationEventListener(NDSJNI_ENV *env)
 }
 
 
-# KEY LOGS from Picasso
-NDS: ^MIL    -aem          	< M:aem_userinput.c F:AEM_InputMonitorThread L:517 > KEY_PRESS: code=0x(SERVICES)e00a 
+<key-pressed>
+!MIL    -aem          		< p:0x000003aa P:APP t:0x013f8520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(SKY)ef01 
+!MIL    -EPG_KEY      		< p:0x000003aa P:APP t:0x2bfeb520 T:no name M:KeyProcessor F:keyPressed L:159 > T:CEE-J EventQueue Reader 0:Keycode is 2:SKY x1 @0-946687837324
+
 NDS: ^MIL   -EPG_UI       < M:PresentationManager F:dispatchKey L:00739 > KEYPRESS 1:35 handled by Screen FULLSCREEN layer=0, id=0 View 458756
 NDS: ^MIL   -EPG_UI       < M:PresentationManager F:dispatchKey L:00739 > KEYPRESS 1:145 handled by Screen FULLSCREEN layer=0, id=0 View 458756
 NDS: ^MIL   -EPG_UI       < M:PresentationManager F:dispatchKey L:00739 > KEYPRESS 1:140 handled by Screen OPTIONS layer=3, id=8 View 65544
@@ -3372,6 +3852,102 @@ ATG_VODCL_Session_RetrievePvodThumbnails
 
 COMPONENT_NAME:=ms_bem_server_src
 COMPONENT_NAME:=ms_bem_client_src
+
+<bem-thread>
+BEM thread "BEM_INTERNAL_EVENT_THREAD"
+BEM_PRIVATE void* BEM_InternalEvent_ThreadEntry(void * arg)
+
+
+<poll-interval>
+// NDS: ^[2016:08:22 04:50:42]0946737989.393631 !WARN   -BEM          		< p:0x000001df P:MW t:0x0177e520 
+// T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
+
+void BEM_InternalEvent_CheckHdcpStatus(BEM_DB_PRIMITIVE_DEVICE_ROW *hdmi_row)
+{
+  if (BEM_IOCTL(hdmi_row->device_fd, HDMI_HDCP_GET_BSTATUS, &status) == BEM_POSIX_OK)
+  {
+  }
+  else
+  {
+    hdcp_state = BEM_OC_HDMI_HDCP_STATE_UNAVAILABLE;
+    DIAG_LOG_WARN(g_BEM_ServerDiagSegId, ("HDMI_HDCP_GET_BSTATUS failed, errno %i", errno));
+  }
+}
+
+
+void BEM_InternalEvent_StartHDMIAlarm(void)
+{
+  f_BEM_HdmiAlarmInfo.alarm_data.rel_info.callback = BEM_InternalEvent_PostHdmiStatusAlarm;
+  post BEM_INTERNAL_EV_`HDMI_STATUS`_ALARM which leas to 
+  calls BEM_InternalEvent_Do`HdmiStatus`Alarm()
+  calls BEM_InternalEvent_`CheckHdmiAndStatus`()
+}
+
+
+bem.cfg:24:HDCP_STATUS=1000
+
+    else if (SYSTEMCONFIG_GetIntegerValue(cfg_handle,
+                                          BEM_CONFIG_HDMI_CONFIG_SECTION,
+                                          BEM_CONFIG_`HDCP_STATUS`,
+                                          &`g_BEM_HdmiHdcpStatusPollDelay`) != SYSTEMCONFIG_STATUS_OK)
+
+bem.cfg:37:HDMI_CONNECTION_STATUS=1000
+
+    else if (SYSTEMCONFIG_GetIntegerValue(cfg_handle,
+                                          BEM_CONFIG_HDMI_CONFIG_SECTION,
+                                          BEM_CONFIG_HDMI_CONNECTION_STATUS,
+                                          &g_BEM_HdmiConnStatusPollDelay) != SYSTEMCONFIG_STATUS_OK)
+
+BEM_InternalEvent_CheckHdmiAndStatus()
+{
+  // when auth is failed
+  DIAG_LOG_INFO(g_BEM_ServerDiagSegId, ("Authentication/encryption failed"));
+
+  BEM_InternalEvent_StartPollingBstatus();
+  {
+    // `relative`
+    f_BEM_HdcpStatusAlarmInfo.is_absolute = false;
+    f_BEM_HdcpStatusAlarmInfo.alarm_data.rel_info.callback = BEM_InternalEvent_PostHdcpStatusAlarm;
+    f_BEM_HdcpStatusAlarmInfo.alarm_data.rel_info.is_repeating = true;
+
+    // post BEM_INTERNAL_EV_HDMI_`BSTATUS`_ALARM 
+    // calls BEM_InternalEvent_Do`HdcpStatus`Alarm
+    // calls BEM_InternalEvent_CheckHdcpStatus()
+
+    f_BEM_HdcpStatusAlarmInfo.alarm_data.rel_info.callback = BEM_InternalEvent_Post`HdcpStatus`Alarm;
+    f_BEM_HdcpStatusAlarmInfo.alarm_data.rel_info.is_repeating = true;
+    f_BEM_HdcpStatusAlarmInfo.alarm_data.rel_info.timeout = g_BEM_HdmiHdcpStatusPollDelay;
+
+    // typedef struct SYSTEMALARM_ALARM_REL_INFO_TAG
+    // {
+    // 	uint32_t  timeout; /*!< @brief Relative timeout value in `msecs` (for relative alarm). */
+    // 	bool is_repeating;/*!< @brief Determines if the alarm should reset itself after timeout. The new timeout it calculated before the callback is called. */
+    // } SYSTEMALARM_ALARM_REL_INFO;
+  }
+}
+
+// BEM_InternalEvent_TerminateAlarms 1305 CMS_MEDIA_SERVICES/BEM/src/server/bem_path_attach.c     if (BEM_InternalEvent_TerminateAlarms() != BEM_STATUS_OK)
+// BEM_InternalEvent_TerminateAlarms 1224 CMS_MEDIA_SERVICES/BEM/src/server/bem_server.c     if (BEM_InternalEvent_TerminateAlarms() != BEM_STATUS_OK)
+SYSTEM_STATUS BEM_InternalEvent_TerminateAlarms(void)
+{
+  DIAG_LOG_INFO(g_BEM_ServerDiagSegId,("Stopping HDMI connection alarm"));
+  if (SYSTEMALARM_Cancel(f_BEM_HdmiConnAlarmHandle) != SYSTEMALARM_STATUS_OK)
+  {
+    status = BEM_STATUS_NOT_OK;
+  }
+
+  /* Stop polling the HDCP connection status */
+  DIAG_LOG_INFO(g_BEM_ServerDiagSegId, ("Stopping HDCP bstatus polling %08x",f_BEM_HdcpStatusAlarmHandle));
+  if (SYSTEMALARM_Cancel(f_BEM_HdcpStatusAlarmHandle) == SYSTEMALARM_STATUS_OK)
+  {
+    f_BEM_HdcpStatusAlarmHandle = SYSTEMALARM_HANDLE_ILLEGAL;
+  }
+}
+
+^[2016:07:30 06:01:42]0946685045.717415 !WARN   -BEM          		< T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
+^[2016:07:30 06:01:43]0946685046.880410 !WARN   -BEM          		< T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
+^[2016:07:30 06:01:45]0946685048.043415 !WARN   -BEM          		< T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
+^[2016:07:30 06:01:46]0946685049.207411 !WARN   -BEM          		< T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
 
 
 ={============================================================================
@@ -4156,6 +4732,27 @@ DRV: ^[23:07:50]0946768070.432141 KERN_WARNING <<< Remote Key >>> key 0xe307 ( U
 DRV: ^[00:10:43]0946685443.806142 KERN_WARNING SPLICE_DBG:F:ioctl_VIDEO_DECODER_STOP L:4440   
 DRV: ^[00:10:43]0946685443.831142 KERN_WARNING SPLICE_DBG:F:ioctl_VIDEO_DECODER_FLUSH_RATE_BUFFER L:4569   
 
+<driver-delivery>
+note:
+This is not a source delivery.
+
+~/STB_SW/deps/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball$ ls -al
+total 24764
+drwxr-xr-x 2 kyoupark ccusers    4096 May 18  2010 .
+drwxr-xr-x 6 kyoupark ccusers    4096 Oct 26  2009 ..
+-r-xr--r-- 1 kyoupark ccusers 3328721 May 20 13:33 cdi-drivers-ams-drx890-debug.tar.bz2
+-r-xr--r-- 1 kyoupark ccusers 2289139 May 20 13:33 cdi-drivers-ams-drx890-preprod.tar.bz2
+-r-xr--r-- 1 kyoupark ccusers 2275247 May 20 13:33 cdi-drivers-ams-drx890-prod.tar.bz2
+-r--r--r-- 1 kyoupark ccusers 5497731 May 20 13:33 kernel-headers-ams-drx890-debug.tar.gz
+-r--r--r-- 1 kyoupark ccusers 5495679 May 20 13:33 kernel-headers-ams-drx890-preprod.tar.gz
+-r--r--r-- 1 kyoupark ccusers 5495446 May 20 13:33 kernel-headers-ams-drx890-prod.tar.gz
+-r--r--r-- 1 kyoupark ccusers  281610 May 20 13:33 nds-drv-ams-drx890-debug.tar.bz2
+-r--r--r-- 1 kyoupark ccusers  281583 May 20 13:33 nds-drv-ams-drx890-preprod.tar.bz2
+-r--r--r-- 1 kyoupark ccusers  268582 May 20 13:33 nds-drv-ams-drx890-prod.tar.bz2
+-r-xr--r-- 1 kyoupark ccusers   40110 Jun  7  2012 service-centre-ams-drx890-debug.tar.bz2
+-r--r--r-- 1 kyoupark ccusers   40110 Jun  7  2012 service-centre-ams-drx890-preprod.tar.bz2
+-r--r--r-- 1 kyoupark ccusers   40110 Jun  7  2012 service-centre-ams-drx890-prod.tar.bz2
+
 
 ={============================================================================
 |kt_dev_si_0001| comp-mcm
@@ -4341,6 +4938,12 @@ RELESE RB MC
 ={============================================================================
 |kt_dev_si_0001| comp-memman
 
+note:
+No master config xml.
+
+$ grep MEMMAN dms_master_config.xml
+99:    <key name="TRACE_LEVEL_MEMMAN" type="STRING" value="AFEWM">
+
 Making mem pool growable has been forbidden, even if the MEMMAN API propose it !
 
 // sample memcheck shot
@@ -4447,6 +5050,9 @@ by the same thing being freed from two different threads.
 
 ={============================================================================
 |kt_dev_si_0001| comp-membuster
+
+note:
+no COMPONENT_NAME for this and no master config xml.
 
 01: merge membuster source into 'vobs\CMS_SYSTEM_INFRASTRUCTURE\MEMMAN\'
 
@@ -4656,62 +5262,168 @@ MEMMAN_API_Init
 
 
 <check-interval>
+
 mb_check_sleep = 180;
-membuster_plus_check_all()
+
+static void membuster_thread(void)
+{
+  membuster_plus_check_all();
+  {
+    "start check at: %.3d:%.2d:%.2d.%.3d\n",
+  }
+
+  sleep(mb_check_sleep);
+}
 
 
-<output>
-// size is bt(backtrace)'s size
+// from membuster_plus_check_all() to dump bt and allocs for all poools.
 
-// starts dump bt and allocs for all poools.
-pool MW_HTTP_POOL size=388036:
-size=2080 (7a059c 7abaac 7acd24 7c44c0 7a7524 7986e0 5101d8 50abe8 e91518 ) [c9469572]
-allocs:2
-size=32 (7a0634 7a890c 7abbcc 7acd24 7c44c0 7a7524 7986e0 5101d8 50abe8 e91518 ) [140420b1]
-allocs:2
+start check at: 000:04:38.883
+
+pool HN_UD_POOL size=204800:
+size=1978 (1064558 1055448 10507b0 108d974 ef52d4 ) [e237d2a0]
+allocs:6
 ...
 
-// when see OOM, will list out a list of allocs.
+pool usage: 2112/204800 peak: 22296
 
+
+{oom-from-log-and-from-membuster}
+
+Found that OOM from log is far behind in OOM in MEM.TXT.
+
+void   *MHWMemAllocStatic(MEMMAN_API_MemoryPoolHandle *pool, uint32_t size)
+{
+        MEMORY_PRINT_W(("Cannot allocate %d bytes in pool " POOLNAME_FMT ", not enough memory", size, PNAME(pool)));
+        if (smax <= size)
+        {
+            MEMORY_PRINT_W(("   Biggest block is %d bytes", smax));
+        }
+        DUMP_USED_BLOCKS(pool);
+}
+
+#define DUMP_USED_BLOCKS(POOL) \
+	(void) membuster_plus_pool_oom(POOL); \
+	(void) MemCheckMemory(POOL, MEMSTATUS_LOGLEVEL(MEMMAN_API_MEMSTATUS_ALL, MEMSTATUS_LOGLEVEL_WARN))
+
+
+void membuster_plus_pool_oom(MEMMAN_API_MemoryPoolHandle *p)
+{
+#ifdef MEMBUSTER_OOM_ONLY
+    membuster_plus_check_pool(0, mb_file_path, p);
+#else
+    membuster_create_output_path();
+    membuster_plus_check_pool(mb_output, mb_file_path, p);
+#endif /* MEMBUSTER_OOM_ONLY */
+}
+
+
+// static void membuster_plus_check_pool() is used by MEMMAN API but not from
+// membuster thread.
 // CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mbuster_pinit.c
-    fprintf(of,
-            "OOM Detected at: %.3d:%.2d:%.2d.%.3d\n",
-            hour,
-            minute,
-            sec,
-            msec);
+
+static void membuster_plus_check_pool()
+{
+  // to MEM_xx file
+  fprintf(of,
+      "OOM Detected at: %.3d:%.2d:%.2d.%.3d\n",
+      hour,
+      minute,
+      sec,
+      msec);
+
+  // to LOG
+  MEMORY_PRINT_E(("MEMBUSTER: pool %s, count %d size %d, bt(%s)", p->name,alloc_count,b[j].size,buf));
+}
+
+
+// MEMORY_PRINT_E(("MEMBUSTER: pool %s, count %d size %d, bt(%s)", p->name, `alloc_count`, `b[j].size`, buf));
+
+                                       M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:1448 FreeSize:788 Bank:1 PoolMAX:387248 
+P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 2580 bytes in pool " "MW_HTTP_POOL"
+P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 712 bytes
+P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 520, bt(007aff90 00ef5c30 007afe08 00795b3c 006e1a60 00ef52d4 )
+...
+
+
+<ex>
+218996:start check at: 013:20:10.348
+219890:OOM Detected at: 013:32:09.086
+
+
+// first OOM in MEM_xx.TXT
+size=25032 (7f4f64 7dcff4 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [f688c2a7]
+allocs:`447`
+size=12963 (7c63bc 7dfab8 7dd838 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [0225da76]
+allocs:447
+size=76897 (7c63bc 7dfab8 7dd864 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [0619daa2]
+allocs:447
+size=2235 (7c63bc 7dfab8 7dcf4c 7dd670 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [e33ba878]
+allocs:447
+size=40319 (7c63bc 7dfab8 7dcf4c 7dd3f4 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [aa17a5fc]
+allocs:447
+size=5364 (7c63bc 7dfab8 7dcf4c 7dd57c 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [cd4fa784]
+allocs:447
+
+
+// first OOM in the log
+// note: MEMBUSTER log is available for membuster build
+
+269075:NDS: ^[2016:08:21 20:14:30]0946879384.632875 !`WARN`   -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 2580 bytes in pool " "MW_HTTP_POOL"  
+269076:NDS: ^[2016:08:21 20:14:30]0946879384.632891 !WARN   -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 712 bytes 
+269077:NDS: ^[2016:08:21 20:14:30]0946879384.635031 !ERROR  -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 520, bt(007aff90 00ef5c30 007afe08 00795b3c 006e1a60 00ef52d4 ) 
+...
+269217:NDS: ^[2016:08:21 20:14:30]0946879384.903082 !`ERROR`  -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, 
+  count `504 size 28224`, bt(007f4f64 007dcff4 007eefa0 007a15a4 007a2adc 007a3b54 007a5028 007a53c0 0079dfd4 0079a950 0051038c 0050ae0c 00ef52d4 ) 
+269218:NDS: ^[2016:08:21 20:14:30]0946879384.929905 !ERROR  -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 504 size 14616, bt(007c63bc 007dfab8 007dd838 007eefa0 007a15a4 007a2adc 007a3b54 007a5028 007a53c0 0079dfd4 0079a950 0051038c 0050ae0c 00ef52d4 ) 
+269219:NDS: ^[2016:08:21 20:14:30]0946879384.951279 !ERROR  -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 504 size 86482, bt(007c63bc 007dfab8 007dd864 007eefa0 007a15a4 007a2adc 007a3b54 007a5028 007a53c0 0079dfd4 0079a950 0051038c 0050ae0c 00ef52d4 ) 
+269220:NDS: ^[2016:08:21 20:14:30]0946879384.992061 !ERROR  -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 504 size 2520, bt(007c63bc 007dfab8 007dcf4c 007dd670 007eefa0 007a15a4 007a2adc 007a3b54 007a5028 007a53c0 0079dfd4 0079a950 0051038c 0050ae0c 00ef52d4 ) 
+269221:NDS: ^[2016:08:21 20:14:31]0946879385.016120 !ERROR  -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 504 size 45248, bt(007c63bc 007dfab8 007dcf4c 007dd3f4 007eefa0 007a15a4 007a2adc 007a3b54 007a5028 007a53c0 0079dfd4 0079a950 0051038c 0050ae0c 00ef52d4 ) 
+269222:NDS: ^[2016:08:21 20:14:31]0946879385.040478 !ERROR  -MEMMAN       		< p:0x000001bb P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 504 size 6048, bt(007c63bc 007dfab8 007dcf4c 007dd57c 007eefa0 007a15a4 007a2adc 007a3b54 007a5028 007a53c0 0079dfd4 0079a950 0051038c 0050ae0c 00ef52d4 ) 
+
+
+WHY not match between 447 and 504?
+
+
+1462439:OOM Detected at: 032:02:23.066
+
+// this `matches`. this is from normal periodic check but not from OOM check.
+size=`28224` (7f4f64 7dcff4 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [f688c2a7]
+allocs:`504`
+
+// next OOM
+1700024:OOM Detected at: 043:55:06.053
+
+
+note: 
+* #ifndef MEMBUSTER_OOM_ONLY in the code
+* For one alloc, size is start and allocs is end
+* `size` is the sum of all allocs in the bt
 
 start check at: 013:47:02.091
 OOM Detected at: 013:48:22.102
 pool MW_HTTP_POOL size=388036:
-size=192 (a399e0 a35ca0 9f616c 9f41b8 a424b0 9f3e70 ba2808 ) [c272294f]
-165 0126a2f8     12 000:07:29.778 # bt idx, alloc address, alloc size, alloc time
-165 01269b30     12 000:03:09.966
-165 0126aec4     12 000:01:39.260
-165 01269f9c     12 000:01:40.967
-165 01269b10     12 000:03:12.082
-165 0126a4a8     12 000:07:39.205
-165 01269ba8     12 000:07:52.728
-165 01269bdc     12 000:07:46.186
-165 01269578     12 000:07:56.910
-165 01269530     12 000:08:04.362
-165 01269730     12 000:08:08.698
-165 01268cfc     12 000:08:12.769
-165 01268bd4     12 000:08:22.274
-165 01268a6c     12 000:08:34.482
-165 0126997c     12 000:08:41.097
-165 01268828     12 000:08:47.393
-allocs:16
+
+allocs:2
+size=3216 (bfdc34 118ccb0 bfe4f0 bffd6c 4fd500 4f3714 4e2c38 4e3b20 ef52d4 ) [3e785703]
+allocs:268
+size=720 (bfdc34 119013c bfe4f0 bffd6c fba6c0 faaff0 fab198 f11544 f2df94 f09cec f15f7c fb4590 5d0f9c 5d1158 5e5498 5dd504 5ad648 ef52d4 ) [061d805b]
+allocs:60
+
+`size`=25032 (7f4f64 7dcff4 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [f688c2a7]
+# bt idx, alloc address, `alloc size`, alloc time
+252 02542cf8     56 013:16:29.236
+...
+allocs:447
+
+note:
+25032 = 447*56
+
 ...
 estimated pool usage 6292/8000	# here 'usuage' is the sum of all bt.
 
-NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:1448 FreeSize:788 Bank:1 PoolMAX:387248 
-NDS: ^[2016:08:09 04:44:13] !WARN   -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 1448 bytes in pool " "MW_HTTP_POOL"  
-NDS: ^[2016:08:09 04:44:13] !WARN   -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 788 bytes
-NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 520, bt(007a87a0 00e944d8 007a8854 0079b3ac 006e26a0 00e91518 )
-NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 68, bt(007a87a0 00e97274 007b0b7c 0079b478 006e26a0 00e91518 )
-NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 40, bt(007a059c 007a020c 0079b558 006e26a0 00e91518 )
-NDS: ^[2016:08:09 04:44:13] !ERROR  -MEMMAN < P:MW T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_pool L:755 > MEMBUSTER: pool MW_HTTP_POOL, count 1 size 24, bt(007a0634 007b9b9c 007a8e4c 007a0440 0079b630 006e26a0 00e91518 )
+
+$ grep "size=|allocs:447" MEM_MW_1.TXT
 
 
 <ex>
@@ -4878,6 +5590,344 @@ membuster_plus_check_pool(*p)
 }
 
 
+<diag>
+static void membuster_plus_check_all(char* filename);
+KIT(/mnt/nds/dev_6/part_0/FSN_DATA/MEM_MW.TXT), start check at: 000:12:10.097
+
+NDS: ^[2016:08:30 09:12:44]0946685156.922346 !MIL    -MEMBUSTER                 < p:0x0000019c P:PWM t:0x2aab2450 T:no name M:mbuster_pinit.c F:membuster_plus_init L:224 > membuster default config: 300, 1, /
+flash0/fs/NDS, 300, 150, 180
+
+note:
+ 201:NDS: ^[2016:08:30 11:19:56]!MIL    -MEMBUSTER    		< P:CA t:0x2aab2310 T:no name M:mbuster_pinit.c F:membuster_plus_init L:224 > membuster default config: 300, 1, /flash0/fs/NDS, 300, 150, 180 
+ 202:NDS: ^[2016:08:30 11:19:56]!MIL    -MEMBUSTER    		< P:CA t:0x2aab2310 T:no name M:mbuster_pinit.c F:membuster_plus_init L:267 > membuster opening process /NDS/bin/CA_Process for analysis 
+
+From start, default file path is /flash0/fs/NDS/ and suddenly changes to
+/mnt/nds/dev_6/part_0/FSN_DATA/ when starts a thread from each process. HOW?
+
+3952:NDS: ^[2016:08:30 11:24:54]!MIL    -MEMBUSTER    		< P:STM t:0x2ad9b530 T:no name M:mbuster_pinit.c F:membuster_thread L:809 > membuster thread for STM_Process started 
+3953:NDS: ^[2016:08:30 11:24:54]!MIL    -MEMBUSTER    		< P:STM t:0x2ad9b530 T:no name M:mbuster_pinit.c F:membuster_thread L:824 > Path used for membuster logs : /mnt/nds/dev_6/part_0/FSN_DATA 
+
+This works since
+
+-sh-3.2# cat /tmp/diag
+/mnt/nds/dev_6/part_0/FSN_DATA
+
+    if( config_read == 0 )
+    {
+        fh = fopen("/tmp/diag", "r");
+        if ( fh == NULL )
+        {
+            MEMBUSTER_PRINT_W(("Path for membuster logs doesn't found in /tmp/diag! Using default path %s", mb_file_path));
+        }
+        else
+        {
+            memset(&mb_file_path[0], 0U, MAX_PATH_NAME);
+            fscanf(fh, "%s", mb_file_path);
+            MEMBUSTER_PRINT_M(("Path used for membuster logs : %s", mb_file_path));
+            fclose(fh);
+        }
+    }
+
+CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/common/src/diag_cmn_log_management.c
+	/* in the config file, for the data partition, the user can either use the exact path or the string "data partition".
+	 * in that case, check in /tmp/diag what is the mount point of the data partition
+	 */
+
+CMS_SYSTEM_RESOURCE/PDM/src/server/inc/pdm_srv_fs_support.h
+#define PDM_FS_DIAG_LINK "/tmp/diag"
+
+PDM_FS_DIAG_LINK 1727 CMS_SYSTEM_RESOURCE/PDM/src/server/fs/pdm_srv_fs_support.c                     
+PDM_FS_WriteMntPointToFile((const uint8_t *)g_pdm_fs_diagDir, PDM_FS_DIAG_LINK,false);
+
+
+={============================================================================
+|kt_dev_si_0001| comp-memman-membuster
+
+*interface-to-outside*
+
+// CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mem_internals.h
+
+#ifdef MEMMAN_MEMBUSTER
+/* alloc type flags */
+#define ALLOC_TYPE_STATIC               0x01
+#define ALLOC_TYPE_ALLOCATOR            0x02
+#define ALLOC_TYPE_ELEM	                0x03
+#define ALLOC_TYPE_MV                   0x04
+#define ALLOC_TYPE_ST_REALLOC           0x05
+
+void membuster_plus_init(void);
+void membuster_plus_term(void);
+
+void alloc_list_remove(MEMMAN_API_MemoryPoolHandle *pool, uint32_t addr);
+uint32_t alloc_list_add(MEMMAN_API_MemoryPoolHandle *pool, 
+                        uint32_t                     addr, 
+                        uint32_t                     size, 
+                        uint32_t                     type);
+uint32_t get_max_call_in_bt(void);
+
+void membuster_plus_pool_oom(MEMMAN_API_MemoryPoolHandle *p);
+
+
+
+#endif /* MEMMAN_MEMBUSTER */
+
+
+*use-outsied*
+
+// CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_fx.c
+
+void   *MEMMAN_API_AllocElement(MEMMAN_API_Allocator *theAllocator)
+{
+#ifdef MEMMAN_MEMBUSTER
+    alloc_list_add(defaultPool, (uint32_t) elem, theAllocator->elemSize, ALLOC_TYPE_ELEM);
+#endif
+}
+
+void   *MEMMAN_API_AllocElementP(MEMMAN_API_MemoryPoolHandle *pool,
+                                 MEMMAN_API_Allocator *theAllocator)
+{
+#ifdef MEMMAN_MEMBUSTER
+    alloc_list_add(pool, (uint32_t) elem, theAllocator->elemSize, ALLOC_TYPE_ELEM);
+#endif
+}
+
+
+// alloc_list_add    387 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(pool, (uint32_t) ptr, size, ALLOC_TYPE_STATIC);
+
+void   *MEMMAN_API_AllocStaticP(MEMMAN_API_MemoryPoolHandle * pool, uint32_t size)
+{
+#ifdef MEMMAN_MEMBUSTER
+    alloc_list_add(pool, (uint32_t) ptr, size, ALLOC_TYPE_STATIC);
+#endif
+}
+
+note:
+This means that user have to know what to use depending on alloc type?
+
+alloc_list_add    152 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_fx.c     alloc_list_add(defaultPool, (uint32_t) elem, theAllocator->elemSize, ALLOC_TYPE_ELEM);
+alloc_list_add    188 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_fx.c     alloc_list_add(pool, (uint32_t) elem, theAllocator->elemSize, ALLOC_TYPE_ELEM);
+alloc_list_add    110 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_fxdbg.c       alloc_list_add( defaultPool, (uint32_t) elem, theAllocator->elemSize, ALLOC_TYPE_ELEM);
+alloc_list_add    149 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_fxdbg.c       alloc_list_add( pool, (uint32_t) elem, theAllocator->elemSize, ALLOC_TYPE_ELEM);
+alloc_list_add    316 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_mv.c  alloc_list_add(pool, (uint32_t)handle, size, ALLOC_TYPE_MV);
+alloc_list_add     68 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_mvdbg.c     alloc_list_add(defaultPool,(uint32_t) handle, size, ALLOC_TYPE_MV);
+alloc_list_add    119 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_mvdbg.c     alloc_list_add(defaultPool, (uint32_t) handle, askedSize, ALLOC_TYPE_ST_REALLOC);
+alloc_list_add    306 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_mvdbg.c     alloc_list_add(pool, (uint32_t) handle, size, ALLOC_TYPE_MV);
+alloc_list_add    358 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_mvdbg.c     alloc_list_add(pool, (uint32_t) handle, askedSize, ALLOC_TYPE_ST_REALLOC);
+alloc_list_add     54 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(defaultPool, (uint32_t) ptr, size, ALLOC_TYPE_STATIC);
+alloc_list_add     92 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(defaultPool, (uint32_t) ptr, nbelem * size, ALLOC_TYPE_STATIC);
+alloc_list_add    135 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(defaultPool, (uint32_t) ptr, size, ALLOC_TYPE_STATIC);
+alloc_list_add    173 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(defaultPool, (uint32_t) ptr,*paramsize, ALLOC_TYPE_STATIC);
+alloc_list_add    212 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(defaultPool, (uint32_t) mem_ptr, askedSize, ALLOC_TYPE_ST_REALLOC);
+alloc_list_add    279 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c         alloc_list_add(defaultPool, (uint32_t)mem_ptr, askedSize, ALLOC_TYPE_ST_REALLOC);
+alloc_list_add    425 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(pool, (uint32_t)ptr, size * nbelem, ALLOC_TYPE_STATIC);
+alloc_list_add    469 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(pool, (uint32_t)ptr, size, ALLOC_TYPE_STATIC);
+alloc_list_add    506 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c     alloc_list_add(pool, (uint32_t)ptr, *paramsize, ALLOC_TYPE_STATIC);
+alloc_list_add    545 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c  alloc_list_add(pool,(uint32_t)  mem_ptr, askedSize, ALLOC_TYPE_ST_REALLOC);
+alloc_list_add    629 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_st.c             alloc_list_add(pool, (uint32_t)mem_ptr, askedSize, ALLOC_TYPE_ST_REALLOC);
+alloc_list_add     72 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(defaultPool,(uint32_t) staticBlock, size, ALLOC_TYPE_STATIC);
+alloc_list_add    129 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(defaultPool, (uint32_t) staticBlock, size * nbelem, ALLOC_TYPE_STATIC);
+alloc_list_add    203 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(defaultPool, (uint32_t) staticBlock, size, ALLOC_TYPE_STATIC);
+alloc_list_add    258 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(defaultPool, (uint32_t) staticBlock, *paramsize, ALLOC_TYPE_STATIC);
+alloc_list_add    314 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(defaultPool, (uint32_t)mem_ptr, askedSize, ALLOC_TYPE_ST_REALLOC);
+alloc_list_add    451 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(pool, (uint32_t) staticBlock, size, ALLOC_TYPE_STATIC);
+alloc_list_add    508 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(pool, (uint32_t) staticBlock, nbelem * size, ALLOC_TYPE_STATIC);
+alloc_list_add    583 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(pool, (uint32_t) staticBlock, size, ALLOC_TYPE_STATIC);
+alloc_list_add    638 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(pool, (uint32_t) staticBlock, *paramsize, ALLOC_TYPE_STATIC);
+alloc_list_add    694 CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_stdbg.c     alloc_list_add(pool, (uint32_t)mem_ptr, askedSize, ALLOC_TYPE_ST_REALLOC);
+
+
+*calltrace*
+#1  0x2ab534c8 in malloc (bytes=1044) at libc/stdlib/malloc-standard/malloc.c:964
+#2  0x2ab53dfc in calloc (n_elements=33, elem_size=2880054767) at libc/stdlib/malloc-standard/calloc.c:93
+#3  0x006fe954 in AllocStaticBlockFromMalloc (pool=<optimized out>, size=1044, blockPool=0x1558f28) at mem_blockpool.c:60
+#4  0x00702a20 in MHWMemAllocStatic (pool=0x124b130, size=1044) at mem_static.c:85
+#5  0x006fb7dc in MEMMAN_API_AllocStaticP (pool=0x124b130, size=1024) at memman_st.c:381
+
+
+*creat-pool*
+
+// allocate membuster structures inside a pool
+
+// not used anywhere
+// SYSTEM_STATUS MEMMAN_API_MemoryInit(void *baseAddr, uint32_t initialSize, uint32_t chunkSize,
+//                                     uint32_t maxSize)
+// {
+//   MEMMAN_API_MemoryPoolHandle *poolHandle = NULL;
+//   status = PoolCreate(&poolHandle, NAME_OF_DEFAULT_POOL, 0U, baseAddr, initialSize, chunkSize, maxSize);
+// }
+// 
+// SYSTEM_STATUS MEMMAN_API_MemoryPoolCreateFixedSizeP(MEMMAN_API_MemoryPoolHandle **pool,
+//                                                    char *name, void *baseAddr, uint32_t maxSize)
+// {
+//     return MEMMAN_API_MemoryPoolCreateP(pool, name, flags, baseAddr);
+// }
+
+SYSTEM_STATUS MEMMAN_API_MemoryPoolCreateP(MEMMAN_API_MemoryPoolHandle **pool,
+                                           char *name, uint32_t flags, void *baseAddr,
+                                           uint32_t initialSize, uint32_t chunkSize,
+                                           uint32_t `maxSize`)
+{
+
+  status = PoolCreate(&poolHandle, poolName, flags, baseAddr, initialSize, chunkSize, `maxSize`);
+  *pool = poolHandle;
+}
+
+
+static SYSTEM_STATUS PoolCreate(MEMMAN_API_MemoryPoolHandle **handle, char *name, uint32_t flags,
+                          void *baseAddr, uint32_t initialSize, uint32_t chunkSize, uint32_t maxSize)
+{
+  // poolHandle has housekeeping structure about a pool
+  poolHandle = (MEMMAN_API_MemoryPoolHandle *) `malloc`(sizeof(MEMMAN_API_MemoryPoolHandle));
+
+#ifdef MEMMAN_MEMBUSTER
+  // alloc membuster structures
+  poolHandle->alloc_list = `malloc`(sizeof(ALLOC_LIST) * ALLOC_LIST_INIT_SIZE);
+  // ... 
+#endif /* MEMBUSTER */
+
+  poolHandle->initialSize = initialSize;
+  poolHandle->chunkSize = chunkSize;
+  poolHandle->maxSize = maxSize;
+
+  // #define MEMMAN_API_MEMORY_POOL_NO_CHUNK (0U)          /*!< @brief used to create a non-expandable memory pool */
+
+  if (chunkSize == `MEMMAN_API_MEMORY_POOL_NO_CHUNK`)
+  {
+    /* Non-growable memory pool, maxSize is ignored */
+    MPOOL_SET_NOT_GROWABLE(poolHandle);
+    poolHandle->maxSize = initialSize;
+  }
+
+  // #define NB_BANK_MAX(PH) (((PH)->chunkSize == MEMMAN_API_MEMORY_POOL_NO_CHUNK) ? (1U) : \
+  //    (IS_UNLIMITED_POOL(PH) ? ((PH)->nb_bank) : (1U + (((PH)->maxSize - (PH)->initialSize)/(PH)->chunkSize))))
+
+  nb_bank_max = NB_BANK_MAX(poolHandle);
+
+  poolHandle->s_WholeMem = (MemWholeMemory *) `malloc`((size_t)(nb_bank_max * sizeof(MemWholeMemory)));
+
+  if(0U == initialSize)
+  {
+    poolHandle->s_WholeMem[0].base = NULL;
+    MEMORY_PRINT_I(("%s is an empty pool", poolHandle->name));
+  }
+  else    /* CQ584593 END */
+  {
+    poolHandle->s_WholeMem[0].base = (void *) `calloc`((size_t) `initialSize`, 1U);
+    if (poolHandle->s_WholeMem[0].base == NULL)
+    {
+      free(poolHandle->s_WholeMem);
+      free(poolHandle);
+      return MEMMAN_API_STATUS_NO_MORE_MEMORY;
+    }
+  }
+
+  // mutex
+  (SYSTEMUTIL_THR_MutexInit(&poolHandle->lock, NULL, MEMMAN_Ctx) != SYSTEMUTIL_STATUS_OK);
+
+  *handle = poolHandle;
+}
+
+
+SYSTEM_STATUS PoolDestroy(MEMMAN_API_MemoryPoolHandle *poolHandle, bool unregister)
+{
+  /* Free s_WholeMem array */
+  `free`(poolHandle->s_WholeMem);
+  poolHandle->s_WholeMem = NULL;
+
+  /* Free pool handle */
+  free(poolHandle);
+}
+
+
+*example-use*
+
+MEMMAN_API_MemoryPoolHandle *httpMemmanHandle;
+
+{
+
+  if (MEMMAN_API_Init() != MEMMAN_API_STATUS_OK)
+  {
+  }
+
+  /* Initialize main pool */
+  if (SYSTEMUTIL_THR_CreateMemoryPool(&httpMemmanHandle,
+        SYSCONFIG_HTTP_FILENAME,        // "http.cfg"
+        SYSCONFIG_HTTP_POOL_PREFIX,     // "HTTP_POOL"
+        true)
+      != SYSTEMUTIL_STATUS_OK)
+  {}
+}
+
+// reads values from config file and create a pool. this is not deprecated.
+
+HTTP_POOL_FLAGS=0
+HTTP_POOL_NAME="MW_HTTP_POOL"
+HTTP_POOL_SIZE=388036
+
+SYSTEM_STATUS SYSTEMUTIL_THR_CreateMemoryPool(MEMMAN_API_MemoryPoolHandle ** pool,
+                                              const char *configFileName,
+                                              const char *poolNamePrefix, bool appendProcessName)
+{
+  MEMMAN_API_MemoryPoolCreateP(pool, poolName, poolFlags, `NULL`, poolSize,
+      0U, `MEMMAN_API_MEMORY_POOL_NO_CHUNK`);
+}
+
+
+void *prvHTTP_MEMMAN_Malloc(size_t size)
+{
+    return (MEMMAN_API_`AllocStaticP`(httpMemmanHandle, (uint32_t)size));
+}
+
+void prvHTTP_MEMMAN_Free(void *ptr)
+{
+    (void)MEMMAN_API_`FreeStaticP`(httpMemmanHandle, ptr);
+}
+
+void *prvHTTP_MEMMAN_Realloc(void *ptr, size_t size)
+{
+    return (MEMMAN_API_`ReallocStaticP`(httpMemmanHandle, ptr, (uint32_t)size));
+}
+
+void *prvHTTP_MEMMAN_Calloc(size_t nmemb, size_t size)
+{
+    void *p;
+
+    p = MEMMAN_API_`AllocStaticAlignP`(httpMemmanHandle,(uint32_t)nmemb*size, 8U);
+
+    if(NULL != p)
+    {
+        memset(p, 0, nmemb * size);
+    }
+
+    return p;
+}
+
+
+*from-malloc-or-pool*
+
+MemBlock *AllocStaticBlock(MEMMAN_API_MemoryPoolHandle *pool, uint32_t size, MemBlockPool * blockPool)
+{
+#ifdef MEMMAN_FORCE_USE_MALLOC_DIRECTLY
+    if (MPOOL_IS_DYNAMIC_MALLOC(pool))
+    {
+        return AllocStaticBlockFromMalloc(pool, size, blockPool);
+        // {
+        //    base = (void *) calloc((size_t) size, 1U);;
+        // }
+    }
+
+    else
+    {
+        return AllocStaticBlockFromPool(pool, size, blockPool);
+    }
+#else
+    return AllocStaticBlockFromPool(pool, size, blockPool);
+#endif
+}
+
+Use MEMMAN_FORCE_USE_MALLOC_DIRECTLY to force it to use calloc.
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-memprof
 
@@ -4932,10 +5982,9 @@ echo "set terminal jpeg; set title 'ADPT_GUIDE 8K'; set grid; set output 'ADPT_G
 # MPROFMWS.CSV
 # See FSI_UA_CMD_PoolsUsage_Callback and FSI_UA_ServerCommand_PoolsUsage_Client: FSI_UA_POOLSUSAGE_CSVFILE_HEADER
 #
-#
-#1                  #2(free)            #3                   #4                          #5 (peek)
-Memory_pool_name	free_size_in_bytes	total_size_in_bytes	 block_header_size_in_bytes	 max_allocated_in_bytes	
-systemobject        24464               51200                20                          51140
+#1               #2(free)           #3                  #4                         #5 (peek)
+Memory_pool_name free_size_in_bytes total_size_in_bytes block_header_size_in_bytes max_allocated_in_bytes
+systemobject     24464              51200               20                         51140
 
 
 ={============================================================================
@@ -6866,8 +7915,10 @@ diag_hlp_debug.h
 #define __DIAG_HLP_DEBUG_ENABLE_FN_ENTER_EXIT
 
 
-# actual function
-#
+<diag-format>
+
+// 10-6  1 `microsecond`  us
+
 __DIAG_LOG_FormatAndLogTraceBuffer
 	DIAG_LOG_GetFormattedTraceBuffer
 	{
@@ -6878,12 +7929,29 @@ __DIAG_LOG_FormatAndLogTraceBuffer
 
 
 <diag-macro>
-#if defined _USE_DIAG && (defined (DEBUG) || defined (RELEASE_DBG))
+
+CURL_DBG_PRINT_E(("KIT: %d, co = calloc(%d)", count_alloc, sizeof(struct Cookie)));
+
+#if defined _USE_DIAG && (defined (DEBUG) || defined (RELEASE_DBG)) OR
+#if (!defined(DIAG_RELEASE) && !defined(__DIAG_RELEASE))
+
 #define CURL_DBG_PRINT_I(MESSAGE)    DIAG_LOG_INFO(libcurlDiagHandlerId, MESSAGE)
 #define CURL_DBG_PRINT_W(MESSAGE)    DIAG_LOG_WARN(libcurlDiagHandlerId, MESSAGE)
 #define CURL_DBG_PRINT_E(MESSAGE)    DIAG_LOG_ERROR(libcurlDiagHandlerId, MESSAGE)
 #define CURL_DBG_PRINT_F(MESSAGE)    DIAG_LOG_FATAL(libcurlDiagHandlerId, MESSAGE)
 #define CURL_DBG_PRINT_EV(MESSAGE)   DIAG_LOG_EVENT(libcurlDiagHandlerId,MESSAGE)
+
+#else
+
+  #if !defined (DEBUG) && !defined (RELEASE_DBG) /* RELEASE */
+  #define CURL_DBG_PRINT_I(MESSAGE)
+  #define CURL_DBG_PRINT_W(MESSAGE)
+  #define CURL_DBG_PRINT_E(MESSAGE)
+  #define CURL_DBG_PRINT_F(MESSAGE)
+  #define CURL_DBG_PRINT_EV(MESSAGE)
+  #endif
+
+#endif
 
 #define CURL_DBG_DECLARE(MESSAGE)        DIAG_DECLARE_FUNCTION(MESSAGE)
 #define CURL_DBG_ENTER(MESSAGE)          DIAG_DECLARE_FUNCTION(MESSAGE); DIAG_LOG_FN_ENTRY(libcurlDiagHandlerId)
@@ -6924,363 +7992,75 @@ CMS_SYSTEM_INFRASTRUCTURE/DIAG/inc/diag_common.h
 
 
 <comp-diag-segments>
+
+#define MEMBUSTER_SEGMENT_NAME "MEMBUSTER"
+DIAG_LOG_uiSegmentId_t MEMBUSTER_segId;
+
+        (void) DIAG_LOG_RegisterTraceSegment((const char *)MEMBUSTER_SEGMENT_NAME , 
+                                             (uint32_t) strlen(MEMBUSTER_SEGMENT_NAME), 
+                                             ptRPCTable, 
+                                             &MEMBUSTER_segId);
+        (void) DIAG_LOG_FormatTraceSegment(MEMBUSTER_segId, "", "", "%p %t %f@%l");
+
+/**
+ * @brief	Format trace string to print optional informations (thread identifier, source line number...) about a component.
+ *		The expanded string is in the trace header fragment.
+ * 
+ * @param[in] uiSegmentId	Identifier of the segment being examined obtained by DIAG_LOG_RegisterTraceSegment() call.
+ * @param[in] pProcessName	Name of the current process (used to distinguish traces from a same component in several processes : i.e. "MW", "SCD", "SC"...).
+ * @param[in] pModuleName	Module/class of a component (i.e : API, SYS, MGR...).
+ * @param[in] pFormat		String format
+ * 
+ * @retval  #DIAG_LOG_STATUS_SUCCESS		The string pattern is valid and will be used to format traces.
+ * @retval  #DIAG_LOG_STATUS_PARAM_FAILURE        One or more parameter(s) is(are) invalid (e.g. NULL-pointer).
+ * 
+ * @par About the trace format
+ *
+ * The string format uses the following key to (optionally) display component information:
+ *	- %m	: file name 			(string is truncated after 32 characters),
+ *	- %f	: function name			(string is truncated after 32 characters),
+ *	- %p	: process identifier	(hexadecimal format),
+ *	- %P	: print process name	(string is truncated to 16 chars)   
+ *	- %t	: thread identifier		(hexadecimal format),
+ *	- %T	: thread name		    (string, available only when thread is created using SYSTEMUTIL),
+ *	- %l	: source line number	(decimal number),
+ *	- %%	: print '%' character.
+ *
+ * The following string format :
+ *	- "%P %p" becomes "P:SCD P:0x12345678",
+ *	- "%P,%p" becomes "P:SCD,P:0x12345678",
+ *	- "%P %p %t %f@%m@%l" becomes "P:SCD p:0x12345678 t:0xDEADBEEF F:foobar.c@M:COMP_API_MyFunc@L:124".
+ * 
+ * @code
+ * DIAG_LOG_uiSegmentId_t mySegmentId;
+ * [...]
+ * DIAG_LOG_RegisterTraceSegment("COMP", 4, , NULL, &mySegmentId);
+ * DIAG_LOG_FormatTraceSegment(mySegmentId, "SCD", "API", "%p %t %m %f@%l"); // Full debug
+ * DIAG_LOG_FormatTraceSegment(mySegmentId, "SCD", "API", ""); // No extra information, only segment name & timestamp will be displayed
+ * [...]
+ * @endcode
+ *
+ * @par Overriding trace format for all segments
+ *
+ * It is possible to override trace format for all components and thus have a more coherent trace output.
+ * To override it, put this section in the configuration file <b>diag.cfg</b> :
+ *
+ * @code
+ * [OVERRIDDEN_VALUES]
+ * TRACE_FORMAT_FOR_ALL=" %p %t %P %T %m %f %l "
+ * @endcode
+ *
+ * @return DIAG_LOG_STATUS_SUCCESS	Optional header trace format successfully set.
+ */
+
+extern SYSTEM_STATUS	__DIAG_LOG_FormatTraceSegment(DIAG_LOG_uiSegmentId_t uiSegmentId, const char * pProcessName, const char * pModuleName, const char * pFormat);
+
+
 registered diag segments as of 12th Sep 2011
 
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SCD'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'DIAG_TIMESTAMP'
 DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'MEMMAN'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSINIT_SERVER'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'IPC_SERVER'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMALARM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSITC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSINIT_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMSTRING'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MW'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MEMMAN'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'CA'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'IPC_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'APP'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSINIT_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMSTRING'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MEMMAN'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSITC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'IPC_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSINIT_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMSTRING'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSITC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'IPC_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSINIT_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMSTRING'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MEMMAN'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSITC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'IPC_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_SERVER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_COMMON'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_SERVER_UPNP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'IPC_SERVER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PDM'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'MM_SERVER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'STORAGE_HELPER'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMTIME'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SFM_SERVER'
-DIAG: - I - IAG_LOG_RegisterTraceSegment : registering segment 'SSM_COMMON'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'BEM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'BEM_MON'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMALARM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SOBJ'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SYSL'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MDM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PREFS'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'NCM_SERVER'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'GFXINIT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PREFS_PTHREAD'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'DHCP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MPM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PREFS_NVRAM'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'PPPD_SERVER'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'CAMM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'FDM_CMN'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'FDM_SVR'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SPC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SFM_API'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'MM_CLIENT'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'PDMC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MSM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MSM_MS'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MSM_MDI'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MSM_MFS'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MSM_FSFOS'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MSM_IMPORT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ00'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ81'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU06'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU02'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ10'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ11'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ12'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ13'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ14'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ20'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ21'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ22'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ30'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ32'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ31'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SQ33'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ34'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ37'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ35'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ36'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SG00'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU01'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SU01'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU01'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SS0B'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ40'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ48'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ41'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ42'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ43'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ45'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ44'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ46'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ47'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ49'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ51'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ55'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ56'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ53'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SQ57'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SQ59'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ60'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ61'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ62'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ82'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU05'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ01'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'VGC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'DBENGINE_SRV'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'DBENGINE_MIRROR'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU03'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ80'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ50'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ58'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'FEM'
-DIAG: - I - IAG_LOG_RegisterTraceSegment : registering segment 'SYSL'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'CAPPROC_SVR'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'VGV'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PCATS'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PDMC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_COMMON'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'CARNG'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MSMIPCCL'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SC02'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PCATP'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SU01'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SC01'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'CAMM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'NCM_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MM_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SDM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'HTTP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'RMF'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'IPC_SERVER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'RMF_sim'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PSCHED'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPC_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPC_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MCM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'UAM'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'RMP_BOOK_CONF'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'RMP_BIC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'RMP_MC_IMM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'VRMS'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'CTM_SVR'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'HTTP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_DISPATCHER'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'OFS'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_PTHREAD'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PDMC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_COMMON'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_NVRAM_COMMON'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SSM_COMMON'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_SERVER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_CLIINT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_STATEMACHINE'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_VGC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_SIM_NVRAM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_FRONTEND_HEALTHCHECK'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_NVRAM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'NCM_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_FEM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_XXSI'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'BINXML'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_BINXML'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_SIM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SC00'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU01'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SQ81'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SU05'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SS0A'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SC01'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_MCM'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_FRONTEND'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_RMF'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_SYSINFO'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_MODEM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_STARTUP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_NETWORK'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SRM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_NETWORK_UPNP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'UPNP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'CTM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMS_TIMEBASE'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMS_SERIESLINK'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMS_BOOKING'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMS_PVOD'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBM_MIGRATION'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMS_USERBOOKING'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMS_COMMON'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'DLM_SVR'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PSRM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_TIMEBASE'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_SERIESLINK'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_BOOKING'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_PVOD'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_USERBOOKING'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_COMMON'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'REMBOOK'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'G_Sess'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'G_SessD'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SCM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'G_SessV'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'G_SessM'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SYSL'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_NVRAM_COMMON'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'NCM_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_PTHREAD'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_COMMON'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'PREFS_C2S'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PREFS_PTHREAD'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SOBJ'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPM_SIM_NVRAM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SYSTEMALARM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'VGC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'P_Planner'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PCATC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SC00'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SU01'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PCATP'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SQ81'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SU05'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'RMF'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'RMF_sim'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SS0A'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SC01'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_TIMEBASE'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_SERIESLINK'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_BOOKING'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_PVOD'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_USERBOOKING'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'SBMC_COMMON'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'DLM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'P_Api'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'P_ApiD'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'ATG_API'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'ATG_MEM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'OIGC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'VRMC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'BEM_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXCONFIG'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXBLITTER'
-DIAG: - I - DIAG_LOG_RegisterTraceSegment : registering segment 'GFXCLUT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXCLUTMATCHER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXFONT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXIFRAME'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXIMAGE'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXINPUT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXMIXER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXPAINTER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXREGION'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXSCALER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXSCENE'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXSHAPE'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXSPANSINK'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXSURFACE'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'GFXEGL'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MPM_IPC_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'RTSP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'CAPPROC_CLI'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'HTTP'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'CAPPRESCONFIG'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'CAPPRES'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'FDM_API_OPTV'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'FDM_CMN_CLT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'FDM_FS'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'aem'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'WLM_SERVER'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPC_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'SPC_CLIENT'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'UAMC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'AIni'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'JAE'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'LAE'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'JDiag'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_SYSTEMCOMMON'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MM_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_SYSTEMLANG'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_SYSTEMLOCATOR'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_GC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_SYSTEMCONFIG'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_SYSTEMTIME'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_GUIDE'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_PLAYER'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_PLANNER'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_PREFS'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'V_JA'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_SPM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_AEM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_ATG'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_DLM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_OFS'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_WLM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'WLM_CLIENT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'J_SPC'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PICASSO'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_PRFM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MST_SSR'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MST_ET'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_ANYT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_ME'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_CONF'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_SCR'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_KEY'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MST_DFIL'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_BOOK'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_LISD'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MST_EVT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_DEV1'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_UI'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_DEV2'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_TVVM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_DEV3'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_DEV4'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_DEV5'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_DLG'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'PICO'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_PLAY'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_ALM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MST'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_LIST'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MST_ASP'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_PRF'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_FS'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_MISC'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'MST_TEST'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_BAN'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_TVG'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_COMP'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_GNOM'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_CA'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'MST_AR'
-DIAG: - I -  DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_INIT'
-DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'EPG_AFRM'
+...
 DIAG: - I - ] DIAG_LOG_RegisterTraceSegment : registering segment 'VGC_JAVA'
-
-
-<enable-comp-diag>
-// BUILD_SYSTEM/COMMON_MAKEFILES/projects/fusion2/build_options.mk
-// COMPONENT_NAME := ms_mcm_src
-NDS_BUILD_TYPE_<name>= debug
-
-NDS_BUILD_TYPE_ms_mcm_src = debug
-NDS_BUILD_TYPE_rmfplugin = debug      *comp-rmf*
 
 
 ={============================================================================
@@ -7403,7 +8183,12 @@ ${OUTPUT}/FusionConfig/FusionConfigImport CFG2BIN ./ *
 cp -f ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/* ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/fs/NDS/config
 
 
-<SI_config.xml>
+<si-config-xml>
+
+<fusion_config_database>
+ <include name="../dms/dms_master_config.xml" />
+ ...
+
 # SI_config.xml which defines 'si_bskyb' profile
  <include name="projects/dms/fs/NDS/dms_master_config.xml" />
 
@@ -7420,7 +8205,7 @@ cp -f ${OUTPUT}/${PLATFORM_DIR}/${ENDIAN}Endian/si/config/* ${OUTPUT}/${PLATFORM
 // Exporting profile sky_trials...
 //
 
-<dms-master-config>
+<dms-master-config-xml>
 // STB_SW/DARWIN_PLATFORM/dms/public/config/dms_master_config.xml
 `dms_master_config.xml` which includes each comp's config and defines BASESET,
 and BSKYB_HD_PVR profile.
@@ -7513,7 +8298,6 @@ NDS: ^0946932953.045506 !WARN  -EPG_INIT     < p:00000079 t:2be8f520 T:no name M
 ={============================================================================
 |kt_dev_si_0001| comp-ncm
 
-/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk
 NDS_BUILD_TYPE_ncm_server = debug
 
 # to DHCP
@@ -9546,12 +10330,7 @@ PSCHED_SCHED_HandleAlarmTimeout
 ={============================================================================
 |kt_dev_si_0001| comp-pdm
 
-# picasso
-vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk
-
-# COMPONENT_NAME := pdm_srv
-NDS_BUILD_TYPE_pdm_srv = debug
-
+COMPONENT_NAME := pdm_srv
 
 CO: Conduit, Patrick
 
@@ -9596,6 +10375,27 @@ PDM_FS_BackupPartitionTable
 
 
 PDM_FS_InitAllowedDiskSizes
+
+
+<log>
+To mound /dev/sda
+
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3049 > device: /dev/sda  mounting 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_support.c F:PDM_FS_NotifyDeviceEvent L:1452 > notifyHandle 0x000c0000 listener 0x0x412678 devicehandle 00000007 event PDM_FS_DeviceEventMountingStart(4) isPrimary: true 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_support.c F:PDM_CLIINT_FSDiskEventCb L:2792 > Send: event=PDM_IPC_EV_FS_DISK_EVENT_NFY func=PDM_CLIINT_FSDiskEventCb 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevMatchAllPartitions L:1380 > /dev/sda1 numSectors=0x0e8e035c0 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevCalculateSectors L:448 > usable sectors of device is 00000000e8e03600 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevCalculateSectors L:454 > percentage 08.00 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevCalculateSectors L:455 > desired part size is thus [2016:08:30 13:32:36]0000000012a14c00 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevCalculateSectors L:462 > usable part size is thus [2016:08:30 13:32:36]0000000012a14c00 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevMatchAllPartitions L:1419 > matching part RECORDING  type 01 XSTORE_FS_XTV numsectors 0x[2016:08:30 13:32:36]0000000012a14bc0 to shDeviceName /dev/sda 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevMatchAllPartitions L:1426 > pctMinSize 0x[2016:08:30 13:32:36]0000000012a14bc0 absMinSize 0x0000000000000000 absMaxSize 0x0000000000000000 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevMatchAllPartitions L:1439 > try to match with existing part /dev/sda1 on dev /dev/sda type 01 XSTORE_FS_XTV numsectors 0x00000000e8e035c0 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_DevMatchAllPartitions L:1490 > physical partition /dev/sda1 matched to expected partition RECORDING 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_CreateDirectory L:1899 > dir_path=/mnt/nds/dev_7 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_CreateDirectory L:1899 > dir_path=/mnt/nds/dev_7/part_0 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_support.c F:PDM_FS_PartitionMountWithRecovery L:2517 > tryMount=1 recoveryStep=4 features=0 
+!INFO   -PDM_FS       		< P:STM T:PDM_FS M:pdm_srv_fs_support.c F:PDM_FS_PartitionMount L:2382 > mounting /dev/sda1 (flags: READWRITE) g_pdm_fs_shFeatures=0x1d875600 extVersion=2 features=0x0 md=0x0 
 
 
 ={============================================================================
@@ -10500,9 +11300,25 @@ class PlayerEventCAVideoImpl
 # Eventually, use 'subtitles_local_setting' to decide on/off and not use any other vars and calls.
 
 
-#-----------------------------------------------------------
-# PLAYER_API_Session_RegisterEventListener
-#-----------------------------------------------------------
+{player-events-to-app}
+
+	void handlePlayerEventComponentFail(PlayerEventComponentFail event) throws PlayerDataUnavailableException
+	{
+		int failureCode = event.getFailure();
+
+		switch (failureCode)
+		{
+			case NO_SERVICE_PROGRAM_ASSOCIATION:
+				channelOffAirMonitor.noServiceProgramAssociation();
+				break;
+
+			case TIMEOUT:
+				LOGGER.logError("SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)");
+				setTechnicalFaultCondition(technicalFaultWithCodes(failureCode, PLAYER_COMPONENT_TIMEOUT));
+				break;
+      }
+   }
+
 
 (picasso/mediaengine/src/java/picasso/mediaengine/mediaengine.java)
 public void onPlayerSessionEvent(PlayerEventSession event)
@@ -10546,20 +11362,61 @@ public class PlayerSessionImpl extends SystemCommonObjectImpl implements PlayerS
     }
 }
 
-(src_sun/sunnatPlayerSessionImpl.c)
 
-{  (char*)"natPlayerApiSessionRegisterPlayerEventListener",     (char*)"(IILcom/nds/fusion/player/PlayerEventListener;Ljava/lang/Object;Lcom/nds/fusion/player/PlayerListenerID;)V", 
-    (void*)Java_com_nds_fusion_playerimpl_PlayerSessionImpl_natPlayerApiSessionRegisterPlayerEventListener},        
+public interface PlayerEventComponentFail extends PlayerEventMediaEvent
+{
+    /** Notification of a failure of the elementary components. */
+    int EVENT = 0x80200100;
 
-Java_com_nds_fusion_playerimpl_PlayerSessionImpl_natPlayerApiSessionRegisterPlayerEventListener 
--> PLAYER_JAVA_SessionRegisterPlayerEventListener
+    interface Failure
+    {
+        int NO_PROGRAM_ASSOCIATIONS        = 1;
+        int NO_SERVICE_PROGRAM_ASSOCIATION = 2;
+        int NO_SERVICE_MAP                 = 3;
+        int FAIL_NULL                      = 4;
+        int TIMEOUT                        = 5;
+    }
+}
 
-Java_com_nds_fusion_playerimpl_PlayerSessionImpl_natPlayerApiSessionStorePIN
--> PLAYER_JAVA_SessionStorePIN
 
-(src/natPlayerSessionImpl.c)
-void PLAYER_JAVA_SessionRegisterPlayerEventListener(NDSJNI_ENV *l_env) 
--> PLAYER_API_Session_RegisterEventListener
+// jpa/modules/jpa-impl/src/c/src/natPlayerSessionImpl.c
+
+        /* make the native call */
+        status = PLAYER_API_Session_RegisterEventListener(jSessionHandle, jEventTypes,
+                                                          &PLAYER_JAVA_PlayerEventListener,
+                                                          (PLAYER_API_TAG)currentRegistrationRequest,
+                                                          &listenerHandle);
+
+// event handle
+void PlayerListenerCallbackExecution(const PLAYER_EVENT_LISTENER_OBJECT_DATA * listener, uint32_t event_handle)
+{
+    PLAYER_DIAG_LOG_FN_ENTRY(("PlayerListenerCallbackExecution()"));
+    (void)listener;
+
+    listener->listener( listener->sessionUserTag, listener->session, (PLAYER_API_Event_Handle)event_handle );
+} /* --------------------------------------------------- */
+
+
+typedef enum
+{
+    PLAYER_API_COMPONENT_FAIL_TIMEOUT                        = 5U,  /**< Timeout on getting service component information */
+} PLAYER_API_Component_Fail;
+
+
+/**
+ * @brief Callback for component fail alarms. This will trigger our message thread to
+ *        check whether we have received an SCI object for the active job and signal a
+ *        PLAYER_API_COMPONENT_FAIL_TIMEOUT if we haven't.
+ *
+ * @param[in] handle Alarm handle
+ * @param[in] user_data_handle VRM job handle for the corresponding play job
+ */
+
+
+/** Component fail timeout in ms */
+player.cfg
+406:COMPONENT_FAIL_TIMEOUT_MS=10000
+
 
 #-----------------------------------------------------------
 # PLAYER_JAVA_AVControlImpl_SetAVWindows: PLAYER_API_AVControl_UpdateDisplay
@@ -10753,10 +11610,10 @@ Scart Control UCM-11437
 !MIL   -JAE          < T:no name M:ceej_bsp.c F:ooBSP_write L:00803 > %%%%%%%  PICASSO ACTIVE STATE...    REACHED  %%%%%%%
 
 !MIL   -EPG_TVVM     < M:SystemCommonObjectHandler F:requestProcessAction L:901 > T:PooledExecutor#4:ACTION_TUNE_AFTER_EXITING_STANDBY
-!MIL    -EPG_TVVM     		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:Tuner F:doTuneToLocatedService L:507 > T:PooledExecutor#3:doTuneToLocatedService - TUNING
-!MIL    -EPG_CONF     		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:ConflictAuthorizer F:doIsAuthorized L:143 > T:PooledExecutor#3:TUNING AUTHORIZED
-!MIL    -EPG_TVVM     		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:Tuner F:playService L:193 > T:PooledExecutor#3:### Tuner.playService
-!MIL    -P_Api        		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:player_api_session.c F:PLAYER_API_Session_Play L:4106 > PLAY 
+!MIL   -EPG_TVVM     		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:Tuner F:doTuneToLocatedService L:507 > T:PooledExecutor#3:doTuneToLocatedService - TUNING
+!MIL   -EPG_CONF     		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:ConflictAuthorizer F:doIsAuthorized L:143 > T:PooledExecutor#3:TUNING AUTHORIZED
+!MIL   -EPG_TVVM     		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:Tuner F:playService L:193 > T:PooledExecutor#3:### Tuner.playService
+!MIL   -P_Api        		< p:0x000001f5 P:APP t:0x2df3d520 T:no name M:player_api_session.c F:PLAYER_API_Session_Play L:4106 > PLAY 
 
 
 
@@ -13145,6 +14002,43 @@ SYSTEM_STATUS SYSTEMTIME_SetTime(const SYSTEMTIME_CLOCK_CALENDAR *utc_time, int3
 NDS: ^[20:00:18]0946756818.527260 !MIL    -SYSTEMTIME           < p:0x00000000 P: t:0x2b149b80 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_SetTime L:929 > Time has been updated to (Year:Month:Day:Hour:Min:Sec) 2011:12:16:8:50:59
 
 
+<time-heart-beat>
+Has 5 secs interval
+
+systemtime.cfg:11:SYSTEMTIME_TIMESTAMP_INTERVAL=5
+
+
+    if( SYSTEMCONFIG_STATUS_OK == SYSTEMCONFIG_GetIntegerValue(Config_file_Handle,
+                                                               "SYSTEMTIME_CONFIGURATION",
+                                                               "SYSTEMTIME_TIMESTAMP_INTERVAL",
+                                                               &f_systemtime_timestamp_interval) )
+
+
+static void SYSTEMTIME_TimeStampCallback(void)
+{
+  {
+    if ((systemtime - prev_systemtime) >= f_systemtime_timestamp_interval)
+    {
+      prev_systemtime = systemtime;
+
+      time_status = SYSTEMTIME_ConvertTimeDateToClockCalendar(systemtime, &clockcalendar);
+      if(SYSTEMTIME_STATUS_OK == time_status)
+      {
+        DIAG_LOG_MIL(g_systemtime_diag_id,("Time is (Year:Month:Day:Hour:Min:Sec) %04d:%02d:%02d:%02d:%02d:%02d",
+              clockcalendar.year,clockcalendar.month,clockcalendar.day,clockcalendar.hour,clockcalendar.minute,clockcalendar.second));
+      }
+    }
+  }
+}
+
+
+^[2016:08:21 14:09:07]0946685094.138404 !MIL    -SYSTEMTIME                < T:SYSTEMTIME_NOTIFICATION_THREAD M:systemtime_thread.c F:SYSTEMTIME_TimeStampCallback L:153 >
+is (Year:Month:Day:Hour:Min:Sec) 2016:08:21:14:09:07
+
+^[2016:08:21 14:09:12]0946685099.144471 !MIL    -SYSTEMTIME                < T:SYSTEMTIME_NOTIFICATION_THREAD M:systemtime_thread.c F:SYSTEMTIME_TimeStampCallback L:153 >
+Time is (Year:Month:Day:Hour:Min:Sec) 2016:08:21:14:09:12
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-systemcommon comp-systemexception
 
@@ -15319,6 +16213,9 @@ CTM_SVR_FTM_Download_Thread()
 
   while(keep)
   {
+    // do download per a requst message
+    CTM_SVR_FTM_WaitForRequest(dl_ctx, &thread_request_received);
+
     // `get global request` which is null at first  
     const CTM_Download_Request_t* request = &dl_ctx->request;
 
@@ -15389,7 +16286,7 @@ CTM_SVR_FTM_Download_Thread()
 }
 
 
-// note: when cookies are freed? Here.
+// note: when cookies are freed? Here. Keep a session live until gets closed.
 
 int32_t CTM_SVR_FTM_Term( void )
 {
@@ -15397,7 +16294,7 @@ int32_t CTM_SVR_FTM_Term( void )
   
   for (i=0; i< FTM_NB_CTX; i++)
   {
-    HTTP_API_SessionDestroy(dl_ctx->handle);
+    HTTP_API_SessionDestroy(`dl_ctx->handle`);
     {
       curl_easy_cleanup((CURL *) handle);
       { 
@@ -15411,11 +16308,54 @@ int32_t CTM_SVR_FTM_Term( void )
 
 SYSTEM_STATUS CTM_SVR_FTM_Init(CTM_SVR_FTM_Callback_t *callback)
 {
+  // only one session
+  dl_ctx->handle = HTTP_API_SessionCreate();
+
   HTTP_API_Handle_t *HTTP_API_SessionCreate(void)
   {
     handle = (HTTP_API_Handle_t *) curl_easy_init();
   }
 }
+
+/*
+ * Initiate a download request using the passed parameters (see header file)
+ */
+int32_t CTM_SVR_FTM_RequestDownload(int32_t ftm_id, const CTM_Download_Request_t* request)
+{
+}
+
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2235 > Downloading... 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2236 > Use bitrate of 40000 
+
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetDefaultHTTPOptions L:1577 > - Set option : SET HTTP VERSION 1.1 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetDefaultHTTPOptions L:1586 > - Set option : DONT IGNORE_CONTENT_LENGTH 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetDefaultHTTPOptions L:1595 > - Set option : NORMAL GET 0 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetDefaultHTTPOptions L:1604 > - Set option : BUFFERSIZE 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetDefaultHTTPOptions L:1613 > - Set option :HTTP_API_OPT_FAILONERROR 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetDefaultHTTPOptions L:1638 > - Set mode HTTP_API_SECURITY_MODE_DIGEST_SRP_SCHEME 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetDefaultHTTPOptions L:1673 > - Set default header 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:1810 > No range 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:1829 > - Set option : URL <http://cdn.sky.com/60440/1174/bsky_4od-MAIN000000[2016:09:05 18:20:58]0000368413-20160820[2042:03:25 21:40:45]1753350000.nff_001477174_02403.oecm> 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:1861 > - Reset default headers 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:1976 > - Set option HTTP_API_OPT_COOKIEFILE: 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:1986 > - Set option HTTP_API_OPT_FOLLOWLOCATION: 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:2012 > - Set option HTTP_API_OPT_IPRESOLVE [1] 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:2046 > No referrer 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:2049 > - Set option HTTP_API_OPT_TCP_KEEPALIVE : 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:2058 > - Set option HTTP_API_OPT_LOW_SPEED_LIMIT : 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:2067 > - Set option HTTP_API_OPT_LOW_SPEED_TIME : 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_FTM_SetHTTPOptions L:2076 > - Set option HTTP_API_OPT_MAXREDIRS 123 : 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2296 > - HTTP_API_Perform ! 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2353 > HTTP_API_Perform : Request 
+!ERROR  -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:http_api.c F:HTTP_API_Perform L:1789 > KIT: Calling curl_easy_perform() 
+
+!ERROR  -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:http_api.c F:HTTP_API_Perform L:1791 > KIT: from curl_easy_perform(): status = 0xd400000 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2399 > - HTTP_API_Perform : Successful 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2485 > Total written to disk [00000000 00001ec2] 
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2488 > Close file (fd=388) 
+
+!INFO   -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_Download_Thread L:2509 > Download finished ok: 'http://cdn.sky.com/60440/1174/bsky_4od-MAIN000000[2016:09:05 18:20:58]0000368413-20160820[2042:03:25 21:40:45]1753350000.nff_001477174_02403.oecm' 
+!ERROR  -CTM_SVR < P:MW T:CTM_SVR_DL_CONTENT M:ctm_svr_file_transfer_manager.c F:CTM_SVR_FTM_CleanUpRequest L:2096 > ** KIT: SI-10728: IRH: HIJACK { ** 
 
 
 <status>
@@ -15432,6 +16372,9 @@ SYSTEM_STATUS CTM_SVR_FTM_Init(CTM_SVR_FTM_Callback_t *callback)
 
 hex(((53 & 0x3FF) << 22) | ((3 & 0x3) << 16) | ((0 & 0xF) << 12) | (0 & 0xFFF) )
 '0xd430000'
+
+#define HTTP_API_E_OK                      (_HTTP_INFO(0))    /*!< @brief Success */
+'0xd400000'
 
 #define HTTP_API_E_COULDNT_CONNECT         (_HTTP_FATAL(7))   /*!< @brief Couldn't connect to server */
 #define HTTP_API_E_WRITE_ERROR             (_HTTP_FATAL(10))  /*!< @brief Failed writing received data */
@@ -15467,18 +16410,41 @@ include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
 CMS_SYSTEM_INFRASTRUCTURE/HTTP/inc/config/http_master_config.xml
 11:    <key name="TRACE_LEVEL_LIBCURL" type="STRING" value="AFEWM">
 
+// `STARTED`
+!WARN   -CTM_SVR < P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xbcc78005 (Type = 0) from 4 (COMMITED) to 1 (STARTED)
 
-!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:257 > KIT: co = calloc(56) 
-!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 444) Strdup: sky-pdl-client-credentials-a 
-!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 445) Strdup: ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89 
-!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: 1800 
-!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: /60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff 
-!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: cdn.sky.com 
-!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:755 > KIT: Added cookie sky-pdl-client-credentials-a=\"ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89\" for domain cdn.sky.com, path /60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff, " "expire %" "lld" "\n 
-!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:760 > KIT: replace_old is null. make it last? 
-!INFO   -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:http_api.c F:debugFunction L:224 > HTTP 0 HEADER IN: Set-Cookie: sky-pdl-client-credentials-a=ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89;Max-Age=1800;Path=/60448/bsky_skydisney/MOVIE/b 
-!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:http.c F:Curl_http_readwrite_headers L:3791 > KIT: from Curl_client_write(): result = 0 
-!ERROR  -LIBCURL      		< p:0x00000264 P:MW t:0x01e07520 T:CTM_SVR_DL_CONTENT M:http.c F:Curl_http_readwrite_headers L:3711 > KIT: call Curl_cookie_add() 
+!ERROR  -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:257 > KIT: co = calloc(56) 
+!INFO   -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 444) Strdup: sky-pdl-client-credentials-a 
+!INFO   -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 445) Strdup: ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89 
+!INFO   -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: 1800 
+!INFO   -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: /60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff 
+!INFO   -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:libcurl_portage.c F:NDS_HTTP_strdup_DEBUG L:33 > (F: src/cookie.c, L: 210) Strdup: cdn.sky.com 
+!ERROR  -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:755 > KIT: Added cookie sky-pdl-client-credentials-a=\"ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89\" for domain cdn.sky.com, path /60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff, " "expire %" "lld" "\n 
+!ERROR  -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_add L:760 > KIT: replace_old is null. make it last? 
+!INFO   -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:http_api.c F:debugFunction L:224 > HTTP 0 HEADER IN: Set-Cookie: sky-pdl-client-credentials-a=ip=91.234.201.1~expires=[2016:08:16 14:38:26]1471358306~access=/60448/bsky_skydisney/MOVIE/bsky_skydisney-MAIN000000[2016:08:31 03:38:46]0001258819-20150926[2018:12:28 15:13:20]1546010000.nff*~md5=84f19af32707950c1db4e742cdc1eb89;Max-Age=1800;Path=/60448/bsky_skydisney/MOVIE/b 
+!ERROR  -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:http.c F:Curl_http_readwrite_headers L:3791 > KIT: from Curl_client_write(): result = 0 
+!ERROR  -LIBCURL < P:MW T:CTM_SVR_DL_CONTENT M:http.c F:Curl_http_readwrite_headers L:3711 > KIT: call Curl_cookie_add() 
+
+// `COMPLETED`
+!WARN   -CTM_SVR < P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xbcc78005 (Type = 0) from 1 (STARTED) to 0 (COMPLETED)
+
+
+<note>
+Curl_cookie_init is called continously but not once for each process. But
+cookie list remains valid between this calls.
+
+T:CTM_SVR_DL_CONTENT M:cookie.c F:Curl_cookie_init L:977 > KIT: cookie file() 
+
+
+<process-and-thread>
+$ grep TRACE_LEVEL_LIBCURL LOGlastrun_realtime
+!INFO   -HTTP < P:`CA` t:0x00991810 T:no name M:http_api.c F:`HTTP_API_Init` L:452 > To activate libcurl traces : please use the diag segment TRACE_LEVEL_LIBCURL = \"FEWI!APR<>\" in the file diag.cfg
+!INFO   -HTTP < P:MW t:0x01d5e520 T:AMS_FTM_HTTP_REQUEST_HANDLER M:http_api.c F:HTTP_API_Init L:452 > To activate libcurl traces : please use the diag segment TRACE_LEVEL_LIBCURL = \"FEWI!APR<>\" in the file diag.cfg
+!INFO   -HTTP < P:APP t:0x01108520 T:GUIDE_MAIN M:http_api.c F:HTTP_API_Init L:452 > To activate libcurl traces : please use the diag segment TRACE_LEVEL_LIBCURL = \"FEWI!APR<>\" in the file diag.cfg
+
+!INFO   -HTTP < P:MW t:0x0228a520 T:WLM_MONITOR M:http_api.c F:HTTP_API_Perform L:1788 > Calling curl_easy_perform()
+!INFO   -HTTP < P:APP t:0x0139c520 T:ATG_FTM_HTTP_DWL M:http_api.c F:HTTP_API_Perform L:1788 > Calling curl_easy_perform ()
+!INFO   -HTTP < P:MW t:0x01e16520 T:CTM_SVR_DL_CONTENT M:http_api.c F:HTTP_API_Perform L:1788 > Calling curl_easy_perform()
 
 
 ==============================================================================
