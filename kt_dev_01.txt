@@ -355,7 +355,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_mecpp_004| 
 |kt_dev_mecpp_005| 25: reference-counting
 |kt_dev_mecpp_006| 28: log entry
-|kt_dev_mecpp_007| 34: combine C and C++
+|kt_dev_mecpp_007| link-combine C and C++
 |kt_dev_mecpp_008| 32: program in the future tense
 
 #{ EFFECTIVE STL 3RD
@@ -2775,6 +2775,15 @@ git clone git://git.sv.gnu.org/coreutils coreutils
 
 #!/bin/bash
 g++ -g -std=c++0x $1
+
+
+={============================================================================
+*kt_dev_gcc_000* gcc-build-cmake
+
+https://cmake.org/download/
+$ ./configure --prefix=/home/NDS-UK/kyoupark/toolchains
+$ make
+$ make install
 
 
 ={============================================================================
@@ -43806,6 +43815,62 @@ for( VPW::iterator iter = winPtrs.begin(); iter != winPtrs.end(); ++iter )
 
 
 ={============================================================================
+*kt_dev_ecpp_014* cpp-cast-error
+
+sanitizer_symbolizer_posix_libcdep.cc:78:77: 
+error: ISO C++ forbids casting between pointer-to-function and pointer-to-object [-Werror]
+   swift_demangle_f = (swift_demangle_ft)dlsym(RTLD_DEFAULT, "swift_demangle");
+                                                                             ^
+cc1plus: all warnings being treated as errors
+
+<code>
+// As of now, there are no headers for the Swift runtime. Once they are
+// present, we will weakly link since we do not require Swift runtime to be
+// linked.
+typedef char *(*swift_demangle_ft)(const char *mangledName,
+                                   size_t mangledNameLength, char *outputBuffer,
+                                   size_t *outputBufferSize, uint32_t flags);
+static swift_demangle_ft swift_demangle_f;
+
+// This must not happen lazily at symbolication time, because dlsym uses
+// malloc and thread-local storage, which is not a good thing to do during
+// symbolication.
+static void InitializeSwiftDemangler() {
+  swift_demangle_f = (swift_demangle_ft)dlsym(RTLD_DEFAULT, "swift_demangle");
+}
+
+
+// to get around this
+static char *(*swift_demangle_f)(const char *mangledName,
+                                   size_t mangledNameLength, char *outputBuffer,
+                                   size_t *outputBufferSize, uint32_t flags);
+
+From C99 spec, section 6.2.5, paragraph 27:
+
+    A pointer to void shall have the same representation and alignment
+    requirements as a pointer to a character type. Similarly, pointers to
+    qualiﬁed or unqualiﬁed versions of compatible types shall have the same
+    representation and alignment requirements. All pointers to structure types
+    shall have the same representation and alignment requirements as each
+    other. All pointers to union types shall have the same representation and
+    alignment requirements as each other. `pointers to other` types need not
+    have the same representation or alignment requirements.
+
+So no; no guarantee that a void * can hold a function pointer(pointers to other).
+
+And section 6.3.2.3, paragraph 8:
+
+    A pointer to a function of one type may be converted to a pointer to a
+    function of another type and back again; the result shall compare equal to
+    the original pointer.
+
+implying that one function pointer type can hold any other function pointer
+value. Technically, that's not the same as guaranteeing that function-pointer
+types can't vary in size, merely that their values occupy the same range as
+each other.
+
+
+={============================================================================
 *kt_dev_ecpp_015* new-delete
 
 {default-value-initialize}
@@ -45133,19 +45198,20 @@ this is main }
 
 
 ={============================================================================
-*kt_dev_mecpp_007* 34: combine C and C++
+*kt_dev_mecpp_007* link-combine C and C++
 
 There are things to know when use both together in a program.
 
 {name-mangling}
-This is the process which C++ compiler give each function a unique name because supports
-overloading. There is a directive to tell compiler not to mangle func name. This is called linkage
-directive.
+This is the process which C++ compiler give each function a unique name
+because supports overloading. There is a directive to tell compiler not to
+mangle func name. This is called `linkage directive`
 
 
 {extern-keyword}
-The GCC compiles files based on extension. When compiles cpp files meaning cpp mangles names, you
-can make sure that functions are c functions (not to mangle) :
+The GCC compiles files based on extension. When compiles cpp files meaning cpp
+mangles names, you can make sure that functions are c functions (not to
+    mangle) :
 
 extern "C" void drawLine(int x1, int y1, int x2, int y2);
 
@@ -45186,7 +45252,20 @@ extern "C" typedef Plugin* createFunction_t(const char *);
 
 
 <case-example> <wrapper-from-cpp-to-c>
-This case is that main is in c and is to use some features written in cpp.
+Suppose the case when main written in c uses some features written in cpp. If
+there is no extern guard, then:
+
+[   15s] /home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/pfm/pfmosa.h:170:1: error: previous
+declaration of 'pfmerr_t pfmThreadCreate(SPfmThreadParams*, void (*)(void*), void*)' with 'C++'
+linkage 
+[   15s] /home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/pfm/pfmthread.cpp:80:80: error:
+conflicts with new declaration with 'C' linkage
+
+
+Why? Since the cpp file uses typedefs from it and when compiles the cpp file,
+  compiler thinks func defs are C++ linkage from wrapper header since there is
+  no extern guard and then see wrapper_func in C linkage from cpp file. So
+  conflict.
 
 C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++)
 
@@ -45200,20 +45279,9 @@ C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++
 																			 ...
 																		}
 
-Note This is a problem when use the same header in both c and cpp compile. Why extern C is needed in
-the wrapper.h? If this is only used for C files then not needed but must for C and CPP source files.
-
-Also because cpp file uses typedefs from it. So when compile cpp compiler thinks func defs are C++
-linkage from wrapper header when there is no extern guard and then see wrapper_func in C linkage
-from cpp file. So conflict and emits errors:
-
-[   15s] /home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/pfm/pfmosa.h:170:1: error: previous
-declaration of 'pfmerr_t pfmThreadCreate(SPfmThreadParams*, void (*)(void*), void*)' with 'C++'
-linkage 
-[   15s] /home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/pfm/pfmthread.cpp:80:80: error:
-conflicts with new declaration with 'C' linkage
 
 C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++)
+
 #include "wrapper.h"                                 	extern "C"
                                typdefs                {
                                                           #include "wrapper.h" 
@@ -45224,10 +45292,11 @@ C source(.c and gcc)        wrapper header(.h)        wrapper class(.cpp and g++
 																			 ...
 																		}
 
-This can be avoided if design header and source files carefully. For example, if need some c
-functions that can be used in c file and this function creates cpp objects and use it then simply
-create a header which has normal declarations and no externs and only have externs in cpp. The point
-is that the same header is used for both C and CPP.
+This can be avoided if design header and source files carefully. For example,
+     if need some c functions that can be used in c file and this function
+     creates cpp objects and use it then simply create a header which has
+     normal declarations and no externs and only have externs in cpp. The
+     point is that the same header is used for both C and CPP.
 
 // ususal c
 #include "wrapper.h"
@@ -45250,9 +45319,10 @@ extern "C"
   }
 }
 
-If usual cpp header or wrapper.h have other cpp headers, will work cpp compiles such as usual cpp
-and others but when used in c compile, emits loads of errors since these cpp files have cpp things.
-So better to have single header file which have all c functions from cpp land. Otherwise, will get
+If usual cpp header or wrapper.h have other cpp headers, will work cpp
+compiles such as usual cpp and others but when used in c compile, emits loads
+of errors since these cpp files have cpp things.  So better to have single
+header file which have all c functions from cpp land. Otherwise, will get
 errors shown in *kt_dev_gcc_007* 
 
 <extern-linkage>
