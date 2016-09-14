@@ -5,6 +5,121 @@ kt.dev.si
 /^[#=]{
 Use #{ for a group and ={ for a item
 
+
+={============================================================================
+|kt_si_log_0001| SI-10793: OOM PCAT_VIEW_CLNT_POOL
+
+Script: OD.30(R12_89x) - Download All (Phase 1) (11.30)
+Baseline(s):
+R015.084.43.00
+
+pcat_db.cfg:22:CLIENT_POOL_NAME="PCAT_VIEW_CLNT_POOL"
+
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d3c9_e5f6f859c892b462a96b21c1cef1dae1/
+P1	70	1533777	2016:09:05 03:18:16	Out of memory in " "PCAT_VIEW_CLNT_POOL" pool.
+
+PROF shows the OOM as well.
+
+!ERROR  -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:40 FreeSize:12 Bank:1 PoolMAX:409588 
+!WARN   -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 40 bytes in pool " "PCAT_VIEW_CLNT_POOL"  
+!WARN   -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 12 bytes 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_misc.c F:PCAT_AllocStaticP_DBG L:411 > not enough memory: size=19, called from M=pcat_serialize_structs.c, F=PCAT_SERIALIZE_deserialize_PropValue, L=215 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_serialize_structs.c F:PCAT_SERIALIZE_deserialize_PropValue L:275 > Deserializaton failed 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_serialize_structs.c F:PCAT_SERIALIZE_deserialize_P_PropValue L:383 > Deserializaton failed 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_serialize_structs.c F:PCAT_SERIALIZE_Deserialize_DBVIEW_ValueListStruct L:771 > Deserializaton failed 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:pcat_server_proxy.c F:PCAT_VIEW_SRV_SelectCollapsedList L:2434 > Finished with error: Failure (0x5c21001) 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:pcat_view_clnt.c F:PCAT_VIEW_SelectCollapsedList L:1097 > PCAT_VIEW_SRV_SelectCollapsedList stat=0x5c21001, view=0x7000014 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:pcat_view_clnt.c F:PCAT_VIEW_SelectCollapsedList L:1121 > Finished with error: Failure (0x5c21001) 
+!ERROR  -PLANNER      		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_list_element.c F:PLANNER_ListElement_PRV_GetValueListCollapsed L:994 > Call to PCAT_VIEW_SelectCollapsedList failed 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_GetVListFromCache L:3449 > Failed to obtain IDs 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_RetrieveVListToCache L:4475 > Failed to get vlist 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_InitCache L:4654 > Failed to get or retrieve vlist at index -1 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_RefreshIfNecessary L:1025 > Failed to initialise the new iterator cache 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIteratorImpl_GetNextIndex L:1322 > Failed to refresh iterator 
+!ERROR  -J_PLANNER    		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:modules/jpa-impl/src/c/src/natPlannerIteratorImp 
+  F:Java_com_nds_fusion_plannerimpl_PlannerIteratorImpl_natPlannerIt L:77 > PLANNER_API_Iterator_GetNextIndex failed: 0x6422001
+
+JNIEXPORT jint JNICALL Java_com_nds_fusion_plannerimpl_PlannerIteratorImpl_natPlannerIteratorNextIndex
+  (JNIEnv *env, jclass jClass, jint param1)
+{
+    uint32_t jReturnVal = 0;
+
+    PLANNER_API_Iterator_Handle jNativeHandle = (PLANNER_API_Iterator_Handle)param1;
+    SYSTEM_STATUS status                      = PLANNER_API_STATUS_NOT_OK;
+
+    JPA_DIAG_DECLARE_FUNCTION;
+    DIAG_LOG_FN_ENTRY(g_planner_adaptor_api_diag_segment_id);
+
+    status = PLANNER_API_Iterator_GetNextIndex(jNativeHandle, (int32_t*)&jReturnVal);
+    if (!SYSTEM_STATUS_IS_OK(status))
+    {
+        DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("PLANNER_API_Iterator_GetNextIndex failed: 0x%x", status));
+    }
+
+    (void)PLANNER_JAVA_ParseReturn(env, status);
+
+    DIAG_LOG_FN_EXIT(g_planner_adaptor_api_diag_segment_id, status);
+    return (jint)jReturnVal;
+}
+
+
+#ifdef PLANNER_ITERATORS_SUPPORTED
+/**
+ * @brief Standard iterator get `next index` implementation
+ *
+ * @param[in] iterator Iterator structure
+ * @param[out] param_index The next object index to the iterator
+ * @retval #PLANNER_API_STATUS_OK on success
+ * @retval #PLANNER_API_STATUS_NOT_OK on failure
+ */
+static SYSTEM_STATUS PLANNER_StandardIteratorImpl_GetNextIndex(`PLANNER_ITERATOR_T` *iterator, int32_t *param_index)
+{
+    /* Refresh the iterator if there has been a change to the view */
+    if (PLANNER_API_STATUS_OK != PLANNER_StandardIterator_RefreshIfNecessary(iterator->handle, false))
+    {
+        DIAG_LOG_ERROR( g_planner_iterator_diag_segment_id, ("Failed to refresh iterator"));
+    }
+
+    DIAG_LOG_FN_EXIT( g_planner_iterator_diag_segment_id, l_status);
+    return l_status;
+}
+
+
+http://theyard.cisco.com/si_logs/translation/darwin_0019fb4307b8_2d26e1f7329ac57b5d6a77a247618025/
+NO OOM.
+
+
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbd18d2c_d853e6a9b3763150ddf24efc1cf86c5d/
+User-pressed 444 - indication of user-trial fault.
+P1	70	1976298	2016:09:05 06:10:20	Out of memory in " "PCAT_VIEW_CLNT_POOL" pool.
+
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbb71c5f_01843626e5c29624c0c7171725b26b36/
+User-pressed 444 - indication of user-trial fault.
+P1	70	1256981	2016:09:05 01:26:20	Out of memory in " "PCAT_VIEW_CLNT_POOL" pool.
+
+// From STR-8794
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbe86f8d_87b620f86f763c69753a8beac697e9b3/
+http://theyard.cisco.com/si_logs/translation/darwin_0019fb4307b8_98e2669064e9274c4317f3693da038f0/
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbd18d2c_261593442ef447a9ebb902d7c91551fd/
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbb71c5f_3c245065794b9d564d1583713a2ec167/
+User-pressed 444 - indication of user-trial fault.
+
+
+<regression>
+
+drx890  R015.084.42.00U 2016-08-31 10:29:00     <p1>PCAT Client Memory Leak (OPERATOR-INDUCED CRASH) (built by hudson)</p1>     http://theyard.cisco.com/si_logs/translation/darwin_0019fbd5a0bc_1a4d2bb1f22c9c780d66815c006f4a5f/index.html
+drx890  R015.084.37.00U 2016-08-23 18:43:00     <p1>PCAT Client Memory Leak (built by hudson)</p1>      http://theyard.cisco.com/si_logs/translation/darwin_0019fb1a2bbc_c6b67f14cc7143d382b5cb5051138c05/index.html
+drx890  R015.084.34.00U 2016-08-18 01:58:00     <p1>PCAT Client Memory Leak (built by hudson)</p1>      http://theyard.cisco.com/si_logs/translation/darwin_0019fb1a2bbc_be413e1111c2f7fccd2d0032ebe12333/index.html
+drx890  R015.084.26.00U 2016-07-28 12:14:00     <p1>PCAT Client Memory Leak (built by hudson)</p1>      http://theyard.cisco.com/si_logs/translation/darwin_0019fb603c05_9332eba249a3dfc7d7c8a11ea56ae3d8/index.html
+drx890  R015.084.21.00U 2016-07-18 12:44:00     <p1>PCAT Client Memory Leak resulting in MW_Process crash in #0 0x2ab0f2d4 in poll (fds=<optimized out>, nfds=1, timeout=-1) at libc/sysdeps/linux/common/poll.c:44 (built by hudson)</p1>     http://theyard.cisco.com/si_logs/translation/darwin_0019fb0fbe52_afdb05d4e149f14dfca055e3a86ba52e/index.html
+
+
+BSKYB_INTEGRATION_BLD_84.21.00_BSKYB_HR015_Int Baseline Listing
+--------------------------------------------------------------------------------
+0a35a11 Pull in new Picasso (trunk.97959)
+9455af1 Revert "US11402 : MID-6826 : R12: Enable content-type protection (again) to work around bad router behaviour when losing DSL connection"
+
+
 ={============================================================================
 |kt_si_log_0001| SI-10757 blue screen and IC2 errors
 
@@ -71,6 +186,9 @@ LOGlastrun_realtime_D_02
 https://www.stb.bskyb.com/jira/browse/SI-10757
 from Log URL: darwin_0019fb5b8297_88d918170f86ebccbc39297608c7c07d.tgz
 
+11527:DRV: ^[2016:08:21 14:17:54]0946685621.354778 KERN_WARNING !!!Error BREG_I2C_Read(hHDMI->hI2cRegHandle, 0x3A, 0x41, (uint8_t *) &Status, 2)(0x110001) at //home/masterci/workspace/AMS_DRX890_R11/cdisourc
+e/trunk/build/ams-drx890/source//magnum/magnum7335/portinginterface/hdm/7335/bhdm_hdcp.c:2162
+
 1655077:NDS: ^[2016:08:22 04:50:22]0946737969.397703 !WARN   -BEM          		< p:0x000001df P:MW t:0x0177e520 T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
 1655078:NDS: ^[2016:08:22 04:50:23]0946737970.295885 !WARN   -BEM          		< p:0x000001df P:MW t:0x0177e520 T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
 1655130:NDS: ^[2016:08:22 04:50:24]0946737971.304141 !WARN   -BEM          		< p:0x000001df P:MW t:0x0177e520 T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:2419 > HDMI_HDCP_GET_BSTATUS failed, errno 145 
@@ -133,6 +251,12 @@ NDS: ^0946740362.015170 !WARN  -BEM          < T:BEM_INTERNAL_EVENT_THREAD M:bem
 // this happens on timer
 NDS: ^0946740364.517876 !INFO  -BEM          < T:BEM_INTERNAL_EVENT_THREAD M:bem_server.c F:BEM_Util_Ioctl L:01911 > BEM IOCTL f=bem_internal_event.c l=2411 rv=-1 fd=297 req=HDMI_HDCP_GET_BSTATUS                       
 NDS: ^0946740364.518048 !WARN  -BEM          < T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdcpStatus L:02419 > HDMI_HDCP_GET_BSTATUS failed, errno 145
+
+
+<log-parser>
+567	2	I2C driver error may cause a blue screen @SI-10719	Error BREG_I2C_Read	None	I2C driver error may cause a blue screen @SI-10719	None
+
+567	2	I2C driver error may cause a blue screen @SI-10757	Error BREG_I2C_Read	None	I2C driver error may cause a blue screen @SI-10719	None i2c_errors.py
 
 
 // ={============================================================================

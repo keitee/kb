@@ -33,7 +33,7 @@
 *kt_linux_bash_001* sh-expansion-parameter-substitude
 *kt_linux_bash_001* sh-expansion-command
 *kt_linux_bash_001* sh-expansion-word
-*kt_linux_bash_001* sh-expansion-arithmetic
+*kt_linux_bash_001* sh-expansion-arithmetic sh-expr
 *kt_linux_bash_001* sh-expansion-process
 *kt_linux_bash_001* sh-expansion-filename
 *kt_linux_bash_001* sh-redirection
@@ -58,6 +58,7 @@
 *kt_linux_bash_101* sh-tip-nested-level
 |kt_linux_bash_202| sh-tip-recursion-test
 *kt_linux_bash_202* sh-tip-get-filenames-from-comment
+*kt_linux_bash_202* sh-case-
 
 
 #{ tool
@@ -69,6 +70,7 @@
 |kt_linux_tool_006| tool-cp
 |kt_linux_tool_007| mkdir
 |kt_linux_tool_008| strings
+*kt_linux_tool_009* tool-head
 |kt_linux_tool_009| tool-sort
 *kt_linux_tool_009* tool-uniq
 *kt_linux_tool_010* tool-grep
@@ -746,13 +748,12 @@ $ { date;time; } > mylog
 ={============================================================================
 *kt_linux_bash_019* sh-pipeline-case-problem
 
-The problem is that if see below two lines in order in a log file then flag it
-up as an error.
+The task is that if see two log lines in order in a log and then it is to flag
+it up as error.
 
 Line xx: ... > VRM_JOB_START: jtVRM=3, jhVRM=0x3000385
 Line xx: > XTVFS_WriteEx failed,returned value: E_FSSERVER_STATUS_INVALID_ALIGNMENT 290:
 
-<1>
 Use function and pipe?
 
 scan_for()
@@ -765,44 +766,30 @@ scan_for()
 
 A=``mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for``
 
-This don't work since sacn_for cannot get piped input.
 
-<2>
-The second approach:
-
-scan_for()
-{
-  cat x.tmp | while read line
-  do
-      echo "$line"
-  done
-}
-
-A=``mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" > x.tmp``
-scan_for()
-
-This solves the initial problem but causes the other problem.
+The $A will have all lines which are echoed from scan_for(). Okay, expand
+this.
 
 scan_for()
 {
   STARTED=0
   MATCHED=0
 
-  cat x.tmp | while read line
+  while read line
   do
     case $line in
       *jtVRM=3*)
           if [ $STARTED -ne 1 ]
           then
              STARTED=1;
-             STARTLINE=`echo $line`;
+             STARTLINE=``echo $line``;
           fi
           ;;
        *XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
           if [ $STARTED -eq 1 ]
           then
              MATCHED=1;
-             LASTLINE=`echo $line`;
+             LASTLINE=``echo $line``;
 
              # note: can see variables as expected
              echo "started = $STARTED, MATCHED=$MATCHED";
@@ -823,8 +810,6 @@ scan_for()
   fi
 }
 
-The $A will have all lines which are echoed from scan_for().
-
 
 The reason:
 
@@ -841,50 +826,145 @@ loop terminates? Or, why can't I pipe data to read?
 
 Workarounds
 
-1. If the input is a file, a simple redirect will suffice. note: OK. 
-2. Use ProcessSubstitution (Bash/Zsh/Ksh93 only). note: OK 
+Use ProcessSubstitution (Bash/Zsh/Ksh93 only). note: OK 
 http://mywiki.wooledge.org/ProcessSubstitution
 
-#!/bin/bash
+
+The problem is changes in subshell cannot be seen in parent. How to solve? Use
+redirection from subshell.
+
+
+<xtvfs_write_error2>
+##P2
+## PicassoShutdownFail: Park, Kyoung-Taek, 09/01/2012
+## Check for XTVFS error on a recording
+
+mycat()
+(
+    F=cat
+    echo "$1" | grep -q '.gz$' && F=zcat
+    $F $1
+)
 
 scan_for()
 {
-  STARTED=0
-  MATCHED=0
-
-  while read line
-  do
-    case $line in
-      *jtVRM=3*)
-          if [ $STARTED -ne 1 ]
-          then
-             STARTED=1;
-             STARTLINE=`echo $line`;
-          fi
-          ;;
-       *XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
-          if [ $STARTED -eq 1 ]
-          then
-             MATCHED=1;
-             LASTLINE=`echo $line`;
-
-             # note: can get output of variables as expected
-             echo "started = $STARTED, MATCHED=$MATCHED";
-
-          break;
-          fi
-          ;;
-    esac
-  # done < <(cat x.tmp)
-  done < x.tmp
-
-  # note: however, the output of variables are '0'
-  echo "started = $STARTED";
-  echo "matched = $MATCHED";
+    while read line	
+    do
+		case $line in
+			*jtVRM=*)
+				LINEJOB=`echo $line | cut -d':' -f1`;
+				LASTJOB=`echo $line | cut -d'=' -f2 | cut -d',' -f1`;
+				;;
+			*XTVFS_WriteEx*E_FSSERVER_STATUS_INVALID_ALIGNMENT*)
+				if [ $LASTJOB -eq 7 ]
+				then
+					LASTLINE=`echo $line`;
+					echo "JOB $LINEJOB, $LASTJOB, $LASTLINE";
+					break;
+				fi
+				;;
+		esac
+    done
 }
 
-A=$(scan_for)
-echo "A = $A";
+if [ "$1" = "-v" ]
+then
+    echo "XTVFS Write error causing failed recordings in Soak tests - Jira SI-4063" 
+    exit 0
+fi
+A=`mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for`
+
+if [ "$A" = "" ]
+then
+echo 0
+exit 0
+fi
+
+L=`echo $A | cut -d':' -f1`
+X=`echo $A | cut -d'.' -f1 | cut -d'^' -f2`
+Y=`echo $A | cut -d'>' -f2 | cut -d',' -f1-2`
+echo "$L Time:$X, $Y"
+echo "XTVFS Write error causing failed recordings in Soak tests - Jira SI-4063"
+exit 1
+
+
+The same in python:
+
+#!/usr/bin/python
+import sys, gzip, os
+#
+# This script is trying to find a situation where player prints a milestone
+# like:
+# M:player_api_session.c F:PLAYER_API_Session_Play L:3672 > PLAY 
+# but no:
+# M:player_api_session.c F:PLAYER_PRV_Session_Play L:5652 > PLAY on target MAIN_TARGET 
+#
+# This two milestones always come in sequence if the second one is missing 
+# the thread is probably blocked.
+#
+
+def processFile (fileName):
+    WAIT_FOR_PLAY = 0
+    WAIT_FOR_PLAY_ON_TARGET = 1
+    if fileName.endswith('gz'):
+        fp = gzip.open(fileName, 'r')
+    else:
+        fp = open (fileName, 'r')
+    status = WAIT_FOR_PLAY
+    lineNo = 1
+    errorLineNo = 0
+    for line in fp:
+        if status == WAIT_FOR_PLAY:
+            if -1 != line.find ("PLAYER_API_Session_Play"):
+                line = line.strip ()
+                if line.endswith ("PLAY"):
+                    pos1 = line.find ("^")
+                    pos2 = line.find ("!")
+                    timePlay = float (line [pos1+1: pos2])
+                    status = WAIT_FOR_PLAY_ON_TARGET
+                    errorLineNo = lineNo
+        else:
+            if -1 != line.find ("PLAYER_PRV_Session_Play"):
+                if -1 != line.find ("PLAY on target"):
+                    pos1 = line.find ("^")
+                    pos2 = line.find ("!")
+                    timePlayOnTarget = float (line [pos1+1: pos2])
+                    if (timePlayOnTarget - timePlay > 30.0):
+                        break
+                    status = WAIT_FOR_PLAY
+        lineNo += 1
+
+    if status == WAIT_FOR_PLAY_ON_TARGET:                   
+        return errorLineNo 
+    else:
+        return -1
+
+def processFolder (folder, fileName):
+    lineNo = -1
+    fileName = os.path.join (folder, fileName)
+
+    if os.path.isfile (fileName):
+        lineNo = processFile (fileName)
+
+    return lineNo
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == '-v':
+        verbose = True
+        fileName=sys.argv[2]
+        print 'Player thread blocked NGDEV-34065.'
+        sys.exit(0)
+    else:
+        verbose = False
+        fileName=sys.argv[1]
+
+    lineNo = processFolder (".", fileName)
+    if lineNo == -1:
+        print "0 0"
+        sys.exit (0)
+    else:
+        print str(lineNo) + " Player blocked"
+        sys.exit (1)
 
 
 ={============================================================================
@@ -1950,6 +2030,8 @@ test
     That means values like ‘aab’ and ‘ aaaaaab’ will match, as will a line
     containing a ‘b’ anywhere in its value. 
 
+note: can use sh-expr
+
 note: These are specific to [[ operator.
 
 Expressions may be combined using the following operators, listed in decreasing
@@ -2441,6 +2523,10 @@ may be unset only by using the `unset command`
 A variable may be assigned to by a statement of the form
 
 name=[value]
+
+note:
+No space between "name", "=", "[value]". Otherwise, treat it as command.
+
 
 If value is not given, the variable is assigned the `null-string` and the null
 string is a 'valid' value. 
@@ -3430,7 +3516,7 @@ $echo $FILES | wc -l
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-expansion-arithmetic
+*kt_linux_bash_001* sh-expansion-arithmetic sh-expr
 
 3.5.5 Arithmetic Expansion
 
@@ -3483,6 +3569,72 @@ id++ id--
 
 ++id --id
     variable pre-increment and pre-decrement
+
+
+{sh-expr}
+`expr` is external command but not shell builtin. 
+
+https://www.gnu.org/software/coreutils/manual/html_node/expr-invocation.html#expr-invocation
+
+16.4 expr: Evaluate expressions
+
+expr evaluates an expression and writes the result on standard output. Each
+token of the expression must be a separate argument. 
+
+$ which expr
+/usr/bin/expr
+
+<ex>
+Shows the same result.
+
+#!/bin/bash
+
+SIZE=1265403
+
+ONE_TWO_THIRD=$(($SIZE * 2 / 3))
+TWO_TWO_THIRD=``expr $SIZE \* 2 / 3``
+
+echo "ONE=$ONE_TWO_THIRD"
+echo "TWO=$TWO_TWO_THIRD"
+
+
+<ex>
+I mostly used expr for its regular expression matching. It is sometimes more
+descriptive than sed or grep:
+
+if expr "$value" : '.*bar$' >/dev/null; then ...
+
+Compared to:
+
+if echo "$value" | grep '.*bar$' >/dev/null; then ...
+
+Or:
+
+name=`expr "$filename" : '.*/\(.*\)\.[^.]*$'`
+
+Compared to:
+
+name=`echo "$filename" | sed 's!.*/\(.*\)\.[^.]*$/\1/'`
+
+They are functionally equivalent, but expr was slightly faster. Especially in
+the older days when some shells had expr as a builtin (DEC Ultrix, for
+    example).
+
+Also, I program in strict Bourne shell syntax, so I still use expr for basic
+arithmatic, for example:
+
+count=0
+while [ $count -lt 10 ]; do
+    # something
+    count=`expr $count + 1`
+done
+
+As the question was tagged with bash, 
+I would prefer 
+
+if [[ "$value" =~ .*bar$ ]]; then instead your two if examples, and 
+with [[ "$filename" =~ .*/(.*)\.[^.]*$ ]]; name="${BASH_REMATCH[1]}" the other two examples. –
+manatwork Dec 1 '11 at 14:55 
 
 
 ={============================================================================
@@ -3656,7 +3808,7 @@ and
 
 >&word
 
-Of the two forms, the first is `preferred`. This is semantically equivalent to
+Of the two forms, `the first is preferred` This is semantically equivalent to
 
 >word 2>&1
 
@@ -5353,6 +5505,133 @@ declare -ar urls=($(grep '^#/ http' "$0" | cut -c 4-))
 echo "urls 0 : ${urls[0]}"
 
 
+={============================================================================
+*kt_linux_bash_202* sh-code-case
+
+#!/bin/bash
+
+mycat()
+(
+    F=cat
+    echo "$1" | grep -q '.gz$' && F=zcat
+    $F $1
+)
+
+if [ "$1" = "-v" ]
+then
+    VERBOSE=1
+    FNAME=$2
+else
+    VERBOSE=0
+    FNAME=$1
+fi
+
+SIZE=`mycat $FNAME | wc -l`
+if [ $SIZE -lt 100000 ]
+then
+    echo 0 0
+    exit 0
+fi
+
+
+TWO_THIRDS=`expr $SIZE \* 2 / 3`
+ONE_TENTH=`expr $SIZE / 10`
+ONE_HUNDREDTH=`expr $SIZE / 100`
+
+// 3% and 0.3%
+THREE_PERCENT=`expr $SIZE / 33`
+POINTTHREE_PERCENT=`expr $SIZE / 333`
+
+// take 1/10 from 2/3 of file to find out the line seem most from that
+// section.
+//
+// NDS: ^0946711584.182091 !WARN   -PCATC                   < p:0x0000020e P:APP t:0x2dfa4520 T:no name M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > \
+//  VL hdl=0x11ac1 allocated but not freed for view PLANNER29 hdl=0x7000020, " "flags=0, ObType=0, num_rows=1, total_size=1242, curpos=0
+//
+// $ cat LOGlastrun_realtime | head -1130954 | tail -169643 | grep "^NDS" | cut -d'!' -f2- | grep -vE "^ENTRY|^EXIT|^INFO" | head -2
+// WARN   -PCATC                   < p:0x0000020e P:APP t:0x010a5520 T:PLANNER_MAIN M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > \
+//  VL hdl=0x17794 allocated but not freed for view PLANNER29 hdl=0x7000020, " "flags=0, ObType=0, num_rows=1, total_size=1193, curpos=0
+//
+// remove matches to sort only for lines from mw and excludes entry/exit/info.
+//
+// $ cat LOGlastrun_realtime | head -1130954 | tail -169643 | grep "^NDS" | cut -d'!' -f2- | grep -vE "^ENTRY|^EXIT|^INFO" | sed -e's/[0-9a-fA-F]//g' | head -2
+// WRN   -PT                       < p:x P:PP t:x T:PLNNR_MIN M:vlu_list_mn_lnt. :PT_VIW_VL_LoglloVL L: > \
+//  VL hl=x llot ut not r or viw PLNNR hl=x, " "lgs=, OTyp=, num_rows=, totl_siz=, urpos=
+//
+// gets one line which seen most in the section
+//
+// $ cat LOGlastrun_realtime | head -1130954 | tail -169643 | grep "^NDS" | cut -d'!' -f2- | grep -vE "^ENTRY|^EXIT|^INFO" | sed -e's/[0-9a-fA-F]//g' | sort | uniq -c | sort -n | tail -1
+// + POSSIBLE='  43546 WRN   -PT                   < p:x P:PP t:x T:no nm M:vlu_list_mn_lnt. :PT_VIW_VL_LoglloVL L: > \
+//  VL hl=x llot ut not r or viw PLNNR hl=x, " "lgs=, OTyp=, num_rows=, totl_siz=, urpos= '
+//
+// note: "sed -e's/[0-9a-fA-F]//g'"
+// 
+// The trick is to remove numbers and some chars to make log lines "netural"
+// and to be sorted as the same.
+// 
+// !WARN   -PCATC < p:0x0000020e P:APP t:0x2dfa4520 T:no name M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > VL hdl=0x11ac1 allocated but not freed for view PLANNER29 hdl=0x7000020, " "flags=0, ObType=0, num_rows=1, total_size=1242, curpos=0
+// !WARN   -PCATC < p:0x0000020e P:APP t:0x2dfa4520 T:no name M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > VL hdl=0x76d4 allocated but not freed for view PLANNER17 hdl=0x7000014, " "flags=0, ObType=0, num_rows=1, total_size=712, curpos=0
+// !WARN   -PCATC < p:0x0000020e P:APP t:0x2dfa4520 T:no name M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > VL hdl=0x115a6 allocated but not freed for view PLANNER17 hdl=0x7000014, " "flags=0, ObType=0, num_rows=1, total_size=703, curpos=0
+//
+// WRN   -PT                   < p:x P:PP t:x T:no nm M:vlu_list_mn_lnt. :PT_VIW_VL_LoglloVL L: > VL hl=x llot ut not r or viw PLNNR hl=x, " "lgs=, OTyp=, num_rows=, totl_siz=, urpos= '
+//
+// note: "sort | uniq -c | sort -n | tail -1"
+//
+// The trick is to sort out lines by `occurrences` and take a last line which
+// is the line seem `most`
+
+POSSIBLE=`mycat $FNAME 2>/dev/null | head -$TWO_THIRDS | tail -$ONE_TENTH | grep "^NDS" | cut -d'!' -f2- | grep -vE "^ENTRY|^EXIT|^INFO" | sed -e's/[0-9a-fA-F]//g' | sort | uniq -c | sort -n | tail -1`
+POSS_COUNT=`echo $POSSIBLE | cut -d' ' -f1`
+TIME_AT_START=`mycat $FNAME 2>/dev/null | head -$TWO_THIRDS | grep "^NDS" | tail -$ONE_TENTH | head -1 | cut -d'.' -f1 | cut -d'^' -f2`
+TIME_AT_END=`mycat $FNAME 2>/dev/null | head -$TWO_THIRDS | grep "^NDS" | tail -1 | cut -d'.' -f1 | cut -d'^' -f2`
+TOTAL_TIME=`expr $TIME_AT_END - $TIME_AT_START`
+SECONDS_BETWEEN_MESSAGES=`expr $TOTAL_TIME / $POSS_COUNT`
+
+if [ $SECONDS_BETWEEN_MESSAGES -gt 3 ]
+then
+    POSS_COUNT=0
+fi
+
+if [ $POSS_COUNT -gt $POINTTHREE_PERCENT ]
+then
+    POSS_HIPPO=`echo "$POSSIBLE" | sed -e's/^[ ]*//' | cut -d' ' -f2- | sed -e's/\[/\\\[/g' | sed -e's/\]/\\\]/g'`
+
+    // `the line to match`
+    // + POSSIBLE='  43546 WRN   -PT < p:x P:PP t:x T:no nm M:vlu_list_mn_lnt. :PT_VIW_VL_LoglloVL L: > VL hl=x llot ut not r or viw PLNNR hl=x, " "lgs=, OTyp=, num_rows=, totl_siz=, urpos= '
+    // + POSS_HIPPO=      'WRN   -PT < p:x P:PP t:x T:no nm M:vlu_list_mn_lnt. :PT_VIW_VL_LoglloVL L: > VL hl=x llot ut not r or viw PLNNR hl=x, " "lgs=, OTyp=, num_rows=, totl_siz=, urpos= '
+
+    // `how often seen?` Q: possible that the most seen line is different from
+    // `the line to match`?
+    HIPPO_COUNT=`mycat $FNAME 2>/dev/null | grep "^NDS" | cut -d'!' -f2- | sed -e's/[0-9a-fA-F]//g' | sort | uniq -c | sort -n | tail -1 | while read a b;do echo $a;done`
+    if [ $HIPPO_COUNT -lt $THREE_PERCENT ]
+    then
+        echo 0 0
+        exit 0
+    fi
+    if [ $VERBOSE -eq 1 ]
+    then
+        // gets `the first line` from a whole file which matches to `the line to match`
+        //
+        // =`mycat $FNAME 2>/dev/null | cut -d'!' -f2- | sed -e's/[0-9a-fA-F]//g' | grep -n "$POSS_HIPPO"`
+        // shows all lines which matches to POS_HIPPO from a whole file.
+        POS_OF_MESS=`mycat $FNAME 2>/dev/null | cut -d'!' -f2- | sed -e's/[0-9a-fA-F]//g' | grep -n "$POSS_HIPPO" | cut -d':' -f1 | head -1`
+        MESSAGE=`mycat $FNAME 2>/dev/null | head -$POS_OF_MESS | tail -1`
+
+        echo "$POS_OF_MESS Message appearing too often ($HIPPO_COUNT times/$SIZE lines): ($MESSAGE)"
+
+        // + echo '705549 Message appearing too often (207618 times/1696431 lines): 
+        // (NDS: ^0946711584.182091 !WARN   -PCATC                        < p:0x0000020e P:APP t:0x2dfa4520 T:no name M:value_list_man_clnt.c F:P
+        // CAT_VIEW_VL_LogAllocVL L:2816 > VL hdl=0x11ac1 allocated but not freed for view PLANNER29 hdl=0x7000020, " "flags=0, ObType=0, num_rows=1, total_size=1242, curpos=0 )'
+
+    else
+        echo $TWO_THIRDS "Too many instances of" $POSSIBLE
+    fi
+    exit 1
+fi
+echo 0 0
+exit 0
+
+
 # ============================================================================
 #{
 ={============================================================================
@@ -5390,6 +5669,7 @@ md5sum -c md5sum.txt
 
        -d, --delimiter=DELIM
               use DELIM instead of TAB for field delimiter
+              note: `instead of TAB` so TAB by default
 
        -f, --fields=LIST
               select only these fields;  also print any line that contains no
@@ -5632,6 +5912,20 @@ GCC: (GNU) 3.4.6
 
 
 ={============================================================================
+*kt_linux_tool_009* tool-head
+
+       -n, --lines=[-]K
+              print the first K lines instead of the first 10; with the
+              leading '-', print all but the last K lines of each file
+
+
+<get-matched-line>
+When POS_OF_MESS is a line no to see.
+
+MESSAGE=`mycat $FNAME 2>/dev/null | head -$POS_OF_MESS | tail -1`
+
+
+={============================================================================
 *kt_linux_tool_009* tool-sort
 
 See the unix power tool 22.6 for more. -u remove duplicates and sort against
@@ -5644,7 +5938,7 @@ http://www.gnu.org/software/coreutils/manual/html_node/sort-invocation.html
 --key=pos1[,pos2]
 
 Specify a sort field that consists of the part of the line between pos1 and pos2
-(or the end of the line, if pos2 is omitted), inclusive.  Each pos has the form
+(or the end of the line, if pos2 is omitted), inclusive.  Each `pos` has the form
 'f[.c][opts]', where f is the number of the field to use, and c is the number of
 the first character from the beginning of the field. 
 
@@ -5704,6 +5998,9 @@ $ df -h | sort -rnk 5
        -n, --numeric-sort
               compare according to string numerical value
 
+       -t, --field-separator=SEP
+              use SEP instead of non-blank to blank transition
+
 
 ={============================================================================
 *kt_linux_tool_009* tool-uniq
@@ -5723,7 +6020,7 @@ DESCRIPTION
        Mandatory arguments to long options are mandatory for short options too.
 
        -c, --count
-              prefix lines by the number of occurrences
+              prefix lines by `the number of occurrences`
 
 
 ={============================================================================
@@ -5757,7 +6054,7 @@ grep
             -m MAX  Match up to MAX times per file
             -w      Match whole words only
             -F      PATTERN is a set of newline-separated strings
-            -E      PATTERN is an extended regular expression
+            -E      PATTERN is an `extended regular expression`
             -e PTRN Pattern to match
             -f FILE Read pattern from file
             -A      Print NUM lines of trailing context
@@ -5917,8 +6214,8 @@ Follow symbolic links.
 ={============================================================================
 *kt_linux_tool_012* make a empty file without touch
 
-can use 'touch' but when busybox do not support touch, can use following to make a empty
-file or to reset a file.
+can use 'touch' but when busybox do not support touch, can use following to
+make a empty file or to reset a file.
 
 cat /dev/null > file
 
@@ -10001,7 +10298,7 @@ Have to speficy lib path:
 $ ./gcc -fsanitize=address -Wl,-rpath=/home/NDS-UK/kyoupark/toolchains/lib64 uaf.c
 
 
-<ex> 01: use after free
+<ex> 01: `use after free`
 
 Here is an example usage (classical use-after-free error):
 
@@ -24215,9 +24512,10 @@ $ ls -al /bin/mount
 ={============================================================================
 *kt_linux_core_007* /dev/null
 
-/dev/null is a virtual device that always discards the data written to it. When we want to eliminate
-the standard output or error of a shell command, we can redirect it to this file. Reads from this
-device always return end-of-file.
+`/dev/null` is a virtual device that always discards the data written to it.
+When we want to eliminate the standard output or error of a shell command, we
+can redirect it to this file. Reads from this device always return
+end-of-file.
 
 
 ={============================================================================
