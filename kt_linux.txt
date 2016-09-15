@@ -139,6 +139,7 @@
 
 *kt_linux_tool_100* tool-gprof
 *kt_linux_tool_100* tool-efence
+*kt_linux_tool_100* tool-efence-duma
 *kt_linux_tool_100* tool-efence-asn
 *kt_linux_tool_100* tool-valgrind
 *kt_linux_tool_100* tool-valgrind-memcheck
@@ -151,8 +152,9 @@
 |kt_linux_tool_102| package: dpkg and install deb file
 
 #{ make and build
-*kt_linux_tool_140* gmake
-*kt_linux_tool_140* gmake-text-function
+*kt_linux_tool_140* make-sample
+*kt_linux_tool_140* make-gmake
+*kt_linux_tool_140* make-gmake-text-function
 
 |kt_linux_tool_140| cmake
 |kt_linux_tool_141| cmake: mix of c and cpp build
@@ -365,7 +367,7 @@
 *kt_linux_core_400* uclibc: config ld_debug
 *kt_linux_core_400* uclibc: fail to find symbol
 
-*kt_linux_core_400* slib: shared library
+*kt_linux_core_400* shared-library
 *kt_linux_core_400* slib-dl
 *kt_linux_core_401* slib: --as-needed flag and link error
 *kt_linux_core_402* slib: search and resolve
@@ -8766,6 +8768,19 @@ minicom.cap
 ={============================================================================
 *kt_linux_tool_039* tool-mount
 
+       mount [-fnrsvw] [-t vfstype] [-o options] device dir
+
+       The standard form of the mount command, is
+
+              mount -t type device dir
+
+       This tells the kernel to attach the filesystem found on `device` (which
+           is of type `type`) `at` the directory `dir`.  The previous contents
+       (if any) and  owner  and  mode  of  dir  become invisible, and as long
+       as this filesystem remains mounted, the pathname dir refers to the root
+       of the filesystem on device.
+
+
 {after-change-fstab}
 mount -a
 
@@ -9985,14 +10000,137 @@ Purpose        User dynamic Memory Corruption
 Technology     Library
 ARCH           ARM, Mips
 OS             Linux
-Description
 
 DUMA used for finding memory usage errors such as Overflow, Underflow, Memory
 used after free, allocator/deallcator mismatch in user program. Below are the
 allocator Supported in DUMA(16 type)
 
-This library is a fork of Buce Perens `Electric Fence library` and adds some new
-features to it. Features of the DUMA library: 
+DUMA is an open-source library (under GNU General Public License) to detect
+buffer overruns and under-runs in C and C++ programs.  This library is a fork
+of `Buce Perens Electric Fence` library and adds some new features to it.
+
+<readme>
+Title: README
+D.U.M.A. - Detect Unintended Memory Access - A Red-Zone memory allocator:
+
+
+DESCRIPTION:
+
+DUMA helps you detect two common programming bugs:
+
+software that overruns the boundaries of a malloc() memory allocation, and
+software that touches a memory allocation that has been released by free().
+
+Unlike other malloc() debuggers, DUMA will `detect read accesses` as well as
+writes, and it will pinpoint the exact instruction that causes an error.
+It has been in use at Pixar since 1987, and at many other sites for years.
+
+DUMA uses the virtual memory hardware of your computer to place an inaccessible
+memory page immediately after (or before, at the user's option) each memory
+allocation. When software reads or writes this inaccessible page, the hardware
+issues a segmentation fault, stopping the program at the offending instruction.
+It is then trivial to find the erroneous statement using your favorite
+debugger. In a similar manner, memory that has been released by free() is made
+inaccessible, and any code that touches it will get a segmentation fault.
+
+Simply linking your application with libduma.a will allow you to detect most,
+but not all, malloc buffer overruns and accesses of free memory. If you want
+to be reasonably sure that you've found all bugs of this type, you'll have to
+read and understand the rest of this man page.
+
+
+USAGE:
+
+note: staic or dynamic
+Link your program with the library libduma.a. You can also use dynamic
+linking. If you're using a Bourne shell, the statement 'export
+LD_PRELOAD=libduma.so.0.0' will cause DUMA to be loaded to run all dynamic
+executables.
+
+
+GLOBAL AND ENVIRONMENT VARIABLES:
+
+note: only for dynamic?
+
+In actual DUMA versions most of the global variables don't exist any more:
+they changed to thread local variables defined in structures. Instead you can
+call macro function to set some variables - but not from debugger!
+
+This is useful especially if you are using the shared DUMA library.
+
+
+MEMORY USAGE AND EXECUTION SPEED:
+
+Since DUMA uses at least two virtual memory pages for each of its allocations,
+it's a terrible memory hog. I've sometimes found it necessary to add a swap
+  file using swapon(8) so that the system would have enough virtual memory to
+  debug my program. Also, the way we manipulate memory results in various
+  cache and translation buffer entries being flushed with each call to malloc
+  or free.  The end result is that your program will be much slower and use
+  more resources while you are debugging it with DUMA.
+
+The Linux kernel also limits the number of different page mappings per process.
+
+Have a look for
+
+/proc/sys/vm/max_map_count
+f.e. under
+http://www.redhat.com/docs/manuals/enterprise/RHEL-4-Manual/en-US/Reference_Guide/s3-proc-sys-vm.html
+You may have to increase this value to allow debugging with DUMA with a
+command like:
+"sudo sysctl -w vm.max_map_count=1000000"
+
+Don't leave libduma.a linked into production software! Use it only for
+debugging. See section 'COMPILATION NOTES FOR RELEASE/PRODUCTION' below.
+
+
+<readme-files>
+Projects:
+---------
+dumalib         DUMA library. this library should be linked with YOUR program
+dumatest        first small test program
+tstheap         second small test program
+
+Files:
+------
+COPYING-*       License files; reade carefully!
+README          this text file
+CHANGES         text file listing done CHANGES
+
+duma.h          belongs to dumalib
+                this header file should be included from within YOUR C source
+dumapp.h        belongs to dumalib
+                this header file should be included from within YOUR C++ source
+duma.c          belongs to dumalib
+                contains malloc/free/.. functions
+dumapp.cpp      belongs to dumalib
+                contains C++ new/delete/.. functions redirecting them
+                  to ANSI C malloc/free
+
+// note: not exist in souce
+// page.c          belongs to dumalib
+//                 library internal source file: contains paging functions
+
+print.c         belongs to dumalib; library internal source file: contains
+                  printing/aborting functions
+dumatest.c      belongs to dumatest
+                small test program; checks wether dumalib's paging does its job
+                should work without any errors
+tstheap.c       belongs to tstheap
+                small test program; checks wether dumalib's heap does its job
+                should report many memory leaks after execution.
+Makefile        Makefile for UNIX/Linux/..
+duma.3          source for UNIX man page
+duma.sh         script for UNIX/Linux to start other programs using the
+                  LD_PRELOAD mechanism
+
+
+<features>
+
+* "overloads" all standard memory allocation functions like malloc(),
+  calloc(), memalign(), strdup(), operator new, operator new[] and also their
+    counterpart deallocation functions like free(), operator delete and
+    operator delete[]
 
 malloc
 calloc
@@ -10011,6 +10149,33 @@ strndup
 vasprintf
 asprintf
 
+
+* utilizes the MMU (memory management unit) of the CPU:
+
+* allocates and protects an extra memory page to detect any illegal access
+  beyond the top of the buffer (or bottom, `at the user's option`)
+
+* stops the program at exactly that instruction, which does the erroneous
+  access to the protected memory page, allowing location of the defectice
+  source code in a debugger
+
+* detects erroneous writes at the non-protected end of the memory block at
+  deallocation of the memory block
+
+* detects mismatch of allocation/deallocation functions: f.e. allocation with
+  malloc() but deallocation with operator delete
+
+* leak detection: detect memory blocks which were not deallocated until
+  program exit
+
+* runs on Linux / U*ix and MS Windows NT/2K/XP operating systems
+
+* preloading of the library on Linux (and some U*ix) systems allowing tests
+  without necessity of changing source code or recompilation
+
+
+<source>
+https://sourceforge.net/projects/duma/?source=typ_redirect
 
 ={============================================================================
 *kt_linux_tool_100* tool-efence-dmalloc
@@ -12363,7 +12528,31 @@ $ pkg-config --modversion gstreamer-1.0
 
 
 ={============================================================================
-*kt_linux_tool_140* gmake
+*kt_linux_tool_140* make-sample
+
+# simple makefile from gmake
+
+FILE = use-main.cpp
+CC = g++ -std=c++0x -I.
+
+main : main.o fsm.o
+	echo '>> bulid main'
+	$(CC) -o out main.o fsm.o
+
+fsm.o : Fsm.c
+	echo '>> build fsm.c'
+	$(CC) -o fsm.o -c Fsm.c
+
+main.o : main.cpp
+	echo '>> build main.cpp'
+	$(CC) -o main.o -c main.cpp
+
+clean :
+	rm main.o fsm.o
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake
 
 GNU Make has a special target that can force targets to only be run in a serial
 manner, regardless of the number of jobs it runs with.
@@ -36442,7 +36631,7 @@ failed
 
 
 ={============================================================================
-*kt_linux_core_400* slib: shared library
+*kt_linux_core_400* shared-library
 
 LPI 41.
 

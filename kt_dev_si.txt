@@ -22,6 +22,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-build-jpa
 |kt_dev_si_0002| si-sh-theyard
 |kt_dev_si_0002| si-sh-check-log
+|kt_dev_si_0002| si-sh-check-back
 |kt_dev_si_0002| si-sh-log-parser
 |kt_dev_si_0002| si-sh-to-dates
 |kt_dev_si_0002| si-sh-alog
@@ -2006,6 +2007,10 @@ fi
 1. cd TRANSLATIONDIR=/home/si_logs/translation
 2. run sql statement and result `by upload_time`
 
+mysql --batch --skip-column-names -u root uploads -e  "select directory_name from upload WHERE (version LIKE '%Q003%' OR version LIKE '%Q004%')"
+
+mysql --batch --skip-column-names -u root uploads -e "select platform, version, upload_time, parser_result, html from upload where directory_name is not null and parser_result != 'Not Yet Parsed' order by upload_time desc limit 90000" | grep 'Excessive number of Planner' | grep R015
+
 mysql --batch -u root uploads -e "select * from upload where directory_name is not null and parser_result != 'Not Yet Parsed' order by upload_time desc limit 1000"
 
 project filename        `version` `platform`        boxname mac     md5sum  
@@ -3272,7 +3277,7 @@ define PLATFORM_CC_BUILD_DEPENDENCY
   $(LOCAL_PLATFORM_CC) -MM $(LOCAL_PLATFORM_DEP_FLAGS) -MT $@ $< -o $(@:$(PLATFORM_OBJ_SUFFIX)=$(PLATFORM_DEPS_SUFFIX))
 endef
 
-<build-outputs> <build-defines>
+<build-option-compile> <build-defines>
 # +++ Message from AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform.mk - 
 # building dependencies for /home/NDS-UK/kyoupark/STB_SW/\
 # FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/\
@@ -3362,6 +3367,7 @@ GRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/compon
 // -o ../build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/\
 // components/platform_management/aem/src/aem_version.o
 
+<build-option-link>
 define PLATFORM_BUILD_PROCESS_FROM_OBJECTS
     @echo +++ Message from $(NDS_PLATFORM)/platform.mk Linking Process $@
     @echo "KT: $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group $(^:$(PLATFORM_LIB_PREFIX)%$(PLATFORM_LIB_SUFFIX)=-l%) $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) -Xlinker --end-group -o $@"
@@ -9898,15 +9904,6 @@ PCAT_CAT_PROP_TRIGGER_TIME			5
 
 
 <comp-pcat-cfg>
-# pcat_db.cfg 
-#
-# (pcat_server_proxy.c)
-# PCAT_VIEW_SRV_PROXY_Init(PcatViewProxyPool)
-#
-# stat = PCAT_VIEW_SRV_GetPrivatePool(&PcatViewVLPool);
-# PCAT_VIEW_SRV_GetPrivatePool
-# 	*Pool = PcatViewProxyPool;
-
 # on app process since planner is in app.
 # (for picasso build)
 # MEM121.TXT:pool PCAT_VIEW_CLNT_POOL size=409600: 015:44:39.636
@@ -12589,11 +12586,26 @@ pool PLANNER size 458752, g_planner_mem_pool
 
 <planner-pcat-client>
 
+#define DBVIEW_MEMMAN_CONFIG_FILE_SECTION_NAME "PCAT_MEMMAN_CONFIGURATION"
+#define DBVIEW_MEMMAN_SRV_POOL_NAME "SERVER_POOL_NAME"
+#define DBVIEW_MEMMAN_CLNT_POOL_NAME "CLIENT_POOL_NAME"
+
+// from pcat_db.cfg
+
+[PCAT_MEMMAN_CONFIGURATION]
+CLIENT_POOL_FLAG=0
+CLIENT_POOL_NAME="PCAT_VIEW_CLNT_POOL"
+CLIENT_POOL_SIZE=400
+SERVER_POOL_FLAG=0
+SERVER_POOL_NAME="PCAT_VIEW_SRV_POOL"
+SERVER_POOL_SIZE=580
+
 SYSTEM_STATUS PLANNER_DBINTERFACE_InitPCAT(void)
 {
     /* Initialize PCAT interface */
     if (PCAT_VIEW_Init() != PCAT_VIEW_STATUS_OK)
 }
+
 PCAT_VIEW_Init()
 {
   /* IPC initialization */
@@ -12606,22 +12618,18 @@ SYSTEM_STATUS PCAT_VIEW_SRV_PROXY_Init(void)
 {
   status = SYSTEMCONFIG_GetStringValue(fileHandle, DBVIEW_MEMMAN_CONFIG_FILE_SECTION_NAME, DBVIEW_MEMMAN_CLNT_POOL_NAME, &len_pool_name, clnt_pool_name);
   PCAT_DIAG_LOG_IF_ERROR(PCAT_diag_segment_id, status, ("Can't read CLNT_POOL_NAME param from pcat_db.cfg"));
+
+  // note: `PCAT_VIEW_CLNT_POOL`
+  // `PcatViewVLPool`= `PcatViewProxyPool`;
+  // 
+  // // pcat_server_proxy.c
+  // stat = `PCAT_VIEW_SRV_GetPrivatePool`(&PcatViewVLPool);
+  // {
+  //  *Pool = PcatViewProxyPool;
+  // }
+
+  status = MEMMAN_API_MemoryPoolCreateP(&`PcatViewProxyPool`, clnt_pool_name, clnt_pool_flag, NULL, (1024U * clnt_pool_size), 2048U, MEMMAN_API_MEMORY_POOL_NO_LIMIT);
 }
-
-#define DBVIEW_MEMMAN_CONFIG_FILE_SECTION_NAME "PCAT_MEMMAN_CONFIGURATION"
-#define DBVIEW_MEMMAN_SRV_POOL_NAME "SERVER_POOL_NAME"
-#define DBVIEW_MEMMAN_CLNT_POOL_NAME "CLIENT_POOL_NAME"
-
-
-// from pcat_db.cfg
-
-[PCAT_MEMMAN_CONFIGURATION]
-CLIENT_POOL_FLAG=0
-CLIENT_POOL_NAME="PCAT_VIEW_CLNT_POOL"
-CLIENT_POOL_SIZE=400
-SERVER_POOL_FLAG=0
-SERVER_POOL_NAME="PCAT_VIEW_SRV_POOL"
-SERVER_POOL_SIZE=580
 
 
 <planner-vtable-debug>
@@ -12630,35 +12638,9 @@ Open Planner\inc\vtable.h and enable the following define:
 
 
 <planner-iterator> <BPH>
-http://hetty.cisco.com/fusionmadesimple/index.php/Planner_Excessive_Booked_Programme_Handles
+http://hetty.cisco.com/fusionmadesimple/index.php/PLANNER
 
-// from planner.cfg
-EXCESSIVE_BOOKED_PROGRAMME_HANDLES_PER_SESSION=50
-
-#ifdef PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG
-
-#define PLANNER_BookedProgramme_Create(session_handle, book_id, booking_subclass, element_handle) \
-    PLANNER_BookedProgramme_CreateDebug((session_handle), (book_id), (booking_subclass), __FILE__, __LINE__, (element_handle))
-
-SYSTEM_STATUS PLANNER_BookedProgramme_CreateDebug(PLANNER_API_Session_Handle session_handle, PCAT_VIEW_OBJECT_ID book_id,
-
-void PLANNER_BookedProgramme_NoteCreation(PLANNER_BOOKEDPROGRAMME_T *booking, uint32_t handle, const char *file, int line)
-
-DIAG_LOG_INFO(g_planner_diag_segment_id, ("%u: Handle %#x created at %s:%u vlist %#x", l_data->count, l_booking->self_handle, l_booking->file, l_booking->line, l_booking->VL));
-
-SYSTEM_STATUS PLANNER_API_BookedProgramme_DeleteHandle( PLANNER_API_BookedProgramme_Handle handle )
-{
-#ifdef PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG
-    /* Booked programme handle tracking. */
-    DIAG_LOG_INFO(g_planner_diag_segment_id, ("Deleting booked programme handle %#x", handle));
-#endif
-}
-
-
-#-----------------------------------------------------------
-# iterators, planner thread, func table
-#-----------------------------------------------------------
-(Planner DC 9.11.11)
+// iterators, planner thread, func table (Planner DC 9.11.11)
 
 The methods allow the user to manipulate iterators containing 'booked
 programme objects'. 
@@ -12685,98 +12667,271 @@ object at position zero, and move the Iterator back before position 0.
 
 * All objects retrieved from the Iterator `must be deleted` when finished with. 
 
-The rebuild routine takes as its arguments the previous and current Iterator
+* Planner Booked Programmes
+
+The EPG manipulates bookings themselves using booked programme handles. These
+are references to booking data that the EPG can receive on adding a new
+booking or getting a booking-related notification, retrieve `using iterators` or
+lists, or find using a catalog locator. The EPG can then use this handle to
+access booking properties, remove/move a booking, stop-and-save/resume the
+booking's recording or download, and make a series link (as shown in the
+    screenshot above), for example. The operations permitted on any given
+booked programme are determined by its "subclass".
+
+The EPG is responsible for deleting the booked programme handle, even if the
+EPG retrieved it from an iterator or list. This allows Planner to release
+associated resources. 
+
+
+* The rebuild routine takes as its arguments the previous and current Iterator
 position. This data is used to determine which blocks should be freed or
 retrieved.
 
 
-# NOTE:
-#
-# sid(session) is a unique key. Each session populate iterators that has id as
-# a count. In a specific session, iid is unique but iterator pointer isn't as
-# it's memory address that can be reused when iterator is requested.
-#
-# iid can be the same between sessions as it's simple counter in a session.
-#
-# Therefore, can be analysied per a session.
-#
-# vtable id(handle)s are simple idx of vtable such as sid and iid.
-#
-# IC
-# ===========
-# PLANNER_JAVA_ApiSessionCreateIteratorBookmarks
-# 	DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-I: JICB:" ));
-#
-# PLANNER_JAVA_ApiSessionCreateIteratorCopyList
-#	DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-I: JICC:" ));
-#
-# PLANNER_JAVA_ApiSessionCreateIteratorFilteredAny
-#	DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-I: JICFA: op=%d, st=%d, ft=%d", operationType, jSortType, jFilterType ));
+// NOTE:
+// sid(session) is a unique key. Each session populate iterators that has id as
+// a count. In a specific session, iid is unique but iterator pointer isn't as
+// it's memory address that can be reused when iterator is requested.
+//
+// iid can be the same between sessions as it's simple counter in a session.
+//
+// Therefore, can be analysied per a session.
+//
+// vtable id(handle)s are simple idx of vtable such as sid and iid.
+//
+// IC
+// ===========
+// PLANNER_JAVA_ApiSessionCreateIteratorBookmarks
+// 	DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-I: JICB:" ));
+//
+// PLANNER_JAVA_ApiSessionCreateIteratorCopyList
+//	DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-I: JICC:" ));
+//
+// PLANNER_JAVA_ApiSessionCreateIteratorFilteredAny
+//	DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-I: JICFA: op=%d, st=%d, ft=%d", operationType, jSortType, jFilterType ));
 
 
 <planner-iterator-create>
 // ITER CREATE
-/*
-** DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: SIC: iter=0x%x, iid=0x%x, sid=0x%x, oper=%d, pfilter=%d, psort=%d, sess.iter.count=%d, sess.ele.count=%d viewh=0x%x",
-**    l_iterator, l_iterator_vtable_pos, session, 
-**    l_params->t.list.listType, l_params->t.list.filterType, l_params->t.list.sortType, icount, ecount, l_iterator->view ));
-*/
-M:planner_api.c F:PLANNER_Iterator_Init L:00417 > Created iterator @0x2b0a1ebc
-M:planner_session.c F:`PLANNER_API_Session_IteratorCreate` L:01791 > 
-  KT-I: SIC: iter=0x2b0a1ebc, iid=0x1, sid=0x4, optype=1, pfilter=15, psort=2, sess.iter.count=4, sess.ele.count=1 viewh=0x0
+//
+// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: SIC: iter=0x%x, iid=0x%x, \
+//  sid=0x%x, oper=%d, pfilter=%d, psort=%d, sess.iter.count=%d, sess.ele.count=%d viewh=0x%x",
+//  l_iterator, l_iterator_vtable_pos, session, 
+//  l_params->t.list.listType, l_params->t.list.filterType, l_params->t.list.sortType, icount, ecount, l_iterator->view ));
+//
+// M:planner_api.c F:PLANNER_Iterator_Init L:00417 > Created iterator @0x2b0a1ebc
+// M:planner_session.c F:`PLANNER_API_Session_IteratorCreate` L:01791 > 
+//   KT-I: SIC: iter=0x2b0a1ebc, iid=0x1, sid=0x4, optype=1, pfilter=15, psort=2, sess.iter.count=4, sess.ele.count=1 viewh=0x0
 
 
 // ITER DELETE
-/* PLANNER_Iterator_Delete: THIS IS ACTUAL DELETION. SHOULD BE MATCHED WITH CREATION.
-**
-** DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: ID: iter=0x%x, sid=0x%x, sess.iter.count=%d, sess.ele.count=%d",
-**	  l_iter, l_iter->session->self_handle, icount, ecount ));
-**
-** PLANNER_JAVA_IteratorDelete
-** PLANNER_API_Iterator_Delete:
-** DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: ID: iter=0x%x, iid=0x%x, sid=0x%x, iter.ecount=%d, sess.iter.count=%d, sess.ele.count=%d",
-**    l_iter, l_iterId, l_sesId, l_iter->count, icount, ecount ));
-*/
-M:planner_api.c F:PLANNER_Iterator_Delete L:00167 > KT-I: ID: iter=0x2b0a1a40, sid=0x4, sess.iter.count=1, sess.ele.count=0
-M:planner_iterator.c F:PLANNER_API_Iterator_Delete L:00588 > KT-I: ID: iter=0x2b0a1cd0, iid=0x2, sid=0x4, iter.ecount=0, sess.iter.count=1, sess.ele.count=0
+// `PLANNER_Iterator_Delete` THIS IS ACTUAL DELETION. SHOULD BE MATCHED WITH CREATION.
+//
+// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: ID: iter=0x%x, sid=0x%x, sess.iter.count=%d, sess.ele.count=%d",
+//	  l_iter, l_iter->session->self_handle, icount, ecount ));
+//
+// PLANNER_JAVA_IteratorDelete
+// PLANNER_API_Iterator_Delete:
+// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: ID: iter=0x%x, iid=0x%x, sid=0x%x, iter.ecount=%d, sess.iter.count=%d, sess.ele.count=%d",
+//    l_iter, l_iterId, l_sesId, l_iter->count, icount, ecount ));
+//
+// M:planner_api.c F:PLANNER_Iterator_Delete L:00167 > KT-I: ID: iter=0x2b0a1a40, sid=0x4, sess.iter.count=1, sess.ele.count=0
+// M:planner_iterator.c F:PLANNER_API_Iterator_Delete L:00588 > KT-I: ID: iter=0x2b0a1cd0, iid=0x2, sid=0x4, iter.ecount=0, sess.iter.count=1, sess.ele.count=0
 
 
 <BPH>
-note:
-DARWIN_PLATFORM/DARWIN_PLANNER/src/inc/planner_bookedprogramme_prv.h
+http://hetty.cisco.com/fusionmadesimple/index.php/Planner_Excessive_Booked_Programme_Handles
 
-/* PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG is defined in non-release builds to report excessive
- * numbers of booked programme handles.
+// from planner.cfg
+EXCESSIVE_BOOKED_PROGRAMME_HANDLES_PER_SESSION=50
+
+/* PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG is defined in non-release builds to
+ * report excessive numbers of booked programme handles.
  */
-#define PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG
+#ifdef PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG
+
+// `BPH CREATE`
+//
+// `PLANNER_JAVA_IteratorNext`
+// DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT: BPH-JIN: bph=0x%x", env->returnVal ));
+//
+// JNIEXPORT jint JNICALL Java_com_nds_fusion_plannerimpl_PlannerIteratorImpl_natPlannerIteratorNext
+//   (JNIEnv *env, jclass jClass, jint param1)
+// {
+//     status = PLANNER_API_Iterator_CreateNextElement(jNativeHandle, &jReturnVal)
+//     {
+//       // @param[out] item_handle - The handle of the specified object in the iterator
+//       // or PLANNER_API_INVALID_HANDLE if the method is unsuccessful.
+//       static SYSTEM_STATUS PLANNER_StandardIterator_CreateElementAtIndex()
+//       {
+//         PLANNER_ListElement_PRV_GetData()
+//         {
+//           PLANNER_ListElement_PRV_GetValueList()
+//           { 
+//             PLANNER_ListElement_PRV_GetValueList_FromPCAT()
+//             {
+//               PCAT_VIEW_Select(PCAT_VIEW_HANDLE view)
+//               {
+//                 // `PCAT_VIEW_CLNT_POOL`
+//                 `PCAT_VIEW_VL_CreateEmpty`(view, &valueListLocal, &value_list);
+//               }
+//             }
+//           }
+//         }
+//
+//         `PLANNER_BookedProgramme_Create`();
+//       }
+//     }
+// }
+//
+// PLANNER_JAVA_IteratorPrevious
+// DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT: BPH-JIP: bph=0x%x", env->returnVal ));
+//
+// `PLANNER_BookedProgramme_Create`
+// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPC: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
+// l_session->self_handle, element_handle, ecount ));
+// M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_Create L:00170 > KT-BPH: BPC: sid=0x4, bph(eh)=0x2bac2568, sess.ele.count=7
+//
+// * @param[out] `element_handle` Handle to newly created booked programme instance
+//
+// When a booked programme handle is created from the iterator, Planner
+// `creates a PCAT value list` to suppport the reading of element properties. 
+
+#define `PLANNER_BookedProgramme_Create`(session_handle, book_id, booking_subclass, element_handle) \
+    PLANNER_BookedProgramme_CreateDebug((session_handle), (book_id), (booking_subclass), __FILE__, __LINE__, (element_handle))
+
+SYSTEM_STATUS PLANNER_BookedProgramme_CreateDebug(PLANNER_API_Session_Handle session_handle, PCAT_VIEW_OBJECT_ID book_id,
+
+void PLANNER_BookedProgramme_NoteCreation(PLANNER_BOOKEDPROGRAMME_T *booking, uint32_t handle, const char *file, int line)
+{
+  static bool PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator(void *object, void *data)
+  {
+    DIAG_LOG_INFO(g_planner_diag_segment_id, 
+        ("%u: Handle %#x created at %s:%u vlist %#x", l_data->count, l_booking->self_handle, l_booking->file, l_booking->line, `l_booking->VL`));
+  }
+}
+
+typedef struct PLANNER_BOOKEDPROGRAMME_S {
+    PCAT_VIEW_VALUE_LIST  VL;
+} PLANNER_BOOKEDPROGRAMME_T;
+
+PLANNER_BookedProgramme_CreateWithSessionInner(PLANNER_SESSION_T *l_session, PCAT_VIEW_OBJECT_ID book_id,
+    VRM_JOB_HANDLE job_id, PLANNER_API_BookingSubclass booking_subclass,
+    PLANNER_BOOKEDPROGRAMME_T **booking, PLANNER_API_BookedProgramme_Handle *element_handle)
+{
+  l_element->type = PLANNER_ELEMENT_TYPE_BOOKING;
+  l_booking = &(l_element->data.booking);
+  l_status = PLANNER_API_STATUS_OK;
+  l_booking->booking_subclass = booking_subclass;
+  ...
+
+  *element_handle  = l_session->self_handle << 16;
+  *element_handle += l_elId;
+  *booking = l_booking;
+}
 
 
-PLANNER_JAVA_IteratorNext
-DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT: BPH-JIN: bph=0x%x", env->returnVal ));
+// `BPH DELETE`
+//
+// PLANNER_JAVA_ApiBookedProgrammeDelete
+// DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-BPH: JBD: bph=0x%x", j_bookedprogramme_handle ));
+//
+// PLANNER_API_BookedProgramme_DeleteHandle	
+// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPD: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
+// l_sesId, handle, ecount ));
+//
+// DIAG_LOG_ERROR(g_planner_diag_segment_id,("Deleted element @%p iterator 0x%X @%p VL 0x%X"
+// 	, l_booking, l_booking->iterator_handle, l_booking->iterator, l_booking->VL));
+//
+// M:planner_common.c F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a0704 iterator 0x4023E @0x2b0a0f64 VL 0x24B2
+//
+// PLANNER_API_BookedProgramme_Handle handle
+//
+// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPD: sid=0x%x, bph=0x%x, sess.ele.count=%d",
+// 	l_sesId, handle, ecount ));
+//
+// M:planner_bookedprogramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40ec3, sess.ele.count=5
 
-PLANNER_JAVA_IteratorPrevious
-DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT: BPH-JIP: bph=0x%x", env->returnVal ));
+SYSTEM_STATUS PLANNER_API_BookedProgramme_DeleteHandle( PLANNER_API_BookedProgramme_Handle handle )
+{
+#ifdef PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG
+    /* Booked programme handle tracking. */
+    DIAG_LOG_INFO(g_planner_diag_segment_id, ("Deleting booked programme handle %#x", handle));
+#endif
 
-`PLANNER_BookedProgramme_Create`
-DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPC: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
-l_session->self_handle, element_handle, ecount ));
+    // get ids from handle
+    l_sesId = handle >> 16;
+    l_elId = handle << 16;
+    l_elId >>= 16;
 
-PLANNER_JAVA_ApiBookedProgrammeDelete
-DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-BPH: JBD: bph=0x%x", j_bookedprogramme_handle ));
+    // note: *bhp-delete-element*
+    /* Delete element */
+    if (VTABLE_ReleaseElement(&(l_session->elements), l_elId) != VTABLE_STATUS_SUCCESS)
+}
 
-PLANNER_API_BookedProgramme_DeleteHandle	
-DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPD: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
-l_sesId, handle, ecount ));
 
-// BPH CREATE
-/*
-** DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPC: sid=0x%x, bph=0x%x, sess.ele.count=%d",
-**		l_session->self_handle, *element_handle, ecount ));
-*/
-M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_Create L:00170 > KT-BPH: BPC: sid=0x4, bph(eh)=0x2bac2568, sess.ele.count=7
+<planner-pcat-use>
+see others uses that pool PCAT_VIEW_CLNT_POOL
 
+!ERROR  -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:40 FreeSize:12 Bank:1 PoolMAX:409588 
+!WARN   -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 40 bytes in pool " "PCAT_VIEW_CLNT_POOL"  
+!WARN   -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 12 bytes 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_misc.c F:PCAT_AllocStaticP_DBG L:411 > not enough memory: size=19, called from 
+  M=pcat_serialize_structs.c, 
+  F=PCAT_SERIALIZE_deserialize_PropValue, L=215 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_serialize_structs.c F:PCAT_SERIALIZE_deserialize_PropValue L:275 > Deserializaton failed 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_serialize_structs.c F:PCAT_SERIALIZE_deserialize_P_PropValue L:383 > Deserializaton failed 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_serialize_structs.c F:PCAT_SERIALIZE_Deserialize_DBVIEW_ValueListStruct L:771 > Deserializaton failed 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:pcat_server_proxy.c F:PCAT_VIEW_SRV_SelectCollapsedList L:2434 > Finished with error: Failure (0x5c21001) 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:pcat_view_clnt.c F:PCAT_VIEW_SelectCollapsedList L:1097 > PCAT_VIEW_SRV_SelectCollapsedList stat=0x5c21001, view=0x7000014 
+!ERROR  -PCATC        		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:pcat_view_clnt.c F:PCAT_VIEW_SelectCollapsedList L:1121 > Finished with error: Failure (0x5c21001) 
+!ERROR  -PLANNER      		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_list_element.c F:PLANNER_ListElement_PRV_GetValueListCollapsed L:994 > Call to PCAT_VIEW_SelectCollapsedList failed 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_GetVListFromCache L:3449 > Failed to obtain IDs 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_RetrieveVListToCache L:4475 > Failed to get vlist 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_InitCache L:4654 > Failed to get or retrieve vlist at index -1 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIterator_RefreshIfNecessary L:1025 > Failed to initialise the new iterator cache 
+!ERROR  -PLANNER_ITERATOR		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:planner_iterator.c F:PLANNER_StandardIteratorImpl_GetNextIndex L:1322 > Failed to refresh iterator 
+!ERROR  -J_PLANNER    		< p:0x0000020e P:APP t:0x2bfeb520 T:no name M:modules/jpa-impl/src/c/src/natPlannerIteratorImp 
+  F:Java_com_nds_fusion_plannerimpl_PlannerIteratorImpl_natPlannerIt L:77 > PLANNER_API_Iterator_GetNextIndex failed: 0x6422001
+
+JNIEXPORT jint JNICALL Java_com_nds_fusion_plannerimpl_PlannerIteratorImpl_natPlannerIteratorNextIndex
+  (JNIEnv *env, jclass jClass, jint param1)
+{
+    status = PLANNER_API_Iterator_GetNextIndex(jNativeHandle, (int32_t*)&jReturnVal);
+    if (!SYSTEM_STATUS_IS_OK(status))
+    {
+        DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("PLANNER_API_Iterator_GetNextIndex failed: 0x%x", status));
+    }
+
+    (void)PLANNER_JAVA_ParseReturn(env, status);
+
+    DIAG_LOG_FN_EXIT(g_planner_adaptor_api_diag_segment_id, status);
+    return (jint)jReturnVal;
+}
+
+#ifdef PLANNER_ITERATORS_SUPPORTED
+/**
+ * @brief Standard iterator get `next index` implementation
+ *
+ * @param[in] iterator Iterator structure
+ * @param[out] param_index The next object index to the iterator
+ * @retval #PLANNER_API_STATUS_OK on success
+ * @retval #PLANNER_API_STATUS_NOT_OK on failure
+ */
+static SYSTEM_STATUS PLANNER_StandardIteratorImpl_GetNextIndex(`PLANNER_ITERATOR_T` *iterator, int32_t *param_index)
+{
+    /* Refresh the iterator if there has been a change to the view */
+    if (PLANNER_API_STATUS_OK != PLANNER_StandardIterator_RefreshIfNecessary(iterator->handle, false))
+    {
+        DIAG_LOG_ERROR( g_planner_iterator_diag_segment_id, ("Failed to refresh iterator"));
+    }
+
+    DIAG_LOG_FN_EXIT( g_planner_iterator_diag_segment_id, l_status);
+    return l_status;
+}
 
 // NO longer available
+//
 // /* PLANNER_API_Iterator_Handle         handle
 // ** PLANNER_API_BookedProgramme_Handle  l_element_handle;
 // ** PLANNER_ITERATOR_T                 *l_iter
@@ -12786,80 +12941,57 @@ M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_Create L:00170 
 // */
 // // can map BPH, VL and iterator
 // M:planner_iterator.c F:PLANNER_Iterator_CreateElementAtIndex L:01464 > Created element 0x40EC5 @0x2b0a0bf4 from iterator 0x40241 @0x2b0a07e0
-
-
-
-# PLANNER_Iterator_DumpIterators
-#   dumps all iterators and elements of a session.
-#
-# DUMP: l_booking->iterator, l_booking->VL
-
-
-/* PCAT_VIEW_VALUE_LIST  VL;
-** PLANNER_ITERATOR_T   *iterator;n
-**
-** DIAG_LOG_ERROR(g_planner_diag_segment_id,("PBP @%p Iterator @%p VL 0x%X", l_booking, l_booking->iterator, l_booking->VL));
-*/
-M:planner_iterator.c F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
-M:planner_iterator.c F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a0428 Iterator @0x2b0a07e0 VL 0x24D1
-
-
-F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
-F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a18c4 Iterator @0x2b0a1a40 VL 0x40
-F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a1940 Iterator @0x2b0a1a40 VL 0x40
-F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a1b60 Iterator @0x2b0a1a40 VL 0x40
-F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a1c08 Iterator @0x2b0a1a40 VL 0x40
-# DIAG_LOG_ERROR(g_planner_diag_segment_id,("PBP @%p Iterator @%p VL 0x%X", 
-# l_booking, l_booking->iterator, l_booking->VL));
-
-
-gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02727 > Deleting PBP 0x40010
-F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a1c08 iterator 0x40008 @0x2b0a1a40 VL 0x40
-gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40010, sess.ele.count=3
-
-gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02727 > Deleting PBP 0x40011
-F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a1b60 iterator 0x40008 @0x2b0a1a40 VL 0x40
-gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40011, sess.ele.count=2
-
-gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02727 > Deleting PBP 0x40012
-F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a1940 iterator 0x40008 @0x2b0a1a40 VL 0x40
-gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40012, sess.ele.count=1
-
-# 
-# DIAG_LOG_ERROR(g_planner_diag_segment_id,("Deleted element @%p iterator 0x%X @%p VL 0x%X", 
-# l_booking, l_booking->iterator_handle, l_booking->iterator, l_booking->VL));
-#
-	
-F:PLANNER_Iterator_RefreshIfNecessary L:00510 > Dumping state
-F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1a40:
-F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a1e70 min 160 max 164 vlist 0x54
-F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a2024 min 152 max 160 vlist 0x53
-F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
-F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a18c4 Iterator @(nil) VL 0x0
-F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1a40:
-F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a1e70 min 160 max 164 vlist 0x54
-F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a2024 min 152 max 160 vlist 0x53
-F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
-F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a18c4 Iterator @(nil) VL 0x0
-
-
-or.c F:PLANNER_API_Iterator_Delete L:00554 > Deleting iterator 0x4000A
-F:PLANNER_Iterator_Delete L:00167 > KT-I: ID: iter=0x2b0a17fc, sid=0x4, sess.iter.count=2, sess.ele.count=4
-
-
-// BPH DELETE
-/*
-** DIAG_LOG_ERROR(g_planner_diag_segment_id,("Deleted element @%p iterator 0x%X @%p VL 0x%X"
-** 	, l_booking, l_booking->iterator_handle, l_booking->iterator, l_booking->VL));
-*/
-M:planner_common.c F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a0704 iterator 0x4023E @0x2b0a0f64 VL 0x24B2
-
-/* PLANNER_API_BookedProgramme_Handle handle
-**
-** DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPD: sid=0x%x, bph=0x%x, sess.ele.count=%d",
-** 	l_sesId, handle, ecount ));
-*/
-M:planner_bookedprogramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40ec3, sess.ele.count=5
+//
+// PLANNER_Iterator_DumpIterators
+//   dumps all iterators and elements of a session.
+//
+// DUMP: l_booking->iterator, l_booking->VL
+//
+// PCAT_VIEW_VALUE_LIST  VL;
+// PLANNER_ITERATOR_T   *iterator;
+//
+// DIAG_LOG_ERROR(g_planner_diag_segment_id,("PBP @%p Iterator @%p VL 0x%X", l_booking, l_booking->iterator, l_booking->VL));
+//
+// M:planner_iterator.c F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
+// M:planner_iterator.c F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a0428 Iterator @0x2b0a07e0 VL 0x24D1
+//
+// F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
+// F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a18c4 Iterator @0x2b0a1a40 VL 0x40
+// F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a1940 Iterator @0x2b0a1a40 VL 0x40
+// F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a1b60 Iterator @0x2b0a1a40 VL 0x40
+// F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a1c08 Iterator @0x2b0a1a40 VL 0x40
+// # DIAG_LOG_ERROR(g_planner_diag_segment_id,("PBP @%p Iterator @%p VL 0x%X", 
+// # l_booking, l_booking->iterator, l_booking->VL));
+// 
+// DIAG_LOG_ERROR(g_planner_diag_segment_id,("Deleted element @%p iterator 0x%X @%p VL 0x%X", 
+// l_booking, l_booking->iterator_handle, l_booking->iterator, l_booking->VL));
+//
+// gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02727 > Deleting PBP 0x40010
+// F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a1c08 iterator 0x40008 @0x2b0a1a40 VL 0x40
+// gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40010, sess.ele.count=3
+//
+// gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02727 > Deleting PBP 0x40011
+// F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a1b60 iterator 0x40008 @0x2b0a1a40 VL 0x40
+// gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40011, sess.ele.count=2
+//
+// gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02727 > Deleting PBP 0x40012
+// F:PLANNER_Element_Delete L:03629 > Deleted element @0x2b0a1940 iterator 0x40008 @0x2b0a1a40 VL 0x40
+// gramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:02749 > KT-BPH: BPD: sid=0x4, bph(eh)=0x40012, sess.ele.count=1
+//
+// F:PLANNER_Iterator_RefreshIfNecessary L:00510 > Dumping state
+// F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1a40:
+// F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a1e70 min 160 max 164 vlist 0x54
+// F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a2024 min 152 max 160 vlist 0x53
+// F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
+// F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a18c4 Iterator @(nil) VL 0x0
+// F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1a40:
+// F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a1e70 min 160 max 164 vlist 0x54
+// F:PLANNER_DumpVlist L:03213 >  Vlist @0x2b0a2024 min 152 max 160 vlist 0x53
+// F:PLANNER_DumpSessionIterators L:03228 > Iterator @0x2b0a1ebc:
+// F:PLANNER_DumpSessionElements L:03254 > PBP @0x2b0a18c4 Iterator @(nil) VL 0x0
+//
+// or.c F:PLANNER_API_Iterator_Delete L:00554 > Deleting iterator 0x4000A
+// F:PLANNER_Iterator_Delete L:00167 > KT-I: ID: iter=0x2b0a17fc, sid=0x4, sess.iter.count=2, sess.ele.count=4
 
 
 # ATG. JPA. GUIDE. PLAYER are creating planner sessions.
@@ -13109,97 +13241,116 @@ PLANNER_JAVA_ApiSessionCreateIteratorFilteredAny
 	env->returnVal = (uint32_t)l_planner_request_handle;
 }
 
-PlannerThread
-	"f_planner_event_message_table" (planner_common.c)
-		# PLANNER_EV_REMINDER_ACK
-		PLANNER_ProcessNextReminder
+PlannerThread()
+{
+  "f_planner_event_message_table" (planner_common.c)
+    // PLANNER_EV_REMINDER_ACK
+    PLANNER_ProcessNextReminder();
 
-		# PLANNER_EV_ADD_BOOKED_PROGRAMME
-		PLANNER_AddBookedProgramme_Handler
+  // PLANNER_EV_ADD_BOOKED_PROGRAMME
+  PLANNER_AddBookedProgramme_Handler();
 
-		# PLANNER_EV_REMINDER_TRIGGER_NTFY
-		PLANNER_ProcessNextReminder,
-	
-		# PLANNER_EV_VIEW_CHANGE_NOTIFICATION
-		PLANNER_DBINTERFACE_Notify_ViewChange
+  // PLANNER_EV_REMINDER_TRIGGER_NTFY
+  PLANNER_ProcessNextReminder();
 
-		# PLANNER_EV_SESSION_ITERATOR_CREATION
-		#  * Function is called after creation of iterator to finalise the creation.
-		PLANNER_Session_Iterator_Creation(uint32_t payload_handle)
-		{
-			# create listener
-			VTABLE_Create(&l_listener, &l_listener_handle, sizeof(PLANNER_LISTENER_T));
-			
-			# ???
-			PLANNER_DBINTERFACE_PopulateTempTable
-			
-			# get count from PCAT view and this will be the total count in the view for that filter.
-			PLANNER_API_Iterator_GetCount(l_payload->data.iterator_creation.ihandle, &l_count);
-				PLANNER_DBINTERFACE_GetNumViewItems
-					PLANNER_DBINTERFACE_GetNumViewItems_FromPCAT
+  // PLANNER_EV_VIEW_CHANGE_NOTIFICATION
+  PLANNER_DBINTERFACE_Notify_ViewChange();
 
-			
-			# VL is ready?
-			PLANNER_Iterator_InitCache( ,l_count, );
-			{
-				PLANNER_ITERATOR_VLIST_T* vlist = NULL;
+  // PLANNER_EV_SESSION_ITERATOR_CREATION
+  // Function is called after creation of iterator to finalise the creation.
+  PLANNER_Session_Iterator_Creation(uint32_t payload_handle)
+  {
+    // create listener
+    VTABLE_Create(&l_listener, &l_listener_handle, sizeof(PLANNER_LISTENER_T));
 
-				# try to find vlist from cache and if not, create new one.
-				PLANNER_Iterator_GetVListFromCache(handle, cache_version, 0U, &vlist, is_locked, false, 0U);
-				{
-					# create one in the iter's vtable
-					VTABLE_Create('&(l_iter->vlists)', (void**)&l_vlist, &l_vlistHandle, sizeof(PLANNER_ITERATOR_VLIST_T);
+    // ???
+    PLANNER_DBINTERFACE_PopulateTempTable();
 
-					# get new vlist. always request 5 to pcat
-					PLANNER_ListElement_PRV_GetData( , 1, NUM_ELEMENTS_IN_ITER_VLIST(5), &(l_vlist->vlist));
-						PLANNER_ListElement_PRV_GetValueListCollapsed( , PCAT_VIEW_VALUE_LIST* vlist)
-							PCAT_VIEW_SelectCollapsedList( /* out */ vlist);
-							{
-								# typedef struct ValueListClntStructTag
-								# {
-							    # 	DBVIEW_ValueListStruct		value_list;
-								#	uint32_t					current_position;
-								#	PCAT_PROP_HANDLE_UNION**	to_be_destroyed;
-								#	PCAT_VIEW_HANDLE dbg_view_hdl; /* associated view for debugging */
-								#	uint8_t dbg_usage_flags;       /* usage flags for debugging */
-								# }ValueListClntStruct;
-								
-								ValueListClnt value_list = NULL;
+    // get count from PCAT view and this will be the total count in the view for that filter.
+    PLANNER_API_Iterator_GetCount(l_payload->data.iterator_creation.ihandle, &l_count)
+    {
+      PLANNER_DBINTERFACE_GetNumViewItems()
+      {
+        PLANNER_DBINTERFACE_GetNumViewItems_FromPCAT();
+      }
+    }
 
-								PCAT_VIEW_VL_CreateEmpty(view, &valueListLocal, &value_list)
-								# allloc ValueListClnt using MEMMAN_API_AllocElementP(PcatViewVLPool). this is PcatViewProxyPool
-								'PCAT_VIEW_CLNT_POOL'
+    // VL is ready?
+    PLANNER_Iterator_InitCache( ,l_count, )
+    {
+      PLANNER_ITERATOR_VLIST_T* vlist = NULL;
 
-								# (, DBVIEW_ValueListStruct* value_list)
-								PCAT_VIEW_SRV_SelectCollapsedList(, &(value_list->value_list))
-									# construct req msg, serialize, and send it to pcat svr and wait response on 'PcatViewProxyPool'
-									#
-									# copy value list from a svr response
-									#
-									# value_list->prop_values_list = value_list_array_from.prop_values_list;
+      // try to find vlist from cache and if not, create new one.
+      PLANNER_Iterator_GetVListFromCache(handle, cache_version, 0U, &vlist, is_locked, false, 0U)
+      {
+        // create one in the iter's vtable
+        VTABLE_Create('&(l_iter->vlists)', (void**)&l_vlist, &l_vlistHandle, sizeof(PLANNER_ITERATOR_VLIST_T));
 
-								# set value for each props in the value list?
-								PCAT_VIEW_VL_ToBeDestroyStructInit
-								# PCAT_AllocStaticP(PcatViewVLPool. MEMMAN_API_AllocStaticP
+        // get new vlist. always request 5 to pcat
+        PLANNER_ListElement_PRV_GetData( , 1, NUM_ELEMENTS_IN_ITER_VLIST(5), &(l_vlist->vlist))
+        {
+          PLANNER_ListElement_PRV_GetValueListCollapsed( , PCAT_VIEW_VALUE_LIST* vlist)
+          {
+            PCAT_VIEW_SelectCollapsedList( /* `out` */ vlist);
+            {
+              // typedef struct ValueListClntStructTag
+              // {
+              // 	DBVIEW_ValueListStruct		value_list;
+              //  uint32_t					current_position;
+              //  PCAT_PROP_HANDLE_UNION**	to_be_destroyed;
+              //  PCAT_VIEW_HANDLE dbg_view_hdl; /* associated view for debugging */
+              //  uint8_t dbg_usage_flags;       /* usage flags for debugging */
+              // }ValueListClntStruct;
 
-								# return valueListLocal(=value_list)
-								*pValueList = valueListLocal;
-							}
-				}	
-			}
+              ValueListClnt value_list = NULL;
 
-			'l_ihandle = l_payload->data.iterator_creation.ihandle';
-			
-			PLANNER_Callback_RunWithArgUsertagStatusHandle(, l_payload->data.iterator_creation.create_callback, l_payload->user_tag, l_ihandle );
-			{
-				PLANNER_Payload_CB_Create
-				
-				payload->data.cb_usertag_status_handle = user_callback;
-				payload->handle = handle; # l_ihandle
-				
-				PLANNER_PostMessage((l_session_struct->cb_queue_id), PLANNER_EV_CB_USERTAG_STATUS_HANDLE)					
-			}
-		}
+              PCAT_VIEW_VL_CreateEmpty(view, &valueListLocal, &value_list)
+              {
+                // note: VL allocates per iterator?
+                // value_list_man_clnt.c is only to use `PCAT_VIEW_CLNT_POOL`
+                // `allloc` ValueListClnt using MEMMAN_API_AllocElementP(PcatViewVLPool); 
+              }
+
+              // (DBVIEW_ValueListStruct* value_list)
+              PCAT_VIEW_SRV_SelectCollapsedList(, &(value_list->value_list))
+              {
+                // `PCAT_VIEW_CLNT_POOL`
+                // construct req msg, serialize, and send it to pcat svr
+                // and wait response on `PcatViewProxyPool`
+                // copy value list from a svr response
+
+                value_list->prop_values_list = value_list_array_from.prop_values_list;
+              }
+
+              // set value for each props in the value list?
+              PCAT_VIEW_VL_ToBeDestroyStructInit
+              { 
+                // `PCAT_VIEW_CLNT_POOL`
+                PCAT_AllocStaticP(PcatViewVLPool); 
+              }
+
+              // return valueListLocal(=value_list)
+              *pValueList = valueListLocal;
+            }
+          }
+        }
+      }
+
+      l_ihandle = l_payload->data.iterator_creation.ihandle;
+
+      PLANNER_Callback_RunWithArgUsertagStatusHandle(, l_payload->data.iterator_creation.create_callback, l_payload->user_tag, l_ihandle )
+      {
+        PLANNER_Payload_CB_Create
+
+          payload->data.cb_usertag_status_handle = user_callback;
+        // l_ihandle
+        payload->handle = handle; 
+
+        PLANNER_PostMessage((l_session_struct->cb_queue_id), PLANNER_EV_CB_USERTAG_STATUS_HANDLE);
+      }
+    }
+  }
+}
 		
 PLANNER_CallbackThread
 	PLANNER_ExecuteUserCallback
