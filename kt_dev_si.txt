@@ -205,10 +205,27 @@ mtd4: 03c00000 00020000 "nor"
 |kt_dev_si_0002| si-box-mount
 
 // from a box and 10.209.62.232 is ukstbuild02 which shares all under /home
-mount -o rw -t nfs 10.209.62.232:/home/NDS-UK/venkatr/RLOGimprove /mnt/nds/dev_5/part_0/LOGS
+mount -o rw -t nfs 10.209.62.232:/home/NDS-UK/kyoupark/si_logs /mnt/tmp
 
 // to kit-debian
 mount -o rw -t nfs 10.209.56.97:/home/kyoupark/si_logs /mnt/tmp
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Cisco_SG_200-08_Ethernet_Switch
+
+NFS issues
+
+If you got one of the Cisco switches from me, be aware that NFS will not work
+through it.
+
+This is because it has a denial of service protection feature that drops TCP
+SYN packets on privileged ports, because of
+http://en.wikipedia.org/wiki/SYN_flood .
+
+You can’t turn this feature off; you need to upgrade the firmware.
+
+See bug discussion: http://www.viktorious.nl/2013/11/05/cisco-sg200-08-nfs/
+
+This issue is fixed in version 1.0.7.4. 
 
 
 ={============================================================================
@@ -10494,18 +10511,12 @@ are not freed due to Picasso holding on to Planner handles.
 Planner will be deleting the PCAT value lists when planner have processed the
 notifications. 
 
-# to enable the below debug, do two things:
-# (1) define two just above a func.
-# PCAT/src/common/interface/value_list_man_clnt.c
-#define PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
-#define PCAT_LOG_POSSIBLE_VL_LEAKS
-# 
-# (2) define in the client's makefile. pcat/src/common/interface/makefile
-# COMPONENT_CC_DEFINES :=PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
-# COMPONENT_CC_DEFINES +=PCAT_LOG_POSSIBLE_VL_LEAKS                             
-#
-# ONLY use (2) otherwise will get build errors saying there're redefinitions.
 
+<where-to-define>
+define in pcat/src/common/interface/makefile
+
+ONLY use this makefile otherwise will get build errors saying there're
+redefinitions.
 
 `PCAT_ENABLE_EXTRA_VL_DEBUG` to get thread id and creation times of VL. 
 `PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG` to show client view filter and sort types in logging.  
@@ -10514,6 +10525,20 @@ notifications.
 COMPONENT_CC_DEFINES :=PCAT_ENABLE_EXTRA_VLDEBUG
 COMPONENT_CC_DEFINES +=PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
 COMPONENT_CC_DEFINES +=PCAT_LOG_POSSIBLE_VL_LEAKS                             
+
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/makefile:75:#COMPONENT_CC_DEFINES += PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/pcat_view_clnt.c:736:#ifdef PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/pcat_view_clnt.c:746:#endif /* PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG */
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/value_list_man_clnt.c:2657: define PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG to show client view filter and sort types in logging.
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/value_list_man_clnt.c:2796:#ifdef PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/value_list_man_clnt.c:2799:#endif /* PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG */
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.c:117:    #ifdef PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.c:120:    #endif /* PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG */
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.c:213:#ifdef PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.c:216:#endif /* PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG */
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.h:46:#ifdef PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
+CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.h:49:#endif /* PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG */
+
 
 // pcat_db.cfg
 
@@ -10550,12 +10575,25 @@ void `PCAT_VIEW_VL_LogAllocVL`(SYSTEM_STATUS result_status);
 
                     pName = pViewDef->view_name;
 
+#ifdef `PCAT_ENABLE_EXTRA_VL_DEBUG`  /* for extra debugging */
+  note:
+  gives filter and sort type which maps to certain view.
+
+                    DIAG_LOG_WARN(PCAT_diag_segment_id, ("VL hdl=%#x allocated but not freed for %s %s hdl=%#x, flt=%d, srt=%d, "
+                        "thread=%x, time=%lu, flags=%u, ObType=%d, num_rows=%lu, total_size=%lu, curpos=%d, dur_mins=%d, possible_leak=%d",
+                        vl_debug_info->value_list.value_list_hdl,
+                        ((vl_debug_info->dbg_view_hdl > 0xFFU) ? "view" : "client"), ((NULL != pName) ? pName : ""), vl_debug_info->dbg_view_hdl, flt, srt,
+                        vl_debug_info->dbge_thread_id, vl_debug_info->dbge_create_time, vl_debug_info->dbg_usage_flags,
+                        vl_debug_info->value_list.object_type, vl_debug_info->value_list.num_rows, vl_debug_info->value_list.total_size,
+                        vl_debug_info->current_position, dur_mins, ((dur_mins >= 5U) ? true:false) ));
+#else
                     DIAG_LOG_WARN(PCAT_diag_segment_id, ("VL hdl=%#x allocated but not freed for %s %s hdl=%#x, "
                         "flags=%u, ObType=%d, num_rows=%lu, total_size=%lu, curpos=%d",
                         vl_debug_info->value_list.value_list_hdl,
                         ((vl_debug_info->dbg_view_hdl > 0xFFU) ? "view" : "client"), ((NULL != pName) ? pName : ""), vl_debug_info->dbg_view_hdl,
                         vl_debug_info->dbg_usage_flags, vl_debug_info->value_list.object_type, vl_debug_info->value_list.num_rows,
                         vl_debug_info->value_list.total_size, vl_debug_info->current_position));
+#endif
 
 ValueListClnt vl_debug_info = NULL;
 
@@ -12569,10 +12607,9 @@ actions this, asynchronously responds back to RMF and then the confirmation
 eventually reaches the PLANNER which forward it back to EPG. 
 
 
-#-----------------------------------------------------------
-# internal
-#-----------------------------------------------------------
-# it comes from planner itself but not planner jpa
+<planner-pool>
+// pool PLANNER size 458752, g_planner_mem_pool
+// it comes from planner itself but not planner jpa
 [MEMORY_CONFIGURATION]
 POOL_FLAGS=0
 POOL_NAME="PLANNER"
@@ -12580,8 +12617,6 @@ POOL_SIZE=458752
 SRM_POOL_FLAGS=0
 SRM_POOL_NAME="PLANNER_SRM"
 SRM_POOL_SIZE=20480
-# 
-pool PLANNER size 458752, g_planner_mem_pool
 
 
 <planner-pcat-client>
@@ -12711,21 +12746,260 @@ retrieved.
 //	DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT-I: JICFA: op=%d, st=%d, ft=%d", operationType, jSortType, jFilterType ));
 
 
-<planner-iterator-create>
-// ITER CREATE
-//
-// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: SIC: iter=0x%x, iid=0x%x, \
-//  sid=0x%x, oper=%d, pfilter=%d, psort=%d, sess.iter.count=%d, sess.ele.count=%d viewh=0x%x",
-//  l_iterator, l_iterator_vtable_pos, session, 
-//  l_params->t.list.listType, l_params->t.list.filterType, l_params->t.list.sortType, icount, ecount, l_iterator->view ));
-//
-// M:planner_api.c F:PLANNER_Iterator_Init L:00417 > Created iterator @0x2b0a1ebc
-// M:planner_session.c F:`PLANNER_API_Session_IteratorCreate` L:01791 > 
-//   KT-I: SIC: iter=0x2b0a1ebc, iid=0x1, sid=0x4, optype=1, pfilter=15, psort=2, sess.iter.count=4, sess.ele.count=1 viewh=0x0
+{session}
+
+<how-many-sessions>
+ATG. JPA. GUIDE. PLAYER are creating planner sessions.
+
+!INFO   -PLANNER                   < p:0x000001f0 P:APP t:0x0131c520 T:ATG_CLIENT_HANDLE_EVENTS M:planner_api.c F:PLANNER_CreateSessionCommon L:565 > Created session 0x1.
+!INFO   -PLANNER                   < p:0x000001f0 P:APP t:0x012f9520 T:PLAYER_MAIN M:planner_api.c F:PLANNER_CreateSessionCommon L:565 > Created session 0x2.
+!INFO   -PLANNER                   < p:0x000001f0 P:APP t:0x0116d520 T:GUIDE_MAIN M:planner_api.c F:PLANNER_CreateSessionCommon L:565 > Created session 0x3.
+!INFO   -PLANNER                   < p:0x000001f0 P:APP t:0x2e0ef520 T:no name M:planner_api.c F:PLANNER_CreateSessionCommon L:565 > Created session 0x4.
+
+// M:atg_api.c F:ATG_SysinitRunLevelHandler() L:02845 > KT: PLANNER_API_CreatePlannerSession: 0x1
+// M:player_common.c F:PlayerAsyncRequestActive L:02311 > KT: g_player_component.planner_session 0x2
+// M:guide_api_session.c F:GuideSessionRetrievalHandler L:01868 > KT: planner session 0x3
+// M:natPlannerSessionImpl.c F:PLANNER_JAVA_ApiSessionPlannerCreate L:00092 > KT: PLANNER_JAVA_ApiSessionPlannerCreate `0x4`
+
+# planner_api.c
+#
+# session node in g_planner_sessionsList get created only when it's called and
+# each session has iterators and other tables.
+#
+# PLANNER_API_CreateSession(depricated) 
+# PLANNER_API_CreatePlannerSession(this is only valid one) 
+# PLANNER_CreateSessionVTables session_index is a session handle
+
+l_VTableretVal |= VTABLE_Create(&g_planner_sessionsList, (void **)l_new_session_ptr, session_index, sizeof(PLANNER_SESSION_T));
+l_VTableretVal |= VTABLE_InitTable(&(l_new_session->iterators), 'g_planner_mem_pool', g_planner_diag_segment_id, NULL, 100);
+l_VTableretVal |= VTABLE_InitTable(&(l_new_session->elements), g_planner_mem_pool, g_planner_diag_segment_id, NULL, 100);
+l_VTableretVal |= VTABLE_SetCreateElementFunction(&(l_new_session->iterators), PLANNER_Iterator_Init);
+l_VTableretVal |= VTABLE_SetDeleteElementFunction(&(l_new_session->iterators), 'PLANNER_Iterator_Delete');
+l_VTableretVal |= VTABLE_SetDeleteElementFunction(&(l_new_session->elements), 'PLANNER_Element_Delete');
+
+
+// PlannerFilterType.java
+public interface PlannerFilterType
+
+typedef struct {
+    VTable_t                longLists;
+    `VTable_t                iterators`;
+    VTable_t                params;
+    VTable_t                requests;
+    VTable_t                shortLists;
+    'VTable_t                elements';
+    uint32_t                self_handle;
+    PLANNER_API_SessionStatusChangeCb listener;
+    PLANNER_API_UserTag     user_tag;
+} PLANNER_SESSION_T;
+
+
+/* A structure containing PCAT vlist and the position in the view 
+   of first (min) and last element(max) of the vlist. */
+typedef struct
+{
+    PCAT_VIEW_VALUE_LIST vlist;
+    uint32_t min;
+    uint32_t max;
+} PLANNER_ITERATOR_VLIST_T;
+
+typedef struct
+{
+    `PCAT_VIEW_HANDLE view;`
+    PCAT_VIEW_SPEC_HANDLE viewspec;
+
+    /* Position of iterator within the view */
+    uint32_t position;
+    /* Locator of element at position, used for position adjustments */
+    PCAT_VIEW_OBJECT_ID element_at_position;
+    /* Number of elements in the iterator */
+    'int32_t count';
+
+    /* VTABLE of PLANNER_ITERATOR_VLIST_T */
+    `VTable_t vlists`;
+
+    /* Handle to view parameters: filter, sort types and others.*/
+    `PLANNER_PARAMETER_T* params`;
+
+    PLANNER_API_Parameter_Handle param;
+    PLANNER_SESSION_T  *session;
+    pthread_mutex_t	   mutex;
+    pthread_mutex_t	   api_mutex;
+} PLANNER_ITERATOR_T;
+
+
+<app-calls>
+iteraror create -> change listerner -> creation listerner -> hasNext ->
+hasPrevious -> getNextIndex -> next -> get booking type
+F:PLANNER_API_Iterator_GetNextIndex L:00616 > KT: return l_index(0),
+  l_count(10) { hasNext -> next -> get booking type } do this loop until to
+  get 6 items when created all BPH then call various apis to get props like
+  type, string and int.
+
+when press down key 6 times, it goes new page in the planner and then: hasNext
+-> hasPrevious -> getNextIndex -> next -> get booking type
+F:PLANNER_API_Iterator_GetNextIndex L:00616 > KT: return l_index(6),
+  l_count(10)
+ 
+
+public interface PlannerBookedProgrammeIteratorCreationListener
+{
+  /**
+   * Notify the successful completion of operation.  @param userTag An opaque
+   * value that the API receives and stores at the start of an asynchronous
+   * operation and returns unchanged to the listener when the operation
+   * completes.  @param iterator The reference of the {@link
+   * PlannerBookedProgrammeIterator} just retrieved.  The user must set the
+   * iterator to null when done with it. This is to prevent the resources from
+   * being unnecessarily tied up and to enable garbage collection.
+   */
+  public void notifySuccess(Object userTag, PlannerBookedProgrammeIterator iterator);
+}
+
+public PlannerRequest iteratorCreateFiltered( PlannerBookedProgrammeIteratorCreationListener createListener, 
+                                            PlannerBookedProgrammeIteratorChangeListener changeListener, Object userTag, 
+                                            int sortType, int filterType,
+                                            int genre, int subGenre )
+                                            throws PlannerHealthCheckException
+{
+  PlannerBookedProgrammeIterator iterator = new PlannerBookedProgrammeIteratorImpl(createListener, changeListener, userTag);
+
+  return new PlannerRequestImpl('`natPlannerApiSessionIteratorCreateFilteredAny`'(
+        nativeHandle,					  // session handle 
+        ListType.BOOKING_FILTERSORT,  // operation
+        sortType, filterType, null, null,null, null, genre, subGenre, 
+        iterator,                     // PlannerBookedProgrammeIterator for JAVA
+        PlannerPpvFilterType.PPV_ANY));
+}
+
+public PlannerRequest iteratorCreateFilteredCollapsed( PlannerBookedProgrammeIteratorCreationListener createListener, 
+        PlannerBookedProgrammeIteratorChangeListener changeListener, Object userTag, 
+        int sortType, int filterType, int genre, int subGenre )throws PlannerHealthCheckException
+{
+  PlannerBookedProgrammeIterator iterator = new PlannerBookedProgrammeIteratorImpl(createListener, changeListener, userTag);
+
+  return new PlannerRequestImpl('`natPlannerApiSessionIteratorCreateFilteredAny`'(
+        nativeHandle, 
+        ListType.BOOKING_FILTERSORT_COLLAPSED(2), 
+        sortType(2), filterType(2), null, null,null,null, genre, subGenre, 
+        iterator,
+        PlannerPpvFilterType.PPV_ANY)); 
+}
+
+// list type(operation)
+PLANNER_API_Parameter_ListTypeTag
+
+// filter and sort type
+typedef enum PLANNER_API_FilterTypeTag
+typedef enum PLANNER_API_SortTypeTag
+
+PLANNER_JAVA_ApiSessionCreateIteratorBookmarks
+PLANNER_JAVA_ApiSessionCreateIteratorCopyList
+PLANNER_JAVA_ApiSessionCreateIteratorFilteredAny
+{
+  // create params
+  VTABLE_Create(g_planner_adaptor_IteratorCreateRequest, &vtable_handle );
+
+  // save PlannerBookedProgrammeIterator from java call
+  // iteratorCreateRequest is vtable ptr
+  // this is java iterator that should map to planner iterator
+  iteratorCreateRequest->iterator = jIteratorGlobal; 
+  // for JPA
+  iteratorCreateRequest->type     = 'PLANNER_JAVA_ITERATOR_TYPE_BOOKED_PROGRAMME'; 
+  // from session mem
+  PLANNER_API_Session_InitParameters;
+
+  // save params from app, that's all java params
+  PLANNER_JAVA_PopulateParameterBag( operationType, jSortType, jFilterType, );
+  // l_param->t.list.filterType = filter_type;
+  // l_param->t.list.sortType = sort_type;
+  // l_param->t.list.listType = type;	// this is operationType
+  // l_param->t.list.genre = value;
+
+
+  // <planner-iterator-create>
+  // `PLANNER_API_Session_IteratorCreate` 
+  //
+  // DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: SIC: iter=0x%x, iid=0x%x, \
+  //  sid=0x%x, oper=%d, pfilter=%d, psort=%d, sess.iter.count=%d, sess.ele.count=%d viewh=0x%x",
+  //  l_iterator, l_iterator_vtable_pos, session, 
+  //  l_params->t.list.listType, l_params->t.list.filterType, l_params->t.list.sortType, icount, ecount, l_iterator->view ));
+  //
+  // M:planner_api.c F:PLANNER_Iterator_Init L:00417 > Created iterator @0x2b0a1ebc
+  // M:planner_session.c F:`PLANNER_API_Session_IteratorCreate` L:01791 > 
+  //   KT-I: SIC: iter=0x2b0a1ebc, iid=0x1, sid=0x4, optype=1, pfilter=15, psort=2, sess.iter.count=4, sess.ele.count=1 viewh=0x0
+  
+  // !ENTER  -PLANNER_ITERATOR		< p:0x00000252 P:APP t:0x2df8b520 T:no name M:planner_session.c F:PLANNER_API_Session_IteratorCreate L:2487 > |-> PLANNER_API_Session_IteratorCreate
+  // !PARAM  -PLANNER_ITERATOR		< p:0x00000252 P:APP t:0x2df8b520 T:no name M:planner_session.c F:PLANNER_API_Session_IteratorCreate L:2490 > session = 0x4, param = 0x40001, create_callback = 0x576964, " "change_callback = 0x576940, user_tag = 0, request = 0x2df8a224 
+  // !INFO   -PLANNER      		< p:0x00000252 P:APP t:0x2df8b520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_GetView_FromPCAT L:6276 > [filter_type 15] [index 15] 
+  // !INFO   -PLANNER      		< p:0x00000252 P:APP t:0x2df8b520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_GetView_FromPCAT L:6284 > [sort_type 4] [index 4] 
+
+  `PLANNER_API_Session_IteratorCreate`(PLANNER_JAVA_IteratorCreateListener, PLANNER_JAVA_IteratorChangeListener, /* user tagi */ vtable_handle, /*out*/ l_planner_request_handle)
+  {
+    // payload create
+    PLANNER_Payload_Create(); 
+
+    // get 'request' handle
+    VTABLE_Create(&(l_session->requests), (void **)&req, request, sizeof(uint32_t));
+
+    *req = (uint32_t)PLANNER_REQUEST_PROCESSING;
+
+    // THIS IS ITERATOR ! from iterator vtable in a session.
+    VTABLE_Create(&(l_session->iterators), (void **)&l_iterator, &l_iterator_vtable_pos, sizeof(PLANNER_ITERATOR_T));
+
+    // set payload and iterator structure 
+    // it's iterator pointer
+    l_payload->data.iterator_creation.iterator = l_iterator;
+
+    // SO ihandle will be (sessid + vtable pos)				
+    // it's iteraror handle that app will have
+    l_payload->data.iterator_creation.ihandle  = session << 16;
+
+    // it's iterator's handle
+    l_payload->data.iterator_creation.ihandle |= l_iterator_vtable_pos;
+
+    l_payload->data.iterator_creation.request = *request;
+
+    // PLANNER_JAVA_IteratorCreateListener
+    l_payload->data.iterator_creation.create_callback = create_callback; 	
+
+    l_iterator->param = param;
+
+    // *map-iterator-and-view*
+    // Try to get the view for iterator. try to get view if it's already exist. should be exist.
+    // params->t.list.filterType and params->t.list.sortType on 'f_pcat_view_handles'
+    `PLANNER_DBINTERFACE_GetView`('&(l_iterator->view)', &(l_iterator->viewspec), l_iterator->params)
+    {
+      PLANNER_DBINTERFACE_GetView_FromPCAT()
+      {
+        // <planner-view-name>
+        *view = `f_pcat_view_handles`[i][j];
+      }
+    }
+
+    // *map-iterator-and-vlist*
+    // Try to initialise VTable for iterator's value lists. create vtable for a vlist
+    VTABLE_InitTable('&(l_iterator->vlists)', `g_planner_mem_pool`, g_planner_diag_segment_id, NULL, 100);
+    VTABLE_SetDeleteElementFunction(&(l_iterator->vlists), 'PLANNER_Iterator_VlistDelete');
+    // PCAT_VIEW_VLIST_Free
+
+    VTABLE_SetCreateElementFunction(&(l_iterator->vlists),PLANNER_Iterator_VlistCreate);
+
+    // this is point where iterator creation was done without any problems.
+    PLANNER_PostMessage('PLANNER_EV_SESSION_ITERATOR_CREATION', l_payload_handle);
+  }
+
+  // to java
+  env->returnVal = (uint32_t)l_planner_request_handle;
+}
 
 
 // ITER DELETE
 // `PLANNER_Iterator_Delete` THIS IS ACTUAL DELETION. SHOULD BE MATCHED WITH CREATION.
+//
+// this is a point more near to actual deletion than
+// 'PLANNER_API_Iterator_Delete' since it's actually get deleted when there's
+// no booked prog handle of iterator available at the time.
 //
 // DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-I: ID: iter=0x%x, sid=0x%x, sess.iter.count=%d, sess.ele.count=%d",
 //	  l_iter, l_iter->session->self_handle, icount, ecount ));
@@ -12739,11 +13013,38 @@ retrieved.
 // M:planner_iterator.c F:PLANNER_API_Iterator_Delete L:00588 > KT-I: ID: iter=0x2b0a1cd0, iid=0x2, sid=0x4, iter.ecount=0, sess.iter.count=1, sess.ele.count=0
 
 
+// `PLANNER_JAVA_IteratorNext`
+// DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT: BPH-JIN: bph=0x%x", env->returnVal ));
+//
+// JNIEXPORT jint JNICALL Java_com_nds_fusion_plannerimpl_PlannerIteratorImpl_natPlannerIteratorNext
+//   (JNIEnv *env, jclass jClass, jint param1)
+
+
+!PARAM  -PLANNER_ITERATOR		< p:0x0000021f P:APP t:0x2e134520 T:no name M:planner_iterator.c F:`PLANNER_API_Iterator_MoveToIndex` L:1655 > handle = 0x40001, position = 0 
+!INFO   -PLANNER      		< p:0x0000021f P:APP t:0x2e134520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_SetupTemporaryViewWithFilterSpec L:11250 > Creating temporary view PLANNER_TEMP0 
+!INFO   -PLANNER      		< p:0x0000021f P:APP t:0x2e134520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_PRV_CreateView L:7773 > [PLANNER_TEMP0] view created: [pcat_filter_type 1001][pcat_sort_type 1001][view_handle 0x700006f] 
+!INFO   -PLANNER      		< p:0x0000021f P:APP t:0x2e134520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_SetupTemporaryViewWithFilterSpec L:11275 > Changing the temporary view filter parameters 
+!INFO   -PLANNER      		< p:0x0000021f P:APP t:0x2e134520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_PRV_ApplyFilterParameters L:10914 > Creating a filter spec object 
+!INFO   -PLANNER      		< p:0x0000021f P:APP t:0x2e134520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_ExtractFilterParameterRuleSet L:7586 > Found near match in the filter params ruleset table (index = 37) for list_type(1) and filter_type(15) 
+!INFO   -PLANNER      		< p:0x0000021f P:APP t:0x2e134520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_ExtractFilterParameterRuleSet L:7586 > Found near match in the filter params ruleset table (index = 57) for list_type(1) and filter_type(15) 
+!INFO   -PCATC        		< p:0x0000021f P:APP t:0x2e134520 T:no name M:pcat_server_proxy.c F:PcatServerProxy_Send L:653 > [API_CALL::IPC] " "IPC_TL_CLIENT_SendBig conn handle 0x3c0000c message id 0x2a message len 35 
+!INFO   -PCATC        		< p:0x0000021f P:APP t:0x2e134520 T:no name M:pcat_server_proxy.c F:PcatServerProxy_Send L:666 > [API_CALL::IPC] " "done.  stat = 0x5c01000 
+!INFO   -PCATC        		< p:0x0000021f P:APP t:0x0122d520 T:PCAT_PROXY_THREAD M:pcat_server_proxy.c F:PcatServerProxy_ReceivedStatus L:5601 > func_status=0x5c01000 
+!RET    -PCATC        		< p:0x0000021f P:APP t:0x0122d520 T:PCAT_PROXY_THREAD M:pcat_server_proxy.c F:PcatServerProxy_ReceivedStatus L:5605 > Finished successfully.\n 
+!WARN   -PCATC        		< p:0x0000021f P:APP t:0x2e134520 T:no name M:value_list_man_clnt.c F:PCAT_VIEW_VL_CreateEmpty L:279 > KIT: defined PCAT_ENABLE_EXTRA_VL_DEBUG 
+{
+  // `PCAT_VIEW_CLNT_POOL`
+  // `PCAT_VIEW_VL_CreateEmpty`(view, &valueListLocal, &value_list);
+  // `PCAT_VIEW_VL_Create`();
+  (ValueListClntStruct* )MEMMAN_API_AllocElementP(PcatViewVLPool,ValuesListsAllocator);
+}
+
+
 <BPH>
 http://hetty.cisco.com/fusionmadesimple/index.php/Planner_Excessive_Booked_Programme_Handles
 
 // from planner.cfg
-EXCESSIVE_BOOKED_PROGRAMME_HANDLES_PER_SESSION=50
+`EXCESSIVE_BOOKED_PROGRAMME_HANDLES_PER_SESSION`=50
 
 /* PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG is defined in non-release builds to
  * report excessive numbers of booked programme handles.
@@ -12751,83 +13052,74 @@ EXCESSIVE_BOOKED_PROGRAMME_HANDLES_PER_SESSION=50
 #ifdef PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG
 
 // `BPH CREATE`
-//
-// `PLANNER_JAVA_IteratorNext`
-// DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT: BPH-JIN: bph=0x%x", env->returnVal ));
-//
-// JNIEXPORT jint JNICALL Java_com_nds_fusion_plannerimpl_PlannerIteratorImpl_natPlannerIteratorNext
-//   (JNIEnv *env, jclass jClass, jint param1)
+// static SYSTEM_STATUS PLANNER_StandardIterator_CreateElementAtIndex()
 // {
-//     status = PLANNER_API_Iterator_CreateNextElement(jNativeHandle, &jReturnVal)
-//     {
-//       // @param[out] item_handle - The handle of the specified object in the iterator
-//       // or PLANNER_API_INVALID_HANDLE if the method is unsuccessful.
-//       static SYSTEM_STATUS PLANNER_StandardIterator_CreateElementAtIndex()
-//       {
-//         PLANNER_ListElement_PRV_GetData()
-//         {
-//           PLANNER_ListElement_PRV_GetValueList()
-//           { 
-//             PLANNER_ListElement_PRV_GetValueList_FromPCAT()
-//             {
-//               PCAT_VIEW_Select(PCAT_VIEW_HANDLE view)
-//               {
-//                 // `PCAT_VIEW_CLNT_POOL`
-//                 `PCAT_VIEW_VL_CreateEmpty`(view, &valueListLocal, &value_list);
-//               }
-//             }
-//           }
-//         }
+//    // DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPC: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
+//    // l_session->self_handle, element_handle, ecount ));
+//    // M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_Create L:00170 > KT-BPH: BPC: sid=0x4, bph(eh)=0x2bac2568, sess.ele.count=7
 //
-//         `PLANNER_BookedProgramme_Create`();
-//       }
-//     }
+//    // * @param[in]  session_handle Session handle
+//    // * @param[in]  book_id        ID of the element in Value List.
+//    // * @param[in]  booking_subclass The required booking subclass value
+//    // * @param[out] `element_handle` Handle to newly created booked programme instance
+//
+//    // When a booked programme handle is created from the iterator, Planner
+//    // `creates a PCAT value list` to suppport the reading of element properties. 
+//
+//    `PLANNER_BookedProgramme_Create`();
 // }
-//
-// PLANNER_JAVA_IteratorPrevious
-// DIAG_LOG_ERROR(g_planner_adaptor_api_diag_segment_id, ("KT: BPH-JIP: bph=0x%x", env->returnVal ));
-//
-// `PLANNER_BookedProgramme_Create`
-// DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT-BPH: BPC: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
-// l_session->self_handle, element_handle, ecount ));
-// M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_Create L:00170 > KT-BPH: BPC: sid=0x4, bph(eh)=0x2bac2568, sess.ele.count=7
-//
-// * @param[out] `element_handle` Handle to newly created booked programme instance
-//
-// When a booked programme handle is created from the iterator, Planner
-// `creates a PCAT value list` to suppport the reading of element properties. 
 
 #define `PLANNER_BookedProgramme_Create`(session_handle, book_id, booking_subclass, element_handle) \
     PLANNER_BookedProgramme_CreateDebug((session_handle), (book_id), (booking_subclass), __FILE__, __LINE__, (element_handle))
-
-SYSTEM_STATUS PLANNER_BookedProgramme_CreateDebug(PLANNER_API_Session_Handle session_handle, PCAT_VIEW_OBJECT_ID book_id,
-
-void PLANNER_BookedProgramme_NoteCreation(PLANNER_BOOKEDPROGRAMME_T *booking, uint32_t handle, const char *file, int line)
 {
-  static bool PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator(void *object, void *data)
-  {
-    DIAG_LOG_INFO(g_planner_diag_segment_id, 
-        ("%u: Handle %#x created at %s:%u vlist %#x", l_data->count, l_booking->self_handle, l_booking->file, l_booking->line, `l_booking->VL`));
-  }
-}
+    PLANNER_BOOKEDPROGRAMME_T *l_booking = NULL;
 
-typedef struct PLANNER_BOOKEDPROGRAMME_S {
-    PCAT_VIEW_VALUE_LIST  VL;
-} PLANNER_BOOKEDPROGRAMME_T;
+    PLANNER_BookedProgramme_CreateInner(session_handle, book_id, booking_subclass, &l_booking, element_handle);
+    {
+      PLANNER_BookedProgramme_CreateWithSessionInner(l_session, book_id, SBM_USERBOOKING_LISTENER_ILLEGAL, booking_subclass, booking, element_handle);
+      {
+        // typedef struct PLANNER_BOOKEDPROGRAMME_S {
+        //     PCAT_VIEW_VALUE_LIST  VL;
+        // } PLANNER_BOOKEDPROGRAMME_T;
 
-PLANNER_BookedProgramme_CreateWithSessionInner(PLANNER_SESSION_T *l_session, PCAT_VIEW_OBJECT_ID book_id,
-    VRM_JOB_HANDLE job_id, PLANNER_API_BookingSubclass booking_subclass,
-    PLANNER_BOOKEDPROGRAMME_T **booking, PLANNER_API_BookedProgramme_Handle *element_handle)
-{
-  l_element->type = PLANNER_ELEMENT_TYPE_BOOKING;
-  l_booking = &(l_element->data.booking);
-  l_status = PLANNER_API_STATUS_OK;
-  l_booking->booking_subclass = booking_subclass;
-  ...
+        PLANNER_BookedProgramme_CreateWithSessionInner(PLANNER_SESSION_T *l_session, PCAT_VIEW_OBJECT_ID book_id,
+            VRM_JOB_HANDLE job_id, PLANNER_API_BookingSubclass booking_subclass,
+            PLANNER_BOOKEDPROGRAMME_T **booking, PLANNER_API_BookedProgramme_Handle *element_handle)
+        {
+          PLANNER_BOOKEDPROGRAMME_T *l_booking = NULL;
 
-  *element_handle  = l_session->self_handle << 16;
-  *element_handle += l_elId;
-  *booking = l_booking;
+          // note:
+          // DO not set l_booking->VL. WHERE?
+          
+          l_element->type = PLANNER_ELEMENT_TYPE_BOOKING;
+          l_booking = &(l_element->data.booking);
+          l_status = PLANNER_API_STATUS_OK;
+          l_booking->booking_subclass = booking_subclass;
+          // ...
+
+          *element_handle  = l_session->self_handle << 16;
+          *element_handle += l_elId;
+          *booking = l_booking;
+        }
+      }
+    }
+
+    // to report
+    // void PLANNER_BookedProgramme_NoteCreation(PLANNER_BOOKEDPROGRAMME_T *booking, uint32_t handle, const char *file, int line)
+    PLANNER_BookedProgramme_NoteCreation(l_booking, *element_handle, file, line);
+    {
+      static bool PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator(void *object, void *data)
+      {
+        note: ???
+        Does `l_booking-VL` corresponds to 
+
+        // !WARN   -PCATC < p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > 
+        // VL hdl=0x76d4 allocated but not freed for view PLANNER17 hdl=0x7000014, " "flags=0, ObType=0, num_rows=1, total_size=712, curpos=0 
+
+        `DIAG_LOG_INFO`(g_planner_diag_segment_id, 
+            ("%u: Handle %#x created at %s:%u vlist %#x", l_data->count, l_booking->self_handle, l_booking->file, l_booking->line, `l_booking->VL`));
+      }
+    }
 }
 
 
@@ -12856,7 +13148,7 @@ SYSTEM_STATUS PLANNER_API_BookedProgramme_DeleteHandle( PLANNER_API_BookedProgra
 {
 #ifdef PLANNER_BOOKED_PROGRAMME_HANDLE_DEBUG
     /* Booked programme handle tracking. */
-    DIAG_LOG_INFO(g_planner_diag_segment_id, ("Deleting booked programme handle %#x", handle));
+    `DIAG_LOG_INFO`(g_planner_diag_segment_id, ("Deleting booked programme handle %#x", handle));
 #endif
 
     // get ids from handle
@@ -12864,17 +13156,181 @@ SYSTEM_STATUS PLANNER_API_BookedProgramme_DeleteHandle( PLANNER_API_BookedProgra
     l_elId = handle << 16;
     l_elId >>= 16;
 
+    DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT: BPD: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
+			l_sesId, handle, ecount ));
+
     // note: *bhp-delete-element*
     /* Delete element */
     if (VTABLE_ReleaseElement(&(l_session->elements), l_elId) != VTABLE_STATUS_SUCCESS)
 }
 
 
+<how-to-interpret>
+// these are unique.
+!INFO   -PLANNER      		< M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_NoteCreation L:241 > Created booked programme handle 0x490f1 
+
+// only when # of bph > 50
+!`WARN`   -PLANNER      		< M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_NoteCreation L:268 > 50 booked programme handles in use in session 0x4: 
+
+// see it has vlist value later
+// M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_NoteCreation L:241 > Created booked programme handle 0x490f1
+// M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator L:212 > 0: Handle 0x490f1 created at planner_iterator.c:2664 vlist 0
+// M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator L:212 > 1: Handle 0x490f1 created at planner_iterator.c:2664 vlist 0xf7ae
+// M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator L:212 > 2: Handle 0x490f1 created at planner_iterator.c:2664 vlist 0xf7ae
+// M:planner_bookedprogramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:5604 > Deleting booked programme handle 0x490f1
+
+// list out all bhp in the session so do not simply grep on this log line.
+!INFO F:PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator L:212 > 0: Handle 0x490f1 created at planner_iterator.c:2664 vlist 0 
+!INFO F:PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator L:212 > 1: Handle 0x490f0 created at planner_iterator.c:2664 vlist 0xf7ad 
+...
+!INFO F:PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator L:212 > 48: Handle 0x419e4 created at planner_iterator.c:2664 vlist 0x2ba2 
+!INFO F:PLANNER_BookedProgramme_CountAndReportSessionHandlesIterator L:212 > 49: Handle 0x41959 created at planner_iterator.c:2664 vlist 0x2c03 
+!INFO   -PLANNER      		< M:planner_list_element.c F:PLANNER_ListElement_UnravelData L:580 > Booked programme is from an iterator 
+!INFO   -PLANNER      		< M:planner_dbinterface.c F:PLANNER_DBINTERFACE_AddFilterParameters L:10859 > Filter has already been applied to this view 
+
+!INFO   -PLANNER < M:planner_bookedprogramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:5604 > Deleting booked programme handle 0x490df 
+!INFO   -PLANNER < M:planner_bookedprogramme.c F:PLANNER_API_BookedProgramme_DeleteHandle L:5604 > Deleting booked programme handle 0x490e0 
+
+
+<planner-view-name>
+Create all view from the start.
+
+Planner creates 147 views in total and uses global tables:
+
+const PLANNER_FILTER_TYPE_MAP f_filter_types_map[];
+const PLANNER_SORT_TYPE_MAP f_sort_types_map[];
+
+
+SYSTEM_STATUS PLANNER_InitialisePCATViews(void)
+{
+  PLANNER_DBINTERFACE_Create_PCAT_View_Pool()
+  {
+    for(i = 0U; i < f_filter_types_map_len; i++)
+    {
+      for( j = 0U; j < f_sort_types_map_len; j++)
+      {
+        /* In the view parameters set the filter and sort types. */
+        l_view_params.t.list.filterType = `f_filter_types_map`[i].planner_type;
+        l_view_params.t.list.sortType = `f_sort_types_map`[j].planner_type;
+
+        /* Create PCAT view and store the handle to it in f_pcat_view_handles. */
+        if(PLANNER_API_STATUS_OK!=PLANNER_DBINTERFACE_PRV_CreateBookingView(
+              &`f_pcat_view_handles`[i][j], &f_pcat_viewspec_handles[i][j],
+              &l_view_params));
+      }
+    }
+  }
+}
+
+
+SYSTEM_STATUS PLANNER_DBINTERFACE_PRV_CreateBookingView(PCAT_VIEW_HANDLE* viewHandlePtr,
+    PCAT_VIEW_SPEC_HANDLE* viewspecHandlePtr, const PLANNER_PARAMETER_T* params)
+{
+  static uint32_t l_view_number = 1U;
+  (void)snprintf(l_view_name,sizeof(l_view_name),"PLANNER%lu", (long unsigned)l_view_number );
+  l_view_number++;
+
+  /* Create the view */
+  `PLANNER_DBINTERFACE_PRV_CreateView`(l_view_name,
+        l_property_list, l_property_list_length,
+        l_pcat_filter_type, l_pcat_sort_type,viewHandlePtr, viewspecHandlePtr)
+  {
+    PCAT_VIEW_New(g_planner_PCAT_client_id, view_name,*viewspec_handle_ptr,view_handle_ptr);
+    {
+      PCAT_VIEW_VIEW_Create(const char* pView_name, PCAT_VIEW_HANDLE  pView_handle)
+      {
+        ViewManClntAllocateNew(PCAT_VIEW_HANDLE view_hdl)
+        {
+          // `PCAT_VIEW_CLNT_POOL` on view name?
+          PCAT_AllocStaticP(PcatViewClntPool, sizeof(char) * (len + 1U), (void**)&p_view_def->view_name);
+        }
+      }
+    }
+
+    // !INFO   -PLANNER      		< p:0x00000222 P:APP t:0x01158520 T:PLANNER_MAIN M:planner_dbinterface.c F:PLANNER_DBINTERFACE_PRV_CreateView L:7773 > 
+    // [PLANNER17] view created: [pcat_filter_type 514][pcat_sort_type 9][view_handle 0x7000014] 
+    //
+    // for iterator move next
+    // !INFO   -PLANNER      		< p:0x00000252 P:APP t:0x2e134520 T:no name M:planner_dbinterface.c F:PLANNER_DBINTERFACE_PRV_CreateView L:7773 > 
+    // [PLANNER_TEMP0] view created: [pcat_filter_type 1001][pcat_sort_type 1001][view_handle 0x700006f] 
+  }
+}
+
+
+// PCAT_CAT_PROP_EXT_FILTER_TYPE_RANGE_START(500)
+//
+// #define PCAT_CAT_FILTER_TYPE_SEARCHBY_EVENTNAME_AND_GENRE
+// (PCAT_CAT_PROP_EXT_FILTER_TYPE_RANGE_START +14) 
+//
+// /**< @brief Used for A-Z search. Used with 3 filter parameters :*/
+
+// note: this is param type
+//
+// PLANNER_API_SortTypeTag
+// {
+//  PLANNER_API_SORT_TYPE_TIME				(2)
+//  PLANNER_API_SORT_TYPE_PVOD_PUBLISH_TIME (5)
+//  PLANNER_API_SORT_TYPE_ITEM_NAME                          = 9U,  /**<@brief Sort filter by item name */
+// }
+
+// #define     PCAT_CAT_SORT_TYPE_TIME_DESC                9       
+// /**< @brief  Sort by event scheduled start time descending (and logical channel ID). Reverse of #PCAT_CAT_SORT_TYPE_TIME.  WP943. */
+
+// KTT: f_filter_types_map_len(30), f_sort_types_map_len(10)
+// KTT: l_view_name(PLANNER17), param.filterType(9), l_pcat_filter_type(509), param.sortType(7), l_pcat_sort_type(504)
+// PLANNER_API_FILTER_TYPE_PVOD(10)
+// define PCAT_CAT_FILTER_TYPE_PUSH_ANYTIME_MENU											(PCAT_CAT_PROP_EXT_FILTER_TYPE_RANGE_START +21)					
+// /**<Filters BOOKING jobs with signup job of type PUSH and publish time < current time, use PCAT_CAT_FILTER_PARAM_TYPE_GENRE and PCAT_CAT_FILTER_PARAM_TYPE_SUBGENRE to get only wanted genre and subgenre, WP222_223: use PCAT_CAT_FILTER_PARAM_TYPE_STRING to exlude events with a SIGNUP_URI equals to one of the URIs specified in the filter param string, seperated by "," 
+// 
+// PCAT_CAT_PROP_EXT_SORT_TYPE_RANGE_START (500)
+// define		PCAT_CAT_SORT_TYPE_PUSH_PUBLISHTIME						 (PCAT_CAT_PROP_EXT_SORT_TYPE_RANGE_START + 6)		/**< @brief  Sorts according to PUSH PUBLISH TIME and then by ACTUAL START TIME*/
+
+
 <planner-pcat-use>
-see others uses that pool PCAT_VIEW_CLNT_POOL
+SI-10793-pcat-view-clnt-pool-oom/01-darwin_0019fbf2d3c9_e5f6f859c892b462a96b21c1cef1dae1
+
+// seen once
+668455: !WARN   -PLANNER                    < p:0x0000020e P:APP t:0x2df8b520 T:no name M:planner_bookedprogramme_management.c F:PLANNER_BookedProgramme_NoteCreation L:268 > 
+  50 booked programme handles in use in session 0x4:
+
+// first
+705548: !WARN   -PCATC                      < p:0x0000020e P:APP t:0x2dfa4520 T:no name M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2774 > 
+  `Number of allocated value lists=54` log_all=1 thread=0x2dfa4520 no name
+
+!ERROR  -PCATS        		< p:0x0000020c P:MW t:0x01f12520 T:SBM_UB_MAIN M:value_list_man_clnt.c F:PCAT_VIEW_VL_Free L:619 > PCAT_VIEW_VL_FindByHandle hdl=0 
+!ERROR  -PCATS        		< p:0x0000020c P:MW t:0x01f12520 T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_VLIST_Free L:2420 > Finished with error: Invalid parameters (0x5c21029) 
+!WARN   -PCATS        		< p:0x0000020c P:MW t:0x01ab3520 T:PCAT_SRV_THREAD M:dbview.c F:DbviewNotifications_NotifyClientOnInsertion L:16476 > The view has been freed. Notifications for this view won't be sent 
+
+
+// just before OOM
+//
+// note: counter_elem (# of allocated value list) increases whenever it gets
+// called.
+//
+// `PCAT_VIEW_VL_Create`()
+// allocs on `PcatViewVLPool` is `PCAT_VIEW_CLNT_POOL`
+// PCAT_VIEW_SRV_GetPrivatePool(&PcatViewVLPool);
+//
+// note: `value list` on the same view 
+//
+
+1533671: !WARN   -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2774 > 
+  `Number of allocated value lists=95` log_all=1 thread=0x117a520 PCAT_PROXY_THREAD 
+
+!WARN   -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > 
+  VL hdl=0x15466 allocated but not freed for `view PLANNER17 hdl=0x7000014`, " "flags=0, ObType=0, num_rows=1, total_size=905, curpos=0 
+!WARN   -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:value_list_man_clnt.c F:PCAT_VIEW_VL_LogAllocVL L:2816 > 
+  VL hdl=0x76d4 allocated but not freed for `view PLANNER17 hdl=0x7000014`, " "flags=0, ObType=0, num_rows=1, total_size=712, curpos=0 
+...
+
 
 !ERROR  -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:40 FreeSize:12 Bank:1 PoolMAX:409588 
-!WARN   -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 40 bytes in pool " "PCAT_VIEW_CLNT_POOL"  
+
+1533777:!WARN   -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 40 bytes in pool " "PCAT_VIEW_CLNT_POOL"  
+
+
+// see others uses that use pool PCAT_VIEW_CLNT_POOL such as serialization.
+
 !WARN   -MEMMAN       		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 12 bytes 
 !ERROR  -PCATC        		< p:0x0000020e P:APP t:0x0117a520 T:PCAT_PROXY_THREAD M:pcat_misc.c F:PCAT_AllocStaticP_DBG L:411 > not enough memory: size=19, called from 
   M=pcat_serialize_structs.c, 
@@ -12994,252 +13450,9 @@ static SYSTEM_STATUS PLANNER_StandardIteratorImpl_GetNextIndex(`PLANNER_ITERATOR
 // F:PLANNER_Iterator_Delete L:00167 > KT-I: ID: iter=0x2b0a17fc, sid=0x4, sess.iter.count=2, sess.ele.count=4
 
 
-# ATG. JPA. GUIDE. PLAYER are creating planner sessions.
-M:atg_api.c F:ATG_SysinitRunLevelHandler() L:02845 > KT: PLANNER_API_CreatePlannerSession: 0x1
-M:player_common.c F:PlayerAsyncRequestActive L:02311 > KT: g_player_component.planner_session 0x2
-M:guide_api_session.c F:GuideSessionRetrievalHandler L:01868 > KT: planner session 0x3
-M:natPlannerSessionImpl.c F:PLANNER_JAVA_ApiSessionPlannerCreate L:00092 > KT: PLANNER_JAVA_ApiSessionPlannerCreate 0x4
-
-#
-# (planner_api.c)
-# session node in g_planner_sessionsList get created only when it's called and each session has iterators and other tables.
-# PLANNER_API_CreateSession(depricated) PLANNER_API_CreatePlannerSession(this is only valid one)
-# PLANNER_CreateSessionVTables
-# session_index is a session handle
-l_VTableretVal |= VTABLE_Create(&g_planner_sessionsList, (void **)l_new_session_ptr, session_index, sizeof(PLANNER_SESSION_T));
-l_VTableretVal |= VTABLE_InitTable(&(l_new_session->iterators), 'g_planner_mem_pool', g_planner_diag_segment_id, NULL, 100);
-l_VTableretVal |= VTABLE_InitTable(&(l_new_session->elements), g_planner_mem_pool, g_planner_diag_segment_id, NULL, 100);
-l_VTableretVal |= VTABLE_SetCreateElementFunction(&(l_new_session->iterators), PLANNER_Iterator_Init);
-l_VTableretVal |= VTABLE_SetDeleteElementFunction(&(l_new_session->iterators), 'PLANNER_Iterator_Delete');
-l_VTableretVal |= VTABLE_SetDeleteElementFunction(&(l_new_session->elements), 'PLANNER_Element_Delete');
-
-# this is a point more near to actual deletion than 'PLANNER_API_Iterator_Delete' since it's actually get deleted when there's no booked prog
-# handle of iterator available at the time.
-# NOTE: it's actual iterator
-PLANNER_API_Iterator_Delete
-	VTABLE_ReleaseElement(&l_session->iterators, l_iterId);
-		if (--(node->refCount) == 0U) then delnode; and call delfunc;
-
-PLANNER_Iterator_Delete((PLANNER_ITERATOR_T*)iterator)
-	VTABLE_TerminateTable('&(l_iter->vlists))'
-
-
-PLANNER_Iterator_RebuildCache
-	PLANNER_Iterator_ReleaseVListAtIndex
-
-
-# PlannerFilterType.java
-public interface PlannerFilterType
-
-typedef struct {
-    VTable_t                longLists;
-    'VTable_t                iterators';
-    VTable_t                params;
-    VTable_t                requests;
-    VTable_t                shortLists;
-    'VTable_t                elements';
-    VTable_t                listeners;
-    VTable_t                conflict_listeners;
-    SYSTEMUTIL_CTX_Context  cb_thr_ctx;
-    SYSTEMUTIL_THR_Thread_t cb_thread;
-    SYSTEMITC_API_QUEUE     cb_queue_id;
-    uint32_t                self_handle;
-    PLANNER_API_SessionStatusChangeCb listener;
-    PLANNER_API_UserTag     user_tag;
-    bool                    use_deprecated_status_notifications;
-    uint32_t                notified_session_status;
-    bool                    session_deletion_requested; /* Prevents session destructor from being called automatically */
-} PLANNER_SESSION_T;
-
-
-/* A structure containing PCAT vlist and the position in the view 
-   of first (min) and last element(max) of the vlist. */
-typedef struct
-{
-#ifndef HOME_NETWORK_PLANNER_CLIENT
-    PCAT_VIEW_VALUE_LIST vlist;
-#else
-    SCM_LIST vlist;
-#endif    
-    uint32_t min;
-    uint32_t max;
-} PLANNER_ITERATOR_VLIST_T;
-
-typedef struct
-{
-    PCAT_VIEW_HANDLE view;
-    PCAT_VIEW_SPEC_HANDLE viewspec;
-
-    /* Position of iterator within the view */
-    uint32_t position;
-    /* Locator of element at position, used for position adjustments */
-    PCAT_VIEW_OBJECT_ID element_at_position;
-    /* Number of elements in the iterator */
-    'int32_t count';
-
-    /* VTABLE of PLANNER_ITERATOR_VLIST_T */
-    'VTable_t vlists';
-
-    uint32_t cache_version; /* Current version of the cache */
-    PLANNER_API_Session_IteratorChangeCb change_callback;
-    uint32_t  changedCBHandle;
-    /* Handle to view parameters: filter, sort types and others.*/
-    PLANNER_PARAMETER_T* params;
-    PLANNER_API_Parameter_Handle param;
-    PLANNER_SESSION_T  *session;
-    pthread_mutex_t	   mutex;
-    pthread_mutex_t	   api_mutex;
-    bool isCoherent;
-    /* Flag to mark that the iterator cache is being refreshed. Used to find when isCoherent is reset during a refresh. */
-    bool isRefreshing;
-    /* Set this flag to true when resetting isCoherent during a refresh. */
-    bool isRefreshClashing;
-    PLANNER_ITERATOR_CACHE_REBUILD_T cache_rebuild; /* Used to track asynchronous cache rebuilding. */
-} PLANNER_ITERATOR_T;
-
-
-# app calls
-#
-# iteraror create -> change listerner -> creation listerner -> 
-# hasNext -> hasPrevious -> getNextIndex -> next -> get booking type
-# F:PLANNER_API_Iterator_GetNextIndex L:00616 > KT: return l_index(0), l_count(10)
-# { hasNext -> next -> get booking type } do this loop until to get 6 items
-# when created all BPH then call various apis to get props like type, string and int.
-#
-# when press down key 6 times, it goes new page in the planner and then:
-# hasNext -> hasPrevious -> getNextIndex -> next -> get booking type
-# F:PLANNER_API_Iterator_GetNextIndex L:00616 > KT: return l_index(6), l_count(10)
-# 
-
-public interface PlannerBookedProgrammeIteratorCreationListener
-{
-    /**
-     * Notify the successful completion of operation.
-     * @param userTag An opaque value that the API receives and stores
-     * at the start of an asynchronous operation and returns unchanged
-     * to the listener when the operation completes.
-     * @param iterator The reference of the {@link PlannerBookedProgrammeIterator} just retrieved.
-     * The user must set the iterator to null when done with it. This is to prevent the 
-     * resources from being unnecessarily tied up and to enable garbage collection.
-     */
-     public void notifySuccess(Object userTag, PlannerBookedProgrammeIterator iterator);
-}
-
-public PlannerRequest iteratorCreateFiltered( PlannerBookedProgrammeIteratorCreationListener createListener, 
-                                            PlannerBookedProgrammeIteratorChangeListener changeListener, Object userTag, 
-                                            int sortType, int filterType,
-                                            int genre, int subGenre )
-                                            throws PlannerHealthCheckException
-{
-    PlannerBookedProgrammeIterator iterator = new PlannerBookedProgrammeIteratorImpl(createListener, changeListener, userTag);
-    
-    return new PlannerRequestImpl('natPlannerApiSessionIteratorCreateFilteredAny'(
-            nativeHandle,					# session handle 
-            ListType.BOOKING_FILTERSORT, 	# operation
-            sortType, filterType, null, null,null, null, genre, subGenre, 
-            iterator,						# PlannerBookedProgrammeIterator for JAVA
-            PlannerPpvFilterType.PPV_ANY));
-}
-
-# when goes to planner
-public PlannerRequest iteratorCreateFilteredCollapsed( PlannerBookedProgrammeIteratorCreationListener createListener, 
-        PlannerBookedProgrammeIteratorChangeListener changeListener, Object userTag, 
-        int sortType, int filterType, int genre, int subGenre )throws PlannerHealthCheckException
-{
-    PlannerBookedProgrammeIterator iterator = new PlannerBookedProgrammeIteratorImpl(createListener, changeListener, userTag);
-	
-	# natPlannerApiSessionIteratorCreateFilteredAny
-	# int nativeHandle, int operation, int sortType, int filterType, String channelName, String eventName, String assetBrandName, String diskQuotaName,
-    # int genre, int subGenre,  PlannerBookedProgrammeIterator iterator, int ppv);
-    return new PlannerRequestImpl('natPlannerApiSessionIteratorCreateFilteredAny'(
-            nativeHandle, 
-            ListType.BOOKING_FILTERSORT_COLLAPSED(2), 
-            sortType(2), filterType(2), null, null,null,null, genre, subGenre, 
-            iterator,
-            PlannerPpvFilterType.PPV_ANY)); 
-}
-
-
-# list type(operation)
-PLANNER_API_Parameter_ListTypeTag
-
-# filter and sort type
-typedef enum PLANNER_API_FilterTypeTag
-typedef enum PLANNER_API_SortTypeTag
-
 PLANNER_JAVA_ApiSessionCreateIteratorBookmarks
 PLANNER_JAVA_ApiSessionCreateIteratorCopyList
 PLANNER_JAVA_ApiSessionCreateIteratorFilteredAny
-{
-	# create params
-	VTABLE_Create(g_planner_adaptor_IteratorCreateRequest, &vtable_handle )
-
-	# save PlannerBookedProgrammeIterator from java call
-	# iteratorCreateRequest is vtable ptr
-	iteratorCreateRequest->iterator = jIteratorGlobal; # this is java iterator that should map to planner iterator
-	iteratorCreateRequest->type     = 'PLANNER_JAVA_ITERATOR_TYPE_BOOKED_PROGRAMME'; # for JPA
-
-	PLANNER_API_Session_InitParameters # from session mem
-		
-	# save params from app, that's all java params
-	PLANNER_JAVA_PopulateParameterBag( operationType, jSortType, jFilterType, ... )
-	# l_param->t.list.filterType = filter_type;
-	# l_param->t.list.sortType = sort_type;
-	# l_param->t.list.listType = type;	# this is operationType
-	# l_param->t.list.genre = value;
-	
-	'PLANNER_API_Session_IteratorCreate'
-	(, PLANNER_JAVA_IteratorCreateListener, PLANNER_JAVA_IteratorChangeListener, /* user tagi */ vtable_handle, /*out*/ l_planner_request_handle)
-	{
-		PLANNER_DBINTERFACE_ValidateParameterStruct
-		
-		# payload create
-		PLANNER_Payload_Create 
-		
-		# get 'request' handle
-		VTABLE_Create(&(l_session->requests), (void **)&req, request, sizeof(uint32_t))
-		
-		*req = (uint32_t)PLANNER_REQUEST_PROCESSING;
-		
-		## THIS IS ITERATOR ! from iterator vtable in a session.
-		##
-		VTABLE_Create(&(l_session->iterators), (void **)&l_iterator, &l_iterator_vtable_pos, sizeof(PLANNER_ITERATOR_T);
-		
-		
-		# set payload and iterator structure
-		l_payload->data.iterator_creation.iterator = l_iterator; 				# it's iterator pointer
-
-		# SO ihandle will be (sessid + vtable pos)
-		l_payload->data.iterator_creation.ihandle  = session << 16;				# it's iteraror handle that app will have
-		l_payload->data.iterator_creation.ihandle |= l_iterator_vtable_pos;		# it's iterator's handle
-
-		l_payload->data.iterator_creation.request = *request;
-		l_payload->data.iterator_creation.create_callback = create_callback; 	# PLANNER_JAVA_IteratorCreateListener
-
-		l_iterator->param = param;
-
-		# Try to get the view for iterator. try to get view if it's already exist. should be exist.
-		# params->t.list.filterType and params->t.list.sortType on 'f_pcat_view_handles'
-		'PLANNER_DBINTERFACE_GetView'('&(l_iterator->view)', &(l_iterator->viewspec), l_iterator->params);
-			PLANNER_DBINTERFACE_GetView_FromPCAT
-				*view = f_pcat_view_handles[i][j];
-			
-		
-		# Try to initialise VTable for iterator's value lists. create vtable for a vlist
-		VTABLE_InitTable('&(l_iterator->vlists)', g_planner_mem_pool, g_planner_diag_segment_id, NULL, 100);
-		VTABLE_SetDeleteElementFunction(&(l_iterator->vlists), 'PLANNER_Iterator_VlistDelete')
-			# PCAT_VIEW_VLIST_Free
-
-		VTABLE_SetCreateElementFunction(&(l_iterator->vlists),PLANNER_Iterator_VlistCreate)
-		
-		# this is point where iterator creation was done without any problems.
-		#
-		PLANNER_PostMessage('PLANNER_EV_SESSION_ITERATOR_CREATION', l_payload_handle);
-	}
-
-	# to java
-	env->returnVal = (uint32_t)l_planner_request_handle;
-}
 
 PlannerThread()
 {
@@ -13408,50 +13621,6 @@ PLANNER_JAVA_IteratorNextIndex
 
 PLANNER_JAVA_IteratorMoveByRelative
 			
-
-####
-# PLANNER_API_BookedProgramme_DeleteHandle vs. PLANNER_BookedProgramme_Create
-#
-PLANNER_API_BookedProgramme_DeleteHandle
-{
-    else
-    {
-        /* Delete element */
-        if (VTABLE_ReleaseElement(&(l_session->elements), l_elId) != VTABLE_STATUS_SUCCESS)
-        {
-            DIAG_LOG_ERROR( g_planner_diag_segment_id, ("Cannot delete element from session"));
-        }
-        else
-        {
-            l_status = PLANNER_API_STATUS_OK;
-        }
-		
-		VTABLE_GetCount(&(l_session->elements), &ecount);
-		
-		DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT: BPD: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
-			l_sesId, handle, ecount ));
-
-        (void)VTABLE_ReleaseElement(&g_planner_sessionsList, l_sesId);
-    }
-
-}
-
-PLANNER_BookedProgramme_Create
-{
-    else
-    {
-        l_status = PLANNER_BookedProgramme_CreateWithSession(l_session, book_id, SBM_USERBOOKING_LISTENER_ILLEGAL, booking_subclass, element_handle);
-		
-		VTABLE_GetCount(&(l_session->elements), &ecount);
-		
-		DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT: BPC: sid=0x%x, bph(eh)=0x%x, sess.ele.count=%d",
-			l_session->self_handle, element_handle, ecount ));
-		
-        (void)VTABLE_ReleaseElement(&g_planner_sessionsList, session_handle);
-    }
-}
-# 
-####
 
 
 /* Structure that represents a booked programme */
@@ -13667,103 +13836,6 @@ PLANNER_JAVA_ApiBookedProgrammeGetBookedProgramme
 	            (PLANNER_API_BookedProgramme_Handle)jHandle,
 	            (PLANNER_API_BookedProgramme_PropId)jPropertyID,
 	            &locatorHandle);
-
-#
-# to PCAT. Planner creates 147 views in total
-#
-
-# set f_pcat_view_handles[i][j], f_pcat_viewspec_handles
-PLANNER_DBINTERFACE_Create_PCAT_View_Pool
-	PLANNER_DBINTERFACE_PRV_CreateBookingView
-		sprintf( l_view_name, "PLANNER%u", l_view_number++ );
-		PLANNER_DBINTERFACE_PRV_CreateView
-			PCAT_VIEW_New
-		else
-		{
-			/* View was created successfully */
-			DIAG_LOG_ERROR(g_planner_diag_segment_id, ("KT: PVIEWS: l_view_name(%s), viewh(0x%x), param.filterType(%d), l_pcat_filter_type(%d), param.sortType(%d), l_pcat_sort_type(%d)",
-			 l_view_name, *viewHandlePtr, params->t.list.filterType, l_pcat_filter_type, params->t.list.sortType, l_pcat_sort_type ));
-		} 
-		
-
-# f_filter_types_map
-#
-# PLANNER_API_FilterType 
-#   PLANNER_API_FILTER_TYPE_NO_FILTER	(1)
-# 	PLANNER_API_FILTER_TYPE_PVOD		(10)
-#
-# PCAT_CAT_PROP_EXT_FILTER_TYPE_RANGE_START(500)
-# PCAT_CAT_FILTER_TYPE_PLATFORM_ALL_BOOKING_JOBS		(PCAT_CAT_PROP_EXT_FILTER_TYPE_RANGE_START + 1)
-#
-# PLANNER_TYPE_MAP f_sort_types_map
-#
-# PLANNER_API_SortTypeTag
-#   PLANNER_API_SORT_TYPE_TIME				(2)
-# 	PLANNER_API_SORT_TYPE_PVOD_PUBLISH_TIME (5)
-#
-# PCAT_CAT_SORT_TYPE_TIME						2		
-# /**< @brief  Sort by event scheduled start time (and logical channel ID). Common to many components */
-#
-KTT: f_filter_types_map_len(30), f_sort_types_map_len(10)
-KTT: l_view_name(PLANNER1), param.filterType(1), l_pcat_filter_type(501), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER2), param.filterType(1), l_pcat_filter_type(501), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER3), param.filterType(1), l_pcat_filter_type(501), param.sortType(10), l_pcat_sort_type(9)
-KTT: l_view_name(PLANNER4), param.filterType(1), l_pcat_filter_type(501), param.sortType(3), l_pcat_sort_type(501)
-KTT: l_view_name(PLANNER5), param.filterType(2), l_pcat_filter_type(504), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER6), param.filterType(2), l_pcat_filter_type(504), param.sortType(10), l_pcat_sort_type(9)
-KTT: l_view_name(PLANNER7), param.filterType(3), l_pcat_filter_type(503), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER8), param.filterType(3), l_pcat_filter_type(503), param.sortType(10), l_pcat_sort_type(9)
-KTT: l_view_name(PLANNER9), param.filterType(4), l_pcat_filter_type(510), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER10), param.filterType(4), l_pcat_filter_type(510), param.sortType(10), l_pcat_sort_type(9)
-KTT: l_view_name(PLANNER11), param.filterType(5), l_pcat_filter_type(511), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER12), param.filterType(5), l_pcat_filter_type(511), param.sortType(10), l_pcat_sort_type(9)
-KTT: l_view_name(PLANNER13), param.filterType(6), l_pcat_filter_type(512), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER14), param.filterType(6), l_pcat_filter_type(512), param.sortType(10), l_pcat_sort_type(9)
-KTT: l_view_name(PLANNER15), param.filterType(7), l_pcat_filter_type(514), param.sortType(3), l_pcat_sort_type(501)
-KTT: l_view_name(PLANNER16), param.filterType(8), l_pcat_filter_type(515), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER17), param.filterType(9), l_pcat_filter_type(509), param.sortType(7), l_pcat_sort_type(504)
-# PLANNER_API_FILTER_TYPE_PVOD(10)
-# define PCAT_CAT_FILTER_TYPE_PUSH_ANYTIME_MENU											(PCAT_CAT_PROP_EXT_FILTER_TYPE_RANGE_START +21)					
-# /**<Filters BOOKING jobs with signup job of type PUSH and publish time < current time, use PCAT_CAT_FILTER_PARAM_TYPE_GENRE and PCAT_CAT_FILTER_PARAM_TYPE_SUBGENRE to get only wanted genre and subgenre, WP222_223: use PCAT_CAT_FILTER_PARAM_TYPE_STRING to exlude events with a SIGNUP_URI equals to one of the URIs specified in the filter param string, seperated by "," 
-# 
-# PCAT_CAT_PROP_EXT_SORT_TYPE_RANGE_START (500)
-# define		PCAT_CAT_SORT_TYPE_PUSH_PUBLISHTIME						 (PCAT_CAT_PROP_EXT_SORT_TYPE_RANGE_START + 6)		/**< @brief  Sorts according to PUSH PUBLISH TIME and then by ACTUAL START TIME*/
-
-# PLANNER_API_SORT_TYPE_PVOD_PUBLISH_TIME(5)
-KTT: l_view_name(PLANNER18), param.filterType(10), l_pcat_filter_type(521), param.sortType(5), l_pcat_sort_type(506)
-KTT: l_view_name(PLANNER19), param.filterType(11), l_pcat_filter_type(524), param.sortType(3), l_pcat_sort_type(501)
-KTT: l_view_name(PLANNER20), param.filterType(12), l_pcat_filter_type(522), param.sortType(5), l_pcat_sort_type(506)
-KTT: l_view_name(PLANNER21), param.filterType(13), l_pcat_filter_type(1002), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER22), param.filterType(22), l_pcat_filter_type(79), param.sortType(5), l_pcat_sort_type(506)
-KTT: l_view_name(PLANNER23), param.filterType(14), l_pcat_filter_type(301), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER24), param.filterType(14), l_pcat_filter_type(301), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER25), param.filterType(15), l_pcat_filter_type(1001), param.sortType(4), l_pcat_sort_type(1001)
-KTT: l_view_name(PLANNER26), param.filterType(16), l_pcat_filter_type(55), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER27), param.filterType(16), l_pcat_filter_type(55), param.sortType(8), l_pcat_sort_type(10)
-KTT: l_view_name(PLANNER28), param.filterType(16), l_pcat_filter_type(55), param.sortType(9), l_pcat_sort_type(11)
-KTT: l_view_name(PLANNER29), param.filterType(17), l_pcat_filter_type(56), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER30), param.filterType(17), l_pcat_filter_type(56), param.sortType(8), l_pcat_sort_type(10)
-KTT: l_view_name(PLANNER31), param.filterType(17), l_pcat_filter_type(56), param.sortType(9), l_pcat_sort_type(11)
-KTT: l_view_name(PLANNER32), param.filterType(18), l_pcat_filter_type(57), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER33), param.filterType(20), l_pcat_filter_type(69), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER34), param.filterType(21), l_pcat_filter_type(14), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER35), param.filterType(23), l_pcat_filter_type(99), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER36), param.filterType(23), l_pcat_filter_type(99), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER37), param.filterType(24), l_pcat_filter_type(76), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER38), param.filterType(24), l_pcat_filter_type(76), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER39), param.filterType(25), l_pcat_filter_type(81), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER40), param.filterType(25), l_pcat_filter_type(81), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER41), param.filterType(26), l_pcat_filter_type(82), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER42), param.filterType(26), l_pcat_filter_type(82), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER43), param.filterType(27), l_pcat_filter_type(83), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER44), param.filterType(27), l_pcat_filter_type(83), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER45), param.filterType(28), l_pcat_filter_type(84), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER46), param.filterType(28), l_pcat_filter_type(84), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER47), param.filterType(29), l_pcat_filter_type(4), param.sortType(1), l_pcat_sort_type(1)
-KTT: l_view_name(PLANNER48), param.filterType(29), l_pcat_filter_type(4), param.sortType(2), l_pcat_sort_type(2)
-KTT: l_view_name(PLANNER49), param.filterType(30), l_pcat_filter_type(107), param.sortType(2), l_pcat_sort_type(2)
-# PLANNER_API_FILTER_TYPE_NO_FILTER(1), PLANNER_API_SORT_TYPE_TIME(2)
-KTT: l_view_name(PLANNER50), param.filterType(1), l_pcat_filter_type(501), param.sortType(2), l_pcat_sort_type(2)
 
 
 PLANNER_DBINTERFACE_RegisterListeners

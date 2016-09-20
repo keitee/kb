@@ -10088,8 +10088,8 @@ debugging. See section 'COMPILATION NOTES FOR RELEASE/PRODUCTION' below.
 Projects:
 ---------
 dumalib         DUMA library. this library should be linked with YOUR program
-dumatest        first small test program
-tstheap         second small test program
+`dumatest`        first small test program
+`tstheap`         second small test program
 
 Files:
 ------
@@ -10113,9 +10113,11 @@ dumapp.cpp      belongs to dumalib
 
 print.c         belongs to dumalib; library internal source file: contains
                   printing/aborting functions
+
 dumatest.c      belongs to dumatest
                 small test program; checks wether dumalib's paging does its job
-                should work without any errors
+                `should work without any errors`
+
 tstheap.c       belongs to tstheap
                 small test program; checks wether dumalib's heap does its job
                 should report many memory leaks after execution.
@@ -10177,6 +10179,7 @@ asprintf
 <source>
 https://sourceforge.net/projects/duma/?source=typ_redirect
 
+
 ={============================================================================
 *kt_linux_tool_100* tool-efence-dmalloc
 
@@ -10237,6 +10240,131 @@ Function: int dmalloc_verify ( char * pnt )
 
 #define malloc(size) \
   dmalloc_malloc(__FILE__, __LINE__, (size), DMALLOC_FUNC_MALLOC, 0, 0)
+
+
+<dmalloc-build>
+
+1. change app_process_main.c
+
+/* Token 12 */
+dmalloc_debug_setup("log-stats,log-non-free,check-fence,error-free-null,print-messages");
+
+pagesize = dmalloc_page_size();
+printf("APP_Process dmalloc pagesize = %d system pagesize = %d\n", pagesize, getpagesize());
+printf("APP_Process size of long = %d\n", sizeof(long));
+
+
+2. change makefile to link with dmalloc lib for each process
+
+/build/processes/APP_Process/makefile
+
+COMPONENT_SOURCE_LIBRARIES+=\
+	$(NDS_ROOT)/libdmallocth.a
+COMPONENT_PREBUILT_OBJECTS+=\
+	$(NDS_ROOT)/libdmallocth.a
+
+
+3. enable console
+note: careful since it's different from release to release
+
+/build/make_image.sh
+
+  SPK_CONFIG+=" console"
+
+
+4. copy two files
+
+vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/dmalloc.h
+vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/libdmallocth.a
+
+
+25:08:16 15:46:17 946684826: 593: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 593:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 593:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 593: ERROR: free: pointer is null (err 20) 
+25:08:16 15:46:17 946684826: 600: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 600:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 600:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 600: ERROR: free: pointer is null (err 20) 
+25:08:16 15:46:17 946684826: 607: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 607:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 607:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 607: ERROR: free: pointer is null (err 20) 
+25:08:16 15:46:17 946684826: 628: WARNING: tried to free(0) from 'unknown' 
+25:08:16 15:46:17 946684826: 628:   error details: invalid 0L pointer 
+25:08:16 15:46:17 946684826: 628:   from 'unknown' prev access 'unknown' 
+25:08:16 15:46:17 946684826: 628: ERROR: free: pointer is null (err 20) 
+
+
+// 
+
+int func_double_free()
+{
+    int *x = malloc(10*sizeof(int));
+    free(x);
+    free(x);
+    return 1;
+}
+
+=== test double free
+946784562: 10:   error details: finding address in heap
+946784562: 10:   pointer '0x483f88' from 'testmain.c:32' prev access 'unknown'
+946784562: 10: ERROR: free: tried to free previously freed pointer (err 61) ~
+946784562: 10: Dumping Chunk Statistics:
+946784562: 10: basic-block 4096 bytes, alignment 8 bytes
+946784562: 10: heap address range: 0x47d000 to 0x487000, 40960 bytes
+946784562: 10:     user blocks: 2 blocks, 8000 bytes (19%)
+946784562: 10:    admin blocks: 8 blocks, 32768 bytes (80%)
+946784562: 10:    total blocks: 10 blocks, 40960 bytes
+946784562: 10: heap checked 0
+946784562: 10: alloc calls: malloc 4, calloc 0, realloc 0, free 5
+946784562: 10: alloc calls: recalloc 0, memalign 0, valloc 0
+946784562: 10: alloc calls: new 0, delete 0
+946784562: 10:   current memory in use: 320 bytes (1 pnts)
+946784562: 10:  total memory allocated: 800 bytes (4 pnts)
+946784562: 10:  max in use at one time: 720 bytes (2 pnts)
+946784562: 10: max alloced with 1 call: 400 bytes
+946784562: 10: max unused memory space: 304 bytes (29%)
+946784562: 10: top 10 allocations:
+946784562: 10:  total-size  count in-use-size  count  source
+946784562: 10:         400      1           0      0  testmain.c:14
+946784562: 10:          40      1           0      0  testmain.c:23
+946784562: 10:          40      1           0      0  testmain.c:30
+946784562: 10:         480      3           0      0  Total of 3
+946784562: 10: Dumping Not-Freed Pointers Changed Since Start:
+946784562: 10:  not freed: '0x47de00|s1' (320 bytes) from 'unknown'
+946784562: 10:  total-size  count  source
+946784562: 10:           0      0  Total of 0
+946784562: 10: ending time = 946784562, elapsed since start = 0:00:00
+
+
+// when ends without detecting an error
+
+946784741: 7: Dumping Chunk Statistics:
+946784741: 7: basic-block 4096 bytes, alignment 8 bytes
+946784741: 7: heap address range: 0x47d000 to 0x487000, 40960 bytes
+946784741: 7:     user blocks: 2 blocks, 8000 bytes (19%)
+946784741: 7:    admin blocks: 8 blocks, 32768 bytes (80%)
+946784741: 7:    total blocks: 10 blocks, 40960 bytes
+946784741: 7: heap checked 0
+946784741: 7: alloc calls: malloc 3, calloc 0, realloc 0, free 3
+946784741: 7: alloc calls: recalloc 0, memalign 0, valloc 0
+946784741: 7: alloc calls: new 0, delete 0
+946784741: 7:   current memory in use: 320 bytes (1 pnts)
+946784741: 7:  total memory allocated: 760 bytes (3 pnts)
+946784741: 7:  max in use at one time: 720 bytes (2 pnts)
+946784741: 7: max alloced with 1 call: 400 bytes
+946784741: 7: max unused memory space: 304 bytes (29%)
+946784741: 7: top 10 allocations:
+946784741: 7:  total-size  count in-use-size  count  source
+946784741: 7:         400      1           0      0  testmain.c:14
+946784741: 7:          40      1           0      0  testmain.c:23
+946784741: 7:         440      2           0      0  Total of 2
+946784741: 7: Dumping Not-Freed Pointers Changed Since Start:
+946784741: 7:  not freed: '0x47de00|s1' (320 bytes) from 'unknown'
+946784741: 7:  total-size  count  source
+946784741: 7:           0      0  Total of 0
+946784741: 7: ending time = 946784741, elapsed since start = 0:00:00
 
 
 ={============================================================================
@@ -10463,7 +10591,7 @@ Have to speficy lib path:
 $ ./gcc -fsanitize=address -Wl,-rpath=/home/NDS-UK/kyoupark/toolchains/lib64 uaf.c
 
 
-<ex> 01: `use after free`
+<ex> `use after free`
 
 Here is an example usage (classical use-after-free error):
 
@@ -10579,7 +10707,7 @@ x[2], x[3]    to 16 bytes   2nd fd
 x[4], x[5]    to 24 bytes   3rd fd
 
 
-<ex> 02: `heap buffer overflow`
+<ex> `heap buffer overflow`
 Let's now examine another classical memory error: buffer overflow. These are
 handled differently depending on memory type (stack, static or heap) which
 we'll examine separately.
@@ -10637,7 +10765,7 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==126== ABORTING
 
 
-<e> 03: `stack buffer overflow`
+<e> `stack buffer overflow`
 https://github.com/google/sanitizers/wiki/AddressSanitizerExampleStackOutOfBounds
 
 Now to stack buffers:
@@ -10865,7 +10993,7 @@ sscanf
 They also instrument builtin compiler intrinsic e.g. __builtin_memcpy, etc.
 
 
-<example-real-1>    The following  heap buffer-overflow was detected by ASan:
+<ex-real> `heap buffer-overflow` was detected by ASan:
 
 ==136== ERROR: AddressSanitizer: heap-buffer-overflow on address 0xad651b10
 at pc 0xb4e03054 bp 0x75c35ac4 sp 0x75c35aac
@@ -10910,41 +11038,43 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
   ASan internal:         fe
 
 
-Reproducing scenario: play video from usb source. Here is the backtrace analyzed with addr2line tool:
+Reproducing scenario: play video from usb source. Here is the backtrace
+analyzed with `addr2line` tool:
 
-#0 0xb4e03053 (/mtd_exe/lib/libasan.so.0+0xf053)
+`#0` 0xb4e03053 (/mtd_exe/lib/libasan.so.0+0xf053)
 __interceptor_strlen /home/ygribov/build/tools/v4/sources/gcc_1/libsanitizer/asan/asan_interceptors.cc:454
 
 note that 'strlen' in __interceptor_strlen
 
 452   uptr length = REAL(strlen)(s);
 453   if (flags()->replace_str) {
-454     ASAN_READ_RANGE(s, length + 1);
+`454`     ASAN_READ_RANGE(s, length + 1);
                            ^^^^^^^^^^
 455   }
 
 #1 0x1281917 (/mtd_exe/exeAPP+0x1281917)
 PCString::Length(char const*)
-/home1/jsun.song/TV400_REL/BP/MAIN2014/Smart/CSP_Smart_2014_Prj/REL_4211/BP_CSP/CSP-4.0/CSP/Src/PCString.cpp:347
+/Smart/CSP_Smart_2014_Prj/REL_4211/BP_CSP/CSP-4.0/CSP/Src/PCString.cpp:347
 
 #2 0x1a286d7 (/mtd_exe/exeAPP+0x1a286d7)
 CAppStateProp::operator=(CAppStateProp&)
-/home2/m.guseva/TV_2014/DTV/BP_APP/BP_AppCM/Src/Common/AppStateProp.cpp:326 <326>
+m.guseva/TV_2014/DTV/BP_APP/BP_AppCM/Src/Common/AppStateProp.cpp:326
 
 322    char* ntmp = prop.GetStateName();
 323   if(ntmp != NULL)
 324   {
 325       m_pStateName = new char[PCString::Length(ntmp)+1];
-326       PCString::Copy(m_pStateName, ntmp, PCString::Length(ntmp)); <326>
+`326`       PCString::Copy(m_pStateName, ntmp, PCString::Length(ntmp));
                                              ^^^^^^^^^^^^^^^^^^^^^^
 327       m_pStateName[PCString::Length(ntmp)] = '\0';
 328     }
 
-So the issue happened in strlen() function called for the CAppStateProp member during coping from
-one string to another.
+So the issue happened in strlen() function called for the CAppStateProp member
+during coping from one string to another.
 
-The root cause is in CAppStateProp constructor method where m_pStateName is initialized withoul null
-termitaning symbol. So the proposed fix is to add null symbol to the Length position.
+The root cause is in CAppStateProp constructor method where m_pStateName is
+initialized without null termitaning symbol. So the proposed fix is to add
+null symbol to the Length position.
 
 diff -p AppStateProp.cpp.orig  AppStateProp.cpp
 *** AppStateProp.cpp.orig       2013-12-18 12:48:15.284055908 +0400
@@ -10952,18 +11082,21 @@ diff -p AppStateProp.cpp.orig  AppStateProp.cpp
 *************** CAppStateProp::CAppStateProp(const char*
 *** 46,51 ****
 --- 46,52 ----
-        {
-                m_pStateName = new char[PCString::Length("UNDEFINED")+1];
-                PCString::Copy(m_pStateName, "UNDEFINED", PCString::Length("UNDEFINED"));
-+               m_pStateName[PCString::Length("UNDEFINED")] = '\0';
-        }
+{
+  m_pStateName = new char[PCString::Length("UNDEFINED")+1];
+  PCString::Copy(m_pStateName, "UNDEFINED", PCString::Length("UNDEFINED"));
++ m_pStateName[PCString::Length("UNDEFINED")] = '\0';
+}
 
-        m_coexistBanner.clear();
+m_coexistBanner.clear();
 
-KT: Although can see what was wrong, but not sure how it came to conclusion that is heap overflow
-and why the first call of Length was not a problem.
 
-<example-real-2> The following  unknown crash was detected by ASan:
+note:
+Although can see what was wrong, but not sure how it came to conclusion
+that is heap overflow and why the first call of Length was not a problem.
+
+
+<ex-real> `unknown crash` was detected by ASan:
 ==215== ERROR: AddressSanitizer: unknown-crash on address 0x8b8eb924
 at pc 0xb4e03054 bp 0x789acad4 sp 0x789acabc
 READ of size 65 at 0x8b8eb924 thread T247 (webserver)
@@ -11081,7 +11214,7 @@ $ diff WebServer.cpp.orig WebServer.cpp
 >             _secure_db_key[SECURE_DB_KEY_LEN] = '\0';
  
 
-<example-real-3> The following  heap buffer-overflow was detected by ASan:
+<ex-real> `heap buffer-overflow` was detected by ASan:
 ==214== ERROR: AddressSanitizer: heap-buffer-overflow on address 0x75929a70
 at pc 0x3b6853c bp 0x533fed54 sp 0x533fed44
 READ of size 4 at 0x75929a70 thread T488 (SMPA_CPHandover)
@@ -11148,21 +11281,25 @@ Shadow bytes around the buggy address:
 
 Here is the backtrace analyzed with addr2line tool:
 
+note: 
+Follow T488.
+
 #0 0x3b6853b (/mtd_exe/exeAPP+0x3b6853b)
 _SMPACPHandOver(void*)
-/home2/m.guseva/TV_2014/DTV/AP_CNC/AP_DLNA/SMP/smpadaptation/src/controlpoint/SMPACPInternals.cpp:2455
+/AP_CNC/AP_DLNA/SMP/smpadaptation/src/controlpoint/SMPACPInternals.cpp:2455
 
 2453         pstCPActionId = ( stCP_ActionIdList * ) SMPMemAllocMA( sizeof( stCP_ActionIdList ) );
 2454         pstCPActionId->cpHandle = nCPHandle;
 2455         pstCPActionId->actionId = ((ControlResult*)pCbInfo)->nActionId;
 
 #1 0xb4e1126b (/mtd_exe/lib/libasan.so.0+0x1d26b)
-__asan::ASanThread::ThreadStart()
+`__asan::ASanThread::ThreadStart`()
 /home/ygribov/build/tools/v4/sources/gcc_1/libsanitizer/asan/asan_thread.cc:99
 
    #1 0x3b67d5b (/mtd_exe/exeAPP+0x3b67d5b)
-   _SMPASendAppInfo(int nCPHandle, int nMessageType, void* pCbInfo) <here>
-   /home2/m.guseva/TV_2014/DTV/AP_CNC/AP_DLNA/SMP/smpadaptation/src/controlpoint/SMPACPInternals.cpp:2579
+   `_SMPASendAppInfo`(int nCPHandle, int nMessageType, void* pCbInfo)
+
+   //AP_DLNA/SMP/smpadaptation/src/controlpoint/SMPACPInternals.cpp:2579
    2571 pstAppCbArgs->pCbInfo = pCbInfo;
    ...
    2578 SMPADebug(SMP_INFO_LEVEL,"[_SMPASendAppInfo] Creating Thread");
@@ -11171,14 +11308,15 @@ __asan::ASanThread::ThreadStart()
    
    #2 0x3b6014f (/mtd_exe/exeAPP+0x3b6014f)
    SMPAGenericDeviceNotifyCb(int, SMP_EVENT, SMP_ERROR_CODE, stSMPAppList*)
-   /home2/m.guseva/TV_2014/DTV/AP_CNC/AP_DLNA/SMP/smpadaptation/src/controlpoint/SMPAControlPoint.cpp:327
+
+   //AP_DLNA/SMP/smpadaptation/src/controlpoint/SMPAControlPoint.cpp:327
    324 SMPInt8* pCopiedDeviceHandle = NULL;
    325 SMPString* pDeviceHandleString = new SMPString((SMPChar*)pDeviceHandle);
    326 pCopiedDeviceHandle = (SMPInt8*)pDeviceHandleString->GetString();                          
    327 nErrorCode = _SMPASendAppInfo( nIntendedCP, DEVICE_ADDED, pCopiedDeviceHandle );
 
-The root cause is in SMPAGenericDeviceNotifyCb() function when _SMPASendAppInfo() is called. The
-proposed fix is below:
+The root cause is in SMPAGenericDeviceNotifyCb() function when
+_SMPASendAppInfo() is called. The proposed fix is below:
 
 $ diff SMPAControlPoint.cpp.orig SMPAControlPoint.cpp
 227,228c227,228
@@ -11205,7 +11343,8 @@ $ diff SMPAControlPoint.cpp.orig SMPAControlPoint.cpp
 >  if (DeviceHandleLength > 16) DeviceHandleLength = 16;
 >  SMPMemCpy(pCopiedDeviceHandle, pDeviceHandleString->GetString(), DeviceHandleLength);
 
-<example-real-4> The following  stack buffer-overflow was detected by ASan:
+
+<ex-real> `stack buffer-overflow` was detected by ASan:
 ==239== ERROR: AddressSanitizer: stack-buffer-overflow on address 0xab43da68
 at pc 0xb4e023f4 bp 0xab43d644 sp 0xab43d224
 READ of size 4 at 0xab43da68 thread T45 (AppInitializer)
@@ -11305,8 +11444,8 @@ Shadow bytes around the buggy address:
 Here is the backtrace analyzed with addr2line tool:
 
 #0 0xb4e023f3 (/mtd_exe/lib/libasan.so.0+0xe3f3)
-__interceptor_memcpy    <memcpy>
-/home/ygribov/build/tools/v4/sources/gcc_1/libsanitizer/asan/asan_interceptors.cc:288
+`__interceptor_memcpy` 
+/build/tools/v4/sources/gcc_1/libsanitizer/asan/asan_interceptors.cc:288
 288     ASAN_READ_RANGE(from, size);
 289     ASAN_WRITE_RANGE(to, size);
 
@@ -11346,7 +11485,8 @@ $diff APCNCTaskConfig.cpp.orig APCNCTaskConfig.cpp
 >       if (pms.Set(PROFILE_MOTIONAPP_CAMERA_POSITION, &ucCamPosition,
                sizeof(ucCamPosition)) == false)
 
-<example-real-4> The following  stack buffer-overflow was detected by ASan:
+
+<ex-real> `stack buffer-overflow` was detected by ASan:
 <strncpy>
 ==283== ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7c25d990
 at pc 0xb4e02520 bp 0x989fe85c sp 0x989fe43c
@@ -11385,8 +11525,8 @@ Shadow bytes around the buggy address:
 Here is the backtrace analyzed with addr2line tool:
 
 #0 0xb4e0251f (/mtd_exe/lib/libasan.so.0+0xe51f)
-__interceptor_memcpy
-/home1/m.guseva/fox-p/vd47_a15/toolchain/build.arm.cortex-a15/sources/gcc_1/libsanitizer/
+`__interceptor_memcpy`
+/fox-p/vd47_a15/toolchain/build.arm.cortex-a15/sources/gcc_1/libsanitizer/
 asan/asan_interceptors.cc:288
 288     ASAN_READ_RANGE(from, size);
 289     ASAN_WRITE_RANGE(to, size);
@@ -11397,26 +11537,26 @@ char* std::string::_S_construct<char const*>(char const*, char const*, std::allo
 
 #2 0xa8bf81f7 (/mtd_exe/lib/libstdc++.so.6.0.17+0xa31f7)
 _S_construct_aux<const char*>
-/home/alexey.merzlyakov/fox-p/vd47_a15/toolchain/build/obj/gcc_final/arm-v7a15v4r3-linux-gnueabi/
+/fox-p/vd47_a15/toolchain/build/obj/gcc_final/arm-v7a15v4r3-linux-gnueabi/
 libstdc++-v3/include/bits/basic_string.h:1722
 
 #3 0x7cb85c3 (/mtd_exe/exeAPP+0x7cb85c3)
 CCNSVTP::PrintVTPLocal(CCNSVTP::CCNSVTP_TYPE type, char* str)
-/home2/m.guseva/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSProfile.cpp:416
+/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSProfile.cpp:416
 414         if (NULL != str)^M
 415         {^M
 416                 std::string str_text = (std::string)str;^M
 
 #4 0x7cb8803 (/mtd_exe/exeAPP+0x7cb8803)
 CCNSVTP::PrintVTP(CCNSVTP::CCNSVTP_TYPE type, char * str, int bool_result)
-/home2/m.guseva/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSProfile.cpp:241
+/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSProfile.cpp:241
 241   PrintVTPLocal(VTP_CONVERSATION_STATE_DATA,str);^M
 242   break;^M
 
 
 #5 0x7c73cbf (/mtd_exe/exeAPP+0x7c73cbf)
 CCnSParsePacket::t_ParseConnectionInfo(std::string&)
-/home2/m.guseva/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSParsePacket.cpp:639
+/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSParsePacket.cpp:639
 635   char * pChar = NULL ;
 636   int length = stConfServer.szStat.size();
 637   pChar = new char[length+1];
@@ -11424,8 +11564,8 @@ CCnSParsePacket::t_ParseConnectionInfo(std::string&)
 639  CCNSVTP::GetInstance()->PrintVTP(CCNSVTP::CCNSVTP_TYPE_STATE_DATA,pChar,0);
 
 According the strncpy POSIX specification:
-If there is no null byte in the first n bytes of the array pointed to by s2, the result will not be
-null-terminated.
+If there is no null byte in the first n bytes of the array pointed to by s2,
+   the result will not be null-terminated.
 
 So the pChar array actually is not null terminated. The proposed fix is:
 
@@ -21067,6 +21207,19 @@ note: now has debugging info
 0x5442c670  0x5444c130  Yes         /opt/zinc-trunk/lib/libVanadiumWebKitVideoElement.so.0
 
 => 0x5443955c <vanadium::VanadiumMediaPlayer::currentTime() const+696>:	sw	v0,0(zero)
+
+
+={============================================================================
+*kt_linux_tool_300* gdb-core-code
+
+#include <stdio.h>
+
+int main()
+{
+    char *p = (char*)0;
+    p[0] = 1;
+    return 0;
+}
 
 
 ={============================================================================
