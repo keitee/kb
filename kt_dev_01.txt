@@ -14,16 +14,13 @@ KT KB. DEVELOPMENT.
 *kt_dev_seng_002* 80 and 20
 
 #{ problems and CODES
-*kt_dev_prob_001* case-issue-memcpy
-*kt_dev_prob_002* case-issue-out-of-index
-*kt_dev_prob_003* case-issue-double-free
-*kt_dev_prob_005* case-issue-use-after-free
 *kt_dev_prob_006* code-print ansi color 
 |kt_dev_prob_008| elapsed time {clock}
 |kt_dev_prob_009| preprocessor {stdarg} {why-ellipses-dangerous} {ndebug}
 *kt_dev_prob_009* code-bit-twos-complement
 *kt_dev_prob_009* code-bit-types
 *kt_dev_prob_010* code-bit-type-max-value
+*kt_dev_prob_010* code-address-alignment
 *kt_dev_prob_011* code-pointer-handle
 *kt_dev_prob_012* case-issue-incremental-build
 *kt_dev_prob_013* code-grep
@@ -312,14 +309,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_110| stl-allocator
 |kt_dev_stl_111| gcc stl impl files
 
-#{ STL Q
-
 #{ SYSTEM 
 |kt_dev_sys_001| <empty>
 |kt_dev_sys_002| endianess
 |kt_dev_sys_003| to check endianess at runtime
-|kt_dev_sys_004| to check address alignment or boundary <bitwise>
-|kt_dev_sys_005| two's complement
 |kt_dev_sys_007| stack (MIPS)
 |kt_dev_sys_008| stack asm example (MIPS)
 |kt_dev_sys_009| for and while asm (MIPS)
@@ -440,174 +433,6 @@ applicability and a solid empirical basis.
 
 # ============================================================================
 #{
-={============================================================================
-*kt_dev_prob_001* case-issue-memcpy
-
-Seen on NDS MW issue
-
-MW_Process crash with core dump in SIM_dbc_query_ReadProgrammeInstanceInfo
-(during memcpy) 
-
-// void *memcpy(void *dest, const void *src, size_t n);
-(void)memcpy((void*)&obj_array[offset].sort_title[0], 
-    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
-
-// source when crashed
-0x1d8dfec: 0x54495050 0x494e4720 0x504f494e 0x54000000
-0x1d8dffc: 0xc009 0x0 0x0 0x0
-
-// dest
-x/40a obj_array[0].sort_title
-0x204eb20: 0x54495050 0x494e4720 0x504f494e 0x54000000
-0x204eb30: 0x0 0x0 0x0 0x0
-
-// solution
-strncpy(&obj_array[offset].sort_title[0], 
-    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
-
-So the problem is the accessing out of index. Why? When doing memcpy, there is
-  no gurantee that src and dest has all the vaild address up to the given size,
-     SIM_DBC_MAX_SORT_STRING_LEN(40). So when the valid length of src is smaller
-       than the size then the area which is over the length of src, may not
-       accessiable such as not contiguous, not valid for this process, etc. 
-
-So strncpy will ensure only the length of the value.text is copied when there is
-a null in src (destination then padded out with nulls) or a maximum of 40 is
-copied if the source string is over 40.
-
-
-={============================================================================
-*kt_dev_prob_002* case-issue-out-of-index
-
-Accessing out of index of array is 'undefined' so sometimes work or sometimes
-not.
-
-<01>
-int g_arr[3];
-
-int main(int argc, char* argv[])
-{
-  if( g_arr[5] == 0 )
-    printf("idx 5 is false\n");
-  else
-    printf("idx 5 is true\n");
-}
-
-$ ./a.out 
-idx 5 is false
-
-<02>
-The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
-sometimes. But crashed
-
-static MFS_STATUS MFSDBWRAP_GetDbContext(MFS_STORAGE_DB_CONTEXT_ID dbConId, 
-    MFS_DB_CONTEXT **ppContext)
-{
-  MFS_STATUS mfsStatus = MFS_STATUS_OK;
-
-  XDEBUG_DEFINE_FUNC_INFO("MFSDBWRAP_GetDbContext");
-  XDEBUG_TRACE2_1("start: dbConId=%d", dbConId);
-
-  // the dbConId is the index into the db context array, so we can directly
-  // access it.  First check that the context is really in use. If not this is a
-  // bug.
-
-  if (db_contexts_array[dbConId].bInUse == XFALSE)
-  {
-    XDEBUG_ERR2_0("No free slots for contextes.  Returning the first one");
-    mfsStatus = MFS_STATUS_ERROR;
-  }
-  else
-  {
-    *ppContext = &db_contexts_array[dbConId];
-  }
-
-  return mfsStatus;
-}
-
-
-={============================================================================
-*kt_dev_prob_003* case-issue-double-free
-
-When do double free under pc linux that uses glibc, make a core as below but run
-on a embedded linux that uses uclibc, shows no problem.
-
-$ ./a.out 
-pstr = 
-this is..
-*** glibc detected *** ./a.out: double free or corruption (fasttop): 0x000000001834b010 ***
-======= Backtrace: =========
-/lib64/libc.so.6[0x393c07230f]
-/lib64/libc.so.6(cfree+0x4b)[0x393c07276b]
-./a.out[0x40062f]
-/lib64/libc.so.6(__libc_start_main+0xf4)[0x393c01d994]
-./a.out[0x4004b9]
-======= Memory map: ========
-00400000-00401000 r-xp 00000000 fd:02 37781700                           /data/home/NDS-UK/parkkt/work/a.out
-00600000-00601000 rw-p 00000000 fd:02 37781700                           /data/home/NDS-UK/parkkt/work/a.out
-1834b000-1836c000 rw-p 1834b000 00:00 0                                  [heap]
-393bc00000-393bc1c000 r-xp 00000000 fd:00 3538948                        /lib64/ld-2.5.so
-393be1b000-393be1c000 r--p 0001b000 fd:00 3538948                        /lib64/ld-2.5.so
-393be1c000-393be1d000 rw-p 0001c000 fd:00 3538948                        /lib64/ld-2.5.so
-393c000000-393c14e000 r-xp 00000000 fd:00 3538955                        /lib64/libc-2.5.so
-393c14e000-393c34d000 ---p 0014e000 fd:00 3538955                        /lib64/libc-2.5.so
-393c34d000-393c351000 r--p 0014d000 fd:00 3538955                        /lib64/libc-2.5.so
-393c351000-393c352000 rw-p 00151000 fd:00 3538955                        /lib64/libc-2.5.so
-393c352000-393c357000 rw-p 393c352000 00:00 0 
-394b200000-394b20d000 r-xp 00000000 fd:00 3539281                        /lib64/libgcc_s-4.1.2-20080825.so.1
-394b20d000-394b40d000 ---p 0000d000 fd:00 3539281                        /lib64/libgcc_s-4.1.2-20080825.so.1
-394b40d000-394b40e000 rw-p 0000d000 fd:00 3539281                        /lib64/libgcc_s-4.1.2-20080825.so.1
-2ba0f68d2000-2ba0f68d4000 rw-p 2ba0f68d2000 00:00 0 
-2ba0f68ec000-2ba0f68ee000 rw-p 2ba0f68ec000 00:00 0 
-7fff1e6e4000-7fff1e6f9000 rw-p 7ffffffe9000 00:00 0                      [stack]
-ffffffffff600000-ffffffffffe00000 ---p 00000000 00:00 0                  [vdso]
-Aborted
-
-
-// from man page
-
-The free() function frees the memory space pointed to by ptr, which must have
-  been returned by a previous call to malloc(), calloc() or realloc().
-  Otherwise, or if free(ptr) has already been called before, 'undefined'
-  behavior occurs. If ptr is NULL, no operation is performed.
-
-
-={============================================================================
-*kt_dev_prob_005* case-issue-use-after-free
-
-<1>: use after free
-Here is an example usage (classical use-after-free error):
-
-$ cat uaf.c
-
-#include <stdlib.h>
-int main() {
-  int *x = malloc(10 * sizeof(int));
-  free(x);
-  return x[5];
-}
-
-<2> from ansic, p167
-
-for( p = haed; p != NULL; p = p->next )
-   free(p);
-
-shall be:
-
-for( p = head; p != NULL; p = q )
-{
-   q = p->next;
-   free(p);
-}
-
-for( p = head; p != NULL; )
-{
-  q = p;
-  p = p->next;
-  free(q);
-}
-
-
 ={============================================================================
 *kt_dev_prob_006* code-print ansi color 
 
@@ -2181,7 +2006,7 @@ From glibc and see exercise 2-1 for examples.
 # endif
 
 note: 
-Must use `unsigned` for `right-shift` to have guaranteed 0 values.
+Must use `unsigned` to do  `right-shift` in order to have guaranteed 0 values.
 This is why glibc macro uses 'unsigned' type.
 
 note: 
@@ -2193,7 +2018,7 @@ The signess must be known to compiler when do shift to have guaranteed result
 and use `signed` by default.
 
 
-<1> To get INT_MAX,  ((~0)>>1) ?
+<1> To get INT_MAX, 01111111...1,  ((~0)>>1) ?
 
 unsigned int val = ((~0) >> 1) +1;            // wrong
 unsigned int val = (((unsigned)~0) >> 1) +1;  // okay
@@ -2205,12 +2030,10 @@ int main()
   unsigned int input1 = ~((unsigned int)0)>>1;
 
   // since do not know signness, use signed by default and gets 1 when shift
-
   unsigned int input2 = (~(0)>>1);
 
   // works since the result is `independant` but assigned to unsigned. the first
   // version is shorter version of this.
-
   unsigned int input3 = ~0;
   input3 >>=1;
 
@@ -2269,7 +2092,7 @@ unsigned getbits( unsigned x, int p, int n );
 
 This is wrong since it assumes:
 
-~(1<<3)   = ~(1000) = ...00111    // wrong assumption
+~(1<<3)   = ~(1000) = ...00111    // *wrong* assumption
                     = 11110111    // real
 
 <correct>
@@ -2327,6 +2150,15 @@ int main()
 
 11111111111111111111111111111111       // (~0)
 11111111111111111111111111111110       // (~1)
+
+
+<ex>
+See use of 'U' which fix the warning like:
+: warning: narrowing conversion of ‘-4’ from ‘int’ to ‘long long unsigned int’
+since `signed` is default.
+
+#define __DIAG_ALIGNMENT	(4U)
+#define DIAG_CMN_ALIGN(x)	(((x) + (__DIAG_ALIGNMENT-1)) &~ (__DIAG_ALIGNMENT-1))
 
 
 <3> independent-of-length
@@ -2666,6 +2498,82 @@ to use with bit pattern.
 
 0177 1.111.111
 0x7F 111.1111
+
+
+={============================================================================
+*kt_dev_prob_010* code-address-alignment
+
+// general platform alignment. not DMA specific
+#define SYSTEM_ALIGNMENT (8)
+
+// check if an address is aligned to the given alignment boundry, 
+// note: alignment boundry must be a power of two
+
+#define IS_ALIGNED(addr,alignb) (((((uint32_t)(addr))) & (((unsigned)alignb)-1)) == 0)
+
+// return true so aligned
+if (IS_ALIGNED(size, SYSTEM_ALIGNMENT)) 
+{
+  *p_aligned_size = size;
+}
+// return false so not aligned
+else 
+{
+  *p_aligned_size = ((size / SYSTEM_ALIGNMENT) + 1) * SYSTEM_ALIGNMENT;
+}
+
+
+Why 'alignment byte -1'? 7(111) in this case. Use the fact that 8 bytes
+aligned address always has `xxx000` and AND with `0111` always yields 0.
+
+For 4 bytes, use `011`.
+
+dec   bin
+0     0000      & 0111 = 0  // ALIGNED
+1     0001      & 0111 = !0
+2     0010      & 0111 = !0
+3     0011      & 0111 = !0
+----------
+4     0100      & 0111 = !0 
+5     0101      & 0111 = !0
+6     0110      & 0111 = !0
+7     0111      & 0111 = !0
+----------
+8     1000      & 0111 = 0  // ALIGNED
+9   0 1001
+10  0 1010
+11  0 1011
+----------
+12  0 1100
+13  0 1101
+14  0 1110
+15  0 1111
+----------
+16  1 0000
+32 10 0000
+
+
+<cal-len-by-alignment>
+
+// Make a value or an address multiple of __DIAG_ALIGNMENT
+
+#define __DIAG_ALIGNMENT	(4U)
+#define DIAG_CMN_ALIGN(x)	(((x) + (__DIAG_ALIGNMENT-1)) &~ (__DIAG_ALIGNMENT-1))
+
+/* Compute total len of message which goes over IPC */
+total_len = (uint32_t)messageLen + (uint32_t)DIAG_CMN_ALIGN(client_name_len) + (uint32_t)DIAG_IPC_MSG_HEADER_SIZE;
+
+// (x+3) & ~3
+
+0     0000      3 , 0011 & 1100 = 0
+1     0001      4 , 0100 & 1100 = 4
+2     0010      5 , 0101 & 1100 = 4
+3     0011      6 , 0110 & 1100 = 4
+----------
+4     0100      7 , 0111 & 1100 = 4
+5     0101      8 , 1000 & 1100 = 8
+6     0110      9 , 1001 & 1100 = 8
+7     0111      10, 1010 & 1100 = 8
 
 
 ={============================================================================
@@ -8518,6 +8426,9 @@ names:
 [] -> "Mar\0          "
 
 
+={============================================================================
+*kt_dev_cpp_0004* pointer-argv
+
 <ex>
 ansic, p116. argv example of option handling such as:
 
@@ -8627,6 +8538,39 @@ int main(int argc, char* argv[])
   printf("%c\n",   *((*ppchar)+0) );  // t
   printf("%c\n",   *((*ppchar)+1) );  // h
 } 
+
+
+<ex>
+Have core file when use argv[x]. Why? Turns out that used:
+
+int main(int argc, char *argv);     // fail
+int main(int argc, char **argv);    // okay
+
+#include <stdio.h>
+
+int main(int argc, char **argv)
+{
+    char *ptr = (char*)argv;
+    char **pptr = argv;
+
+    printf("argv[0] = %s\n", argv[0]);
+
+    return;
+}
+
+(gdb) p ptr
+$1 = 0xbfffef54 "\336\360\377\277"
+(gdb) p pptr
+$2 = (char **) 0xbfffef54
+(gdb) p *ptr
+$3 = -34 '\336'
+(gdb) p *pptr
+$4 = 0xbffff0de "/home/kyoupark/work/a.out"
+(gdb) p *(char**)ptr
+$5 = 0xbffff0de "/home/kyoupark/work/a.out"
+(gdb) p/x *ptr
+$6 = 0xde
+(gdb) 
 
 
 <ex> *ex-tail* *ex-interview*
@@ -10452,7 +10396,7 @@ for(i=0; i<lim-1 ? (c=getchar()) != '\n' ? c != EOF : 0 : 0; ++i)
 ={============================================================================
 *kt_dev_lang_016* expr-assign
 
-The operator "+=" is called "assignment operator" and most binary operators have
+The operator "+=" is called `assignment operator` and most binary operators have
 a corresponding assignment operator "op=", where op is + - * / % << >> & ^ |.
 
 note: 
@@ -10465,6 +10409,10 @@ note:
 that assignment statement, c = getchar(), and the 'type' of an assignement
   expression is the type of its left operand in case of assignement operator.
   The point is that expresssion has a 'type'.
+
+note:
+The "&~" is not `assignment opearator` since do not have `=`. No such an
+operator and turns out "x & ~y".
 
 
 ={============================================================================
@@ -41980,56 +41928,6 @@ uint32_t *ebuf32 = (uint32_t *)ebuf;
 ebuf32[0] = 0x01000000;
 if(ebuf[0] == 0x01) system_endian = TBIG_ENDIAN;
 else system_endian = TLITTLE_ENDIAN;
-
-
-={============================================================================
-*kt_dev_sys_004* to check address alignment
-
-#define SYSTEM_ALIGNMENT (8)
-
-/* check if an address is aligned to the given alignment boundry,
-   NOTE: alignment boundry must be a power of two */
-#define IS_ALIGNED(addr,alignb) (((((uint32_t)(addr))) & (((unsigned)alignb)-1)) == 0)
-
-// ALIGNED
-if (IS_ALIGNED(size, SYSTEM_ALIGNMENT)) 
-{
-	*p_aligned_size = size;
-}
-// NOT ALIGNED
-else 
-{
-	*p_aligned_size = ((size / SYSTEM_ALIGNMENT) + 1) * SYSTEM_ALIGNMENT;
-}
-
-Why 'alignment byte -1'? 7(111) in this case.
-
-dec : bin
-0     0000        ==0 <- ALIGNED for 4/8 bytes
-1     0001        !=0
-2     0010        !=0
-3     0011  [11]  !=0
-----------
-4     0100        <- ALIGNED for 8
-5     0101
-6     0110
-7     0111  [11] or [111] 
-----------
-8     1000        <- ALIGNED
-9   0 1001
-10  0 1010
-11  0 1011 [11]
-----------
-12  0 1100
-13  0 1101
-14  0 1110
-15  0 1111 [11] or [111] 
-----------
-16  1 0000
-32 10 0000
-
-For 4 bytes align, 4-1=3 [11] and get the start or boundary by & [11].
-For 8 bytes align, 7-1=3 [111] and get the start or boundary by & [111].
 
 
 ={============================================================================

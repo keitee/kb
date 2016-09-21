@@ -138,9 +138,13 @@
 *kt_linux_tool_051* tool-fs-btrfs
 
 *kt_linux_tool_100* tool-gprof
+*kt_linux_tool_100* tool-efence-issues
+*kt_linux_tool_100* tool-efence-benchmark
 *kt_linux_tool_100* tool-efence
 *kt_linux_tool_100* tool-efence-duma
+*kt_linux_tool_100* tool-efence-dmalloc
 *kt_linux_tool_100* tool-efence-asn
+*kt_linux_tool_100* tool-efence-others
 *kt_linux_tool_100* tool-valgrind
 *kt_linux_tool_100* tool-valgrind-memcheck
 *kt_linux_tool_100* tool-valgrind-memcheck-doc
@@ -237,7 +241,6 @@
 *kt_linux_tool_300* gdb-core: stack frame
 |kt_linux_tool_300| gdb-core-analysis-on-mips
 |kt_linux_tool_300| gdb-step
-*kt_linux_tool_300* gdb-print-gdb-set
 *kt_linux_tool_309* gdb-break
 *kt_linux_tool_309* gdb-break-set-location
 *kt_linux_tool_309* gdb-break-set-location-in-cpp
@@ -9907,6 +9910,188 @@ http://sourceware.org/binutils/docs/gprof/
 
 
 ={============================================================================
+*kt_linux_tool_100* tool-efence-issues
+  
+<double-free>
+When do double free under pc linux that uses glibc, make a core as below but
+run on a embedded linux that uses uclibc, shows no problem.
+
+$ ./a.out 
+pstr = 
+this is..
+*** glibc detected *** ./a.out: double free or corruption (fasttop): 0x000000001834b010 ***
+======= Backtrace: =========
+/lib64/libc.so.6[0x393c07230f]
+/lib64/libc.so.6(cfree+0x4b)[0x393c07276b]
+./a.out[0x40062f]
+/lib64/libc.so.6(__libc_start_main+0xf4)[0x393c01d994]
+./a.out[0x4004b9]
+======= Memory map: ========
+00400000-00401000 r-xp 00000000 fd:02 37781700                           /data/home/NDS-UK/parkkt/work/a.out
+00600000-00601000 rw-p 00000000 fd:02 37781700                           /data/home/NDS-UK/parkkt/work/a.out
+1834b000-1836c000 rw-p 1834b000 00:00 0                                  [heap]
+393bc00000-393bc1c000 r-xp 00000000 fd:00 3538948                        /lib64/ld-2.5.so
+393be1b000-393be1c000 r--p 0001b000 fd:00 3538948                        /lib64/ld-2.5.so
+393be1c000-393be1d000 rw-p 0001c000 fd:00 3538948                        /lib64/ld-2.5.so
+393c000000-393c14e000 r-xp 00000000 fd:00 3538955                        /lib64/libc-2.5.so
+393c14e000-393c34d000 ---p 0014e000 fd:00 3538955                        /lib64/libc-2.5.so
+393c34d000-393c351000 r--p 0014d000 fd:00 3538955                        /lib64/libc-2.5.so
+393c351000-393c352000 rw-p 00151000 fd:00 3538955                        /lib64/libc-2.5.so
+393c352000-393c357000 rw-p 393c352000 00:00 0 
+394b200000-394b20d000 r-xp 00000000 fd:00 3539281                        /lib64/libgcc_s-4.1.2-20080825.so.1
+394b20d000-394b40d000 ---p 0000d000 fd:00 3539281                        /lib64/libgcc_s-4.1.2-20080825.so.1
+394b40d000-394b40e000 rw-p 0000d000 fd:00 3539281                        /lib64/libgcc_s-4.1.2-20080825.so.1
+2ba0f68d2000-2ba0f68d4000 rw-p 2ba0f68d2000 00:00 0 
+2ba0f68ec000-2ba0f68ee000 rw-p 2ba0f68ec000 00:00 0 
+7fff1e6e4000-7fff1e6f9000 rw-p 7ffffffe9000 00:00 0                      [stack]
+ffffffffff600000-ffffffffffe00000 ---p 00000000 00:00 0                  [vdso]
+Aborted
+
+
+// from man page
+
+The free() function frees the memory space pointed to by ptr, which must have
+  been returned by a previous call to malloc(), calloc() or realloc().
+  Otherwise, or if free(ptr) has already been called before, 'undefined'
+  behavior occurs. If ptr is NULL, no operation is performed.
+
+
+<use-after-free>
+Here is an example usage (classical use-after-free error):
+
+$ cat uaf.c
+
+#include <stdlib.h>
+int main() {
+  int *x = malloc(10 * sizeof(int));
+  free(x);
+  return x[5];
+}
+
+
+from ansic, p167
+
+for( p = haed; p != NULL; p = p->next )
+   free(p);
+
+shall be:
+
+for( p = head; p != NULL; p = q )
+{
+   q = p->next;
+   free(p);
+}
+
+for( p = head; p != NULL; )
+{
+  q = p;
+  p = p->next;
+  free(q);
+}
+
+
+{overrun}
+Accessing out of index of array is 'undefined' so sometimes work or sometimes
+not.
+
+<01>
+int g_arr[3];
+
+int main(int argc, char* argv[])
+{
+  if( g_arr[5] == 0 )
+    printf("idx 5 is false\n");
+  else
+    printf("idx 5 is true\n");
+}
+
+$ ./a.out 
+idx 5 is false
+
+<02>
+The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
+sometimes. But crashed
+
+static MFS_STATUS MFSDBWRAP_GetDbContext(MFS_STORAGE_DB_CONTEXT_ID dbConId, 
+    MFS_DB_CONTEXT **ppContext)
+{
+  MFS_STATUS mfsStatus = MFS_STATUS_OK;
+
+  XDEBUG_DEFINE_FUNC_INFO("MFSDBWRAP_GetDbContext");
+  XDEBUG_TRACE2_1("start: dbConId=%d", dbConId);
+
+  // the dbConId is the index into the db context array, so we can directly
+  // access it.  First check that the context is really in use. If not this is a
+  // bug.
+
+  if (db_contexts_array[dbConId].bInUse == XFALSE)
+  {
+    XDEBUG_ERR2_0("No free slots for contextes.  Returning the first one");
+    mfsStatus = MFS_STATUS_ERROR;
+  }
+  else
+  {
+    *ppContext = &db_contexts_array[dbConId];
+  }
+
+  return mfsStatus;
+}
+
+<3>
+Seen on NDS MW issue
+
+MW_Process crash with core dump in SIM_dbc_query_ReadProgrammeInstanceInfo
+(during memcpy) 
+
+// void *memcpy(void *dest, const void *src, size_t n);
+(void)memcpy((void*)&obj_array[offset].sort_title[0], 
+    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
+
+// source when crashed
+0x1d8dfec: 0x54495050 0x494e4720 0x504f494e 0x54000000
+0x1d8dffc: 0xc009 0x0 0x0 0x0
+
+// dest
+x/40a obj_array[0].sort_title
+0x204eb20: 0x54495050 0x494e4720 0x504f494e 0x54000000
+0x204eb30: 0x0 0x0 0x0 0x0
+
+// solution
+strncpy(&obj_array[offset].sort_title[0], 
+    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
+
+So the problem is the accessing out of index. Why? When doing memcpy, there is
+  no gurantee that src and dest has all the vaild address up to the given size,
+     SIM_DBC_MAX_SORT_STRING_LEN(40). So when the valid length of src is smaller
+       than the size then the area which is over the length of src, may not
+       accessiable such as not contiguous, not valid for this process, etc. 
+
+So strncpy will ensure only the length of the value.text is copied when there is
+a null in src (destination then padded out with nulls) or a maximum of 40 is
+copied if the source string is over 40.
+
+
+={============================================================================
+*kt_linux_tool_100* tool-efence-benchmark
+
+                  | HOF       | RAF   | WAF     | DF          | SOF   | GBOF
+                  -------------------------------------------------------
+gcc, host         | n/d       | n/d   | n/d     | glibc trace | n/d   | n/d
+gcc, target       | n/d       | n/d   | n/d     | n/d         | n/d   | n/d
+dmalloc, target   | n/d       | n/d   | n/d     | detected    | n/d   | n/d
+asn, host         | d         | d     | d       | d           | d     | d
+duma, target      | d         | d     | d       | d           | n/d   | n/d
+mudflap, host
+
+heap overflow, read after free, write after free, double free
+stack overflow, global buffer overflow
+
+
+<reference>
+/duma_2_5_15/comparisons/memCheckers.html
+
+
+={============================================================================
 *kt_linux_tool_100* tool-efence
 
 {efence}
@@ -10038,38 +10223,238 @@ but not all, malloc buffer overruns and accesses of free memory. If you want
 to be reasonably sure that you've found all bugs of this type, you'll have to
 read and understand the rest of this man page.
 
+note: how? use `segmentation fault`
 
-USAGE:
 
-note: staic or dynamic
-Link your program with the library libduma.a. You can also use dynamic
-linking. If you're using a Bourne shell, the statement 'export
-LD_PRELOAD=libduma.so.0.0' will cause DUMA to be loaded to run all dynamic
-executables.
+<how-to-use>
+CATCHING THE ERRONEOUS LINE:
 
+note: staic
+
+1. Compile your program (with debugging information) without DUMA.
+2. Set 'ulimit -c unlimited' to get core files
+3. Start your program, choose one of following options
+   a) Start your program (linked statically with DUMA)
+   b) Start your program with duma.sh <your_program>
+4. Wait for a segmentation fault. this should have created a core[.<pid>]
+   file. You can get into a debugger f.e. with 'gdb <program> -c <core file>'
+
+
+<configuration>
 
 GLOBAL AND ENVIRONMENT VARIABLES:
 
-note: only for dynamic?
+note: two ways to configure; env variable or macro.
 
-In actual DUMA versions most of the global variables don't exist any more:
-they changed to thread local variables defined in structures. Instead you can
-call macro function to set some variables - but not from debugger!
+You can use the gdb command 'set environment variable value' to set shell
+environment variables only for the program you are going to debug. This is
+useful especially if you are using the shared DUMA library.
 
-This is useful especially if you are using the shared DUMA library.
+Instead you can call macro function to set some variables.
+
+
+DUMA_PROTECT_BELOW - DUMA usually places an inaccessible page immediately after
+  each memory allocation, so that software that runs past the end of the
+  allocation will be detected. Setting DUMA_PROTECT_BELOW to 1 causes DUMA to
+  place the inaccessible page before the allocation in the address space, so
+  that `under-runs` will be detected instead of over-runs.
+  To change this value, set DUMA_PROTECT_BELOW in the shell environment to an
+  integer value, or call the macro function DUMA_SET_PROTECT_BELOW() from your
+  code.
+
+  note: overrun is default?
+
+
+DUMA_SKIPCOUNT_INIT - DUMA usually does its initialization with `the first`
+  memory allocation. On some systems this may collide with initialization of
+  pthreads or other libaries and produce a hang. To get DUMA work even in these
+  situations you can control (with this environment variable) after how many
+  allocations the full internal initialization of DUMA is done. `default is 0`
+
+  note: shall use it?
+
+
+DUMA_FILL - When set to a value between 0 and 255, every byte of allocated
+  memory is initialized to that value. This can help detect reads of
+  uninitialized memory. When set to -1, DUMA does not initialise memory on
+  allocation. But some memory is filled with zeroes (the operating system
+  default on most systems) and some memory will retain the values written to
+  it during its last use.
+  Per `default` DUMA will initialise all allocated bytes to 255 (=0xFF).
+  To change this value, set DUMA_FILL in the shell environment to an
+  integer value, or call the macro function DUMA_SET_FILL() from your
+  code.
+
+
+DUMA_PROTECT_FREE - DUMA usually returns free memory to a pool from which it
+  may be re-allocated. If you suspect that a program may be touching free
+  memory, set DUMA_PROTECT_FREE shell environment to -1. `This is the default`
+  and will cause DUMA not to re-allocate any memory.
+
+  note: such as use after free?
+
+  For programs with many allocations and deallocations this may lead to the
+  consumption of the full address space and thus to the failure of malloc().
+  To avoid such failures you may limit the amount of protected deallocated
+  memory by setting DUMA_PROTECT_FREE to a positive value. This value in kB
+  will be the limit for such protected free memory.
+
+  `A value of 0 will disable` protection of freed memory.
+
+  note: shall disable it?
+
+
+DUMA_SUPPRESS_ATEXIT - Set this shell environment variable to non-zero when
+  DUMA should skip the installation of its exit handler. The exit handler is
+  called at the end of the main program and checks for memory leaks, so the
+  handler's installation should usually not be suppressed. One reason for
+  doing so regardless are some buggy environments, where calls to the standard
+  C library's atexit()-function hangs.
+
+  note: shall disable it?
+
+
+DUMA_OUTPUT_STDOUT - Set this shell environment variable to non-zero to output
+  all DUMA messages to STDOUT. This option is `off by default`
+
+DUMA_OUTPUT_STDERR - Set this shell environment variable to non-zero to output
+  all DUMA messages to STDERR. This option is `on by default`
+
+DUMA_OUTPUT_FILE - Set this shell environment variable to a filename where all
+  DUMA messages should be written to. This option is `off by default`
+
+
+<configuration-alignment>
+
+DUMA_ALIGNMENT - This is an integer that specifies the alignment for any memory
+  allocations that will be returned by malloc(), calloc(), and realloc().
+  The value is `specified in bytes`, thus a value of 4 will cause memory to be
+  aligned to 32-bit boundaries unless your system doesn't have a 8-bit
+  characters. DUMA_ALIGNMENT is set to the minimum required alignment specific
+  to your environment by default. The minimum required alignment is detected by
+  `createconf` and stored in the file duma_config.h.
+
+  note:
+  `createconf` generates duma_config.h
+
+  no DUMA_MIN_ALIGNMENT env var but it is define used in code and defined in
+  duma_config.h
+
+  duma.c:573:  , {   DUMA_MIN_ALIGNMENT
+  dumatest.c:308:  DUMA_SET_ALIGNMENT(DUMA_MIN_ALIGNMENT);
+
+  get 1 for mips:
+  duma_config_mips.h:194:#define DUMA_MIN_ALIGNMENT 1
+
+  If your program requires that allocations be aligned to 64-bit boundaries
+  you'll have to set this value to 8. This is the case when compiling with the
+  '-mips2' flag on MIPS-based systems such as those from SGI. For some
+  architectures the default is defined to even more - x86_64 uses alignment to
+  16 bytes by default.
+
+  DUMA internally uses a smaller value if the requested memory size is smaller
+  than the alignment value: the next smaller power of 2 is used.
+  Thus allocating blocks smaller than DUMA_ALIGNMENT may result into smaller
+  alignments - for example when allocating 3 bytes, they would be aligned to 2
+  byte boundary. `This allows better detection of overrun`
+  For this reason, you will sometimes want to set `DUMA_ALIGNMENT to 1` (no
+  alignment), so that you can detect overruns of less than your CPU's word
+  size. Be sure to read the section 'WORD-ALIGNMENT AND OVERRUN DETECTION' in
+  this manual page before you try this.
+
+  To change this value, set DUMA_ALIGNMENT in the shell environment to an
+  integer value, or call the macro function DUMA_SET_ALIGNMENT() from your
+  code.
+  You don't need to change this setting, if you just need bigger alignment for
+  some special buffers. In this case you may use the function
+  memalign(alignment, userSize).
+
+
+WORD-ALIGNMENT AND OVERRUN DETECTION:
+
+There is a conflict between the alignment restrictions that malloc() operates
+under and the debugging strategy used by DUMA. When detecting overruns, DUMA
+malloc() allocates two or more virtual memory pages for each allocation. The
+last page is made inaccessible in such a way that any read, write, or execute
+access will cause a segmentation fault. Then, DUMA malloc() will return an
+address such that the first byte after the end of the allocation is on the
+inaccessible page. Thus, any overrun of the allocation will cause a
+segmentation fault.
+
+It follows that the address returned by malloc() is the address of the
+inaccessible page minus the size of the memory allocation. 
+
+note:
+After all,
+
+ ===================  inaccessible page
+ ===================
+ ===================
+ 01 ----------------  accessible page. return X-size
+ -------------------
+ -------------------
+ 01 ================  inaccessible page, X
+ ===================
+ ===================
+
+
+Unfortunately, malloc() is required to return word-aligned allocations, since
+many CPUs can only access a word when its address is aligned. The conflict
+happens when software makes a memory allocation using a size that is not a
+multiple of the word size, and expects to do word accesses to that allocation.
+The location of the inaccessible page is fixed by hardware at a word-aligned
+address. If DUMA malloc() is to return an aligned address, it must increase
+the size of the allocation to a multiple of the word size.
+
+In addition, the functions memalign() and valloc() must honor explicit
+specifications on the alignment of the memory allocation, and this, as well
+can only be implemented by increasing the size of the allocation. 
+
+Thus, there will be situations in which the end of a memory allocation
+contains some `padding space, and accesses of that padding space will not` be
+detected, even if they are overruns.
+
+DUMA provides the variable DUMA_ALIGNMENT so that the user can control the
+default alignment used by malloc(), calloc(), and realloc(). To debug overruns
+as small as a single byte, you can set DUMA_ALIGNMENT to one. This will result
+in DUMA malloc() returning unaligned addresses for allocations with sizes that
+are not a multiple of the word size. 
+
+This is not a problem in most cases, because `compilers must pad` the size of
+objects so that alignment restrictions are honored when storing those objects
+in arrays. 
+
+The problem surfaces when software allocates odd-sized buffers for objects
+that must be word-aligned. One case of this is software that allocates a
+buffer to contain a structure and a string, and the string has an odd size
+(this example was in a popular TIFF library). If word references are made to
+un-aligned buffers, you will see a bus error (SIGBUS) instead of a
+segmentation fault. The only way to fix this is to re-write the offending code
+to make byte references or not make odd-sized allocations, or to set
+DUMA_ALIGNMENT to the word size.
+
+Another example of software incompatible with DUMA_ALIGNMENT < word-size
+is the strcmp() function and other string functions on SunOS (and probably
+Solaris), which make word-sized accesses to character strings, and may attempt
+to access up to three bytes beyond the end of a string. These result in a
+segmentation fault (SIGSEGV). The only way around this is to use versions of
+the string functions that perform byte references instead of word references.
 
 
 MEMORY USAGE AND EXECUTION SPEED:
 
-Since DUMA uses at least two virtual memory pages for each of its allocations,
+Since DUMA `uses at least two virtual memory pages for each` of its allocations,
 it's a terrible memory hog. I've sometimes found it necessary to add a swap
   file using swapon(8) so that the system would have enough virtual memory to
   debug my program. Also, the way we manipulate memory results in various
   cache and translation buffer entries being flushed with each call to malloc
-  or free.  The end result is that your program will be much slower and use
-  more resources while you are debugging it with DUMA.
+  or free. 
 
-The Linux kernel also limits the number of different page mappings per process.
+`The end result is that program will be much slower and use more resources`
+while you are debugging it with DUMA.
+
+
+The Linux kernel limits the number of different page mappings `per process`
 
 Have a look for
 
@@ -10078,10 +10463,49 @@ f.e. under
 http://www.redhat.com/docs/manuals/enterprise/RHEL-4-Manual/en-US/Reference_Guide/s3-proc-sys-vm.html
 You may have to increase this value to allow debugging with DUMA with a
 command like:
-"sudo sysctl -w vm.max_map_count=1000000"
+sudo sysctl -w vm.max_map_count=1000000
+sysctl -w vm.max_map_count=1000000
+
+note: From mips platform
+-sh-3.2# cat /proc/sys/vm/max_map_count
+65536
 
 Don't leave libduma.a linked into production software! Use it only for
 debugging. See section 'COMPILATION NOTES FOR RELEASE/PRODUCTION' below.
+
+
+MEMORY LEAK DETECTION:
+
+
+All memory allocation is protocoled from DUMA together with the filename and
+linenumber of the calling function. The atexit() function checks if each
+allocated memory block was freed. To disable leak detection add the
+`preprocessor definition` 'DUMA_SO_NO_LEAKDETECTION' or
+'DUMA_LIB_NO_LEAKDETECTION' to DUMA_OPTIONS in Makefile.
+
+note:
+Seems no use.
+
+If a leak is reported without source filename and line number but is
+reproducible with the same pointer, set a conditional breakpoint on the
+function 'void * duma_alloc_return( void * address)' f.e. with gdb command
+'break duma_alloc_return if address==0x123'
+
+note:
+This is a tip when know the exact address
+
+
+C++ MEMORY OPERATORS AND LEAK DETECTION:
+
+Macros for "new" and "delete" are defined in dumapp.h. These macros give
+filename and linenumber of the calling functions to DUMA, thus allowing the
+same leak detection reports as for malloc and free. 'dumapp.h' needs to be
+included from your source file(s).
+
+For disabling the C++ new/delete/new[] and delete[] operators, add the
+preprocessor definition 'DUMA_NO_CPP_SUPPORT' to DUMA_OPTIONS in Makefile.
+
+note: shall disable
 
 
 <readme-files>
@@ -10099,13 +10523,13 @@ CHANGES         text file listing done CHANGES
 
 duma.h          belongs to dumalib
                 this header file should be included from within YOUR C source
-dumapp.h        belongs to dumalib
-                this header file should be included from within YOUR C++ source
+// dumapp.h        belongs to dumalib
+//                 this header file should be included from within YOUR C++ source
 duma.c          belongs to dumalib
                 contains malloc/free/.. functions
-dumapp.cpp      belongs to dumalib
-                contains C++ new/delete/.. functions redirecting them
-                  to ANSI C malloc/free
+// dumapp.cpp      belongs to dumalib
+//                 contains C++ new/delete/.. functions redirecting them
+//                   to ANSI C malloc/free
 
 // note: not exist in souce
 // page.c          belongs to dumalib
@@ -10122,9 +10546,9 @@ tstheap.c       belongs to tstheap
                 small test program; checks wether dumalib's heap does its job
                 should report many memory leaks after execution.
 Makefile        Makefile for UNIX/Linux/..
-duma.3          source for UNIX man page
-duma.sh         script for UNIX/Linux to start other programs using the
-                  LD_PRELOAD mechanism
+// duma.3          source for UNIX man page
+// duma.sh         script for UNIX/Linux to start other programs using the
+//                   LD_PRELOAD mechanism
 
 
 <features>
@@ -10368,7 +10792,7 @@ int func_double_free()
 
 
 ={============================================================================
-*kt_linux_tool_100* tool-efence-dmalloc
+*kt_linux_tool_100* tool-efence-dml
 
 {DML}
 Purpose        User dynamic Memory Accounting
@@ -10562,7 +10986,7 @@ AddressSanitizer is based on compiler instrumentation and directly-mapped
 shadow memory. 
 
 AddressSanitizer is a part of LLVM starting with version 3.1 and a part of GCC
-starting with version 4.8
+starting with version `4.8`
 
 note:
 Being built as a part of gcc build and as a shared library.
@@ -18740,6 +19164,19 @@ to inspect over the course of the run
 (gdb) info disp 	" to list disps
 
 
+{gdb-set}
+can 'set' them to better values using the p command, since it can print the
+value of any expression that expression can include subroutine calls and
+assignments. set new value and continue to see if it fixes the bug.
+
+(gdb) p len lquote=strlen(lquote)
+$5 = 7
+(gdb) p len rquote=strlen(rquote)
+$6 = 9
+(gdb) c
+Continuing.
+
+
 ={============================================================================
 *kt_linux_tool_300* gdb-exam: between address and code
 
@@ -22092,26 +22529,6 @@ expose<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::db
 
 ={============================================================================
 *kt_linux_tool_300* gdb-print-gdb-set
-
-{gdb-print}
-p (print) to see their values.
-
-(gdb) p len lquote
-$3 = 9
-(gdb) p len rquote
-$4 = 7
-
-{gdb-set}
-can 'set' them to better values using the p command, since it can print the
-value of any expression that expression can include subroutine calls and
-assignments. set new value and continue to see if it fixes the bug.
-
-(gdb) p len lquote=strlen(lquote)
-$5 = 7
-(gdb) p len rquote=strlen(rquote)
-$6 = 9
-(gdb) c
-Continuing.
 
 
 ={============================================================================
