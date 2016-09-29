@@ -5,6 +5,87 @@ kt.dev.si
 /^[#=]{
 Use #{ for a group and ={ for a item
 
+={============================================================================
+|kt_si_log_0001| D12: Release 12 - 84.48 (23/09/16)
+
+/**
+ * @brief Write the programme instance object to the database.
+ *
+ * @param[in]      p_prog_inst_object              The programme instance to write to the database.
+ * @param[in]      p_service_object                The DBC service object of the service showing the event.
+ * @param[out]     p_db_write_occurred             Set to true if the programme instance was written to the database.
+ * @param[in,out]  p_sim_pi_xsi_pf_user_data       SIM PI XSI user data.
+ *
+ * @retval #SIM_STATUS_OK      If successful.
+ * @retval #SIM_STATUS_FAILED  Otherwise.
+ */
+static SIM_STATUS SIM_pi_xsi_pf_WritePIToDB(SIM_DBC_PROG_INST_OBJECT           *p_prog_inst_object,
+                                            const SIM_DBC_SERVICE_OBJECT       *p_service_object,
+                                            bool                               *p_db_write_occurred,
+                                            SIM_PI_XSI_PF_PROCESSING_USER_DATA *p_sim_pi_xsi_pf_user_data)
+{
+  if (SIM_FLAG_ISSET(p_sim_pi_xsi_pf_user_data->p_mc_context->flags, SIM_PI_MC_CONTEXT_UNALIGNED_SCHEDULE))
+  {
+    /* PIs are not usually updated from the EIT-PF if the schedule is unaligned.
+       The exception is when we want to update the synopsis information only. For
+       example, when a secondary free-to-air network exists its EIT-PF synopsis
+       may be different and more accurate than the home network's synopsis information. */
+    status = SIM_pi_xsi_pf_UpdateUnalignedPI(p_prog_inst_object,
+        p_sim_pi_xsi_pf_user_data->present,
+        p_service_object->service_object_id,
+        p_db_write_occurred);
+    if (SIM_STATUS_OK != status)
+    {
+      SIM_TB_LOG_ERROR(("SIM_pi_xsi_pf_UpdateUnalignedPI()="SIM_STATUS_STRING_NO_PREFIX" FAILED"));
+    }
+  }
+  else
+  {
+    if (SIM_STATUS_OK != SIM_DBC_MERGED_QUERY_GetMergeProfileFromSvcType(p_service_object->service_type,
+          &p_merge_profile))
+    {
+      SIM_TB_LOG_ERROR(("Could not find a merge profile for the service, default primary source is SIM_DB"));
+    }
+    else
+    {
+      primary_source = p_merge_profile->primary_source;
+    }
+  }
+}
+
+
+21026:NDS: ^[2016:09:20 10:26:24]0946688450.257308 !WARN   -SBMS_PVOD                   < p:0x0000019a P:MW t:0x01eb7520 T:SBM_SERVER M:sbm_server_pvod.c F:SBM_SERVER_VRM_INTERFACE_PVOD_JobStoppedOrFailed L:4348 > 
+  PVOD booking job job id 0x290037D8 going to be deleted due to premature ending! Schedule end time [2016:09:20 10:27:30]1474367250, actual end time [2016:09:20 10:26:22]1474367182, difference = -68s (10s max allowed)
+
+21047:NDS: ^[2016:09:20 10:26:24]0946688450.689724 !WARN   -PLANNER                     < p:0x0000019c P:APP t:0x01500520 T:PLANNER_CB4 M:planner_list_element.c F:PLANNER_ListElement_UnravelData L:691 > 
+  Booking 0x290037D8 not found
+
+
+NDS: ^[2016:09:20 10:38:29]0946689175.612869 !ERROR  -SU09         		< p:0x0000019a P:MW t:0x01f14520 T:SBM_UB_MAIN M:sim_ipc_serialization_client_legacy.c F:SIM_IPC_SRZ_C_LEGACY_GetStringAttribute L:214 > Attribute (0x087020034) not available 
+NDS: ^[2016:09:20 10:38:29]0946689175.612895 !ERROR  -SU09         		< p:0x0000019a P:MW t:0x01f14520 T:SBM_UB_MAIN M:sim_ipc_serialization_client_legacy.c F:SIM_IPC_SRZ_C_LEGACY_GetIntegerAttribute L:153 > Attribute (0x087010033) not available 
+NDS: ^[2016:09:20 10:38:29]0946689175.617457 !WARN   -SC00         		< p:0x0000019a P:MW t:0x01f14520 T:SBM_UB_MAIN M:sim_si_odecoder.c F:SIM_ODECODER_ObjectGetByteArrayAttribute L:274 > Byte array index 0 is out of the array boundary limit 0 
+NDS: ^[2016:09:20 10:38:29]0946689175.617477 !WARN   -SC00         		< p:0x0000019a P:MW t:0x01f14520 T:SBM_UB_MAIN M:sim_si_service.c F:SIM_SI_Service_GetByteArrayProperty L:98 > SIM_ODECODER_ObjectGetByteArrayAttribute(propid=0x60c001e) FAILED 
+NDS: ^[2016:09:20 10:38:29]0946689175.617497 !ERROR  -SBMS_USERBOOKING		< p:0x0000019a P:MW t:0x01f14520 T:SBM_UB_MAIN M:sbm_server_ub_addbookedprogramme.c F:SBM_USERBOOKING_AddBooking_GetServiceProps L:2766 > Service Extension property not available 
+NDS: ^[2016:09:20 10:38:29]0946689175.619868 !WARN   -SQ08         		< p:0x0000019a P:MW t:0x019b6520 T:SIM_SC_IPC_SERVER_THREAD M:sim_dbc_merged_query.c F:SIM_DBC_MERGED_QUERY_GetMergeProfileFromSvcType L:1818 > Merge profile not configured for svc_type = 1 
+NDS: ^[2016:09:20 10:38:29]0946689175.619888 !ERROR  -SQ08         		< p:0x0000019a P:MW t:0x019b6520 T:SIM_SC_IPC_SERVER_THREAD M:sim_dbc_merged_query.c F:SIM_DBC_MERGED_QUERY_GetMergeProfileFromLocator L:1787 > SIM_DBC_MERGED_QUERY_GetMergeProfileFromSvcType()=""0x00010004 
+
+
+<retest-error>
+dont show popup.
+http://theyard.uk.nds.com/si_logs/translation/darwin_0019fbd5a088_98bd744b6e22780585d9e0383e2e2bf0/
+
+10405:NDS: ^[2016:09:28 08:56:23]0946686012.092712 !WARN   -PLANNER      		< p:0x000001df P:APP t:0x01500520 T:PLANNER_CB4 M:planner_list_element.c F:PLANNER_ListElement_UnravelData L:691 > Booking 0x2900116F not found 
+10406:NDS: ^[2016:09:28 08:56:23]0946686012.092752 !ERROR  -PLANNER                     < p:0x000001df P:APP t:0x01500520 T:PLANNER_CB4 M:planner_bookedprogramme_properties.c F:PLANNER_BookedProgramme_GetInternalDataAndValidatePropID L:1320 > Call to PLANNER_ListElement_ExtractBookingData failed
+10407:NDS: ^[2016:09:28 08:56:23]0946686012.092773 !ERROR  -PLANNER                     < p:0x000001df P:APP t:0x01500520 T:PLANNER_CB4 M:planner_bookedprogramme_subclass.c F:PLANNER_BookedProgramme_Subclass_CheckSubclassSupportsProperty L:3045 > The booked programme subclass value 0 is not valid
+10408:NDS: ^[2016:09:28 08:56:23]0946686012.092813 !ERROR  -PLANNER                     < p:0x000001df P:APP t:0x01500520 T:PLANNER_CB4 M:planner_bookedprogramme.c F:PLANNER_API_BookedProgramme_GetPropertyUint32 L:260 > Call to PLANNER_BookedProgramme_GetInternalDataAndValidatePropID failed
+
+10972:NDS: ^[2016:09:28 08:58:20]0946686129.554039 !MIL    -EPG_MISC                    < p:0x000001df P:APP t:0x2bfeb520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "RECORD","title": "Key Press RECORD","label": "","currentscreen": "Entering grid: //TV Guide/All Channels"}
+
+<retest-okay>
+show popup.
+
+http://theyard.uk.nds.com/si_logs/translation/darwin_0019fbd5a088_ede3d21592e7a50d5665e3f7a4dfac2a/
+
 
 ={============================================================================
 |kt_si_log_0001| D12: Release 12 - 84.48 (23/09/16)
@@ -86,6 +167,218 @@ NDS: ^[2016:09:25 16:27:02]0946861618.409104 !WARN   -MSM_MS       		< p:0x00000
 NDS: ^[2016:09:25 16:27:02]0946861618.409123 !WARN   -MSM_MS       		< p:0x000001f6 P:MW t:0x018d9520 T:EVENT_MGR_THREAD M:diagnostic.cpp F:(HandleStreamingMonitorTimerTick) L:994 > < splicer=0xef hMC=0xf3 >" "-MS_DIAGNOSTIC- buffer is above threshold - pumping (CDI) might be stuck 
 
 445848: rebooted
+
+
+<2>
+richardsargent 
+
+http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb0bc80e_f528d6f319559a21c75d583780994eac/
+
+293979	 [2016:09:26 06:12:45] NUMERIC_FOUR
+293994 **** The user is within BANNER section ****
+294023	 [2016:09:26 06:12:45] NUMERIC_FOUR
+294044	 [2016:09:26 06:12:46] NUMERIC_FOUR
+
+
+// booking-job-id in PCAT
+
+>>> hex(688316759) '0x2906e157'
+Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence               |s66709|    0|  1|Sky Arts            |     0| 0.25|        |UNDF  |    |688316759
+
+283736:NDS: ^[2016:09:26 06:06:52]0946791751.610705 !MIL    -EPG_TVVM     		< p:0x000001f6 P:APP t:0x2df8b520 T:no name M:ServiceInfo F:doProgrammeChanged L:1341 > T:PooledExecutor#1:PICASSODEV-19255 ServiceInfo.doProgrammeChanged Programme Matches current event in Banner: Anna Scher: In Confidence
+284172:NDS: ^[2016:09:26 06:07:03]0946791762.218972 !MIL    -EPG_MISC     		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "StartAgain","action": "Download","title": "Anna Scher: In Confidence","label": "Title:Anna Scher: In Confidence;State:NOT_BOOKED;Type:Ents","currentscreen": "/tv/live/121/start_again_mini_banner"}
+
+284223:NDS: ^[2016:09:26 06:07:05]!MIL    -PCATS   P:MW T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_CommitJob L:3077 > client id = 0x5, `bookingJobID = 0x2906e157`
+
+284225:NDS: ^[2016:09:26 06:07:05]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 3 (CREATED) to 4 (COMMITED) 
+284228:NDS: ^[2016:09:26 06:07:05]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040) 
+284229:NDS: ^[2016:09:26 06:07:05]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001) 
+
+284252:NDS: ^[2016:09:26 06:07:05]0946791764.718154 !MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:null->"Anna Scher: In Confidence" 
+  firstStatus:UNKNOWN->SCHEDULED firstFailureReason:100->0 firstIsDpl:false->true
+
+284266:NDS: ^[2016:09:26 06:07:06]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001) 
+284267:NDS: ^[2016:09:26 06:07:06]!WARN   -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Override_Active_Job L:2255 > Replacing active job: [tag=R2D-A ; id=0x00000173 ; job_id=0xCA278008] 
+284320:NDS: ^[2016:09:26 06:07:08]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 4 (COMMITED) to 1 (STARTED) 
+284428:NDS: ^[2016:09:26 06:07:09]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_1_DPL_DOWNLOAD_RESPONSE 
+
+284331:NDS: ^[2016:09:26 06:07:09]0946791768.123394 !MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+  firstStatus:SCHEDULED->PREPARING_DOWNLOAD firstFailureReason:0->100 firstIsDpl:true
+
+284433:NDS: ^[2016:09:26 06:07:10]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_2_DPL_DOWNLOAD_TOC 
+284448:NDS: ^[2016:09:26 06:07:11]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_3_DPL_OECM_IMPORT 
+284463:NDS: ^[2016:09:26 06:07:12]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_4_DPL_CATALOG_DL 
+284502:NDS: ^[2016:09:26 06:07:13]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_5_DPL_INDEX_DL 
+284504:NDS: ^[2016:09:26 06:07:13]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_JOB_STARTED](0x63000004) 
+
+284548:NDS: ^[2016:09:26 06:07:16]0946791775.559026 !MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+  firstStatus:PREPARING_DOWNLOAD->DOWNLOADING_BUT_NOT_AVAILABLE firstFailureReason:100 firstIsDpl:true
+
+284602:NDS: ^[2016:09:26 06:07:20]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_6_DPL_INDEX_IMPORT_START_DL 
+
+284667:NDS: ^[2016:09:26 06:07:35]0946791794.901767 !MIL    -EPG_MISC     		< p:0x000001f6 P:APP t:0x2dfd6520 T:no name M:MilestoneNotifier F:send L:21 > T:PooledExecutor#4:{"category": "PDLDOWNLOAD","action": "","title": "PDLDOWNLOAD took 21357ms","label": "isDPL:true,Title:Anna Scher: In Confidence,sizeKB:10985","currentscreen": "/tv/live/121"}
+
+284673:NDS: ^[2016:09:26 06:07:36]0946791795.062493 !MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+  firstStatus:DOWNLOADING_BUT_NOT_AVAILABLE->DOWNLOADING_AND_AVAILABLE firstFailureReason:100 firstIsDpl:true
+
+285228:NDS: ^[2016:09:26 06:09:40]0946791919.700101 !MIL    -EPG_MISC     		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "StartAgain","action": "Play","title": "Anna Scher: In Confidence","label": "Title:Anna Scher: In Confidence;State:DOWNLOADING_AND_AVAILABLE;Type:Ents","currentscreen": "/tv/live/121/banner"}
+285716:NDS: ^[2016:09:26 06:09:43]0946791922.139818 !MIL    -EPG_PLAY     		< p:0x000001f6 P:APP t:0x2df8b520 T:no name M:AutoPlayMilestoneControl F:sessionStarted L:94 > T:PooledExecutor#1:AutoPlay - current playing Anna Scher: In Confidence
+285844:NDS: ^[2016:09:26 06:09:44]0946791923.546398 !MIL    -EPG_MISC     		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/playback/pdl/Anna Scher: In Confidence"}
+
+293484:NDS: ^[2016:09:26 06:12:15]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 1 (STARTED) to 5 (STOPPED) 
+293485:NDS: ^[2016:09:26 06:12:15]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 5 (STOPPED) to 4 (COMMITED) 
+293487:NDS: ^[2016:09:26 06:12:15]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_JOB_STOPPED](0x63000080) 
+293489:NDS: ^[2016:09:26 06:12:15]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040) 
+
+293512:NDS: ^[2016:09:26 06:12:16]0946792075.516242 !MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence"->"Fish Town" 
+  firstStatus:DOWNLOADING_AND_AVAILABLE->SCHEDULED firstFailureReason:100->0 firstIsDpl:true->false
+
+293610:NDS: ^[2016:09:26 06:12:19]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001) 
+
+293657:NDS: ^[2016:09:26 06:12:21]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 4 (COMMITED) to 1 (STARTED) 
+293658:NDS: ^[2016:09:26 06:12:21]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_JOB_STARTED](0x63000004) 
+
+293665:NDS: ^[2016:09:26 06:12:21]0946792080.994865 !MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+  firstStatus:PART_SCHEDULED->DOWNLOADING_AND_AVAILABLE firstFailureReason:100 firstIsDpl:true
+
+293683:NDS: ^[2016:09:26 06:12:23]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_2_DPL_DOWNLOAD_TOC 
+293698:NDS: ^[2016:09:26 06:12:24]!MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_4_DPL_CATALOG_DL 
+294378:NDS: ^[2016:09:26 06:13:00]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 1 (STARTED) to 5 (STOPPED) 
+294379:NDS: ^[2016:09:26 06:13:00]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 5 (STOPPED) to 4 (COMMITED) 
+294381:NDS: ^[2016:09:26 06:13:00]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_JOB_STOPPED](0x63000080) 
+294383:NDS: ^[2016:09:26 06:13:00]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040) 
+
+294455:NDS: ^[2016:09:26 06:13:01]0946792120.586161 !MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence"->"Fish Town" 
+  firstStatus:DOWNLOADING_AND_AVAILABLE->PREPARING_DOWNLOAD firstFailureReason:100 firstIsDpl:true->false
+
+NDS: ^[2016:09:26 06:13:43]0946792162.100718 !MIL    -EPG_MISC     		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ColourButtonAction","action": "YELLOW_DELETE","title": "Colour Button to: YELLOW_DELETE","label": "","currentscreen": "Entering grid: //Planner/All"}
+NDS: ^[2016:09:26 06:13:43]0946792162.121739 !MIL    -EPG_KEY      		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:KeyEventValve F:open L:167 > T:CEE-J EventQueue Reader 0:Legacy activity has opened the KeyEventValve.
+NDS: ^[2016:09:26 06:13:43]0946792162.122091 !MIL    -EPG_LIST     		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:CommonBookedItem F:lockState L:952 > T:CEE-J EventQueue Reader 0:The state of this item is now locked to DELETING
+NDS: ^[2016:09:26 06:13:43]0946792162.123934 !MIL    -EPG_KEY      		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:Activity F:start L:45 > T:CEE-J EventQueue Reader 0:start activity (NamedActivity(DELETE_BOOKING)@5a7154d)
+NDS: ^[2016:09:26 06:13:43]0946792162.124406 !MIL    -EPG_KEY      		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:KeyEventValve F:activate L:145 > T:CEE-J EventQueue Reader 0:Added NamedActivity(DELETE_BOOKING)@5a7154d to live activities
+NDS: ^[2016:09:26 06:13:43]0946792162.127759 !MIL    -EPG_BOOK     		< p:0x000001f6 P:APP t:0x2dfbd520 T:no name M:BookingAgent F:doRemoveBookedProgramme L:1517 > T:PooledExecutor#3:Removing booking with middleware removeBookedProgramme
+
+296049:NDS: ^[2016:09:26 06:13:43]!WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 4 (COMMITED) to 5 (STOPPED) 
+296050:NDS: ^[2016:09:26 06:13:43]!MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_JOB_STOPPED](0x63000080) 
+
+
+>>> hex(688316799) '0x2906e17f'
+Seen|PDL |2016:09:26 06:13:02|2016:09:26 06:14:01|Fish Town                               |s66714|    0|  1|Sky Atlantic        |     0| 0.04|        |UNDF  |    |688316799
+
+
+293446:NDS: ^[2016:09:26 06:12:14]!MIL    -PCATS   P:MW T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_CommitJob L:3077 > client id = 0x5, `bookingJobID = 0x2906e17f` 
+
+// 
+293448:NDS: ^[2016:09:26 06:12:14]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 3 (CREATED) to 4 (COMMITED) 
+293451:NDS: ^[2016:09:26 06:12:15]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040) 
+293490:NDS: ^[2016:09:26 06:12:15]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001) 
+293532:NDS: ^[2016:09:26 06:12:17]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 4 (COMMITED) to 1 (STARTED) 
+293559:NDS: ^[2016:09:26 06:12:19]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 1 (STARTED) to 7 (NETWORK_ERROR) 
+293560:NDS: ^[2016:09:26 06:12:19]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[CTM_STATUS_CONNECTION_LOST](0x63000400) 
+293609:NDS: ^[2016:09:26 06:12:19]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 7 (`NETWORK_ERROR`) to 5 (STOPPED) 
+293613:NDS: ^[2016:09:26 06:12:19]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 5 (STOPPED) to 2 (FAILED) 
+293615:NDS: ^[2016:09:26 06:12:19]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[CTM_STATUS_JOB_FAILED](0x63000010) 
+
+293637:NDS: ^[2016:09:26 06:12:20]0946792079.238028 !MIL    -`EPG_NET`      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Fish Town"->"Anna Scher: In Confidence" 
+  `firstStatus:FAILED`->PART_SCHEDULED firstFailureReason:`53`->100 firstIsDpl:false->true
+
+294332:NDS: ^[2016:09:26 06:12:59]0946792118.499295 !MIL    -EPG_MISC     		< p:0x000001f6 P:APP t:0x2bfeb520 T:no name M:MilestoneNotifier F:send L:21 > 
+  T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "GREEN","title": "Key Press GREEN","label": "","currentscreen": "/tv/live/108/banner"}
+
+294341:NDS: ^[2016:09:26 06:12:59]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 2 (FAILED) to 4 (COMMITED) 
+294342:NDS: ^[2016:09:26 06:12:59]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040) 
+294384:NDS: ^[2016:09:26 06:13:00]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001) 
+294413:NDS: ^[2016:09:26 06:13:00]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 4 (COMMITED) to 1 (STARTED) 
+294466:NDS: ^[2016:09:26 06:13:01]!MIL    -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xff078009 step CTM_JOB_STEP_1_TOC_DL 
+
+294470:NDS: ^[2016:09:26 06:13:02]!MIL    -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xff078009 step CTM_JOB_STEP_2_TOC_IMPORT_AND_OECM_DL 
+// ctm job creates vrm import job?
+294471:NDS: ^[2016:09:26 06:13:02]!MIL    -VRM_SERVER P:MW T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: VRM_IMP_OBJECT_0x50004: VRM_IMP_OBJECT_INT_STATE_NULL -> (VRM_IMP_OBJECT_STATE_INPUT_CREATED) -> VRM_IMP_OBJECT_INT_STATE_CREATED 
+
+294477:NDS: ^[2016:09:26 06:13:03]!MIL    -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xff078009 step CTM_JOB_STEP_3_OECM_IMPORT_AND_INDEX_DL 
+294481:NDS: ^[2016:09:26 06:13:03]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[CTM_STATUS_JOB_STARTED](0x63000004) 
+
+// this is why it is `seen`
+294939:NDS: ^[2016:09:26 06:13:19]!MIL    -MSM     P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4410 > 
+  MSM_DEVICEMAN_Open for playback: " "hMC=0xad, `shrec=s66714`, vfile=0x500147de Starts...  
+
+296211:NDS: ^[2016:09:26 06:14:02]!MIL    -VRM_SERVER P:MW T:CTM_SVR_HANDLEREQUESTS M:fsm.c F:FSMRun L:921 > VRM-FSM: VRM_IMP_SESSION_0x5: VRM_IMP_SESSION_INT_STATE_COMPLETED -> (VRM_IMP_SESSION_STATE_INPUT_DESTROYED) -> VRM_IMP_SESSION_INT_STATE_NULL 
+
+296215:NDS: ^[2016:09:26 06:14:02]!WARN   -CTM_SVR P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xff078009 (Type = 0) from 1 (STARTED) to 5 (STOPPED) 
+296216:NDS: ^[2016:09:26 06:14:02]!MIL    -DLM_SVR P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xFF078009] ; ctm_status=[CTM_STATUS_JOB_STOPPED](0x63000080) 
+
+
+<3>
+
+// 2016-09-24 05:56:00     R015.084.48.00U RaiPDRX890SNUG  darwin_0019fb5b82fe_a4b36f19f86755dcbc647252918ebc0e.tgz
+// 2016-09-25 05:54:00     R015.084.48.00U RaiPDRX890SNUG  darwin_0019fb5b82fe_bbd4315d0e64503f4117141f74e6820d.tgz
+// 2016-09-25 17:22:00     R015.084.48.00U RaiPDRX890SNUG  darwin_0019fb5b82fe_dfdc28be197942d63f2d3dd6bdd59594.tgz
+
+
+<4>
+chrisbassett 
+
+First episode of box set download failed - Subscription needed
+
+Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fb0f3cf9_8ecfd595718a8f45f96bb976a0222f8c/index.html
+
+Purchased Breaking Bad Season 2 Box Set. Went off to watch another recorded
+event in Planner. Came back to Planner and S2 Ep1 of Breaking Bad was marked
+as "Failed Rec: Subscription needed". S2 Ep2 has successfully downloaded.
+Pressed (R) to resume download and it started to download with no problems.
+
+2016-09-23 23:57:00     R015.084.45.00U BassettCAms895R8SNUG    darwin_0019fb0f3cf9_6764f0ef06450fc6fc4849c1a3297496.tgz
+2016-09-28 09:40:00     R015.084.48.00U BassettCAms895R8SNUG    darwin_0019fb0f3cf9_8ecfd595718a8f45f96bb976a0222f8c.tgz
+
+// LOGlastrun_realtime_f8c
+687141:NDS: ^[2016:09:27 20:25:18]0947021598.735527 !MIL    -EPG_NET                    < p:0x000001eb P:APP t:0x2e03a520 T:no name M:HttpNotifier F:send L:31 > d3=508273075&cd4=off&cd5=off&de=UTF-8&t=event&cd=%2Fanytime&ec=AssetAction&el=Title%3DBreaking+Bad+Season+2%3BState%3DNOT_BOOKED%3Btemplatename%3DViewBuyAndKeepBoxSet&ea=SELECT
+
+687513:NDS: ^[2016:09:27 20:25:37]0947021617.188817 !MIL    -PCATS        		< p:0x000001e9 P:MW t:0x01f1b520 T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_CommitJob L:3077 > 
+  client id = 0x5,bookingJobID = 0x2b078dec 
+
+0x2b078dec, 721915372 (NOT SEEN PCAT)
+
+687640:NDS: ^[2016:09:27 20:25:38]0947021618.797543 !MIL    -PCATS        		< p:0x000001e9 P:MW t:0x01f1b520 T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_CommitJob L:3077 > 
+  client id = 0x5,bookingJobID = 0x29078dee 
+
+0x29078dee, 688360942 
+Seen|PDL |2016:09:27 21:03:09|2016:09:27 21:17:47|Breaking Bad                            |s72715|    0|100|Sky Store HD        |     0| 2.09|        |UNDF  |    |688360942
+
+
+687645:NDS: ^[2016:09:27 20:25:38]0947021618.912094 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > 
+  ctm_job=[0x46C7800F] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040)
+
+687646:NDS: ^[2016:09:27 20:25:38]0947021618.912139 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001)
+
+687642:NDS: ^[2016:09:27 20:25:38]0947021618.837120 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > 
+  Transition : CTM job 0x46c7800f (Type = 0) from 3 (CREATED) to 4 (COMMITED)
+
+687645:NDS: ^[2016:09:27 20:25:38]0947021618.912094 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040)
+687646:NDS: ^[2016:09:27 20:25:38]0947021618.912139 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001)
+687757:NDS: ^[2016:09:27 20:25:39]0947021619.802898 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0x46c7800f (Type = 0) from 4 (COMMITED) to 1 (STARTED)
+687861:NDS: ^[2016:09:27 20:25:42]0947021622.426710 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0x46c7800f (Type = 0) from 1 (STARTED) to 7 (NETWORK_ERROR)
+687862:NDS: ^[2016:09:27 20:25:42]0947021622.435288 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[CTM_STATUS_CONNECTION_LOST](0x63000400)
+
+687911:NDS: ^[2016:09:27 20:25:43]0947021623.097992 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > 
+  Transition : CTM job 0x46c7800f (Type = 0) from 7 (NETWORK_ERROR) to 5 (STOPPED)
+
+687913:NDS: ^[2016:09:27 20:25:43]0947021623.166277 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0x46c7800f (Type = 0) from 5 (STOPPED) to 2 (FAILED)
+687916:NDS: ^[2016:09:27 20:25:43]0947021623.218735 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[CTM_STATUS_JOB_FAILED](0x63000010)
+
+702255:NDS: ^[2016:09:27 21:03:01]0947023861.704355 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > 
+  Transition : CTM job 0x46c7800f (Type = 0) from 2 (FAILED) to 4 (COMMITED)
+
+702258:NDS: ^[2016:09:27 21:03:01]0947023861.794559 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040)
+702259:NDS: ^[2016:09:27 21:03:01]0947023861.794691 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001)
+702321:NDS: ^[2016:09:27 21:03:02]0947023862.745579 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0x46c7800f (Type = 0) from 4 (COMMITED) to 1 (STARTED)
+702355:NDS: ^[2016:09:27 21:03:04]0947023864.848102 !MIL    -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0x46c7800f step CTM_JOB_STEP_1_TOC_DL
+702356:NDS: ^[2016:09:27 21:03:04]0947023864.899559 !MIL    -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0x46c7800f step CTM_JOB_STEP_2_TOC_IMPORT_AND_OECM_DL
+702360:NDS: ^[2016:09:27 21:03:05]0947023865.728905 !MIL    -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0x46c7800f step CTM_JOB_STEP_3_OECM_IMPORT_AND_INDEX_DL
+702364:NDS: ^[2016:09:27 21:03:05]0947023865.760516 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[CTM_STATUS_JOB_STARTED](0x63000004)
+706256:NDS: ^[2016:09:27 21:17:43]0947024743.055023 !MIL    -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0x46c7800f step CTM_JOB_STEP_4_INDEX_IMPORT_AND_CONTENT_DL
+706272:NDS: ^[2016:09:27 21:17:43]0947024743.391869 !WARN   -CTM_SVR                    < p:0x000001e9 P:MW t:0x01dbb520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > 
+  Transition : CTM job 0x46c7800f (Type = 0) from 1 (STARTED) to 0 (COMPLETED)
+706275:NDS: ^[2016:09:27 21:17:43]0947024743.512523 !MIL    -DLM_SVR                    < p:0x000001e9 P:MW t:0x01f29520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0x46C7800F] ; ctm_status=[CTM_STATUS_JOB_COMPLETED](0x63000002)
 
 
 ={============================================================================
