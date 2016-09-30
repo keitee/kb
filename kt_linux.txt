@@ -10620,6 +10620,20 @@ DUMA_PROTECT_BELOW - DUMA usually places an inaccessible page immediately after
 //     _duma_s.SKIPCOUNT_INIT = 10000;
 // #endif
 
+void * malloc(size_t size)
+{
+  return _duma_malloc(size  DUMA_PARAMS_UK);
+}
+
+// _duma_g.allocList is set in _duma_init()
+void * _duma_malloc(size_t size  DUMA_PARAMLIST_FL)
+{
+  if ( _duma_g.allocList == 0 )
+    _duma_init();  /* This sets DUMA_ALIGNMENT, DUMA_PROTECT_BELOW, DUMA_FILL, ... */
+
+  return _duma_allocate();
+}
+
 
 DUMA_EXPLICIT_INIT
 
@@ -10631,8 +10645,9 @@ DUMA_EXPLICIT_INIT
 //
 // See Also: duma_init
 //
-// _duma_init is called from _duma_malloc() and others. so set DUMA_EXPLICIT_INIT
-// and then duma_int() will be external, and _duma_init will call it.
+// _duma_init is full initialization, is called from _duma_malloc() and
+// others. so set DUMA_EXPLICIT_INIT and then duma_int() will be external, and
+// _duma_init will call it.
 
 
 DUMA_FILL - When set to a value between 0 and 255, every byte of allocated
@@ -10909,6 +10924,23 @@ DUMA_OPTIONS += -DUMA_NO_PROTECT_FREE
 
 
 <readme-files>
+
+SubDirectories:
+---------------
+
+// note: removed
+// win32-vide/*    project files for VIDE 1.24 (see http://www.objectcentral.com)
+//                 using the Borland C++ Builder 5.5 compiler
+//                 (FreeCommandLineTools, see http://www.borland.com)
+// win32-devcpp/*  project files for Dev-C++ 4.9.6 (see http://www.bloodshed.net)
+//                 using the gcc compiler (see http://gcc.gnu.org)
+// win32-msvc/*    projects files for Microsoft Visual C++ 6.0 IDE/compiler
+//                 (see http://www.microsoft.com)
+// debian/*        don't know; maybe some files for the Debian Linux distribution?
+// detours/        microsoft detours related
+// kduma/          This is the begining of a linux kernel model duma.
+
+
 Projects:
 ---------
 dumalib         DUMA library. this library should be linked with YOUR program
@@ -11018,6 +11050,61 @@ testmain: argv[1]
 
 === DUMA: KIT: _duma_allocate
 Segmentation fault (core dumped)
+
+
+<global-malloc>
+When use #define DUMA_NO_GLOBAL_MALLOC_FREE, define _duma_xxx ones and use
+preprocessor scheme.
+
+0000337c T _duma_free
+00004068 D _duma_g
+000013f0 T _duma_init
+00000750 t _duma_init_slack
+00003204 T _duma_malloc
+
+// duma.h
+      #define malloc(SIZE)                _duma_malloc(SIZE, __FILE__, __LINE__)
+      #define calloc(ELEMCOUNT, ELEMSIZE) _duma_calloc(ELEMCOUNT, ELEMSIZE, __FILE__, __LINE__)
+
+Made a binary statically linked with libduma.a, saw the module(c file) calls
+the duma. However, not all the rest in the binary since other modules are not
+compiled with duma preprocessor on. How to address this?
+
+1. Find every single c files to build a binary and make sure that includes
+duma header and macro on?
+
+1. Find global header of malloc families and repalce it with duma one? But
+this make all binary(process) to use duma but not only one binary.
+
+
+When NOT use #define DUMA_NO_GLOBAL_MALLOC_FREE, this define malloc families
+in the libary.
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char **argv)
+{
+    int *x = malloc(10*sizeof(int));
+    free(x);
+    return x[5];
+}
+
+$ nm libduma.a.without.global.malloc | grep malloc
+35:00003204 T _duma_malloc
+
+$ nm out_duma | grep malloc
+35:         U malloc
+
+So not use duma. However, when use global mallocs,
+
+$ nm libduma.a | grep malloc
+35:00003268 T _duma_malloc
+60:00004108 T malloc
+
+$ nm out_duma | grep malloc
+55:00403f58 T _duma_malloc
+103:00404df8 T malloc
 
 
 ={============================================================================
@@ -37556,6 +37643,9 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 *kt_linux_core_400* uclibc
 
 http://www.uclibc.org/
+15 May 2012, uClibc 0.9.33.2 Released
+uClibc-0.9.33.2 was released today. 
+
 http://git.uclibc.org/uClibc/
 
 
