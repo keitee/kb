@@ -380,6 +380,7 @@
 |kt_linux_core_302|  case: analysis of 200 and 201 case
 |kt_linux_core_303|  case: msg q between threads
 
+*kt_linux_tchain_400* tchain-libc-musl
 *kt_linux_tchain_400* tchain-uclibc
 *kt_linux_tchain_400* tchain-uclibc-ld
 *kt_linux_tchain_400* tchain-uclibc-fail to find symbol
@@ -37731,6 +37732,12 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 
 
 ={============================================================================
+*kt_linux_tchain_400* tchain-libc-musl
+
+http://www.musl-libc.org/
+
+
+={============================================================================
 *kt_linux_tchain_400* tchain-uclibc
 
 http://www.uclibc.org/
@@ -37954,6 +37961,13 @@ host/
 contains the installation of tools compiled for the host that are needed for
 the proper execution of Buildroot, including the cross-compilation toolchain.
 
+
+note: host or target?
+Host system differs from what is used by GNU configure, where the host is the
+machine on which the application will run (which is usually the same as
+target)
+
+
 /broot-latest/buildroot-2016.08.1/output/host/usr/bin$ ./mips-buildroot-linux-uclibc-gcc --version
 mips-buildroot-linux-uclibc-gcc.br_real (Buildroot 2016.08.1) 4.9.4
 Copyright (C) 2015 Free Software Foundation, Inc.
@@ -38025,7 +38039,46 @@ For clang:
 /home/NDS-UK/kyoupark/asn/llvm/projects/compiler-rt/lib/asan
 
 
-{attempt-to-use-old-linux}
+{toolchain-selection}
+6.1.1 Internal toolchain backend
+
+Once you have selected this backend, a number of options appear. The most
+important ones allow to:
+
+Change the version of the Linux kernel headers used to build the toolchain.
+This item deserves a few explanations. In the process of building a
+cross-compilation toolchain, `the C library is being built` 
+
+This library provides the `interface` between userspace applications and the
+Linux kernel. In order to know how to "talk" to the Linux kernel, the C
+library needs to have access to the Linux kernel headers (i.e. the .h files
+    from the kernel), which define the interface between userspace and the
+kernel (system calls, data structures, etc.). 
+
+Since this interface is `backward compatible`, the version of the Linux kernel
+headers used to build your toolchain `do not need to match exactly`  the version
+of the Linux kernel you intend to run on your embedded system. 
+
+note: Why the version should be equal or older when say it's backward
+compatible?
+
+They only need to have a version equal or older to the version of the Linux
+kernel you intend to run. If you use kernel headers that are more recent than
+the Linux kernel you run on your embedded system, then the C library might be
+using interfaces that are not provided by your Linux kernel.
+
+
+It is worth noting that whenever one of those options is modified, then the
+entire toolchain and system must be rebuilt. See Section 8.2.
+
+Drawbacks of this backend:
+
+Rebuilding the toolchain is needed when doing make clean, which takes time. If
+you're trying to reduce your build time, consider using the External toolchain
+backend.
+
+
+<attempt-to-use-old-linux>
 
 <error>
 >>> linux-headers 2.6.18.8 Downloading
@@ -38134,6 +38187,321 @@ ERROR: Could not generate syscalls.
 Make sure that you have proper kernel headers.
 Your .config in KERNEL_HEADERS="" was set to:
 /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/linux-headers-2.6.18/usr/include/
+
+
+{make-help}
+8.1 make tips
+
+This is a collection of tips that help you make the most of Buildroot.
+
+Display all commands executed by make:
+$ make V=1 <target>
+
+Display the list of boards with a defconfig:
+$ make list-defconfigs
+
+Display all available targets:
+$ make help
+
+kyoupark@ukstbuild2:~/asn/broot-latest/buildroot-2016.08.1$ make help
+Cleaning:
+  clean                  - delete all files created by build
+  distclean              - delete all non-source files (including .config)
+
+Build:
+  all                    - make world
+  toolchain              - build toolchain
+
+Configuration:
+  menuconfig             - interactive curses-based configurator
+  nconfig                - interactive ncurses-based configurator
+  xconfig                - interactive Qt-based configurator
+  gconfig                - interactive GTK-based configurator
+  oldconfig              - resolve any unresolved symbols in .config
+  silentoldconfig        - Same as oldconfig, but quietly, additionally update deps
+  olddefconfig           - Same as silentoldconfig but sets new symbols to their default value
+  randconfig             - New config with random answer to all options
+  defconfig              - New config with default answer to all options
+                             BR2_DEFCONFIG, if set, is used as input
+  savedefconfig          - Save current config to BR2_DEFCONFIG (minimal config)
+  allyesconfig           - New config where all options are accepted with yes
+  allnoconfig            - New config where all options are answered with no
+  randpackageconfig      - New config with random answer to package options
+  allyespackageconfig    - New config where pkg options are accepted with yes
+  allnopackageconfig     - New config where package options are answered with no
+
+Package-specific:
+  <pkg>                  - Build and install <pkg> and all its dependencies
+  <pkg>-source           - Only download the source files for <pkg>
+  <pkg>-extract          - Extract <pkg> sources
+  <pkg>-patch            - Apply patches to <pkg>
+  <pkg>-depends          - Build <pkg>'s dependencies
+  <pkg>-configure        - Build <pkg> up to the configure step
+  <pkg>-build            - Build <pkg> up to the build step
+  <pkg>-graph-depends    - Generate a graph of <pkg>'s dependencies
+  <pkg>-dirclean         - Remove <pkg> build directory
+  <pkg>-reconfigure      - Restart the build from the configure step
+  <pkg>-rebuild          - Restart the build from the build step
+
+busybox:
+  busybox-menuconfig     - Run BusyBox menuconfig
+
+uclibc:
+  uclibc-menuconfig      - Run uClibc menuconfig
+
+Documentation:
+  manual                 - build manual in all formats
+  manual-html            - build manual in HTML
+  manual-split-html      - build manual in split HTML
+  manual-pdf             - build manual in PDF
+  manual-text            - build manual in text
+  manual-epub            - build manual in ePub
+  graph-build            - generate graphs of the build times
+  graph-depends          - generate graph of the dependency tree
+  graph-size             - generate stats of the filesystem size
+  list-defconfigs        - list all defconfigs (pre-configured minimal systems)
+
+Miscellaneous:
+  source                 - download all sources needed for offline-build
+  source-check           - check selected packages for valid download URLs
+  external-deps          - list external packages used
+  legal-info             - generate info about license compliance
+
+  make V=0|1             - 0 => quiet build (default), 1 => verbose build
+  make O=dir             - Locate all output files in "dir", including .config
+
+For further details, see README, generate the Buildroot manual, or consult
+it on-line at http://buildroot.org/docs.html
+
+
+{rebuild}
+
+8.2 Understanding when a full rebuild is necessary
+
+Buildroot does not attempt to detect what parts of the system should be
+rebuilt when the system configuration is changed through make menuconfig, make
+xconfig or one of the other configuration tools. In some cases, Buildroot
+should rebuild the entire system, in some cases, only a specific subset of
+packages. But detecting this in a completely reliable manner is very
+difficult, and therefore the Buildroot developers have decided to simply not
+attempt to do this.  
+
+Instead, it is the responsibility of the user to know when a full rebuild is
+necessary. As a hint, here are a few rules of thumb that can help you
+understand how to work with Buildroot:
+
+
+* When the toolchain configuration is changed, a complete rebuild generally is
+  needed. Changing the toolchain configuration often involves changing the
+  compiler version, the type of C library or its configuration, or some other
+  fundamental configuration item, and these changes have an impact on the
+  entire system.
+
+Generally speaking, when you’re facing a build error and you’re unsure of the
+potential consequences of the configuration changes you’ve made, do a full
+rebuild.
+
+
+8.3 Understanding how to rebuild packages
+
+The easiest way to rebuild a single package from scratch is to remove its
+build directory in `output/build` Buildroot will then re-extract,
+      re-configure, re-compile and re-install this package from scratch. You
+      can ask buildroot to do this with the make `<package>-dirclean` command.
+
+On the other hand, if you only want to restart the build process of a package
+`from its compilation step`, you can run make `<package>-rebuild`, followed by
+`make or make <package>` It will restart the compilation and installation of
+the package, but not from scratch: it basically re-executes make and make
+install inside the package, so it will only rebuild files that changed.
+
+If you want to restart the build of a package `from its configuration step`,
+   you can run `make <package>-reconfigure`, followed by make or make
+   <package>. It will restart the configuration, compilation and installation
+   of the package.
+
+Internally, Buildroot creates so-called stamp files to keep track of which
+build steps have been completed for each package. They are stored in the
+package build directory, output/build/<package>-<version>/ and are named
+.stamp_<stepname>.  The commands detailed above simply manipulate these stamp
+files to force Buildroot to restart a specific set of steps of a package build
+process.
+
+Further details about package special make targets are explained in Section
+8.12.5.
+
+
+8.12.4 Location of downloaded packages
+
+The various tarballs that are downloaded by Buildroot are all stored in
+BR2_DL_DIR, which by default is the dl directory. If you want to keep a
+complete version of Buildroot which is known to be working with the associated
+tarballs, you can make a copy of this directory. This will allow you to
+regenerate the toolchain and the target filesystem with exactly the same
+versions.
+
+The following line should be added to <~/.bashrc>.
+
+export BR2_DL_DIR=<shared download location>
+
+The download location can also be set in the .config file, with the BR2_DL_DIR
+option. Unlike most options in the .config file, this value is overridden by
+the BR2_DL_DIR environment variable.
+
+
+{rebuild-package}
+
+8.12.6 Using Buildroot during development
+
+The normal operation of Buildroot is to download a tarball, extract it,
+    configure, compile and install the software component found inside this
+    tarball. 
+
+The source code is extracted in output/build/<package>-<version>, which is a
+temporary directory: whenever make clean is used, this directory is entirely
+removed, and re-created at the next make invocation.
+
+Even when a Git or Subversion repository is used as the input for the package
+source code, Buildroot creates a tarball out of it, and then behaves as it
+normally does with tarballs.
+
+This behavior is well-suited when Buildroot is used mainly as an integration
+tool, to build and integrate all the components of an embedded Linux system. 
+
+However, if one uses Buildroot during the development of certain components of
+the system, this behavior is not very convenient: 
+
+  one would instead like to make a small change to the source code of one
+  package, and be able to quickly rebuild the system with Buildroot.
+
+Making changes directly in output/build/<package>-<version> `is not` an
+appropriate solution, because this directory is removed on make clean.
+
+Therefore, Buildroot provides a specific mechanism for this use case: the
+<pkg>_OVERRIDE_SRCDIR mechanism. Buildroot reads an override file, which
+allows the user to tell Buildroot the location of the source for certain
+packages. By default this override file is named `local.mk` and located in the
+top directory of the Buildroot source tree, but a different location can be
+specified through the BR2_PACKAGE_OVERRIDE_FILE configuration option.
+
+
+In this override file, Buildroot expects to find lines of the form:
+
+<pkg1>_OVERRIDE_SRCDIR = /path/to/pkg1/sources
+<pkg2>_OVERRIDE_SRCDIR = /path/to/pkg2/sources
+
+For example:
+
+LINUX_OVERRIDE_SRCDIR = /home/bob/linux/
+BUSYBOX_OVERRIDE_SRCDIR = /home/bob/busybox/
+
+When Buildroot finds that for a given package, an <pkg>_OVERRIDE_SRCDIR has
+been defined, it will no longer attempt to download, extract and patch the
+package. Instead, it will directly use the source code available in in the
+specified directory and make clean will not touch this directory. This allows
+to point Buildroot to your own directories, that can be managed by Git,
+   Subversion, or any other version control system. To achieve this, Buildroot
+   will use rsync to copy the source code of the component from the specified
+   <pkg>_OVERRIDE_SRCDIR to output/build/<package>-custom/.
+
+This mechanism is best used in conjunction with the make <pkg>-rebuild and
+make <pkg>-reconfigure targets.
+
+A make <pkg>-rebuild all sequence will rsync the source code from <pkg>_OVERRIDE_SRCDIR to output/
+build/<package>-custom (thanks to rsync, only the modified files are copied), and restart the build process of just this
+package.
+
+In the example of the linux package above, the developer can then make a
+source code change in /home/bob/linux and then run:
+
+make linux-rebuild all
+
+and in a matter of seconds gets the updated Linux kernel image in
+output/images. Similarly, a change can be made to the BusyBox source code in
+/home/bob/busybox, and after:
+
+make busybox-rebuild all
+
+the root filesystem image in output/images contains the updated BusyBox.
+
+
+{gcc-build}
+why twice?
+
+// broot-latest/buildroot-2016.08.1/package/gcc
+# gcc is a special package, not named gcc, but gcc-initial and
+# gcc-final, but patches are nonetheless stored in package/gcc in the
+# tree, and potentially in BR2_GLOBAL_PATCH_DIR directories as well.
+
+
+<initial>
+for p in   "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2; do \
+		if test ! -e /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/`basename $p` ; then \
+			echo ">>> host-gcc-initial 4.9.4 Downloading" ; \
+			break ; \
+		fi ; \
+	done
+if test -n "" ; then case "" in file) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b cp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-initial//gcc-initial.hash  -- /gcc-4.9.4.tar.bz2 && exit ;; scp) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b scp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-initial//gcc-initial.hash  -- '/gcc-4.9.4.tar.bz2' && exit ;; *) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b wget -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-initial//gcc-initial.hash  -- '/gcc-4.9.4.tar.bz2' && exit ;; esac ; fi ; if test "" = "y" ; then exit 1 ; fi ; if test -n ""http://ftpmirror.gnu.org"/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2" ; then case "http" in git) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b git -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2   -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-initial-4.9.4 && exit ;; svn) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b svn -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-initial-4.9.4 && exit ;; cvs) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b cvs -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- ftpmirror.gnu.org/gcc/gcc-4.9.4 4.9.4 gcc-initial host-gcc-initial-4.9.4 && exit ;; bzr) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b bzr -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-initial-4.9.4 && exit ;; file) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b cp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-initial//gcc-initial.hash  -- ftpmirror.gnu.org/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2 && exit ;; scp) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b scp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-initial//gcc-initial.hash  -- 'ftpmirror.gnu.org/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2' && exit ;; hg) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b hg -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-initial-4.9.4 && exit ;; *) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b wget -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-initial//gcc-initial.hash  -- 'http://ftpmirror.gnu.org/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2' && exit ;; esac ; fi ; if test -n "http://sources.buildroot.net" ; then 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b wget -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-initial//gcc-initial.hash  -- 'http://sources.buildroot.net/gcc-4.9.4.tar.bz2' && exit ; fi ; exit 1
+gcc-4.9.4.tar.bz2: OK (sha512: 93abb78e16277454f41a8e9810f41f66c0fdffdc539a762ff6b67d3037f78db971378683fd2ebf707d1d51c059fad2161fe42d110c330027f40214b7db0f3efe)
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4
+touch /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/.stamp_downloaded
+
+>>> host-gcc-initial 4.9.4 Extracting
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4
+bzcat /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 | tar --strip-components=1 -C /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4 --exclude='libjava/*'  --exclude='libgo/*'  --exclude='gcc/testsuite/*'  --exclude='libstdc++-v3/testsuite/*'   -xf -
+chmod -R +rw /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/libstdc++-v3/testsuite/
+echo "all:" > /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/libstdc++-v3/testsuite/Makefile.in
+echo "install:" >> /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/libstdc++-v3/testsuite/Makefile.in
+touch /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/.stamp_extracted
+
+>>> host-gcc-initial 4.9.4 Configuring
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build
+
+note: where cwd is then?
+ln -sf ../configure /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build/configure
+(cd /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build && rm -rf config.cache; PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm" CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc" CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy" RANLIB="/usr/bin/ranlib" CPPFLAGS="-I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" CFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" CXXFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" LDFLAGS="-L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/lib -L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib -Wl,-rpath,/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib/pkgconfig:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/share/pkgconfig" INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" LDFLAGS="-L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/lib -L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib -Wl,-rpath,/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib" MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CONFIG_SITE=/dev/null ./configure --prefix="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr" --sysconfdir="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/etc" --localstatedir="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/var" --enable-shared --disable-static --disable-gtk-doc --disable-gtk-doc-html --disable-doc --disable-docs --disable-documentation --disable-debug --with-xmlto=no --with-fop=no --disable-dependency-tracking  --target=mips-buildroot-linux-uclibc --with-sysroot=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/mips-buildroot-linux-uclibc/sysroot --disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib --with-gmp=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --with-mpfr=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --with-pkgversion="Buildroot 2016.08.1" --with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath --disable-libsanitizer --enable-tls --disable-libmudflap --enable-threads --with-mpc=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --without-isl --without-cloog --with-float=soft --disable-decimal-float --with-arch="mips32" --with-abi="32" --enable-languages=c --disable-shared --without-headers --disable-threads --with-newlib --disable-largefile --disable-nls  )
+
+configure: loading site script /dev/null
+checking build system type... x86_64-pc-linux-gnu
+
+>>> host-gcc-initial 4.9.4 Building
+PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" PKG_CONFIG="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib/pkgconfig"  /usr/bin/make -j25 gcc_cv_libc_provides_ssp=no all-gcc all-target-libgcc -C /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build
+make[1]: Entering directory `/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build'
+mkdir -p -- ./libiberty
+
+
+<final>
+for p in   "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2; do \
+		if test ! -e /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/`basename $p` ; then \
+			echo ">>> host-gcc-final 4.9.4 Downloading" ; \
+			break ; \
+		fi ; \
+	done
+if test -n "" ; then case "" in file) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b cp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-final//gcc-final.hash  -- /gcc-4.9.4.tar.bz2 && exit ;; scp) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b scp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-final//gcc-final.hash  -- '/gcc-4.9.4.tar.bz2' && exit ;; *) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b wget -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-final//gcc-final.hash  -- '/gcc-4.9.4.tar.bz2' && exit ;; esac ; fi ; if test "" = "y" ; then exit 1 ; fi ; if test -n ""http://ftpmirror.gnu.org"/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2" ; then case "http" in git) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b git -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2   -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-final-4.9.4 && exit ;; svn) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b svn -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-final-4.9.4 && exit ;; cvs) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b cvs -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- ftpmirror.gnu.org/gcc/gcc-4.9.4 4.9.4 gcc-final host-gcc-final-4.9.4 && exit ;; bzr) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b bzr -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-final-4.9.4 && exit ;; file) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b cp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-final//gcc-final.hash  -- ftpmirror.gnu.org/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2 && exit ;; scp) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b scp -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-final//gcc-final.hash  -- 'ftpmirror.gnu.org/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2' && exit ;; hg) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b hg -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2  -- "http://ftpmirror.gnu.org"/gcc/gcc-4.9.4 4.9.4 host-gcc-final-4.9.4 && exit ;; *) 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b wget -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-final//gcc-final.hash  -- 'http://ftpmirror.gnu.org/gcc/gcc-4.9.4/gcc-4.9.4.tar.bz2' && exit ;; esac ; fi ; if test -n "http://sources.buildroot.net" ; then 	PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" BR2_DL_DIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl" BUILD_DIR=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build BR2_EXTERNAL=support/dummy-external support/download/dl-wrapper -b wget -o /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 -H package/gcc/gcc-final//gcc-final.hash  -- 'http://sources.buildroot.net/gcc-4.9.4.tar.bz2' && exit ; fi ; exit 1
+gcc-4.9.4.tar.bz2: OK (sha512: 93abb78e16277454f41a8e9810f41f66c0fdffdc539a762ff6b67d3037f78db971378683fd2ebf707d1d51c059fad2161fe42d110c330027f40214b7db0f3efe)
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4
+touch /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/.stamp_downloaded
+
+>>> host-gcc-final 4.9.4 Extracting
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4
+bzcat /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/dl/gcc-4.9.4.tar.bz2 | tar --strip-components=1 -C /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4 --exclude='libjava/*'  --exclude='libgo/*'  --exclude='gcc/testsuite/*'  --exclude='libstdc++-v3/testsuite/*'   -xf -
+chmod -R +rw /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/libstdc++-v3/testsuite/
+echo "all:" > /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/libstdc++-v3/testsuite/Makefile.in
+echo "install:" >> /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/libstdc++-v3/testsuite/Makefile.in
+touch /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/.stamp_extracted
+
+>>> host-gcc-final 4.9.4 Configuring
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build
+ln -sf ../configure /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build/configure
+(cd /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build && rm -rf config.cache; PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm" CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc" CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy" RANLIB="/usr/bin/ranlib" CPPFLAGS="-I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" CFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" CXXFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" LDFLAGS="-L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/lib -L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib -Wl,-rpath,/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib/pkgconfig:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/share/pkgconfig" INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" LDFLAGS="-L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/lib -L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib -Wl,-rpath,/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib" MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " ./configure --prefix="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr" --sysconfdir="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/etc" --enable-static  --target=mips-buildroot-linux-uclibc --with-sysroot=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/mips-buildroot-linux-uclibc/sysroot --disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib --with-gmp=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --with-mpfr=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --with-pkgversion="Buildroot 2016.08.1" --with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath --disable-libsanitizer --enable-tls --disable-libmudflap --enable-threads --with-mpc=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --without-isl --without-cloog --with-float=soft --disable-decimal-float --with-arch="mips32" --with-abi="32" --enable-languages=c --with-build-time-tools=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/mips-buildroot-linux-uclibc/bin --enable-shared --disable-libgomp  )
+checking build system type... x86_64-pc-linux-gnu
+
+>>> host-gcc-final 4.9.4 Building
+PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" PKG_CONFIG="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib/pkgconfig"  /usr/bin/make -j25 gcc_cv_libc_provides_ssp=no -C /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build
+make[1]: Entering directory `/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build'
+make[2]: Entering directory `/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build'
 
 
 ={============================================================================
