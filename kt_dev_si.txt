@@ -83,8 +83,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-vgc
 |kt_dev_si_0001| comp-srm
 |kt_dev_si_0001| comp-pcat
+|kt_dev_si_0001| comp-pcat-dbengine
 |kt_dev_si_0001| comp-fdm
-|kt_dev_si_0001| comp-dbengine
 |kt_dev_si_0001| comp-pshed
 |kt_dev_si_0001| comp-pdm
 |kt_dev_si_0001| comp-player
@@ -2104,6 +2104,9 @@ mysql --batch --skip-column-names -u root uploads -e "select directory_name  fro
 /home/si_logs/translation/darwin_783e53ffd885_86413132ddf506ccb2d3264b0e8785ab
 /home/si_logs/translation/darwin_783e53ffd3fd_ce7877cf7c67d5a2b526e7b4d1b02bfb
 
+<run-sql-parser-result>
+mysql --batch --skip-column-names -u root uploads -e "select upload_time, version, boxname, directory_name, parser_result from upload where directory_name is not null and parser_result != 'Not Yet Parsed' order by upload_time desc limit 1000"
+
 
 <run-on-parser>
 // sorted by upload_time so the latest comes first. use `tac` to reverse.
@@ -2496,6 +2499,46 @@ possibly XTVFS errors.			P1 db_corrupt: Robert Kibble, 11/06/2010 Check for a va
 
 theyard/bin/tests/db_corrupt
 
+note:
+<p1>DBENGINE fatal error: status = 0x202000a [PCAT.DB corrupt], PCAT.DB is corrupted (built by hudson)</p1>
+
+Greps on two status
+
+mycat $1 | grep -n "DBENGINE_SRV" 2>/dev/null | grep -Ei 'status = 0x202000a|status = 0x203000b|OUT OF MEMORY|status = 0x2020007' 2>/dev/null | head -1
+
+note:
+when see 0x202000b which is malformed during boot-up
+
+!FATAL  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1612 > status = 0x203000b 
+!ERROR  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1249 > execution error on stmt = INSERT INTO BEFORE_NOTIF SELECT 167772199, A.BOOKING_JOB_ID, A.BOOKING_ID,B.EVENT_ID,B.AV_CONTENT_ID,0,0,0,BOOKING_JOB_ID,E.SHREC_ITEM_ID,0,0 FROM BOOKING_JOBS A LEFT OUTER JOIN BOOKING_INFO B ON A.BOOKING_ID = B.BOOKING_ID LEFT OUTER JOIN ITEM C ON B.EVE\n 
+!ERROR  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1250 > status = 0x203000b\n 
+!ERROR  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1253 > errmsg = database disk image is malformed\n 
+!FATAL  -PCATS        		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbview.c F:DbviewExecuteSqlDbeStatus L:1192 > DBENGINE_API_ExecSQL (0x203000b) database disk image is malformed 
+
+note:
+when see 0x202000a which is disk I/O error during out of standby
+
+!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1607 > status = 0x202000a
+!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1249 > execution error on stmt = DROP TABLE IF EXISTS BEFORE_NOTIF\n
+!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1250 > status = 0x202000a\n
+!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1253 > errmsg = disk I/O error\n
+!ERROR  -PCATS                     < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbview.c F:DbviewExecuteSqlDbeStatus L:1192 > DBENGINE_API_ExecSQL (0x202000a) disk I/O error
+
+note:
+NDS: ^[2016:10:11 11:58:03]0946710710.090534 !MIL    -VRM_SERVER                < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0x17001f,0x29013edd: E_RECORD_INT_STATE_WAIT_TUNER_RETRY -> (E_RECORD_INPUT_TUNER_RETRY) -> E_RECORD_INT_STATE_ALLOCATING_TUNER
+NDS: ^[2016:10:11 11:58:03]0946710710.176993 !MIL    -RMF                       < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20101e2(0)[R] request=0x10000008 released=0xf0000000 change request if fails.
+NDS: ^[2016:10:11 11:58:03]0946710710.247292 !FATAL  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1612 > status = 0x203000b
+NDS: ^[2016:10:11 11:58:03]0946710710.247312 !ERROR  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_Step_ L:1922 > execution error: status =0x203000b\n
+NDS: ^[2016:10:11 11:58:03]0946710710.247332 !FATAL  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_RunSelectStmt L:923 > DBENGINE_API_Step sqlite_status=0x203000b
+NDS: ^[2016:10:11 11:58:03]0946710710.247390 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_RunSelectStmt L:987 > RunSelectStmt returns error: database disk image is malformed with status =  0x5c21001
+NDS: ^[2016:10:11 11:58:03]0946710710.247444 !FATAL  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1612 > status = 0x203000b
+NDS: ^[2016:10:11 11:58:03]0946710710.247461 !ERROR  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_Reset_ L:2227 > execution error: status =0x203000b\n
+NDS: ^[2016:10:11 11:58:03]0946710710.247479 !FATAL  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_ResetStmt L:267 > DBENGINE_API_Reset status=0x203000b
+NDS: ^[2016:10:11 11:58:03]0946710710.247523 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_ResetStmt L:273 > PREPARE_ResetStmt returns error: database disk image is malformed and status = 0x5c21001
+NDS: ^[2016:10:11 11:58:03]0946710710.247553 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_RunSelectStmt L:1004 > Finished with error: Failure (0x5c21001)
+NDS: ^[2016:10:11 11:58:03]0946710710.247572 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbview.c F:Dbview_Select L:3135 > PREPARE_RunSelectStmt status=0x5c21001
+NDS: ^[2016:10:11 11:58:03]0946710710.247638 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbview.c F:DBVIEW_Select L:23177 > Finished with error: Failure (0x5c21001)
+NDS: ^[2016:10:11 11:58:03]0946710710.247710 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_view_clnt.c F:PCAT_VIEW_Select L:882 > Finished with error: Failure (0x5c21001)
 
 <9>
 96	2	P2 sata_errors: Robert Kibble, 28/10/2010 Look for errors from SATA in KMSG.LOG Often caused by disk failure and/or garbage 
@@ -2506,6 +2549,10 @@ theyard/bin/tests/sata_errors
 
 $ egrep "O error" KMSG.LOG
 <4>[0946684879.477503]end_request: I/O error, dev sda, sector 3205540
+
+<10>
+
+!WARN   -SYSINIT_S                 < p:0x000001dd P:SCD t:0x00647530 T:STATE_MACHINE_THREAD M:state_machine.c F:stateMachineThread L:1402 > PVR transition failed at ring level 6
 
 
 {all-benigh}
@@ -11057,7 +11104,7 @@ CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.h:46:#ifdef PCA
 CMS_INFORMATION_SERVICES/PCAT/src/common/interface/view_man_clnt.h:49:#endif /* PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG */
 
 
-// pcat_db.cfg
+<pcat-config> pcat_db.cfg
 
 [VIEWS_LIMITATION]
 MAX_VIEWS=200
@@ -11171,25 +11218,23 @@ typedef struct ValueListClntStructTag
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-fdm
-
-FDM_SVR is the FDM server module which is responsible for managing the mount point of the broadcast file system
-
-Note that DSM-CC carousels are packaged such that more than one file may be resident in a module, and so acquiring a single file actually entails acquiring a module.
-
-
-={============================================================================
-|kt_dev_si_0001| comp-dbengine
+|kt_dev_si_0001| comp-pcat-dbengine
 
 Uzan, Galit <GUzan@nds.com>
 
+<dbengine-status>
 # (((COMP_COMP_ID & 0x3FF) << 22) | ((SEVERITY & 0x3) << 16) | ((COMP_IF_ID & 0xF) << 12) | (STATUS & 0xFFF) )
 hex(((8 & 0x3FF) << 22) | ((1 & 0x3) << 16) | ((0 & 0xF) << 12) | (19 & 0xFFF) ) = 0x2010013
 
-# 0x2010013
-#define DBENGINE_API_STATUS_CONSTRAINT  DBENGINE_API_MAKE_STATUS(SEVERITY_WARNING,19)   /*!< Abort due to constraint violation */
-this error means that you try to insert an object that already exist in the db. Because this error is return to SIM, you need to ask them if this an error or not.
-For PCAT for example, this error can happen and it's not a failure,
+
+`0x2010013`
+#define DBENGINE_API_STATUS_CONSTRAINT
+DBENGINE_API_MAKE_STATUS(SEVERITY_WARNING,19)   
+/*!< Abort due to constraint violation */ 
+
+this error means that you try to insert an object that already exist in the
+db. Because this error is return to SIM, you need to ask them if this an error
+or not. For PCAT for example, this error can happen and it's not a failure,
 
 
 #define DBENGINE_API_STATUS_DONE        DBENGINE_API_MAKE_STATUS(SEVERITY_NONE,101)  /*!< #DBENGINE_API_Step() has finished executing */
@@ -11200,17 +11245,12 @@ For PCAT for example, this error can happen and it's not a failure,
 (from Galit)
 The status 0x2000065 (DBENGINE_API_STATUS_DONE) is not an error, it only means that there is no more row to select 
 that the execution of the query is done.
+
 When you execute a query, you first call once to DBENGINE_API_Prepare and while the db_status == DBENGINE_API_STATUS_ROW, 
 you need to call to db_status=DBENGINE_API_Step() to get the last row return by the query.
 when the db_status is DBENGINE_API_STATUS_DONE  (0x20000065) it means that you don't need to call again to DBENGINE_API_Step 
 the query has been totally executed there is no more row to get.
 If SIM print the error below it seems to be that the query (select) doesn't return the result they expect.
-
-# 0x203000b
-#define DBENGINE_API_STATUS_CORRUPT     DBENGINE_API_MAKE_STATUS(SEVERITY_FATAL,11)   /*!< The database disk image is malformed */
-
-# 0x202000a. SEVERITY_SEVERE(2)
-#define DBENGINE_API_STATUS_IOERR       DBENGINE_API_MAKE_STATUS(SEVERITY_SEVERE,10)   /*!< Some kind of disk I/O error occurred */
 
 # 0x2020001
 #define DBENGINE_API_STATUS_ERROR        DBENGINE_API_MAKE_STATUS(SEVERITY_SEVERE,1)   /*!< SQL error or missing database */
@@ -11219,8 +11259,85 @@ If SIM print the error below it seems to be that the query (select) doesn't retu
 #define DBENGINE_API_STATUS_PROTOCOL    DBENGINE_API_MAKE_STATUS(SEVERITY_SEVERE,15)   /*!< Database lock protocol error */
 
 
-sqlite3 PCAT.DB 'pragma integrity_check'
-# sqlite3 PCAT.DB 'PRAGMA quick_check'
+<pcat-error>
+`0x203000b`
+#define DBENGINE_API_STATUS_CORRUPT     DBENGINE_API_MAKE_STATUS(SEVERITY_FATAL,11)   
+/*!< The database disk image is malformed */
+
+`0x202000a` SEVERITY_SEVERE(2)
+#define DBENGINE_API_STATUS_IOERR       DBENGINE_API_MAKE_STATUS(SEVERITY_SEVERE,10)   
+/*!< Some kind of disk I/O error occurred */
+
+!ERROR  -DBENGINE_SRV 		T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1249 > 
+  execution error on stmt = INSERT INTO BEFORE_NOTIF SELECT 167772199, A.BOOKING_JOB_ID, A.BOOKING_ID,B.EVENT_ID,B.AV_CONTENT_ID,0,0,0,BOOKING_JOB_ID,E.SHREC_ITEM_ID,0,0 FROM BOOKING_JOBS A LEFT OUTER JOIN BOOKING_INFO B ON A.BOOKING_ID = B.BOOKING_ID LEFT OUTER JOIN ITEM C ON B.EVE\n 
+!ERROR  -DBENGINE_SRV 		T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1250 > 
+  status = 0x203000b\n 
+!ERROR  -DBENGINE_SRV 		T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1253 > 
+  errmsg = database disk image is malformed\n 
+
+NDS: ^0947462201.382190 !ERROR  -DBENGINE_SRV 		< p:0x00000403 P:MW t:0x01aae520 T:PCAT_SRV_THREAD M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1253 > errmsg = database disk image is malformed\n 
+
+SYSTEM_STATUS DBENGINE_API_ExecSQL()
+{
+  status_sql=sqlite3_exec((sqlite3 *)dbContext,sql,callback,arg,&local_errmsg);
+
+  DIAG_LOG_ERROR(DBENGINE_diag_segment_id, ("execution error on stmt = %s\n",sql));
+  DIAG_LOG_ERROR(DBENGINE_diag_segment_id, ("status = 0x%x\n",status));
+  if (local_errmsg != NULL)
+  {
+    DIAG_LOG_ERROR(DBENGINE_diag_segment_id, ("errmsg = %s\n",local_errmsg));
+  }
+}
+
+This means that "database disk image is malformed" comes from sqlite.
+
+
+<pcat-check>
+https://sqlite.org/download.html
+sqlite-tools-linux-x86-3140200.zip
+(1.75 MiB) 		A bundle of command-line tools for managing SQLite database
+files, including the command-line shell program, the sqldiff program, and the
+sqlite3_analyzer program.  (sha1: 296d4b1f419a544b2e7c7cf29792d5074dad9cc6)
+
+https://www.sqlite.org/pragma.html#pragma_integrity_check
+PRAGMA schema.integrity_check;
+PRAGMA schema.integrity_check(N)
+
+This pragma does an `integrity check of the entire database` 
+
+The integrity_check pragma looks for out-of-order records, missing pages,
+    malformed records, missing index entries, and UNIQUE and NOT NULL
+    constraint errors. If the integrity_check pragma finds problems, strings
+    are returned (as multiple rows with a single column per row) which
+    describe the problems. Pragma integrity_check will return at most N errors
+    before the analysis quits, with N defaulting to 100. If pragma
+    integrity_check finds no errors, a single row with the value 'ok' is
+    returned.
+
+PRAGMA integrity_check does not find FOREIGN KEY errors. Use the PRAGMA
+foreign_key_check command for to find errors in FOREIGN KEY constraints.
+
+See also the PRAGMA quick_check command which does most of the checking of
+PRAGMA integrity_check but runs much faster.
+
+sqlite-tools-linux-x86-3140200/sqlite3 PCAT.DB.courrpted 'PRAGMA integrity_check'
+wrong # of entries in index sqlite_autoindex_BOOKING_INFO_2
+wrong # of entries in index I_BJ_BS
+wrong # of entries in index I_BJ_RS
+
+sqlite-tools-linux-x86-3140200/sqlite3 PCAT.DB.clean 'PRAGMA integrity_check'
+ok
+
+note:
+Do not use sqlite3 PCAT.DB 'PRAGMA quick_check'
+
+
+={============================================================================
+|kt_dev_si_0001| comp-fdm
+
+FDM_SVR is the FDM server module which is responsible for managing the mount point of the broadcast file system
+
+Note that DSM-CC carousels are packaged such that more than one file may be resident in a module, and so acquiring a single file actually entails acquiring a module.
 
 
 ={============================================================================
@@ -15573,19 +15690,23 @@ NUM_COMPONENTS=1
 COMPONENT_1="SPM_SERVER"
 COMPONENT_2="OFS"
 NUM_COMPONENTS=2
+
 [RING_LEVEL_12]
-COMPONENT_1="SRM"
+COMPONENT_1="`SRM`"
 NUM_COMPONENTS=1
+
 [RING_LEVEL_13]
 COMPONENT_1="SBM"
 COMPONENT_2="DLM_SERVER"
 NUM_COMPONENTS=2
+
 [RING_LEVEL_14]
 COMPONENT_1="GUIDE"
 COMPONENT_2="PLANNER"
 COMPONENT_3="REMBOOK"
 COMPONENT_4="SCM"
 NUM_COMPONENTS=4
+
 [RING_LEVEL_15]
 COMPONENT_1="PLAYER"
 COMPONENT_2="ATG"
@@ -15627,12 +15748,14 @@ NUM_COMPONENTS=1
 COMPONENT_1="SIM"
 COMPONENT_2="FEM"
 NUM_COMPONENTS=2
+
 [RING_LEVEL_6]
 COMPONENT_1="RNC"
 COMPONENT_2="NDS_CA_KERNEL"
 COMPONENT_3="CAPPROC"
-COMPONENT_4="PCAT"
+COMPONENT_4="`PCAT`"
 NUM_COMPONENTS=4
+
 [RING_LEVEL_7]
 COMPONENT_1="SDM"
 COMPONENT_2="RMF"
@@ -15645,8 +15768,9 @@ NUM_COMPONENTS=6
 COMPONENT_1="MCM"
 COMPONENT_2="UAM"
 NUM_COMPONENTS=2
+
 [RING_LEVEL_9]
-COMPONENT_1="VRM_SRV"
+COMPONENT_1="`VRM_SRV`"
 NUM_COMPONENTS=1
 
 # each comp follows the below state changes
@@ -17887,6 +18011,32 @@ NDS: ^0946927542.313872 !MIL    -EPG_DLG      		< p:0x0000021c P:APP t:0x2bfeb52
 						.actions(BACKUP_DISPEL)
 						.screenLayer(IScreenLayer.MENU_DIALOG)));
 
+<recording-not-available>
+
+	int DISK_FAIL_SYSTEM_FAULT_ID                                        = 1299;
+	int DISK_FAIL_SYSTEM_FAULT_MODAL_ID                                  = 1300;
+
+		register(dialog(IDialogID.DISK_FAIL_SYSTEM_FAULT_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.SYSTEM_FAULT)
+						.instruction(NONE)
+						.textStrings("There is an issue with your Sky+HD box, so recording and playback are unavailable.\nFor help resolving this issue, please go to sky.com/record"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.CA_EXCEPTION)
+						.secondaryPriority(ISecondaryPriority.CA_EXCEPTION_VIEWING_CARD)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.flags(SHOW_DISK_FAULT_REFERENCE)
+						.modal(false)
+						.actions(BACKUP_IGNORE)));
+
+		register(dialog(IDialogID.DISK_FAIL_SYSTEM_FAULT_MODAL_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.SYSTEM_FAULT)
+						.instruction(BACKUP_TO_CANCEL)
+						.textStrings("There is an issue with your Sky+HD box, so recording and playback are unavailable.\nFor help resolving this issue, please go to sky.com/record"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.CA_EXCEPTION)
+						.secondaryPriority(ISecondaryPriority.CA_EXCEPTION_VIEWING_CARD)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.flags(SHOW_DISK_FAULT_REFERENCE)
+						.modal(true)
+						.actions(BACKUP_BACKUP)));
 
 
 register(dialog(IDialogID.ECO_STANDBY_EXIT).type(IDialogType.FYI)
