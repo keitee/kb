@@ -80,6 +80,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-sfm
 |kt_dev_si_0001| comp-sim
 |kt_dev_si_0001| comp-spm
+|kt_dev_si_0001| comp-power
 |kt_dev_si_0001| comp-vgc
 |kt_dev_si_0001| comp-srm
 |kt_dev_si_0001| comp-pcat
@@ -2104,8 +2105,14 @@ mysql --batch --skip-column-names -u root uploads -e "select directory_name  fro
 /home/si_logs/translation/darwin_783e53ffd885_86413132ddf506ccb2d3264b0e8785ab
 /home/si_logs/translation/darwin_783e53ffd3fd_ce7877cf7c67d5a2b526e7b4d1b02bfb
 
+
 <run-sql-parser-result>
 mysql --batch --skip-column-names -u root uploads -e "select upload_time, version, boxname, directory_name, parser_result from upload where directory_name is not null and parser_result != 'Not Yet Parsed' order by upload_time desc limit 1000"
+mysql --batch --skip-column-names -u root uploads -e "select upload_time, diskerrors, boxname, directory_name, parser_result from upload where version LIKE '%R015%' and directory_name is not null and parser_result != 'Not Yet Parsed' order by upload_time desc limit 10"
+mysql --batch --skip-column-names -u root uploads -e "select upload_time, diskerrors, boxname, directory_name, parser_result from upload where version LIKE '%R015%' and parser_result LIKE '%DBENGINE%' and directory_name is not null and parser_result != 'Not Yet Parsed' order by upload_time desc limit 10"
+
+mysql -u root uploads --execute='select upload_time, version, parser_testid, parser_result, diskerrors from upload where mac in ("0019FB38E30A", "0019FB0F53B4", "0019FB515474", "0019FB8817BF", "0019FB 384838", "0019FB0F4CBC", "0019FBB71C47", "0019FBB71BB1") order by upload_time desc, version desc limit 10'
+mysql --batch --skip-column-names -u root uploads -e "select upload_time, boxname, directory_name, parser_result from upload where mac LIKE '%0019fb42ddb6%' order by upload_time desc"
 
 
 <run-on-parser>
@@ -2172,7 +2179,7 @@ test_log.py $FILE $FORCE
 
 note:
 .bestguess can be written by someone other than test_log.py from check_log?
-.test_out has log from test_log
+`.test_out` has log from test_log
 
 # test_log.py
 #
@@ -2342,7 +2349,13 @@ note:
 #       simple tests
 #
 #       or for script tests
+#
+#       *run-verbose* which is why the final log parser result is different
+#       from first script run.
+#
 #       run_verbose_shellscript(chosen_test)           
+#       def run_verbose_shellscript(script_to_test):
+#       """Given a script to test, runs it in verbose mode and passes the output to make the bestguess files"""
 #
 #       for both, do:
 #
@@ -2501,44 +2514,54 @@ theyard/bin/tests/db_corrupt
 
 note:
 <p1>DBENGINE fatal error: status = 0x202000a [PCAT.DB corrupt], PCAT.DB is corrupted (built by hudson)</p1>
+<p1>DBENGINE fatal error:  status = 0x203000b  [MFS.DB corrupt]</p1>
 
-Greps on two status
+Greps on two different issue
+
+!FATAL  -DBENGINE_SRV              < p:0x000001ef P:MW t:0x0188a520 T:MSMDispatcher M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1612 > status = 0x203000b
 
 mycat $1 | grep -n "DBENGINE_SRV" 2>/dev/null | grep -Ei 'status = 0x202000a|status = 0x203000b|OUT OF MEMORY|status = 0x2020007' 2>/dev/null | head -1
 
-note:
-when see 0x202000b which is malformed during boot-up
+2016-08-20 04:15:52,254: root - DEBUG - Current script db_corrupt
+2016-08-20 04:15:52,254: root - DEBUG - Output: ('2703 Time:0946684974,  status = 0x203000b\n', '')
 
-!FATAL  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1612 > status = 0x203000b 
-!ERROR  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1249 > execution error on stmt = INSERT INTO BEFORE_NOTIF SELECT 167772199, A.BOOKING_JOB_ID, A.BOOKING_ID,B.EVENT_ID,B.AV_CONTENT_ID,0,0,0,BOOKING_JOB_ID,E.SHREC_ITEM_ID,0,0 FROM BOOKING_JOBS A LEFT OUTER JOIN BOOKING_INFO B ON A.BOOKING_ID = B.BOOKING_ID LEFT OUTER JOIN ITEM C ON B.EVE\n 
-!ERROR  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1250 > status = 0x203000b\n 
-!ERROR  -DBENGINE_SRV 		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1253 > errmsg = database disk image is malformed\n 
-!FATAL  -PCATS        		< p:0x000001dd P:MW t:0x01ca8520 T:VRM_SRV M:dbview.c F:DbviewExecuteSqlDbeStatus L:1192 > DBENGINE_API_ExecSQL (0x203000b) database disk image is malformed 
+From *run-verbose*
 
-note:
-when see 0x202000a which is disk I/O error during out of standby
+if [ "$1" = "-v" ]
+then
+    FIRST=`mycat $2 | grep -n "VACUUM operation has failed with errmsg = out of memory.Ignore it" 2>/dev/null | head -1 | cut -d':' -f1`
+    if [ "$FIRST" = "" ]
+    then
+        FIRST=0
+    fi
+    A=`find_first_match $2 | cut -d'>' -f2`
+    WHICH=""
+    for file in *.DB
+    do
+        if [ -f $file ]
+        then
+            # check file depending on return from `dbcheck`
+            dbcheck $file >/dev/null 2>&1 || WHICH="[$file corrupt]"
+        fi
+    done
+    echo "DBENGINE fatal error: $A $WHICH"
+    exit 1
+fi
 
-!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1607 > status = 0x202000a
-!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1249 > execution error on stmt = DROP TABLE IF EXISTS BEFORE_NOTIF\n
-!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1250 > status = 0x202000a\n
-!ERROR  -DBENGINE_SRV              < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbengine_api.c F:DBENGINE_API_ExecSQL L:1253 > errmsg = disk I/O error\n
-!ERROR  -PCATS                     < p:0x000003b2 P:MW t:0x01a9a520 T:PCAT_SRV_SYSINIT_THREAD M:dbview.c F:DbviewExecuteSqlDbeStatus L:1192 > DBENGINE_API_ExecSQL (0x202000a) disk I/O error
+# runs check and if it returns fail, return is back
 
-note:
-NDS: ^[2016:10:11 11:58:03]0946710710.090534 !MIL    -VRM_SERVER                < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: rec:0x17001f,0x29013edd: E_RECORD_INT_STATE_WAIT_TUNER_RETRY -> (E_RECORD_INPUT_TUNER_RETRY) -> E_RECORD_INT_STATE_ALLOCATING_TUNER
-NDS: ^[2016:10:11 11:58:03]0946710710.176993 !MIL    -RMF                       < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20101e2(0)[R] request=0x10000008 released=0xf0000000 change request if fails.
-NDS: ^[2016:10:11 11:58:03]0946710710.247292 !FATAL  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1612 > status = 0x203000b
-NDS: ^[2016:10:11 11:58:03]0946710710.247312 !ERROR  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_Step_ L:1922 > execution error: status =0x203000b\n
-NDS: ^[2016:10:11 11:58:03]0946710710.247332 !FATAL  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_RunSelectStmt L:923 > DBENGINE_API_Step sqlite_status=0x203000b
-NDS: ^[2016:10:11 11:58:03]0946710710.247390 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_RunSelectStmt L:987 > RunSelectStmt returns error: database disk image is malformed with status =  0x5c21001
-NDS: ^[2016:10:11 11:58:03]0946710710.247444 !FATAL  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_GetErrcode__ L:1612 > status = 0x203000b
-NDS: ^[2016:10:11 11:58:03]0946710710.247461 !ERROR  -DBENGINE_SRV              < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbengine_api.c F:DBENGINE_API_Reset_ L:2227 > execution error: status =0x203000b\n
-NDS: ^[2016:10:11 11:58:03]0946710710.247479 !FATAL  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_ResetStmt L:267 > DBENGINE_API_Reset status=0x203000b
-NDS: ^[2016:10:11 11:58:03]0946710710.247523 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_ResetStmt L:273 > PREPARE_ResetStmt returns error: database disk image is malformed and status = 0x5c21001
-NDS: ^[2016:10:11 11:58:03]0946710710.247553 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_prepare.c F:PREPARE_RunSelectStmt L:1004 > Finished with error: Failure (0x5c21001)
-NDS: ^[2016:10:11 11:58:03]0946710710.247572 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbview.c F:Dbview_Select L:3135 > PREPARE_RunSelectStmt status=0x5c21001
-NDS: ^[2016:10:11 11:58:03]0946710710.247638 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:dbview.c F:DBVIEW_Select L:23177 > Finished with error: Failure (0x5c21001)
-NDS: ^[2016:10:11 11:58:03]0946710710.247710 !ERROR  -PCATS                     < p:0x0000035b P:MW t:0x01cae520 T:VRM_SRV M:pcat_view_clnt.c F:PCAT_VIEW_Select L:882 > Finished with error: Failure (0x5c21001)
+X=`sqlite3 $1 "pragma integrity_check" 2>&1`
+A=$?
+echo "$X"
+if [ $A -eq 0 ]
+then
+    if [ "$X" != "ok" ]
+    then
+        A=1
+    fi
+fi
+exit $A
+
 
 <9>
 96	2	P2 sata_errors: Robert Kibble, 28/10/2010 Look for errors from SATA in KMSG.LOG Often caused by disk failure and/or garbage 
@@ -10168,6 +10191,31 @@ the default Guide Service, then we receive channel 998
 
 
 ={============================================================================
+|kt_dev_si_0001| comp-power comp-standby
+
+<passive-deep-standby>
+During passive stand-by, the STB front panel is running. The STB front end and
+Fusion Product are not running. EMMs are not filtered. Alarms can be triggered
+in order to switch the STB to active stand-by so that the Fusion Product can
+process scheduled tasks.
+
+<active>
+During active stand-by, the STB front end is running. The Fusion Product is
+also running and can process update tasks and recordings. EMMs are filtered
+during update tasks.
+
+<boot-up>
+// bootup okay
+!MIL    -SYSINIT_S    		< p:0x000001fe P:SCD t:0x00646530 T:STATE_MACHINE_THREAD M:state_machine.c F:switchRingLevelRunLevel L:460 > ENDING   Moving ring level 19 to runlevel PVR. 
+!MIL    -SYSINIT_S    		< p:0x000001fe P:SCD t:0x00646530 T:STATE_MACHINE_THREAD M:state_machine.c F:stateMachineThread L:1416 > ENDING   Moving system to runlevel PVR. 
+
+!MIL    -EPG_INIT     		< p:0x00000203 P:APP t:0x2dfef520 T:no name M:PlannerStarter$2 F:run L:140 > T:IM#0:PLANNER READY
+
+<shutdown>
+!MIL    -SYSINIT_S    		< p:0x000001fe P:SCD t:0x00646530 T:STATE_MACHINE_THREAD M:server_msghandling.c F:sendRunLevelRequest L:965 > STARTING Moving component FEM to runlevel SHUTDOWN 
+
+
+={============================================================================
 |kt_dev_si_0001| comp-vgc
 
 The error means that VGC hasnt managed to read the data from the card at the time of SPM initialisation, but usually this is not a problem. SPM should receive a notification from VGC later, when its ready (SPM_VGC_SubscriberConfigChangedListener) and then SPM tries to read the HD subscription again (in SPM_VGC_InternalEventEntitlementInfoChanged).
@@ -11292,6 +11340,13 @@ SYSTEM_STATUS DBENGINE_API_ExecSQL()
 This means that "database disk image is malformed" comes from sqlite.
 
 
+// CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c
+# define SQLITE_CORRUPT_BKPT SQLITE_CORRUPT
+
+78570 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c     
+  case SQLITE_CORRUPT:    z = "database disk image is malformed";      break;
+
+
 <pcat-check>
 https://sqlite.org/download.html
 sqlite-tools-linux-x86-3140200.zip
@@ -11330,6 +11385,16 @@ ok
 
 note:
 Do not use sqlite3 PCAT.DB 'PRAGMA quick_check'
+
+
+SQLITE_VERSION     77 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/common_h/sqlite3.h # undef SQLITE_VERSION
+SQLITE_VERSION    110 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/common_h/sqlite3.h #define SQLITE_VERSION        "3.7.9"
+SQLITE_VERSION    506 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c # undef SQLITE_VERSION
+SQLITE_VERSION    542 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c #define SQLITE_VERSION         "3.6.1"
+SQLITE_VERSION    465 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.c # undef SQLITE_VERSION
+SQLITE_VERSION    502 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.c #define SQLITE_VERSION         "3.5.9"
+SQLITE_VERSION     59 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.h # undef SQLITE_VERSION
+SQLITE_VERSION     96 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.h #define SQLITE_VERSION         "3.5.9"
 
 
 ={============================================================================

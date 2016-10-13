@@ -167,8 +167,18 @@
 |kt_linux_tool_102| package: dpkg and install deb file
 
 #{ make and build
-*kt_linux_tool_140* make-sample
-*kt_linux_tool_140* make-gmake
+*kt_linux_tool_140* make-cmake
+*kt_linux_tool_140* make-cmake-basic
+*kt_linux_tool_140* make-cmake-add-subdir
+*kt_linux_tool_140* make-cmake-mix-c-and-cpp
+*kt_linux_tool_140* make-cmake-compile-flag
+*kt_linux_tool_140* make-cmake-include
+*kt_linux_tool_140* make-cmake-link-flag
+
+*kt_linux_tool_140* make-gmake-sample
+*kt_linux_tool_140* make-gmake-intro
+*kt_linux_tool_140* make-gmake-write
+*kt_linux_tool_140* make-gmake-builtin-target
 *kt_linux_tool_140* make-gmake-text-function
 
 |kt_linux_tool_140| cmake
@@ -12884,6 +12894,9 @@ It also provides implementations of run-time libraries for dynamic testing
 tools such as AddressSanitizer, ThreadSanitizer, MemorySanitizer, and
 DataFlowSanitizer. 
 
+Not all LLVM projects require LLVM for all use cases. For example compiler-rt
+can be built without LLVM, and the compiler-rt sanitizer libraries are used
+with GCC.
 
 https://github.com/google/sanitizers/wiki/AddressSanitizerHowToBuild
 http://llvm.org/docs/GettingStarted.html#getting-a-modern-host-c-toolchain
@@ -14175,7 +14188,438 @@ $ pkg-config --modversion gstreamer-1.0
 
 
 ={============================================================================
-*kt_linux_tool_140* make-sample
+*kt_linux_tool_140* make-cmake
+
+https://cmake.org/
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-basic
+
+https://cmake.org/cmake-tutorial/
+
+Note that this example uses lower case commands in the CMakeLists.txt file.
+Upper, lower, and mixed case commands are supported by CMake. 
+
+
+http://llvm.org/docs/CMakePrimer.html
+
+<variable-dereferencing>
+One big "Gotcha" with variable dereferencing is that if commands implicitly
+dereference values. This has some unexpected results. For example:
+
+if("${SOME_VAR}" STREQUAL "MSVC")
+
+In this code sample MSVC will be implicitly dereferenced, which will result in
+the if command comparing the value of the dereferenced variables SOME_VAR
+and MSVC. A common workaround to this solution is to prepend strings being
+compared with an x.
+
+if("x${SOME_VAR}" STREQUAL "xMSVC")
+
+This works because while MSVC is a defined variable, xMSVC is not. This
+  pattern is uncommon, but it does occur in LLVM’s CMake scripts.
+
+
+<list>
+Lists of Lists
+
+One of the more complicated patterns in CMake is lists of lists. Because a
+list cannot contain an element with a semi-colon to construct a list of lists
+you make a list of variable names that refer to other lists. For example:
+
+set(list_of_lists a b c)
+set(a 1 2 3)
+set(b 4 5 6)
+set(c 7 8 9)
+
+With this layout you can iterate through the list of lists printing each value
+with the following code:
+
+foreach(list_name IN LISTS list_of_lists)
+  foreach(value IN LISTS ${list_name})
+    message(${value})
+  endforeach()
+endforeach()
+
+You'll notice that the inner foreach loop’s list is doubly dereferenced. This
+is because the first dereference turns list_name into the name of the sub-list
+(a, b, or c in the example), then the second dereference is to get the value
+of the list.
+
+This pattern is used throughout CMake, the most common example is the compiler
+flags options, which CMake refers to using the following variable expansions:
+CMAKE_${LANGUAGE}_FLAGS and CMAKE_${LANGUAGE}_FLAGS_${CMAKE_BUILD_TYPE}.
+
+
+<scope>
+Scope
+
+CMake inherently has a `directory-based scoping` Setting a variable in a
+CMakeLists file, will set the variable for that file, and all subdirectories.
+Variables set in a CMake module that is included in a CMakeLists file will be
+set in the scope they are included from, and all subdirectories.
+
+When a variable that is already set is set again in a subdirectory it
+overrides the value in that scope and any deeper subdirectories.
+
+The CMake set command provides two scope-related options. PARENT_SCOPE sets a
+variable into the parent scope, and not the current scope. The CACHE option
+sets the variable in the CMakeCache, which results in it being set in all
+scopes. The CACHE option will not set a variable that already exists in the
+CACHE unless the FORCE option is specified.
+
+In addition to directory-based scope, CMake functions also have their own
+scope. This means variables set inside functions do not bleed into the parent
+scope. This is not true of macros, and it is for this reason LLVM prefers
+functions over macros whenever reasonable.
+
+
+Note
+Unlike C-based languages, CMake’s loop and control flow blocks do not have
+their own scopes.
+
+The single most important thing to know about CMake’s if blocks coming from a
+C background is that they do not have their own scope. Variables set inside
+conditional blocks persist after the endif().
+
+
+<module>
+Modules, Functions and Macros
+
+Modules
+
+Modules are CMake's vehicle for enabling code reuse. CMake modules are just
+CMake script files. They can contain code to execute on include as well as
+definitions for commands.
+
+In CMake macros and functions are universally referred to as commands, and
+they are the primary method of defining code that can be called multiple
+times.
+
+In LLVM we have several CMake modules that are included as part of our
+distribution for developers who don’t build our project from source. Those
+modules are the fundamental pieces needed to build LLVM-based projects with
+CMake. We also rely on modules as a way of organizing the build system’s
+functionality for maintainability and re-use within LLVM projects.
+
+
+Argument Handling
+
+When defining a CMake command handling arguments is very useful. The examples
+in this section will all use the CMake function block, but this all applies to
+the macro block as well.
+
+CMake commands can have named arguments, but all commands are implicitly
+`variable argument` (note, variable number of argument). If the command has
+named arguments they are required and must be specified at every call site.
+
+Below is a trivial example of providing a wrapper function for CMake’s built
+in function add_dependencies.
+
+function(add_deps target)
+  add_dependencies(${target} ${ARGV})
+endfunction()
+
+This example defines a new macro named add_deps which takes a required first
+argument, and just calls another function passing through the first argument
+and `all trailing arguments` When variable arguments are present CMake defines
+them in a list named ARGV, and the count of the arguments is defined in ARGN.
+
+CMake provides a module CMakeParseArguments which provides an implementation
+of advanced argument parsing. We use this all over LLVM, and it is recommended
+for any function that has complex argument-based behaviors or optional
+  arguments. 
+
+CMake's official documentation for the module is in the cmake-modules manpage,
+  and is also available at the cmake-modules online documentation.
+
+Note
+As of CMake 3.5 the cmake_parse_arguments command has become a native command
+and the CMakeParseArguments module is empty and only left around for
+compatibility.
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-add-subdir
+
+./mheg
++-- CMakeLists.txt
++-- include
+  +-- dbg.h
+  +-- def.h
++-- main
+  +-- main.c
+
+To:
+
+./mheg
++-- CMakeLists.txt
++-- include
+  +-- dbg.h
+  +-- def.h
++-- main
+  +-- main.c
++-- mh5eng
+  +-- CMakeLists.txt
+  +-- sample.c
+  +-- sample.h
+
+
+The changes made to build:
+
+../mheg/CMakeLists.txt
+
+	 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/mh5eng)
+
+	 ADD_EXECUTABLE(${PROJECT_NAME}
+		 main/main.c # uses sample.h
+	 )
+
+	 ADD_SUBDIRECTORY(mh5eng)
+
+	 TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5eng ${APPS_PKGS_LDFLAGS})
+
+../mheg/mh5eng/CMakeLists.txt
+
+	 SET(MH5ENG_HEADERS
+		 sample.h
+	 )
+
+	 SET(MH5ENG_SOURCES
+		 sample.c
+	 )
+
+	 ADD_LIBRARY(mh5eng ${MH5ENG_HEADERS} ${MH5ENG_SOURCES})
+
+This create libmh5eng.a as a output
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-mix-c-and-cpp
+
+To compile the mix of c and cpp file, when try followings:
+
+PROJECT(mhegproto C)
+
+SET(MH5ENG_SOURCES
+	xx.c
+	mh5i_residentprogram_db.cpp
+)
+
+ADD_LIBRARY(mh5eng ${MH5ENG_HEADERS} ${MH5ENG_SOURCES} )
+
+cmake do not compile cpp file although it is defined in the set variable. To
+make it built, must add c++ build as below:
+
+PROJECT(mhegproto C CXX)
+
+From http://cmake.org/cmake/help/v2.8.8/cmake.html
+
+project: Set a name for the entire project.
+
+project(<projectname> [languageName1 languageName2 ... ] )
+
+Sets the name of the project. Additionally this sets the variables
+<projectName>_BINARY_DIR and <projectName>_SOURCE_DIR to the respective
+values.
+
+Optionally you can specify which languages your project supports. Example
+languages are CXX (i.e.  C++), C, Fortran, etc. By default C and CXX are
+enabled. E.g. if you do not have a C++ compiler, you can disable the check for
+it by explicitly listing the languages you want to support, e.g. C. By using
+the special language "NONE" all checks for any language can be disabled. If a
+variable exists called CMAKE_PROJECT_<projectName>_INCLUDE_FILE, the file
+pointed to by that variable will be included as the last step of the project
+command.
+
+note: by default? seems not.
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-compile-flag
+
+To enable preprocessor, set -E as below.
+
+FOREACH (flag ${APPS_PKGS_CFLAGS})
+    SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
+ENDFOREACH(flag)
+SET(CMAKE_C_FLAGS "-E ${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-include
+
+Found that building a library in the subdir cannot find necessary includes.
+
+root CMakeList.txt:
+
+INCLUDE(FindPkgConfig)
+pkg_check_modules(APPS_PKGS REQUIRED
+	capi-appfw-application
+	dlog
+	edje
+	elementary
+	ecore-x
+	evas
+	utilX
+	x11
+	aul
+	ail
+)
+
+ADD_EXECUTABLE(${PROJECT_NAME}
+	main/main.c
+	main/viewmgr.c
+	main/view_main.c
+)
+
+ADD_SUBDIRECTORY(mh5eng)
+ADD_SUBDIRECTORY(mh5dec)
+ADD_SUBDIRECTORY(mah)
+ADD_SUBDIRECTORY(mhv)
+ADD_SUBDIRECTORY(pfm)
+
+FOREACH (flag ${APPS_PKGS_CFLAGS})
+    SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
+ENDFOREACH(flag)
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
+
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5eng ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5dec ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mah ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mhv ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} pfm ${APPS_PKGS_LDFLAGS})
+
+CONFIGURE_FILE(${PACKAGE_NAME}.xml.in ${PACKAGE_NAME}.xml)
+
+# Install 
+INSTALL(TARGETS ${PROJECT_NAME} DESTINATION ${BINDIR})
+INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
+INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/dummy.png DESTINATION ${IMAGEDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps.png DESTINATION ${IMAGEDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_selected.png DESTINATION ${IMAGEDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_wallpaper.png DESTINATION ${IMAGEDIR})
+
+ADD_SUBDIRECTORY(data)
+
+Here there is no problem to use headers from packages such as elementary but
+when add the same to the one in /mh5eng then cannot find headers. When looked
+at flags used to build mh5eng, there is no necessary -I. This is the same when
+add pkg_check_moudles in the mh5eng/CMakeList.txt. Thing is build faild to
+update flags as expected.
+
+The finding is that when move mh5eng then it builds without adding
+pkg_check_moudles in the mh5eng/CMakeList.txt
+
+...
+ADD_SUBDIRECTORY(mh5dec)
+ADD_SUBDIRECTORY(mah)
+ADD_SUBDIRECTORY(mhv)
+ADD_SUBDIRECTORY(pfm)
+
+FOREACH (flag ${APPS_PKGS_CFLAGS})
+    SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
+ENDFOREACH(flag)
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
+
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5eng ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5dec ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mah ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mhv ${APPS_PKGS_LDFLAGS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} pfm ${APPS_PKGS_LDFLAGS})
+
+CONFIGURE_FILE(${PACKAGE_NAME}.xml.in ${PACKAGE_NAME}.xml)
+
+# Install 
+INSTALL(TARGETS ${PROJECT_NAME} DESTINATION ${BINDIR})
+INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
+INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/dummy.png DESTINATION ${IMAGEDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps.png DESTINATION ${IMAGEDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_selected.png DESTINATION ${IMAGEDIR})
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_wallpaper.png DESTINATION ${IMAGEDIR})
+
+ADD_SUBDIRECTORY(data)
+ADD_SUBDIRECTORY(mh5eng) [KT] moved to here
+
+That suggests that where to put is important and not sure it is a GBS(git
+    build system) or cmake itself problem. 
+
+
+Found that this error still happens when build cpp file and the solution is:
+
+From:
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
+
+To:
+MESSAGE("KT >>>>>PKGS_LDFLAGS>>>>>" : ${APPS_PKGS_CFLAGS})
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_CFLAGS}")
+
+Turns out that PKGS_CFLAGS will have necessary includes depending on pkg
+selection.
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-link-flag
+
+To solve {cyclic-dependencies} in link, can use this:
+
+From defining each: 
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} mah ${APPS_PKGS_LDFLAGS})
+...
+
+To use group:
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} -Wl,--start-group mhdebug pfm mh5eng mh5dec mhv mah
+-Wl,--end-group ${APPS_PKGS_LDFLAGS})
+
+ On 05/19/2011 11:11 AM, Anton Sibilev wrote:
+> Hello!
+> I'm wondering how I can use "--start-group archives --end-group"
+> linker flags with "Unix Makefiles".
+> May be somebody know the right way?
+
+You might specify these flags immediately in TARGET_LINK_LIBRARIES():
+
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8 FATAL_ERROR)
+PROJECT(LINKERGROUPS C)
+SET(CMAKE_VERBOSE_MAKEFILE ON)
+FILE(WRITE ${CMAKE_BINARY_DIR}/f.c "void f(void){}\n")
+FILE(WRITE ${CMAKE_BINARY_DIR}/g1.c "void g1(void){}\n")
+FILE(WRITE ${CMAKE_BINARY_DIR}/g2.c "void g2(void){}\n")
+FILE(WRITE ${CMAKE_BINARY_DIR}/h.c "void h(void){}\n")
+ADD_LIBRARY(f STATIC f.c)
+ADD_LIBRARY(g1 STATIC g1.c)
+ADD_LIBRARY(g2 STATIC g2.c)
+ADD_LIBRARY(h STATIC h.c)
+FILE(WRITE ${CMAKE_BINARY_DIR}/main.c "int main(void){return 0;}\n")
+ADD_EXECUTABLE(main main.c)
+TARGET_LINK_LIBRARIES(main f -Wl,--start-group g1 g2 -Wl,--end-group h)
+
+However, do you really need these flags? Refer to the target properties
+[IMPORTED_]LINK_INTERFACE_MULTIPLICITY[_<CONFIG>] and the documentation
+of TARGET_LINK_LIBRARIES().
+
+Regards,
+
+Michael
+
+LINK_INTERFACE_MULTIPLICITY
+
+Repetition count for STATIC libraries with cyclic dependencies.
+
+When linking to a STATIC library target with cyclic dependencies the linker
+may need to scan more than once through the archives in the strongly connected
+component of the dependency graph. CMake by default constructs the link line
+so that the linker will scan through the component at least twice.  This
+property specifies the minimum number of scans if it is larger than the
+default. CMake uses the largest value specified by any target in a component.
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-sample
 
 # simple makefile from gmake
 
@@ -14348,7 +14792,7 @@ makefile as the target, and an empty recipe (see Section 5.9 [Using Empty
 
 
 ={============================================================================
-*kt_linux_tool_140* make-gmake
+*kt_linux_tool_140* make-gmake-builtin-target
 
 4.8 Special Built-in Target Names
 
@@ -14371,7 +14815,7 @@ command will still run recipes in parallel (unless its makefile also contains
 
 
 ={============================================================================
-*kt_linux_tool_140* gmake-text-function
+*kt_linux_tool_140* make-gmake-text-function
 
 https://www.gnu.org/software/make/manual/html_node/Text-Functions.html
 
@@ -14397,285 +14841,6 @@ $(strip string)
 
     Replacing the variable reference ‘$(needs_made)’ with the function call
     ‘$(strip $(needs_made))’ in the ifneq directive would make it more robust.
-
-
-={============================================================================
-*kt_linux_tool_140* cmake
-
-<ref>
-http://www.cmake.org/cmake/help/v2.8.9/cmake.html
-http://stackoverflow.com/questions/6352123/multiple-directories-under-cmake
-
-From:
-
-./mheg
-+-- CMakeLists.txt
-+-- include
-Â¦Â Â  +-- dbg.h
-Â¦Â Â  +-- def.h
-+-- main
-Â¦Â Â  +-- main.c
-
-
-To:
-
-./mheg
-+-- CMakeLists.txt
-+-- include
-Â¦Â Â  +-- dbg.h
-Â¦Â Â  +-- def.h
-+-- main
-Â¦Â Â  +-- main.c
-+-- mh5eng
-Â¦Â Â  +-- CMakeLists.txt
-Â¦Â Â  +-- sample.c
-Â¦Â Â  +-- sample.h
-
-
-The changes made to build:
-
-../mheg/CMakeLists.txt
-
-	 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/mh5eng)
-
-	 ADD_EXECUTABLE(${PROJECT_NAME}
-		 main/main.c # uses sample.h
-	 )
-
-	 ADD_SUBDIRECTORY(mh5eng)
-
-	 TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5eng ${APPS_PKGS_LDFLAGS})
-
-../mheg/mh5eng/CMakeLists.txt
-
-	 SET(MH5ENG_HEADERS
-		 sample.h
-	 )
-
-	 SET(MH5ENG_SOURCES
-		 sample.c
-	 )
-
-	 ADD_LIBRARY(mh5eng ${MH5ENG_HEADERS} ${MH5ENG_SOURCES})
-
-This create <libmh5eng.a> as a output
-
-
-==============================================================================
-*kt_linux_tool_141*	cmake: mix of c and cpp build
-
-To compile the mix of c and cpp file, when try followings:
-
-PROJECT(mhegproto C)
-
-SET(MH5ENG_SOURCES
-	xx.c
-	mh5i_residentprogram_db.cpp
-)
-
-ADD_LIBRARY(mh5eng ${MH5ENG_HEADERS} ${MH5ENG_SOURCES} )
-
-cmake do not compile cpp file although it is defined in the set variable. To make it built, must add
-c++ build as below:
-
-PROJECT(mhegproto C CXX)
-
-From http://cmake.org/cmake/help/v2.8.8/cmake.html
-
-project: Set a name for the entire project.
-
-project(<projectname> [languageName1 languageName2 ... ] )
-
-Sets the name of the project. Additionally this sets the variables <projectName>_BINARY_DIR and
-<projectName>_SOURCE_DIR to the respective values.
-
-Optionally you can specify which languages your project supports. Example languages are CXX (i.e.
-C++), C, Fortran, etc. By default C and CXX are enabled. E.g. if you do not have a C++ compiler, you
-can disable the check for it by explicitly listing the languages you want to support, e.g. C. By
-using the special language "NONE" all checks for any language can be disabled. If a variable exists
-called CMAKE_PROJECT_<projectName>_INCLUDE_FILE, the file pointed to by that variable will be
-included as the last step of the project command.
-
-note: by default? seems not.
-
-
-==============================================================================
-*kt_linux_tool_142*	cmake: cflags
-
-To enable preprocessor, set -E as below.
-
-FOREACH (flag ${APPS_PKGS_CFLAGS})
-    SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
-ENDFOREACH(flag)
-SET(CMAKE_C_FLAGS "-E ${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
-
-
-==============================================================================
-*kt_linux_tool_143*	cmake: includes
-
-Found that building a library in the subdir cannot find necessary includes.
-
-root CMakeList.txt:
-
-INCLUDE(FindPkgConfig)
-pkg_check_modules(APPS_PKGS REQUIRED
-	capi-appfw-application
-	dlog
-	edje
-	elementary
-	ecore-x
-	evas
-	utilX
-	x11
-	aul
-	ail
-)
-
-ADD_EXECUTABLE(${PROJECT_NAME}
-	main/main.c
-	main/viewmgr.c
-	main/view_main.c
-)
-
-ADD_SUBDIRECTORY(mh5eng)
-ADD_SUBDIRECTORY(mh5dec)
-ADD_SUBDIRECTORY(mah)
-ADD_SUBDIRECTORY(mhv)
-ADD_SUBDIRECTORY(pfm)
-
-FOREACH (flag ${APPS_PKGS_CFLAGS})
-    SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
-ENDFOREACH(flag)
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
-
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5eng ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5dec ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mah ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mhv ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} pfm ${APPS_PKGS_LDFLAGS})
-
-CONFIGURE_FILE(${PACKAGE_NAME}.xml.in ${PACKAGE_NAME}.xml)
-
-# Install 
-INSTALL(TARGETS ${PROJECT_NAME} DESTINATION ${BINDIR})
-INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
-INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/dummy.png DESTINATION ${IMAGEDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps.png DESTINATION ${IMAGEDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_selected.png DESTINATION ${IMAGEDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_wallpaper.png DESTINATION ${IMAGEDIR})
-
-ADD_SUBDIRECTORY(data)
-
-Here there is no problem to use headers from packages such as elementary but when add the same to
-the one in /mh5eng then cannot find headers. When looked at flags used to build mh5eng, there is no
-necessary -I. This is the same when add pkg_check_moudles in the mh5eng/CMakeList.txt. Thing is
-build faild to update flags as expected.
-
-The finding is that when move mh5eng then it builds without adding pkg_check_moudles in the
-mh5eng/CMakeList.txt
-
-...
-ADD_SUBDIRECTORY(mh5dec)
-ADD_SUBDIRECTORY(mah)
-ADD_SUBDIRECTORY(mhv)
-ADD_SUBDIRECTORY(pfm)
-
-FOREACH (flag ${APPS_PKGS_CFLAGS})
-    SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
-ENDFOREACH(flag)
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
-
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5eng ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mh5dec ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mah ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mhv ${APPS_PKGS_LDFLAGS})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} pfm ${APPS_PKGS_LDFLAGS})
-
-CONFIGURE_FILE(${PACKAGE_NAME}.xml.in ${PACKAGE_NAME}.xml)
-
-# Install 
-INSTALL(TARGETS ${PROJECT_NAME} DESTINATION ${BINDIR})
-INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
-INSTALL(FILES ${PACKAGE_NAME}.xml DESTINATION ${MANIFESTDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/dummy.png DESTINATION ${IMAGEDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps.png DESTINATION ${IMAGEDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_selected.png DESTINATION ${IMAGEDIR})
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/images/apps_wallpaper.png DESTINATION ${IMAGEDIR})
-
-ADD_SUBDIRECTORY(data)
-ADD_SUBDIRECTORY(mh5eng) [KT] moved to here
-
-That suggests that where to put is important and not sure it is a GBS(git build system) or cmake
-itself problem. 
-
-
-Found that this error still happens when build cpp file and the solution is:
-
-From:
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
-
-To:
-MESSAGE("KT >>>>>PKGS_LDFLAGS>>>>>" : ${APPS_PKGS_CFLAGS})
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_CFLAGS}")
-
-Turns out that PKGS_CFLAGS will have necessary includes depending on pkg selection.
-
-
-={============================================================================
-*kt_linux_tool_144* cmake: link group
-
-To solve {cyclic-dependencies} in link, can use this:
-
-From defining each: 
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} mah ${APPS_PKGS_LDFLAGS})
-...
-
-To use group:
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} -Wl,--start-group mhdebug pfm mh5eng mh5dec mhv mah
--Wl,--end-group ${APPS_PKGS_LDFLAGS})
-
- On 05/19/2011 11:11 AM, Anton Sibilev wrote:
-> Hello!
-> I'm wondering how I can use "--start-group archives --end-group"
-> linker flags with "Unix Makefiles".
-> May be somebody know the right way?
-
-You might specify these flags immediately in TARGET_LINK_LIBRARIES():
-
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8 FATAL_ERROR)
-PROJECT(LINKERGROUPS C)
-SET(CMAKE_VERBOSE_MAKEFILE ON)
-FILE(WRITE ${CMAKE_BINARY_DIR}/f.c "void f(void){}\n")
-FILE(WRITE ${CMAKE_BINARY_DIR}/g1.c "void g1(void){}\n")
-FILE(WRITE ${CMAKE_BINARY_DIR}/g2.c "void g2(void){}\n")
-FILE(WRITE ${CMAKE_BINARY_DIR}/h.c "void h(void){}\n")
-ADD_LIBRARY(f STATIC f.c)
-ADD_LIBRARY(g1 STATIC g1.c)
-ADD_LIBRARY(g2 STATIC g2.c)
-ADD_LIBRARY(h STATIC h.c)
-FILE(WRITE ${CMAKE_BINARY_DIR}/main.c "int main(void){return 0;}\n")
-ADD_EXECUTABLE(main main.c)
-TARGET_LINK_LIBRARIES(main f -Wl,--start-group g1 g2 -Wl,--end-group h)
-
-However, do you really need these flags? Refer to the target properties
-[IMPORTED_]LINK_INTERFACE_MULTIPLICITY[_<CONFIG>] and the documentation
-of TARGET_LINK_LIBRARIES().
-
-Regards,
-
-Michael
-
-LINK_INTERFACE_MULTIPLICITY
-
-Repetition count for STATIC libraries with cyclic dependencies.
-
-When linking to a STATIC library target with cyclic dependencies the linker may need to scan more
-than once through the archives in the strongly connected component of the dependency graph. CMake by
-default constructs the link line so that the linker will scan through the component at least twice.
-This property specifies the minimum number of scans if it is larger than the default. CMake uses the
-largest value specified by any target in a component.
 
 
 ={============================================================================
