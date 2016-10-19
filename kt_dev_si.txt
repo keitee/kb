@@ -11,7 +11,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-box-sceret-screen
 |kt_dev_si_0002| si-box-mount
 |kt_dev_si_0002| si-boot-ssitart-mw
-|kt_dev_si_0002| si-boot-log
+|kt_dev_si_0002| si-bootlog
 |kt_dev_si_0002| si-git
 |kt_dev_si_0002| si-build
 |kt_dev_si_0002| si-build-baseline
@@ -399,7 +399,7 @@ mount -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob/595/fosh/Darwin97350_BE/debu
 
 
 ={============================================================================
-|kt_dev_si_0002| si-boot-log
+|kt_dev_si_0002| si-bootlog
 
 ## trial-boot-scripts
 
@@ -470,7 +470,7 @@ BLROTATED="${BLOG_DATAPATH}/RLOG"
 BLINFOPATH="${BLOG_DATAPATH}/VERINFO"
 
 
-<bootlog> main
+<bootlog-sh> main
 # Usage: bootlog.sh <rotate limit> <size limit> [upload]
 #
 # check if it's already mounted.
@@ -481,8 +481,10 @@ grep -q "${BLOG_mntpath}" /proc/mounts
 
 #
 /usr/bin/bootlog-rotate.sh "$rotate_limit"
-#
+
+*call-bootlog-create*
 /usr/bin/bootlog-create.sh
+
 #
 /usr/bin/bootlog-diskusage.sh "$rotate_limit" "$size_limit"
 # upload
@@ -512,7 +514,12 @@ cd "${BLOG_DATAPATH}"/ || exit $?
 
 rm BOOTLOG
 mkdir /mnt/nds/BLOGDIR/FSN_DATA/VERINFO
-cp -a *.DB BOOTLOG/
+
+# Copy database files
+echo "BLL:bootlog-create.sh: MILESTONE Copy database files (*.DB* to BOOTLOG/)"  >> "${BLLFILENAME}"
+cp -a ` *.DB* BOOTLOG/`
+
+
 mv ${BLINFOPATH}/INFO.TXT LOG LOG.* *.LOG *.CUR *.COR *.TXT BOOTLOG/
 
 # [bootlog-mkinfo.sh] create info file, nvram file, etc..
@@ -531,7 +538,7 @@ cat /proc/version && echo
 cat /proc/callisto/version && echo
 
 
-# [bootlog-upload.sh]
+*call-bootlog-upload*
 # Do upload
 logdir="${BLOG_DATAPATH}"/BOOTLOG
 if /usr/bin/bootlog-upload-1.sh "$logdir" &>/tmp/UPLOAD.LOG; then
@@ -546,7 +553,8 @@ else
 /usr/bin/cdi-fpi 0 0 0
 
 
-# [bootlog-upload-1.sh]
+
+<bootlog-upload-1-sh>
 # FTP settings
 host=87.86.191.132
 user=anonymous
@@ -556,6 +564,9 @@ path=upload
 # Enable "online" LED
 # "usage: cdi-fpi <index> <state> <luminosity>\n"
 /usr/bin/cdi-fpi 0 1 1
+
+# note: set files to upload which can be different from what's copied from
+# bootlog-create.
 
 # Create tarball. upload 'BOOTLOG'
 tar -c \
@@ -2974,6 +2985,10 @@ import scripts.common.Diag as Diag
   [["NCM_CLIENT"],	["ncm_client"]],
   [["WLM_SERVER"],	["wlm_server"]],
   [["WLM_CLIENT"],	["wlm_client"]],
+
+  [["DBENGINE_MIRROR"], ["dbengine_misc"]],
+  [["DBENGINE_XDB"], ["manager"]],
+
 ]
 
 
@@ -2989,7 +3004,7 @@ parser.add_argument ("-d", "--dir", help="Folder containing the repository to co
 // def enableDebugConfig (self, segment):
 "darwin":"FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/build_options.mk",
 
-==
+== build_options.mk
 NDS_BUILD_TYPE_darwin_player_src=debug
 
 # Example entry for building a debug library (darwin_player_src) in a release_dbg or release build 
@@ -2999,15 +3014,15 @@ NDS_BUILD_TYPE_darwin_player_src=debug
 include $(NDS_ROOT)/projects/fusion2/build_options.mk
 ==
 
+2. for each key(component segment) in a dict, processSegment(key, value)
+    add "NDS_BUILD_TYPE_xxx=debug" in build_options.mk
 
-3. for each key(component segment) in a dict, processSegment(key, value)
-    add "NDS_BUILD_TYPE_xxx=debug" in debug file.
-
-
+// *enable-comp-diag*
 // def changeSegmentFlags (self, segment, flagStr):
 "darwin":"FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/SI_config.xml",
 
-2. set diag and debug file.
+
+3. set diag and debug file.
 
 adds overrides for `all profiles`:
 
@@ -8950,7 +8965,8 @@ TRACE_LEVEL_ATG_API="AFEWM"
 TRACE_LEVEL_ATG_LOCK="AFEWM"
 ...
 
-
+// each component has a config file
+CMS_INFORMATION_SERVICES/DBENGINE/inc/config/dbengine_master_config.xml
 CMS_SYSTEM_INFRASTRUCTURE/HTTP/inc/config/http_master_config.xml
 11:    <key name="TRACE_LEVEL_LIBCURL" type="STRING" value="AFEWM">
 
@@ -11275,6 +11291,35 @@ typedef struct ValueListClntStructTag
 
 Uzan, Galit <GUzan@nds.com>
 
+COMPONENT_NAME := dbengine
+
+src/Interface/dbe_interface/makefile
+52:COMPONENT_NAME := dbe_interface
+
+char f_segment_name_debug_backup[] = "DBENGINE_BACKUP";
+char f_segment_name_debug_mirror[] = "DBENGINE_MIRROR";
+
+status = DIAG_LOG_SetTraceSettings(DBENGINE_BACKUP_diag_segment_id, DBENGINE_DIAG_TRACE_BIT_PATTERN_ERROR); 
+status = DIAG_LOG_SetTraceSettings(DBENGINE_MIRROR_diag_segment_id, DBENGINE_DIAG_TRACE_BIT_PATTERN_ERROR); 
+
+
+#define DBENGINE_SRV_DIAG_SEGMENT_NAME            "DBENGINE_SRV"
+DBENGINE_XDEBUG_Init(DBENGINE_SRV_DIAG_SEGMENT_NAME); 
+DBENGINE_diag_segment_id;
+
+TRACE_LEVEL_DBENGINE_BACKUP="AFEWM"
+TRACE_LEVEL_DBENGINE_MIRROR="AFEWM"
+TRACE_LEVEL_DBENGINE_SRV="AFEWM"
+
+<version>
+SQLITE_VERSION     77 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/common_h/sqlite3.h # undef SQLITE_VERSION
+SQLITE_VERSION    110 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/common_h/sqlite3.h #define SQLITE_VERSION        "3.7.9"
+SQLITE_VERSION    506 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c # undef SQLITE_VERSION
+SQLITE_VERSION    542 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c #define SQLITE_VERSION         "3.6.1"
+
+DIAG_LOG_INFO(DBENGINE_diag_segment_id, ("SQLite version : %s", SQLITE_VERSION));
+
+
 <dbengine-status>
 # (((COMP_COMP_ID & 0x3FF) << 22) | ((SEVERITY & 0x3) << 16) | ((COMP_IF_ID & 0xF) << 12) | (STATUS & 0xFFF) )
 hex(((8 & 0x3FF) << 22) | ((1 & 0x3) << 16) | ((0 & 0xF) << 12) | (19 & 0xFFF) ) = 0x2010013
@@ -11392,16 +11437,6 @@ note:
 Do not use sqlite3 PCAT.DB 'PRAGMA quick_check'
 
 
-SQLITE_VERSION     77 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/common_h/sqlite3.h # undef SQLITE_VERSION
-SQLITE_VERSION    110 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/common_h/sqlite3.h #define SQLITE_VERSION        "3.7.9"
-SQLITE_VERSION    506 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c # undef SQLITE_VERSION
-SQLITE_VERSION    542 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/sqlite3/src/amalgation/sqlite3.c #define SQLITE_VERSION         "3.6.1"
-SQLITE_VERSION    465 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.c # undef SQLITE_VERSION
-SQLITE_VERSION    502 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.c #define SQLITE_VERSION         "3.5.9"
-SQLITE_VERSION     59 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.h # undef SQLITE_VERSION
-SQLITE_VERSION     96 CMS_INFORMATION_SERVICES/DBENGINE/src/profiling/tools/sqlite3.h #define SQLITE_VERSION         "3.5.9"
-
-
 <pcat-recovery>
 /**  @brief Get the dirty flag.
   *  @param[out] isDirty If true, a data cleanup operation is required.
@@ -11433,7 +11468,23 @@ SYSTEM_STATUS PDM_FS_GetDirtyFlag(bool *isDirty);
 2752:NDS: ^[2016:08:15 20:06:26]0946684975.351336 !WARN   -PCATS                        < p:0x000001ef P:MW t:0x01a9c520 T:PCAT_SRV_SYSINIT_THREAD M:dbview.c F:Dbview_PVR_InitDb L:1930 > isDirtyShutdown = 1, p_is_empty_db = 0
 
 // use stat = PDM_FS_GetDirtyFlag(&isDirty);
+// if it fails, SBM fails to boot up
+
 2795:NDS: ^[2016:08:15 20:06:28]0946684977.460730 !MIL    -VRM_SERVER                   < p:0x000001ef P:MW t:0x01cb8520 T:VRM_SRV M:vrm_recoverer.c F:VRM_RECOVERER_Init L:720 > Dirty flag [1]
+2767 NDS: ^[2016:10:11 12:11:36]0946684971.317275 !ERROR  -VRM_SERVER                < p:0x000001e3 P:MW t:0x01cae520 T:VRM_SRV M:vrm_pcat.c F:VRM_PCAT_Cleanup L:916 > error was encountered during VRM_PCAT cleanup process, stat=0xb420001\n
+
+// stat = VRMRecovererCleanup();
+// SYSTEM_STATUS VRM_PCAT_Cleanup(void);
+
+
+<pcat-jornal>
+SQLite will attempt to recover if the box was rebooted while a transaction was
+in progress.  It's *really* important we know whether this has happened or
+not. Basically if the first few bytes of the DBJ file is zeroes, then there's
+no transaction to be rolled back.  If they're non-zero, then there was likely
+a hard reboot, and it will attempt a rollback that may or may not be
+successful. 
+
 
 ={============================================================================
 |kt_dev_si_0001| comp-fdm

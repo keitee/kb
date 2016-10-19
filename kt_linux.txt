@@ -102,6 +102,7 @@
 |kt_linux_tool_030| diff and patch
 |kt_linux_tool_031| tool-zip. tool-tar
 |kt_linux_tool_032| tool-split tool-merge
+*kt_linux_tool_032* tool-tr
 *kt_linux_tool_032* tool-dd
 |kt_linux_tool_033| getconf
 |kt_linux_tool_034| tool-ps
@@ -185,18 +186,20 @@
 *kt_linux_tool_150* make-autoconf-build-system
 *kt_linux_tool_150* make-autoconf-model
 *kt_linux_tool_150* make-autoconf-write
+*kt_linux_tool_150* make-autoconf-output
 *kt_linux_tool_150* make-autoconf-configure --help
 *kt_linux_tool_150* make-autoconf-error on LDFLAGS
 
 |kt_linux_tool_150| make-automake
 *kt_linux_tool_150* make-automake-standard targets
 *kt_linux_tool_150* make-automake-directory variable
-*kt_linux_tool_150* automake: distcheck
-*kt_linux_tool_150* make-automake-example
-*kt_linux_tool_150* make-automake-example-explained
-*kt_linux_tool_150* automake-variables
-*kt_linux_tool_150* automake: 04: example packages
-*kt_linux_tool_150* automake: 08: building programs and libraries
+*kt_linux_tool_150* make-automake-distcheck
+*kt_linux_tool_150* make-automake-ex
+*kt_linux_tool_150* make-automake-ex-explained
+*kt_linux_tool_150* make-automake-variables
+*kt_linux_tool_150* make-automake-ex-packages
+*kt_linux_tool_150* make-automake-macros
+*kt_linux_tool_150* make-automake-building programs and libraries
 *kt_linux_tool_150* automake: 08: program variables
 *kt_linux_tool_150* automake: 08: program variables: case issue
 *kt_linux_tool_150* automake: 09: scripts
@@ -8412,6 +8415,16 @@ cat xxx.* > outfile
 
 
 ={============================================================================
+*kt_linux_tool_032* tool-tr
+
+NAME
+       tr - translate or delete characters
+
+       -d, --delete
+              delete characters in SET1, do not translate
+
+
+={============================================================================
 *kt_linux_tool_032* tool-dd
 
 DD(1)
@@ -8427,15 +8440,27 @@ DESCRIPTION
        Copy a file, converting and formatting according to the operands.
 
        bs=BYTES
-              read and write up to BYTES bytes at a time
+              read and write up to BYTES bytes `at a time`
 
        if=FILE
               read from FILE instead of stdin
 
-<ex>
-note: this means that the default is stdin.
+       of=FILE
+              write to FILE instead of stdout
 
+       seek=BLOCKS
+              skip BLOCKS obs-sized blocks at start of output
+
+       BLOCKS  and  BYTES  may  be  followed  by  the  following
+       multiplicative suffixes: c =1, w =2, b =512, kB =1000, K =1024, MB
+       =1000*1000, M =1024*1024, xM =M GB =1000*1000*1000, G =1024*1024*1024,
+       and so on for T, P, E, Z, Y.
+
+<ex>
 dd of="${core_output_path}/core.$pid" bs=1M
+
+<ex> create a binary file filled with zeros. must use seek.
+dd of=zeros.bin if=/dev/null bs=10 seek=2
 
 
 ={============================================================================
@@ -9860,6 +9885,13 @@ https://i3wm.org/
 *kt_linux_tool_051* tool-hexdump:
 
 $ hexdump -C -n 100 DTT_Radio1_20150225_1603.ts
+
+     -C          Canonical hex+ASCII display.  Display the input offset in
+     hexadecimal, followed by sixteen space-separated, two column, hexadecimal
+     bytes, followed by the same sixteen bytes in %_p format enclosed in ‘‘|’’
+     characters.
+
+     -n length   Interpret only length bytes of input.
 
 
 ={============================================================================
@@ -13442,6 +13474,10 @@ struct stat {};
 struct __old_kernel_stat {};
 
 
+// useful?
+https://gcc.gnu.org/ml/gcc-patches/2013-05/msg00338.html
+
+
 ={============================================================================
 *kt_linux_tool_100* tool-valgrind
 
@@ -14614,6 +14650,215 @@ so that the linker will scan through the component at least twice.  This
 property specifies the minimum number of scans if it is larger than the
 default. CMake uses the largest value specified by any target in a component.
 
+={============================================================================
+*kt_linux_tool_140* make-kbuild
+
+http://www.linuxjournal.com/article/6568?page=0,0
+
+In versions before the 2.5 kernel, configuration was driven by a `Config.in`
+file within every subdirectory and a main help file,
+Documentation/Configure.help. The language used to describe the build process
+  was based loosely on a shell-style language that would control which
+  configuration options were presented to the user, depending on which options
+  were currently presented. 
+
+This article describes the format of the makefile and configuration files in
+the 2.5 kernel and shows how to add a new driver to the build process.
+
+Configuring the Kernel
+
+To configure different kernel options, a user runs either a text-mode or a
+graphical kernel configurator. The text-mode configurator can be run with make
+config and prompts the user to select configuration options in order. 
+
+The ncurses text version is more popular and is run with the `make menuconfig`
+option. The graphical configurator is run with make xconfig and uses Qt as the
+widget set.
+
+When the kernel configurator is run, it reads the main kernel configuration
+file, located in arch/i386/Kconfig for the i386 platform. Other architectures
+have the main configuration files located in their main directories. This main
+configuration file then includes other configuration files from the different
+subdirectories in the kernel directory tree. Those configuration files also
+can include other configuration files as needed. For example, the
+arch/i386/Kconfig file contains the line:
+
+source "sound/Kconfig"
+
+which will read information from that file. This sound/Kconfig file then
+includes a lot of other files: 
+
+The sound/usb/Kconfig file describes all of the ALSA USB driver options, like
+this:
+
+# ALSA USB drivers
+menu "ALSA USB devices"
+    depends on SND!=n && USB!=n
+
+config SND_USB_AUDIO
+    tristate "USB Audio/MIDI driver"
+    depends on SND && USB
+    help
+      Say 'Y' or 'M' to include support for
+      USB audio and USB MIDI devices.
+endmenu
+
+The # character can be used to comment Kconfig files. Anything written after
+it on the same line is not read by the configurator, but it is useful for
+documenting what the file is for and what it should do.
+
+The menu and endmenu commands tell the configurator to declare a new menu
+level or new screen in some of the configuration programs. On the menu line,
+the name of the menu should be specified within “ characters. For this file,
+the menu is called "ALSA USB devices".
+
+Menus and configuration options can be controlled to display or not. In this
+example, the USB option menu is `only displayed if` the CONFIG_SND and
+CONFIG_USB options are selected, which is controlled by the line depends on
+SND!=n && USB!=n. To help decrease the amount of typing involved, all
+configuration options automatically start with CONFIG, which is not used
+within the configuration language. The valid states for a configuration option
+are:
+
+    y—the option is enabled.
+
+    n—the option is not enabled.
+
+    m—the option is set to be built as a module.
+
+If both the CONFIG_SND and CONFIG_USB options are not set to n (meaning they
+    are set either to be built in to the kernel or to build as a module), the
+CONFIG_SND_USB_AUDIO option is presented to the user. This option can be set
+to one of the three values, and it is described as a “tristate” value. The
+text that should be shown to the user is "USB Audio/MIDI driver":
+
+tristate "USB Audio/MIDI driver"
+
+The valid values for describing a configuration variable are:
+
+    bool—the variable can be set only to y or n.
+
+    tristate—the variable can be set to y, n or m.
+
+    int—the variable can be set to any numeric value.
+
+This configuration option is controlled by a depends logic line, which follows
+the same logic as a menu option. The CONFIG_SND_USB_AUDIO option depends on
+`both the CONFIG_SND and CONFIG_USB options`, meaning that 
+
+if one of these options is set to a module, then the CONFIG_SND_USB_AUDIO
+  option also should be set to a module. 
+
+If both of the controlling options are not enabled (meaning both are set to
+    n), this option will not be displayed. 
+
+If both of these options are set to y, this option can be selected as n, y or
+m. All of this is defined with the simple line:
+
+depends on SND && USB
+
+Within the kernel code, the configuration variable will be seen (the
+    CONFIG_SND_USB_AUDIO in the above example), so the code can test for it or
+any other kernel configuration option's existence. However, using #ifdef
+within a .c file to test for different configuration options is against the
+kernel-style programming guidelines, which I covered in my article “Proper
+Linux Kernel Coding Style” [LJ, July 2002, www.linuxjournal.com/article/5780].
+
+Instead, limit the use of #ifdef to .h files, keeping the .c files cleaner and
+easier to read.
+
+Previously, the help text for a configuration option was placed in one big
+Configuration.help file. Now the help text is placed right after the depends
+line within the Kconfig file. It begins with a line containing either help or
+---help---, followed by a number of lines of help text that are indented two
+spaces from the help line.
+
+
+Building the Kernel
+
+The kernel is built with a system of individual makefiles that are all linked
+together when the kernel is built, forming a large makefile. The individual
+makefiles do not look like any standard makefile, but instead follow a special
+format that is unique to the kernel build process. The makefile needs to build
+only the necessary files, depending on the configuration options enabled, in
+the proper format (as modules or built in to the kernel). 
+
+As an example, drivers/usb/misc/Makefile in the 2.5.59 kernel release looks
+like:
+
+#
+# Makefile for the rest of the USB drivers
+# (the ones that don't fit into any other
+# categories)
+#
+obj-$(CONFIG_USB_AUERSWALD)  += auerswald.o
+obj-$(CONFIG_USB_BRLVGER)    += brlvger.o
+obj-$(CONFIG_USB_EMI26)      += emi26.o
+obj-$(CONFIG_USB_LCD)        += usblcd.o
+obj-$(CONFIG_USB_RIO500)     += rio500.o
+obj-$(CONFIG_USB_SPEEDTOUCH) += speedtch.o
+obj-$(CONFIG_USB_TEST)       += usbtest.o
+obj-$(CONFIG_USB_TIGL)       += tiglusb.o
+obj-$(CONFIG_USB_USS720)     += uss720.o
+speedtch-objs := speedtouch.o atmsar.o
+
+The line:
+
+obj-$(CONFIG_USB_LCD)        += usblcd.o
+
+builds the usblcd.c file into a module if the CONFIG_USB_LCD configuration
+option is set to m. Otherwise, it is built into the kernel directly if that
+configuration option is set to y. This step is all that is necessary to add to
+a kernel makefile if the module is made from only a single .c file.
+
+If the driver consists of multiple .c files, the name of the files needs to be
+listed on separate lines, along with the name of the module that this driver
+is called. In the previous example file, this listing of file and driver names
+looks like:
+
+obj-$(CONFIG_USB_SPEEDTOUCH) += speedtch.o
+
+and
+
+speedtch-objs := speedtouch.o atmsar.o
+
+The first line controls whether the speedtch module is built. If it is, the
+line indicates whether it is compiled into the kernel or stands as a module.
+The second line explains that the speedtouch.c and atmsar.c files will be
+built into .o files and then linked together into the speedtch.o module.
+
+In older kernels, if a file exported symbols, it needed to be explicitly
+mentioned in the kernel makefiles. In 2.5 and later kernels, that mention is
+no longer necessary.
+
+
+Adding a New Driver to the Build Process
+
+To add a new driver to the kernel build process, a single line needs to be
+added if the driver is contained within a single file. Based on the previous
+example of the FooBar USB speaker device, the line:
+
+obj-$(CONFIG_SND_USB_FOOBAR) += usbfoobar.o
+
+is added to sound/usb/Makefile.
+
+If the driver is contained in two files, such as foobar1.c and foobar2.c, an
+additional line needs to be added:
+
+usbfoobar-objs := foobar1.o foobar2.o
+
+Conclusion
+
+The kernel configuration and build process in the 2.5 kernel is much simpler
+and more flexible than in the previous kernel versions. Thanks go to Roman
+Zippel and Kai Germaschewski for doing the work to make it easier for kernel
+developers to focus on writing code and not have to worry about the
+intricacies of the kernel build process.
+
+
+http://www.linuxjournal.com/content/kbuild-linux-kernel-build-system?page=0,0
+http://www.linuxfromscratch.org/hints/downloads/files/kernel-configuration.txt
+
 
 ={============================================================================
 *kt_linux_tool_140* make-gmake-sample
@@ -14984,7 +15229,7 @@ configure.ac --.
 
 Makefile.in
 
-
+<when-use-automake>
 Additionally, if you use Automake, the following additional productions come
 into play:
 
@@ -15171,7 +15416,7 @@ More traces deleted
 
 3.5 Using autoreconf to Update configure Scripts
 
-autoreconf runs autoconf, autoheader, aclocal, automake, libtoolize, and
+`autoreconf runs` autoconf, autoheader, aclocal, automake, libtoolize, and
 autopoint (when appropriate) repeatedly to update `the GNU Build System` in
 the specified directories and their subdirectories
 
@@ -15192,6 +15437,38 @@ verification.
 The following M4 macros (e.g., AC_PACKAGE_NAME), output variables (e.g.,
     PACKAGE_ NAME), and preprocessor symbols (e.g., PACKAGE_NAME), are
 `defined by AC_INIT`:
+
+
+4.2 Dealing with Autoconf versions
+
+The following optional macros can be used to help choose the minimum version
+of Autoconf that can successfully compile a given ‘configure.ac’.
+
+AC_PREREQ (version) [Macro]
+
+Ensure that a recent enough version of Autoconf is being used. If the version
+of Autoconf being used to create configure is earlier than version, print an
+error message to the standard error output and exit with failure (exit status
+is 63). For example: AC_PREREQ([2.69])
+
+This macro may be used before AC_INIT.
+
+
+4.4 Finding configure Input
+
+AC_CONFIG_SRCDIR (unique-file-in-source-dir) [Macro]
+
+unique-file-in-source-dir is some file that is in the package’s source
+directory; configure checks for this `file's existence` to make sure that the
+directory that it is told contains the source code in fact does. Occasionally
+people accidentally specify the wrong directory with ‘--srcdir’; this is a
+safety check. See Section 16.10 [configure Invocation], page 299, for more
+information.
+
+Packages that do manual configuration or use the install program might need to
+  tell configure where to find some other shell scripts by calling
+  AC_CONFIG_AUX_DIR, though the default places it looks are correct for most
+  cases.
 
 
 4.5 Outputting Files
@@ -15221,7 +15498,7 @@ is actually a hidden slave: ‘config.status’.
 
 ‘configure’ is in charge of examining your system, but it is ‘config.status’
 that actually takes the proper actions based on the results of ‘configure’.
-The most typical task of ‘config.status’ is to instantiate files. 
+The most typical task of ‘config.status’ is `to instantiate files` 
 
 This section describes the common behavior of the four standard instantiating
 macros: AC_CONFIG_FILES, AC_CONFIG_HEADERS, AC_CONFIG_COMMANDS and
@@ -15240,7 +15517,7 @@ the files `to instantiate` You are encouraged to use `literals` as tags.
 
 The macros AC_CONFIG_FILES and AC_CONFIG_HEADERS use special tag values: they
 may have the form ‘output’ or ‘output:inputs’. The file output is instantiated
-from its templates, `inputs` (defaulting to `output.in`).
+from its templates, `inputs` (`defaulting to output.in`).
 
 ‘AC_CONFIG_FILES([Makefile:boiler/top.mk:boiler/bot.mk])’, for example, asks
 for the creation of the file ‘Makefile’ that contains the expansion of the
@@ -15248,7 +15525,7 @@ for the creation of the file ‘Makefile’ that contains the expansion of the
     ‘boiler/bot.mk’.
 
 note:
-Means that Makefile can be created from Makefile.in, bolier/top.mk, or
+Means that Makefile can be created from `Makefile.in`, bolier/top.mk, or
 boiler/bot.mk.
 
 
@@ -15256,11 +15533,11 @@ boiler/bot.mk.
 
 AC_CONFIG_FILES (file . . . , [cmds], [init-cmds]) [Macro]
 
-Make AC_OUTPUT create each ‘file’ by copying an input file (by default
-    ‘file.in’), substituting the output variable values. This macro is one of
+Make AC_OUTPUT `create each file` by copying an input file (by default
+    ‘file.in’), `substituting the output variable values` This macro is one of
 the instantiating macros;
 
-This macro creates the directory that the file is in if it doesn’t exist.
+This macro creates the directory that the file is in if it doesn't exist.
   Usually, makefiles are created this way, but other files
 
 
@@ -15268,7 +15545,7 @@ This macro creates the directory that the file is in if it doesn’t exist.
 
 Each subdirectory in a distribution that contains something to be compiled or
 installed should come with a file ‘Makefile.in’, from which configure creates
-a file ‘Makefile’ in that directory. To create ‘Makefile’, configure performs
+a file ‘Makefile’ in that directory. `To create Makefile`, configure performs
 a simple variable substitution, replacing occurrences of `@variable@` in
 `Makefile.in with the value that configure has determined for that variable`
 Variables that are substituted into output files in this way are called
@@ -15296,8 +15573,9 @@ macros set additional output variables, which are mentioned in the
 descriptions for those macros.  See Section B.2 [Output Variable Index], page
 364, for a complete list of output variables.  See Section 4.8.2 [Installation
 Directory Variables], page 27, for the list of the preset ones related to
-installation directories. Below are listed the other preset ones, many of
-which are precious variables
+installation directories. 
+
+Below are listed the other preset ones, many of which are precious variables
 
 
 CFLAGS [Variable]
@@ -15402,6 +15680,10 @@ libraries are found and provide necessary functions, see Section 5.4
 test for C, C++, Objective C, Objective C++, Fortran, and Go features.
 
 
+srcdir [Variable]
+The name of the directory that contains the source code for that makefile.
+
+
 4.8.2 Installation Directory Variables
 
 The following variables specify the directories for package installation, see
@@ -15409,7 +15691,7 @@ Section “Variables for Installation Directories” in The GNU Coding Standards
 for more information.
 
 exec_prefix [Variable]
-The installation prefix for architecture-dependent files. By default it’s the
+The installation prefix for `architecture-dependent files` By default it’s the
 same as `prefix`. You should avoid installing anything directly to exec_prefix.
 However, the default value for directories containing architecture-dependent
 files should be relative to exec_prefix.
@@ -15459,9 +15741,150 @@ with ‘.in’, and uses a makefile snippet similar to the following to build
 scripts like autoheader and autom4te:
 
 
-={============================================================================
-*kt_linux_tool_150* make-autoconf-
+4.9 Configuration Header Files
 
+When a package contains more than a few tests that define C preprocessor
+symbols, the command lines to pass ‘-D’ options to the compiler can get quite
+long. This causes two problems. One is that the make output is hard to
+visually scan for errors. More seriously, the command lines can exceed the
+length limits of some operating systems. 
+
+As an alternative to passing ‘-D’ options to the compiler, configure scripts
+can create a C header file containing ‘#define’ directives. The
+`AC_CONFIG_HEADERS` macro selects this kind of output. Though it can be called
+anywhere between AC_INIT and AC_OUTPUT, it is customary to call it right after
+AC_INIT.
+
+The package should ‘#include’ the configuration header file before any other
+header files, to prevent inconsistencies in declarations (for example, if it
+redefines const).
+
+To provide for VPATH builds, remember to pass the C compiler a ‘-I.’ option
+(or ‘-I..’; whichever directory contains ‘config.h’). Even if you use
+‘#include "config.h"’, the preprocessor searches only the directory of the
+currently read file, i.e., the source directory, not the build directory.
+
+With the appropriate ‘-I’ option, you can use ‘#include <config.h>’. Actually,
+it’s a good habit to use it, because in the rare case when the source
+  directory contains another ‘config.h’, the build directory should be
+  searched first.
+
+AC_CONFIG_HEADERS (header . . . , [cmds], [init-cmds]) [Macro]
+
+This macro is one of the instantiating macros; see Section 4.6 [Configuration
+Actions], page 21. Make AC_OUTPUT create the file(s) in the
+blank-or-newline-separated list header containing C preprocessor #define
+statements, and replace ‘@DEFS@’ in generated files with ‘-DHAVE_CONFIG_H’
+instead of the value of DEFS. The usual name for header is ‘config.h’.
+
+configure
+3527:DEFS=-DHAVE_CONFIG_H
+
+
+4.9.1 Configuration Header Templates
+
+Your distribution should contain a template file that looks as you want the
+final header file to look, including comments, with #undef statements which
+are used as hooks. For example, suppose your ‘configure.ac’ makes these calls:
+
+AC_CONFIG_HEADERS([conf.h])
+AC_CHECK_HEADERS([unistd.h])
+
+Then you could have code like the following in ‘conf.h.in’. The ‘conf.h’
+created by configure defines ‘HAVE_UNISTD_H’ to 1, if and only if the system
+has ‘unistd.h’.
+/* Define as 1 if you have unistd.h. */
+#undef HAVE_UNISTD_H
+
+note:
+Can use autoreconof to create config.h.in
+
+
+={============================================================================
+*kt_linux_tool_150* make-autoconf-tests
+
+5 Existing Tests
+
+These macros test for particular system features that packages might need or
+want to use. If you need to test for a kind of feature that none of these
+macros check for, you can probably do it by calling primitive test macros with
+appropriate arguments (see Chapter 6 [Writing Tests], page 101).
+
+These tests print messages telling the user which feature they’re checking
+for, and what they find. They cache their results for future configure runs
+  (see Section 7.4 [Caching Results], page 117).
+
+`Some of these macros set output variables` See Section 4.8 [Makefile
+Substitutions], page 23, for how to get their values. 
+  
+The phrase “define name” is used below as a shorthand to mean “define the C
+preprocessor symbol name to the value 1”. See Section 7.1 [Defining Symbols],
+page 113, for how to get those symbol definitions into your program.  
+  
+
+5.1 Common Behavior 
+
+Much effort has been expended to make Autoconf easy to learn. The most obvious
+way to reach this goal is simply to enforce standard interfaces and behaviors,
+avoiding exceptions as much as possible. Because of history and inertia,
+unfortunately, there are still too many exceptions in Autoconf; nevertheless,
+this section describes some of the common rules.
+
+
+5.10 Compilers and Preprocessors
+
+All the tests for compilers (AC_PROG_CC, AC_PROG_CXX, AC_PROG_F77) define the
+output variable EXEEXT based on the output of the compiler, typically to the
+empty string if Posix and ‘.exe’ if a DOS variant.
+
+They also define the output variable `OBJEXT` based on the output of the
+compiler, after ‘.c’ files have been excluded, typically to ‘o’ if Posix,
+‘obj’ if a DOS variant.
+
+If the compiler being used does not produce executables, the tests fail. If
+the executables can’t be run, and cross-compilation is not enabled, they fail
+too. See Chapter 14 [Manual Configuration], page 281, for more on support for
+cross compiling.
+
+
+={============================================================================
+*kt_linux_tool_150* make-autoconf-output
+
+7 Results of Tests
+
+Once configure has determined whether a feature exists, what can it do to
+record that information? There are four sorts of things it can do: define a C
+preprocessor symbol, set a variable in the output files, save the result in a
+cache file for future configure runs, and print a message letting the user
+know the result of the test.
+
+7.1 Defining C Preprocessor Symbols
+
+A common action to take in response to a feature test is to define a C
+preprocessor symbol indicating the results of the test. That is done by
+calling AC_DEFINE or AC_DEFINE_UNQUOTED.
+
+By default, `AC_OUTPUT' places the symbols defined by these macros into the
+output variable `DEFS', which contains an option `-DSYMBOL=VALUE' for each
+symbol defined.  Unlike in Autoconf version 1, there is no variable `DEFS'
+defined while `configure' is running.
+
+// not use DEFS so
+
+To check whether Autoconf macros have already defined a certain C preprocessor
+symbol, test the value of the appropriate cache variable, as in this example:
+
+     AC_CHECK_FUNC([vprintf], [AC_DEFINE([HAVE_VPRINTF], [1],
+                               [Define if vprintf exists.])])
+     if test "x$ac_cv_func_vprintf" != xyes; then
+       AC_CHECK_FUNC([_doprnt], [AC_DEFINE([HAVE_DOPRNT], [1],
+                                 [Define if _doprnt exists.])])
+     fi
+
+If AC_CONFIG_HEADERS has been called, then instead of creating DEFS, AC_OUTPUT
+creates a header file by substituting the correct values into #define
+statements in a template file.  *Note Configuration Headers::, for more
+information about this kind of output.
 
 
 ={============================================================================
@@ -16061,7 +16484,7 @@ which files need to be rebuilt.
 
 
 ={============================================================================
-*kt_linux_tool_150* automake: distcheck
+*kt_linux_tool_150* make-automake-distcheck
 
 2.2.11 Preparing Distributions
 
@@ -16163,7 +16586,7 @@ etc.
 
 <source>
 ~/amhello % cat src/main.c
-#include <config.h>
+#include <config.h>             // note:
 #include <stdio.h>
 
 int
@@ -16375,6 +16798,8 @@ right manual when seeking answers.
 ={============================================================================
 *kt_linux_tool_150* make-automake-example-explained
 
+2.4.2 amhello’s configure.ac Setup Explained
+
 Let us begin with the contents of `configure.ac`.
 
      AC_INIT([amhello], [1.0], [bug-automake@gnu.org])
@@ -16387,7 +16812,7 @@ Let us begin with the contents of `configure.ac`.
      ])
      AC_OUTPUT
 
-This file is read by both ‘autoconf’ (to create ‘configure’) and ‘automake’
+This file is read `by both ‘autoconf’ (to create ‘configure’) and automake`
 (to create the various ‘Makefile.in’s). It contains a series of M4 macros that
 will be expanded as `shell code` to finally form the ‘configure’ script.  
 
@@ -16400,6 +16825,20 @@ manual. The macros that start with ‘AM_’ are `automake macros`
 The first two lines of ‘configure.ac’ initialize Autoconf and Automake.
 ‘AC_INIT’ takes in as parameters the name of the package, its version number,
 and a contact address for bug-reports about the package.
+
+The argument to AM_INIT_AUTOMAKE is a list of options for automake (see
+    Chapter 17 [Options], page 117). -Wall and -Werror ask automake to turn on
+all warnings and report them as errors. `We are speaking of Automake warnings`
+here, such as dubious instructions in Makefile.am. This has absolutely nothing
+to do with how the compiler will be called, even though it may support options
+with similar names. Using -Wall -Werror is a safe setting when starting to
+work on a package: you do not want to miss any issues. Later you may decide to
+relax things a bit. 
+
+The `foreign option` tells Automake that this package will not follow the GNU
+Standards. GNU packages should always distribute additional files such as
+ChangeLog, AUTHORS, etc. We do not want automake to complain about these
+missing files in our small example.
   
 The `AC_PROG_CC` line causes the ‘configure’ script to search for a C compiler
 and define the variable ‘CC’ with its name. 
@@ -16516,12 +16955,12 @@ converting them into defined macros.  For this, *note (autoconf)Defining
 
 
 ={============================================================================
-*kt_linux_tool_150* automake-variables
+*kt_linux_tool_150* make-automake-variables
 
 3.1 General Operation
-=====================
 
 Automake works by reading a ‘Makefile.am’ and generating a ‘Makefile.in’.
+
 Certain variables and rules defined in the ‘Makefile.am’ instruct Automake to
 generate more specialized code; for instance, a ‘bin_PROGRAMS’ variable
 definition will cause 'rules' for 'compiling' and 'linking' programs to be
@@ -16581,7 +17020,6 @@ Automake.
 
 
 3.3 The Uniform Naming Scheme
-=============================
 
 Automake variables generally follow a "uniform naming scheme" that makes it easy
 to decide how programs (and other derived objects) are built, and how they are
@@ -16694,7 +17132,6 @@ These prefixes are explained later (*note Program and Library Variables::)
 
 
 3.5 How derived variables are named
-===================================
 
 // bin_PROGRAMS = hello
 // hello_SOURCES = main.c
@@ -16744,22 +17181,9 @@ files—may adjust these shadow variables however necessary.
 
 
 ={============================================================================
-*kt_linux_tool_150* make-automake-marco
+*kt_linux_tool_150* make-automake-ex-packages
 
-6 Scanning configure.ac, using aclocal
-
-Automake scans the package’s configure.ac to determine certain information
-about the package. Some autoconf macros are required and some variables must
-be defined in configure.ac. Automake will also use information from
-configure.ac to further tailor its output.
-
-AM_CONDITIONAL
-This introduces an Automake conditional (see Chapter 20 [Conditionals],
-page 124).
-
-
-={============================================================================
-*kt_linux_tool_150* automake: 04: example packages
+4 Some example packages
 
 The second example shows how two programs can be built from the same file, using
 different compilation parameters.  It contains some technical digressions that
@@ -16790,10 +17214,136 @@ files rarely matters.
 
 
 ={============================================================================
-*kt_linux_tool_150* automake: 08: building programs and libraries
+*kt_linux_tool_150* make-automake-marco
+
+6 Scanning configure.ac, using aclocal
+
+`Automake scans the package’s configure.ac` to determine certain information
+about the package. `Some autoconf macros are required` and `some variables` must
+be defined in configure.ac. Automake will also use information from
+configure.ac to further tailor its output.
+
+Automake also `supplies some Autoconf macros` to make the maintenance easier.
+These macros can automatically be put into your aclocal.m4 using the aclocal
+program.
+
+
+6.1 Configuration requirements
+
+Here are the other macros that Automake requires but which are not run by
+AM_INIT_AUTOMAKE:
+
+AC_CONFIG_FILES
+AC_OUTPUT
+
+AC_CONFIG_FILES([
+Makefile
+doc/Makefile
+src/Makefile
+src/lib/Makefile
+...
+])
+AC_OUTPUT
+
+Automake uses these `to determine which files to create` (see Section
+    “Creating Output Files” in The Autoconf Manual).
+‘AC_CONFIG_FILES([foo/Makefile])’ will cause Automake to generate
+foo/Makefile.in `if foo/Makefile.am exists`
+
+
+6.2 Other things Automake recognizes
+
+Every time Automake is run it `calls Autoconf to trace configure.ac` This way
+it can recognize the use of certain macros and tailor the generated
+Makefile.in appropriately.
+
+Currently recognized macros and their effects are:
+
+AC_CONFIG_HEADERS
+
+Automake will generate rules to rebuild these headers from the corresponding
+templates (usually, the template for a foo.h header being foo.h.in).
+
+
+AM_CONDITIONAL
+
+This introduces an Automake conditional (see Chapter 20 [Conditionals],
+page 124).
+
+
+6.4 Autoconf macros supplied with Automake
+
+Automake ships with several Autoconf macros that you can use from your
+configure.ac.  When you use one of them it will be included by aclocal in
+aclocal.m4.
+
+6.4.1 Public Macros
+
+AM_INIT_AUTOMAKE([OPTIONS])
+
+Runs many macros required for proper operation of the generated Makefiles.
+Today, AM_INIT_AUTOMAKE is called with a single argument: a space-separated
+list of Automake options that should be applied to every Makefile.am in the
+tree. The effect is as if each option were listed in AUTOMAKE_OPTIONS (see
+Chapter 17 [Options], page 117).
+
+
+17.1 Options generalities
+
+Various features of Automake can be controlled by options. Except where noted
+otherwise, options can be specified in one of several ways. Most options can
+be applied on a per-Makefile basis when listed in a special Makefile variable
+named AUTOMAKE_OPTIONS. Some of these options only make sense when specified
+in the toplevel Makefile.am file. 
+
+Options are applied globally to all processed Makefile files when listed in
+the first argument of AM_INIT_AUTOMAKE in configure.ac, and some options
+which require changes to the configure script can only be specified there.
+These are annotated below.
+
+As a general rule, options specified in AUTOMAKE_OPTIONS take precedence over
+those specified in AM_INIT_AUTOMAKE, which in turn take precedence over those
+specified on the command line.
+
+
+17.2 List of Automake options
+
+foreign
+
+Set the strictness as appropriate.
+
+no-dist 
+
+Don’t emit any code related to dist target. This is useful when a package has
+its own method for making distributions.
+
+-Wcategory or --warnings=category
+
+These options behave exactly like their command-line counterpart (see Chapter
+    5 [automake Invocation], page 26). This allows you to enable or disable
+some warning categories on a per-file basis. You can also setup some warnings
+for your entire project; for instance, try ‘AM_INIT_AUTOMAKE([-Wall])’ in your
+  configure.ac.
+
+
+note:
+From For version 1.4, 10 January 1999 but not from the latest.
+
+AM_ENABLE_MULTILIB
+    This is used when a "multilib" library is being built. A multilib library
+    is one that is built multiple times, once per target flag combination.
+    This is only useful when the library is intended to be cross-compiled. 
+    
+    The first optional argument is the name of the `Makefile' being generated;
+it defaults to `Makefile'. The second option argument is used to find the top
+  source directory; it defaults to the empty string (generally this should not
+      be used unless you are familiar with the internals). 
+
+
+={============================================================================
+*kt_linux_tool_150* make-automake-building programs and libraries
 
 8 Building Programs and Libraries
-*********************************
 
 A large part of Automake’s functionality is dedicated to making it easy to build
 programs and libraries.
@@ -16817,19 +17367,18 @@ into an executable:
 This causes each mentioned ‘.c’ file to be compiled into the corresponding
 ‘.o’.  Then all are linked to produce ‘hello’.
 
-Header files listed in a ‘_SOURCES’ definition will be included in the
-distribution but otherwise ignored.  In case it isn’t obvious, you should not
-include the header file generated by ‘configure’ in a ‘_SOURCES’ variable; this
-file should not be distributed.
+Header files listed in a ‘_SOURCES’ `will be included in the distribution` but
+otherwise ignored.  In case it isn’t obvious, you should not include the
+header file generated by ‘configure’ in a ‘_SOURCES’ variable; this file
+should not be distributed.
 
 
-8.1.2 Linking the program : LDADD, AM_LDFLAGS
--------------------------
+8.1.2 Linking the program
 
-If you need to link against libraries that are 'not' found by ‘configure’, you
-can use ‘LDADD’ to do so.  This variable is used to specify 'additional' objects
-or libraries to link with; it is inappropriate for specifying specific linker
-'flags', you should use ‘AM_LDFLAGS’ for this purpose.
+If you need to link against libraries `that are 'not' found by ‘configure’`,
+you can use `LDADD` to do so. This variable is used to specify 'additional'
+  objects or libraries to link with; it is inappropriate for specifying
+  specific linker 'flags', you should use `AM_LDFLAGS` for this purpose.
 
 
 8.2 Building a library
@@ -17292,6 +17841,18 @@ but should not be distributed.
 
    (1) There are other, more obscure reasons for this limitation as well.
 
+
+8.6 Special handling for LIBOBJS and ALLOCA
+
+The ‘$(LIBOBJS)’ and ‘$(ALLOCA)’ variables `list object files` that should be
+compiled into the project to provide an implementation for functions that are
+missing or broken on the host system. `They are substituted by configure`
+
+These variables are defined by Autoconf macros such as AC_LIBOBJ,
+AC_REPLACE_FUNCS, or AC_FUNC_ALLOCA. Many other Autoconf macros call
+  AC_LIBOBJ or AC_REPLACE_FUNCS to populate ‘$(LIBOBJS)’.
+
+// more
 
 8.7 Variables used when building a program
 ==========================================
