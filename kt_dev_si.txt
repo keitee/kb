@@ -25,6 +25,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-sh-check-back
 |kt_dev_si_0002| si-sh-log-parser
 |kt_dev_si_0002| si-sh-log-parser-entry
+|kt_dev_si_0002| si-sh-log-parser-mine
 |kt_dev_si_0002| si-sh-to-dates
 |kt_dev_si_0002| si-sh-alog
 |kt_dev_si_0002| si-sh-list-log
@@ -127,6 +128,7 @@ http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FB63D645 | SI | womb
 http://theyard.cisco.com/missing/checklog.php?log=1f047ae19daf49d912235e7d884ee5e4 | SI | web check log
 
 http://hetty.cisco.com/fusionmadesimple/index.php/Log_Parser | FMS | Log Parser
+http://hetty.cisco.com/fusionmadesimple/index.php/TEST_LOG | FMS | Log Parser
 http://hetty.cisco.com/fusionmadesimple/index.php/FillDisk | FMS | FillDisk
 http://hetty.cisco.com/fusionmadesimple/index.php/SIProcesses#Requesting_retests_for_Brentwood_Stress_defects | FMS | process - brentwood
 http://hetty.cisco.com/fusionmadesimple/index.php/SI-101 | FMS | SI-101
@@ -179,8 +181,12 @@ eth0      Link encap:Ethernet  HWaddr 00:19:FB:F2:D4:6B
           inet addr:10.209.60.60  Bcast:10.209.60.255  Mask:255.255.255.0
 
 
-0019FBF2D46B  
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FBF2D46B
+0019FBF2D46B  
+
+# down
+http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019fb101972
+00:19:FB:10:19:72
 
 
 <fsn_data>
@@ -487,7 +493,8 @@ grep -q "${BLOG_mntpath}" /proc/mounts
 
 #
 /usr/bin/bootlog-diskusage.sh "$rotate_limit" "$size_limit"
-# upload
+
+*call-bootlog-upload*
 [ -n "$upload" ] && /usr/bin/bootlog-upload.sh
 
 # Run crash monitor at high priority in background
@@ -522,25 +529,48 @@ cp -a ` *.DB* BOOTLOG/`
 
 mv ${BLINFOPATH}/INFO.TXT LOG LOG.* *.LOG *.CUR *.COR *.TXT BOOTLOG/
 
+*call-bootlog-makeinfo*
 # [bootlog-mkinfo.sh] create info file, nvram file, etc..
 /usr/bin/bootlog-mkinfo.sh >${BLINFOPATH}/INFO.TXT
-# Middleware version
-grep NDS_SW_VERSION /NDS/config/version.cfg && echo
 
-# CDI version information properties
-/usr/bin/cdi-vi STBM_NAME MODEL_VER STB_ID && echo
+# # Middleware version
+# grep NDS_SW_VERSION /NDS/config/version.cfg && echo
+# 
+# # CDI version information properties
+# /usr/bin/cdi-vi STBM_NAME MODEL_VER STB_ID && echo
+# 
+# # Linux kernel version
+# uname -a
+# cat /proc/version && echo
+# 
+# # CDI driver version
+# cat /proc/callisto/version && echo
+#
+# INFO.TXT
+# --------
+# NDS_SW_VERSION="84.51.00_1809_MNTEE"
+# 
+# STBM_NAME="Sky"
+# MODEL_VER="4f317e"
+# STB_ID="16c8d522"
+# 
+# Linux drx890 2.6.18.8 #2 Tue Oct 18 10:13:08 BST 2016 7335a0 unknown
+# Linux version 2.6.18.8 (jenkins@hudkinsslave10.cisco.com) (gcc version 4.2.0 20070124 (prerelease) - BRCM 10tsHound-20140508) #2 Tue Oct 18 10:13:08 BST 2016
+# 
+# Software version: Rev 4606 for darwin-spk-1.19 debug built 19-05-2016
+# Running on 7335 B0
 
-# Linux kernel version
-uname -a
-cat /proc/version && echo
 
-# CDI driver version
-cat /proc/callisto/version && echo
+*update-version-history*
+cat /NDS/config/version.cfg >>${BLOG_DATAPATH}/VERHIST
+cp -f ${BLOG_DATAPATH}/VERHIST  ${BLOG_DATAPATH}/BOOTLOG/VERHIST.LOG
 
 
-*call-bootlog-upload*
+<bootlog-upload>
 # Do upload
 logdir="${BLOG_DATAPATH}"/BOOTLOG
+
+*call-bootlog-upload-1*
 if /usr/bin/bootlog-upload-1.sh "$logdir" &>/tmp/UPLOAD.LOG; then
   echo '---- UPLOAD COMPLETE ----' >>"$logdir"/UPLOAD.LOG
   cat /tmp/UPLOAD.LOG >>"$logdir"/UPLOAD.LOG
@@ -551,8 +581,6 @@ else
 
 # Disable "online" LED
 /usr/bin/cdi-fpi 0 0 0
-
-
 
 <bootlog-upload-1-sh>
 # FTP settings
@@ -2093,7 +2121,7 @@ mysql --batch --skip-column-names -u root uploads -e "select platform, version, 
 mysql --batch -u root uploads -e "select * from upload where directory_name is not null and parser_result != 'Not Yet Parsed' order by upload_time desc limit 1000"
 
 project filename        `version` `platform`        boxname mac     md5sum  
-`upload_time`     `parser_result`   lastlogtime     corrupt diskerrors      pcat_status     nvram_status    parser_testid   priority      
+`upload_time`     `parser_result`   lastlogtime     corrupt `diskerrors`      `pcat_status`     nvram_status    parser_testid   priority      
 directory_name   `html`    from_time       to_time skykeycode      iterative       dylan   viewing_card    id
 
 BSKYB   darwin_783e53f4a368_c8f60dd992bb8aa7dddc2cc2d2259c34.tgz        X038.002.21.00C eu-q-falconv2-it        HudsonR24B3     783e53f4a368    c8f60dd992bb8aa7dddc2cc2d2259c34        
@@ -2158,6 +2186,10 @@ if [ "$1" = "-for" ]
 
 http://hetty.cisco.com/fusionmadesimple/index.php/TEST_LOG
 
+Assuming that works, book the test into git (git add <mytest>;git commit -m
+'Why I added this test'). Then do 'gitrefresh' to push the test
+everywhere. 
+
 <2> 
 check_log
 518:    test_log.py $1
@@ -2220,6 +2252,8 @@ note:
 #
 #       # [0] id  [1] prio  [2] message                     [3] *text-to-search*                   [4]       [5] message                     [6] script name
 #       # 2<tab>  1<tab>    Failed to lock semaphore<tab>   Failed to lock semaphore<tab>   None<tab> Failed to lock semaphore<tab>   None
+#
+#       # NOTE: the “text to search” should be empty if you've got a script.
 #
 #       # 18	
 #       # 1	
@@ -2559,10 +2593,18 @@ then
     exit 1
 fi
 
-# runs check and if it returns fail, return is back
+# dbcheck, runs check and if it returns fail, return is back
 
 X=`sqlite3 $1 "pragma integrity_check" 2>&1`
-A=$?
+A=$?    # this is exit status
+
+# this seems that there is case when it returns this which is okay.
+if [ "$X" = "Error: no such collation sequence: DEUTCH" ]
+then
+    echo "ok"
+    exit 0
+fi
+
 echo "$X"
 if [ $A -eq 0 ]
 then
@@ -2616,6 +2658,138 @@ P4	481	637578	2016:09:30 17:29:15	DNS failed to respond after 3.5s and there is 
 P4	482	666928	2016:09:30 18:32:21	Re-using old IP address as DNS quick response timeout expired
 P3	167	769918	2016:10:01 03:20:28	VRM shows this warning when user makes booking 2 seconds before the event ends. Planner shows failed recording with TF 10.
 P3	170	815343	2016:10:01 04:55:40	815343 number of errors[277], look in ADSMART_test_BDL_monitoring.log for more information. in LOGlastrun.log.gz line #815343 test finds BDL's that started the download flow, started with asset request but didn't reach recording asset end. found error in [{[] [d-rec-asset-end] [None] #[29047790]}] state[state_illegal]
+
+
+={============================================================================
+|kt_dev_si_0002| si-sh-log-parser-mine
+
+<f>
+i2c_errors
+
+#!/usr/bin/env python
+import sys, gzip, os
+#
+# This script is trying to find a situation where shows unresponsive box and I2C
+# errors from driver and which are: 
+#
+# DRV: ^[2016:08:22 04:54:59]0946738246.285778 KERN_WARNING !!!Error BREG_I2C_Read(hHDMI->hI2cRegHandle, \ 
+#   0x3A, 0x41, (uint8_t *) &Status, 2)(0x110001) at \
+#   //home/masterci/workspace/AMS_DRX890_R11/cdisource/trunk/build/ams-drx890/source//magnum/magnum7335/portinginterface/hdm/7335/bhdm_hdcp.c:2162
+#
+# > T:PooledExecutor#2:SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)
+#
+
+def processFile (fileName):
+    WAIT_FOR_I2C = 0
+    WAIT_FOR_TIMEOUT = 1
+    FOUND_ERROR = 2
+    if fileName.endswith('gz'):
+        fp = gzip.open(fileName, 'r')
+    else:
+        fp = open (fileName, 'r')
+    status = WAIT_FOR_I2C
+    lineNo = 1
+    errorLineNo = 0
+    for line in fp:
+        if status == WAIT_FOR_I2C:
+            if -1 != line.find ("Error BREG_I2C_Read"):
+                status = WAIT_FOR_TIMEOUT
+        else:
+            if -1 != line.find ("SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)"):
+                status = FOUND_ERROR
+                errorLineNo = lineNo
+                break
+        lineNo += 1
+
+    if status == FOUND_ERROR:                   
+        return errorLineNo 
+    else:
+        return -1
+
+def processFolder (folder, fileName):
+    lineNo = -1
+    fileName = os.path.join (folder, fileName)
+
+    if os.path.isfile (fileName):
+        lineNo = processFile (fileName)
+
+    return lineNo
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == '-v':
+        verbose = True
+        fileName=sys.argv[2]
+        print 'Unresponsive box due to I2C errors @SI-10757.'
+        sys.exit(0)
+    else:
+        verbose = False
+        fileName=sys.argv[1]
+
+    lineNo = processFolder (".", fileName)
+    if lineNo == -1:
+        print "0 0"
+        sys.exit (0)
+    else:
+        print str(lineNo) + " Unresponsive box due to I2C errors @SI-10757."
+        sys.exit (1)
+
+
+<f>
+db_journal_check.sh
+
+## P3
+## db_journal_check: 19/10/2016
+## Check for a result of PCAT journal rollback.
+
+if [ "$1" = "-v" ]
+then
+  head -c 10 PCAT.DBJ 2>/dev/null | tr -d '\0' | read -n 1
+  A=$?
+  if [ $A -eq 1 ]
+  then
+    echo "PCAT journal rollback is recovered"
+    exit 0
+  fi
+  echo "PCAT journal rollback is not recovered"
+  exit 1
+fi
+
+head -c 10 PCAT.DBJ 2>/dev/null | tr -d '\0' | read -n 1
+A=$?
+
+# read fails since there is no input and it means DBJ has null bytes which
+# means recovered.
+#
+# this covers if there is no file.
+
+if [ $A -eq 1 ]
+then
+echo 0
+exit 0
+fi
+
+# read okay which means not recovered.
+echo 1
+exit 1
+
+# when used PCAT.DBJ
+$ ./db_check_journal.sh
+0
+$ ./db_check_journal.sh -c
+0
+
+# when used PCAT.DB
+$ ./db_check_journal.sh -v
+$ cp PCAT.DB PCAT.DBJ
+$ ./db_check_journal.sh -v
+PCAT journal rollback is not recovered
+
+# when there is no file
+$ rm PCAT.DBJ
+$ ./db_check_journal.sh
+0
+$ ./db_check_journal.sh -v
+$
 
 
 ={============================================================================

@@ -147,6 +147,7 @@
 *kt_linux_tool_051* tool-virtualbox
 *kt_linux_tool_051* tool-cron
 *kt_linux_tool_100* tool-gprof
+*kt_linux_tool_100* tool-chrome
 
 *kt_linux_tool_100* tool-efence-issues
 *kt_linux_tool_100* tool-efence-benchmark
@@ -176,6 +177,7 @@
 *kt_linux_tool_140* make-cmake-include
 *kt_linux_tool_140* make-cmake-link-flag
 
+*kt_linux_tool_140* make-variable-pattern
 *kt_linux_tool_140* make-gmake-sample
 *kt_linux_tool_140* make-gmake-intro
 *kt_linux_tool_140* make-gmake-write
@@ -186,6 +188,8 @@
 *kt_linux_tool_150* make-autoconf-build-system
 *kt_linux_tool_150* make-autoconf-model
 *kt_linux_tool_150* make-autoconf-write
+*kt_linux_tool_150* make-autoconf-macro
+*kt_linux_tool_150* make-autoconf-tests
 *kt_linux_tool_150* make-autoconf-output
 *kt_linux_tool_150* make-autoconf-configure --help
 *kt_linux_tool_150* make-autoconf-error on LDFLAGS
@@ -200,7 +204,7 @@
 *kt_linux_tool_150* make-automake-ex-packages
 *kt_linux_tool_150* make-automake-macros
 *kt_linux_tool_150* make-automake-building programs and libraries
-*kt_linux_tool_150* automake: 08: program variables
+*kt_linux_tool_150* make-automake-building variables
 *kt_linux_tool_150* automake: 08: program variables: case issue
 *kt_linux_tool_150* automake: 09: scripts
 *kt_linux_tool_150* automake: 15: test and make check
@@ -2143,6 +2147,13 @@ string1 = string2
 
     ‘=’ should be used with the test command for POSIX conformance.
 
+
+<ex>
+if [ ! -f $file ]; then
+  echo "not exist"
+fi
+
+
 <ex>
 gender="female"
 if [[ "$gender" == f* ]]
@@ -3733,7 +3744,7 @@ directs both standard output (file descriptor 1) and standard error (file
 
 ls 2>&1 > dirlist
 
-directs only the standard output to file dirlist, because the standard error was
+`directs only` the standard output to file dirlist, because the standard error was
 made a copy of the standard output before the standard output was redirected to
 dirlist.
 
@@ -3763,6 +3774,7 @@ A failure to open or create a file causes the redirection to fail.
 Redirections using file descriptors greater than 9 should be used with care, as
 they may conflict with file descriptors the shell uses internally. 
 
+
 3.6.1 Redirecting Input
 
 Redirection of input causes the file whose name results from the expansion of
@@ -3772,6 +3784,10 @@ word to be opened for reading on file descriptor n, or the standard input (file
 The general format for redirecting input is:
 
 [n]<word
+
+<ex>
+$ <file `command`
+
 
 3.6.2 Redirecting Output
 
@@ -3813,6 +3829,29 @@ Of the two forms, `the first is preferred` This is semantically equivalent to
 When using the second form, word may not expand to a number or ‘-’. If it does,
 other redirection operators apply (see Duplicating File Descriptors below) for
   compatibility reasons. 
+
+
+<ex>
+head &>/dev/null
+
+
+<ex>
+Wants to this cover two cases: 
+one when a file has null first bytes, read fails and $? is 1. The other when a
+file does not exist, read fails and $? is 1. But there is a error message from
+head command when there is no file. So seems fine? 
+
+NO
+
+head -c 10 PCAT.DBJ &>/dev/null | tr -d '\0' | read -n 1
+
+This makes read command always fails since redirect stdin and stdout to
+/dev/null and there will be no input to read command! 
+
+So have to redirect ONLY stderr.
+
+head -c 10 PCAT.DBJ 2>/dev/null | tr -d '\0' | read -n 1
+
 
 <ex>
 One of the most common uses of file descriptors is to redirect STDOUT and STDERR
@@ -5982,15 +6021,52 @@ GCC: (GNU) 3.4.6
 ={============================================================================
 *kt_linux_tool_009* tool-head
 
+       Print  the  first 10 lines of each FILE to standard output.  With more
+       than one FILE, precede each with a header giving the file name.  With
+       no FILE, or when FILE is -, read stan- dard input.
+
        -n, --lines=[-]K
               print the first K lines instead of the first 10; with the
               leading '-', print all but the last K lines of each file
 
+       -c, --bytes=[-]K
+              print the first K bytes of each file; with the leading ‘-’,
+              print all but the last K bytes of each file
 
 <get-matched-line>
 When POS_OF_MESS is a line no to see.
 
 MESSAGE=`mycat $FNAME 2>/dev/null | head -$POS_OF_MESS | tail -1`
+
+
+<to-check-if-first-n-bytes-are-null>
+PCAT.DB has data but PCAT.DBJ has null bytes in first few bytes as can see:
+
+$ head -c 10 PCAT.DB
+SQLite fork$ head -c 10 PCAT.DBJ
+$
+
+Both returns($?) 0 so cannot use this to say if it has first few null bytes.
+Then how?
+
+$ head -c 10 PCAT.DB | read -n 1      # $? is 0 since read is okay
+$ head -c 10 PCAT.DBJ | read -n 1     # $? is 1 since read is fail (no input)
+
+However, both retuns 0. WTF? The reason is that head outputs "10" long even if
+these are null. 
+
+
+The fix:
+
+# when has first null bytes and read fails
+$ head -c 10 PCAT.DBJ | tr -d '\0' | read -n 1
+$ echo $?
+1
+
+# when has not first null bytes and read okay
+$ head -c 10 PCAT.DB | tr -d '\0' | read -n 1
+$ echo $?
+0
 
 
 ={============================================================================
@@ -8451,6 +8527,13 @@ DESCRIPTION
        seek=BLOCKS
               skip BLOCKS obs-sized blocks at start of output
 
+       count=BLOCKS
+              copy only BLOCKS input blocks
+
+       note:
+       Must use `count` since not know the default and if not use, will have
+       unknown size of input/output. May be bigger than you need.
+
        BLOCKS  and  BYTES  may  be  followed  by  the  following
        multiplicative suffixes: c =1, w =2, b =512, kB =1000, K =1024, MB
        =1000*1000, M =1024*1024, xM =M GB =1000*1000*1000, G =1024*1024*1024,
@@ -8461,6 +8544,40 @@ dd of="${core_output_path}/core.$pid" bs=1M
 
 <ex> create a binary file filled with zeros. must use seek.
 dd of=zeros.bin if=/dev/null bs=10 seek=2
+
+<ex>
+$ hexdump -C -n 20 PCAT.DB
+00000000  53 51 4c 69 74 65 20 66  6f 72 6d 61 74 20 33 00  |SQLite format 3.|
+00000010  08 00 01 01                                       |....|
+00000014
+
+$ dd if=PCAT.DB bs=10c count=1
+SQLite for1+0 records in
+1+0 records out
+10 bytes (10 B) copied, 1.0746e-05 s, 931 kB/s
+
+$ dd if=PCAT.DB bs=20c count=1
+SQLite format 1+0 records in
+1+0 records out
+20 bytes (20 B) copied, 1.3354e-05 s, 1.5 MB/s
+
+$ dd if=PCAT.DB bs=30c count=1
+SQLite format @  ▒1+0 records in
+1+0 records out
+30 bytes (30 B) copied, 1.2526e-05 s, 2.4 MB/s
+
+$ hexdump -C -n 20 PCAT.DBJ
+00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000010  00 00 00 00                                       |....|
+00000014
+
+$ dd if=PCAT.DBJ bs=20c count=1
+1+0 records in
+1+0 records out
+20 bytes (20 B) copied, 1.427e-05 s, 1.4 MB/s
+
+So dd tries to print out outputs on stdin and prints out only displayable
+chars? Anyway, there will be no output for null byte stream.
 
 
 ={============================================================================
@@ -10408,6 +10525,13 @@ HOME=/
 *kt_linux_tool_100* tool-gprof
 
 http://sourceware.org/binutils/docs/gprof/
+
+
+={============================================================================
+*kt_linux_tool_100* tool-chrome
+
+http://www.gamasutra.com/view/news/176420/Indepth_Using_Chrometracing_to_view_your_inline_profiling_data.php
+chrome://tracing/
 
 
 ={============================================================================
@@ -14237,23 +14361,6 @@ Upper, lower, and mixed case commands are supported by CMake.
 
 http://llvm.org/docs/CMakePrimer.html
 
-<variable-dereferencing>
-One big "Gotcha" with variable dereferencing is that if commands implicitly
-dereference values. This has some unexpected results. For example:
-
-if("${SOME_VAR}" STREQUAL "MSVC")
-
-In this code sample MSVC will be implicitly dereferenced, which will result in
-the if command comparing the value of the dereferenced variables SOME_VAR
-and MSVC. A common workaround to this solution is to prepend strings being
-compared with an x.
-
-if("x${SOME_VAR}" STREQUAL "xMSVC")
-
-This works because while MSVC is a defined variable, xMSVC is not. This
-  pattern is uncommon, but it does occur in LLVM’s CMake scripts.
-
-
 <list>
 Lists of Lists
 
@@ -14858,6 +14965,32 @@ intricacies of the kernel build process.
 
 http://www.linuxjournal.com/content/kbuild-linux-kernel-build-system?page=0,0
 http://www.linuxfromscratch.org/hints/downloads/files/kernel-configuration.txt
+
+
+={============================================================================
+*kt_linux_tool_140* make-variable-pattern
+
+<variable-dereferencing>
+One big "Gotcha" with variable dereferencing is that if commands `implicitly`
+dereference values. This has some unexpected results. For example:
+
+if("${SOME_VAR}" STREQUAL "MSVC")
+
+In this code sample MSVC will be implicitly dereferenced, which will result in
+the if command comparing the value of the dereferenced variables SOME_VAR
+and MSVC. A common workaround to this solution is to prepend strings being
+compared with an x.
+
+if("x${SOME_VAR}" STREQUAL "xMSVC")
+
+This works because while MSVC is a defined variable, xMSVC is not. This
+  pattern is uncommon, but it does occur in LLVM’s CMake scripts.
+
+note:
+To prevent name colision by making it string.
+
+note:
+GNU autotools also use this
 
 
 ={============================================================================
@@ -15475,7 +15608,7 @@ Packages that do manual configuration or use the install program might need to
 
 Every Autoconf script, e.g., ‘configure.ac’, should finish by calling
 AC_OUTPUT. (When runs `configure` scrupt) That is the macro that generates and
-runs ‘config.status’, which in turn creates the makefiles and any other files
+runs ‘config.status’, which in turn `creates the makefiles` and any other files
 resulting from configuration.  This is the only required macro besides AC_INIT
 
 AC_OUTPUT [Macro]
@@ -15548,6 +15681,7 @@ installed should come with a file ‘Makefile.in’, from which configure create
 a file ‘Makefile’ in that directory. `To create Makefile`, configure performs
 a simple variable substitution, replacing occurrences of `@variable@` in
 `Makefile.in with the value that configure has determined for that variable`
+
 Variables that are substituted into output files in this way are called
 `output variables` They are ordinary shell variables that are set in
 configure. 
@@ -15555,8 +15689,8 @@ configure.
 To make configure substitute a particular variable into the output files, the
 macro `AC_SUBST` must be called with that variable name as an argument. Any
 occurrences of ‘@variable@’ for other variables are left unchanged. See
-Section 7.2 [Setting Output Variables], page 114, for more information on
-creating output variables with AC_SUBST.
+Section 7.2 [Setting Output Variables], for more information on creating
+output variables with AC_SUBST.
 
 A software package that uses a configure script should be distributed with a
 file ‘Makefile.in’, but no makefile; that way, the user has to properly
@@ -15831,6 +15965,27 @@ unfortunately, there are still too many exceptions in Autoconf; nevertheless,
 this section describes some of the common rules.
 
 
+5.5.3 Generic Function Checks
+
+These macros are used to find functions not covered by the "particular"
+test macros. If the functions might be in libraries other than the
+default C library, first call `AC_CHECK_LIB' for those libraries. 
+
+If you need to check the behavior of a function as well as find out whether it
+is present, you have to write your own test for it (*note Writing Tests::).
+
+ -- Macro: AC_CHECK_FUNC (FUNCTION, [ACTION-IF-FOUND],
+          [ACTION-IF-NOT-FOUND])
+
+     If C function FUNCTION is available, run shell commands ACTION-IF-FOUND,
+otherwise ACTION-IF-NOT-FOUND.  If you just want to define a symbol if the
+  function is available, consider using `AC_CHECK_FUNCS' instead.  This macro
+  checks for functions with C linkage even when `AC_LANG(C++)' has been
+  called, since C is more standardized than C++.  
+
+     This macro `caches its result in the ac_cv_func_FUNCTION variable`
+
+
 5.10 Compilers and Preprocessors
 
 All the tests for compilers (AC_PROG_CC, AC_PROG_CXX, AC_PROG_F77) define the
@@ -15872,7 +16027,7 @@ defined while `configure' is running.
 // not use DEFS so
 
 To check whether Autoconf macros have already defined a certain C preprocessor
-symbol, test the value of the appropriate cache variable, as in this example:
+symbol, test the value of the appropriate `cache variable`, as in this example:
 
      AC_CHECK_FUNC([vprintf], [AC_DEFINE([HAVE_VPRINTF], [1],
                                [Define if vprintf exists.])])
@@ -15885,6 +16040,84 @@ If AC_CONFIG_HEADERS has been called, then instead of creating DEFS, AC_OUTPUT
 creates a header file by substituting the correct values into #define
 statements in a template file.  *Note Configuration Headers::, for more
 information about this kind of output.
+
+ -- Macro: AC_DEFINE (VARIABLE, VALUE, [DESCRIPTION])
+ -- Macro: AC_DEFINE (VARIABLE)
+     Define VARIABLE to VALUE (verbatim), by defining a C preprocessor
+     macro for VARIABLE.  VARIABLE should be a `C identifier`, optionally
+     suffixed by a parenthesized argument list to define a C
+     preprocessor macro with arguments.  The macro argument list, if
+     present, should be a comma-separated list of C identifiers,
+     possibly terminated by an ellipsis `...' if C99 syntax is employed.
+     VARIABLE should not contain comments, white space, trigraphs,
+     backslash-newlines, universal character names, or non-ASCII
+     characters.
+
+     VALUE may contain backslash-escaped newlines, which will be
+     preserved if you use 'AC_CONFIG_HEADERS' but flattened if passed
+     via `@DEFS@' (with no effect on the compilation, since the
+     preprocessor sees only one line in the first place).  VALUE should
+     not contain raw newlines.  If you are not using
+     'AC_CONFIG_HEADERS', VALUE should not contain any '#' characters,
+     as `make' tends to eat them.  To use a shell variable, use
+     'AC_DEFINE_UNQUOTED' instead.
+
+     DESCRIPTION is only useful if you are using 'AC_CONFIG_HEADERS'.
+     In this case, DESCRIPTION is put into the generated 'config.h.in'
+     as the comment before the macro define.  The following example
+     `defines the C preprocessor variable` 'EQUATION' to be the string
+     constant `"$a > $b"':
+
+          AC_DEFINE([EQUATION], ["$a > $b"],
+            [Equation string.])
+
+     If neither VALUE nor DESCRIPTION are given, then VALUE defaults to
+     1 instead of to the empty string.  This is for backwards
+     compatibility with older versions of Autoconf, but this usage is
+     obsolescent and may be withdrawn in future versions of Autoconf.
+
+     If the VARIABLE is a literal string, it is passed to
+     `m4_pattern_allow' (*note Forbidden Patterns::).
+
+     If multiple `AC_DEFINE' statements are executed for the same
+     VARIABLE name (not counting any parenthesized argument list), the
+     last one wins.
+
+
+7.2 Setting Output Variables
+
+Another way to record the results of tests is to set `output variables`, which
+are `shell variables` whose values are substituted into files that `configure'
+outputs.  The two macros below create new output variables. *Note Preset
+Output Variables::, for a list of output variables that are always available.
+
+ -- Macro: AC_SUBST (VARIABLE, [VALUE])
+     Create an output variable from a shell variable.  Make `AC_OUTPUT'
+     substitute the variable VARIABLE into output files (typically one
+     or more makefiles). 
+     
+     `This means` that AC_OUTPUT replaces instances of `@VARIABLE@` in input
+     files with the value that the shell variable VARIABLE has when
+     `AC_OUTPUT' is called.  
+     
+     The value can contain any non-`NUL' character, including newline.  If you
+     are using Automake 1.11 or newer, for newlines in values you might want
+     to consider using `AM_SUBST_NOTMAKE' to prevent `automake' from adding a
+     line VARIABLE = @VARIABLE@' to the Makefile.in files (*note Automake:
+         (automake)Optional.).
+
+     Variable occurrences should not overlap: e.g., an input file should
+     not contain `@VAR1@VAR2@' if VAR1 and VAR2 are variable names.
+     The substituted value is not rescanned for more output variables;
+     occurrences of `@VARIABLE@' in the value are inserted literally
+     into the output file.  (The algorithm uses the special marker
+     `|#_!!_#|' internally, so neither the substituted value nor the
+     output file may contain `|#_!!_#|'.)
+
+     If VALUE is given, in addition assign it to VARIABLE.
+
+     The string VARIABLE is passed to `m4_pattern_allow' (*note
+     Forbidden Patterns::).
 
 
 ={============================================================================
@@ -17155,8 +17388,7 @@ The strudel is an addition, to make the use of Autoconf substitutions in
 variable names less obfuscating.
 
 
-3.6 Variables reserved for the user
-===================================
+3.6 Variables reserved for the user *user-variable*
 
 Some ‘Makefile’ variables are 'reserved' by the GNU Coding Standards for the use
 of the 'user' - the person 'building' the package. For instance, ‘CFLAGS’ is one
@@ -17193,8 +17425,15 @@ Here is another, trickier example.  It shows how to generate two programs
 (‘true’ and ‘false’) from the same source file (‘true.c’).  The difficult part
 is that each compilation of ‘true.c’ requires different ‘cpp’ flags.
 
-As it turns out, there is also a much easier way to do this same task.  Some of
-the above technique is useful enough that we’ve kept the example in the manual.
+     bin_PROGRAMS = true false
+     false_SOURCES =
+     false_LDADD = false.o
+
+     true.o: true.c
+             $(COMPILE) -DEXIT_CODE=0 -c true.c
+
+     false.o: true.c
+             $(COMPILE) -DEXIT_CODE=1 -o false.o -c true.c
 
 However if you were to build ‘true’ and ‘false’ in real life, you would probably
 use per-program compilation flags, like so:
@@ -17352,7 +17591,16 @@ In order to build a program, you need to tell Automake which sources are
 part of it, and which libraries it should be linked with.
 
 This section also covers conditional compilation of sources or programs. Most
-of the comments about these also apply to libraries and libtool libraries.
+of the comments about these `also apply to libraries and libtool libraries`
+
+
+8.1.1 Defining program sources
+
+In a directory containing source that gets built into a program (`as opposed
+    to` a library or a script), the `PROGRAMS primary` is used.  Programs can
+be installed in ‘bindir’, ‘sbindir’, ‘libexecdir’, ‘pkglibexecdir’, or not at
+all (‘noinst_’).  They can also be built only for ‘make check’, in which case
+the prefix is ‘check_’.
 
      bin_PROGRAMS = hello
 
@@ -17382,30 +17630,45 @@ you can use `LDADD` to do so. This variable is used to specify 'additional'
 
 
 8.2 Building a library
-======================
 
 Building a library is much like building a program.  In this case, the name of
-the primary is ‘LIBRARIES’.  Libraries can be installed in ‘libdir’ or
+the primary is `LIBRARIES`.  Libraries can be installed in ‘libdir’ or
 ‘pkglibdir’.
+
+*Note A Shared Library::, for information on how to build shared libraries
+using libtool and the ‘LTLIBRARIES’ primary.
+
 
 For instance, to create a library named ‘libcpio.a’, but not install it, you
 would write:
 
      noinst_LIBRARIES = libcpio.a
-
+     libcpio_a_SOURCES = ...
+     
 The sources that go into a library are determined exactly as they are for
 programs, via the ‘_SOURCES’ variables.  Note that the library name is
 canonicalized, so the ‘_SOURCES’ variable corresponding to ‘libcpio.a’ is
-‘libcpio_a_SOURCES’, not ‘libcpio.a_SOURCES’.
+`libcpio_a_SOURCES`, not ‘libcpio.a_SOURCES’.
 
 Extra objects can be added to a library using the ‘LIBRARY_LIBADD’ variable.
 This should be used for objects determined by ‘configure’.  Again from ‘cpio’:
 
      libcpio_a_LIBADD = $(LIBOBJS) $(ALLOCA)
 
+
+Building a static library is done by compiling all object files, then by
+invoking ‘$(AR) $(ARFLAGS)’ followed by the name of the library and the list
+of objects, and finally by calling ‘$(RANLIB)’ on that library.  You should
+call ‘AC_PROG_RANLIB’ from your ‘configure.ac’ to define ‘RANLIB’ (Automake
+    will complain otherwise).
+
+You `can override` the ‘AR’ variable by defining a per-library ‘maude_AR’
+variable (*note Program and Library Variables::).
+
+<use-static-library>
 To use a static library when building a program, add it to ‘LDADD’ for this
-program.  In the following example, the program ‘cpio’ is statically linked with
-the library ‘libcpio.a’.
+program.  In the following example, the program ‘cpio’ is statically linked
+with the library ‘libcpio.a’.
 
      noinst_LIBRARIES = libcpio.a
      libcpio_a_SOURCES = ...
@@ -17416,7 +17679,6 @@ the library ‘libcpio.a’.
 
 
 8.3 Building a Shared Library
-=============================
 
 <libtool>
 Building shared libraries portably is a relatively complex matter.  For this
@@ -17617,27 +17879,27 @@ The libtool rules also use a ‘LIBTOOLFLAGS’ variable that should not be set 
 
 
 ={============================================================================
-*kt_linux_tool_150* automake: 08: program variables
+*kt_linux_tool_150* make-automake-building variables
 
 8.4 Program and Library Variables
-=================================
 
 Associated with each program is a collection of variables that can be used to
-modify how that program is built.  There is a similar list of such variables for
-each library.  The canonical name of the program (or library) is used as a base
-for naming these variables.
+modify how that program is built.  There is a similar list of such variables
+for each library.  The canonical name of the program (or library) is used as a
+base for naming these variables.
 
 In the list below, we use the name “maude” to refer to the 'program' or
-'library'.  In your ‘Makefile.am’ you would replace this with the canonical name
-of your program.  This list also refers to “maude” as a program, but in general
-the same rules apply for both static and dynamic libraries; the documentation
-below notes situations where programs and libraries differ.
+'library'.  In your ‘Makefile.am’ you would replace this with the canonical
+name of your program.  This list also refers to “maude” as a program, but in
+general the same rules apply for both static and dynamic libraries; the
+documentation below notes situations `where programs and libraries differ`
 
 ‘maude_SOURCES’
      This variable, if it exists, lists all the source files that are compiled
      to build the program.  These files are added to the distribution by
      default.  When building the program, Automake will cause each source file
      to be compiled to a single ‘.o’ file (or ‘.lo’ when using libtool).
+
      Normally these object files are named after the source file, but other
      factors can change this.  If a file in the ‘_SOURCES’ variable has an
      unrecognized extension, Automake will do one of two things with it.  If a
@@ -17647,7 +17909,7 @@ below notes situations where programs and libraries differ.
      header file.
 
      The prefixes ‘dist_’ and ‘nodist_’ can be used to control whether files
-     listed in a ‘_SOURCES’ variable are distributed.  ‘dist_’ is 'redundant',
+     listed in a ‘_SOURCES’ variable are distributed. ‘dist_’ is 'redundant',
             as sources are distributed by default, but it can be specified for
               clarity if desired.
 
@@ -17676,9 +17938,7 @@ below notes situations where programs and libraries differ.
      object names into, e.g., ‘_LDADD’ (see below), then you should list the
      corresponding source files in the ‘EXTRA_’ variable.
 
-     This variable also supports ‘dist_’ and ‘nodist_’ prefixes.  For instance,
-‘nodist_EXTRA_maude_SOURCES’ would list extra sources that may need to be built,
-but should not be distributed.
+     This variable also supports ‘dist_’ and ‘nodist_’ prefixes.
 
 ‘maude_AR’
      A static library is created by default by invoking ‘$(AR) $(ARFLAGS)’
@@ -17692,30 +17952,32 @@ but should not be distributed.
 
 ‘maude_LIBADD’
      Extra objects can be added to a _library_ using the ‘_LIBADD’ variable.
-     For instance, this should be used for objects determined by ‘configure’
+     For instance, this `should be used for objects determined by ‘configure’`
      (*note A Library::).
 
      In the case of libtool libraries, ‘maude_LIBADD’ can also refer to other
      libtool libraries.
+
 
 ‘maude_LDADD’
      Extra objects (‘*.$(OBJEXT)’) and libraries (‘*.a’, ‘*.la’) can be added to
      a _program_ by listing them in the ‘_LDADD’ variable.  For instance, this
      should be used for objects determined by ‘configure’ (*note Linking::).
 
-     ‘_LDADD’ and ‘_LIBADD’ are 'inappropriate' for passing program-'specific'
-     linker flags (except for ‘-l’, ‘-L’, ‘-dlopen’ and ‘-dlpreopen’).  Use the
-     ‘_LDFLAGS’ variable for this purpose.
+     ‘_LDADD’ and ‘_LIBADD’ are `inappropriate for passing program-specific`
+     linker flags (except for ‘-l’, ‘-L’, ‘-dlopen’ and ‘-dlpreopen’).  Use
+     the ‘_LDFLAGS’ variable for this purpose.
 
      For instance, if your ‘configure.ac’ uses ‘AC_PATH_XTRA’, you could link
      your program against the X libraries like so:
 
           maude_LDADD = $(X_PRE_LIBS) $(X_LIBS) $(X_EXTRA_LIBS)
 
-     We recommend that you use ‘-l’ and ‘-L’ only when referring to third-party
-     libraries, and give the explicit file names of any library built by your
-     package.  Doing so will ensure that ‘maude_DEPENDENCIES’ (see below) is
-     correctly defined by default.
+     We recommend that you use ‘-l’ and ‘-L’ only when referring to
+     third-party libraries, and give the explicit file names of any library
+     built by your package.  Doing so will ensure that ‘maude_DEPENDENCIES’
+     (see below) is correctly defined by default.
+
 
 ‘maude_LDFLAGS’
      This variable is used to pass 'extra''flags' to the link step of a program
@@ -17778,6 +18040,9 @@ but should not be distributed.
      as ‘_CFLAGS’, ‘_LDFLAGS’ or ‘_LIBTOOLFLAGS’, in cases where they
      apply.
 
+
+<per-target-compilation>
+
 ‘maude_CCASFLAGS’
 ‘maude_CFLAGS’
 ‘maude_CPPFLAGS’
@@ -17795,16 +18060,16 @@ but should not be distributed.
      programs, and it will potentially be compiled with different flags for each
      program.  This works for any language directly supported by Automake.
 
-     These "per-target compilation flags" are 
+     These `per-target compilation flags` are 
      ‘_CCASFLAGS’, ‘_CFLAGS’, ‘_CPPFLAGS’, ‘_CXXFLAGS’, ‘_FFLAGS’, ‘_GCJFLAGS’, 
      ‘_LFLAGS’, ‘_OBJCFLAGS’, ‘_OBJCXXFLAGS’, ‘_RFLAGS’, ‘_UPCFLAGS’,
      and ‘_YFLAGS’.
 
-     When using a per-target compilation flag, Automake will choose a different
-     name for the intermediate object files.  Ordinarily a file like ‘sample.c’
-     will be compiled to produce ‘sample.o’.  However, if the program’s
-     ‘_CFLAGS’ variable is set, then the object file will be named, for
-     instance, ‘maude-sample.o’.  (See also *note Renamed Objects::).
+     When using a per-target compilation flag, Automake will choose a
+     `different name` for the intermediate object files.  Ordinarily a file like
+     ‘sample.c’ will be compiled to produce ‘sample.o’.  However, if the
+     program’s ‘_CFLAGS’ variable is set, then the object file will be named,
+     for instance, ‘maude-sample.o’.  (See also *note Renamed Objects::).
 
      In compilations with per-target flags, the ordinary ‘AM_’ form of the flags
      variable is _not_ automatically included in the compilation (however, the
@@ -17849,16 +18114,16 @@ compiled into the project to provide an implementation for functions that are
 missing or broken on the host system. `They are substituted by configure`
 
 These variables are defined by Autoconf macros such as AC_LIBOBJ,
-AC_REPLACE_FUNCS, or AC_FUNC_ALLOCA. Many other Autoconf macros call
-  AC_LIBOBJ or AC_REPLACE_FUNCS to populate ‘$(LIBOBJS)’.
+AC_REPLACE_FUNCS, or AC_FUNC_ALLOCA. Many other Autoconf macros call AC_LIBOBJ
+  or AC_REPLACE_FUNCS `to populate` ‘$(LIBOBJS)’.
 
 // more
 
-8.7 Variables used when building a program
-==========================================
 
-Occasionally it is useful to know which ‘Makefile’ variables Automake uses for
-compilations, and in which 'order'; for instance, you might need to do your own
+8.7 Variables used when building a program
+
+Occasionally it is useful to know `which ‘Makefile’ variables Automake uses` for
+compilations, and in `which order`; for instance, you might need to do your own
 compilation in some special cases.
 
    Some variables are 'inherited' from Autoconf; these are 
@@ -17868,16 +18133,16 @@ compilation in some special cases.
    There are some additional variables that Automake defines on its own:
 
 ‘AM_CPPFLAGS’
-     The contents of this variable are passed to every compilation that invokes
+     The contents of this variable are passed to `every compilation` that invokes
      the C 'preprocessor'; it is a list of arguments to the preprocessor.  For
      instance, ‘-I’ and ‘-D’ options should be listed here.
 
      Automake already provides some ‘-I’ options automatically, in a separate
      variable that is also passed to every compilation that invokes the C
-     preprocessor.  In particular it generates ‘-I.’, ‘-I$(srcdir)’, and a ‘-I’
+     preprocessor. In particular it generates ‘-I.’, ‘-I$(srcdir)’, and a ‘-I’
      pointing to the directory holding ‘config.h’ (if you’ve used
          ‘AC_CONFIG_HEADERS’).  You can disable the default ‘-I’ options using
-     the ‘nostdinc’ option.
+     the `nostdinc` option.
 
      When a file to be included is generated during the build and not
      part of a distribution tarball, its location is under
@@ -17891,40 +18156,39 @@ compilation in some special cases.
      reference to the source tree, so that accidentally leftover
      generated files in the source directory are ignored.
 
-     ‘AM_CPPFLAGS’ is ignored in preference to a per-executable (or
-     per-library) ‘_CPPFLAGS’ variable if it is defined.
+     `AM_CPPFLAGS is ignored` in preference to a per-executable (or
+         per-library) ‘_CPPFLAGS’ variable `if it is defined`
 
 // ‘INCLUDES’
 //      This does the same job as ‘AM_CPPFLAGS’ (or any per-target
 //      ‘_CPPFLAGS’ variable if it is used).  It is an older name for the
-//      same functionality.  This variable is 'deprecated'; we suggest using
+//      same functionality.  `This variable is deprecated`; we suggest using
 //      ‘AM_CPPFLAGS’ and per-target ‘_CPPFLAGS’ instead.
 
 ‘AM_CFLAGS’
-     This is the variable the ‘Makefile.am’ author can use to pass in additional
-     C compiler flags.  In some situations, this is not used, in preference to
-     the per-executable (or per-library) ‘_CFLAGS’.
+     This is the variable the ‘Makefile.am’ author can use to pass in
+     additional C compiler flags.  In some situations, this is not used, in
+     preference to the per-executable (or per-library) ‘_CFLAGS’.
 
 ‘COMPILE’
      This is the command used to actually compile a C source file.  The file
      name is appended to form the complete command line.
 
 ‘AM_LDFLAGS’
-     This is the variable the ‘Makefile.am’ author can use to pass in additional
-     linker flags.  In some situations, this is not used, in preference to the
-     per-executable (or per-library) ‘_LDFLAGS’.
+     This is the variable the ‘Makefile.am’ author can use to pass in
+     additional linker flags.  In some situations, this is not used, in
+     preference to the per-executable (or per-library) ‘_LDFLAGS’.
 
 ‘LINK’
-     This is the command used to actually link a C program.  It already includes
-     ‘-o $@’ and the usual variable references (for instance, ‘CFLAGS’); it
-     takes as “arguments” the names of the object files and libraries to link
-     in.  This variable is not used when the linker is overridden with a
-     per-target ‘_LINK’ variable or per-target flags cause Automake to define
-     such a ‘_LINK’ variable.
+     This is the command used to actually link a C program.  It already
+     includes ‘-o $@’ and the usual variable references (for instance,
+         ‘CFLAGS’); it takes as “arguments” the names of the object files and
+     libraries to link in.  This variable is not used when the linker is
+     overridden with a per-target ‘_LINK’ variable or per-target flags cause
+     Automake to define such a ‘_LINK’ variable.
 
 
 8.9 C++ Support
-===============
 
 Automake includes full support for C++.
 
@@ -17951,8 +18215,10 @@ A few additional variables are defined when a C++ source file is seen:
      The command used to actually link a C++ program.
 
 
+={============================================================================
+*kt_linux_tool_150* make-automake-building variable order
+
 27.6 Flag Variables Ordering
-============================
 
 What is the difference between ‘AM_CFLAGS’, ‘CFLAGS’, and ‘mumble_CFLAGS’?
 
@@ -17961,28 +18227,30 @@ Shouldn’t it be the converse?
 
 My ‘configure’ adds some warning flags into ‘CXXFLAGS’.  In one ‘Makefile.am’ I
 would like to append a new flag, however if I put the flag into ‘AM_CXXFLAGS’ it
-is prepended to the other flags, not appended.
+is `prepended` to the other flags, `not appended`
+
 
 Compile Flag Variables
-----------------------
 
-This section attempts to answer all the above questions.  We will mostly discuss
-‘CPPFLAGS’ in our examples, but actually the answer holds for 'all' the compile
-flags used in Automake: ‘CCASFLAGS’, ‘CFLAGS’, ‘CPPFLAGS’, ‘CXXFLAGS’,
-‘FCFLAGS’, ‘FFLAGS’, ‘GCJFLAGS’, ‘LDFLAGS’, ‘LFLAGS’, ‘LIBTOOLFLAGS’,
-‘OBJCFLAGS’, ‘OBJCXXFLAGS’, ‘RFLAGS’, ‘UPCFLAGS’, and ‘YFLAGS’.
+This section attempts to answer all the above questions. We will mostly
+discuss ‘CPPFLAGS’ in our examples, but actually the answer holds for 'all'
+the compile flags used in Automake: ‘CCASFLAGS’, ‘CFLAGS’, ‘CPPFLAGS’,
+‘CXXFLAGS’, ‘FCFLAGS’, ‘FFLAGS’, ‘GCJFLAGS’, ‘LDFLAGS’, ‘LFLAGS’,
+‘LIBTOOLFLAGS’, ‘OBJCFLAGS’, ‘OBJCXXFLAGS’, ‘RFLAGS’, ‘UPCFLAGS’, and
+  ‘YFLAGS’.
 
-‘CPPFLAGS’, ‘AM_CPPFLAGS’, and ‘mumble_CPPFLAGS’ are three variables that can be
-used to pass flags to the C preprocessor (actually these variables are also used
-    for other languages like C++ or preprocessed Fortran).  ‘CPPFLAGS’ is the
-user variable (*note User Variables::), ‘AM_CPPFLAGS’ is the Automake variable,
+‘CPPFLAGS’, ‘AM_CPPFLAGS’, and ‘mumble_CPPFLAGS’ are three variables that can
+be used to pass flags to the C preprocessor (actually these variables are also
+    used for other languages like C++ or preprocessed Fortran). ‘CPPFLAGS’ is
+the user variable *user-variable* , ‘AM_CPPFLAGS’ is the Automake variable,
 and ‘mumble_CPPFLAGS’ is the variable specific to the ‘mumble’ target (we call
-    this a per-target variable, *note Program and Library Variables::).
+    this a per-target variable).
 
-<use-order>
+
+<variable-order>
 Automake always uses two of these variables when compiling C sources files.
 When compiling an object file for the ‘mumble’ target, the first variable will
-be ‘mumble_CPPFLAGS’ if it is defined, or ‘AM_CPPFLAGS’ otherwise.  The second
+be ‘mumble_CPPFLAGS’ if it is defined, or ‘AM_CPPFLAGS’ otherwise. The second
 variable is always ‘CPPFLAGS’.
 
    In the following example,
@@ -17993,35 +18261,43 @@ variable is always ‘CPPFLAGS’.
      foo_CPPFLAGS = -DFOO
      AM_CPPFLAGS = -DBAZ
 
-‘xyz.o’ will be compiled with ‘$(foo_CPPFLAGS) $(CPPFLAGS)’, (because ‘xyz.o’ is
-    part of the ‘foo’ target), while ‘main.o’ will be compiled with
-‘$(AM_CPPFLAGS) $(CPPFLAGS)’ (because there is no per-target variable for target
-    ‘bar’).
+‘xyz.o’ will be compiled with ‘$(foo_CPPFLAGS) $(CPPFLAGS)’, (because ‘xyz.o’
+    is part of the ‘foo’ target), 
+
+while ‘main.o’ will be compiled with ‘$(AM_CPPFLAGS) $(CPPFLAGS)’ (because
+    there is no per-target variable for target ‘bar’).
+
 
 The difference between ‘mumble_CPPFLAGS’ and ‘AM_CPPFLAGS’ being clear enough,
-let’s focus on ‘CPPFLAGS’.  ‘CPPFLAGS’ is a user variable, i.e., a variable that
-  users are entitled to modify in order to compile the package.  This variable,
-like many others, is documented at the end of the output of ‘configure --help’.
+    let’s focus on ‘CPPFLAGS’. ‘CPPFLAGS’ is a user variable, i.e., a variable
+      that users are entitled to modify in order to compile the package.  This
+      variable, like many others, is documented at the end of the output of
+      ‘configure --help’.
 
 For instance, someone who needs to add ‘/home/my/usr/include’ to the C
 compiler’s search path would configure a package with
 
      ./configure CPPFLAGS='-I /home/my/usr/include'
 
-and this flag would be 'propagated' to the compile rules of all ‘Makefile’s.
+and this flag would be 'propagated' to the compile rules of `all Makefile’s`
+
 
 <make-time-change>
-It is also not uncommon to override a user variable at ‘make’-time.  Many
+It is also not uncommon to override a user variable at `make-time`.  Many
 installers do this with ‘prefix’, but this can be useful with compiler flags
-too.  For instance, if, while debugging a C++ project, you need to 'disable'
-optimization in one specific object file, you can run something like
+too. For instance, if, while debugging a C++ project, you need to 'disable'
+optimization `in one specific object file`, you can run something like
 
      rm file.o
      make CXXFLAGS=-O0 file.o
      make
 
 The reason ‘$(CPPFLAGS)’ appears after ‘$(AM_CPPFLAGS)’ or ‘$(mumble_CPPFLAGS)’
-in the compile command is that users should always have the last say.  It
+in the compile command is `that users should always have the last say`  
+
+*should-not-use-user-variable-in-makefile-or-config-ac*
+
+It
 probably makes more sense if you think about it while looking at the
 ‘CXXFLAGS=-O0’ above, which should 'supersede' any other switch from
 ‘AM_CXXFLAGS’ or ‘mumble_CXXFLAGS’ (and this of course replaces the previous
