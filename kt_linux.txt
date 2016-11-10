@@ -32,7 +32,7 @@
 *kt_linux_bash_001* sh-expansion-parameter
 *kt_linux_bash_001* sh-expansion-parameter-substitude
 *kt_linux_bash_001* sh-expansion-command
-*kt_linux_bash_001* sh-expansion-word
+*kt_linux_bash_001* sh-expansion-word sh-ifs
 *kt_linux_bash_001* sh-expansion-arithmetic sh-expr
 *kt_linux_bash_001* sh-expansion-process
 *kt_linux_bash_001* sh-expansion-filename
@@ -3244,7 +3244,7 @@ pushd
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-expansion-parameter *sh-expansion-parameter*
+*kt_linux_bash_001* sh-expansion-parameter
 
 3.5.3 Shell Parameter Expansion 
 
@@ -3485,7 +3485,7 @@ expansion are not performed on the results.
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-expansion-word
+*kt_linux_bash_001* sh-expansion-word sh-ifs
 
 3.5.7 Word Splitting
 
@@ -3522,6 +3522,39 @@ command expansion and word splitting.
 $ls
 $FILES=``ls``
 $echo $FILES | wc -l
+
+
+note: $FILES do not change but echo changes depending on IFS Why? Due to
+*sh-expansion-parameter*
+
+$ IFS=$'\n'
+$ echo $FILES
+brentwood_macs_and_names_phase1.txt brentwood_macs_and_names_r36.txt brentwood_macs_and_names.txt find_matching_tests_by_version_and_mac.sh find_uploads_by_viewing_card.sh
+$ echo $FILES | wc -l
+1
+
+$ IFS=$' '
+$ echo $FILES
+brentwood_macs_and_names_phase1.txt
+brentwood_macs_and_names_r36.txt
+brentwood_macs_and_names.txt
+find_matching_tests_by_version_and_mac.sh
+find_uploads_by_viewing_card.sh
+$ echo $FILES | wc -l
+5
+
+
+<ex>
+OLD_IFS=IFS
+IFS=$'\n'
+
+# LIST file has a format and read a line by line
+# xxxx xxxx
+# xxxx xxxx
+# ....
+MAC_ADDRESS_LIST=$(cat $MAC_ADDRESS_LIST_FILE)
+
+IFS=OLD_IFS
 
 
 ={============================================================================
@@ -6042,28 +6075,38 @@ MESSAGE=`mycat $FNAME 2>/dev/null | head -$POS_OF_MESS | tail -1`
 <to-check-if-first-n-bytes-are-null>
 PCAT.DB has data but PCAT.DBJ has null bytes in first few bytes as can see:
 
+$ hexdump -C -n 10 PCAT.DB
+00000000  53 51 4c 69 74 65 20 66  6f 72                    |SQLite for|
+0000000a
+$ hexdump -C -n 10 PCAT.DBJ.org
+00000000  00 00 00 00 00 00 00 00  00 00                    |..........|
+0000000a
+
 $ head -c 10 PCAT.DB
 SQLite fork$ head -c 10 PCAT.DBJ
 $
 
-Both returns($?) 0 so cannot use this to say if it has first few null bytes.
-Then how?
+Both `head command` returns($?) 0 so cannot use this to say if it has first
+few null bytes. Then how?
 
-$ head -c 10 PCAT.DB | read -n 1      # $? is 0 since read is okay
-$ head -c 10 PCAT.DBJ | read -n 1     # $? is 1 since read is fail (no input)
+$ head -c 10 PCAT.DB | read -n 1      # expect $? is 0 since read is okay
+$ head -c 10 PCAT.DBJ | read -n 1     # expect $? is 1 since read is fail (no input)
 
-However, both retuns 0. WTF? The reason is that head outputs "10" long even if
-these are null. 
+However, both `read command` retuns 0. WTF? The reason is that head outputs
+"10" long even if these are null. 
 
 
 The fix:
 
-# when has first null bytes and read fails
+# when there are first null bytes, tr deletes null bytes, so no input to read
+# command. Hence read fails and return 1
+
 $ head -c 10 PCAT.DBJ | tr -d '\0' | read -n 1
 $ echo $?
 1
 
-# when has not first null bytes and read okay
+# when there are no first null bytes and read returns okay.
+
 $ head -c 10 PCAT.DB | tr -d '\0' | read -n 1
 $ echo $?
 0
@@ -8844,6 +8887,18 @@ ERROR: The certificate of 'stb.co.uk' is not trusted.
 ERROR: The certificate of 'stb.co.uk' hasn't got a known issuer.
 
 curl --insecure https://zinc-logs.gz > zinc-logs.gz
+
+
+{libcurl}
+https://curl.haxx.se/libcurl/c/curl_easy_perform.html
+https://curl.haxx.se/libcurl/c/curl_easy_cleanup.html
+
+https://curl.haxx.se/changes.html
+
+ Fixed in 7.33.0 - October 14 2013
+
+Changes:
+    cookies: add expiration 
 
 
 ={============================================================================
