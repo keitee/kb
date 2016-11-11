@@ -18,7 +18,7 @@
 *kt_linux_bash_021* sh-exit-status
 *kt_linux_bash_021* sh-return-value-from-script
 *kt_linux_bash_001* sh-looping-construct sh-compound-command
-*kt_linux_bash_001* sh-looping-construct-getopt
+*kt_linux_bash_001* sh-looping-construct-getopt sh-parse-arg
 *kt_linux_bash_001* sh-conditional-construct
 *kt_linux_bash_001* sh-conditional-expression
 *kt_linux_bash_001* sh-pattern-match
@@ -123,12 +123,15 @@
 |kt_linux_tool_045| graphbiz
 |kt_linux_tool_046| mktemp
 *kt_linux_tool_047* tool-env
-|kt_linux_tool_048| term: gnome-terminal
+*kt_linux_tool_048* tool-dircolors
+*kt_linux_tool_048* tool-tput
+|kt_linux_tool_048| tool-gnome-terminal
 *kt_linux_tool_049* tool-terminator
 |kt_linux_tool_050| tool-watch
 *kt_linux_tool_051* tool-github set-github
 *kt_linux_tool_051* tool-font set-font
 *kt_linux_tool_051* tool-echo
+*kt_linux_tool_051* tool-echo-compile
 *kt_linux_tool_051* tool-tcpdump
 *kt_linux_tool_051* tool-wireshark
 *kt_linux_tool_051* tool-swapon
@@ -537,7 +540,7 @@ You owe $1250
 * Single Quotes: to inhibit `all` interpretation of a sequence of characters.
 
 Enclosing `characters` in single quotes (‘'’) preserves the literal value of each
-character within the quotes. A single quote may not occur between single quotes,
+character within the quotes. A single quote `may not occur between single quotes`,
 even when preceded by a backslash. 
 
 <ex>
@@ -570,7 +573,7 @@ The special parameters ‘*’ and ‘@’ have special meaning when in double q
 (see Shell Parameter Expansion). 
 
 <ex>
-Do not quote all (see below) so that can use 'variables' inside the quoted.
+Do not quote all (see below) so that `can use variables` inside the quoted.
 
 $ echo '$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]'
 $USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]
@@ -582,6 +585,10 @@ parkkt owes <-250.**>; [ as of (01/26) ]
 To prevent globbing by shell before passing params to grep command.
 
 $ grep '[0-9][0-9]*$' report2 report7
+
+<ex>
+ssh theyard "mysql -e "select upload_time from upload where parser_result != 'Not Yet Parsed' $1""      # not work
+ssh theyard "mysql -e \"select upload_time from upload where parser_result != 'Not Yet Parsed' $1\""    # work
 
 
 ={============================================================================
@@ -1678,7 +1685,7 @@ control loop execution.
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-looping-construct-getopt
+*kt_linux_bash_001* sh-looping-construct-getopt sh-parse-arg
 
 <ex>
 note: can use true only in the script but not command line.
@@ -1743,6 +1750,70 @@ while [ $# -gt 0 ]; do
             break;;
     esac
 done
+
+<ex>
+# Parse command line arguments.
+parse_args "$@"
+
+# Parse command line arguments.
+function parse_args
+{
+    while [ $# -gt 0 ]
+    do
+        case "$1" in
+            -m | --maximum)
+                shift
+                MAXIMUM_NUMBER_OF_UPLOADS_TO_FIND=$1
+                if [ $MAXIMUM_NUMBER_OF_UPLOADS_TO_FIND -lt 1 ]
+                then
+                    echo "'$MAXIMUM_NUMBER_OF_UPLOADS_TO_FIND' isn't large enough.  Please enter a value greater than 0."
+                    echo ""
+                    exit 1
+                fi
+                ;;
+            -l | --list)
+                shift
+                MAC_ADDRESS_LIST_FILE=$1
+                if [ ! -e $MAC_ADDRESS_LIST_FILE ]
+                then
+                    echo "The MAC address list file '$MAC_ADDRESS_LIST_FILE' cannot be found."
+                    echo ""
+                    exit 1
+                fi
+                MAC_ADDRESS_LIST=$(cat $MAC_ADDRESS_LIST_FILE)
+                NUMBER_OF_MAC_ADDRESSES=$(cat $MAC_ADDRESS_LIST_FILE | wc -l)
+                ;;
+            -v | --version)
+                shift
+                VERSION=$1
+                ;;
+            -t | --test)
+                shift
+                TEST_IDS=$1
+                ;;
+            -h | --help)
+                usage
+                exit 0
+                ;;
+            *)
+                # Bail out if we hit something unexpected.
+                echo "'$1' is not a valid parameter.  Please use the -h or --help parameter for more information."
+                echo ""
+                exit 1
+                ;;
+        esac
+        shift
+    done
+
+    # Check all mandatory parameters are set.
+    if [ -z "$MAC_ADDRESS_LIST_FILE" ]
+    then
+        usage
+        echo "The mandatory -l/--list parameter was not provided."
+        echo ""
+        exit 1
+    fi
+}
 
 
 {getopts} shell built-in
@@ -2716,6 +2787,10 @@ note:
 After all, not in double-quote, gets each word for each positional parameter and
 in double-quote, gets a single-word which has all parametes.
 
+Both do the same. Why two? So the $* provides more options than $@ since can
+make single word.
+
+
 <ex>
 args2=($*)  # `compound-assignments` in array
 echo $args2 ${args2[0]} ${args2[1]} ${args2[2]}
@@ -2755,9 +2830,10 @@ vars+=(LD_PRELOAD=$(list_join ":" ${preload_libs[@]}))
 
 
 @
-($@) Expands to the `positional-parameters`, starting from one. When the
-expansion occurs "within double quotes", each parameter expands to a separate
-word. That is, "$@" is equivalent to "$1" "$2"... 
+($@) Expands to the `positional-parameters`, starting from one. 
+
+When the expansion occurs "within double quotes", each parameter expands to a
+separate word. That is, "$@" is equivalent to "$1" "$2"... 
 
 If the double-quoted expansion occurs within a word, the expansion of the first
 parameter is joined with the beginning part of the original word, and the
@@ -2770,12 +2846,6 @@ args=("$@");   # to get 'all' args and set it to array.
 echo ${args[0]} ${args[1]} ${args[2]}
 
 echo $@        # to print all args in a one go
-
-note:
-Both do the same. Why two?
-
-echo $@
-echo $*
 
 
 0
@@ -9619,7 +9689,178 @@ env ${LD_PRELOAD} nickelmediad \
 
 
 ={============================================================================
-*kt_linux_tool_048* term: gnome-terminal
+*kt_linux_tool_048* tool-dircolors
+
+IMPORTANT NOTE FOR TERMINAL USERS:
+
+If you are going to use Solarized in Terminal mode (i.e. not in a GUI version
+like gvim or macvim), please please please consider setting your terminal
+emulator's colorscheme to used the Solarized palette. I've included palettes
+for some popular terminal emulator as well as Xdefaults in the official
+Solarized download available from Solarized homepage. If you use Solarized
+without these colors, Solarized will need to be told to degrade its
+colorscheme to a set compatible with the limited 256 terminal palette (whereas
+by using the terminal's 16 ansi color values, you can set the correct,
+specific values for the Solarized palette).
+
+http://www.webupd8.org/2011/04/solarized-must-have-color-paletter-for.html
+
+{dircolors}
+
+#############################################################################
+# Below are the color init strings for the basic file types. A color init
+# string consists of one or more of the following numeric codes:
+#
+# Attribute codes:
+#   00=none 01=bold 04=underscore 05=blink 07=reverse 08=concealed
+# Text color codes:
+#   30=black 31=red 32=green 33=yellow 34=blue 35=magenta 36=cyan 37=white
+# Background color codes:
+#   40=black 41=red 42=green 43=yellow 44=blue 45=magenta 46=cyan 47=white
+#
+# NOTES:
+# - See http://www.oreilly.com/catalog/wdnut/excerpt/color_names.html
+# - Color combinations
+#   ANSI Color code       Solarized  Notes                Universal             SolDark              SolLight
+#   ~~~~~~~~~~~~~~~       ~~~~~~~~~  ~~~~~                ~~~~~~~~~             ~~~~~~~              ~~~~~~~~
+#   00    none                                            NORMAL, FILE          <SAME>               <SAME>
+#   30    black           base02
+#   01;30 bright black    base03     bg of SolDark
+#   31    red             red                             docs & mm src         <SAME>               <SAME>
+#   01;31 bright red      orange                          EXEC                  <SAME>               <SAME>
+#   32    green           green                           editable text         <SAME>               <SAME>
+#   01;32 bright green    base01                          unimportant text      <SAME>
+#   33    yellow          yellow     unclear in light bg  multimedia            <SAME>               <SAME>
+#   01;33 bright yellow   base00     fg of SolLight                             unimportant non-text
+#   34    blue            blue       unclear in dark bg   user customized       <SAME>               <SAME>
+#   01;34 bright blue     base0      fg in SolDark                                                   unimportant text
+#   35    magenta         magenta                         LINK                  <SAME>               <SAME>
+#   01;35 bright magenta  violet                          archive/compressed    <SAME>               <SAME>
+#   36    cyan            cyan                            DIR                   <SAME>               <SAME>
+#   01;36 bright cyan     base1                           unimportant non-text                       <SAME>
+#   37    white           base2
+#   01;37 bright white    base3      bg in SolLight
+#   05;37;41                         unclear in Putty dark
+
+
+// since light is better
+// wget --no-check-certificate https://raw.github.com/seebi/dircolors-solarized/master/dircolors.ansi-dark
+// mv dircolors.ansi-dark .dircolors
+// eval `dircolors ~/.dircolors`
+
+wget --no-check-certificate https://raw.github.com/seebi/dircolors-solarized/master/dircolors.ansi-light
+mv dircolors.ansi-light .dircolors
+eval `dircolors ~/.dircolors`
+
+
+$ man dircolors
+
+NAME
+       dircolors - color setup for ls
+
+       -p, --print-database
+              output defaults
+
+note:
+No /etc/DIR_COLORS in debian.
+
+As for where dircolors gets its settings from, when you don't specify a file
+it just uses some builtin defaults.
+
+
+{gonme}
+git clone https://github.com/sigurdga/gnome-terminal-colors-solarized.git
+cd gnome-terminal-colors-solarized
+
+" can set it to light or dark using the following commands:
+
+./set_dark.sh
+./set_light.sh
+
+
+{putty}
+https://github.com/altercation/solarized/tree/master/putty-colors-solarized
+
+PuTTY Tray can store sessions in text files as opposed to the Windows
+registry. To modify an existing session to use Solarized colors, open the file
+in a text editor and replace the lines beginning with Colour## (0-21) with the
+version from solarized_dark_puttytray.txt or solarized_light_puttytray.txt.
+
+https://puttytray.goeswhere.com/
+
+Saves a session as a text which is made under "session" from where putty runs.
+
+// solarized/putty-colors-solarized/solarized_light_puttytray.txt
+
+Colour21\253,246,227\
+Colour20\238,232,213\
+Colour19\147,161,161\
+Colour18\42,161,152\
+Colour17\108,113,196\
+Colour16\211,54,130\
+Colour15\131,148,150\
+Colour14\38,139,210\
+Colour13\101,123,131\
+Colour12\181,137,0\
+Colour11\88,110,117\
+Colour10\133,153,0\
+Colour9\203,75,22\
+Colour8\220,50,47\
+Colour7\0,43,54\
+Colour6\7,54,66\
+Colour5\101,123,131\
+Colour4\238,232,213\
+Colour3\238,232,213\
+Colour2\253,246,227\
+Colour1\88,110,117\
+Colour0\101,123,131\
+
+// original value
+
+Colour21\255,255,255\
+Colour20\187,187,187\
+Colour19\85,255,255\
+Colour18\0,187,187\
+Colour17\255,85,255\
+Colour16\187,0,187\
+Colour15\85,85,255\
+Colour14\0,0,187\
+Colour13\255,255,85\
+Colour12\187,187,0\
+Colour11\85,255,85\
+Colour10\0,187,0\
+Colour9\255,85,85\
+Colour8\187,0,0\
+Colour7\85,85,85\
+Colour6\0,0,0\
+Colour5\0,255,0\
+Colour4\0,0,0\
+Colour3\85,85,85\
+Colour2\0,0,0\
+Colour1\255,255,255\
+Colour0\187,187,187\
+
+
+={============================================================================
+*kt_linux_tool_048* tool-tput
+
+NAME
+       tput, reset - initialize a terminal or query terminfo database
+
+<ex>
+
+# Definitions for bold/normal formatting.  Used to prettify the output.
+bold=$(tput bold)
+normal=$(tput sgr0)
+
+    echo ""
+    echo "${bold}********************************************${normal}"
+    echo "${bold}** Find Latest Uploads from MAC Addresses **${normal}"
+    echo "${bold}********************************************${normal}"
+
+
+={============================================================================
+*kt_linux_tool_048* tool-gnome-terminal
 
 {gnome-terminal}
 I have just found that you can open new terminals using 'gnome-terminal'.  You can open multiple
