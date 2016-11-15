@@ -193,9 +193,8 @@
 *kt_linux_tool_150* make-autoconf-write
 *kt_linux_tool_150* make-autoconf-macro
 *kt_linux_tool_150* make-autoconf-tests
-*kt_linux_tool_150* make-autoconf-output
-*kt_linux_tool_150* make-autoconf-configure --help
-*kt_linux_tool_150* make-autoconf-error on LDFLAGS
+*kt_linux_tool_150* make-autoconf-test-result
+*kt_linux_tool_150* make-autoconf-run-configure
 
 |kt_linux_tool_150| make-automake
 *kt_linux_tool_150* make-automake-standard targets
@@ -322,7 +321,7 @@
 |kt_linux_core_106| process-virtual-memory, user and kernel stack, stack frame
 |kt_linux_core_107| process: environment list
 |kt_linux_core_108| process: group
-|kt_linux_core_109| process: deamon
+|kt_linux_core_109| process-deamon
 |kt_linux_core_110| process-exec-call <exec-wrapper-example>
 *kt_linux_core_110* process-resource
 *kt_linux_core_110* process-resource-case
@@ -13564,7 +13563,7 @@ AddressSanitizer is a part of LLVM starting with version 3.1 and a part of GCC
 starting with version `4.8`
 
 
-<gcc-x86>
+<for-x86-via-gcc-build>
 note:
 Being built as a part of gcc build and as a shared library.
 
@@ -13591,7 +13590,156 @@ Have to speficy lib path:
 $ ./gcc -fsanitize=address -Wl,-rpath=/home/NDS-UK/kyoupark/toolchains/lib64 uaf.c
 
 
-{mips-support}
+{for-mips-without-asn}
+For mips but without asn, builds okay and have toolchain built
+
+BR2_mips=y
+BR2_ARCH="mips"
+BR2_ENDIAN="BIG"
+BR2_GCC_TARGET_ARCH="mips32"
+BR2_GCC_TARGET_ABI="32"
+
+BR2_WGET="wget --passive-ftp -nd -t 3 --no-check-certificate"
+
+BR2_DEFAULT_KERNEL_HEADERS="3.2.81"
+BR2_TOOLCHAIN_BUILDROOT_UCLIBC=y
+
+BR2_GCC_VERSION="4.9.4"
+
+/output/host/usr/bin/mips-buildroot-linux-uclibc-gcc --version
+mips-buildroot-linux-uclibc-gcc.br_real (Buildroot 2016.08.1) 4.9.4
+Copyright (C) 2015 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+/broot-latest/buildroot-2016.08.1/output/host/usr/bin$ ls
+mips-buildroot-linux-uclibc-gcc                
+mips-buildroot-linux-uclibc-gcc-4.9.4          
+...
+
+kyoupark@ukstbuild2:~$ more x.c
+#include <stdio.h>
+
+//      gcc -fsanitize=address testmain.c -o out_asn
+int main(int argc, char **argv)
+{
+    printf("====> \n" );
+    printf("====> this is mips target and use after free..\n" );
+    printf("====> \n" );
+    int *x = malloc(10*sizeof(int));
+    free(x);
+    x[5] = 10;
+    return;
+}
+
+$ /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/mips-buildroot-linux-uclibc-gcc -fsanitize=address x.c
+
+
+{for-aarch64}
+Enabled C++ support, used musl since there is no selection for uclibc.
+
+kyoupark@ukstbuild2:~/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin$ ./aarch64-buildroot-linux-musl-gcc --version
+aarch64-buildroot-linux-musl-gcc.br_real (Buildroot 2016.08.1) 4.9.4
+Copyright (C) 2015 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+kyoupark@ukstbuild2:~$ ~/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/aarch64-buildroot-linux-musl-gcc -fsanitize=address x.c
+x.c:1:0: warning: -fsanitize=address not supported for this target
+ #include <stdio.h>
+ ^
+x.c: In function ‘main’:
+x.c:9:14: warning: incompatible implicit declaration of built-in function ‘malloc’
+     int *x = malloc(10*sizeof(int));
+              ^
+x.c:10:5: warning: incompatible implicit declaration of built-in function ‘free’
+     free(x);
+     ^
+/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/../lib/gcc/aarch64-buildroot-linux-musl/4.9.4/../../../../aarch64-buildroot-linux-musl/bin/ld: cannot find libasan_preinit.o: No such file or directory
+/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/../lib/gcc/aarch64-buildroot-linux-musl/4.9.4/../../../../aarch64-buildroot-linux-musl/bin/ld: cannot find -lasan
+collect2: error: ld returned 1 exit status
+
+Built but failed to use asn. Why?
+
+// home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/package/gcc/gcc.mk
+// since not happy with musl.
+
+# libsanitizer requires wordexp, not in default uClibc config. Also
+# doesn't build properly with musl.
+ifeq ($(BR2_TOOLCHAIN_BUILDROOT_UCLIBC)$(BR2_TOOLCHAIN_BUILDROOT_MUSL),y)
+HOST_GCC_COMMON_CONF_OPTS += --disable-libsanitizer
+endif
+
+
+Changes to use glibc, have it built but still not have ASN enabled. 
+
+note:
+1. glibc gets built which is different when do on debian VM.
+2. Since not use UCLIBC or MUSL, not set "--disable-libsanitizer" and will
+have config checking:
+
+// checking for libsanitizer support... no
+
+
+// full command to run config. note that cd first and when use "./configure
+// ...", do not work.
+
+// no changes
+PATH="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/sbin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/sbin:/home/nds-uk/kyoupark/inst/bin:/home/nds-uk/kyoupark/viminst/bin:/home/nds-uk/kyoupark/github-kb/bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/nds-uk/kyoupark/bin" AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm" CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc" CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy" RANLIB="/usr/bin/ranlib" CPPFLAGS="-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" CFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" CXXFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/lib -L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib -Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib/pkgconfig:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/share/pkgconfig" INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/lib -L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib -Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib" MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CONFIG_SITE=/dev/null ./configure --prefix="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr" --sysconfdir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/etc" --localstatedir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/var" --enable-shared --disable-static --disable-gtk-doc --disable-gtk-doc-html --disable-doc --disable-docs --disable-documentation --disable-debug --with-xmlto=no --with-fop=no --disable-dependency-tracking  --target=aarch64-buildroot-linux-gnu --with-sysroot=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/aarch64-buildroot-linux-gnu/sysroot --disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib --with-gmp=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr --with-mpfr=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr --with-pkgversion="Buildroot 2016.08.1" --with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath --enable-tls --disable-libmudflap --enable-threads --with-mpc=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr --without-isl --without-cloog --disable-decimal-float --enable-languages=c --disable-shared --without-headers --disable-threads --with-newlib --disable-largefile --disable-nls 
+
+// use --enable-libsanitizer
+PATH="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/sbin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/sbin:/home/nds-uk/kyoupark/inst/bin:/home/nds-uk/kyoupark/viminst/bin:/home/nds-uk/kyoupark/github-kb/bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/nds-uk/kyoupark/bin" AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm" CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc" CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy" RANLIB="/usr/bin/ranlib" CPPFLAGS="-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" CFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" CXXFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/lib -L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib -Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib/pkgconfig:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/share/pkgconfig" INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include" LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/lib -L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib -Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib" MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CONFIG_SITE=/dev/null ./configure --prefix="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr" --sysconfdir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/etc" --localstatedir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/var" --enable-shared --disable-static --disable-gtk-doc --disable-gtk-doc-html --disable-doc --disable-docs --disable-documentation --disable-debug --with-xmlto=no --with-fop=no --disable-dependency-tracking  --target=aarch64-buildroot-linux-gnu --with-sysroot=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/aarch64-buildroot-linux-gnu/sysroot --disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib --with-gmp=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr --with-mpfr=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr --with-pkgversion="Buildroot 2016.08.1" --with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath --enable-tls --disable-libmudflap --enable-threads --with-mpc=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr --without-isl --without-cloog --disable-decimal-float --enable-languages=c --disable-shared --without-headers --disable-threads --with-newlib --disable-largefile --disable-nls --enable-libsanitizer
+
+PATH="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/sbin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/sbin:/home/nds-uk/kyoupark/inst/bin:/home/nds-uk/kyoupark/viminst/bin:/home/nds-uk/kyoupark/github-kb/bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/nds-uk/kyoupark/bin"
+AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm"
+CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc"
+CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy"
+RANLIB="/usr/bin/ranlib"
+CPPFLAGS="-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include"
+CFLAGS="-O2
+-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include"
+CXXFLAGS="-O2
+-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include"
+LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/lib
+-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib
+-Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib"
+PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+PKG_CONFIG="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/pkg-config"
+PKG_CONFIG_SYSROOT_DIR="/"
+PKG_CONFIG_LIBDIR="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib/pkgconfig:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/share/pkgconfig"
+INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2
+-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/include"
+LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/lib
+-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib
+-Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/lib"
+MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
+-D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE
+-D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CONFIG_SITE=/dev/null
+./configure
+--prefix="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr"
+--sysconfdir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/etc"
+--localstatedir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/var"
+--enable-shared --disable-static --disable-gtk-doc --disable-gtk-doc-html
+--disable-doc --disable-docs --disable-documentation --disable-debug
+--with-xmlto=no --with-fop=no --disable-dependency-tracking
+--target=aarch64-buildroot-linux-gnu
+--with-sysroot=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/aarch64-buildroot-linux-gnu/sysroot
+--disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib
+--with-gmp=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr
+--with-mpfr=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr
+--with-pkgversion="Buildroot 2016.08.1"
+--with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath --enable-tls
+--disable-libmudflap --enable-threads
+--with-mpc=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr
+--without-isl --without-cloog --disable-decimal-float --enable-languages=c
+--disable-shared --without-headers --disable-threads --with-newlib
+--disable-largefile --disable-nls
+
+
+Build fails on host-gcc-final 4.9.4
+
+
+{for-mips-with-asn}
 https://gcc.gnu.org/ml/gcc/2013-10/threads.html#00253
 
 /broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/libsanitizer/configure.tgt
@@ -13639,8 +13787,97 @@ esac
 For clang:
 /home/NDS-UK/kyoupark/asn/llvm/projects/compiler-rt/lib/asan
 
-<config>
-buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/configure.ac
+
+<changes-to-buildroot>
+//home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/package/gcc/gcc.mk
+
+# libsanitizer requires wordexp, not in default uClibc config. Also
+# doesn't build properly with musl.
+ifeq ($(BR2_TOOLCHAIN_BUILDROOT_UCLIBC)$(BR2_TOOLCHAIN_BUILDROOT_MUSL),y)
+HOST_GCC_COMMON_CONF_OPTS += --disable-libsanitizer
+endif
+
+changes to:
+ifeq ($(BR2_TOOLCHAIN_BUILDROOT_UCLIBC)$(BR2_TOOLCHAIN_BUILDROOT_MUSL),y)
+HOST_GCC_COMMON_CONF_OPTS += --enable-libsanitizer
+endif
+
+
+//home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2015.08.1-for-mips-w-asn/package/uclibc/uClibc-ng.config
+
+changes to:
+UCLIBC_HAS_WORDEXP=y
+
+note:
+Use $make clean all for buildroot rebuild
+
+
+These changes ./configure param as:
+
+ `--enable-libsanitizer`
+
+>>> host-gcc-initial 4.9.4 Configuring
+mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build
+ln -sf ../configure /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build/configure
+
+(cd /home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/build/host-gcc-initial-4.9.4/build && rm -rf config.cache; 
+ 
+PATH="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/sbin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/sbin:/home/nds-uk/kyoupark/inst/bin:/home/nds-uk/kyoupark/viminst/bin:/home/nds-uk/kyoupark/github-kb/bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/nds-uk/kyoupark/bin" AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm" CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc" CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy" RANLIB="/usr/bin/ranlib" CPPFLAGS="-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include" CFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include" CXXFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include" LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/lib -L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib -Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib" PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib/pkgconfig:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/share/pkgconfig" INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2 -I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include" LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/lib -L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib -Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib" MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CONFIG_SITE=/dev/null ./configure --prefix="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr" --sysconfdir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/etc" --localstatedir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/var" --enable-shared --disable-static --disable-gtk-doc --disable-gtk-doc-html --disable-doc --disable-docs --disable-documentation --disable-debug --with-xmlto=no --with-fop=no --disable-dependency-tracking  --target=mips-buildroot-linux-uclibc --with-sysroot=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/mips-buildroot-linux-uclibc/sysroot --disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib --with-gmp=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr --with-mpfr=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr --with-pkgversion="Buildroot 2016.08.1" --with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath --enable-libsanitizer --enable-tls --disable-libmudflap --enable-threads --with-mpc=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr --without-isl --without-cloog --with-float=soft --disable-decimal-float --with-arch="mips32" --with-abi="32" --enable-languages=c --disable-shared --without-headers --disable-threads --with-newlib --disable-largefile --disable-nls --config-cache
+
+PATH="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/sbin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/bin:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/sbin:/home/nds-uk/kyoupark/inst/bin:/home/nds-uk/kyoupark/viminst/bin:/home/nds-uk/kyoupark/github-kb/bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/nds-uk/kyoupark/bin"
+AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm"
+CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc"
+CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy"
+RANLIB="/usr/bin/ranlib"
+CPPFLAGS="-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include"
+CFLAGS="-O2
+-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include"
+CXXFLAGS="-O2
+-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include"
+LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/lib
+-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib
+-Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib"
+PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+PKG_CONFIG="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/bin/pkg-config"
+PKG_CONFIG_SYSROOT_DIR="/"
+PKG_CONFIG_LIBDIR="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib/pkgconfig:/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/share/pkgconfig"
+INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2
+-I/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/include"
+LDFLAGS="-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/lib
+-L/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib
+-Wl,-rpath,/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/lib"
+MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
+-D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE
+-D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CONFIG_SITE=/dev/null
+./configure
+--prefix="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr"
+--sysconfdir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/etc"
+--localstatedir="/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/var"
+--enable-shared --disable-static --disable-gtk-doc --disable-gtk-doc-html
+--disable-doc --disable-docs --disable-documentation --disable-debug
+--with-xmlto=no --with-fop=no --disable-dependency-tracking
+`--target=mips-buildroot-linux-uclibc`
+--with-sysroot=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr/mips-buildroot-linux-uclibc/sysroot
+--disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib
+--with-gmp=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr
+--with-mpfr=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr
+--with-pkgversion="Buildroot 2016.08.1"
+--with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath
+`--enable-libsanitizer` --enable-tls --disable-libmudflap --enable-threads
+--with-mpc=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-mips-w-asn/output/host/usr
+--without-isl --without-cloog --with-float=soft --disable-decimal-float
+--with-arch="mips32" --with-abi="32" --enable-languages=c --disable-shared
+--without-headers --disable-threads --with-newlib --disable-largefile
+--disable-nls 
+
+
+Therefore, this will not use checking:
+
+// configure:2416: checking target system type
+// configure:2429: result: aarch64-buildroot-linux-gnu
+// checking for libsanitizer support... no
+// home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/build/host-gcc-initial-4.9.4/configure.ac
+
 # Disable libsanitizer on unsupported systems.
 if test -d ${srcdir}/libsanitizer; then
     if test x$enable_libsanitizer = x; then
@@ -13657,51 +13894,6 @@ if test -d ${srcdir}/libsanitizer; then
     fi
 fi
 
-
-<changes-to-buildroot>
-// gcc.mk
-
-# libsanitizer requires wordexp, not in default uClibc config. Also
-# doesn't build properly with musl.
-ifeq ($(BR2_TOOLCHAIN_BUILDROOT_UCLIBC)$(BR2_TOOLCHAIN_BUILDROOT_MUSL),y)
-HOST_GCC_COMMON_CONF_OPTS += --disable-libsanitizer
-endif
-
-changes to:
-HOST_GCC_COMMON_CONF_OPTS += --enable-libsanitizer
-
-
-// package/uclibc/uClibc-ng.config
-
-changes to:
-UCLIBC_HAS_WORDEXP=y
-
-
-These changes ./configure param as:
-
- `--enable-libsanitizer`
-
->>> host-gcc-initial 4.9.4 Configuring
-mkdir -p /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build
-ln -sf ../configure /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build/configure
-(cd /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-initial-4.9.4/build && rm -rf config.cache; 
- PATH="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/sbin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/sbin:/home/NDS-UK/kyoupark/inst/bin:/home/NDS-UK/kyoupark/viminst/bin:/home/NDS-UK/kyoupark/github-bin:/shared/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/kerberos/bin:/opt/ecloud/i686_Linux/64/bin:/opt/rational/clearcase/bin:/usr/lib64/ccache:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/coverity:/home/NDS-UK/kyoupark/bin" 
- AR="/usr/bin/ar" AS="/usr/bin/as" LD="/usr/bin/ld" NM="/usr/bin/nm" CC="/usr/lib64/ccache/gcc" GCC="/usr/lib64/ccache/gcc" CXX="/usr/lib64/ccache/g++" CPP="/usr/bin/cpp" OBJCOPY="/usr/bin/objcopy" RANLIB="/usr/bin/ranlib" CPPFLAGS="-I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" CFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" CXXFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" LDFLAGS="-L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/lib -L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib -Wl,-rpath,/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib" 
- PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/pkg-config" PKG_CONFIG_SYSROOT_DIR="/" PKG_CONFIG_LIBDIR="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib/pkgconfig:/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/share/pkgconfig" INTLTOOL_PERL=/usr/bin/perl CFLAGS="-O2 -I/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/include" LDFLAGS="-L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/lib -L/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib -Wl,-rpath,/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/lib" MAKEINFO=missing CFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CXXFLAGS_FOR_TARGET="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os " CONFIG_SITE=/dev/null 
- 
- ./configure 
- --prefix="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr" 
- --sysconfdir="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/etc" 
- --localstatedir="/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/var" 
- --enable-shared --disable-static --disable-gtk-doc --disable-gtk-doc-html --disable-doc --disable-docs --disable-documentation --disable-debug --with-xmlto=no --with-fop=no --disable-dependency-tracking  
- --target=mips-buildroot-linux-uclibc 
- --with-sysroot=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/mips-buildroot-linux-uclibc/sysroot 
- --disable-__cxa_atexit --with-gnu-ld --disable-libssp --disable-multilib --with-gmp=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --with-mpfr=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --with-pkgversion="Buildroot 2016.08.1" --with-bugurl="http://bugs.buildroot.net/" --disable-libquadmath 
- `--enable-libsanitizer` --enable-tls --disable-libmudflap --enable-threads 
- --with-mpc=/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr --without-isl --without-cloog --with-float=soft --disable-decimal-float 
- --with-arch="mips32" --with-abi="32" --enable-languages=c --disable-shared --without-headers 
- --disable-threads --with-newlib --disable-largefile --disable-nls
-)
 
 // from log
 
@@ -13801,13 +13993,15 @@ if test -n "${notsupp}" && test -z "${norecursion}" ; then
 fi
 
 
-So add:
+So add C++ support:
 
 +BR2_TOOLCHAIN_BUILDROOT_CXX=y
 
-
 BR builds libsanitizer. Great but build error:
 
+note:
+host-gcc-initial-4.9.4 build still shows the above warning but not for
+host-gcc-final-4.9.4 and build fails on that.
 
 make[3]: Entering directory `/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build/mips-buildroot-linux-uclibc/libsanitizer'
 /usr/bin/make "AR_FLAGS=rc" "CC_FOR_BUILD=/usr/lib64/ccache/gcc" "CFLAGS=-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64  -Os  -minterlink-mips16" "CXXFLAGS=-D_LARGEFILE_SOURCE -D_LARGEFILE6
@@ -15532,6 +15726,7 @@ software source code packages to adapt to many kinds of Posix-like systems. The
 configuration scripts produced by Autoconf are independent of Autoconf when they
 are run, so their users do not need to have Autoconf.
 
+
 The configuration scripts produced by Autoconf require no manual user
 intervention when run; they do not normally even need an argument specifying the
 system type. Instead, they individually `test for the presence of each feature`
@@ -15542,9 +15737,12 @@ they deal well with systems that are hybrids or customized from the more common
   Posix variants. There is no need to maintain files that list the features
   supported by each release of each variant of Posix.
 
-For each software package that Autoconf is used with, it creates a configuration
-script from a template file that lists the system features that the package
-needs or can use. After the shell code to recognize and respond to a system
+For each software package that Autoconf is used with, it 
+`creates a configuration script from a template file` that lists the system
+features that the package needs or can use. 
+
+
+After the shell code to recognize and respond to a system
 feature has been written, Autoconf allows it to be shared by many software
 packages that can use (or need) that feature. If it later turns out that the
 shell code needs adjustment for some reason, it needs to be changed in only one
@@ -15610,7 +15808,7 @@ magic incantations.  Fortunately, GNU provides a solution: Libtool.
 3 Making configure Scripts
 
 The configuration scripts that Autoconf produces are by convention called
-`configure`.  When run, configure creates several files, replacing
+`configure`.  When run, `configure creates several files`, replacing
 configuration parameters in them with appropriate values. The files that
 configure creates are:
 
@@ -15624,7 +15822,7 @@ configure creates are:
     listed above (see Chapter 17 [config.status Invocation], page 301);
 
   * an optional shell script normally called `config.cache` (created when
-    using ‘configure --config-cache’) that saves the results of running many
+    using `configure --config-cache`) that saves the results of running many
     of the tests (see Section 7.4.2 [Cache Files], page 119);
 
   * a file called `config.log` containing any messages produced by compilers,
@@ -15651,7 +15849,7 @@ Autoconf:
 your source files --> [autoscan*] --> [configure.scan] --> configure.ac
 
 configure.ac --.
-               |   .------> autoconf* -----> configure
+               |   .------> `autoconf*` -----> configure
 [aclocal.m4] --+---+
                |   ‘-----> [autoheader*] --> [config.h.in]
 [acsite.m4] ---’
@@ -15669,7 +15867,7 @@ into play:
 configure.ac ----’
 
 configure.ac --.
-               +--> automake* --> Makefile.in
+               +--> `automake*` --> Makefile.in
 Makefile.am ---’
 
 
@@ -15696,23 +15894,24 @@ other features, you can use Autoconf template macros to produce custom checks;
 see Writing Tests, for information about them. 
   
 Previous versions of Autoconf promoted the name configure.in. Using
-configure.ac is now preferred.
+`configure.ac is now preferred`
 
-So, what is really needed is some kind of compiler, autoconf, that takes an
-Autoconf program, ‘configure.ac’, and transforms it into a portable shell
-script, configure.
+  *what-autoconf-do*
+  So, what is really needed is some kind of compiler, autoconf, that takes an
+  Autoconf program, ‘configure.ac’, and transforms it into a portable shell
+  script, configure.
 
 
 3.1.2 The Autoconf Language
 
-Therefore, we need a means to distinguish literal strings from text to be
+Therefore, we need a means to distinguish `literal strings` from text to be
 expanded: quotation. `When calling macros that take arguments`, there must not
 be any white space between the macro name and the open parenthesis.
 
 AC_INIT ([oops], [1.0]) # incorrect
 AC_INIT([hello], [1.0]) # good
 
-Arguments should be enclosed within the `quote characters` ‘[’ and ‘]’, and be
+Arguments should be enclosed within the `quote characters [ and ]`, and be
 separated by commas.
 
 
@@ -15728,7 +15927,7 @@ AC_CHECK_HEADERS([stdio.h],,,)
 AC_CHECK_HEADERS([stdio.h])
 
 
-You can include comments in ‘configure.ac’ files by starting them with the
+You can include `comments` in ‘configure.ac’ files by starting them with the
 ‘#’. For example, it is helpful to begin ‘configure.ac’ files with a line like
 this:
 
@@ -15755,6 +15954,7 @@ depend on things earlier in it.
 
 3.3 Using ifnames to List Conditionals
 
+*tool-ifnames*
 `ifnames` scans all of the C source files named on the command line (or the
     standard input, if none are given) and writes to the standard output a
 sorted list of all the identifiers that appear in those files in
@@ -15783,6 +15983,8 @@ The Autoconf macros are defined in several files. If a macro is defined in
 more than one of the files that autoconf reads, the last definition it reads
 overrides the earlier ones.
 
+
+<autoconf-options>
 autoconf accepts the following options: 
 
 ‘--verbose’
@@ -16240,7 +16442,7 @@ want to use. If you need to test for a kind of feature that none of these
 macros check for, you can probably do it by calling primitive test macros with
 appropriate arguments (see Chapter 6 [Writing Tests], page 101).
 
-These tests print messages telling the user which feature they’re checking
+These tests print messages telling the user which feature they're checking
 for, and what they find. They cache their results for future configure runs
   (see Section 7.4 [Caching Results], page 117).
 
@@ -16298,8 +16500,35 @@ too. See Chapter 14 [Manual Configuration], page 281, for more on support for
 cross compiling.
 
 
+5.10.2 Generic Compiler Characteristics
+
+ -- Macro: AC_CHECK_SIZEOF (TYPE-OR-EXPR, [UNUSED], [INCLUDES =
+          `AC_INCLUDES_DEFAULT'])
+
+     Define `SIZEOF_TYPE-OR-EXPR' (*note Standard Symbols::) to be the
+     size in bytes of TYPE-OR-EXPR, which may be either a type or an
+     expression returning a value that has a size.  If the expression
+     `sizeof (TYPE-OR-EXPR)' is invalid, the result is 0.  INCLUDES is
+     a series of include directives, defaulting to
+     `AC_INCLUDES_DEFAULT' (*note Default Includes::), which are used
+     prior to the expression under test.
+
+     This macro now works even when cross-compiling.  The UNUSED
+     argument was used when cross-compiling.
+
+     For example, the call
+
+          AC_CHECK_SIZEOF([int *])
+
+     defines `SIZEOF_INT_P' to be 8 on DEC Alpha AXP systems.
+
+     This macro caches its result in the `ac_cv_sizeof_TYPE-OR-EXPR`
+     variable, with `*' mapped to `p' and other characters not suitable
+     for a variable name mapped to underscores.
+
+
 ={============================================================================
-*kt_linux_tool_150* make-autoconf-output
+*kt_linux_tool_150* make-autoconf-test-result
 
 7 Results of Tests
 
@@ -16316,7 +16545,7 @@ preprocessor symbol indicating the results of the test. That is done by
 calling AC_DEFINE or AC_DEFINE_UNQUOTED.
 
 By default, `AC_OUTPUT' places the symbols defined by these macros into the
-output variable `DEFS', which contains an option `-DSYMBOL=VALUE' for each
+output variable DEFS, which contains an option -DSYMBOL=VALUE for each
 symbol defined.  Unlike in Autoconf version 1, there is no variable `DEFS'
 defined while `configure' is running.
 
@@ -16333,7 +16562,7 @@ symbol, test the value of the appropriate `cache variable`, as in this example:
      fi
 
 If AC_CONFIG_HEADERS has been called, then instead of creating DEFS, AC_OUTPUT
-creates a header file by substituting the correct values into #define
+`creates a header file` by substituting the correct values into #define
 statements in a template file.  *Note Configuration Headers::, for more
 information about this kind of output.
 
@@ -16414,6 +16643,163 @@ Output Variables::, for a list of output variables that are always available.
 
      The string VARIABLE is passed to `m4_pattern_allow' (*note
      Forbidden Patterns::).
+
+
+={============================================================================
+*kt_linux_tool_150* make-autoconf-run-configure
+
+<ex>
+Appears that "--xxx" populates to "$xxx" in configure.ac since when runs
+with "--enable-libsanitizer", $enable-libsanitizer and  the following checks
+is not in effect. This is the same as ${prefix}
+
+// configure.ac
+# Disable libsanitizer on unsupported systems.
+if test -d ${srcdir}/libsanitizer; then
+    if test x$enable_libsanitizer = x; then
+	AC_MSG_CHECKING([for libsanitizer support])
+	if (srcdir=${srcdir}/libsanitizer; \
+		. ${srcdir}/configure.tgt; \
+		test -n "$UNSUPPORTED")
+	then
+	    AC_MSG_RESULT([no])
+	    noconfigdirs="$noconfigdirs target-libsanitizer"
+	else
+	    AC_MSG_RESULT([yes])
+	fi
+    fi
+fi
+
+
+16.4 Installation Names
+=======================
+
+`By default`, make install' installs the package's commands under
+`/usr/local/bin`, include files under `/usr/local/include', etc.  You can
+specify an installation prefix other than `/usr/local' by giving configure'
+the option `--prefix=PREFIX', where PREFIX must be an absolute file name.
+
+
+16.5 Optional Features
+======================
+
+If the package supports it, you can cause programs to be installed with
+an extra prefix or suffix on their names by giving `configure' the
+option --program-prefix=PREFIX or --program-suffix=SUFFIX.
+
+   Some packages pay attention to `--enable-FEATURE' options to `configure',
+where FEATURE indicates `an optional part of the package`  They may also pay
+  attention to `--with-PACKAGE' options, where PACKAGE is something like
+  gnu-as or x (for the X Window System).  The `README' should mention any
+  `--enable-' and `--with-' options that the package recognizes.
+
+   For packages that use the X Window System, `configure' can usually
+find the X include and library files automatically, but if it doesn't,
+you can use the `configure' options `--x-includes=DIR' and
+`--x-libraries=DIR' to specify their locations.
+
+   Some packages offer the ability to configure how verbose the
+execution of `make' will be.  For these packages, running `./configure
+--enable-silent-rules' sets the default to minimal output, which can be
+overridden with `make V=1'; while running `./configure
+--disable-silent-rules' sets the default to verbose, which can be
+overridden with `make V=0'.
+
+
+16.7 Specifying the System Type
+===============================
+
+There may be some features `configure' cannot figure out automatically,
+but needs to determine by `the type of machine the package will run on`
+
+Usually, assuming the package is built to be run on the _same_
+architectures, `configure' can figure that out, but if it prints a
+message saying it cannot guess the machine type, give it the
+`--build=TYPE' option.  TYPE can either be a short name for the system
+type, such as `sun4', or a canonical name which has the form:
+
+     CPU-COMPANY-SYSTEM
+
+where SYSTEM can have one of these forms:
+
+     OS
+     KERNEL-OS
+
+   See the file `config.sub` for the possible values of each field.  If
+   `config.sub' isn't included in this package, then this package doesn't need
+   to know the machine type.
+
+   <cross-compile>
+   If you are _building_ compiler tools for cross-compiling, you should use
+   the option `--target=TYPE` to select the type of system they will produce
+   code for.
+
+   If you want to _use_ a cross compiler, that generates code for a platform
+   different from the build platform, you should specify the "host" platform
+   (i.e., that on which the generated programs will eventually be run) with
+   `--host=TYPE`.
+
+
+16.9 Defining Variables
+=======================
+
+Variables not defined in a site shell script can be set in the environment
+passed to `configure'.  However, some packages may run configure again during
+the build, and the customized values of these variables may be lost.  In order
+to avoid this problem, you should set them in the configure command line,
+using VAR=value.  For example:
+
+     ./configure CC=/usr/local2/bin/gcc
+
+causes the specified gcc to be used as the C compiler (unless it is overridden
+    in the site shell script).
+
+
+16.10 `configure' Invocation
+============================
+
+configure recognizes the following options to control how it operates.
+
+`--version'
+`-V'
+     Print the version of Autoconf `used to generate` the `configure'
+     script, and exit.
+
+`--cache-file=FILE'
+     Enable the cache: use and save the results of the tests in FILE,
+     traditionally `config.cache'.  FILE defaults to `/dev/null' to
+     disable caching.
+
+`--config-cache'
+`-C'
+     Alias for `--cache-file=config.cache'.
+
+`configure' also accepts some other, not widely useful, options.  Run
+`configure --help' for more details.
+
+note:
+configure script has `here` document for a help.
+
+#
+# Report the --help message.
+#
+if test "$ac_init_help" = "long"; then
+  # Omit some internal or obsolete options to make the list less imposing.
+  # This message is too long to be a string in the A/UX 3.1 sh.
+  cat <<_ACEOF
+\`configure' configures this package to adapt to many kinds of systems.
+
+Usage: $0 [OPTION]... [VAR=VALUE]...
+
+To assign environment variables (e.g., CC, CFLAGS...), specify them as
+VAR=VALUE.  See below for descriptions of some of the useful variables.
+
+(skipped)
+
+Optional Features:
+  --disable-option-checking  ignore unrecognized --enable/--with options
+  --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
+  --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
 
 
 ={============================================================================
@@ -30059,7 +30445,7 @@ signal stops a process by default.
 
 
 ={============================================================================
-*kt_linux_core_108* process: daemon
+*kt_linux_core_108* process-daemon
 
 LPI 37.
 
@@ -30157,52 +30543,174 @@ signal for a daemon. Therefore, daemons can use SIGHUP for the purpose described
 note: no syslogd on a embedded system.
 
 <why>
-When writing a daemon, one problem we encounter is how to display error messages. Since a daemon
-runs in the background, we can't display messages on an associated terminal, as we would typically
-do with other programs. 
+When writing a daemon, one problem we encounter is how to display error
+messages. Since a daemon runs in the background, we can't display messages on
+an associated terminal, as we would typically do with other programs. 
 
-One possible alternative is to write messages to an application-specific log file, as is done in the
-program in Listing 37-3. The main problem with this approach is that it is difficult for a system
-administrator to manage multiple application log files and monitor them all for error messages. 
+One possible alternative is to write messages to an application-specific log
+file, as is done in the program in Listing 37-3. The main problem with this
+approach is that it is difficult for a system administrator to manage multiple
+application log files and monitor them all for error messages. 
 
-The syslog facility was devised to address this problem which provides a single, centralized logging
-facility that can be used to log messages by 'all' applications on the system.
+The syslog facility was devised to address this problem which provides a
+single, centralized logging facility that can be used to log messages by 'all'
+applications on the system.
+
+
+Figure 37-1: Overview of system logging 
+
+printf uses syslog 2 and /proc/kmsg to log and klogd uses
+syslog 3 to log in to /dev/log.
+
+Kernel                            User process
+  |                                 |
+  | printk                          | syslog(3)
+  | syslog(2), /proc/kmsg           |
+  |                                 |
+klogd                               |
+  |                                 |
+  | syslog(3)                       |
+  |                                 |
+  +---------------------------------+-------
+                                |
+                             /dev/log
+                    Unix domain datagram socket
+                                |
+                            syslogd
+
 
 <daemon-and-conf>
-The System Log daemon, syslogd, accepts log messages from two different sources: /dev/log, which
-holds locally produced messages, and remote.
+The syslog facility has two principal components: the syslogd daemon and the
+syslog(3) library function.
 
-The syslogd daemon examines the facility and level of each message, and then passes it along to any
-of several possible destinations according to the associated configuration file, /etc/syslog.conf.
-Possible destinations include a terminal or virtual console, a disk file, etc.
+The System Log daemon, `syslogd`, accepts log messages from two different
+sources: a UNIX domain socket, /dev/log, which holds locally produced
+messages, and (if enabled) an Internet domain socket (UDP port 514), which
+holds messages sent across a TCP/IP network.
+
+Each message processed by syslogd has a number of `attributes`, including a
+`facility`, which specifies the `type of program` generating the message, and
+a `level`, which specifies the `severity` (priority) of the message. The
+syslogd daemon examines the facility and level of each message, and then
+passes it along to any of several possible destinations according to the
+dictates of an associated configuration file, /etc/syslog.conf. 
+
+Possible destinations include a terminal or virtual console, a disk file, a
+FIFO, one or more (or all) logged-in users, or a process (typically another
+    syslogd daemon) on another system connected via a TCP/IP network. (Sending
+      the message to a process on another system is useful for reducing
+      administrative overhead by consolidating messages from multiple systems
+      to a single location.) A single message may be sent to multiple
+    destinations (or none at all), and messages with different combinations of
+    facility and level can be targeted to different destinations or to
+    different instances of destinations (i.e., different consoles, different
+        disk files, and so on).
+
+
+The `syslog(3)` library function can be used by any process to log a message.
+This function, which we describe in detail in a moment, uses its supplied
+arguments to construct a message in a standard format that is then placed on
+the /dev/log socket for reading by syslogd.
+
 
 <klogd>
-An alternative source of the messages placed on /dev/log is the Kernel Log daemon, klogd, which
-collects kernel log messages (produced by the kernel using its printk() function). These messages
-are collected using either of two equivalent Linux-specific interfaces-the /proc/kmsg file and the
-syslog(2) 'system' call-and then placed on /dev/log using the syslog(3) 'library' function.
+An alternative source of the messages placed on /dev/log is the Kernel Log
+daemon, `klogd`, which collects kernel log messages (produced by the kernel
+    using its printk() function). 
 
-note: Figure 37-1. printf uses syslog 2 and /proc/kmsg to log and klogd uses syslog 3 to log in to
-/dev/log.
+These messages are collected using either of two equivalent Linux-specific
+interfaces-the `/proc/kmsg` file and the syslog(2) 'system' call-and then
+placed on /dev/log using the syslog(3) 'library' function.
 
-<calls>
+
+Although `syslog(2)` and `syslog(3)` share the same name, they perform quite
+different tasks. An interface to syslog(2) is provided in glibc under the name
+klogctl(). Unless explicitly indicated otherwise, when we refer to syslog() in
+this section, `we mean syslog(3)`
+
+
+<syslog2>
+SYSLOG(2)                  Linux Programmer’s Manual                 SYSLOG(2)
+
+NAME
+       syslog, klogctl - read and/or clear kernel message ring buffer; set console_loglevel
+
+SYNOPSIS
+       int syslog(int type, char *bufp, int len);
+                       /* No wrapper provided in glibc */
+
+       /* The glibc interface */
+       #include <sys/klog.h>
+
+       int klogctl(int type, char *bufp, int len);
+
+DESCRIPTION
+       If you need the C library function syslog() (which talks to
+           syslogd(8)), then look at syslog(3).  
+       
+       The system call of this name is about controlling the kernel printk()
+  buffer, and the glibc version is called klogctl().
+
+
+   The kernel log buffer
+       The kernel has a cyclic buffer of length LOG_BUF_LEN in which messages
+       given as arguments to the kernel function printk() are stored
+       (regardless of their loglevel).  In early ker- nels,  LOG_BUF_LEN  had
+       the value 4096; from kernel 1.3.54, it was 8192; from kernel 2.1.113 it
+       was 16384; since 2.4.23/2.6 the value is a kernel configuration option.
+       In recent kernels the size can be queried with command type 10.
+
+   The loglevel
+       The  kernel  routine printk() will only print a message on the console,
+       if it has a loglevel less than the value of the variable
+       console_loglevel.  This variable initially has the value
+       DEFAULT_CONSOLE_LOGLEVEL (7), but is set to 10 if the kernel command
+       line contains the word "debug", and to 15 in case of a kernel fault
+       (the 10 and 15 are just  silly,  and equivalent to 8).  This variable
+       is set (to a value in the range 1-8) by the call syslog(8,dummy,value).
+       The calls syslog(type,dummy,dummy) with type equal to 6 or 7, set it to
+       1 (kernel panics only) or 7 (all except debugging messages),
+       respectively.
+
+       Every text line in a message has its own loglevel.  This level is
+       DEFAULT_MESSAGE_LOGLEVEL - 1 (6) unless the line starts with <d> where
+       d is a digit in the range  1-7,  in  which case the level is d.  The
+       conventional meaning of the loglevel is defined in <linux/kernel.h> as
+       follows:
+
+       #define KERN_EMERG    "<0>"  /* system is unusable               */
+       #define KERN_ALERT    "<1>"  /* action must be taken immediately */
+       #define KERN_CRIT     "<2>"  /* critical conditions              */
+       #define KERN_ERR      "<3>"  /* error conditions                 */
+       #define KERN_WARNING  "<4>"  /* warning conditions               */
+       #define KERN_NOTICE   "<5>"  /* normal but significant condition */
+       #define KERN_INFO     "<6>"  /* informational                    */
+       #define KERN_DEBUG    "<7>"  /* debug-level messages             */
+       
+       note:
+       How to set level? Depends on words contained in a line.
+
+
+<syslog3>
 #include <syslog.h>
 
 void openlog(const char *ident, int log_options, int facility);
 void syslog(int priority, const char *format, ...);
 
 <facility-and-level>
-The priority argument is created by ORing together a facility value and a level value. The facility
-indicates the general category of the application logging the message, and is specified as one of
-the values listed in Table 37-1. If omitted, the facility defaults to the value specified in a
-previous openlog() call, or to LOG_USER if that call was omitted.
+The priority argument is created by ORing together a facility value and a
+level value. The `facility` indicates the general `category` of the application
+logging the message, and is specified as one of the values listed in Table
+37-1. If omitted, the facility defaults to the value specified in a previous
+openlog() call, or to LOG_USER if that call was omitted.
 
        LOG_AUTH       security/authorization messages
        LOG_AUTHPRIV   security/authorization messages (private)
        ...
 
-The level value indicates the severity of the message, and is specified as one of the values in
-Table 37-2. All of the level values listed in this table appear in SUSv3.
+The `level` value indicates the `severity` of the message, and is specified as one
+of the values in Table 37-2. All of the level values listed in this table
+appear in SUSv3.
 
        LOG_EMERG      system is unusable
        LOG_ALERT      action must be taken immediately
@@ -30213,10 +30721,10 @@ Table 37-2. All of the level values listed in this table appear in SUSv3.
        LOG_INFO       informational message
        LOG_DEBUG      debug-level message
 
-One difference from printf() is that the format string doesn't need to include a terminating newline
-character. Also, the format string may include the 2-character sequence %m, which is replaced by the
-error string correspond- ing to the current value of errno (i.e., the equivalent of
-    strerror(errno)).
+One difference from printf() is that the format string doesn't need to include
+a terminating newline character. Also, the format string may include the
+2-character sequence %m, which is replaced by the error string correspond- ing
+to the current value of errno (i.e., the equivalent of strerror(errno)).
 
 
 ={============================================================================
@@ -40127,23 +40635,6 @@ saves configuration to: broot-latest/buildroot-2016.08.1/.config
 make menuconfig
 
 
-{build-mips}
-For mips but no asn, builds okay and see toolchain built
-
-BR2_mips=y
-BR2_ARCH="mips"
-BR2_ENDIAN="BIG"
-BR2_GCC_TARGET_ARCH="mips32"
-BR2_GCC_TARGET_ABI="32"
-
-BR2_WGET="wget --passive-ftp -nd -t 3 --no-check-certificate"
-
-BR2_DEFAULT_KERNEL_HEADERS="3.2.81"
-BR2_TOOLCHAIN_BUILDROOT_UCLIBC=y
-
-BR2_GCC_VERSION="4.9.4"
-
-
 <build-output>
 Buildroot output is stored in a single directory, output/. This directory
 contains several subdirectories:
@@ -40162,20 +40653,6 @@ note: host or target?
 Host system differs from what is used by GNU configure, where the host is the
 machine on which the application will run (which is usually the same as
 target)
-
-
-/output/host/usr/bin/mips-buildroot-linux-uclibc-gcc --version
-mips-buildroot-linux-uclibc-gcc.br_real (Buildroot 2016.08.1) 4.9.4
-Copyright (C) 2015 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.  There is NO
-warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
-/broot-latest/buildroot-2016.08.1/output/host/usr/bin$ ls
-mips-buildroot-linux-uclibc-gcc                
-mips-buildroot-linux-uclibc-gcc-4.9.4          
-...
-
-$ /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/mips-buildroot-linux-uclibc-gcc -fsanitize=address x.c
 
 
 {toolchain-selection}
@@ -40198,14 +40675,10 @@ Since this interface is `backward compatible`, the version of the Linux kernel
 headers used to build your toolchain `do not need to match exactly`  the version
 of the Linux kernel you intend to run on your embedded system. 
 
-note: Why the version should be equal or older when say it's backward
-compatible?
-
-They only need to have a version equal or older to the version of the Linux
+They only need to have a version `equal or older` to the version of the Linux
 kernel you intend to run. If you use kernel headers that are more recent than
 the Linux kernel you run on your embedded system, then the C library might be
 using interfaces that are not provided by your Linux kernel.
-
 
 It is worth noting that whenever one of those options is modified, then the
 entire toolchain and system must be rebuilt. See Section 8.2.
@@ -40781,6 +41254,14 @@ mkdir build
 --enable-multiarch --enable-shared --enable-threads=posix \
 --enable-libstdcxx-debug \
 --program-suffix=4.9.2 \
+--with-gmp=/usr/local/lib --with-mpc=/usr/lib --with-mpfr=/usr/lib \
+--without-included-gettext --with-system-zlib --with-tune=generic \
+--prefix=$HOME/gcc-build/install
+
+../gcc-4.9.4/configure --disable-checking --enable-languages=c,c++ \
+--enable-multiarch --enable-shared --enable-threads=posix \
+--enable-libstdcxx-debug \
+--program-suffix=4.9.4 \
 --with-gmp=/usr/local/lib --with-mpc=/usr/lib --with-mpfr=/usr/lib \
 --without-included-gettext --with-system-zlib --with-tune=generic \
 --prefix=$HOME/gcc-build/install
