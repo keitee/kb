@@ -34,6 +34,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-sh-convert-logs
 |kt_dev_si_0002| si-sh-wombat
 |kt_dev_si_0002| si-sh-flipper
+|kt_dev_si_0002| si-process-snug
 
 |kt_dev_si_0002| si-tcpdump
 |kt_dev_si_0002| si-dmalloc
@@ -70,7 +71,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-mfs
 |kt_dev_si_0001| comp-msm
 |kt_dev_si_0001| comp-rmf
-|kt_dev_si_0001| comp-rmf-conclict
+|kt_dev_si_0001| comp-rmf-conclict-disk-quota
+|kt_dev_si_0001| comp-rmf-conclict-disk-full
+|kt_dev_si_0001| comp-rmf-conclict-tune
 |kt_dev_si_0001| comp-vrm
 |kt_dev_si_0001| comp-diag
 |kt_dev_si_0001| comp-mil
@@ -206,6 +209,11 @@ mysql --batch --table --column-names -u root uploads -e "select upload_time, ver
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019fb101972
 00:19:FB:10:19:72
 mysql --batch --table --column-names -u root uploads -e "select upload_time, version, directory_name, viewing_card from upload where mac='0019fb101972' order by upload_time desc limit 100"
+
+
+<kernel-verion>
+Linux drx890 2.6.18.8 #2 Thu Nov 17 16:01:46 GMT 2016 7335a0 unknown
+Linux version 2.6.18.8 (jenkins@hudkinsslave17.cisco.com) (gcc version 4.2.0 20070124 (prerelease) - BRCM 10tsHound-20140508) #2 Thu Nov 17 16:01:46 GMT 2016
 
 
 <fsn_data>
@@ -1124,14 +1132,18 @@ http://hudsonmaster1.uk.nds.com:8080/hudson/job/build_fullstack_image/102440/con
    --override_location asbo.bskyb.com:/home/asbo/mac
 
 
-<build-mw>
-//FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/build_mw_epg.sh
+<build-manual>
 
-    // ./build_mw_epg.sh --platform ams-drx890 --project picasso 
-    //    --variant debug --profile sky_trials --baseline ENG_48.96.00U_4790_AEM_ENG
+./build_mw_epg.sh --platform ams-drx890 --profile NDS_SI_Devel --project picasso --variant debug --build_in_debug dbe_interface, darwin_planner_src, rmfplugin
+./make.sh   --platform ams_bcm    --profile NDS_SI_Devel --project picasso 
+./make_image.sh   --platform ams-drx890 --profile NDS_SI_Devel --project picasso 
 
-    *version-cfg*
-    --baseline <baseline> Used to manually override the version field"
+
+<build-mw-sh>
+// FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/build_mw_epg.sh
+
+    *build-version-cfg*
+    echo "  --baseline <baseline>     Used to manually override the version field"
                           Can be in the form of official SI baseline name or
                           Engineering baseline name: " E. g.
                           BSKYB_INTEGRATION_BLD_15.05.00_BSKYB_GM_Integration
@@ -1143,14 +1155,18 @@ http://hudsonmaster1.uk.nds.com:8080/hudson/job/build_fullstack_image/102440/con
 
                           note: HOW long?
 
-  *build-mw-only*
-  Use this one and otherwise do clean build and build all.
+    *build-mw-only*
+    echo "  --mw_only                 builds the middleware only, no EPG built"
 
-  --mw_only                 builds the middleware only, no EPG built"
+    echo "  --build_in_debug <component,component+1,...>  set specified components to be built as full debug libraries - comma separated no spaces"
+
+    echo "  --build_in_release <component,component+1,...>  set specified components to be built as release libraries - comma separated no spaces"
 
 
-# note: before
-# ./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean
+# ./build_mw_epg.sh --platform ams-drx890 --project picasso 
+#   --variant debug --profile sky_trials --baseline ENG_48.96.00U_4790_AEM_ENG
+# ./build_mw_epg.sh --platform ams-drx890 --project picasso 
+#   --variant debug --profile nds_si_devel --clean
 # 
 # OUTPUT = $(pwd)
 # VARIANT = debug
@@ -1161,8 +1177,7 @@ http://hudsonmaster1.uk.nds.com:8080/hudson/job/build_fullstack_image/102440/con
 # --output /home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_001/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build --baseline  
 #
 # BUILD_OUTPUT_ROOT == .../picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/fs/NDS
-
-# 2016.07
+#
 + STD_OPTIONS='--clean --profile sky_trials --project picasso --platform ams-drx890 --output /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build '
 + ADDED_OPTIONS='                                                      '
 + /usr/bin/time -o /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/bfi_stats -a 
@@ -1179,11 +1194,11 @@ function build_mw_epg()
     STD_OPTIONS="${CLEAN} --profile ${PROFILE} --project ${PROJECT} --platform ${PLATFORM} --output ${OUTPUT} ${BASELINE}"
 
     ADDED_OPTIONS="${BUILD_MW} ${BUILD_EPG} ${MEMPROF} ${TIMEDOCTOR} ${USE_SYSINIT_CFG} ${MEMBUSTER} ${MEMMAP_ANALYSE} \
-      ${ENABLE_LAE_DEBUG_HACKS} ${PATCH_BLD_OPT_DBG} ${PATCH_BLD_OPT_REL} ${LOGFILE_MONITOR} ${FILLDISK} \
+      ${ENABLE_LAE_DEBUG_HACKS} `${PATCH_BLD_OPT_DBG}` ${PATCH_BLD_OPT_REL} ${LOGFILE_MONITOR} ${FILLDISK} \
       ${FULL_PARALLEL}"
 
-    *call-make-sh*   
-    /usr/bin/time -o ${WORKSPACE}/bfi_stats -a -f "%C,R=%E,K=%S,U=%U" ./make.sh ${STD_OPTIONS} ${ADDED_OPTIONS}
+    # *call-make-sh*   
+    /usr/bin/time -o ${WORKSPACE}/bfi_stats -a -f "%C,R=%E,K=%S,U=%U" `./make.sh ${STD_OPTIONS} ${ADDED_OPTIONS}`
 
     if [ "${PIPESTATUS[0]}" -ne 0 ]; then
       echo "**** FAILED TO make ${project} ****"
@@ -1193,6 +1208,30 @@ function build_mw_epg()
 }
 
 package_mw_epg_binary()
+{
+}
+
+parse_args "$@"
+
+if [ -z "${WORKSPACE}" ]; then
+    export WORKSPACE=$(readlink -f ${OUTPUT})
+fi
+
+source setup_platform.sh
+set_up_platform $PLATFORM
+ENDIAN=${ENDIAN}Endian
+BUILD_OUTPUT_ROOT=${OUTPUT}/${PROJECT}/${PLATFORM_DIR}/${ENDIAN}/fs/NDS
+
+if [ -n "$WIPEOUT" ]; then
+  package_mw_epg_wipeout_binary
+else
+  if [ -n "$NO_APP" ]; then
+      package_no_app
+  else
+      build_mw_epg
+      package_mw_epg_binary
+  fi
+fi
 
 
 <make-sh>
@@ -1207,6 +1246,48 @@ package_mw_epg_binary()
   echo "                            link OS-specific libraries for a specific debug level."
   echo "                            level may be \"debug\", \"release_dbg\" or \"release\""
   echo "                            H=Hound-Development, NH=Non-Hound;"
+
+    # ex
+    # --build_in_debug dbe_interface,darwin_planner_src,rmfplugin
+    #
+    --build_in_debug)
+      shift
+      patch_build_options_debug `echo $1 | sed 's/,/ /g'`
+      ;;
+    --build_in_release)
+      shift
+      patch_build_options_release `echo $1 | sed 's/,/ /g'`
+      ;;
+
+
+# Patch build options to enable debug on release_dbg build for selected components
+function patch_build_options_debug()
+{
+    echo "##############################"
+    echo "# Patching  build options.mk #"
+    echo "##############################"
+
+    while [ "$1" != "" ]; do
+      if ! ( grep -qi "NDS_BUILD_TYPE_$1 = debug" ${CWD}/projects/$PROJECT/build_options.mk); then
+         echo "Setting $1 to debug"
+         sed -i '3i NDS_BUILD_TYPE_'$1' = debug' ${CWD}/projects/$PROJECT/build_options.mk
+      fi
+      shift
+    done
+}
+
+# *build-options-mk* *enable-comp-diag*
+#
+# To enable diag for a component, set NDS_BUILD_TYPE_$COMPONENT_NAME = debug
+# this is where changes are made by flipper or makefile
+#
+# ^M
+# # Example entry for building a debug library (darwin_player_src) in a release_dbg or release build ^M
+# NDS_BUILD_TYPE_rmfplugin = debug
+# NDS_BUILD_TYPE_darwin_planner_src = debug
+# NDS_BUILD_TYPE_dbe_interface = debug
+#
+#    include $(NDS_ROOT)/projects/fusion2/build_options.mk
 
   // NDS_OS_BUILD_TYPE:="${OS_BUILD_TYPE}". 'release' is default
   // NDS_OS_BUILD_TYPE:=release     
@@ -1800,7 +1881,40 @@ check_log darwin_0019fbd18c9a_487032cd821312aea3b11274c2ff7384  // not find
 check_log 487032cd821312aea3b11274c2ff7384                      // find
 
 
-==
+<reparse>
+newyard_reparse_request darwin_xxxx_xxxxx.tgz
+
+
+<alias>
+t()
+{
+    cd $HOME/translation
+    L=`echo *$1 | grep -v '*' | wc -w`
+    echo "Match count $L"
+    if [ $L -eq 0 ]
+    then
+        echo "No such directory found: $1"
+    else
+        if [ $L -gt 1 ]
+        then
+            echo "Multiple directories found - specify further:"
+            ls -ld *$1
+        else
+            echo "Changing to \"$1\""
+            cd *$1
+        fi
+    fi
+}
+
+cl()
+{
+    # check_log do not `cd` so need to run t.
+    check_log $1
+    t $1
+}
+
+
+<ex>
 [si_logs@ukstbuild01 parkkt]$ check_log 930bfc54ac88565a249ae01328a8a88b
 WC=1
 File line now {Jul 5 10:22 darwin_0019fbddef0c_930bfc54ac88565a249ae01328a8a88b.tgz}
@@ -2063,6 +2177,70 @@ Done unpacking
 #     A=``get parser_result``       # gets parser_result from .detailed_output
 
 
+<pcat-check>
+PCATDB=PCAT.DB
+PCAT=""
+if [ $CORRUPT -eq 0 -a -f $PCATDB ]
+then
+    # $? is 0 when db corrupted
+    # $? is 0 when db is ok
+    # $? is 11 when db corrupted
+    SQRES=`sqlite3 ${PCATDB} "pragma integrity_check" 2>.pcat_error`
+    SQRN=$?
+    echo "$SQRES"
+    NEW_A=
+
+    # okay, something is wrong. let's check
+    if [ $SQRN -ne 0 ]
+    then
+        XX=`cat .pcat_error | cut -d':' -f1-2`
+        if [ "$XX" = "Error: no such collation sequence" ]
+        then
+          echo "PCAT DB is ok"
+        else
+          echo "PCAT DB is corrupted"
+          NEW_A="PCAT.DB is corrupted"
+
+          # 2016.11. added to fix the issue that not shows pcat corrpution in
+          # result when integirity check fails on db file
+          PCAT="[PCAT.DB corrupted]"      <pcat> see different message
+        fi
+
+    # return okay but still need to check
+    else
+        if [ "$SQRES" != "ok" -a "$SQRES" != "Error: no such collation sequence: DEUTCH" ]
+        then
+            echo "PCAT DB is corrupted (2)"
+            PCAT="[PCAT.DB corruption]"   <pcat>
+        else
+            echo "PCAT DB is ok"
+        fi
+
+        items > item.txt
+        items -x > item.csv
+        items -b > itemk.txt
+        signup_jobs PCAT.DB > signup_jobs.txt
+        pcat.py -b
+        pcat.py -d
+        $MYPATH/pvod_scan/pvod.py
+    fi
+
+    if [ "$NEW_A" != "" ]
+    then
+        OLD_A=`head -1 .bestguess | grep "<p1>" | sed -e's/<p1>//' | sed -e's/<\/p1>//'`
+        if [ "$OLD_A" != "" ]
+        then
+            A="<p1>$OLD_A, $NEW_A</p1>"
+        else
+            A="<p1>$NEW_A</p1>"
+        fi
+        echo "$A" > .bestguess
+    fi
+else
+    echo "PCAT DB not found"
+fi
+
+
 # *write_result*
 # 
 # where does $A comes from?
@@ -2086,6 +2264,8 @@ Done unpacking
 # cat << END
 # version=$FULLVER
 # parser_result=$A
+# 
+# pcat_status=$PCAT       # <pcat>
 # ...
 # END
 #     ) > .detailed_output
@@ -2224,15 +2404,103 @@ if [ "$1" = "-for" ]
 
 2. runs sql statements on each mac from the list
 
-For example, this list out the latest 15 uploads for each mac
-
-./find_latest_uploads_from_mac_addresses.sh -l brentwood_macs_and_names.txt -m 15
-
+<1>
 # use only mac in running sql statment
 find_latest_uploads_from_mac_addresses.sh
 
+# ex, this list out the latest 15 uploads for each mac
+./find_latest_uploads_from_mac_addresses.sh -l brentwood_macs_and_names.txt -m 15
+
+<2>
 # use version and testid
 find_matching_tests_by_version_and_mac.sh
+
+    # Find uploads for the current MAC address.
+    SQL_FIND_MATCHING_UPLOADS=""
+    SQL_FIND_MATCHING_UPLOADS+="        SELECT"
+    SQL_FIND_MATCHING_UPLOADS+="            version"
+    SQL_FIND_MATCHING_UPLOADS+="          , upload_time"
+    SQL_FIND_MATCHING_UPLOADS+="          , filename"
+    SQL_FIND_MATCHING_UPLOADS+="          , all_tests_found.test_id"
+    SQL_FIND_MATCHING_UPLOADS+="        FROM"
+    SQL_FIND_MATCHING_UPLOADS+="            upload"
+    SQL_FIND_MATCHING_UPLOADS+="          , all_tests_found"
+    SQL_FIND_MATCHING_UPLOADS+="        WHERE"
+    SQL_FIND_MATCHING_UPLOADS+="            mac = '$MAC_ADDRESS'"
+    SQL_FIND_MATCHING_UPLOADS+="        AND"
+    SQL_FIND_MATCHING_UPLOADS+="            all_tests_found.id=upload.id"
+    # Add Version to the clause only if one was provided.
+    if [ -n "$VERSION" ]
+    then
+        SQL_FIND_MATCHING_UPLOADS+="    AND"
+        SQL_FIND_MATCHING_UPLOADS+="        version REGEXP('"$VERSION"')"
+    fi
+    if [ -n "$TEST_IDS" ]
+    then
+        SQL_FIND_MATCHING_UPLOADS+="    AND"
+        SQL_FIND_MATCHING_UPLOADS+="        all_tests_found.test_id in ($TEST_IDS)"
+    fi
+    SQL_FIND_MATCHING_UPLOADS+="        ORDER BY"
+    SQL_FIND_MATCHING_UPLOADS+="            upload_time DESC"
+    SQL_FIND_MATCHING_UPLOADS+="          , version DESC"
+    SQL_FIND_MATCHING_UPLOADS+="          , filename"
+    SQL_FIND_MATCHING_UPLOADS+="        LIMIT"
+    SQL_FIND_MATCHING_UPLOADS+="            $MAXIMUM_NUMBER_OF_UPLOADS_TO_FIND"
+    SQL_FIND_MATCHING_UPLOADS+="        ;"
+
+mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, all_tests_found.test_id FROM upload, all_tests_found WHERE mac = '0019FB0FC051' AND all_tests_found.id=upload.id AND all_tests_found.test_id in (59) ORDER BY upload_time DESC LIMIT 5"
++-----------------+---------------------+----------------------------------------------------------+---------+
+| version         | upload_time         | filename                                                 | test_id |
++-----------------+---------------------+----------------------------------------------------------+---------+
+| R014.083.64.00U | 2016-11-04 11:08:00 | darwin_0019fb0fc051_a213b57f7d19b46193caeccc485bbd2f.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 10:56:00 | darwin_0019fb0fc051_9eb0ef5a62d41b41b592c6f01571dbe5.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 10:35:00 | darwin_0019fb0fc051_9a2346415cd474f0f8be7e075e86f61a.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 10:13:00 | darwin_0019fb0fc051_3523e56ab3172c3763dcc72e200cce24.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 09:52:00 | darwin_0019fb0fc051_0552694f30c1fb1f6920a58c8713dc9d.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 09:31:00 | darwin_0019fb0fc051_15f231ec9fee53d1d4a73915097de1ba.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 09:10:00 | darwin_0019fb0fc051_94b69f5c3e485f87a55a2d6821641aa1.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 08:49:00 | darwin_0019fb0fc051_eb5aa2652b89acca00b243b62b6e262e.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 08:28:00 | darwin_0019fb0fc051_3686fbc91bde164ad593ef2f0c933835.tgz |      59 |
+| R014.083.64.00U | 2016-11-04 08:06:00 | darwin_0019fb0fc051_fbceb6522f10a62547a6a85243e97f74.tgz |      59 |
++-----------------+---------------------+----------------------------------------------------------+---------+
+
+# mysql --batch --table -u root uploads -e "select version, upload_time, filename, all_tests_found.test_id from upload, all_tests_found where mac='0019FB0FC051' and all_tests_found.test_id in (59) order by upload_time desc limit 10"
+# this show the same uploads. why?
+# +---------------------+---------------------+----------------------------------------------------------+---------+
+# | version             | upload_time         | filename                                                 | test_id |
+# +---------------------+---------------------+----------------------------------------------------------+---------+
+# | 83.64.00_7120_MNTEE | 2016-11-17 06:43:00 | darwin_0019fb0fc051_4497e17380be16a370fb5ce183405eb9.tgz |      59 |
+# | 83.64.00_7120_MNTEE | 2016-11-17 06:43:00 | darwin_0019fb0fc051_4497e17380be16a370fb5ce183405eb9.tgz |      59 |
+# | 83.64.00_7120_MNTEE | 2016-11-17 06:43:00 | darwin_0019fb0fc051_4497e17380be16a370fb5ce183405eb9.tgz |      59 |
+# | 83.64.00_7120_MNTEE | 2016-11-17 06:43:00 | darwin_0019fb0fc051_4497e17380be16a370fb5ce183405eb9.tgz |      59 |
+# | 83.64.00_7120_MNTEE | 2016-11-17 06:43:00 | darwin_0019fb0fc051_4497e17380be16a370fb5ce183405eb9.tgz |      59 |
+# | 83.64.00_7120_MNTEE | 2016-11-17 06:43:00 | darwin_0019fb0fc051_4497e17380be16a370fb5ce183405eb9.tgz |      59 |
+
+
+mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019FB0FC051' order by upload_time desc limit 90"
+mysql --batch --table -u root uploads -e "SELECT version, upload_time, filename, pcat_status, all_tests_found.test_id FROM upload, all_tests_found WHERE mac='0019FB0FC051' AND all_tests_found.id=upload.id AND all_tests_found.test_id in (590) ORDER BY upload_time DESC LIMIT 10"
++---------------------+---------------------+----------------------------------------------------------+----------------------+---------+
+| version             | upload_time         | filename                                                 | pcat_status          | test_id |
++---------------------+---------------------+----------------------------------------------------------+----------------------+---------+
+
+
+# mahesh to show pcat_status
+#
+    # Find uploads for the current MAC address.
+    SQL_FIND_MATCHING_UPLOADS="                                 \
+        SELECT      version,                                    \
+                    upload_time,                                \
+                    filename,                                   \
+                    pcat_status                              \
+        FROM        upload                                      \
+        WHERE       mac = '$MAC_ADDRESS'                        \
+        ORDER BY upload_time DESC, version DESC, filename       \
+        LIMIT       $MAXIMUM_NUMBER_OF_UPLOADS_TO_FIND;"
+    MATCHING_UPLOADS=$(run_sql_command "$SQL_FIND_MATCHING_UPLOADS" with_table)
+
+./find_logs_From_macLatest.sh -l Rack40Brentwood.txt
+
+mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019FB0BAF44' order by upload_time desc, version desc limit 10"
 
 
 {mysql}
@@ -3466,6 +3734,12 @@ UseEmailSubject=Re: WALRUS build: tag: 00.28.09, try-duma) add duma files
 
 
 ={============================================================================
+|kt_dev_si_0002| si-process-snug
+
+http://hetty.cisco.com/fusionmadesimple/index.php/SIProcesses#D12.2FSNUG_Engineering_Support
+
+
+={============================================================================
 |kt_dev_si_0002| si-tcpdump
 
 For instructions, see SI-10771
@@ -3938,18 +4212,7 @@ $/comp/src/makefile
 
   # this starts the process of refering global make files.
   include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
-  {
-    // *enable-comp-diag*
-    // To enable diag for a component, set NDS_BUILD_TYPE_$COMPONENT_NAME = debug
-    // this is where flipper makes changes
-
-    NDS_BUILD_TYPE_darwin_planner_src = debug
-    NDS_BUILD_TYPE_ms_mcm_src = debug
-    NDS_BUILD_TYPE_rmfplugin = debug      *comp-rmf*
-
-    include $(NDS_ROOT)/projects/fusion2/build_options.mk
-  }
-
+  # see  *build-options-mk* *enable-comp-diag*
 
   // include $(NDS_ROOT)/projects/fusion2/build_options.mk
   {
@@ -7629,6 +7892,28 @@ On the other hand, the physical resource manager of the disk space (the file
     system) does not support such a mechanism. 
 
 
+// from RMF ppt
+
+A conflict can be characterized by: 
+Which resources are involved:
+	Tuner
+	Quota
+Time: 
+	Immediate 
+	Imminent (immediate conflict is expected shortly) 
+	Future (booking) 
+Trigger of conflict:
+	Solicited  - requested by EPG
+	Unsolicited - notified by RMF
+How it is resolved:
+	Automatically 
+	Involving the user 
+
+// channel change conflict
+if there's no response within the timeout, the platform cancels the
+channel-change request.
+
+
 The MCM supports the following types of media connections:
 
 1) LIVEVIEWING 
@@ -7684,6 +7969,9 @@ char* JobTypeToString(SYSTEMJOB_Type jobType)
     case SYSTEMJOB_TYPE_PLAYBACK:
         typeStr = "P";
         break;
+    case SYSTEMJOB_TYPE_`DOWNLOAD`:
+        typeStr = "D";
+        break;
         ...
     }
 
@@ -7691,18 +7979,11 @@ char* JobTypeToString(SYSTEMJOB_Type jobType)
 }
 
 
-<conflict-quota> see *rmf-auto-resolution-to-qic*
-
-!INFO  -SBMS_USERBOOKING < p:000000eb t:021e5520 T:SBM_UB_MAIN M:sbm_server_ub_bookedprogramme_properties.c F:SBM_SERVER_USERBOOKING_GetQuotaStatus L:00435 > Quota (user): MaxSize 0x00000000,5c868d3e, UsedSize 0x00000000,001dc5fe, usedPct 0x0
-!INFO  -RMF          < p:000000eb t:021e5520 T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00590 > maxSize =  0,[2019:03:11 16:30:54]1552321854(high,low)
-!INFO  -RMF          < p:000000eb t:021e5520 T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00591 > usedSize =  0,1951230(high,low)
-!INFO  -RMF          < p:000000eb t:021e5520 T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00592 > UsedPercents = 0
-
-
+<conflict-qic>
+// see QIC
 // CMS_SYSTEM_RESOURCE/RMF/src/plugins/quota_immediate_conflict.c
 
 // this is only place to register QIC_Listener
-
     /* register to ControlPermission listener */
     stat = RMF_SRV_Listener_Register(QIC_Listener, NULL,
                 &QICListenerHandle);
@@ -7710,11 +7991,11 @@ char* JobTypeToString(SYSTEMJOB_Type jobType)
     stat = RMF_SRV_Listener_SetEventsMask(QICListenerHandle,
       RMF_SRV_LISTENER_EVENT_CONTROL_PERMISSIONS);
 
-
-RMF_ALLOCATE_ControlPermissions() to check permission
+// to check permission
+RMF_ALLOCATE_ControlPermissions()
 {
-  fire up to notify permission result to client
-    stat = RMF_SRV_TriggerListeners(RMF_SRV_LISTENER_EVENT_CONTROL_PERMISSIONS, cookieJar);
+  //  fire up to notify permission result to client
+  stat = RMF_SRV_TriggerListeners(RMF_SRV_LISTENER_EVENT_CONTROL_PERMISSIONS, cookieJar);
 
   SYSTEM_STATUS RMF_SRV_TriggerListeners(uint32_t event, RMF_COOKIE_JarHandle cookieJar)
     listenersTable[i].trigger(event, cookieJar, listenersTable[i].data);
@@ -7748,10 +8029,12 @@ PRVFUNC void QIC_Listener(uint32_t event, RMF_COOKIE_JarHandle	cookieJar, void *
   }
 }
 
+
+<conflict-raise-type>
 // /* conflict due to fail assign */
 // QIC_Type_FailAssign,
 //
-// /* conflict due to trigger of quota resource */
+// /* conflict due to trigger of `quota resource` */
 // QIC_Type_TriggerWarning,
 
 // raise quota conflict
@@ -7766,157 +8049,6 @@ stat = QIC_Construct(QIC_Type_FailAssign,
     RMF_JOB_Instance_ToString(subject),
     (uiRequired ? "" : "NOT ")));
 }
-
-
-<conflit-change-quota-size> *user-quota*
-HOWTO artificially reduce the size of the user quota of the planner
-
-Edit `flash0/fs/NDS/config/rmf.cfg` and change max_size in section.
-
-[quota1_internal]
-conflictCriticalLimitInMinutes=3
-conflictThresholdLimitInMinutes=7
-max_size_units="MB"
-max_size=4000
-partition_name="RECORDING"
-quota_name="user"
-quota_type="user_type"
-statistics_required=1
-strategy="Fixed"
-
-
-The user quota do not use size_unit to set size since set it with all
-remaining size. Have to use max_size with real size or do have calc in code.
-
-
-max_size_units="MB"
-max_size=4000
-
-104857600     100(1024*1024)
-
-
-Do two things:
-
-1.
-QuotasOnDevice_Add: 
-        /* max_size entry should be present for all strategies expect for
-         * units: Remaining, system limitation, system quota per model,
-         * Recycle */
-        if ((info.strategy != RMF_QUOTA_STRATEGY_REMAINING) &&
-                (info.strategy != RMF_QUOTA_STRATEGY_SYSTEM_QUOTA_LIMITATION) &&
-                (info.strategy != RMF_QUOTA_STRATEGY_NO_SIZE_SET))
-        {
-        }
-        else
-        {
-            info.max_size = i64zero;
-
-            // KIT
-            if (strcmp(info.type, "user_type") == 0) 
-            {
-                raw_size = 1000;
-                info.max_size = i32_to_xint64_t(0, raw_size);
-                DIAG_LOG_ERROR(gRmfSegmentId, ("KIT: <%s> raw_size: %u, max_size: %u,%u(high,low) ",
-                            info.name,
-                            raw_size,
-                            xint64_t_high(&info.max_size),
-                            xint64_t_low(&info.max_size)));
-
-            }
-        }
-
-2. QuotasOnDevice_SetSizes()
-comment out this in QuotasOnDevice_SetSizes() since this do calc and set
-user quota with the remaining size
-// KIT: DO NOT SET WITH REMAINING SIZE
-// quotas[Idx]->creationInfo.max_size = remainingSize;
-
-
-// CMS_SYSTEM_RESOURCE/RMF/src/plugins/quota_resource.c
-// reads rmf.cfg and set values for all quotas
-QuotasOnDevice_Add(SYSTEMCOMMON_DEVICE_HANDLE device_handle)
-
-// reads from pdm but not uses model configuraton. use stragegy.
-PRVFUNC SYSTEM_STATUS QuotasOnDevice_SetSizes(SYSTEMCOMMON_DEVICE_HANDLE device_handle)
-
-    /* get the size of recording partition on disk  */
-    stat = QuotasOnDevice_GetPartitionSize(device_handle,
-            quotas[quotas_count-1U]->creationInfo.partition_name,
-            &partitionSize);
-
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_Add L:03773 > quota[3] name recycle device_handle: 0x6, disk_uid  part_id 0x50003
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04557 > PDM partition size  465,3228270592(high,low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04568 > 1TB is in bytes: 256,0(high, low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04614 > DATA part size in bytes: 2,2212160949(high, low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04620 > Final stream partition size in bytes: 463,1016109643(high, low)
-
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04159 > manufactured HDD size in GiB 1500
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04167 > device size in GB (10^9 bytes) 2000
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04238 > The current model is not part of the exception.
-
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_LimitQuotaSize L:04052 > quota: <user> max_size is 0,1000(high,low)
-
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota user: size: 0,1000(high,low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota system: size: 83,3526103040(high,low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota NDS_Dynamic: size: 9,1345294336(high,low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota recycle: size: 0,0(high,low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04481 > partitionSize: 463,1016109643(high,low), all quotas size: 93,576431080(high,low)
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[0]: <user> max size = 0,1000(high,low) on device handle 0x6
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[1]: <system> max size = 83,3526103040(high,low) on device handle 0x6
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[2]: <NDS_Dynamic> max size = 9,1345294336(high,low) on device handle 0x6
-!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[3]: <recycle> max size = 0,0(high,low) on device handle 0x6
-
-
-<check-disk-size>
--sh-3.2# fdisk -lu
-
-Disk /dev/sda: 2000.3 GB, 2000398934016 bytes
-255 heads, 63 sectors/track, 243201 cylinders, total 3907029168 sectors
-Units = sectors of 1 * 512 = 512 bytes
-
-   Device Boot      Start         End      Blocks  Id System
-/dev/sda1              64  3907007999  1953503968   1 FAT12
-
-
-note: 
-Usual size
-
-M:quota_resource.c F:QuotasOnDevice_SetSizes L:04427 > remaining size: 370,439679563(high,low)
-M:quota_resource.c F:QuotasOnDevice_SetSizes L:04443 > remaining quota[0]: <user> max_size: 370,439679563(high,low)
-M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota user: size: 370,439679563(high,low)
-M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota system: size: 83,3526103040(high,low)
-M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota NDS_Dynamic: size: 9,1345294336(high,low)
-M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota recycle: size: 0,0(high,low)
-
->>> ((370<<32) | (439679563))
-1589577579083L
->>> (1589577579083L)/(1024*1024*1024)
-1480L
-1.4 TB
-
-
-<conflict>
-
-// from RMF ppt
-A conflict can be characterized by: 
-Which resources are involved:
-	Tuner
-	Quota
-Time: 
-	Immediate 
-	Imminent (immediate conflict is expected shortly) 
-	Future (booking) 
-Trigger of conflict:
-	Solicited  - requested by EPG
-	Unsolicited - notified by RMF
-How it is resolved:
-	Automatically 
-	Involving the user 
-
-// channel change conflict
-
-if there's no response within the timeout, the platform cancels the
-channel-change request.
 
 
 <state-code>
@@ -7942,7 +8074,7 @@ RMF_CONFLICT_STATUS_FAILURE   (0x7802001)
 #define RMF_QUOTA_STATUS_UNKNOWN_QUOTA	 RMF_COMP_ID, RMF_QUOTA_IF_ID, SEVERITY_SEVERE, 2	(0x07825002)
 
 
-<permission>
+<conflict-permission>
 /*
    (perm1 & perm2), 
    (perm1 | perm2): 
@@ -7968,14 +8100,15 @@ RMF_CONFLICT_STATUS_FAILURE   (0x7802001)
 
 RMF_ALLOCATE_REQUEST_STATUS_SUCCESS(1)
 
-RMF_ALLOCATE_PERMISSION_NONE    (0xf0000000U) /*!< @brief no permission */	
+RMF_ALLOCATE_PERMISSION_NONE    (0xf0000000U) /*!< @brief `no permission` */	
+RMF_ALLOCATE_PERMISSION_STORE   (0x10000004U) /*!< @brief Store recording on disk */	
 RMF_ALLOCATE_PERMISSION_RECORD  (0x10000008U) /*!< @brief Recording to disk */	
+RMF_ALLOCATE_PERMISSION_LIVE    (0x10000020U) /*!< @brief Live streaming */	
 RMF_ALLOCATE_PERMISSION_EXTEND  (0x10001000U) /*!< @brief Extend quota storage  */	
 
 
-note:
-result and status returns okay but released permission is not.
-!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10000008 released=0xf0000000 change request if fails. 
+note: result and status returns okay but released permission is not.
+!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10000008 released=`0xf0000000` change request if fails. 
 !MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
 
 
@@ -8003,7 +8136,7 @@ NDS: ^0946684997.681695 !ERROR  -RMF < T:SBM_UB_MAIN M:rmf_conflict.c F:RMF_CONF
 RMF_STATUS_FAILURE(0x7821001)
 
 
-<conflict-noti-type>
+<conflict-type-resoultion>
 
 typedef enum RMF_CONFLICT_NOTIFICATION_TYPE_TAG
 {
@@ -8015,11 +8148,7 @@ typedef enum RMF_CONFLICT_NOTIFICATION_TYPE_TAG
 } RMF_CONFLICT_NOTIFICATION_TYPE;
 
 
-<conflict-resolution>
-notifyConflict@picasso/bookingmgr/conflicts/ConflictResolver.java
-
--EPG_CONF     < T:PLANNER_CB4 M:ConflictResolver F:notifyConflict L:00130 > 
-PlannerConflictType=3 Imminent Tuner, ConflictStatus=TO-RESOLVE, conflict=com.nds.fusion.plannerimpl.PlannerImminentTunerConflictImpl
+// notifyConflict@picasso/bookingmgr/conflicts/ConflictResolver.java
 
 typedef enum PLANNER_API_ConflictResolutionTag
 {
@@ -8027,17 +8156,101 @@ typedef enum PLANNER_API_ConflictResolutionTag
   PLANNER_API_CONFLICT_RESOLUTION_CANCEL  (1)     /**< Cancel the cause of the conflict. */
   PLANNER_API_CONFLICT_RESOLUTION_BASIC,          /**< Accept the automatic suggestion to resolve the conflict. */
   PLANNER_API_CONFLICT_RESOLUTION_ADVANCED,       /**< Manual selection to resolve the conflict. */
-  PLANNER_API_CONFLICT_RESOLUTION_ACCEPT,         /**< Accept the conflict situation with no resolution. */
+  PLANNER_API_CONFLICT_RESOLUTION_ACCEPT, `4`         /**< Accept the conflict situation with no resolution. */
   PLANNER_API_CONFLICT_RESOLUTION_CONTINUE,       /**< Continue with the original action that caused the conflict if it is automatically resolved */
   PLANNER_API_CONFLICT_RESOLUTION_AUTO_RESOLVE    /**< Resolve the conflict automatically means without user interaction */
 } PLANNER_API_ConflictResolution;
 
-!MIL   -EPG_CONF     < M:BaseConflict F:trackStatic L:00137 > 
-T:CEE-J EventQueue Reader 0:>>> [CONFLICT=com.nds.fusion.plannerimpl.PlannerChannelChangeConflictImpl@5964e29] commitConflictResolution(resolutionType=1) <<<
+
+typedef enum PLANNER_API_ConflictTypeTag
+{
+    PLANNER_API_CONFLICTTYPE_UNDEF = 0U,
+    PLANNER_API_CONFLICTTYPE_BOOKING_TIME,      /**< Caused by insufficent resources at record time when adding a new booking */
+    PLANNER_API_CONFLICTTYPE_CHANNEL_CHANGE,    /**< Caused by insufficent resources when changing the Live play. */
+    PLANNER_API_CONFLICTTYPE_IMMINENT_TUNER,    /**< Caused by insufficent resources for an imminent recording. i.e clash with Live */
+
+    PLANNER_API_CONFLICTTYPE_IMMINENT_DISK, `4`     
+      /**< Caused by imminent insufficent disk resources for current recordings */
+
+    PLANNER_API_CONFLICTTYPE_BOOKING_DISK_FAIL  (5), /**< Caused by insufficent disk resources at booking time */
+    PLANNER_API_CONFLICTTYPE_PDL_REPLACEMENT_DISK, /**< Caused by imminent insufficient disk resources for PDL recording replacement with PVOD asset */
+    PLANNER_API_CONFLICTTYPE_REMINDER_BOOKING,  /**< Caused by clashing reminders. */
+    PLANNER_API_CONFLICTTYPE_LIVE_RESERVATION,  /**< Caused by insufficient resources when reserving resources for an interactive application */
+    PLANNER_API_CONFLICTTYPE_IMMINENT_LIVE_RESERVATION, /**< Caused by insufficient resources for an imminent recording, when an interactive application is running. */
+    PLANNER_API_CONFLICTTYPE_UPDATED,            /* Caused by automatic conflict update */
+    PLANNER_API_CONFLICTTYPE_RESOLVED, (11, 0xb)            /* Caused by automatic conflict resolve, ie) without the resolver intervention */
+    PLANNER_API_CONFLICTTYPE_IMMEDIATE_RECORDING, /* Caused by booking a second child event while watching an interactive application and recording the current child event.*/
+
+    PLANNER_API_CONFLICTTYPE_QUOTA_CHANGE, `13` 
+      /**< Caused by imminent insufficient disk resources `when moving an asset to the user disk quota` */
+
+    PLANNER_API_CONFLICTTYPE_EXTEND_DISK_QUOTA, /**< Caused by when the viewer performs SFRB for a past event, and the user disk quota does not contain enough space for the new booking  */
+    PLANNER_API_CONFLICTTYPE_LASTVALUE
+} PLANNER_API_ConflictType;
+
+
+// imminent
+!MIL    -EPG_CONF     		< T:PLANNER_CB4 M:ConflictResolver F:notifyConflict L:284 > T:threadtracker:ConflictResolver.notifyConflict - kN@5a024bc `type - 4` - status 1 existing conflicts - 0
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver$1 F:doHandleConflict L:112 > T:CEE-J EventQueue Reader 0:USER_RESOLVE_CONFLICT
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver F:newEpgConflict L:736 > T:CEE-J EventQueue Reader 0:ConflictResolver > new ImminentDiskConflict
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver F:queueConflictAndMaybeStartResolutionOrDebounce L:542 > T:CEE-J EventQueue Reader 0:Starting Conflict Debounce
+
+
+// move to user-quota
+!ERROR  -J_GC         		< T:PLANNER_CB4 M: F: L:0 > T:threadtracker:Conflict callback for conflictCallbackId 0, (maybe) booking id 123, ConflictHandle 2, `Conflict Type 13`
+!MIL    -EPG_CONF     		< T:PLANNER_CB4 M:ConflictResolver F:notifyConflict L:284 > T:threadtracker:ConflictResolver.notifyConflict - kJ@5a685c3 `type - 13` - status 1 existing conflicts - 0
+!MIL    -EPG_PLAY     		< T:no name M:DownloadTracker F:isSuppressingDiskConflicts L:98 > T:CEE-J EventQueue Reader 0:isSuppressingDiskConflicts > false
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver$1 F:doHandleConflict L:112 > T:CEE-J EventQueue Reader 0:USER_RESOLVE_CONFLICT
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver F:newEpgConflict L:752 > T:CEE-J EventQueue Reader 0:ConflictResolver > new OtherDiskConflict
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver F:startResolution L:585 > T:CEE-J EventQueue Reader 0:startResolution - currentConflict = null
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver F:startResolution L:589 > T:CEE-J EventQueue Reader 0:startResolution - priorityConflict = Wl@5a6e07e
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver F:resolve L:649 > T:CEE-J EventQueue Reader 0:resolve
+!MIL    -EPG_CONF     		< T:no name M:ConflictResolver F:setCurrentConflict L:557 > T:CEE-J EventQueue Reader 0:Set current conflict Wl@5a6e07e
+!MIL    -EPG_CONF     		< T:no name M:EpgConflict F:commitResolution L:205 > T:CEE-J EventQueue Reader 0:Committing `resolution type 1`
+
+// errors when no space
+!ERROR  -SBMS_USERBOOKING		< T:SBM_UB_MAIN M:sbm_server_ub_movebooking.c F:SBM_SERVER_UB_MOVEBOOKING_QuotaChangeResultCallback_Handler L:1709 > Failed to change quota for a booking - possibly not enough space in the target quota. 
+!ERROR  -SBMS_USERBOOKING		< T:SBM_UB_MAIN M:sbm_server_ub_movebooking.c F:SBM_SERVER_UB_MOVEBOOKING_Handler L:1765 > Unable to find the Move Booking payload 
+!ERROR  -SBMS_USERBOOKING		< T:SBM_UB_MAIN M:sbm_server_ub_common.c F:SBMUserBookingThread L:1389 > Failed in running callback message function [event_id 21] [event_name SBM_USERBOOKING_EV_MOVE_BOOKING] 
+!ERROR  -PLANNER_COMMON		< T:PLANNER_MAIN M:planner_common.c F:PlannerThread L:1555 > Failed in running event message [event_id 37][event_name PLANNER_EV_SBM_MOVE_BOOKING_FINISHED] 
+!ERROR  -EPG_MISC     		< T:PLANNER_CB4 M:SystemListenerLatch F:doNotify L:87 > T:threadtracker:MW notified failure
+!ERROR  -EPG_BOOK     		< T:no name M:BookingAgent F:doBookingFailure L:1378 > T:PooledExecutor#0:Planner Action Failed (UNDEFINED): UNKNOWN(104996876)
+!MIL    -EPG_DLG      		< T:no name M:DialogManager F:showDialog L:1400 > T:CEE-J EventQueue Reader 0:Showing dialog 1124
+!ERROR  -EPG_DEV1     		< T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /playback/diskspace_booking_disk_fail_id
+
+// auto-resolution
+// note: job=0x20107b0(0)[R] where 0x?? is rmj job instance
+// snprintf(str, (size_t)STR_LEN, "0x%x(%d)[%s]", RMF_JOB_Instance_GetHandle(original), generation, typeStr);
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10001008 released=0xf0000000 change request if fails. 
+!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type FailAssign on 0x20107b0(0)[R] 
+
+
+// 0x2010094 comes from candidateList[i].jobInstance and means candidates to
+// delete? Looks like to delete it and marks it with a reason.
+//
+//  case QIC_JobDeletionMode_Auto:
+//
+//    DIAG_LOG_MIL(gRmfSegmentId, ("Adding job 0x%x to Auto resolution",
+//      RMF_JOB_Instance_GetHandle(candidateList[i].jobInstance)));
+//
+//    stat = AddDeleteInstruction(candidateList[i].jobInstance, 
+//    SYSTEM_EXCEPTION_TYPE_INSUFFICIENT_DISK_SPACE);
+
+!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x2010094 to Auto resolution 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_SRV_CommitResolution L:2756 > Instruction job=0x2010094 toRelease=0x10000004 
+
+!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20107b0(0)[R] UI NOT  required 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10000008 released=0x10001000 change request if fails. 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
+
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x2010094(0)[R] request=0xf0000000 released=0x10000004 change request if fails. 
+!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
 
 
 <conflict-if>
-
 // public interface PlannerSession
 
 checkForServiceConflict
@@ -8200,29 +8413,6 @@ SBM_USERBOOKING_ConflictNotificationHandler
 	SBM_SERVER_CONFLICT_Call_NotifyListener(notifyType, conflictHandle, l_userData);
 }
 
-
-*conflict-type*
-
-typedef enum PLANNER_API_ConflictTypeTag
-{
-    PLANNER_API_CONFLICTTYPE_UNDEF = 0U,
-    PLANNER_API_CONFLICTTYPE_BOOKING_TIME,      /**< Caused by insufficent resources at record time when adding a new booking */
-    PLANNER_API_CONFLICTTYPE_CHANNEL_CHANGE,    /**< Caused by insufficent resources when changing the Live play. */
-    PLANNER_API_CONFLICTTYPE_IMMINENT_TUNER,    /**< Caused by insufficent resources for an imminent recording. i.e clash with Live */
-    PLANNER_API_CONFLICTTYPE_IMMINENT_DISK,     /**< Caused by imminent insufficent disk resources for current recordings */
-    PLANNER_API_CONFLICTTYPE_BOOKING_DISK_FAIL  (5), /**< Caused by insufficent disk resources at booking time */
-    PLANNER_API_CONFLICTTYPE_PDL_REPLACEMENT_DISK, /**< Caused by imminent insufficient disk resources for PDL recording replacement with PVOD asset */
-    PLANNER_API_CONFLICTTYPE_REMINDER_BOOKING,  /**< Caused by clashing reminders. */
-    PLANNER_API_CONFLICTTYPE_LIVE_RESERVATION,  /**< Caused by insufficient resources when reserving resources for an interactive application */
-    PLANNER_API_CONFLICTTYPE_IMMINENT_LIVE_RESERVATION, /**< Caused by insufficient resources for an imminent recording, when an interactive application is running. */
-    PLANNER_API_CONFLICTTYPE_UPDATED,            /* Caused by automatic conflict update */
-    PLANNER_API_CONFLICTTYPE_RESOLVED, (11, 0xb)            /* Caused by automatic conflict resolve, ie) without the resolver intervention */
-    PLANNER_API_CONFLICTTYPE_IMMEDIATE_RECORDING, /* Caused by booking a second child event while watching an interactive application and recording the current child event.*/
-    PLANNER_API_CONFLICTTYPE_QUOTA_CHANGE, /**< Caused by imminent insufficient disk resources when moving an asset to the user disk quota */
-    PLANNER_API_CONFLICTTYPE_EXTEND_DISK_QUOTA, /**< Caused by when the viewer performs SFRB for a past event, and the user disk quota does not contain enough space for the new booking  */
-    PLANNER_API_CONFLICTTYPE_LASTVALUE
-} PLANNER_API_ConflictType;
-
 PLANNER_ConflictNotificationHandler
 {
 	PLANNER_PRV_NotifyConflictListenersInAllSessions
@@ -8256,7 +8446,6 @@ else if (RMF_CONFLICT_STATUS_OK != RMF_CONFLICT_RegisterResolver(
 
 
 <conflict-log>
-
 // PLANNER_API_CONFLICTTYPE_CHANNEL_CHANGE
 -P_Planner    	< T:PLANNER_CB4 M:planner_callback.c F:PLANNER_ExecuteUserCallback L:240 > KT: 0x1, 0xcd, 0x44, 0x2 
 -J_PLANNER    	< T:PLANNER_CB4 M:natPlannerCommon.c F:PLANNER_JAVA_Conflict_ResolverCb L:3014 > ResolverUserTag: 0x0x1, BookingUserTag: 0x0xcd, ConflictHandle: 0x0x44, ConflictType: 0x0x2 
@@ -8338,7 +8527,351 @@ $ sed -n '1,69926p' LOGlast | egrep 'commitConflictResolution' | wc -l
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-rmf-conclict
+|kt_dev_si_0001| comp-rmf-conclict-disk-quota
+
+<check-disk-size>
+-sh-3.2# fdisk -lu
+
+Disk /dev/sda: 2000.3 GB, 2000398934016 bytes
+255 heads, 63 sectors/track, 243201 cylinders, total 3907029168 sectors
+Units = sectors of 1 * 512 = 512 bytes
+
+   Device Boot      Start         End      Blocks  Id System
+/dev/sda1              64  3907007999  1953503968   1 FAT12
+
+
+<disk-quotas>
+!INFO  -SBMS_USERBOOKING < T:SBM_UB_MAIN M:sbm_server_ub_bookedprogramme_properties.c F:SBM_SERVER_USERBOOKING_GetQuotaStatus L:00435 > 
+  Quota (user): MaxSize 0x00000000,5c868d3e, UsedSize 0x00000000,001dc5fe, usedPct 0x0
+!INFO  -RMF          < T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00590 > maxSize =  0,[2019:03:11 16:30:54]1552321854(high,low)
+!INFO  -RMF          < T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00591 > usedSize =  0,1951230(high,low)
+!INFO  -RMF          < T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00592 > UsedPercents = 0
+
+
+Usual size:
+M:quota_resource.c F:QuotasOnDevice_SetSizes L:04427 > remaining size: 370,439679563(high,low)
+M:quota_resource.c F:QuotasOnDevice_SetSizes L:04443 > remaining quota[0]: <user> max_size: 370,439679563(high,low)
+M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota user: size: 370,439679563(high,low)
+M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota system: size: 83,3526103040(high,low)
+M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota NDS_Dynamic: size: 9,1345294336(high,low)
+M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota recycle: size: 0,0(high,low)
+
+>>> ((370<<32) | (439679563))
+1589577579083L
+>>> (1589577579083L)/(1024*1024*1024)
+1480L
+1.4 TB
+
+
+<conflit-change-quota-size> *user-quota*
+HOWTO artificially reduce the size of the user quota of the planner
+
+Edit `flash0/fs/NDS/config/rmf.cfg` and change max_size in section.
+
+[quota1_internal]
+conflictCriticalLimitInMinutes=3
+conflictThresholdLimitInMinutes=7
+max_size_units="MB"
+max_size=4000
+partition_name="RECORDING"
+quota_name="user"
+quota_type="user_type"
+statistics_required=1
+strategy="Fixed"
+
+
+note: The user quota do not use size_unit to set size since set it with all
+remaining size. Have to use max_size with real size or do have calc in code.
+
+max_size_units="MB"
+max_size=4000
+
+104857600     100(1024*1024)
+
+Do two things:
+
+1.
+QuotasOnDevice_Add: 
+        /* max_size entry should be present for all strategies expect for
+         * units: Remaining, system limitation, system quota per model,
+         * Recycle */
+        if ((info.strategy != RMF_QUOTA_STRATEGY_REMAINING) &&
+                (info.strategy != RMF_QUOTA_STRATEGY_SYSTEM_QUOTA_LIMITATION) &&
+                (info.strategy != RMF_QUOTA_STRATEGY_NO_SIZE_SET))
+        {
+        }
+        else
+        {
+            info.max_size = i64zero;
+
+            // KIT
+            if (strcmp(info.type, "user_type") == 0) 
+            {
+                raw_size = 1000;
+                info.max_size = i32_to_xint64_t(0, raw_size);
+                DIAG_LOG_ERROR(gRmfSegmentId, ("KIT: <%s> raw_size: %u, max_size: %u,%u(high,low) ",
+                            info.name,
+                            raw_size,
+                            xint64_t_high(&info.max_size),
+                            xint64_t_low(&info.max_size)));
+
+            }
+        }
+
+2. QuotasOnDevice_SetSizes()
+comment out this in QuotasOnDevice_SetSizes() since this do calc and set
+user quota with the remaining size
+// KIT: DO NOT SET WITH REMAINING SIZE
+// quotas[Idx]->creationInfo.max_size = remainingSize;
+
+
+// CMS_SYSTEM_RESOURCE/RMF/src/plugins/quota_resource.c
+// reads rmf.cfg and set values for all quotas
+QuotasOnDevice_Add(SYSTEMCOMMON_DEVICE_HANDLE device_handle)
+
+// reads from pdm but not uses model configuraton. use stragegy.
+PRVFUNC SYSTEM_STATUS QuotasOnDevice_SetSizes(SYSTEMCOMMON_DEVICE_HANDLE device_handle)
+
+    /* get the size of recording partition on disk  */
+    stat = QuotasOnDevice_GetPartitionSize(device_handle,
+            quotas[quotas_count-1U]->creationInfo.partition_name,
+            &partitionSize);
+
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_Add L:03773 > quota[3] name recycle device_handle: 0x6, disk_uid  part_id 0x50003
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04557 > PDM partition size  465,3228270592(high,low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04568 > 1TB is in bytes: 256,0(high, low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04614 > DATA part size in bytes: 2,2212160949(high, low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_GetPartitionSize L:04620 > Final stream partition size in bytes: 463,1016109643(high, low)
+
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04159 > manufactured HDD size in GiB 1500
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04167 > device size in GB (10^9 bytes) 2000
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04238 > The current model is not part of the exception.
+
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_LimitQuotaSize L:04052 > quota: <user> max_size is 0,1000(high,low)
+
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota user: size: 0,1000(high,low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota system: size: 83,3526103040(high,low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota NDS_Dynamic: size: 9,1345294336(high,low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04466 > quota recycle: size: 0,0(high,low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04481 > partitionSize: 463,1016109643(high,low), all quotas size: 93,576431080(high,low)
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[0]: <user> max size = 0,1000(high,low) on device handle 0x6
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[1]: <system> max size = 83,3526103040(high,low) on device handle 0x6
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[2]: <NDS_Dynamic> max size = 9,1345294336(high,low) on device handle 0x6
+!INFO  -RMF < T:RMF_Server M:quota_resource.c F:QuotasOnDevice_SetSizes L:04497 > quota[3]: <recycle> max size = 0,0(high,low) on device handle 0x6
+
+
+={============================================================================
+|kt_dev_si_0001| comp-rmf-conclict-disk-full
+
+https://www.stb.bskyb.com/jira/browse/SI-10688
+
+Here two problem:
+  * live pause unavailable when disk is full
+  * recording from review buffer failed when disk is full
+
+<live-pause>
+
+"Live pause is not available.
+There is currently insufficient disk space.
+Press BACK UP to cancel."
+
+Shows the dialog when disk is near full. Log shows that when a pause key is
+pressed for a long time and live pause is going on while other recording is
+going on. Log shows there are conflicts which keeps deleting or stoping
+recordins to make a space and eventually stop a RB.
+
+// tune first
+ 65143:!MIL    -EPG_ME < T:no name M:MediaEngine F:playService L:1498 > T:PooledExecutor#4:TUNING TO Eurosport 1 HD, 410 locator:5:3:FA4
+
+ 70234:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010256(0)[Rb] UI NOT  required 
+ 71604:!MIL    -aem    < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+ 77329:!MIL    -aem    < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+208922:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010271(0)[R] 
+208950:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010271(0)[R] UI NOT  required 
+209463:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010272(0)[R] 
+209491:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010272(0)[R] UI NOT  required 
+327749:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010285(0)[R] 
+327777:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010285(0)[R] UI NOT  required 
+329001:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010286(0)[R] 
+329029:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010286(0)[R] UI NOT  required 
+441291:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
+441319:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+445309:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
+445337:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+446251:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
+446279:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+448462:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type `TriggerWarning` on 0x201029b(0)[R] 
+448490:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
+
+// tune second
+564660:!MIL    -EPG_ME < T:no name M:MediaEngine F:playService L:1498 > T:PooledExecutor#2:TUNING TO Eurosport 1 HD, 410 locator:5:3:FA4
+
+// start rb
+565347:!MIL    -VRM_SERVER < T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-rbrec, jhVRM=0x3000014 
+565350:!MIL    -RMF        < T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_TriggerGetShrec L:381 > Job `0x20102c1`(0)[Rb] - shrec found: 0x0 
+
+// note: did not get premissions
+565355:!MIL    -RMF     < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20102c1(0)[Rb] request=0x10000008 released=`0xf0000000` change request if fails. 
+565503:!MIL    -RMF     < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20102c1(0)[Rb] request=0x10000008 released=0xf0000000 change request if fails. 
+
+571468:!MIL    -MDM     < T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x469 hMC=0x8e tuner_id =0 and job_type =LIVE_VIEWING 
+571469:!MIL    -MDM     < T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x46c hMC=0x8f tuner_id =0 and job_type =RECORD 
+571470:!MIL    -MDM     < T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x4db hMC=0x91 tuner_id =1 and job_type =RECORD 
+
+577323:!MIL    -RMF     < T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:994 > Building conflict of type `FailAssign` on 0x20102c4(0)[R] 
+577349:!MIL    -RMF     < T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Resolve L:2234 > Adding job 0x20101da to `Auto resolution` 
+577351:!MIL    -RMF     < T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+
+// conflict on rb
+580427:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c1(0)[Rb] 
+
+// delete rb
+580453:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2333 > Stopping subject 0x20102c1(0)[Rb] because there are no candidates 
+
+580455:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c1(0)[Rb] UI NOT  required 
+580946:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
+580972:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101dc to Auto resolution 
+580974:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+586603:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:994 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
+586629:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101e5 to Auto resolution 
+586631:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+588826:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
+588852:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101e6 to Auto resolution 
+588854:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
+
+599193:!MIL    -VRM_SERVER < T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Destroy L:1601 > @@PMON@@,mark,job,job-destroy,50331668,job-destroy-type=,jb-rbrec 
+
+593555:!ERROR  -EPG_DEV1 < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > 
+  T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
+593556:!MIL    -EPG_MISC < T:no name M:MilestoneNotifier F:send L:21 > 
+  T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+593576:!MIL    -EPG_MISC < T:no name M:MilestoneNotifier F:send L:21 > 
+  T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "REWIND","title": "Key Press REWIND","label": "","currentscreen": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
+594132:!MIL    -aem      < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
+
+
+From docs:
+
+1. Live pause failure
+
+This scenario happens when disk space is near full and there are multiple
+recording on including live pause. Disk conflicts happens continually while
+`deleting low priority recording from user quota` according to the defined
+priority and eventually stops RB to make space available when there are no
+other recordings to delete. These all done by rule which is defined for Darwin
+profile and the important snippet reads:
+
+    When an active Review Buffer or Live Pause recording encounters a disk
+    conflict, the PVR always stops the Review Buffer recording, unless the
+    resolution mode is set to Auto.  
+
+    If the resolution mode is "Auto," the PVR deletes viewed non-PPV
+    recordings which are not set to Keep or Copy, to make way for the Review
+    Buffer. If no such recordings exist, then the review buffer recording is
+    stopped. The Review Buffer will not be automatically resumed until a
+    subsequent channel change occurs.
+
+See 
+
+1.	XT-T314	8.0	Conflict Rules for Multiple Simultaneous Recordings
+Table 5	Primary Priorities for Recording Retention
+
+
+This matches to the RMF code:
+
+            /* MSCQ494756 - do not stop ongoing recording when threshold limit is reached */
+            SYSTEMJOB_Type jobType = RMF_JOB_Instance_GetType(subjectJob);
+            if ( (jobType == SYSTEMJOB_TYPE_RB_RECORD) || (jobType == SYSTEMJOB_TYPE_IPTV_RB_RECORD)
+                    || (jobType == SYSTEMJOB_TYPE_TRANSCODING_RECORDING))
+
+            {
+                stat = AddStopInstruction(subjectJob, SYSTEM_EXCEPTION_TYPE_INSUFFICIENT_DISK_SPACE);
+                STATUS_CHECK_AB(stat);
+                resolutionSet = true;
+            }
+
+
+<recording-fail-when-disk-space-auto>
+This is a recording from review buffer which showed as failed when:
+
+[Paul] Go to the planner, select the failed recording and press the i button.
+It gives the reason for the failure as lack of disk space. For the daily
+  report we get the information from the UPnP data
+
+However, no PCAT entry and hence no errors in PCAT.
+
+WP775 - Extend Recording with Full Disk
+
+The issue to slove:
+
+"In some circumstances, after tuning to a channel which is already being
+recorded, it is not possible to rewind back into the recording from the
+current live viewing point. This happens when the disk is full and a review
+buffer exists. The issue arises when VRM requests RMF for permission to extend
+a recording and it is refused."
+
+Here "extend" means that "extend" RB to make it possible to "rewind back"
+
+This occurs because of the following:
+
+* When the user tunes to a channel, it a Record RB is created..
+
+* If that channel is recording, the review buffer’s vfile shares the pfile
+  being used for that recording.
+
+* It is possible for the user to use reverse play trick modes to move to the
+  beginning of the recording (as opposed to selecting the recording in
+  Planner). This is implemented by updating its shrec to extend the RB’s
+  vfile back to the beginning of the recording.
+
+* During this extension, RMF checks for a disk quota conflict. In computing
+  the disk requirements, RMP does not take into account that the ongoing
+  recording and the review buffer share a pfile . Therefore, if the disk is
+  close to being full, the request for the extension may result in a conflict.
+
+* Although RMF can resolve quota conflicts by deleting recordings [7], the
+  current VRM/RMF implementation does not support this for extension requests.
+  Consequently, the review buffer fails, requiring the user to retune to a
+  different channel for it to be re-established.
+
+Although it was considered to apply the current conflict rules [7] to resolve
+quota extension conflicts, this could result in rewinding within the review
+buffer to delete, say, 8 hours of partially viewed recordings without any
+warning to the user. Therefore, this WP will only delete recordings from the
+recycle quota to resolve quota extension conflicts. This eliminates the impact
+that the introduction of the “undelete” feature has on the RB.
+
+7.	XT-T314	8.0	Conflict Rules for Multiple Simultaneous Recordings
+
+note:
+My understanding is that when disk management is auto, it uses [7] to delete
+recordings to make a space. However, this may delete a recording that RB uses
+to extend since it's marked "viewed". This WP ensures that this RB extension
+uses only "recycled quota" which seems to be kind of virtual quota. 
+
+If this is physical quota, deletion moves a recording from user to recycled
+then user already has a space!
+
+From:
+WP1965 - Planner Undelete - Disk Quota Management
+
+RMF implementation of Recycle disk quota includes fully `overlapping` with user
+disk quota, and ensure disk usage is apportioned correctly to these quotas.
+
+RMF extends the priority rules for Disk Space conflicts to prioritise deletion
+of jobs in the Recycle disk quota `above` jobs in the User disk quota.  RMF
+should always exhaust the Recycle disk quota before considering jobs for
+deletion in the User disk quota.
+
+RMF disk conflict rules for RB recording are changed to auto-resolve disk
+space conflicts by removing jobs from the Recycle disk quota.
+
+note:
+This WP is applied HR015.
+
+
+={============================================================================
+|kt_dev_si_0001| comp-rmf-conclict-tune
 
 *si-jira* SI-10601
 
@@ -8742,123 +9275,6 @@ is the *booking-job-id* in PCAT db.
 
 *job-destory*
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Destroy L:1601 > @@PMON@@,mark,job,job-destroy,50331668,job-destroy-type=,jb-rbrec 
-
-
-<when-auto-resolution-to-qic>
-// job=0x20107b0(0)[R] where 0x?? is rmj job instance
-// snprintf(str, (size_t)STR_LEN, "0x%x(%d)[%s]", RMF_JOB_Instance_GetHandle(original), generation, typeStr);
-
-!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10001008 released=0xf0000000 change request if fails. 
-!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type FailAssign on 0x20107b0(0)[R] 
-
-
-// 0x2010094 comes from candidateList[i].jobInstance and means candidates to
-// delete? Looks like to delete it and marks it with a reason.
-//
-//  case QIC_JobDeletionMode_Auto:
-//
-//    DIAG_LOG_MIL(gRmfSegmentId, ("Adding job 0x%x to Auto resolution",
-//      RMF_JOB_Instance_GetHandle(candidateList[i].jobInstance)));
-//
-//    stat = AddDeleteInstruction(candidateList[i].jobInstance, 
-//    SYSTEM_EXCEPTION_TYPE_INSUFFICIENT_DISK_SPACE);
-
-
-!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x2010094 to Auto resolution 
-
-// /** @brief Mask of permissions to release */
-// RMF_ALLOCATE_PERMISSION permissionsToRelease;
-// RMF_ALLOCATE_PERMISSION_STORE (0x10000004U)		/*!< @brief Store recording on disk */	
-
-!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_SRV_CommitResolution L:2756 > Instruction job=0x2010094 toRelease=0x10000004 
-
-!MIL    -RMF          		< T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20107b0(0)[R] UI NOT  required 
-!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
-
-!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10000008 released=0x10001000 change request if fails. 
-!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
-
-!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x2010094(0)[R] request=0xf0000000 released=0x10000004 change request if fails. 
-!MIL    -RMF          		< T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
-
-
-<when-stopping-rb-when-conflict>
-Shows the dialog when disk is near full. Log shows that when a pause key is
-pressed for a long time and live pause is going on while other recording is
-going on. Log shows there are conflicts which keeps deleting or stoping
-recordins to make a space and eventually stop a RB.
-
-"Live pause is not available.
-There is currently insufficient disk space.
-Press BACK UP to cancel."
-
-
-// tune 01
- 65143:!MIL    -EPG_ME < T:no name M:MediaEngine F:playService L:1498 > T:PooledExecutor#4:TUNING TO Eurosport 1 HD, 410 locator:5:3:FA4
-
- 70234:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010256(0)[Rb] UI NOT  required 
- 71604:!MIL    -aem    < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
- 77329:!MIL    -aem    < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
-208922:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010271(0)[R] 
-208950:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010271(0)[R] UI NOT  required 
-209463:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010272(0)[R] 
-209491:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010272(0)[R] UI NOT  required 
-327749:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010285(0)[R] 
-327777:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010285(0)[R] UI NOT  required 
-329001:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x2010286(0)[R] 
-329029:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x2010286(0)[R] UI NOT  required 
-441291:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
-441319:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
-445309:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
-445337:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
-446251:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
-446279:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
-448462:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x201029b(0)[R] 
-448490:!MIL    -RMF    < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x201029b(0)[R] UI NOT  required 
-
-// tune 02
-
-564660:!MIL    -EPG_ME < T:no name M:MediaEngine F:playService L:1498 > T:PooledExecutor#2:TUNING TO Eurosport 1 HD, 410 locator:5:3:FA4
-
-// start rb
-565347:!MIL    -VRM_SERVER < T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4947 > VRM_JOB_START: jtVRM=jb-rbrec, jhVRM=0x3000014 
-565350:!MIL    -RMF        < T:VRM_SRV M:shrec_group_manager.c F:RMP_SHREC_GROUP_MANAGER_TriggerGetShrec L:381 > Job `0x20102c1`(0)[Rb] - shrec found: 0x0 
-
-// did not get premissions
-565355:!MIL    -RMF     < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20102c1(0)[Rb] request=0x10000008 released=0xf0000000 change request if fails. 
-565503:!MIL    -RMF     < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20102c1(0)[Rb] request=0x10000008 released=0xf0000000 change request if fails. 
-
-571468:!MIL    -MDM     < T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x469 hMC=0x8e tuner_id =0 and job_type =LIVE_VIEWING 
-571469:!MIL    -MDM     < T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x46c hMC=0x8f tuner_id =0 and job_type =RECORD 
-571470:!MIL    -MDM     < T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x4db hMC=0x91 tuner_id =1 and job_type =RECORD 
-
-577323:!MIL    -RMF     < T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:994 > Building conflict of type FailAssign on 0x20102c4(0)[R] 
-577349:!MIL    -RMF     < T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Resolve L:2234 > Adding job 0x20101da to Auto resolution 
-577351:!MIL    -RMF     < T:VRM_SRV M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
-
-// conflict on rb
-580427:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c1(0)[Rb] 
-
-// rb deleted
-580453:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2333 > Stopping subject 0x20102c1(0)[Rb] because there are no candidates 
-
-580455:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c1(0)[Rb] UI NOT  required 
-580946:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
-580972:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101dc to Auto resolution 
-580974:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
-586603:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:994 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
-586629:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101e5 to Auto resolution 
-586631:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
-588826:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:993 > Building conflict of type TriggerWarning on 0x20102c4(0)[R] 
-588852:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Resolve L:2233 > Adding job 0x20101e6 to Auto resolution 
-588854:!MIL    -RMF     < T:RMF_Server M:quota_immediate_conflict.c F:QIC_Construct L:1027 > Conflict on 0x20102c4(0)[R] UI NOT  required 
-
-599193:!MIL    -VRM_SERVER < T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Destroy L:1601 > @@PMON@@,mark,job,job-destroy,50331668,job-destroy-type=,jb-rbrec 
-
-593555:!ERROR  -EPG_DEV1 < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
-593556:!MIL    -EPG_MISC < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
-593576:!MIL    -EPG_MISC < T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "REWIND","title": "Key Press REWIND","label": "","currentscreen": "/tv/live/410/live_pause_not_available_insufficient_disk_space_id"}
-594132:!MIL    -aem      < T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(PAUSE)e401 
 
 
 <when-record-from-start-to-end>
@@ -10742,6 +11158,9 @@ taken some time to complete.  I think this will fix it. Would be good to know
 how reproducible the problem is.
 
 
+!MIL    -EPG_BOOK     		< p:0x00000233 P:APP t:0x2df72520 T:no name M:PvodBookingAgent$1 F:run L:96 > T:PooledExecutor#0:Moving to quota=user from quota=system
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-pcat
 
@@ -11696,6 +12115,7 @@ COMPONENT_NAME := dbengine
 src/Interface/dbe_interface/makefile
 52:COMPONENT_NAME := dbe_interface
 
+// segment name
 char f_segment_name_debug_backup[] = "DBENGINE_BACKUP";
 char f_segment_name_debug_mirror[] = "DBENGINE_MIRROR";
 
@@ -11710,6 +12130,7 @@ DBENGINE_diag_segment_id;
 TRACE_LEVEL_DBENGINE_BACKUP="AFEWM"
 TRACE_LEVEL_DBENGINE_MIRROR="AFEWM"
 TRACE_LEVEL_DBENGINE_SRV="AFEWM"
+
 
 <version>
 SQLITE_VERSION     77 CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/common_h/sqlite3.h # undef SQLITE_VERSION
@@ -11755,6 +12176,10 @@ If SIM print the error below it seems to be that the query (select) doesn't retu
 
 # 0x2020015
 #define DBENGINE_API_STATUS_PROTOCOL    DBENGINE_API_MAKE_STATUS(SEVERITY_SEVERE,15)   /*!< Database lock protocol error */
+
+
+<dbengine_backup>
+CMS_INFORMATION_SERVICES/DBENGINE/src/Interface/dbe_interface/dbengine_backup.c
 
 
 <pcat-error>
@@ -11877,13 +12302,320 @@ SYSTEM_STATUS PDM_FS_GetDirtyFlag(bool *isDirty);
 // SYSTEM_STATUS VRM_PCAT_Cleanup(void);
 
 
-<pcat-jornal>
+{pcat-journal}
 SQLite will attempt to recover if the box was rebooted while a transaction was
 in progress.  It's *really* important we know whether this has happened or
 not. Basically if the first few bytes of the DBJ file is zeroes, then there's
 no transaction to be rolled back.  If they're non-zero, then there was likely
 a hard reboot, and it will attempt a rollback that may or may not be
 successful. 
+
+https://www.sqlite.org/howtocorrupt.html
+1.3. Deleting a hot journal
+
+SQLite normally stores all content in a single disk file. However, while
+performing a transaction, information necessary to roll back that transaction
+following a crash or power failure is stored in auxiliary journal files. These
+journal files have the same name as the original database file with the
+addition of -journal or -wal suffix.
+
+SQLite must see the journal files in order to recover from a crash or power
+failure. If the journal files are moved, deleted, or renamed after a crash or
+power failure, then automatic recovery will not work and the database may go
+corrupt.
+
+
+<rollback-mode>
+
+// <dbengine.cfg>
+
+[DBENGINE_JOURNAL]
+DBENGINE_JOURNAL_MODE="PERSIST"
+
+// https://www.sqlite.org/isolation.html
+
+SQLite implements isolation and concurrency control (and atomicity) using
+transient journal files that appear in the same directory in as the database
+file. There are two major "journal modes". The older "rollback mode"
+corresponds to using the "DELETE", "PERSIST", or "TRUNCATE" options to the
+journal_mode pragma. In rollback mode, changes are written directly into the
+database file, while simultaneously a separate rollback journal file is
+constructed that is able to restore the database to its original state if the
+transaction rolls back. Rollback mode (specifically DELETE mode, meaning that
+    the rollback journal is deleted from disk at the conclusion of each
+    transaction) is the current default behavior. 
+
+// dbe_interface/dbengine_api.c
+//
+// static SYSTEM_STATUS ApplyDefaultPragmas(DBENGINE_API_DbContext *pDbContext)
+//		(void)snprintf(temp_buf, sizeof(temp_buf), "PRAGMA journal_mode = %s", g_DBENGINE_Conf.DbenginejournalMode);
+
+
+<how-rollback-works>
+https://www.sqlite.org/atomiccommit.html
+
+An important feature of `transactional databases` like SQLite is `atomic commit`
+
+SQLite has the important property that transactions appear to be atomic even
+if the transaction is interrupted by an operating system crash or power
+failure.
+
+This article describes the techniques used by SQLite to create the illusion of
+atomic commit.
+
+The information in this article applies only when SQLite is operating in
+"rollback mode", or in other words when SQLite is not using a write-ahead log.
+
+
+2. Hardware Assumptions
+
+SQLite assumes that the operating system will buffer writes and that a write
+request will return before data has actually been stored in the mass storage
+device. SQLite further assumes that write operations will be reordered by the
+operating system. For this reason, SQLite does a "flush" or "fsync" operation
+at key points. SQLite assumes that the flush or fsync will not return until
+all pending write operations for the file that is being flushed have
+completed. We are told that the flush and fsync primitives are broken on some
+versions of Windows and Linux. This is unfortunate. It opens SQLite up to the
+possibility of database corruption following a power loss in the middle of a
+commit. However, there is nothing that SQLite can do to test for or remedy the
+situation. SQLite assumes that the operating system that it is running on
+works as advertised. If that is not quite the case, well then hopefully you
+will not lose power too often.
+
+
+3. Single File Commit
+
+We begin with an overview of the steps SQLite takes in order to perform an
+atomic commit of a transaction against a single database file.
+
+note: see these steps in time order.
+
+note: make a journal file
+
+3.5. Creating A Rollback Journal File
+
+Prior to making any changes to the database file, SQLite first creates a
+separate `rollback journal file` and writes into the rollback journal the
+`original content of the database pages` that are to be altered. The idea behind
+the rollback journal is that it contains all information needed to restore the
+database back to its original state.
+
+The rollback journal contains a small `header`  
+
+When a new file is created, most desktop operating systems will not actually
+write anything to disk. The new file is created in the operating systems disk
+cache only. The file is not created on mass storage until sometime later, when
+the operating system has a spare moment. This creates the impression to users
+that I/O is happening much faster than is possible when doing real disk I/O.
+We illustrate this idea in the diagram to the right by showing that the new
+rollback journal appears in the operating system disk cache only and not on
+the disk itself.
+
+
+3.6. Changing Database Pages In User Space
+
+After the original page content has been saved in the rollback journal, the
+pages can `be modified in user memory` Each database connection has its own
+private copy of user space, so the changes that are made in user space are
+only visible to the database connection that is making the changes. Other
+database connections still see the information in operating system disk cache
+buffers which have not yet been changed. And so even though one process is
+busy modifying the database, other processes can continue to read their own
+copies of the original database content.
+
+
+3.7. Flushing The Rollback Journal File To Mass Storage
+
+The next step is to flush the content of the rollback journal file to
+nonvolatile storage. As we will see later, this is a critical step in insuring
+that the database can survive an unexpected power loss. This step also takes a
+lot of time, since writing to nonvolatile storage is normally a slow
+operation.
+
+This step is usually more complicated than simply flushing the rollback
+journal to the disk. 
+
+note: change (main) db
+
+3.9. Writing Changes To The Database File
+
+Once an exclusive lock is held, we know that no other processes are reading
+from the database file and it is safe to write changes into the database file.
+Usually those changes only go as far as the operating systems disk cache and
+do not make it all the way to mass storage.
+
+3.10. 0 Flushing Changes To Mass Storage
+
+Another flush must occur to make sure that all the database changes are
+written into nonvolatile storage. This is a critical step to ensure that the
+database will survive a power loss without damage. However, because of the
+inherent slowness of writing to disk or flash memory, this step together with
+the rollback journal file flush in section 3.7 above takes up most of the time
+required to complete a transaction commit in SQLite.
+
+
+note: reset a journal file since pcat use "reset" optimisation.
+
+3.11. 1 Deleting The Rollback Journal
+
+After the database changes are all safely on the mass storage device, the
+rollback journal file is deleted. This is the instant where the transaction
+commits. 
+
+If a power failure or system crash occurs prior to this point, then recovery
+processes to be described later make it appear as if no changes were ever made
+to the database file. 
+
+note: means a power failure before resetting the header then will see this in
+the next reboot or next transaction. so will start "rollback" recovery process.
+
+If a power failure or system crash occurs after the rollback journal is
+deleted, then it appears as if all changes have been written to disk. Thus,
+  SQLite gives the appearance of having made no changes to the database file
+  or having made the complete set of changes to the database file `depending
+  on whether or not the rollback journal file exists`
+
+Deleting a file is not really an atomic operation, but it appears to be from
+the point of view of a user process. A process is always able to ask the
+operating system "does this file exist?" and the process will get back a yes
+or no answer. After a power failure that occurs during a transaction commit,
+   SQLite will ask the operating system whether or not the rollback journal
+   file exists. If the answer is "yes" then the transaction is incomplete and
+   is rolled back. If the answer is "no" then it means the transaction did
+   commit.
+
+The existence of a transaction depends on whether or not the rollback journal
+file exists and the deletion of a file appears to be an atomic operation from
+the point of view of a user-space process. Therefore, a transaction appears to
+be an atomic operation.
+
+The act of deleting a file is expensive on many systems. As an optimization,
+    SQLite can be configured to truncate the journal file to zero bytes in
+    length or `overwrite the journal file header with zeros` In either case,
+    the resulting journal file is no longer capable of rolling back and so the
+    transaction still commits. Truncating a file to zero length, like deleting
+    a file, is assumed to be an atomic operation from the point of view of a
+    user process. 
+    
+Overwriting the header of the journal with zeros is not atomic, but if any
+part of `the header is malformed the journal will not roll back` Hence, one
+can say that the commit occurs as soon as the header is sufficiently changed
+to make it invalid. Typically this happens as soon as the first byte of the
+header is zeroed.
+
+
+4. Rollback
+
+An atomic commit is supposed to happen instantaneously. But the processing
+described above clearly takes a finite amount of time. Suppose the power to
+the computer were cut part way through the commit operation described above.
+In order to maintain the illusion that the changes were instantaneous, we have
+to "rollback" any partial changes and restore the database to the state it was
+in prior to the beginning of the transaction.  
+
+
+note: hot journal means
+
+4.2. Hot Rollback Journals
+
+The first time that any SQLite process attempts to access the database file,
+    it obtains a shared lock as described in section 3.2 above. But then it
+    `notices` that there is a rollback journal file present. SQLite then checks
+    to see if the rollback journal is a "hot journal". A hot journal is a
+    rollback journal that needs to be played back in order to restore the
+    database to a sane state.
+
+
+4.4. Rolling Back Incomplete Changes
+
+Once a process obtains an exclusive lock, it is permitted to write to the
+database file. It then proceeds to read the original content of pages out of
+the rollback journal and write that content back to where it came from in the
+database file.
+
+
+4.5. Deleting The Hot Journal
+
+After all information in the rollback journal has been played back into the
+database file (and flushed to disk in case we encounter yet another power
+    failure), the hot rollback journal can be deleted.
+
+As in section 3.11, the journal file might be truncated to zero length or its
+header might be overwritten with zeros as an optimization on systems where
+deleting a file is expensive. Either way, the journal is `no longer hot` after
+this step.
+
+
+<pcat-check>
+
+1.
+
+sqlite3 PCAT.DB.courrpted "pragma integrity_check"
+*** in database main ***
+On page 55 at right child: invalid page number 712
+Error: database disk image is malformed
+
+boots up, get TF when goes to planner. no DBJ made.
+
+		register(dialog(IDialogID.DISK_FAIL_SYSTEM_FAULT_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.SYSTEM_FAULT)
+						.instruction(NONE)
+						.textStrings("There is an issue with your Sky+HD box, so recording and playback are unavailable.\nFor help resolving this issue, please go to sky.com/record"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.CA_EXCEPTION)
+						.secondaryPriority(ISecondaryPriority.CA_EXCEPTION_VIEWING_CARD)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.flags(SHOW_DISK_FAULT_REFERENCE)
+						.modal(false)
+						.actions(BACKUP_IGNORE)));
+
+		register(dialog(IDialogID.DISK_FAIL_SYSTEM_FAULT_MODAL_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.SYSTEM_FAULT)
+						.instruction(BACKUP_TO_CANCEL)
+						.textStrings("There is an issue with your Sky+HD box, so recording and playback are unavailable.\nFor help resolving this issue, please go to sky.com/record"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.CA_EXCEPTION)
+						.secondaryPriority(ISecondaryPriority.CA_EXCEPTION_VIEWING_CARD)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.flags(SHOW_DISK_FAULT_REFERENCE)
+						.modal(true)
+						.actions(BACKUP_BACKUP)));
+
+2.  
+
+sqlite3 PCAT.DB.courrpted "pragma integrity_check"
+
+wrong # of entries in index sqlite_autoindex_BOOKING_INFO_2
+wrong # of entries in index sqlite_autoindex_BOOKING_INFO_1
+wrong # of entries in index I_BJ_BS
+wrong # of entries in index I_BJ_TT_BT
+wrong # of entries in index I_DEL_BJ
+wrong # of entries in index I_BJ_RS
+wrong # of entries in index I_BJ_BI
+
+boot up, DBJ made, init diaglog when goes to planner
+
+
+3. R.Tinter
+kyoupark@ukstbuild2:~/si_logs$ sqlite3 PCAT.DB.RTiner "pragma integrity_check"
+wrong # of entries in index I_SI_EVENT
+wrong # of entries in index sqlite_autoindex_SHREC_ITEMS_2
+wrong # of entries in index sqlite_autoindex_SHREC_ITEMS_1
+rowid 570948264 missing from index I_IT_CU
+rowid 570948264 missing from index I_IT_PP
+rowid 570948264 missing from index I_IT_SERIES
+rowid 570948264 missing from index I_IT_EN
+rowid 570948264 missing from index I_IT_DU
+rowid 570948264 missing from index I_IT_SL
+rowid 570948264 missing from index I_IT_ST
+rowid 570948271 missing from index I_IT_CU
+rowid 570948271 missing from index I_IT_PP
+rowid 570948271 missing from index I_IT_SERIES
+rowid 570948271 missing from index I_IT_EN
+rowid 570948271 missing from index I_IT_DU
+rowid 570948271 missing from index I_IT_SL
+rowid 570948271 missing from index I_IT_ST
+
+boot up, DBJ made, okay when goes to planner
 
 
 ={============================================================================
@@ -15847,6 +16579,26 @@ FIXED_SD_ATTENUATION=6 in prefs.cfg
 f_nvram_properties
 
 
+<prefs-nvram-txt>
+ ~~~ Record Properties
+Start Guard Time          = 0x0000 (0) 
+End Guard Time            = 0x0000 (0) 
+Auto Start Guard Time     = 0x0002 (On) 
+Auto End Guard Time       = 0x0002 (On) 
+Deletion Mode             = 0x0001 (Automatic) 
+Review Buffer Length      = 0x0000 (0) 
+Reminder Time             = 0x003C (60) 
+Conflict Time             = 0x0000 (0) 
+Warn Percent              = 0x005A (90 %) 
+Skip Forward              = 0xEA60 (60000 ms) 
+Skip Backward             = 0xEA60 (60000 ms) 
+Skip Forward mode         = 0x01 (Time) 
+Skip Backward mode        = 0x01 (Time) 
+ARR functionality         = 0x00 (ERROR Value) 
+No of Daily ARR           = 0x00 (00) 
+Master Personalization    = 0x02 (Enabled) 
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-systemobject
 
@@ -16050,6 +16802,12 @@ public interface SystemCommonFailureType
 
 	/** Event booked after its scheduled start time */
 	int VIEWER_BOOKED_TOO_LATE = 3;
+
+	/** Viewer stopped in response to disk conflict message */
+	int VIEWER_STOPPED_DISK_CONFLICT = 6;
+
+	/** queue paused */
+	int USER_PAUSED_QUEUE = 48;
 
 	/** raw HTTP error */
 	int HTTP_401_UNAUTHORIZED = 53;
@@ -18376,8 +19134,34 @@ case SystemCommonFailureType.RECORDED_CONTENT_MISSING:
 int RECORDED_CONTENT_MISSING = 19; /* Robustness check identified recorded content missing from disk */
 int INSUFFICIENT_DISK_SPACE = 11; /* Not enough disk space to record event */
 
+<system-fault>
+		register(dialog(IDialogID.DISK_FAIL_SYSTEM_FAULT_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.SYSTEM_FAULT)
+						.instruction(NONE)
+						.textStrings("There is an issue with your Sky+HD box, so recording and playback are unavailable.\nFor help resolving this issue, please go to sky.com/record"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.CA_EXCEPTION)
+						.secondaryPriority(ISecondaryPriority.CA_EXCEPTION_VIEWING_CARD)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.flags(SHOW_DISK_FAULT_REFERENCE)
+						.modal(false)
+						.actions(BACKUP_IGNORE)));
+
+		register(dialog(IDialogID.DISK_FAIL_SYSTEM_FAULT_MODAL_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.SYSTEM_FAULT)
+						.instruction(BACKUP_TO_CANCEL)
+						.textStrings("There is an issue with your Sky+HD box, so recording and playback are unavailable.\nFor help resolving this issue, please go to sky.com/record"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.CA_EXCEPTION)
+						.secondaryPriority(ISecondaryPriority.CA_EXCEPTION_VIEWING_CARD)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.flags(SHOW_DISK_FAULT_REFERENCE)
+						.modal(true)
+						.actions(BACKUP_BACKUP)));
 
 <screen-id>
+
+egrep -an "screen seen to|Showing dialog"
+
+
 NDS: ^[2016:10:03 09:55:44]0947123825.760899 !MIL    -EPG_SCR      		< p:0x00000238 P:APP t:0x2bfeb520 T:no name M:Screens F:`doOpenScreen` L:1103 > 
   T:CEE-J EventQueue Reader 0:SCREEN PURCHASE MULTI_FORMAT layer=4, `id=15` opened
 
@@ -18479,11 +19263,43 @@ int AUTO_STANDBY_ID                                       = 1162;
    int	TECHNICAL_FAULT_ON_SERVICE_ID                         = 1249;
    int	REMINDER_ALERT_WITHOUT_RECORD_ID                      = 1234;
    int	SHARED_PLANNER_INGEST_ERROR_SH20_SPN11                = 1324;
-   int HD_BOX_INITIALISING_NON_MODAL_ID                      = 1236;
+
+	int BOX_INITIALISING_NON_MODAL_ID                                    = 1236;
+	int HD_BOX_EXITING_STANDBY_ID                                        = 1391;
    int SEARCHING_FOR_LISTINGS_ID                             = 1112;
    int NO_OTHER_CHANNELS_ID                                  = 1115;
 
 	int `BUY_AND_KEEP_PURCHASE_CONFIRMATION_NON_MODAL`                     = 1475;
+
+<1125>
+	int DISKSPACE_IMMINENT_DISK_ID                                       = 1125;
+
+<1124>
+	int DISKSPACE_BOOKING_DISK_FAIL_ID                                   = 1124;
+
+<1183>
+	int DELETE_KEEP_CONFIRM_ID                                           = 1183;
+
+		register(dialog(IDialogID.DELETE_KEEP_CONFIRM_ID).type(DialogType.PROGRAMME_INFO)
+				.with(textContent().instruction(SELECT_OR_BACKUP)
+						.textStrings("To delete this programme"))
+				.with(behaviour().screenLayer(IScreenLayer.MENU_DIALOG)
+						.modal(true)
+						.actions(BACKUP_DISPEL,
+								new KeyAndAction(IKeyCode.SELECT,
+										IActionCodes.CONFIRMED_DELETE_PROGRAMME))));
+
+<1294>
+	int OPPV_PVOD_UNAVAILABLE_ID                                         = 1294;
+
+		register(dialog(IDialogID.OPPV_PVOD_UNAVAILABLE_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.FYI)
+						.instruction(BACKUP_TO_CANCEL)
+						.textStrings("This programme is currently unavailable\nPlease try later"))
+				.with(behaviour().modal(true)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.actions(BACKUP_DISPEL)
+						.timeoutInMinutes(10)));
 
 
 <not-initializing>
@@ -18534,7 +19350,7 @@ int AUTO_STANDBY_ID                                       = 1162;
 NDS: ^0946927542.313872 !MIL    -EPG_DLG      		< p:0x0000021c P:APP t:0x2bfeb520 T:no name M:DialogManager F:showDialog L:1400 > T:CEE-J EventQueue Reader 0:Showing dialog 1393
 NDS: ^0946927542.313872 !MIL    -EPG_DLG      		< p:0x0000021c P:APP t:0x2bfeb520 T:no name M:DialogManager F:showDialog L:1400 > T:CEE-J EventQueue Reader 0:Showing dialog 1377
 
-	int BOX_INITIALISING                                                 = 1377;
+	int BOX_INITIALISING                                                 = *1377*
 
 		register(dialog(IDialogID.BOX_INITIALISING)
 				.type(DialogType.FYI)
@@ -19127,6 +19943,75 @@ note:
 When there are network glitch, ctm job failed and resumed again then start
 time will be the one last successful commit state.
 
+// public interface DlmQueueStatusListener {
+// 
+//     /**
+//      * Defines possible outcomes for action performed on the download queue.
+//      */
+//     interface QueueStatus
+//     {
+//         /** queue is active */
+//         int ACTIVE = 41;
+// 
+//         /** queue has been paused by the user */
+//         int USER_PAUSED = 42;
+// 
+//         /** queue has been paused by the system */
+//         int SYSTEM_PAUSED = 43;
+// 
+//         /** queue has been paused by the system, but the user can resume */
+//         int RETRY_PAUSED = 44;
+//     }
+// }
+//
+// import static com.nds.fusion.systemcommon.SystemCommonFailureType.NO_EXCEPTION;
+//
+// public enum ProgrammeState
+// {
+// 	UNKNOWN("FAILED"),
+// 
+// 	NOT_BOOKED(""),
+// 	REMINDER("BOOKED"),
+// 	SCHEDULED("SCHEDULED"),
+// 	PART_SCHEDULED("SCHEDULED"),
+// 	PREPARING_DOWNLOAD("DOWNLOADING"),
+// 	DOWNLOADING_BUT_NOT_AVAILABLE("DOWNLOADING"),
+// 	DOWNLOADING_AND_AVAILABLE("AVAILABLE"),
+// 	RECORDING("RECORDING"),
+// 	PART_RECORDING("RECORDING"),
+// 	RECORDED("RECORDED"),
+// 	PART_RECORDED("PART REC"),
+// 	FAILED("FAILED"),
+// 	TIMEOUT("FAILED"),
+// 	DELETING("DELETING"),
+// 	ARCHIVED("ARCHIVED"),
+// 	DOWNLOADED("DOWNLOADED"),
+// 	PENDING("PENDING");
+// }
+//
+// THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso/pdl/DownloadQueueMonitor.java
+//
+//			@Override public void onDownloadQueueUpdate(DownloadQueueState oldState, DownloadQueueState newState)
+//			{
+//				PlannerPdlBookedProgramme oldFirstPbp = oldState.getFirstPbp();
+//				PlannerPdlBookedProgramme newFirstPbp = newState.getFirstPbp();
+//				try
+//				{
+//					String debug = "Download queue changed:"
+//							+ addDebug("queueStatus", oldState, newState, MAP_QUEUE_STATUS)
+//							+ addDebug("queueFailureType", oldState, newState, MAP_QUEUE_FAILURE_TYPE)
+//							+ addDebug("firstPbp", oldFirstPbp, newFirstPbp, MAP_FIRST_PBP)
+//							+ addDebug("firstStatus", oldState, newState, MAP_FIRST_STATUS)
+//							+ addDebug("firstFailureReason", oldState, newState, MAP_FIRST_FAILURE_REASON)
+//							+ addDebug("firstIsDpl", oldState, newState, MAP_FIRST_IS_DPL);
+//					LOGGER.logMilestone(debug);
+//				}
+//				finally
+//				{
+//					Lifecycles.release(oldFirstPbp);
+//					Lifecycles.release(newFirstPbp);
+//				}
+//			}
 
 >>> hex(688316759) '0x2906e157'
 Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence               |s66709|    0|  1|Sky Arts            |     0| 0.25|        |UNDF  |    |688316759
@@ -19135,6 +20020,10 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 !MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "StartAgain","action": "Download","title": "Anna Scher: In Confidence","label": "Title:Anna Scher: In Confidence;State:NOT_BOOKED;Type:Ents","currentscreen": "/tv/live/121/start_again_mini_banner"}
 
 !MIL    -PCATS   P:MW T:SBM_UB_MAIN M:pcat_view_clnt.c F:PCAT_VIEW_CommitJob L:3077 > client id = 0x5, `bookingJobID = 0x2906e157`
+
+// Q: how maps vrm job and ctm job?
+
+// note: search ctm job with no-case
 
 // `STARTED`
 !WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job `0xca278008` (Type = 2) from 3 (CREATED) to 4 (COMMITED) 
@@ -19157,7 +20046,8 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 !WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 4 (COMMITED) to 1 (STARTED) 
 !MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_1_DPL_DOWNLOAD_RESPONSE 
 
-!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:
+  41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
   `firstStatus:SCHEDULED->PREPARING_DOWNLOAD` firstFailureReason:0->100 firstIsDpl:true
 
 !MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_2_DPL_DOWNLOAD_TOC 
@@ -19166,7 +20056,8 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 !MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_5_DPL_INDEX_DL 
 !MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_JOB_STARTED](0x63000004) 
 
-!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: 
+  queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
   `firstStatus:PREPARING_DOWNLOAD->DOWNLOADING_BUT_NOT_AVAILABLE` firstFailureReason:100 firstIsDpl:true
 
 !MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_6_DPL_INDEX_`IMPORT`_START_DL 
@@ -19177,7 +20068,8 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
   VRM-FSM: VRM_IMP_OBJECT_0x50004: VRM_IMP_OBJECT_INT_STATE_NULL -> (VRM_IMP_OBJECT_STATE_INPUT_CREATED) -> VRM_IMP_OBJECT_INT_STATE_CREATED 
 
 !MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:PooledExecutor#4:{"category": "PDLDOWNLOAD","action": "","title": "PDLDOWNLOAD took 21357ms","label": "isDPL:true,Title:Anna Scher: In Confidence,sizeKB:10985","currentscreen": "/tv/live/121"}
-!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: 
+  queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
   `firstStatus:DOWNLOADING_BUT_NOT_AVAILABLE->DOWNLOADING_AND_AVAILABLE` firstFailureReason:100 firstIsDpl:true
 
 !WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 1 (STARTED) to 5 (STOPPED) 
@@ -19186,13 +20078,15 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 !MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040) 
 !MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001) 
 
-!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence"->"Fish Town" 
+!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: 
+  queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence"->"Fish Town" 
   `firstStatus:DOWNLOADING_AND_AVAILABLE->SCHEDULED` firstFailureReason:100->0 firstIsDpl:true->false
 
 !WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 4 (COMMITED) to 1 (STARTED) 
 !MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_JOB_STARTED](0x63000004) 
 
-!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
+!MIL    -EPG_NET      		< P:APP T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: 
+  queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence" 
   `firstStatus:PART_SCHEDULED->DOWNLOADING_AND_AVAILABLE` firstFailureReason:100 firstIsDpl:true
 
 !MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_2_DPL_DOWNLOAD_TOC 
@@ -19210,7 +20104,8 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 !MIL    -EPG_KEY      		< P:APP T:no name M:KeyEventValve F:activate L:145 > T:CEE-J EventQueue Reader 0:Added NamedActivity(DELETE_BOOKING)@5a7154d to live activities
 !MIL    -EPG_BOOK     		< P:APP T:no name M:BookingAgent F:doRemoveBookedProgramme L:1517 > T:PooledExecutor#3:Removing booking with middleware removeBookedProgramme
 
-!MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence"->"Fish Town" 
+!MIL    -EPG_NET      		< p:0x000001f6 P:APP t:0x2e134520 T:no name M:DownloadQueueMonitor$9 F:onDownloadQueueUpdate L:251 > T:DownloadQueueMonitor#0:Download queue changed: 
+  queueStatus:41 queueFailureType:100 firstPbp:"Anna Scher: In Confidence"->"Fish Town" 
   `firstStatus:DOWNLOADING_AND_AVAILABLE->PREPARING_DOWNLOAD` firstFailureReason:100 firstIsDpl:true->false
 
 !WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 4 (COMMITED) to 5 (STOPPED) 
@@ -19231,6 +20126,11 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 
 // `COMPLETED`
 !WARN   -CTM_SVR < P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xbcc78005 (Type = 0) from 1 (STARTED) to 0 (COMPLETED)
+
+
+// stopped due to disk full
+!MIL    -DLM_SVR      		< p:0x0000020e P:MW t:0x01f21520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > 
+  ctm_job=[0x1E07809D] ; ctm_status=[CTM_STATUS_STOPPED_BY_DISK_CONFLICT](0x63002000) 
 
 
 <epg-download-status>
