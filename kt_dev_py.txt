@@ -31,6 +31,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-data-dict
 |kt_dev_py_0001| py-data-set
 |kt_dev_py_0001| py-data-comprehension
+|kt_dev_py_0001| py-module
+|kt_dev_py_0001| py-module-namespace
 |kt_dev_py_0001| py-module-package
 |kt_dev_py_0001| py-function
 |kt_dev_py_0001| py-class
@@ -2090,7 +2092,7 @@ Note that this dict could be equivalently constructed by:
 
 
 ={============================================================================
-|kt_dev_py_0001| py-module-package
+|kt_dev_py_0001| py-module
 
 LPY. CHAPTER 22 Modules: The Big Picture
 
@@ -2209,9 +2211,9 @@ x = 1
 y = [1, 2]
 
 % python
->>> from small import x, y # Copy two names out
->>> x = 42 # Changes local x only
->>> y[0] = 42 # Changes shared mutable in place
+>>> from small import x, y      # Copy two names out
+>>> x = 42                      # Changes local x only
+>>> y[0] = 42                   # Changes shared mutable in place
 
 Here, x is not a shared mutable object, but y is, so changing it from one
 place changes it in the other:
@@ -2223,36 +2225,178 @@ place changes it in the other:
 [42, 2]
 
 
-In Python a module is simply a .py file.
+There is no link from a name copied with `from` back to the file it came from.
+  To really change a global name in another file, you must use import:
 
-# some_module.py
-PI = 3.14159
+% python
+>>> from small import x, y      # Copy two names out
+>>> x = 42                      # Changes my x only
+>>> import small                # Get module name
+>>> small.x = 42                # Changes x in other module
 
-def f(x):
-  return x + 2
+Note that the change to y[0] in the prior session is different; it changes an
+object, not a name, and the name in both modules references the same, changed
+object.
 
-def g(a, b):
-  return a + b
-
-To access the variables and functions defined in some_module.py, from another
-  file in the `same directory` we could do:
-
-import some_module
-result = some_module.f(5)
-pi = some_module.PI
-
-Or equivalently:
-
-from some_module import f, g, PI
-result = g(5, PI)
+TODO: This phenomenon was introduced in Chapter 17. Scopes
 
 
-By using the `as` keyword you can give imports different variable names:
+import and from Equivalence
 
-import some_module as sm
-from some_module import PI as pi, g as gf
-r1 = sm.f(pi)
-r2 = gf(6, pi)
+At least conceptually, a from statement like this one:
+
+from module import name1, name2 # Copy these two names out (only)
+
+is equivalent to this statement sequence:
+
+import module                   # Fetch the module object
+name1 = module.name1            # Copy names out by assignment
+name2 = module.name2
+del module                      # Get rid of the module name
+
+Like all assignments, the from statement creates new variables in the
+importer, which initially refer to objects of the same names in the imported
+file. Only the names are copied out, though, `not the objects they reference`,
+  and not the name of the module itself.
+
+
+Potential Pitfalls of the from Statement
+
+Some Python users recommend using import instead of from most of the time. 
+
+It is true that the from statement has the potential to corrupt namespaces, at
+least in principle—if you use it to import variables that happen to have the
+same names as existing variables in your scope, your variables will be
+silently overwritten. This problem doesn’t occur with the simple import
+statement because you must always go through a module’s name to get to its
+contents
+
+
+={============================================================================
+|kt_dev_py_0001| py-module-namespace
+
+Technically, modules usually correspond to files, and Python creates a module
+object to contain all the names assigned in a module file. But in simple
+terms, modules are just `namespaces` (places where names are created), and the
+names that live in a module are called its `attributes`.
+
+Files Generate Namespaces
+
+The short answer is that every name that is assigned a value at the top level
+of a module file (i.e., not nested in a function or class body) becomes an
+attribute of that module.
+
+* Module statements run on the first import. The first time a module is
+imported anywhere in a system, Python creates an empty module object and
+executes the statements in the module file one after another, from the top of
+the file to the bottom.
+
+* Top-level assignments create module attributes. During an import, statements
+at the top level of the file not nested in a def or class that assign names
+(e.g., =, def) create attributes of the module object; assigned names are
+stored in the module’s namespace.
+
+* Module namespaces can be accessed via the attribute__dict__ or dir(M).
+Module namespaces created by imports are dictionaries; they may be accessed
+through the built-in __dict__ attribute associated with module objects and may
+be inspected with the dir function. The dir function is roughly equivalent to
+the sorted keys list of an object’s __dict__ attribute, but it includes
+inherited names for classes, may not be complete, and is prone to changing
+from release to release.
+
+<ex>
+# module2.py
+print('starting to load...')
+
+import sys
+name = 42
+
+def func(): pass
+class klass: pass
+
+print('done loading.')
+
+
+Namespace Dictionaries: __dict__
+
+module namespaces are stored as dictionary objects.
+
+>>> list(module2.__dict__.keys())
+['__loader__', 'func', 'klass', '__builtins__', '__doc__', '__file__', '__name__',
+'name', '__package__', 'sys', '__initializing__', '__cached__']
+
+Python also adds some names in the module’s namespace for us; for instance,
+__file__ gives the name of the file the module was loaded from, and __name__
+  gives its name as known to importers (without the .py extension and
+      directory path).
+
+>>> list(name for name in module2.__dict__.keys() if not name.startswith('__'))
+['func', 'klass', 'name', 'sys']
+>>> list(name for name in module2.__dict__ if not name.startswith('__'))
+['func', 'sys', 'name', 'klass']
+
+>>> module2.name, module2.__dict__['name']
+(42, 42)
+
+
+Imports Versus Scopes
+
+Scopes are never influenced by function calls or module imports.
+
+# moda.py
+
+X = 88      # My X: global to this file only
+def f():
+  global X  # Change this file's X
+  X = 99    # Cannot see names in other modules
+
+# modb.py
+
+X = 11      # My X: global to this file only
+import moda # Gain access to names in moda
+moda.f()    # Sets moda.X, not this file's X
+print(X, moda.X)
+
+% python modb.py
+11 99
+
+
+Namespace Nesting
+
+imports do nest downward and it is possible to descend into arbitrarily nested
+modules and access their attributes.
+
+# mod3.py
+
+X = 3
+
+# mod2.py
+
+X = 2
+import mod3
+print(X, end=' ')   # My global X
+print(mod3.X)       # mod3's X
+
+# mod1.py
+
+X = 1
+import mod2
+print(X, end=' ')       # My global X
+print(mod2.X, end=' ')  # mod2's X
+print(mod2.mod3.X)      # Nested mod3's X
+
+% python mod1.py
+2 3
+1 2 3
+
+The reverse, however, is not true: mod3 cannot see names in mod2, and mod2
+cannot see names in mod1.
+
+
+={============================================================================
+|kt_dev_py_0001| py-module-package
+
+LPY. CHAPTER 24 Module Packages
 
 
 ={============================================================================
