@@ -33863,6 +33863,42 @@ causes data to be transferred `to the cache` If we disable caching on the disk
 (using the command hdparm W0), then the performance impact of O_SYNC becomes
 even more extreme. 
 
+// hdparm
+//
+// For Get/Set options, a query without an optional parameter (e.g. -d) will
+// query (get) the device state, and with a parameter (e.g., -d0) will set the
+// device state. 
+//
+//      -W     Get/set the IDE/SATA drive´s write-caching feature.
+//
+//      --fibmap
+//        When used, this must be the only flag given. It requires a file path
+//        as a parameter, and will print out a list of the device extents
+//        (sector ranges)
+//        occupied by that file on disk. Sector numbers are given as absolute LBA
+//        numbers, referenced from sector 0 of the physical device (*not* the
+//        partition or filesystem). This information can then be used for a
+//        variety of purposes, such as examining the degree of fragmenation of
+//        larger files, or determining appropriate sectors to deliberately corrupt
+//        during fault-injection testing procedures. 
+//
+// -sh-3.2# hdparm -W /dev/sda
+// 
+// /dev/sda:
+//  write-caching =  1 (on)
+//
+// -sh-3.2# hdparm -W0 /dev/sda
+// 
+// /dev/sda:
+//  setting drive write-caching to 0 (off)
+//  write-caching =  0 (off)
+//
+// -sh-3.2# hdparm -W /dev/sda
+// 
+// /dev/sda:
+//  write-caching =  0 (off)
+// -sh-3.2#
+
 In the 1-byte case, the elapsed time rises from 1030 seconds to around 16,000
 seconds. In the 4096-byte case, the elapsed time rises from 0.34 seconds to 4
 seconds.  
@@ -44005,6 +44041,9 @@ $ export PATH=/opt/cross/bin:$PATH
 export PATH=~/asn/install-4.9.2/bin:$PATH
 export PATH=~/asn/install-4.8.2/bin:$PATH
 
+
+1. SYSTEM ROOT
+===========
 Pay particular attention to the stuff that gets installed under
 `/opt/cross/aarch64-linux/`. This directory is considered the system root of an
 imaginary AArch64 Linux target system. A self-hosted AArch64 Linux compiler
@@ -44013,7 +44052,7 @@ none of the programs built for the host system, such as the cross-compiler
 itself, will be installed to this directory.
 
 
-1. Binutils
+1. Binutils: ${PREFIX}/bin
 ===========
 This step builds and installs the cross-assembler, cross-linker, and other tools.
 
@@ -44035,7 +44074,7 @@ aarch64-linux-.
 with programs and libraries using the AArch64 instruction set, and not any
 related instruction sets such as AArch32.
 
-../binutils-2.24/configure --target=mips-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2 --with-sysroot --disable-nls --disable-multilib
+../binutils-2.24/configure --target=mips-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2 --disable-nls --disable-multilib
 ../binutils-2.24/configure --target=mips-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --with-sysroot --disable-nls --disable-multilib
 
 // ../binutils-2.24/configure --target=mipsel-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2 --with-sysroot --disable-nls --disable-multilib
@@ -44161,22 +44200,30 @@ cases at runtime. This will be useful later on.
 │   ├── mips-linux-size
 │   ├── mips-linux-strings
 │   └── mips-linux-strip
-├── mips-linux # --target
+│
+├── mips-unknown-linux-uclibc
 │   ├── bin
-│       ├── ar
-│       └── strip
+│   │   ├── ar
+│   │   ├── as
+│   │   ├── ld
+│   │   ├── ld.bfd
+│   │   ├── nm
+│   │   ├── objcopy
+│   │   ├── objdump
+│   │   ├── ranlib
+│   │   └── strip
 │   └── lib
+│       └── ldscripts
 └── share
     ├── info
     └── man
 
 
-2. Linux Kernel Headers
+2. Linux Kernel Headers: ${prefix}/arch/include 
 =======================
-This step installs the Linux kernel header files to
-/opt/cross/aarch64-linux/include, which will ultimately allow programs built
-using our new toolchain to make system calls to the AArch64 kernel in the
-target environment.
+This step installs the Linux kernel header files to ${INSTALL_HDR_PATH}/include,
+which will ultimately allow programs built using our new toolchain to make
+  system calls to the AArch64 kernel in the target environment.
 
 $ cd linux-3.17.2
 $ make ARCH=arm64 INSTALL_HDR_PATH=`/opt/cross/aarch64-linux` headers_install
@@ -44196,6 +44243,22 @@ $ cd ..
 make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux headers_install
 make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2/`mips-linux` headers_install
 
+note:
+
+home/nds-uk/kyoupark/asn/install-4.8.2/mips-linux
+├── include
+│   ├── asm
+│   ├── asm-generic
+│   ├── drm
+│   ├── linux
+│   ├── mtd
+│   ├── rdma
+│   ├── scsi
+│   ├── sound
+│   ├── uapi
+│   ├── video
+│   └── xen
+
 
 All of the remaining steps involve building GCC and Glibc. The trick is that
 there are parts of GCC which depend on parts of Glibc already being built, and
@@ -44203,8 +44266,8 @@ vice versa. We can't build either package in a single step; we need to go back
 and forth between the two packages and build their components in a way that
 satisfies their dependencies.
 
-note: shows build order
 
+<build-order>
 GCC components          Glibc componenets
 C/C++ compilers
                     ->  standard C library headers and starup files
@@ -44217,13 +44280,8 @@ standard C++
 library             <-
 libstdc++.a/libstdc++.so 
 
-├── mips-linux
-│   ├── bin
-│   ├── include
-│   └── lib
 
-
-3. C/C++ Compilers (pass 1)
+3. C/C++ Compilers (pass 1): ${prefix}/bin
 ==================
 This step will build `GCC's C and C++ cross-compilers only`, and install them to
 /opt/cross/bin. It won't invoke those compilers to build any libraries just
@@ -44368,8 +44426,19 @@ Fortran, Go or Java, from being built.
 // libgcc
 // http://wiki.osdev.org/Libgcc
 
+note: installs in ${prefix}/bin
+-rwxr-xr-x 2 kyoupark ccusers 2259227 Dec  6 09:59 mips-unknown-linux-uclibc-c++*
+-rwxr-xr-x 1 kyoupark ccusers 2253021 Dec  6 09:59 mips-unknown-linux-uclibc-cpp*
+-rwxr-xr-x 2 kyoupark ccusers 2259227 Dec  6 09:59 mips-unknown-linux-uclibc-g++*
+-rwxr-xr-x 2 kyoupark ccusers 2251225 Dec  6 09:59 mips-unknown-linux-uclibc-gcc*
+-rwxr-xr-x 2 kyoupark ccusers 2251225 Dec  6 09:59 mips-unknown-linux-uclibc-gcc-4.8.2*
+-rwxr-xr-x 1 kyoupark ccusers  110602 Dec  6 09:59 mips-unknown-linux-uclibc-gcc-ar*
+-rwxr-xr-x 1 kyoupark ccusers  110546 Dec  6 09:59 mips-unknown-linux-uclibc-gcc-nm*
+-rwxr-xr-x 1 kyoupark ccusers  110558 Dec  6 09:59 mips-unknown-linux-uclibc-gcc-ranlib*
+-rwxr-xr-x 1 kyoupark ccusers 1241641 Dec  6 09:59 mips-unknown-linux-uclibc-gcov*
 
-4. Standard C Library Headers and Startup Files
+
+4. Standard C Library Headers and Startup Files: ${prefix}/arch/include, lib 
 ===============================================
 note:
 Before this, must have cross gcc, binuitl built, installed, and have it in the
@@ -44396,7 +44465,7 @@ $ touch /opt/cross/aarch64-linux/include/gnu/stubs.h
 $ cd ..
 
 --prefix=/opt/cross/aarch64-linux tells Glibc's configure script where it
-should install its headers and libraries. Note that it's different from the
+should `install its headers and libraries` Note that it's different from the
 usual --prefix.
 
 Despite some contradictory information out there, Glibc's configure script
@@ -44454,7 +44523,7 @@ mips-linux-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o /home/nds-uk/ky
 touch /home/nds-uk/kyoupark/asn/install-4.8.2/mips-linux/include/gnu/stubs.h
 
 
-5. Compiler Support Library
+5. Compiler Support Library: 
 ===========================
 This step `uses the cross-compilers` built in step 4 to build the compiler
 support library. The compiler support library contains some C++ exception
@@ -44658,13 +44727,10 @@ diff -up -r gcc-4.8.2-clean/libsanitizer/asan/asan_linux.cc gcc-4.8.2/libsanitiz
 // libsanitizer/configure.tgt. This should enable libsanitizer build for MIPS.
 diff -up -r gcc-4.8.2-clean/libsanitizer/configure.tgt gcc-4.8.2/libsanitizer/configure.tgt
 
-run
 
-$ ../gcc-4.8.2/configure -C --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --target=mips-linux --enable-languages=c,c++ --disable-multilib --enable-libsanitizer
-
-run to install
-
-$ make install
+../gcc-4.8.2/configure -C --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --target=mips-linux --enable-languages=c,c++ --disable-multilib --enable-libsanitizer
+make
+make install
 
 
 3. "-fstack-protector"
@@ -44699,7 +44765,7 @@ Based on cross-ng
 use a specific kernel version
 wget --no-check-certificate https://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.19.tar.xz
 
-INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-own
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-uc-two
 export PATH=$INSTALL_PATH/bin:$PATH
 
 
@@ -44743,6 +44809,9 @@ build errors.
 //     'V=0' 'headers_install' 
 // 
 // /usr/bin/make -C /home/kyoupark/cross/work/.build/src/linux-4.3 CROSS_COMPILE=mips-unknown-linux-uclibc- O=/home/kyoupark/cross/work/.build/mips-unknown-linux-uclibc/build/build-kernel-headers ARCH=mips INSTALL_HDR_PATH=/home/kyoupark/x-tools/mips-unknown-linux-uclibc/mips-unknown-linux-uclibc/sysroot/usr V=0 headers_install
+//
+// note:
+// install to ${INSTALL_HDR_PATH}/include
 //
 // kyoupark@kit-debian:~/x-tools/mips-unknown-linux-uclibc/mips-unknown-linux-uclibc/sysroot/usr/include$ ll
 // total 72
@@ -44811,14 +44880,11 @@ make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroo
 ../`gcc-4.8.2-clean`/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ \
 --disable-libmudflap --disable-multilib --disable-nls --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
 
-// for asan
-../`gcc-4.8.2-wasan`/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ \
---disable-libmudflap --disable-multilib --disable-nls --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
+// ../gcc-4.8.2-clean/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ --disable-multilib --disable-nls \
+// --with-local-prefix=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot \
+// --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
 
-../gcc-4.8.2-clean/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ --disable-multilib --disable-nls \
---with-local-prefix=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot \
---with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
-make -j4 all-gcc
+make -j5 all-gcc
 make install-gcc
 
 
@@ -45169,8 +45235,157 @@ make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=$
 // [DEBUG]    ==> Executing: 'ln' '-sfv' 'mips-unknown-linux-uclibc-gcc'
 //   '/home/kyoupark/x-tools/mips-unknown-linux-uclibc/bin/mips-unknown-linux-uclibc-cc' 
 
-$ make -j5
-$ make install
+make -j5
+make install
+
+
+<commands>
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-3.8.2-uc-two
+export PATH=$INSTALL_PATH/bin:$PATH
+
+../binutils-2.24/configure --target=mips-unknown-linux-uclibc --prefix=${INSTALL_PATH} --disable-nls --disable-multilib --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
+make -j4
+make install
+
+cd linux-3.17.2
+make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr headers_install
+
+../gcc-4.8.2-clean/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ \
+--disable-libmudflap --disable-multilib --disable-nls --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
+make -j4 all-gcc
+make install-gcc
+
+cd uClibc-ng-1.0.17
+DEVEL_PREFIX="/usr/"
+KERNEL_HEADERS="/home/nds-uk/kyoupark/asn/install-4.8.2-uc-two/mips-unknown-linux-uclibc/sysroot/usr/include"
+make clean
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ install_headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ STRIPTOOL=true lib/crt1.o lib/crti.o lib/crtn.o
+mips-unknown-linux-uclibc-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o libdummy.so
+
+mkdir -p ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib
+/usr/bin/install -c -m 0644 lib/crt1.o lib/crti.o lib/crtn.o ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib
+/usr/bin/install -c -m 0755 libdummy.so ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib/libc.so
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+cd uClibc-ng-1.0.17
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ pregen
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ all
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ install
+
+cd build-gcc
+make -j5
+make install
+
+
+={============================================================================
+*kt_linux_gcc_400* gcc-build-uclibc-build-asan
+
+/home/nds-uk/kyoupark/asn/gcc/gcc-4.8.2-build-uclibc-wasan
+
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan-wsys
+export PATH=$INSTALL_PATH/bin:$PATH
+
+../binutils-2.24/configure --target=mips-unknown-linux-uclibc --prefix=${INSTALL_PATH} --disable-nls --disable-multilib --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
+make -j4
+make install
+
+cd linux-3.17.2
+make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr headers_install
+
+# this gcc-pass-1 expects to see kernel headers from
+# ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr. How?
+
+../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ \
+--enable-libsanitizer --disable-libmudflap --disable-multilib --disable-nls --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
+make -j4 all-gcc
+make install-gcc
+
+cd uClibc-ng-1.0.17
+# change KERNEL_HEADERS in .config if intall path is changed
+DEVEL_PREFIX="/usr/"
+KERNEL_HEADERS="/home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/sysroot/usr/include"
+make clean
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ install_headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ STRIPTOOL=true lib/crt1.o lib/crti.o lib/crtn.o
+mips-unknown-linux-uclibc-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o libdummy.so
+mkdir -p ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib
+/usr/bin/install -c -m 0645 lib/crt1.o lib/crti.o lib/crtn.o ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib
+/usr/bin/install -c -m 0755 libdummy.so ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib/libc.so
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ pregen
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ all
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ install
+
+cd build-gcc
+make -j5
+make install
+
+./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector 
+./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib
+./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/sysroot/lib
+
+/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/bin/ld: warning: libstdc++.so.6, needed by /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so, not found (try using -rpath or -rpath-link)
+/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_free'
+/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_malloc'
+collect2: error: ld returned 1 exit status
+
+
+<without-sysroot>
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan-wosys
+export PATH=$INSTALL_PATH/bin:$PATH
+
+../binutils-2.24/configure --target=mips-unknown-linux-uclibc --prefix=${INSTALL_PATH} --disable-nls --disable-multilib
+make -j4
+make install
+
+cd linux-3.17.2
+make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-unknown-linux-uclibc headers_install
+
+../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ \
+--enable-libsanitizer --disable-libmudflap --disable-multilib --disable-nls 
+make -j4 all-gcc
+make install-gcc
+
+# change KERNEL_HEADERS in .config if intall path is changed
+DEVEL_PREFIX=""
+KERNEL_HEADERS="/home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan-wosys/mips-unknown-linux-uclibc/include"
+make clean
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc install_headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc STRIPTOOL=true lib/crt1.o lib/crti.o lib/crtn.o
+mips-unknown-linux-uclibc-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o libdummy.so
+mkdir -p ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib
+/usr/bin/install -c -m 0645 lib/crt1.o lib/crti.o lib/crtn.o ${INSTALL_PATH}/mips-unknown-linux-uclibc/lib
+/usr/bin/install -c -m 0755 libdummy.so ${INSTALL_PATH}/mips-unknown-linux-uclibc/lib/libc.so
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc pregen
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc all
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc install
+
+cd build-gcc
+make -j5
+
+// /home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/bin/ld: cannot find /lib/libc.so.1
+// /home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/bin/ld: cannot find /lib/uclibc_nonshared.a
+// /home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/bin/ld: cannot find /lib/ld-uClibc.so.1
+// collect2: error: ld returned 1 exit status
+// make[2]: *** [libgcc_s.so] Error 1
+
+make install
 
 
 ={============================================================================
@@ -45813,6 +46028,16 @@ gcc sample.c
 // x-tools/mips-unknown-linux-uclibc/mips-unknown-linux-uclibc/lib
 lrwxrwxrwx 1 kyoupark ccusers       18 Dec  2 10:17 libc.so.1 -> libuClibc-1.0.9.so*
 -r-xr-xr-x 1 kyoupark ccusers   612272 Dec  2 10:17 libuClibc-1.0.9.so*
+
+<x>
+kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/lib$ ../../bin/mips-unknown-linux-uclibc-readelf -d libasan.so.0.0.0 | grep NEEDED
+4: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+5: 0x00000001 (NEEDED)                     Shared library: [libdl.so.0]
+6: 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
+7: 0x00000001 (NEEDED)                     Shared library: [libm.so.0]
+8: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+9: 0x00000001 (NEEDED)                     Shared library: [ld-uClibc.so.1]
+10: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
 
 
 ={============================================================================
