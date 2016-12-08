@@ -311,6 +311,7 @@
 *kt_linux_gcc_400* gcc-build-reference
 *kt_linux_gcc_400* gcc-build-asan
 *kt_linux_gcc_400* gcc-build-uclibc-build
+*kt_linux_gcc_400* gcc-build-uclibc-build-asan
 *kt_linux_gcc_400* gcc-build-cross-ng
 
 
@@ -427,7 +428,7 @@
 *kt_linux_core_401* lib-shared
 *kt_linux_core_400* lib-how-static-works
 *kt_linux_core_401* lib-dependancy
-*kt_linux_core_400* shared-lib-dl
+*kt_linux_core_400* lib-dl ld-library-path
 *kt_linux_core_401* slib: --as-needed flag and link error
 *kt_linux_core_402* shared-lib-search and resolve
 *kt_linux_core_403* slib-case-problem in name resolve. crash
@@ -442,7 +443,7 @@
 *kt_linux_core_410* shared library: check libraries loading
 *kt_linux_core_411* slib: case problem in open failure
 *kt_linux_core_411* slib: points to enhance performance
-*kt_linux_core_412* slib: ld.conf and ld.cache
+*kt_linux_core_412* lib-ld.conf lib-ld.cache
 *kt_linux_core_412* slib: as-needed and _GLOBAL_OFFSET_TABLE_
 
 |kt_linux_core_500| sandbox
@@ -2207,6 +2208,7 @@ Unless otherwise specified, `primaries` that operate on files follow symbolic
 links and operate on the target of the link, rather than the link itself.
 
 -a file
+-e file
     True if file exists.
 
 -f file
@@ -32256,6 +32258,50 @@ note: needs more about difference?
 
 
 ={============================================================================
+*kt_linux_core_151* thread-sample
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+static void * threadFunc(void *arg)
+{
+    const char *s = (char *) arg;
+    printf("%s", s);
+    printf("sleeps for 30s\n");
+    sleep(30);
+    printf("wakes up\n");
+    return (void *) strlen(s);
+}
+
+int main(int argc, char *argv[])
+{
+    pthread_t t1;
+    void *res;
+    int s;
+    s = pthread_create(&t1, NULL, threadFunc, "Hello world\n");
+    if (s != 0)
+    {
+        printf("pthread_create failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Message from main()\n");
+
+    s = pthread_join(t1, &res);
+    if (s != 0)
+    {
+        printf("pthread_join failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Thread returned %ld\n", (long) res);
+    exit(EXIT_SUCCESS);
+}
+
+
+={============================================================================
 *kt_linux_core_151* thread-source
 
 POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard
@@ -42360,6 +42406,20 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 
 
 ={============================================================================
+*kt_linux_gcc_400* gcc-libc-uclibc-and-glibc
+
+$ nm libc.a | grep libc_malloc
+5440:00005130 T __libc_malloc
+5441:00000004 D __libc_malloc_initialized
+5579:         U __libc_malloc_initialized
+
+$ nm libuClibc-1.0.17.so | grep malloc
+784:00054850 T __uc_malloc
+785:000775e0 B __uc_malloc_failed
+1513:00051820 T malloc
+
+
+={============================================================================
 *kt_linux_gcc_400* gcc-libc-uclibc
 
 http://www.etalabs.net/compare_libcs.html
@@ -42557,7 +42617,7 @@ failed
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-options-directory-search
+*kt_linux_gcc_400* gcc-option-directory-search
 
 https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html#Directory-Options
 These options specify directories to search for header files, for libraries
@@ -42570,20 +42630,23 @@ note: used when compile.
 -Lsearchdir 
 --library-path=searchdir 
 
-Add path searchdir to the list of paths that ld will search for archive libraries and ld control
-scripts. You may use this option any number of times. The directories are searched in the order in
-which they are specified on the command line. Directories specified on the command line are searched
-before the default directories. All -L options apply to all -l options, regardless of the order in
-which the options appear. 
+Add path searchdir to the list of paths that ld will search for archive
+libraries and ld control scripts. You may use this option any number of times.
+The directories are searched in the order in which they are specified on the
+command line. Directories specified on the command line are searched before
+the default directories. All -L options apply to all -l options, regardless of
+the order in which the options appear. 
 
-If searchdir begins with =, then the = will be replaced by the sysroot prefix, a path specified when
-the linker is configured. 
+If searchdir begins with =, then the = will be replaced by the sysroot prefix,
+a path specified when the linker is configured. 
 
-The default set of paths searched (without being specified with `-L') depends on which emulation
-mode ld is using, and in some cases also on how it was configured. See Environment. 
+The default set of paths searched (without being specified with `-L') depends
+on which emulation mode ld is using, and in some cases also on how it was
+configured. See Environment. 
 
-The paths can also be specified in a link script with the SEARCH_DIR command. Directories specified
-this way are searched at the point in which the linker script appears in the command line. 
+The paths can also be specified in a link script with the SEARCH_DIR command.
+Directories specified this way are searched at the point in which the linker
+script appears in the command line. 
 
 
 ={============================================================================
@@ -42594,24 +42657,31 @@ http://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
 
 -llibrary
 -l library
-Search the library named library when 'linking'. 
+Search the library `named library` when `linking`. 
 
-It makes a difference where in the command you write this option; the linker searches and processes
-libraries and object files in the order they are specified. Thus, 'foo.o -lz bar.o' searches library
-'z' after file foo.o but before bar.o. If bar.o refers to functions in 'z', those functions may not
-be loaded.
+<order>
+It makes a difference where in the command you write this option; the linker
+searches and processes libraries and object files in the order they are
+specified. Thus, 'foo.o -lz bar.o' searches library 'z' after file foo.o but
+before bar.o. If bar.o refers to functions in 'z', those functions may not be
+loaded.
 
-The linker searches a standard list of directories for the library, which is actually a file named
-liblibrary.a. The linker then uses this file as if it had been specified precisely by name.
+The linker searches a standard list of directories for the library, which is
+actually a file named liblibrary.a. The linker then uses this file as if it
+had been specified precisely by name.
 
-The directories searched include several standard system directories plus any that you specify with
--L.
+The directories searched include several standard system directories plus any
+that you specify with -L.
 
-Normally the files found this way are library files-archive files whose members are object files.
-The linker handles an archive file by scanning through it for members which define symbols that have
-so far been referenced but not defined. But if the file that is found is an ordinary object file, it
-is linked in the usual fashion. The only difference between using an -l option and specifying a file
-name is that -l surrounds library with 'lib' and '.a' and searches several directories.
+Normally the files found this way are library files-archive files whose
+members are object files. The linker handles an archive file by scanning
+through it for members which define symbols that have so far been referenced
+but not defined. But if the file that is found is an ordinary object file, it
+is linked in the usual fashion. 
+
+The only difference between using an -l option and specifying a file name is
+that -l surrounds library with 'lib' and '.a' and searches several
+directories.
 
 -shared
 Produce a shared object which can then be linked with other objects to form an
@@ -45330,14 +45400,104 @@ cd build-gcc
 make -j5
 make install
 
-./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector 
-./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib
-./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/sysroot/lib
 
 /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/bin/ld: warning: libstdc++.so.6, needed by /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so, not found (try using -rpath or -rpath-link)
 /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_free'
 /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_malloc'
 collect2: error: ld returned 1 exit status
+
+sanitizer_allocator.o:
+00000000 r $LC0
+00000054 r $LC1
+0000007c r $LC2
+         U _ZN11__sanitizer11CheckFailedEPKciS1_yy
+00000074 T _ZN11__sanitizer12InternalFreeEPv
+00000000 T _ZN11__sanitizer13InternalAllocEm
+         U _ZN11__sanitizer17GetPageSizeCachedEv
+00000124 T _ZN11__sanitizer17LowLevelAllocator8AllocateEm
+0000024c T _ZN11__sanitizer27SetLowLevelAllocateCallbackEPFvmmE
+00000264 T _ZN11__sanitizer35CallocShouldReturnNullDueToOverflowEmm
+         U _ZN11__sanitizer9MmapOrDieEmPKc
+00000000 b _ZN11__sanitizerL24low_level_alloc_callbackE
+00000000 r _ZZN11__sanitizer17LowLevelAllocator8AllocateEmE12__FUNCTION__
+         U __libc_free
+         U __libc_malloc
+         U _gp_disp
+
+// sanitizer_allocator.cc
+// FIXME: We should probably use more low-level allocator that would
+// mmap some pages and split them into chunks to fulfill requests.
+// #if defined(__linux__) && !defined(__ANDROID__)
+// extern "C" void *__libc_malloc(__sanitizer::uptr size);
+// extern "C" void __libc_free(void *ptr);
+// # define LIBC_MALLOC __libc_malloc
+// # define LIBC_FREE __libc_free
+// #else  // __linux__ && !ANDROID
+# include <stdlib.h>
+# define LIBC_MALLOC malloc
+# define LIBC_FREE free
+// #endif  // __linux__ && !ANDROID
+
+Fixes:
+/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_free'
+/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_malloc'
+
+
+./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib
+
+Fixes:
+/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/bin/ld: warning: libstdc++.so.6, needed by /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so, not found (try using -rpath or -rpath-link)
+
+-sh-3.2# ./a.out_from_mips_asan
+./a.out_from_mips_asan: can't load library 'libasan.so.0'
+
+-rw-r--r-- 1 kyoupark ccusers 1639506 Dec  7 15:37 libasan.a
+-rwxr-xr-x 1 kyoupark ccusers    1129 Dec  7 15:37 libasan.la*
+lrwxrwxrwx 1 kyoupark ccusers      16 Dec  7 15:37 libasan.so -> libasan.so.0.0.0*
+lrwxrwxrwx 1 kyoupark ccusers      16 Dec  7 15:37 libasan.so.0 -> libasan.so.0.0.0*
+-rwxr-xr-x 1 kyoupark ccusers  984707 Dec  7 15:37 libasan.so.0.0.0*
+
+-rw-r--r-- 1 kyoupark ccusers 53466 Dec  7 15:37 libssp.a
+-rwxr-xr-x 1 kyoupark ccusers  1001 Dec  7 15:37 libssp.la*
+-rw-r--r-- 1 kyoupark ccusers  2630 Dec  7 15:37 libssp_nonshared.a
+-rwxr-xr-x 1 kyoupark ccusers   983 Dec  7 15:37 libssp_nonshared.la*
+lrwxrwxrwx 1 kyoupark ccusers    15 Dec  7 15:37 libssp.so -> libssp.so.0.0.0*
+lrwxrwxrwx 1 kyoupark ccusers    15 Dec  7 15:37 libssp.so.0 -> libssp.so.0.0.0*
+-rwxr-xr-x 1 kyoupark ccusers 27038 Dec  7 15:37 libssp.so.0.0.0*
+
+./a.out_from_mips_asan: can't load library 'libstdc++.so.6'
+
+lrwxrwxrwx 1 kyoupark ccusers      19 Dec  7 15:37 libstdc++.so -> libstdc++.so.6.0.18*
+lrwxrwxrwx 1 kyoupark ccusers      19 Dec  7 15:37 libstdc++.so.6 -> libstdc++.so.6.0.18*
+-rwxr-xr-x 1 kyoupark ccusers 5410330 Dec  7 15:37 libstdc++.so.6.0.18*
+
+./a.out_from_mips_asan: can't load library 'ld-uClibc.so.1'
+
+lrwxrwxrwx 1 kyoupark ccusers     19 Dec  7 14:48 ld-uClibc.so.1 -> ld-uClibc-1.0.17.so*
+
+<x>
+kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/lib$ ../../bin/mips-unknown-linux-uclibc-readelf -d libasan.so.0.0.0 | grep NEEDED
+4: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
+5: 0x00000001 (NEEDED)                     Shared library: [libdl.so.0]
+6: 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
+7: 0x00000001 (NEEDED)                     Shared library: [libm.so.0]
+8: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
+9: 0x00000001 (NEEDED)                     Shared library: [ld-uClibc.so.1]
+10: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+
+
+-sh-3.2# LD_LIBRARY_PATH=/mnt/tmp/si_logs/mips_libs ./a.out_from_mips_asan
+Segmentation fault
+
+(gdb) file a.out_from_mips_asan
+warning: core file may not match specified executable file.
+Reading symbols from /home/NDS-UK/kyoupark/a.out_from_mips_asan...Dwarf Error: wrong version in compilation unit header (is 4, should be 2) [in module /home/NDS-UK/kyoupark/a.out_from_mips_asan]
+
+
+<static>
+./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -lasan -L./mips-unknown-linux-uclibc/lib/
+
+-Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib
 
 
 <without-sysroot>
@@ -45351,6 +45511,7 @@ make install
 cd linux-3.17.2
 make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-unknown-linux-uclibc headers_install
 
+cd gcc-4.8.2-build-uclibc-wasan
 ../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ \
 --enable-libsanitizer --disable-libmudflap --disable-multilib --disable-nls 
 make -j4 all-gcc
@@ -45386,6 +45547,50 @@ make -j5
 // make[2]: *** [libgcc_s.so] Error 1
 
 make install
+
+
+={============================================================================
+*kt_linux_gcc_400* gcc-build-uclibc-xx
+
+# from-mips-glibc-without-sysroot
+
+kyoupark@ukstbuild2:~/asn/install-4.8.2-mips-glibc/mips-linux/lib$ ls
+audit           libasan_preinit.o        libcidn-2.20.so   libgcc_s.so       libmudflap.a           libnss_compat.so       libnss_nisplus-2.20.so  librpcsvc.a          libstdc++.so
+crt1.o          libasan.so               libcidn.so        libgcc_s.so.1     libmudflap.la          libnss_compat.so.2     libnss_nisplus.so       librt-2.20.so        libstdc++.so.6
+crti.o          libasan.so.0             libcidn.so.1      libgomp.a         libmudflap.so          libnss_db-2.20.so      libnss_nisplus.so.2     librt.a              libstdc++.so.6.0.18
+crtn.o          libasan.so.0.0.0         libc_nonshared.a  libgomp.la        libmudflap.so.0        libnss_db.so           libnss_nis.so           librt.so             libstdc++.so.6.0.18-gdb.py
+gconv           libatomic.a              libcrypt-2.20.so  libgomp.so        libmudflap.so.0.0.0    libnss_db.so.2         libnss_nis.so.2         librt.so.1           libsupc++.a
+gcrt1.o         libatomic.la             libcrypt.a        libgomp.so.1      libmudflapth.a         libnss_dns-2.20.so     libpcprofile.so         libSegFault.so       libsupc++.la
+ld-2.20.so      libatomic.so             libcrypt.so       libgomp.so.1.0.0  libmudflapth.la        libnss_dns.so          libpthread-2.20.so      libssp.a             libthread_db-1.0.so
+ldscripts       libatomic.so.1           libcrypt.so.1     libgomp.spec      libmudflapth.so        libnss_dns.so.2        libpthread.a            libssp.la            libthread_db.so
+ld.so.1         libatomic.so.1.0.0       libc.so           libieee.a         libmudflapth.so.0      libnss_files-2.20.so   libpthread_nonshared.a  libssp_nonshared.a   libthread_db.so.1
+libanl-2.20.so  libBrokenLocale-2.20.so  libc.so.6         libm-2.20.so      libmudflapth.so.0.0.0  libnss_files.so        libpthread.so           libssp_nonshared.la  libutil-2.20.so
+libanl.a        libBrokenLocale.a        libdl-2.20.so     libm.a            libnsl-2.20.so         libnss_files.so.2      libpthread.so.0         libssp.so            libutil.a
+libanl.so       libBrokenLocale.so       libdl.a           libmcheck.a       libnsl.a               libnss_hesiod-2.20.so  libresolv-2.20.so       libssp.so.0          libutil.so
+libanl.so.1     libBrokenLocale.so.1     libdl.so          libmemusage.so    libnsl.so              libnss_hesiod.so       libresolv.a             libssp.so.0.0.0      libutil.so.1
+libasan.a       libc-2.20.so             libdl.so.2        libm.so           libnsl.so.1            libnss_hesiod.so.2     libresolv.so            libstdc++.a          Mcrt1.o
+libasan.la      libc.a                   libg.a            libm.so.6         libnss_compat-2.20.so  libnss_nis-2.20.so     libresolv.so.2          libstdc++.la         Scrt1.o
+
+
+# from-mips-uclibc-with-sysroot
+
+kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib$ ls
+ldscripts          libasan.so        libatomic.la        libgcc_s.so    libgomp.so        libssp.a             libssp.so        libstdc++.la         libstdc++.so.6.0.18-gdb.py
+libasan.a          libasan.so.0      libatomic.so        libgcc_s.so.1  libgomp.so.1      libssp.la            libssp.so.0      libstdc++.so         libsupc++.a
+libasan.la         libasan.so.0.0.0  libatomic.so.1      libgomp.a      libgomp.so.1.0.0  libssp_nonshared.a   libssp.so.0.0.0  libstdc++.so.6       libsupc++.la
+libasan_preinit.o  libatomic.a       libatomic.so.1.0.0  libgomp.la     libgomp.spec      libssp_nonshared.la  libstdc++.a      libstdc++.so.6.0.18
+
+kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/sysroot/lib$ ls
+ld-uClibc-1.0.17.so  libcrypt.so.0  libdl-1.0.17.so  libm.so.0         libnsl.so.1           libresolv-1.0.17.so  librt.so.0              libuClibc-1.0.17.so
+ld-uClibc.so.0       libcrypt.so.1  libdl.so.0       libm.so.1         libpthread-1.0.17.so  libresolv.so.0       librt.so.1              libutil-1.0.17.so
+ld-uClibc.so.1       libc.so.0      libdl.so.1       libnsl-1.0.17.so  libpthread.so.0       libresolv.so.1       libthread_db-1.0.17.so  libutil.so.0
+libcrypt-1.0.17.so   libc.so.1      libm-1.0.17.so   libnsl.so.0       libpthread.so.1       librt-1.0.17.so      libthread_db.so.1       libutil.so.1
+
+kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/sysroot/usr/lib$ ls
+crt1.o  libc_pic.a      libc.so      libm.a      libnsl_pic.a            libpthread_nonshared_pic.a  libresolv_pic.a  librt.so            libutil.a      uclibc_nonshared.a
+crti.o  libcrypt.a      libdl.a      libm_pic.a  libnsl.so               libpthread_pic.a            libresolv.so     libthread_db.a      libutil_pic.a
+crtn.o  libcrypt_pic.a  libdl_pic.a  libm.so     libpthread.a            libpthread.so               librt.a          libthread_db_pic.a  libutil.so
+libc.a  libcrypt.so     libdl.so     libnsl.a    libpthread_nonshared.a  libresolv.a                 librt_pic.a      libthread_db.so     Scrt1.o
 
 
 ={============================================================================
@@ -45933,7 +46138,7 @@ $ ldd /bin/ls
 
 <case>
 The ldd is script. Although the binary uses shared library, ldd don't
-understand it.
+understand it since it's cross compiled.
 
 $ readelf -d nexus-inspect | grep NEED
 (standard input):4: 0x00000001 (NEEDED)  Shared library: [libnexus.so]
@@ -45943,10 +46148,6 @@ $ readelf -d nexus-inspect | grep NEED
 
 $ ldd -v nexus-inspect
 	not a dynamic executable
-
-note: 
-The ldd on a target is an executable but not a script and also shows details
-when used on shared library. However, the host version only works on executable.
 
 
 {shows-if-can-load-dependency}
@@ -45986,9 +46187,7 @@ checking sub-depends for '/opt/zinc/oss/lib/libffi.so.5'
   not a dynamic executable
 
 
-={============================================================================
-*kt_linux_core_400* lib-dependancy-libc
-
+{libc-case}
 #include <stdio.h>
 
 int main()
@@ -46000,7 +46199,6 @@ gcc sample.c
 
 
 <on-debian-vm>
-
 @kit-debian:~$ readelf -d a.out | grep NEEDED
 4: 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
 
@@ -46011,7 +46209,6 @@ gcc sample.c
 
 
 <on-mips-cross-gcc>
-
 // same when use mips-unknown-linux-uclibc-readelf
 
 @kit-debian:~$ readelf -d a.out | grep NEEDED
@@ -46019,6 +46216,9 @@ gcc sample.c
 
 @kit-debian:~$ ldd a.out
 	not a dynamic executable
+
+note:
+mips-unknown-linux-uclibc-ldd is a script and not part of binutil build.
 
 @kit-debian:~$ ./x-tools/mips-unknown-linux-uclibc/bin/mips-unknown-linux-uclibc-ldd \
   --root ./x-tools/mips-unknown-linux-uclibc/mips-unknown-linux-uclibc/sysroot/ a.out 
@@ -46029,19 +46229,9 @@ gcc sample.c
 lrwxrwxrwx 1 kyoupark ccusers       18 Dec  2 10:17 libc.so.1 -> libuClibc-1.0.9.so*
 -r-xr-xr-x 1 kyoupark ccusers   612272 Dec  2 10:17 libuClibc-1.0.9.so*
 
-<x>
-kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/lib$ ../../bin/mips-unknown-linux-uclibc-readelf -d libasan.so.0.0.0 | grep NEEDED
-4: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
-5: 0x00000001 (NEEDED)                     Shared library: [libdl.so.0]
-6: 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
-7: 0x00000001 (NEEDED)                     Shared library: [libm.so.0]
-8: 0x00000001 (NEEDED)                     Shared library: [libc.so.0]
-9: 0x00000001 (NEEDED)                     Shared library: [ld-uClibc.so.1]
-10: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
-
 
 ={============================================================================
-*kt_linux_core_400* shard-lib-dl
+*kt_linux_core_400* lib-dl ld-library-path
 
 When an executable starts, the `dynamic-linker` loads 'all' of the shared
 libraries in the program's dynamic dependency list. Sometimes, however, it can
@@ -46049,22 +46239,34 @@ be useful to load libraries at a 'later' time. For example, a plug-in is loaded
 only when it is needed. This functionality is provided by an API to the dynamic
 linker.
 
-
-{version-check}
-The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2,
-    which is employed by every ELF executable that uses shared libraries.
+{dynamic-linking}
+The dynamic linking, which is the task of resolving the embedded library name at
+runtime. This task is performed by the dynamic linker (also called the dynamic
+    linking loader or the runtime linker). The dynamic linker is 'itself' a
+'shared' library, named /lib/ld-linux.so.2, which is employed by every ELF
+executable that uses shared libraries.
 
 <host>
 $ ls -l /lib/ld-linux.so.2 
-25 Oct 17 00:50 /lib/ld-linux.so.2 -> i386-linux-gnu/ld-2.13.so
+lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 
+  -> i386-linux-gnu/ld-2.13.so
 
-<embedded>
+<target>
 # ls -al /lib/ld-linux.so.2 
 24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
 
-<embedded> but there is no ld-linux.so
--rwxrwxrwx    1 root     root        29028 Sep 15  2016 ld-uClibc-0.9.29.so
-lrwxrwxrwx    1 root     root           19 Jan  1 00:00 ld-uClibc.so.0 -> ld-uClibc-0.9.29.so
+<target>
+# ls -al /lib/ld-uClibc*
+root     root         31760 Jul 31 11:10 /lib/ld-uClibc-0.9.32.1.so*
+root     root            21 Aug  5 08:50 /lib/ld-uClibc.so 
+  -> ld-uClibc-0.9.32.1.so*
+root     root            21 Aug  5 08:50 /lib/ld-uClibc.so.0 
+  -> ld-uClibc-0.9.32.1.so*
+
+note:
+Every program-including those that use shared libraries-goes through a
+static-linking phase. At run time, a program that employs shared libraries
+additionally undergoes dynamic linking.
 
 
 {dynamic-linker}
@@ -46092,37 +46294,10 @@ $ readelf -d one | grep NEED
 note: In order to embed the shared library in a executable that use so, requires
 'so' file in linking.
 
-
 2. At 'runtime', there must be some 'mechanism' for 'resolving' the embedded
 library name-that is, for finding the shared library file corresponding to the
 name specified in the executable file-and then loading the library into memory,
      if it is not already present.
-
-
-{dynamic-linking}
-The dynamic linking, which is the task of resolving the embedded library name at
-runtime. This task is performed by the dynamic linker (also called the dynamic
-    linking loader or the runtime linker). The dynamic linker is 'itself' a
-'shared' library, named /lib/ld-linux.so.2, which is employed by every ELF
-executable that uses shared libraries.
-
-<host>
-$ ls -l /lib/ld-linux.so.2 
-lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2 
-  -> i386-linux-gnu/ld-2.13.so
-
-<target>
-# ls -al /lib/ld-uClibc*
-root     root         31760 Jul 31 11:10 /lib/ld-uClibc-0.9.32.1.so*
-root     root            21 Aug  5 08:50 /lib/ld-uClibc.so 
-  -> ld-uClibc-0.9.32.1.so*
-root     root            21 Aug  5 08:50 /lib/ld-uClibc.so.0 
-  -> ld-uClibc-0.9.32.1.so*
-
-note:
-Every program-including those that use shared libraries-goes through a
-static-linking phase. At run time, a program that employs shared libraries
-additionally undergoes dynamic linking.
 
 
 {ld-library-path}
@@ -46136,7 +46311,7 @@ directories.
 
 note: Creates an environment variable definition 'within' the process executing
 prog. Since if you don't export the changes to an environment variable, they
-won't be inherited by the child processes.  The loader and our test program
+won't be inherited by the child processes. The loader and our test program
 didn't inherit the changes we made.
 
 $ LD_LIBRARY_PATH=. ./one 
@@ -47733,7 +47908,7 @@ not have a real justification.
 
 
 ={============================================================================
-*kt_linux_core_412* slib: ld.conf and ld.cache
+*kt_linux_core_412* lib-ld.conf lib-ld.cache
 
 /etc/ld.so.cache
 

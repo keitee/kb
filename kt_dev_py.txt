@@ -2412,6 +2412,170 @@ The same goes for from statements:
 
 from dir1.dir2.mod import x
 
+Furthermore, these imports imply that dir1 resides within some container
+directory dir0, which is a component of the normal Python module search path.
+
+More formally, the leftmost component in a package import path is still
+relative to a directory included in the sys.path module search path list
+
+In effect, entries on the module search path provide platform-specific
+directory path prefixes, which lead to the leftmost names in import and from
+statements. These import statements themselves provide the remainder of the
+directory path in a platform-neutral fashion.
+
+
+Package __init__.py Files
+
+Each directory named within the path of a package import statement must
+contain a file named __init__.py, or your package imports will fail.
+
+for a directory structure such as this:
+dir0\dir1\dir2\mod.py
+
+and an import statement of the form:
+import dir1.dir2.mod
+
+the following rules apply:
+
+* dir1 and dir2 both must contain an __init__.py file.
+ 
+* dir0, the container, does not require an __init__.py file; this file will
+  simply be ignored if present.
+
+* dir0, not dir0\dir1, must be listed on the module search path sys.path.
+ 
+The __init__.py files can contain Python code, just like normal module files.
+Their names are special because their code is run automatically the first time
+a Python program imports a directory, and thus serves primarily as a hook for
+performing initialization steps required by the package. These files can also
+be completely empty.
+
+dir0\                       # Container on module search path
+  dir1\
+      __init__.py
+      dir2\
+          __init__.py
+          mod.py
+
+Once imported, the path in your import statement becomes a nested object path
+in your script. Here, mod is an object nested in the object dir2, which in
+turn is nested in the object dir1:
+
+>>> dir1
+<module 'dir1' from '.\\dir1\\__init__.py'>
+>>> dir1.dir2
+<module 'dir1.dir2' from '.\\dir1\\dir2\\__init__.py'>
+>>> dir1.dir2.mod
+<module 'dir1.dir2.mod' from '.\\dir1\\dir2\\mod.py'>
+
+
+Why Use Package Imports?
+
+They do serve useful roles, though, especially in larger programs: they make
+imports more informative, serve as an organizational tool, simplify your
+module search path, and can resolve ambiguities.
+
+
+Package Relative Imports
+
+note: TODO for Python 3.X
+
+
+={============================================================================
+|kt_dev_py_0001| py-module-advanced
+
+LPY. CHAPTER 25 Advanced Module Topics
+
+Data Hiding in Modules
+
+There is no notion of declaring which names should and shouldn't be visible
+outside the module. In fact, there's no way to prevent a client from changing
+names inside a module if it wants to.  
+
+In Python, data hiding in modules is a convention, not a syntactical
+constraint.
+
+
+Minimizing from * Damage: _X and __all__
+
+a single underscore (e.g., _X) to prevent them from being copied out when a
+client imports a module's names with a from * statement.
+
+Underscores aren't "private" declarations: you can still see and change such
+names with other import forms, such as the `import` statement:
+
+When this feature is used, the from * statement will copy out only those names
+listed in the __all__ list. In effect, this is the converse of the _X
+convention: __all__ identifies names to be copied, while _X identifies names
+not to be copied.
+
+Python looks for an __all__ list in the module first and copies its names
+irrespective of any underscores; if __all__ is not defined, from * copies all
+names without a single leading underscore:
+
+# alls.py
+__all__ = ['a', '_c']                 # __all__ has precedence over _X
+a, b, _c, _d = 1, 2, 3, 4
+
+>>> from alls import *                # Load __all__ names only
+>>> a, _c
+(1, 3)
+>>> b
+NameError: name 'b' is not defined
+
+>>> from alls import a, b, _c, _d     # But other importers get every name
+>>> a, b, _c, _d
+(1, 2, 3, 4)
+
+>>> import alls
+>>> alls.a, alls.b, alls._c, alls._d
+(1, 2, 3, 4)
+
+
+Enabling Future Language Features: __future__
+
+Changes to the language that may potentially break existing code are usually
+introduced gradually in Python. They often initially appear as optional
+extensions, which are disabled by default. To turn on such extensions, use a
+special import statement of this form:
+
+from __future__ import featurename
+
+When used in a script, this statement must appear as the first executable
+statement in the file (possibly following a docstring or comment), because it
+enables special compilation of code on a per-module basis. It’s also possible
+to submit this statement at the interactive prompt to experiment with upcoming
+language changes; the feature will then be available for the remainder of the
+interactive session.
+
+
+={============================================================================
+|kt_dev_py_0001| py-module-name-test
+
+Mixed Usage Modes: __name__ and __main__
+
+each module has a built-in attribute called __name__, which Python creates and
+assigns automatically as follows:
+
+* If the file is being run as a top-level program file, __name__ is set to the
+  string "__main__" when it starts.
+
+* If the file is being imported instead, __name__ is set to the module’s name
+  as known by its clients.
+
+The upshot is that a module can test its own __name__ to determine whether
+it's being run or imported.
+
+In effect, a module’s __name__ variable serves as a `usage mode flag`,
+allowing its code to be leveraged as both an importable library and a
+  top-level script.
+
+Coding self-test code at the bottom of a file under the __name__ test is
+probably the most common and simplest unit-testing protocol in Python.
+
+In addition, the __name__ trick is also commonly used when you’re writing
+files that can be used both as command-line utilities and as tool libraries.
+
 
 ={============================================================================
 |kt_dev_py_0001| py-function

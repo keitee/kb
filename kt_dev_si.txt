@@ -30,7 +30,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-sh-log-parser
 |kt_dev_si_0002| si-sh-log-parser-entry
 |kt_dev_si_0002| si-sh-log-parser-mine
-|kt_dev_si_0002| si-sh-to-dates
+|kt_dev_si_0002| si-sh-to-dates si-keycodes
 |kt_dev_si_0002| si-sh-alog
 |kt_dev_si_0002| si-sh-list-log
 |kt_dev_si_0002| si-sh-convert-logs
@@ -3378,11 +3378,13 @@ $
 
 
 ={============================================================================
-|kt_dev_si_0002| si-sh-to-dates
+|kt_dev_si_0002| si-sh-to-dates si-keycodes
 
-#-----------------------------------------------------------
-# to_dates
-#-----------------------------------------------------------
+<keycode>
+/home/kyoupark/si-logs/theyard/bin/bskyb_charcodes
+
+
+<to-dates>
 Readable Any Date
 
 to_dates converts any possible timestamp into a date format.
@@ -3737,6 +3739,7 @@ createJobfile.py
 // flipper/scripts/flipper/diag.py
 import scripts.common.Diag as Diag
 
+<diag-list>
 * getsegment() build a dict from reading a "http://theyard.cisco.com/diagconf.txt"
 [
   ...
@@ -7525,10 +7528,375 @@ systemobject     24464              51200               20                      
 ={============================================================================
 |kt_dev_si_0001| comp-timedoctor
 
-DRV: ^[2016:09:26 06:12:47]0946792106.446265 KERN_WARNING <<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is DOWN 
-DRV: ^[2016:09:26 06:12:47]0946792106.449265 KERN_NOTICE [TimeDoctor] stopped
-DRV: ^[2016:09:26 06:12:47]0946792106.472265 KERN_WARNING 
-DRV: ^[2016:09:26 06:12:47]0946792106.472265 KERN_WARNING [TimeDoctor] logging /mnt/nds/dev_5/part_0/FSN_DATA/TD01.LOG
+https://sourceforge.net/projects/timedoctor/
+
+To `start` the timedoctor logging:
+echo "on" > /proc/timedoctor
+
+To stop the timedoctor logging
+echo "off" > /proc/timedoctor
+
+Enable 'wrapping' of the memory pool
+echo wrapon > /proc/timedoctor
+
+Disable 'wrapping'
+echo wrapoff > /proc/timedoctor
+
+
+http://ndpedia.uk.nds.com/index.php/TimeDoctor_STB_Operational_Instructions
+Calling the TimeDoctor process via Test Code
+
+One of the simpilest methods of instigating TimeDoctor is through the use of
+the following macros, either directly in the file you wish to monitor or in a
+file common file (e.g. System_common.h) Prerequisite
+
+The following includes are recomended (if not already included):
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+
+Note: Currently these do not need to be added to System_common.c (and will
+    most likley cause problems if you do)
+
+Macros
+#define SYSCOM_START_TD() do{int tfd; tfd = open("/proc/timedoctor",O_RDWR); write(tfd, "reset\n",strlen("reset\n")); usleep(250); write(tfd, "wrapoff\n",strlen("wrapoff\n")); write(tfd, "on\n",strlen("on\n")); close(tfd); }while(0)
+
+#define SYSCOM_STOP_TD()  do{int tfd; tfd = open("/proc/timedoctor",O_RDWR); write(tfd, "off\n",strlen("off\n")); close(tfd); }while(0)
+
+Usage
+
+Turn Timedoctor on
+SYSCOM_START_TD();
+
+Note: "wrapoff" can be replaced with "wrapon" to turn wrapping on
+
+Turn Timedoctor off
+SYSCOM_STOP_TD();
+
+
+<flag>
+http://ndpedia.uk.nds.com/index.php/TimeDoctor_Flags
+TimeDoctor Flags
+To track individual code points TimeDoctor Flags can be used. 
+
+Prerequisite
+
+You will need to include the TimeDoctor header file:
+
+FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/timedoctor/timedoctor.h
+
+Initialisation
+
+Before you call code to access the flag functionality in TimeDoctor you will
+need to enable the driver node. This should called in the SCD Process thus:
+
+system("mknod /dev/timedoctor c 10 63");
+
+This will need to be placed in your source at the appropriate place before you
+  code attempts to open the TimeDoctor device, for example after
+  DIAG_DECLARE_FUNCTION in Main.c.  
+  
+Setting a Flag
+
+An example of how to place flags into your code is shown below where:
+
+    "flag_group" is the name of the group of flags (4 characters max). All
+    flags of the same group will be displayed on the same line
+
+    "flag_number" is the number of the flag that will appear when you move
+    over with the mouse on the flag 
+
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+
+#include
+    "../../../FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/linux-2.6.18.8/include/linux/timedoctor.h"
+
+static void TDFlag(char* flag_group /* max 4 chars*/, uint32_t flag_number)
+{
+   int timeDoctor = -1;
+   unsigned int tddata[TIMEDOCTOR_INFO_DATASIZE];
+  
+   timeDoctor = open("/dev/timedoctor", O_RDWR);
+   if(timeDoctor == -1) {
+       printf("Error: Can't open /dev/timedoctor\n");
+   }
+   else
+   {
+      tddata[0] = TDI_COMMAND(TD_CMD_GENERIC, TD_TYPE_EVENT);
+      tddata[1] = CHAR_ARRAY_TO_U32(flag_group);
+      tddata[2] = flag_number;
+      ioctl(timeDoctor, TIMEDOCTOR_IOCTL_INFO, tddata);
+      close(timeDoctor);
+   }
+}
+
+At the point the above function is called in your code a execution point flag will be generated in the TimeDoctor log.
+
+You can also use the following convenience macros:
+
+TD_START_EVENT(id, nam)      //Where id is a 16 bit unique value & nam is up to 8 char human readable name
+TD_STOP_EVENT(id, nam)       //Where id is a 16 bit unique value & nam is up to 8 char human readable name
+TD_GENERIC(id, nam)          //Where id is a 16 bit unique value & nam is up to 8 char human readable name
+TD_VALUE_COUNT(id, nam, val) //Where id is a 16 bit unique value, nam is up to
+  4 char human readable name and val is a 32 bit integer value which will be
+  displayed when you mouse hover over the flag in the visualiser tool
+
+
+note:
+This "id" means "interrupts"?
+
+http://hetty.cisco.com/fusionmadesimple/index.php/TimeDoctor
+
+Timedoctor flags are the markers in the functions to be monitored. If a flag
+is added to a function, the timedoctor trace will show the duration for which
+the function was executed.
+
+On BSKYB, timedoctor macros are implemented in the following file:
+vobs\FUSION_SYSTEM_INTEGRATION\BSKYB_INTEGRATION\build\tools\nds\si\timedoctor\timedoctor.h
+
+Add following macro to timedoctor.h:
+
+#define TD_EVENT(id, nam)			\
+ do { \
+   uint32_t data[TIMEDOCTOR_INFO_DATASIZE]; \
+   if (g_timeDoctor_fd != -1) { \
+     data[0] = TDI_COMMAND(TDI_GENERIC, TDI_EVENT) | ((unsigned int)(id) & 0xffff); \
+     data[2] = CHAR_ARRAY_TO_U32(nam); \
+     data[1] = CHAR2_ARRAY_TO_U32(nam); \
+     ioctl(g_timeDoctor_fd, TIMEDOCTOR_IOCTL_INFO, data); \
+   } \
+ } while(0)
+
+To add the timedoctor flags, following code changes need to be made to each
+\<source\>.c :
+
+    #include "../../../FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/timedoctor/timedoctor.h"
+
+    In the init function in that source file, call TD_INIT macro (to open the
+        timedoctor device)
+
+    In the function to monitor, add following macro call:
+
+TD_EVENT(<id>, <name>);
+
+The id should be unique per flag (If driver team is adding flags in CDI,
+    please make sure they are not using same range of ids) The name should be
+unique per flag. The name should be max 8 characters long. 
+
+
+<interrupts>
+TimeDoctor Interrupts
+
+To view intrupt names, whilst the STB is still running enter the following
+command: cat /proc/interrupts
+
+-sh-3.2# cat /proc/interrupts
+           CPU0
+  1:          0          <NULL>  hif_cpu_int
+  2:        408          <NULL>  dmx_status_int
+  3:          0          <NULL>  dmx_overflow_int
+  4:     754489          <NULL>  dmx_message_int
+  5:   14477032          <NULL>  dmx_icam_int
+  6:         65          <NULL>  cpu_bsp_int
+  7:          0          <NULL>  cpu_aio_int
+  8:    1829948          <NULL>  video_gfx_int
+  9:      33607          <NULL>  video_hdmi_int
+ 10:        317          <NULL>  cpu_rptd_int
+ 11:    7618915          <NULL>  video_vec_int
+ 12:          0          <NULL>  disp_bvnb_int
+ 13:   15282353          <NULL>  disp_bvnf0_int
+ 14:          0          <NULL>  disp_bvnf1_int
+ 15:          0          <NULL>  disp_bvnf2_int
+ 16:    3258249          <NULL>  eth0
+ 18:         25          <NULL>  upg_timer_int
+ 19:      19423          <NULL>  upg_main_int, lnb, serial
+ 20:     867496          <NULL>  upg_bsc_int
+ 21:          0          <NULL>  upg_spi_int
+ 23:          0          <NULL>  upg_sc_int
+ 25:          0          <NULL>  upg_uhf1_int
+ 26:        148          <NULL>  7335_sds0_1
+ 31:    7641463          <NULL>  cpu_ethernet_int
+ 32:        463          <NULL>  xpt_rav_int
+ 36:    1568126          <NULL>  7335_sds1_0
+ 42:    1302158          <NULL>  libata
+ 55:    1519956          <NULL>  7335_sds0_0
+ 57:          0          <NULL>  ehci_hcd:usb2
+ 59:         23          <NULL>  xpt_pcr_int
+ 60:          0          <NULL>  xpt_fe_int
+ 61:          0          <NULL>  msg_stat_int
+ 62:          0          <NULL>  ehci_hcd:usb1
+ 68:      34159          <NULL>  7335_sds1_1
+ 69:          0          <NULL>  7335_qpsk_0
+ 70:          0          <NULL>  7335_qpsk_1
+ 71:         26          <NULL>  7335_fec
+ 72:         32          <NULL>  7335_fec
+ 97:  152855411          <NULL>  timer
+102:          0   BCM MIPS PERF  Perfcounter
+
+ERR:          0
+-sh-3.2#
+
+
+<capture>
+Capture TimeDoctor logs
+
+When you have completed your test and turned logging off you should capture
+timedoctor data to a file. There are two ways of doing this:
+
+1) cat /proc/timedoctor > my_td_log.td 
+
+# You can then copy this file my_td_log.td to you host machine where it can be
+# converted to an analysis file.
+
+2) cat /proc/timedoctor-data > my_td_log.tdi 
+
+# You can then copy this file to your host and view it directly in the Time
+# Doctor visualiser
+
+The `second option` seems to be quicker and render better for BSKYB builds.
+
+
+Process the Timedoctor log
+
+This is required if you used option 1 above and is done on the host using the
+perl script log2tdi to convert the timedoctor log (td) file to a tdi file
+acceptable to the Timedoctor Analysis
+
+perl log2tdi my_td_log.td > my_td_log.tdi
+
+TimeDoctor Analyser for Windows
+
+The GUI analayser (Microsoft Windows) is avaiable for viewing TimeDoctor
+(.tdi) files and can be downloaded from the Timedoctor Source Forge site:
+http://sourceforge.net/projects/timedoctor/ 
+
+<code>
+// from FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/build_mw_epg.sh
+  #------------------------------------------------------------------------------------
+  # copy timedoctor script
+  #------------------------------------------------------------------------------------
+  if [ -n "$TIMEDOCTOR" ]; then
+    mkdir -p nds-mw/usr/bin
+    cp tools/nds/si/timedoctor/timedoctor_monitor.sh nds-mw/usr/bin/
+    chmod +x nds-mw/usr/bin/timedoctor_monitor.sh
+  fi
+
+  // when makes a starup script /etc/start-mw.sh
+      if [ -n "$TIMEDOCTOR" ]; then
+        # Enable timedoctor and timedoctor monitor
+        echo 'echo "wrapon" > /proc/timedoctor'
+        echo 'echo "on" > /proc/timedoctor'
+        echo '/usr/bin/timedoctor_monitor.sh &'
+      fi
+
+
+//FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/bootlog/bootlog-kernel-config.sh
+
+if [ "${DEBUG_BUILD}" == "drx890" ]; then
+    # Enable 'save last kernel log to HDD on kernel panic' feature
+    if [ -e /proc/kpanic_log ] ; then
+        echo "on ${FSN_DATAPATH}" > /proc/kpanic_log
+    fi
+    # Enable 'save TD log to HDD on special remote key press [444] events' feature
+    if [ -e /proc/td_log ] && [ -e /proc/timedoctor ] ; then
+        echo "on" > /proc/timedoctor
+        echo "on ${FSN_DATAPATH}" > /proc/td_log
+    fi
+fi
+
+
+// FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/timedoctor/timedoctor_monitor.sh
+while true ;
+do
+  sleep 5
+  if [ -f $HELP_KEY_FILE -o -f $TRIGGER_FILE ] ;    # note:
+  then
+    echo "off" > /proc/timedoctor
+    echo `date +%s` ": trigger detected" >> $TRIGGER_LOG
+
+
+    # TD01.LOG. WHY?
+    # OUTPUT_FILE_BASE=${FSN_DATAPATH}/TDOC
+    # OUTPUT_FILE_EXT=.LOG
+    # let OUTPUT_FILE_NUMBER=0
+    
+    OUTPUT_FILE=${OUTPUT_FILE_BASE}${OUTPUT_FILE_NUMBER}${OUTPUT_FILE_EXT}
+    
+    rm -f $OUTPUT_FILE
+    cat /proc/timedoctor-data > $OUTPUT_FILE
+    echo `date +%s` ": $OUTPUT_FILE created" >> $TRIGGER_LOG
+
+    echo "on" > /proc/timedoctor
+
+    # limit how often we can copy to allow the box to recover
+    sleep 30
+
+    rm -f $HELP_KEY_FILE
+    rm -f $TRIGGER_FILE
+
+    let OUTPUT_FILE_NUMBER++
+
+    echo `date +%s` ": waiting for next trigger" >> $TRIGGER_LOG
+  fi
+done
+
+
+// FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/APP_Process/app_process_main.c
+
+#define USER_INPUT_KEY_HELP                  (0xE009U)
+
+#ifdef TIMEDOCTOR
+/* We are using a feature of AEM in a way it was not originally intended to call
+   a function whenever the HELP key is pressed. This writes the file /tmp/help_key_pressed.
+   A Bash script on the system called timedoctor_monitor.sh can detect this file and
+   then trigger timedoctor. */
+
+void timedoctor_init(void)
+{
+    AEM_API_SetDebugKeyCode(USER_INPUT_KEY_HELP);
+    AEM_API_SetDebugAction(timedoctor_function);
+}
+
+void timedoctor_function(GFX_INPUT_Event* event)
+{
+    int fd = -1;
+    fd = open("/tmp/help_key_pressed", O_RDWR | O_CREAT);
+    close(fd);
+}
+#endif /* TIMEDOCTOR */
+
+
+<444>
+444 TD trace dump is done from the drivers when the particular key pattern is met. 
+
+<4>[0946728276.692273]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is DOWN
+<4>[0946728275.861274]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is UP
+<4>[0946728277.357273]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is DOWN
+<4>[0946728277.525273]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is UP
+<4>[0946728276.806274]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is DOWN
+<5>[0946728276.809274][TimeDoctor] stopped
+<4>[0946728276.850274]
+<4>[0946728276.850274][TimeDoctor] logging /mnt/nds/dev_6/part_0/FSN_DATA/TD01.LOG
+<4>[0946728278.121273]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is UP
+<4>[0946728278.625273]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is DOWN
+<4>[0946728277.938274]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is UP
+<4>[0946728279.259273]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is DOWN
+<4>[0946728279.574273]<<< Remote Key >>> key 0xe304 ( USER_INPUT_KEY_NUMERIC_FOUR ) is UP
+<4>[0946728281.783274]
+<4>[0946728281.783274][TimeDoctor] logged:3122988
+<3>[0946728281.783274]VFS: Close: file count is 0
+<5>[0946728281.783274][TimeDoctor] running
+
+
+<trace-ioctl>
+Yes, It will turn on all the ioctl calls. 
+
+echo ioctl A,a > /proc/timedoctor
 
 
 ={============================================================================
@@ -9366,7 +9734,7 @@ typedef enum SYSTEMJOB_TYPE_TAG
 !MIL   -VRMS         < T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:03884 > VRM_JOB_START: jtVRM=3, jhVRM=0x30003f3
 
 
-<tune-to-live>
+<vrm-tune-to-live>
 // Now it shows job-type as string
 //
 // #define DIAG_PMON_SYSTEMJOB_TYPE_RB_RECORD          "jb-rbrec" 				/*!< brief review buffer record job */
@@ -9416,6 +9784,47 @@ typedef enum SYSTEMJOB_TYPE_TAG
 !MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x52e hMC=0x81 tuner_id =1 and job_type =RECORD 
 !MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x4b0 hMC=0x6e tuner_id =0 and job_type =RECORD 
 !MIL    -MDM          		< T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x529 hMC=0x80 tuner_id =1 and job_type =LIVE_VIEWING 
+
+
+<vrm-back-to-live-from-pause>
+switching between live pause and live causes switching between rbplay and live
+job.
+
+# 0x300012d 50331949 # has MC, FRAME_PRESENTED, but not VIDEO IS SHOWN/HIDE
+# for rbplay. 
+!MIL    -VRM_SERVER   		< P:MW T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4948 > VRM_JOB_START: jtVRM=jb-rbplay, jhVRM=0x300012d 
+!MIL    -MPM          		< P:MW t:0x017d5520 T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1374 > FRAME_PRESENTED: hMC=0x12b2 
+!MIL    -P_Api        		< P:APP t:0x01201520 T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:8968 > VIDEO_RUNNING_STATUS: jtVRM=6, jhVRM=0x300012d, status=RUNNING 
+
+!MIL    -aem          		< P:APP t:0x01400520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(REWIND)e407 
+...
+!MIL    -aem          		< P:APP t:0x01400520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(REWIND)e407 
+
+# exit pause and back to live
+!MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(SKY)ef01   
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressMagicEye","action": "SKY","title": "Key Press SKY","label": "","currentscreen": "/tv/live/106"}
+!MIL    -EPG_KEY      		< P:APP T:no name M:Activity F:start L:45 > T:CEE-J EventQueue Reader 0:start activity (NamedActivity(REJOIN_LIVE)@5942b84)
+!MIL    -EPG_KEY      		< P:APP T:no name M:KeyEventValve F:activate L:145 > T:CEE-J EventQueue Reader 0:Added NamedActivity(REJOIN_LIVE)@5942b84 to live activities
+!MIL    -P_Api        		< P:APP T:no name M:player_api_session.c F:PLAYER_API_Session_RejoinLive L:2604 > Rejoin live on target MAIN_TARGET 
+!MIL    -P_Api        		< P:APP T:no name M:player_api_session.c F:PLAYER_PRV_Session_Play L:6157 > PLAY on target MAIN_TARGET 
+
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_CreateVRMJob L:1806 > Job 0x03000308 Created on Display Target MAIN_TARGET type=3 
+!MIL    -VRM_SERVER   		< P:MW  T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x3000308: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
+!MIL    -VRM_SERVER   		< P:MW  T:VRM_SRV M:live.c F:LIVE_Create L:1381 > @@PMON@@,mark,job,job-create,3,job-create-type=,jb-live,job-srcloc=,locator:5:3:FDD,job-destloc=,locator:3:2E:47:0 
+
+!MIL    -VRM_SERVER   		< P:MW  T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Start L:1808 > @@PMON@@,mark,job,job-start,`50332424`,job-start-type=,jb-live 
+!MIL    -VRM_SERVER   		< P:MW  T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: `job_man:0x3000308`: E_JOB_MAN_SRV_INT_ST_CREATED -> (E_JOB_MAN_SRV_INP_START_CALLED) -> E_JOB_MAN_SRV_INT_ST_COMMITTING 
+!MIL    -VRM_SERVER   		< P:MW  T:VRM_SRV M:job_man_srv.c F:JobManSrvStart L:4948 > VRM_JOB_START: jtVRM=jb-live, `jhVRM=0x3000308` 
+!MIL    -MCM          		< P:MW  T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,4180,mc-create-mcid=,4180,mc_create-str=,mc-live,fsnfmt=,hMC=0x1054 
+!MIL    -MDM          		< P:MW  T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x38f0 hMC=0x1054 tuner_id =0 and job_type =LIVE_VIEWING 
+!MIL    -MCM          		< P:MW  T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:340 > @@PMON@@,trace,mediacon,mc-created,4180,fsnfmt=,hMC=0x1054 
+
+# delete rb-play that is made in the previous 0x300012d 50331949
+!MIL    -VRM_SERVER   		< P:MW T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Destroy L:1601 > @@PMON@@,mark,job,job-destroy,50331949,job-destroy-type=,jb-rbplay 
+
+!MIL    -MPM          		< P:MW  T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1374 > FRAME_PRESENTED: hMC=0x1054 
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1106 > VIDEO IS SHOWN 
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:8968 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000308, status=RUNNING 
 
 
 <when-record-from-rb>
@@ -12789,6 +13198,10 @@ To mound /dev/sda
 
 1. smartctrl
 
+https://www.smartmontools.org/
+https://www.thomas-krenn.com/en/wiki/SMART_tests_with_smartctl
+
+
 -sh-3.2# smartctl -t short -d ata /dev/sda
 smartctl version 5.33 [mips-unknown-linux-gnu] Copyright (C) 2002-4 Bruce Allen
 Home page is http://smartmontools.sourceforge.net/
@@ -13344,7 +13757,7 @@ PLAYER_SM_VRM_JobCreated
 }
 
 
-<live-case>
+<player-tune-to-live>
 grep -an "PLAYER_API_Session_Play|PLAYER_PRV_Session_Play|PLAYER_AVControl_UpdateVisibility|VIDEO_RUNNING_STATUS"
 
 SYSTEMJOB_TYPE_LIVE_VIEWING,  3
@@ -19429,7 +19842,6 @@ int AUTO_STANDBY_ID                                       = 1162;
    int ECO_STANDBY_EXIT                                      = 1312;
    int NO_PROGRAMMES_OF_THIS_TYPE_ID                         = 1555;
    int	LIVE_PAUSE_NOT_AVAILABLE_INSUFFICIENT_DISK_SPACE_ID   = 1302;
-   int	TECHNICAL_FAULT_ON_SERVICE_ID                         = 1249;
    int	REMINDER_ALERT_WITHOUT_RECORD_ID                      = 1234;
    int	SHARED_PLANNER_INGEST_ERROR_SH20_SPN11                = 1324;
 
@@ -19439,6 +19851,20 @@ int AUTO_STANDBY_ID                                       = 1162;
    int NO_OTHER_CHANNELS_ID                                  = 1115;
 
 	int `BUY_AND_KEEP_PURCHASE_CONFIRMATION_NON_MODAL`                     = 1475;
+
+<1249>
+   int	TECHNICAL_FAULT_ON_SERVICE_ID                         = 1249;
+
+		register(dialog(IDialogID.TECHNICAL_FAULT_ON_SERVICE_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.FYI)
+						.textStrings("There is a technical fault with this channel\nPlease try later")
+						.altString("There is a technical fault\nwith this channel\nPlease try later")
+						.instruction(NONE))
+				.with(behaviour().primaryPriority(IPrimaryPriority.SYSTEM)
+						.secondaryPriority(ISecondaryPriority.SYSTEM)
+						.flags(DISPLAY_IN_PIG | PERSISTENT | HIDE_VIDEO)
+						.actions(BACKUP_IGNORE)
+						.screenLayer(IScreenLayer.TV_DIALOG)));
 
 <1357>
 	int ONLINE_SEARCH_NETWORK_FAILURE                                    = 1357;
