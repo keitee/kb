@@ -95,7 +95,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-pcat-dbengine
 |kt_dev_si_0001| comp-fdm
 |kt_dev_si_0001| comp-pshed
-|kt_dev_si_0001| comp-pdm
+|kt_dev_si_0001| comp-pdm comp-storage
 |kt_dev_si_0001| comp-player
 |kt_dev_si_0001| comp-sharedplanner
 |kt_dev_si_0001| comp-planner
@@ -191,6 +191,39 @@ Writing file images/drx890.SYSF40.65.00.enc.snugupdate.gpg
 Updating...
 
 All done.  You stay classy now.
+
+<snug>
+http://hetty.cisco.com/marvin/SnugUpdate-v2
+
+set PATH=%PATH%;"c:\Program Files (x86)\GNU\GnuPG\"
+gpg --gen-key
+
+Accept all the default values by pressing enter.
+
+Export your public key to brian using
+gpg --armor --output public.key --export <Your Email address>
+
+C:\Users\kyoupark\AppData\Local\VirtualStore\Program Files
+  (x86)\GNU\GnuPG\public.key
+
+Rename the public.key file to include your username and copy it to
+\\brian\snugupdate\keys 
+
+
+Verify that you've picked the image you want and enter your password for the
+`decryption`. 
+
+
+Hitting next will then run the update. The box will not reboot immediately -
+It will wait until:
+
+    It's in standby
+    There's nothing recording now
+    There's nothing recording in the next 30 minutes
+    There's nothing from this box being played by Remote Planner boxes 
+
+Note that it only runs these checks every 10 minutes, so the reboot time may
+be a little unpredictable. 
 
 
 # ============================================================================
@@ -864,7 +897,7 @@ cd /home/NDS-UK/mariyapm/R11/R11/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/bui
 
 1. 
 ./build_mw_epg.sh -p "ams-drx890" --project "picasso"  --profile "Sky_Trials" --variant "debug"
-./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean --mw_only
 
 2) Upload jar files and replace it with car files. 
 note: requires hudson page to do that.
@@ -1923,6 +1956,12 @@ THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa
 
 version.txt:
 83.51.00_BSKYB_HR014_Int
+
+
+={============================================================================
+|kt_dev_si_0002| si-build-flipper
+
+$ git tag ENG_XX.09.12
 
 
 ={============================================================================
@@ -7528,8 +7567,7 @@ systemobject     24464              51200               20                      
 ={============================================================================
 |kt_dev_si_0001| comp-timedoctor
 
-https://sourceforge.net/projects/timedoctor/
-
+<on-off>
 To `start` the timedoctor logging:
 echo "on" > /proc/timedoctor
 
@@ -7543,6 +7581,7 @@ Disable 'wrapping'
 echo wrapoff > /proc/timedoctor
 
 
+<enable-from-source>
 http://ndpedia.uk.nds.com/index.php/TimeDoctor_STB_Operational_Instructions
 Calling the TimeDoctor process via Test Code
 
@@ -7573,6 +7612,34 @@ Note: "wrapoff" can be replaced with "wrapon" to turn wrapping on
 
 Turn Timedoctor off
 SYSCOM_STOP_TD();
+
+Note: 
+Starting timedoctor from the source code for recent baselines will not work
+  because of timedoctor control files ownership/permissions.  Timedoctor
+  should be started under root, but the middleware is running as a NDS_MW
+  user, therefore it is not able to open these files in "write" mode. When
+  timedoctor is enabled in kernel, a new device is created: -rw-r--r-- 1 root
+  root 0 Jan 1 01:40 /dev/timedoctor Since NDS MW runs not in root mode, it
+  can not write to this device or to the: -rw-r--r-- 1 root root 0 Jan 1 01:40
+  /proc/timedoctor
+
+The workaround is to make this files “group-writable” from NDS build_mw_epg.sh
+after bootlog UPLOAD section the following commands should be inserted:
+
+   echo 'mknod /dev/timedoctor c 10 63'
+   echo 'sleep 5'
+   echo 'chmod 0666 /dev/timedoctor'
+   echo 'echo "reset" > /proc/timedoctor'
+   echo 'sleep 1'
+   echo 'echo "wrapon" > /proc/timedoctor'
+   echo 'sleep 1'
+   echo 'echo "on" > /proc/timedoctor'
+   echo 'sleep 1'
+   echo 'chmod 0666 /proc/timedoctor'
+   echo 'sleep 1'
+
+This will make the timedoctor control files “writable” from NDS_MW processes
+and kick-off the timedoctor. 
 
 
 <flag>
@@ -7760,7 +7827,7 @@ timedoctor data to a file. There are two ways of doing this:
 
 The `second option` seems to be quicker and render better for BSKYB builds.
 
-
+<process>
 Process the Timedoctor log
 
 This is required if you used option 1 above and is done on the host using the
@@ -7768,6 +7835,7 @@ perl script log2tdi to convert the timedoctor log (td) file to a tdi file
 acceptable to the Timedoctor Analysis
 
 perl log2tdi my_td_log.td > my_td_log.tdi
+https://sourceforge.net/p/timedoctor/tdlogger/ci/master/tree/log2tdi
 
 TimeDoctor Analyser for Windows
 
@@ -7775,25 +7843,27 @@ The GUI analayser (Microsoft Windows) is avaiable for viewing TimeDoctor
 (.tdi) files and can be downloaded from the Timedoctor Source Forge site:
 http://sourceforge.net/projects/timedoctor/ 
 
+
 <code>
-// from FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/build_mw_epg.sh
-  #------------------------------------------------------------------------------------
-  # copy timedoctor script
-  #------------------------------------------------------------------------------------
-  if [ -n "$TIMEDOCTOR" ]; then
-    mkdir -p nds-mw/usr/bin
-    cp tools/nds/si/timedoctor/timedoctor_monitor.sh nds-mw/usr/bin/
-    chmod +x nds-mw/usr/bin/timedoctor_monitor.sh
-  fi
-
-  // when makes a starup script /etc/start-mw.sh
-      if [ -n "$TIMEDOCTOR" ]; then
-        # Enable timedoctor and timedoctor monitor
-        echo 'echo "wrapon" > /proc/timedoctor'
-        echo 'echo "on" > /proc/timedoctor'
-        echo '/usr/bin/timedoctor_monitor.sh &'
-      fi
-
+// note: not used since $TIMEDOCTOR is not set for any builds
+//
+// // from FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/build_mw_epg.sh
+//   #------------------------------------------------------------------------------------
+//   # copy timedoctor script
+//   #------------------------------------------------------------------------------------
+//   if [ -n "$TIMEDOCTOR" ]; then
+//     mkdir -p nds-mw/usr/bin
+//     cp tools/nds/si/timedoctor/timedoctor_monitor.sh nds-mw/usr/bin/
+//     chmod +x nds-mw/usr/bin/timedoctor_monitor.sh
+//   fi
+//
+//   // when makes a starup script /etc/start-mw.sh
+//       if [ -n "$TIMEDOCTOR" ]; then
+//         # Enable timedoctor and timedoctor monitor
+//         echo 'echo "wrapon" > /proc/timedoctor'
+//         echo 'echo "on" > /proc/timedoctor'
+//         echo '/usr/bin/timedoctor_monitor.sh &'
+//       fi
 
 //FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/bootlog/bootlog-kernel-config.sh
 
@@ -7897,6 +7967,15 @@ void timedoctor_function(GFX_INPUT_Event* event)
 Yes, It will turn on all the ioctl calls. 
 
 echo ioctl A,a > /proc/timedoctor
+
+<td_log>
+whenever run this, driver creates TD0?.LOG where starting from 0 and keeps
+this numbering even if deletes files.
+
+Once we trigger it using the proc/td_log”, then it will just dump the current
+active timedoctor buffer to the disks and stop dumping after that. 
+
+echo log > /proc/td_log
 
 
 ={============================================================================
@@ -8066,6 +8145,7 @@ CDISERVER_GetPts(cdi_server.c)
 //
 // note: that there are two types of message. `warn` and `halt`.
 // note: ms unit.
+// note: it clears timer in EndOp.
 //
 // !WARN  -MSM_MS < T:EVENT_MGR_THREAD M:watchdog.cpp F:(WatchdogEventMgrCb) L:469 > < no-ctx >" 
 // "-MS_WATCHDOG- thread E_MS_PORT_THREAD_TYPE_CDI_WT, " "pid = 488,tid = 26162464, " 
@@ -8077,6 +8157,15 @@ CDISERVER_GetPts(cdi_server.c)
 
 CdiServerThread(cdi_server.c, 'E_MS_PORT_THREAD_TYPE_CDI_WT' thread name )
 {
+   /* register the new thread with the watchdog, this needs to be called
+   before calling INITERM_ThreadIsUp, because we are relying on the 
+   INITERM semaphore to synchronize the calls to WATCHDOG_Register */
+
+   watchdog_handle = WATCHDOG_RegisterThread(
+	 E_MS_PORT_THREAD_TYPE_CDI_WT,
+	 WATCHDOG_WARN_TIME_FOR_CDI_SERVER_OP,
+	 WATCHDOG_ASSERT_TIME_FOR_CDI_SERVER_OP);  // 500
+
   /* report begin of operation to watchdog */
   WATCHDOG_BeginOp(watchdog_handle, CdiServerRequestToString(req.type));
 
@@ -8112,8 +8201,14 @@ CdiServerThread(cdi_server.c, 'E_MS_PORT_THREAD_TYPE_CDI_WT' thread name )
                 if (status == MPM_STATUS_OK)
                 {
                   /*lint -save -e923    Authorised by S Taylor. See email attached to CQ196440 */
+
+                  // CMS_MEDIA_SERVICES/MPM/src/interfaces/mpm_device.c
+                  //
+                  // int mpm_ioctl_debug_ioctl_ptr();
+                  
                   status = `MPM_DEVICE_DoIoctl`(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER, VIDEO_DECODER_GET_PTS, (void *)pts);
                   /*lint -restore */
+
                   MPM_DEVICE_UnlockDevice(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER);
                 }
               }
@@ -8135,6 +8230,9 @@ CdiServerThread(cdi_server.c, 'E_MS_PORT_THREAD_TYPE_CDI_WT' thread name )
         }
       }
     }
+
+	/* report end of operation to watchdog */
+	WATCHDOG_EndOp(watchdog_handle);
 }
 
 
@@ -10804,9 +10902,9 @@ Steven Williams, Component Owner
 # internal
 #-----------------------------------------------------------
 
-#
-# there are only three clients (SDM, FDM and SIM) so adding some debug in each to print the session_handle obtained from
-# SFM_API_SESSION_CreateSession() will allow us to see who needs to do a further investigation.
+# there are only three clients (SDM, FDM and SIM) so adding some debug in each
+# to print the session_handle obtained from SFM_API_SESSION_CreateSession()
+# will allow us to see who needs to do a further investigation.
 
 SIM -> SFM -> MDM
 
@@ -13107,7 +13205,7 @@ PSCHED_SCHED_HandleAlarmTimeout
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-pdm
+|kt_dev_si_0001| comp-pdm comp-storage
 
 COMPONENT_NAME := pdm_srv
 
@@ -13158,6 +13256,7 @@ FOS Helper Issue 18
 FOS header file for the storage helper.
 This file is immutable. Do not edit.
 */
+// FUSIONOS/STORAGE_HELPER/src/storage_helper/src/storage_partition_format_usage_lnx.c
 int32_t xstore_mount_partition(const XStoreMountPoint mountPoint,
                                const XStorePartitionInfo * const partitionInfo,
                                const uint32_t mountFlags,
