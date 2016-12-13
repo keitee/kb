@@ -42534,6 +42534,8 @@ tested release.
 
 wget http://downloads.uclibc-ng.org/releases/1.0.17/uClibc-ng-1.0.17.tar.xz
 
+uclibc-ng starts from 1.0.0.
+
 
 ={============================================================================
 *kt_linux_gcc_400* gcc-libc-uclibc-ld
@@ -45319,9 +45321,11 @@ Trid linux-3.17.2 instead and causes different error:
   ^
 make: *** [libc/inet/if_index.os] Error 1
 
-note:
-So tried uClibc-ng-1.0.17 instead with the same kernel and built! However,
-   failed with linux-2.6.19 around the same code as uClibc case above.
+<uclibc-note>
+===========
+Here fails to use uClibc-0.9.33.2 and tried uClibc-ng-1.0.17 instead with the
+same kernel and built! However, failed with linux-2.6.19 around the same code
+as uClibc case above.
 
 make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ install
 
@@ -45509,6 +45513,7 @@ Fixes:
 
 
 ./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib
+./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys-uc109/mips-unknown-linux-uclibc/lib
 
 Fixes:
 /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/bin/ld: warning: libstdc++.so.6, needed by /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so, not found (try using -rpath or -rpath-link)
@@ -45551,12 +45556,6 @@ kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/li
 10: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
 
 
-LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-build ./a.out_from_mips_tsam
-Segmentation fault
-
-LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-box ./a.out_from_mips_tsam
-OKAY
-
 (gdb) file a.out_from_mips_asan
 warning: core file may not match specified executable file.
 Reading symbols from /home/NDS-UK/kyoupark/a.out_from_mips_asan...Dwarf Error: wrong version in compilation unit header (is 4, should be 2) [in module /home/NDS-UK/kyoupark/a.out_from_mips_asan]
@@ -45564,6 +45563,15 @@ Reading symbols from /home/NDS-UK/kyoupark/a.out_from_mips_asan...Dwarf Error: w
 
 #1  0x2aabf414 in __pthread_initialize_minimal_internal () from /home/kyoupark/asn/mips-libs-from-build/libpthread.so.0
 #2  0x2ab36874 in __uClibc_init () from /home/kyoupark/asn/mips-libs-from-build/libc.so.0
+
+LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-build ./a.out_from_mips_tsam
+Segmentation fault
+LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-box ./a.out_from_mips_tsam
+LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-uclibc109 ./a.out_from_mips_tsam
+
+LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-uclibc109 ./a.out_from_mips_tsam
+
+LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-uclibc109 ./a.out_from_mips_asan
 
 
 <static>
@@ -45618,6 +45626,67 @@ make -j5
 // collect2: error: ld returned 1 exit status
 // make[2]: *** [libgcc_s.so] Error 1
 
+make install
+
+
+={============================================================================
+*kt_linux_gcc_400* gcc-build-uclibc-build-asan-
+
+BCM       uses uClibc 0.9.29
+BR        uses uClibc-ng-1.0.17.tar.xz
+cross-ng  uses uClibc-ng-1.0.9
+          tried uClibc-0.9.33.2 and linux-3.17.2  (not okay)
+          tried uClibc-ng-1.0.17 and linux-3.17.2 (okay)
+          tried uClibc-ng-1.0.17 and linux-2.6.19 (not okay)
+          tried uClibc-ng-1.0.17 and linux-3.17.2 (okay) but runtime error.
+
+see <uclibc-note>
+
+so this is to try uClibc-ng-1.0.9 and linux-3.17.2
+
+wget http://downloads.uclibc-ng.org/releases/1.0.9/uClibc-ng-1.0.9.tar.xz
+
+
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan-wsys-uc109
+export PATH=$INSTALL_PATH/bin:$PATH
+
+../binutils-2.24/configure --target=mips-unknown-linux-uclibc --prefix=${INSTALL_PATH} --disable-nls --disable-multilib --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
+make -j4
+make install
+
+cd linux-3.17.2
+make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr headers_install
+
+cd gcc-4.8.2-build-uclibc109
+../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux-uclibc --enable-languages=c,c++ \
+--enable-libsanitizer --disable-libmudflap --disable-multilib --disable-nls --with-sysroot=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot
+make -j4 all-gcc
+make install-gcc
+
+cd uClibc-ng-1.0.9
+# change KERNEL_HEADERS in .config if intall path is changed
+DEVEL_PREFIX="/usr/"
+KERNEL_HEADERS="/home/nds-uk/kyoupark/asn/install-4.8.2-uclibc-asan-wsys-uc109/mips-unknown-linux-uclibc/sysroot/usr/include"
+make clean
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ install_headers 
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ STRIPTOOL=true lib/crt1.o lib/crti.o lib/crtn.o
+mips-unknown-linux-uclibc-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o libdummy.so
+mkdir -p ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib
+/usr/bin/install -c -m 0645 lib/crt1.o lib/crti.o lib/crtn.o ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib
+/usr/bin/install -c -m 0755 libdummy.so ${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/usr/lib/libc.so
+
+cd gcc-4.8.2-build-uclibc109
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+cd uClibc-ng-1.0.9
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ pregen
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ all
+make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=${INSTALL_PATH}/mips-unknown-linux-uclibc/sysroot/ install
+
+cd gcc-4.8.2-build-uclibc109
+make -j5
 make install
 
 
