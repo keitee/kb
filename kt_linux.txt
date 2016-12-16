@@ -223,6 +223,7 @@
 *kt_linux_tool_300* tool-apache-ivy
 
 #{ gdb
+*kt_linux_gdb_001* gdb-error gdb-target
 |kt_linux_tool_300| gdb-term and links
 *kt_linux_tool_300* gdb-check-built with debug symbols
 *kt_linux_tool_300* gdb-sample session
@@ -312,10 +313,11 @@
 *kt_linux_gcc_400* gcc-build-buildroot
 *kt_linux_gcc_400* gcc-build-old-kernel
 *kt_linux_gcc_400* gcc-build-options
-*kt_linux_gcc_400* gcc-build-reference
-*kt_linux_gcc_400* gcc-build-asan
+*kt_linux_gcc_400* gcc-build-glibc-reference
+*kt_linux_gcc_400* gcc-build-glibc-asan
 *kt_linux_gcc_400* gcc-build-uclibc-build
 *kt_linux_gcc_400* gcc-build-uclibc-build-asan
+*kt_linux_gcc_400* gcc-build-uclibc-build-asan-109
 *kt_linux_gcc_400* gcc-build-cross-ng
 
 
@@ -432,9 +434,10 @@
 *kt_linux_core_401* lib-shared
 *kt_linux_core_400* lib-how-static-works
 *kt_linux_core_401* lib-dependancy
-*kt_linux_core_400* lib-dl ld-library-path
+*kt_linux_core_400* lib-ld ld-library-path
+*kt_linux_core_412* lib-ld.conf lib-ld.cache
+*kt_linux_core_402* lib-search and rpath
 *kt_linux_core_401* slib: --as-needed flag and link error
-*kt_linux_core_402* shared-lib-search and resolve
 *kt_linux_core_403* slib-case-problem in name resolve. crash
 *kt_linux_core_404* slib-case-problem in name resolve. pthread stub 
 *kt_linux_core_405* slib-dl-api
@@ -447,7 +450,6 @@
 *kt_linux_core_410* shared library: check libraries loading
 *kt_linux_core_411* slib: case problem in open failure
 *kt_linux_core_411* slib: points to enhance performance
-*kt_linux_core_412* lib-ld.conf lib-ld.cache
 *kt_linux_core_412* slib: as-needed and _GLOBAL_OFFSET_TABLE_
 
 |kt_linux_core_500| sandbox
@@ -20818,6 +20820,7 @@ http://www.busybox.net/source.html
 http://www.busybox.net/downloads/BusyBox.html
 https://git.busybox.net/busybox/tree/coreutils
 
+
 # ============================================================================
 #{ apache-ivy
 ={============================================================================
@@ -21177,6 +21180,17 @@ Examples: zip, tar, tar.gz, rar, jar, war, ear, txt, doc, xml, html
 
 # ============================================================================
 #{ gdb
+={============================================================================
+*kt_linux_gdb_001* gdb-error gdb-target
+
+# see this when uses cross gdb which built with different configuration.
+
+(gdb) file a.out_from_mips_asan
+warning: core file may not match specified executable file.
+Reading symbols from /home/NDS-UK/kyoupark/a.out_from_mips_asan...\
+  Dwarf Error: wrong version in compilation unit header (is 4, should be 2) [in module /home/NDS-UK/kyoupark/a.out_from_mips_asan]
+
+
 ={============================================================================
 *kt_linux_tool_300* gdb-term and links
 
@@ -43982,6 +43996,37 @@ analysis purposes.
 
 
 ={============================================================================
+*kt_linux_gcc_400* gcc-build--execution-env
+
+http://askubuntu.com/questions/133389/no-such-file-or-directory-but-the-file-exists
+
+There are three cases where you can get the message “No such file or directory”:
+
+    The file doesn't exist. I presume you've checked that the file does exist
+    (perhaps because the shell completes it).
+
+    There is a file by that name, but it's a dangling symbolic link.
+
+    The file exists, and you can even read it, and yet when you try to execute
+    it you're told that the file doesn't exist.
+    note: this is what I see when run binary built with glibc on a box with
+    uclibc.
+
+The error message in this last case is admittedly confusing. What it's telling
+you is that a key component of the runtime environment necessary to run the
+program is missing. Unfortunately, the channel through which the error is
+reported only has room for the error code and not for this extra information
+that it's really the runtime environment that's to blame. If you want the
+technical version of this explanation, read Getting “Not found” message when
+running a 32-bit binary on a 64-bit system.
+
+The file command will tell you just what this binary is. With a few
+exceptions, you can only run a binary for the processor architecture that your
+release of Ubuntu is for. The main exception is that you can run 32-bit (x86,
+    a.k.a. IA32) binaries on 64-bit (amd64, a.k.a. x86_64) systems.
+
+
+={============================================================================
 *kt_linux_gcc_400* gcc-build-target-triplet
 
 {triplet}
@@ -44944,6 +44989,99 @@ configure: error: GNU libc requires kernel header files from
 Linux 2.6.32 or later to be installed before configuring.
 
 
+<2-6-33>
+1. use a specific(old) kernel version
+wget --no-check-certificate https://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.33.tar.xz
+
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-glibc-k2633
+TARGET=mips-unknown-linux
+export PATH=$INSTALL_PATH/bin:$PATH
+
+#../binutils-2.24/configure --target=mips-unknown-linux --prefix=${INSTALL_PATH} --disable-nls --disable-multilib --with-sysroot
+../binutils-2.24/configure --target=${TARGET} --prefix=${INSTALL_PATH} --disable-nls --disable-multilib
+make -j4
+make install
+
+
+cd linux-2.6.33
+make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/${TARGET} headers_install
+
+
+cd build-gcc
+#../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux --enable-languages=c,c++ \
+../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=${TARGET} --enable-languages=c,c++ \
+--disable-libmudflap --disable-multilib --disable-nls --enable-libsanitizer
+make -j4 all-gcc
+make install-gcc
+
+cd build-glibc
+../glibc-2.20/configure --prefix=${INSTALL_PATH}/${TARGET} \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${INSTALL_PATH}/${TARGET}/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+make install-bootstrap-headers=yes install-headers
+make -j4 csu/subdir_lib
+
+install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+
+cd build-glibc
+make -j4
+make install
+
+cd build-gcc
+make -j5
+make install
+
+builds okay.
+
+
+<glibc-210>
+https://sourceware.org/glibc/wiki/Glibc%20Timeline
+2014-09-08 GLIBC 2.20 The GNU C Library version 2.20 is now available 
+2009-05-09 GLIBC 2.10 2.10 done 
+2000-11-09 GLIBC 2.2 glibc 2.2
+
+wget --no-check-certificate http://ftpmirror.gnu.org/glibc/glibc-2.10.1.tar.gz
+
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-glibc-k2633
+TARGET=mips-unknown-linux
+export PATH=$INSTALL_PATH/bin:$PATH
+
+#../binutils-2.24/configure --target=mips-unknown-linux --prefix=${INSTALL_PATH} --disable-nls --disable-multilib --with-sysroot
+../binutils-2.24/configure --target=${TARGET} --prefix=${INSTALL_PATH} --disable-nls --disable-multilib
+make -j4
+make install
+
+
+cd linux-2.6.33
+make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/${TARGET} headers_install
+
+
+cd build-gcc
+#../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux --enable-languages=c,c++ \
+../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=${TARGET} --enable-languages=c,c++ \
+--disable-libmudflap --disable-multilib --disable-nls --enable-libsanitizer
+make -j4 all-gcc
+make install-gcc
+
+
+cd build-glibc
+../glibc-2.10.1/configure --prefix=${INSTALL_PATH}/${TARGET} \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${INSTALL_PATH}/${TARGET}/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+configure: running configure fragment for add-on nptl
+checking sysdep dirs... configure: error: The mips is not supported.
+
 
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-options
@@ -44963,7 +45101,7 @@ This sets the installation directory
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-reference
+*kt_linux_gcc_400* gcc-build-glibc-reference
 
 http://preshing.com/20141119/how-to-build-a-gcc-cross-compiler/
 
@@ -44973,7 +45111,6 @@ note:
 
 Required Packages
 =================
-
 Starting with a clean Debian system, you must first install a few packages:
 
 $ sudo apt-get install g++ make gawk
@@ -45131,13 +45268,13 @@ subdirectory is in your PATH environment variable. You can remove this
 directory from your PATH later, but most of the build steps expect to find
 aarch64-linux-gcc and other host tools via the PATH by default.
 
+${PREFIX}=`/opt/cross`
 $ export PATH=/opt/cross/bin:$PATH
 
-export PATH=~/asn/install-4.9.2/bin:$PATH
-export PATH=~/asn/install-4.8.2/bin:$PATH
+export PATH=${PREFIX}/bin:$PATH
 
 
-1. SYSTEM ROOT
+1. SYSTEM ROOT: ${PREFIX}=`/opt/cross/{target}`
 ===========
 Pay particular attention to the stuff that gets installed under
 `/opt/cross/aarch64-linux/`. This directory is considered the system root of an
@@ -45169,30 +45306,20 @@ aarch64-linux-.
 with programs and libraries using the AArch64 instruction set, and not any
 related instruction sets such as AArch32.
 
-../binutils-2.24/configure --target=mips-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2 --disable-nls --disable-multilib
-../binutils-2.24/configure --target=mips-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --with-sysroot --disable-nls --disable-multilib
+../binutils-2.24/configure --target=mips-linux --prefix=${PREFIX} --disable-nls --disable-multilib
+#../binutils-2.24/configure --target=mips-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --with-sysroot --disable-nls --disable-multilib
 
+// `target` will be prefix in binary names
 // ../binutils-2.24/configure --target=mipsel-linux --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2 --with-sysroot --disable-nls --disable-multilib
 //
 // kyoupark@ukstbuild2:~/asn/install-4.9.2$
 // drwxr-xr-x  2 kyoupark ccusers 4096 Nov 24 09:53 bin/
 // drwxr-xr-x  4 kyoupark ccusers 4096 Nov 24 09:53 mipsel-linux/
 // drwxr-xr-x  4 kyoupark ccusers 4096 Nov 24 09:53 share/
+//
 // kyoupark@ukstbuild2:~/asn/install-4.9.2$ ls bin/
 // mipsel-linux-addr2line  mipsel-linux-as       mipsel-linux-elfedit  mipsel-linux-ld      mipsel-linux-nm       mipsel-linux-objdump  mipsel-linux-readelf  mipsel-linux-strings
 // mipsel-linux-ar         mipsel-linux-c++filt  mipsel-linux-gprof    mipsel-linux-ld.bfd  mipsel-linux-objcopy  mipsel-linux-ranlib   mipsel-linux-size     mipsel-linux-strip
-
-// ../binutils-2.24/configure --target=mipsel-linux-gnu --prefix=/home/nds-uk/kyoupark/asn/install --with-sysroot --disable-nls --disable-werror
-//
-// kyoupark@ukstbuild2:~/asn/install$
-// drwxr-xr-x  2 kyoupark ccusers 4096 Nov 24 08:07 bin/
-// drwxr-xr-x  4 kyoupark ccusers 4096 Nov 24 08:07 mipsel-linux-gnu/
-// drwxr-xr-x  4 kyoupark ccusers 4096 Nov 24 08:07 share/
-// kyoupark@ukstbuild2:~/asn/install$ ls bin/
-// mipsel-linux-gnu-addr2line  mipsel-linux-gnu-c++filt  mipsel-linux-gnu-ld      mipsel-linux-gnu-objcopy  mipsel-linux-gnu-readelf  mipsel-linux-gnu-strip
-// mipsel-linux-gnu-ar         mipsel-linux-gnu-elfedit  mipsel-linux-gnu-ld.bfd  mipsel-linux-gnu-objdump  mipsel-linux-gnu-size
-// mipsel-linux-gnu-as         mipsel-linux-gnu-gprof    mipsel-linux-gnu-nm      mipsel-linux-gnu-ranlib   mipsel-linux-gnu-strings
-
 
 note: failed to build 2.24 but build 2.25.1 on debian VM.
 kyoupark@kit-debian:~/si-logs/gcc/build-binutil$ uname -a
@@ -45214,7 +45341,6 @@ understand when you ask your questions. ;-)
 
 
 <sysroot>
-
 https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html#Directory-Options
 
 --sysroot=`dir`
@@ -45335,8 +45461,8 @@ $ cd ..
     ARCH=arm64
 
 
-make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux headers_install
-make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2/`mips-linux` headers_install
+# make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux headers_install
+make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 
 note:
 
@@ -45389,8 +45515,8 @@ $ make -j4 all-gcc
 $ make install-gcc
 $ cd ..
 
-../gcc-4.9.2/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2 --target=mips-linux --enable-languages=c,c++ --disable-multilib
-../gcc-4.8.2/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --target=mips-linux --enable-languages=c,c++ --disable-multilib
+#../gcc-4.8.2/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --target=mips-linux --enable-languages=c,c++ --disable-multilib
+../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ --disable-multilib
 
 Because we've specified --target=aarch64-linux, the build script looks for the
 Binutils cross-tools we built in step 1 with names prefixed by aarch64-linux-.
@@ -45551,7 +45677,8 @@ expected in step 5, but which will be replaced in step 6.
 
 $ mkdir -p build-glibc
 $ cd build-glibc
-$ ../glibc-2.20/configure --prefix=/opt/cross/aarch64-linux --build=$MACHTYPE --host=aarch64-linux --target=aarch64-linux --with-headers=/opt/cross/aarch64-linux/include --disable-multilib libc_cv_forced_unwind=yes
+$ ../glibc-2.20/configure --prefix=/opt/cross/aarch64-linux --build=$MACHTYPE --host=aarch64-linux --target=aarch64-linux 
+  --with-headers=/opt/cross/aarch64-linux/include --disable-multilib libc_cv_forced_unwind=yes
 $ make install-bootstrap-headers=yes install-headers
 $ make -j4 csu/subdir_lib
 $ install csu/crt1.o csu/crti.o csu/crtn.o /opt/cross/aarch64-linux/lib
@@ -45583,31 +45710,27 @@ We install the C library's startup files, crt1.o, crti.o and crtn.o, to the
 installation directory manually. There's doesn't seem to a make rule that does
 this without having other side effects.
 
-// ../glibc-2.20/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux 
-// --build=x86_64-redhat-linux-gnu --host=mips-linux --target=mips-linux 
-// --with-headers=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include 
-// --disable-multilib libc_cv_forced_unwind=yes
+#../glibc-2.20/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux \
+#--build=$MACHTYPE --host=mips-linux --target=mips-linux \
+#--with-headers=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include \
+#--disable-multilib libc_cv_forced_unwind=yes
 
-../glibc-2.20/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux \
---build=$MACHTYPE --host=mips-linux --target=mips-linux \
---with-headers=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include \
+../glibc-2.20/configure --prefix=${PREFIX}/${TARGET} \
+--build=$MACHTYPE --host=mips-linux --target=${TARGET} \
+--with-headers=${PREFIX}/${TARGET}/include \
 --disable-multilib libc_cv_forced_unwind=yes
+
 
 make install-bootstrap-headers=yes install-headers
 make -j4 csu/subdir_lib
 
-install csu/crt1.o csu/crti.o csu/crtn.o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib
-mips-linux-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib/libc.so
-touch /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include/gnu/stubs.h
+# install csu/crt1.o csu/crti.o csu/crtn.o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib
+# mips-linux-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib/libc.so
+# touch /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include/gnu/stubs.h
 
-
-../glibc-2.20/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2/mips-linux \
---build=$MACHTYPE --host=mips-linux --target=mips-linux \
---with-headers=/home/nds-uk/kyoupark/asn/install-4.8.2/mips-linux/include \
---disable-multilib libc_cv_forced_unwind=yes
-
-make install-bootstrap-headers=yes install-headers
-make -j4 csu/subdir_lib
+install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
 
 note:
 If miss out these, then cause libgcc in step 5 failed with errors around gcov
@@ -45685,7 +45808,7 @@ for GNU/Linux 2.6.32, with unknown capability 0x41000000 = 0xf676e75, with unkno
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-asan
+*kt_linux_gcc_400* gcc-build-glibc-asan
 
 <enalbe-asan>
 
@@ -46271,7 +46394,7 @@ collect2: error: ld returned 1 exit status
 make: *** [lib/libc.so] Error 1
 
 note:
-Trid linux-3.17.2 instead and causes different error:
+Tried linux-3.17.2 instead and causes different error:
 
 /home/nds-uk/kyoupark/asn/install-4.8.2-own/mips-unknown-linux-uclibc/sysroot/usr/include/linux/sysinfo.h:8:2: error: unknown type name '__kernel_long_t'
   __kernel_long_t uptime;  /* Seconds since boot */
@@ -46427,7 +46550,9 @@ make -j5
 make install
 
 
-/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/bin/ld: warning: libstdc++.so.6, needed by /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so, not found (try using -rpath or -rpath-link)
+<error>
+/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/bin/ld: 
+  warning: libstdc++.so.6, needed by /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so, not found (try using -rpath or -rpath-link)
 /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_free'
 /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_malloc'
 collect2: error: ld returned 1 exit status
@@ -46464,46 +46589,26 @@ sanitizer_allocator.o:
 # define LIBC_FREE free
 // #endif  // __linux__ && !ANDROID
 
-Fixes:
-/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_free'
-/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so: undefined reference to `__libc_malloc'
+fixes undefined references
 
 
-./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib
-./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys-uc109/mips-unknown-linux-uclibc/lib
+<error> rpath
+install-4.8.2-uclibc-asan-wsys/bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector \
+-Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib
 
-Fixes:
-/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/bin/ld: warning: libstdc++.so.6, needed by /home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/bin/../lib/gcc/mips-unknown-linux-uclibc/4.8.2/../../../../mips-unknown-linux-uclibc/lib/libasan.so, not found (try using -rpath or -rpath-link)
+fixes warning.
+
+
+<error> 
+# when run on target, see lots of library dependancies.
 
 -sh-3.2# ./a.out_from_mips_asan
 ./a.out_from_mips_asan: can't load library 'libasan.so.0'
-
--rw-r--r-- 1 kyoupark ccusers 1639506 Dec  7 15:37 libasan.a
--rwxr-xr-x 1 kyoupark ccusers    1129 Dec  7 15:37 libasan.la*
-lrwxrwxrwx 1 kyoupark ccusers      16 Dec  7 15:37 libasan.so -> libasan.so.0.0.0*
-lrwxrwxrwx 1 kyoupark ccusers      16 Dec  7 15:37 libasan.so.0 -> libasan.so.0.0.0*
--rwxr-xr-x 1 kyoupark ccusers  984707 Dec  7 15:37 libasan.so.0.0.0*
-
--rw-r--r-- 1 kyoupark ccusers 53466 Dec  7 15:37 libssp.a
--rwxr-xr-x 1 kyoupark ccusers  1001 Dec  7 15:37 libssp.la*
--rw-r--r-- 1 kyoupark ccusers  2630 Dec  7 15:37 libssp_nonshared.a
--rwxr-xr-x 1 kyoupark ccusers   983 Dec  7 15:37 libssp_nonshared.la*
-lrwxrwxrwx 1 kyoupark ccusers    15 Dec  7 15:37 libssp.so -> libssp.so.0.0.0*
-lrwxrwxrwx 1 kyoupark ccusers    15 Dec  7 15:37 libssp.so.0 -> libssp.so.0.0.0*
--rwxr-xr-x 1 kyoupark ccusers 27038 Dec  7 15:37 libssp.so.0.0.0*
-
 ./a.out_from_mips_asan: can't load library 'libstdc++.so.6'
-
-lrwxrwxrwx 1 kyoupark ccusers      19 Dec  7 15:37 libstdc++.so -> libstdc++.so.6.0.18*
-lrwxrwxrwx 1 kyoupark ccusers      19 Dec  7 15:37 libstdc++.so.6 -> libstdc++.so.6.0.18*
--rwxr-xr-x 1 kyoupark ccusers 5410330 Dec  7 15:37 libstdc++.so.6.0.18*
-
 ./a.out_from_mips_asan: can't load library 'ld-uClibc.so.1'
+...
 
-lrwxrwxrwx 1 kyoupark ccusers     19 Dec  7 14:48 ld-uClibc.so.1 -> ld-uClibc-1.0.17.so*
-
-<x>
-kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/lib$ ../../bin/mips-unknown-linux-uclibc-readelf -d libasan.so.0.0.0 | grep NEEDED
+$ ../../bin/mips-unknown-linux-uclibc-readelf -d libasan.so.0.0.0 | grep NEEDED
 4: 0x00000001 (NEEDED)                     Shared library: [libpthread.so.0]
 5: 0x00000001 (NEEDED)                     Shared library: [libdl.so.0]
 6: 0x00000001 (NEEDED)                     Shared library: [libstdc++.so.6]
@@ -46512,26 +46617,77 @@ kyoupark@ukstbuild2:~/asn/install-4.8.2-uclibc-asan/mips-unknown-linux-uclibc/li
 9: 0x00000001 (NEEDED)                     Shared library: [ld-uClibc.so.1]
 10: 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
 
+use LD_LIBRARY_PATH
+
+
+<error>
+# see this when uses gdb to see core.
 
 (gdb) file a.out_from_mips_asan
 warning: core file may not match specified executable file.
 Reading symbols from /home/NDS-UK/kyoupark/a.out_from_mips_asan...Dwarf Error: wrong version in compilation unit header (is 4, should be 2) [in module /home/NDS-UK/kyoupark/a.out_from_mips_asan]
 
 
+<error>
+install-4.8.2-uclibc-asan-wsys-uc109/bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys-uc109/mips-unknown-linux-uclibc/lib
+install-4.8.2-uclibc-asan-wsys-uc109/bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -Wl,-rpath=/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys-uc109/mips-unknown-linux-uclibc/lib
+
+# sam.c
+#include <stdio.h>
+
+int main(int argc, char **argv)
+{
+    printf("====> \n" );
+    printf("====> Hello, this is sample program.\n" );
+    printf("====> \n" );
+    return;
+}
+
+# tsm.c (sample thread app)
+# uaf(asan).c (use after free app)
+
+1. no seg fault for sam.c when use any mips build
+2. seg fault for tsm.c when use mips build with uclibc-ng-1.0.17 and core
+shows:
+
 #1  0x2aabf414 in __pthread_initialize_minimal_internal () from /home/kyoupark/asn/mips-libs-from-build/libpthread.so.0
 #2  0x2ab36874 in __uClibc_init () from /home/kyoupark/asn/mips-libs-from-build/libc.so.0
 
-LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-build ./a.out_from_mips_tsam
-Segmentation fault
-LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-box ./a.out_from_mips_tsam
-LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-uclibc109 ./a.out_from_mips_tsam
+3. no seg fault for tsm.c when use mips build with uclibc-ng-1.0.9. This is
+why built mips and uclibc-ng-109
+
+4. seg fault for asan.c when use mips build with uclibc-ng-1.0.9 and shows the
+same core as before.
 
 -sh-3.2# LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-uclibc109 ./a.out_from_mips_asan
 Segmentation fault
 -sh-3.2# LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-uclibc109 ./a.out_from_mips_asan_from_109
 Segmentation fault
 
-LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-glibc ./a.out_from_mips_glibc_asan
+5. With/without "-fstack-protector", makes a.out in different size but both
+make a seg fault.
+
+6. forum suggests to use glibc since ASAN is heavily connected to glibc.
+
+install-4.8.2/bin/mips-linux-gcc sam.c
+
+7. LD_LIBRARY_PATH=/mnt/tmp/asn/mips-libs-from-glibc ./a.out_from_mips_glibc_asan
+-sh: ./a.out_from_mips_glibc_asan: No such file or directory
+
+This is because to run glibc binary on uclibc environment.
+
+8.
+install-4.8.2/bin/mips-linux-gcc sam.c -Wl,--dynamic-linker=/mnt/tmp/asn/mips-libs-from-glibc/ld.so.1
+
+-sh-3.2# ./a.out_from_mips_glib_samc_wdlink
+FATAL: kernel too old
+
+9. built tool with linux-2.6.33
+install-4.8.2-glibc-k2633/bin/mips-unknown-linux-gcc sam.c -Wl,--dynamic-linker=/mnt/tmp/asn/mips-libs-from-glibc/ld.so.1
+
+-sh-3.2# ./a.out_a.out_from_mips_glib_samc_wk2633
+FATAL: kernel too old
+
 
 <static>
 ./bin/mips-unknown-linux-uclibc-gcc -fsanitize=address ~/uaf.c -fstack-protector -lasan -L./mips-unknown-linux-uclibc/lib/
@@ -46589,7 +46745,7 @@ make install
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-uclibc-build-asan-
+*kt_linux_gcc_400* gcc-build-uclibc-build-asan-109
 
 BCM       uses uClibc 0.9.29
 BR        uses uClibc-ng-1.0.17.tar.xz
@@ -46647,6 +46803,9 @@ make CROSS_COMPILE=mips-unknown-linux-uclibc- UCLIBC_EXTRA_CFLAGS=-pipe PREFIX=$
 cd gcc-4.8.2-build-uclibc109
 make -j5
 make install
+
+note:
+failes withe the same seg fault issue.
 
 
 ={============================================================================
@@ -47331,7 +47490,7 @@ lrwxrwxrwx 1 kyoupark ccusers       18 Dec  2 10:17 libc.so.1 -> libuClibc-1.0.9
 
 
 ={============================================================================
-*kt_linux_core_400* lib-dl ld-library-path
+*kt_linux_core_400* lib-ld ld-library-path
 
 When an executable starts, the `dynamic-linker` loads 'all' of the shared
 libraries in the program's dynamic dependency list. Sometimes, however, it can
@@ -47355,13 +47514,19 @@ lrwxrwxrwx 1 root root 25 Oct 17 00:50 /lib/ld-linux.so.2
 # ls -al /lib/ld-linux.so.2 
 24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
 
-<target>
+<target-uclibc>
 # ls -al /lib/ld-uClibc*
 root     root         31760 Jul 31 11:10 /lib/ld-uClibc-0.9.32.1.so*
-root     root            21 Aug  5 08:50 /lib/ld-uClibc.so 
-  -> ld-uClibc-0.9.32.1.so*
-root     root            21 Aug  5 08:50 /lib/ld-uClibc.so.0 
-  -> ld-uClibc-0.9.32.1.so*
+root     root            21 Aug  5 08:50 /lib/ld-uClibc.so -> ld-uClibc-0.9.32.1.so*
+root     root            21 Aug  5 08:50 /lib/ld-uClibc.so.0 -> ld-uClibc-0.9.32.1.so*
+
+-rwxr-xr-x 1 kyoupark ccusers 39250 Dec 13 12:52 ld-uClibc-1.0.9.so
+lrwxrwxrwx 1 kyoupark ccusers    14 Dec 13 12:52 ld-uClibc.so.0 -> ld-uClibc.so.1
+lrwxrwxrwx 1 kyoupark ccusers    18 Dec 13 12:52 ld-uClibc.so.1 -> ld-uClibc-1.0.9.so
+
+<target-glibc>
+-rwxr-xr-x 1 kyoupark ccusers 746756 Dec 15 08:16 ld-2.20.so
+lrwxrwxrwx 1 kyoupark ccusers     10 Dec 15 08:16 ld.so.1 -> ld-2.20.so
 
 note:
 Every program-including those that use shared libraries-goes through a
@@ -47588,6 +47753,135 @@ note: The above is convention but not mandatory so can have followings:
 
 17 Dec 29 13:08 liblog4c.so -> liblog4c.so.3.1.0*
 17 Dec 29 13:08 liblog4c.so.3 -> liblog4c.so.3.1.0*
+
+
+={============================================================================
+*kt_linux_core_412* lib-ld.conf lib-ld.cache
+
+/etc/ld.so.cache
+
+/etc/ld.so.cache is required to run D-BUS daemon as non-root. This is due to
+the fact that LD_LIBRARY_PATH is ignored when it calls setuid
+yv-daemon-sandbox (this is intended behaviour). The dynamic linker does not
+resolve shared object dependencies properly in this situation. Using RPATH
+could help with that but it is generally not recommended and it is broken in
+uClibc.
+
+In order to create ld.so.cache you may create /etc/ld.so.conf with the
+following content:
+
+/opt/zinc/oss/lib
+/opt/zinc/lib
+/usr/local/lib
+/opt/stagecraft-2.0/bin
+
+and run ldconfig. You can get ldconfig as part of uClibc build or download
+MIPSEL rootfs from the uClibc site and extract it from there. Note that you
+should generate /etc/ld.so.cache with every build as the list of the shared
+libraries may differ.
+
+
+={============================================================================
+*kt_linux_core_402* lib-search and rpath
+
+LD_LIBRARY_PATH is broken and should 'not' be used if at all possible since
+LD_LIBRARY_PATH is great for quick tests and for systems on which you don't have
+admin privileges. However, as a downside, exporting the LD_LIBRARY_PATH variable
+means it may cause problems with other programs if you don't reset it to its
+previous state when you're done.
+
+
+The dynamic linker searches for the shared library using the following rules:
+
+1. If the executable has any directories listed in its DT_RPATH run-time library
+path list (rpath) and the executable does not contain a DT_RUNPATH list, then
+these directories are searched (in the order that they were supplied when
+    linking the program).
+
+2. If the LD_LIBRARY_PATH environment variable is defined, then each of the
+colon-separated directories listed in its value is searched in turn. 
+
+<security>
+If the executable is a set-user-ID or set-group-ID program, then LD_LIBRARY_PATH
+is ignored. This is a security measure to prevent users from tricking the
+dynamic linker into loading a private version of a library with the same name as
+a library required by the executable.
+
+3. If the executable has any directories listed in its DT_RUNPATH run-time
+library path list, then these directories are searched (in the order that they
+    were supplied when linking the program).
+
+4. The file `/etc/ld.so.cache` is checked to see if it contains an entry for the
+library.
+
+5. The directories /lib and /usr/lib are searched (in that order).
+
+<rpath>
+There is a third way: during the static editing phase, we can insert into the
+executable a list of directories that should be searched at run time for shared
+libraries. This is useful if we have libraries that reside in fixed locations
+that are not among the standard locations searched by the dynamic linker. To do
+this, we employ the -rpath linker option when creating an executable:
+
+$ gcc -g -Wall -Wl,-rpath,/home/mtk/pdir -o prog prog.c libdemo.so
+
+note: From ld linker docs:
+
+2. Any directories specified by -rpath options. The difference between -rpath
+and -rpath-link is that directories specified by -rpath options are included in
+the executable and used at runtime, whereas the `-rpath-link` option is only
+effective at link time. Searching -rpath in this way is only supported by native
+linkers and cross linkers which have been configured with the --with-sysroot
+option.
+
+# readelf
+ 0x0000000f (RPATH)                      Library rpath: [/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib]
+
+
+{runtime-resolution}
+Suppose that a global symbol (i.e., a 'function' or variable) is defined in
+multiple locations, such as in an executable and in a shared library, or in
+'multiple' shared libraries. How is a reference to that symbol resolved?
+
+         prog                                   libfoo.so
+-----------------------------          -----------------------------
+xyz() {                                xyz() {               
+  printf("main-xyz\n");                  printf("foo-xyz\n");
+}                                      }
+                                       
+main() {                               func() {
+  func();    -->                         xyz();                
+}                                      }       
+
+$ gcc -g -c -fPIC -Wall -c foo.c
+$ gcc -g -shared -o libfoo.so foo.o
+$ gcc -g -o prog prog.c libfoo.so
+$ LD_LIBRARY_PATH=. ./prog
+main-xyz
+
+See that the definition of xyz() in the main program overrides the one in the
+shared library.
+
+The following semantics apply:
+
+o A definition of a global symbol in the 'main' program 'overrides' a definition
+in a library.
+
+<resolve-order>
+o If a global symbol is defined in 'multiple' libraries, then a reference to
+that symbol is bound to the 'first' definition found by scanning libraries in
+the left-to-right 'order' in which they were listed on the static 'link' command
+line.
+
+<problem>
+Although these semantics make the transition from static to shared libraries
+relatively straightforward, they can cause some problems. The most significant
+problem is that these semantics conflict with the model of a shared library as
+implementing a 'self'-contained subsystem. 
+
+By default, a shared library can 'not' guarantee that a reference to one of its
+own global symbols will actually be bound to the library's definition of that
+symbol.
 
 
 ={============================================================================
@@ -47838,108 +48132,6 @@ The fix to this kind of problem is usually simple: just find which library
 provides the symbols and which one is requiring them (the error message from the
     linker should contain the name of the latter). Then make sure that when the
 library is linked from the source files it's also linked to the first. 
-
-
-={============================================================================
-*kt_linux_core_402* shared-lib-search and resolve
-
-{search-rules}
-note: >
-LD_LIBRARY_PATH is broken and should 'not' be used if at all possible since
-LD_LIBRARY_PATH is great for quick tests and for systems on which you don't have
-admin privileges. However, as a downside, exporting the LD_LIBRARY_PATH variable
-means it may cause problems with other programs if you don't reset it to its
-previous state when you're done.
-
-
-The dynamic linker searches for the shared library using the following rules:
-
-1. If the executable has any directories listed in its DT_RPATH run-time library
-path list (rpath) and the executable does not contain a DT_RUNPATH list, then
-these directories are searched (in the order that they were supplied when
-    linking the program).
-
-2. If the LD_LIBRARY_PATH environment variable is defined, then each of the
-colon-separated directories listed in its value is searched in turn. 
-
-<security>
-If the executable is a set-user-ID or set-group-ID program, then LD_LIBRARY_PATH
-is ignored. This is a security measure to prevent users from tricking the
-dynamic linker into loading a private version of a library with the same name as
-a library required by the executable.
-
-3. If the executable has any directories listed in its DT_RUNPATH run-time
-library path list, then these directories are searched (in the order that they
-    were supplied when linking the program).
-
-4. The file /etc/ld.so.cache is checked to see if it contains an entry for the
-library.
-
-5. The directories /lib and /usr/lib are searched (in that order).
-
-<rpath>
-There is a third way: during the static editing phase, we can insert into the
-executable a list of directories that should be searched at run time for shared
-libraries. This is useful if we have libraries that reside in fixed locations
-that are not among the standard locations searched by the dynamic linker. To do
-this, we employ the -rpath linker option when creating an executable:
-
-$ gcc -g -Wall -Wl,-rpath,/home/mtk/pdir -o prog prog.c libdemo.so
-
-note: From ld linker docs:
-
-2. Any directories specified by -rpath options. The difference between -rpath
-and -rpath-link is that directories specified by -rpath options are included in
-the executable and used at runtime, whereas the -rpath-link option is only
-effective at link time. Searching -rpath in this way is only supported by native
-linkers and cross linkers which have been configured with the --with-sysroot
-option.
-
-
-{runtime-resolution}
-Suppose that a global symbol (i.e., a 'function' or variable) is defined in
-multiple locations, such as in an executable and in a shared library, or in
-'multiple' shared libraries. How is a reference to that symbol resolved?
-
-         prog                                   libfoo.so
------------------------------          -----------------------------
-xyz() {                                xyz() {               
-  printf("main-xyz\n");                  printf("foo-xyz\n");
-}                                      }
-                                       
-main() {                               func() {
-  func();    -->                         xyz();                
-}                                      }       
-
-$ gcc -g -c -fPIC -Wall -c foo.c
-$ gcc -g -shared -o libfoo.so foo.o
-$ gcc -g -o prog prog.c libfoo.so
-$ LD_LIBRARY_PATH=. ./prog
-main-xyz
-
-See that the definition of xyz() in the main program overrides the one in the
-shared library.
-
-The following semantics apply:
-
-o A definition of a global symbol in the 'main' program 'overrides' a definition
-in a library.
-
-<resolve-order>
-o If a global symbol is defined in 'multiple' libraries, then a reference to
-that symbol is bound to the 'first' definition found by scanning libraries in
-the left-to-right 'order' in which they were listed on the static 'link' command
-line.
-
-<problem>
-Although these semantics make the transition from static to shared libraries
-relatively straightforward, they can cause some problems. The most significant
-problem is that these semantics conflict with the model of a shared library as
-implementing a 'self'-contained subsystem. 
-
-By default, a shared library can 'not' guarantee that a reference to one of its
-own global symbols will actually be bound to the library's definition of that
-symbol.
 
 
 ={============================================================================
@@ -49006,31 +49198,6 @@ As seen previously, a lot of time is spent in Python. It also seems to be a
 reasonable idea to remove the python scripts from the launch chain as they did
 not have a real justification.
 
-
-={============================================================================
-*kt_linux_core_412* lib-ld.conf lib-ld.cache
-
-/etc/ld.so.cache
-
-/etc/ld.so.cache is required to run D-BUS daemon as non-root. This is due to
-the fact that LD_LIBRARY_PATH is ignored when it calls setuid
-yv-daemon-sandbox (this is intended behaviour). The dynamic linker does not
-resolve shared object dependencies properly in this situation. Using RPATH
-could help with that but it is generally not recommended and it is broken in
-uClibc.
-
-In order to create ld.so.cache you may create /etc/ld.so.conf with the
-following content:
-
-/opt/zinc/oss/lib
-/opt/zinc/lib
-/usr/local/lib
-/opt/stagecraft-2.0/bin
-
-and run ldconfig. You can get ldconfig as part of uClibc build or download
-MIPSEL rootfs from the uClibc site and extract it from there. Note that you
-should generate /etc/ld.so.cache with every build as the list of the shared
-libraries may differ.
 
 
 ={============================================================================
