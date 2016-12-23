@@ -16127,18 +16127,65 @@ GNU autotools also use this
 ={============================================================================
 *kt_linux_tool_140* make-gmake-write-rule
 
+4.2 Types of Prerequisites
+
+you have a situation where you want to impose a specific ordering on the rules
+to be invoked without forcing the target to be updated if one of those rules
+is executed.
+
+Order-only prerequisites can be specified by placing a pipe symbol (|) in the
+prerequisites list: any prerequisites to the left of the pipe symbol are
+normal; any prerequisites to the right are order-only:
+
+targets : normal-prerequisites | order-only-prerequisites
+
+<ex>
+Consider an example where your targets are to be placed in a separate
+directory, and that directory might not exist before make is run. In this
+situation, you want the directory to be created before any targets are placed
+into it but, because the timestamps on directories change whenever a file is
+added, removed, or renamed, we certainly don’t want to rebuild all the targets
+whenever the directory’s timestamp changes. One way to manage this is with
+order-only prerequisites: make the directory an order-only prerequisite on all
+the targets:
+
+OBJDIR := objdir
+OBJS := $(addprefix $(OBJDIR)/,foo.o bar.o baz.o)
+
+$(OBJDIR)/%.o : %.c
+  $(COMPILE.c) $(OUTPUT_OPTION) $<
+
+all: $(OBJS)
+
+$(OBJS): | $(OBJDIR)
+
+$(OBJDIR):
+  mkdir $(OBJDIR)
+
+Now the rule to create the objdir directory will be run, if needed, before any
+  ‘.o’ is built, but no ‘.o’ will be built because the objdir directory
+  timestamp changed.
+
+
 <wildcard>
 4.3 Using Wildcard Characters in File Names
 
-Wildcard expansion is performed by make automatically in targets and in
-prerequisites.  In recipes, the shell is responsible for wildcard expansion.
+Wildcard expansion is performed by make automatically in `targets` and in
+`prerequisites`. In recipes, the shell is responsible for wildcard expansion.
 In other contexts, wildcard expansion happens only if you request it
 explicitly with the `wildcard function`
+
+Wildcard expansion does not happen when you define a variable. Thus, if you
+write this: objects = *.o then the value of the variable objects is the actual
+string ‘*.o’. To set objects to the expansion, instead use:
+
+objects := $(wildcard *.o)
+
 
 4.3.3 The Function wildcard
 
 Wildcard expansion happens automatically in rules. But wildcard expansion does
-not normally take place when a variable is set, or inside the arguments of a
+not normally take place `when a variable is set`, or inside the arguments of a
 function. If you want to do wildcard expansion in such places, you need to use
 the wildcard function, like this:
 
@@ -16148,6 +16195,60 @@ This string, used anywhere in a makefile, is replaced by a space-separated
 list of names of `existing files` that match one of the given file name
 patterns. If no existing file name matches a pattern, then that pattern is
 omitted from the output of the wildcard function.
+
+Note that this is different from how unmatched wildcards behave in rules,
+where they are used verbatim rather than ignored as when the below ex.
+
+<ex>
+// ex from 4.3.2 Pitfalls of Using Wildcards
+
+An example of a naive way of using wildcard expansion, that does not do what
+you would intend. Suppose you would like to say that the executable file foo
+is made from all the object files in the directory, and you write this:
+
+objects = *.o
+
+foo : $(objects)
+  cc -o foo $(CFLAGS) $(objects)
+
+The value of objects is the actual string ‘*.o’. Wildcard expansion happens in
+the rule for foo, so that each existing ‘.o’ file becomes a prerequisite of
+foo and will be recompiled if necessary.
+
+But what if you delete all the ‘.o’ files?
+
+When a wildcard matches no files, it is left as it is, so then foo will depend
+on the oddly-named file *.o. Since no such file is likely to exist, make will
+give you an error saying it "cannot figure out how to make *.o." This is not
+what you want!
+
+note:
+If there are no .o file, no matches and is left as it is, string, so:
+
+foo : *.o 
+  cc -o foo $(CFLAGS) *.o 
+
+One use of the wildcard function is to get a list of all the C source files in
+a directory, like this:
+
+$(wildcard *.c)
+
+We can change the list of C source files into a list of object files by
+replacing the ‘.c’ suffix with ‘.o’ in the result, like this:
+
+$(patsubst %.c,%.o,$(wildcard *.c))
+
+Thus, a makefile to compile all C source files in the directory and then link
+them together could be written as follows:
+
+objects := $(patsubst %.c,%.o,$(wildcard *.c))
+
+foo : $(objects)
+  cc -o foo $(objects)
+
+This takes advantage of the implicit rule for compiling C programs, so there
+is no need to write explicit rules for compiling the files.
+
 
 <ex>
 # use to check if a file exist
