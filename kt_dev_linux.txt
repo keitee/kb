@@ -183,16 +183,19 @@
 *kt_linux_tool_140* make-kbuild
 *kt_linux_tool_140* make-gmake-sample
 *kt_linux_tool_140* make-gmake-rule
-*kt_linux_tool_140* make-gmake-write
-*kt_linux_tool_140* make-gmake-two-phase
-*kt_linux_tool_140* make-gmake-variable
-*kt_linux_tool_140* make-gmake-variable-pattern
-*kt_linux_tool_140* make-gmake-write-rule
-*kt_linux_tool_140* make-gmake-write-vpath
-*kt_linux_tool_140* make-gmake-write-phony
+*kt_linux_tool_140* make-gmake-rule-implicit
+*kt_linux_tool_140* make-gmake-rule-automatic-variable
+*kt_linux_tool_140* make-gmake-include
+*kt_linux_tool_140* make-gmake-vpath
+*kt_linux_tool_140* make-gmake-phony
 *kt_linux_tool_140* make-gmake-builtin-target
 *kt_linux_tool_140* make-gmake-recipe gmake-just-print
 *kt_linux_tool_140* make-gmake-recipe-parallel
+*kt_linux_tool_140* make-gmake-variable-two-phase
+*kt_linux_tool_140* make-gmake-variable
+*kt_linux_tool_140* make-gmake-variable-pattern
+*kt_linux_tool_140* make-gmake-variable-empty-string
+*kt_linux_tool_140* make-gmake-conditional
 *kt_linux_tool_140* make-gmake-text-function
 
 *kt_linux_tool_150* make-autoconf
@@ -15892,237 +15895,6 @@ files.o : defs.h buffer.h command.h
 utils.o : defs.h
 
 
-={============================================================================
-*kt_linux_tool_140* make-gmake-write
-
-3.1 What Makefiles Contain
-
-`Comments within a recipe` are passed to the shell, just as with any other
-recipe text.  The shell decides how to interpret it: whether or not this is a
-comment is up to the shell.
-
-
-3.2 What Name to Give Your Makefile
-
-Normally you should call your makefile either makefile or Makefile. We
-recommend Makefile because it appears prominently near the beginning of a
-directory listing,
-
-
-3.3 Including Other Makefiles
-
-The directive is a line in the makefile that looks like this:
-
-include filenames...
-
-filenames can contain shell file name patterns.
-
-When make processes an include directive, it suspends reading of the
-containing makefile and reads from each listed file in turn. When that is
-finished, make resumes reading the makefile in which the directive appears.
-
-<use-cases>
-One occasion for using include directives is when several programs, handled by
-individual makefiles in various directories, need to use a common set of
-variable definitions (see Section 6.5 [Setting Variables], page 65) or pattern
-rules (see Section 10.5 [Defining and Redefining Pattern Rules], page 118).
-
-Another such occasion is when you want to generate prerequisites from source
-files automatically; the prerequisites can be put in a file that is included
-by the main makefile.  This practice is generally cleaner than that of somehow
-appending the prerequisites to the end of the main makefile as has been
-traditionally done with other versions of make. See Section 4.13 [Automatic
-Prerequisites], page 38.
-
-<search>
-If an included makefile cannot be found in any of these directories, a warning
-message is generated, but it is not an immediately fatal error; processing of
-the makefile containing the include continues.
-
-Only after it has tried to find a way to remake a makefile and failed, will
-make diagnose the missing makefile as a fatal error.
-
-If you want make to simply ignore a makefile which does not exist or cannot be
-remade, `with no error message`, use the -include directive instead of include,
-like this:
-
--include filenames...
-
-
-={============================================================================
-*kt_linux_tool_140* make-gmake-two-phase
-
-3.7 How make Reads a Makefile
-
-a read-in phase and a target-update phase
-
-GNU make does its work in `two distinct phases` During the first phase it
-reads all the makefiles, included makefiles, etc. and internalizes all the
-variables and their values, implicit and explicit rules, and constructs a
-dependency graph of all the targets and their prerequisites.  During the
-second phase, make uses these internal structures to determine what targets
-will need to be rebuilt and to invoke the rules necessary to do so.
-
-We say that expansion is `immediate` if it happens during the first phase: in
-this case make will expand any variables or functions in that section of a
-construct as the makefile is parsed. 
-
-We say that expansion is `deferred` if expansion is not performed immediately.
-Expansion of a deferred construct is not performed until either the construct
-appears later in an immediate context, or until the second phase.
-
-Variable Assignment
-
-immediate = deferred
-immediate ?= deferred
-immediate := immediate
-immediate ::= immediate
-immediate += deferred or immediate
-immediate != immediate
-
-For the `append operator`, ‘+=’, the right-hand side is considered immediate
-if the variable was previously set as a `simple variable` (‘:=’ or ‘::=’), and
-  deferred otherwise.
-
-For the shell assignment operator, ‘!=’, the right-hand side is evaluated
-immediately and handed to the shell. The result is stored in the variable
-named on `the left`, and that variable becomes a simple variable (and will
-    thus be re-evaluated on each reference).
-
-
-Rule Definition
-
-A rule is always expanded the same way, regardless of the form:
-
-immediate : immediate 
-  deferred
-
-
-={============================================================================
-*kt_linux_tool_140* make-gmake-variable
-
-6 How to Use Variables
-
-A `variable` is a name defined in a makefile to represent a string of text,
-called the variable's `value`. 
-  
-These values are substituted by explicit request into targets, prerequisites,
-recipes, and other parts of the makefile. 
-
-Variables and functions in all parts of a makefile `are expanded when read`,
-except for in recipes, the right-hand sides of variable definitions using ‘=’,
-and the bodies of variable definitions using the define directive.
-
-Variable names are `case-sensitive`.
-
-It is traditional to use upper case letters in variable names, but we
-recommend using lower case letters for variable names that serve internal
-purposes in the makefile, and reserving upper case for parameters that control
-implicit rules or for parameters that the user should override with command
-options.
-
-
-6.1 Basics of Variable References
-
-To substitute a variable's value, write a dollar sign followed by the name of
-the variable in parentheses or braces: either `$(foo)` or `${foo}` is a valid
-reference to the variable foo.
-
-This special significance of ‘$’ is why you must write ‘$$’ to have the effect
-of a single dollar sign in a file name or recipe.
-
-note:
-sh uese $foo or ${foo}
-
-Variable references can be used in any context: targets, prerequisites,
-         recipes, most directives, and new variable values.
-
-A dollar sign followed by a character other than a dollar sign,
-open-parenthesis or open-brace treats that single character as the variable
-  name. Thus, you could reference the variable x with `$x`. However, this
-  practice is strongly discouraged, except in the case of the automatic
-  variables
-
-
-6.2 The Two Flavors of Variables
-
-There are two ways that a variable in GNU make can have a value; we call them
-the two flavors of variables.
-
-
-
-6.10 Variables from the Environment
-
-Variables in make can come from the environment in which make is run. Every
-environment variable that make sees when it starts up is transformed into a
-make variable with the same name and value. However, an explicit assignment in
-the makefile, or `with a command argument`, overrides the environment.
-
-Thus, by setting the variable CFLAGS in your environment, you can cause all C
-compilations in most makefiles to use the compiler switches you prefer.
-
-When make runs a recipe, variables defined in the makefile are placed into the
-environment of each shell. This allows you to pass values to sub-make
-invocations
-
-By default, only variables that came from the environment or the command line
-are passed to recursive invocations.
-
-<ex>
-// from buildroot-2016.08.1 makefile
-
-ifneq ("$(origin O)", "command line")
-O := output
-CONFIG_DIR := $(TOPDIR)
-NEED_WRAPPER =
-else
-# other packages might also support Linux-style out of tree builds
-# with the O=<dir> syntax (E.G. BusyBox does). As make automatically
-# forwards command line variable definitions those packages get very
-# confused. Fix this by telling make to not do so
-MAKEOVERRIDES =
-# strangely enough O is still passed to submakes with MAKEOVERRIDES
-# (with make 3.81 atleast), the only thing that changes is the output
-# of the origin function (command line -> environment).
-# Unfortunately some packages don't look at origin (E.G. uClibc 0.9.31+)
-# To really make O go away, we have to override it.
-override O := $(O)
-CONFIG_DIR := $(O)
-# we need to pass O= everywhere we call back into the toplevel makefile
-EXTRAMAKEARGS = O=$(O)
-NEED_WRAPPER = y
-endif
-
-
-={============================================================================
-*kt_linux_tool_140* make-gmake-variable-pattern
-
-<variable-dereferencing>
-One big "Gotcha" with variable dereferencing is that if commands `implicitly`
-dereference values. This has some unexpected results. For example:
-
-if("${SOME_VAR}" STREQUAL "MSVC")
-
-In this code sample MSVC will be implicitly dereferenced, which will result in
-the if command comparing the value of the dereferenced variables SOME_VAR
-and MSVC. A common workaround to this solution is to prepend strings being
-compared with an x.
-
-if("x${SOME_VAR}" STREQUAL "xMSVC")
-
-This works because while MSVC is a defined variable, xMSVC is not. This
-  pattern is uncommon, but it does occur in LLVM’s CMake scripts.
-
-note:
-To prevent name colision by making it string.
-
-note:
-GNU autotools also use this
-
-
-={============================================================================
-*kt_linux_tool_140* make-gmake-write-rule
-
 4.2 Types of Prerequisites
 
 you have a situation where you want to impose a specific ordering on the rules
@@ -16255,7 +16027,371 @@ is no need to write explicit rules for compiling the files.
 
 
 ={============================================================================
-*kt_linux_tool_140* make-gmake-write-vpath
+*kt_linux_tool_140* make-gmake-rule-implicit
+
+10 Using Implicit Rules
+
+"Implicit rules" tell 'make' how to use customary techniques so that you do
+not have to specify them in detail when you want to use them. For example,
+there is an implicit rule for C compilation.  
+
+File names determine which implicit rules are run.  For example, C compilation
+typically takes a '.c' file and makes a '.o' file.  So 'make' applies the
+implicit rule for C compilation when it sees this combination of file name
+endings.
+
+The built-in implicit rules use several variables in their recipes so that, by
+changing the values of the variables, you can change the way the implicit rule
+works. For example, the variable 'CFLAGS' controls the flags given to the C
+compiler by the implicit rule for C compilation.
+
+
+10.1 Using Implicit Rules
+
+To allow 'make' to find a customary method for updating a target file, all you
+have to do is refrain from specifying recipes yourself. Either write a rule
+with no recipe, or don't write a rule at all.  
+
+Then 'make' will figure out which implicit rule to use based on which kind of
+source file exists or can be made.
+
+For example, suppose the makefile looks like this:
+
+     foo : foo.o bar.o
+             cc -o foo foo.o bar.o $(CFLAGS) $(LDFLAGS)
+
+Because you mention 'foo.o' but do not give a rule for it, 'make' will
+automatically look for an implicit rule that tells how to update it.
+
+If an implicit rule is found, it can supply both a recipe and one or more
+prerequisites (the source files). You would want to write a rule for 'foo.o'
+with no recipe if you need to specify additional prerequisites, such as header
+files, that the implicit rule cannot supply.
+
+note: really? different from the previous example?
+
+<which-rule-to-apply>
+Each implicit rule has a target pattern and prerequisite patterns. There may
+be many implicit rules with the same target pattern. For example, numerous
+rules make '.o' files: one, from a '.c' file with the C compiler; another,
+from a '.p' file with the Pascal compiler; and so on. 
+
+The rule that actually applies is the one whose prerequisites exist or can be
+made.  So, if you have a file 'foo.c', 'make' will run the C compiler;
+otherwise, if you have a file 'foo.p', 'make' will run the Pascal compiler;
+and so on.
+
+Note that `explicit prerequisites` do not influence implicit rule search. For
+example, consider this explicit rule:
+
+     foo.o: foo.p
+
+The prerequisite on 'foo.p' does not necessarily mean that 'make' will remake
+'foo.o' according to the implicit rule to make an object file, a '.o' file,
+  from a Pascal source file, a '.p' file. 
+
+For example, `if 'foo.c' also exists`, the implicit rule to make an object
+file from a C source file is used instead, because it `appears before` the
+Pascal rule in the list of predefined implicit rules
+
+
+10.2 Catalogue of Built-In Rules
+
+Here is a catalogue of predefined implicit rules which are always available
+unless the makefile explicitly overrides or cancels them.
+
+This manual only documents the default rules available on POSIX-based
+operating systems. Other operating systems may have different sets of default
+rules. To see the full list of default rules and variables available in your
+version of GNU 'make', run 'make -p' in a directory with no makefile.
+
+Many of the predefined implicit rules are implemented in 'make' as suffix
+rules, so which ones will be defined depends on the "suffix list".  
+
+note: simplified
+
+The default suffix list is: '.out', '.a', '.ln', '.o', '.c', '.cc', '.C',
+'.cpp', '.s', '.S', '.h', '.sh'.  
+
+
+Compiling C programs
+     'N.o' is made automatically from 'N.c' with a recipe of the form 
+     '$(CC) $(CPPFLAGS) $(CFLAGS) -c'.
+
+Compiling C++ programs
+     'N.o' is made automatically from 'N.cc', 'N.cpp', or 'N.C' with a recipe
+     of the form 
+     '$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c'.  
+
+     We encourage you to use the suffix '.cc' for C++ source files instead of
+     '.C'.
+
+
+10.3 Variables Used by Implicit Rules
+
+You can alter the values of these variables in the makefile, with arguments to
+'make', or in the environment to alter how the implicit rules work without
+redefining the rules themselves.
+
+By redefining 'CFLAGS' to be '-g', you could pass the '-g' option to each
+compilation.
+
+The variables used in implicit rules fall into two classes: those that are
+names of programs (like 'CC') and those that contain arguments for the
+programs (like 'CFLAGS'). (The "name of a program" may also contain some
+    command arguments, but it must start with an actual executable program
+    name.) 
+
+If a variable value contains more than one argument, separate them with
+spaces.
+
+The following tables describe of some of the more commonly-used predefined
+variables. This list is `not exhaustive`, and the default values shown here
+may not be what 'make' selects for your environment. To see the complete list
+of predefined variables for your instance of GNU 'make' you can run 'make -p'
+in a directory with no makefiles.
+
+
+Here is a table of some of the more common variables used as names of programs
+in built-in rules:
+
+'AR'
+     Archive-maintaining program; default 'ar'.
+
+'AS'
+     Program for compiling assembly files; default 'as'.
+
+'CC'
+     Program for compiling C programs; default 'cc'.
+
+'CXX'
+     Program for compiling C++ programs; default 'g++'.
+
+'CPP'
+     Program for running the C preprocessor, with results to standard
+     output; default '$(CC) -E'.
+
+'RM'
+     Command to remove a file; default 'rm -f'.
+
+Here is a table of variables whose values are additional arguments for the
+programs above. The default values for all of these is the empty string,
+unless otherwise noted.
+
+'CFLAGS'
+     Extra flags to give to the C compiler.
+
+'CXXFLAGS'
+     Extra flags to give to the C++ compiler.
+
+'CPPFLAGS'
+     Extra flags to give to the C preprocessor and programs that use it
+     (the C and Fortran compilers).
+
+'LDFLAGS'
+     Extra flags to give to compilers when they are supposed to invoke
+     the linker, 'ld', such as '-L'.  Libraries ('-lfoo') should be
+     added to the 'LDLIBS' variable instead.
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-rule-automatic-variable
+
+10.5 Defining and Redefining Pattern Rules
+
+You define an implicit rule by writing a "pattern rule". A pattern rule looks
+like an ordinary rule, except that its target contains the character '%'
+(exactly one of them). The target `is considered a pattern` for matching file
+names; the '%' can match any nonempty substring, while other characters match
+only themselves. The prerequisites likewise use '%' to show how their names
+relate to the target name.
+
+Thus, a pattern rule '%.o : %.c' says how to make any file 'STEM.o' from
+another file 'STEM.c'.
+
+Note that expansion using '%' in pattern rules occurs *after* any variable or
+function expansions, which take place when the makefile is read.
+
+
+10.5.1 Introduction to Pattern Rules
+
+<gmake-stem>
+For example, '%.c' as a pattern matches any file name that ends in '.c'.
+'s.%.c' as a pattern matches any file name that starts with 's.', ends in '.c'
+and is at least five characters long. (There must be at least one character to
+    match the '%'.) The substring that the '%' matches is called the `"stem"`.
+
+Thus, a rule of the form
+
+     %.o : %.c ; RECIPE...
+
+specifies how to make a file 'N.o', with another file 'N.c' as its
+prerequisite, provided that 'N.c' `exists or can be made`
+
+
+10.5.2 Pattern Rule Examples
+
+Here are some examples of pattern rules actually predefined in 'make'. First,
+the rule that compiles '.c' files into '.o' files:
+
+     %.o : %.c
+             $(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+
+defines a rule that can make any file 'X.o' from 'X.c'. The recipe uses the
+automatic variables '$@' and '$<' to substitute the names of the target file
+and the source file in each case where the rule applies.
+
+
+10.5.3 Automatic Variables
+
+<why-automatic-variable>
+Suppose you are writing a pattern rule to compile a '.c' file into a '.o'
+file: how do you write the 'cc' command so that it operates on the right
+`source file name`?  You cannot write the name in the recipe, because the name
+is different each time the implicit rule is applied.
+
+What you do is use a special feature of 'make', the "automatic variables".
+These variables have values computed afresh for each rule that is executed,
+based on the target and prerequisites of the rule. In this example, you would
+  use '$@' for the object file name and '$<' for the source file name.
+
+It's very important that you recognize the limited scope in which automatic
+variable values are available: they only have values within the recipe.
+
+
+Here is a table of automatic variables:
+
+'$@'
+     The file name of the target of the rule. If the target is an archive
+     member, then '$@' is the name of the archive file. In a pattern rule that
+     has multiple targets, '$@' is the name of whichever target caused the
+     rule's recipe to be run.
+
+// '$%'
+//      The target member name, when the target is an archive member.  For
+//      example, if the target is 'foo.a(bar.o)' then '$%' is 'bar.o' and '$@' is
+//      'foo.a'. '$%' is empty when the target is not an archive member.
+
+'$<'
+     The name of the first prerequisite. If the target got its recipe from an
+     implicit rule, this will be the first prerequisite added by the implicit
+     rule.
+
+'$?'
+     The names of all the prerequisites `that are newer than` the target, with
+     spaces between them.  
+
+'$^'
+     The names of all the prerequisites, with spaces between them.  A target
+     has only one prerequisite on each other file it depends on, no matter how
+     many times each file is listed as a prerequisite.  So if you list a
+     prerequisite more than once for a target, the value of '$^' contains just
+     one copy of the name.  This list does *not* contain any of the order-only
+     prerequisites; for those see the '$|' variable, below.
+
+'$+'
+     This is like '$^', but prerequisites listed more than once are duplicated
+     in the order they were listed in the makefile. This is primarily useful
+     for use in linking commands where it is meaningful to repeat library file
+       names in a particular order.
+
+'$|'
+     The names of all the order-only prerequisites, with spaces between
+     them.
+
+'$*'
+     The stem with which an implicit rule matches. If the target is
+     'dir/a.foo.b' and the target pattern is 'a.%.b' then the stem is
+     'dir/foo'. The stem is useful for constructing names of related files.
+
+four have values that are single file names, and three have values that are
+lists of file names. These seven have `variants` that get just the file's
+directory name or just the file name within the directory.  The variant
+variables' names are formed by appending 'D' or 'F', respectively.  These
+variants are semi-obsolete in GNU 'make' since the functions 'dir' and
+'notdir' can be used to get a similar effect.
+
+
+Here is a table of the variants:
+
+'$(@D)'
+     The directory part of the file name of the target, with the trailing
+     slash removed. If the value of '$@' is 'dir/foo.o' then '$(@D)' is 'dir'.
+     This value is '.' if '$@' does not contain a slash.
+
+'$(@F)'
+     The file-within-directory part of the file name of the target. If the
+     value of '$@' is 'dir/foo.o' then '$(@F)' is 'foo.o'. '$(@F)' is
+     equivalent to '$(notdir $@)'.
+
+
+10.7 Old-Fashioned Suffix Rules
+
+"Suffix rules" are the old-fashioned way of defining implicit rules for
+'make'. Suffix rules `are obsolete` because pattern rules are more general and
+clearer. They are supported in GNU 'make' for compatibility with old
+makefiles. They come in two kinds: "double-suffix" and "single-suffix".
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-include
+
+3.1 What Makefiles Contain
+
+`Comments within a recipe` are passed to the shell, just as with any other
+recipe text.  The shell decides how to interpret it: whether or not this is a
+comment is up to the shell.
+
+
+3.2 What Name to Give Your Makefile
+
+Normally you should call your makefile either makefile or Makefile. We
+recommend Makefile because it appears prominently near the beginning of a
+directory listing,
+
+
+3.3 Including Other Makefiles
+
+The directive is a line in the makefile that looks like this:
+
+include filenames...
+
+filenames can contain shell file name patterns.
+
+When make processes an include directive, it suspends reading of the
+containing makefile and reads from each listed file in turn. When that is
+finished, make resumes reading the makefile in which the directive appears.
+
+<use-cases>
+One occasion for using include directives is when several programs, handled by
+individual makefiles in various directories, need to use a common set of
+variable definitions (see Section 6.5 [Setting Variables], page 65) or pattern
+rules (see Section 10.5 [Defining and Redefining Pattern Rules], page 118).
+
+Another such occasion is when you want to generate prerequisites from source
+files automatically; the prerequisites can be put in a file that is included
+by the main makefile.  This practice is generally cleaner than that of somehow
+appending the prerequisites to the end of the main makefile as has been
+traditionally done with other versions of make. See Section 4.13 [Automatic
+Prerequisites], page 38.
+
+<search>
+If an included makefile cannot be found in any of these directories, a warning
+message is generated, but it is not an immediately fatal error; processing of
+the makefile containing the include continues.
+
+Only after it has tried to find a way to remake a makefile and failed, will
+make diagnose the missing makefile as a fatal error.
+
+If you want make to simply ignore a makefile which does not exist or cannot be
+remade, `with no error message`, use the -include directive instead of include,
+like this:
+
+-include filenames...
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-vpath
 
 4.4 Searching Directories for Prerequisites
 
@@ -16272,7 +16408,7 @@ VPATH as a search list for both prerequisites and targets of rules.
 
 
 ={============================================================================
-*kt_linux_tool_140* make-gmake-write-phony
+*kt_linux_tool_140* make-gmake-phony
 
 Targets that do not refer to files but are just actions are `phony targets`
 
@@ -16787,8 +16923,8 @@ Likewise variables defined on the command line are passed to the sub-make
 through MAKEFLAGS. Words in the value of MAKEFLAGS that contain ‘=’, make
 treats as variable definitions just as if they appeared on the command line.
 
-The options ‘-C’, ‘-f’, ‘-o’, and ‘-W’ are not put into MAKEFLAGS; these options are not
-passed down.
+The options ‘-C’, ‘-f’, ‘-o’, and ‘-W’ are not put into MAKEFLAGS; these
+options are not passed down.
 
 If you `do not want to pass` the other flags down, you must change the value of
 MAKEFLAGS, like this:
@@ -16809,6 +16945,544 @@ purpose of makefiles and of make itself. For instance, the ‘-t’, ‘-n’, a
 ‘-q’ options, if put in one of these variables, could have disastrous
 consequences and would certainly have at least surprising and probably
 annoying effects.
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-variable-two-phase
+
+3.7 How make Reads a Makefile
+
+a read-in phase and a target-update phase
+
+GNU make does its work in `two distinct phases` During the first phase it
+reads all the makefiles, included makefiles, etc. and internalizes all the
+variables and their values, implicit and explicit rules, and constructs a
+dependency graph of all the targets and their prerequisites.  During the
+second phase, make uses these internal structures to determine what targets
+will need to be rebuilt and to invoke the rules necessary to do so.
+
+We say that expansion is `immediate` if it happens during the first phase: in
+this case make will expand any variables or functions in that section of a
+construct as the makefile is parsed. 
+
+We say that expansion is `deferred` if expansion is not performed immediately.
+Expansion of a deferred construct is not performed until either the construct
+appears later in an immediate context, or until the second phase.
+
+Variable Assignment
+
+immediate = deferred
+immediate ?= deferred
+immediate := immediate
+immediate ::= immediate
+immediate += deferred or immediate
+immediate != immediate
+
+For the `append operator`, ‘+=’, the right-hand side is considered immediate
+if the variable was previously set as a `simple variable` (‘:=’ or ‘::=’), and
+  deferred otherwise.
+
+For the shell assignment operator, ‘!=’, the right-hand side is evaluated
+immediately and handed to the shell. The result is stored in the variable
+named on `the left`, and that variable becomes a simple variable (and will
+    thus be re-evaluated on each reference).
+
+
+Rule Definition
+
+A rule is always expanded the same way, regardless of the form:
+
+immediate : immediate 
+  deferred
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-variable
+
+6 How to Use Variables
+
+A `variable` is a name defined in a makefile to represent a string of text,
+called the variable's `value`. 
+  
+These values are substituted by explicit request into targets, prerequisites,
+recipes, and other parts of the makefile. 
+
+Variables and functions in all parts of a makefile `are expanded when read`,
+except for in recipes, the right-hand sides of variable definitions using ‘=’,
+and the bodies of variable definitions using the define directive.
+
+Variable names are `case-sensitive`.
+
+It is traditional to use upper case letters in variable names, but we
+recommend using lower case letters for variable names that serve internal
+purposes in the makefile, and reserving upper case for parameters that control
+implicit rules or for parameters that the user should override with command
+options.
+
+
+6.1 Basics of Variable References
+
+To substitute a variable's value, write a dollar sign followed by the name of
+the variable in parentheses or braces: either `$(foo)` or `${foo}` is a valid
+reference to the variable foo.
+
+This special significance of ‘$’ is why you must write ‘$$’ to have the effect
+of a single dollar sign in a file name or recipe.
+
+note:
+sh uese $foo or ${foo}
+
+Variable references can be used in any context: targets, prerequisites,
+         recipes, most directives, and new variable values.
+
+A dollar sign followed by a character other than a dollar sign,
+open-parenthesis or open-brace treats that single character as the variable
+  name. Thus, you could reference the variable x with `$x`. However, this
+  practice is strongly discouraged, except in the case of the automatic
+  variables
+
+
+6.2 The Two Flavors of Variables
+
+There are two ways that a variable in GNU make can have a value; we call them
+the two flavors of variables.
+
+<recursively-expanded-variable>
+The first flavor of variable is a `recursively expanded` variable. Variables
+of this sort are defined by lines using '=' or by the 'define' directive.  
+
+This flavor of variable is the only sort supported by most other
+versions of 'make'.  It has its advantages and its disadvantages.
+
+An advantage:
+
+     CFLAGS = $(include_dirs) -O
+     include_dirs = -Ifoo -Ibar
+
+will do what was intended: when 'CFLAGS' is expanded in a recipe, it will
+expand to '-Ifoo -Ibar -O'.
+
+A major disadvantage:
+
+cannot append something on the end of a variable, as in
+
+     CFLAGS = $(CFLAGS) -O
+
+because it will cause an infinite loop in the variable expansion. Actually
+'make' detects the infinite loop and reports an error.
+
+Another disadvantage is that any functions referenced in the definition will
+be executed every time the variable is expanded. This makes 'make' run slower;
+worse, it causes the 'wildcard' and 'shell' functions to give unpredictable
+  results because you cannot easily control when they are called, or even how
+  many times.
+
+
+<simply-expanded-variable>
+To avoid all the problems and inconveniences of recursively expanded
+variables, there is another flavor: simply expanded variables.
+
+"Simply expanded variables" are defined by lines using ':=' or '::='. Both
+forms are equivalent in GNU 'make'
+
+The value of a simply expanded variable is scanned once and for all, expanding
+any references to other variables and functions, `when the variable is defined`  
+it contains their values _as of the time this variable was defined_.
+
+     x := foo
+     y := $(x) bar
+     x := later
+
+is equivalent to
+
+     y := foo bar
+     x := later
+
+Simply expanded variables generally make complicated makefile programming more
+predictable because they work like variables in most programming languages.
+
+
+<trailing-space>
+
+     nullstring :=
+     space := $(nullstring) # end of the line
+
+Here the value of the variable 'space' is precisely one space. The comment '#
+end of the line' is included here just for clarity. Since trailing space
+characters `are not stripped` from variable values, just a space at the end of
+the line would have the same effect (but be rather hard to read). If you put
+whitespace at the end of a variable value, it is a good idea to put a comment
+like that at the end of the line to make your intent clear. 
+
+Conversely, if you do not want any whitespace characters at the end of your
+variable value, you must remember `not to put a random comment` on the end of
+the line after some whitespace, such as this:
+
+     dir := /foo/bar    # directory to put the frobs in
+
+Here the value of the variable 'dir' is '/foo/bar    ' (with four trailing
+    spaces), which was probably not the intention. 
+
+
+<conditional-assignment>
+There is another assignment operator for variables, '?='. This is called a
+conditional variable assignment operator, because it only has an effect if the
+variable `is not yet defined` This statement:
+
+     FOO ?= bar
+
+is exactly equivalent to this:
+
+     ifeq ($(origin FOO), undefined)
+       FOO = bar
+     endif
+
+Note that a variable set to an empty value is still defined, so '?=' will not
+set that variable.
+
+
+6.3.1 Substitution References
+
+A "substitution reference" substitutes the value of a variable with
+alterations that you specify.  It has the form '$(VAR:A=B)' (or '${VAR:A=B}')
+and its meaning is to take the value of the variable VAR, replace every A at
+the end of a word with B in that value, and substitute the resulting string.
+
+When we say "at the end of a word", we mean that A must appear either followed
+by whitespace or at the end of the value in order to be replaced; other
+occurrences of A in the value are unaltered.  For example:
+
+     foo := a.o b.o c.o
+     bar := $(foo:.o=.c)
+
+sets 'bar' to 'a.c b.c c.c'.
+
+Another type of substitution reference lets you use the full power of the
+'patsubst' function. It has the same form '$(VAR:A=B)' described above, except
+that now A must contain a single '%' character.  This case is equivalent to
+'$(patsubst A,B,$(VAR))'.  
+
+For example:
+
+     foo := a.o b.o c.o
+     bar := $(foo:%.o=%.c)
+
+sets 'bar' to 'a.c b.c c.c'.
+
+
+6.5 Setting Variables
+
+Most variable names are considered to have the empty string as a value if you
+have never set them.
+
+Several special variables are set automatically to a new value for each rule;
+these are called the "automatic" variables
+
+<shell-assignment>
+The shell assignment operator '!=' can be used to execute a shell script and
+set a variable to its output. This operator first evaluates the right-hand
+side, then passes that result to the shell for execution.
+
+If the result of the execution ends in a newline, that one newline is removed;
+all other newlines are replaced by spaces. The resulting string is then placed
+  into the named `recursively-expanded variable` For example:
+
+     hash != printf '\043'
+     file_list != find . -name '*.c'
+
+Alternatively, you can set a `simply expanded variable` to the result of
+running a program using the 'shell' function call.
+
+     hash := $(shell printf '\043')
+     var := $(shell find . -name "*.c")
+
+As with the 'shell' function, the exit status of the just-invoked shell script
+is stored in the '.SHELLSTATUS' variable.
+
+
+6.6 Appending More Text to Variables
+
+immediate += deferred or immediate
+
+When the variable in question has not been defined before, '+=' acts
+just like normal '=': it defines a recursively-expanded variable.
+
+However, when there _is_ a previous definition, exactly what '+=' does
+depends on what flavor of variable you defined originally.  
+
+
+For both cases:
+  When you add to a variable's value with '+=', 'make' acts essentially as if
+  you had included the extra text in the initial definition of the variable.  
+
+
+If you defined it first with ':=' or '::=', making it a
+simply-expanded variable, '+=' adds to that simply-expanded definition,
+and expands the new text before appending it to the old value just as
+':=' does .  In fact,
+
+     variable := value
+     variable += more
+
+is exactly equivalent to:
+
+     variable := value
+     variable := $(variable) more
+
+When you use '+=' with a variable that you defined first to be
+recursively-expanded using plain '=', 'make' does something a bit different
+and it is this unexpanded text to which 'make' appends the new text you
+specify.
+
+     variable = value
+     variable += more
+
+is roughly equivalent to:
+
+     temp = value
+     variable = $(temp) more
+
+<ex>
+The importance of this comes when the variable's old value contains variable
+references. Take this common example:
+
+     CFLAGS = $(includes) -O
+     ...
+     CFLAGS += -pg # enable profiling
+
+The first line defines the 'CFLAGS' variable with a reference to another
+variable, 'includes'. Using '=' for the definition makes 'CFLAGS' a
+recursively-expanded variable, meaning '$(includes) -O' is _not_ expanded when
+'make' processes the definition of 'CFLAGS'. Thus, 'includes' need not be
+defined yet for its value to take effect. It only has to be defined before any
+reference to 'CFLAGS'. 
+
+If we tried to append to the value of 'CFLAGS' without using '+=', we might do
+it like this:
+
+     CFLAGS := $(CFLAGS) -pg # enable profiling
+
+This is pretty close, but not quite what we want. Using ':=' redefines
+'CFLAGS' as a simply-expanded variable; this means 'make' expands the text
+'$(CFLAGS) -pg' before setting the variable. If 'includes' is not yet defined,
+we get ' -O -pg', and a later definition of 'includes' will have no effect. 
+
+Conversely, by using '+=' we set 'CFLAGS' to the _unexpanded_ value
+'$(includes) -O -pg'. Thus we preserve the reference to 'includes', so if that
+variable gets defined at any later point, a reference like '$(CFLAGS)' still
+uses its value.
+
+
+6.9 Undefining Variables
+
+If you want to clear a variable, setting its value to empty is usually
+sufficient. Expanding such a variable will yield the same result (empty
+    string) regardless of whether it was set or not. 
+
+However, if you are using the 'flavor' and 'origin' functions, there is a
+difference between a variable that was never set and a variable with an empty
+value.  
+
+In such situations you may want to use the 'undefine' directive to make a
+variable appear as if it was never set. For example:
+
+     foo := foo
+     bar = bar
+
+     undefine foo
+     undefine bar
+
+     $(info $(origin foo))
+     $(info $(flavor bar))
+
+This example will print "undefined" for both variables.
+
+
+6.10 Variables from the Environment
+
+Variables in make can come from the environment in which make is run. Every
+environment variable that make sees when it starts up `is transformed into` a
+make variable with the same name and value. However, an explicit assignment in
+the makefile, or `with a command argument`, overrides the environment.
+
+Thus, by setting the variable CFLAGS in your environment, you can cause all C
+compilations in most makefiles to use the compiler switches you prefer.
+
+When make runs a recipe, variables defined in the makefile are placed into the
+`environment of each shell` This allows you to pass values to sub-make
+invocations
+
+By default, only variables that came from the environment or the command line
+are passed to recursive invocations.
+
+<ex>
+// from buildroot-2016.08.1 makefile
+
+ifneq ("$(origin O)", "command line")
+O := output
+CONFIG_DIR := $(TOPDIR)
+NEED_WRAPPER =
+else
+# other packages might also support Linux-style out of tree builds
+# with the O=<dir> syntax (E.G. BusyBox does). As make automatically
+# forwards command line variable definitions those packages get very
+# confused. Fix this by telling make to not do so
+MAKEOVERRIDES =
+# strangely enough O is still passed to submakes with MAKEOVERRIDES
+# (with make 3.81 atleast), the only thing that changes is the output
+# of the origin function (command line -> environment).
+# Unfortunately some packages don't look at origin (E.G. uClibc 0.9.31+)
+# To really make O go away, we have to override it.
+override O := $(O)
+CONFIG_DIR := $(O)
+# we need to pass O= everywhere we call back into the toplevel makefile
+EXTRAMAKEARGS = O=$(O)
+NEED_WRAPPER = y
+endif
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-variable-pattern
+
+<variable-dereferencing>
+One big "Gotcha" with variable dereferencing is that if commands `implicitly`
+dereference values. This has some unexpected results. For example:
+
+if("${SOME_VAR}" STREQUAL "MSVC")
+
+In this code sample MSVC will be implicitly dereferenced, which will result in
+the if command comparing the value of the dereferenced variables SOME_VAR
+and MSVC. A common workaround to this solution is to prepend strings being
+compared with an x.
+
+if("x${SOME_VAR}" STREQUAL "xMSVC")
+
+This works because while MSVC is a defined variable, xMSVC is not. This
+  pattern is uncommon, but it does occur in LLVM’s CMake scripts.
+
+note:
+To prevent name colision by making it string.
+
+note:
+GNU autotools also use this
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-variable-empty-string
+
+// From 6.5 Setting Variables
+Most variable names are considered to have the empty string as a value if you
+have never set them.
+
+note: defined but not set
+
+// From <conditional-assignment>
+Note that a variable set to an empty value is still defined, so '?=' will not
+set that variable.
+
+Either "not defined" or "defined but not set" has `empty string`
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-conditional
+
+7 Conditional Parts of Makefiles
+
+Conditionals control what 'make' actually "sees" in the makefile, so they
+_cannot_ be used to control recipes at the time of execution.
+
+
+7.1 Example of a Conditional
+
+The result is that 'CC=gcc' as an argument to 'make' changes not only which
+compiler is used but also which libraries are linked.
+
+     libs_for_gcc = -lgnu
+     normal_libs =
+
+     foo: $(objects)
+     ifeq ($(CC),gcc)
+             $(CC) -o foo $(objects) $(libs_for_gcc)
+     else
+             $(CC) -o foo $(objects) $(normal_libs)
+     endif
+
+There are four different directives that test different conditions. Here is a
+table of them:
+
+'ifeq (ARG1, ARG2)'
+'ifeq 'ARG1' 'ARG2''
+'ifeq "ARG1" "ARG2"'
+'ifeq "ARG1" 'ARG2''
+'ifeq 'ARG1' "ARG2"'
+     Expand all variable references in ARG1 and ARG2 and compare them.
+
+
+<gmake-non-empty-check>
+Often you want to test if a variable has a non-empty value. You can use the
+'strip' function to avoid interpreting whitespace as a non-empty value. For
+example:
+
+     ifeq ($(strip $(foo)),)
+     TEXT-IF-EMPTY
+     endif
+
+will evaluate TEXT-IF-EMPTY even if the expansion of '$(foo)' contains
+whitespace characters.
+
+
+'ifdef VARIABLE-NAME'
+     The 'ifdef' form takes the `_name_ of a variable` as its argument, not a
+     reference to a variable. If `the value of that variable` has a non-empty
+     value, the TEXT-IF-TRUE is effective. 
+     
+     Variables that have never been defined have an empty value.  
+     
+     note: After all, "defined and set" variable.
+
+          bar = true
+          foo = bar
+          ifdef $(foo)
+          frobozz = yes
+          endif
+
+     The variable reference '$(foo)' is expanded, yielding 'bar', which is
+     considered to be the name of a variable. The variable 'bar' is not
+     expanded, but its value is examined to determine if it is non-empty.
+
+     Note that 'ifdef' only tests whether a variable has a value.  It
+     does `not expand the variable to see` if that value is nonempty.
+     Consequently, tests using 'ifdef' return true for all definitions
+     `except those like 'foo ='`  
+
+     To test for an empty value, use 'ifeq ($(foo),)'. For example,
+
+          bar =
+          foo = $(bar)
+          ifdef foo
+          frobozz = yes
+          else
+          frobozz = no
+          endif
+
+     sets 'frobozz' to 'yes', while:
+
+          foo =
+          ifdef foo
+          frobozz = yes
+          else
+          frobozz = no
+          endif
+
+     sets 'frobozz' to 'no'.
+
+     note:
+     Okay to think that expand one level only?
+
+
+Conditionals affect which lines of the makefile 'make' uses.  If the condition
+is true, 'make' reads the lines of the TEXT-IF-TRUE as part of the makefile;
+          if the condition is false, 'make' ignores those lines completely.
 
 
 ={============================================================================
