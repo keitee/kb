@@ -21,15 +21,20 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-lib-itertools
 |kt_dev_py_0001| py-lib-cvs
 |kt_dev_py_0001| py-lib-re
+|kt_dev_py_0001| py-lib-pip
+|kt_dev_py_0001| py-lib-dropbox
+|kt_dev_py_0001| py-lib-imaplib
 
+|kt_dev_py_0001| py-types
 |kt_dev_py_0001| py-string
-|kt_dev_py_0001| py-data-tuple
+|kt_dev_py_0001| py-tuple
 |kt_dev_py_0001| py-list
 |kt_dev_py_0001| py-slice
 |kt_dev_py_0001| py-data-seq-function
 |kt_dev_py_0001| py-dict in-membership
 |kt_dev_py_0001| py-data-set
 |kt_dev_py_0001| py-comprehension
+|kt_dev_py_0001| py-if
 |kt_dev_py_0001| py-module
 |kt_dev_py_0001| py-module-namespace
 |kt_dev_py_0001| py-module-package
@@ -876,6 +881,30 @@ https://docs.python.org/3.4/library/os.html
 
 16.1.5. Files and Directories
 
+
+os.listdir(path='.')
+
+    Return a list containing the names of the entries in the directory given
+    by path. The list is in arbitrary order, and does not include the special
+    entries '.' and '..' even if they are present in the directory.
+
+    path may be either of type str or of type bytes. If path is of type bytes,
+    the filenames returned will also be of type bytes; in all other circumstances,
+    they will be of type str.
+
+    This function can also support specifying a file descriptor; the file
+    descriptor must refer to a directory.
+
+    Note
+    To encode str filenames to bytes, use fsencode().
+
+    Availability: Unix, Windows.
+
+    Changed in version 3.2: The path parameter became optional.
+
+    New in version 3.3: Added support for specifying an open file descriptor
+    for path.
+
 <ex>
     # Check the folder exists
     if os.path.isdir (dir):
@@ -923,7 +952,18 @@ redirections, cookies and more.
 ={============================================================================
 |kt_dev_py_0001| py-lib-file
 
-Use the built-in `open` function with either a relative or absolute file path
+Chapter 9: Tuples, Files, and Everything Else
+
+the built-in `open` function creates a Python `file object`, which serves as a
+link to a file residing on your machine. After calling open, you can transfer
+strings of data to and from the associated external file by calling the
+returned file object's methods.
+
+afile = open(filename, mode)
+afile.method()
+
+Without a directory path, the file is assumed to exist in the current working
+directory. Use either a relative or absolute file path
 
 path = 'ch13/segismundo.txt'
 f = open(path)
@@ -934,6 +974,9 @@ file handle f like a `list` and iterate over the lines like so
 for line in f:
   pass
 
+# Or this way. File iterators read line by line
+for line in open('data'): 
+  use line 
 
 The lines come out of the file with the end-of-line (EOL) markers intact, so
 you'll often see code to get an EOL-free list of lines
@@ -949,6 +992,64 @@ with open('tmp.txt', 'w') as handle:
   handle.writelines(x for x in open(path) if len(x) > 1)
 
 open('tmp.txt').readlines()
+
+
+As discussed, in Python an object's memory space is automatically reclaimed as
+soon as the object is no longer referenced anywhere in the program. When file
+objects are reclaimed, Python also automatically closes the files if they are
+still open (this also happens when a program shuts down).
+
+`write` methods don't add the end-of-line character for us, so we must include
+it to properly terminate our lines
+
+>>> myfile.write('hello text file\n') # Write a line of text: string
+>>>
+>>> myfile.readline()                 # Read the lines back
+'hello text file\n'
+
+
+Storing Python Objects in Files: Conversions
+
+Have to use other conversion tools to translate from the strings in the text
+file to real Python objects.
+
+>>> X, Y, Z = 43, 44, 45 # Native Python objects
+>>> S = 'Spam' # Must be strings to store in file
+>>> D = {'a': 1, 'b': 2}
+>>> L = [1, 2, 3]
+>>>
+>>> F = open('datafile.txt', 'w') # Create output text file
+>>> F.write(S + '\n') # Terminate lines with \n
+>>> F.write('%s,%s,%s\n' % (X, Y, Z)) # Convert numbers to strings
+>>> F.write(str(L) + '$' + str(D) + '\n') # Convert and separate with $
+>>> F.close()
+
+>>> line = F.readline() # Next line from file
+>>> line # It's a string here
+'43,44,45\n'
+>>> parts = line.split(',') # Split (parse) on commas
+>>> parts
+['43', '44', '45\n']
+
+>>> int(parts[1]) # Convert from string to int
+44
+>>> numbers = [int(P) for P in parts] # Convert all in list at once
+>>> numbers
+[43, 44, 45]
+
+*eval-keyword*
+
+>>> line = F.readline()
+>>> line
+"[1, 2, 3]${'a': 1, 'b': 2}\n"
+>>> parts = line.split('$') # Split (parse) on $
+>>> parts
+['[1, 2, 3]', "{'a': 1, 'b': 2}\n"]
+>>> eval(parts[0]) # Convert to any object type
+[1, 2, 3]
+>>> objects = [eval(P) for P in parts] # Do same for all in list
+>>> objects
+[[1, 2, 3], {'a': 1, 'b': 2}]
 
 
 ={============================================================================
@@ -983,6 +1084,49 @@ https://docs.python.org/2/library/re.html
 
 This module provides regular expression matching operations similar to those
 found in Perl
+
+
+7.2.1. Regular Expression Syntax
+
+A brief explanation of the format of regular expressions follows. For further
+information and a gentler presentation, consult the Regular Expression HOWTO.
+
+https://docs.python.org/2/howto/regex.html#regex-howto
+
+(?...)
+    This is an `extension` notation (a '?' following a '(' is not meaningful
+        otherwise). The first character after the '?' determines what the
+    meaning and further syntax of the construct is. 
+
+    Extensions usually do not create a new group; (?P<name>...) is the only
+    `exception to this rule` 
+    
+    Following are the currently supported extensions.
+
+(?P<name>...)
+
+    Similar to regular parentheses, but the substring matched by the group is
+    accessible via `the symbolic group name` 
+    
+    Group names must be valid Python identifiers, and each group name must be
+    defined only once `within a regular expression` A symbolic group is also a
+    numbered group, just as if the group were not named.
+
+    Named groups can be referenced in three contexts. If the pattern is
+    (?P<quote>['"]).*?(?P=quote) (i.e. matching a string quoted with either
+    single or double quotes):
+
+(?P=name)
+
+    A backreference to a named group; it matches whatever text was matched by
+    the earlier group named name.
+
+\d
+    When the UNICODE flag is not specified, matches any decimal digit; this is
+    equivalent to the set [0-9]. With UNICODE, it will match whatever is
+    classified as a decimal digit in the Unicode character properties
+    database.
+
 
 7.2.2. Module Contents
 
@@ -1022,19 +1166,106 @@ re.compile(pattern, flags=0)
           regular expressions.
 
 
- re.split(pattern, string, maxsplit=0, flags=0)
+re.search(pattern, string, flags=0)
 
-    Split string by the occurrences of pattern. If capturing parentheses are
-    used in pattern, then the text of all groups in the pattern are also
-    returned as part of the resulting list. If maxsplit is nonzero, at most
-    maxsplit splits occur, and the remainder of the string is returned as the
-    final element of the list. (Incompatibility note: in the original Python
-        1.5 release, maxsplit was ignored. This has been fixed in later
-        releases.)
+    Scan through string looking for `the first location` where the regular
+    expression pattern produces a match, and return a corresponding
+    MatchObject instance. 
+    
+    Return None if no position in the string matches the pattern; note that
+    this is different from finding a zero-length match at some point in the
+    string.
 
 
->>> import re
+re.match(pattern, string, flags=0)
+
+    If zero or more characters at the beginning of string match the regular
+    expression pattern, return a corresponding MatchObject instance. 
+    
+    Return None if the string does not match the pattern; note that this is
+    different from a zero-length match.
+
+    Note that even in MULTILINE mode, re.match() will only match at the
+    beginning of the string and not at the beginning of each line.
+
+    If you want to locate a match anywhere in string, use search() instead
+    (see also search() vs. match()).
+
+
+7.2.5.3. search() vs. match()
+
+Python offers two different primitive operations based on regular expressions:
+re.match() checks for a match only at the beginning of the string, while
+re.search() checks for a match anywhere in the string (this is what Perl does
+    by default).
+
+For example:
+
+>>> re.match("c", "abcdef")    # No match
+>>> re.search("c", "abcdef")   # Match
+<_sre.SRE_Match object at ...>
+
+Regular expressions beginning with '^' can be used with search() to restrict
+the match at the beginning of the string:
+
+>>> re.match("c", "abcdef")    # No match
+>>> re.search("^c", "abcdef")  # No match
+>>> re.search("^a", "abcdef")  # Match
+<_sre.SRE_Match object at ...>
+
+Note however that in MULTILINE mode match() only matches at the beginning of
+the string, whereas using search() with a regular expression beginning with
+'^' will match at the beginning of each line.
+
+>>> re.match('X', 'A\nB\nX', re.MULTILINE)    # No match
+>>> re.search('^X', 'A\nB\nX', re.MULTILINE)  # Match
+<_sre.SRE_Match object at ...>
+
+
+re.split(pattern, string, maxsplit=0, flags=0)
+
+    Split string by the occurrences of pattern. 
+
+    If capturing parentheses are used in pattern, then the text of all groups
+    in the pattern are also returned as part of the resulting list. 
+    
+    If maxsplit is nonzero, at most maxsplit splits occur, and the remainder
+    of the string is returned as the final element of the list.
+    (Incompatibility note: in the original Python 1.5 release, maxsplit was
+     ignored. This has been fixed in later releases.)
+
+>>> re.split('[/:]', '/usr/home/lumberjack')
+['', 'usr', 'home', 'lumberjack']
+
+>>> re.split('\W+', 'Words, words, words.')
+['Words', 'words', 'words', '']
+
+
+
+7.2.4. Match Objects
+
+group([group1, ...])
+
+    Returns one or more subgroups of the match.
+
+    Without arguments, group1 defaults to zero (the whole match is returned).
+    If a groupN argument is zero, the corresponding return value is the entire
+    matching string; if it is in the inclusive range [1..99], it is the string
+    matching the corresponding parenthesized group.
+
+    If the regular expression uses the (?P<name>...) syntax, the groupN
+    arguments may `also be strings identifying groups by their group name` If a
+    string argument is not used as a group name in the pattern, an IndexError
+    exception is raised.
+
+groups([default])
+
+    Return a tuple containing all the subgroups of the match, from 1 up to
+    however many groups are in the pattern.
+
 >>> match = re.match('Hello[ \t]*(.*)world', 'Hello Python world')
+>>> match.group(0)
+'Hello Python world'
 >>> match.group(1)
 'Python '
 
@@ -1042,8 +1273,17 @@ re.compile(pattern, flags=0)
 >>> match.groups()
 ('usr', 'home', 'lumberjack')
 
->>> re.split('[/:]', '/usr/home/lumberjack')
-['', 'usr', 'home', 'lumberjack']
+>>> m = re.match(r"(?P<first_name>\w+) (?P<last_name>\w+)", "Malcolm Reynolds")
+>>> m.group('first_name')
+'Malcolm'
+>>> m.group('last_name')
+'Reynolds'
+
+import re
+f='drx890.SYSF40.73.00.enc.snugupdate'
+m=re.match(r'^(?P<type>.+)\.SYSF(?P<version>[\d.]+)', f)
+print 'DEBUG: f: %s, match.group(type): %s, m.group(version): %s' % (f, m.group('type'), m.group('version'))
+DEBUG: f: drx890.SYSF40.73.00.enc.snugupdate, match.group(type): drx890, m.group(version): 40.73.00.
 
 
 <ex>
@@ -1070,12 +1310,192 @@ matchDic = re.search(r'^NDS:.*!(FATAL|ERROR|WARN|MIL)\s+-(\S+).*(M:\S+)\s+(F:\S+
 
 
 ={============================================================================
+|kt_dev_py_0001| py-lib-pip
+
+https://pip.pypa.io/en/stable/
+
+Quickstart
+
+Install a package from PyPI:
+
+$ pip install SomePackage
+  [...]
+  Successfully installed SomePackage
+
+https://packaging.python.org/glossary/#term-python-package-index-pypi
+Python Package Index (PyPI)
+    PyPI is the default Package Index for the Python community. It is open to
+    all Python developers to consume and distribute their distributions.
+
+To search package:
+https://pypi.python.org/pypi/
+
+
+={============================================================================
+|kt_dev_py_0001| py-lib-dropbox
+
+https://www.dropbox.com/developers/documentation/python#install
+Install Dropbox for Python
+
+To get started with Dropbox for Python, we recommend you add the SDK to your
+project using pip.
+
+Download and install the SDK.
+
+pip install dropbox
+
+Now you can do "import dropbox" in your Python app, or in a Python interpreter.
+
+import dropbox
+
+That's it! Now you're ready to get started with the tutorial.
+
+
+https://www.dropbox.com/developers/documentation/python#tutorial
+Link an account
+
+In order to make calls to the API, you'll need an instance of the Dropbox
+object. To instantiate, pass in the access token for the account you want to
+link. (Tip: You can generate an access token for your own account through the
+    App Console).
+
+dbx = dropbox.Dropbox('YOUR_ACCESS_TOKEN')
+
+Test it out to make sure you've linked the right account:
+
+dbx.users_get_current_account()
+
+
+<core-api>
+https://www.dropbox.com/developers-v1/core/start/python
+Warning: API v1 has been deprecated. Learn more.
+
+Using the Core API in Python
+
+The Core API is based on HTTP and OAuth and provides low-level calls to access
+and manipulate a user's Dropbox account.
+
+If you want to follow along, first register a new app on the App Console.
+You'll need the app key to access the Core API. Then install the Python SDK
+and you'll be ready to go.
+
+
+Downloading files
+
+Some time has passed and you're ready to start editing that magnum opus of
+yours again. We'll need the get_file_and_metadata method to download the file.
+
+f, metadata = client.get_file_and_metadata('/magnum-opus.txt')
+out = open('magnum-opus.txt', 'wb')
+out.write(f.read())
+out.close()
+print metadata
+
+get_file_and_metadata, like other calls that return file data, returns an
+httplib.HTTPResponse that you should .read() from to get the full response.
+https://www.dropbox.com/developers-v1/core/docs/python#DropboxClient.get_file_and_metadata
+
+
+={============================================================================
+|kt_dev_py_0001| py-lib-imaplib
+
+
+={============================================================================
+|kt_dev_py_0001| py-types
+
+More formally, there are three major type (and operation) categories in Python
+that have this generic nature:
+
+Numbers (integer, floating-point, decimal, fraction, others)
+Support addition, multiplication, etc.
+
+Sequences (strings, lists, tuples)
+Support indexing, slicing, concatenation, etc.
+
+Mappings (dictionaries)
+Support indexing by key, etc.
+
+Sets are something of a category unto themselves (they don’t map keys to
+    values and are not positionally ordered sequences)
+
+
+The major core types in Python break down as follows:
+
+Immutables (numbers, strings, tuples, frozensets)
+None of the object types in the immutable category support in-place changes,
+though we can always run expressions to make new objects and assign their
+  results to variables as needed.
+
+Mutables (lists, dictionaries, sets, bytearray)
+Conversely, the mutable types can always be changed in place with operations
+that do not create new objects. Although such objects can be copied, in-place
+changes support direct modification.
+
+
+={============================================================================
 |kt_dev_py_0001| py-string
   
-<immutable>
 Every string operation is defined to produce a new string as its result,
 because strings are `immutable` 
 
+Chapter 7: String Fundamentals
+
+String Conversion Tools
+
+# Python 3.X
+>>> "42" + 1
+TypeError: Can't convert 'int' object to str implicitly
+
+# Python 2.X
+>>> "42" + 1
+TypeError: cannot concatenate 'str' and 'int' objects
+
+>>> int("42"), str(42)  # Convert from/to string
+(42, '42')
+
+>>> repr(42)            # Convert to as-code string
+'42'
+
+note: 
+The `str` type name.
+
+The repr function (and the older backquotes expression, removed in Python 3.X)
+also converts an object to its string representation
+
+
+Character code conversions
+
+The built-in `ord` returns the actual binary value used to represent the
+corresponding character in memory. The chr function performs the inverse
+operation, taking an integer code and converting it to the corresponding
+character:
+
+>>> ord('s')
+115
+>>> chr(115)
+'s'
+
+#!/usr/bin/python
+
+B = '1101'
+I = 0
+
+while B != '':
+    I = I*2 + (ord(B[0]) - ord('0'))
+    B = B[1:]
+
+print(I)
+
+
+>>> int(0b1101)
+13
+>>> int('1101', 2)
+13
+>>> bin(13)
+'0b1101'
+
+
+<string-quote>
 Can write string literal using either single quotes ' or double quotes ":
 
 For multiline strings with line breaks, you can use `triple quotes`, either '''
@@ -1102,6 +1522,7 @@ https://docs.python.org/2/library/stdtypes.html?highlight=endswith#str.endswith
 5.6.1. String Methods
 
 str.endswith(suffix[, start[, end]])
+
     Return True if the string ends with the specified suffix, otherwise return
     False. suffix can also be a tuple of suffixes to look for. With optional
     start, test beginning at that position. With optional end, stop comparing
@@ -1109,7 +1530,9 @@ str.endswith(suffix[, start[, end]])
 
     Changed in version 2.5: Accept tuples as suffix.
 
+
 str.title()
+
     Return a titlecased version of the string where words start with an
     uppercase character and the remaining characters are lowercase.
 
@@ -1149,6 +1572,13 @@ str.split([sep[, maxsplit]])
                         if not tag.endswith ("{}"):
                             tagsAux.append (tag)
 
+<ex>
+Delimiters can be longer than a single character, too:
+
+>>> line = "i'mSPAMaSPAMlumberjack"
+>>> line.split("SPAM")
+["i'm", 'a', 'lumberjack']
+
 
 str.rstrip([chars])
 
@@ -1164,6 +1594,14 @@ str.rstrip([chars])
     >>> 'mississippi'.rstrip('ipz')
     'mississ'
 
+    note: Compared with [:-1]
+
+    Chapter 7: String Fundamentals
+    A line[:−1] slice would work, too. Having said that, calling the
+    line.rstrip method is often preferred for stripping newline characters
+    because this call leaves the line intact if it has no newline character at
+    the end - a common case for files created with some text-editing tools.
+    Slicing works if you're sure the line is properly terminated.
 
 
 str.join(iterable)
@@ -1173,7 +1611,102 @@ str.join(iterable)
     method.
 
 
-{formatting}
+str.find()
+
+The find method returns the offset where the substring appears (by default,
+    searching from the front), or −1 if it is not found. 
+As we saw earlier, it's a substring search operation just like the in
+expression, but find returns the position of a located substring.
+
+
+str.replace()
+
+>>> S = 'xxxxSPAMxxxxSPAMxxxx'
+>>> S.replace('SPAM', 'EGGS')     # Replace all
+'xxxxEGGSxxxxEGGSxxxx'
+>>> S.replace('SPAM', 'EGGS', 1)  # Replace one
+'xxxxEGGSxxxxSPAMxxxx'
+
+
+<perfoemance>
+If you have to apply many changes to a very large string, you might be able to
+improve your script's performance by converting the string to an object that
+does support in-place changes:
+
+>>> S = 'spammy'
+>>> L = list(S)
+>>> L
+['s', 'p', 'a', 'm', 'm', 'y']
+
+>>> L[3] = 'x' # Works for lists, not strings
+>>> L[4] = 'x'
+
+>>> L
+['s', 'p', 'a', 'x', 'x', 'y']
+
+If, after your changes, you need to convert back to a string, use the string
+  join method to "implode" the list back into a string:
+
+>>> S = ''.join(L)
+>>> S
+'spaxxy'
+
+str.join()
+
+`join` puts the strings in a list (or other iterable) together, with the
+delimiter between list items; in this case, it uses an empty string delimiter
+to convert from a list back to a string. More generally, any string delimiter
+and iterable of strings will do:
+
+>>> 'SPAM'.join(['eggs', 'sausage', 'ham', 'toast'])
+'eggsSPAMsausageSPAMhamSPAMtoast'
+
+>>> '|'.join("one")     # o| n|e
+'o|n|e'
+>>> '|'.join(['one'])
+'one'
+
+
+<string-module>
+The Original string Module's Functions (Gone in 3.X)
+
+The history of Python's string methods is somewhat convoluted. For roughly the
+first decade of its existence, Python provided a standard library module
+called `string` that contained functions that largely mirrored the current set
+of string object methods. 
+
+By popular demand, in Python 2.0 these functions were made available as
+methods of string objects. Because so many people had written so much code
+that relied on the original string module, however, it was retained for
+backward compatibility.
+
+Today, you should use only string methods, not the original string module. In
+fact, the original module call forms of today's string methods have been
+removed completely from Python 3.X, and you should not use them in new code in
+either 2.X or 3.X.
+
+
+{string-formatting} *py-print*
+
+String Formatting Expressions
+
+string formatting allows us to perform multiple type-specific substitutions on
+a string in a single step.
+
+string formatting is available in two flavors
+
+String formatting expressions: '...%s...' % (values)
+
+The original technique available since Python's inception, this form is based
+upon the C language's "printf" model, and sees widespread use in much existing
+code.
+
+String formatting method calls: '...{}...'.format(values)
+
+A newer technique added in Python 2.6 and 3.0, this form is derived in part
+from a same-named tool in C#/.NET, and overlaps with string formatting
+expression functionality.
+
 # Formatting expression (all)
 >>> '%s, eggs, and %s' % ('spam', 'SPAM!') 
 'spam, eggs, and SPAM!'
@@ -1187,6 +1720,23 @@ str.join(iterable)
 'spam, eggs, and SPAM!'
 
 
+>>> '%s -- %s -- %s' % (42, 3.14159, [1, 2, 3]) # All types match a %s target
+'42 -- 3.14159 -- [1, 2, 3]'
+
+As every type of object can be converted to a string, every object type works
+with the %s conversion code. Because of this, unless you will be doing some
+special formatting, %s is often the only code you need to remember for the
+formatting expression.
+
+Again, keep in mind that formatting always makes a new string, rather than changing
+the string on the left.
+
+<ex>
+>>> L = [1,2,3]
+>>> print 'print list: %s' % (L)
+print list: [1, 2, 3]
+
+
 {raw-string}
 raw string literal that turns off the backslash escape mechanism. Such
 literals start with the letter r and are useful for strings like directory
@@ -1194,15 +1744,28 @@ paths on Windows (e.g., r'C:\text\new').
 
 
 ={============================================================================
-|kt_dev_py_0001| py-data-tuple
+|kt_dev_py_0001| py-tuple
 
 A tuple is a one-dimensional, `fixed-length`, `immutable` sequence of Python
 objects. 
 
+Because parentheses can also enclose expressions (see Chapter 5), you need to
+do something special to tell Python when a single object in parentheses is a
+  tuple object and not a simple expression.
+
+T = (0,) A one-item tuple (not an expression)
+
+>>> x = (40)      # An integer!
+>>> x
+40
+>>> y = (40,)     # A tuple containing an integer
+>>> y
+(40,)
+
 
 # The easiest way to create one is with a comma-separated sequence of values
 
->>> tup = 4,5,6
+>>> tup = 4,5,6   # >>> tup = (4,5,6)
 >>> tup
 (4, 5, 6)
 
@@ -1239,18 +1802,6 @@ objects.
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
 TypeError: 'tuple' object does not support item assignment
-
-note: WHY??
-
->>> tup=('foo', 'bar', 'baz')
->>> tup
-('foo', 'bar', 'baz')
->>> tup=1,2,3
->>> tup
-(1, 2, 3)
->>> tup=4,5,6,7
->>> tup
-(4, 5, 6, 7)
 
 
 # Can be concatenated using the + operator to produce longer tuples:
@@ -1352,6 +1903,75 @@ objects and thus can be used interchangeably in many functions.
 ['foo', 'bar', 'baz']
 
 
+<indexing>
+Chapter 8: Lists and Dictionaries
+
+Indexing, Slicing, and Matrixes
+
+Because lists are sequences, indexing and slicing work the same way for lists
+as they do for strings. However, the result of indexing a list is whatever
+type of object lives at the offset you specify, while slicing a list always
+returns a new list:
+
+>>> L = ['spam', 'Spam', 'SPAM!']
+>>> L[2]    # Offsets start at zero
+'SPAM!'
+>>> L[−2]   # Negative: count from the right
+'Spam'
+>>> L[1:]   # Slicing fetches sections
+['Spam', 'SPAM!']
+
+
+Index and slice assignments
+
+When using a list, you can change its contents by assigning to either a
+particular item (offset) or an entire section (slice):
+
+>>> L = ['spam', 'Spam', 'SPAM!']
+>>> L[1] = 'eggs'               # Index assignment
+>>> L
+['spam', 'eggs', 'SPAM!']
+>>> L[0:2] = ['eat', 'more']    # Slice assignment: delete+insert
+>>> L # Replaces items 0,1
+['eat', 'more', 'SPAM!']
+
+>>> L = [1, 2, 3]
+>>> L[1:2] = [4, 5]       # Replacement/insertion
+>>> L
+[1, 4, 5, 3]
+>>> L[1:1] = [6, 7]       # Insertion (replace nothing)
+>>> L
+[1, 6, 7, 4, 5, 3]
+>>> L[1:2] = []           # Deletion (insert nothing)
+>>> L
+[1, 7, 4, 5, 3]
+
+Because the length of the sequence being assigned does not have to match the
+  length of the slice being assigned to, slice assignment can be used to
+  replace (by overwriting), expand (by inserting), or shrink (by deleting) the
+  subject list. 
+
+It's a powerful operation, but frankly, one that you may not see very often in
+practice. There are often `more straightforward and mnemonic ways` to replace,
+  insert, and delete (concatenation, and the insert, pop, and remove list
+      methods, for example), which Python programmers tend to prefer in
+    practice.
+
+
+Other common list operations
+
+Because lists are mutable, you can use the del statement to delete an item or
+section in place:
+
+>>> L = ['spam', 'eggs', 'ham', 'toast']
+>>> del L[0]          # Delete one item
+>>> L
+['eggs', 'ham', 'toast']
+>>> del L[1:]         # Delete an entire section
+>>> L # Same as L[1:] = []
+['eggs']
+
+
 <adding-removing>
 # Append to the end of the list with the `append` method and `insert` an
 # element at a specific location in the list:
@@ -1375,6 +1995,11 @@ element.
 'bar'
 >>> b_list
 ['foo', 'red', 'baz', 'dwarf']
+
+>>> L
+[1, 2]
+>>> L.pop() # Pop off stack
+2
 
 
 # `remove` locates the first such value and removes it from the last:
@@ -1420,6 +2045,9 @@ everything = []
 for chunk in list_of_lists:
   everything = everything + chunk
 
+note:
+Know that extend adds many items, and append adds one.
+
 
 <sorting> 
 A list can be sorted in-place (without creating a new object) by calling its
@@ -1443,9 +2071,12 @@ AttributeError: 'tuple' object has no attribute 'sort'
 [2, 3, 4, 5, 7, 8]
 
 
-sort has a few options that will occasionally come in handy. One is the
-  ability to pass a secondary `sort key`, i.e. a `function` that produces a
-  value to use to sort the objects.
+Can modify sort behavior by passing in `keyword arguments` - a special
+  "name=value" syntax in function calls that specifies passing by name and is
+  often used for giving configuration options.
+
+One is the ability to pass a secondary `sort key`, i.e. a `function` that
+produces a value to use to sort the objects.
 
 >>> lst = ['saw', 'small', 'He', 'foxes', 'six']
 >>> lst
@@ -1453,6 +2084,43 @@ sort has a few options that will occasionally come in handy. One is the
 >>> lst.sort(key=len)
 >>> lst
 ['He', 'saw', 'six', 'small', 'foxes']
+
+
+>>> L = ['abc', 'ABD', 'aBe']
+>>> L.sort()                              # Sort with mixed case
+>>> L
+['ABD', 'aBe', 'abc']
+>>> L = ['abc', 'ABD', 'aBe']
+>>> L.sort(key=str.lower)                 # Normalize to lowercase
+>>> L
+['abc', 'ABD', 'aBe']
+>>>
+>>> L = ['abc', 'ABD', 'aBe']
+>>> L.sort(key=str.lower, reverse=True)   # Change sort order
+>>> L
+['aBe', 'ABD', 'abc']
+
+
+<sorted-function>
+
+Partly because of such constraints, sorting is also available in recent
+  Pythons as a builtin function, which sorts any collection (not just lists)
+  and `returns a new list` for the result (instead of in-place changes):
+
+>>> L = ['abc', 'ABD', 'aBe']
+>>> sorted(L, key=str.lower, reverse=True) # Sorting built-in
+['aBe', 'ABD', 'abc']
+
+>>> L = ['abc', 'ABD', 'aBe']
+>>> sorted([x.lower() for x in L], reverse=True) # Pretransform items: differs!
+['abe', 'abd', 'abc']
+
+Notice the last example here - we can convert to lowercase prior to the sort
+  with a list comprehension, but the result `does not contain` the original
+  list's values as it does with the key argument. 
+
+The latter is applied temporarily during the sort, instead of changing the
+values to be sorted altogether.
 
 
 note: *py-module-bisect*
@@ -1701,6 +2369,11 @@ list of columns. The syntax, which looks a bit magical, is:
 ={============================================================================
 |kt_dev_py_0001| py-dict in-membership
 
+Chapter 8: Lists and Dictionaries
+
+Dictionaries are sometimes called associative arrays or hashes. Internally,
+dictionaries are implemented as hash tables.
+
 Dictionaries, the only mapping type in core objects set, are also `mutable`:
 like lists, they may be changed in place and can grow and shrink on demand.
 
@@ -1709,7 +2382,6 @@ new dictionary keys create those keys:
 
 >>> D = {}
 >>> D['name'] = 'Bob'             # Create keys by assignment
->>> D['job'] = 'dev'
 >>> D['age'] = 40
 
 
@@ -1718,14 +2390,18 @@ flexibly-sized collection of key-value pairs, where key and value are Python
 objects. One way to create one is by using curly `braces` {} and using
 `colons` to separate keys and values:
 
->>> d1={'a':'some value', 'b':[1,2,3,4]}
->>> d1
-{'a': 'some value', 'b': [1, 2, 3, 4]}
+{'name': 'Bob', 'age': 40}        # Traditional literal expression
+
+dict(name='Bob', age=40)          # dict keyword argument form
 
 
+<nonexistent-key-exception>
 Elements can be accessed and inserted using the same syntax as accessing
 elements of a list or tuple:
 
+>>> d1={'a':'some value', 'b':[1,2,3,4]}
+>>> d1
+{'a': 'some value', 'b': [1, 2, 3, 4]}
 >>> d1[7]='an integer'
 >>> d1
 {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'}
@@ -1763,7 +2439,7 @@ b => 2
 c => 3
 
 This is a three-step process, and in recent versions of Python it can be done
-in one step with the newer sorted built-in function.
+in one step with the newer `sorted` built-in function.
 
 >>> D
 {'a': 1, 'c': 3, 'b': 2}
@@ -1781,7 +2457,7 @@ nonexistent key is still a mistake.
 The dictionary `in membership expression` allows us to query the existence of
 a key and branch on the result with a Python if statement.
 
-Can check if a dict contains a key using the same syntax as with checking
+Can check `if a dict contains a key` using the same syntax as with checking
 whether a list or tuple contains a value:
 
 >>> 'b' in d1
@@ -1795,6 +2471,39 @@ True
 # >>> strings=['a', 'as', 'bat', 'car', 'dove', 'python']
 # >>> [x.upper() for x in strings if len(x) > 2]
 # ['BAT', 'CAR', 'DOVE', 'PYTHON']
+
+
+<dict-looping>
+  # segments is a dict
+  segments = D.getSegments ()
+  if segments != None:
+
+      # makes a list from keys of a dict
+      keys = sorted (list (segments.keys ()))
+      for key in keys:
+          if args.detail:
+              print key + ":",
+
+              # looks up the value of a dict
+              for build in segments [key]:
+                  print build,
+              print " "
+
+In fact, Python also lets you step through a dictionary's keys list without
+actually calling the keys method in most for loops. 
+For any dictionary D, saying `for key in D` works the same as saying the
+complete `for key in D.keys()`
+
+>>> table = {'1975': 'Holy Grail', # Key: Value
+... '1979': 'Life of Brian',
+... '1983': 'The Meaning of Life'}
+
+>>> for year in table: # Same as: for year in table.keys()
+... print(year + '\t' + table[year])
+...
+1979 Life of Brian
+1975 Holy Grail
+1983 The Meaning of Life
 
 
 Values can be deleted either using the `del` keyword or the `pop` method
@@ -1830,6 +2539,29 @@ One dict can be merged into another using the `update` method:
 {'a': 'some value', 'c': 12, 'b': 'foo', 7: 'an integer'}
 
 note: 'b' is overwritten.
+
+
+Preview: Mapping values to keys
+
+Notice how the prior table maps year to titles, but not vice versa. If you
+want to map the other way-titles to years-you can either code the dictionary
+differently, or use methods like items that give searchable sequences,
+
+>>> table = {'Holy Grail': '1975',  # Key=>Value (title=>year)
+... 'Life of Brian': '1979',
+... 'The Meaning of Life': '1983'}
+>>>
+>>> table['Holy Grail']
+'1975'
+
+>>> list(table.items())             # Value=>Key (year=>title)
+[('The Meaning of Life', '1983'), ('Holy Grail', '1975'), ('Life of Brian', '1979')]
+
+>>> [title for (title, year) in table.items() if year == '1975']
+['Holy Grail']
+
+searching through sequences like this is generally much slower than a direct
+key index
 
 
 <dict-from-sequence> <zipping>
@@ -1873,6 +2605,16 @@ value = some_dict.get(key, default_value)
 
 `get` by default will return `None` if the key is not present, while `pop`
 will raise an exception.
+
+Fetching a nonexistent key is normally an error, but the get method returns a
+default value-None, or a passed-in default-if the key doesn’t exist.
+
+>>> D.get('spam') # A key that is there
+2
+>>> print(D.get('toast')) # A key that is missing
+None
+>>> D.get('toast', 88)
+88
 
 
 <other-collection-as-value>
@@ -1947,6 +2689,38 @@ Traceback (most recent call last):
 TypeError: unhashable type: 'list'
 
 
+in dictionaries, there's just one value per key, but there may be many keys
+per value.
+
+
+Using dictionaries to simulate flexible lists: Integer keys
+
+>>> L = []
+>>> L[99] = 'spam'
+Traceback (most recent call last):
+File "<stdin>", line 1, in ?
+IndexError: list assignment index out of range
+
+Although you can use repetition to preallocate as big a list as you’ll need
+(e.g., [0]*100), you can also do something that looks similar with
+dictionaries that does not require such space allocations. By using integer
+keys, dictionaries can emulate lists that seem to grow on offset assignment:
+
+>>> D = {}
+>>> D[99] = 'spam'
+>>> D[99]
+'spam'
+>>> D
+{99: 'spam'}
+
+Here, it looks as if D is a 100-item list, but it's really a dictionary with a
+single entry; the value of the key 99 is the string 'spam'. You can access
+this structure with offsets much like a list, catching nonexistent keys with
+get or in tests if required, but you don’t have to allocate space for all the
+positions you might ever need to assign values to in the future. When used
+like this, dictionaries are like more flexible equivalents of lists.
+
+
 To use a list as a key, an easy fix is to convert it to a tuple:
 
 >>> d = {}
@@ -1955,30 +2729,46 @@ To use a list as a key, an easy fix is to convert it to a tuple:
 {(1, 2, 3): 5}
 
 
+Turple as a key?
+
+Using dictionaries for sparse data structures: Tuple keys
+
+In a similar way, dictionary keys are also commonly leveraged to implement
+`sparse` data structures-for example, multidimensional arrays where only a few
+positions have values stored in them:
+
+>>> Matrix = {}
+>>> Matrix[(2, 3, 4)] = 88
+>>> Matrix[(7, 8, 9)] = 99
+>>>
+>>> X = 2; Y = 3; Z = 4 # ; separates statements: see Chapter 10
+>>> Matrix[(X, Y, Z)]
+88
+>>> Matrix
+{(2, 3, 4): 88, (7, 8, 9): 99}
+
+Here, we’ve used a dictionary to represent a three-dimensional array that is
+empty except for the two positions (2,3,4) and (7,8,9). The keys are tuples
+that record the coordinates of nonempty slots. 
+
+Rather than allocating a large and mostly empty threedimensional matrix to
+hold these values, we can use a simple two-item dictionary. 
+
+Accessing an empty slot triggers a `nonexistent key exception` slots are not
+physically stored:
+
+>>> Matrix[(2,3,6)]
+Traceback (most recent call last):
+File "<stdin>", line 1, in ?
+KeyError: (2, 3, 6)
+
+
 <sorting>
 dict is not `ordered` but can be done in one step with the newer `sorted`
 built-in function.
 
 >>> for key in sorted(D):
   print(key, '=>', D[key])
-
-
-<dict-looping>
-
-  # segments is a dict
-  segments = D.getSegments ()
-  if segments != None:
-
-      # makes a list from keys of a dict
-      keys = sorted (list (segments.keys ()))
-      for key in keys:
-          if args.detail:
-              print key + ":",
-
-              # looks up the value of a dict
-              for build in segments [key]:
-                  print build,
-              print " "
 
 
 ={============================================================================
@@ -2124,6 +2914,114 @@ Note that this dict could be equivalently constructed by:
 >>> loc_mapping2 = dict((val,index) for index, val in enumerate(strings))
 >>> loc_mapping2
 {'a': 0, 'bat': 2, 'python': 5, 'car': 3, 'as': 1, 'dove': 4}
+
+
+={============================================================================
+|kt_dev_py_0001| py-if
+
+Chapter 12: if Tests and Syntax Rules
+
+Like all `compound statements`, the if statement may contain other statements,
+including other ifs.
+
+<python-true>
+Remember that 1 is Boolean true (the word `True` is its equivalent), so this
+statement’s test always succeeds. To handle a false result, code the else:
+
+>>> if not 1:
+... print('true')
+... else:
+... print('false')
+...
+false
+
+* All objects have an inherent Boolean true or false value.
+* Any nonzero number or nonempty object is true.
+* Zero numbers, empty objects, and the special object `None` are considered false.
+* Comparisons and equality tests return `True` or `False` (custom versions of 1 and 0).
+* Boolean and and or operators return a true or false operand object.
+* Boolean operators stop evaluating (“short circuit”) as soon as a result is known.
+
+
+On the other hand, the `and` and `or` operators always `return an object` - either
+the object on the left side of the operator or the object on the right. If we
+test their results in if or other statements, they will be as expected
+(remember, every object is inherently true or false), but we won't get back a
+simple True or False.
+
+>>> 2 or 3, 3 or 2    # Return left operand if true
+(2, 3)                # Else, return right operand (true or false)
+>>> [] or 3
+3
+>>> [] or {}
+{}
+
+
+Python `and` operations also stop as soon as the result is known; however, in
+this case Python evaluates the operands from left to right and stops if the
+left operand is a false object because it determines the result—false and
+anything is always false:
+
+>>> 2 and 3, 3 and 2  # Return left operand if false
+(3, 2)                # Else, return right operand (true or false)
+>>> [] and {}
+[]
+>>> 3 and []
+[]
+
+
+<alternative-to-switch> dictionary-based multiway branch.
+that there is no switch or case statement in Python that selects an action
+based on a variable’s value. Instead, you usually code multiway branching as a
+series of if/elif tests, as in the prior example, and occasionally by indexing
+dictionaries or searching lists. 
+
+Because dictionaries and lists `can be built at runtime dynamically`, they are
+sometimes more flexible than hardcoded if logic in your script:
+
+>>> choice = 'ham'
+>>> print({'spam': 1.25,  # A dictionary-based 'switch'
+...        'ham': 1.99,   # Use has_key or get for default
+...        'eggs': 0.99,
+...        'bacon': 1.10}[choice])
+1.99
+
+
+Because any expression can be enclosed in parentheses, you can usually use the
+`open pairs technique` instead if you need your code to span multiple
+lines—simply wrap a part of your statement in parentheses:
+
+if (a == b and c == d and
+  d == e and e == f):
+  print('new')            # But parentheses usually do too, and are obvious
+
+
+The if/else Ternary Expression
+
+if X:
+  A = Y
+else:
+  A = Z
+
+At other times, we may want to nest such a construct in a larger statement
+instead of assigning its result to a variable. For these reasons, Python 2.5
+introduced a new expression format that allows us to say the same thing in one
+expression:
+
+A = Y if X else Z
+
+>>> A = 't' if 'spam' else 'f'  # For strings, `nonempty means true`
+>>> A
+'t'
+>>> A = 't' if '' else 'f'
+>>> A
+'f'
+
+<ex>
+    print 'Found %d images, ignoring those matching \'%s\'%s' % (
+        len(images),
+        settings.dropBoxIgnoreRegex,
+        '' if stb_regex == '.*' else ' filtering on \'' + stb_regex + '\'')
 
 
 ={============================================================================
@@ -2994,6 +3892,7 @@ A more `functional pattern` like this enables you to easily modify how the
 strings are transformed at a very high level. The clean_strings function is
 also now more reusable!
 
+<map-function>
 Use functions as arguments to other functions like the built-in `map
 function`, which applies a function to a collection of some kind:
 
