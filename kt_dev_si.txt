@@ -6,6 +6,7 @@ kt.dev.si
 Use #{ for a group and ={ for a item
 
 |kt_dev_si_0001| si-pi si-snug
+|kt_dev_si_0001| si-pi-py-update
 |kt_dev_si_0001| si-pi-py
 
 |kt_dev_si_0002| si-jabber
@@ -131,11 +132,19 @@ Use #{ for a group and ={ for a item
 
 http://hetty.cisco.com/fusionmadesimple/index.php/SnugberryPi
 
+http://gitlab.cisco.com/snug-si/
+
 http://gitlab.cisco.com/snug-si/snugupdate-v2-snugberrypi
 
 git clone http://gitlab.cisco.com/snug-si/snugupdate-v2-snugberrypi.git si-pi
 cd si-pi
+# /home/kyoupark/si-pi
+
 git clone http://gitlab.cisco.com/snug-si/snugupdate-v2-python.git
+# /home/kyoupark/si-pi/snugupdate-v2-python
+
+git clone http://gitlab.cisco.com/snug-si/snugupdate-v2.git updater
+# /home/kyoupark/si-pi/updater/src/update.c
 
 Steddy Smit
 
@@ -156,15 +165,18 @@ Low
 2.	Detect non SNUG image.
 3.	Webpage layout.[Include Version updated, Force Core Dump button, Issue pre populate etc]
 
-version of snug special image:
-R011.075.59.00U
+
+<special-image>
+// note: do not work
+// version of snug special image:
+// R011.075.59.00U
 
 
 <login>
 pi/pi
 
 
-<snug>
+<gpg>
 http://hetty.cisco.com/marvin/SnugUpdate-v2
 
 set PATH=%PATH%;"c:\Program Files (x86)\GNU\GnuPG\"
@@ -175,8 +187,11 @@ Accept all the default values by pressing enter.
 Export your public key to brian using
 gpg --armor --output public.key --export <Your Email address>
 
-C:\Users\kyoupark\AppData\Local\VirtualStore\Program Files
-  (x86)\GNU\GnuPG\public.key
+C:\Users\kyoupark\AppData\Local\VirtualStore\Program Files (x86)\
+GNU\GnuPG\public.key
+
+note:
+Saved in github/si/snug/gnupg
 
 Rename the public.key file to include your username and copy it to
 \\brian\snugupdate\keys 
@@ -202,6 +217,69 @@ http://hetty.cisco.com/marvin/SnugUpdateFileFormat
 
 <version-on-box>
 2.7.3
+
+<dropbox>
+https://www.dropbox.com/home
+username: rajchop@cisco.com
+pwd: generic1
+
+https://www.dropbox.com/sh/wlz5ikbmggua3cu/AAB2hrH6Um6GarVD2nhBe4sYa?dl=0
+
+
+={============================================================================
+|kt_dev_si_0001| si-pi-py-update
+
+pi@raspberrypi ~ $ crontab -l
+
+00 02 * * * /home/pi/snugupdate-v2-snugberrypi/run_auto.sh
+00 03 * * * /home/pi/snugupdate-v2-snugberrypi/run.sh
+
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ more run_auto.sh
+#!/bin/bash
+sec=$(( $RANDOM % 900 ))
+sleep $sec
+curl -L -o autoupdate.sh https://www.dropbox.com/s/yo8uyu4q1pn6v1l/autoupdate.sh?dl=1
+chmod 777 autoupdate.sh
+./autoupdate.sh
+
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ more autoupdate.sh
+#!/bin/bash
+FILE="version.txt"
+while read line; do
+cur_ver=`echo $line|awk '{print $1}'`
+done <$FILE
+echo "$(date)" > /home/pi/snugupdate-v2-snugberrypi/www/log
+curl -L -o newversion.txt https://www.dropbox.com/s/csty3cjjqtki4s2/version.txt?dl=1
+if [ $? != 0 ]; then
+    echo "Failed to download the Pi version file!" >> /home/pi/snugupdate-v2-snugberrypi/www/log
+    exit 1
+fi
+FILE="newversion.txt"
+while read line; do
+new_ver=`echo $line|awk '{print $1}'`
+done <$FILE
+rm newversion.txt
+cd /home/pi/snugupdate-v2-snugberrypi/snugupdate-v2-python
+
+if test "$cur_ver" = "$new_ver";then
+   echo "Pi has the latest version:$cur_ver Auto update not required" >> ../www/log
+else
+   echo "Current Version: $cur_ver Auto updating to New Version: $new_ver" >> ../www/log
+   cd /home/pi/
+   curl -L -o pi_software.zip https://www.dropbox.com/sh/d806r7k415g3fkq/AACrX2dQYOWlPolWp0CV8wAUa?dl=1
+   if [ $? != 0 ]; then
+      echo "Failed to download the new Pi software!" >> ../www/log
+      exit 1
+   fi
+   mkdir pi_software
+   unzip pi_software.zip -d pi_software &>/dev/null
+   cp -r /home/pi/pi_software/* /home/pi/snugupdate-v2-snugberrypi/
+   rm -rf pi_software.zip
+   rm -rf pi_software
+   echo "Auto update done!!" >> /home/pi/snugupdate-v2-snugberrypi/www/log
+fi
 
 
 ={============================================================================
@@ -324,8 +402,97 @@ Done
 All done.  You stay classy now.
 
 
+<local-settings>
+
+From README
+
+To use
+======
+
+1) Take a look at settings.py. If it all looks good, skip to step 3.
+
+2) To override a setting, make a file called local_settings.py and
+add your overrides in there. For example, if you have 2 set top boxes
+at home, local_settings.py should look like this:
+
+numSTBs = 2
+
+3) Put your .snugupdate image files in the images folder.
+
+4) Run this command to detect set top boxes on your network and
+perform the update:
+
+    python update.py
+
+
+From REAEME.manual
+
+Here is a worked example:
+
+$ python snug_update_linux/extract_image.py sam-7401.SYSF62.04.enc.snugupdate
+File version: 1
+Number of images: 1
+Image version: 2685599744
+Baseline: SYSF62.04
+Platform: sam-7401
+Encrypted: 1
+Encrypted for: keyholders@company.com
+Found data length: 14739278
+Writing file sam-7401_SYSF62.04.gpg
+
+Now we have the encrypted image, decrypt it with gpg:
+
+note: on pi and extract_image.py works only on linux but not windows.
+$ sudo python ./libraries/extract_image.py ~/drx890.SYSF40.73.00.enc.snugupdate
+
+
+$ gpg --decrypt sam-7401_SYSF62.04.gpg > sam-7401_SYSF62.04
+You need a passphrase to unlock the secret key for
+user: "Rob Fisher (Snugupdate key) <rfisher@ndsuk.com>"
+2048-bit ELG-E key, ID 0337F932, created 2011-01-07 (main key ID 1A62845E)
+
+gpg: encrypted with RSA key, ID 74EFA50A
+...
+
+Now copy the updater and image to your web server:
+
+$ scp snug_update/SnugUpdate/SnugUpdate/Resources/updater_sam_7401 mywebserver:/var/www/snug/
+$ scp sam-7401_SYSF62.04 mywebserver:/var/www/snug/
+
+
+`settings.py`
+
+try:
+    from local_settings import *
+    if verboseLogging:
+      print 'Successfully imported local settings'
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi/snugupdate-v2-python $ cat local_settings.py
+from libraries.utilities import get_ipv4_address
+
+# GPG passphrase
+gpgPassphrase = 'Zft4ngX4#_q5HvzELy9pnW#L-Sw=LnTgN$jkCgPPcyCrQrCuSQ78s=45uNujm*$Q'
+
+# Don't ask whether to update or not assume this tool will do the correct thing!
+acceptDefaultActions = True
+
+# enable log uploading via a SnugberryPi
+piLogUploading = True
+
+
 <run>
+pi@raspberrypi ~/snugupdate-v2-snugberrypi/snugupdate-v2-python/images $ incrontab -l
+/srv/ftp/upload IN_CLOSE_WRITE /home/pi/snugupdate-v2-snugberrypi/stblog.sh $@/ $#
+/home/pi/snugupdate-v2-snugberrypi/www/manual-update IN_CREATE /home/pi/snugupdate-v2-snugberrypi/run.sh
+
 # run.sh
+
+echo "$(date)" >> ../www/log
+if [ -f ../www/manual-update/manual ]; then
+    rm -f ../www/manual-update/manual
+    echo "Manually updating the box now" >> ../www/log
+fi
+
 python update.py $force >> ../www/log 2>&1
 
 
@@ -351,8 +518,6 @@ from libraries import settings
   webServices = WebServices(devices.deviceDiscover)
   webServices.startWebServices()
 
-  # note: how each STB get updated. but where does it come from?
-  #
   # class Devices():
   # def deviceDiscover(self, packet, address):
   #   stb = STB(ip, port, packet)
@@ -368,6 +533,9 @@ from libraries import settings
   #   self._parsepacket(packet)
   #   self._getEndPoint()
   #
+  # note: 
+  # This is box ip and gets data from a box over uPNP.  
+  #
   # DEBUG: packet: HTTP/1.1 200 OK
   # CACHE-CONTROL: max-age=115
   # DATE: Mon, 03 Jan 2000 10:16:15 GMT
@@ -379,6 +547,8 @@ from libraries import settings
   # X-User-Agent: redsonic
   # ST: urn:schemas-nds-com:device:SkyControl:2
   # USN: uuid:444D5276-3247-536B-7943-0019fbf2d46b::urn:schemas-nds-com:device:SkyControl:2
+  #
+  # >>> DEBUG: _getEndPoint: self.info[model]: R000.040.73.00U (4ldzfno)
 
   # return a list of STB objects.
   valids = devices.getValidDevices()
@@ -528,6 +698,7 @@ from libraries import settings
   #     print ' - upgrade to %s' % image['filename']
   #     self._update = True
   #
+  # *compare.version*
   # images.compareVersions('stb-version', 'image-version')
   #
   # # returns 1 if greater is bigger than lesser
@@ -538,18 +709,43 @@ from libraries import settings
   devices.checkSTBActions(stbImages)
 
   # note: NOT executed for some reason when settings.acceptDefaultActions =
-  # False in settings.py? Different place to define it?
-  #
-  # Don't ask whether to update or not assume this tool will do the correct thing!
-  # *settings.acceptDefaultActions* = False
-  if settings.acceptDefaultActions is False:
-    answer = getAnswer('Do the actions look OK?', ['yes', 'no', 'confirm'])
+  # False in settings.py? Different place to define it? 
+  # *settings.acceptDefaultActions* = True
+  # turns out if comes from `local_settings.py`
 
   # note: decrypt image using `gpg`
-  # note: NOT effect on settings.gpgPassphrase. Different place to define it?
+  # note: settings.gpgPassphrase comes from `local_settings.py`
   #
   # def extractImages(self):
+  #
+  # with open(self.images[image]['filename'], 'rb') as f:                
+  #     out_filename=self.images[image]['filename'] + '.gpg'
+  #     self.images[image]['extracted'] = extract_image(f, filename=out_filename)
+  #
+  # `extract_image.py`
+  # def extract_image(f, filename=None):
+  #
+  # note: prints from extract_image which is to get file info.
+  # # File version: 1
+  # # Number of images: 1
+  # # Image version: 0
+  # # Baseline: SYSF40.73.00
+  # # Platform: drx890
+  # # Encrypted: 1
+  # # Encrypted for: keyholders@company.com
+  # # Found data length: 16722379
+  # # Writing file images/drx890.SYSF40.74.00.enc.snugupdate.gpg
+  #
+  # in_file = self.images[image]['extracted']
+  # out_file =  in_file + '.clear'
+  # self.images[image]['clear'] = out_file
+  #
   # >>> DEBUG: cmd: gpg --batch --no-tty --passphrase-fd 0 --decrypt "images/drx890.SYSF40.73.00.enc.snugupdate.gpg"
+  #
+  # 16722541 Jan  3 11:55 drx890.SYSF40.74.00.enc.snugupdate
+  # 16722379 Jan  4 09:01 drx890.SYSF40.74.00.enc.snugupdate.gpg
+  # 16611504 Jan  4 09:01 drx890.SYSF40.74.00.enc.snugupdate.gpg.clear
+  #
   stbImages.extractImages()
 
   # def updateSTBs(self, images, confirm=False):
@@ -558,7 +754,7 @@ from libraries import settings
   # def performAction(self, images):
   #   do only when *self._update* = True
   #
-  # libraries/update_engine.py
+  # `libraries/update_engine.py`
   # update_stb(self, image['clear'], settings.webserverIPAddress)
   #
   # My IP address.  Only set this if the auto detection is failing (advanced setting)
@@ -641,6 +837,7 @@ from libraries import settings
   #         tn.write('wget -O image.img %s%s && echo STEP_3\n' % (server_root, image_path))
   #         read_until_step(tn, 'STEP_3', 120)
   # 
+  #         *update* 
   #         #4) Update the image
   #         print 'Updating...'
   #         cmd = 'LD_LIBRARY_PATH=. ./update -t %d -w %s' % (time.time(), 'image.img')
@@ -661,6 +858,41 @@ from libraries import settings
 /home/pi/snugupdate-v2-snugberrypi/snugupdate-v2-python/images
 -rw-r--r-- 1 pi pi 16707295 Dec  5 11:11 drx890.SYSF40.65.00.enc.snugupdate
 -rw-r--r-- 1 pi pi 16722490 Dec 13 13:45 drx890.SYSF40.68.00.enc.snugupdate
+
+
+={============================================================================
+|kt_dev_si_0001| si-pi-update
+
+cmd = 'LD_LIBRARY_PATH=. ./update -t %d -w %s' % (time.time(), 'image.img')
+
+    LOG(LOG_LEVEL_ERROR, "  -w <filename> - Flash image to write - Can be local or http://\n");
+    LOG(LOG_LEVEL_ERROR, "  -t <time>     - Set current time - Unix timestamp in seconds since 1970\n");
+
+
+<reboot>
+            case 'f':
+                z_force_reboot = 1;
+                break;
+
+    /* Wait until it's safe to reboot */
+    if (z_force_reboot == 0)
+    {
+        while(check_box_state() != ERR_OK)
+        {
+            sleep(z_check_interval);
+        }
+    }
+
+
+    else
+    {
+        LOG(LOG_LEVEL_ERROR, "Rebooting...\n");
+#ifndef PLATFORM_x86
+        sleep(5);
+        sync();
+        reboot(RB_AUTOBOOT);
+#endif
+    }
 
 
 # ============================================================================
@@ -20141,61 +20373,70 @@ MCM_SysinitPrepare
 ={============================================================================
 |kt_dev_si_0001| comp-xtvfs
 
-############################################################
-## comp-XTVFS
-############################################################
+git clone ssh://kyoupark@wwwin-git-gpk-2.cisco.com:29418/XTVFS_Comp.git
+
 XTV FS Group <XTVFSGroup@nds.com>
 
 # see below as there are some tools and docs
-#
-http://hoover.uk.nds.com/fusionmadesimple/index.php/DiskIssuesTips
 \\ukbackup.uk.nds.com\STB Development\XTVFS
 
-# The stat = 0x8123 means partition table error. It seemed to be a failure in mount operation when trying to read the partition table.
+# The stat = 0x8123 means partition table error. It seemed to be a failure in
+# mount operation when trying to read the partition table.
 # 
-# XTVFS have a data structure called "Additional Info" reside at sector 5 and use sector 6 as a backup.
-# In version Z6, sector 5 is copied into sector 6 in case the two have different content and in version 20, 
-# a difference between the two copies fails the mount. 
+# XTVFS have a data structure called "Additional Info" reside at sector 5 and
+# use sector 6 as a backup.  In version Z6, sector 5 is copied into sector 6
+# in case the two have different content and in version 20, a difference
+# between the two copies fails the mount. 
 #
-# old one
-# (baseline) XTVFS_ALL_OS17.13.8Z6_XTVFS_MAIN_2_Int
-# (from log) @(#)XTVFS FORMAT 17.13.8Z6 PRODUCT Aug 31 2011 11:41:42
+# old one (baseline) XTVFS_ALL_OS17.13.8Z6_XTVFS_MAIN_2_Int (from log)
+# @(#)XTVFS FORMAT 17.13.8Z6 PRODUCT Aug 31 2011 11:41:42
 #
-# new one
-# (baseline) XTVFS_ALL_OS20.0.8_XTVFS_MAIN_2_Int@/vobs/FUSIONOS_PROJECTS
+# new one (baseline)
+# XTVFS_ALL_OS20.0.8_XTVFS_MAIN_2_Int@/vobs/FUSIONOS_PROJECTS
 
-# so if old xtvfs(Z release) had a way to fix a sector06 by copying it from sector05, then why are we seeing 
-# this problem when shifting to R2(new xtvfs) as it should be fixed before when ran R1??
+# so if old xtvfs(Z release) had a way to fix a sector06 by copying it from
+# sector05, then why are we seeing this problem when shifting to R2(new xtvfs)
+# as it should be fixed before when ran R1??
 
-# Exactly my question too. If you consider that sector 6 is corrupted by a copy of sector 0, I can only assume 
-# that some component in R2 still write to sector 6. This is why I asked if the content of sector 5 and 6 be chcked before running R2.
-# (expected to be the same as old xtvfs fixes if it's different) 
+# Exactly my question too. If you consider that sector 6 is corrupted by a
+# copy of sector 0, I can only assume that some component in R2 still write to
+# sector 6. This is why I asked if the content of sector 5 and 6 be chcked
+# before running R2.  (expected to be the same as old xtvfs fixes if it's
+# different) 
 
-# You're suspecting that some component, PDM or Storage Helper here, may back up sector06 with sector#0(partition table)? 
-# Yes.
-# (Currently PDM uses #32 for backing up #00 and before it was #06 and storage helper did.)
+# You're suspecting that some component, PDM or Storage Helper here, may back
+# up sector06 with sector#0(partition table)?  Yes.  (Currently PDM uses #32
+# for backing up #00 and before it was #06 and storage helper did.)
 
-# why I didn't hit the same problem when tried to move from clean R1 to R2 on a differnt box? 
-# Well, on normal legacy box the partition starts at sector 63 not at sector 1!
+# why I didn't hit the same problem when tried to move from clean R1 to R2 on
+# a differnt box?  Well, on normal legacy box the partition starts at sector
+# 63 not at sector 1!
 
-# To be correct, legacy means disk formatted by Orchid software. 
-# Fusion software formats the partition to start at sector 64. Most important, not at sector 1.
+# To be correct, legacy means disk formatted by Orchid software.  Fusion
+# software formats the partition to start at sector 64. Most important, not at
+# sector 1.
 
 
-# Well, if the partition starts at 63 (or 64) then wrting to sector 6 will not corrupt file system. 
-# When the partition start at 63, the additional sector will be at sector 65 and 66 as there location is relative to teh start of partition
+# Well, if the partition starts at 63 (or 64) then wrting to sector 6 will not
+# corrupt file system.  When the partition start at 63, the additional sector
+# will be at sector 65 and 66 as there location is relative to teh start of
+# partition
 
-# So it's not just about #06. If partion starts 01 and 06 is broken, then xtvfs would think that whole partition 
-# is broken and cannot mount a partition. that's the problem we're seeing. am i correct?
+# So it's not just about #06. If partion starts 01 and 06 is broken, then
+# xtvfs would think that whole partition is broken and cannot mount a
+# partition. that's the problem we're seeing. am i correct?
 
-# yes. To be more accurate, XTVFS do check but, deccide that sector 5 will be copied to sector6. 
-# It is always a debate whether to try and recover or to fail a mount. 
-# In this case we would not find the issue is XTVFS would not fails the mount. 
-# However, if such issue will happen in the field, probably the best is to try and recover. Tough question. 
+# yes. To be more accurate, XTVFS do check but, deccide that sector 5 will be
+# copied to sector6.  It is always a debate whether to try and recover or to
+# fail a mount.  In this case we would not find the issue is XTVFS would not
+# fails the mount.  However, if such issue will happen in the field, probably
+# the best is to try and recover. Tough question. 
 #
-# However, it turned out that version R1 check and fixed 16 bytes (size of the structure), while version R2 checked 512 bytes (whole sector). 
-# So for R1 it was fixed, but for R2 it was still corrupted. Please note that we changed this during the 4k change to compatible 
-# with other XTVFS met-data. And most important, this is extra anyway, such corruption should never happen!
+# However, it turned out that version R1 check and fixed 16 bytes (size of the
+# structure), while version R2 checked 512 bytes (whole sector).  So for R1 it
+# was fixed, but for R2 it was still corrupted. Please note that we changed
+# this during the 4k change to compatible with other XTVFS met-data. And most
+# important, this is extra anyway, such corruption should never happen!
 
 # ORG problem box: sec 5 : sec 6 = diff
 # ENG box        : sec 5 : sec 6 = same
@@ -20262,13 +20503,15 @@ Units = sectors of 1 * 512 = 512 bytes
 #   2) #00 is valid but has some garbage
 #   3) #06 has the copy of #00(partition table) 
 #
-# After all, if partition starts 63/64 then shouldn't be the problem whether #06 is corrupted or not as it's out of the fs. The main problem is
-# that partition starts #01 in this case that failed to mount. 
+# After all, if partition starts 63/64 then shouldn't be the problem whether
+# #06 is corrupted or not as it's out of the fs. The main problem is that
+# partition starts #01 in this case that failed to mount. 
 #
-# From looking at #05 and #06 for R1 and R2 case, there are two things:
-#   1) For R1, #05 and #06 is different. not sure that's because xtvfs don't supports copying #05 or some overwrites this.
-#   2)
-#
+# From looking at #05 and #06 for R1 and R2 case, there are two things: 
+# 1) For R1, #05 and #06 is different. not sure that's because xtvfs don't supports
+# copying #05 or some overwrites this.
+# 2)
+
  xtvfs_read_super:XTVFS_Init stat = 0x8123
  xtvfs_fill_super:  xtvfs_read_super failed 
 !ERROR -STORAGE_HELPER <M:pdm_srv_fs_utility.c F:PDM_FS_PartitionMount L:01163 > Failure in Storage Helper library.
@@ -20287,11 +20530,12 @@ Units = sectors of 1 * 512 = 512 bytes
 !ERROR -PDM          < ppdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:03436 > failed mounting device
 
 
-# debug libs. Thing is that tar files in the input_del are not right ones so should pull debug files from output_del as below. damm.
-# so replace the below and replace a lib with debug one.
-# (this is input_del where the build picks up the tars)
+# debug libs. Thing is that tar files in the input_del are not right ones so
+# should pull debug files from output_del as below. damm.  so replace the
+# below and replace a lib with debug one.  (this is input_del where the build
+# picks up the tars)
 # vobs/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-debug.tar.bz2
-#
+
 /home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_001/vobs/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian
 drwxr-xr-x 5 parkkt ccusers 4096 Mar 28  2011 debug
 drwxr-xr-x 5 parkkt ccusers 4096 Mar 28  2011 preprod
@@ -20328,6 +20572,82 @@ mhxnvramfs 38800 1 - Live 0xc033a000
 callisto_periph 241120 2 - Live 0xc03e6000
 callisto_tuner 322640 0 - Live 0xc0394000
 callisto 5871232 2 callisto_periph,callisto_tuner, Live 0xc0762000
+
+
+// ../../XTVFS_CMA_Wrapper/src/xtvfs_imodule.c
+module_init(xtvfs_init);
+
+// ../../XTVFS_CMA_Wrapper/src/xtvfs_iinode.c                   inode->i_fop = &xtvfs_file_operations;
+struct inode_operations xtvfs_inode_operations = {
+        create:
+            xtvfs_create,
+};
+
+static int xtvfs_create(struct inode *pdir, struct dentry *pdentry,)
+{
+  InodeInit();
+}
+
+
+// ../../XTVFS_CMA_Wrapper/src/xtvfs_iinode.c                   inode->i_fop = &xtvfs_file_operations;
+/* new file or directory inode initialisation */
+static void InodeInit(
+	struct inode *pdir,  	/* in, the parent directory inode */
+	struct inode *inode, 	/* in, the file or directory inode */
+	int ino, 			 	/* in, the file or directory inode number */
+	DIR_OR_FILE dirOrFile	/* in, is it file or directory */
+	)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
+		inode->i_uid = current->cred->fsuid;
+		inode->i_gid = (pdir->i_mode & S_ISGID) ? pdir->i_gid : current->cred->fsgid;
+#else
+		inode->i_uid = current->fsuid;
+		inode->i_gid = (pdir->i_mode & S_ISGID) ? pdir->i_gid : current->fsgid;
+#endif
+		inode->i_op = &xtvfs_inode_operations;
+		inode->i_mapping->a_ops = &xtvfs_aops;
+		inode->i_mode = S_IRWXUGO;		   /*all can all */
+		if(dirOrFile == DIR){
+			inode->i_mode |= S_IFDIR;
+			inode->i_fop = &xtvfs_dir_operations;
+		} else {
+			inode->i_mode |= S_IFREG;	/* regular file */
+			inode->i_fop = &xtvfs_file_operations;
+			i_size_write(inode, 0);
+		}
+		insert_inode_hash(inode);
+}
+
+
+// ../../XTVFS_CMA_Wrapper/src/xtvfs_ifile.c
+struct file_operations xtvfs_file_operations = {
+        write:
+            xtvfs_write,
+};
+
+xtvfs_write        68 ../../posix/inc/pxtvfs.h ssize_t xtvfs_write(int fildes, const void *buf, size_t nbyte);
+ssize_t xtvfs_write(struct file * pfile, const char * buf,  size_t count,loff_t * offset)
+
+../../XTVFS_CMA_Wrapper/src/xtvfs_ifile.c
+int XTVFS_Write(xtvfsFile handle,char *buffer,int numbytes,XTVFS_Trans trans_handle)
+{
+	int		    bytesWritten;
+    XTVFSSTATUS status;
+	
+	ARGSUSED_INT((int)trans_handle)  ; 
+	status = XTVFS_WriteEx(handle, buffer, numbytes, &bytesWritten);
+	if(XTVFS_SUCCEED != status) {
+		bytesWritten = -1;
+	}
+	return bytesWritten;
+}
+
+
+// po_write           61 ../../ertfs/src/api.c
+
+
+XHddLowFlush
 
 
 ={============================================================================
