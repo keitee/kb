@@ -1,0 +1,1332 @@
+--- httpsend-0.0/src/httpsend.c	2012-01-30 12:23:45.000000000 +0000
++++ httpsend-0.0/src/httpsend.c	2012-06-06 11:53:19.000000000 +0100
+@@ -12,67 +12,82 @@
+ #define FLAG_KEEP_HEADER 0x4
+ #define FLAG_CHUNKED 0x8
+ 
+-#include <malloc.h>
+-
++#include <sys/select.h>
+ #include <stddef.h>
+ 
++#include <stdio.h>
++#include <malloc.h>
++#include <sys/time.h>
++#include <errno.h>
++
+ typedef enum {
+-        HS_IDLE=0,
+-        HS_REQUESTING,
+-        HS_RECEIVING,
+-        HS_STOPPING,
++    HS_IDLE=0,
++    HS_REQUESTING,
++    HS_RECEIVING,
++    HS_STOPPING,
+ } HTTP_STATES;
+ 
+ typedef enum {
+-        HM_GET = 0,
+-        HM_HEAD,
+-        HM_POST,
+-        HM_POST_STREAM,
+-        HM_POST_MULTIPART,
++    HM_GET = 0,
++    HM_HEAD,
++    HM_POST,
++    HM_POST_STREAM,
++    HM_POST_MULTIPART,
+ } HTTP_METHOD;
+ 
++typedef enum {
++    RET_READ_SELECT_ERROR = 10,
++    RET_READ_SELECT_TIMEOUT,
++    RET_READ_SELECT_OTHERERR,
++    RET_READ_ERROR,
++    RET_READ_PAYLOAD_SELECT_ERROR,
++    RET_READ_PAYLOAD_SELECT_TIMEOUT,
++    RET_READ_PAYLOAD_SELECT_OTHERERR,
++    RET_READ_PAYLOAD_ERROR,
++} RET_CODES;
++
+ #define postPayload_STRING 0
+ #define postPayload_BINARY 1
+ #define postPayload_FD 2
+ #define postPayload_CALLBACK 3
+ 
+-#define POST_BUFFER_SIZE 1024
++#define POST_BUFFER_SIZE 8192
+ typedef int (*PFNpostPayloadCALLBACK)(void* buffer, int bufsize);
+ 
+ typedef struct {
+-        void* data;
+-        int type;
+-        size_t length;
++    void* data;
++    int type;
++    size_t length;
+ } POST_CHUNK;
+ 
+ typedef struct {
+-        int sockfd;
+-        HTTP_METHOD method;
+-        HTTP_STATES state;
+-        const char *url;
+-        const char *proxy;
+-        unsigned short flags;
+-        unsigned short port;
+-        char* referer;
+-        char* header;
+-        char* buffer;
+-        int bufferSize;
+-        char* postPayload;
+-        char* hostname;
+-        int postPayloadBytes;
+-        int dataSize;
+-        int bytesStart;
+-        int bytesEnd;
+-        int payloadSize;
+-        //info parsed from response header
+-        char* contentType;
+-        char* location;
+-        int httpVer;    // 0 for 1.0, 1 for 1.1
+-        int httpCode;
+-        //Multipart-Post
+-        POST_CHUNK* chunk;
+-        int chunkCount;
+-        const char* filename;
++    int sockfd;
++    HTTP_METHOD method;
++    HTTP_STATES state;
++    const char *url;
++    const char *proxy;
++    unsigned short flags;
++    unsigned short port;
++    char* referer;
++    char* header;
++    char* buffer;
++    int bufferSize;
++    char* postPayload;
++    char* hostname;
++    int postPayloadBytes;
++    int dataSize;
++    int bytesStart;
++    int bytesEnd;
++    int payloadSize;
++    //info parsed from response header
++    char* contentType;
++    char* location;
++    int httpVer;    // 0 for 1.0, 1 for 1.1
++    int httpCode;
++    //Multipart-Post
++    POST_CHUNK* chunk;
++    int chunkCount;
++    const char* filename;
+ } HTTP_REQUEST;
+ 
+ #ifdef __cplusplus
+@@ -88,10 +103,22 @@
+ int httpPostStbFile(HTTP_REQUEST* req, char* url, char *macfield, char *mac, char* fieldname, const char* filename);
+ int PostFileStream(char* url, const char* filename);
+ 
++int asyncWaitOnRead(int aFd, int aSec, int aUsec);
++int asyncWaitOnWrite(int aFd, int aSec, int aUsec);
++
+ #ifdef __cplusplus
+ }
+ #endif
+ 
++
++#define PORT_TIMEOUT 60
++
++#define SELECT_READY      0
++#define SELECT_ERROR     -1
++#define SELECT_TIMEOUT   -2
++#define SELECT_OTHERERR  -3
++
++
+ #endif
+ /*******************************************************************
+ * HTTP helper
+@@ -103,18 +130,7 @@
+ #include <stdio.h>
+ #include <fcntl.h>
+ #include <string.h>
+-#ifdef WIN32
+-#include <Winsock2.h>
+-#include <io.h>
+-
+-#define read _read
+-#define open _open
+-#define close _close
+-#define lseek _lseek
+-#define snprintf _snprintf
+-#define stricmp _stricmp
+ 
+-#else
+ #include <unistd.h>
+ #include <sys/types.h>
+ #include <sys/socket.h>
+@@ -122,12 +138,9 @@
+ #include <netdb.h>
+ 
+ #define closesocket close
+-#define CloseHandle close
+ #define stricmp strcasecmp
+ #if !defined(O_BINARY)
+-#define O_BINARY 0
+-#endif
+-
++  #define O_BINARY 0
+ #endif
+ 
+ /****************************************************************************
+@@ -143,8 +156,8 @@
+ #define DEBUG
+ #endif
+ 
+-#undef DEBUG
+-#define DEBUG
++//#undef DEBUG
++//#define DEBUG
+ 
+ #define CONN_RETRIES 3
+ #define HTTP_GET_HEADER "%s %s HTTP/1.%d\r\nAccept: */*\r\nConnection: %s\r\nUser-Agent: Transerver/1.0\r\nHost: %s\r\n%s\r\n"
+@@ -154,510 +167,700 @@
+ #define MULTIPART_BOUNDARY "---------------------------67301445416139000571068213053"
+ #define HTTP_POST_STREAM_HEADER "POST %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nAccept: text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5\r\nAccept-Language: en-us,en;q=0.5\r\nAccept-Encoding: gzip,deflate\r\nAccept-Charset: ISO-8859-1;q=0.7,*;q=0.7\r\nKeep-Alive: 300\r\nConnection: close\r\nContent-Type: application/octet-stream; filename=%s\r\nContent-Length: %d\r\n%s\r\n"
+ 
++//----------------------------------------------------------------------------
++
+ void httpInitReq(HTTP_REQUEST* req, char* proxy)
+ {
+-        memset(req, 0, sizeof(HTTP_REQUEST));
+-        if (proxy && *proxy) req->proxy = proxy;
++    memset(req, 0, sizeof(HTTP_REQUEST));
++    if (proxy && *proxy) req->proxy = proxy;
+ }
+ 
++//----------------------------------------------------------------------------
++
+ static char* parseURL(const char* url, HTTP_REQUEST* param)
+ {
+-        char *ptr;
+-        size_t len;
+-        char *path;
+-
+-        if (strncmp(url,"http://",7) != 0 ) {
+-                return NULL;
+-        }
+-
+-        url += 7;
+-        ptr = strchr(url, '/');
+-        if (ptr == NULL) {
+-                path="/";
+-                len = strlen(url);
+-        } else {
+-                len = (int)(ptr - url);
+-                path = ptr;
+-        }
+-        ptr = strchr(url, ':');
+-        if (ptr && *(ptr + 1) != '/') {
+-                unsigned short int port = atoi(ptr + 1);
+-                if (port) {
+-                        param->port = port;
+-                }
+-                len = (int)(ptr - url);
+-        }
+-        param->hostname = (char*)malloc(len + 1);
+-        memcpy(param->hostname, url, len);
+-        param->hostname[len] = 0;
+-        if (!param->port) param->port = 80;
+-        return path;
++    char *ptr;
++    size_t len;
++    char *path;
++
++    if (strncmp(url,"http://",7) != 0 ) {
++        return NULL;
++    }
++
++    url += 7;
++    ptr = strchr(url, '/');
++    if (ptr == NULL) {
++        path="/";
++        len = strlen(url);
++    } else {
++        len = (int)(ptr - url);
++        path = ptr;
++    }
++    ptr = strchr(url, ':');
++    if (ptr && *(ptr + 1) != '/') {
++        unsigned short int port = atoi(ptr + 1);
++        if (port) {
++            param->port = port;
++        }
++        len = (int)(ptr - url);
++    }
++    param->hostname = (char*)malloc(len + 1);
++    memcpy(param->hostname, url, len);
++    param->hostname[len] = 0;
++    if (!param->port) param->port = 80;
++    return path;
+ }
+ 
++//----------------------------------------------------------------------------
++
+ #define MAX_HEADER_SIZE (8192 - 1)
+ 
+ size_t httpSend(HTTP_REQUEST* param, char* data, size_t length)
+ {
+-        size_t offset = 0;
+-        size_t bytes;
+-        do {
+-                bytes = send(param->sockfd, data + offset, (int)(length - offset), 0);
+-                if (bytes <= 0) break;
++    size_t offset = 0;
++    int bytes;
++    do {
++        int ret = 0;
++        ret = asyncWaitOnWrite(param->sockfd, PORT_TIMEOUT, MSG_DONTWAIT);
++        if ( ret == SELECT_ERROR ) {
++            // error
++            DEBUG("\nerror in select whilst waiting for permission to send data, quitting! errno=%d\n",errno);
++            DEBUG("%s\n",strerror(errno));
++            closesocket(param->sockfd);
++            param->sockfd = 0;
++            break;
++        } else if ( ret == SELECT_TIMEOUT ) {
++            DEBUG("\nwrite timed out\n");
++            closesocket(param->sockfd);
++            param->sockfd = 0;
++            break;
++        } else if ( ret == SELECT_OTHERERR ) {
++            DEBUG("\nselect returned in an unknown state, quitting!\n");
++            closesocket(param->sockfd);
++            param->sockfd = 0;
++            break;
++        } else {
++            // ready to send
++            //bytes = send(param->sockfd, data + offset, (int)(length - offset), 0);
++            bytes = send(param->sockfd, data + offset, (int)(length - offset), MSG_DONTWAIT);
++
++            if ( (-1 == bytes) && (EAGAIN == errno || EWOULDBLOCK == errno) ) {
++                DEBUG("\nsocket not ready, try again\n");
++                continue;
++            } else if ( bytes < 0 ) {
++                DEBUG("\nreal error during write so quit, errorcode(bytes)=%d errno=%d\n",bytes,errno);
++                DEBUG("%s\n",strerror(errno));
++                closesocket(param->sockfd);
++                param->sockfd = 0;
++                break;
++            } else {
+                 offset += bytes;
+-                DEBUG("Sent %d/%d bytes\n", offset, length);
+-        } while(offset < length);
+-        return offset;
++                //DEBUG("Sent %d/%d bytes\n", (int)offset, (int)length);
++                //DEBUG("Sent data = %s\n", data);
++            }
++        }
++    } while(offset < length);
++
++    return offset;
+ }
+ 
++//----------------------------------------------------------------------------
++
++int asyncWaitOnWrite(int aFd, int aSec, int aUsec) {
++//return 0;
++    int retval = 0;
++
++    fd_set writefds;
++    int nfds = 0;
++    struct timeval thetimeout;
++
++    thetimeout.tv_sec = aSec;
++    thetimeout.tv_usec = aUsec;
++
++    FD_ZERO(&writefds);
++
++    FD_SET(aFd, &writefds);
++
++    nfds = select(aFd+1, NULL, &writefds, NULL, &thetimeout);
++
++    if ( -1 == nfds ) {
++        // select error
++        retval = SELECT_ERROR;
++    } else if ( 0 == nfds ) {
++        // timeout
++        retval = SELECT_TIMEOUT;
++    } else if (FD_ISSET(aFd, &writefds)) {
++        // onReadyWrite
++        retval = SELECT_READY;
++    } else {
++        // none of the above must be an error
++        retval = SELECT_OTHERERR;
++    }
++
++    return retval;
++}
++
++//----------------------------------------------------------------------------
++
+ void httpClean(HTTP_REQUEST* param)
+ {
+-        if (param->sockfd) {
+-                closesocket(param->sockfd);
+-                param->sockfd = 0;
+-        }
+-        if (param->buffer) {
+-                free(param->buffer);
+-                param->buffer = 0;
+-        }
+-        if (param->hostname){
+-                free(param->hostname);
+-                param->hostname = 0;
+-        }
+-        if (param->header) {
+-                free(param->header);
+-                param->header = 0;
+-        }
++    if (param->sockfd) {
++        closesocket(param->sockfd);
++        param->sockfd = 0;
++    }
++    if (param->buffer) {
++        free(param->buffer);
++        param->buffer = 0;
++    }
++    if (param->hostname){
++        free(param->hostname);
++        param->hostname = 0;
++    }
++    if (param->header) {
++        free(param->header);
++        param->header = 0;
++    }
+ }
+ 
++//----------------------------------------------------------------------------
++
+ int httpRequest(HTTP_REQUEST* param, const char* url)
+ {
+-        const char *path;
+-        struct hostent *target_host;
+-        int ret = 0;
+-        int bytes;
+-
+-        if (url) param->url = url;
+-        param->state = HS_REQUESTING;
+-        param->payloadSize=0;
+-
+-        if (param->proxy) {
+-                parseURL(param->proxy, param);
+-                path = param->url;
++    const char *path;
++    int ret = 0;
++    int bytes;
++
++    if (url) param->url = url;
++    param->state = HS_REQUESTING;
++    param->payloadSize=0;
++
++    if (param->proxy) {
++        parseURL(param->proxy, param);
++        path = param->url;
++    } else {
++        path = parseURL(param->url, param);
++        if (!path) return -1;
++    }
++
++    if (param->header) free(param->header);
++    param->header = (char*)malloc(MAX_HEADER_SIZE + 1);
++    if ((param->bytesStart|param->bytesEnd) == 0) {
++        char headerAddition[128];
++        headerAddition[0] = 0;
++        if (param->referer) {
++            snprintf(headerAddition, sizeof(headerAddition), "Referer: %s\r\n", param->referer);
++        }
++        switch (param->method) {
++        case HM_GET:
++            snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, "GET",
++                     path, param->httpVer, (param->flags & FLAG_KEEP_ALIVE) ? "Keep-Alive" : "close", param->hostname, headerAddition);
++            break;
++        case HM_HEAD:
++            snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, "HEAD",
++                     path, param->httpVer, (param->flags & FLAG_KEEP_ALIVE) ? "Keep-Alive" : "close", param->hostname, headerAddition);
++            break;
++        case HM_POST:
++            snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_HEADER, path, param->hostname, param->postPayloadBytes, headerAddition);
++            break;
++        case HM_POST_STREAM: {
++            snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_STREAM_HEADER, path, param->hostname, param->filename, 0, headerAddition);
++            break;
++        } break;
++        case HM_POST_MULTIPART: {
++            size_t lbytes = 0;
++            int i;
++            for (i = 0; i < param->chunkCount; i++) {
++                if (param->chunk[i].type == postPayload_STRING) {
++                    param->chunk[i].length = strlen((char*)param->chunk[i].data);
++                }
++                lbytes += param->chunk[i].length;
++                lbytes += sizeof(MULTIPART_BOUNDARY) - 1 + 6;
++            }
++            lbytes += sizeof(MULTIPART_BOUNDARY) - 1 + 6;
++            snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_MULTIPART_HEADER, path, param->hostname, MULTIPART_BOUNDARY, (int)lbytes, headerAddition);
++        } break;
++        }
++    } else {
++        char tokenRange[48],*p=tokenRange;
++        p+=snprintf(p, sizeof(tokenRange), "Range: bytes=%u-", param->bytesStart);
++        if (param->bytesEnd>0) {
++            snprintf(p, 16, "%u\r\n",param->bytesEnd);
+         } else {
+-                path = parseURL(param->url, param);
+-                if (!path) return -1;
+-        }
+-
+-        if (param->header) free(param->header);
+-        param->header = (char*)malloc(MAX_HEADER_SIZE + 1);
+-        if ((param->bytesStart|param->bytesEnd) == 0) {
+-                char headerAddition[128];
+-                headerAddition[0] = 0;
+-                if (param->referer) {
+-                        snprintf(headerAddition, sizeof(headerAddition), "Referer: %s\r\n", param->referer);
+-                }
+-                switch (param->method) {
+-                case HM_GET:
+-                        snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, "GET",
+-                                path, param->httpVer, (param->flags & FLAG_KEEP_ALIVE) ? "Keep-Alive" : "close", param->hostname, headerAddition);
+-                        break;
+-                case HM_HEAD:
+-                        snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, "HEAD",
+-                                path, param->httpVer, (param->flags & FLAG_KEEP_ALIVE) ? "Keep-Alive" : "close", param->hostname, headerAddition);
+-                        break;
+-                case HM_POST:
+-                        snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_HEADER, path, param->hostname, param->postPayloadBytes, headerAddition);
+-                        break;
+-                case HM_POST_STREAM: {
+-                        snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_STREAM_HEADER, path, param->hostname, param->filename, 0, headerAddition);
+-                        break;
+-                        } break;
+-                case HM_POST_MULTIPART: {
+-                        size_t lbytes = 0;
+-                        int i;
+-                        for (i = 0; i < param->chunkCount; i++) {
+-                                if (param->chunk[i].type == postPayload_STRING) {
+-                                        param->chunk[i].length = strlen((char*)param->chunk[i].data);
+-                                }
+-                                lbytes += param->chunk[i].length;
+-                                lbytes += sizeof(MULTIPART_BOUNDARY) - 1 + 6;
+-                        }
+-                        lbytes += sizeof(MULTIPART_BOUNDARY) - 1 + 6;
+-                        snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_POST_MULTIPART_HEADER, path, param->hostname, MULTIPART_BOUNDARY, lbytes, headerAddition);
+-                        } break;
+-                }
+-        } else {
+-                char tokenRange[48],*p=tokenRange;
+-                p+=snprintf(p, sizeof(tokenRange), "Range: bytes=%u-", param->bytesStart);
+-                if (param->bytesEnd>0) {
+-                        snprintf(p, 16, "%u\r\n",param->bytesEnd);
+-                } else {
+-                        strcpy(p,"\r\n");
+-                }
+-                snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, path, "close", param->hostname, tokenRange);
++            strcpy(p,"\r\n");
+         }
++        snprintf(param->header, MAX_HEADER_SIZE + 1, HTTP_GET_HEADER, "GET", path, param->httpVer, "close", param->hostname, tokenRange);
++    }
+ 
++    do {
++        int hdrsize = (int)strlen(param->header);
++        int retry = 3;
++        ret = 0;
+         do {
+-                int hdrsize = (int)strlen(param->header);
+-                int retry = 3;
+-                ret = 0;
+-                do {
+-                if (!param->sockfd) {
+-                        struct sockaddr_in server_addr;
+-
+-                        if ((target_host = gethostbyname((const char*)param->hostname)) == NULL) {
+-                                ret = -1;
+-                                continue;
+-                        }
+-
+-                        if ((param->sockfd = socket(AF_INET,SOCK_STREAM,0)) == -1) {
+-                                DEBUG("Failed to open socket\n");
+-                                ret = -1;
+-                                continue;
+-                        }
+-
+-                        memset(&server_addr.sin_zero,0,8);
+-                        server_addr.sin_family = AF_INET;
+-                        server_addr.sin_addr.s_addr = ((struct in_addr *)(target_host->h_addr))->s_addr;
+-                        server_addr.sin_port = htons(param->port);
+-                        DEBUG("Connecting to server...(%d)(%s)(%x)\n",param->port,param->hostname,server_addr.sin_addr.s_addr);
+-
+-                        if (connect(param->sockfd,(struct sockaddr *)&server_addr,sizeof(struct sockaddr)) < 0) {
+-                                DEBUG("Failed to connect\n");
+-                                ret = -1;
+-                                continue;
+-                        }
+-                }
+-                DEBUG("Sending request...\n");
+-                if (httpSend(param, param->header, hdrsize) != hdrsize) {
+-                                closesocket(param->sockfd);
+-                                param->sockfd = 0;
+-                                ret = -1;
+-                                continue;;
+-                }
+-                        break;
+-                } while (--retry > 0);
+-                if (ret == -1) break;
+-
+-                if (param->method == HM_POST) {
+-                        if (httpSend(param, param->postPayload, param->postPayloadBytes) != param->postPayloadBytes) break;
+-                } else if (param->method == HM_POST_MULTIPART) {
+-                        POST_CHUNK* chunk;
+-                        int i;
+-                        char* sendbuf = (char*)malloc(POST_BUFFER_SIZE);
+-                        for (i = 0; i < param->chunkCount && param->state != HS_STOPPING; i++) {
+-                                chunk = param->chunk + i;
+-                                bytes = snprintf(sendbuf, POST_BUFFER_SIZE, "--%s\r\n", MULTIPART_BOUNDARY);
+-                                if (httpSend(param, sendbuf, bytes) != bytes) break;
+-                                switch (chunk->type) {
+-                                case postPayload_STRING:
+-                                case postPayload_BINARY:
+-                                        if (httpSend(param, (char*)chunk->data, chunk->length) != chunk->length) break;
+-                                        break;
+-                                case postPayload_FD:
+-                                        for(;;) {
+-                                                bytes = read((int)chunk->data, sendbuf, POST_BUFFER_SIZE);
+-                                                if (bytes <= 0) break;
+-                                                if (httpSend(param, sendbuf, bytes) != bytes) break;
+-                                        }
+-                                        break;
+-                                case postPayload_CALLBACK:
+-                                        for(;;) {
+-                                                bytes = (*(PFNpostPayloadCALLBACK)chunk->data)(sendbuf, POST_BUFFER_SIZE);
+-                                                if (bytes < 0) {
+-                                                        param->state = HS_STOPPING;
+-                                                        break;
+-                                                }
+-                                                if (bytes == 0) break;
+-                                                if (httpSend(param, sendbuf, bytes) != bytes) break;
+-                                        }
+-                                        break;
+-                                }
+-                                if (httpSend(param, "\r\n", 2) != 2) break;
+-                        }
+-                        free(sendbuf);
+-                        httpSend(param, "--", 2);
+-                        httpSend(param, MULTIPART_BOUNDARY, sizeof(MULTIPART_BOUNDARY) - 1);
+-                        httpSend(param, "--\r\n", 4);
+-                }
+-        } while(0);
++            if (!param->sockfd) {
++                struct sockaddr_in server_addr;
++                struct hostent *target_host;
++
++                if ((target_host = gethostbyname((const char*)param->hostname)) == NULL) {
++                    ret = -1;
++                    continue;
++                }
++
++                if ((param->sockfd = socket(AF_INET,SOCK_STREAM,0)) == -1) {
++                    DEBUG("Failed to open socket\n");
++                    ret = -1;
++                    continue;
++                }
++
++                memset(&server_addr.sin_zero,0,8);
++                server_addr.sin_family = AF_INET;
++                server_addr.sin_addr.s_addr = ((struct in_addr *)(target_host->h_addr))->s_addr;
++                server_addr.sin_port = htons(param->port);
++                DEBUG("Connecting to server...(%d)(%s)(%x)\n",param->port,param->hostname,server_addr.sin_addr.s_addr);
++
++                if (connect(param->sockfd,(struct sockaddr *)&server_addr,sizeof(struct sockaddr)) < 0) {
++                    DEBUG("Failed to connect\n");
++                    ret = -1;
++                    continue;
++                }
++//                {
++//                    int flags = fcntl(param->sockfd, F_GETFL, 0);
++//                    if (-1 == fcntl(param->sockfd, F_SETFL, flags | O_NONBLOCK)) {
++//                        DEBUG("Failed to set socket as non-blocking.");
++//                        ret = -1;
++//                        continue;
++//                    }
++//                }
++            }
++            DEBUG("Sending header...\n");
++            if (httpSend(param, param->header, hdrsize) != hdrsize) {
++                closesocket(param->sockfd);
++                param->sockfd = 0;
++                ret = -1;
++                continue;;
++            }
++            DEBUG("Sending header... complete\n");
++            break;
++        } while (--retry > 0);
++        if (ret == -1) break;
++
++        if (param->method == HM_POST) {
++            if (httpSend(param, param->postPayload, param->postPayloadBytes) != param->postPayloadBytes) break;
++        } else if (param->method == HM_POST_MULTIPART) {
++            POST_CHUNK* chunk;
++            int i;
++            char* sendbuf = (char*)malloc(POST_BUFFER_SIZE);
++            for (i = 0; i < param->chunkCount && param->state != HS_STOPPING; i++) {
++                chunk = param->chunk + i;
++                bytes = snprintf(sendbuf, POST_BUFFER_SIZE, "--%s\r\n", MULTIPART_BOUNDARY);
++                if (httpSend(param, sendbuf, bytes) != bytes)
++                    break;
++                switch (chunk->type) {
++                case postPayload_STRING:
++                case postPayload_BINARY:
++                    DEBUG("Sending payload string or binary...\n");
++                    if (httpSend(param, (char*)chunk->data, chunk->length) != chunk->length) break;
++                    break;
++                case postPayload_FD:
++                    DEBUG("Sending payload via FD...\n");
++                    for(;;) {
++                        bytes = read((int)chunk->data, sendbuf, POST_BUFFER_SIZE);
++                        if (bytes <= 0) break;
++                        if (httpSend(param, sendbuf, bytes) != bytes) break;
++                    }
++                    break;
++                case postPayload_CALLBACK:
++                    DEBUG("Sending payload via callback...\n");
++                    for(;;) {
++                        bytes = (*(PFNpostPayloadCALLBACK)chunk->data)(sendbuf, POST_BUFFER_SIZE);
++                        if (bytes < 0) {
++                            param->state = HS_STOPPING;
++                            break;
++                        }
++                        if (bytes == 0) break;
++                        if (httpSend(param, sendbuf, bytes) != bytes) break;
++                    }
++                    break;
++                }
++                if (httpSend(param, "\r\n", 2) != 2) break;
++            }
++            free(sendbuf);
++            httpSend(param, "--", 2);
++            httpSend(param, MULTIPART_BOUNDARY, sizeof(MULTIPART_BOUNDARY) - 1);
++            httpSend(param, "--\r\n", 4);
++        }
++    } while(0);
+ 
+-        if (!ret && param->method != HM_POST_STREAM && param->method != HM_POST_MULTIPART)
+-                return httpGetResponse(param);
++    if (!ret && param->method != HM_POST_STREAM && param->method != HM_POST_MULTIPART)
++        return httpGetResponse(param);
+ 
+-        return ret;
++    return ret;
+ }
+ 
++//----------------------------------------------------------------------------
++
+ int httpGetResponse(HTTP_REQUEST* param)
+ {
+-        int receivedBytes;
+-        int rspHeaderBytes;
+-        int ret;
+-        char *p = 0;
+-
+-        do {
+-                //receive header
+-                DEBUG("Receiving response...\n");
+-                receivedBytes=0;
+-                for(;;) {
+-                        ret = recv(param->sockfd, param->header + receivedBytes, MAX_HEADER_SIZE-receivedBytes, 0);
+-                        if (ret <= 0) break;
+-                        receivedBytes += ret;
+-                        param->header[receivedBytes] = 0;
+-                        DEBUG("Received %d/%d bytes\n", ret, receivedBytes);
+-                        if ((p = strstr(param->header,"\r\n\r\n"))) {
+-                                *(p+2) = '\0';
+-                                break;
+-                        }
+-                        if (receivedBytes == MAX_HEADER_SIZE) {
+-                                p = param->header + receivedBytes - 4;
+-                        }
+-                }
+-                if (!p) {
+-                        DEBUG("Invalid server response\n");
+-                        ret = -1;
+-                        continue;
+-                } else {
+-                        ret = 0;
+-                        p+=4;
+-                }
+-                rspHeaderBytes = (int)(p - param->header);
++    int receivedBytes;
++    int rspHeaderBytes;
++    int ret;
++    char *p = 0;
++
++    do {
++        //receive header
++        DEBUG("\nReceiving response...\n");
++        receivedBytes=0;
++        for(;;) {
++            ret = asyncWaitOnRead(param->sockfd, PORT_TIMEOUT, 0);
++            if (ret == SELECT_ERROR) {
++                // error
++                DEBUG("error in select whilst waiting for permission to read data, quitting! errno=%d\n",errno);
++                DEBUG("%s\n",strerror(errno));
++                exit(RET_READ_SELECT_ERROR);
++            } else if (ret == SELECT_TIMEOUT) {
++                DEBUG("reading header timed out, time to quit\n");
++                exit(RET_READ_SELECT_TIMEOUT);
++            } else if (ret == SELECT_OTHERERR) {
++                DEBUG("reading header select returned in an unknown state, quitting!\n");
++                exit(RET_READ_SELECT_OTHERERR);
++            } else {
++                // no select error, try reading
++                ret = recv(param->sockfd, param->header + receivedBytes, MAX_HEADER_SIZE-receivedBytes, MSG_DONTWAIT);
++                if ( 0 == ret ) {
++                    // other side disconnected
++                    DEBUG("other side disconnected whilst reading header.\n");
++                    break;
++                } else if ( (-1 == ret) && (EAGAIN == errno || EWOULDBLOCK == errno) ) {
++                    // no data to read so keep waiting
++                    continue;
++                } else if ( ret < 0 ) {
++                    // real error occurred, panic!
++                    DEBUG("real error occurred on reading header returned in an unknown state, quitting! errorcode(ret)=%d errno=%d\n",ret,errno);
++                    DEBUG("%s\n",strerror(errno));
++                    exit(RET_READ_ERROR);
++                }
++            }
++
++            receivedBytes += ret;
++            param->header[receivedBytes] = 0;
++            DEBUG("Received %d/%d bytes\n", ret, receivedBytes);
++            if ((p = strstr(param->header,"\r\n\r\n"))) {
++                *(p+2) = '\0';
++                break;
++            }
++            if (receivedBytes == MAX_HEADER_SIZE) {
++                p = param->header + receivedBytes - 4;
++            }
++        }
++        if (!p) {
++            DEBUG("Invalid server response\n");
++            ret = -1;
++            continue;
++        } else {
++            ret = 0;
++            p+=4;
++        }
++        rspHeaderBytes = (int)(p - param->header);
+ 
+         //process header
+         {
+-                char *p;
+-                DEBUG("Response header:\n%s\n", param->header);
+-                printf("Response header:\n%s\n", param->header);
+-                if (p = strstr(param->header,"HTTP/1.")) {
+-                        param->httpCode = atoi(p+9);
+-                }
+-                if (param->httpCode >= 404) {
+-                        DEBUG("Invalid response or file not found on server\n");
+-                        closesocket(param->sockfd);
+-                        param->sockfd=0;
+-                        param->state=HS_IDLE;
+-                        free(param->header);
+-                        param->header = 0;
+-                        return -1;
+-                }
+-                while ((p = strstr(p, "\r\n"))) {
+-                        char *q;
+-                        q=strchr((p += 2),':');
+-                        if (!q) continue;
+-                        *q = 0;
+-                        if (!stricmp(p,"Content-length")) {
+-                                param->payloadSize=atoi(q+2);
+-                        } else if (!stricmp(p,"Content-type")) {
+-                                param->contentType = q+2;
+-                        } else if (!stricmp(p, "Transfer-Encoding")) {
+-                                if (!strncmp(p + 19, "chunked", 7)) {
+-                                        param->flags |= FLAG_CHUNKED;
+-                                }
+-                        } else if (!stricmp(p, "Location")) {
+-                                param->location = q + 2;
+-                        }
+-                        *q = ':';
++            char *p;
++            DEBUG("Response header:\n%s\n", param->header);
++            printf("Response header:\n%s\n", param->header);
++            p = strstr(param->header,"HTTP/1.");
++            if (p) {
++                param->httpCode = atoi(p+9);
++            }
++            if (param->httpCode >= 404) {
++                DEBUG("Invalid response or file not found on server\n");
++                closesocket(param->sockfd);
++                param->sockfd=0;
++                param->state=HS_IDLE;
++                free(param->header);
++                param->header = 0;
++                return -1;
++            }
++            while ((p = strstr(p, "\r\n"))) {
++                char *q;
++                q=strchr((p += 2),':');
++                if (!q) continue;
++                *q = 0;
++                if (!stricmp(p,"Content-length")) {
++                    param->payloadSize=atoi(q+2);
++                } else if (!stricmp(p,"Content-type")) {
++                    param->contentType = q+2;
++                } else if (!stricmp(p, "Transfer-Encoding")) {
++                    if (!strncmp(p + 19, "chunked", 7)) {
++                        param->flags |= FLAG_CHUNKED;
++                    }
++                } else if (!stricmp(p, "Location")) {
++                    param->location = q + 2;
+                 }
++                *q = ':';
++            }
+         }
+         DEBUG("Payload bytes: %d\n",param->payloadSize);
+         if (param->payloadSize == 0 && param->dataSize > 0)
+-                param->payloadSize = param->dataSize - 1;
++            param->payloadSize = param->dataSize - 1;
+         if (param->flags & FLAG_REQUEST_ONLY) {
+-                closesocket(param->sockfd);
+-                param->state=HS_IDLE;
+-                return 0;
++            closesocket(param->sockfd);
++            param->state=HS_IDLE;
++            return 0;
+         }
+         // receive payload
+         if (param->method != HM_HEAD) {
+-                int bytes;
+-                int recvBytes = 0;
+-                int bytesToRecv;
+-                int payloadWithHeader = receivedBytes - rspHeaderBytes;
+-                int eof = 0;
+-                param->state=HS_RECEIVING;
+-                do {
+-                        if (param->bufferSize > 0) {
+-                                if (param->payloadSize > 0) {
+-                                        if (param->bufferSize < param->payloadSize + 1) {
+-                                                free(param->buffer);
+-                                                param->bufferSize = param->payloadSize + 1;
+-                                                param->buffer = (char*)calloc(1, param->bufferSize);
+-                                        }
+-                                } else {
+-                                        param->bufferSize *= 2;
+-                                        param->buffer = (char*)realloc(param->buffer, param->bufferSize);
+-                                }
+-                        } else {
+-                                DEBUG("Allocating %d bytes for payload buffer\n",param->payloadSize);
+-                                if (param->payloadSize) {
+-                                        param->bufferSize = param->payloadSize + 1;
+-                                        param->buffer = (char*)calloc(1, param->bufferSize);
+-                                } else {
+-                                        param->bufferSize = 1024 + payloadWithHeader;
+-                                        param->buffer = (char*)calloc(1, param->bufferSize);
+-                                }
+-                        }
+-                        if (recvBytes == 0) {
+-                                recvBytes = payloadWithHeader;
+-                                if (recvBytes > 0) {
+-                                        DEBUG("Header includes %d bytes of payload\n", recvBytes);
+-                                        memcpy(param->buffer, param->header + rspHeaderBytes, recvBytes);
+-                                }
+-                        }
+-                        //receive payload data
+-                        bytesToRecv = param->payloadSize ? param->payloadSize : param->bufferSize - 1;
+-                        for (; recvBytes < bytesToRecv; recvBytes += bytes) {
+-                                bytes = recv(param->sockfd, param->buffer + recvBytes, bytesToRecv - recvBytes, 0);
+-                                if (bytes<=0) {
+-                                        eof = 1;
+-                                        break;
+-                                }
+-                        }
+-                        if (recvBytes == param->payloadSize) eof = 1;
+-                        DEBUG("Payload received: %d bytes\n", recvBytes);
+-                } while (!eof);
+-                DEBUG("End of stream\n");
+-                *(param->buffer + recvBytes)=0;
+-                param->dataSize = recvBytes;
+-        }
++            int bytes;
++            int recvBytes = 0;
++            int bytesToRecv;
++            int payloadWithHeader = receivedBytes - rspHeaderBytes;
++            int eof = 0;
++            param->state=HS_RECEIVING;
++            do {
++                if (param->bufferSize > 0) {
++                    if (param->payloadSize > 0) {
++                        if (param->bufferSize < param->payloadSize + 1) {
++                            free(param->buffer);
++                            param->bufferSize = param->payloadSize + 1;
++                            param->buffer = (char*)calloc(1, param->bufferSize);
++                        }
++                    } else {
++                        param->bufferSize *= 2;
++                        param->buffer = (char*)realloc(param->buffer, param->bufferSize);
++                    }
++                } else {
++                    DEBUG("Allocating %d bytes for payload buffer\n",param->payloadSize);
++                    if (param->payloadSize) {
++                        param->bufferSize = param->payloadSize + 1;
++                        param->buffer = (char*)calloc(1, param->bufferSize);
++                    } else {
++                        param->bufferSize = POST_BUFFER_SIZE + payloadWithHeader;
++                        param->buffer = (char*)calloc(1, param->bufferSize);
++                    }
++                }
++                if (recvBytes == 0) {
++                    recvBytes = payloadWithHeader;
++                    if (recvBytes > 0) {
++                        DEBUG("Header includes %d bytes of payload\n", recvBytes);
++                        memcpy(param->buffer, param->header + rspHeaderBytes, recvBytes);
++                    }
++                }
++                //receive payload data
++                bytesToRecv = param->payloadSize ? param->payloadSize : param->bufferSize - 1;
++                for (; recvBytes < bytesToRecv; recvBytes += bytes) {
++                    int retval = asyncWaitOnRead(param->sockfd, PORT_TIMEOUT, 0);
++                    if (retval == SELECT_ERROR) {
++                        // error
++                        DEBUG("error in select whilst waiting for permission to read data, quitting! errno=%d\n",errno);
++                        DEBUG("%s\n",strerror(errno));
++                        exit(RET_READ_PAYLOAD_SELECT_ERROR);
++                    } else if (retval == SELECT_TIMEOUT) {
++                        DEBUG("read timed out, time to quit\n");
++                        exit(RET_READ_PAYLOAD_SELECT_TIMEOUT);
++                    } else if (retval == SELECT_OTHERERR) {
++                        DEBUG("reading data select returned in an unknown state, quitting!\n");
++                        exit(RET_READ_PAYLOAD_SELECT_OTHERERR);
++                    } else {
++                        // no select error, try reading
++                        bytes = recv(param->sockfd, param->buffer + recvBytes, bytesToRecv - recvBytes, MSG_DONTWAIT);
++                        if ( 0 == bytes ) {
++                            // other side disconnected, all done :)
++                            eof = 1;
++                            break;
++                        } else if ( (-1 == bytes) && (EAGAIN == errno || EWOULDBLOCK == errno) ) {
++                            // no data to read so keep waiting
++                            continue;
++                        } else if ( bytes < 0 ) {
++                            // real error occurred, panic!
++                            DEBUG("error reading payload, quitting! errorcode(bytes)=%d errno=%d\n",bytes,errno);
++                            DEBUG("%s\n",strerror(errno));
++                            exit(RET_READ_PAYLOAD_ERROR);
++                        }
++                    }
++                }
++                if (recvBytes == param->payloadSize) eof = 1;
++                DEBUG("Payload received: %d bytes\n", recvBytes);
++            } while (!eof);
++            DEBUG("End of stream\n");
++            *(param->buffer + recvBytes)=0;
++            param->dataSize = recvBytes;
++        }
++
++    } while(0);
++    if (param->sockfd && !(param->flags & FLAG_KEEP_ALIVE)) {
++        closesocket(param->sockfd);
++        param->sockfd=0;
++    }
++    param->state=HS_IDLE;
++    if (!(param->flags & FLAG_KEEP_HEADER)) {
++        free(param->header);
++        param->header = 0;
++    }
++    return ret;
++}
++
++//----------------------------------------------------------------------------
++
++int asyncWaitOnRead(int aFd, int aSec, int aUsec) {
++    int retval = 0;
++
++    fd_set readfds;
++    int nfds = 0;
++    struct timeval thetimeout;
++
++    thetimeout.tv_sec = aSec;
++    thetimeout.tv_usec = aUsec;
++
++    FD_ZERO(&readfds);
++
++    FD_SET(aFd, &readfds);
++
++    nfds = select(aFd+1, &readfds, NULL, NULL, &thetimeout);
++
++    if ( -1 == nfds ) {
++        // select error
++        retval = SELECT_ERROR;
++    } else if ( 0 == nfds ) {
++        // timeout
++        retval = SELECT_TIMEOUT;
++    } else if (FD_ISSET(aFd, &readfds)) {
++        // onReadyRead
++        retval = SELECT_READY;
++    } else {
++        // none of the above must be an error
++        retval = SELECT_OTHERERR;
++    }
+ 
+-        } while(0);
+-        if (param->sockfd && !(param->flags & FLAG_KEEP_ALIVE)) {
+-                closesocket(param->sockfd);
+-                param->sockfd=0;
+-        }
+-        param->state=HS_IDLE;
+-        if (!(param->flags & FLAG_KEEP_HEADER)) {
+-                free(param->header);
+-                param->header = 0;
+-        }
+-        return ret;
++    return retval;
+ }
+ 
++//----------------------------------------------------------------------------
++
+ static int fd;
+ static char fileheader[512];
+ static int filelen;
+ 
+ static int ReadData(void* buffer, int bufsize)
+ {
+-        if (fileheader[0]) {
+-                int ret = snprintf(buffer, bufsize, "%s", fileheader);
+-                fileheader[0] = 0;
+-                return ret;
+-        } else {
+-                return read(fd, buffer, bufsize);
+-        }
++    DEBUG("currpos = (%d/%d)\r", (int)lseek(fd,0,SEEK_CUR),filelen);
++    if (fileheader[0]) {
++        int ret = snprintf(buffer, bufsize, "%s", fileheader);
++        fileheader[0] = 0;
++        return ret;
++    } else {
++        return read(fd, buffer, bufsize);
++    }
+ }
+ 
++//----------------------------------------------------------------------------
++
+ #define FILE_CHUNK_HEADER "Content-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\n\r\n"
+ 
+ int httpPostFile(HTTP_REQUEST* req, char* url, char* fieldname, const char* filename)
+ {
+-        int ret;
+-        POST_CHUNK chunk;
+-        char *p;
+-
+-        httpInitReq(req, 0);
+-
+-        fd = open(filename, O_BINARY | O_RDONLY);
+-        if (fd <= 0) return -1;
+-
+-        p = strrchr(filename, '\\');
+-        if (!p) p = strrchr(filename, '/');
+-        if (!p)
+-                req->filename = filename;
+-        else
+-                req->filename = p + 1;
+-
+-        filelen = lseek(fd, 0, SEEK_END);
+-        chunk.data = (void*)ReadData;
+-        chunk.length = filelen + snprintf(fileheader, sizeof(fileheader), FILE_CHUNK_HEADER, fieldname, req->filename);
+-        chunk.type = postPayload_CALLBACK;
+-        lseek(fd, 0, SEEK_SET );
+-        req->method = HM_POST_MULTIPART;
+-        req->chunk = &chunk;
+-        req->chunkCount = 1;
+-        req->port = 80;
+-        ret = httpRequest(req, url);
+-        close(fd);
+-        if (!ret) {
+-                ret = httpGetResponse(req);
+-        }
+-        return 0;
++    int ret;
++    POST_CHUNK chunk;
++    char *p;
++
++    httpInitReq(req, 0);
++
++    fd = open(filename, O_BINARY | O_RDONLY);
++    if (fd <= 0) return -1;
++
++    p = strrchr(filename, '\\');
++    if (!p) p = strrchr(filename, '/');
++    if (!p)
++        req->filename = filename;
++    else
++        req->filename = p + 1;
++
++    filelen = lseek(fd, 0, SEEK_END);
++    chunk.data = (void*)ReadData;
++    chunk.length = filelen + snprintf(fileheader, sizeof(fileheader), FILE_CHUNK_HEADER, fieldname, req->filename);
++    chunk.type = postPayload_CALLBACK;
++    lseek(fd, 0, SEEK_SET );
++    req->method = HM_POST_MULTIPART;
++    req->chunk = &chunk;
++    req->chunkCount = 1;
++    req->port = 80;
++    ret = httpRequest(req, url);
++    close(fd);
++    if (!ret) {
++        ret = httpGetResponse(req);
++    }
++    return 0;
+ }
+ 
+ static char stbheader[512];
+-static int stblen;
+ 
+ int httpPostStbFile(HTTP_REQUEST* req, char* url, char *stb_id_field, char *mac, char* fieldname, const char* filename)
+ {
+-        int ret;
+-        POST_CHUNK chunk[2];
+-        char *p;
+-
+-        httpInitReq(req, 0);
+-
+-        fd = open(filename, O_BINARY | O_RDONLY);
+-        if (fd <= 0) return -1;
+-
+-        p = strrchr(filename, '\\');
+-        if (!p) p = strrchr(filename, '/');
+-        if (!p)
+-                req->filename = filename;
+-        else
+-                req->filename = p + 1;
++    int ret;
++    POST_CHUNK chunk[2];
++    char *p;
++
++    httpInitReq(req, 0);
++
++    fd = open(filename, O_BINARY | O_RDONLY);
++    if (fd <= 0) return -1;
++
++    p = strrchr(filename, '\\');
++    if (!p) p = strrchr(filename, '/');
++    if (!p)
++        req->filename = filename;
++    else
++        req->filename = p + 1;
+ 
+-        filelen = lseek(fd, 0, SEEK_END);
++    filelen = lseek(fd, 0, SEEK_END);
++    DEBUG("filelen = %d\n", filelen);
+ 
+ #define STB_CHUNK_HEADER "Content-Disposition: form-data; name=\"%s\"\r\n\r\n%s"
+ 
+-        chunk[0].data = (void*)stbheader;
+-        chunk[0].length = snprintf(stbheader, sizeof(stbheader), STB_CHUNK_HEADER, stb_id_field, mac);
+-        chunk[0].type = postPayload_STRING;
+-
+-        chunk[1].data = (void*)ReadData;
+-        chunk[1].length = filelen + snprintf(fileheader, sizeof(fileheader), FILE_CHUNK_HEADER, fieldname, req->filename);
+-        chunk[1].type = postPayload_CALLBACK;
+-        lseek(fd, 0, SEEK_SET );
+-        req->method = HM_POST_MULTIPART;
+-        req->chunk = chunk;
+-        req->chunkCount = 2;
+-        req->port = 80;
+-        ret = httpRequest(req, url);
+-        close(fd);
+-        if (!ret) {
+-                ret = httpGetResponse(req);
+-        }
+-        return 0;
++    chunk[0].data = (void*)stbheader;
++    chunk[0].length = snprintf(stbheader, sizeof(stbheader), STB_CHUNK_HEADER, stb_id_field, mac);
++    chunk[0].type = postPayload_STRING;
++
++    chunk[1].data = (void*)ReadData;
++    chunk[1].length = filelen + snprintf(fileheader, sizeof(fileheader), FILE_CHUNK_HEADER, fieldname, req->filename);
++    chunk[1].type = postPayload_CALLBACK;
++    lseek(fd, 0, SEEK_SET );
++    req->method = HM_POST_MULTIPART;
++    req->chunk = chunk;
++    req->chunkCount = 2;
++    req->port = 80;
++    ret = httpRequest(req, url);
++    close(fd);
++    if (!ret) {
++        ret = httpGetResponse(req);
++    }
++    return 0;
+ }
+ 
+ int PostFileStream(char* url, const char* filename)
+ {
+-        int ret;
+-        HTTP_REQUEST req;
++    int ret;
++    HTTP_REQUEST req;
+ 
+-        char buf[1024];
+-        int bytes;
++    char buf[POST_BUFFER_SIZE];
++    int bytes;
+ 
+-        memset(&req, 0, sizeof(req));
++    memset(&req, 0, sizeof(req));
+ 
+-        fd = open(filename, O_BINARY | O_RDONLY);
+-        if (fd <= 0) return 0;
++    fd = open(filename, O_BINARY | O_RDONLY);
++    if (fd <= 0) return 0;
+ 
+-        req.filename = strrchr(filename, '\\');
+-        if (!req.filename)
+-                req.filename = filename;
+-        else
+-                req.filename++;
++    req.filename = strrchr(filename, '\\');
++    if (!req.filename)
++        req.filename = filename;
++    else
++        req.filename++;
+ 
+-        req.method = HM_POST_STREAM;
+-        ret = httpRequest(&req, url);
++    req.method = HM_POST_STREAM;
++    ret = httpRequest(&req, url);
+ 
+-        while ((bytes = read(fd, buf, sizeof(buf))) > 0
+-                && httpSend(&req, buf, bytes) == bytes);
++    while ((bytes = read(fd, buf, sizeof(buf))) > 0
++           && httpSend(&req, buf, bytes) == bytes);
+ 
+-        close(fd);
+-        return ret;
++    close(fd);
++    return ret;
+ }
+ 
+ int main( int argc, char *argv[] )
+@@ -667,8 +870,8 @@
+     url = "http://drop.stb.bskyb.com/cgi-bin/stbdump.cgi";
+ 
+     /*httpRequest( param, url );*/
+-    printf("Uploading (%d)(%s)(%s)\n",argc,argv[1],argv[2]);
++    printf("Uploading V2.0 (%d)(%s)(%s)\n",argc,argv[1],argv[2]);
+     httpPostStbFile( param, url, "stbid", argv[1], "file", argv[2] );
+ 
++    return 0;
+ }
+-

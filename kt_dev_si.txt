@@ -6,8 +6,11 @@ kt.dev.si
 Use #{ for a group and ={ for a item
 
 |kt_dev_si_0001| si-pi si-snug
-|kt_dev_si_0001| si-pi-py-update
+|kt_dev_si_0001| si-pi-signed image-version
+|kt_dev_si_0001| si-pi-py-deploy
 |kt_dev_si_0001| si-pi-py
+|kt_dev_si_0001| si-pi-update
+|kt_dev_si_0001| si-pi-upload
 
 |kt_dev_si_0002| si-jabber
 |kt_dev_si_0002| si-links
@@ -21,7 +24,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-build
 |kt_dev_si_0002| si-build-baseline
 |kt_dev_si_0002| si-build-errors
-|kt_dev_si_0002| si-build-make
+|kt_dev_si_0002| si-build-mw
 |kt_dev_si_0002| si-build-make-image
 |kt_dev_si_0002| si-build-map-file
 |kt_dev_si_0002| si-build-jpa
@@ -130,6 +133,7 @@ Use #{ for a group and ={ for a item
 ={============================================================================
 |kt_dev_si_0001| si-pi
 
+// Instructions to set up Pi
 http://hetty.cisco.com/fusionmadesimple/index.php/SnugberryPi
 
 http://gitlab.cisco.com/snug-si/
@@ -177,6 +181,7 @@ pi/pi
 
 
 <gpg>
+// windows version
 http://hetty.cisco.com/marvin/SnugUpdate-v2
 
 set PATH=%PATH%;"c:\Program Files (x86)\GNU\GnuPG\"
@@ -190,16 +195,11 @@ gpg --armor --output public.key --export <Your Email address>
 C:\Users\kyoupark\AppData\Local\VirtualStore\Program Files (x86)\
 GNU\GnuPG\public.key
 
-note:
-Saved in github/si/snug/gnupg
+Use usual file such as:
+drx890.SYSF40.79.00.enc.snugupdate
 
-Rename the public.key file to include your username and copy it to
-\\brian\snugupdate\keys 
-
-
-Verify that you've picked the image you want and enter your password for the
+Verify that you've picked the image you want and enter your passphrase for the
 `decryption`. 
-
 
 Hitting next will then run the update. The box will not reboot immediately -
 It will wait until:
@@ -212,11 +212,13 @@ It will wait until:
 Note that it only runs these checks every 10 minutes, so the reboot time may
 be a little unpredictable. 
 
+
+<format>
 http://hetty.cisco.com/marvin/SnugUpdateFileFormat
 
 
 <version-on-box>
-2.7.3
+python 2.7.3
 
 <dropbox>
 https://www.dropbox.com/home
@@ -227,13 +229,44 @@ https://www.dropbox.com/sh/wlz5ikbmggua3cu/AAB2hrH6Um6GarVD2nhBe4sYa?dl=0
 
 
 ={============================================================================
-|kt_dev_si_0001| si-pi-py-update
+|kt_dev_si_0001| si-pi-signed image-version
+
+# sign request
+https://hudkinsmaster1.cisco.com:8443/view/_AutoSigning/job/AS20_RequestSigning_Darwin/177/
+https://hudkinsmaster1.cisco.com:8443/view/_AutoSigning/job/AS20_RequestSigning_Darwin/177/console
+21:27:52 sign_version/5364/flash.out.sky_trials_signed.mux_dr
+21:27:52 sign_version/5364/APPLI_0.FLA_flash.out.sky_trials.etp_signed.bin
+21:27:52 sign_version/5364/ethupdater.bin_signed.mux_dr
+
+http://hetty.cisco.com/fusionmadesimple/index.php/Flashing_Signed_Image
+
+01 and 02 are the two flash banks. '-1-' means the image in that bank is
+considered valid. 
+
+'-2-' means it is invalid. The 182 and 183 are version numbers - the STB will
+try to boot from the highest valid bank. 
+
+The '03-1' means it is trying to boot from bank 1. If it has '03-0' it is
+booting from bank 0. 
+
+1.3.5
+01-1-5364-0     # snug signed
+02-1-5362-0     # snug singed
+03-0            # boots from 0
+
+1.3.5
+01-1-65535-1    # not sung signed and usual build
+02-1-5364-0     # snug signed
+03-0
+
+
+={============================================================================
+|kt_dev_si_0001| si-pi-py-deploy
 
 pi@raspberrypi ~ $ crontab -l
-
 00 02 * * * /home/pi/snugupdate-v2-snugberrypi/run_auto.sh
-00 03 * * * /home/pi/snugupdate-v2-snugberrypi/run.sh
 
+note: this is to update package
 
 pi@raspberrypi ~/snugupdate-v2-snugberrypi $ more run_auto.sh
 #!/bin/bash
@@ -467,6 +500,7 @@ try:
     if verboseLogging:
       print 'Successfully imported local settings'
 
+<local-settings>
 pi@raspberrypi ~/snugupdate-v2-snugberrypi/snugupdate-v2-python $ cat local_settings.py
 from libraries.utilities import get_ipv4_address
 
@@ -476,12 +510,12 @@ gpgPassphrase = 'Zft4ngX4#_q5HvzELy9pnW#L-Sw=LnTgN$jkCgPPcyCrQrCuSQ78s=45uNujm*$
 # Don't ask whether to update or not assume this tool will do the correct thing!
 acceptDefaultActions = True
 
-# enable log uploading via a SnugberryPi
-piLogUploading = True
 
+<cron-run>
+pi@$ crontab -l
+00 03 * * * /home/pi/snugupdate-v2-snugberrypi/run.sh
 
-<run>
-pi@raspberrypi ~/snugupdate-v2-snugberrypi/snugupdate-v2-python/images $ incrontab -l
+pi@$ incrontab -l
 /srv/ftp/upload IN_CLOSE_WRITE /home/pi/snugupdate-v2-snugberrypi/stblog.sh $@/ $#
 /home/pi/snugupdate-v2-snugberrypi/www/manual-update IN_CREATE /home/pi/snugupdate-v2-snugberrypi/run.sh
 
@@ -493,6 +527,7 @@ if [ -f ../www/manual-update/manual ]; then
     echo "Manually updating the box now" >> ../www/log
 fi
 
+<pi-log-update>
 python update.py $force >> ../www/log 2>&1
 
 
@@ -671,6 +706,7 @@ from libraries import settings
   # `libraries/stb.py`
   # devices = Devices()
   #
+  # note: can set from "force" option
   # If you want to ignore what file versions are being returned, ie the STBs
   # will be flashed with the highest image version that we have, regardless of
   # what version they have, set this to true 
@@ -686,6 +722,7 @@ from libraries import settings
   #
   #   image = images.getImage(self.info['boxtype'])
   #
+  # *force-option*
   # If you want to ignore what file versions are being returned, ie the STBs
   # will be flashed with the highest image version that we have, regardless of
   # what version they have, set this to true ignoreFileVersions = False
@@ -745,7 +782,32 @@ from libraries import settings
   # 16722541 Jan  3 11:55 drx890.SYSF40.74.00.enc.snugupdate
   # 16722379 Jan  4 09:01 drx890.SYSF40.74.00.enc.snugupdate.gpg
   # 16611504 Jan  4 09:01 drx890.SYSF40.74.00.enc.snugupdate.gpg.clear
+
+  # note: WHY size changes? since do not write header to output
   #
+  # kyoupark@kit-debian:~/si-pi-image$ python ./extract_image.py drx890.SYSF40.73.00.enc.snugupdate
+  # File version: 1
+  # Number of images: 1
+  # Image version: 0
+  # Baseline: SYSF40.73.00
+  # Platform: drx890
+  # Encrypted: 1
+  # Encrypted for: keyholders@company.com
+  # Found data length: 16722379
+  # Writing file drx890_SYSF40.73.00.gpg
+  # 
+  # -rwxr--r--  1 kyoupark ccusers 16722541 Jan  5 09:52 drx890.SYSF40.73.00.enc.snugupdate*
+  # -rw-r--r--  1 kyoupark ccusers 16722379 Jan  6 13:28 drx890_SYSF40.73.00.gpg
+  #
+  # note: WHY FLA from CI is different x.out?
+  #
+  # gpg --output x.out --passphrase tegI3301 --decrypt drx890_SYSF40.79.00.gpg
+  #
+  # -rwxr--r--  1 kyoupark ccusers 16349360 Jan  6 13:17 APPLI_0.FLA_40.73.FLA*
+  # -rwxr--r--  1 kyoupark ccusers 16722541 Jan  5 09:52 drx890.SYSF40.73.00.enc.snugupdate*
+  # -rw-r--r--  1 kyoupark ccusers 16722379 Jan  6 13:28 drx890_SYSF40.73.00.gpg
+  # -rw-r--r--  1 kyoupark ccusers 16611504 Jan  6 13:33 x.out
+
   stbImages.extractImages()
 
   # def updateSTBs(self, images, confirm=False):
@@ -776,17 +838,14 @@ from libraries import settings
   # │       ├── libexpat.so.1 -> libexpat.so.1.6.0
   # │       └── libexpat.so.1.6.0
   # 
-  # the update is a binary file. where does it come from?
-  #
   # # def getUpdaterImage(self):
   # #     box = self.getBoxInfo('boxtype')
   # #     if box == 'ams-drx78':
   # #         return 'resources/updater.drx780.tar'
   # #     else:
   # #         return 'resources/updater.ams890.tar'
-  #     updater_path = stb.getUpdaterImage()
   #
-  #     #updater_path = 'resources/updater.ams890.tar'
+  #     updater_path = stb.getUpdaterImage()
   # 
   #     # 1) Telnet into the STB
   #     tn = stb.openTelnetConnection()
@@ -798,11 +857,21 @@ from libraries import settings
   #     tn.read_until('# ')
   # 
   #     try:
-  #         #setup PI log uploading
-  #         if settings.piLogUploading:
+  #         # enable log uploading via a SnugberryPi
+  #         # piLogUploading = False
+  #         if *settings.piLogUploading* :
+  #
+  #             # /dev/sda1 on /mnt/nds/dev_6/part_0 type xtvfs (rw,nosuid)
+  #             #
+  #             # -sh-3.2# mount | grep "/dev/sda.*/mnt/nds/dev" | cut -f3 -d" "
+  #             # /mnt/nds/dev_6/part_0
+  #
+  #             # note: WHY make this file?
   #             print 'Creating pi_addr file for log uploads'
-  #             #this finds the locations of FSN_DATA and then creates a file in it called PI_ADDR and puts this machines IP address in that file
-  #             tn.write('echo `mount | grep "/dev/sda.*/mnt/nds/dev" | cut -f3 -d" "`/FSN_DATA/PI_ADDR\n')
+  #
+  #             # this finds the locations of FSN_DATA and then creates a file
+  #             # in it called PI_ADDR and puts PI's IP address in that file
+  #             tn.write('echo ``mount | grep "/dev/sda.*/mnt/nds/dev" | cut -f3 -d" "``/FSN_DATA/PI_ADDR\n')
   #             fsndata = tn.read_until('PI_ADDR', 10)
   #             tn.read_until('# ')
   # 
@@ -817,11 +886,16 @@ from libraries import settings
   #                 print 'location = ' + fsndata
   #                 tn.write('echo ' + settings.webserverIPAddress + ' > ' + fsndata + '\n')
   # 
+  #             # >>> location = /mnt/nds/dev_6/part_0/FSN_DATA/PI_ADDR
+  #
   #         # 1.5) Create working directory
   #         print 'Creating working dir'
   #         tn.write('mkdir -p /update && cd /update && echo STEP_1_5\n')
   #         read_until_step(tn, 'STEP_1_5', 5)
   # 
+  #         # *from-pi*
+  #         # Downloading update utility http://10.209.60.125:1024/, resources/updater.ams890.tar
+  #
   #         # 2) Download the updater file
   #         print 'Downloading update utility %s' % updater_path
   #         tn.write('wget -O updater.tar %s%s && echo STEP_2\n' % (server_root, updater_path))
@@ -855,19 +929,43 @@ from libraries import settings
   devices.updateSTBs(stbImages, confirm=confirmEach)
 
 
-/home/pi/snugupdate-v2-snugberrypi/snugupdate-v2-python/images
--rw-r--r-- 1 pi pi 16707295 Dec  5 11:11 drx890.SYSF40.65.00.enc.snugupdate
--rw-r--r-- 1 pi pi 16722490 Dec 13 13:45 drx890.SYSF40.68.00.enc.snugupdate
-
-
 ={============================================================================
 |kt_dev_si_0001| si-pi-update
 
 cmd = 'LD_LIBRARY_PATH=. ./update -t %d -w %s' % (time.time(), 'image.img')
 
+-sh-3.2# pwd
+/update/bin.ams890
+-sh-3.2# ls -al
+-rw-r--r--    1 root     root     16628100 Jan  1 08:06 image.img
+lrwxrwxrwx    1 root     root           16 Jan  1 08:06 libcurl.so -> libcurl.so.4.3.0
+lrwxrwxrwx    1 root     root           16 Jan  1 08:06 libcurl.so.4 -> libcurl.so.4.3.0
+-rwxr-xr-x    1 root     root       372181 Mar 18  2013 libcurl.so.4.3.0
+lrwxrwxrwx    1 root     root           17 Jan  1 08:06 libexpat.so -> libexpat.so.1.6.0
+lrwxrwxrwx    1 root     root           17 Jan  1 08:06 libexpat.so.1 -> libexpat.so.1.6.0
+-rwxr-xr-x    1 root     root       368023 Mar 18  2013 libexpat.so.1.6.0
+-rwxr-xr-x    1 root     root        46288 May  3  2013 update
+
+# WHY not work?
+# wget -O updater.tar http://11.209.60.125:1024/resources/updater.ams890.tar
+
+mkdir /mnt/tmp
+mount -o rw -t nfs 10.209.62.232:/home/NDS-UK/kyoupark/ /mnt/tmp
+
+LD_LIBRARY_PATH=. ./update -t `date +%s` -w image.img
+LD_LIBRARY_PATH=. ./update -t `date +%s` -w image.img.40.73
+
     LOG(LOG_LEVEL_ERROR, "  -w <filename> - Flash image to write - Can be local or http://\n");
+
+            case 'w':
+                z_image_to_write = optarg;
+                break;
+
     LOG(LOG_LEVEL_ERROR, "  -t <time>     - Set current time - Unix timestamp in seconds since 1970\n");
 
+            case 't':
+                z_time_offset = atoi(optarg) - time(NULL);
+                break;
 
 <reboot>
             case 'f':
@@ -893,6 +991,79 @@ cmd = 'LD_LIBRARY_PATH=. ./update -t %d -w %s' % (time.time(), 'image.img')
         reboot(RB_AUTOBOOT);
 #endif
     }
+
+note:
+DO not reboot immediately whether use Windows update or python update.
+
+
+<write>
+  write_flash_banks(z_image_to_write);
+
+  uses CDI software download device and input source can be either uPnP or
+  input file.
+
+
+={============================================================================
+|kt_dev_si_0001| si-pi-upload
+
+<local-settings>
+# enable log uploading via a SnugberryPi
+piLogUploading = True
+
+
+Clear or echo "uploadlog" to a page:
+upload.php
+        $log = file_get_contents("uploadlog");
+
+Looks like that a box uploads "uploadlog" automatically when boot up?
+
+
+1. update_stb creates this file which has PI's IP:
+>>> location = /mnt/nds/dev_6/part_0/FSN_DATA/PI_ADDR
+
+note: WHY is doing that?
+
+2.
+
+# bootlog-upload-1.sh
+/usr/bin/bootlog-upload-pi.sh "$logdir" "$hwaddr" "$filelist"
+
+# bootlog-upload-pi.sh
+pi_addr=`cat $BLOG_DATAPATH/PI_ADDR`
+
+for srcfile in $filelist
+do
+	if [ -f "$srcfile" ]; then
+		echo "BLL:bootlog-upload-pi.sh: FTPPUT: $srcfile" >> "${BLLFILENAME}"
+		ftpput -u anonymous -p pi "$pi_addr" upload/"$hwaddr"_"$id"_"${srcfile##*/}" "$srcfile"
+	fi
+done
+
+
+3. Use icron to run script whenever file uploads happens.
+
+pi@$ incrontab -l
+/srv/ftp/upload IN_CLOSE_WRITE /home/pi/snugupdate-v2-snugberrypi/stblog.sh $@/ $#
+
+$@
+Watched filesystem path
+
+$#
+Event-related file name
+
+Moves from /srv/ftp/upload to STBLOGSDIR="/home/pi/snugupdate-v2-snugberrypi/stblogs/"
+
+$2 0019fbf2d46b_1484200015_BLL.LOG
+
+[Thu Jan 12 05:46:55 UTC 2017-0019fbf2d46b_1484200015] Received File: 0019fbf2d46b_1484200015_BLL.LOG (6855b) - Prefix: 0019fbf2d46b_1484200015 Name: BLL.LOG
+macaddr: 00:19:fb:f2:d4:6b
+
+When gets "UPLOAD.URL", tars and upload it to 
+
+log "Uploading $tgzname"
+${SHDIR}httpsend "$macaddr" "$tgzname"
+
+./httpsend "00:19:fb:f2:d4:6b" version.txt
 
 
 # ============================================================================
@@ -1909,7 +2080,7 @@ STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/APP_Process
 
 
 ={============================================================================
-|kt_dev_si_0002| si-build-make
+|kt_dev_si_0002| si-build-mw
 
 See build.log
 
@@ -1964,6 +2135,28 @@ http://hudsonmaster1.uk.nds.com:8080/hudson/job/build_fullstack_image/102440/con
 #
 # BUILD_OUTPUT_ROOT == .../picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/fs/NDS
 #
+parse_args "$@"
+
+if [ -z "${WORKSPACE}" ]; then
+    export WORKSPACE=$(readlink -f ${OUTPUT})
+fi
+
+source setup_platform.sh
+set_up_platform $PLATFORM
+ENDIAN=${ENDIAN}Endian
+BUILD_OUTPUT_ROOT=${OUTPUT}/${PROJECT}/${PLATFORM_DIR}/${ENDIAN}/fs/NDS
+
+if [ -n "$WIPEOUT" ]; then
+  package_mw_epg_wipeout_binary
+else
+  if [ -n "$NO_APP" ]; then
+      package_no_app
+  else
+      build_mw_epg
+      package_mw_epg_binary
+  fi
+fi
+
 + STD_OPTIONS='--clean --profile sky_trials --project picasso --platform ams-drx890 --output /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build '
 + ADDED_OPTIONS='                                                      '
 + /usr/bin/time -o /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/bfi_stats -a 
@@ -1995,33 +2188,20 @@ function build_mw_epg()
 
 package_mw_epg_binary()
 {
+  SPK_TARBALL_MW=mw-epg-${PLATFORM}-${VARIANT}-${PROFILE}.tar.bz2
+  SPK_SCRIPT_MW=/etc/start-mw.sh
+
+  tar -cjvf "$SPK_TARBALL_MW" -C nds-mw .
+  rm -rf nds-mw
+
+  // *build-mw-output*
+  // FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/mw-epg-ams-drx890-debug-sky_trials.tar.bz2
+  mv ${SPK_TARBALL_MW} ${OUTPUT}/${PROJECT}/${PLATFORM_DIR}/${ENDIAN}/
 }
-
-parse_args "$@"
-
-if [ -z "${WORKSPACE}" ]; then
-    export WORKSPACE=$(readlink -f ${OUTPUT})
-fi
-
-source setup_platform.sh
-set_up_platform $PLATFORM
-ENDIAN=${ENDIAN}Endian
-BUILD_OUTPUT_ROOT=${OUTPUT}/${PROJECT}/${PLATFORM_DIR}/${ENDIAN}/fs/NDS
-
-if [ -n "$WIPEOUT" ]; then
-  package_mw_epg_wipeout_binary
-else
-  if [ -n "$NO_APP" ]; then
-      package_no_app
-  else
-      build_mw_epg
-      package_mw_epg_binary
-  fi
-fi
 
 
 <make-sh>
-//FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/make.sh
+// FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/make.sh
 
   echo "  --mw_only                 builds the middleware only, no EPG built"
 
@@ -2228,10 +2408,8 @@ $(LOCAL_COMPONENTS):
 // USER_ACTIVITY_BARB USER_ACTIVITY_SSP WIFI_SUPPORTED WLM_SUPPORTED"
 // NDS_DIAG_MODE:=sync SUN_BUILD:=YES NDS_APP_TYPE:=PICASSO
 
-
 // FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/makefile
 COMPONENT_SOURCE_LIBRARIES+=camm
-
 
 // FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/fusion2/makefile
 
@@ -2367,6 +2545,7 @@ make_image_timer check_input_tarballs || exit 1
 # checks if tarballs exists or not
 function check_input_tarballs()
 {
+  // *build-mw-output*
   MW_EPG_TARBALL_DIR=${OUTPUT}/${PROJECT}/${NDS_PLATFORM}/${NDS_ENDIAN}
   MW_EPG_TARBALL=${MW_EPG_TARBALL_DIR}/mw-epg-${SPK_PLATFORM}-${SPK_VARIANT}-${PROFILE}.tar.bz2
   MW_EPG_SPK_TARBALL_NAME=mw-epg-${SPK_PLATFORM}-${SPK_VARIANT}.tar.bz2
@@ -2551,7 +2730,6 @@ function copy_packages()
     \ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19/dl/
   # + cp -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/applications/BSKYB_SCS/ams-drx890/`service-centre-ams-drx890-prod.tar.bz2` 
     \ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19/dl/service-centre-ams-drx890-debug.tar.bz2
-
 }
 
 
@@ -2602,56 +2780,390 @@ function configure_spk()
   # + rm -rf /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19/patches/darwin-spk-1.19-0010-drx890-spk-newtoolchain.patch
 
   # + ./configure O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug ams-drx890 debug initramfs otv fullstack noconsole
+  # ./configure O=/home/kyoupark/si-logs/spk/output ams-drx890 debug initramfs otv fullstack noconsole
 }
 
 
-make_image.sh
-{
-	# default values
-	FULLSTACK="fullstack"
-	SPK_VARIANT=debug
-}		
+<configure-script>
 
-
-
-# called in set_up_spk
-# get executed once when untarred so need to use clean option to make sure it's run to apply SI patches.
+# ./configure O=/home/kyoupark/si-logs/spk/output ams-drx890 debug initramfs otv noconsole
 #
-patch_spk()
++ OBJDIR=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug
++ BOARD=ams-drx890
++ VARIANT=debug
+# Grab main config file
+CFG=target/device/Sky/${BOARD}/buildroot-${VARIANT}.config
++ CFG=target/device/Sky/ams-drx890/buildroot-debug.config
 
-if [ -d ${BUILD_ROOT}/spk_patches/${SPK_PLATFORM}/${SPK_VARIANT} ]; then
-  SPK_VARIANT_PATCH_DIR=${BUILD_ROOT}/spk_patches/${SPK_PLATFORM}/${SPK_VARIANT}
-echo "KT: ${SPK_VARIANT_PATCH_DIR}"
-else
-  echo "KT: not exist? ${BUILD_ROOT}/spk_patches/${SPK_PLATFORM}/${SPK_VARIANT}"
+# Apply any SPK patches
+apply_patches
+
+# `target/device/Sky/ams-drx890/buildroot-debug.config' -> `.config'
+cp -v $CFG .config
+
+make -n O=$OBJDIR SPK_CONFIGURED= oldconfig
++ make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug SPK_CONFIGURED= oldconfig
+  * Buildroot Configuration
+    > 9. mips (BR2_mips)
+    > 5. mips 32 (BR2_mips_32)
+    > 1. o32 (BR2_MIPS_OABI32)
+    > 2. External binary toolchain (BR2_TOOLCHAIN_EXTERNAL)
+      >
+    The core C library from the external toolchain (BR2_TOOLCHAIN_EXTERNAL_LIB_C) [libc.so.0] libc.so.0
+    Libraries to copy from the external toolchain (BR2_TOOLCHAIN_EXTERNAL_LIBS) [ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0] ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0
+    Strip shared libraries (BR2_TOOLCHAIN_EXTERNAL_STRIP) [Y/n/?] y
+    > 4. Native POSIX Threading (NPTL) (BR2_EXT_PTHREADS_NATIVE)
+    >
+    > 2. BusyBox 1.13.x (BR2_BUSYBOX_VERSION_1_13_X)
+    vim (BR2_PACKAGE_VIM) [N/y/?] n
+    tar the root filesystem (BR2_TARGET_ROOTFS_TAR) [Y/n/?] y
+      > 3. bzip2 (BR2_TARGET_ROOTFS_TAR_BZIP2)
+    initramfs for initial ramdisk of linux kernel (BR2_TARGET_ROOTFS_INITRAMFS) [Y/n/?] y
+    Linux Tarball version (BR2_CUSTOM_DOWNLOAD_LINUX26_VERSION) [2.6.18.8] 2.6.18.8
+    Linux Version (BR2_CUSTOM_LINUX26_VERSION) [2.6.18.8] 2.6.18.8
+
+  # Makefile
+  
+  oldconfig: $(CONFIG)/conf
+  	@mkdir -p $(CONFIG)/buildroot-config
+  	@KCONFIG_AUTOCONFIG=$(CONFIG)/buildroot-config/auto.conf \
+  		KCONFIG_AUTOHEADER=$(CONFIG)/buildroot-config/autoconf.h \
+  		$(CONFIG)/conf -o $(CONFIG_CONFIG_IN)
+  
+  + make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug SPK_CONFIGURED= oldconfig
+  + mkdir -p package/config/buildroot-config
+  + KCONFIG_AUTOCONFIG=package/config/buildroot-config/auto.conf \
+                  KCONFIG_AUTOHEADER=package/config/buildroot-config/autoconf.h \
+                  package/config/conf -o Config.in
+  
+  KCONFIG_AUTOCONFIG=package/config/buildroot-config/auto.conf \
+  KCONFIG_AUTOHEADER=package/config/buildroot-config/autoconf.h \
+  package/config/conf -o Config.in
+
+# Setup kernel config
+# target stuff is last so it can override anything else
+include target/Makefile.in
+
+  # kernel rules
+  # We already did add the kernel target to TARGETS and now just pull in the rules
+  # to actually build this target.
+  
+  ifeq ($(BR2_KERNEL_LINUX),y)
+  include target/linux/Makefile.in
+  endif
+
+  # target/linux/Makefile.in.advanced
+  linux_patch: $(LINUX26_DIR)/.patched.board
+
++ KNLDIR=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/linux-2.6.18.8
++ make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug SPK_CONFIGURED= linux_patch
+
+  toolchain/patch-kernel.sh /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/linux-2.6.18.8 toolchain/kernel-headers \
+		linux-2.6.18.8-\*.patch{,.gz,.bz2}
+
+
+# Setup busybox config
+# package/busybox/busybox.mk
++ make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug SPK_CONFIGURED= busybox-config
++ BBDIR=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/busybox-1.13.1
+
+echo "BOARD ${BOARD}" >> $OBJDIR/configured.flags
+echo "VARIANT $VARIANT" >> $OBJDIR/configured.flags
+echo "ARCH" $BR2_ARCH >> $OBJDIR/configured.flags
+
+note: change BR, kernel .config
+# echo "initramfs" >> $OBJDIR/configured.flags
+# echo "otv" >> $OBJDIR/configured.flags
+# echo "noconsole" >> $OBJDIR/configured.flags
+
+note: again?
++ make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug SPK_CONFIGURED= oldconfig
++ make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug SPK_CONFIGURED= linux26-config
+
+# Copy .config to user's objdir for safe-keeping
+if [ $OBJDIR != "." ]; then
+    cp -f .config $OBJDIR/.config
 fi
 
+# Write flag file, used to indicate to SPK that we are configured
+echo "SPK_CONFIGURED=y" > .spk_configured
 
-SPK_VARIANT_PATCH_DIR=.../vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/spk_patches/ams-drx890/debug
-SPK_PATCHES_DIR=.../vobs/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.17/patches
+
+<no-fullstack>
+fullstack) to add mw, driver and epg binaries. so not use fullstack?
+./configure O=/home/kyoupark/si-logs/spk/output ams-drx890 debug initramfs otv noconsole
+
+NO since make_image.sh defines by default:
+
+FULLSTACK="fullstack"
+
+So:
+      --kernel_only)
+        FULLSTACK=
+        DHCP="dhcp"
+        ;;
+
+  echo "  --kernel_only             Build an EOTV binary without app/middleware or drivers - CFE mode"
 
 
-# before running configure, uptar and apply pactches on source and configs.
-#
-configure_spk()
+<build-spk>
+// make_image_timer build_spk || exit 1
+// + make_image_timer build_spk
+
+function build_spk() 
 {
-  # Configure the SPK
-  ./configure O=${SPK_BUILD_OUTPUT_DIR} $SPK_PLATFORM $SPK_VARIANT $SPK_CONFIG
+  # SPK Package Level Parallel setting support.
+  if [ -z "${NDS_PARALLEL}" ]; then
+      NDS_PARALLEL=$(grep 'processor.*:' /proc/cpuinfo|wc -l)
+      if [ "${NDS_PARALLEL}" -eq 0 ]; then
+          NDS_PARALLEL=1
+      fi
+  fi
+  SPK_PARALLEL="BR2_JLEVEL=${NDS_PARALLEL}"
++ SPK_PARALLEL=BR2_JLEVEL=24
 
-  # use debug SPK
-  # + ./configure O=/home/NDS-UK/parkkt/cc/parkkt_BSKYB_HR004_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug 
-  #   ams-drx890 debug initramfs otv fullstack noconsole
-  #
-  # for cust trials with console change
-  #
-  # ./make_image.sh --variant preprod --platform ams-drx595 --profile cust_trials --project picasso --clean
-  # ./configure O=/home/NDS-UK/parkkt/cc/parkkt_BSKYB_HR006_002/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx595-preprod 
-  #   ams-drx595 preprod initramfs otv fullstack noscs console
+  make ${FULL_PARALLEL} O=${SPK_BUILD_OUTPUT_DIR} || return $?
+
+  # # target/device/Sky/Makefile.in
+  # .PHONY:     kernel-menuconfig kernel-dirclean kernel-clean kernel-force kernel-config rootfs-clean
+  # rootfs-clean:
++ echo 'Building clean rootfs'
++ make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug rootfs-clean
+  make ${FULL_PARALLEL} O=${SPK_BUILD_OUTPUT_DIR} || return $?
++ make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug
+
+  echo "Build complete"
+  echo "rootfs: ${SPK_BUILD_OUTPUT_DIR}/binaries/${SPK_PLATFORM}"
+  echo "kernel: ${SPK_BUILD_OUTPUT_DIR}/binaries/${SPK_PLATFORM}/vmlinuz"
+}
+
+
+<makefile-nds-mk>
+package/sky/nds/nds.mk
+
+Unpacking /home/NDS-UK/kyoupark/STB_SW/AMS_BCM_MIPS4K_LNUX_DARWIN_01/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19/dl/mw-epg-ams-drx890-debug.tar.bz2...
+bzcat /home/NDS-UK/kyoupark/STB_SW/AMS_BCM_MIPS4K_LNUX_DARWIN_01/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19/dl/mw-epg-ams-drx890-debug.tar.bz2 | tar -C 
+  /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root   -xf -
+touch /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/nds-mw/.unpacked
+
+$(NDS_DRV_DIR)/.unpacked: $(DL_DIR)/$(NDS_DRV_SOURCE) $(TARGET_DIR)/$(NDS_DRV_FILE)
+	@echo "Unpacking $(DL_DIR)/$(NDS_DRV_SOURCE)..."
+	$(NDS_DRV_CAT) $(DL_DIR)/$(NDS_DRV_SOURCE) | tar -C $(TARGET_DIR) $(TAR_OPTIONS) -
+	-@mkdir -p $(NDS_DRV_DIR)
+	touch $@
+
+#############################################################
+#
+# Toplevel Makefile options
+#
+#############################################################
+ifeq ($(BR2_PACKAGE_SKY_NDS_DRIVERS),y)
+TARGETS+=nds-drv
+endif
+ifeq ($(BR2_PACKAGE_SKY_NDS_MW),y)
+TARGETS+=nds-mw
+endif
+
+<makefile>
+toolchain/external-toolchain/ext-tool.mk
+copy_toolchain_lib_root lib=libc.so.0 dst=/lib
+SKIPPING copy_toolchain_lib_root lib=libuClibc-0.9.29.so dst=/lib
+for libs in ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0; do \
+		LIB="$libs"; DST="/lib"; STRIP="y"; SYSROOT="" ; if test -z y; then PREFIX=`/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--prefix" | head -1 | cut -f2 -d=`; SYSROOT_DIR=`echo ""/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2"" | sed -e "s|\(.*\)${PREFIX}|\1|"` ; SYSROOT="--sysroot ${SYSROOT_DIR}" ; fi ; LIB_DIR=`/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc ${SYSROOT} -print-file-name=${LIB} | sed -e "s,${LIB}\$,,"`; if test -z "${LIB_DIR}"; then echo "copy_toolchain_lib_root: lib=${LIB} not found"; exit -1; fi; if test -z ; then LINKS="-type l"; fi; LIB="$libs"; for FILE in `find ${LIB_DIR} -maxdepth 1 ${LINKS} -name "${LIB}*"`; do LIB=`basename ${FILE}`; while test \! -z "${LIB}"; do if test -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; then echo "SKIPPING copy_toolchain_lib_root lib=${LIB} dst=${DST}"; chmod +x "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; case "${STRIP}" in (0 | n | no) ;; (*) /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-strip "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; ;; esac; else rm -fr /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}; echo "copy_toolchain_lib_root lib=${LIB} dst=${DST}"; if test -h ${LIB_DIR}/${LIB}; then cp -d ${LIB_DIR}/${LIB} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/; elif test -f ${LIB_DIR}/${LIB}; then /usr/bin/install -D -m0755 ${LIB_DIR}/${LIB} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; case "${STRIP}" in (0 | n | no) ;; (*) /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-strip "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; ;; esac; else exit -1; fi; fi; LIB="`readlink ${LIB_DIR}/${LIB}`"; done; done; echo -n; \
+	done
+copy_toolchain_lib_root lib=ld-uClibc.so.0 dst=/lib
+
+# There is a nasty hack here to try to use toolchains which were not
+# configured with --with-sysroot.  If so, we take the files from the
+# compiler install directory and hope for the best...
+#
+# [HOUND] Added an extra check to see if the sysroot returned by the
+# grep line (i.e. sysroot reported by the compiler) is a sub-path of
+# the actual location of the toolchain. For example if sysroot arg
+# points to /opt/blah but the toolchain path is /opt/foo, then go
+# with /opt/foo.
+#
+# This is a workaround for NDS and the ARM toolchain, in their case
+# sysroot reports a location of /opt/toolchains/tools-4.2.1-arm9, however
+# the actual location of the toolchain is somewhere in clear case.
+# Without this fix the make would still be looking in /opt/toolchains/...
+#
+# [HOUND] Added a sed line to strip the compiler prefix off the end
+# of the BR2_TOOLCHAIN_EXTERNAL_PATH toolchain variable.
+#
+#	SYSROOT_DIR="$(findstring $(BLAH),$(BR2_TOOLCHAIN_EXTERNAL_PATH))" ;\
+#	echo "SYSROOT_DIR = $${SYSROOT_DIR}" ;\
+
+note: no match with --with-sysroot since
+--prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/
+--with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc
+
+copy_toolchain_sysroot = \
+	SYSROOT_DIR=``$(TARGET_CC) -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--with-sysroot" | head -1 | cut -f2 -d=``; \
+	if [ ! -z "$${SYSROOT_DIR}" ]; then \
+		SYSROOT_DIR=`echo "$${SYSROOT_DIR}/" | sed -e "s|//|/|g"` ;\
+		SYSROOT_DIR=`echo "$(BR2_TOOLCHAIN_EXTERNAL_PATH)/" | grep -o "$${SYSROOT_DIR}"` ;\
+	fi ;\
+ \
+	if [ -z "$${SYSROOT_DIR}" ]; then \
+		PREFIX=`$(TARGET_CC) -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--prefix" | head -1 | cut -f2 -d=`; \
+		SYSROOT_DIR=`echo "$(BR2_TOOLCHAIN_EXTERNAL_PATH)" | sed -e "s|\(.*\)$${PREFIX}|\1|"` ;\
+	fi ;\
+ \
+	echo -e "\nCopying toolchain files from $${SYSROOT_DIR}\n" ;\
+	cp -a $${SYSROOT_DIR}/* $(STAGING_DIR)/ ; \
+	find $(STAGING_DIR) -type d | xargs chmod 755 ;\
+
+/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--with-sysroot" | head -1 | cut -f2 -d=
+
+PREFIX=`/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--prefix" | head -1 | cut -f2 -d=` 
+PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/
+
+echo "/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2" | sed -e "s|\(.*\)${PREFIX}|\1|"
+/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2
+
+# echo -e "\nCopying toolchain files from $${SYSROOT_DIR}\n" ;\
+Copying toolchain files from /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2
+cp -a $${SYSROOT_DIR}/* $(STAGING_DIR)/ ; \
+find $(STAGING_DIR) -type d | xargs chmod 755 ;\
+
+
+build-done:
+	@echo "****************************************************************************"
+	@echo "Build outputs at:-"
+	@echo "  $(BINARIES_DIR)"
+	@ls -lh $(BINARIES_DIR)
+	@echo "****************************************************************************"
+	@echo "BUILD COMPLETE: `date`"
+	@echo "****************************************************************************"
+
+****************************************************************************
+Build outputs at:-
+  /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/binaries/ams-drx890
+total 141M
+-rw-r--r-- 1 kyoupark ccusers 114K Dec 16 08:15 rootfs.mips.initramfs_list
+-rw-r--r-- 1 kyoupark ccusers  59M Dec 16 08:19 rootfs.mips.tar
+-rw-r--r-- 1 kyoupark ccusers  22M Dec 16 08:19 rootfs.mips.tar.bz2
+-rwxr-xr-x 1 kyoupark ccusers  20M Dec 16 08:19 vmlinux
+-rwxr-xr-x 1 kyoupark ccusers  41M Dec 16 08:19 vmlinux.unstripped
+****************************************************************************
+BUILD COMPLETE: Fri Dec 16 08:19:23 GMT 2016
+****************************************************************************
+
++ echo 'rootfs: /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/binaries/ams-drx890'
+rootfs: /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/binaries/ams-drx890
++ echo 'kernel: /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/binaries/ams-drx890/vmlinuz'
+kernel: /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/binaries/ams-drx890/vmlinuz
+}
+
+# Post-process the build
+function post_process_build() {
+
+  + IMAGE_OUTPUT_PATH=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV
+  + echo 'Signing image for OTV bootloader'
+
+  + cd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/image_generation
+  + echo 'Deleting existing image generation tools and untarring the package'
+  + tar --overwrite -jxvf image-generation-ams-drx890.tar.bz2
+  ./
+  ./cl.c
+  ./generate-otv-image.sh
+  ./makepartition
+  ./pad.sh
+  ./codeloader.bin
+  ./ethupdater.bin
+
+  <image-generation>
+  # merge codeloader and vmlinuz into flash.out
+  ./cl codeloader.bin vmlinuz flash.out
+
+  ## change version number to high value. Stops over the air downloads from 
+  ## overwriting test builds
+  case ${SPK_PLATFORM} in
+    ams-drx890)
+      sed -i 's/-v 0x01/-v 0x01 -s 0x99999999/' ${OTV_IMAGE_GEN_SCRIPT}
+      ;;
+
+  + case ${SPK_PLATFORM} in
+  + sed -i 's/-v 0x01/-v 0x01 -s 0x99999999/' generate-otv-image.sh
+  + '[' ams-drx890 '!=' ams-drx890 ']'
+  + ./generate-otv-image.sh /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/binaries/ams-drx890/vmlinux
+  ==============================================================
+  |        ./generate-otv-image.sh - Version: 2.2              |
+  ==============================================================
+  Please make sure VMLINUX was built with the OTV flags!! *** 
+  Using S/W version number=0xFFFF 
+  ./generate-otv-image.sh: Preparing "Legacy ETP image" type; which support image size upto 15.625MB, please wait ...
+  Done
+  Updated APPLI_0.FLA.etp  18684652 d800b0bc0f563c519ce68ccdcadca566
+  Updated vmlinuz-890  18422508 ca8c2c7edbf0d0e70431309805686911
+  ./generate-otv-image.sh Execution completed
+  ==============================================================
+
+  + cp ./APPLI_0.FLA /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.sky_trials
+  + cp ./flash.out /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/flash.out.sky_trials
+  + cp ./APPLI_0.FLA.etp /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.etp.sky_trials
+  + cp ./flash.out.etp /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/flash.out.etp.sky_trials
+  + cp ./FileInfo.txt /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV
+
+  + cd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19
+  + echo 'Signed boot image: /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV'
+
+  ## Check if the images will fit on the STB if option is selected
+  ## This has to cater for local builds but also official builds through Hudson
+  ## Any non-etp build which is too big will fail for local builds and official builds in Hudson
+  ## Non-etp images which are too big will mean the etp image will also not fit so it is a complete build fail
+  ## If either the non-etp or etp image is too big it will be renamed to highlight it is too big but only fail this script if the non-etp is too big
+  ## Hudson can fail the job when checking for the etp image (if renamed it is too big)
+  ## Hudson can then check the etp image after signing using the same python script
+
+  if  [ "${CHECK_IMAGE_SIZE}" == "yes" ]; then
+    FileSizeRet=0
+
+  # Check the non-etp image first
+  python ${BUILD_ROOT}/tools/nds/si/python/FlashFileCheckLib.py ${SPK_PLATFORM} ${IMAGE_OUTPUT_PATH}/${EOTV_IMAGE_OUTPUT}.${PROFILE}
+
+  + '[' yes == yes ']'
+  + FileSizeRet=0
+  + python /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/python/FlashFileCheckLib.py ams-drx890 /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.sky_trials
+
+  #######################################################
+  2017-01-10 14:19:49,567 INFO: Start of Flash File Check
+  #######################################################
+  
+  2017-01-10 14:19:49,567 INFO: Checking /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.sky_trials
+  Flash Bank Size = 16777216
+  Overheads       = 0
+  Flash File Size = 18553736
+  Max File Size   = 16777216
+  ERROR - File too big
+
+  + mv /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.sky_trials /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.sky_trials.FILE_TOO_BIG
+  + echo '######### NON-ETP IMAGE TOO BIG ########'
+
+  + FileSizeRet=1
+
+  + '[' -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.etp.sky_trials ']'
+  + python /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/python/FlashFileCheckLib.py ams-drx890 /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.etp.sky_trials -e
+
+  #######################################################
+  2017-01-10 14:19:49,596 INFO: Start of Flash File Check
+  #######################################################
+  
+  2017-01-10 14:19:49,597 INFO: Checking /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.etp.sky_trials
+  ETP already added so just allowing for ETP storage
+  Flash Bank Size = 16777216
+  Overheads       = 131072
+  Flash File Size = 18684652
+  Max File Size   = 16646144
+  ERROR - File too big
+
+  + mv /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.etp.sky_trials /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.etp.sky_trials.FILE_TOO_BIG
+  + echo '########### ETP IMAGE TOO BIG ##########'
 }
 
 
 <make-image-kernel-config>
-
 # cust trial shell
 CONFIG_FEATURE_SH_IS_MSH=y
 
@@ -6376,6 +6888,42 @@ http://hetty.cisco.com/fusionmadesimple/index.php/BSkyB_AdSmart_SI_Helpers
 This parsed log attached may help you save time. It is parsed for the following strings -
 keyPressed", "splicer", "failed to find index", "no streaming for 3000 ms", “HandleInjectionCompleteEvent"
 
+<ple-to-asm>
+!INFO   -VRM_SERVER   		< T:VRM_SRV M:vrm_ple.c F:VrmPleSessionCreate L:5458 > [API_CALL::""ASM""] " "ASM_SESSION_Create returned [SYSTEM_STATUS_OK 0x0E802000] hPle(0x315f0003) asm_handle (0x315e)  
+!INFO   -VRM_SERVER   		< T:VRM_SRV M:vrm_ple.c F:VrmPleSessionCreate L:5509 > Ended. hPle=(0x315f0003) stat [VRM:STATUS_OK 0x0B400000] 
+!INFO   -VRM_SERVER   		< T:VRM_SRV M:vrm_ple.c F:VRM_PLE_CreateRBPlaySession L:988 > Ended.stat [VRM:STATUS_OK 0x0B400000] hPle (0x315f0003) 
+!INFO   -VRM_SERVER   		< T:VRM_SRV M:vflist_play.c F:VflistPlayCreatePLESession L:1585 > Call::VRM_PLE_CreateRBPlaySession returned [VRM:STATUS_OK 0x0B400000] hPle 0x315f0003 starting speed -2000 
+
+<mc-to-asm>
+!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > 
+@@PMON@@,trace,mediacon,mc-create,65366,mc-create-mcid=,65366,mc_create-str=,mc-playback,fsnfmt=,hMC=0xff56 
+
+!MIL    -MSM_MS       		< T:EVENT_MGR_THREAD M:transition_controller.cpp F:(ResolveTrickplayStrategy) L:1500 > 
+< splicer=0xff56 hMC=0xff56 >" "-MS_STREAM- xcon 65366, has_video XTRUE, encoding E_ITEM_VIDEO_ENCODING_TYPE_MPEG4, bitrate 8000, " "strategy E_PB_MODE_I_FRAMES_REVERSE, speed -2000, iframe display interval=250ms 
+
+// #define MCM_MEDIACONN_TYPE_SUBSTITUTION   `0x700000c`
+!MIL    -MPM          		< T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Open L:947 > 
+MCM_MEDIACONN_STATE_OPENED hMC=0xff57 `replace` hMC=0xff56 type=0x0700000c 
+
+// back to the start mc?
+!MIL    -MSM          		< T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > 
+h_media_connection  [hMC=0xff56],from_mcon [hMC=0xff57],to_mcon [hMC=0xff56] 
+
+!MIL    -MPM          		< T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Open L:947 > 
+MCM_MEDIACONN_STATE_OPENED hMC=0xff58 replace hMC=0xff56 type=0x0700000c 
+
+// asm-mc is destoryed as normal mc
+!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:729 > 
+@@PMON@@,trace,mediacon,mc-destroyed,65367,fsnfmt=,hMC=0xff57 
+
+// differnt mc
+!WARN   -MSM_MS       		< T:EVENT_MGR_THREAD M:security.cpp F:(PushMaximumAllowed) L:1965 > 
+< splicer=0xff56 hMC=0xff57 >" "Read needed has to be" " stalled because not in range." " active range=[([2055:01:24 16:51:31]2147483647, 4294967295)->([2055:01:24 16:51:31]2147483647, 4294967295)]. 
+
+// same mc
+!WARN   -MSM_MS       		< T:EVENT_MGR_THREAD M:security.cpp F:(PushMaximumAllowed) L:1965 > < 
+splicer=0x8a8d hMC=0x8a8d >" "Read needed has to be" " stalled because not in range." " active range=[([2055:01:24 16:51:29]2147483647, 4294967295)->([2055:01:24 16:51:29]2147483647, 4294967295)]. 
+
 
 ={============================================================================
 |kt_dev_si_0001| comp-bem
@@ -7477,6 +8025,10 @@ NDS: !MIL    -EPG_ME               < M:SatelliteSignalGainedLostHandler F:allSat
 
 DRV: KERN_WARNING  TUNER0 UNLOCKED
 DRV: KERN_WARNING  TUNER0 UNLOCKED
+
+<mc-playback>
+!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > 
+@@PMON@@,trace,mediacon,mc-create,65366,mc-create-mcid=,65366,mc_create-str=,mc-playback,fsnfmt=,hMC=0xff56 
 
 
 ={============================================================================
@@ -11134,6 +11686,16 @@ MIL   -MSM          < T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:MSM_DEVICEMAN_Ope
 !MIL    -MDM          P:MW T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x1b hMC=0x15 tuner_id =1 and job_type =RECORD 
 !MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(MSM_DEVICEMAN_Open) L:466 > MSM_DEVICEMAN_Open " "hMC=0x15, mc_type=0x7000003, source_locator=0xffe18144, " "destination_locator=0x721801e Starts...  
 !MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4336 > MSM_DEVICEMAN_Open for record: " "hMC=0x15, `shrec=s69897` Starts... 
+
+<vrm-to-mc-free>
+
+// to stop MC
+!INFO   -VRM_SERVER   		< p:0x000001e5 P:MW t:0x01e17520 T:VRM_SRV M:pvp_fsm.c F:PANEL_SetState L:1176 > 
+hMC=0x11cd2"" changing state from PANEL_STATE_STOPPING to PANEL_STATE_WAIT_USER_RELEASE 
+
+// to free, close and destory MC
+!INFO   -VRM_SERVER   		< p:0x000001d6 P:MW t:0x01e17520 T:VRM_SRV M:pvp_fsm.c F:PANEL_SetState L:1176 > 
+hMC=0xff4c"" changing state from PANEL_STATE_WAIT_USER_RELEASE to PANEL_STATE_DISCONNECTING 
 
 
 ={============================================================================
@@ -20375,6 +20937,23 @@ MCM_SysinitPrepare
 
 git clone ssh://kyoupark@wwwin-git-gpk-2.cisco.com:29418/XTVFS_Comp.git
 
+XTVFS description.
+
+On XTV project start we didn’t have any file system experience. So we decided
+to take existing embedded file system and extend it to support XTV
+requirements. The only ready to use portable embedded file system was ERTFS,
+FAT based file system. We used FAT32 mode. We extended ERTFS API to support
+  OpenTV file system driver API and recording and playback of stream file. To
+  increase the efficiency of work with huge stream files we allocated for them
+  special virtual partition with increased cluster size and use extents tables
+  for fast searches. This destroys FAT32 compatibility. Other non-FAT32
+    compatible feature is support of huge files, with length more then 2 GB
+      and instant replay files.  All those features will be discussed further.
+
+XTVFS assumes to be the only file system on disc. So disc partition table is
+overwritten on format.
+
+
 XTV FS Group <XTVFSGroup@nds.com>
 
 # see below as there are some tools and docs
@@ -20574,13 +21153,31 @@ callisto_tuner 322640 0 - Live 0xc0394000
 callisto 5871232 2 callisto_periph,callisto_tuner, Live 0xc0762000
 
 
+<source>
 // ../../XTVFS_CMA_Wrapper/src/xtvfs_imodule.c
 module_init(xtvfs_init);
 
-// ../../XTVFS_CMA_Wrapper/src/xtvfs_iinode.c                   inode->i_fop = &xtvfs_file_operations;
+// ../../XTVFS_CMA_Wrapper/src/xtvfs_iinode.c
 struct inode_operations xtvfs_inode_operations = {
         create:
             xtvfs_create,
+        lookup:
+            xtvfs_lookup,
+        unlink:
+            xtvfs_unlink,
+        mkdir:
+            xtvfs_mkdir,
+        rmdir:
+            xtvfs_rmdir,
+        rename:
+            xtvfs_rename,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
+        truncate:
+		    xtvfs_truncate,
+#else
+        setattr:
+		    xtvfs_setattr,
+#endif
 };
 
 static int xtvfs_create(struct inode *pdir, struct dentry *pdentry,)
@@ -20605,7 +21202,7 @@ static void InodeInit(
 		inode->i_uid = current->fsuid;
 		inode->i_gid = (pdir->i_mode & S_ISGID) ? pdir->i_gid : current->fsgid;
 #endif
-		inode->i_op = &xtvfs_inode_operations;
+		inode->i_op = &`xtvfs_inode_operations`;
 		inode->i_mapping->a_ops = &xtvfs_aops;
 		inode->i_mode = S_IRWXUGO;		   /*all can all */
 		if(dirOrFile == DIR){
@@ -20613,7 +21210,7 @@ static void InodeInit(
 			inode->i_fop = &xtvfs_dir_operations;
 		} else {
 			inode->i_mode |= S_IFREG;	/* regular file */
-			inode->i_fop = &xtvfs_file_operations;
+			inode->i_fop = &`xtvfs_file_operations`;
 			i_size_write(inode, 0);
 		}
 		insert_inode_hash(inode);
@@ -20621,33 +21218,183 @@ static void InodeInit(
 
 
 // ../../XTVFS_CMA_Wrapper/src/xtvfs_ifile.c
-struct file_operations xtvfs_file_operations = {
+/* data file operations */
+struct file_operations xtvfs_generic_file_operations = {
+		read:
+            xtvfs_generic_file_read,
         write:
-            xtvfs_write,
-};
+            xtvfs_generic_file_write,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
+		/* for kernel version >= 2.6.19 generic_file_write/read are defined as do_sync_write/read, 
+			which call asynchrous IO and wait its end. Because of this 
+			aio_read/aio_write should be implemented. It opens possibility for user 
+			to do async IO. Currently it is not used, so it is OK to have less debug output for it. */
+        aio_read:
+            generic_file_aio_read,
+        aio_write:
+            xtvfs_generic_file_aio_write,
+#endif	
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
+		ioctl:
+#else
+		unlocked_ioctl:
+#endif
+            xtvfs_ioctl,
+        open:
+            xtvfs_open,
+        flush:
+            xtvfs_flush,
+        release:
+            xtvfs_release,
+        fsync:
+            xtvfs_fsync,
+		mmap:
+			generic_file_mmap,
+        llseek:
+            xtvfs_data_seek_check
+        };
 
-xtvfs_write        68 ../../posix/inc/pxtvfs.h ssize_t xtvfs_write(int fildes, const void *buf, size_t nbyte);
-ssize_t xtvfs_write(struct file * pfile, const char * buf,  size_t count,loff_t * offset)
 
-../../XTVFS_CMA_Wrapper/src/xtvfs_ifile.c
-int XTVFS_Write(xtvfsFile handle,char *buffer,int numbytes,XTVFS_Trans trans_handle)
+int xtvfs_open (struct inode * pinode,  struct file* pfile )
+/*!<
+  \Description: 
+	Opens a file and saves its handle in pfile->private_data.
+  \Parameters: 
+      \- pinode : in, file to open inode
+      \- pfile	: in, file to open
+  \Returns: 0 on success -error code on error
+\*---------------------------------------------------------------------------*/ 
 {
-	int		    bytesWritten;
-    XTVFSSTATUS status;
-	
-	ARGSUSED_INT((int)trans_handle)  ; 
-	status = XTVFS_WriteEx(handle, buffer, numbytes, &bytesWritten);
-	if(XTVFS_SUCCEED != status) {
-		bytesWritten = -1;
-	}
-	return bytesWritten;
+    if(FileIsStream(pdentry)) {
+        mode = XFS_MODE_VFS;
+		if(!(pfile->f_flags & O_TRUNC)){
+			mode |= XFS_MODE_LOOPING;
+		}
+        pfile->f_op = &xtvfs_stream_file_operations;
+    }
+    else {
+		if (!(pfile->f_flags & O_NOCTTY)) {
+			pfile->f_op = &xtvfs_generic_file_operations;
+		}
+    }
 }
 
 
-// po_write           61 ../../ertfs/src/api.c
+static ssize_t xtvfs_generic_file_write(struct file *file, 
+    const char __user *buf, size_t count, loff_t *ppos)
+{
+  size = generic_file_write(file, buf, count, ppos);
+}
 
 
-XHddLowFlush
+// // ../../posix/inc/pxtvfs.h ssize_t xtvfs_write(int fildes, const void *buf, size_t nbyte);
+// // ../../XTVFS_CMA_Wrapper/src/xtvfs_ifile.c
+// ssize_t xtvfs_write(struct file * pfile, const char * buf,  size_t count,loff_t * offset)
+// {
+//   m = XTVFS_Write(handle, lbuf, count, -1);
+// }
+// 
+// 
+// // xtvfs_api/src/xtvfs_file.c
+// int XTVFS_Write(xtvfsFile handle,char *buffer,int numbytes,XTVFS_Trans trans_handle)
+// {
+// 	int		    bytesWritten;
+//     XTVFSSTATUS status;
+// 	
+// 	ARGSUSED_INT((int)trans_handle)  ; 
+// 	status = XTVFS_WriteEx(handle, buffer, numbytes, &bytesWritten);
+// 	if(XTVFS_SUCCEED != status) {
+// 		bytesWritten = -1;
+// 	}
+// 	return bytesWritten;
+// }
+// 
+// // // Translate XTT042 API into Posix (Linux) system calls
+// // // posix/src/pos_to_42.c
+// // /*---------------------------------------------------------------------------*/
+// // int  XTVFS_Write(					/* Writes a designated number of bytes to file. Returns actual number of written bytes */
+// //     xtvfsFile	handle,			/* in, The file handle */
+// //     char*		buffer,			/* in, data to be written into the file */
+// //     int		numBytes,		/* in, number of bytes to be written into the file */
+// //     XTVFS_Trans trans_handle	/* for future use. Set it to -1 */
+// // )
+// // {
+// // 	int ret = 0, n;
+// // 	size_t rest = (size_t)numBytes;
+// // 	ReadErrorSet(0);
+// // 	while(ret < rest) {
+// // 		n = (int)write((int)handle, (const void *)buffer, rest);
+// // 		if(n < 1)
+// // 			break;
+// // 		ret += n;
+// // 		rest -= n;
+// // 	}
+// // 	return ret;
+// // }
+
+
+// /ertfs/src/api.c/
+XTVFSSTATUS _po_write(PCFD fd, byte *buf, int count_to_write, int count_for_fsize, int *pnumWritten);
+
+
+// XTVFS_CMA_Wrapper/src/xtvfs_ifile.c
+int xtvfs_flush (struct file * pfile
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+				 ,  fl_owner_t id
+#endif
+)
+
+// xtvfs_api/src/xtvfs_file.c
+XTVFSSTATUS XTVFS_Flush(xtvfsFile handle)
+{
+	unsigned long FTIME_;
+	XTVFSSTATUS   status = XTVFS_ERROR;
+    int           ppartno;
+    PC_FILE       *pfile = 0;	
+
+	XDEBUG_DEFINE_FUNC(XTVFS_Flush);
+	XDEBUG_APIENTER_1(0u, "handle=%d", handle); 
+	
+	/*Check XTVFS is initialized*/
+	CHECK_XTVFS_INIT("XTVFS_Flush")
+    /*-1 says flush all*/
+	if(-1 == handle){
+		/* Loop on all partitions and flush */
+		for (ppartno=0; ppartno<MAX_NUM_PHYS_PARTS; ppartno++){
+			if (IsUsedPpartno(ppartno)){
+				In(ppartno);
+				XDEBUG_LOW_REPORT_1(0u, "flush ppartno=%d", ppartno); 
+				/* Flush the file to disk */
+				status = po_flush_partition(ppartno);
+				Out(ppartno,FNAME_,  FTIME_);
+			}
+		}
+	}
+    else if(handle >= 0){ /* Try to extract ppartno and PC_FILE from handle*/
+		/*Get PC_FILE and check handle validity and related ppartno validity*/
+		CHECK_PPART_NUMBER_BY_HANDLE(pfile,handle,0,ppartno,"XTVFS_Flush")
+		In(ppartno)
+		/* Flush the file to disk */
+		status = po_flush(handle);
+		Out(ppartno,FNAME_,  FTIME_);
+	}
+	else{
+		XDBG_Printf(" XTVFS::XTVFS_Flush Wrong parameter handle = %d\n", handle);
+        status = XTVFS_E_ARGUMENT;
+	}
+	XDEBUG_APIEXIT_1(0u,"status=0x%x",status); 
+	set_errno(status);
+	return status;
+}
+
+// fat/src/lowl.c
+/* Consult the dirty fat block list and write any. write all copies
+    of the fat */
+/* Note: The caller locks the fat before calling this routine   */
+int pc_pfflush(LPARTITION *plpart)
+{
+  ret = devio_write(ppartno,blockno,(byte *)pdata,8, FALSE);
+}
 
 
 ={============================================================================
