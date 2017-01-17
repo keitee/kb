@@ -11,7 +11,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| si-pi-py
 |kt_dev_si_0001| si-pi-update
 |kt_dev_si_0001| si-pi-upload
-|kt_dev_si_0001| si-httpsend
 
 |kt_dev_si_0002| si-jabber
 |kt_dev_si_0002| si-links
@@ -21,7 +20,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-box-mount
 |kt_dev_si_0002| si-boot-ssitart-mw
 |kt_dev_si_0002| si-bootlog
+|kt_dev_si_0001| si-httpsend
 |kt_dev_si_0002| si-gi si-filelist
+|kt_dev_si_0002| si-build-flist
 |kt_dev_si_0002| si-build
 |kt_dev_si_0002| si-build-baseline
 |kt_dev_si_0002| si-build-errors
@@ -1084,16 +1085,6 @@ ${SHDIR}httpsend "$macaddr" "$tgzname"
 ./httpsend "00:19:fb:f2:d4:6b" version.txt
 
 
-={============================================================================
-|kt_dev_si_0001| si-httpsend
-
-build by spk and seems to be modified to send it sky.
-
-printf("Uploading (%d)(%s)(%s)\n",argc, /* mac */ argv[1],argv[2]);
-
-./httpsend "00:19:fb:f2:d4:6b" version.txt
-
-
 # ============================================================================
 #{
 ={============================================================================
@@ -1175,6 +1166,8 @@ The Amstrad DRX595 is a Broadcom 7350 based box
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FBF2D46B
 0019FBF2D46B  
 mysql --batch --table --column-names -u root uploads -e "select upload_time, version, directory_name, viewing_card from upload where mac='0019FBF2D46B' order by upload_time desc limit 10"
+ftpsky "ls *_00019FBF2D46B_*" 
+ftpsky "ls *_00019FBF2D46B_*" | grep 'Mar 27'
 
 <box-down> dynamic ip
 http://theyard.cisco.com/cgi-bin/Generate_WOMBAT.sh?MAC=0019FB63D645
@@ -1493,7 +1486,12 @@ grep -q "${BLOG_mntpath}" /proc/mounts
 /usr/bin/bootlog-diskusage.sh "$rotate_limit" "$size_limit"
 
 *call-bootlog-upload*
-[ -n "$upload" ] && /usr/bin/bootlog-upload.sh
+# BLL:bootlog.sh: MILESTONE Args: upload = upload, loguploadmethod = http
+  if [ -n "$upload" ]; then
+    echo "BLL:bootlog.sh: MILESTONE Calling bootlog-upload.sh $loguploadmethod"  >> "${BLLFILENAME}"
+    echo "51#>>  PREPARING NETWORK" >> "${UPLOAD_SCREEN_UPDATE}"
+    /usr/bin/bootlog-upload.sh "$loguploadmethod"
+  else
 
 # Run crash monitor at high priority in background
 chrt -r 97 /usr/bin/crash-monitor.sh </dev/null &
@@ -1616,14 +1614,16 @@ tar -c \
 # 
 cut -c1-2,4-5,7-8,10-11,13-14,16-17 </sys/class/net/eth0/address
 
+note: use httpsend
+
 # Send the tarball
-if [ "$use_ftp" = "ftp" ] ; then
-  echo "BLL:bootlog-upload.sh: MILESTONE Send Tarball by FTP: ${srcfile} to ${destfile}"  >> "${BLLFILENAME}"
-  echo "67#        Uploading logs via FTP on ${interface}." >> "${UPLOAD_SCREEN_UPDATE}"
-  echo "Uploading to ftp://$user@$host/$destfile"
-  ftpput -u "$user" -p "$pass" "$host" "$destfile" "$srcfile" || exit $?
-  echo "BLL:bootlog-upload.sh: MILESTONE Upload complete"  >> "${BLLFILENAME}"
-  echo "ftp://$user@$host/$destfile" >"$logdir"/UPLOAD.URL
+# if [ "$use_ftp" = "ftp" ] ; then
+#   echo "BLL:bootlog-upload.sh: MILESTONE Send Tarball by FTP: ${srcfile} to ${destfile}"  >> "${BLLFILENAME}"
+#   echo "67#        Uploading logs via FTP on ${interface}." >> "${UPLOAD_SCREEN_UPDATE}"
+#   echo "Uploading to ftp://$user@$host/$destfile"
+#   ftpput -u "$user" -p "$pass" "$host" "$destfile" "$srcfile" || exit $?
+#   echo "BLL:bootlog-upload.sh: MILESTONE Upload complete"  >> "${BLLFILENAME}"
+#   echo "ftp://$user@$host/$destfile" >"$logdir"/UPLOAD.URL
 elif [ "$use_ftp" = "http" ] ; then
   # name of the file to be httpsend does not matter.Could be anything.
   # The way the naming of the upload file works is: generate the file,any name (UPLOAD) --> using md5sum generate the name and for records store in UPLOAD.URL
@@ -1637,6 +1637,43 @@ elif [ "$use_ftp" = "http" ] ; then
 fi
 echo "BLL:bootlog-upload.sh: MILESTONE Upload finished"  >> "${BLLFILENAME}"
 
+<upload-log>
+BLL:bootlog-upload-pi.sh: MILESTONE START_OF_SCRIPT
+Uploading V2.0 (3)(00:19:fb:63:d6:45)(/tmp/dummydisk/BLOGDIR/FSN_DATA/BOOTLOG/UPLOAD.TGZ)
+filelen = 1895987
+Connecting to server...(80)(drop.stb.bskyb.com)(50ee01ba)
+Sending header...
+Sending header... complete
+Sending payload string or binary...
+Sending payload via callback...
+currpos = (247568/1895987)
+currpos = (491520/1895987)
+currpos = (745472/1895987)
+currpos = (991232/1895987)
+currpos = (1236992/1895987)
+currpos = (1482752/1895987)
+currpos = (1720320/1895987)
+currpos = (1895987/1895987)
+Receiving response...
+Received 761/761 bytes
+Response header:
+HTTP/1.0 200 OK
+Date: Thu, 12 Jan 2017 15:18:16 GMT
+Server: Apache/2.2.17 (Unix)
+Uploaded-file: 2017-01-12_15-18-17_00:19:fb:63:d6:45_173.38.209.9.tgz
+Content-Type: text/html; charset=ISO-8859-1
+Via: 1.0 aer01-mda2-dmz-wsa-4-mgmt.cisco.com:80 (Cisco-WSA/9.0.1-162)
+Connection: keep-alive
+
+Response header:
+HTTP/1.0 200 OK
+Date: Thu, 12 Jan 2017 15:18:16 GMT
+Server: Apache/2.2.17 (Unix)
+Uploaded-file: 2017-01-12_15-18-17_00:19:fb:63:d6:45_173.38.209.9.tgz
+Content-Type: text/html; charset=ISO-8859-1
+Via: 1.0 aer01-mda2-dmz-wsa-4-mgmt.cisco.com:80 (Cisco-WSA/9.0.1-162)
+Connection: keep-alive
+
 
 # [crash-monitor.sh]
 # Set core dump location and format
@@ -1647,6 +1684,53 @@ echo '/tmp/%p.COR' >/proc/sys/kernel/core_pattern
 # dumps are written to /tmp/<pid>.COR by the kernel. The crash monitor copies
 # these to /FSN_DATA/.  Looking at the date of the core files may give you a
 # clue as to when a crash occurred. 
+
+
+={============================================================================
+|kt_dev_si_0001| si-httpsend
+
+build by spk and seems to be modified to send it sky.
+
+printf("Uploading (%d)(%s)(%s)\n",argc, /* mac */ argv[1],argv[2]);
+
+./httpsend "00:19:fb:f2:d4:6b" version.txt
+
+Fixed to: http://drop.stb.bskyb.com/cgi-bin/stbdump.cgi
+
+
+<ftp-sky>
+# fsky?
+kyoupark@kit-debian:~/si-logs/theyard/bin$ cat fsky
+ftpsky "dir *$1*"
+
+ftpsky "ls *_001018001200_*" | grep 'Mar 27'
+./ftpsky "get darwin_001018001200_30c26f7d966c03ff4f850a19380182b4.tgz"
+
+# si-logs/theyard/bin/ftpsky
+##:Go to the ftp server at sky
+(
+echo quote user hound
+echo quote pass K8tRAcr9
+echo cd upload
+echo bin
+echo $*
+) | ftp -n 87.86.191.132
+
+
+<ftp-get>
+# check_log for eng build
+./ftpsky "get darwin_00101800122e_1f0e4cfd6280fce012291bfe8abc6b7e.tgz"
+diag_binary
+unstripped_processes
+check_log -p <path> <file>
+    Use "path" as the path for the diag_binary and unstripped_processes
+    folders, and otherwise translate <file>.
+check_log -p . darwin_00101800122e_1f0e4cfd6280fce012291bfe8abc6b7e.tgz 
+
+# use known bins
+check_log darwin_0019fb0bad0c_f6b90f0bd7dd874e65817e34fea126af.tgz
+
+tar -cjvf ~/ktpark/SI-4453.bz2 .
 
 
 ={============================================================================
@@ -1699,6 +1783,15 @@ CMS_SECURITY_SERVICES/NAGRA_CA_KERNEL/
 BUILD_SYSTEM/
 CMS_MEDIA_SERVICES/MPM/src/.doxygen.d/
 NDS_TOOLSETS/
+
+={============================================================================
+|kt_dev_si_0002| si-build-flist
+
+ag -U --nopager --follow --nocolor --nogroup -g '' > gtaglist.out
+ag -U --nopager --nocolor --nogroup -g '' THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa
+
+find -L THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-api/src/java/com/nds/fusion -name '*.java' 
+find -L THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-api/src/java/com/nds/fusion -name '*.java' -o -name '*.[ch]pp' > flist.out 
 
 
 ={============================================================================
@@ -3509,20 +3602,6 @@ ls /home/si_logs/mirrored/upload/darwin_00101800122e*
 cp /home/si_logs/mirrored/upload/darwin_00101800122e_157cab819be0c785f41d8cdcde7aaead.tgz .
 
 
-# check_log for eng build
-./ftpsky "get darwin_00101800122e_1f0e4cfd6280fce012291bfe8abc6b7e.tgz"
-diag_binary
-unstripped_processes
-check_log -p <path> <file>
-    Use "path" as the path for the diag_binary and unstripped_processes
-    folders, and otherwise translate <file>.
-check_log -p . darwin_00101800122e_1f0e4cfd6280fce012291bfe8abc6b7e.tgz 
-
-# use known bins
-check_log darwin_0019fb0bad0c_f6b90f0bd7dd874e65817e34fea126af.tgz
-
-tar -cjvf ~/ktpark/SI-4453.bz2 .
-
 <sh>
 declare -ar list=(
     darwin_0019fbd18c9a_487032cd821312aea3b11274c2ff7384
@@ -4485,12 +4564,6 @@ darwin_001018001200_30c26f7d966c03ff4f850a19380182b4.tgz
 # on the box
 /mnt/nds/dev_2/part_0/BOOTLOG/*
 /mnt/nds/dev_2/part_0/*
-
-# fsky?
-[parkkt@ukstbuild01 bin]$ more fsky 
-ftpsky "dir *$1*"
-ftpsky "ls *_001018001200_*" | grep 'Mar 27'
-./ftpsky "get darwin_001018001200_30c26f7d966c03ff4f850a19380182b4.tgz"
 
 
 ={============================================================================
@@ -6084,10 +6157,8 @@ import com.nds.fusion.systemcommon.SystemCommonObject;
 import com.nds.fusion.systemcommon.SystemException;
 import com.nds.fusion.systemlocator.SystemLocator;
 
-kyoupark@ukstbuild2:~/STB_SW/jpa/modules/jpa-api/src/java/com/nds/fusion$ pwd
-/home/nds-uk/kyoupark/STB_SW/jpa/modules/jpa-api/src/java/com/nds/fusion
-kyoupark@ukstbuild2:~/STB_SW/jpa/modules/jpa-api/src/java/com/nds/fusion$ ll
-total 128
+./THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-api/src/java/com/nds/fusion
+
 drwxr-xr-x 20 kyoupark ccusers  4096 Sep 26 12:05 ./
 drwxr-xr-x  3 kyoupark ccusers  4096 Sep 26 12:05 ../
 drwxr-xr-x  2 kyoupark ccusers  4096 Sep 26 12:05 aem/
@@ -15281,12 +15352,14 @@ SYSTEMJOB_TYPE_LIVE_VIEWING,  3
 
 !MIL    -MPM            T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1374 > FRAME_PRESENTED: hMC=0x257 
 
+// this is always a pair to see
 !MIL    -P_Api        < T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1105 > VIDEO IS SHOWN 
 !MIL    -P_Api        < T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:8959 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000003, status=RUNNING 
 !MIL    -EPG_ME       < T:no name M:MediaEngine F:tuningIsFinished L:4717 > T:PooledExecutor#4:SYSTEMTEST tuning complete
 !MIL    -EPG_ME       < T:no name M:MediaEngine F:channelChanged L:2027 > T:PooledExecutor#4:CHANNEL CHANGED TO Sky1 HD, 106
 
 
+<player-app-live>
 1. EPG calls a function to create a session and get a handle.
 
 APP: session.play(playLoc, true, data.getSessionUserTag());
@@ -15774,23 +15847,30 @@ class PlayerEventCAVideoImpl
 
 {player-events-to-app}
 
-   *player-something-timeout*
-	void handlePlayerEventComponentFail(PlayerEventComponentFail event) throws PlayerDataUnavailableException
-	{
-		int failureCode = event.getFailure();
+*player-events* which defines events for both and app.
 
-		switch (failureCode)
-		{
-			case NO_SERVICE_PROGRAM_ASSOCIATION:
-				channelOffAirMonitor.noServiceProgramAssociation();
-				break;
+DARWIN_PLATFORM/DARWIN_PLAYER/inc/player_api_events.h
 
-			case TIMEOUT:
-				LOGGER.logError("SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)");
-				setTechnicalFaultCondition(technicalFaultWithCodes(failureCode, PLAYER_COMPONENT_TIMEOUT));
-				break;
-      }
-   }
+#define PLAYER_EVENT                                0x80000000      /**< Represents all events notified by PLAYER */
+...
+
+*player-something-timeout*
+void handlePlayerEventComponentFail(PlayerEventComponentFail event) throws PlayerDataUnavailableException
+{
+  int failureCode = event.getFailure();
+
+  switch (failureCode)
+  {
+     case NO_SERVICE_PROGRAM_ASSOCIATION:
+        channelOffAirMonitor.noServiceProgramAssociation();
+        break;
+
+     case TIMEOUT:
+        LOGGER.logError("SOMETHING TIMEDOUT in middleware (PLAYER_EVT_COMPONENT_FAIL_TIMEOUT)");
+        setTechnicalFaultCondition(technicalFaultWithCodes(failureCode, PLAYER_COMPONENT_TIMEOUT));
+        break;
+  }
+}
 
 
 (picasso/mediaengine/src/java/picasso/mediaengine/mediaengine.java)
@@ -15809,6 +15889,9 @@ public interface PlayerEvent extends SystemCommonObject
 
 
 (MediaEngine/src/java/picasso/mediaengine/PlayerEventPump.java:76:)
+
+<player-event-pump>
+PlayerEventPump::processEvent 
 
 listenerId = playerSession.registerPlayerEventListener(PlayerEvent.EVENT, this);
 
@@ -15838,6 +15921,7 @@ public class PlayerSessionImpl extends SystemCommonObjectImpl implements PlayerS
 
 public interface PlayerEventComponentFail extends PlayerEventMediaEvent
 {
+    *player-events* which defines events for both and app.
     /** Notification of a failure of the elementary components. */
     int EVENT = 0x80200100;
 

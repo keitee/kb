@@ -62,6 +62,7 @@
 *kt_linux_bash_202* sh-code-case
 *kt_linux_bash_202* sh-code-case-use-config
 *kt_linux_bash_202* sh-code-case-use-function-command
+*kt_linux_bash_202* sh-code-case-check-linux-version
 
 
 #{ tool
@@ -125,7 +126,7 @@
 *kt_linux_tool_042* tool-tail: print multiple files with filename
 |kt_linux_tool_044| mc
 |kt_linux_tool_045| graphbiz
-|kt_linux_tool_046| mktemp
+|kt_linux_tool_046| tool-mktemp
 *kt_linux_tool_047* tool-env
 *kt_linux_tool_048* tool-dircolors
 *kt_linux_tool_048* tool-tput
@@ -323,11 +324,13 @@
 *kt_linux_gcc_400* gcc-libc-uclibc
 *kt_linux_gcc_400* gcc-libc-uclibc-ld
 *kt_linux_gcc_400* gcc-libc-uclibc--fail to find symbol
+*kt_linux_gcc_400* gcc-option-output
 *kt_linux_gcc_400* gcc-option-developers
 *kt_linux_gcc_400* gcc-option-directory-search
 *kt_linux_gcc_400* gcc-option-link
 *kt_linux_gcc_400* gcc-option-debug
 *kt_linux_gcc_400* gcc-option-verbose
+*kt_linux_gcc_400* gcc-option-cpp
 *kt_linux_gcc_400* gcc-option-code-gen
 *kt_linux_gcc_400* gcc-option-optimization
 *kt_linux_gcc_400* tc-gcc-target-triplet
@@ -3556,16 +3559,16 @@ ${parameter#word}
 ${parameter##word}
 
     The `word` is expanded to produce a pattern just as in filename expansion
-      (see Filename Expansion). If the pattern matches the beginning of the
+      (see Filename Expansion). If the pattern matches the `beginning` of the
       expanded value of parameter, then the result of the expansion is the
-      expanded value of parameter with the `shortest` matching pattern (the ‘#’
-          case) or the longest matching pattern (the ‘##’ case) `deleted`. 
+      expanded value of parameter with the `shortest` matching pattern (the
+          ‘#’ case) or the longest matching pattern (the ‘##’ case) `deleted`. 
       
-    If parameter is ‘@’ or ‘*’, the pattern removal operation is applied to each
-    positional parameter in turn, and the expansion is the resultant list. If
-    parameter is an array variable subscripted with ‘@’ or ‘*’, the pattern
-    removal operation is applied to each member of the array in turn, and the
-    expansion is the resultant list.
+    If parameter is ‘@’ or ‘*’, the pattern removal operation is applied to
+    each positional parameter in turn, and the expansion is the resultant
+    list. If parameter is an array variable subscripted with ‘@’ or ‘*’, the
+    pattern removal operation is applied to each member of the array in turn,
+            and the expansion is the resultant list.
 
 
 <ex>
@@ -3574,6 +3577,27 @@ test_handler="${test_fun#test_*}_handler"
 
 echo $test_handler
 _that_generates_url
+
+
+'${PARAMETER%WORD}'
+'${PARAMETER%%WORD}'
+     The WORD is expanded to produce a pattern just as in filename expansion.
+     If the pattern matches a `trailing` portion of the expanded value of
+     PARAMETER, then the result of the expansion is the value of PARAMETER
+     with the shortest matching pattern (the '%' case) or the longest matching
+     pattern (the '%%' case) deleted.  
+     
+     If PARAMETER is '@' or '*', the pattern removal operation is applied to
+     each positional parameter in turn, and the expansion is the resultant
+     list.  If PARAMETER is an array variable subscripted with '@' or '*', the
+     pattern removal operation is applied to each member of the array in turn,
+     and the expansion is the resultant list.
+
+<ex>
++ HDR_VER=2.6.0.0
++ HDR_M=2
++ HDR_V=6.0.0
++ HDR_m=6
 
 
 ={============================================================================
@@ -4453,6 +4477,34 @@ let
     expression is evaluated according to the rules given below in Shell
     Arithmetic. If the last expression evaluates to 0, let returns 1;
     otherwise 0 is returned.
+
+
+{sh-mask}
+umask
+
+    umask [-p] [-S] [mode]
+
+    Set the shell process’s file creation mask to mode. If mode begins with a
+    digit, it is interpreted as an octal number; if not, it is interpreted as
+    a symbolic mode mask similar to that accepted by the chmod command. 
+    
+    If mode is omitted, the current value of the mask is printed. 
+    
+    If the -S option is supplied without a mode argument, the mask is printed
+    in a symbolic format. If the -p option is supplied, and mode is omitted,
+    the output is in a form that may be reused as input. The return status is
+    zero if the mode is successfully changed or if no mode argument is
+    supplied, and non-zero otherwise.
+
+    Note that when the mode is interpreted as an octal number, each number of
+    the umask is subtracted from 7. Thus, a umask of 022 results in
+    permissions of 755.
+
+<ex>
+$ umask
+0022
+$ ls -al a.out 
+-rwxr-xr-x 1 kyoupark ccusers 4948 Jan 16 19:30 a.out
 
 
 ={============================================================================
@@ -5974,6 +6026,106 @@ and runs "ls -ld <list>" Q: *$1?
 $ t
 
 $ t 123213
+
+
+={============================================================================
+*kt_linux_bash_202* sh-code-case-check-linux-version
+
+from buildroot
+
+# Check the specified kernel headers version actually matches the
+# version in the toolchain.
+#
+# $1: sysroot directory
+# $2: kernel version string, in the form: X.Y
+#
+check_kernel_headers_version = \
+	if ! support/scripts/check-kernel-headers.sh $(1) $(2); then \
+		exit 1; \
+	fi
+
+# $1: /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-install/mips-unknown-linux/ 
+# $2: 2.6
+
+
+# support/scripts/check-kernel-headers.sh
+#!/bin/sh
+
+SYSROOT="${1}"
+# Make sure we have enough version components
+HDR_VER="${2}.0.0"
+
+HDR_M="${HDR_VER%%.*}"
+HDR_V="${HDR_VER#*.}"
+HDR_m="${HDR_V%%.*}"
+
+EXEC="$(mktemp -t check-headers.XXXXXX)"
+
+note:
+Use the fact that mktemp creates a file with permission "rw" and gcc output a
+file with default permission. If fails to compile, then cannot run a file from
+mktemp and set a error code other than true, 0. This is the same when a binary
+returns a false.
+
+
+-rw------- 1 kyoupark ccusers 0 Jan 16 19:29 /tmp/check-headers.ZDoaQ
+-rwxr-xr-x 1 kyoupark ccusers 4948 Jan 16 19:30 a.out
+
+# We do not want to account for the patch-level, since headers are
+# not supposed to change for different patchlevels, so we mask it out.
+# This only applies to kernels >= 3.0, but those are the only one
+# we actually care about; we treat all 2.6.x kernels equally.
+${HOSTCC} -imacros "${SYSROOT}/usr/include/linux/version.h" \
+          -x c -o "${EXEC}" - <<_EOF_
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc __attribute__((unused)),
+         char** argv __attribute__((unused)))
+{
+    if((LINUX_VERSION_CODE & ~0xFF)
+        != KERNEL_VERSION(${HDR_M},${HDR_m},0))
+    {
+        printf("Incorrect selection of kernel headers: ");
+        printf("expected %d.%d.x, got %d.%d.x\n", ${HDR_M}, ${HDR_m},
+               ((LINUX_VERSION_CODE>>16) & 0xFF),
+               ((LINUX_VERSION_CODE>>8) & 0xFF));
+        return 1;
+    }
+    return 0;
+}
+_EOF_
+
+"${EXEC}"
+ret=${?}
+rm -f "${EXEC}"
+exit ${ret}
+
+
+gcc -imacros "/usr/include/linux/version.h" -x c sample.c
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int HDR_M=2;
+int HDR_m=6;
+
+int main(int argc __attribute__((unused)),
+         char** argv __attribute__((unused)))
+{
+    if((LINUX_VERSION_CODE & ~0xFF)
+        != KERNEL_VERSION(HDR_M,HDR_m,0))
+    {
+        printf("Incorrect selection of kernel headers: ");
+        printf("expected %d.%d.x, got %d.%d.x\n", HDR_M, HDR_m,
+               ((LINUX_VERSION_CODE>>16) & 0xFF),
+               ((LINUX_VERSION_CODE>>8) & 0xFF));
+        printf("return 1.\n");
+        return 1;
+    }
+    printf("return 0.\n");
+    return 0;
+}
 
 
 # ============================================================================
@@ -10294,15 +10446,23 @@ dot -Tjpeg gst-launch.PLAYING_PAUSED.dot -o gst-launch.PLAYING_PAUSED.jpg
 
 
 ={============================================================================
-*kt_linux_tool_046* mktemp
+*kt_linux_tool_046* tool-mktemp
 
-Create  a  temporary  file  or  directory,  safely,  and  print its name.  TEMPLATE must contain at
-least 3 consecutive `X's in last component.  If TEMPLATE is not specified, use tmp.XXXXXXXXXX, and
---tmpdir is implied.  Files are created u+rw, and directories u+rwx, minus umask restrictions.
+DESCRIPTION
+       Create a temporary file or directory, safely, and print its name. TEM‐
+       PLATE must contain at least 3 consecutive 'X's in last  component. If
+       TEMPLATE is not specified, use tmp.XXXXXXXXXX, and --tmpdir is implied.
+       Files are created u+rw, and directories u+rwx, minus umask restrictions.
 
+       -t     interpret  TEMPLATE as a single file name component, relative to
+              a directory: $TMPDIR, if set; else the directory  specified  via
+              -p; else /tmp [deprecated]
 
 $ mktemp
 /tmp/tmp.eezueA0X5X
+
+$ mktemp -t check-headers.XXXXX
+/tmp/check-headers.Y8A9r
 
 
 ={============================================================================
@@ -16205,6 +16365,20 @@ ftp:x:109:65534::/srv/ftp:/bin/false
 
 <conf>
 $ cat /etc/vsftpd.conf
+
+
+<ftp>
+DESCRIPTION
+     Ftp is the user interface to the Internet standard File Transfer
+     Protocol.  The program allows a user to transfer files to and from a
+     remote network site.
+
+     -n    Restrains ftp from attempting “auto-login” upon initial connection.
+     If auto-login is enabled, ftp will check the .netrc (see netrc(5)) file
+     in the user's home directory for an entry describing an account on the
+     remote machine.  If no entry exists, ftp will prompt for the remote
+     machine login name (default is the user identity on the local machine),
+     and, if necessary, prompt for a password and an account with which to login.
 
 
 # ============================================================================
@@ -47577,6 +47751,49 @@ failed
 
 
 ={============================================================================
+*kt_linux_gcc_400* gcc-option-output
+
+https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html#Overall-Options
+
+3.2 Options Controlling the Kind of Output
+
+Compilation can involve up to four stages: preprocessing, compilation proper,
+assembly and linking, always in that order. 
+  
+GCC is capable of preprocessing and compiling several files either into
+several assembler input files, or into one assembler input file; then each
+assembler input file produces an object file, and linking combines all the
+object files (those newly compiled, and those specified as input) into an
+executable file.
+
+For any given input file, the file name suffix determines what kind of
+compilation is done: 
+
+You can specify the input language explicitly with the -x option:
+
+-x language
+    Specify explicitly the language for the following input files (rather than
+        letting the compiler choose a default based on the file name suffix).
+    This option applies to all following input files until the next -x option.
+
+    Possible values for language are:
+
+              c  c-header  cpp-output
+              c++  c++-header  c++-cpp-output
+              objective-c  objective-c-header  objective-c-cpp-output
+              objective-c++ objective-c++-header objective-c++-cpp-output
+              assembler  assembler-with-cpp
+              ada
+              f77  f77-cpp-input f95  f95-cpp-input
+              go
+
+-x none
+    Turn off any specification of a language, so that subsequent files are
+    handled according to their file name suffixes (as they are if -x has not
+        been used at all). 
+
+
+={============================================================================
 *kt_linux_gcc_400* gcc-option-developers
 
 3.17 GCC Developer Options
@@ -47858,7 +48075,42 @@ note: to check path for lib
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-options-code-gen
+*kt_linux_gcc_400* gcc-option-cpp
+
+3.12 Options Controlling the Preprocessor
+
+These options control the C preprocessor, which is run on each C source file
+before actual compilation.
+
+If you use the -E option, nothing is done except preprocessing. Some of these
+options make sense only together with -E because they cause the preprocessor
+output to be unsuitable for actual compilation.
+
+In addition to the options listed here, there are a number of options to
+control search paths for include files documented in Directory Options.
+Options to control preprocessor diagnostics are listed in Warning Options. 
+
+-include file
+    Process file as if #include "file" appeared as the first line of the
+    primary source file. However, the first directory searched for file is the
+    preprocessor's working directory instead of the directory containing the
+    main source file. If not found there, it is searched for in the remainder
+    of the #include "..." search chain as normal.
+
+    If multiple -include options are given, the files are included in the
+    order they appear on the command line. 
+
+-imacros file
+    Exactly like -include, except that any output produced by scanning file is
+    thrown away. Macros it defines remain defined. This allows you to acquire
+    all the macros from a header without also processing its declarations.
+
+    All files specified by -imacros are processed before all files specified
+    by -include. 
+
+
+={============================================================================
+*kt_linux_gcc_400* gcc-option-code-gen
 
 -fpic or -fPIC
 
