@@ -338,14 +338,15 @@
 *kt_linux_gcc_400* gcc-option-code-gen
 *kt_linux_gcc_400* gcc-option-optimization
 *kt_linux_gcc_400* gcc-option-instrument
+*kt_linux_gcc_205* gcc-ld
 *kt_linux_gcc_400* gcc-build-execution-env
 *kt_linux_gcc_400* gcc-build-tc-target-triplet
 *kt_linux_gcc_400* gcc-build-tc-spec mips-tc-spec
 *kt_linux_gcc_400* gcc-build-tc-failed-instructions
 *kt_linux_gcc_400* gcc-build-tc-buildroot-build
 *kt_linux_gcc_400* gcc-build-tc-buildroot-internal
-*kt_linux_gcc_400* gcc-build-tc-buildroot-external-spk
 *kt_linux_gcc_400* gcc-build-tc-buildroot-external-toolchain
+*kt_linux_gcc_400* gcc-build-tc-buildroot-external-spk
 *kt_linux_gcc_400* gcc-build-glibc-reference
 *kt_linux_gcc_400* gcc-build-glibc-combinations
 *kt_linux_gcc_400* gcc-build-glibc-mips buildroot-glic-mips-internal-toolchain
@@ -417,11 +418,12 @@
 *kt_linux_core_201* linux-io-ioctl
 |kt_linux_core_201| linux-io-extended
 |kt_linux_core_202| linux-io-non-blocking
+*kt_linux_core_203* linux-io-fs driver-api
+*kt_linux_core_203* linux-io-fs-vfs
 *kt_linux_core_202* linux-io-buffering
 *kt_linux_core_203* linux-io-ex
 *kt_linux_core_203* linux-io-dev-fd
 *kt_linux_core_203* linux-io-temp-file
-*kt_linux_core_203* linux-io-fs driver-api
 *kt_linux_core_203* linux-io-fs-mount
 |kt_linux_core_204| system resource limits
 
@@ -24296,19 +24298,6 @@ If the line number can not be determined, addr2line will print 0
 mips-uclibc-addr2line -f -s -e fs/NDS/bin/MW_Process 5dd134 5dbe00 5d3ee4 5d6cb4 5ddb64 5cef3c a5f298   
 
 
-={============================================================================
-*kt_linux_tool_205* binutil: ld
-
-https://sourceware.org/binutils/docs/ld/index.html#Top
-This file documents the gnu linker ld (GNU Binutils) version 2.25. 
-
-<debian>
-keitee@debian-keitee:~/work/xxx$ which ld
-/usr/bin/ld
-keitee@debian-keitee:~/work/xxx$ ld --version
-GNU ld (GNU Binutils for Debian) 2.22
-Copyright 2011 Free Software Foundation, Inc.
-
 
 ={============================================================================
 *kt_linux_tool_250* tool-busybox
@@ -38361,6 +38350,338 @@ Section 44.9 and in Chapter 63.
 
 
 ={============================================================================
+*kt_linux_core_203* linux-io-fs driver-api
+
+14.1 Device Special Files (Devices)
+
+A device special file corresponds to a device on the system. Within the
+kernel, each device type has a corresponding device driver, which handles all
+I/O requests for the device. A device driver is a unit of kernel code that
+implements a set of operations that (normally) correspond to input and output
+actions on an associated piece of hardware. 
+
+<driver-api>
+The API provided by device drivers is fixed, and includes operations
+corresponding to the system calls open(), close(), read(), write(), mmap(),
+and ioctl().  The fact that each device driver provides a consistent
+  interface, hiding the differences in operation of individual devices, allows
+  for universality of I/O (Section 4.2).
+
+Devices can be divided into two types:
+
+  * Character devices handle data on a character-by-character basis. Terminals
+    and keyboards are examples of character devices.
+
+  * Block devices handle data a block at a time. The size of a block depends
+    on the type of device, but is typically some multiple of 512 bytes.
+    Examples of block devices include disks and tape drives.
+
+Device IDs
+
+Each device file has a major ID number and a minor ID number. The major ID
+identifies the general class of device, and is used by the kernel to look up
+the appropriate driver for this type of device. The minor ID uniquely
+identifies a particular device within a general class. The major and minor IDs
+of a device file are displayed by the ls –l command.
+
+
+14.2 Disks and Partitions
+
+Disk drives
+
+A hard disk drive is a mechanical device consisting of one or more `platters`
+that rotate at high speed (of the order of thousands of revolutions per
+    minute). Magnetically encoded information on the disk surface is retrieved
+or modified by read/ write heads that move radially across the disk.
+Physically, information on the disk surface is located on a set of concentric
+circles called `tracks`. Tracks themselves are divided into a number of
+`sectors`, each of which consists of a series of physical `blocks`.
+
+Physical blocks are typically 512 bytes (or some multiple thereof) in size,
+and represent the `smallest unit` of information that the drive can read or
+  write.
+
+Although modern disks are fast, reading and writing information on the disk
+still takes significant time. The disk head must first move to the appropriate
+track (seek time), then the drive must wait until the appropriate sector
+rotates under the head (rotational latency), and finally the required blocks
+must be transferred (transfer time). The total time required to carry out such
+an operation is typically of the order of milliseconds. By comparison, modern
+CPUs are capable of executing millions of instructions in this time.
+
+Disk partitions
+
+Each disk is divided into one or more (nonoverlapping) partitions. Each
+partition is treated by the kernel as a separate device residing under the
+/dev directory.
+
+
+14.3 File Systems
+
+A file system is an organized collection of regular files and directories. A
+file system is created using the mkfs command. One of the strengths of Linux
+is that it supports a wide variety of file systems.
+
+The file-system types currently known by the kernel can be viewed in the
+Linux-specific /proc/filesystems file.
+
+File-system structure
+
+The basic unit for allocating space in a file system is a `logical block`,
+which is some multiple of `contiguous physical blocks` on the disk device on
+  which the file system resides. For example, the logical block size on ext2
+  is 1024, 2048, or 4096 bytes.  (The logical block size is specified as an
+      argument of the mkfs(8) command used to build the file system.)
+
+note:
+From here, block refers to logical block.
+
+| partition                                            |
+| boot block | super block | i-node table | data block |
+
+Figure 14-1: Layout of disk partitions and a file system
+
+A file system contains the following parts:
+
+  * Boot block: 
+  This is always the first block in a file system. The boot block is not used
+  by the file system; rather, it contains information used to boot the
+  operating system. Although only one boot block is needed by the operating
+  system, all file systems have a boot block (most of which are unused).
+
+  * Superblock: 
+  This is a single block, immediately following the boot block, which contains
+  parameter information about the file system, including:
+
+  the size of the i-node table;
+  the size of `logical blocks` in this file system; and
+  the size of the file system in logical blocks.
+
+
+  * I-node table: 
+  Each file or directory in the file system has a unique entry in the i-node
+  table. This entry records various information about the file. 
+
+  * Data blocks: 
+  The great majority of space in a file system is used for the blocks of data
+  that form the files and directories residing in the file system.
+
+
+14.4 I-nodes
+
+A file system's i-node table contains one i-node (short for index node) for
+each file residing in the file system. I-nodes are identified numerically by
+their sequential location in the i-node table. The i-node number (or simply
+    i-number) of a file is the first field displayed by the ls –li command.
+The information maintained in an i-node includes the following:
+
+  * File type (e.g., regular file, directory, symbolic link, character device).
+  * Owner (also referred to as the user ID or UID) for the file.
+  * Group (also referred to as the group ID or GID) for the file.
+  * Access permissions for three categories of user
+
+  * Three timestamps: <three-timestamps>
+  time of `last access` to the file (shown by ls –lu), time of `last modification`
+  of the file (the default time shown by ls –l), and time of `last status`
+  change (last change to i-node information, shown by ls –lc).
+
+  * Number of hard links to the file.
+  * Size of the file in bytes.
+
+  * Number of blocks actually allocated to the file
+  measured in units of 512-byte blocks. There may not be a simple
+  correspondence between this number and the size of the file in bytes, since
+  a file can contain holes (Section 4.7), and thus require fewer allocated
+  blocks than would be expected according to its nominal size in bytes.
+
+  * Pointers to the data blocks of the file.
+
+I-nodes and data block pointers in ext2
+
+Like most UNIX file systems, the ext2 file system doesn't store the data
+blocks of a file contiguously or even in sequential order. To locate the file
+data blocks, the kernel maintains a set of pointers in the i-node. The system
+used for doing this on the ext2 file system is shown in Figure 14-2.
+
+note:
+Removing the need to store the blocks of a file contiguously allows the file
+system to use space in an efficient way. In particular, it reduces the
+incidence of fragmentation of free disk space—the wastage created by the
+existence of numerous pieces of noncontiguous free space, all of which are too
+small to use.
+
+Under ext2, each i-node contains 15 pointers. The first 12 of these pointers
+(numbered 0 to 11 in Figure 14-2) point to the location in the file system of
+the first 12 blocks of the file. 
+
+The next pointer is a pointer to a block of pointers that give the locations
+of the thirteenth and subsequent data blocks of the file. The number of
+pointers in this block depends on the block size of the file system. Each
+pointer requires 4 bytes, so there may be from 256 pointers (for a 1024-byte
+    block size) to 1024 pointers (for a 4096-byte block size).
+
+For even larger files, the fourteenth pointer (numbered 13 in the diagram) is
+a `double` indirect pointer—it points to blocks of pointers that in turn point
+to blocks of pointers that in turn point to data blocks of the file. And
+should the need for a truly enormous file arise, there is a further level of
+indirection: the last pointer in the i-node is a `triple`-indirect pointer.
+
+designed to satisfy a number of requirements:
+
+To begin with, it allows the i-node structure to be a fixed size, while at the
+same time allowing for files of an arbitrary size. 
+
+Additionally, it allows the file system to store the blocks of a file
+noncontiguously, while also allowing the data to be accessed randomly via
+lseek(); the kernel just needs to calculate which pointer(s) to follow. 
+
+Finally, for small files, which form the overwhelming majority of files on
+most systems, this scheme allows the file data blocks to be accessed rapidly
+via the direct pointers of the i-node.
+
+
+14.6 Journaling File Systems
+
+The ext2 file system is a good example of a traditional UNIX file system, and
+suffers from a classic limitation of such file systems: after a system crash,
+a file-system consistency check (fsck) must be performed on reboot in order to
+  ensure the integrity of the file system. 
+
+This is necessary because, at the time of the system crash, a file update may
+have been only partially completed, and the file-system metadata (directory
+    entries, i-node information, and file data block pointers) may be in an
+inconsistent state, so that the file system might be further damaged if these
+inconsistencies are not repaired. 
+
+A file-system consistency check ensures the consistency of the file-system
+metadata. Where possible, repairs are performed; otherwise, information that
+is not retrievable (possibly including file data) is discarded.
+
+Journaling file systems eliminate the need for lengthy file-system consistency
+checks after a system crash. A journaling file system logs (journals) all
+metadata updates to a special on-disk journal file before they are actually
+carried out. The updates are logged in groups of related metadata updates
+(transactions). In the event of a system crash in the middle of a transaction,
+on system reboot, the log can be used to rapidly redo any incomplete updates
+  and bring the file system back to a consistent state.
+
+note: see *sql-rollback*
+
+<on-metadata>
+Some journaling file systems ensure `only the consistency of file metadata`
+Because they don't log file data, data may still be lost in the event of a
+crash. The ext3, ext4, and Reiserfs file systems provide options for logging
+data updates, but, depending on the workload, this may result in lower file
+I/O performance. 
+
+Two other file systems that provide journaling and a range of other advanced
+features:
+
+* The ext4 file system (http://ext4.wiki.kernel.org/) 
+  is the successor to ext3. The first pieces of the implementation were added
+  in kernel 2.6.19, and various features were added in later kernel versions.
+  Among the planned (or already implemented) features for ext4 are extents
+  (reservation of contiguous blocks of storage) and other allocation features
+  that aim to reduce file fragmentation, online file-system defragmentation,
+  faster file-system checking, and support for nanosecond timestamps.
+
+* Btrfs (B-tree FS, usually pronounced “butter FS”; http://btrfs.wiki.kernel.org/) 
+  is a new file system designed from the ground up to provide a range of
+  modern features, including extents, writable snapshots (which provide
+  functionality equivalent to metadata and data journaling), checksums on
+  data and metadata, online file-system checking, online file-system
+  defragmentation, space-efficient packing of small files, and space-efficient
+  indexed directories. It was integrated into the kernel in version 2.6.29.
+
+
+14.10 A Virtual Memory File System: tmpfs
+
+Linux also supports the notion of virtual file systems that reside in memory.
+There is, however, one important difference: file operations are much faster,
+since no disk access is involved.
+
+The tmpfs file system differs from other memory-based file systems in that it
+is a virtual memory file system. This means that tmpfs uses not only RAM, but
+also the swap space, if RAM is exhausted.
+
+note:
+The tmpfs file system is an optional Linux kernel component that is configured
+via the CONFIG_TMPFS option.
+
+Aside from use by user applications, tmpfs file systems also serve two special
+purposes:
+
+* An invisible tmpfs file system, mounted internally by the kernel, is used
+  for implementing System V shared memory (Chapter 48) and shared anonymous
+  memory mappings (Chapter 49).
+
+* A tmpfs file system mounted at /dev/shm is used for the glibc implementation
+  of POSIX shared memory and POSIX semaphores.
+
+
+={============================================================================
+*kt_linux_core_203* linux-io-fs-vfs
+
+14.5 The Virtual File System (VFS)
+
+If every program that worked with files needed to understand the specific
+details of each file system, the task of writing programs that worked with all
+of the different file systems would be nearly impossible. The virtual file
+system (VFS, sometimes also referred to as the virtual file switch) is a
+kernel feature that resolves this problem by creating an abstraction layer for
+file-system operations
+
+The ideas behind the VFS are straightforward:
+
+  * The VFS defines a generic interface for file-system operations. All
+    programs that work with files specify their operations in terms of this
+    generic interface.
+
+  * Each file system provides an implementation for the VFS interface.
+
+Under this scheme, programs need to understand only the VFS interface and can
+ignore details of individual file-system implementations.
+
+The VFS interface includes operations corresponding to all of the usual system
+calls for working with file systems and directories, such as 
+
+<fs-api>
+open(), read(), write(), lseek(), close(), truncate(), stat(), mount(),
+  umount(), mmap(), mkdir(), link(), unlink(), symlink(), and rename().
+
+
+Understanding The Linux Kernel, 3rd Ed 12.1.1. The Common File Model
+
+The key idea behind the VFS consists of introducing a common file model
+capable of representing all supported filesystems.
+
+For instance, in the common file model, each directory is regarded as a file,
+which contains a list of files and other directories. However, several
+  non-Unix disk-based filesystems use a File Allocation Table (FAT), which
+  stores the position of each file in the directory tree. In these
+  filesystems, directories are not files. To stick to the VFS's common file
+  model, the Linux implementations of such FAT-based filesystems must be able
+  to construct on the fly, when needed, the files corresponding to the
+  directories. Such files exist only as objects in kernel memory.
+
+More essentially, the Linux kernel cannot hardcode a particular function to
+handle an operation such as read( ) or ioctl( ) . Instead, it must use a
+pointer for each operation; the pointer is made to point to the proper
+function for the particular filesystem being accessed.
+
+The application's call to read( ) makes the kernel invoke the corresponding
+sys_read( ) service routine, like every other system call. The file is
+represented by a file data structure in kernel memory, as we'll see later in
+this chapter. This data structure contains a field called f_op that contains
+pointers to functions
+
+sys_read( ) finds the pointer to this function and invokes it. Thus, the
+application's read( ) is turned into the rather indirect call:
+
+file->f_op->read(...);
+
+
+={============================================================================
 *kt_linux_core_202* linux-io-buffering
 
 <kernel-buffer-cache>
@@ -38710,35 +39031,6 @@ note: here "disk device" means actual disk? seems a disk as below.
 // }
 
 
-<from-write-to-fs>
-// fs/read_write.c
-// ssize_t do_sync_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
-// {
-// 	for (;;) {
-// 		ret = filp->f_op->aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
-// 		if (ret != -EIOCBRETRY)
-// 			break;
-// 		wait_on_retry_sync_kiocb(&kiocb);
-// 	}
-// }
-// 
-// EXPORT_SYMBOL(do_sync_write);
-//
-// aio_write          47 fs/ext2/file.c    .aio_write      = generic_file_aio_write,
-//
-// mm/filemap.c
-// ssize_t generic_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
-// 	unsigned long nr_segs, loff_t pos)
-// {
-//   ret = __generic_file_aio_write_nolock(iocb, iov, nr_segs, &iocb->ki_pos)
-//   {
-//     written = generic_file_direct_write();
-// 
-//     // or
-// 
-//     written_buffered = generic_file_buffered_write();
-//   }
-// }
 
 
 <generic_file_write>
@@ -39208,6 +39500,40 @@ kernel source code to check for this support.
 
 
 ={============================================================================
+*kt_linux_core_203* linux-io-cache
+
+<write-to-fs>
+// fs/read_write.c
+ssize_t do_sync_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
+{
+	for (;;) {
+		ret = filp->f_op->aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
+		if (ret != -EIOCBRETRY)
+			break;
+		wait_on_retry_sync_kiocb(&kiocb);
+	}
+}
+
+EXPORT_SYMBOL(do_sync_write);
+
+aio_write          47 fs/ext2/file.c    .aio_write      = generic_file_aio_write,
+
+mm/filemap.c
+ssize_t generic_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
+	unsigned long nr_segs, loff_t pos)
+{
+  ret = __generic_file_aio_write_nolock(iocb, iov, nr_segs, &iocb->ki_pos)
+  {
+    written = generic_file_direct_write();
+
+    // or
+
+    written_buffered = generic_file_buffered_write();
+  }
+}
+
+
+={============================================================================
 *kt_linux_core_203* linux-io-ex
 
 #include <sys/stat.h>
@@ -39373,304 +39699,6 @@ On success, tmpfile() returns a file stream that can be used with the stdio
 library functions. The temporary file is automatically deleted when it is
 closed. To do this, tmpfile() makes an internal call to unlink() to remove the
 filename immediately after opening the file.
-
-
-={============================================================================
-*kt_linux_core_203* linux-io-fs driver-api
-
-14.1 Device Special Files (Devices)
-
-A device special file corresponds to a device on the system. Within the
-kernel, each device type has a corresponding device driver, which handles all
-I/O requests for the device. A device driver is a unit of kernel code that
-implements a set of operations that (normally) correspond to input and output
-actions on an associated piece of hardware. 
-
-<driver-api>
-The API provided by device drivers is fixed, and includes operations
-corresponding to the system calls open(), close(), read(), write(), mmap(),
-and ioctl().  The fact that each device driver provides a consistent
-  interface, hiding the differences in operation of individual devices, allows
-  for universality of I/O (Section 4.2).
-
-Devices can be divided into two types:
-
-  * Character devices handle data on a character-by-character basis. Terminals
-    and keyboards are examples of character devices.
-
-  * Block devices handle data a block at a time. The size of a block depends
-    on the type of device, but is typically some multiple of 512 bytes.
-    Examples of block devices include disks and tape drives.
-
-Device IDs
-
-Each device file has a major ID number and a minor ID number. The major ID
-identifies the general class of device, and is used by the kernel to look up
-the appropriate driver for this type of device. The minor ID uniquely
-identifies a particular device within a general class. The major and minor IDs
-of a device file are displayed by the ls –l command.
-
-
-14.2 Disks and Partitions
-
-Disk drives
-
-A hard disk drive is a mechanical device consisting of one or more `platters`
-that rotate at high speed (of the order of thousands of revolutions per
-    minute). Magnetically encoded information on the disk surface is retrieved
-or modified by read/ write heads that move radially across the disk.
-Physically, information on the disk surface is located on a set of concentric
-circles called `tracks`. Tracks themselves are divided into a number of
-`sectors`, each of which consists of a series of physical `blocks`.
-
-Physical blocks are typically 512 bytes (or some multiple thereof) in size,
-and represent the `smallest unit` of information that the drive can read or
-  write.
-
-Although modern disks are fast, reading and writing information on the disk
-still takes significant time. The disk head must first move to the appropriate
-track (seek time), then the drive must wait until the appropriate sector
-rotates under the head (rotational latency), and finally the required blocks
-must be transferred (transfer time). The total time required to carry out such
-an operation is typically of the order of milliseconds. By comparison, modern
-CPUs are capable of executing millions of instructions in this time.
-
-Disk partitions
-
-Each disk is divided into one or more (nonoverlapping) partitions. Each
-partition is treated by the kernel as a separate device residing under the
-/dev directory.
-
-
-14.3 File Systems
-
-A file system is an organized collection of regular files and directories. A
-file system is created using the mkfs command. One of the strengths of Linux
-is that it supports a wide variety of file systems.
-
-The file-system types currently known by the kernel can be viewed in the
-Linux-specific /proc/filesystems file.
-
-File-system structure
-
-The basic unit for allocating space in a file system is a `logical block`,
-which is some multiple of `contiguous physical blocks` on the disk device on
-  which the file system resides. For example, the logical block size on ext2
-  is 1024, 2048, or 4096 bytes.  (The logical block size is specified as an
-      argument of the mkfs(8) command used to build the file system.)
-
-note:
-From here, block refers to logical block.
-
-| partition                                            |
-| boot block | super block | i-node table | data block |
-
-Figure 14-1: Layout of disk partitions and a file system
-
-A file system contains the following parts:
-
-  * Boot block: 
-  This is always the first block in a file system. The boot block is not used
-  by the file system; rather, it contains information used to boot the
-  operating system. Although only one boot block is needed by the operating
-  system, all file systems have a boot block (most of which are unused).
-
-  * Superblock: 
-  This is a single block, immediately following the boot block, which contains
-  parameter information about the file system, including:
-
-  the size of the i-node table;
-  the size of `logical blocks` in this file system; and
-  the size of the file system in logical blocks.
-
-
-  * I-node table: 
-  Each file or directory in the file system has a unique entry in the i-node
-  table. This entry records various information about the file. 
-
-  * Data blocks: 
-  The great majority of space in a file system is used for the blocks of data
-  that form the files and directories residing in the file system.
-
-
-14.4 I-nodes
-
-A file system's i-node table contains one i-node (short for index node) for
-each file residing in the file system. I-nodes are identified numerically by
-their sequential location in the i-node table. The i-node number (or simply
-    i-number) of a file is the first field displayed by the ls –li command.
-The information maintained in an i-node includes the following:
-
-  * File type (e.g., regular file, directory, symbolic link, character device).
-  * Owner (also referred to as the user ID or UID) for the file.
-  * Group (also referred to as the group ID or GID) for the file.
-  * Access permissions for three categories of user
-
-  * Three timestamps: <three-timestamps>
-  time of `last access` to the file (shown by ls –lu), time of `last modification`
-  of the file (the default time shown by ls –l), and time of `last status`
-  change (last change to i-node information, shown by ls –lc).
-
-  * Number of hard links to the file.
-  * Size of the file in bytes.
-
-  * Number of blocks actually allocated to the file
-  measured in units of 512-byte blocks. There may not be a simple
-  correspondence between this number and the size of the file in bytes, since
-  a file can contain holes (Section 4.7), and thus require fewer allocated
-  blocks than would be expected according to its nominal size in bytes.
-
-  * Pointers to the data blocks of the file.
-
-I-nodes and data block pointers in ext2
-
-Like most UNIX file systems, the ext2 file system doesn't store the data
-blocks of a file contiguously or even in sequential order. To locate the file
-data blocks, the kernel maintains a set of pointers in the i-node. The system
-used for doing this on the ext2 file system is shown in Figure 14-2.
-
-note:
-Removing the need to store the blocks of a file contiguously allows the file
-system to use space in an efficient way. In particular, it reduces the
-incidence of fragmentation of free disk space—the wastage created by the
-existence of numerous pieces of noncontiguous free space, all of which are too
-small to use.
-
-Under ext2, each i-node contains 15 pointers. The first 12 of these pointers
-(numbered 0 to 11 in Figure 14-2) point to the location in the file system of
-the first 12 blocks of the file. 
-
-The next pointer is a pointer to a block of pointers that give the locations
-of the thirteenth and subsequent data blocks of the file. The number of
-pointers in this block depends on the block size of the file system. Each
-pointer requires 4 bytes, so there may be from 256 pointers (for a 1024-byte
-    block size) to 1024 pointers (for a 4096-byte block size).
-
-For even larger files, the fourteenth pointer (numbered 13 in the diagram) is
-a `double` indirect pointer—it points to blocks of pointers that in turn point
-to blocks of pointers that in turn point to data blocks of the file. And
-should the need for a truly enormous file arise, there is a further level of
-indirection: the last pointer in the i-node is a `triple`-indirect pointer.
-
-designed to satisfy a number of requirements:
-
-To begin with, it allows the i-node structure to be a fixed size, while at the
-same time allowing for files of an arbitrary size. 
-
-Additionally, it allows the file system to store the blocks of a file
-noncontiguously, while also allowing the data to be accessed randomly via
-lseek(); the kernel just needs to calculate which pointer(s) to follow. 
-
-Finally, for small files, which form the overwhelming majority of files on
-most systems, this scheme allows the file data blocks to be accessed rapidly
-via the direct pointers of the i-node.
-
-
-14.5 The Virtual File System (VFS)
-
-If every program that worked with files needed to understand the specific
-details of each file system, the task of writing programs that worked with all
-of the different file systems would be nearly impossible. The virtual file
-system (VFS, sometimes also referred to as the virtual file switch) is a
-kernel feature that resolves this problem by creating an abstraction layer for
-file-system operations
-
-The ideas behind the VFS are straightforward:
-
-  * The VFS defines a generic interface for file-system operations. All
-    programs that work with files specify their operations in terms of this
-    generic interface.
-
-  * Each file system provides an implementation for the VFS interface.
-
-Under this scheme, programs need to understand only the VFS interface and can
-ignore details of individual file-system implementations.
-
-The VFS interface includes operations corresponding to all of the usual system
-calls for working with file systems and directories, such as 
-
-<fs-api>
-open(), read(), write(), lseek(), close(), truncate(), stat(), mount(),
-  umount(), mmap(), mkdir(), link(), unlink(), symlink(), and rename().
-
-
-14.6 Journaling File Systems
-
-The ext2 file system is a good example of a traditional UNIX file system, and
-suffers from a classic limitation of such file systems: after a system crash,
-a file-system consistency check (fsck) must be performed on reboot in order to
-  ensure the integrity of the file system. 
-
-This is necessary because, at the time of the system crash, a file update may
-have been only partially completed, and the file-system metadata (directory
-    entries, i-node information, and file data block pointers) may be in an
-inconsistent state, so that the file system might be further damaged if these
-inconsistencies are not repaired. 
-
-A file-system consistency check ensures the consistency of the file-system
-metadata. Where possible, repairs are performed; otherwise, information that
-is not retrievable (possibly including file data) is discarded.
-
-Journaling file systems eliminate the need for lengthy file-system consistency
-checks after a system crash. A journaling file system logs (journals) all
-metadata updates to a special on-disk journal file before they are actually
-carried out. The updates are logged in groups of related metadata updates
-(transactions). In the event of a system crash in the middle of a transaction,
-on system reboot, the log can be used to rapidly redo any incomplete updates
-  and bring the file system back to a consistent state.
-
-note: see *sql-rollback*
-
-<on-metadata>
-Some journaling file systems ensure `only the consistency of file metadata`
-Because they don't log file data, data may still be lost in the event of a
-crash. The ext3, ext4, and Reiserfs file systems provide options for logging
-data updates, but, depending on the workload, this may result in lower file
-I/O performance. 
-
-Two other file systems that provide journaling and a range of other advanced
-features:
-
-* The ext4 file system (http://ext4.wiki.kernel.org/) 
-  is the successor to ext3. The first pieces of the implementation were added
-  in kernel 2.6.19, and various features were added in later kernel versions.
-  Among the planned (or already implemented) features for ext4 are extents
-  (reservation of contiguous blocks of storage) and other allocation features
-  that aim to reduce file fragmentation, online file-system defragmentation,
-  faster file-system checking, and support for nanosecond timestamps.
-
-* Btrfs (B-tree FS, usually pronounced “butter FS”; http://btrfs.wiki.kernel.org/) 
-  is a new file system designed from the ground up to provide a range of
-  modern features, including extents, writable snapshots (which provide
-  functionality equivalent to metadata and data journaling), checksums on
-  data and metadata, online file-system checking, online file-system
-  defragmentation, space-efficient packing of small files, and space-efficient
-  indexed directories. It was integrated into the kernel in version 2.6.29.
-
-
-14.10 A Virtual Memory File System: tmpfs
-
-Linux also supports the notion of virtual file systems that reside in memory.
-There is, however, one important difference: file operations are much faster,
-since no disk access is involved.
-
-The tmpfs file system differs from other memory-based file systems in that it
-is a virtual memory file system. This means that tmpfs uses not only RAM, but
-also the swap space, if RAM is exhausted.
-
-note:
-The tmpfs file system is an optional Linux kernel component that is configured
-via the CONFIG_TMPFS option.
-
-Aside from use by user applications, tmpfs file systems also serve two special
-purposes:
-
-* An invisible tmpfs file system, mounted internally by the kernel, is used
-  for implementing System V shared memory (Chapter 48) and shared anonymous
-  memory mappings (Chapter 49).
-
-* A tmpfs file system mounted at /dev/shm is used for the glibc implementation
-  of POSIX shared memory and POSIX semaphores.
 
 
 ={============================================================================
@@ -48539,6 +48567,43 @@ analysis purposes.
 
 
 ={============================================================================
+*kt_linux_gcc_205* gcc-ld
+
+https://sourceware.org/binutils/docs/ld/index.html#Top
+This file documents the gnu linker ld (GNU Binutils) version 2.25. 
+
+<check-search> 
+--verbose[=NUMBER] Display the version number for ld and list the linker
+emulations supported. Display which input files can and cannot be opened. 
+    
+Display the `linker script` being used by the linker. If the optional NUMBER
+argument > 1, plugin symbol status will also be displayed. 
+
+<ex>
+GNU ld (GNU Binutils) 2.25.1
+  Supported emulations:
+   elf32btsmip
+   elf32ltsmip
+   elf32btsmipn32
+   elf64btsmip
+   elf32ltsmipn32
+   elf64ltsmip
+using internal linker script:
+==================================================
+/* Script for -z combreloc: combine and sort reloc sections */
+/* Copyright (C) 2014 Free Software Foundation, Inc.
+   Copying and distribution of this script, with or without modification,
+   are permitted in any medium without royalty provided the copyright
+   notice and this notice are preserved.  */
+OUTPUT_FORMAT("elf32-tradbigmips", "elf32-tradbigmips",
+              "elf32-tradlittlemips")
+OUTPUT_ARCH(mips)
+ENTRY(__start)
+SEARCH_DIR("=/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/lib"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
+SECTIONS
+
+
+={============================================================================
 *kt_linux_gcc_400* gcc-build-execution-env
 
 http://askubuntu.com/questions/133389/no-such-file-or-directory-but-the-file-exists
@@ -48882,8 +48947,10 @@ The following options only apply to building cross compilers.
         of) the root filesystem of the `target operating system` 
     
     `Target system headers, libraries and run-time object files` will be
-    searched for in there. More specifically, this acts as if --sysroot=dir
-    was added to the `default options` of the built compiler. 
+    searched for in there. 
+
+    More specifically, this acts `as if --sysroot=dir was added` to the `default
+    options` of the built compiler. 
     
     The specified directory is not copied into the install tree, unlike the
     options --with-headers and --with-libs that this option obsoletes. 
@@ -48902,16 +48969,21 @@ The following options only apply to building cross compilers.
     compiler will search that directory within dirname for native system
     headers rather than the default /usr/include. 
 
-eg.,
+    note: will not create sysroot directory.
 
-../binutils-2.24/configure --target=mips-linux --prefix=/xx --with-sysroot=/xx/sysroot --disable-nls --disable-multilib
 
-note: will not create sysroot directory.
+http://wiki.osdev.org/GCC_Cross-Compiler
+--with-sysroot 
+tells `binutils` to enable sysroot support in the cross-compiler by pointing
+it to a default empty directory. By default the linker refuses to use sysroots
+for no good technical reason, while gcc is able to handle both cases at
+  runtime. This will be useful later on. 
 
---with-sysroot tells binutils to enable sysroot support in the cross-compiler
-by pointing it to a default empty directory. By default the linker refuses to
-use sysroots for no good technical reason, while gcc is able to handle both
-cases at runtime. This will be useful later on. 
+<gcc-ld>
+--sysroot=directory
+    Use directory as the location of the sysroot, overriding the
+    configure-time default. This option is only supported by linkers that were
+    configured using --with-sysroot. 
 
 
 ={============================================================================
@@ -49791,67 +49863,6 @@ make[1]: Entering directory `/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-20
 make[2]: Entering directory `/home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/build/host-gcc-final-4.9.4/build'
 
 
-
-={============================================================================
-*kt_linux_gcc_400* gcc-build-tc-buildroot-external-spk
-
-MIPS:
-The toolchain used is the Broadcom NPTL toolchain with GCC4.2.
-
-The SPK assumes that the symlink /opt/toolchains/uclibc-crosstools points to
-the correct toolchain. This is the default symlink to the Broadcom install.
-
-Configure Build Options:
-
-Following configure build options are supported to modify standard configurations:
-
-initramfs:
-
-This enables initramfs (i.e. the kernel binary will contain a rootfs which is
-    loaded into RAM). By default, a kernel with no internal rootfs is built.
-
-noinitramfs:
-
-This disables initramfs. This is the default state for all configs, and will
-only need to be used if you have modified the configurations.
-
-otv
-
-Configures the kernel for the OTV bootloader. On some platforms, this modifies
-the kernel configuration.
-
-cfe
-
-Configures the kernel for the CFE bootloader. This is the default
-configuration. This option may be useful to undo the changes made by the “otv”
-config option.
-
-<version>
-file:///home/kyoupark/si-logs/spk/darwin-spk-1.19/docs/buildroot.html
-$LastChangedDate: 2008-12-16 09:00:11 +0000 (Tue, 16 Dec 2008) $
-
-The nearest from buildroot.org
-buildroot-2009.02-rc1.tar.bz2                      2009-01-16 19:35  7.0M
-
-checked buildroot-2009.02 and do not have glibc package
-
-linux-2.6.32.tar.bz2     03-Dec-2009 05:24   61M  
-linux-2.6.32.tar.gz      03-Dec-2009 05:24   78M  
-linux-2.6.32.tar.sign    08-Aug-2013 19:37  665   
-linux-2.6.32.tar.xz      03-Dec-2009 05:24   50M  
-
-linux-2.6.18.tar.bz2     20-Sep-2006 03:56   40M  
-linux-2.6.18.tar.gz      20-Sep-2006 03:56   50M  
-linux-2.6.18.tar.sign    08-Aug-2013 19:27  665   
-linux-2.6.18.tar.xz      20-Sep-2006 03:56   33M  
-
-
-<buildroot-glibc-version>
-/buildroot-2016.08.1/package/glibc
-drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.22
-drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.23
-
-
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-tc-buildroot-external-toolchain
 
@@ -49991,249 +50002,7 @@ TOOLCHAIN_EXTERNAL_TOOLCHAIN_WRAPPER_ARGS += -DBR_ABI='"$(CC_TARGET_ABI_)"'
 endif
 
 
-<spk-case>
-toolchain/Config.in
-
-config BR2_TOOLCHAIN_EXTERNAL
-	bool "External binary toolchain"
-
-source "toolchain/export-toolchain/Config.in"
-
-toolchain/external-toolchain/Config.in
-
-if BR2_TOOLCHAIN_EXTERNAL
-config BR2_TOOLCHAIN_EXTERNAL_LIB_C
-	string "The core C library from the external toolchain"
-	default "libc.so.0"
-	help
-	  Specify the core C shared library found in the external
-	  toolchain. This is required in addition to any other
-	  libraries to be copied.
-
-config BR2_TOOLCHAIN_EXTERNAL_LIBS
-	string "Libraries to copy from the external toolchain"
-	default "ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0"
-	help
-	  A space separated list of the shared libraries to be copied
-	  from the external toolchain into the root filesystem. Only
-	  the top-level name is needed, i.e. libc.so, libpthread.so as
-	  the actual shared library symlinked to will be copied also.
-
-config BR2_TOOLCHAIN_EXTERNAL_STRIP
-        bool
-        default y
-        prompt "Strip shared libraries"
-	help
-	  Strip shared libraries copied from the external toolchain.
-endif
-
-toolchain/dependencies/dependencies.sh
-
-Checking build system dependencies:
-BUILDROOT_DL_DIR clean:				Ok
-CC clean:					Ok
-CXX clean:					Ok
-CPP clean:					Ok
-CFLAGS clean:					Ok
-INCLUDES clean:					Ok
-CXXFLAGS clean:					Ok
-which installed:				Ok
-sed works:					Ok (/bin/sed)
-GNU make version '3.81':			Ok
-C compiler '/usr/lib64/ccache/gcc'
-C compiler version '4.4.7':			Ok
-C++ compiler '/usr/lib64/ccache/g++'
-C++ compiler version '4.4.7':			Ok
-awk installed:					Ok
-bison installed:				Ok
-flex installed:					Ok
-gettext installed:				Ok
-makeinfo installed:				Ok
-Build system dependencies:			Ok
-
-toolchain/dependencies/dependencies.mk
-toolchain/external/ext-tool.mk
-
-uclibc: dependencies $(TARGET_DIR)/lib/$(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIB_C)))
-
-$(TARGET_DIR)/lib/$(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIB_C))):
-#"))
-	mkdir -p $(TARGET_DIR)/lib
-	@$(call copy_toolchain_lib_root, $(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIB_C))), /lib, $(BR2_TOOLCHAIN_EXTERNAL_STRIP))
-#")))
-	for libs in $(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIBS))); do \
-		$(call copy_toolchain_lib_root, $$libs, /lib, $(BR2_TOOLCHAIN_EXTERNAL_STRIP)); \
-	done
-	$(call copy_toolchain_sysroot)
-
-
-note: then where libuClibc-0.9.29.so come from when it doesn't get built?
-From patch file and means that it's delivered as a binary.
-
-no file
-~/si-logs/spk/darwin-spk-1.19/target/device/Sky/ams-drx890/rootfs/debug/lib$ ls -al
-total 12
-drwxr-xr-x  3 kyoupark ccusers 4096 Oct 14  2013 .
-drwxr-xr-x 16 kyoupark ccusers 4096 Oct 14  2013 ..
--rw-r--r--  1 kyoupark ccusers    0 Oct 14  2013 .empty
-drwxr-xr-x  3 kyoupark ccusers 4096 Oct 14  2013 modules
-
-
-mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root
-if ! [ -d "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/bin" ]; then \
-		if [ -d "target/device/Sky/ams-drx890/rootfs/"debug"" ]; then \
-			cp -fa target/device/Sky/ams-drx890/rootfs/"debug"/* \
-         /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/; \
-		fi; \
-		touch /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir/.fakeroot.00000; \
-	fi
-
-/home/kyoupark/si-logs/spk/darwin-spk-1.19/patches
--rw-r--r--  1 kyoupark ccusers 2535439 Mar 15  2016 darwin-spk-1.19-0001-drx890-uclibc-update-v3.patch
-
-WARNING: patch 'patches/darwin-spk-1.19-0001-drx890-uclibc-update-v3.patch' can be applied -p0 or -p1. Using -p0.
-Applying patch 'patches/darwin-spk-1.19-0001-drx890-uclibc-update-v3.patch'...
-patching file target/device/Sky/ams-drx890/rootfs/debug/lib/libuClibc-0.9.29.so
-patching file target/device/Sky/ams-drx890/rootfs/preprod/lib/libuClibc-0.9.29.so
-patching file target/device/Sky/ams-drx890/rootfs/prod/lib/libuClibc-0.9.29.so
-
-
-note:
-ext-tool.ml do two things:
-
-1. copy libraries to target directory
-
-copy_toolchain_lib_root = \
-
-copy_toolchain_lib_root lib=libc.so.0 dst=/lib
-SKIPPING copy_toolchain_lib_root lib=libuClibc-0.9.29.so dst=/lib
-for libs in ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0; do \
-		LIB="$libs"; DST="/lib"; STRIP="y"; SYSROOT="" ; if test -z y; then PREFIX=`/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--prefix" | head -1 | cut -f2 -d=`; SYSROOT_DIR=`echo ""/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2"" | sed -e "s|\(.*\)${PREFIX}|\1|"` ; SYSROOT="--sysroot ${SYSROOT_DIR}" ; fi ; LIB_DIR=`/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc ${SYSROOT} -print-file-name=${LIB} | sed -e "s,${LIB}\$,,"`; if test -z "${LIB_DIR}"; then echo "copy_toolchain_lib_root: lib=${LIB} not found"; exit -1; fi; if test -z ; then LINKS="-type l"; fi; LIB="$libs"; for FILE in `find ${LIB_DIR} -maxdepth 1 ${LINKS} -name "${LIB}*"`; do LIB=`basename ${FILE}`; while test \! -z "${LIB}"; do if test -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; then echo "SKIPPING copy_toolchain_lib_root lib=${LIB} dst=${DST}"; chmod +x "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; case "${STRIP}" in (0 | n | no) ;; (*) /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-strip "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; ;; esac; else rm -fr /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}; echo "copy_toolchain_lib_root lib=${LIB} dst=${DST}"; if test -h ${LIB_DIR}/${LIB}; then cp -d ${LIB_DIR}/${LIB} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/; elif test -f ${LIB_DIR}/${LIB}; then /usr/bin/install -D -m0755 ${LIB_DIR}/${LIB} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; case "${STRIP}" in (0 | n | no) ;; (*) /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-strip "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; ;; esac; else exit -1; fi; fi; LIB="`readlink ${LIB_DIR}/${LIB}`"; done; done; echo -n; \
-	done
-copy_toolchain_lib_root lib=ld-uClibc.so.0 dst=/lib
-copy_toolchain_lib_root lib=ld-uClibc-0.9.29.so dst=/lib
-copy_toolchain_lib_root lib=libcrypt.so.0 dst=/lib
-...
-
-# The core C library from the external toolchain (BR2_TOOLCHAIN_EXTERNAL_LIB_C) 
-# [libc.so.0] libc.so.0
-# Libraries to copy from the external toolchain (BR2_TOOLCHAIN_EXTERNAL_LIBS) 
-# [ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0
-# libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0] 
-#
-# ld-uClibc.so.0
-# libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0
-# libresolv.so.0 librt.so.0 libutil.so.0
-#
-# ${LIB_DIR}
-# $ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc --print-file-name=libc.so.0
-# /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib/libc.so.0
-# $ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc --print-file-name=libc.so.0 |sed -e "s,libc.so.0,,"
-# /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib/
-# 
-# /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/mips-linux-uclibc/lib
-#
-# /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 \
-# | grep ^Configured | tr " " "\n" | grep -- "--with-sysroot" | head -1 | cut -f2 -d=
-# 
-# <mips-gcc-spec>
-# $ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 | grep ^Configured | tr " " "\n"
-# 3:Configured
-# with:
-# ../gcc-4.2.0-20070124/configure
-# --prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/
-# --build=mips-linux
-# --host=mips-linux
-# --target=mips-linux-uclibc
-# --with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc
-# --enable-languages=c,c++
-# --disable-__cxa_atexit
-# --enable-target-optspace
-# --with-gnu-ld
-# --with-float=hard
-# --enable-threads
-# --infodir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/info
-# --mandir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/man
-# --with-arch=mips32
-# --disable-libmudflap
-# --disable-nls
-# --with-gnu-plts
-# 
-# note: no match for --with-sysroot since
-# --with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc
-# PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/
-
-+ LIB=libc.so.0
-+ DST=/lib
-+ STRIP=y
-+ SYSROOT=
-++ pwd
-+ echo 'KT: pwd=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19'
-
-# do check if it really exist 
-++ find /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib/ -maxdepth 1 -type l -name 'libc.so.0*'
-
-# libc.so.0 is not exist
-#
-# ${TARGET_DIR} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root
-#
-+ test -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/libc.so.0
-+ rm -fr /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/libc.so.0
-+ mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib
-
-+ mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib
-+ echo 'copy_toolchain_lib_root lib=libc.so.0 dst=/lib'
-+ test -h /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0
-+ cp -d /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0 \
-    /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/
-
-cp -d /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0 ~/yy
-
-# libc.so.0 is a symbolic link to libuClibc-0.9.29.so. Here copies only a link
-# but not actual file and skips libuClibc-0.9.29.so. Means that it's already
-# copied and there.
-
-++ readlink /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0
-+ LIB=libuClibc-0.9.29.so
-+ test '!' -z libuClibc-0.9.29.so
-+ test -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/libuClibc-0.9.29.so
-+ echo 'SKIPPING copy_toolchain_lib_root lib=libuClibc-0.9.29.so dst=/lib'
-
-
-2. copy whole toolchain to staging directory
-
-copy_toolchain_sysroot = \
-	SYSROOT_DIR=``$(TARGET_CC) -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--with-sysroot" | head -1 | cut -f2 -d=``; \
-	if [ ! -z "$${SYSROOT_DIR}" ]; then \
-		SYSROOT_DIR=`echo "$${SYSROOT_DIR}/" | sed -e "s|//|/|g"` ;\
-		SYSROOT_DIR=`echo "$(BR2_TOOLCHAIN_EXTERNAL_PATH)/" | grep -o "$${SYSROOT_DIR}"` ;\
-	fi ;\
- \
-	if [ -z "$${SYSROOT_DIR}" ]; then \
-		PREFIX=`$(TARGET_CC) -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--prefix" | head -1 | cut -f2 -d=`; \
-		SYSROOT_DIR=`echo "$(BR2_TOOLCHAIN_EXTERNAL_PATH)" | sed -e "s|\(.*\)$${PREFIX}|\1|"` ;\
-	fi ;\
- \
-	echo -e "\nCopying toolchain files from $${SYSROOT_DIR}\n" ;\
-	cp -a $${SYSROOT_DIR}/* $(STAGING_DIR)/ ; \
-	find $(STAGING_DIR) -type d | xargs chmod 755 ;\
-
-# ${SYSROOT_DIR}
-# echo "/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2" | sed -e "s|\(.*\)${PREFIX}|\1|"
-# /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2
-
-# echo -e "\nCopying toolchain files from $${SYSROOT_DIR}\n" ;\
-Copying toolchain files from /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2
-cp -a $${SYSROOT_DIR}/* $(STAGING_DIR)/ ; \
-find $(STAGING_DIR) -type d | xargs chmod 755 ;\
-
-+ cp -a /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/info /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/lib /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/libexec /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/man /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mipsel-linux /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mipsel-linux-uclibc /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mips-linux /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mips-linux-uclibc /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/out.txt /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir/
-+ xargs chmod 755
-+ find /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir -type d
-
-
 <2016-11-case-with-external-settings>
-
 note: used external toolchain from <gcc-build-glibc-mips>
 
 # Config.in
@@ -50358,8 +50127,24 @@ toolchain/toolchain-external.mk
 >>> toolchain-external  Copying external toolchain sysroot to staging...
 >>> toolchain-external  Fixing libtool files
 >>> toolchain-external  Installing to target
+
+# toolchain/toolchain-external/toolchain-external.mk
+# ifeq ($(BR2_TOOLCHAIN_EXTERNAL_GLIBC)$(BR2_TOOLCHAIN_EXTERNAL_UCLIBC),y)
+# TOOLCHAIN_EXTERNAL_LIBS += libatomic.so.* libc.so.* libcrypt.so.* libdl.so.* libgcc_s.so.* libm.so.* libnsl.so.* libresolv.so.* librt.so.* libutil.so.*
+#
+# ifeq ($(BR2_STATIC_LIBS),)
+# define TOOLCHAIN_EXTERNAL_INSTALL_TARGET_LIBS
+# 	$(Q)$(call MESSAGE,"Copying external toolchain libraries to target...")
+# 	$(Q)for libs in $(TOOLCHAIN_EXTERNAL_LIBS); do \
+# 		echo "KT: TOOLCHAIN_EXTERNAL_LIBS: ($(TOOLCHAIN_EXTERNAL_LIBS)"; \
+# 		$(call copy_toolchain_lib_root,$$libs); \
+# 	done
+# endef
+# endif
+
 KT: TOOLCHAIN_EXTERNAL_LIBS: (libatomic.so.* libc.so.* libcrypt.so.* libdl.so.* libgcc_s.so.* libm.so.* libnsl.so.* libresolv.so.* librt.so.* libutil.so.* ld*.so.* libpthread.so.* libnss_files.so.* libnss_dn
 s.so.* libmvec.so.* libstdc++.so.*
+
 >>> toolchain  Extracting
 >>> toolchain  Patching
 
@@ -50748,6 +50533,322 @@ endif
 this linker was not configured to use sysroots
 collect2: error: ld returned 1 exit status
 scripts/Makefile.build:264: recipe for target 'applets/built-in.o' failed
+
+builds okay when use <gcc-build-glibc-mips-sysroot-null> and 
+BR2_PACKAGE_STRACE is not set
+
+
+={============================================================================
+*kt_linux_gcc_400* gcc-build-tc-buildroot-external-spk
+
+MIPS:
+The toolchain used is the Broadcom NPTL toolchain with GCC4.2.
+
+The SPK assumes that the symlink /opt/toolchains/uclibc-crosstools points to
+the correct toolchain. This is the default symlink to the Broadcom install.
+
+Configure Build Options:
+
+Following configure build options are supported to modify standard configurations:
+
+initramfs:
+
+This enables initramfs (i.e. the kernel binary will contain a rootfs which is
+    loaded into RAM). By default, a kernel with no internal rootfs is built.
+
+noinitramfs:
+
+This disables initramfs. This is the default state for all configs, and will
+only need to be used if you have modified the configurations.
+
+otv
+
+Configures the kernel for the OTV bootloader. On some platforms, this modifies
+the kernel configuration.
+
+cfe
+
+Configures the kernel for the CFE bootloader. This is the default
+configuration. This option may be useful to undo the changes made by the “otv”
+config option.
+
+<version>
+file:///home/kyoupark/si-logs/spk/darwin-spk-1.19/docs/buildroot.html
+$LastChangedDate: 2008-12-16 09:00:11 +0000 (Tue, 16 Dec 2008) $
+
+The nearest from buildroot.org
+buildroot-2009.02-rc1.tar.bz2                      2009-01-16 19:35  7.0M
+
+checked buildroot-2009.02 and do not have glibc package
+
+linux-2.6.32.tar.bz2     03-Dec-2009 05:24   61M  
+linux-2.6.32.tar.gz      03-Dec-2009 05:24   78M  
+linux-2.6.32.tar.sign    08-Aug-2013 19:37  665   
+linux-2.6.32.tar.xz      03-Dec-2009 05:24   50M  
+
+linux-2.6.18.tar.bz2     20-Sep-2006 03:56   40M  
+linux-2.6.18.tar.gz      20-Sep-2006 03:56   50M  
+linux-2.6.18.tar.sign    08-Aug-2013 19:27  665   
+linux-2.6.18.tar.xz      20-Sep-2006 03:56   33M  
+
+
+<buildroot-glibc-version>
+/buildroot-2016.08.1/package/glibc
+drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.22
+drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.23
+
+
+<spk-case>
+toolchain/Config.in
+
+config BR2_TOOLCHAIN_EXTERNAL
+	bool "External binary toolchain"
+
+source "toolchain/export-toolchain/Config.in"
+
+toolchain/external-toolchain/Config.in
+
+if BR2_TOOLCHAIN_EXTERNAL
+config BR2_TOOLCHAIN_EXTERNAL_LIB_C
+	string "The core C library from the external toolchain"
+	default "libc.so.0"
+	help
+	  Specify the core C shared library found in the external
+	  toolchain. This is required in addition to any other
+	  libraries to be copied.
+
+config BR2_TOOLCHAIN_EXTERNAL_LIBS
+	string "Libraries to copy from the external toolchain"
+	default "ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0"
+	help
+	  A space separated list of the shared libraries to be copied
+	  from the external toolchain into the root filesystem. Only
+	  the top-level name is needed, i.e. libc.so, libpthread.so as
+	  the actual shared library symlinked to will be copied also.
+
+config BR2_TOOLCHAIN_EXTERNAL_STRIP
+        bool
+        default y
+        prompt "Strip shared libraries"
+	help
+	  Strip shared libraries copied from the external toolchain.
+endif
+
+toolchain/dependencies/dependencies.sh
+
+Checking build system dependencies:
+BUILDROOT_DL_DIR clean:				Ok
+CC clean:					Ok
+CXX clean:					Ok
+CPP clean:					Ok
+CFLAGS clean:					Ok
+INCLUDES clean:					Ok
+CXXFLAGS clean:					Ok
+which installed:				Ok
+sed works:					Ok (/bin/sed)
+GNU make version '3.81':			Ok
+C compiler '/usr/lib64/ccache/gcc'
+C compiler version '4.4.7':			Ok
+C++ compiler '/usr/lib64/ccache/g++'
+C++ compiler version '4.4.7':			Ok
+awk installed:					Ok
+bison installed:				Ok
+flex installed:					Ok
+gettext installed:				Ok
+makeinfo installed:				Ok
+Build system dependencies:			Ok
+
+toolchain/dependencies/dependencies.mk
+toolchain/external/ext-tool.mk
+
+uclibc: dependencies $(TARGET_DIR)/lib/$(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIB_C)))
+
+$(TARGET_DIR)/lib/$(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIB_C))):
+#"))
+	mkdir -p $(TARGET_DIR)/lib
+	@$(call copy_toolchain_lib_root, $(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIB_C))), /lib, $(BR2_TOOLCHAIN_EXTERNAL_STRIP))
+#")))
+	for libs in $(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIBS))); do \
+		$(call copy_toolchain_lib_root, $$libs, /lib, $(BR2_TOOLCHAIN_EXTERNAL_STRIP)); \
+	done
+	$(call copy_toolchain_sysroot)
+
+
+note: then where libuClibc-0.9.29.so come from when it doesn't get built?
+From patch file and means that it's delivered as a binary.
+
+no file
+~/si-logs/spk/darwin-spk-1.19/target/device/Sky/ams-drx890/rootfs/debug/lib$ ls -al
+total 12
+drwxr-xr-x  3 kyoupark ccusers 4096 Oct 14  2013 .
+drwxr-xr-x 16 kyoupark ccusers 4096 Oct 14  2013 ..
+-rw-r--r--  1 kyoupark ccusers    0 Oct 14  2013 .empty
+drwxr-xr-x  3 kyoupark ccusers 4096 Oct 14  2013 modules
+
+
+mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root
+if ! [ -d "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/bin" ]; then \
+		if [ -d "target/device/Sky/ams-drx890/rootfs/"debug"" ]; then \
+			cp -fa target/device/Sky/ams-drx890/rootfs/"debug"/* \
+         /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/; \
+		fi; \
+		touch /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir/.fakeroot.00000; \
+	fi
+
+/home/kyoupark/si-logs/spk/darwin-spk-1.19/patches
+-rw-r--r--  1 kyoupark ccusers 2535439 Mar 15  2016 darwin-spk-1.19-0001-drx890-uclibc-update-v3.patch
+
+WARNING: patch 'patches/darwin-spk-1.19-0001-drx890-uclibc-update-v3.patch' can be applied -p0 or -p1. Using -p0.
+Applying patch 'patches/darwin-spk-1.19-0001-drx890-uclibc-update-v3.patch'...
+patching file target/device/Sky/ams-drx890/rootfs/debug/lib/libuClibc-0.9.29.so
+patching file target/device/Sky/ams-drx890/rootfs/preprod/lib/libuClibc-0.9.29.so
+patching file target/device/Sky/ams-drx890/rootfs/prod/lib/libuClibc-0.9.29.so
+
+
+note:
+ext-tool.mk do two things:
+
+1. copy libraries to target directory
+
+copy_toolchain_lib_root = \
+
+copy_toolchain_lib_root lib=libc.so.0 dst=/lib
+SKIPPING copy_toolchain_lib_root lib=libuClibc-0.9.29.so dst=/lib
+for libs in ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0; do \
+		LIB="$libs"; DST="/lib"; STRIP="y"; SYSROOT="" ; if test -z y; then PREFIX=`/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--prefix" | head -1 | cut -f2 -d=`; SYSROOT_DIR=`echo ""/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2"" | sed -e "s|\(.*\)${PREFIX}|\1|"` ; SYSROOT="--sysroot ${SYSROOT_DIR}" ; fi ; LIB_DIR=`/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc ${SYSROOT} -print-file-name=${LIB} | sed -e "s,${LIB}\$,,"`; if test -z "${LIB_DIR}"; then echo "copy_toolchain_lib_root: lib=${LIB} not found"; exit -1; fi; if test -z ; then LINKS="-type l"; fi; LIB="$libs"; for FILE in `find ${LIB_DIR} -maxdepth 1 ${LINKS} -name "${LIB}*"`; do LIB=`basename ${FILE}`; while test \! -z "${LIB}"; do if test -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; then echo "SKIPPING copy_toolchain_lib_root lib=${LIB} dst=${DST}"; chmod +x "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; case "${STRIP}" in (0 | n | no) ;; (*) /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-strip "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; ;; esac; else rm -fr /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}; echo "copy_toolchain_lib_root lib=${LIB} dst=${DST}"; if test -h ${LIB_DIR}/${LIB}; then cp -d ${LIB_DIR}/${LIB} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/; elif test -f ${LIB_DIR}/${LIB}; then /usr/bin/install -D -m0755 ${LIB_DIR}/${LIB} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}; case "${STRIP}" in (0 | n | no) ;; (*) /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-strip "/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root${DST}/${LIB}"; ;; esac; else exit -1; fi; fi; LIB="`readlink ${LIB_DIR}/${LIB}`"; done; done; echo -n; \
+	done
+copy_toolchain_lib_root lib=ld-uClibc.so.0 dst=/lib
+copy_toolchain_lib_root lib=ld-uClibc-0.9.29.so dst=/lib
+copy_toolchain_lib_root lib=libcrypt.so.0 dst=/lib
+...
+
+# The core C library from the external toolchain (BR2_TOOLCHAIN_EXTERNAL_LIB_C) 
+# [libc.so.0] libc.so.0
+# Libraries to copy from the external toolchain (BR2_TOOLCHAIN_EXTERNAL_LIBS) 
+# [ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0
+# libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0] 
+#
+# ld-uClibc.so.0
+# libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0
+# libresolv.so.0 librt.so.0 libutil.so.0
+#
+# ${LIB_DIR}
+# $ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc --print-file-name=libc.so.0
+# /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib/libc.so.0
+# $ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc --print-file-name=libc.so.0 |sed -e "s,libc.so.0,,"
+# /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib/
+# 
+# /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/mips-linux-uclibc/lib
+#
+# /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 \
+# | grep ^Configured | tr " " "\n" | grep -- "--with-sysroot" | head -1 | cut -f2 -d=
+# 
+# <mips-gcc-spec>
+# $ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc -v 2>&1 | grep ^Configured | tr " " "\n"
+# 3:Configured
+# with:
+# ../gcc-4.2.0-20070124/configure
+# --prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/
+# --build=mips-linux
+# --host=mips-linux
+# --target=mips-linux-uclibc
+# --with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc
+# --enable-languages=c,c++
+# --disable-__cxa_atexit
+# --enable-target-optspace
+# --with-gnu-ld
+# --with-float=hard
+# --enable-threads
+# --infodir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/info
+# --mandir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/man
+# --with-arch=mips32
+# --disable-libmudflap
+# --disable-nls
+# --with-gnu-plts
+# 
+# note: no match for --with-sysroot since
+# --with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc
+# PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/
+
++ LIB=libc.so.0
++ DST=/lib
++ STRIP=y
++ SYSROOT=
+++ pwd
++ echo 'KT: pwd=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19'
+
+# do check if it really exist 
+++ find /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib/ -maxdepth 1 -type l -name 'libc.so.0*'
+
+# libc.so.0 is not exist
+#
+# ${TARGET_DIR} /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root
+#
++ test -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/libc.so.0
++ rm -fr /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/libc.so.0
++ mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib
+
++ mkdir -p /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib
++ echo 'copy_toolchain_lib_root lib=libc.so.0 dst=/lib'
++ test -h /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0
++ cp -d /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0 \
+    /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/
+
+cp -d /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0 ~/yy
+
+# libc.so.0 is a symbolic link to libuClibc-0.9.29.so. Here copies only a link
+# but not actual file and skips libuClibc-0.9.29.so. Means that it's already
+# copied and there.
+
+++ readlink /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/bin/../lib/gcc/mips-linux-uclibc/4.2.0/../../../../mips-linux-uclibc/lib//libc.so.0
++ LIB=libuClibc-0.9.29.so
++ test '!' -z libuClibc-0.9.29.so
++ test -f /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/project_build_mips/ams-drx890/root/lib/libuClibc-0.9.29.so
++ echo 'SKIPPING copy_toolchain_lib_root lib=libuClibc-0.9.29.so dst=/lib'
+
+
+2. copy whole toolchain to staging directory
+
+copy_toolchain_sysroot = \
+	SYSROOT_DIR=``$(TARGET_CC) -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--with-sysroot" | head -1 | cut -f2 -d=``; \
+	if [ ! -z "$${SYSROOT_DIR}" ]; then \
+		SYSROOT_DIR=`echo "$${SYSROOT_DIR}/" | sed -e "s|//|/|g"` ;\
+		SYSROOT_DIR=`echo "$(BR2_TOOLCHAIN_EXTERNAL_PATH)/" | grep -o "$${SYSROOT_DIR}"` ;\
+	fi ;\
+ \
+	if [ -z "$${SYSROOT_DIR}" ]; then \
+		PREFIX=`$(TARGET_CC) -v 2>&1 | grep ^Configured | tr " " "\n" | grep -- "--prefix" | head -1 | cut -f2 -d=`; \
+		SYSROOT_DIR=`echo "$(BR2_TOOLCHAIN_EXTERNAL_PATH)" | sed -e "s|\(.*\)$${PREFIX}|\1|"` ;\
+	fi ;\
+ \
+	echo -e "\nCopying toolchain files from $${SYSROOT_DIR}\n" ;\
+	cp -a $${SYSROOT_DIR}/* $(STAGING_DIR)/ ; \
+	find $(STAGING_DIR) -type d | xargs chmod 755 ;\
+
+# ${SYSROOT_DIR}
+# echo "/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2" | sed -e "s|\(.*\)${PREFIX}|\1|"
+# /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2
+
+# echo -e "\nCopying toolchain files from $${SYSROOT_DIR}\n" ;\
+Copying toolchain files from /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2
+cp -a $${SYSROOT_DIR}/* $(STAGING_DIR)/ ; \
+find $(STAGING_DIR) -type d | xargs chmod 755 ;\
+
++ cp -a /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/info /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/lib /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/libexec /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/man /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mipsel-linux /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mipsel-linux-uclibc /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mips-linux /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mips-linux-uclibc /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/out.txt /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir/
++ xargs chmod 755
++ find /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug/build_mips/staging_dir -type d
+
+
+BR2_TOOLCHAIN_EXTERNAL_LIB_C="libc.so.0"
+BR2_TOOLCHAIN_EXTERNAL_LIBS="ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0"
+BR2_TOOLCHAIN_EXTERNAL_PATH="/home/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2"
+BR2_TOOLCHAIN_EXTERNAL_PREFIX="$(ARCH)-linux"
+
+
+BR2_TOOLCHAIN_EXTERNAL_LIB_C="libc.so.0"
+BR2_TOOLCHAIN_EXTERNAL_LIBS="libatomic.so.* libc.so.* libcrypt.so.* libdl.so.* libgcc_s.so.* libm.so.* libnsl.so.* libresolv.so.* librt.so.* libutil.so.* ld*.so.* libpthread.so.* libnss_files.so.* libnss_dn s.so.* libmvec.so.* libstdc++.so.*"
+BR2_TOOLCHAIN_EXTERNAL_PATH="/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install"
+BR2_TOOLCHAIN_EXTERNAL_PREFIX="mips-known-linux"
 
 
 ={============================================================================
@@ -51758,19 +51859,25 @@ stubs-o32_hard.h not generated yet
 mkdir gcc-4.8.2-glibc-mips-wsysroot-build
 PREFIX=/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install
 TARGET=mips-unknown-linux
-export PATH=${PREFIX}/bin:$PATH
 
+export PATH=${PREFIX}/bin:$PATH
 
 mkdir build-binutils
 cd build-binutils
-../binutils-2.25.1/configure --target=${TARGET} --prefix=${PREFIX} --disable-nls --disable-multilib
+
+../binutils-2.25.1/configure --target=${TARGET} --prefix=${PREFIX} --disable-nls --disable-multilib \
 --with-sysroot=${PREFIX}/${TARGET}/sysroot
 make -j4
 make install
 
 cd ../linux-2.6.32
-# make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET}/sysroot/usr headers_install
+
+# cd build-gcc
+# ../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ \
+# --disable-libmudflap --disable-multilib --disable-nls
+# make -j4 all-gcc
+# make install-gcc
 
 cd build-gcc
 ../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ \
@@ -51793,11 +51900,108 @@ cd build-glibc
 --disable-multilib libc_cv_forced_unwind=yes
 
 make install-bootstrap-headers=yes install-headers
-make -j4 csu/subdir_lib
+make -j5 csu/subdir_lib
+# install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+# ${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+# touch ${PREFIX}/${TARGET}/include/gnu/stubs.h$ mkdir /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/sysroot/usr/lib
+
+# installs ${PREFIX}/${TARGET}/include. HOW to make it to install in
+# ${PREFIX}/${TARGET}/sysroot/usr/include?
+
+cd build-glibc
+../glibc-2.20/configure --prefix=${PREFIX}/${TARGET}/sysroot/usr \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${PREFIX}/${TARGET}/sysroot/usr/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+make install-bootstrap-headers=yes install-headers
+make -j5 csu/subdir_lib
+
+mkdir ${PREFIX}/${TARGET}/sysroot/usr/lib
+install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/sysroot/usr/lib
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/sysroot/usr/lib/libc.so
+touch ${PREFIX}/${TARGET}/sysroot/usr/include/gnu/stubs.h
+
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+
+cd build-glibc
+make -j5
+make install
+
+
+cd build-gcc
+make -j5
+
+/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/bin/ld:
+cannot find /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/sysroot/usr/lib/libc.so.6
+inside      /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/sysroot
+
+/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/bin/ld: cannot find /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/sysroot/usr/lib/libc_nonsha
+red.a inside /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/sysroot
+/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/bin/ld: cannot find /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/sysroot/usr/lib/ld.so.1 ins
+ide /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/sysroot
+collect2: error: ld returned 1 exit status
+Makefile:921: recipe for target 'libgcc_s.so' failed
+make[2]: *** [libgcc_s.so] Error 1
+
+note:
+WHY not find these files when there are? WHY sysroot do not work?
+
+From this build:
+SEARCH_DIR("=/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/lib"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
+
+From buildroot-builds:
+SEARCH_DIR("=/home/nds-uk/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/mips-buildroot-linux-gnu/lib"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
+
+Same and in case no sysroot, all libraries goes to
+  install/mips-unknown-linux/lib so not a problem.
+
+
+<gcc-build-glibc-mips-sysroot-null>
+mkdir gcc-4.8.2-glibc-mips-wsysroot-build
+PREFIX=/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install
+TARGET=mips-unknown-linux
+
+export PATH=${PREFIX}/bin:$PATH
+
+mkdir build-binutils
+cd build-binutils
+
+../binutils-2.24/configure --target=${TARGET} --prefix=${PREFIX} --disable-nls --disable-multilib \
+--with-sysroot=${PREFIX}/${TARGET}/sysroot
+
+../binutils-2.25.1/configure --target=${TARGET} --prefix=${PREFIX} --disable-nls --disable-multilib \
+--with-sysroot
+make -j4
+make install
+
+cd ../linux-2.6.32
+make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
+
+
+cd build-gcc
+../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ \
+--disable-libmudflap --disable-multilib --disable-nls
+make -j4 all-gcc
+make install-gcc
+
+
+cd build-glibc
+../glibc-2.20/configure --prefix=${PREFIX}/${TARGET} \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${PREFIX}/${TARGET}/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+make install-bootstrap-headers=yes install-headers
+make -j5 csu/subdir_lib
 install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
 ${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
-# touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
-touch ${PREFIX}/${TARGET}/sysroot/usr/include/gnu/stubs.h
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
 
 
 cd build-gcc
@@ -52964,7 +53168,7 @@ From BRCM
 │                   └── mkheaders
 
 ├── mipsel-linux -> mipsel-linux-uclibc
-├── mipsel-linux-uclibc
+├── mipsel-linux-uclibc note: this is host tool.
 │   ├── bin
 │   │   ├── ar
 │   │   ├── as
