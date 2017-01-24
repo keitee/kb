@@ -348,7 +348,7 @@
 *kt_linux_gcc_400* gcc-build-tc-buildroot-external-toolchain
 *kt_linux_gcc_400* gcc-build-tc-buildroot-external-spk
 *kt_linux_gcc_400* gcc-build-glibc-reference
-*kt_linux_gcc_400* gcc-build-glibc-combinations
+*kt_linux_gcc_400* gcc-build-glibc-limitation
 *kt_linux_gcc_400* gcc-build-glibc-mips buildroot-glic-mips-internal-toolchain
 *kt_linux_gcc_400* gcc-build-enable-asan
 *kt_linux_gcc_400* gcc-build-mips-uclibc
@@ -6404,6 +6404,21 @@ This cause that files copied under /dst/dir/. If want to copy only files under
 dir then use
 
 cp -r /xx/dir/* /dst/
+
+<error>
+cp: cannot create regular file
+
+this happens when file has all read permission and okay to copy it to
+somewhere first time. shows this error when do it again. Since it has only
+read permission cannot copy in the second.
+
+-r--r--r-- 1 kyoupark ccusers 1976 Jun 19  2014 /home/
+
+$ cp -afv 
+`/shmem.o' -> `/shmem.o'
+removed `/home/nds-uk/kyoupark/spk-out/build_mips/staging_dir/nds/src/shmem/shmem.o'
+
+see `removed` message when use -f
 
 
 ={============================================================================
@@ -24305,6 +24320,7 @@ mips-uclibc-addr2line -f -s -e fs/NDS/bin/MW_Process 5dd134 5dbe00 5d3ee4 5d6cb4
 http://www.busybox.net/source.html
 http://www.busybox.net/downloads/BusyBox.html
 https://git.busybox.net/busybox/tree/coreutils
+https://busybox.net/downloads/
 
 
 # ============================================================================
@@ -32999,6 +33015,9 @@ this step.
 https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git
 git clone git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
 
+<linux-archive>
+https://www.kernel.org/pub/linux/kernel/
+
 
 ={============================================================================
 *kt_linux_core_002* linux-c-lib
@@ -33334,8 +33353,52 @@ documented in the function's manual page. For these functions, it is a mistake
 to use errno, perror(), or strerror() to diagnose errors.
 
 
-<errno-h>
-/SPK/ams-drx890-debug/build_mips/staging_dir/mips-linux-uclibc/include/asm/errno.h
+{errno-values}
+
+<linux>/include/asm-generic/errno-base.h
+
+#ifndef _ASM_GENERIC_ERRNO_BASE_H
+#define _ASM_GENERIC_ERRNO_BASE_H
+
+#define	EPERM		 1	/* Operation not permitted */
+#define	ENOENT		 2	/* No such file or directory */
+#define	ESRCH		 3	/* No such process */
+#define	EINTR		 4	/* Interrupted system call */
+#define	EIO		 5	/* I/O error */
+#define	ENXIO		 6	/* No such device or address */
+#define	E2BIG		 7	/* Argument list too long */
+#define	ENOEXEC		 8	/* Exec format error */
+#define	EBADF		 9	/* Bad file number */
+#define	ECHILD		10	/* No child processes */
+#define	EAGAIN		11	/* Try again */
+#define	ENOMEM		12	/* Out of memory */
+#define	EACCES		13	/* Permission denied */
+#define	EFAULT		14	/* Bad address */
+#define	ENOTBLK		15	/* Block device required */
+#define	EBUSY		16	/* Device or resource busy */
+#define	EEXIST		17	/* File exists */
+#define	EXDEV		18	/* Cross-device link */
+#define	ENODEV		19	/* No such device */
+#define	ENOTDIR		20	/* Not a directory */
+#define	EISDIR		21	/* Is a directory */
+#define	EINVAL		22	/* Invalid argument */
+#define	ENFILE		23	/* File table overflow */
+#define	EMFILE		24	/* Too many open files */
+#define	ENOTTY		25	/* Not a typewriter */
+#define	ETXTBSY		26	/* Text file busy */
+#define	EFBIG		27	/* File too large */
+#define	ENOSPC		28	/* No space left on device */
+#define	ESPIPE		29	/* Illegal seek */
+#define	EROFS		30	/* Read-only file system */
+#define	EMLINK		31	/* Too many links */
+#define	EPIPE		32	/* Broken pipe */
+#define	EDOM		33	/* Math argument out of domain of func */
+#define	ERANGE		34	/* Math result not representable */
+
+#endif
+
+<linux>/include/asm-mips/errno.h
+<toolchain>/mips-linux-uclibc/include/asm/errno.h
 
 /*
  * This file is subject to the terms and conditions of the GNU General Public
@@ -47856,6 +47919,132 @@ failed
 
 
 ={============================================================================
+*kt_linux_gcc_400* gcc-asm
+
+https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html#AssemblerTemplate
+6.45.2 Extended Asm - Assembler Instructions with C Expression Operands
+
+With extended asm you can read and write C variables from assembler and
+perform jumps from assembler code to C labels. 
+
+Extended asm syntax uses colons (‘:’) to delimit the operand parameters after
+the assembler template:
+
+     asm [volatile] ( AssemblerTemplate
+                      : OutputOperands
+                      [ : InputOperands
+                      [ : Clobbers ] ])
+
+The asm keyword is a GNU extension. When writing code that can be compiled
+  with -ansi and the various -std options, use __asm__ instead of asm (see
+      Alternate Keywords). 
+
+AssemblerTemplate
+    This is a literal string that is `the template for the assembler code` It
+    is a combination of fixed text and `tokens` that refer to the input,
+    output, and goto parameters. See AssemblerTemplate. 
+
+
+6.45.2.2 Assembler Template
+
+An assembler template is a literal string containing assembler instructions.
+The compiler replaces tokens in the template that refer to inputs, outputs,
+and goto labels, and `then outputs the resulting string to the assembler` 
+  
+The string can contain any instructions recognized by the assembler, including
+directives. `GCC does not parse the assembler instructions themselves` and does
+not know what they mean or even whether they are valid assembler input.
+However, it does count the statements (see Size of an asm). 
+
+
+Remarks
+
+The asm statement allows you to include assembly instructions directly within
+C code. This may help you `to maximize performance` in time-sensitive code or to
+access assembly instructions that are not readily available to C programs.
+
+Note that `extended asm` statements must be inside a function. Only `basic asm`
+may be outside functions (see Basic Asm). Functions declared with the naked
+attribute also require basic asm (see Function Attributes).
+
+While the uses of asm are many and varied, it may help to think of an asm
+statement as a series of low-level instructions that convert input parameters
+to output parameters. So a simple (if not particularly useful) example for
+i386 using asm might look like this:
+
+     int src = 1;
+     int dst;
+     
+     asm ("mov %1, %0\n\t"
+         "add $1, %0"
+         : "=r" (dst)
+         : "r" (src));
+     
+     printf("%d\n", dst);
+
+This code copies src to dst and add 1 to dst. 
+
+
+6.45.2.3 Output Operands
+
+An asm statement has zero or more output operands indicating the names of C
+variables modified by the assembler code.
+
+In this i386 example, old (referred to in the template string as %0) and *Base
+(as %1) are outputs and Offset (%2) is an input:
+
+     bool old;
+     
+     __asm__ ("btsl %2,%1\n\t" // Turn on zero-based bit #Offset in Base.
+              "sbb %0,%0"      // Use the CF to calculate old.
+        : "=r" (old), "+rm" (*Base)
+        : "Ir" (Offset)
+        : "cc");
+     
+     return old;
+
+
+https://gcc.gnu.org/onlinedocs/gcc-4.8.2/gcc/Extended-Asm.html#Extended-Asm
+6.41 Assembler Instructions with C Expression Operands
+
+In an assembler instruction using asm, you can specify the operands of the
+instruction using C expressions. `This means you need not guess` which registers
+or memory locations contain the data you want to use. 
+
+You must specify an assembler instruction template much like what appears in a
+machine description, plus an `operand constraint string` for each operand.
+
+For example, here is how to use the 68881's fsinx instruction:
+
+     asm ("fsinx %1,%0" : "=f" (result) : "f" (angle));
+
+Here angle is the C expression for the input operand while result is that of
+  the output operand. 
+  
+Each has ‘"f"’ as its operand constraint, saying that a `floating-point`
+`register` is required. The ‘=’ in ‘=f’ indicates that the operand is an
+output; all output operands' constraints must use ‘=’. The constraints use the
+same language used in the machine description (see Constraints).
+
+Each operand is described by an operand-constraint string followed by the C
+expression in parentheses. A colon separates the `assembler template` from the
+first output operand and another separates the last output operand from the
+first input, if any. Commas separate the operands within each group. The total
+number of operands is currently limited to 30; this limitation may be lifted
+in some future version of GCC. 
+
+
+6.42.1 Simple Constraints
+
+The simplest kind of constraint is a string full of letters, each of which
+describes one kind of operand that is permitted. Here are the letters that are
+allowed: 
+
+‘r’
+    A register operand is allowed provided that it is in a general register. 
+
+
+={============================================================================
 *kt_linux_gcc_400* gcc-option-output
 
 https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html#Overall-Options
@@ -50572,9 +50761,102 @@ Configures the kernel for the CFE bootloader. This is the default
 configuration. This option may be useful to undo the changes made by the “otv”
 config option.
 
-<version>
+
+{glibc-limitation}
+
+<kernel-version>
+1. use a specific(old) kernel version
+wget --no-check-certificate https://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.19.tar.xz
+
+2. 
+INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-own
+
+3. 
+export PATH=$INSTALL_PATH/bin:$PATH
+
+4.
+../binutils-2.24/configure --target=mips-linux --prefix=${INSTALL_PATH} --with-sysroot --disable-nls --disable-multilib
+make -j4
+make install
+
+5.
+cd linux-2.6.19
+make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-linux headers_install
+
+kyoupark@ukstbuild2:~/asn/gcc/linux-2.6.19$ make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-own/mips-linux headers_install
+  CHK     include/linux/version.h
+  UPD     include/linux/version.h
+  HOSTCC  scripts/basic/fixdep
+scripts/basic/fixdep.c: In function ‘traps’:
+scripts/basic/fixdep.c:371: warning: dereferencing type-punned pointer will break strict-aliasing rules
+scripts/basic/fixdep.c:373: warning: dereferencing type-punned pointer will break strict-aliasing rules
+  HOSTCC  scripts/basic/docproc
+  HOSTCC  scripts/unifdef
+scripts/unifdef.c:209: error: conflicting types for ‘getline’
+/usr/include/stdio.h:673: note: previous declaration of ‘getline’ was here
+make[1]: *** [scripts/unifdef] Error 1
+make: *** [headers_install] Error 2
+
+<linux-kernel-header-fix>
+To fix, chage getline to parseline in scripts/unifdef.c
+
+6.
+../gcc-4.8.2-clean/configure --prefix=${INSTALL_PATH} --target=mips-linux --enable-languages=c,c++ --disable-multilib --disable-nls
+../gcc-4.8.2-clean/configure --prefix=${INSTALL_PATH} --target=mips-linux --enable-languages=c,c++ --disable-multilib --disable-nls --without-headers --with-newlib
+make -j4 all-gcc
+make install-gcc
+
+7.
+../glibc-2.20/configure --prefix=${INSTALL_PATH}/mips-linux \
+--build=$MACHTYPE --host=mips-linux --target=mips-linux \
+--with-headers=${INSTALL_PATH}/mips-linux/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+make install-bootstrap-headers=yes install-headers
+make -j4 csu/subdir_lib
+
+configure: error: GNU libc requires kernel header files from
+Linux 2.6.32 or later to be installed before configuring.
+
+note:
+So Linux 2.6.32 or later for glibc-2.20!
+
+
+<glibc-2-20-linux-2-6-33>
+Why doing this? Since see this error when run ASAN on target which has uclibc:
+
+-sh-3.2# ./a.out_from_mips_glib_samc_wdlink
+FATAL: kernel too old
+
+note:
+Builds fine.
+
+
+<glibc-2-10>
+2009-05-09 GLIBC 2.10 2.10 done 
+
+cd build-glibc
+../glibc-2.10.1/configure --prefix=${INSTALL_PATH}/${TARGET} \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${INSTALL_PATH}/${TARGET}/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+configure: running configure fragment for add-on nptl
+checking sysdep dirs... configure: error: The mips is not supported.
+
+To check:
+/home/nds-uk/kyoupark/asn/gcc/glibc-2.20/sysdeps
+drwxr-xr-x 11 kyoupark ccusers 4096 Sep  7  2014 mips/
+
+
+{spk-versions}
 file:///home/kyoupark/si-logs/spk/darwin-spk-1.19/docs/buildroot.html
 $LastChangedDate: 2008-12-16 09:00:11 +0000 (Tue, 16 Dec 2008) $
+
+<buildroot-glibc-version>
+/buildroot-2016.08.1/package/glibc
+drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.22
+drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.23
 
 The nearest from buildroot.org
 buildroot-2009.02-rc1.tar.bz2                      2009-01-16 19:35  7.0M
@@ -50586,16 +50868,87 @@ linux-2.6.32.tar.gz      03-Dec-2009 05:24   78M
 linux-2.6.32.tar.sign    08-Aug-2013 19:37  665   
 linux-2.6.32.tar.xz      03-Dec-2009 05:24   50M  
 
+linux-2.6.19.tar.bz2     29-Nov-2006 22:20   41M  
+linux-2.6.19.tar.gz      29-Nov-2006 22:20   51M  
+linux-2.6.19.tar.sign    08-Aug-2013 19:27  665   
+linux-2.6.19.tar.xz      29-Nov-2006 22:20   33M  
+
+linux-2.6.18.8-000-kernel.org-to-mips.org.patch using plaintext: 
 linux-2.6.18.tar.bz2     20-Sep-2006 03:56   40M  
 linux-2.6.18.tar.gz      20-Sep-2006 03:56   50M  
 linux-2.6.18.tar.sign    08-Aug-2013 19:27  665   
 linux-2.6.18.tar.xz      20-Sep-2006 03:56   33M  
 
+busybox-1.13.1
+busybox-1.13.1.tar.bz2                             2008-12-18 00:25  2.0M  
+busybox-1.13.1.tar.bz2.sign                        2008-12-18 00:25  536  
 
-<buildroot-glibc-version>
-/buildroot-2016.08.1/package/glibc
-drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.22
-drwxr-xr-x    2 kyoupark ccusers  4096 Sep 21 21:53 2.23
+binutil GNU ld version 2.17.50-brcm 20070220
+
+glibc-2.4.tar.bz2                                  06-Mar-2006 12:30            15202445
+glibc-2.4.tar.bz2.sig                              06-Mar-2006 12:30                  65
+glibc-2.4.tar.gz                                   06-Mar-2006 12:30            20460608
+glibc-2.4.tar.gz.sig                               06-Mar-2006 12:30                  65
+
+glibc-2.4.tar.bz2	          06-Mar-2006 06:30 	14M	 
+glibc-2.4.tar.bz2.sig	    06-Mar-2006 06:30 	65 	 
+glibc-2.4.tar.gz	          06-Mar-2006 06:30 	20M	 
+glibc-2.4.tar.gz.sig	       06-Mar-2006 06:30 	65 	
+
+glibc-2.8.tar.bz2	          2009-Feb-26 16:48:15	15.2M	application/x-bzip
+glibc-2.8.tar.bz2.sig	    2009-Feb-26 16:48:27	0.1K	application/pgp-signature
+glibc-2.8.tar.gz	          2009-Mar-10 17:05:47	20.4M	application/x-gzip
+glibc-2.8.tar.gz.sig	       2009-Mar-10 17:12:40	0.1K	application/pgp-signature
+
+[ ]	glibc-ports-2.8.tar.bz2	17-May-2009 20:27 	432K	 
+[ ]	glibc-ports-2.8.tar.bz2.sig	17-May-2009 20:27 	72 	 
+[ ]	glibc-ports-2.8.tar.gz	17-May-2009 20:27 	621K	 
+[ ]	glibc-ports-2.8.tar.gz.sig	17-May-2009 20:27 	72 	 
+
+
+// home/NDS-UK/kyoupark/asn/gcc/glibc-2.8/README
+
+This directory contains the version 2.7 release of the GNU C Library.
+
+When working with Linux kernels, the GNU C Library version 2.4 is
+intended primarily for use with Linux kernel version 2.6.0 and later.
+We only support using the NPTL implementation of pthreads, which is now
+the default configuration.  Most of the C library will continue to work
+on older Linux kernels and many programs will not require a 2.6 kernel
+to run correctly.  However, pthreads and related functionality will not
+work at all on old kernels and we do not recommend using glibc 2.4 with
+any Linux kernel prior to 2.6.
+
+All Linux kernel versions prior to 2.6.16 are known to have some bugs that
+may cause some of the tests related to pthreads in "make check" to fail.
+If you see such problems, please try the test suite on the most recent
+Linux kernel version that you can use, before pursuing those bugs further.
+
+The code for other CPU configurations supported by volunteers outside of
+the core glibc maintenance effort is contained in the separate `ports'
+add-on.  You can find glibc-ports-2.7 distributed separately in the
+same place where you got the main glibc distribution files.
+Currently these configurations are known to work using the `ports' add-on:
+
+        arm-*-linux-gnu         Requires Linux 2.6.15 for NPTL, no SMP support
+        arm-*-linux-gnueabi     Requires Linux 2.6.16-rc1 for NPTL, no SMP
+        mips-*-linux-gnu        Requires Linux 2.6.12 for NPTL
+        mips64-*-linux-gnu      Requires Linux 2.6.12 for NPTL
+
+The ports distribution also contains code for other configurations that
+do not work or have not been maintained recently, but will be of use to
+anyone trying to make a new configuration work.  If you are interested
+in doing a port, please contact the glibc maintainers; see
+http://www.gnu.org/software/libc/ for more information.
+
+../glibc-2.10.1/configure --prefix=${INSTALL_PATH}/${TARGET} \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${INSTALL_PATH}/${TARGET}/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+--enable-add-ons
+
+wget --no-check-certificate http://ftpmirror.gnu.org/glibc/glibc-2.8.tar.gz
 
 
 <spk-case>
@@ -51462,169 +51815,6 @@ for GNU/Linux 2.6.32, with unknown capability 0x41000000 = 0xf676e75, with unkno
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-glibc-combinations
-
-1. use a specific(old) kernel version
-wget --no-check-certificate https://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.19.tar.xz
-
-2. 
-INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-own
-
-3. 
-export PATH=$INSTALL_PATH/bin:$PATH
-
-4.
-../binutils-2.24/configure --target=mips-linux --prefix=${INSTALL_PATH} --with-sysroot --disable-nls --disable-multilib
-make -j4
-make install
-
-5.
-cd linux-2.6.19
-make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/mips-linux headers_install
-
-kyoupark@ukstbuild2:~/asn/gcc/linux-2.6.19$ make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-own/mips-linux headers_install
-  CHK     include/linux/version.h
-  UPD     include/linux/version.h
-  HOSTCC  scripts/basic/fixdep
-scripts/basic/fixdep.c: In function ‘traps’:
-scripts/basic/fixdep.c:371: warning: dereferencing type-punned pointer will break strict-aliasing rules
-scripts/basic/fixdep.c:373: warning: dereferencing type-punned pointer will break strict-aliasing rules
-  HOSTCC  scripts/basic/docproc
-  HOSTCC  scripts/unifdef
-scripts/unifdef.c:209: error: conflicting types for ‘getline’
-/usr/include/stdio.h:673: note: previous declaration of ‘getline’ was here
-make[1]: *** [scripts/unifdef] Error 1
-make: *** [headers_install] Error 2
-
-<linux-kernel-header-fix>
-To fix, chage getline to parseline in scripts/unifdef.c
-
-6.
-../gcc-4.8.2-clean/configure --prefix=${INSTALL_PATH} --target=mips-linux --enable-languages=c,c++ --disable-multilib --disable-nls
-../gcc-4.8.2-clean/configure --prefix=${INSTALL_PATH} --target=mips-linux --enable-languages=c,c++ --disable-multilib --disable-nls --without-headers --with-newlib
-make -j4 all-gcc
-make install-gcc
-
-7.
-../glibc-2.20/configure --prefix=${INSTALL_PATH}/mips-linux \
---build=$MACHTYPE --host=mips-linux --target=mips-linux \
---with-headers=${INSTALL_PATH}/mips-linux/include \
---disable-multilib libc_cv_forced_unwind=yes
-
-make install-bootstrap-headers=yes install-headers
-make -j4 csu/subdir_lib
-
-configure: error: GNU libc requires kernel header files from
-Linux 2.6.32 or later to be installed before configuring.
-
-So Linux 2.6.32 or later for glibc-2.20!
-
-
-<linux-2-6-33>
-Why doing this? Since see this error when run ASAN on target which has uclibc:
-
--sh-3.2# ./a.out_from_mips_glib_samc_wdlink
-FATAL: kernel too old
-
-
-1. use a specific(old) kernel version
-wget --no-check-certificate https://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.32.tar.xz
-
-INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-glibc-k2633
-TARGET=mips-unknown-linux
-export PATH=$INSTALL_PATH/bin:$PATH
-
-#../binutils-2.24/configure --target=mips-unknown-linux --prefix=${INSTALL_PATH} --disable-nls --disable-multilib --with-sysroot
-../binutils-2.24/configure --target=${TARGET} --prefix=${INSTALL_PATH} --disable-nls --disable-multilib
-make -j4
-make install
-
-
-cd linux-2.6.33
-make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/${TARGET} headers_install
-
-
-cd build-gcc
-#../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux --enable-languages=c,c++ \
-../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=${TARGET} --enable-languages=c,c++ \
---disable-libmudflap --disable-multilib --disable-nls --enable-libsanitizer
-make -j4 all-gcc
-make install-gcc
-
-cd build-glibc
-../glibc-2.20/configure --prefix=${INSTALL_PATH}/${TARGET} \
---build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
---with-headers=${INSTALL_PATH}/${TARGET}/include \
---disable-multilib libc_cv_forced_unwind=yes
-
-make install-bootstrap-headers=yes install-headers
-make -j4 csu/subdir_lib
-
-install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
-${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
-touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
-
-cd build-gcc
-make -j4 all-target-libgcc
-make install-target-libgcc
-
-
-cd build-glibc
-make -j4
-make install
-
-cd build-gcc
-make -j5
-make install
-
-builds okay.
-
-
-<glibc-2-10> do not supports mips
-https://sourceware.org/glibc/wiki/Glibc%20Timeline
-2014-09-08 GLIBC 2.20 The GNU C Library version 2.20 is now available 
-2009-05-09 GLIBC 2.10 2.10 done 
-2000-11-09 GLIBC 2.2 glibc 2.2
-
-wget --no-check-certificate http://ftpmirror.gnu.org/glibc/glibc-2.10.1.tar.gz
-
-INSTALL_PATH=/home/nds-uk/kyoupark/asn/install-4.8.2-glibc-k2633
-TARGET=mips-unknown-linux
-export PATH=$INSTALL_PATH/bin:$PATH
-
-#../binutils-2.24/configure --target=mips-unknown-linux --prefix=${INSTALL_PATH} --disable-nls --disable-multilib --with-sysroot
-../binutils-2.24/configure --target=${TARGET} --prefix=${INSTALL_PATH} --disable-nls --disable-multilib
-make -j4
-make install
-
-
-cd linux-2.6.33
-make ARCH=mips INSTALL_HDR_PATH=${INSTALL_PATH}/${TARGET} headers_install
-
-
-cd build-gcc
-#../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=mips-unknown-linux --enable-languages=c,c++ \
-../gcc-4.8.2-wasan/configure --prefix=${INSTALL_PATH} --target=${TARGET} --enable-languages=c,c++ \
---disable-libmudflap --disable-multilib --disable-nls --enable-libsanitizer
-make -j4 all-gcc
-make install-gcc
-
-
-cd build-glibc
-../glibc-2.10.1/configure --prefix=${INSTALL_PATH}/${TARGET} \
---build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
---with-headers=${INSTALL_PATH}/${TARGET}/include \
---disable-multilib libc_cv_forced_unwind=yes
-
-configure: running configure fragment for add-on nptl
-checking sysdep dirs... configure: error: The mips is not supported.
-
-To check:
-/home/nds-uk/kyoupark/asn/gcc/glibc-2.20/sysdeps
-drwxr-xr-x 11 kyoupark ccusers 4096 Sep  7  2014 mips/
-
-
-={============================================================================
 *kt_linux_gcc_400* gcc-build-glibc-mips buildroot-glic-mips-internal-toolchain
 
 <gcc-build-glibc-mips>
@@ -52015,6 +52205,133 @@ cd build-gcc
 make -j5
 make install
 
+
+<gcc-build-glibc-mips-sysroot-null-options>
+mkdir gcc-4.8.2-glibc-mips-wsysroot-woption-build
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-woption-install
+TARGET=mips-unknown-linux
+
+export PATH=${PREFIX}/bin:$PATH
+
+mkdir build-binutils
+cd build-binutils
+
+../binutils-2.25.1/configure --target=${TARGET} --prefix=${PREFIX} --disable-nls --disable-multilib \
+--with-sysroot
+make -j4
+make install
+
+cd ../linux-2.6.32
+make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
+
+
+cd build-gcc
+../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ \
+--disable-libmudflap --disable-multilib --disable-nls \
+--disable-__cxa_atexit --enable-target-optspace \
+--with-gnu-ld --with-float=hard --enable-threads \
+--with-gnu-plts --with-arch=mips32 
+make -j4 all-gcc
+make install-gcc
+
+
+cd build-glibc
+../glibc-2.20/configure --prefix=${PREFIX}/${TARGET} \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${PREFIX}/${TARGET}/include \
+--disable-multilib libc_cv_forced_unwind=yes
+
+make install-bootstrap-headers=yes install-headers
+make -j5 csu/subdir_lib
+install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
+
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+
+cd build-glibc
+make -j5
+make install
+
+
+cd build-gcc
+make -j5
+make install
+
+
+<gcc-build-glibc-mips-sysroot-null-options> <glibc-2-8>
+mkdir gcc-4.8.2-glibc-2.8-mips-w-build
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-4.8.2-glibc-2.8-mips-w-install
+TARGET=mips-unknown-linux
+
+export PATH=${PREFIX}/bin:$PATH
+
+mkdir build-binutils
+cd build-binutils
+
+../binutils-2.25.1/configure --target=${TARGET} --prefix=${PREFIX} --disable-nls --disable-multilib \
+--with-sysroot
+make -j4
+make install
+
+# 2.6.18.8 shows errors
+cd ../linux-2.6.19
+make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
+
+
+cd build-gcc
+../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ \
+--disable-libmudflap --disable-multilib --disable-nls \
+--disable-__cxa_atexit --enable-target-optspace \
+--with-gnu-ld --with-float=hard --enable-threads \
+--with-gnu-plts --with-arch=mips32 
+make -j4 all-gcc
+make install-gcc
+
+cd glibc-2.8-build
+../glibc-2.8/configure --prefix=${PREFIX}/${TARGET} \
+--build=$MACHTYPE --host=mips-unknown-linux --target=${TARGET} \
+--with-headers=${PREFIX}/${TARGET}/include \
+--disable-multilib libc_cv_forced_unwind=yes \
+--enable-add-ons=../glibc-ports-2.8
+
+configure: error:
+*** These critical programs are missing or too old: as ld
+*** Check the INSTALL file for required versions.
+
+# Accept binutils 2.13 or newer.
+AC_CHECK_PROG_VER(AS, $AS, --version,
+		  [GNU assembler.* \([0-9]*\.[0-9.]*\)],
+		  [2.1[3-9]*], AS=: critic_missing="$critic_missing as")
+AC_CHECK_PROG_VER(LD, $LD, --version,
+		  [GNU ld.* \([0-9][0-9]*\.[0-9.]*\)],
+		  [2.1[3-9]*], LD=: critic_missing="$critic_missing ld")
+
+
+make install-bootstrap-headers=yes install-headers
+make -j5 csu/subdir_lib
+install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
+
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+
+cd build-glibc
+make -j5
+make install
+
+
+cd build-gcc
+make -j5
+make install
 
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-enable-asan
