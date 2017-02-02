@@ -540,15 +540,14 @@ pi@$ incrontab -l
 /srv/ftp/upload IN_CLOSE_WRITE /home/pi/snugupdate-v2-snugberrypi/stblog.sh $@/ $#
 /home/pi/snugupdate-v2-snugberrypi/www/manual-update IN_CREATE /home/pi/snugupdate-v2-snugberrypi/run.sh
 
-# run.sh
 
+<run-sh>
 echo "$(date)" >> ../www/log
 if [ -f ../www/manual-update/manual ]; then
     rm -f ../www/manual-update/manual
     echo "Manually updating the box now" >> ../www/log
 fi
 
-<pi-log-update>
 python update.py $force >> ../www/log 2>&1
 
 
@@ -626,7 +625,7 @@ from libraries import settings
 
   # from libraries.dropbox_integration import find_and_download_images
   # `libraries/dropbox_integration.py`
-  # find a image from a dropbox and write it to /images/
+  # find `all` images from a dropbox and write it to /images/
   #
   # def find_and_download_images(stb_regex='.*'):
   
@@ -645,8 +644,8 @@ from libraries import settings
     #
     # >>> Found 1 images, ignoring those matching 'Archived' filtering on 'drx890'
     #
-    # # continue searching if image should be ignored and is not one to look
-    # # for.
+    # note: to remove images that matches to `IgnoreRegex` and do not match `boxtype`
+    #
     # for image in images:
     #   if re.search(settings.dropBoxIgnoreRegex, image) or not re.search(stb_regex, image):
     #       continue
@@ -677,7 +676,9 @@ from libraries import settings
  
   stbImages = STBImages(filter_on=regex_search)
 
-  # note: check each file in "image" directory and if matches then add it
+  # note: 
+  # once downloaded all files from dropbox,
+  # check each file in "image" directory on Pi and if matches then add it
   #
   # image name regex (do not change this)
   # *settings.imageNameRegex* = r'^(?P<type>.+)\.SYSF(?P<version>[\d.]+)'
@@ -705,8 +706,15 @@ from libraries import settings
   #   new_version = image.group('version')
   #
   # note: self.images is dictionary and if there is already a value for
-  # images[box] then compare versions and if not, add it to dictionary when
-  # there is an exception since there is no key and it's first time.
+  # images[box] then `compare versions, compareVersions` and if not, add it to
+  # dictionary when there is an exception since there is no key and it's first
+  # time.
+  #
+  # note: when add an entry to `nested dict`, compareVersions and set `update`
+  # note: bug. when there are multiple images in the folder, update dict when
+  # there is a image which has bigger version.
+  # 
+  #   old_version = self.images[box].get('version', '0.0.0')
   #
   #   if update is True:
   #     self.images[box] = { 'version': new_version, 'filename': filename }
@@ -847,7 +855,6 @@ from libraries import settings
   #     server_root = 'http://%s:%d/' % (server_ip, settings.webserverFileServerPort)
   #
   # # snugupdate-v2-python/resources/updater.ams890.tar
-  #
   # ├── bin.ams890
   # │   └── update
   # ├── rootfs.ams890
@@ -2729,6 +2736,13 @@ function set_up_spk()
   // note: remove_spk for a clean build and tar spk
   // ++ SPK_TARBALL_DIR=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/
   
+  <clean-spk>
+  if [[ $PASS -eq 1 && -n "$CLEAN" ]]; then
+    echo
+    echo "Doing a clean build"
+    remove_spk || return $?
+  fi
+
   // <get-spk> <untar-spk>
   // + tar -C /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/ -jxvf \
   //  /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/darwin-spk-1.19-20131014.tar.bz2
@@ -2884,6 +2898,7 @@ function configure_spk()
 {
   # <spk-buildroot-config>
   # Set toolchain path
+  # note use `$NDS_FUSIONOS_TOOLCHAIN_PATH` to set path 
   sed -i "s?.*\(BR2_TOOLCHAIN_EXTERNAL_PATH\).*?\1=\"$NDS_FUSIONOS_TOOLCHAIN_PATH\"?" target/device/Sky/$SPK_PLATFORM/buildroot-${SPK_VARIANT}.config
   # + sed -i 's?.*\(BR2_TOOLCHAIN_EXTERNAL_PATH\).*?\1="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2"?' \
     target/device/Sky/ams-drx890/buildroot-debug.config
@@ -2922,6 +2937,12 @@ cwd is + SPK_PATH=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_
 # <spk-buildroot-config>
 # `target/device/Sky/ams-drx890/buildroot-debug.config' -> `.config'
 cp -v $CFG .config
+
+# Grab a few variables from the .config. We can't just source the
+# .config file as a shell script because some variable values are
+# makefile variables.
+grep `BR2_TOOLCHAIN_EXTERNAL_PATH` .config >> /tmp/spkconf$$
+. /tmp/spkconf$$
 
 make -n O=$OBJDIR SPK_CONFIGURED= oldconfig
 + make O=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/SPK/ams-drx890-debug SPK_CONFIGURED= oldconfig
@@ -4659,6 +4680,11 @@ single_message_flooding
 
 note:
 runs on raw LOG and use -v
+
+
+<tid-322>
+322	3	Download of Secondary Asset is skipped in DPL Asset.Reason can be 1. PA PID not found in SA2. There is mismatch of Audio Type in PA and SA.3. SA having less PID than PA.
+The current asset has to be skipped*		Download of Secondary Asset is skipped in DPL Asset.	
 
 
 <342>
@@ -7082,6 +7108,14 @@ SA 	Secondary Asset
 SAC 	Secure Authenticated Channel
 SGW 	Secure GateWay (HE component) 
 
+SA PID should match with PA
+
+!WARN   -MSM          		< p:0x000001a8 P:MW t:0x01d3c520 T:VRM_SRV M:msm_concatenate_index_obj.c F:(checkPrimaryAssetPidsMatchSecondaryAsset) L:2093 
+> PA PID (2005) not found in SA 
+>
+!WARN   -CTM_SVR      		< p:0x000001a8 P:MW t:0x01e34520 T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_dpl.c F:CTM_SVR_DPL_ProcessIndexFiles L:701 
+> Item 0 will be SKIPPED 
+>
 
 ={============================================================================
 |kt_dev_si_0001| comp-bem
