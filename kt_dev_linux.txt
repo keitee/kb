@@ -347,7 +347,8 @@
 *kt_linux_gcc_400* gcc-build-execution-env
 *kt_linux_gcc_400* gcc-build-tc-target-triplet
 *kt_linux_gcc_400* gcc-build-tc-spec mips-tc-spec
-*kt_linux_gcc_400* gcc-spec-file
+*kt_linux_gcc_400* gcc-int-internal
+*kt_linux_gcc_400* gcc-int-spec-file
 *kt_linux_gcc_400* gcc-ucmpdi2-error
 *kt_linux_gcc_400* gcc-build-sysroot
 *kt_linux_gcc_400* gcc-build-tc-failed-instructions
@@ -49437,7 +49438,254 @@ with:
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-spec-file
+*kt_linux_gcc_400* gcc-int-internal
+
+https://gcc.gnu.org/onlinedocs/gccint/index.html#Top
+
+Introduction
+
+This manual documents the internals of the GNU compilers, including how to
+port them to new targets and some information about how to write front ends
+for new languages. It corresponds to the compilers (GCC) version 7.0.1. The
+  use of the GNU compilers is documented in a separate manual. See
+    Introduction.
+
+This manual is mainly a reference manual rather than a tutorial. It discusses
+how to contribute to GCC (see Contributing), the characteristics of the
+machines supported by GCC as hosts and targets (see Portability), how GCC
+relates to the ABIs on such systems (see Interface), and the characteristics
+of the languages for which GCC front ends are written (see Languages). It then
+describes the GCC source tree structure and build system, some of the
+interfaces to GCC front ends, and how support for a target system is
+implemented in GCC. 
+
+
+6.3.9 Anatomy of a Target Back End
+
+gcc-4.2.0-20070124-patched/gcc/config/mips$ ls
+24k.md   4600.md  6000.md         crtn.asm     iris5.h            linux64.h       mips-dsp.md    mips-modes.def      netbsd.h       sdb.h       t-iris           t-r3900        t-slibgcc-irix  vxworks.h
+3000.md  4k.md    7000.md         dbxmdebug.h  iris6.h            linux.h         mips-dspr2.md  mips.opt            openbsd.h      sde.h       t-iris6          t-rtems        t-sr71k         windiss.h
+4000.md  5000.md  74k.md          elf.h        iris.h             linux-unwind.h  mips.h         mips.opt.orig       predicates.md  sde.h.orig  t-isa3264        t-sb1          t-vr
+4100.md  5400.md  9000.md         elfoabi.h    irix-crti.asm      mips16.S        mips.h.orig    mips-protos.h       r3900.h        sr71k.md    t-libgcc-mips16  t-sde          t-vxworks
+4130.md  5500.md  constraints.md  elforion.h   irix-crtn.asm      mips.c          mips.md        mips-protos.h.orig  rtems.h        t-elf       t-linux64        t-sdemtk       vr4120-div.S
+4300.md  5k.md    crti.asm        generic.md   libgcc-mips16.ver  mips.c.orig     mips.md.orig   mips-ps-3d.md       sb1.md         t-gofast    t-mips           t-sdemtk.orig  vr.h
+
+A back end for a target architecture in GCC has the following parts: 
+
+A directory `machine` under gcc/config, 
+  containing a machine description machine.md file (see Machine Descriptions), 
+  header files machine.h and machine-protos.h and 
+  a source file machine.c (see Target Description Macros and Functions), 
+  possibly a target Makefile fragment t-machine (see The Target Makefile Fragment), 
+  and maybe some other files. 
+    
+The names of these files may be changed from the defaults given by explicit
+specifications in config.gcc.
+
+If necessary, a file machine-modes.def in the machine directory, containing
+additional machine modes to represent condition codes. See Condition Code, for
+further details.  An optional machine.opt file in the machine directory,
+        containing a list of target-specific options. You can also add other
+          option files using the extra_options variable in config.gcc. See
+          Options.  Entries in config.gcc (see The config.gcc File) for the
+          systems with this target architecture. 
+
+
+17 Target Description Macros and Functions
+
+In addition to the file machine.md, a machine description includes a C header
+file conventionally given the name machine.h and a C source file named
+machine.c. The header file defines numerous macros that convey the information
+about the target machine that does not fit into the scheme of the .md file.
+The file tm.h should be a link to machine.h. The header file config.h includes
+tm.h and most compiler source files include config.h. The source file defines
+a variable targetm, which is a structure containing pointers to functions and
+data relating to the target machine. machine.c should also contain their
+definitions, if they are not defined elsewhere in GCC, and other functions
+called through the macros defined in the .h file. 
+
+
+https://gcc.gnu.org/onlinedocs/gccint/RTL.html#RTL
+13 RTL Representation
+
+The last part of the compiler work is done on a low-level intermediate
+representation called Register Transfer Language. In this language, the
+instructions to be output are described, pretty much one by one, in an
+algebraic form that describes what the instruction does.
+
+RTL is inspired by Lisp lists. It has both an internal form, made up of
+structures that point at other structures, and a textual form that is used in
+the machine description and in printed debugging dumps. The textual form uses
+nested parentheses to indicate the pointers in the internal form. 
+
+
+https://gcc.gnu.org/onlinedocs/gccint/Machine-Desc.html
+16 Machine Descriptions
+
+A machine description has two parts: a file of instruction patterns (.md file)
+and a C header file of macro definitions.
+
+The .md file for a target machine contains `a pattern` for each instruction that
+the target machine supports (or at least each instruction that is worth
+    telling the compiler about). It may also contain comments. A semicolon
+causes the rest of the line to be a comment, unless the semicolon is inside a
+quoted string.
+
+See the next chapter for information on the C header file. 
+
+
+16.1 Overview of How the Machine Description is Used
+
+There are three main conversions that happen in the compiler:
+
+    The front end reads the source code and builds a parse tree.
+
+    The parse tree is used to generate `an RTL insn list` based on named
+    instruction patterns.
+
+    The insn list is matched against the RTL templates `to produce assembler code` 
+
+For the generate pass, only the names of the insns matter, from either a named
+define_insn or a define_expand. The compiler will choose the pattern with the
+right name and apply the operands according to the documentation later in this
+chapter, without regard for the RTL template or operand constraints. Note that
+the names the compiler looks for are hard-coded in the compiler - it will
+ignore unnamed patterns and patterns with names it doesn't know about, but if
+you don't provide a named pattern it needs, it will abort.
+
+If a define_insn is used, the template given is inserted into the insn list.
+If a define_expand is used, one of three things happens, based on the
+condition logic. The condition logic may manually create new insns for the
+insn list, say via emit_insn(), and invoke DONE. For certain named patterns,
+     it may invoke FAIL to tell the compiler to use an alternate way of
+       performing that task. If it invokes neither DONE nor FAIL, the template
+       given in the pattern is inserted, as if the define_expand were a
+       define_insn.
+
+Once the insn list is generated, various optimization passes convert, replace,
+and rearrange the insns in the insn list. This is where the define_split and
+  define_peephole patterns get used, for example.
+
+Finally, the insn list's RTL is matched up with the RTL templates in the
+define_insn patterns, and those patterns are used to emit the final assembly
+code. For this purpose, each named define_insn acts like it's unnamed, since
+the names are ignored. 
+
+
+16.2 Everything about Instruction Patterns
+
+A `define_insn` expression is used to define instruction patterns to which
+insns may be matched. A define_insn expression contains an incomplete RTL
+expression, with pieces to be filled in later, operand constraints that
+restrict how the pieces can be filled in, and an output template or C code to
+generate the assembler output.
+
+A define_insn is an RTL expression containing four or five operands: 
+
+1. An optional name. 
+
+The presence of a name indicate that this instruction pattern can perform a
+certain standard job for the RTL-generation pass of the compiler. This pass
+knows certain names and will use the instruction patterns with those names, if
+the names are defined in the machine description.
+
+The absence of a name is indicated by writing an empty string where the name
+should go. Nameless instruction patterns are never used for generating RTL
+code, but they may permit several simpler insns to be combined later on.
+
+Names that are not thus known and used in RTL-generation have no effect; they
+are equivalent to no name at all.
+
+For the purpose of debugging the compiler, you may also specify a name
+beginning with the ‘*’ character. Such a name is used only for identifying the
+instruction in RTL dumps; it is equivalent to having a nameless pattern for
+all other purposes. Names beginning with the ‘*’ character are not required to
+be unique.
+
+
+2. The RTL template: This is a vector of incomplete RTL expressions which
+describe the semantics of the instruction (see RTL Template). It is incomplete
+because it may contain match_operand, match_operator, and match_dup
+expressions that stand for operands of the instruction.
+
+If the vector has multiple elements, the RTL template is treated as a parallel
+expression.
+
+
+3. The condition: This is a string which contains a C expression. When the
+compiler attempts to match RTL against a pattern, the condition is evaluated.
+If the condition evaluates to true, the match is permitted. The condition may
+be an empty string, which is treated as always true.
+
+For a named pattern, the condition may not depend on the data in the insn
+being matched, but only the target-machine-type flags. The compiler needs to
+test these conditions during initialization in order to learn exactly which
+named instructions are available in a particular run.
+
+For nameless patterns, the condition is applied only when matching an
+individual insn, and only after the insn has matched the pattern's recognition
+template. The insn's operands may be found in the vector operands.
+
+For an insn where the condition has once matched, it cannot later be used to
+control register allocation by excluding certain register or value
+combinations.
+
+
+4. The output template or output statement: This is either a string, or a
+fragment of C code which `returns a string`
+
+When simple substitution isn't general enough, you can specify a piece of C
+code to compute the output. See Output Statement.
+
+
+5. The insn attributes: This is an optional vector containing the values of
+attributes for insns matching this pattern (see Insn Attributes). 
+
+
+16.3 Example of define_insn
+
+Here is an example of an instruction pattern, taken from the machine
+description for the 68000/68020.
+
+     (define_insn "tstsi"
+       [(set (cc0)
+             (match_operand:SI 0 "general_operand" "rm"))]
+       ""
+       "*
+     {
+       if (TARGET_68020 || ! ADDRESS_REG_P (operands[0]))
+         return \"tstl %0\";
+       return \"cmpl #0,%0\";
+     }")
+
+This can also be written using braced strings:
+
+     (define_insn "tstsi"
+       [(set (cc0)
+             (match_operand:SI 0 "general_operand" "rm"))]
+       ""
+     {
+       if (TARGET_68020 || ! ADDRESS_REG_P (operands[0]))
+         return "tstl %0";
+       return "cmpl #0,%0";
+     })
+
+This describes an instruction which sets the condition codes based on the
+  value of a general operand. It has no condition, so any insn with an RTL
+  description of the form shown may be matched to this pattern. The name
+  ‘tstsi’ means “test a SImode value” and tells the RTL generation pass that,
+  when it is necessary to test such a value, an insn to do so can be
+    constructed using this pattern.
+
+The output control string is a piece of C code which chooses which output
+template to return based on the kind of operand and the specific type of CPU
+for which code is being generated.
+
+‘"rm"’ is an operand constraint. Its meaning is explained below. 
+
+
+={============================================================================
+*kt_linux_gcc_400* gcc-int-spec-file
 
 https://gcc.gnu.org/onlinedocs/gcc/Spec-Files.html
 
@@ -49781,7 +50029,7 @@ e)}}    %{!A:%{!nostdlib:%{!nostartfiles:%E}}} %{T*} }}}}}}
 
 {gcc-ucmpdi2-error}
 Outputs are different depending on compiler used and turns out that
-gcc puts `__ucmpdi2` symbol since there is no use in the source.
+gcc puts `__ucmpdi2` symbol although there is no use in the source.
 
 <when-use-bcm-gcc> see no __ucmpdi2
 
@@ -49805,6 +50053,7 @@ gcc puts `__ucmpdi2` symbol since there is no use in the source.
 <when-use-own-gcc> see __ucmpdi2
 
 /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-try-install/bin/mips-linux-gnu-gcc -Wp,-MD,arch/mips/math-emu/.ieee754dp.o.d  -nostdinc -isystem /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-mips-try-install/bin/../lib/gcc/mips-linux-gnu/4.3.0/include -D__KERNEL__ -Iinclude  -include include/linux/autoconf.h -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Os  -mabi=32 -G 0 -mno-abicalls -fno-pic -pipe -msoft-float -ffreestanding  -march=mips32 -Wa,-mips32 -Wa,--trap -Wno-uninitialized -Iinclude/asm-mips/mach-brcmstb -Iinclude/asm-mips/mach-generic -fomit-frame-pointer -g  -fno-stack-protector -Wdeclaration-after-statement -Wno-pointer-sign   -Os -I/home/nds-uk/kyoupark/ext3/build_mips/staging_dir/include -I/home/nds-uk/kyoupark/ext3/build_mips/staging_dir/usr/include -I/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-try-install/mips-linux-gnu/include -D"KBUILD_STR(s)=\#s" -D"KBUILD_BASENAME=KBUILD_STR(ieee754dp)"  -D"KBUILD_MODNAME=KBUILD_STR(ieee754dp)" -c -o ieee754dp.o arch/mips/math-emu/ieee754dp.c
+/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-gcc -Wp,-MD,arch/mips/math-emu/.ieee754dp.o.d  -nostdinc -isystem /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/../lib/gcc/mips-linux-gnu/4.3.0/include -D__KERNEL__ -Iinclude  -include include/linux/autoconf.h -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Os -mabi=32 -G 0 -mno-abicalls -fno-pic -pipe -msoft-float -ffreestanding -march=mips32 -Wa,-mips32 -Wa,--trap -Wno-uninitialized -Iinclude/asm-mips/mach-brcmstb -Iinclude/asm-mips/mach-generic -fomit-frame-pointer -g  -fno-stack-protector -Wdeclaration-after-statement -Wno-pointer-sign   -Os -I/home/nds-uk/kyoupark/ext3/build_mips/staging_dir/include -I/home/nds-uk/kyoupark/ext3/build_mips/staging_dir/usr/include -I/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/include -D"KBUILD_STR(s)=\#s" -D"KBUILD_BASENAME=KBUILD_STR(ieee754dp)" -D"KBUILD_MODNAME=KBUILD_STR(ieee754dp)" -c -o ieee754dp.o arch/mips/math-emu/ieee754dp.c
 
 /linux-2.6.18.8/arch/mips/math-emu$ nm ieee754dp.o
          U __ashldi3
@@ -52065,7 +52314,10 @@ endif
 
 
 <2016-11-case-with-external-settings>
-note: used external toolchain from <gcc-build-glibc-mips>
+note: 
+1. used external toolchain from <gcc-build-glibc-mips>
+2. since spk uses buildroot and is to check if normal buildroot works okay
+when use external toolchain setting and to find out glibc libraries to copy.
 
 # Config.in
 source "toolchain/Config.in"
@@ -52590,7 +52842,7 @@ TOOLCHAIN_EXTERNAL_CFLAGS += -msoft-float
 TOOLCHAIN_EXTERNAL_TOOLCHAIN_WRAPPER_ARGS += -DBR_SOFTFLOAT=1
 endif
 
-<error>
+<error> <why-sysroot-necessary>
 /home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-install/lib/gcc/mips-unknown-linux/4.8.2/../../../../mips-unknown-linux/bin/ld:
 this linker was not configured to use sysroots
 collect2: error: ld returned 1 exit status
@@ -53452,6 +53704,593 @@ through the Timesys LinuxLink service.
 
 The SPK assumes that the symlink /opt/toolchains/uclibc-crosstools points to
 the correct toolchain. This is the default symlink to the Broadcom install.
+
+={============================================================================
+*kt_linux_gcc_400* gcc-build-brcm-reference
+
+cd /usr/src/redhat/SPECS
+rpmbuild -ba crosstools-linux-2.6.18.0-uclibc-0.9.29-nptl-20070423-4.2-10ts.spec  2>&1 |tee  buildlog 
+
+// crosstools-linux-2.6.18.0-uclibc-0.9.29-nptl-20070423-4.2-11tsHound.spec
+build_tool()
+{
+  arch=$1
+  gnu_arch=$arch-linux-uclibc
+  export PATH=%{tools_dir_prefix}/bin:$PATH
+
+  pushd ${RPM_BUILD_DIR}
+
+  #
+  # Set the arch for the build/devel system, or let it be automaticly set.
+  #
+  build_arch=$arch-linux
+
+  # Configure uClibc and header files
+  
+  #
+  # Build uClibc
+  #
+  pushd uClibc-%{uclibc_version}
+
+  mkdir -p %{tools_dir_prefix}/$gnu_arch/include
+  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/usr/include
+  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/usr/lib
+  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/lib
+
+  # Copy in the locale tarball
+  cp ${RPM_SOURCE_DIR}/uClibc-locale-030818.tgz extra/locale
+
+  # Copy in the architecture config and fix it up
+  cp extra/Configs/Config.rpm.$arch ./.config
+
+  if test %{float_type} = soft; then
+    # Modify the uClibc config for soft float
+    perl -p -i -e 's,.*HAS_FPU.*,# UCLIBC_HAS_FPU is not set\nUCLIBC_HAS_SOFT_FLOAT=y,g' ./.config
+  fi
+
+  # Modify the uClibc config for profiling
+  perl -p -i -e 's,.*UCLIBC_PROFILING.*,# UCLIBC_PROFILING is not set,g' ./.config
+
+  # Disable library stripping
+  perl -p -i -e 's,.*DOSTRIP.*,# DOSTRIP is not set,g' ./.config
+
+  make oldconfig
+
+  # Create symlinks
+  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/linux include
+  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/asm-mips include/asm
+  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/asm-generic include/asm-generic
+
+  make PREFIX=${RPM_BUILD_DIR}/build_uClibc/			\
+       DEVEL_PREFIX=/usr/					\
+       RUNTIME_PREFIX=${RPM_BUILD_DIR}/build_uClibc/		\
+       HOSTCC=gcc						\
+       KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+       CROSS=$gnu_arch-						\
+       pregen install_dev
+  popd
+
+  #
+  # Configure, build and install binutils
+  #
+  rm -rf build-binutils-%{binutils_version}
+  mkdir build-binutils-%{binutils_version}
+  pushd build-binutils-%{binutils_version}
+  ../binutils-%{binutils_version}/configure			\
+    --prefix=%{tools_dir_prefix}				\
+    --build=$build_arch 					\
+    --host=$build_arch	 					\
+    --target=$gnu_arch						\
+    --disable-werror						\
+    --disable-nls						\
+    --enable-multilib
+
+  make %{parallel}
+  make info
+  make install
+  make install-info
+  popd
+  
+  #
+  # Update gcc version number
+  #
+  pushd gcc-%{gcc_version}
+  perl -p -i -e "s/BRCM_VER/%{build_number}-%{build_date}/" gcc/version.c
+  popd
+
+  #
+  # Build first stage C compiler
+  #
+  rm -rf build-gcc-%{gcc_version}-initial
+  mkdir build-gcc-%{gcc_version}-initial
+  pushd build-gcc-%{gcc_version}-initial
+
+  # Currently the unwind stuff seems to work for staticly linked apps but
+  # not dynamic.  So use setjmp/longjmp exceptions by default.
+  #
+  ../gcc-%{gcc_version}/configure 				\
+    --prefix=%{tools_dir_prefix}				\
+    --build=$build_arch 					\
+    --host=$build_arch						\
+    --target=$gnu_arch						\
+    --with-build-sysroot=${RPM_BUILD_DIR}/build_uClibc		\
+    --enable-languages=c					\
+    --disable-shared						\
+    --disable-__cxa_atexit 					\
+    --enable-target-optspace 					\
+    --with-gnu-ld						\
+    --with-float=%{float_type}					\
+    --enable-threads						\
+    --disable-multilib						\
+    --with-gnu-plts
+
+  make %{parallel} all-gcc
+  make install-gcc
+  popd
+
+  #
+  # Build uClibc (which was configured above).
+  #
+  pushd uClibc-%{uclibc_version}
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=/						\
+    RUNTIME_PREFIX=/						\
+    CROSS=$gnu_arch- all
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=%{tools_dir_prefix}/$gnu_arch/			\
+    RUNTIME_PREFIX=%{tools_dir_prefix}/$gnu_arch/		\
+    CROSS=$gnu_arch-	 					\
+    install_runtime install_dev
+
+  ln -snf include %{tools_dir_prefix}/$gnu_arch/sys-include
+  popd
+
+  #
+  # Build final C compiler and C++ support, using the newly built uClibc.
+  #
+  rm -rf build-gcc-%{gcc_version}-final
+  mkdir build-gcc-%{gcc_version}-final
+  pushd build-gcc-%{gcc_version}-final
+
+  #
+  # WARNING!!!  Do not use --with-gxx-include-dir!!!  WARNING!!!
+  #
+  # mjn3: Incorrectly setting the g++ include dir has broken a number
+  #       of uClibc toolchains in the past.  There is logic in some gcc
+  #       versions that attempts to detect path aliases and which can
+  #        break the include dir search order.  Best to just leave it be.
+  #
+  ../gcc-%{gcc_version}/configure				\
+    --prefix=%{tools_dir_prefix}/				\
+    --build=$build_arch						\
+    --host=$build_arch						\
+    --target=$gnu_arch						\
+    --with-build-sysroot=${RPM_BUILD_DIR}/build_uClibc		\
+    --enable-languages=c,c++					\
+    --disable-__cxa_atexit 					\
+    --enable-target-optspace					\
+    --with-gnu-ld						\
+    --with-float=%{float_type}					\
+    --enable-threads						\
+    --infodir=%{tools_dir_prefix}/info				\
+    --mandir=%{tools_dir_prefix}/man				\
+    --with-arch=mips32						\
+    --disable-libmudflap					\
+    --disable-nls						\
+    --with-gnu-plts
+
+  make %{parallel} all							\
+    CFLAGS_FOR_TARGET="%{library_flags}"			\
+    CXXFLAGS_FOR_TARGET="%{library_flags}"
+
+  make info
+  make install
+  make install-info
+
+  # If we build libstdc++ with -mips16, scripts/testsuite_flags will
+  # cause the libstdc++ testsuite to use -mips16 (unlike the other
+  # testsuites).  If we built the library with -Os, the testsuite will
+  # also use -Os, but some of the tests require -O2.  Change the
+  # testsuite flags to the default "-O2 -g".
+  perl -p -i -e "s/-Os -g.*/-O2 -g/" $gnu_arch/libstdc++-v3/scripts/testsuite_flags
+
+  popd
+
+  #
+  # Relink uClibc against final libgcc
+  #
+  pushd uClibc-%{uclibc_version}
+
+  rm -rf lib
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=/						\
+    RUNTIME_PREFIX=/						\
+    CROSS=$gnu_arch- all
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=%{tools_dir_prefix}/$gnu_arch/			\
+    RUNTIME_PREFIX=%{tools_dir_prefix}/$gnu_arch/		\
+    CROSS=$gnu_arch-	 					\
+    install_runtime install_dev
+
+  popd
+
+  #
+  # Build uClibc utils (which were configured above).
+  #
+  pushd uClibc-%{uclibc_version}
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=%{tools_dir_prefix}/$gnu_arch/target-apps/ 		\
+    DEVEL_PREFIX=						\
+    RUNTIME_PREFIX=						\
+    CROSS=$gnu_arch-	 					\
+    utils install_utils
+
+  make -C utils							\
+    KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=%{tools_dir_prefix}/$gnu_arch/ 			\
+    CROSS=$gnu_arch-	 					\
+    clean
+
+  # We build uClibc in place, so clean it up for the next arch.
+  make distclean
+  popd
+
+  %if %{enable_gdb}
+  #
+  # Build gdbserver for the target
+  #
+  rm -rf build-gdbserver%{gdb_version}
+  mkdir build-gdbserver%{gdb_version}
+  pushd build-gdbserver%{gdb_version}
+
+  AR=$gnu_arch-ar						\
+  AS=$gnu_arch-as						\
+  LD=$gnu_arch-ld						\
+  NM=$gnu_arch-nm						\
+  CC=$gnu_arch-gcc						\
+  GCC=$gnu_arch-gcc						\
+  CXX=$gnu_arch-g++						\
+  RANLIB=$gnu_arch-ranlib					\
+  gdb_cv_func_sigsetjmp=yes					\
+  ac_cv_type_uintptr_t=yes					\
+  gt_cv_func_gettext_libintl=yes				\
+  ac_cv_func_dcgettext=yes					\
+  bash_cv_func_strcoll_broken=no				\
+  bash_cv_must_reinstall_sighandlers=no				\
+  bash_cv_func_sigsetjmp=present				\
+  bash_cv_have_mbstate_t=yes					\
+  ../gdb-%{gdb_version}/gdb/gdbserver/configure			\
+    --prefix=%{tools_dir_prefix}/$gnu_arch/target-apps/usr	\
+    --target=$gnu_arch						\
+    --build=$build_arch						\
+    --host=$gnu_arch						\
+    --mandir=%{tools_dir_prefix}/man				\
+    --infodir=%{tools_dir_prefix}/info				\
+    --disable-nls						\
+    --without-uiout --disable-gdbmi				\
+    --disable-tui --disable-gdbtk --without-x			\
+    --without-included-gettext
+
+  make %{parallel} all
+  make install
+  popd
+
+  #
+  # Build gdb for the host
+  #
+  rm -rf build-gdb-%{gdb_version}
+  mkdir build-gdb-%{gdb_version}
+  pushd build-gdb-%{gdb_version}
+  gdb_cv_func_sigsetjmp=yes					\
+  ../gdb-%{gdb_version}/configure				\
+    --prefix=%{tools_dir_prefix}				\
+    --target=$gnu_arch						\
+    --build=$build_arch						\
+    --host=$build_arch						\
+    --disable-nls						\
+    --disable-gdbserver						\
+    --without-included-gettext
+
+  make %{parallel} all-gdb
+  make info
+  #make install-gdb
+  make install
+  make install-info
+  #install gdb/gdb %{tools_dir_prefix}/bin/$gnu_arch-gdb
+  #install gdb/gdb %{tools_dir_prefix}/$gnu_arch/bin
+
+  popd
+  %endif
+
+  #
+  # Build sstrip for the host.
+  #
+  # Even though it is independent of the target arch, provide symlinks
+  # so that it can be invoked like all other cross tools.
+  #
+  pushd sstrip
+
+  make all
+
+  install sstrip %{tools_dir_prefix}/bin
+
+  ln -snf sstrip %{tools_dir_prefix}/bin/$gnu_arch-sstrip
+  ln -snf sstrip %{tools_dir_prefix}/bin/$arch-linux-sstrip
+  ln -snf sstrip %{tools_dir_prefix}/bin/$arch-uclibc-sstrip
+  ln -snf ../../bin/sstrip %{tools_dir_prefix}/$gnu_arch/bin/sstrip
+
+  popd
+
+  #
+  # Now strip all binaries.
+  #
+
+  # Remove the script to avoid strip failures.
+  rm -f %{tools_dir_prefix}/bin/*-gccbug
+
+  # Do some additional housekeeping.
+  rm -f %{tools_dir_prefix}/lib/libiberty.a
+  rm -f %{tools_dir_prefix}/gcc/libiberty.a
+  rm -f %{tools_dir_prefix}/gcc/libmmalloc.a
+
+  strip %{tools_dir_prefix}/bin/*
+  strip %{tools_dir_prefix}/$gnu_arch/bin/*
+
+  $gnu_arch-strip %{tools_dir_prefix}/$gnu_arch/target-apps/sbin/*
+  $gnu_arch-strip %{tools_dir_prefix}/$gnu_arch/target-apps/usr/bin/*
+
+  #
+  # Create the backward compatibility symlinks.
+  #
+
+  pushd %{tools_dir_prefix}/bin
+  for F in $gnu_arch-* ; do \
+	ln -snf $F $arch-linux${F##$gnu_arch} ;\
+	ln -snf $F $arch-uclibc${F##$gnu_arch} ; \
+  done
+  popd
+  ln -snf $gnu_arch %{tools_dir_prefix}/$arch-linux
+  ln -snf $gnu_arch %{tools_dir_prefix}/$arch-uclibc
+
+  # Directory name changed in gcc 3.4.x from lib/gcc-libc/ to lib/gcc/.
+  if [ -d %{tools_dir_prefix}/lib/gcc-lib ] ; then 
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc-lib/$arch-linux
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc-lib/$arch-uclibc
+  fi
+  if [ -d %{tools_dir_prefix}/lib/gcc ] ; then 
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc/$arch-linux
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc/$arch-uclibc
+  fi
+}
+
+
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install
+TARGET=mips-linux-gnu
+export PATH=${PREFIX}/bin:$PATH
+
+../binutils-2.17.50/configure --prefix=${PREFIX} \
+--target=${TARGET} \
+--disable-werror \
+--disable-nls \
+--enable-multilib
+make -j4
+make install
+
+
+make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
+
+// copy linux headers
+// home/nds-uk/kyoupark/asn/gcc-brcm/linux-libc-headers-2.6.18.0
+// cp -r include/ /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu
+
+note: gcc-4.2.0 is different from 4.3.0 as to build steps and make targets so
+stops here.
+
+
+cd build-gcc
+../gcc-4.2.0-20070124-patched/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c \
+--disable-shared \
+--disable-libmudflap --disable-nls \
+--disable-__cxa_atexit --enable-target-optspace \
+--with-gnu-ld --with-float=hard --enable-threads \
+--with-gnu-plts
+
+note: when not use --disable-multilib, no libgcc_eh.a and fails on
+build-glibc.
+
+cd build-gcc
+../gcc-4.3.0-patched/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c \
+--disable-shared \
+--disable-libmudflap --disable-nls \
+--disable-__cxa_atexit --enable-target-optspace \
+--with-gnu-ld --with-float=hard --enable-threads \
+--with-gnu-plts
+
+make -j4 all-gcc
+make install-gcc
+
+
+cd glibc-2.13-build
+../glibc-2.13/configure --prefix=${PREFIX}/${TARGET} \
+--build=$MACHTYPE --host=mips-linux-gnu --target=${TARGET} \
+--with-headers=${PREFIX}/${TARGET}/include \
+libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes \
+--enable-add-ons=nptl,../glibc-ports-2.13
+
+make install-bootstrap-headers=yes install-headers
+make -j5 csu/subdir_lib
+install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
+
+
+cd build-gcc
+make -j4 all-target-libgcc
+make install-target-libgcc
+
+
+cd build-glibc
+make -j5
+make install
+
+
+cd build-gcc
+make -j5
+make install
+
+
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:1:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:4:+++ gcc/gcc/gcc/config/mips/mips.md	2007-01-10 14:00:16.000000000 +0000
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:22:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:25:+++ gcc/gcc/gcc/config/mips/mips.c	2007-01-10 13:07:58.000000000 +0000
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:80:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:83:+++ gcc/gcc/gcc/config/mips/mips.h	2007-01-09 17:35:36.000000000 +0000
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:94:Index: gcc/gcc/gcc/config/mips/74k.md
+gcc-4.2.0-20070124-mti-74k-pipeline.diff:97:+++ gcc/gcc/gcc/config/mips/74k.md	2007-01-09 17:47:26.000000000 +0000
+gcc-4.2.0-20070124-mti-builtin-assert-warning.diff:1:Index: gcc/gcc/gcc/config/mips/sde.h
+gcc-4.2.0-20070124-mti-builtin-assert-warning.diff:4:+++ gcc/gcc/gcc/config/mips/sde.h	2006-08-29 13:14:08.000000000 +0100
+gcc-4.2.0-20070124-mti-cache-flush.diff:1:Index: gcc/gcc/gcc/config/mips/sde.h
+gcc-4.2.0-20070124-mti-cache-flush.diff:4:+++ gcc/gcc/gcc/config/mips/sde.h	2007-02-07 13:38:21.000000000 +0000
+gcc-4.2.0-20070124-mti-cpu-names.diff:1:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-cpu-names.diff:4:+++ gcc/gcc/gcc/config/mips/mips.md	2006-08-29 13:18:44.000000000 +0100
+gcc-4.2.0-20070124-mti-cpu-names.diff:14:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-cpu-names.diff:17:+++ gcc/gcc/gcc/config/mips/mips.c	2006-08-29 13:17:22.000000000 +0100
+gcc-4.2.0-20070124-mti-cpu-names.diff:68:Index: gcc/gcc/gcc/config/mips/24k.md
+gcc-4.2.0-20070124-mti-cpu-names.diff:71:+++ gcc/gcc/gcc/config/mips/24k.md	2006-08-29 13:17:22.000000000 +0100
+gcc-4.2.0-20070124-mti-cpu-names.diff:322:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-cpu-names.diff:325:+++ gcc/gcc/gcc/config/mips/mips.h	2006-08-29 13:17:22.000000000 +0100
+gcc-4.2.0-20070124-mti-dollar-in-asm-identifier.diff:25:Index: gcc/gcc/gcc/config/mips/sde.h
+gcc-4.2.0-20070124-mti-dollar-in-asm-identifier.diff:28:+++ gcc/gcc/gcc/config/mips/sde.h	2006-10-04 12:55:44.000000000 +0100
+gcc-4.2.0-20070124-mti-ldst-df-high.diff:1:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-ldst-df-high.diff:4:+++ gcc/gcc/gcc/config/mips/mips.md	2006-04-26 15:36:05.000000000 +0100
+gcc-4.2.0-20070124-mti-longcall-attr.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-longcall-attr.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-04-26 15:46:59.000000000 +0100
+gcc-4.2.0-20070124-mti-mfhc1-mthc1-patterns.diff:1:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-mfhc1-mthc1-patterns.diff:4:+++ gcc/gcc/gcc/config/mips/mips.md	2006-04-27 14:45:11.000000000 +0100
+gcc-4.2.0-20070124-mti-mfhc1-mthc1-patterns.diff:44:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mfhc1-mthc1-patterns.diff:47:+++ gcc/gcc/gcc/config/mips/mips.c	2006-04-27 14:45:11.000000000 +0100
+gcc-4.2.0-20070124-mti-mfhc1-mthc1-patterns.diff:73:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mfhc1-mthc1-patterns.diff:76:+++ gcc/gcc/gcc/config/mips/mips.h	2006-04-27 14:45:11.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-builtin_unwind_init.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-builtin_unwind_init.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-23 15:27:00.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-complex-func.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-complex-func.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-04-26 15:36:11.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-complex-func.diff:140:Index: gcc/gcc/gcc/config/mips/mips16.S
+gcc-4.2.0-20070124-mti-mips16-complex-func.diff:143:+++ gcc/gcc/gcc/config/mips/mips16.S	2006-04-26 15:36:11.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-compute-frame-size.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-compute-frame-size.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-23 15:40:04.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:1:Index: gcc/gcc/gcc/config/mips/mips-protos.h
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:4:+++ gcc/gcc/gcc/config/mips/mips-protos.h	2006-06-08 14:57:37.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:13:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:16:+++ gcc/gcc/gcc/config/mips/mips.md	2006-06-08 14:57:37.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:66:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:69:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-08 14:57:37.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:649:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mips16e-save-restore.diff:652:+++ gcc/gcc/gcc/config/mips/mips.h	2006-06-08 14:57:37.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-float-stub.diff:1:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mips16-float-stub.diff:4:+++ gcc/gcc/gcc/config/mips/mips.h	2006-04-26 15:47:07.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-float-stub.diff:23:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-float-stub.diff:26:+++ gcc/gcc/gcc/config/mips/mips.c	2006-04-26 15:47:07.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-funcattr.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-funcattr.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-05-03 18:33:59.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-funcattr.diff:862:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mips16-funcattr.diff:865:+++ gcc/gcc/gcc/config/mips/mips.h	2006-04-27 14:45:35.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-funcattr-mflip16.diff:1:Index: gcc/gcc/gcc/config/mips/mips.opt
+gcc-4.2.0-20070124-mti-mips16-funcattr-mflip16.diff:4:+++ gcc/gcc/gcc/config/mips/mips.opt	2006-05-04 12:38:09.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-funcattr-mflip16.diff:16:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-funcattr-mflip16.diff:19:+++ gcc/gcc/gcc/config/mips/mips.c	2006-05-04 12:39:59.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-hardfloat-libgcc.diff:1:Index: gcc/gcc/gcc/config/mips/t-sde
+gcc-4.2.0-20070124-mti-mips16-hardfloat-libgcc.diff:4:+++ gcc/gcc/gcc/config/mips/t-sde	2007-02-08 17:18:19.000000000 +0000
+gcc-4.2.0-20070124-mti-mips16-hardfloat-libgcc.diff:18:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-hardfloat-libgcc.diff:21:+++ gcc/gcc/gcc/config/mips/mips.c	2007-02-09 11:44:37.000000000 +0000
+gcc-4.2.0-20070124-mti-mips16-hardfloat-libgcc.diff:38:Index: gcc/gcc/gcc/config/mips/mips16.S
+gcc-4.2.0-20070124-mti-mips16-hardfloat-libgcc.diff:41:+++ gcc/gcc/gcc/config/mips/mips16.S	2007-02-09 19:36:37.000000000 +0000
+gcc-4.2.0-20070124-mti-mips16-intermix-callstub.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-intermix-callstub.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-05-04 12:40:09.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-intermix-complex.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-intermix-complex.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-01 16:12:13.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-intermix-complex.diff:23:Index: gcc/gcc/gcc/config/mips/mips16.S
+gcc-4.2.0-20070124-mti-mips16-intermix-complex.diff:26:+++ gcc/gcc/gcc/config/mips/mips16.S	2006-06-01 16:11:56.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-reload-gp-splitsym.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips16-reload-gp-splitsym.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-22 15:39:35.000000000 +0100
+gcc-4.2.0-20070124-mti-mips16-ret_df.diff:1:Index: gcc/gcc/gcc/config/mips/mips16.S
+gcc-4.2.0-20070124-mti-mips16-ret_df.diff:4:+++ gcc/gcc/gcc/config/mips/mips16.S	2006-02-21 14:35:19.000000000 +0000
+gcc-4.2.0-20070124-mti-mips16-slow-byte-access.diff:1:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mips16-slow-byte-access.diff:4:+++ gcc/gcc/gcc/config/mips/mips.h	2006-04-26 15:36:16.000000000 +0100
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:1:Index: gcc/gcc/gcc/config/mips/t-sde
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:4:+++ gcc/gcc/gcc/config/mips/t-sde	2006-06-08 14:57:16.000000000 +0100
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:16:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:19:+++ gcc/gcc/gcc/config/mips/mips.md	2006-06-08 14:57:06.000000000 +0100
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:94:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:97:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-08 14:57:07.000000000 +0100
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:116:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mips32r2-mfp64.diff:119:+++ gcc/gcc/gcc/config/mips/mips.h	2006-06-08 14:57:07.000000000 +0100
+gcc-4.2.0-20070124-mti-mips32r2-support.diff:1:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mips32r2-support.diff:4:+++ gcc/gcc/gcc/config/mips/mips.h	2006-04-27 14:45:06.000000000 +0100
+gcc-4.2.0-20070124-mti-mips32-use-odd-floats.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-mips32-use-odd-floats.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-08 14:57:27.000000000 +0100
+gcc-4.2.0-20070124-mti-mips32-use-odd-floats.diff:57:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mips32-use-odd-floats.diff:60:+++ gcc/gcc/gcc/config/mips/mips.h	2006-06-08 14:57:27.000000000 +0100
+gcc-4.2.0-20070124-mti-mt-asm-spec.diff:1:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-mt-asm-spec.diff:4:+++ gcc/gcc/gcc/config/mips/mips.h	2006-10-27 17:29:26.000000000 +0100
+gcc-4.2.0-20070124-mti-o32-arguments.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-o32-arguments.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-04-26 15:36:01.000000000 +0100
+gcc-4.2.0-20070124-mti-optimize-size-default-cost.diff:1:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-optimize-size-default-cost.diff:4:+++ gcc/gcc/gcc/config/mips/mips.c	2006-04-27 14:44:54.000000000 +0100
+gcc-4.2.0-20070124-mti-option-branch-cost.diff:1:Index: gcc/gcc/gcc/config/mips/mips.opt
+gcc-4.2.0-20070124-mti-option-branch-cost.diff:4:+++ gcc/gcc/gcc/config/mips/mips.opt	2007-01-25 16:57:46.000000000 +0000
+gcc-4.2.0-20070124-mti-option-branch-cost.diff:16:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-option-branch-cost.diff:19:+++ gcc/gcc/gcc/config/mips/mips.c	2007-01-26 14:09:55.000000000 +0000
+gcc-4.2.0-20070124-mti-option-branch-cost.diff:57:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-option-branch-cost.diff:60:+++ gcc/gcc/gcc/config/mips/mips.h	2007-01-26 14:10:46.000000000 +0000
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:1:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:4:+++ gcc/gcc/gcc/config/mips/mips.md	2007-02-01 14:20:24.000000000 +0000
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:172:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:175:+++ gcc/gcc/gcc/config/mips/mips.c	2007-02-01 14:20:22.000000000 +0000
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:190:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:193:+++ gcc/gcc/gcc/config/mips/mips.h	2007-02-01 14:21:02.000000000 +0000
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:215:Index: gcc/gcc/gcc/config/mips/74k.md
+gcc-4.2.0-20070124-mti-sched-mult-madd.diff:218:+++ gcc/gcc/gcc/config/mips/74k.md	2007-02-01 14:12:46.000000000 +0000
+gcc-4.2.0-20070124-mti-sde7-configuration.diff:44:Index: gcc/gcc/gcc/config/mips/t-sde
+gcc-4.2.0-20070124-mti-sde7-configuration.diff:47:+++ gcc/gcc/gcc/config/mips/t-sde
+gcc-4.2.0-20070124-mti-sde7-configuration.diff:181:Index: gcc/gcc/gcc/config/mips/sde.h
+gcc-4.2.0-20070124-mti-sde7-configuration.diff:184:+++ gcc/gcc/gcc/config/mips/sde.h
+gcc-4.2.0-20070124-mti-sde7-disable-embedded-data.diff:1:Index: gcc/gcc/gcc/config/mips/sde.h
+gcc-4.2.0-20070124-mti-sde7-disable-embedded-data.diff:4:+++ gcc/gcc/gcc/config/mips/sde.h	2006-07-21 12:05:45.000000000 +0100
+gcc-4.2.0-20070124-mti-sde7-disable-embedded-data.diff:16:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-sde7-disable-embedded-data.diff:19:+++ gcc/gcc/gcc/config/mips/mips.c	2006-07-21 12:08:07.000000000 +0100
+gcc-4.2.0-20070124-mti-sde7-disable-multilibs.diff:1:Index: gcc/gcc/gcc/config/mips/t-sde
+gcc-4.2.0-20070124-mti-sde7-disable-multilibs.diff:4:+++ gcc/gcc/gcc/config/mips/t-sde	2006-07-18 12:46:04.000000000 +0100
+gcc-4.2.0-20070124-mti-sde7-embedded-data.diff:1:Index: gcc/gcc/gcc/config/mips/sde.h
+gcc-4.2.0-20070124-mti-sde7-embedded-data.diff:4:+++ gcc/gcc/gcc/config/mips/sde.h	2006-06-16 17:42:43.000000000 +0100
+gcc-4.2.0-20070124-mti-sde7-embedded-data.diff:20:Index: gcc/gcc/gcc/config/mips/mips.opt
+gcc-4.2.0-20070124-mti-sde7-embedded-data.diff:23:+++ gcc/gcc/gcc/config/mips/mips.opt	2006-06-16 17:55:46.000000000 +0100
+gcc-4.2.0-20070124-mti-sde7-embedded-data.diff:33:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-sde7-embedded-data.diff:36:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-19 14:11:13.000000000 +0100
+gcc-4.2.0-20070124-mti-sde7-mips16e-opt.diff:1:Index: gcc/gcc/gcc/config/mips/mips.opt
+gcc-4.2.0-20070124-mti-sde7-mips16e-opt.diff:4:+++ gcc/gcc/gcc/config/mips/mips.opt	2007-02-05 17:50:47.000000000 +0000
+gcc-4.2.0-20070124-mti-sde7-mtk.diff:1:Index: gcc/gcc/gcc/config/mips/t-sdemtk
+gcc-4.2.0-20070124-mti-sde7-mtk.diff:4:+++ gcc/gcc/gcc/config/mips/t-sdemtk	2006-06-21 18:10:38.000000000 +0100
+gcc-4.2.0-20070124-mti-sde7-mtk-user_h.diff:1:Index: gcc/gcc/gcc/config/mips/t-sdemtk
+gcc-4.2.0-20070124-mti-sde7-mtk-user_h.diff:4:+++ gcc/gcc/gcc/config/mips/t-sdemtk	2006-06-22 17:24:59.000000000 +0100
+gcc-4.2.0-20070124-mti-smartmips-support.diff:1:Index: gcc/gcc/gcc/config/mips/mips.opt
+gcc-4.2.0-20070124-mti-smartmips-support.diff:4:+++ gcc/gcc/gcc/config/mips/mips.opt	2006-06-21 18:12:54.000000000 +0100
+gcc-4.2.0-20070124-mti-smartmips-support.diff:16:Index: gcc/gcc/gcc/config/mips/mips.md
+gcc-4.2.0-20070124-mti-smartmips-support.diff:19:+++ gcc/gcc/gcc/config/mips/mips.md	2006-06-21 18:12:58.000000000 +0100
+gcc-4.2.0-20070124-mti-smartmips-support.diff:74:Index: gcc/gcc/gcc/config/mips/mips.c
+gcc-4.2.0-20070124-mti-smartmips-support.diff:77:+++ gcc/gcc/gcc/config/mips/mips.c	2006-06-21 18:12:58.000000000 +0100
+gcc-4.2.0-20070124-mti-smartmips-support.diff:93:Index: gcc/gcc/gcc/config/mips/mips.h
+gcc-4.2.0-20070124-mti-smartmips-support.diff:96:+++ gcc/gcc/gcc/config/mips/mips.h	2006-06-21 18:12:58.000000000 +0100
+gcc-4.2.0-20070124-ths-install-multilib:1:Index: gcc/gcc/gcc/config/mips/t-sdemtk
+gcc-4.2.0-20070124-ths-install-multilib:4:+++ gcc/gcc/gcc/config/mips/t-sdemtk	2006-12-08 13:01:34.000000000 +0000
 
 
 ={============================================================================
@@ -54840,7 +55679,7 @@ note:
 tried gcc 4.8.2 and glibc 2.20 config fails since requires > binuitl 2.20
 
 wget --no-check-certificate https://ftp.gnu.org/gnu/gcc/gcc-4.2.0/gcc-4.2.0.tar.bz2
-wget --no-check-certificate https://ftp.gnu.org/gnu/gcc/gcc-4.2.3/gcc-4.2.3.tar.bz2
+wget --no-check-certificate https://ftp.gnu.org/gnu/gcc/gcc-4.2.4/gcc-4.2.4.tar.bz2
 wget --no-check-certificate https://ftp.gnu.org/gnu/gcc/gcc-4.3.0/gcc-4.3.0.tar.bz2
 
 wget --no-check-certificate http://ftpmirror.gnu.org/mpfr/mpfr-2.4.0.tar.bz2
@@ -54850,7 +55689,6 @@ cd build-gcc
 
 // builds fails
 // ../gcc-4.2.0/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ \
-// ../gcc-4.2.3/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ \
 // 
 // I../../gcc-4.2.0/gcc/../libdecnumber -I../libdecnumber -fexceptions -fvisibility=hidden -DHIDE_EXPORTS -c ../../gcc-4.2.0/gcc/unwind-dw2.c -o libgcc/./unwind-dw2.o
 // In file included from ./gthr-default.h:1,
@@ -54948,7 +55786,7 @@ install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
 ${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
 touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
 
-note: fails wien use binutil 2.18 so back to 2.25.1
+note: fails when use binutil 2.18 so back to 2.25.1
 
 cd build-gcc
 make -j4 all-target-libgcc
@@ -56470,11 +57308,13 @@ libc.a  libcrypt.so     libdl.so     libnsl.a    libpthread_nonshared.a  libreso
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-tc-cross-ng-mips-uclibc
 
+http://crosstool-ng.org/
+
 wget http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-1.22.0.tar.bz2
 
 tar xjf crosstool-ng-VERSION.tar.bz2
 cd crosstool-ng-VERSION
-./configure --prefix=/some/place
+./configure --prefix=/some/place --prefix=/home/cross/install/bin
 make
 make install
 export PATH="${PATH}:/some/place/bin"
@@ -56496,6 +57336,7 @@ ct-ng show-arm-unknown-linux-gnueabi
 once you know what sample to use, configure ct-ng to use it:
 
 ct-ng arm-unknown-linux-gnueabi
+ct-ng mipsel-unknown-linux-gnu
 
 samples are configured to install in
 "${HOME}/x-tools/arm-unknown-linux-gnueabi" by default. This should be OK for
