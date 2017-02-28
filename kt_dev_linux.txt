@@ -356,6 +356,7 @@
 *kt_linux_gcc_400* gcc-build-tc-buildroot-build
 *kt_linux_gcc_400* gcc-build-tc-buildroot-internal
 *kt_linux_gcc_400* gcc-build-buildroot-external-toolchain
+*kt_linux_gcc_400* gcc-build-buildroot-spk-build-vmlinux
 *kt_linux_gcc_400* gcc-build-buildroot-spk
 *kt_linux_gcc_400* gcc-build-brcm-reference
 *kt_linux_gcc_400* gcc-build-glibc-reference
@@ -377,6 +378,8 @@
 
 *kt_linux_core_002* linux-source
 *kt_linux_core_002* linux-c-lib
+
+*kt_linux_core_001* linux-boot
 
 *kt_linux_core_001* linux-syscall-list
 *kt_linux_core_001* linux-syscall-reboot
@@ -33297,6 +33300,110 @@ const char *gnu_get_libc_version(void);
 
 
 ={============================================================================
+*kt_linux_core_001* linux-boot
+
+
+BOOTPARAM(7)               Linux Programmer’s Manual              BOOTPARAM(7)
+
+NAME
+       bootparam - Introduction to boot time parameters of the Linux kernel
+
+DESCRIPTION
+       The Linux kernel accepts certain ’command-line options’ or ’boot time
+       parameters’ at the moment it is started.  In general this is used to
+       supply the kernel with information about hardware parameters that the
+       kernel would not be able to determine on its own, or to avoid/override
+       the values that the kernel would otherwise detect.
+
+       When the kernel is booted directly by the BIOS (say from a floppy to
+           which you copied a kernel using ’cp zImage /dev/fd0’), you have no
+       opportunity to specify any parameters.  So, in order to take advantage
+       of this possibility you have to use `software that is able to pass`
+       parameters, like LILO or loadlin.  For a few parameters one can also
+       modify the kernel image itself, using rdev, see rdev(8) for further
+       details.
+
+       The LILO program (LInux LOader) written by Werner Almesberger is the
+       most commonly used.  It has the ability to boot various kernels, and
+       stores the configuration information in a plain text file.  (See
+           lilo(8) and lilo.conf(5).)
+
+       The  other  commonly used Linux loader is ’LoadLin’ which is a DOS
+       program that has the capability to launch a Linux kernel from the DOS
+       prompt (with boot-args) assuming that cer- tain resources are
+       available.  This is good for people that want to launch Linux from DOS.
+
+       It is also very useful if you have certain hardware which relies on the
+       supplied DOS driver to put the hardware into a known state.  A common
+       example is ’SoundBlaster  Compatible’ sound  cards  that  require  the
+       DOS driver to twiddle a few mystical registers to put the card into a
+       SB compatible mode.  Booting DOS with the supplied driver, and then
+       loading Linux from the DOS prompt with loadlin avoids the reset of the
+       card that happens if one rebooted instead.
+
+       Any remaining arguments that were not picked up by the kernel and were
+       not interpreted as environment variables are then passed onto process
+       one, which is usually the init program. The most common argument that
+       is passed to the init process is the word ’single’ which instructs init
+       to boot the computer in single user mode, and not launch all the usual
+       daemons.  Check the manual page for the version of init installed on
+       your system to see what arguments it accepts.
+
+
+   General Non-device Specific Boot Arguments
+       ’init=...’
+              This sets the initial command to be executed by the kernel. If
+              this is not set, or cannot be found, the kernel will try
+              /sbin/init, then /etc/init,  then  /bin/init,  then /bin/sh and
+              panic if all of this fails.
+
+
+init(8)                                                                init(8)
+
+NAME
+       init - Upstart process management daemon
+
+https://github.com/mozilla-b2g/busybox/blob/master/init/init.c
+
+
+<minimal-init>
+#!/bin/sh
+ 
+mount -t proc none /proc
+mount -t sysfs none /sys
+ 
+echo -e "\nBoot took $(cut -d' ' -f1 /proc/uptime) seconds\n"
+ 
+exec /bin/sh
+
+
+https://busybox.net/FAQ.html#init
+Busybox init isn't working!
+
+Init is the first program that runs, so it might be that no programs are
+working on your new system because of a problem with your cross-compiler,
+kernel, console settings, shared libraries, root filesystem... To rule all
+  that out, first build a statically linked version of the following "hello
+  world" program with your cross compiler toolchain:
+
+#include <stdio.h>
+
+int main(int argc, char *argv)
+{
+  printf("Hello world!\n");
+  sleep(999999999);
+}
+
+Now try to boot your device with an "init=" argument pointing to your hello
+world program. Did you see the hello world message? Until you do, don't bother
+messing with Busybox init.
+
+Once you've got it working statically linked, try getting it to work
+dynamically linked. Then read the FAQ entry How do I build a Busybox-based
+system?, and the documentation for Busybox init (FIXME: dead link). 
+
+
+={============================================================================
 *kt_linux_core_001* linux-syscall-list
 
 What syscalls are valid depends on the OS. On GNU and Unix systems, you can find
@@ -53033,18 +53140,21 @@ BR2_PACKAGE_STRACE is not set
 
 add toolchain in PATH
 
-darwin-spk-1.19/Obj/ams-drx890_debug/project_build_mips/ams-drx890/linux-2.6.18.8
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install
+TARGET=mips-linux-gnu
+export PATH=${PREFIX}/bin:$PATH
+
 darwin-spk-1.19/Obj/ams-drx890_debug/project_build_mips/ams-drx890/root
 
-#!/bin/bash
+cd darwin-spk-1.19/Obj/ams-drx890_debug/project_build_mips/ams-drx890/linux-2.6.18.8
 
 echo "!!********* Build drivers *********!!"
-make CROSS_COMPILE=mips-liunx-gun- modules
+make CROSS_COMPILE=mips-linux-gnu- modules
 make modules
 
 echo "!!********* Re-build initramfs*********!!"
 touch ../root/VERSION.gz
-make
+make CROSS_COMPILE=mips-linux-gnu-
 
 echo "!!********* Copy vmlinux to tftp location  [YOU MAY NEED TO ADD SUDO PASSWORD] *********!!"
 cp vmlinux vmlinux-stripped
@@ -53054,6 +53164,11 @@ sudo cp vmlinux-stripped /var/lib/tftpboot/vmlinux_drx595
 ls -al ./vmlinux ./vmlinux-stripped /var/lib/tftpboot/vmlinux_drx595
 
 echo "!!********* done!*********!!"
+
+
+pushd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/image_generation
++ ./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/binaries/ams-drx890/vmlinux -E 4.X
+./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/project_build_mips/ams-drx890/linux-2.6.18.8/vmlinux -E 4.X
 
 
 ={============================================================================
@@ -53681,6 +53796,12 @@ pushd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_
 ./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/binaries/ams-drx890/vmlinux -E 4.X
 ./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/project_build_mips/ams-drx890/linux-2.6.18.8/vmlinux -E 4.X
 
+
+kyoupark@ukstbuild2:~$ asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-gcc minit.c
+/home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/bin/ld: warning: libc.so, needed by /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-
+install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/lib/libgcc_s.so, not found (try using -rpath or -rpath-link)
+kyoupark@ukstbuild2:~$ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc minit.c
+kyoupark@ukstbuild2:~$ readelf a.out
 
 
 *ucmpid2-error*
@@ -57890,7 +58011,7 @@ were linked against the library.
 
 {what-is-shared}
 Although the code of a shared library is shared among multiple processes, its
-`variables are not` Each process that uses the library has its own copies of
+`variables are not.` Each process that uses the library has its own copies of
 the global and static variables that are defined within the library.
 
 
@@ -58276,9 +58397,10 @@ linker.
 {dynamic-linking}
 The dynamic linking, which is the task of resolving the embedded library name at
 runtime. This task is performed by the dynamic linker (also called the dynamic
-    linking loader or the runtime linker). The dynamic linker is 'itself' a
-'shared' library, named /lib/ld-linux.so.2, which is employed by every ELF
-executable that uses shared libraries.
+    linking loader or the runtime linker). 
+
+The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2,
+    which is employed by every ELF executable that uses shared libraries.
 
 <host>
 $ ls -l /lib/ld-linux.so.2 
