@@ -495,17 +495,19 @@
 *kt_linux_core_400* lib-how-static-works
 *kt_linux_core_401* lib-dependancy
 *kt_linux_core_400* lib-ld ld-library-path
+*kt_linux_core_400* lib-ld-soname
 *kt_linux_core_412* lib-ld-conf lib-ld-so-cache
 *kt_linux_core_402* lib-search lib-rpath
+|kt_linux_core_406| lib-preload lib-ld-debug
 *kt_linux_core_410* lib-shared: check libraries that process uses
 *kt_linux_core_410* lib-shared: check libraries loading
 *kt_linux_core_411* lib-shared: case problem in open failure
 *kt_linux_core_401* slib: --as-needed flag and link error
 *kt_linux_core_403* slib-case-problem in name resolve. crash
 *kt_linux_core_404* slib-case-problem in name resolve. pthread stub 
-*kt_linux_core_405* slib-dl-api
+
+*kt_linux_core_405* lib-ld-api
 *kt_linux_core_405* slib-visibility
-|kt_linux_core_406| slib-preload, debug and monitor ld
 |kt_linux_core_407| shared library: further information
 |kt_linux_core_408| shared library: md5sum
 |kt_linux_core_409| shared library: inspect dynamic sections
@@ -49349,6 +49351,10 @@ some architectures, such as x86-64, this option is enabled by default since it
 doesn't prevent debugging. For the same reason, executables and libraries
 should not be stripped of debugging information using strip(1).
 
+From ASAN,
+
+To get nicer stacktraces, use -fno-omit-frame-pointer.
+
 From gcc doc.
 
 Don't keep the frame pointer in a register for functions that don't need one.
@@ -53796,8 +53802,10 @@ pushd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_
 ./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/binaries/ams-drx890/vmlinux -E 4.X
 ./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/project_build_mips/ams-drx890/linux-2.6.18.8/vmlinux -E 4.X
 
+<rpath>
+$ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2 minit.c
+$ asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-gcc minit.c
 
-kyoupark@ukstbuild2:~$ asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-gcc minit.c
 /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/bin/ld: warning: libc.so, needed by /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-
 install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/lib/libgcc_s.so, not found (try using -rpath or -rpath-link)
 kyoupark@ukstbuild2:~$ /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc minit.c
@@ -57981,16 +57989,16 @@ the following:
 $ cc -g -c prog.c
 $ cc -g -o prog prog.o libdemo.a
 
-note: 'linktime' search
+note: `linktime search`
 2. can place the library in one of the `standard directories` searched by the
 linker such as /usr/lib, and then specify the library name; the filename of
-the library without the lib prefix and .a suffix using the -l option:
+the library without the lib prefix and .a suffix using the `-l option`
 
 $ cc -g -o prog prog.o -ldemo
 
 3. If the library resides in a directory not normally searched by the linker,
   can specify that the linker should search this additional directory using
-  the -L option:
+  the `-L option`
 
 $ cc -g -o prog prog.o -Lmylibdir -ldemo
 
@@ -58012,7 +58020,7 @@ were linked against the library.
 {what-is-shared}
 Although the code of a shared library is shared among multiple processes, its
 `variables are not.` Each process that uses the library has its own copies of
-the global and static variables that are defined within the library.
+the `global and static variables` that are defined within the library.
 
 
 {further-advantages}
@@ -58057,8 +58065,8 @@ note: as shown above, this not necessarily means 'shared' object. It's only tell
 <pic-vs-relocatable>
 This is talking about position independent code, which is 'not' the same as
 relocatable code. Relocatable code is code whose address may be assigned at
-'linktime'. Position independent code is code whose address may be assigned at
-'runtime'.
+`linktime`. Position independent code is code whose address may be assigned at
+`runtime`.
 
 'all' object files are relocatable. For most targets, only object files compiled
 with -fpic or -fPIC or -pie are position independent.
@@ -58066,7 +58074,7 @@ with -fpic or -fPIC or -pie are position independent.
 For more about relocatable code: http://www.airs.com/blog/archives/41
 
 
-{create-shared}
+{shared}
 $ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c
 $ gcc -g -shared -o libfoo.so mod1.o mod2.o mod3.o
 
@@ -58199,7 +58207,8 @@ $ nm thr | grep foo
 *kt_linux_core_400* lib-how-static-works
 
 In a try to use DUMA which replace malloc calls, should I have to change all
-sources which uses malloc calls to include "duma.h" and to recompile all?
+sources which uses malloc calls to have "include "duma.h"" and have to
+recompile all?
 
 How can be sure that duma_malloc is used in all static libraries used to build
 a final binary?
@@ -58208,6 +58217,7 @@ a final binary?
 // which do not include duma.h and not recompiled.
 
 #include <stdio.h>
+#include <stdlib.h>
 
 void func_from_mod()
 {
@@ -58221,18 +58231,16 @@ void func_from_mod()
     free(p);
     p[0] = 'm';
     printf("func_from_mod: return \n");
-    return 0;
 }
 
+$ gcc -g -c mod.c
+$ ar r libmod mod.o
 
 // testmain.c
 
 #include <stdio.h>
 
 func_from_mod();
-
-See that replacing malloc calls with duma ones works when links with duma
-library but not with a header inclusion.
 
 $ nm mod.o
                  U free
@@ -58241,17 +58249,18 @@ $ nm mod.o
                  U printf
                  U puts
 
-See that malloc is `external undefined`
-
-
-When use no duma, see `undefined but from glibc`
+See that global malloc is `external undefined` from glibc
 
 $ gcc -g testmain.c mod.host.o -o out_duma_host
 $ nm out_duma_host | grep malloc
 44:                 U malloc@@GLIBC_2.2.5
 
 
-When include duma header, see compile errors:
+<1>
+// duma.h
+      #define malloc(SIZE)                _duma_malloc(SIZE, __FILE__, __LINE__)
+
+include duma header, see compile errors:
 
 $ gcc -g -DUSE_DUMA testmain.c mod.host.o -o out_duma_host
 
@@ -58259,9 +58268,17 @@ $ gcc -g -DUSE_DUMA testmain.c mod.host.o -o out_duma_host
 /testmain.c:36: undefined reference to `_duma_free'
 
 
-When not include duma header which causes to define global malloc in duma
-library so see `defined` All malloc calls in the binary uses malloc from duma
-by rebuilding one module and relinking the binary.
+<2>
+// duma.c
+void * malloc(size_t size)
+{
+  return _duma_malloc(size  DUMA_PARAMS_UK);
+}
+
+
+not include duma header which causes that duma defines global malloc in duma
+library so see all `defined` malloc calls in the output binary from duma by
+rebuilding the duma and relinking the binary, but not whole thing. 
 
 $ gcc -g testmain.c mod.host.o libduma.a.for.buildsvr -lpthread -o out_duma_host
 $ nm out_duma_host | grep malloc
@@ -58289,20 +58306,6 @@ The simplest approach is to pick a binary that you consider is typical (e.g.
 $ ldd /bin/ls
         libc.so.6 => /lib/libc.so.6 (0x4000e000)
         /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x40000000)
-
-
-<case>
-The ldd is script. Although the binary uses shared library, ldd don't
-understand it since it's cross compiled.
-
-$ readelf -d nexus-inspect | grep NEED
-(standard input):4: 0x00000001 (NEEDED)  Shared library: [libnexus.so]
-(standard input):5: 0x00000001 (NEEDED)  Shared library: [libgcc_s.so.1]
-(standard input):6: 0x00000001 (NEEDED)  Shared library: [libpthread.so.0]
-(standard input):7: 0x00000001 (NEEDED)  Shared library: [libc.so.0]
-
-$ ldd -v nexus-inspect
-	not a dynamic executable
 
 
 {shows-if-can-load-dependency}
@@ -58372,6 +58375,20 @@ gcc sample.c
 @kit-debian:~$ ldd a.out
 	not a dynamic executable
 
+<case>
+The ldd is script. Although the binary uses shared library, ldd don't
+understand it since it's cross compiled.
+
+$ readelf -d nexus-inspect | grep NEED
+(standard input):4: 0x00000001 (NEEDED)  Shared library: [libnexus.so]
+(standard input):5: 0x00000001 (NEEDED)  Shared library: [libgcc_s.so.1]
+(standard input):6: 0x00000001 (NEEDED)  Shared library: [libpthread.so.0]
+(standard input):7: 0x00000001 (NEEDED)  Shared library: [libc.so.0]
+
+$ ldd -v nexus-inspect
+	not a dynamic executable
+
+
 note:
 mips-unknown-linux-uclibc-ldd is a script and not part of binutil build.
 
@@ -58388,19 +58405,28 @@ lrwxrwxrwx 1 kyoupark ccusers       18 Dec  2 10:17 libc.so.1 -> libuClibc-1.0.9
 ={============================================================================
 *kt_linux_core_400* lib-ld ld-library-path
 
+{dynamic-linking}
+$ ./prog 
+./prog: error while loading shared libraries: libfoo.so: cannot open shared
+  object file: No such file or directory
+
+This brings us to the second required step: dynamic linking, which is the task
+of resolving the embedded library name at run time. This task is performed by
+the dynamic linker (also called the dynamic linking loader or the run-time
+linker).
+
+The dynamic linker is 'itself' a shared library, named /lib/ld-linux.so.2,
+which is employed `by every ELF executable` that uses shared libraries.
+
+
+42.1 Dynamically Loaded Libraries
+
 When an executable starts, the `dynamic-linker` loads 'all' of the shared
 libraries in the program's dynamic dependency list. Sometimes, however, it can
 be useful to load libraries at a 'later' time. For example, a plug-in is loaded
 only when it is needed. This functionality is provided by an API to the dynamic
 linker.
 
-{dynamic-linking}
-The dynamic linking, which is the task of resolving the embedded library name at
-runtime. This task is performed by the dynamic linker (also called the dynamic
-    linking loader or the runtime linker). 
-
-The dynamic linker is 'itself' a 'shared' library, named /lib/ld-linux.so.2,
-    which is employed by every ELF executable that uses shared libraries.
 
 <host>
 $ ls -l /lib/ld-linux.so.2 
@@ -58466,33 +58492,9 @@ name specified in the executable file-and then loading the library into memory,
      if it is not already present.
 
 
-{ld-library-path}
-Some of these rules specify a set of 'standard' directories in which shared
-libraries normally reside. To inform the dynamic linker that a shared library
-resides in a nonstandard directory
+={============================================================================
+*kt_linux_core_400* lib-ld-soname
 
-If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared
-library in the directories it lists before looking in the standard library
-directories.
-
-note: Creates an environment variable definition 'within' the process executing
-prog. Since if you don't export the changes to an environment variable, they
-won't be inherited by the child processes. The loader and our test program
-didn't inherit the changes we made.
-
-$ LD_LIBRARY_PATH=. ./one 
-foo: this is foo...
-
-$ ./one 
-./one: error while loading shared libraries: libfoo.so: cannot open shared 
-  object file: No such file or directory
-
-$ export LD_LIBRARY_PATH=.
-$ ./one 
-foo: this is foo...
-
-
-{soname-and-realname}
 In the above example, libfoo is realname. As with a realname, soname is used in
 linking and is embedded in the executable, and used by the linker at runtime.
 
@@ -58514,7 +58516,7 @@ $ readelf -d libfoo.so | grep SONAME              note: DT_SONAME in ELF
 $ gcc -o one main.c libfoo.so
 
 $ readelf -d one | grep NEED 
-:4: 0x0000000000000001 (NEEDED)             Shared library: [libbar.so]
+:4: 0x0000000000000001 (NEEDED)             Shared library: [`libbar.so`]
 :5: 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 
 $ ./one 
@@ -58526,7 +58528,7 @@ $ LD_LIBRARY_PATH=. ./one
   object file: No such file or directory
 
 note: Why fails this time? So set soname in so file itself and executable embeds
-it instead of realname. Now linker ld looks for libbar instead but not libfoo.
+it instead of realname. Now ld looks for `libbar` instead but not libfoo.
 
 <indirection>
 When using a soname, one further step is required: we must create a symbolic
@@ -58619,10 +58621,10 @@ lrwxrwxrwx libdemo.so.1 -> libdemo.so.1.0.1
 -rwxr-xr-x libdemo.so.1.0.1
 
 $ gcc -g -Wall -o prog prog.c -L. -ldemo        
-$ gcc -g -Wall -o prog prog.c libdemo.so        
+$ gcc -g -Wall -o prog prog.c `libdemo.so`
 // as with exmple $ gcc -o one main.c libfoo.so
 
-note: -ldemo or libdemo.so is linkername and use is in static linking stage.
+note: -ldemo or libdemo.so is linkername and use is in `static linking stage`
 
 $ LD_LIBRARY_PATH=. ./prog
 Called mod1-x1
@@ -58659,8 +58661,41 @@ note: The above is convention but not mandatory so can have followings:
 ={============================================================================
 *kt_linux_core_412* lib-ld-conf lib-ld-so-cache
 
-/etc/ld.so.cache
+ldconfig
 
+The ldconfig(8) program addresses two potential problems with shared libraries:
+
+  Shared libraries can reside in a variety of directories. If the dynamic
+  linker needed to search all of these directories in order to find a library,
+  then loading libraries could be very slow.
+
+  As new versions of libraries are installed or old versions are removed, the
+  soname symbolic links may become out of date.
+
+The ldconfig program solves these problems by performing two tasks:
+
+1. It searches a standard set of directories and creates or `updates a cache
+file`, `/etc/ld.so.cache`, to contain a list of the (latest minor versions of
+    each of the) major library versions in all of these directories. The
+dynamic linker in turn uses this cache file when resolving library names at
+run time. 
+  
+To build the cache, ldconfig searches the directories specified in the file
+`/etc/ld.so.conf` and then /lib and /usr/lib. The /etc/ld.so.conf file
+consists of a list of directory pathnames (these should be specified as
+    absolute pathnames), separated by newlines, spaces, tabs, commas, or
+colons. In some distributions, the directory /usr/local/lib is included in
+this list. (If not, we may need to add it manually.)
+
+The command ldconfig p displays the current contents of /etc/ld.so.cache.
+
+2. It examines the latest minor version (i.e., the version with the highest
+    minor number) of each major version of each library to find the embedded
+soname and then creates (or updates) relative symbolic links for each soname
+in the same directory.
+
+
+<ex>
 /etc/ld.so.cache is required to run D-BUS daemon as non-root. This is due to
 the fact that LD_LIBRARY_PATH is ignored when it calls setuid
 yv-daemon-sandbox (this is intended behaviour). The dynamic linker does not
@@ -58683,7 +58718,138 @@ libraries may differ.
 
 
 ={============================================================================
+*kt_linux_core_400* lib-ld-man
+
+LD(1)                        GNU Development Tools                       LD(1)
+
+NAME
+       ld - The GNU linker
+
+       -l namespec
+       --library=namespec
+           Add the archive or object file specified by namespec to the list of
+           files to link. This option may be used any number of times. If
+           namespec is of the form :filename, ld will search the library path
+           for a file called `filename`, otherwise it will search the library
+             path for a file called `libnamespec.a`.
+
+           On systems which support shared libraries, ld may also search for
+           files other than libnamespec.a.  Specifically, on ELF and SunOS
+           systems, ld will search a directory for a library called
+           libnamespec.so before searching for one called libnamespec.a. (By
+               convention, a ".so" extension indicates a shared library.)
+           Note that this behavior does not apply to :filename, which always
+           specifies a file called filename.
+
+           The linker will search an archive only once, at the location where
+           it is specified on the command line. If the archive defines a
+           symbol which was undefined in some object which appeared before the
+           archive on the command line, the linker will include the
+           appropriate file(s) from the archive. However, an undefined symbol
+           in an object appearing later on the command line will not cause the
+           linker to search the archive again.
+
+           See the -( option for a way to force the linker to search archives
+               multiple times.
+
+           You may list the same archive multiple times on the command line.
+
+
+       -L searchdir
+       --library-path=searchdir
+           Add path `searchdir` to the list of paths that `ld` will search for
+           `archive libraries and ld control scripts.` You may use this option
+           any number of times. The directories are searched in the order in
+           which they are specified on the command line.
+
+           Directories specified on the command line are searched before the
+           default directories. 
+           
+           All -L options apply to all `-l options`, regardless of the order in
+           which the options appear. 
+           
+           -L options do not affect how ld searches for a linker script unless
+           -T option is specified.
+
+           If searchdir begins with "=", then the "=" will be replaced by the
+           sysroot prefix, a path specified when the linker is configured.
+
+           The default set of paths searched (without being specified with -L)
+           depends on which emulation mode ld is using, and in some cases also
+           on how it was configured.
+
+           The paths can also be specified in a link script with the
+           "SEARCH_DIR" command.  Directories specified this way are searched
+           at the point in which the linker script appears in the command
+           line.
+
+
+       -rpath=dir
+           Add a directory to the runtime library search path. This is used
+           when linking an ELF executable with shared objects. All -rpath
+           arguments are concatenated and passed to the runtime linker, which
+           uses them to locate shared objects at runtime.  The -rpath option
+           is also used when locating shared objects which are needed by
+           shared objects explicitly included in the link; see the description
+           of the -rpath-link option. 
+           
+           If -rpath is not used when linking an ELF executable, the contents
+           of the environment variable "LD_RUN_PATH" will be used if it is
+           defined.
+
+           The -rpath option may also be used on SunOS.  By default, on SunOS,
+               the linker will form a runtime search patch out of all the -L
+                 options it is given.  
+
+           If a -rpath option is used, the runtime search path will be formed
+           `exclusively` using the -rpath options, ignoring the -L options.
+           This can be useful when using gcc, which adds many -L options which
+           may be on NFS mounted file systems.
+
+           For compatibility with other ELF linkers, if the -R option is
+           followed by a directory name, rather than a file name, it is
+           treated as the -rpath option.
+
+
+       --sysroot=directory
+           Use directory as the location of the sysroot, overriding the
+           configure-time default. This option is only supported by linkers
+           that were configured using --with-sysroot.
+
+
+={============================================================================
 *kt_linux_core_402* lib-search lib-rpath
+
+41.10 Specifying Library Search Directories in an Object File
+
+standard library directories (/lib, /usr/lib, or one of the directories listed
+in /etc/ld.so.conf).
+
+{ld-library-path}
+Some of these rules specify a set of `standard directories` in which shared
+libraries normally reside. To inform the dynamic linker that a shared library
+resides in a nonstandard directory
+
+If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared
+library in the directories it lists `before` looking in the standard library
+directories.
+
+note: Creates an environment variable definition 'within' the process executing
+prog. Since if you don't export the changes to an environment variable, they
+won't be inherited by the child processes. The loader and our test program
+didn't inherit the changes we made.
+
+$ LD_LIBRARY_PATH=. ./one 
+foo: this is foo...
+
+$ ./one 
+./one: error while loading shared libraries: libfoo.so: cannot open shared 
+  object file: No such file or directory
+
+$ export LD_LIBRARY_PATH=.
+$ ./one 
+foo: this is foo...
+
 
 LD_LIBRARY_PATH is broken and should 'not' be used if at all possible since
 LD_LIBRARY_PATH is great for quick tests and for systems on which you don't have
@@ -58692,39 +58858,26 @@ means it may cause problems with other programs if you don't reset it to its
 previous state when you're done.
 
 
-The dynamic linker searches for the shared library using the following rules:
-
-1. If the executable has any directories listed in its DT_RPATH run-time library
-path list (rpath) and the executable does not contain a DT_RUNPATH list, then
-these directories are searched (in the order that they were supplied when
-    linking the program).
-
-2. If the LD_LIBRARY_PATH environment variable is defined, then each of the
-colon-separated directories listed in its value is searched in turn. 
-
-<security>
-If the executable is a set-user-ID or set-group-ID program, then LD_LIBRARY_PATH
-is ignored. This is a security measure to prevent users from tricking the
-dynamic linker into loading a private version of a library with the same name as
-a library required by the executable.
-
-3. If the executable has any directories listed in its DT_RUNPATH run-time
-library path list, then these directories are searched (in the order that they
-    were supplied when linking the program).
-
-4. The file `/etc/ld.so.cache` is checked to see if it contains an entry for the
-library.
-
-5. The directories /lib and /usr/lib are searched (in that order).
-
 <rpath>
-There is a third way: during the static editing phase, we can insert into the
-executable a list of directories that should be searched at run time for shared
-libraries. This is useful if we have libraries that reside in fixed locations
-that are not among the standard locations searched by the dynamic linker. To do
-this, we employ the -rpath linker option when creating an executable:
+During the static editing phase, we can insert into the executable a list of
+directories that should be searched at run time for shared libraries. This is
+useful if we have libraries that reside in fixed locations that are not among
+the standard locations searched by the dynamic linker. To do this, we employ
+the -rpath linker option when creating an executable:
 
 $ gcc -g -Wall -Wl,-rpath,/home/mtk/pdir -o prog prog.c libdemo.so
+
+An alternative to the rpath option is the LD_RUN_PATH environment variable.
+This variable can be assigned a string containing a series of colon-separated
+directories that are to be used as the rpath list `when building` the
+executable file. LD_RUN_PATH is employed only if the rpath option is not
+specified when building the executable.
+
+By default, the linker creates the rpath list as a DT_RPATH tag. To have the
+linker instead create the rpath list as a DT_RUNPATH entry, we must
+additionally employ the enablenewdtags (enable new dynamic tags) linker
+option.
+
 
 note: From ld linker docs:
 
@@ -58736,7 +58889,76 @@ linkers and cross linkers which have been configured with the --with-sysroot
 option.
 
 # readelf -d
- 0x0000000f (RPATH)                      Library rpath: [/home/NDS-UK/kyoupark/asn/install-4.8.2-uclibc-asan-wsys/mips-unknown-linux-uclibc/lib]
+ 0x0000000f (RPATH) \
+  Library rpath: [/home/NDS-UK/kyoupark/asn/mips-unknown-linux-uclibc/lib]
+
+
+<serch-order>
+
+The difference between these two types of rpath lists is their relative
+precedence with respect to the LD_LIBRARY_PATH environment variable when the
+dynamic linker searches for shared libraries at run time: `DT_RPATH` has higher
+precedence, while DT_RUNPATH has lower precedence
+
+
+41.11 Finding Shared Libraries at Run Time
+
+When resolving library dependencies, the dynamic linker first inspects each
+dependency string to see if it contains a slash (/), which can occur if we
+specified an explicit library pathname when linking the executable. If a slash
+is found, then the dependency string is interpreted as a pathname (either
+    absolute or relative), and the library is loaded using that pathname. 
+
+Otherwise, The dynamic linker searches for the shared library using the
+following rules:
+
+  * If the executable has any directories listed in its DT_RPATH run-time
+    library path list (rpath) and the executable does not contain a DT_RUNPATH
+    list, then these directories are searched (in the order that they were
+    supplied when linking the program).
+
+  * If the LD_LIBRARY_PATH environment variable is defined, then each of the
+    colon-separated directories listed in its value is searched in turn. 
+
+  <security>
+  If the executable is a set-user-ID or set-group-ID program, then
+  LD_LIBRARY_PATH is ignored. This is a security measure to prevent users from
+  tricking the dynamic linker into loading a private version of a library with
+  the same name as a library required by the executable.
+
+  * If the executable has any directories listed in its DT_RUNPATH run-time
+    library path list, then these directories are searched (in the order that
+    they were supplied when linking the program).
+
+  * The file `/etc/ld.so.cache` is checked to see if it contains an entry for
+    the library.
+
+  * The directories /lib and /usr/lib are searched (in that order).
+
+<from-ld-man>
+LD.SO(8)                   Linux Programmer’s Manual                  LD.SO(8)
+
+       The shared libraries needed by the program are searched for in the
+       following order:
+
+       o  (ELF  only) Using the directories specified in the DT_RPATH dynamic
+       section attribute of the binary if present and DT_RUNPATH attribute
+       does not exist.  Use of DT_RPATH is dep- recated.
+
+       o  Using the environment variable LD_LIBRARY_PATH.  Except if the
+       executable is a set-user-ID/set-group-ID binary, in which case it is
+       ignored.
+
+       o  (ELF only) Using the directories specified in the DT_RUNPATH dynamic
+       section attribute of the binary if present.
+
+       o  From the cache file /etc/ld.so.cache which contains a compiled list
+       of candidate libraries previously found in the augmented library path.
+       If, however, the binary  was  linked with the -z nodeflib linker
+       option, libraries in the default library paths are skipped.
+
+       o  In the default path /lib, and then /usr/lib.  If the binary was
+       linked with the -z nodeflib linker option, this step is skipped.
 
 
 {runtime-resolution}
@@ -58765,24 +58987,215 @@ shared library.
 
 The following semantics apply:
 
-o A definition of a global symbol in the 'main' program 'overrides' a definition
-in a library.
+  A definition of a global symbol in the 'main' program 'overrides' a
+  definition in a library.
 
 <resolve-order>
-o If a global symbol is defined in 'multiple' libraries, then a reference to
-that symbol is bound to the 'first' definition found by scanning libraries in
-the left-to-right 'order' in which they were listed on the static 'link' command
-line.
+  If a global symbol is defined in 'multiple' libraries, then a reference to
+  that symbol is bound to the 'first' definition found by scanning libraries
+  in the left-to-right 'order' in which they were listed on the static 'link'
+  command line.
 
 <problem>
 Although these semantics make the transition from static to shared libraries
 relatively straightforward, they can cause some problems. The most significant
 problem is that these semantics conflict with the model of a shared library as
-implementing a 'self'-contained subsystem. 
+implementing a self-contained subsystem. 
 
 By default, a shared library can 'not' guarantee that a reference to one of its
 own global symbols will actually be bound to the library's definition of that
 symbol.
+
+Consequently, the properties of a shared library can change when it is
+aggregated into a larger unit. This can lead to applications breaking in
+unexpected ways, and also makes it difficult to perform divide-and-conquer
+debugging (i.e., trying to reproduce a problem using fewer or different shared
+libraries).
+
+In the above scenario, if we wanted to ensure that the invocation of xyz() in
+the shared library actually called the version of the function defined within
+the library, then we could use the `-Bsymbolic linker option` when building the
+shared library:
+
+$ gcc -g -c -fPIC -Wall -c foo.c
+$ gcc -g -shared -Wl,-Bsymbolic -o libfoo.so foo.o
+$ gcc -g -o prog prog.c libfoo.so
+$ LD_LIBRARY_PATH=. ./prog
+foo-xyz
+
+The Bsymbolic linker option specifies that references to global symbols within
+a shared library should be preferentially bound to definitions (if they exist)
+  within that library. Note that, regardless of this option, calling xyz()
+  from the main program would always invoke the version of xyz() defined in
+  the main program.
+
+
+={============================================================================
+*kt_linux_core_406* lib-preload lib-ld-debug
+
+{ld-preload}
+For testing purposes, it can sometimes be useful to 'selectively' override
+functions and other symbols that would normally be found by the dynamic linker
+using the search rules. 
+
+To do this, we can define the environment variable LD_PRELOAD as a string
+consisting of space-separated or colon-separated names of shared libraries that
+should be loaded `before any other shared libraries` 
+
+Since these libraries are loaded first, any functions they define will
+automatically be used if required by the executable, thus overriding any other
+functions of the same 'name' that the dynamic linker would otherwise have
+searched for.
+
+$ ./prog
+Called mod1-x1 DEMO
+Called mod2-x2 DEMO
+
+$ LD_PRELOAD=libalt.so ./prog
+Called mod1-x1 ALT      // x1 in libalt.so and changed this only, selectively.
+Called mod2-x2 DEMO
+
+<process-and-system-wide>
+The LD_PRELOAD environment variable controls preloading on a <per-process>
+basis. Alternatively, the file `/etc/ld.so.preload`, which lists libraries
+separated by white space, can be used to perform the same task on a system-wide
+basis. Libraries specified by LD_PRELOAD are loaded before those specified in
+/etc/ld.so.preload. 
+
+<security>
+For security reasons, set-user-ID and set-group-ID programs ignore LD_PRELOAD.
+
+<tip>
+You can use the following command to test if the driver (the driver itself just
+        dlopen() this lib) is happy to load:
+
+LD_PRELOAD=/opt/zinc/lib/libyouviewrcu.so /bin/true
+
+note:
+Why "/bin/true"? This is a simple utility which returns 0(success) and to check
+if libraries are loaded fine, run that with simple utility.
+
+
+{ld-debug}
+LD.SO(8)                   Linux Programmer’s Manual                  LD.SO(8)
+
+NAME
+       ld.so, ld-linux.so* - dynamic linker/loader
+
+SYNOPSIS
+       The  dynamic  linker  can be run either indirectly by running some
+       dynamically linked program or library (in which case no command-line
+           options to the dynamic linker can be passed and, in the ELF case,
+           the dynamic linker which is stored in the .interp section of the
+           program is executed) or directly by running:
+
+       /lib/ld-linux.so.*  [OPTIONS] [PROGRAM [ARGUMENTS]]
+
+ENVIRONMENT
+       There are four important environment variables.
+
+       LD_BIND_NOW
+              (libc5; glibc since 2.1.1) If set to a non-empty string, causes
+              the dynamic linker to resolve all symbols at program startup
+              instead of deferring function  call  resolution to the point
+              when they are first referenced.  This is useful when using a
+              debugger.
+
+       LD_LIBRARY_PATH
+              A colon-separated list of directories in which to search for ELF
+              libraries at execution-time.  Similar to the PATH environment
+              variable.
+
+       LD_PRELOAD
+              A whitespace-separated list of additional, user-specified, ELF
+              shared libraries to be loaded before all others.  This can be
+              used to selectively override functions in other shared
+              libraries.  For set-user-ID/set-group-ID ELF binaries, only
+              libraries in the standard search directories that are also
+              set-user-ID will be loaded.
+
+       LD_TRACE_LOADED_OBJECTS
+              (ELF only) If set to a non-empty string, causes the program to
+              list its dynamic library dependencies, as if run by ldd(1),
+              instead of running normally.
+
+
+       Then there are lots of more or less obscure variables, many obsolete or
+       only for internal use.
+
+       LD_DEBUG
+              (glibc since 2.1) Output verbose debugging information about the
+              dynamic linker.  If set to all prints all debugging information
+              it has, if set to help prints a  help  message about which
+              categories can be specified in this environment variable.  Since
+              glibc 2.3.4, LD_DEBUG is ignored for set-user-ID/set-group-ID
+              binaries.
+
+Sometimes, it is useful to monitor the operation of the dynamic linker in
+order to know, for example, where it is searching for libraries. We can use
+the LD_DEBUG environment variable to do this. By setting this variable to one
+(or more) of a set of standard keywords, we can obtain various kinds of
+tracing information from the dynamic linker.
+
+If we assign the value help to LD_DEBUG, the dynamic linker displays help
+information about LD_DEBUG, and the specified command is not executed:
+
+note: can be any command other 
+$ LD_DEBUG=help ls  
+Valid options for the LD_DEBUG environment variable are:
+
+  libs        display library search paths
+  reloc       display relocation processing
+  files       display progress for input file
+  symbols     display symbol table processing
+  bindings    display information about symbol binding
+  versions    display version dependencies
+  all         all previous options combined
+  statistics  display relocation statistics
+  unused      determined unused DSOs
+  help        display this help message and exit
+
+To direct the debugging output into a file instead of standard output
+a filename can be specified using the LD_DEBUG_OUTPUT environment variable.
+
+
+$ LD_DEBUG=libs ls
+     20177:	find library=libselinux.so.1 [0]; searching
+     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
+     20177:	  trying file=./tls/x86_64/libselinux.so.1
+     20177:	  trying file=./tls/libselinux.so.1
+     20177:	  trying file=./x86_64/libselinux.so.1
+     20177:	  trying file=./libselinux.so.1
+     20177:	 search cache=/etc/ld.so.cache
+     20177:	  trying file=/lib/x86_64-linux-gnu/libselinux.so.1
+     20177:	
+     20177:	find library=librt.so.1 [0]; searching
+     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
+     20177:	  trying file=./tls/x86_64/librt.so.1
+     20177:	  trying file=./tls/librt.so.1
+     20177:	  trying file=./x86_64/librt.so.1
+     20177:	  trying file=./librt.so.1
+     ...
+     20177:	
+install-sh  ltmain.sh  Makefile.am  Makefile.in  missing  src $ 
+
+note: ls command was executed. works on host but not on a target. use strace instead.
+
+The PID value displayed at the start of each line and this is useful if we are
+monitoring several processes (e.g., parent and child).
+
+If desired, we can assign multiple options to LD_DEBUG by separating them with
+commas (no spaces should appear). 
+
+<symbol-option>
+The output of the symbols option (which traces symbol resolution by the
+    dynamic linker) is particularly voluminous.
+
+LD_DEBUG is effective both for libraries implicitly loaded by the dynamic
+linker and for libraries dynamically loaded by dlopen().
+
+For security reasons, LD_DEBUG is (since glibc 2.2.5) ignored in set-user-ID
+and set- group-ID programs.
 
 
 ={============================================================================
@@ -59468,7 +59881,7 @@ $ nm -D libc.so.0 | ag pthread
 
 
 ={============================================================================
-*kt_linux_core_405* slib-dl-api
+*kt_linux_core_405* lib-ld-api
 
 {dl-apis} LPI42.1
 
@@ -59673,118 +60086,6 @@ preventing symbol interposition at runtime.
 
 note: there are more ways in LPI 42.3.
 
-
-={============================================================================
-*kt_linux_core_406* slib-preload, debug and monitor ld
-
-{ld-preload}
-For testing purposes, it can sometimes be useful to 'selectively' override
-functions and other symbols that would normally be found by the dynamic linker
-using the search rules. 
-
-To do this, we can define the environment variable LD_PRELOAD as a string
-consisting of space-separated or colon-separated names of shared libraries that
-should be loaded 'before' any other shared libraries. 
-
-Since these libraries are loaded first, any functions they define will
-automatically be used if required by the executable, thus overriding any other
-functions of the same 'name' that the dynamic linker would otherwise have
-searched for.
-
-$ ./prog
-Called mod1-x1 DEMO
-Called mod2-x2 DEMO
-
-$ LD_PRELOAD=libalt.so ./prog
-Called mod1-x1 ALT      // x1 in libalt.so and changed this only, selectively.
-Called mod2-x2 DEMO
-
-<process-and-system-wide>
-The LD_PRELOAD environment variable controls preloading on a <per-process>
-basis. Alternatively, the file /etc/ld.so.preload, which lists libraries
-separated by white space, can be used to perform the same task on a system-wide
-basis. Libraries specified by LD_PRELOAD are loaded before those specified in
-/etc/ld.so.preload. 
-
-<security>
-For security reasons, set-user-ID and set-group-ID programs ignore LD_PRELOAD.
-
-<tip>
-You can use the following command to test if the driver (the driver itself just
-        dlopen() this lib) is happy to load:
-
-LD_PRELOAD=/opt/zinc/lib/libyouviewrcu.so /bin/true
-
-note:
-Why "/bin/true"? This is a simple utility which returns 0(success) and to check
-if libraries are loaded fine, run that with simple utility.
-
-
-{ld-debug}
-Sometimes, it is useful to monitor the operation of the dynamic linker in order to know, for
-example, where it is searching for libraries. We can use the LD_DEBUG environment variable to do
-this. By setting this variable to one (or more) of a set of standard keywords, we can obtain various
-kinds of tracing information from the dynamic linker.
-
-If we assign the value help to LD_DEBUG, the dynamic linker displays help information about
-LD_DEBUG, and the specified command is not executed:
-
-note: can be any command other 
-$ LD_DEBUG=help ls  
-Valid options for the LD_DEBUG environment variable are:
-
-  libs        display library search paths
-  reloc       display relocation processing
-  files       display progress for input file
-  symbols     display symbol table processing
-  bindings    display information about symbol binding
-  versions    display version dependencies
-  all         all previous options combined
-  statistics  display relocation statistics
-  unused      determined unused DSOs
-  help        display this help message and exit
-
-To direct the debugging output into a file instead of standard output
-a filename can be specified using the LD_DEBUG_OUTPUT environment variable.
-
-
-$ LD_DEBUG=libs ls
-     20177:	find library=libselinux.so.1 [0]; searching
-     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
-     20177:	  trying file=./tls/x86_64/libselinux.so.1
-     20177:	  trying file=./tls/libselinux.so.1
-     20177:	  trying file=./x86_64/libselinux.so.1
-     20177:	  trying file=./libselinux.so.1
-     20177:	 search cache=/etc/ld.so.cache
-     20177:	  trying file=/lib/x86_64-linux-gnu/libselinux.so.1
-     20177:	
-     20177:	find library=librt.so.1 [0]; searching
-     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
-     20177:	  trying file=./tls/x86_64/librt.so.1
-     20177:	  trying file=./tls/librt.so.1
-     20177:	  trying file=./x86_64/librt.so.1
-     20177:	  trying file=./librt.so.1
-     ...
-     20177:	
-install-sh  ltmain.sh  Makefile.am  Makefile.in  missing  src $ 
-
-note: ls command was executed. works on host but not on a target. use strace instead.
-
-The PID value displayed at the start of each line and this is useful if we are monitoring several
-processes (e.g., parent and child).
-
-If desired, we can assign multiple options to LD_DEBUG by separating them with commas (no spaces
-    should appear). 
-
-<symbol-option>
-The output of the symbols option (which traces symbol resolution by the dynamic linker) is
-particularly voluminous.
-
-LD_DEBUG is effective both for libraries implicitly loaded by the dynamic linker and for libraries
-dynamically loaded by dlopen().
-
-For security reasons, LD_DEBUG is (since glibc 2.2.5) ignored in set-user-ID and set- group-ID
-programs.
 
 
 ={============================================================================
