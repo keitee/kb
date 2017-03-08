@@ -203,6 +203,7 @@
 *kt_linux_tool_140* make-gmake-recipe-parallel make-curdir
 *kt_linux_tool_140* make-gmake-two-variable make-gmake-read-makefile
 *kt_linux_tool_140* make-gmake-variable
+*kt_linux_tool_140* make-gmake-variable-override
 *kt_linux_tool_140* make-gmake-variable-split
 *kt_linux_tool_140* make-gmake-variable-define
 *kt_linux_tool_140* make-gmake-variable-pattern
@@ -400,7 +401,7 @@
 |kt_linux_core_052| signal: kill: checking for the existence of a process
 *kt_linux_core_052* signal-raise-call
 
-|kt_linux_core_100| process
+|kt_linux_core_100| linux-process
 |kt_linux_core_101| process-creation
 |kt_linux_core_102| process-termination
 |kt_linux_core_103| process-monitor-child-process
@@ -19077,12 +19078,17 @@ variable appear as if it was never set. For example:
 This example will print "undefined" for both variables.
 
 
+={============================================================================
+*kt_linux_tool_140* make-gmake-variable-override
+
 6.10 Variables from the Environment
 
 Variables in make can come from the environment in which make is run. Every
 environment variable that make sees when it starts up `is transformed into` a
-make variable with the same name and value. However, an explicit assignment in
-the makefile, or `with a command argument`, overrides the environment.
+make variable with the same name and value. 
+
+However, an explicit assignment in the makefile, or `with a command argument`,
+overrides the environment.
 
 Thus, by setting the variable CFLAGS in your environment, you can cause all C
 compilations in most makefiles to use the compiler switches you prefer.
@@ -19118,6 +19124,35 @@ CONFIG_DIR := $(O)
 EXTRAMAKEARGS = O=$(O)
 NEED_WRAPPER = y
 endif
+
+
+9.5 Overriding Variables
+
+An argument that contains ‘=’ specifies the value of a variable: ‘v=x’ sets
+the value of the variable v to x. If you specify a value in this way, all
+ordinary assignments of the same variable in the makefile are ignored; we say
+they have been overridden `by the command line argument.`
+
+The most common way to use this facility is to pass extra flags to compilers.
+For example, in a properly written makefile, the variable CFLAGS is included
+in each recipe that runs the C compiler, so a file foo.c would be compiled
+something like this:
+
+cc -c $(CFLAGS) foo.c
+
+Thus, whatever value you set for CFLAGS affects each compilation that occurs.
+The makefile probably specifies the usual value for CFLAGS, like this:
+
+CFLAGS=-g
+
+Each time you run make, you can override this value if you wish. For example,
+if you say 
+       
+make CFLAGS=’-g -O’
+  
+each C compilation will be done with ‘cc -c -g -O’. This also illustrates how
+you can use quoting in the shell to enclose spaces and other special
+characters in the value of a variable when you override it.
 
 
 ={============================================================================
@@ -33367,6 +33402,29 @@ NAME
 https://github.com/mozilla-b2g/busybox/blob/master/init/init.c
 
 
+<inittab>
+http://www.manpages.info/linux/inittab.5.html
+
+       Valid actions for the action field are:
+
+       respawn
+	      The process will	be  restarted  whenever	 it  terminates	 (e.g.
+	      getty).
+
+https://git.busybox.net/busybox/tree/examples/inittab
+# Note: BusyBox init works just fine without an inittab. If no inittab is
+# found, it has the following default behavior:
+#         ::sysinit:/etc/init.d/rcS
+#         ::askfirst:/bin/sh
+#         ::ctrlaltdel:/sbin/reboot
+#         ::shutdown:/sbin/swapoff -a
+#         ::shutdown:/bin/umount -a -r
+#         ::restart:/sbin/init
+#         tty2::askfirst:/bin/sh
+#         tty3::askfirst:/bin/sh
+#         tty4::askfirst:/bin/sh
+
+
 <minimal-init>
 #!/bin/sh
  
@@ -33402,6 +33460,17 @@ messing with Busybox init.
 Once you've got it working statically linked, try getting it to work
 dynamically linked. Then read the FAQ entry How do I build a Busybox-based
 system?, and the documentation for Busybox init (FIXME: dead link). 
+
+
+<cmdline>
+sh-3.2# cat /proc/cmdline
+mem=166M rw console=uart,mmio,0x10400b00,115200n8 ip_conntrack_tftp.ports=4085
+
+[0946684811.106040]Adding console on ttyS0 at MMIO 0x10400b00 (options '115200n8')
+[0946684811.114040]Freeing unused kernel memory: 4008k freed
+init started: BusyBox v1.13.1 (2017-03-06 07:49:02 GMT)
+starting pid 1, tty '/dev/ttyS0': '/bin/sh'
+sh-3.2#
 
 
 ={============================================================================
@@ -35059,7 +35128,7 @@ _g_log_abort (gboolean breakpoint)
 
 
 ={============================================================================
-*kt_linux_core_100* process
+*kt_linux_core_100* linux-process
 
 LPI 6.
 
@@ -53224,6 +53293,9 @@ PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install
 TARGET=mips-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
+export PATH=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin:$PATH
+
+
 darwin-spk-1.19/Obj/ams-drx890_debug/project_build_mips/ams-drx890/root
 
 cd darwin-spk-1.19/Obj/ams-drx890_debug/project_build_mips/ams-drx890/linux-2.6.18.8
@@ -53234,7 +53306,12 @@ make modules
 
 echo "!!********* Re-build initramfs*********!!"
 touch ../root/VERSION.gz
+
+# when use own toolchain
 make CROSS_COMPILE=mips-linux-gnu-
+# when use brcm toolchain
+make
+
 
 echo "!!********* Copy vmlinux to tftp location  [YOU MAY NEED TO ADD SUDO PASSWORD] *********!!"
 cp vmlinux vmlinux-stripped
@@ -53247,8 +53324,10 @@ echo "!!********* done!*********!!"
 
 
 pushd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/image_generation
+
 + ./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/binaries/ams-drx890/vmlinux -E 4.X
 ./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out-use-own-brcm/project_build_mips/ams-drx890/linux-2.6.18.8/vmlinux -E 4.X
+./generate-otv-image.sh /home/nds-uk/kyoupark/spk-out/project_build_mips/ams-drx890/linux-2.6.18.8/vmlinux -E 4.X
 
 
 ={============================================================================
@@ -53625,6 +53704,7 @@ find $(STAGING_DIR) -type d | xargs chmod 755 ;\
 <spk-changes-to-use-ext-tool>
 
 tar cjvf darwin-spk-1.19-20131014.tar.bz2 darwin-spk-1.19-use-own
+tar cjvf darwin-spk-1.19-20131014.tar.bz2 darwin-spk-1.19
 cp darwin-spk-1.19-20131014.tar.bz2 ~/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/
 cd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk
 
@@ -53675,7 +53755,7 @@ copy_toolchain_sysroot = \
 
 *buildroot-debug.config* target/device/Sky/ams-drx890/buildroot-debug.config
 
-# BR2_TOOLCHAIN_EXTERNAL_LIB_C="libc.so.0"
+# BR3_TOOLCHAIN_EXTERNAL_LIB_C="libc.so.0"
 # BR2_TOOLCHAIN_EXTERNAL_LIBS="ld-uClibc.so.0 libcrypt.so.0 libdl.so.0 libgcc_s.so libm.so.0 libnsl.so.0 libpthread.so.0 libresolv.so.0 librt.so.0 libutil.so.0"
 # BR2_TOOLCHAIN_EXTERNAL_PATH="/home/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2"
 # BR2_TOOLCHAIN_EXTERNAL_PREFIX="$(ARCH)-linux"
