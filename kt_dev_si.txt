@@ -4162,6 +4162,20 @@ Done unpacking
 #     MACHINE=`get platform`
 #     A=``get parser_result``       # gets parser_result from .detailed_output
 
+<no-log>
+
+# expects there is no CUR file but there is. so no translation.
+#
+else
+    if [ "`echo [SP]*.CUR`" != '[SP]*.CUR' -o "`echo [SP]*.LOG`" != '[SP]*.LOG' ]
+    then
+        echo "<p0>LOG translation did not succeed or was not available</p0>" >.bestguess
+    else
+        echo "<p0>No Snnn.CUR/Pnnn.CUR or equivalent .LOG files in log upload</p0>" >.bestguess
+    fi
+    RETVAL=1
+fi
+
 
 <pcat-check>
 PCATDB=PCAT.DB
@@ -7521,10 +7535,6 @@ typedef enum AEM_API_ApplicationEventTag
 } AEM_API_ApplicationEvent;
 
 
-typedef void (*AEM_APPLICATION_ERRORCODE_LISTENER) (AEM_API_ApplicationHandle application_handle,
-                                                                              AEM_API_ApplicationErrorCode app_errorcode,
-                                                                              uint32_t user_tag);
-
 /** @brief Application error code enumeration. This specifies what type of failure occurred.
  */
 typedef enum AEM_API_ApplicationErrorCodeTag
@@ -7537,6 +7547,55 @@ typedef enum AEM_API_ApplicationErrorCodeTag
     AEM_API_ApplicationErrorCodeUnknown,
     AEM_API_ApplicationErrorCodeLastValue
 } AEM_API_ApplicationErrorCode;
+
+note: LAE -> AEM
+
+/** @brief Allows AEM to receive error notification and pass it on to its clients.
+ *
+ *  @param[in] application_handle  The handle of the application which is reporting an error.
+ *  @param[in] application_errorcode  One of the error codes enumerated in #AEM_API_ApplicationErrorCode.
+ *
+ *  @retval #AEM_API_STATUS_OK if successful.
+ *  @retval #AEM_API_STATUS_ERROR in case of error.
+ */
+SYSTEM_STATUS AEM_API_Application_NotifyApplicationErrorCode (AEM_API_ApplicationHandle application_handle,
+                                                              AEM_API_ApplicationErrorCode application_errorcode)
+{}
+
+note: AEM -> EPG
+
+/** @brief Callback function to provide notification of a particular error type on an application.
+ *
+ *  Callback function that is used by clients of AEM (e.g. EPG) in order that
+ *  they can receive notifications from AEM relating to application failures.
+ *  The event types that will be notified are enumerated in #AEM_API_ApplicationErrorCode.
+ *
+ *  @param[in] application_handle  The handle of the application which has failed.
+ *  @param[in] app_errorcode       The current error code of the application failure.
+ *  @param[in] user_tag            User tag used to identify the caller.
+ *  @retval None.
+ */
+typedef void (*AEM_APPLICATION_ERRORCODE_LISTENER) (AEM_API_ApplicationHandle application_handle,
+                                                                              AEM_API_ApplicationErrorCode app_errorcode,
+                                                                              uint32_t user_tag);
+
+/**  @brief AEM allows client to register an error notification listener callback - which is used to notify
+ *   the client when the application encounters an error.
+ *   Registration of the listener has to be done only once before starting any application,
+ *   and this listener is used by all applications.
+ *   @param[in] client_listener  	A pointer to an #AEM_APPLICATION_ERRORCODE_LISTENER function that will be called by AEM
+ *   								when the application has encountered one of the errors enumerated
+ *   								in #AEM_API_ApplicationErrorCode.
+ */
+SYSTEM_STATUS AEM_API_Application_RegisterErrorNotificationListener (AEM_APPLICATION_ERRORCODE_LISTENER client_listener,
+                                                                     uint32_t user_tag)
+{}
+
+SYSTEM_STATUS AEM_Common_ProcessErrorNotificationListener(AEM_API_ApplicationHandle applicationHandle,
+                                              AEM_API_ApplicationErrorCode applicationErrorCode)
+{
+      pListener->listener(applicationHandle, applicationErrorCode, pListener->usertag);
+}
 
 
 <key-pressed>
@@ -7559,10 +7618,10 @@ NDS: !MIL    -EPG_UI      < P:APP M:ScreenDirectingKeyListener F:dispatchKeyToVi
 ={============================================================================
 |kt_dev_si_0001| comp-lae
 
-# comp-LAE : CMS_PLATFORM_SERVICES
-
 # for debug mode
 NDS_BUILD_TYPE_lae = debug
+
+FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/engines
 
 # From: Rune Petersen [mailto:rune.petersen@craftwork.dk] 
 #
@@ -7575,8 +7634,35 @@ void IframeSm::idleHandler(Message &msg)
 	PLAYER_API_VideoFrame_Open(m_iframeHandle, PLAYER_VIDEO_FRAME_STREAM_FORMAT_ES|PLAYER_VIDEO_FRAME_TYPE_MPEG2_VIDEO);
 		MPM_PRES_OpenVideoFrame(l_mpm_info, PLAYER_VIDEO_FRAME_MPM_EventHandler))
 
+src/AemSm.cpp
+
 void AemSm::registerAemCallbacks()
-	AEM_API_RegisterApplicationEngine
+{
+    AEM_API_ApplicationEngineCallback callback;
+    DIAG_DECLARE_FUNCTION("initAEMCallbacks");
+
+    strcpy((char *)callback.attributes.name, "LAE");
+    strcpy((char *)callback.attributes.content_types, ".otv");
+    callback.attributes.num_content_types = 1;
+    callback.attributes.single_application = false; // TODO: should we have single_application set to true? ... we dont accept multiple launch commands...
+    callback.attributes.single_instance = true;
+    strcpy((char *)callback.attributes.version, "v1.0");
+    callback.launch_fn = sAemLaunchFunctionCB;
+    callback.terminate_fn = sAemTerminateFunctionCB;
+    callback.show_fn = sAemShowFunctionCB;
+    callback.hide_fn = sAemHideFunctionCB;
+    callback.pause_fn = sAemPauseFunctionCB;
+    callback.resume_fn = sAemResumeFunctionCB;
+    callback.message_received_fn = sAemMessageReceiveFunctionCB;
+    callback.user_input_fn = sAemUserInputFunctionCB;
+
+    SYSTEM_STATUS status = AEM_API_RegisterApplicationEngine(callback); // before returning this function can call the callbacks
+    if( status!=AEM_API_STATUS_OK )
+    {
+        FATAL("failed to register the Legacy App Engine with the AEM");
+        exit(1);
+    }
+}
 
 
 ={============================================================================
