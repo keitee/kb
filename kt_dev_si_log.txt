@@ -1,6 +1,6 @@
-*kt_dev_si*                                                                tw=100
+*kt_dev_si_log*                                                            tw=100
 
-kt.dev.si
+kt.dev.si.log
 
 /^[#=]{
 Use #{ for a group and ={ for a item
@@ -12,6 +12,216 @@ Use #{ for a group and ={ for a item
 mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019fbf2d46b' order by upload_time desc limit 10"
 // mahesh
 mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019fb091911' order by upload_time desc limit 10"
+
+
+={============================================================================
+|kt_si_log_0001| SI-10927 Macroblocking and Audio loss after trick play on PDL asset
+
+<not-ok>
+<1> Tue 07/03/2017 18:58
+
+vamadevans Sireesh Vamadevan added a comment - 3 days ago - edited
+
+Able to reproduce the PTS discontinuity issue
+
+File: darwin_0019fb53a4a7_348bb97cf3799f852bf70c84f0fcd375.tgz
+Build: 84.65.00_4648_MNTEE
+
+  > even though I have not seen the macroblocking, there were
+    VIDEO_DECODER_EVENT_NO_FRAME_TO_PRESENT events from the video decoder
+
+  > starved due to no packet injection from MW during this time. 
+
+NDS: ^[2017:03:07 10:09:45]0946736850.302876 !INFO   -MSM_MS       		< p:0x000001b3 P:MW t:0x01b2b520 T:RANGE_MGR_THREAD M:range_mgr_server.c F:(RangeShouldBeRequested) L:2079 > < no-ctx >" 
+"reached EOF (or near live) 
+
+// 962
+NDS: ^[2017:03:07 10:09:45]0946736850.303786 !INFO   -MSM_MS       		< Adding chunk to chunk input queue. " 
+"chunk input fd = 364, p_address = 0x2c1b9d28, num bytes = 344792 " "chunk_id = 962 
+
+// 963
+NDS: ^[2017:03:07 10:09:45]0946736850.343819 !INFO   -MSM_MS       		< Adding chunk to chunk input queue. " 
+"chunk input fd = 364, p_address = 0x2c20e000, num bytes = 192512 " "chunk_id = 963 
+
+NDS: ^[2017:03:07 10:09:45]0946736850.413662 !WARN   -MSM_MS       		< splicer=0x13 hMC=0x13 >" "Got PTS Discontinuity chunk ID 962 
+
+
+<ok>
+working case above
+// http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb53a4a7_51bdcaeeddbda2003cbb78afeea987ac
+
+<from-driver>
+#define TPID_MONITOR_PTS_DISC_THRES (90 * 2500) /* 2500 ms GOP. The longest GOP NDS ever saw */
+
+<not-working-and-working>
+http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb53a4a7_017d9e0b85c1dfff43fd3fa484a66ff4
+The above logs has two times playback of "s8ep3. Peep Show", first playback
+has reproduced the discontinuity issue even by not auto playing from s8ep2,
+Please look in to the second playback of "S8ep3 Peep Show" for the working
+scenario log. 
+
+egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|ChunkInputTPIDMonitorData|reached EOF" 
+egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|ChunkInputTPIDMonitorData|reached EOF|range_mgr_server.c"
+egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk" 
+
+114708:NDS: ^[2017:03:10 19:19:18]0946687106.355210 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Last completed chunk is 966 
+
+// starts from 
+// DISPLAY_FILTER::ReadFsm_HandleReadNeededEvent(_in_ const DEST_PUSH_READ_NEEDED_INFO *p_info)
+//	case E_DISPLAY_ST_WAIT_READ_Q_EMPTY:
+//	case E_DISPLAY_ST_WAIT_READ_CHUNKS_IN_Q:
+//	    ProcessReadNeeded(p_info);
+//
+// void DISPLAY_FILTER::ProcessReadNeeded(_in_ const DEST_PUSH_READ_NEEDED_INFO  *p_info)
+// {
+//   /* chunk input can only receive packet aligned data */
+//   MS_ASSERT((p_info->header.packet_bytes_data % DEMUX_PACKET_SIZE) == 0);
+// 
+//   /* add the chunks to the chunk input */
+//   AddChunksToChunkInput(p_info);
+//   {
+//     CDISERVER_AddChunkToChunkInput();
+//   }
+// }
+
+
+114902:NDS: ^[2017:03:10 19:19:18]0946687106.373264 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Adding chunk to chunk input queue. " "chunk input fd = 398, p_address = 0x2c41dd28, num bytes = 344792 " "chunk_id = `967`
+
+// \Description: Gets the events of the chunk input and the id of the last
+// completed chunk.
+//
+// starts from CDISERVER_GetChunkInputEvents,
+// DEMUX_EVENT_CHUNKINPUT_GET_STATUS
+
+114903: NDS: ^[2017:03:10 19:19:18]`0946687106.373868` !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 
+  T:`CDI_WT_THREAD` M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  `Last completed chunk is 967` 
+
+// starts pumping again
+
+114982:NDS: ^[2017:03:10 19:19:18]0946687106.393983 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Adding chunk to chunk input queue. " "chunk input fd = 398, p_address = 0x2c472000, num bytes = 192512 " "chunk_id = 968 
+
+114996:NDS: ^[2017:03:10 19:19:18]0946687106.396926 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Adding chunk to chunk input queue. " "chunk input fd = 398, p_address = 0x2c419e00, num bytes = 360960 " "chunk_id = 972 
+
+`114997`:NDS: ^[2017:03:10 19:19:18]`0946687106.431169` !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  `Last completed chunk is 967` 
+
+//    for (i = 0; i < (int)read_data.numDataBlocksReturned; i++)
+//    {
+//      /* st compiler does like macros with more than 10 lines */
+//      XDEBUG_TRACE1_6("-MS_CDI_CONTROL- FIRST_PTS=%s, DISCONTINUITY=%s pid %d, chunklist ID %d, PTS (%ld,%lu)",
+//          (((unsigned) p_tpid_data->data_blocks_array[i].eventDescriptor & 
+//            DEMUX_CHUNKINPUT_CHUNK_FIRST_PTS_INDICATOR) ? "true" : "false"),
+//          (((unsigned) p_tpid_data->data_blocks_array[i].eventDescriptor & 
+//            DEMUX_CHUNKINPUT_CHUNK_PTS_DISCONTINUITY_INDICATOR) ? "true" : "false"),
+//          p_tpid_data->data_blocks_array[i].tpid,
+//          p_tpid_data->data_blocks_array[i].chunkListID,
+//          p_tpid_data->data_blocks_array[i].data[0],
+//          p_tpid_data->data_blocks_array[i].data[1]);
+//    }
+
+^[2017:03:10 19:19:18]0946687106.431212 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7124 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 2 entries 
+^[2017:03:10 19:19:18]0946687106.431239 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- 
+  FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 967, PTS (0,109018798) 
+^[2017:03:10 19:19:18]0946687106.431266 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- 
+  FIRST_PTS=false, DISCONTINUITY=true pid 481, chunklist ID `967`, PTS (0,109018798) 
+
+115001: 
+^[2017:03:10 19:19:18]0946687106.431373 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5929 > < splicer=0x5 hMC=0x5 >" 
+  "num blocks read 2 
+  "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 967, PTS (0,109018798) 
+
+^[2017:03:10 19:19:18]0946687106.431557 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6127 > < splicer=0x5 hMC=0x5 >" "found prev_pts (pts=[0,108313198],chunk_id=966, index=65). 
+^[2017:03:10 19:19:18]0946687106.431583 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6138 > < splicer=0x5 hMC=0x5 >" "found prev_prev_pts (pts=[0,108219598],chunk_id=965, index=64). 
+^[2017:03:10 19:19:18]0946687106.431615 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6176 > < splicer=0x5 hMC=0x5 >" 
+  "Warning: received PTS [0,109018798] jumps 7 secs diff from " "previous one (pts=[0,108313198],chunk_id=`966`, index=65).  
+
+^[2017:03:10 19:19:18]0946687106.431641 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6038 > < splicer=0x5 hMC=0x5 >" 
+  "Saving PTS at index 66, chunkID `967` PTS [0,109018798] 
+  "FIRST_PTS=false, DISCONTINUITY=true pid 481, chunklist ID `967`, PTS (0,109018798) 
+'WARN'  "Got PTS Discontinuity chunk ID 967 
+  "Not Saving Discont PTS: index 66, chunkID 967 PTS [0,109018798] !!!! 
+
+115008:
+^[2017:03:10 19:19:18]0946687106.431727  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5954 > < splicer=0x5 hMC=0x5 >" 
+  "Got PTS Discontinuity chunk ID 967 
+^[2017:03:10 19:19:18]0946687106.431756  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6025 > < splicer=0x5 hMC=0x5 >" "Not Saving Discont PTS: index 66, chunkID 967 PTS [0,109018798] !!!! 
+
+115046:NDS: ^[2017:03:10 19:19:19]0946687107.756055 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  `Last completed chunk is 967` 
+
+^[2017:03:10 19:19:19]0946687107.756098 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7124 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 2 entries 
+^[2017:03:10 19:19:19]0946687107.756127 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 968, PTS (0,108489598) 
+^[2017:03:10 19:19:19]0946687107.756152 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=false, DISCONTINUITY=true pid 481, chunklist ID 968, PTS (0,108489598) 
+^[2017:03:10 19:19:19]0946687107.756259 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5929 > < splicer=0x5 hMC=0x5 >" "num blocks read 2 
+^[2017:03:10 19:19:19]0946687107.756285 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5948 > < splicer=0x5 hMC=0x5 >" 
+  "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 968, PTS (0,108489598) 
+  "Saving PTS at index 67, chunkID 968 PTS [0,108489598] 
+  "FIRST_PTS=false, DISCONTINUITY=true pid 481, chunklist ID 968, PTS (0,108489598) 
+  "Got PTS Discontinuity chunk ID 968 
+
+115091:NDS: ^[2017:03:10 19:19:20]0946687108.781692 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Last completed chunk is 967 
+115136:NDS: ^[2017:03:10 19:19:21]0946687109.858582 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Last completed chunk is 967 
+
+115213:NDS: ^[2017:03:10 19:19:23]0946687111.432164 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Last completed chunk is 969 
+
+// second playback
+124281:NDS: ^[2017:03:10 19:20:23]0946687171.939233 !MIL    -EPG_MISC     		< p:0x000001e4 P:APP t:0x2bf25520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/playback/pdl/Peep Show"}
+
+// works in the second playback
+222935:NDS: ^[2017:03:10 19:40:23]0946688371.947452 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 967 
+222987:NDS: ^[2017:03:10 19:40:24]0946688372.021719 !INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 967 
+
+sed -n '124281,%' LOGlastrun_realtime_6ff4 | egrep -an 'TPIDMONITOR_READ array le'
+
+<not-working>
+Please find the corresponding timedcotor traces and logs for reference 
+td_0019fb53a4a7_ed17cdc8aeb3320ba1da4ce1db77a50b_not_working_84.65.00_4097_MNTEE.tdi.
+http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb53a4a7_ed17cdc8aeb3320ba1da4ce1db77a50b
+
+egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk" 
+egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|ChunkInputTPIDMonitorData|reached EOF" 
+
+352492:^[2017:03:09 15:10:17]0946687725.627862 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > Adding chunk to chunk input queue. " "chunk input fd = 373, p_address = 0x2c1b5d28, num bytes = 344792 " "chunk_id = 962 
+352493:^[2017:03:09 15:10:17]0946687725.628283 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > Last completed chunk is 962 
+352582:^[2017:03:09 15:10:17]0946687725.704646 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > Adding chunk to chunk input queue. " "chunk input fd = 373, p_address = 0x2c20a000, num bytes = 192512 " "chunk_id = 963 
+352583:^[2017:03:09 15:10:17]0946687725.704874 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > Adding chunk to chunk input queue. " "chunk input fd = 373, p_address = 0x2c0f0000, num bytes = 192512 " "chunk_id = 964 
+352584:^[2017:03:09 15:10:17]0946687725.705079 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > Adding chunk to chunk input queue. " "chunk input fd = 373, p_address = 0x2c11f000, num bytes = 385024 " "chunk_id = 965 
+352585:^[2017:03:09 15:10:17]0946687725.705273 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > Adding chunk to chunk input queue. " "chunk input fd = 373, p_address = 0x2c17d000, num bytes = 216576 " "chunk_id = 966 
+352586:^[2017:03:09 15:10:17]0946687725.705467 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > Adding chunk to chunk input queue. " "chunk input fd = 373, p_address = 0x2c1b1e00, num bytes = 360960 " "chunk_id = 967 
+352587:^[2017:03:09 15:10:17]0946687725.772145 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > Last completed chunk is 962 
+
+^[2017:03:09 15:10:17]0946687725.772191 24 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 2 entries 
+^[2017:03:09 15:10:17]0946687725.772505 40 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 962, PTS (0,109033198) 
+^[2017:03:09 15:10:17]0946687725.772532 40 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=false, DISCONTINUITY=true pid 481, chunklist ID 962, PTS (0,109033198) 
+^[2017:03:09 15:10:17]0946687725.772755  L:5929 > < splicer=0xd hMC=0xd >" "num blocks read 2 
+^[2017:03:09 15:10:17]0946687725.772782  L:5948 > < splicer=0xd hMC=0xd >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 962, PTS (0,109033198) 
+^[2017:03:09 15:10:17]0946687725.772815 splicer=0xd hMC=0xd >" "found prev_pts (pts=[0,108313198],chunk_id=961, index=60). 
+^[2017:03:09 15:10:17]0946687725.772840 splicer=0xd hMC=0xd >" "found prev_prev_pts (pts=[0,108219598],chunk_id=960, index=59). 
+^[2017:03:09 15:10:17]0946687725.772870 splicer=0xd hMC=0xd >" "Warning: received PTS [0,109033198] jumps 8 secs diff from " "previous one (pts=[0,108313198],chunk_id=961, index=60).  
+^[2017:03:09 15:10:17]0946687725.772895  L:6038 > < splicer=0xd hMC=0xd >" "Saving PTS at index 61, chunkID 962 PTS [0,109033198] 
+^[2017:03:09 15:10:17]0946687725.772921  L:5948 > < splicer=0xd hMC=0xd >" "FIRST_PTS=false, DISCONTINUITY=true pid 481, chunklist ID 962, PTS (0,109033198) 
+
+352598:^[2017:03:09 15:10:17]0946687725.772940 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5954 > < splicer=0xd hMC=0xd >" "Got PTS Discontinuity chunk ID 962 
+352722:^[2017:03:09 15:10:18]0946687726.962603 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 962 
+352730:^[2017:03:09 15:10:18]0946687726.962963 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5954 > < splicer=0xd hMC=0xd >" "Got PTS Discontinuity chunk ID 963 
+352782:^[2017:03:09 15:10:19]0946687727.971897 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > Last completed chunk is 962 
+352839:^[2017:03:09 15:10:21]0946687729.022818 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > Last completed chunk is 962 
+352941:^[2017:03:09 15:10:22]0946687730.782429 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > Last completed chunk is 964 
+
+
+<eng-build>
+// from pushp
+CMS_MEDIA_SERVICES/MSM/src/mediastreamer/src/cdi_server.c
+CMS_MEDIA_SERVICES/MSM/src/mediastreamer/src/buffer_pump.cp
+CMS_MEDIA_SERVICES/MSM/src/mediastreamer/src/display_chunk.cpp
 
 
 // on monitor
@@ -2007,6 +2217,46 @@ NDS: ^[2016:11:30 21:14:28]0946701281.575067 !MIL    -VRM_SERVER   		< p:0x00000
 NDS: ^[2016:11:30 21:14:28]0946701281.575108 !MIL    -VRM_SERVER   		< p:0x000001bd P:MW t:0x01cae520 T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  1): E_LIVE_STATE_CREATED -> (E_LIVE_INPUT_DESTROY_LIVE) -> E_LIVE_STATE_DESTROY 
 NDS: ^[2016:11:30 21:14:28]0946701281.575464 !MIL    -VRM_SERVER   		< p:0x000001bd P:MW t:0x01cae520 T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  1): E_LIVE_STATE_DESTROY -> (E_LIVE_INPUT_FREE_FSM) -> E_LIVE_STATE_NONE 
 NDS: ^[2016:11:30 21:14:28]0946701281.575607 !MIL    -VRM_SERVER   		< p:0x000001bd P:MW t:0x01cae520 T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x200017a: E_JOB_MAN_SRV_INT_ST_DESTROYING -> (E_JOB_MAN_SRV_INP_DESTROYED) -> E_JOB_MAN_SRV_INT_ST_NULL 
+
+
+
+https://www.stb.bskyb.com/jira/browse/SI-10738?focusedCommentId=881193&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-881193
+Kyoungtaek Park added a comment - 11/Jan/17 9:30 AM
+
+Thanks Rayees. As chatted, it does look similar and here is the summary. These all shows MW crashes in the end from the latest TR:
+
+http://theyard.cisco.com/si_logs/translation/darwin_783e5321d57b_59bc7b79ccd0fa43af03cfccf762bdbb
+http://theyard.cisco.com/si_logs/translation/darwin_783e53043fbb_624ba32cea0251a72558c71f80bc6638
+http://theyard.cisco.com/si_logs/translation/darwin_0019fb4375f3_5cd80a941b1f7dc5abb9e73da7119d2d
+
+Core was generated by `/NDS/bin/MW_Process MW_Process'.
+
+Program terminated with signal 11, Segmentation fault.
+
+#0  XI64Set (ptarget=0x1a3e208, porigin=0x40) at xi64h.c:173
+
+#0  XI64Set (ptarget=0x1a3e208, porigin=0x40) at xi64h.c:173
+
+No locals.
+
+#1  0x00a1c074 in MSCPP::SPLICER::ValidateAndSetPosition (this=0x2afdb09c, p_destination=0x1a3e208, p_source=0x1a3ea6c, p_action_list=0x1a3e740, speed_of_halted_item=-2000) at splicer.cpp:3446
+
+All shows the problem when do get pos on `RB PLAY`:
+
+5793305:NDS: ^[2017:01:08 15:50:34]0946951990.620509 !INFO   -VRM_SERVER                < p:0x000001d6 P:MW t:0x01e17520 T:VRM_SRV M:rb_play.c F:RB_PLAY_ReceiveMessage L:3774 > got RB_PLAY_MSG_TYPE_ALARM_TRIGGERED, rb_play_handle:0x18a1
+5793306:NDS: ^[2017:01:08 15:50:34]0946951990.620572 !INFO   -VRM_SERVER                < p:0x000001d6 P:MW t:0x01e17520 T:VRM_SRV M:basic_play.c F:PlayGetPosition L:4982 > getting position for query_id: 0x1
+5793307:NDS: ^[2017:01:08 15:50:34]0946951990.620592 !INFO   -VRM_SERVER                < p:0x000001d6 P:MW t:0x01e17520 T:VRM_SRV M:pvp_play.c F:PANEL_PlayGetPosition L:380 > [API_CALL::""MSM_SP""] " "calling MSM_SP_GetPosition
+5793308:NDS: ^[2017:01:08 15:50:34]0946951990.620949 !WARN   -MSM_MS                    < p:0x000001d6 P:MW t:0x01a41520 T:EVENT_MGR_THREAD M:splicer.cpp F:(GetSpliceDataByFromEntryIdAndSpeed) L:655 > <  >" 
+"Splice point not found by from playlist entry 0 with concern to current speed -12000
+
+However, as far as I see, the first is while TM and the others is when back to
+live where `RB-PLAY` is stopped but not freed and destroyed. Hence no more
+jobs which is the same as reported in the first place. So MW seems to have a
+problem of handling a play list or get pos when reaches to the end of
+`RB-PLAY` or when VRM believes `RB-PLAY` is running when MC actually is
+stopped.
+
+Rayees Khan, can you have a look and confirm if this is the same as the fix you mentioned?
 
 
 ={============================================================================
