@@ -10743,7 +10743,6 @@ hex(((22 & 0x3FF) << 22) | ((2 & 0x3) << 16) | ((4 & 0xF) << 12) | (1 & 0xFFF) )
 Media Streamer Support - Fusion <MediaStreamerSupport-Fusion@nds.com>
 
 <status>
-
 #define MSM_COMP_ID         ((uint32_t)(22)) /*!< @brief Media Streaming Management */
 #define MSM_INDEXER_IF_ID   (3)
 #define SEVERITY_SEVERE     ((uint32_t)(0x2))
@@ -10784,66 +10783,88 @@ Open -> Create -> Prepare [-> Run -> Stop] -> Free -> Close. Means that Run and 
 
 
 <msm-pts>
-
 UseVideoDecoderPTS value in MS.CFG
 UseVideoDecoderPTS=True
 
 MSCPP::DISPLAY_FILTER::PrepareVideoDecoderCallback
 {
-	    if (UseVideoDecoderPTS == XTRUE)
-	    { 
-		p_display->m_is_video_decoder_support_pts = 
-		    p_data->data.video_decoder_prepared_data.is_video_decoder_support_pts;
-	    }
-	    else
-	    {
-		p_display->m_is_video_decoder_support_pts = XFALSE;
-	    }	   	 
+  if (UseVideoDecoderPTS == XTRUE)
+  { 
+    p_display->m_is_video_decoder_support_pts = 
+      p_data->data.video_decoder_prepared_data.is_video_decoder_support_pts;
+  }
+  else
+  {
+    p_display->m_is_video_decoder_support_pts = XFALSE;
+  }
+}
+
+// CMS_MEDIA_SERVICES/Media_Streamer/proj_specific/fusion2/src/mediastreamer/src/display_chunk.cpp
+void DISPLAY_FILTER::HandleChunkInputTPIDMonitorData(const CDISERVER_TPID_DATA *p_tpid_data)
+{
+  // note: see "FIRST_PTS=true, DISCONTINUITY=false" untils play ends and no
+  // discontinuity.
+  //
+  // FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 967, PTS (0,109018798) 
+ 
+  for (i = 0; i < (int)read_data.numDataBlocksReturned; i++)
+  {
+    /* st compiler does like macros with more than 10 lines */
+    XDEBUG_TRACE1_6("-MS_CDI_CONTROL- FIRST_PTS=%s, DISCONTINUITY=%s pid %d, chunklist ID %d, PTS (%ld,%lu)",
+        (((unsigned) p_tpid_data->data_blocks_array[i].eventDescriptor & 
+          DEMUX_CHUNKINPUT_CHUNK_FIRST_PTS_INDICATOR) ? "true" : "false"),
+        (((unsigned) p_tpid_data->data_blocks_array[i].eventDescriptor & 
+          DEMUX_CHUNKINPUT_CHUNK_PTS_DISCONTINUITY_INDICATOR) ? "true" : "false"),
+        p_tpid_data->data_blocks_array[i].tpid,
+        p_tpid_data->data_blocks_array[i].chunkListID,
+        p_tpid_data->data_blocks_array[i].data[0],
+        p_tpid_data->data_blocks_array[i].data[1]);
+  }
+
+  CheckPTSFromDrivers();
 }
 
 
-HandleChunkInputTPIDMonitorData
-	CheckPTSFromDrivers
+void MSCPP::DISPLAY_FILTER::GetPosition (_in_ GET_POSITION_METHOD method,
+  _in_ FILTER_GET_POSITION_CALLBACK  	callback)
+{
+  XDEBUG_DEFINE_FUNC_INFO("GetPosition");
+
+  PTS_SOURCE    pts_source = GetPTSSource(); 
+
+  XDEBUG_TRACE3_0("IN");
+
+  /* remember the callback */
+  m_get_pos_callback = callback;
+
+  XDEBUG_TRACE1_1("get position using method %d", method);
+  switch (method)
+  {
+    case E_GET_POS_METHOD_DISPLAYED_PTS:
+      /* get pos by pts only */
+      CDISERVER_GetPts(ITEM_GetXconnection(m_p_item),
+          m_clock_sync_fd,
+          m_video_decoder_fd,
+          pts_source,
+          GetPtsCallbackForUserPosByPts,
+          this);
+      break;
+  }
+}
 
 inline PTS_SOURCE MSCPP::DISPLAY_FILTER::GetPTSSource()const 
 {
-    PTS_SOURCE    pts_source;
-    /* pts from the audio decoder is not supported yet, in future when it will be supported it should be added here */
-    if ((m_is_video_decoder_support_pts == XTRUE) && (m_is_video_enabled))
-    {
-			pts_source = E_CDISERVER_PTS_SOURCE_VIDEO_DECODER;
-    }
-    else
-    {
-			pts_source = E_CDISERVER_PTS_SOURCE_CLOCK_SYNC;
-    }
-    return  pts_source;
-}
-
-void MSCPP::DISPLAY_FILTER::GetPosition (_in_ GET_POSITION_METHOD      		method,
-					 _in_ FILTER_GET_POSITION_CALLBACK  	callback)
-{
-    XDEBUG_DEFINE_FUNC_INFO("GetPosition");
-    
-    PTS_SOURCE    pts_source = GetPTSSource(); 
-
-    XDEBUG_TRACE3_0("IN");
-    
-    /* remember the callback */
-    m_get_pos_callback = callback;
-
-    XDEBUG_TRACE1_1("get position using method %d", method);
-    switch (method)
-    {
-				case E_GET_POS_METHOD_DISPLAYED_PTS:
-				    /* get pos by pts only */
-				    CDISERVER_GetPts(ITEM_GetXconnection(m_p_item),
-						     m_clock_sync_fd,
-						     m_video_decoder_fd,
-						     pts_source,
-						     GetPtsCallbackForUserPosByPts,
-						     this);
-				    break;
+  PTS_SOURCE    pts_source;
+  /* pts from the audio decoder is not supported yet, in future when it will be supported it should be added here */
+  if ((m_is_video_decoder_support_pts == XTRUE) && (m_is_video_enabled))
+  {
+    pts_source = E_CDISERVER_PTS_SOURCE_VIDEO_DECODER;
+  }
+  else
+  {
+    pts_source = E_CDISERVER_PTS_SOURCE_CLOCK_SYNC;
+  }
+  return  pts_source;
 }
 
 
@@ -10882,82 +10903,83 @@ CDISERVER_GetPts(cdi_server.c)
 
 CdiServerThread(cdi_server.c, 'E_MS_PORT_THREAD_TYPE_CDI_WT' thread name )
 {
-   /* register the new thread with the watchdog, this needs to be called
-   before calling INITERM_ThreadIsUp, because we are relying on the 
-   INITERM semaphore to synchronize the calls to WATCHDOG_Register */
+  /* register the new thread with the watchdog, this needs to be called
+     before calling INITERM_ThreadIsUp, because we are relying on the 
+     INITERM semaphore to synchronize the calls to WATCHDOG_Register */
 
-   watchdog_handle = WATCHDOG_RegisterThread(
-	 E_MS_PORT_THREAD_TYPE_CDI_WT,
-	 WATCHDOG_WARN_TIME_FOR_CDI_SERVER_OP,
-	 WATCHDOG_ASSERT_TIME_FOR_CDI_SERVER_OP);  // 500
+  watchdog_handle = WATCHDOG_RegisterThread(
+      E_MS_PORT_THREAD_TYPE_CDI_WT,
+      WATCHDOG_WARN_TIME_FOR_CDI_SERVER_OP,
+      WATCHDOG_ASSERT_TIME_FOR_CDI_SERVER_OP);  // 500
 
   /* report begin of operation to watchdog */
   WATCHDOG_BeginOp(watchdog_handle, CdiServerRequestToString(req.type));
 
   case E_REQUEST_TYPE_GET_PTS:
-    PRVFUNC MS_STATUS HandleGetPts
+
+  MS_STATUS HandleGetPts
+  {
+    switch(pts_source)
     {
-      switch(pts_source)
+      // E_CDISERVER_PTS_SOURCE_VIDEO_DECODER: MS_CDI_PROXY_VideoDecoderGetPts:
+      // E_CDISERVER_PTS_SOURCE_CLOCK_SYNC: MS_CDI_PROXY_ClockSyncGetValue:
+
+      XDEBUG_TRACE1_2("-MS_CDI_CONTROL- returning PTS [%u,%u]", pts.high, pts.low);
+
+      // lead to the below
+
+      SYSTEM_STATUS MPM_DEVICE_GetVideoDecoderPTS(MCM_MEDIACONN_HANDLE h_media_connection, PTS * pts)
       {
-        // E_CDISERVER_PTS_SOURCE_VIDEO_DECODER: MS_CDI_PROXY_VideoDecoderGetPts:
-        // E_CDISERVER_PTS_SOURCE_CLOCK_SYNC: MS_CDI_PROXY_ClockSyncGetValue:
+        MPM_STATUS status = MPM_STATUS_NOT_OK;
+        MPM_MEDIA_CONNECTION * p_media_connection;
 
-        XDEBUG_TRACE1_2("-MS_CDI_CONTROL- returning PTS [%u,%u]", pts.high, pts.low);
+        DIAG_DECLARE_FUNCTION("MPM_DEVICE_GetVideoDecoderPTS");
+        DIAG_LOG_FN_ENTRY(g_MPM_Logging_ID);
 
-        // lead to the below
+        p_media_connection = MPM_MCGetMediaConnection(h_media_connection);
 
-        SYSTEM_STATUS MPM_DEVICE_GetVideoDecoderPTS(MCM_MEDIACONN_HANDLE h_media_connection, PTS * pts)
+        if (NULL != p_media_connection)
         {
-          MPM_STATUS status = MPM_STATUS_NOT_OK;
-          MPM_MEDIA_CONNECTION * p_media_connection;
-
-          DIAG_DECLARE_FUNCTION("MPM_DEVICE_GetVideoDecoderPTS");
-          DIAG_LOG_FN_ENTRY(g_MPM_Logging_ID);
-
-          p_media_connection = MPM_MCGetMediaConnection(h_media_connection);
-
-          if (NULL != p_media_connection)
+          if (NULL != p_media_connection->p_video_decoder)
           {
-            if (NULL != p_media_connection->p_video_decoder)
+            if (p_media_connection->p_video_decoder->supported_formats.decoder_features & VIDEO_DECODER_FEATURE_PTS_AVAILABLE)
             {
-              if (p_media_connection->p_video_decoder->supported_formats.decoder_features & VIDEO_DECODER_FEATURE_PTS_AVAILABLE)
+              status = MPM_DEVICE_LockDevice(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER);
+              if (status == MPM_STATUS_OK)
               {
-                status = MPM_DEVICE_LockDevice(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER);
-                if (status == MPM_STATUS_OK)
-                {
-                  /*lint -save -e923    Authorised by S Taylor. See email attached to CQ196440 */
+                /*lint -save -e923    Authorised by S Taylor. See email attached to CQ196440 */
 
-                  // CMS_MEDIA_SERVICES/MPM/src/interfaces/mpm_device.c
-                  //
-                  // int mpm_ioctl_debug_ioctl_ptr();
-                  
-                  status = `MPM_DEVICE_DoIoctl`(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER, VIDEO_DECODER_GET_PTS, (void *)pts);
-                  /*lint -restore */
+                // CMS_MEDIA_SERVICES/MPM/src/interfaces/mpm_device.c
+                //
+                // int mpm_ioctl_debug_ioctl_ptr();
 
-                  MPM_DEVICE_UnlockDevice(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER);
-                }
-              }
-              else
-              {
-                status = MPM_STATUS_NOT_SUPPORTED;
-                DIAG_LOG_WARN(g_MPM_Logging_ID, ("hMC=0x%x - video decoder doesn't support getting PTS",h_media_connection));
+                status = `MPM_DEVICE_DoIoctl`(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER, VIDEO_DECODER_GET_PTS, (void *)pts);
+                /*lint -restore */
+
+                MPM_DEVICE_UnlockDevice(h_media_connection, MPM_DEVICE_DECODE_VIDEO_DECODER);
               }
             }
             else
             {
-              status = MPM_STATUS_NO_DEVICE;
-              DIAG_LOG_WARN(g_MPM_Logging_ID, ("hMC=0x%x - No video decoder assigned",h_media_connection));
+              status = MPM_STATUS_NOT_SUPPORTED;
+              DIAG_LOG_WARN(g_MPM_Logging_ID, ("hMC=0x%x - video decoder doesn't support getting PTS",h_media_connection));
             }
           }
-
-          DIAG_LOG_FN_EXIT(g_MPM_Logging_ID,status);
-          return status;
+          else
+          {
+            status = MPM_STATUS_NO_DEVICE;
+            DIAG_LOG_WARN(g_MPM_Logging_ID, ("hMC=0x%x - No video decoder assigned",h_media_connection));
+          }
         }
+
+        DIAG_LOG_FN_EXIT(g_MPM_Logging_ID,status);
+        return status;
       }
     }
+  }
 
-	/* report end of operation to watchdog */
-	WATCHDOG_EndOp(watchdog_handle);
+  /* report end of operation to watchdog */
+  WATCHDOG_EndOp(watchdog_handle);
 }
 
 
@@ -10990,15 +11012,15 @@ NDS: ^[00:05:02]0946685102.219069 !WARN  -MSM_MS       < p:0000023c t:01256dd0 T
 
 StartDecoderMonitoring
 {
-	if (MSFeatureUseEofDecodersEvents == XTRUE)
-	{
-		VIDEO_DECODER_EVENT_NO_FRAME_TO_PRESENT
-		AUDIO_DECODER_EVENT_NO_SAMPLES_TO_PLAY
-	}
-	else
-	{
-		VIDEO_DECODER_GET_RATE_BUFFER_STATE
-	}
+  if (MSFeatureUseEofDecodersEvents == XTRUE)
+  {
+    VIDEO_DECODER_EVENT_NO_FRAME_TO_PRESENT
+      AUDIO_DECODER_EVENT_NO_SAMPLES_TO_PLAY
+  }
+  else
+  {
+    VIDEO_DECODER_GET_RATE_BUFFER_STATE
+  }
 }
 
 VIDEO_DECODER_EVENT_NO_FRAME_TO_PRESENT -> E_DISPLAY_DECODER_MONITOR_EV_EVENT_ARRIVED
@@ -11214,6 +11236,107 @@ After the output buffer overflow, the MSM goes through a stop->free->prepare->ru
 <xcon-mc>
 NDS: ^[2016:09:25 16:26:29]0946861585.839292 !MIL    -MSM_MS                     < p:0x000001f6 P:MW t:0x018d9520 T:EVENT_MGR_THREAD M:disksrc.cpp F:(HandleReadDoneEvent) L:900 > 
 < splicer=0xef `hMC=0xf2` >" "-MS_EOF- Source Filter of `xcon=0xf2` Reached EOF. Total number of bytes in header is 0
+
+
+<ms-chunkinput>
+// driver has the discontinuity threadhold.
+#define TPID_MONITOR_PTS_DISC_THRES (90 * 2500) /* 2500 ms GOP. The longest GOP NDS ever saw */
+
+
+// push-to-driver. what does triggers this?
+
+// ID is chunk_id
+!INFO   -MSM_MS       < M:display_chunk.cpp F:(AddChunksToChunkInput) L:8711 > < splicer=0x2f hMC=0x2f >" "Added chunk to chunk input queue of size 192512, ID 443 
+
+starts from 
+
+DISPLAY_FILTER::ReadFsm_HandleReadNeededEvent(_in_ const DEST_PUSH_READ_NEEDED_INFO *p_info)
+case E_DISPLAY_ST_WAIT_READ_Q_EMPTY:
+case E_DISPLAY_ST_WAIT_READ_CHUNKS_IN_Q:
+    ProcessReadNeeded(p_info);
+
+void DISPLAY_FILTER::ProcessReadNeeded(_in_ const DEST_PUSH_READ_NEEDED_INFO  *p_info)
+{
+  /* chunk input can only receive packet aligned data */
+  MS_ASSERT((p_info->header.packet_bytes_data % DEMUX_PACKET_SIZE) == 0);
+
+  /* add the chunks to the chunk input */
+  AddChunksToChunkInput(p_info);
+  {
+    CDISERVER_AddChunkToChunkInput();
+      MS_STATUS HandleAddChunkToChunkInput()
+      {
+        if ( MS_ioctl(chunk_input_fd,
+              DEMUX_CHUNKINPUT_CHUNK_LIST_READY_EX,
+              &chunks_ex) != 0)
+      }
+  }
+}
+
+!INFO   -MSM_MS       < T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Adding chunk to chunk input queue. " "chunk input fd = 398, p_address = 0x2c41dd28, num bytes = 344792 " "chunk_id = `967`
+
+
+// get-last-completed event
+
+\Description: Gets the events of the chunk input and the id of the last
+completed chunk.
+
+starts from CDISERVER_GetChunkInputEvents,
+DEMUX_EVENT_CHUNKINPUT_GET_STATUS
+
+!INFO   -MSM_MS       < T:`CDI_WT_THREAD` M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- 
+  `Last completed chunk is 967` 
+
+
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7004 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 956 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7024 > < no-ctx >" "Got events:  chunk id 956\n 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7119 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 1 entries 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7135 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 957, PTS (0,107841598) 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7064 > < no-ctx >" "Time now is [2045:08:12 20:59:52]1844039857, events=100, queue empty=XFALSE, chunk list completed=XFALSE, chunk_id=956 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(CdiServerThread) L:4802 > < no-ctx >" "Request done. request=E_REQUEST_TYPE_GET_CHUNK_INPUT_EVENTS Result=MS_STATUS_OK, time=[2045:08:12 20:59:52]1844039857 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(CDIServerEventMgrCallback) L:4962 > < no-ctx >" "IN 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetChunkInputEventsCallback) L:5862 > < no-ctx >" "events=100, queue empty=XFALSE, chunk list completed=XFALSE, " "TPID monitor threshold=XTRUE, TPID monitor overflow=XFALSE " "last completed chunk id 956 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetChunkInputEventsCallback) L:5891 > < no-ctx >" "going to retrieve TPID monitor data 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5927 > < splicer=0x13 hMC=0x13 >" "num blocks read 1 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5946 > < splicer=0x13 hMC=0x13 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 957, PTS (0,107841598) 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6084 > < splicer=0x13 hMC=0x13 >" "Check PTS [0,107841598] at index=56). 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6125 > < splicer=0x13 hMC=0x13 >" "found prev_pts (pts=[0,107643598],chunk_id=956, index=55). 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6136 > < splicer=0x13 hMC=0x13 >" "found prev_prev_pts (pts=[0,107503198],chunk_id=955, index=54). 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6036 > < splicer=0x13 hMC=0x13 >" "Saving PTS at index 56, chunkID 957 PTS [0,107841598] 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(CdiServerThread) L:3815 > < no-ctx >" "Reading message 
+KERN_EMERG --| Vid-lvl 1412813  | Pts(H)0 (L)106732798  |
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(CDISERVER_PrintDeviceDebug) L:3708 > < no-ctx >" "IN\n 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(SendMsgToBgThread) L:12471 > < no-ctx >" "Sending message to background thread 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(PrintProcfsDebug) L:12695 > < no-ctx >" "IN\n 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(PrintProcfsDebug) L:12707 > < no-ctx >" "-MS_PROCFS- 	 PTS(high):0 (low):106844398
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(PrintProcfsDebug) L:12695 > < no-ctx >" "IN\n 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(PrintProcfsDebug) L:12707 > < no-ctx >" "-MS_PROCFS- Read Mode: Default
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(PrintProcfsDebug) L:12707 > < no-ctx >" "-MS_PROCFS- CDI Audio decoder information
+KERN_EMERG --| Vid-lvl 1439874  | Pts(H)0 (L)106775998  |
+KERN_EMERG  --| Aud-lvl:259367  | pts 106786078 | pts2stc 4294967278   |
+KERN_EMERG MIL tpidmonitor_process_event:440:Raising first PTS event (481 957)
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(CDISERVER_GetChunkInputEvents) L:2076 > < no-ctx >" "IN 
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(SendMsgToBgThread) L:12471 > < no-ctx >" "Sending message to background thread 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7004 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 957 
+
+
+egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|ChunkInputTPIDMonitorData|reached EOF" 
+
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 964 
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7124 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 1 entries 
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 965, PTS (0,108219598) 
+!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5929 > < splicer=0x5 hMC=0x5 >" "num blocks read 1 
+!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5948 > < splicer=0x5 hMC=0x5 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 965, PTS (0,108219598) 
+!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6038 > < splicer=0x5 hMC=0x5 >" "Saving PTS at index 64, chunkID 965 PTS [0,108219598] 
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 965 
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 965 
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7124 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 1 entries 
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 966, PTS (0,108313198) 
+!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5929 > < splicer=0x5 hMC=0x5 >" "num blocks read 1 
+!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5948 > < splicer=0x5 hMC=0x5 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 966, PTS (0,108313198) 
+!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6038 > < splicer=0x5 hMC=0x5 >" "Saving PTS at index 65, chunkID 966 PTS [0,108313198] 
+!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 966 
 
 
 ={============================================================================
@@ -24314,6 +24437,9 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 
 !MIL    -EPG_MISC     		< M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/playback/pdl/Fish Town/banner"}
 !MIL    -EPG_MISC     		< M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "PlayingStatus","action": "PDL_DOWNLOAD","title": "PlayingStatus changed to: PDL_DOWNLOAD","label": "","currentscreen": "/playback/pdl/Fish Town/banner"}
+
+<playback-asset-name>
+!MIL    -EPG_ME       		< M:SpcPortOutput F:write L:24 > 220SSCN019On Demand TVSSCA012All 4SSDT025 6.59pm Fri 10 MarSSN0016Peep ShowSSE0128Simon, Dobby's ex-boyfriend, invites Mark, Dobby, Jeremy and Super Hans to join him for a paintballing weekend. (S8, Ep3)SSEI015Playback4c
 
 !MIL    -EPG_ME       		< M:DownloadNext F:isDownloadNextAllowedFor L:219 > T:CEE-J EventQueue Reader 0:DOWNLOADNEXT: item = Fish Town candidate for `DN = true`
 
