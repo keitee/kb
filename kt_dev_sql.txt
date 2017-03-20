@@ -10,6 +10,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_sql_002| sql-select sql-wildcard
 |kt_dev_sql_003| sql-order-by sql-function
 *kt_dev_sql_003* sql-join
+*kt_dev_sql_003* sql-create
 *kt_dev_sql_003* sql-insert sql-update sql-delete
 *kt_dev_sql_003* sql-examples
 
@@ -238,12 +239,52 @@ create result set from two or more tables.
 
 <CROSS-JOIN>
 The simplest type of JOIN. least useful and inefficient.
-Takes all the rows from both tables without relation between tables.
+Takes all the rows from both tables `without relation` between tables.
 CROSS keyword is optional.
 
 Q: What are all the first names and email addresses I have?
 
 SELECT p.person_first_name, e.email_address FROM person p, email_address e;
+
+mysql> SELECT * FROM person;
++-----------+-------------------+------------------+-------------------------+----------------------------+---------------------+
+| person_id | person_first_name | person_last_name | person_contacted_number | person_date_last_contacted | person_date_added   |
++-----------+-------------------+------------------+-------------------------+----------------------------+---------------------+
+|         1 | Jon               | Flanders         |                       5 | 2013-09-14 11:43:31        | 2013-01-14 11:43:31 |
+|         2 | Shannon           | Ahern            |                       0 | 2013-08-14 11:43:31        | 2013-02-14 11:43:31 |
+|         3 | Fritz             | Onion            |                       1 | 2013-07-14 11:43:31        | 2013-03-14 11:43:31 |
++-----------+-------------------+------------------+-------------------------+----------------------------+---------------------+
+3 rows in set (0.00 sec)
+
+mysql> SELECT * FROM email_address;
++------------------+-------------------------+-----------------------+
+| email_address_id | email_address_person_id | email_address         |
++------------------+-------------------------+-----------------------+
+|                1 |                       1 | jon.flanders@mail.com |
+|                2 |                       1 | jonf@anothermail.com  |
+|                4 |                       3 | fritz@mail.com        |
+|                5 |                    NULL | aaron@mail.com        |
++------------------+-------------------------+-----------------------+
+4 rows in set (0.00 sec)
+
+mysql>  SELECT p.person_first_name, e.email_address FROM person p, email_address e;
++-------------------+-----------------------+
+| person_first_name | email_address         |
++-------------------+-----------------------+
+| Jon               | jon.flanders@mail.com |
+| Shannon           | jon.flanders@mail.com |
+| Fritz             | jon.flanders@mail.com |
+| Jon               | jonf@anothermail.com  |
+| Shannon           | jonf@anothermail.com  |
+| Fritz             | jonf@anothermail.com  |
+| Jon               | fritz@mail.com        |
+| Shannon           | fritz@mail.com        |
+| Fritz             | fritz@mail.com        |
+| Jon               | aaron@mail.com        |
+| Shannon           | aaron@mail.com        |
+| Fritz             | aaron@mail.com        |
++-------------------+-----------------------+
+12 rows in set (0.00 sec)
 
 
 <INNER-JOIN>
@@ -258,11 +299,19 @@ SELECT p.person_first_name, p.person_last_name, e.email_address
 FROM person p INNER JOIN email_address e
 ON p.person_id = e.email_address_person_id;
 
++-------------------+------------------+-----------------------+
+| person_first_name | person_last_name | email_address         |
++-------------------+------------------+-----------------------+
+| Jon               | Flanders         | jon.flanders@mail.com |
+| Jon               | Flanders         | jonf@anothermail.com  |
+| Fritz             | Onion            | fritz@mail.com        |
++-------------------+------------------+-----------------------+
+
 
 <OUTER-JOIN>
 The difference between INNER JOIN and OUTER JOIN is NULL since INNER JOIN only
 joins against rows where there is a match in the joined table and OUTER JOIN
-works even when there is no match.
+works even when there is no match. But NULL on LEFT or RIGHT.
 
 Q: What are all my contacts and their email addresses, including the ones
 missing an email address and the one with an email address but missing a
@@ -278,6 +327,8 @@ ON p.person_id = e.email_address_person_id;
 | Shannon           | Ahern             | NULL          |
 | NULL              | NULL              | aaron@..      |
 
+note: do not work in mysql
+
 
 <LEFT-OUTER-JOIN>
 Only the rows from the table on the left of the LEFT OUTER JOIN will be
@@ -290,13 +341,17 @@ SELECT p.person_first_name, p.person_last_name, e.email_address
 FROM person p LEFT OUTER JOIN email_address e
 ON p.person_id = e.email_address_person_id;
 
-| Jon               | Flanders          | jon@..        |
-| Fritz             | Onion             | fritz@..      |
-| Shannon           | Ahern             | NULL          |
++-------------------+------------------+-----------------------+
+| person_first_name | person_last_name | email_address         |
++-------------------+------------------+-----------------------+
+| Jon               | Flanders         | jon.flanders@mail.com |
+| Jon               | Flanders         | jonf@anothermail.com  |
+| Shannon           | Ahern            | NULL                  |
+| Fritz             | Onion            | fritz@mail.com        |
++-------------------+------------------+-----------------------+
 
 
 <RIGHT-OUTER-JOIN>
-
 Q: What are the email addresses I have, including those emails I don't have a
 person for?
 
@@ -304,80 +359,101 @@ SELECT p.person_first_name, p.person_last_name, e.email_address
 FROM person p RIGHT OUTER JOIN email_address e
 ON p.person_id = e.email_address_person_id;
 
-| Jon               | Flanders          | jon@..        |
-| Fritz             | Onion             | fritz@..      |
-| NULL              | NULL              | aaron@..      |
-
-<ex>
-CROSS JOIN
-SELECT p.person_first_name, e.email_address FROM person p, email_address e;
-
-| person_first_name | person_last_name  | email_address     | 
-+-----------------------------------------------------------+
-| Jon               | Flanders          | jon.flanders@..   |
-| Shannon           | Ahern             | jon.flanders@..   |
-| Fritz             | Onion             | jon.flanders@..   |
-| Jon               | Flanders          | jon@..            |
-| Shannon           | Ahern             | jon@..            |
-| Fritz             | Onion             | jon@..            |
-| Jon               | Flanders          | fritz@..          |
-| Shannon           | Ahern             | fritz@..          |
-| Fritz             | Onion             | fritz@..          |
-| Jon               | Flanders          | aaron@..          |
-| Shannon           | Ahern             | aaron@..          |
-| Fritz             | Onion             | aaron@..          |
++-------------------+------------------+-----------------------+
+| person_first_name | person_last_name | email_address         |
++-------------------+------------------+-----------------------+
+| Jon               | Flanders         | jon.flanders@mail.com |
+| Jon               | Flanders         | jonf@anothermail.com  |
+| Fritz             | Onion            | fritz@mail.com        |
+| NULL              | NULL             | aaron@mail.com        |
++-------------------+------------------+-----------------------+
 
 
-INNER JOIN
+={============================================================================
+*kt_dev_sql_003* sql-create
 
-| person_first_name | person_last_name  | email_address     | 
-+-----------------------------------------------------------+
-| Jon               | Flanders          | jon.flanders@..   |
-| Jon               | Flanders          | jon@..            |
-| Fritz             | Onion             | fritz@..          |
+* DDL (Data Definition Language)
+
+$mysql -u root -p
+$mysql -u root --password=mysql < contacts.sql
+
+-- this is not ANSI SQL but is supported by most vendors.
+CREATE DATABASE contacts;
+USE contacts;
+
+-- CREATE TABLE ( column name, column data type );
+-- NULL is the default and means that NULL value are valid for that column.
+-- NOT NULL means an attempt to insert NULL value will fail.
+
+-- PRIMARY KEY columns are implicitly NOT NULL
+-- possible for more than one column to form together as a compound PRIMARY
+-- KEY.
+
+-- CONSTRAINT constraint name
+
+-- create tables but note that no FOREIGN KEY
+CREATE TABLE email_address( email_address_id INTEGER NOT NULL, 
+email_address_person_id INTEGER, 
+email_address VARCHAR(55) NOT NULL, 
+CONSTRAINT PK_email_address PRIMARY KEY (email_address_id));
+
+CREATE TABLE person( person_id INTEGER NOT NULL, person_first_name VARCHAR(55) NOT NULL, 
+person_last_name VARCHAR(55) NULL, 
+person_contacted_number INTEGER NOT NULL, 
+person_date_last_contacted DATETIME NOT NULL,
+person_date_added DATETIME NOT NULL, 
+CONSTRAINT PK_person PRIMARY KEY(person_id));
+
+-- fill email_address table
+INSERT INTO email_address (email_address_id, email_address_person_id,
+    email_address) VALUES (1, 1, 'jon.flanders@mail.com');
+INSERT INTO email_address (email_address_id, email_address_person_id,
+    email_address) VALUES (2, 1, 'jonf@anothermail.com');
+INSERT INTO email_address (email_address_id, email_address_person_id,
+    email_address) VALUES (4, 3, 'fritz@mail.com');
+INSERT INTO email_address (email_address_id, email_address_person_id,
+    email_address) VALUES (5, NULL, 'aaron@mail.com');
+
+-- fill person table
+INSERT INTO person (person_id, person_first_name, person_last_name,
+      person_contacted_number, person_date_last_contacted, person_date_added)
+  VALUES (1, 'Jon', 'Flanders', 5, '2013-09-14 11:43:31', '2013-01-14 11:43:31');
+INSERT INTO person (person_id, person_first_name, person_last_name,
+      person_contacted_number, person_date_last_contacted, person_date_added)
+  VALUES (2, 'Shannon', 'Ahern', 0, '2013-08-14 11:43:31', '2013-02-14 11:43:31');
+INSERT INTO person (person_id, person_first_name, person_last_name,
+      person_contacted_number, person_date_last_contacted, person_date_added)
+  VALUES (3, 'Fritz', 'Onion', 1, '2013-07-14 11:43:31', '2013-03-14 11:43:31');
 
 
-SELECT p.person_first_name FROM person p;
+-- ALTER TABLE enables you to add or change a column definition or CONSTRAINT
+-- on an existing table.
 
-| person_first_name |
-+--------------------
-| Jon               |
-| Jon               |
-| Fritz             |
-
-
-SLECT e.email_address FROM email_address e;
-
-| email_address     | 
---------------------+
-| jon.flanders@..   |
-| jon@..            |
-| fritz@..          |
-| aaron@..          |
-
-This means that there are rows which has NULL.
-
-note: WHY do not show rows which has NULL?
+-- doing alter table to make `relation`
+ALTER TABLE email_address ADD CONSTRAINT FK_email_address_person FOREIGN
+KEY(email_address_person_id) REFERENCES person (person_id);
 
 
-RIGHT OUTER JOIN
+mysql> SELECT * FROM person;
++-----------+-------------------+------------------+-------------------------+----------------------------+---------------------+
+| person_id | person_first_name | person_last_name | person_contacted_number | person_date_last_contacted | person_date_added   |
++-----------+-------------------+------------------+-------------------------+----------------------------+---------------------+
+|         1 | Jon               | Flanders         |                       5 | 2013-09-14 11:43:31        | 2013-01-14 11:43:31 |
+|         2 | Shannon           | Ahern            |                       0 | 2013-08-14 11:43:31        | 2013-02-14 11:43:31 |
+|         3 | Fritz             | Onion            |                       1 | 2013-07-14 11:43:31        | 2013-03-14 11:43:31 |
++-----------+-------------------+------------------+-------------------------+----------------------------+---------------------+
+3 rows in set (0.00 sec)
 
-| person_first_name | person_last_name  | email_address     | 
-+-----------------------------------------------------------+
-| Jon               | Flanders          | jon.flanders@..   |
-| Jon               | Flanders          | jon@..            |
-| Fritz             | Onion             | fritz@..          |
-| NULL              | NULL              | aaron@..          |
-
-
-LEFT OUTER JOIN
-
-| person_first_name | person_last_name  | email_address     | 
-+-----------------------------------------------------------+
-| Jon               | Flanders          | jon.flanders@..   |
-| Jon               | Flanders          | jon@..            |
-| Shannon           | Ahern             | NULL              |
-| Fritz             | Onion             | fritz@..          |
+mysql> SELECT * FROM email_address;
++------------------+-------------------------+-----------------------+
+| email_address_id | email_address_person_id | email_address         |
++------------------+-------------------------+-----------------------+
+|                1 |                       1 | jon.flanders@mail.com |
+|                2 |                       1 | jonf@anothermail.com  |
+|                4 |                       3 | fritz@mail.com        |
+|                5 |                    NULL | aaron@mail.com        |
++------------------+-------------------------+-----------------------+
+4 rows in set (0.00 sec)
 
 
 ={============================================================================
@@ -446,6 +522,7 @@ mysql --batch --skip-column-names -u root uploads -e \
 
 mysql --batch --table --column-names -u root uploads -e \
 "SELECT version, upload_time, filename, all_tests_found.test_id FROM upload, all_tests_found WHERE mac = '0019FB0FC051' AND all_tests_found.id=upload.id AND all_tests_found.test_id IN (59) ORDER BY upload_time DESC LIMIT 5"
+
 
 =}============================================================================
 Copyright: see |ktkb|                              vim:tw=100:ts=3:ft=help:norl:
