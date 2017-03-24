@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
     subprocess.call(["rm", "-f", "G* tags"])
 
-    listfile = "/home/nds-uk/kyoupark/github-kb/si/flist.out"
+    listfile = "/home/kyoupark/github-kb/si/flist.out"
     sys.stdout.write("building ctags for %s ...\n" % listfile)
     subprocess.call(["ctags", "-L", listfile])
 
