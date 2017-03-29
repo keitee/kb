@@ -35674,38 +35674,194 @@ to perform I/O on the same file, as described in Section 13.7.
 
 LPI 26 MONITORING CHILD PROCESSES
 
+In many applications where a parent creates child processes, it is useful for
+the parent to be able to monitor the children to find out when and how they
+terminate.  This facility is provided by wait() and a number of related system
+calls.
+
 <syscall-wait>
 The wait() system call waits for one of the children of the calling process to
-terminate and returns the termination status of that child in the buffer pointed
-to by status.
+terminate and returns `the termination status` of that child in the buffer
+pointed to by status.
 
 #include <sys/wait.h>
+
 pid_t wait(int *status);
 
-If no (previously unwaited-for) child of the calling process has yet terminated,
-   the call blocks until one of the children terminates. If a child has already
-     terminated by the time of the call, wait() returns immediately.
+Returns process ID of terminated child, or 1 on error
 
-As its function result, wait() returns the process ID of the child that has
-terminated.
+  * If no (previously unwaited-for) child of the calling process has yet
+    terminated, the call `blocks` until one of the children terminates. If a
+    child has already terminated by the time of the call, wait() returns
+    immediately.
 
-On error, wait() returns -1. One possible error is that the calling process has
-no previously unwaited-for children, which is indicated by the errno value
-ECHILD. This means that we can use the following loop to wait for all children
-of the calling process to terminate:
+  * If status is not NULL, information about how the child terminated is
+    returned in the integer to which status points. We describe the
+    information returned in status in Section 26.1.3.
+
+  * As its function result, wait() returns the process ID of the child that
+    has terminated.
+
+On error, wait() returns -1. One possible error is that the calling process
+has no (previously unwaited-for) children, which is indicated by the errno
+value ECHILD. This means that we can use the following loop to wait for all
+children of the calling process to terminate:
 
 while ((childPid = wait(NULL)) != -1)
   continue;
 if (errno != ECHILD) /* An unexpected error... */
   errExit("wait");
 
+note:
+If there are multiple terminated children at a particular moment, SUSv3 leaves
+  unspecified the order in which these children will be reaped by a sequence
+  of wait() calls; that is, the order depends on the implementation. Even
+  across versions of the Linux kernel, the behavior varies.
 
-<waitpid-system-call>
+
+<syscall-waitpid>
 The wait() system call has a number of limitations, which waitpid() was designed
-to address. See the reference for more details.
+to address.
+
+  * If a parent process has created multiple children, it is not possible to
+    wait() for the completion of a specific child; we can only wait for the
+    next child that terminates.
+
+  * If no child has yet terminated, wait() always blocks. Sometimes, it would
+    be preferable to perform a nonblocking wait so that if no child has yet
+    terminated, we obtain an immediate indication of this fact.
+
+  * Using wait(), we can find out only about children that have terminated. It
+    is not possible to be notified when a child is stopped by a signal (such
+    as SIGSTOP or SIGTTIN) or when a stopped child is resumed by delivery
+    of a SIGCONT signal.  
+
 
 #include <sys/wait.h>
+
 pid_t waitpid(pid_t pid, int *status, int options);
+
+The pid argument enables the selection of the child to be waited for:
+
+  * If pid is greater than 0, wait for the child whose process ID equals pid.
+  
+  * If pid equals 0, wait for any child in the same process group as the
+    caller (parent). We describe process groups in Section 34.2.
+
+  * If pid is less than 1, wait for any child whose process group identifier
+    equals the absolute value of pid.
+
+  * If pid equals 1, wait for any child. The call wait(&status) is equivalent
+    to the call waitpid(1, &status, 0).
+
+
+26.1.3 The Wait Status Value
+
+The status value returned by wait() and waitpid() allows us to distinguish the
+following events for the child:
+
+  * The child terminated by calling _exit() (or exit()), specifying an integer
+    exit status.
+  
+  * The child was terminated by the delivery of an unhandled signal.
+  
+  * The child was stopped by a signal, and waitpid() was called with the
+    WUNTRACED flag.
+  
+  * The child was resumed by a SIGCONT signal, and waitpid() was called with
+    the WCONTINUED flag.
+
+We use the term `wait status` to encompass all of the above cases. The
+designation `termination status` is used to refer to the first two cases.
+
+Although defined as an int, only the bottom 2 bytes of the value pointed to by
+status are actually used. The way in which these 2 bytes are filled depends on
+which of the above events occurred for the child.
+
+normal termination
+
+15 <---- bits ----> 8| 7          0
+| exit status(0-255) | 0          |
+
+note:
+the layout of the wait status value for Linux/x86-32. The details vary across
+implementations. SUSv3 doesn't specify any particular layout for this
+information, or even require that it is contained in the bottom 2 bytes of the
+value pointed to by status. Portable applications should always use `the macros`
+described in this section to inspect this value, rather than directly
+inspecting its bit-mask components.
+
+The <sys/wait.h> header file defines a standard set of macros that can be used
+to dissect a wait status value. When applied to a status value returned by
+wait() or waitpid(), only one of the macros in the list below will return
+true. Additional macros are provided to further dissect the status value, as
+noted in the list.
+
+WIFEXITED(status)
+
+This macro returns true if the child process exited normally. In this case,
+     the macro WEXITSTATUS(status) returns the exit status of the child
+       process.  
+(As noted in Section 25.1, only the least significant byte of the child’s exit
+ status is available to the parent.)
+
+Note that although the name status is also used for the argument of the above
+macros, they expect a plain integer, rather than a pointer to an integer as
+required by wait() and waitpid().
+       
+<ex> <call-strsignal>
+
+#define _GNU_SOURCE             // get strsignal() declaration from <string.h>
+#include <string.h>
+#include <sys/wait.h>
+#include "print_wait_status.h"  // declaration of printWaitStatus()
+#include "tlpi_hdr.h"
+
+// NOTE: The following function employs printf(), which is not
+// async-signal-safe (see Section 21.1.2). As such, this function is also not
+// async-signal-safe (i.e., beware of calling it from a SIGCHLD handler)
+
+// examine a wait() status using the W* macros
+void printWaitStatus(const char *msg, int status)
+{
+  if (msg != NULL)
+    printf("%s", msg);
+
+  if (WIFEXITED(status))
+  {
+    printf("child exited, status=%d\n", WEXITSTATUS(status));
+  }
+  else if (WIFSIGNALED(status))
+  {
+    printf("child killed by signal %d (%s)\n",
+        WTERMSIG(status), strsignal(WTERMSIG(status)));
+
+#ifdef WCOREDUMP  // not in SUSv3, may be absent on some systems
+    if (WCOREDUMP(status))
+      printf(" (core dumped)");
+#endif
+
+    printf("\n");
+  }
+  else if (WIFSTOPPED(status))
+  {
+    printf("child stopped by signal %d (%s)\n",
+        WSTOPSIG(status), strsignal(WSTOPSIG(status)));
+
+#ifdef WIFCONTINUED
+  }
+  else if (WIFCONTINUED(status))
+  {
+    printf("child continued\n");
+#endif
+  }
+
+  // should never happen
+  else {
+    printf("what happened to this child? (status=%x)\n", 
+        (unsigned int) status);
+  }
+}
 
 
 ={============================================================================
