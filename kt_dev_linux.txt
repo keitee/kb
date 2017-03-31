@@ -327,6 +327,10 @@
 |kt_linux_rege_001| regex-usage
 *kt_linux_rege_001* regex-grep tool-grep
 
+#{ busybox
+*kt_linux_busy_001* busy-links
+*kt_linux_busy_001* busy-build
+
 #{ gcc
 *kt_linux_gcc_400* gcc-doc
 *kt_linux_gcc_400* gcc-libc-uclibc-and-glibc
@@ -409,6 +413,7 @@
 |kt_linux_core_102| process-termination
 |kt_linux_core_103| process-monitor-child-process
 *kt_linux_core_104* process-zombie *ex-interview*
+*kt_linux_core_104* process-sigchld
 |kt_linux_core_105| process-memory-layout
 |kt_linux_core_106| process-virtual-memory, user and kernel stack, stack frame
 *kt_linux_core_107* linux-process-environment-list
@@ -496,6 +501,7 @@
 
 
 *kt_linux_core_400* lib-linker
+*kt_linux_core_400* lib-linker-script
 *kt_linux_core_401* lib-shared
 *kt_linux_core_400* lib-static-how-works
 *kt_linux_core_401* lib-shared-dependancy
@@ -6947,7 +6953,6 @@ $ find . -type d -name \*stb-4 | xargs -I{} find {} -name \*nickel\* | xargs ls 
 
 
 <busybox>
-
 xargs
 
     xargs [OPTIONS] [PROG [ARGS]]
@@ -24742,6 +24747,14 @@ complilation.
            libraries.  This is similar to the information provided by the nm
            program when given the -D (--dynamic) option.
 
+       -t
+       --syms
+           Print the symbol table entries of the file.  This is similar to the
+           information provided by the nm program, although the display format
+           is different.  The format of the output depends upon the format of
+           the file being dumped, but there are two main types.  One looks
+           like this:
+
 
 ={============================================================================
 *kt_linux_tool_204* tool-addr2line
@@ -24777,15 +24790,6 @@ If the line number can not be determined, addr2line will print 0
 
 mips-uclibc-addr2line -f -s -e fs/NDS/bin/MW_Process 5dd134 5dbe00 5d3ee4 5d6cb4 5ddb64 5cef3c a5f298   
 
-
-
-={============================================================================
-*kt_linux_tool_250* tool-busybox
-
-http://www.busybox.net/source.html
-http://www.busybox.net/downloads/BusyBox.html
-https://git.busybox.net/busybox/tree/coreutils
-https://busybox.net/downloads/
 
 
 # ============================================================================
@@ -33710,7 +33714,7 @@ dynamically linked. Then read the FAQ entry How do I build a Busybox-based
 system?, and the documentation for Busybox init (FIXME: dead link). 
 
 
-<cmdline>
+<cmdline> <console>
 sh-3.2# cat /proc/cmdline
 mem=166M rw console=uart,mmio,0x10400b00,115200n8 ip_conntrack_tftp.ports=4085
 
@@ -35869,70 +35873,157 @@ void printWaitStatus(const char *msg, int status)
 
 2014.02 from google phone interview. 
 
-The lifetimes of parent and child processes are usually not the same-either the
-parent outlives the child or vice versa. This raises two questions: 
+26.2 Orphans and Zombies
+
+The lifetimes of parent and child processes are usually not the same-either
+the parent outlives the child or vice versa. This raises two questions: 
 
 1. Who becomes the parent of an `orphaned-child`? 
 
 Each process has a parent-the process that created it. If a child process
 becomes orphaned because its "birth" parent terminates, then the child is
 adopted by the `init-process`, and subsequent calls to getppid() in the child
-return 1. See Section 26.2. The process 1, init, the ancestor of all processes.
-The init process adopts the child and automatically performs a wait(), thus
-removing the zombie process from the system.
+return 1. See Section 26.2. The process 1, init, the ancestor of all
+processes. 
 
-2. What happens to a child that terminates before its parent has had a chance to
-perform a wait()?
+2. What happens to a child that terminates before its parent has had a chance
+to perform a wait()?
 
 The point here is that, although the child has finished its work, the parent
 should still be permitted to perform a wait() at some later time to determine
-how the child terminated. The kernel deals with this situation by 'turning' the
-child into a `zombie`. This means that most of the resources held by the child
-are released back to the system to be reused by other processes. 
+how the child terminated. The kernel deals with this situation by `turning`
+the child into a `zombie`. This means that most of the resources held by the
+child are released back to the system to be reused by other processes. 
 
 The only part of the process that remains is an entry in the kernel's process
-table recording; among other things the child's process ID, termination status,
-and resource usage statistics. Section 36.1.
+table recording; among other things the child's process ID, termination
+status, and resource usage statistics. Section 36.1.
 
 A zombie process can't be killed by a signal, not even the (silver bullet)
 SIGKILL. This ensures that the parent can always eventually perform a wait().
-When the parent does perform a wait(), the kernel removes the zombie, since the
-last remaining information about the child is no longer required.
+When the parent does perform a wait(), the kernel removes the zombie, since
+the last remaining information about the child is no longer required.
 
+On the other hand, if the parent terminates without doing a wait(), then the
+init process adopts the child and automatically performs a wait(), thus
+removing the zombie process from the system.
 
 <why-zombie-can-be-a-problem>
-If a parent creates a child, but fails to perform a wait(), then an entry for
-the zombie child will be maintained indefinitely in the kernel's process table.
-If a large number of such zombie children are created, they will eventually fill
-the kernel process table, 'preventing' the creation of new processes. 
+If a parent creates a child and `alive`, but fails to perform a wait(), then
+an entry for the zombie child will be maintained indefinitely in the kernel's
+process table. If a large number of such zombie children are created, they
+will eventually fill the kernel process table, `preventing` the creation of
+new processes. 
 
 note:
 zombie-process is different from orphaned-process since parent is still alive
-but fails to wait. So killing parent makes zombie orphaned process and then
+but fails to wait. So `killing parent makes` zombie orphaned process and then
 adopted by init-process.
 
-Since the zombies can't be killed by a signal, the only way to remove them from
-the system is to kill their parent (or wait for it to exit), at which time the
-zombies are adopted and waited on by init, and consequently removed from the
-system.
+Since the zombies can't be killed by a signal, the only way to remove them
+from the system is to kill their parent (or wait for it to exit), at which
+time the zombies are adopted and waited on by init, and consequently removed
+from the system.
 
-note:
-TODO to check code to see how to makes zombies.
-
+<ex>
 $ ./make_zombie
 Parent PID=1013
 Child (PID=1014) exiting
-  1013 pts/4 00:00:00 make_zombie Output from ps(1)
+  1013 pts/4 00:00:00 make_zombie       // Output from ps(1)
   1014 pts/4 00:00:00 make_zombie <defunct>
 After sending SIGKILL to make_zombie (PID=1014):
-  1013 pts/4 00:00:00 make_zombie Output from ps(1)
+  1013 pts/4 00:00:00 make_zombie       // Output from ps(1)
   1014 pts/4 00:00:00 make_zombie <defunct>
 
-In the above output, we see that ps(1) displays the string <defunct> to indicate
-a process in the zombie state.
+In the output, we see that ps(1) displays the string <defunct> to indicate a
+  process in the zombie state.
 
 A common way of reaping dead child processes is to establish a handler for the
 SIGCHLD signal.
+
+#include <signal.h>
+#include <libgen.h>         // for basename() declaration
+#include "tlpi_hdr.h"
+
+#define CMD_SIZE 200
+
+int main(int argc, char *argv[])
+{
+  char cmd[CMD_SIZE];
+  pit_t childPid;
+
+  setbuf(stdout, NULL);     // disable buffering of stdout
+
+  printf("Parent PID=%ld\n", (long) getpid());
+
+  switch( childPid = fork())
+  {
+    case -1:
+      errExit("fork");
+
+      // child: immediately exits to become zombie
+    case 0:
+      printf("Child PID=%ld exiting\n", (long) getpid());
+      _exit(EXIT_SUCCESS);
+
+      // parent
+    default:
+      sleep(3);     // give child a chance to start and exit
+      snprintf(cmd, CMD_SIZE, "ps | grep %s", basename(argv[0]));
+      cmd[CMD_SIZE-1] = '\0';   // ensure string is null-terminated
+      system(cmd);  // view zombie child again
+
+      // now send the "sure kill" signal to the zombie
+
+      if( kill(childPid, SIGKILL) == -1 )
+        errMsg("kill");
+
+      sleep(3);     // give child a chance to react to signal
+      printf("After sending SIGKILL to zombie (PID=%ld):\n", (long) childPid);
+      system(cmd);  // view zombie child again
+
+      exit(EXIT_SUCCESS);
+  }
+}
+
+
+={============================================================================
+*kt_linux_core_104* process-sigchld
+
+note:
+An example that has a possibility of creating zombie childrens and has to
+handle it.
+
+These semantics have important implications for the design of long-lived
+parent processes, such as network servers and shells, that create numerous
+children.
+
+26.3 The SIGCHLD Signal
+
+The termination of a child process is an event that occurs asynchronously. A
+parent can't predict when one of its child will terminate. Even if the parent
+sends a SIGKILL signal to the child, the exact time of termination is still
+dependent on when the child is next scheduled for use of a CPU. We have
+already seen that the parent should use wait() (or similar) in order to
+prevent the accumulation of zombie children, and have looked at two ways in
+which this can be done:
+
+  * The parent can call wait(), or waitpid() without specifying the WNOHANG
+    flag, in which case the call will block if a child has not already
+    terminated.
+
+
+  * The parent can periodically perform a nonblocking check (a poll) for dead
+    children via a call to waitpid() specifying the WNOHANG flag.
+
+Both of these approaches can be inconvenient. On the one hand, we may not want
+the parent to be blocked waiting for a child to terminate. On the other hand,
+making repeated nonblocking waitpid() calls wastes CPU time and adds
+  complexity to an application design. 
+
+To get around these problems, we can employ a handler for the SIGCHLD signal.
+
+note: skipped and see the LPI for more.
 
 
 ={============================================================================
@@ -48551,6 +48642,172 @@ pfmQueueSend(HPfmQueue q, const SPfmMessage *msg)
 
 
 ={============================================================================
+*kt_linux_busy_001* busy-links
+http://www.busybox.net/source.html
+http://www.busybox.net/downloads/BusyBox.html
+https://git.busybox.net/busybox/tree/coreutils
+https://busybox.net/downloads/
+
+
+={============================================================================
+*kt_linux_busy_001* busy-build
+
+<spk-busybox>
+// build for spk
+
+/usr/bin/make -j1
+CC=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc
+CROSS_COMPILE="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-"
+\
+CROSS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-"
+PREFIX="/home/nds-uk/kyoupark/spk-out/project_build_mips/ams-drx890/root" \
+ARCH=mips \ EXTRA_CFLAGS="-Os
+-I/home/nds-uk/kyoupark/spk-out/build_mips/staging_dir/include
+-I/home/nds-uk/kyoupark/spk-out/build_mips/staging_dir/usr/include
+-I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mips-linux/include"
+-C /home/nds-uk/kyoupark/spk-out/project_build_mips/ams-drx890/busybox-1.13.1
+
+
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install
+TARGET=mips-linux-gnu
+export PATH=${PREFIX}/bin:$PATH
+
+/usr/bin/make -j1 CC=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-gcc \
+CROSS_COMPILE="/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-" \
+CROSS="/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-" \
+PREFIX="/home/nds-uk/kyoupark/spk-out-use-own-brcm/project_build_mips/ams-drx890/root" \
+ARCH=mips \
+EXTRA_CFLAGS="-Os  -I/home/nds-uk/kyoupark/spk-out-use-own-brcm/build_mips/staging_dir/include -I/home/nds-uk/kyoupark/spk-out-use-own-brcm/build_mips/staging_dir/usr/include -I/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/include" 
+
+<error>
+busybox sh keeps restarting when sh is not configured in busybox
+
+KT: process '/bin/sh' (pid 16) exited. (stat 65280) Scheduling for restart.
+KT: respawn(once)
+KT: process '/bin/sh' (pid 17) exited. (stat 65280) Scheduling for restart.
+KT: respawn(once)
+
+
+<source>
+note:
+to check what applets, commands, are supported.
+
+include/applet_tables.h
+
+const char applet_names[] ALIGN1 = ""
+"awk" "\0"
+"basename" "\0"
+"brctl" "\0"
+
+int (*const applet_main[])(int argc, char **argv) = {
+awk_main,
+basename_main,
+brctl_main,
+...
+};
+
+
+libbb/appletlib.c
+
+int main(int argc UNUSED_PARAM, char **argv)
+{
+	parse_config_file(); /* ...maybe, if FEATURE_SUID_CONFIG */
+
+   // note:
+   // gets printed whenever runs commands on busybox
+
+	full_write2_str(applet_name);
+	full_write2_str(" KT: run applet\n");
+
+	run_applet_and_exit(applet_name, argv);
+}
+
+note: 
+to check init working
+
+init/init.c
+
+int init_main(int argc UNUSED_PARAM, char **argv)
+{
+	/* Hello world */
+	message(MAYBE_CONSOLE | L_LOG, "KT: init started: %s", bb_banner);
+    sleep(2);
+}
+
+
+[0946684820.742326]Freeing unused kernel memory: 7936k freed
+         1:      KT: system_dirs: /lib/
+init KT: run applet                                 // from libbb/appletlib.c
+KT: init started: BusyBox v1.13.1 (2017-03-24 14:44:53 GMT)
+KT: init started: 2
+KT: init started: 4
+command='/bin/ash' action=2 tty='/dev/ttyS0'
+
+command='/sbin/reboot' action=32 tty=''
+
+command='/usr/bin/killall syslogd' action=64 tty='/dev/null'
+
+command='/bin/umount -a -r' action=64 tty='/dev/null'
+
+command='/sbin/swapoff -a' action=64 tty='/dev/null'
+
+KT: init started: 5
+KT: init started: 6
+KT: run(sysint)
+KT: run_actions(1)
+KT: wait(sysint)
+KT: run_actions(8)
+KT: wait(once)
+KT: run_actions(16)
+KT: respawn(once)
+KT: run_actions(6)
+KT: starting pid 16, tty '/dev/ttyS0': '/bin/ash'
+KT: EXE: /bin/ash                         // static void init_exec(const char *command)
+        16:      KT: system_dirs: /lib/   // from glibc
+ash KT: run applet                        // from libbb/appletlib.c
+
+BusyBox v1.13.1 (2017-03-24 14:44:53 GMT) built-in shell (ash)
+Enter 'help' for a list of built-in commands.
+
+        16:      KT: RPATH...        16:         KT: LD_LIB...        16:        KT: RUNPATH...        16:   KT: cache...        16:         KT: default...
+        16:      KT: cannot open...        16:   KT: RPATH...        16:         KT: LD_LIB...        16:    KT: RUNPATH...        16:       KT: cache...        16:         KT: default...
+        16:      KT: RPATH...        16:         KT: LD_LIB...        16:        KT: RUNPATH...        16:   KT: cache...        16:         KT: default...
+        16:      KT: RPATH...        16:         KT: LD_LIB...        16:        KT: RUNPATH...        16:   KT: cache...        16:         KT: default...
+/ #
+/ #
+/ # ls
+        17:      KT: system_dirs: /lib/
+ls KT: run applet
+VERSION.gz  fifo        linuxrc     root        tmp
+bin         home        mnt         sbin        usr
+dev         init        opt         scs         var
+etc         lib         proc        sys
+
+
+<inittab>
+# /etc/inittab
+# Put a getty on the serial port
+#
+# note: ash
+ttyS0::respawn:/bin/ash
+
+# Stuff to do for the 3-finger salute
+::ctrlaltdel:/sbin/reboot
+
+# Stuff to do before rebooting
+null::shutdown:/usr/bin/killall syslogd
+null::shutdown:/bin/umount -a -r
+null::shutdown:/sbin/swapoff -a
+
+
+<config>
+To enable ash
+
+CONFIG_FEATURE_SH_IS_ASH=y
+CONFIG_ASH=y
+
+
+={============================================================================
 *kt_linux_gcc_400* gcc-doc
 
 
@@ -54553,40 +54810,6 @@ toolchain/patch-kernel.sh /home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-spk-gdb gcc-build-spk-bash
 
-<spk-busybox>
-
-/usr/bin/make -j1 CC=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-gcc CROSS_COMPILE="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-" \
-CROSS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-" PREFIX="/home/nds-uk/kyoupark/spk-out/project_build_mips/ams-drx890/root" \
-ARCH=mips \
-EXTRA_CFLAGS="-Os  -I/home/nds-uk/kyoupark/spk-out/build_mips/staging_dir/include -I/home/nds-uk/kyoupark/spk-out/build_mips/staging_dir/usr/include -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/mips-linux/include" -C /home/nds-uk/kyoupark/spk-out/project_build_mips/ams-drx890/busybox-1.13.1
-
-/usr/bin/make -j1 CC=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-gcc \
-CROSS_COMPILE="/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-" \
-CROSS="/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-" \
-PREFIX="/home/nds-uk/kyoupark/spk-out-use-own-brcm/project_build_mips/ams-drx890/root" \
-ARCH=mips \
-EXTRA_CFLAGS="-Os  -I/home/nds-uk/kyoupark/spk-out-use-own-brcm/build_mips/staging_dir/include -I/home/nds-uk/kyoupark/spk-out-use-own-brcm/build_mips/staging_dir/usr/include -I/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/include" 
-
-
-include/applet_tables.h
-
-const char applet_names[] ALIGN1 = ""
-"awk" "\0"
-"basename" "\0"
-"brctl" "\0"
-
-int (*const applet_main[])(int argc, char **argv) = {
-awk_main,
-basename_main,
-brctl_main,
-...
-};
-
-libbb/appletlib.c
-
-int main(int argc UNUSED_PARAM, char **argv)
-
-
 <spk-gdb>
 /home/nds-uk/kyoupark/si_logs/spk/darwin-spk-1.19-use-own/toolchain/gdb/6.7.1
 -rw-rw-r--  1 kyoupark ccusers  920 Oct 14  2013 600-fix-compile-flag-mismatch.patch
@@ -58956,6 +59179,188 @@ NAME
 
 https://blog.jessfraz.com/post/top-10-favorite-ldflags/
 
+
+={============================================================================
+*kt_linux_core_400* lib-linker-script
+
+3 Linker Scripts
+
+Every link is controlled by a linker script. This script is written in the
+`linker command language.`
+
+The main purpose of the linker script is 
+
+  * to describe how the sections in the input files should be mapped into the
+    output file, and 
+  
+  * to control the memory layout of the output file. 
+
+Most linker scripts do nothing more than this.  However, when necessary, the
+linker script can also direct the linker to perform many other operations,
+using the commands described below.
+
+The linker always uses a linker script. If you do not supply one yourself, the
+linker will use a `default script that is compiled into the linker executable.`
+
+You can use the `--verbose` command line option to display the default linker
+script. Certain command line options, such as `-r' or `-N', will affect the
+default linker script.
+
+You may supply your own linker script by using the `-T' command line option.
+When you do this, your linker script will replace the default linker script.
+
+You may also use linker scripts implicitly by naming them as input files to
+the linker, as though they were files to be linked. See Implicit Linker
+Scripts. 
+
+
+3.1 Basic Linker Script Concepts
+
+We need to define some basic concepts and vocabulary in order to describe the
+linker script language.
+
+The linker combines input files into a single output file. The output file and
+each input file are in a special data format known as an object file format.
+Each file is called an object file. The output file is often called an
+executable, but for our purposes we will also call it an object file. Each
+object file has, among other things, a list of sections. We sometimes refer to
+a section in an input file as an input section; similarly, a section in the
+output file is an output section.
+
+Each section in an object file has a name and a size. Most sections also have
+an associated block of data, known as the section contents. A section may be
+marked as `loadable`, which means that the contents should be loaded into memory
+when the output file is run. A section with no contents may be allocatable,
+which means that an area in memory should be set aside, but nothing in
+  particular should be loaded there (in some cases this memory must be zeroed
+      out). A section which is neither loadable nor allocatable typically
+  contains some sort of debugging information.
+
+Every loadable or allocatable output section has two addresses. The first is
+the `VMA`, or virtual memory address. This is the address the section will have
+when the output file is run. The second is the `LMA`, or load memory address.
+This is the address at which the section will be loaded. In most cases the two
+addresses will be the same. An example of when they might be different is when
+a data section is loaded into ROM, and then copied into RAM when the program
+starts up (this technique is often used to initialize global variables in a
+    ROM based system). In this case the ROM address would be the LMA, and the
+RAM address would be the VMA.
+
+You can see the sections in an object file by using the objdump program with
+the `-h' option.
+
+<symbols-are>
+Every object file also has a list of symbols, known as the symbol table. A
+symbol may be defined or undefined. Each symbol has a name, and each defined
+symbol has an address, among other information. If you compile a C or C++
+program into an object file, you will get a defined symbol for every defined
+function and global or static variable. Every undefined function or global
+variable which is referenced in the input file will become an undefined
+symbol.
+
+You can see the symbols in an object file by using the nm program, or by using
+the objdump program with the `-t' option. 
+
+
+3.2 Linker Script Format
+
+Linker scripts are text files.
+
+You write a linker script as a series of commands. Each command is either a
+keyword, possibly followed by arguments, or an assignment to a symbol. You may
+separate commands using semicolons. Whitespace is generally ignored.
+
+Strings such as file or format names can normally be entered directly. If the
+file name contains a character such as a comma which would otherwise serve to
+separate file names, you may put the file name in double quotes. There is no
+way to use a double quote character in a file name.
+
+You may include comments in linker scripts just as in C, delimited by 
+/* and */. As in C, comments are syntactically equivalent to whitespace. 
+
+
+3.3 Simple Linker Script Example
+
+Many linker scripts are fairly simple.
+
+The simplest possible linker script has just one command: `SECTIONS`. You use
+the SECTIONS command to describe the memory layout of the output file.
+
+The `SECTIONS' command is a powerful command. Here we will describe a simple
+use of it. Let's assume your program consists only of code, initialized data,
+and uninitialized data. These will be in the `.text', `.data', and `.bss'
+  sections, respectively. Let's assume further that these are the only
+  sections which appear in your input files.
+
+For this example, let's say that the code should be loaded at address 0x10000,
+and that the data should start at address 0x8000000. Here is a linker script
+which will do that:
+
+     SECTIONS
+     {
+       . = 0x10000;
+       .text : { *(.text) }
+       . = 0x8000000;
+       .data : { *(.data) }
+       .bss : { *(.bss) }
+     }
+
+You write the SECTIONS command as the keyword `SECTIONS', followed by a series
+  of `symbol assignments` and `output section descriptions` enclosed in curly
+  braces.
+
+The first line inside the `SECTIONS' command of the above example sets the
+value of the special symbol `.`, which is `the location counter` If you do not
+specify the address of an output section in some other way (other ways are
+    described later), the address is set from the current value of the
+location counter. The location counter is then incremented by the size of the
+output section. At the start of the `SECTIONS' command, the location counter
+has the value 0.
+
+The second line defines an output section, `.text`. The colon is required
+syntax which may be ignored for now. Within the curly braces after the output
+section name, `you list the names of the input sections` which should be
+placed into this output section. The * is a wildcard which matches any file
+name. The expression *(.text)' means all .text input sections in all input
+files.
+
+Since the location counter is 0x10000 when the output section .text is
+defined, the linker will set the address of the .text section in the output
+file to be 0x10000.
+
+The remaining lines define the .data and .bss sections in the output file.
+The linker will place the .data output section at address 0x8000000. After the
+linker places the .data output section, the value of the location counter will
+be 0x8000000 plus the size of the .data output section. The effect is that the
+linker will place the .bss output section immediately after the .data output
+section in memory.
+
+The linker will ensure that each output section has `the required alignment`, by
+increasing the location counter if necessary. In this example, the specified
+addresses for the .text and .data sections will probably satisfy any
+alignment constraints, but the linker may have to create a small gap between
+the .data and .bss sections.
+
+That's it! That's a simple and complete linker script. 
+
+
+3.4.1 Setting the Entry Point
+
+The first instruction to execute in a program is called the entry point. You
+can use the ENTRY linker script command to set the entry point. The argument
+is a symbol name:
+
+     ENTRY(symbol)
+
+There are several ways to set the entry point. The linker will set the entry
+point by trying each of the following methods in order, and stopping when one
+of them succeeds:
+
+    the `-e' entry command-line option;
+    the ENTRY(symbol) command in a linker script;
+    the value of a target specific symbol, if it is defined; For many targets this is start, but PE and BeOS based systems for example check a list of possible entry symbols, matching the first one found.
+    the address of the first byte of the `.text' section, if present;
+    The address 0. 
 
 ={============================================================================
 *kt_linux_core_400* lib-shared
