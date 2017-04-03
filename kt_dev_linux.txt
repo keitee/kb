@@ -505,12 +505,12 @@
 *kt_linux_core_401* lib-shared
 *kt_linux_core_400* lib-static-how-works
 *kt_linux_core_401* lib-shared-dependancy
-*kt_linux_core_400* lib-shared-ld ld-library-path
+*kt_linux_core_400* lib-shared-ld-so
+*kt_linux_core_406* lib-shared-ld-so-debug ld-so-glibc
 *kt_linux_core_400* lib-shared-soname
 *kt_linux_core_412* lib-shared-ld-conf lib-ld-so-cache
-*kt_linux_core_402* lib-search lib-rpath
+*kt_linux_core_402* lib-shared-search lib-rpath ld-library-path   
 |kt_linux_core_406| lib-shared-preload
-*kt_linux_core_406* lib-shared-ld-debug lib-ld-glibc
 *kt_linux_core_410* lib-shared: check libraries that process uses
 *kt_linux_core_410* lib-shared: check libraries loading
 *kt_linux_core_411* lib-shared: case problem in open failure
@@ -24754,6 +24754,41 @@ complilation.
            is different.  The format of the output depends upon the format of
            the file being dumped, but there are two main types.  One looks
            like this:
+
+       -f
+       --file-headers
+           Display summary information from the overall header of each of the
+           objfile files.
+
+$ objdump -f a.out_from_mips_asan
+
+a.out_from_mips_asan:     file format elf32-big
+architecture: UNKNOWN!, flags 0x00000112:
+EXEC_P, HAS_SYMS, D_PAGED
+start address 0x00400790
+
+$ readelf -h !$
+readelf -h a.out_from_mips_asan
+ELF Header:
+  Magic:   7f 45 4c 46 01 02 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF32
+  Data:                              2's complement, big endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           MIPS R3000
+  Version:                           0x1
+  Entry point address:               0x400790
+  Start of program headers:          52 (bytes into file)
+  Start of section headers:          8056 (bytes into file)
+  Flags:                             0x1007, noreorder, pic, cpic, o32, mips1
+  Size of this header:               52 (bytes)
+  Size of program headers:           32 (bytes)
+  Number of program headers:         9
+  Size of section headers:           40 (bytes)
+  Number of section headers:         38
+  Section header string table index: 35
 
 
 ={============================================================================
@@ -59057,6 +59092,26 @@ Display the `linker script` being used by the linker. If the optional NUMBER
 argument > 1, plugin symbol status will also be displayed. 
 
 <ex>
+/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-ld --verbose
+GNU ld version 2.17.50-brcm 20070220
+  Supported emulations:
+   elf32btsmip
+   elf32ltsmip
+   elf32btsmipn32
+   elf64btsmip
+   elf32ltsmipn32
+   elf64ltsmip
+using internal linker script:
+==================================================
+/* Script for -z combreloc: combine and sort reloc sections */
+OUTPUT_FORMAT("elf32-tradbigmips", "elf32-tradbigmips",
+	      "elf32-tradlittlemips")
+OUTPUT_ARCH(mips)
+ENTRY(__start)
+SEARCH_DIR("/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508/mips-linux-uclibc/lib");
+SECTIONS
+{ ...  }
+
 GNU ld (GNU Binutils) 2.25.1
   Supported emulations:
    elf32btsmip
@@ -59078,104 +59133,105 @@ OUTPUT_ARCH(mips)
 ENTRY(__start)
 SEARCH_DIR("=/home/kyoupark/asn/gcc/gcc-4.8.2-glibc-mips-wsysroot-install/mips-unknown-linux/lib"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
 SECTIONS
+{ ...  }
 
 
 <ld-man>
+https://sourceware.org/binutils/docs/ld/Options.html#Options
+
 LD(1)                        GNU Development Tools                       LD(1)
 
-NAME
-       ld - The GNU linker
+-l namespec
+--library=namespec
+    Add the archive or object file specified by namespec to the list of files
+    to link. This option may be used any number of times. If namespec is of
+    the form :filename, ld will search the library path for a file called
+    `filename`, otherwise it will search the library path for a file called
+    `libnamespec.a`.
 
-       -l namespec
-       --library=namespec
-           Add the archive or object file specified by namespec to the list of
-           files to link. This option may be used any number of times. If
-           namespec is of the form :filename, ld will search the library path
-           for a file called `filename`, otherwise it will search the library
-             path for a file called `libnamespec.a`.
+    On systems which support shared libraries, ld may also search for files
+    other than libnamespec.a.  Specifically, on ELF and SunOS systems, ld will
+    search a directory for a library called libnamespec.so before searching
+    for one called libnamespec.a. (By convention, a ".so" extension indicates
+        a shared library.) Note that this behavior does not apply to
+      :filename, which always specifies a file called filename.
 
-           On systems which support shared libraries, ld may also search for
-           files other than libnamespec.a.  Specifically, on ELF and SunOS
-           systems, ld will search a directory for a library called
-           libnamespec.so before searching for one called libnamespec.a. (By
-               convention, a ".so" extension indicates a shared library.)
-           Note that this behavior does not apply to :filename, which always
-           specifies a file called filename.
+    The linker will search an archive only once, at the location where it is
+    specified on the command line. If the archive defines a symbol which was
+    undefined in some object which appeared before the archive on the command
+    line, the linker will include the appropriate file(s) from the archive.
+    However, an undefined symbol in an object appearing later on the command
+    line will not cause the linker to search the archive again.
 
-           The linker will search an archive only once, at the location where
-           it is specified on the command line. If the archive defines a
-           symbol which was undefined in some object which appeared before the
-           archive on the command line, the linker will include the
-           appropriate file(s) from the archive. However, an undefined symbol
-           in an object appearing later on the command line will not cause the
-           linker to search the archive again.
+    See the -( option for a way to force the linker to search archives
+        multiple times.
 
-           See the -( option for a way to force the linker to search archives
-               multiple times.
-
-           You may list the same archive multiple times on the command line.
+    You may list the same archive multiple times on the command line.
 
 
-       -L searchdir
-       --library-path=searchdir
-           Add path `searchdir` to the list of paths that `ld` will search for
-           `archive libraries and ld control scripts.` You may use this option
-           any number of times. The directories are searched in the order in
-           which they are specified on the command line.
+-L searchdir
+--library-path=searchdir
+    Add path `searchdir` to the list of paths that `ld` will search for
+    `archive libraries and ld control scripts.` You may use this option any
+    number of times. The directories are searched in the order in which they
+    are specified on the command line.
 
-           Directories specified on the command line are searched before the
-           default directories. 
-           
-           All -L options apply to all `-l options`, regardless of the order in
-           which the options appear. 
-           
-           -L options do not affect how ld searches for a linker script unless
-           -T option is specified.
+    Directories specified on the command line are searched before the default
+    directories. 
+   
+    All -L options apply to all `-l options`, regardless of the order in which
+    the options appear. 
+   
+    -L options do not affect how ld searches for a linker script unless -T
+    option is specified.
 
-           If searchdir begins with "=", then the "=" will be replaced by the
-           sysroot prefix, a path specified when the linker is configured.
+    If searchdir begins with "=", then the "=" will be replaced by the sysroot
+    prefix, a path specified when the linker is configured.
 
-           The default set of paths searched (without being specified with -L)
-           depends on which emulation mode ld is using, and in some cases also
-           on how it was configured.
+    The default set of paths searched (without being specified with -L)
+    depends on which emulation mode ld is using, and in some cases also on how
+    it was configured.
 
-           The paths can also be specified in a link script with the
-           "SEARCH_DIR" command.  Directories specified this way are searched
-           at the point in which the linker script appears in the command
-           line.
-
-
-       -rpath=dir
-           Add a directory to the runtime library search path. This is used
-           when linking an ELF executable with shared objects. All -rpath
-           arguments are concatenated and passed to the runtime linker, which
-           uses them to locate shared objects at runtime.  The -rpath option
-           is also used when locating shared objects which are needed by
-           shared objects explicitly included in the link; see the description
-           of the -rpath-link option. 
-           
-           If -rpath is not used when linking an ELF executable, the contents
-           of the environment variable "LD_RUN_PATH" will be used if it is
-           defined.
-
-           The -rpath option may also be used on SunOS.  By default, on SunOS,
-               the linker will form a runtime search patch out of all the -L
-                 options it is given.  
-
-           If a -rpath option is used, the runtime search path will be formed
-           `exclusively` using the -rpath options, ignoring the -L options.
-           This can be useful when using gcc, which adds many -L options which
-           may be on NFS mounted file systems.
-
-           For compatibility with other ELF linkers, if the -R option is
-           followed by a directory name, rather than a file name, it is
-           treated as the -rpath option.
+    The paths can also be specified in a link script with the "SEARCH_DIR"
+    command.  Directories specified this way are searched at the point in
+    which the linker script appears in the command line.
 
 
-       --sysroot=directory
-           Use directory as the location of the sysroot, overriding the
-           configure-time default. This option is only supported by linkers
-           that were configured using --with-sysroot.
+-rpath=dir
+    Add a directory to the runtime library search path. This is used when
+    linking an ELF executable with shared objects. All -rpath arguments are
+    concatenated and passed to the runtime linker, which uses them to locate
+    shared objects at runtime.  The -rpath option is also used when locating
+    shared objects which are needed by shared objects explicitly included in
+    the link; see the description of the -rpath-link option. 
+   
+    If -rpath is not used when linking an ELF executable, the contents of the
+    environment variable "LD_RUN_PATH" will be used if it is defined.
+
+    The -rpath option may also be used on SunOS.  By default, on SunOS, the
+    linker will form a runtime search patch out of all the -L options it is
+    given.  
+
+    If a -rpath option is used, the runtime search path will be formed
+    `exclusively` using the -rpath options, ignoring the -L options.  This can
+    be useful when using gcc, which adds many -L options which may be on NFS
+    mounted file systems.
+
+    For compatibility with other ELF linkers, if the -R option is followed by
+    a directory name, rather than a file name, it is treated as the -rpath
+    option.
+
+--sysroot=directory
+    Use directory as the location of the sysroot, overriding the
+    configure-time default. This option is only supported by linkers that were
+    configured using --with-sysroot. 
+
+-EB
+    Link big-endian objects. This affects the default output format.
+
+-EL
+    Link little-endian objects. This affects the default output format.
+
 
 https://blog.jessfraz.com/post/top-10-favorite-ldflags/
 
@@ -59305,7 +59361,7 @@ which will do that:
        .bss : { *(.bss) }
      }
 
-You write the SECTIONS command as the keyword `SECTIONS', followed by a series
+You write the SECTIONS command as the keyword 'SECTIONS', followed by a series
   of `symbol assignments` and `output section descriptions` enclosed in curly
   braces.
 
@@ -59357,10 +59413,148 @@ point by trying each of the following methods in order, and stopping when one
 of them succeeds:
 
     the `-e' entry command-line option;
+
     the ENTRY(symbol) command in a linker script;
-    the value of a target specific symbol, if it is defined; For many targets this is start, but PE and BeOS based systems for example check a list of possible entry symbols, matching the first one found.
-    the address of the first byte of the `.text' section, if present;
+
+    the value of a target specific symbol, if it is defined; For many targets
+      this is start, but PE and BeOS based systems for example check a list of
+      possible entry symbols, matching the first one found.  the address of
+      the first byte of the `.text' section, if present;
+
     The address 0. 
+
+
+3.4.2 Commands Dealing with Files
+
+Several linker script commands deal with files. 
+
+INPUT(file, file, ...)
+INPUT(file file ...)
+    The INPUT command directs the linker to include `the named files` in the
+    link, as though they were named on the command line.
+
+    For example, if you always want to include subr.o any time you do a link,
+        but you can't be bothered to put it on every link command line, then
+          you can put `INPUT (subr.o)' in your linker script.
+
+    In fact, if you like, you can list all of your input files in the linker
+    script, and then invoke the linker with nothing but a -T option.
+
+    In case a sysroot prefix is configured, and the filename starts with the
+    '/' character, and the script being processed was located inside the
+    sysroot prefix, the filename will be looked for in the sysroot prefix.
+    Otherwise, the linker will try to open the file in the current directory.
+    If it is not found, the linker will search through the archive library
+    search path. The sysroot prefix can also be forced by specifying = as the
+    first character in the filename path. See also the description of '-L' in
+    Command Line Options.
+
+    If you use 'INPUT (-lfile)', ld will transform the name to libfile.a, as
+    with the command line argument '-l'.
+
+    When you use the INPUT command in an implicit linker script, the files
+    will be included in the link at the point at which the linker script file
+    is included. This can affect archive searching. 
+
+GROUP(file, file, ...)
+GROUP(file file ...)
+    The GROUP command is like INPUT, except that the named files should all be
+    `archives`, and they are searched repeatedly until no new undefined
+    references are created. See the description of '-(' in Command Line
+        Options.
+
+AS_NEEDED(file, file, ...)
+AS_NEEDED(file file ...)
+    This construct can appear only inside of the INPUT or GROUP commands,
+    among other filenames. The files listed will be handled as if they appear
+    directly in the INPUT or GROUP commands, with the exception of ELF shared
+    libraries, that will be added only when they are actually needed. This
+    construct essentially enables --as-needed option for all the files listed
+    inside of it and restores previous --as-needed resp. --no-as-needed
+    setting afterwards.
+
+SEARCH_DIR(path)
+    The SEARCH_DIR command adds path to the list of paths where ld looks for
+    archive libraries. Using SEARCH_DIR(path) is exactly like using '-L path'
+    on the command line (see Command Line Options). If both are used, then the
+    linker will search both paths. Paths specified using the command line
+    option are searched first. 
+
+
+3.4.3 Commands Dealing with Object File Formats
+
+A couple of linker script commands deal with object file formats.
+
+OUTPUT_FORMAT(bfdname)
+OUTPUT_FORMAT(default, big, little)
+    The OUTPUT_FORMAT command names the BFD format to use for the output file
+    (see BFD). Using OUTPUT_FORMAT(bfdname) is exactly like using '--oformat
+    bfdname' on the command line (see Command Line Options). If both are used,
+    the command line option takes precedence.
+
+    You can use OUTPUT_FORMAT with three arguments to use different formats
+    based on the '-EB' and `-EL' command line options. This permits the linker
+    script to set the output format based on the desired endianness.
+
+    If neither '-EB' nor '-EL' are used, then the output format will be the
+    first argument, default. If '-EB' is used, the output format will be the
+    second argument, big. If `-EL' is used, the output format will be the
+    third argument, little.
+
+    For example, the default linker script for the MIPS ELF target uses this
+    command:
+
+              OUTPUT_FORMAT(elf32-bigmips, elf32-bigmips, elf32-littlemips)
+         
+    This says that the default format for the output file is 'elf32-bigmips',
+    but if the user uses the '-EL' command line option, the output file will
+      be created in the 'elf32-littlemips' format. 
+
+
+3.4.5 Other Linker Script Commands
+
+OUTPUT_ARCH(bfdarch)
+    Specify a particular output machine architecture. The argument is one of
+    the names used by the BFD library (see BFD). You can see the architecture
+    of an object file by using the objdump program with the `-f' option. 
+
+
+5 BFD
+
+The linker accesses object and archive files using the BFD libraries. These
+libraries allow the linker to use the same routines to operate on object files
+whatever the object file format. A different object file format can be
+supported simply by creating a new BFD back end and adding it to the library.
+To conserve runtime memory, however, the linker and associated tools are
+usually configured to support only a subset of the object file formats
+available. You can use objdump -i (see objdump) to list all the formats
+available for your configuration.
+
+As with most implementations, BFD is a compromise between several conflicting
+requirements. The major factor influencing BFD design was efficiency: any time
+used converting between formats is time which would not have been spent had
+BFD not been involved. This is partly offset by abstraction payback; since BFD
+simplifies applications and back ends, more time and care may be spent
+optimizing algorithms for a greater speed.
+
+One minor artifact of the BFD solution which you should bear in mind is the
+potential for information loss. There are two places where useful information
+can be lost using the BFD mechanism: during conversion and during output. See
+BFD information loss.
+
+    BFD outline: How it works: an outline of BFD 
+
+<ex>
+/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-objdump -i
+BFD header file version 2.17.50-brcm 20070220
+elf32-tradbigmips
+ (header big endian, data big endian)
+  mips
+elf32-tradlittlemips
+ (header little endian, data little endian)
+  mips
+...
+
 
 ={============================================================================
 *kt_linux_core_400* lib-shared
@@ -59838,7 +60032,9 @@ lrwxrwxrwx 1 kyoupark ccusers       18 Dec  2 10:17 libc.so.1 -> libuClibc-1.0.9
 
 
 ={============================================================================
-*kt_linux_core_400* lib-shred-ld ld-library-path
+*kt_linux_core_400* lib-shared-ld-so
+
+LPI 41.4.3 Using a Shared Library
 
 {dynamic-linking}
 $ ./prog 
@@ -59850,29 +60046,61 @@ of resolving the embedded library name at run time. This task is performed by
 the dynamic linker (also called the dynamic linking loader or the run-time
 linker).
 
-The dynamic linker is 'itself' a shared library, named /lib/ld-linux.so.2,
+The dynamic linker is `itself a shared library`, named /lib/ld-linux.so.2,
 which is employed `by every ELF executable` that uses shared libraries.
+
+
+<two-step-link>
+Every program-including those that use shared libraries-goes through a
+static-linking phase. At run time, a program that employs shared libraries
+`additionally` undergoes dynamic linking.
+
+Two steps must occur that are not required for programs that use static
+libraries:
+
+$ gcc -c -fpic foo.c 
+$ gcc -shared -o libfoo.so foo.o
+$ gcc -o one main.c libfoo.so          // note: embeds the name of lib
+
+  * At `linktime`. Since the executable file 'no' longer contains copies of
+    the object files that it requires, must have some mechanism for
+    identifying the shared library that it needs at runtime.
+
+This is done by `embedding the name of the shared library inside the executable`
+during the link phase. DT_NEEDED tag in ELF.
+
+$ readelf -d one | grep NEED
+0x00000001 (NEEDED)  Shared library: [libfoo.so]    // note: "libfoo"
+0x00000001 (NEEDED)  Shared library: [libc.so.6]
+
+note: In order to embed the shared library in a executable that use so, requires
+'so' file in linking.
+
+  * At `runtime`, there must be some 'mechanism' for 'resolving' the embedded
+    library name-that is, for finding the shared library file corresponding to
+    the name specified in the executable file-and then loading the library
+    into memory, if it is not already present.
 
 
 42.1 Dynamically Loaded Libraries
 
-When an executable starts, the `dynamic-linker` loads 'all' of the shared
-libraries in the program's dynamic dependency list. Sometimes, however, it can
-be useful to load libraries at a 'later' time. For example, a plug-in is loaded
-only when it is needed. This functionality is provided by an API to the dynamic
-linker.
+When an executable starts, the `dynamic-linker` loads all of the shared
+libraries in the program's `dynamic dependency list.` Sometimes, however, it
+can be useful to load libraries at a 'later' time. For example, a plug-in is
+loaded only when it is needed. This functionality is provided by an API to the
+dynamic linker.
 
 
-<intereter>
+<ld-so-intereter>
 the kernel sees this an ELF file, then it looks for a piece of information
-called the “requesting program interpreter” (or “interp” for short) and it
-calls that program with your program as argument. 
+called the "requesting program interpreter" and it calls that program with
+your program as argument. Only available for a executable.
 
-Only available for a executable.
 
 $ file --version
 file-5.04
 magic file from /usr/share/misc/magic
+
 $ file busybox
 busybox: ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked (uses shared libs), stripped
 
@@ -59883,7 +60111,6 @@ magic file from /etc/magic:/usr/share/misc/magic
 
 $ file busybox
 busybox: setuid ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked, interpreter /lib/ld-uClibc.so.0, corrupted section header size
-
 busybox: setuid ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked, interpreter /lib/ld.so.1, stripped
 
 
@@ -59909,12 +60136,20 @@ Program Headers:
       [Requesting program interpreter: /lib/ld-uClibc.so.0]
 
 
-<redhat-server>
+// from redhat server
 $ readelf -l /bin/echo
 
   INTERP         0x0000000000000200 0x0000000000400200 0x0000000000400200
                  0x000000000000001c 0x000000000000001c  R      1
       [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
+
+
+The pathname /lib/ld-linux.so.2 is normally a symbolic link pointing to the
+dynamic linker executable file. This file has the name ld-version.so, where
+version is the glibc version installed on the system—for example, ld-2.11.so. The
+pathname of the dynamic linker differs on some architectures. For example,
+on IA-64, the dynamic linker symbolic link is named /lib/ld-linux-ia64.so.2.
+
 
 $ ls -al ld-linux-x86-64.so.2
 lrwxrwxrwx 1 root root 10 Feb 13  2015 ld-linux-x86-64.so.2 -> ld-2.12.so
@@ -59926,6 +60161,21 @@ $ file ld-2.12.so
 ld-2.12.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, from '0(%rbp)', not stripped
 
 
+// ex-uclibc
+# ls -al /lib/ld-linux.so.2 
+24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
+
+root     root         31760 Jul 31 11:10 /lib/ld-uClibc-0.9.32.1.so*
+root     root            21 Aug  5 08:50 /lib/ld-uClibc.so -> ld-uClibc-0.9.32.1.so*
+root     root            21 Aug  5 08:50 /lib/ld-uClibc.so.0 -> ld-uClibc-0.9.32.1.so*
+
+// ex-glibc
+-rwxr-xr-x 1 kyoupark ccusers 746756 Dec 15 08:16 ld-2.20.so
+lrwxrwxrwx 1 kyoupark ccusers     10 Dec 15 08:16 ld.so.1 -> ld-2.20.so
+
+
+// see this usage help from glibc-2.20/elf/rtld.c
+
 $ /lib64/ld-linux-x86-64.so.2
 Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]
 You have invoked `ld.so', the helper program for shared library executables.
@@ -59933,8 +60183,8 @@ This program usually lives in the file `/lib/ld.so', and special directives
 in executable files using ELF shared libraries tell the system's program
 loader to load the helper program from this file.  This helper program loads
 the shared libraries needed by the program executable, prepares the program
-to run, and runs it.  You may invoke this helper program directly from the
-command line to load and run an ELF executable file; this is like executing
+to run, and runs it. "You may invoke this helper program directly from the
+command line to load and run an ELF executable file"; this is like executing
 that file itself, but always uses this helper program from the file you
 specified, instead of the helper program file specified in the executable
 file you run.  This is mostly of use for maintainers to test new versions
@@ -59953,8 +60203,6 @@ of this helper program; chances are you did not intend to run this program.
 $ /lib64/ld-linux-x86-64.so.2 /bin/echo 'Hello, world!'
 Hello, world!
 
-see *ld-man* for descriptions.
-
 
 <ex> *tool-ldd*
 $ /lib64/ld-linux-x86-64.so.2 --list /bin/echo
@@ -59964,70 +60212,323 @@ $ /lib64/ld-linux-x86-64.so.2 --list /bin/echo
 
 https://blog.ksub.org/bytes/2016/07/23/ld.so-glibcs-dynanic-linker/loader/
 
-There’s another helpful environment variable that the dynamic loader pays
-attention to: LD_TRACE_LOADED_OBJECTS. This is what ldd actually uses to
+There's another helpful environment variable that the dynamic loader pays
+attention to: LD_TRACE_LOADED_OBJECTS. `This is what ldd actually uses` to
 display the list of libraries that are loaded. If you compare the output of
-setting this variable and the output of --list you’ll notice that they are
+setting this variable and the output of --list you'll notice that they are
 slightly different. ldd will optionally set LD_VERBOSE=1 (to output version
-information) and LD_DEBUG=unused (to output unused shared libraries).
+    information) and LD_DEBUG=unused (to output unused shared libraries).
 
 
-<target>
-# ls -al /lib/ld-linux.so.2 
-24 Jan  1  1970 /lib/ld-linux.so.2 -> /lib/ld-uClibc-0.9.29.so
+={============================================================================
+*kt_linux_core_400* lib-shared-ld-so-debug ld-so-glibc
 
-<target-uclibc>
-# ls -al /lib/ld-uClibc*
-root     root         31760 Jul 31 11:10 /lib/ld-uClibc-0.9.32.1.so*
-root     root            21 Aug  5 08:50 /lib/ld-uClibc.so -> ld-uClibc-0.9.32.1.so*
-root     root            21 Aug  5 08:50 /lib/ld-uClibc.so.0 -> ld-uClibc-0.9.32.1.so*
+the dynamic loader is not part of GCC and is part of c library.
 
--rwxr-xr-x 1 kyoupark ccusers 39250 Dec 13 12:52 ld-uClibc-1.0.9.so
-lrwxrwxrwx 1 kyoupark ccusers    14 Dec 13 12:52 ld-uClibc.so.0 -> ld-uClibc.so.1
-lrwxrwxrwx 1 kyoupark ccusers    18 Dec 13 12:52 ld-uClibc.so.1 -> ld-uClibc-1.0.9.so
+<ld-man>
+http://man7.org/linux/man-pages/man8/ld.so.8.html
+LD.SO(8)                   Linux Programmer’s Manual                  LD.SO(8)
+
+NAME
+       ld.so, ld-linux.so* - dynamic linker/loader
+
+SYNOPSIS
+       The  dynamic  linker  can be run either indirectly by running some
+       dynamically linked program or library (in which case no command-line
+           options to the dynamic linker can be passed and, in the ELF case,
+           the dynamic linker which is stored in the .interp section of the
+           program is executed) or directly by running:
+
+       /lib/ld-linux.so.*  [OPTIONS] [PROGRAM [ARGUMENTS]]
+
+ENVIRONMENT
+       There are four important environment variables.
+
+       LD_BIND_NOW
+              (libc5; glibc since 2.1.1) If set to a non-empty string, causes
+              the dynamic linker to resolve all symbols at program startup
+              instead of deferring function  call  resolution to the point
+              when they are first referenced.  This is useful when using a
+              debugger.
+
+       LD_LIBRARY_PATH
+              A colon-separated list of directories in which to search for ELF
+              libraries at execution-time.  Similar to the PATH environment
+              variable.
+
+       LD_PRELOAD
+              A whitespace-separated list of additional, user-specified, ELF
+              shared libraries to be loaded before all others.  This can be
+              used to selectively override functions in other shared
+              libraries.  For set-user-ID/set-group-ID ELF binaries, only
+              libraries in the standard search directories that are also
+              set-user-ID will be loaded.
+
+       LD_TRACE_LOADED_OBJECTS
+              (ELF only) If set to a non-empty string, causes the program to
+              list its dynamic library dependencies, as if run by ldd(1),
+              instead of running normally.
 
 
-lrwxrwxrwx 1 kyoupark ccusers 19 Feb 22 11:32 ld-uClibc.so.0 -> ld-uClibc-0.9.29.so*
+       Then there are lots of more or less obscure variables, many obsolete or
+       only for internal use.
+
+       LD_DEBUG
+              (glibc since 2.1) Output verbose debugging information about the
+              dynamic linker.  If set to all prints all debugging information
+              it has, if set to help prints a  help  message about which
+              categories can be specified in this environment variable.  Since
+              glibc 2.3.4, LD_DEBUG is ignored for set-user-ID/set-group-ID
+              binaries.
+
+Sometimes, it is useful to monitor the operation of the dynamic linker in
+order to know, for example, where it is searching for libraries. We can use
+the LD_DEBUG environment variable to do this. By setting this variable to one
+(or more) of a set of standard keywords, we can obtain various kinds of
+tracing information from the dynamic linker.
+
+If we assign the value help to LD_DEBUG, the dynamic linker displays help
+information about LD_DEBUG, and the specified command is not executed:
+
+note: can be any command other 
+$ LD_DEBUG=help ls  
+Valid options for the LD_DEBUG environment variable are:
+
+  libs        display library search paths
+  reloc       display relocation processing
+  files       display progress for input file
+  symbols     display symbol table processing
+  bindings    display information about symbol binding
+  versions    display version dependencies
+  all         all previous options combined
+  statistics  display relocation statistics
+  unused      determined unused DSOs
+  help        display this help message and exit
+
+To direct the debugging output into a file instead of standard output
+a filename can be specified using the LD_DEBUG_OUTPUT environment variable.
 
 
-<target-glibc>
--rwxr-xr-x 1 kyoupark ccusers 746756 Dec 15 08:16 ld-2.20.so
-lrwxrwxrwx 1 kyoupark ccusers     10 Dec 15 08:16 ld.so.1 -> ld-2.20.so
+$ LD_DEBUG=libs ls
+     20177:	find library=libselinux.so.1 [0]; searching
+     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
+     20177:	  trying file=./tls/x86_64/libselinux.so.1
+     20177:	  trying file=./tls/libselinux.so.1
+     20177:	  trying file=./x86_64/libselinux.so.1
+     20177:	  trying file=./libselinux.so.1
+     20177:	 search cache=/etc/ld.so.cache
+     20177:	  trying file=/lib/x86_64-linux-gnu/libselinux.so.1
+     20177:	
+     20177:	find library=librt.so.1 [0]; searching
+     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
+     20177:	  trying file=./tls/x86_64/librt.so.1
+     20177:	  trying file=./tls/librt.so.1
+     20177:	  trying file=./x86_64/librt.so.1
+     20177:	  trying file=./librt.so.1
+     ...
+     20177:	
+install-sh  ltmain.sh  Makefile.am  Makefile.in  missing  src $ 
 
+note: 
+ls command was executed. works on host since it uses glibc but not on a
+target. use strace instead.
+
+The PID value displayed at the start of each line and this is useful if we are
+monitoring several processes (e.g., parent and child).
+
+If desired, we can assign multiple options to LD_DEBUG by separating them with
+commas (no spaces should appear). 
+
+<symbol-option>
+The output of the symbols option (which traces symbol resolution by the
+    dynamic linker) is particularly voluminous.
+
+LD_DEBUG is effective both for libraries implicitly loaded by the dynamic
+linker and for libraries dynamically loaded by dlopen().
+
+For security reasons, LD_DEBUG is (since glibc 2.2.5) ignored in set-user-ID
+and set- group-ID programs.
+
+
+<ex>
+// glibc-2.13/elf/rtld.c
+
+/* Process all environments variables the dynamic linker must recognize.
+   Since all of them start with `LD_' we are a bit smarter while finding
+   all the entries.  */
+extern char **_environ attribute_hidden;
+
+static void
+process_envvars (enum mode *modep)
+{
+  _dl_printf ("*** KT: force LD_DEBUG=all ***\n");
+  process_dl_debug ("all");
+
+  /*
+     _dl_next_ld_env_entry Walk through the environment of the process and return
+     all entries starting with `LD_'. */
+
+  while ((envline = _dl_next_ld_env_entry (&runp)) != NULL)
+
+  case 5:
+    /* Debugging of the dynamic linker?  */
+    if (memcmp (envline, "DEBUG", 5) == 0)
+    {
+      process_dl_debug (&envline[6]);
+      break;
+    }
+}
+
+
+<system-dirs>
 note:
-Every program-including those that use shared libraries-goes through a
-static-linking phase. At run time, a program that employs shared libraries
-additionally undergoes dynamic linking.
+where system dirs comes from? comes from SYSTEM_DIRS.
+
+// glibc-2.13/elf/dl-load.c, search-order
+
+elf/dl-load.c:1512:/* Print search path.  */
+elf/dl-load.c:1520:  _dl_debug_printf (" search path=");
+
+/* Map in the shared object file NAME.  */
+
+struct link_map *
+internal_function
+_dl_map_object (struct link_map *loader, const char *name,
+  int type, int trace_mode, int mode, Lmid_t nsid)
+{
+
+  /* Finally, try the default path.  */
+  if (fd == -1
+      && ((l = loader ?: GL(dl_ns)[nsid]._ns_loaded) == NULL
+        || __builtin_expect (!(l->l_flags_1 & DF_1_NODEFLIB), 1))
+      && rtld_search_dirs.dirs != (void *) -1)
+  {
+    fd = open_path (name, namelen, mode & __RTLD_SECURE, &rtld_search_dirs,
+        &realname, &fb, l, LA_SER_DEFAULT, &found_other_class);
+
+  }
+}
+
+open_path (const char *name, size_t namelen, int secure,
+	   struct r_search_path_struct *sps, char **realname)
+{
+  struct r_search_path_elem **dirs = sps->dirs;
+
+  do
+  {
+      struct r_search_path_elem *this_dir = *dirs;
+  }
+  while (*++dirs != NULL);
+}
 
 
-{dynamic-linker}
-the dynamic loader is not part of GCC; it is part of c library.
+[0946684818.923326]Freeing unused kernel memory: 7000k freed
+*** KT: force LD[0946684818.925326]Kernel panic - not syncing: Attempted to kill init!
+[0946684818.926326]
+                             1: fin<0>Rebooting in 1 seconds..d library=libdl.so.2 [0]; searching
+         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
+         1:      KT: cache...         1:         KT: default...         1:       search path=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/tls:/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib              (system search path)
+         1:       trying file=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/tls/libdl.so.2
+         1:       trying file=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/libdl.so.2
+         1:
+         1:      KT: cannot open.../init: error while loading shared libraries: libdl.so.2: cannot open shared object file: No such file or directory
 
-Two steps must occur that are not required for programs that use static
-libraries:
+11198 1999-05-03  Ulrich Drepper  <drepper@cygnus.com>
+11210         * elf/dl-load.c (systems_dirs): Moved into file scope.  Initialize
+11211         from SYSTEM_DIRS macro.
+11212         (system_dirs_len): New variable.  Contains lengths of system_dirs
+11213         strings.
+11214         (fillin_rpath): Rewrite for systems_dirs being a simple string.
+11215         Improve string comparisons.  Change parameter trusted to be a flag.
+11216         Change all callers.
+11217         (_dt_init_paths): Improve using new format for system_dirs.
 
-$ gcc -c -fpic foo.c 
-$ gcc -shared -o libfoo.so foo.o
-$ gcc -o one main.c libfoo.so          <embedding-the-name-of-lib>
+212 make[2]: Entering directory `/home/NDS-UK/kyoupark/asn/gcc/glibc-2.13/elf'
+213 echo "KT: /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib "
+214 KT: /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib
+215 echo "KT: gawk -f gen-trusted-dirs.awk > /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T"
+216 KT: gawk -f gen-trusted-dirs.awk > /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T
+217 echo "/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib "    \
+218   | gawk -f gen-trusted-dirs.awk > /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T;
+219 echo '#define DL_DST_LIB "lib"' >> /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T
+220 /bin/sh ../scripts/move-if-change /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.h
 
-1. At 'linktime'. Since the executable file 'no' longer contains copies of the
-object files that it requires, must have some mechanism for identifying the
-shared library that it needs at runtime.
+./elf/gen-trusted-dirs.awk
 
-This is done by `embedding the name of the shared library inside the executable`
-during the link phase. DT_NEEDED tag in ELF.
+$ echo "/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib" | gawk -f gen-trusted-dirs.awk
+#define SYSTEM_DIRS \
+  "/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/"
 
-$ readelf -d one | grep NEED
-0x00000001 (NEEDED)  Shared library: [libfoo.so]    // note: "libfoo"
-0x00000001 (NEEDED)  Shared library: [libc.so.6]
+#define SYSTEM_DIRS_LEN \
+  77
 
-note: In order to embed the shared library in a executable that use so, requires
-'so' file in linking.
+#define SYSTEM_DIRS_MAX_LEN     77
 
-2. At 'runtime', there must be some 'mechanism' for 'resolving' the embedded
-library name-that is, for finding the shared library file corresponding to the
-name specified in the executable file-and then loading the library into memory,
-     if it is not already present.
+$ echo "/lib" | gawk -f gen-trusted-dirs.awk
+#define SYSTEM_DIRS \
+  "/lib/"
+
+#define SYSTEM_DIRS_LEN \
+  5
+
+#define SYSTEM_DIRS_MAX_LEN     5
+
+
+*** KT: force LD_DEBUG=libs ***
+         1:      KT: system_dirs: /lib/
+         1:     find library=libdl.so.2 [0]; searching
+         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
+         1:      KT: cache...         1:         KT: default...
+         1:      search path=/lib/tls:/lib              (system search path)
+         1:     KT:  trying file=/lib/tls/libdl.so.2
+         1:     KT:  trying file=/lib/libdl.so.2
+         1:
+         1:     find library=libgcc_s.so.1 [0]; searching
+         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
+         1:      KT: cache...         1:         KT: default...
+         1:      search path=/lib               (system search path)
+         1:     KT:  trying file=/lib/libgcc_s.so.1
+         1:
+         1:     find library=libc.so.6 [0]; searching
+         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
+         1:      KT: cache...         1:         KT: default...
+         1:      search path=/lib               (system search path)
+         1:     KT:  trying file=/lib/libc.so.6
+         1:
+         1:     find library=libc.so [0]; searching
+         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
+         1:      KT: cache...         1:         KT: default...
+         1:      search path=/lib               (system search path)
+         1:     KT:  trying file=/lib/libc.so
+         1:
+
+
+<libc-script>
+file /lib/ld-2.13.so /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/ld-2.13.so 755 0 0
+file /lib/libgcc_s.so.1 /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/libgcc_s.so.1 755 0 0
+file /lib/libc.so /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/libc.so 755 0 0
+file /lib/libc_nonshared.a /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/libc_nonshared.a 755 0 0
+slink /lib/libc.so.6 libc-2.13.so 777 0 0
+slink /init ../bin/sh 777 0 1
+
+ 0x00000001 (NEEDED)                     Shared library: [libdl.so.2]
+  0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+  0x00000001 (NEEDED)                     Shared library: [ld.so.1]
+
+ 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
+  0x00000001 (NEEDED)                     Shared library: [libc.so]   // this is script
+
+/* GNU ld script
+   Use the shared library, but some functions are only in
+   the static library, so try that secondarily.  */
+OUTPUT_FORMAT(elf32-tradbigmips)
+GROUP ( /lib/libc.so.6 /lib/libc_nonshared.a  AS_NEEDED ( /lib/ld.so.1 ) )
+
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+
+0x00000001 (NEEDED)                     Shared library: [ld.so.1]
+ 0x0000000e (SONAME)                     Library soname: [libc.so.6]
+
 
 
 ={============================================================================
@@ -60256,7 +60757,7 @@ libraries may differ.
 
 
 ={============================================================================
-*kt_linux_core_402* lib-shared-search lib-rpath
+*kt_linux_core_402* lib-shared-search lib-rpath ld-library-path
 
 41.10 Specifying Library Search Directories in an Object File
 
@@ -60516,321 +61017,6 @@ LD_PRELOAD=/opt/zinc/lib/libyouviewrcu.so /bin/true
 note:
 Why "/bin/true"? This is a simple utility which returns 0(success) and to check
 if libraries are loaded fine, run that with simple utility.
-
-
-={============================================================================
-*kt_linux_core_406* lib-shared-ld-debug lib-ld-glibc
-
-<ld-man>
-LD.SO(8)                   Linux Programmer’s Manual                  LD.SO(8)
-
-NAME
-       ld.so, ld-linux.so* - dynamic linker/loader
-
-SYNOPSIS
-       The  dynamic  linker  can be run either indirectly by running some
-       dynamically linked program or library (in which case no command-line
-           options to the dynamic linker can be passed and, in the ELF case,
-           the dynamic linker which is stored in the .interp section of the
-           program is executed) or directly by running:
-
-       /lib/ld-linux.so.*  [OPTIONS] [PROGRAM [ARGUMENTS]]
-
-ENVIRONMENT
-       There are four important environment variables.
-
-       LD_BIND_NOW
-              (libc5; glibc since 2.1.1) If set to a non-empty string, causes
-              the dynamic linker to resolve all symbols at program startup
-              instead of deferring function  call  resolution to the point
-              when they are first referenced.  This is useful when using a
-              debugger.
-
-       LD_LIBRARY_PATH
-              A colon-separated list of directories in which to search for ELF
-              libraries at execution-time.  Similar to the PATH environment
-              variable.
-
-       LD_PRELOAD
-              A whitespace-separated list of additional, user-specified, ELF
-              shared libraries to be loaded before all others.  This can be
-              used to selectively override functions in other shared
-              libraries.  For set-user-ID/set-group-ID ELF binaries, only
-              libraries in the standard search directories that are also
-              set-user-ID will be loaded.
-
-       LD_TRACE_LOADED_OBJECTS
-              (ELF only) If set to a non-empty string, causes the program to
-              list its dynamic library dependencies, as if run by ldd(1),
-              instead of running normally.
-
-
-       Then there are lots of more or less obscure variables, many obsolete or
-       only for internal use.
-
-       LD_DEBUG
-              (glibc since 2.1) Output verbose debugging information about the
-              dynamic linker.  If set to all prints all debugging information
-              it has, if set to help prints a  help  message about which
-              categories can be specified in this environment variable.  Since
-              glibc 2.3.4, LD_DEBUG is ignored for set-user-ID/set-group-ID
-              binaries.
-
-Sometimes, it is useful to monitor the operation of the dynamic linker in
-order to know, for example, where it is searching for libraries. We can use
-the LD_DEBUG environment variable to do this. By setting this variable to one
-(or more) of a set of standard keywords, we can obtain various kinds of
-tracing information from the dynamic linker.
-
-If we assign the value help to LD_DEBUG, the dynamic linker displays help
-information about LD_DEBUG, and the specified command is not executed:
-
-note: can be any command other 
-$ LD_DEBUG=help ls  
-Valid options for the LD_DEBUG environment variable are:
-
-  libs        display library search paths
-  reloc       display relocation processing
-  files       display progress for input file
-  symbols     display symbol table processing
-  bindings    display information about symbol binding
-  versions    display version dependencies
-  all         all previous options combined
-  statistics  display relocation statistics
-  unused      determined unused DSOs
-  help        display this help message and exit
-
-To direct the debugging output into a file instead of standard output
-a filename can be specified using the LD_DEBUG_OUTPUT environment variable.
-
-
-$ LD_DEBUG=libs ls
-     20177:	find library=libselinux.so.1 [0]; searching
-     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
-     20177:	  trying file=./tls/x86_64/libselinux.so.1
-     20177:	  trying file=./tls/libselinux.so.1
-     20177:	  trying file=./x86_64/libselinux.so.1
-     20177:	  trying file=./libselinux.so.1
-     20177:	 search cache=/etc/ld.so.cache
-     20177:	  trying file=/lib/x86_64-linux-gnu/libselinux.so.1
-     20177:	
-     20177:	find library=librt.so.1 [0]; searching
-     20177:	 search path=./tls/x86_64:./tls:./x86_64:.		(LD_LIBRARY_PATH)
-     20177:	  trying file=./tls/x86_64/librt.so.1
-     20177:	  trying file=./tls/librt.so.1
-     20177:	  trying file=./x86_64/librt.so.1
-     20177:	  trying file=./librt.so.1
-     ...
-     20177:	
-install-sh  ltmain.sh  Makefile.am  Makefile.in  missing  src $ 
-
-note: 
-ls command was executed. works on host since it uses glibc but not on a
-target. use strace instead.
-
-The PID value displayed at the start of each line and this is useful if we are
-monitoring several processes (e.g., parent and child).
-
-If desired, we can assign multiple options to LD_DEBUG by separating them with
-commas (no spaces should appear). 
-
-<symbol-option>
-The output of the symbols option (which traces symbol resolution by the
-    dynamic linker) is particularly voluminous.
-
-LD_DEBUG is effective both for libraries implicitly loaded by the dynamic
-linker and for libraries dynamically loaded by dlopen().
-
-For security reasons, LD_DEBUG is (since glibc 2.2.5) ignored in set-user-ID
-and set- group-ID programs.
-
-
-<ex>
-
-// glibc-2.13/elf/rtld.c
-
-/* Process all environments variables the dynamic linker must recognize.
-   Since all of them start with `LD_' we are a bit smarter while finding
-   all the entries.  */
-extern char **_environ attribute_hidden;
-
-static void
-process_envvars (enum mode *modep)
-{
-
-  _dl_printf ("*** KT: force LD_DEBUG=all ***\n");
-  process_dl_debug ("all");
-
-  /*
-     _dl_next_ld_env_entry Walk through the environment of the process and return
-     all entries starting with `LD_'. */
-
-  while ((envline = _dl_next_ld_env_entry (&runp)) != NULL)
-
-  case 5:
-    /* Debugging of the dynamic linker?  */
-    if (memcmp (envline, "DEBUG", 5) == 0)
-    {
-      process_dl_debug (&envline[6]);
-      break;
-    }
-}
-
-
-// glibc-2.13/elf/dl-load.c, search-order
-
-elf/dl-load.c:1512:/* Print search path.  */
-elf/dl-load.c:1520:  _dl_debug_printf (" search path=");
-
-/* Map in the shared object file NAME.  */
-
-struct link_map *
-internal_function
-_dl_map_object (struct link_map *loader, const char *name,
-  int type, int trace_mode, int mode, Lmid_t nsid)
-{
-
-  /* Finally, try the default path.  */
-  if (fd == -1
-      && ((l = loader ?: GL(dl_ns)[nsid]._ns_loaded) == NULL
-        || __builtin_expect (!(l->l_flags_1 & DF_1_NODEFLIB), 1))
-      && rtld_search_dirs.dirs != (void *) -1)
-  {
-    fd = open_path (name, namelen, mode & __RTLD_SECURE, &rtld_search_dirs,
-        &realname, &fb, l, LA_SER_DEFAULT, &found_other_class);
-
-  }
-}
-
-open_path (const char *name, size_t namelen, int secure,
-	   struct r_search_path_struct *sps, char **realname)
-{
-  struct r_search_path_elem **dirs = sps->dirs;
-
-  do
-  {
-      struct r_search_path_elem *this_dir = *dirs;
-  }
-  while (*++dirs != NULL);
-}
-
-
-[0946684818.923326]Freeing unused kernel memory: 7000k freed
-*** KT: force LD[0946684818.925326]Kernel panic - not syncing: Attempted to kill init!
-[0946684818.926326]
-                             1: fin<0>Rebooting in 1 seconds..d library=libdl.so.2 [0]; searching
-         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
-         1:      KT: cache...         1:         KT: default...         1:       search path=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/tls:/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib              (system search path)
-         1:       trying file=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/tls/libdl.so.2
-         1:       trying file=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/libdl.so.2
-         1:
-         1:      KT: cannot open.../init: error while loading shared libraries: libdl.so.2: cannot open shared object file: No such file or directory
-
-  11198 1999-05-03  Ulrich Drepper  <drepper@cygnus.com>
-  11199
-  11200         * sysdeps/generic/strtok_r.c: Use rawmemchr instead of strchr.
-  11201         * sysdeps/generic/strtok.c: Likewise.
-  11202
-  11203         * string/tester.c: Add test of rawmemchr.
-  11204
-  11205         * sysdeps/i386/bits/select.h (__FD_ZERO): Remove memory output
-  11206         specification.  It's not necessary.
-  11207
-  11208         * elf/Makefile (trusted-dirs.st): Use gen-trusted-dirs.awk.
-  11209         * elf/gen-trusted-dirs.awk: New file.
-  11210         * elf/dl-load.c (systems_dirs): Moved into file scope.  Initialize
-  11211         from SYSTEM_DIRS macro.
-  11212         (system_dirs_len): New variable.  Contains lengths of system_dirs
-  11213         strings.
-  11214         (fillin_rpath): Rewrite for systems_dirs being a simple string.
-  11215         Improve string comparisons.  Change parameter trusted to be a flag.
-  11216         Change all callers.
-  11217         (_dt_init_paths): Improve using new format for system_dirs.
-
-212 make[2]: Entering directory `/home/NDS-UK/kyoupark/asn/gcc/glibc-2.13/elf'
-213 echo "KT: /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib "
-214 KT: /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib
-215 echo "KT: gawk -f gen-trusted-dirs.awk > /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T"
-216 KT: gawk -f gen-trusted-dirs.awk > /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T
-217 echo "/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib "    \
-218   | gawk -f gen-trusted-dirs.awk > /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T;
-219 echo '#define DL_DST_LIB "lib"' >> /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T
-220 /bin/sh ../scripts/move-if-change /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.T /home/nds-uk/kyoupark/asn/gcc/glibc-2.13-build/elf/trusted-dirs.h
-
-./elf/gen-trusted-dirs.awk
-
-$ echo "/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib" | gawk -f gen-trusted-dirs.awk
-#define SYSTEM_DIRS \
-  "/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/lib/"
-
-#define SYSTEM_DIRS_LEN \
-  77
-
-#define SYSTEM_DIRS_MAX_LEN     77
-
-$ echo "/lib" | gawk -f gen-trusted-dirs.awk
-#define SYSTEM_DIRS \
-  "/lib/"
-
-#define SYSTEM_DIRS_LEN \
-  5
-
-#define SYSTEM_DIRS_MAX_LEN     5
-
-
-*** KT: force LD_DEBUG=libs ***
-         1:      KT: system_dirs: /lib/
-         1:     find library=libdl.so.2 [0]; searching
-         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
-         1:      KT: cache...         1:         KT: default...
-         1:      search path=/lib/tls:/lib              (system search path)
-         1:     KT:  trying file=/lib/tls/libdl.so.2
-         1:     KT:  trying file=/lib/libdl.so.2
-         1:
-         1:     find library=libgcc_s.so.1 [0]; searching
-         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
-         1:      KT: cache...         1:         KT: default...
-         1:      search path=/lib               (system search path)
-         1:     KT:  trying file=/lib/libgcc_s.so.1
-         1:
-         1:     find library=libc.so.6 [0]; searching
-         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
-         1:      KT: cache...         1:         KT: default...
-         1:      search path=/lib               (system search path)
-         1:     KT:  trying file=/lib/libc.so.6
-         1:
-         1:     find library=libc.so [0]; searching
-         1:      KT: RPATH...         1:         KT: LD_LIB...         1:        KT: RUNPATH...         1:   search cache=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/etc/ld.so.cache
-         1:      KT: cache...         1:         KT: default...
-         1:      search path=/lib               (system search path)
-         1:     KT:  trying file=/lib/libc.so
-         1:
-
-
-file /lib/ld-2.13.so /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/ld-2.13.so 755 0 0
-file /lib/libgcc_s.so.1 /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/libgcc_s.so.1 755 0 0
-file /lib/libc.so /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/libc.so 755 0 0
-file /lib/libc_nonshared.a /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/project_build_mips/ams-drx890/root/lib/libc_nonshared.a 755 0 0
-slink /lib/libc.so.6 libc-2.13.so 777 0 0
-slink /init ../bin/sh 777 0 1
-
- 0x00000001 (NEEDED)                     Shared library: [libdl.so.2]
-  0x00000001 (NEEDED)                     Shared library: [libc.so.6]
-  0x00000001 (NEEDED)                     Shared library: [ld.so.1]
-
- 0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
-  0x00000001 (NEEDED)                     Shared library: [libc.so]   // this is script
-
-/* GNU ld script
-   Use the shared library, but some functions are only in
-   the static library, so try that secondarily.  */
-OUTPUT_FORMAT(elf32-tradbigmips)
-GROUP ( /lib/libc.so.6 /lib/libc_nonshared.a  AS_NEEDED ( /lib/ld.so.1 ) )
-
- 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
-
-0x00000001 (NEEDED)                     Shared library: [ld.so.1]
- 0x0000000e (SONAME)                     Library soname: [libc.so.6]
 
 
 ={============================================================================
