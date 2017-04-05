@@ -54363,7 +54363,6 @@ find $(STAGING_DIR) -type d | xargs chmod 755 ;\
 
 
 <spk-changes-to-use-ext-tool>
-
 tar cjvf darwin-spk-1.19-20131014.tar.bz2 darwin-spk-1.19-use-own
 tar cjvf darwin-spk-1.19-20131014.tar.bz2 darwin-spk-1.19
 cp darwin-spk-1.19-20131014.tar.bz2 ~/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/
@@ -55507,10 +55506,7 @@ Starting with a clean Debian system, you must first install a few packages:
 $ sudo apt-get install g++ make gawk
 
 Everything else will be built from source. Create a new directory somewhere,
-and download the following source packages. (If you’re following this guide at
-    a later date, there will be more recent releases of each package
-    available. Check for newer releases by pasting each URL into your browser
-    without the filename. For example: http://ftpmirror.gnu.org/binutils/)
+and download the following source packages. 
 
 wget http://ftpmirror.gnu.org/binutils/binutils-2.24.tar.gz
 wget http://ftpmirror.gnu.org/gcc/gcc-4.9.2/gcc-4.9.2.tar.gz
@@ -55526,19 +55522,16 @@ wget --no-check-certificate ftp://gcc.gnu.org/pub/gcc/infrastructure/cloog-0.18.
 
 The first four packages  Binutils, GCC, the Linux kernel and Glibc  are the
 main ones. We could have installed the next three packages in binary form
-using our system’s package manager instead, but that tends to provide older
+using our system's package manager instead, but that tends to provide older
 versions. The last two packages, ISL and CLooG, are `optional`, but they enable
 a few more optimizations in the compiler we’re about to build.
 
 
 How The Pieces Fit Together
 ===========================
-By the time we’re finished, we will have built each of the following programs
-and libraries. First, we’ll build the tools on the left, then we’ll use those
+By the time we're finished, we will have built each of the following programs
+and libraries. First, we'll build the tools on the left, then we'll use those
 tools to build the programs and libraries on the right. 
-
-We won't actually build the target system's Linux kernel, but we `do need the
-kernel header files` in order to build the target system's standard C library.
 
 
 Host Programs                             
@@ -55636,15 +55629,11 @@ cd gcc-4.8.2
 
 // this script will download and set up sym links
 //
-// for 4.8.2
+// for 4.8.2 for 4.9.2
 // MPFR=mpfr-2.4.2
 // GMP=gmp-4.3.2
 // MPC=mpc-0.8.1
-//
-// for 4.9.2
-// MPFR=mpfr-2.4.2
-// GMP=gmp-4.3.2
-// MPC=mpc-0.8.1
+
 
 Choose an installation directory, and make sure you have write permission to
 it. In the steps that follow, I'll install the new toolchain to /opt/cross.
@@ -55660,9 +55649,14 @@ subdirectory is in your PATH environment variable. You can remove this
 directory from your PATH later, but most of the build steps expect to find
 aarch64-linux-gcc and other host tools via the PATH by default.
 
-{PREFIX}=`/opt/cross`
+// for arm
+PREFIX=`/opt/cross`
 export PATH=/opt/cross/bin:$PATH
+export PATH=${PREFIX}/bin:$PATH
 
+// for mips
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference
+TARGET=mips-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
 
@@ -55676,7 +55670,7 @@ none of the programs built for the host system, such as the cross-compiler
 itself, will be installed to this directory.
 
 
-1. Binutils: ${PREFIX}/bin
+1. Binutils: installed to "${PREFIX}/bin"
 ===========
 This step builds and installs the cross-assembler, cross-linker, and other tools.
 
@@ -55687,28 +55681,28 @@ $ make -j4
 $ make install
 $ cd ..
 
+// for mips
+../binutils-2.24/configure --prefix=${PREFIX} --target=${TARGET} --disable-multilib
+make -j4
+make install
+
+
 We've specified aarch64-linux as the target system type. Binutils's configure
 script will recognize that this target is different from the machine we're
 building on, and configure a cross-assembler and cross-linker as a result. 
 
-The tools will be installed to /opt/cross/bin, their names prefixed by
-aarch64-linux-.  
+The tools `will be installed to /opt/cross/bin,` their names prefixed by
+aarch64-linux-. 
 
 `--disable-multilib` means that we only want our Binutils installation to work
 with programs and libraries using the AArch64 instruction set, and not any
 related instruction sets such as AArch32.
 
-// `target` will be prefix in binary names
-// kyoupark@ukstbuild2:~/asn/install-4.9.2$ ls bin/
+// `${TARGET}` will be prefix in binary names
 // mipsel-linux-addr2line  mipsel-linux-as       mipsel-linux-elfedit
 // mipsel-linux-ld      mipsel-linux-nm       mipsel-linux-objdump
-// mipsel-linux-readelf  mipsel-linux-strings mipsel-linux-ar
-// mipsel-linux-c++filt  mipsel-linux-gprof    mipsel-linux-ld.bfd
-// mipsel-linux-objcopy  mipsel-linux-ranlib   mipsel-linux-size
-// mipsel-linux-strip
 
 
-<binutil-note>
 note: failed to build 2.24 but build 2.25.1 on debian VM.
 kyoupark@kit-debian:~/si-logs/gcc/build-binutil$ uname -a
 Linux kit-debian 3.16.0-4-686-pae #1 SMP Debian 3.16.7-ckt25-2+deb8u3 (2016-07-02) i686 GNU/Linux
@@ -55728,7 +55722,7 @@ result in English-language diagnostics, which the people on the Forum
 understand when you ask your questions. ;-)
 
 
-2. Linux Kernel Headers: ${prefix}/arch 
+2. Linux Kernel Headers: installed to ${PREFIX}/${TARGET}/include
 =======================
 This step installs the Linux kernel header files to ${INSTALL_HDR_PATH}/include,
 which will ultimately allow programs built using our new toolchain to make
@@ -55740,21 +55734,18 @@ $ cd ..
 
     We could even have done this before installing Binutils.
 
-    The Linux kernel header files won't actually be used until step 6, when we
-    build the standard C library, although the configure script in step 4
-    expects them to be already installed.  
-    
     Because the Linux kernel is a different open-source project from the
     others, it has a `different way of identifying the target` CPU architecture:
     ARCH=arm64
 
 
-# make ARCH=mips INSTALL_HDR_PATH=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux headers_install
-# make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
+// for maps
+cd linux-3.17.2
+make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 
-note: this copies
-/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/mips-linux-gnu/include
-asm  asm-generic  linux  mtd  rdma  scsi  sound  video
+// this copies
+// ${PREFIX}/${TARGET}/include
+// asm  asm-generic  linux  mtd  rdma  scsi  sound  video
 
 
 All of the remaining steps involve building GCC and Glibc. The trick is that
@@ -55791,8 +55782,12 @@ $ make -j4 all-gcc
 $ make install-gcc
 $ cd ..
 
-#../gcc-4.8.2/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.8.2 --target=mips-linux --enable-languages=c,c++ --disable-multilib
-#../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ --disable-multilib
+// for mips
+$ cd build-gcc
+../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ --disable-multilib
+make -j4 all-gcc
+make install-gcc
+
 
 Because we've specified --target=aarch64-linux, the build script looks for the
 Binutils cross-tools we built in step 1 with names prefixed by aarch64-linux-.
@@ -55802,7 +55797,7 @@ Likewise, the C/C++ compiler names will be prefixed by aarch64-linux-.
 Fortran, Go or Java, from being built.
 
 // note:
-// must use "all-gcc" since when runs "make", build fails on:
+// must use "all-gcc". Since when runs "make", build fails on:
 // 
 // shows error:
 // 
@@ -55867,28 +55862,6 @@ Fortran, Go or Java, from being built.
 // 
 // export PATH=~/asn/install/bin:$PATH
 
-// note:
-// cross gcc without C/C++ library
-// http://wiki.osdev.org/GCC_Cross-Compiler
-//
-// build libgcc right after binutils is built without doing C/C++ libs?
-// possible? 
-//
-// cd build-gcc
-// ../gcc-x.y.z/configure --target=$TARGET --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers
-// make all-gcc
-// make all-target-libgcc
-// make install-gcc
-// make install-target-libgcc
-//
-// because:
-//
-// We build libgcc, a low-level support library that the compiler expects
-// available at compile time. Linking against libgcc provides integer,
-// floating point, decimal, stack unwinding (useful for exception handling)
-// and other support functions. Note how we are not simply running make &&
-// make install as that would build way too much, not all components of gcc
-// are ready to target your unfinished operating system.
 // 
 // --disable-nls is the same as for binutils above.
 // 
@@ -55919,10 +55892,7 @@ Fortran, Go or Java, from being built.
 // stdbool.h, stddef.h, stdint.h and stdnoreturn.h (as of C11). All of these
 // consist of typedef s and #define s "only", so you can implement them
 // without a single .c file in sight. 
-//
-// note: 
-// libgcc
-// http://wiki.osdev.org/Libgcc
+
 
 note: installs in ${prefix}/bin
 -rwxr-xr-x 2 kyoupark ccusers 2259227 Dec  6 09:59 mips-unknown-linux-uclibc-c++*
@@ -55936,7 +55906,7 @@ note: installs in ${prefix}/bin
 -rwxr-xr-x 1 kyoupark ccusers 1241641 Dec  6 09:59 mips-unknown-linux-uclibc-gcov*
 
 
-4. Standard C Library Headers and Startup Files: ${prefix}/arch/include, lib 
+4. glibc Headers and Startup Files: installed to ${PREFIX}/${TARGET}/include,lib
 ===============================================
 note:
 Before this, must have cross gcc, binuitl built, installed, and have it in the
@@ -55988,27 +55958,33 @@ We install the C library's startup files, crt1.o, crti.o and crtn.o, to the
 installation directory manually. There's doesn't seem to a make rule that does
 this without having other side effects.
 
-#../glibc-2.20/configure --prefix=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux \
-#--build=$MACHTYPE --host=mips-linux --target=mips-linux \
-#--with-headers=/home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include \
-#--disable-multilib libc_cv_forced_unwind=yes
-
 note:
 check on --with-headers which is about linux header
 
+note:
+config error if not --host=mips-linux and --target=${TARGET} are the same.
+
+// ../glibc-2.20/configure --prefix=${PREFIX}/${TARGET} \
+// --build=$MACHTYPE --host=mips-linux --target=${TARGET} \
+// --with-headers=${PREFIX}/${TARGET}/include \
+// --disable-multilib libc_cv_forced_unwind=yes
+
 ../glibc-2.20/configure --prefix=${PREFIX}/${TARGET} \
---build=$MACHTYPE --host=mips-linux --target=${TARGET} \
+--build=$MACHTYPE --host=${TARGET} --target=${TARGET} \
 --with-headers=${PREFIX}/${TARGET}/include \
 --disable-multilib libc_cv_forced_unwind=yes
-
 
 make install-bootstrap-headers=yes install-headers
 make -j4 csu/subdir_lib
 
-# install csu/crt1.o csu/crti.o csu/crtn.o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib
-# mips-linux-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib/libc.so
-# touch /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include/gnu/stubs.h
 
+<libc-so>
+// for arm
+install csu/crt1.o csu/crti.o csu/crtn.o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib
+mips-linux-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/lib/libc.so
+touch /home/nds-uk/kyoupark/asn/install-4.9.2/mips-linux/include/gnu/stubs.h
+
+// for mips
 install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
 ${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
 touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
@@ -56017,12 +55993,8 @@ note:
 If miss out these, then cause libgcc in step 5 failed with errors around gcov
 and pthred related.
 
-install csu/crt1.o csu/crti.o csu/crtn.o /home/nds-uk/kyoupark/asn/install-4.8.2/mips-linux/lib
-mips-linux-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o /home/nds-uk/kyoupark/asn/install-4.8.2/mips-linux/lib/libc.so
-touch /home/nds-uk/kyoupark/asn/install-4.8.2/mips-linux/include/gnu/stubs.h
 
-
-5. Compiler Support Library: 
+5. Compiler Support Library: *libgcc* http://wiki.osdev.org/Libgcc
 ===========================
 This step `uses the cross-compilers` built in step 4 to build the compiler
 support library. The compiler support library contains some C++ exception
@@ -56045,6 +56017,42 @@ A shared library, libgcc_s.so, is installed to /opt/cross/aarch64-linux/lib64.
 cd build-gcc
 make -j4 all-target-libgcc
 make install-target-libgcc
+
+<install-libgcc-s-so>
+$ readelf -d libgcc_s.so.1
+ 0x00000001 (NEEDED)                     Shared library: [libc.so]
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
+
+note:
+Can build *libgcc* after binutil step
+
+cross gcc without C/C++ library
+http://wiki.osdev.org/GCC_Cross-Compiler
+
+cd build-gcc
+../gcc-x.y.z/configure --target=$TARGET --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers
+make all-gcc
+make all-target-libgcc
+make install-gcc
+make install-target-libgcc
+
+We build libgcc, a low-level support library that the compiler expects
+available at compile time. Linking against libgcc provides integer, floating
+point, decimal, stack unwinding (useful for exception handling) and other
+support functions. Note how we are not simply running make && make install as
+that would build way too much, not all components of gcc are ready to target
+your unfinished operating system.
+
+
+5.5 When needs kernel header?
+===============================================
+We won't actually build the target system's Linux kernel, but we do need the
+kernel header files in order to build the target system's standard C library.
+
+The Linux kernel header files won't actually be used until step 6, when we
+build the standard C library, although the configure script in step 4 expects
+them to be already installed.  
+    
 
 
 6. Standard C Library (back to glibc)
@@ -56997,9 +57005,7 @@ gcc-4.2.4, glibc-2.13, linux-2.18.8 : OK
 gcc-4.2.0, glibc-2.13, linux-2.18.8 : OK
 
 // cross-ng, gcc-4.2.4, glibc-2.13, linux-4.3
-// [DEBUG]    
-// PATH=/home/kyoupark/x-tools/mipsel-unknown-linux-gnu/bin:/home/kyoupark/cross/.build/mipsel-unknown-linux-gnu/buildtools/bin:/home/kyoupark/cross/.build/tools/bin:/home/kyoupark/x-tools/mipsel-unknown-linux-gnu/bin:/home/kyoupark/cross/.build/mipsel-unknown-linux-gnu/buildtools/bin:/home/kyoupark/cross/.build/tools/bin:/home/kyoupark/si-logs/broot/buildroot-2016.08.1/output/host/usr/bin:/home/kyoupark/bin:/home/kyoupark/inst/bin/:/home/kyoupark/viminst/bin:/home/kyoupark/bin:/home/kyoupark/si-logs/broot/buildroot-2016.08.1/output/host/usr/bin:/home/kyoupark/bin:/home/kyoupark/inst/bin/:/home/kyoupark/viminst/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
-// 
+//
 // [EXTRA]    Configuring binutils
 // [DEBUG]    Extra config passed: '--enable-ld=yes --enable-gold=no --enable-plugins --with-pkgversion=crosstool-NG crosstool-ng-1.22.0 --disable-multilib --disable-nls'
 // [DEBUG]    ==> Executing: 'CFLAGS=-O2 -g -pipe ' 'CXXFLAGS=-O2 -g -pipe '
@@ -57042,7 +57048,7 @@ gcc-4.2.0, glibc-2.13, linux-2.18.8 : OK
 // [DEBUG]    ==> Executing: '/usr/bin/make' '-j2' '-l' 'install-gcc' 
 
 
-// OK - `soft`
+// OK - `soft` and OK - `hard`
 CFLAGS='-O2 -g -pipe' CXXFLAGS='-O2 -g -pipe' LDFLAGS=' -lstdc++ -lm' \
 ../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
 --with-newlib --enable-threads=no --disable-shared \
@@ -57054,20 +57060,9 @@ make -j4 -l all-gcc
 make -l install-gcc
 
 
-// OK - `hard`
-../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
---with-newlib --enable-threads=no --disable-shared \
---with-arch=mips1 --with-abi=32 --with-float=hard --enable-__cxa_atexit \
---enable-lto --enable-target-optspace --with-mips-plt --disable-libgomp \
---disable-libmudflap --disable-libssp --disable-nls \
---disable-multilib --enable-languages=c,c++ 
-make -j4 -l all-gcc
-make -l install-gcc
-
-
 // NOT OK since --enable-threads sets -DHAVE_GTHR_DEFAULT and this fails to
-// build files in gcc/unwind-xx.c so have to use --enable-threads=no. 
-// ../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
+// build files in gcc/unwind-xx.c so `have to use --enable-threads=no` 
+//
 // ../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
 // --enable-languages=c \
 // --disable-shared \
@@ -57108,9 +57103,19 @@ make -l install-gcc
 // 'ARCH=mips'
 // 'INSTALL_HDR_PATH=/home/kyoupark/x-tools/mipsel-unknown-linux-gnu/mipsel-unknown-linux-gnu/sysroot/usr'
 // 'V=0' 'headers_install' 
+//
+// [EXTRA]    Checking installed headers
+// [DEBUG]    ==> Executing: '/usr/bin/gmake' '-C'
+// '/home/NDS-UK/kyoupark/cross/.build/src/linux-4.3'
+// 'CROSS_COMPILE=mipsel-unknown-linux-gnu-'
+// 'O=/home/NDS-UK/kyoupark/cross/.build/mipsel-unknown-linux-gnu/build/build-kernel-headers'
+// 'ARCH=mips'
+// 'INSTALL_HDR_PATH=/home/nds-uk/kyoupark/x-tools/mipsel-unknown-linux-gnu/mipsel-unknown-linux-gnu/sysroot/usr'
+// 'V=0' 'headers_check' 
 
 cd ../linux-2.6.18.8-from-mips
 make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
+
 
 // [INFO ]  Installing C library headers & start files
 // [DEBUG]    Entering '/home/kyoupark/cross/.build/mipsel-unknown-linux-gnu/build/build-libc-startfiles'
@@ -57212,9 +57217,9 @@ cp csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
 // '--disable-libgomp' '--disable-libmudflap' '--disable-libssp' '--disable-nls'
 // '--disable-multilib' '--enable-languages=c' 
 // [EXTRA]    Building gcc
-// [DEBUG]    ==> Executing: '/usr/bin/make' '-j2' '-l' 'all-gcc' 
+// [DEBUG]    ==> Executing: '/usr/bin/gmake' '-j25' '-l' 'all-gcc' 'all-target-libgcc' 
 // [EXTRA]    Installing gcc
-// [DEBUG]    ==> Executing: '/usr/bin/make' '-j2' '-l' 'install-gcc' 
+// [DEBUG]    ==> Executing: '/usr/bin/gmake' '-j25' '-l' 'install-gcc' 'install-target-libgcc' 
 
 note: this is difference
 
@@ -57300,7 +57305,13 @@ PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install
 TARGET=mips-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
-// [EXTRA]    Configuring binutils
+// ../binutils-2.17.50/configure --prefix=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install --target=mips-linux-gnu --disable-werror --disable-nls --enable-multilib target_alias=mips-linux-gnu --no-
+// create --no-recursion
+
+../binutils-2.17.50/configure --prefix=${PREFIX} --target=${TARGET} --disable-werror --disable-nls --enable-multilib \
+--no-create --no-recursion
+make -j4
+make install
 
 ../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
 --enable-threads=no --disable-shared \
@@ -57314,7 +57325,7 @@ make -l install-gcc
 
 
 cd ../linux-2.6.18.8-from-mips/include
-rename linux, asm-mips, asm-generic
+rename linux, asm-mips, asm-generic to -org
 cp linux-libc-headers-2.6.18.0/include/linux linux
 cp linux-libc-headers-2.6.18.0/include/asm-mips asm-mips
 cp linux-libc-headers-2.6.18.0/include/asm-generic asm-mips
@@ -57369,6 +57380,96 @@ cd build-glibc
 make -j5
 make install
 
+
+// [INFO ]  Installing final gcc compiler
+cd build-gcc
+make -j5
+make install
+
+
+{gcc-build-glibc-13} uses patched gcc
+PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install-two
+TARGET=mips-linux-gnu
+export PATH=${PREFIX}/bin:$PATH
+
+../binutils-2.17.50/configure --prefix=${PREFIX} --target=${TARGET} --disable-werror --disable-nls --enable-multilib target_alias=mips-linux-gnu \
+--no-create --no-recursion
+make -j4
+make install
+
+../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
+--enable-threads=no --disable-shared \
+--with-float=hard \
+--disable-__cxa_atexit --enable-target-optspace \
+--disable-libmudflap --disable-nls \
+--with-gnu-ld --with-gnu-plts \
+--disable-multilib --enable-languages=c
+make -j4 -l all-gcc
+make -l install-gcc
+
+note: install libgcc_s.so.1
+
+cd ../linux-2.6.18.8-from-mips/include
+rename linux, asm-mips, asm-generic to -org
+cp linux-libc-headers-2.6.18.0/include/linux linux
+cp linux-libc-headers-2.6.18.0/include/asm-mips asm-mips
+cp linux-libc-headers-2.6.18.0/include/asm-generic asm-mips
+cp Kbuild files from org to new directories
+
+
+cd ../linux-2.6.18.8-from-mips
+make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
+
+
+// [INFO ]  Installing C library headers & start files
+// use `hard`
+
+CFLAGS='-U_FORTIFY_SOURCE  -EL -march=mips1 -mabi=32    -mhard-float  -O2'
+../glibc-2.13/configure --prefix=${PREFIX}/${TARGET} \
+--build=$MACHTYPE --host=${TARGET} \
+--without-cvs --disable-profile --without-gd \
+--with-headers=${PREFIX}/${TARGET}/include \
+--disable-debug --disable-sanity-checks --enable-obsolete-rpc \
+libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes \
+--enable-kernel=2.6.18 --with-__thread --with-tls --enable-shared \
+--without-fp --enable-add-ons=nptl,../glibc-ports-2.13
+
+make install-bootstrap-headers=yes BUILD_CFLAGS='-O2 -g' install-headers
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
+cp -v ../glibc-2.13/include/features.h ${PREFIX}/${TARGET}/include/features.h 
+cp -v ./bits/stdio_lim.h ${PREFIX}/${TARGET}/include/bits/stdio_lim.h
+cp -v ./misc/syscall-list.h ${PREFIX}/${TARGET}/include/bits/syscall.h
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+make -j2 -l BUILD_CFLAGS='-O2 -g' csu/subdir_lib
+cp csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+
+
+cd build-gcc
+make -j4 all-target-libgcc
+make: *** No rule to make target `all-target-libgcc'.  Stop.
+
+make install-target-libgcc
+
+
+// // [INFO ]  Installing pass-2 core C gcc compiler
+// 
+// note: this is difference
+// 
+// ../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
+// --enable-languages=c,c++ \
+// --disable-__cxa_atexit --enable-target-optspace \
+// --with-gnu-ld --with-float=hard --enable-threads \
+// --with-arch=mips32 --disable-libmudflap --disable-nls --with-gnu-plts
+// make -j4 -l all-gcc
+// make -l install-gcc
+
+
+// [INFO ]  Installing C library
+cd build-glibc
+make -j5
+make install
+
+note: updates libc.so which is linker script
 
 // [INFO ]  Installing final gcc compiler
 cd build-gcc
@@ -58909,11 +59010,13 @@ ct-ng show-arm-unknown-linux-gnueabi
 once you know what sample to use, configure ct-ng to use it:
 
 ct-ng arm-unknown-linux-gnueabi
-ct-ng mipsel-unknown-linux-gnu
 
 // has to set --no-check-certificate
 // mips-ar2315-linux-gnu 			linux 	4.3 	2.25.1 	gcc 	5.2.0 	glibc 	2.22 	nptl 	soft 	C, C++ 	Giammarco Zacheo 	2015-11-14 
 ct-ng mips-ar2315-linux-gnu
+
+ct-ng mipsel-unknown-linux-gnu
+ct-ng V=2 build
 
 
 samples are configured to install in
@@ -58987,7 +59090,10 @@ STOP=cc_core_pass_2 ct-ng build
 
 
 <build-log>
-kyoupark@kit-debian:~/cross/work$ ct-ng V=2 build
+~/cross/work$ ct-ng V=2 build
+
+note:see build.log
+
 /home/kyoupark/cross/install/lib/crosstool-ng-1.22.0/scripts/crosstool-NG.sh
 [INFO ]  Performing some trivial sanity checks
 [INFO ]  Build started 20161129.124349
