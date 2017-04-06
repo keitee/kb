@@ -56027,7 +56027,7 @@ $ sudo mkdir -p /opt/cross
 $ sudo chown jeff /opt/cross
 
 
-1. PATH
+0. PATH
 ===========
 Throughout the entire build process, make sure the installation's bin
 subdirectory is in your PATH environment variable. You can remove this
@@ -56045,7 +56045,7 @@ TARGET=mips-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
 
-1. SYSTEM ROOT: ${PREFIX}=`/opt/cross/{target}`
+0. SYSTEM ROOT: ${PREFIX}=`/opt/cross/{target}`
 ===========
 Pay particular attention to the stuff that gets installed under
 `/opt/cross/aarch64-linux/`. This directory is considered the system root of an
@@ -56058,8 +56058,7 @@ itself, will be installed to this directory.
 1. Binutils: installed to "${PREFIX}/bin"
 ===========
 note:
-creates
-/gcc-glibc-mips-reference/mips-linux-gnu/lib/ldscripts
+installs /gcc-glibc-mips-reference/mips-linux-gnu/lib/ldscripts
 
 This step builds and installs the cross-assembler, cross-linker, and other tools.
 
@@ -56132,8 +56131,7 @@ ARCH=arm64
 cd linux-3.17.2
 make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 
-// this copies
-// ${PREFIX}/${TARGET}/include
+// this installs to ${PREFIX}/${TARGET}/include
 // asm  asm-generic  linux  mtd  rdma  scsi  sound  video
 
 
@@ -56172,7 +56170,7 @@ $ make install-gcc
 $ cd ..
 
 // for mips
-$ cd build-gcc
+cd build-gcc
 ../gcc-4.8.2/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ --disable-multilib
 make -j4 all-gcc
 make install-gcc
@@ -56307,7 +56305,7 @@ In this step, we install Glibc's `standard C library headers` to
 We also use the C compiler built in step 3 to compile the library's startup
 files and install them to /opt/cross/aarch64-linux/lib. 
 
-Finally, we create a couple of `dummy files`, libc.so and stubs.h, which are
+Finally, we create a couple of `dummy files`, *libc.so* and stubs.h, which are
 expected in step 5, but which will be replaced in step 6.
 
 
@@ -56358,6 +56356,8 @@ config error if not --host=mips-linux and --target=${TARGET} are the same.
 // --with-headers=${PREFIX}/${TARGET}/include \
 // --disable-multilib libc_cv_forced_unwind=yes
 
+// for mips
+cd glibc-2.20-build
 ../glibc-2.20/configure --prefix=${PREFIX}/${TARGET} \
 --build=$MACHTYPE --host=${TARGET} --target=${TARGET} \
 --with-headers=${PREFIX}/${TARGET}/include \
@@ -56365,13 +56365,17 @@ config error if not --host=mips-linux and --target=${TARGET} are the same.
 
 make install-bootstrap-headers=yes install-headers
 make -j4 csu/subdir_lib
-
-
-*libc.so*
-// for mips
 install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
 ${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
 touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
+
+~/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib
+-rwxr-xr-x 1 kyoupark ccusers 3152 Apr  6 07:39 crt1.o*
+-rwxr-xr-x 1 kyoupark ccusers 1980 Apr  6 07:39 crti.o*
+-rwxr-xr-x 1 kyoupark ccusers 1680 Apr  6 07:39 crtn.o*
+drwxr-xr-x 2 kyoupark ccusers 4096 Apr  6 07:35 ldscripts/
+-rwxr-xr-x 1 kyoupark ccusers 1701 Apr  6 07:39 libc.so*
+
 
 note:
 If miss out these, then cause libgcc in step 5 failed with errors around gcov
@@ -56402,6 +56406,17 @@ A shared library, libgcc_s.so, is installed to /opt/cross/aarch64-linux/lib64.
 cd build-gcc
 make -j4 all-target-libgcc
 make install-target-libgcc
+
+-rwxr-xr-x 1 kyoupark ccusers    1701 Apr  6 07:39 libc.so*
+lrwxrwxrwx 1 kyoupark ccusers      13 Apr  6 07:40 libgcc_s.so -> libgcc_s.so.1
+-rw-r--r-- 1 kyoupark ccusers 1522196 Apr  6 07:40 libgcc_s.so.1
+
+$ readelf -d libgcc_s.so.1
+
+ 0x00000001 (NEEDED)                     Shared library: [libc.so]
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
+
+// /home/NDS-UK/kyoupark/asn/gcc/gcc-4.8.2-build/mips-linux-gnu/libgcc/libgcc_s.so.1
 
 
 5.5 When needs kernel header?
@@ -56443,6 +56458,17 @@ $ cd ..
 
 make -j5
 make install
+
+note:
+This changes:
+
+$ readelf -d libgcc_s.so.1
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
+
+$ readelf -d libgcc_s.so.1.org
+ 0x00000001 (NEEDED)                     Shared library: [libc.so]
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
 
 
 8. Check
@@ -57877,6 +57903,18 @@ $ ls -al a.out
 $ readelf -d a.out
 
 There is no dynamic section in this file.
+
+$ readelf -d libgcc_s.so.1
+
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
+
+/* GNU ld script
+   Use the shared library, but some functions are only in
+   the static library, so try that secondarily.  */
+OUTPUT_FORMAT(elf32-tradbigmips)
+GROUP ( /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/libc.so.6 /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/libc_nonshared.a  AS_NEEDED ( /home/nds-u
+k/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/ld.so.1 ) )
 
 
 <link-own>
