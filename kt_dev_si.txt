@@ -18019,11 +18019,34 @@ SYSTEM_STATUS PLAYER_API_AVControl_SetVisibility(PLAYER_API_AVControl_Handle avc
 
 SYSTEM_STATUS PLAYER_AVControl_SetVideoVisibility(PLAYER_SERVICE_CONTEXT_DATA *sc_data, bool visibility)
 {
-                uint32_t l_background_color = (l_apply_visibility == true) ?
-                    g_player_component.default_unblancking_background_color : g_player_component.default_blancking_background_color;
+  uint32_t l_background_color = (l_apply_visibility == true) ?
+    g_player_component.default_unblancking_background_color : g_player_component.default_blancking_background_color;
 
-                if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_SetBackgroundColour(PLAYER_PIXEL_FORMAT,
-                                                                       l_background_color)));
+  if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_SetBackgroundColour(PLAYER_PIXEL_FORMAT,
+          l_background_color)));
+
+  // leads to
+  //
+  // /*===========================================================================*/
+  // /**  @brief Allows BEM clients to set the background colour for an Output
+  //   *  Composition.
+  //   *
+  //   *  @param[in] composition Identifies the Output Composition to which the
+  //   *                         setting applies.
+  //   *  @param[in] format Defines the background colour pixel format. As used in
+  //   *                    BlenderBackgroundColour from CDI ioctl
+  //   *                    BLENDER_SET_BACKROUND_COLOUR (CDI V6 section 10.4.7.6).
+  //   *                    i.e. PIXEL_FORMAT_XXX from CDI's graphics.h.
+  //   *  @param[in] colour Defines the background colour pixel value in the pixel
+  //   *                    format indicated by the pixel format parameter. As used
+  //   *                    in BlenderBackgroundColour from CDI ioctl
+  //   *                    BLENDER_SET_BACKROUND_COLOUR (CDI V6 section 10.4.7.6).
+  //   *
+  //   *  @return BEM_STATUS_OK if successful or BEM_STATUS_NOT_OK on any error.
+  //   *
+  //   */
+  // SYSTEM_STATUS BEM_OC_VideoComposition_SetBackgroundColour()
+  // {}
 }
 
 
@@ -18109,15 +18132,55 @@ Scart Control UCM-11437
 !MIL   -MCM          < T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:00569 > @@PMON@@,trace,mediacon,mc-destroy,3
 
 *change-channel* note that player do video control
+
+"F:PLAYER_AVControl_UpdateVisibility L:1110 > VIDEO IS HIDDEN" do not really
+mean blanking or unblanking since this use blender IOCTL and valid only when
+video runs.
+
+!INFO   -P_Api        		< M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:1320 > Can't unblank the video because the video is not running 
+
+So if see this, this means that control has no effect.
+
 !MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(CHANNEL+)e006 
 !MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1110 > VIDEO IS HIDDEN          // *to-blue*
-!INFO   -P_Api        		< P:APP T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:1435 > Set Visibility to [0]  // this matches up
+!INFO   -P_Api        		< P:APP T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:1435 > Set Visibility to [0]  // this do not mean blank
 !MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:8968 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000012, status=NOT_RUNNING 
 !MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:8968 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000014, status=NOT_RUNNING 
 !MIL    -MPM          		< P:MW  T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1374 > FRAME_PRESENTED: hMC=0x13 
 !MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1106 > VIDEO IS SHOWN           // *to-black*
 !INFO   -P_Api        		< P:APP T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:1423 > Set Visibility to [1] 
 !MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:8968 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000014, status=RUNNING 
+
+*change-channel-on-audio*
+!MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(0)e300 
+!MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(2)e302 
+!MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(0)e300 
+!MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(2)e302 
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "DCAEvent","action": "DCA to channel:0202","title": "DCA to channel:0202","label": "","currentscreen": "/tv/live/998"}
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/0202/banner"}
+
+// player do and has an effect since is tuning from video and there is video
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1174 > VIDEO IS HIDDEN 
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:9410 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000001, status=NOT_RUNNING 
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessASI L:9596 > AUDIO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000001 [PROCESSED_ASI (524952) NOT_RUNNING] [SELECTION_ASI (524952) NOT_RUNNING] 
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "PlayingStatus","action": "LIVE","title": "PlayingStatus changed to: LIVE","label": "","currentscreen": "/tv/live/0202/banner"}
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessASI L:9596 > AUDIO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000003 [PROCESSED_ASI (67869) RUNNING] [SELECTION_ASI (67869) RUNNING] 
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/0202"}
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "PlayingStatus","action": "LIVE","title": "PlayingStatus changed to: LIVE","label": "","currentscreen": "/tv/live/0202"}
+!INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=3, source=1, visible=1 
+!INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1093 > SetVisibility VIDEO TRUE 
+
+// no control on blanking when change to audio
+!MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(CHANNEL+)e006 
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "CHANNEL_UP","title": "Key Press CHANNEL_UP","label": "","currentscreen": "/tv/live/0202"}
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessASI L:9596 > AUDIO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000003 [PROCESSED_ASI (67869) NOT_RUNNING] [SELECTION_ASI (67869) NOT_RUNNING] 
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "PlayingStatus","action": "LIVE","title": "PlayingStatus changed to: LIVE","label": "","currentscreen": "/tv/live/0202"}
+!MIL    -P_Api        		< P:APP T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessASI L:9596 > AUDIO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000004 [PROCESSED_ASI (133383) RUNNING] [SELECTION_ASI (133383) RUNNING] 
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/0203"}
+!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "PlayingStatus","action": "LIVE","title": "PlayingStatus changed to: LIVE","label": "","currentscreen": "/tv/live/0203"}
+!INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=3, source=1, visible=1 
+!INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1093 > SetVisibility VIDEO TRUE 
+!MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(CHANNEL+)e006 
 
 
 picasso/java/picasso/initialisationmanager/InitialisationManager.java

@@ -146,6 +146,7 @@
 *kt_linux_tool_051* tool-lpstat: view and cancel print jobs
 *kt_linux_tool_051* tool-i3wm:
 *kt_linux_tool_051* tool-hexdump
+*kt_linux_tool_051* tool-hexedit tool-ghex
 *kt_linux_tool_051* tool-uptime
 *kt_linux_tool_051* tool-lsof
 *kt_linux_tool_051* tool-dirname tool-basename tool-readlink
@@ -372,6 +373,7 @@
 *kt_linux_gcc_400* gcc-build-glibc-reference
 *kt_linux_gcc_400* gcc-build-c-library
 *kt_linux_gcc_400* gcc-build-glibc-mips buildroot-glic-mips-internal-toolchain
+*kt_linux_gcc_400* gcc-build-glibc-mips-own
 *kt_linux_gcc_400* gcc-build-glibc-libgcc
 *kt_linux_gcc_400* gcc-build-enable-asan
 *kt_linux_gcc_400* gcc-build-mips-uclibc
@@ -512,6 +514,7 @@
 *kt_linux_core_400* lib-shared-soname
 *kt_linux_core_412* lib-shared-ld-conf lib-ld-so-cache
 *kt_linux_core_402* lib-shared-search lib-rpath ld-library-path   
+*kt_linux_core_406* lib-shared-elf-edit 
 |kt_linux_core_406| lib-shared-preload
 *kt_linux_core_410* lib-shared: check libraries that process uses
 *kt_linux_core_410* lib-shared: check libraries loading
@@ -11280,8 +11283,25 @@ DESCRIPTION
               output in postscript continuous hexdump style. Also known as
               plain hexdump style.
 
+     -s offset
+      Skip offset bytes from the beginning of the input. By default, offset is
+      interpreted as a decimal number. With a leading 0x or 0X, offset is
+      interpreted as a hexadecimal number, otherwise, with a leading 0, offset
+      is interpreted as an octal number.  Appending the character b, k, or m
+      to offset causes it to be interpreted as a multiple of 512, 1024, or
+      1048576, respectively.
+
+
 <ex>
 xxd -ps -c 188 -g1 s6631/STREAM.STR  > s6631/hexdump_ts.txt
+
+
+={============================================================================
+*kt_linux_tool_051* tool-hexedit tool-ghex
+
+the GNOME Hex Editor, ghex(1)
+
+sudo apt-get install ghex
 
 
 ={============================================================================
@@ -24557,6 +24577,14 @@ Why these are different in size??
        --syms
            Displays the entries in symbol table section of the file, if it has
            one.
+
+       -R <number or name>
+       --relocated-dump=<number or name>
+           Displays the contents of the indicated section as a hexadecimal
+           bytes.  A number identifies a particular section by index in the
+           section table; any other string identifies all sections with that
+           name in the object file.  The contents of the section will be
+           relocated before they are displayed.
 
 
 ={============================================================================
@@ -56058,7 +56086,9 @@ itself, will be installed to this directory.
 1. Binutils: installed to "${PREFIX}/bin"
 ===========
 note:
-installs /gcc-glibc-mips-reference/mips-linux-gnu/lib/ldscripts
+installs /gcc-glibc-mips-reference/mips-linux-gnu/lib/ldscripts and where it
+installs it depends on on binutil version. For example, binutil 2.17 installs
+it in the different directory.
 
 This step builds and installs the cross-assembler, cross-linker, and other tools.
 
@@ -56511,8 +56541,9 @@ Have to use Linux 2.6.32 or later for glibc-2.20
 <08> okay: gcc-4.8.2, glibc-2.13, linux-2.6.32, binutils-2.19.1, float-hard
 <09> okay: gcc-4.3.0, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.18, float-hard
 <10> okay: gcc-4.8.2, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.25.1, null sysroot, float-hard
-<11> okay: gcc-4.2.0, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.25.1, float-hard *cross-ng*
-<12> okay: gcc-4.2.0-brcm, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.17.50, float-hard
+<11> okay: gcc-4.2.0-org, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.25.1, float-hard *cross-ng*
+<12> okay: gcc-4.2.0-bcm, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.17.50, float-hard
+<13-test> okay: gcc-4.2.0-org, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.24, float-hard
 
 <1> fail: gcc-4.8.2, glibc-2.20, linux-2.6.19
 Have to use Linux 2.6.32 or later for glibc-2.20
@@ -57354,7 +57385,7 @@ make -j5
 make install
 
 
-<11> okay: gcc-4.2.0, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.25.1, float-hard
+<11> okay: gcc-4.2.0-org, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.25.1, float-hard
 
 PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install
 TARGET=mips-linux-gnu
@@ -57378,6 +57409,11 @@ cd build-binutils
 // '--with-pkgversion=crosstool-NG crosstool-ng-1.22.0' '--disable-multilib'
 // '--disable-nls' '--with-float=soft'
 // '--with-sysroot=/home/kyoupark/x-tools/mipsel-unknown-linux-gnu/mipsel-unknown-linux-gnu/sysroot' 
+
+cd build-binutils
+../binutils-2.25.1/configure --target=${TARGET} --prefix=${PREFIX} --disable-nls --disable-multilib
+make -j4
+make install
 
 
 1 all-gcc
@@ -57440,17 +57476,6 @@ make -l install-gcc
 
 // OK with less options
 ../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
---enable-threads=no --disable-shared \
---with-float=hard \
---disable-__cxa_atexit --enable-target-optspace \
---disable-libmudflap --disable-nls \
---with-gnu-ld --with-gnu-plts \
---disable-multilib --enable-languages=c \
-make -j4 -l all-gcc
-make -l install-gcc
-
-
-../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
 --enable-threads=no --disable-shared \
 --with-float=hard \
 --disable-__cxa_atexit --enable-target-optspace \
@@ -57575,7 +57600,6 @@ cd build-gcc, *build-second-pass*
 note: this is different compared with the previous tries since not call
 all-target-libgcc.
 
-
 // [INFO ]  Installing pass-2 core C gcc compiler
 // [DEBUG]    Entering '/home/kyoupark/cross/.build/mipsel-unknown-linux-gnu/build/build-cc-gcc-core-pass-2'
 // [EXTRA]    Configuring core C gcc compiler
@@ -57602,39 +57626,31 @@ all-target-libgcc.
 // [EXTRA]    Installing gcc
 // [DEBUG]    ==> Executing: '/usr/bin/gmake' '-j25' '-l' 'install-gcc' 'install-target-libgcc' 
 
+// // OK soft
+// CFLAGS='-O2 -g -pipe' CXXFLAGS='-O2 -g -pipe' LDFLAGS=' -lstdc++ -lm' \
+// ../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
+// --enable-shared \
+// --with-arch=mips1 --with-abi=32 --with-float=soft --enable-__cxa_atexit \
+// --enable-lto --enable-target-optspace --with-mips-plt --disable-libgomp \
+// --disable-libmudflap --disable-libssp --disable-nls \
+// --disable-multilib --enable-languages=c 
+// make -j4 -l all-gcc
+// make -l install-gcc
+// 
+// // OK `hard`
+// ../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
+// --enable-shared \
+// --with-arch=mips1 --with-abi=32 --with-float=hard --enable-__cxa_atexit \
+// --enable-lto --enable-target-optspace --with-mips-plt --disable-libgomp \
+// --disable-libmudflap --disable-libssp --disable-nls \
+// --disable-multilib --enable-languages=c 
+// make -j4 -l all-gcc
+// make -l install-gcc
+
+note: this is difference from glibc-reference
 
 // OK
-CFLAGS='-O2 -g -pipe' CXXFLAGS='-O2 -g -pipe' LDFLAGS=' -lstdc++ -lm' \
 ../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
---enable-shared \
---with-arch=mips1 --with-abi=32 --with-float=soft --enable-__cxa_atexit \
---enable-lto --enable-target-optspace --with-mips-plt --disable-libgomp \
---disable-libmudflap --disable-libssp --disable-nls \
---disable-multilib --enable-languages=c 
-make -j4 -l all-gcc
-make -l install-gcc
-
-// OK `hard`
-../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
---enable-shared \
---with-arch=mips1 --with-abi=32 --with-float=hard --enable-__cxa_atexit \
---enable-lto --enable-target-optspace --with-mips-plt --disable-libgomp \
---disable-libmudflap --disable-libssp --disable-nls \
---disable-multilib --enable-languages=c 
-make -j4 -l all-gcc
-make -l install-gcc
-
-// OK
-../gcc-4.2.0/configure --target=${TARGET} --prefix=${PREFIX} \
---enable-languages=c,c++ \
---disable-__cxa_atexit --enable-target-optspace \
---with-gnu-ld --with-float=hard --enable-threads \
---with-arch=mips32 --disable-libmudflap --disable-nls --with-gnu-plts
-make -j4 -l all-gcc
-make -l install-gcc
-
-
-../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
 --enable-languages=c,c++ \
 --disable-__cxa_atexit --enable-target-optspace \
 --with-gnu-ld --with-float=hard --enable-threads \
@@ -57679,16 +57695,17 @@ make -j5
 make install
 
 
-<12> okay: gcc-4.2.0-brcm, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.17.50, float-hard
+<12> okay: gcc-4.2.0-bcm, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.17.50, float-hard
 
 PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install
 TARGET=mips-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
-// ../binutils-2.17.50/configure --prefix=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install --target=mips-linux-gnu --disable-werror --disable-nls --enable-multilib target_alias=mips-linux-gnu --no-
-// create --no-recursion
+../binutils-2.17.50/configure --prefix=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install --target=mips-linux-gnu --disable-werror --disable-nls --enable-multilib target_alias=mips-linux-gnu \
+--no-create --no-recursion
 
 ../binutils-2.17.50/configure --prefix=${PREFIX} --target=${TARGET} --disable-werror --disable-nls --enable-multilib \
+target_alias=mips-linux-gnu \
 --no-create --no-recursion
 make -j4
 make install
@@ -57719,9 +57736,7 @@ cd ../linux-2.6.18.8-from-mips
 make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 
 
-// [INFO ]  Installing C library headers & start files
 // use `hard`
-
 CFLAGS='-U_FORTIFY_SOURCE  -EL -march=mips1 -mabi=32    -mhard-float  -O2'
 ../glibc-2.13/configure --prefix=${PREFIX}/${TARGET} \
 --build=$MACHTYPE --host=${TARGET} \
@@ -57742,10 +57757,6 @@ make -j2 -l BUILD_CFLAGS='-O2 -g' csu/subdir_lib
 cp csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
 
 
-// [INFO ]  Installing pass-2 core C gcc compiler
-
-note: this is difference
-
 ../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
 --enable-languages=c,c++ \
 --disable-__cxa_atexit --enable-target-optspace \
@@ -57755,28 +57766,34 @@ make -j4 -l all-gcc
 make -l install-gcc
 
 
-// [INFO ]  Installing C library
 cd build-glibc
 make -j5
 make install
 
 
-// [INFO ]  Installing final gcc compiler
 cd build-gcc
 make -j5
 make install
 
 
-<13> okay: gcc-4.2.0-brcm, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.17.50, float-hard
+={============================================================================
+*kt_linux_gcc_400* gcc-build-glibc-mips-own
+
+<14-test> okay: gcc-4.2.0-brcm, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.17.50, float-hard
 
 PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install-two
 TARGET=mips-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
-../binutils-2.17.50/configure --prefix=${PREFIX} --target=${TARGET} --disable-werror --disable-nls --enable-multilib target_alias=mips-linux-gnu \
---no-create --no-recursion
+
+// note: do not create makefile. ???
+// ../binutils-2.17.50/configure --prefix=${PREFIX} --target=${TARGET} --disable-werror --disable-nls --enable-multilib \
+//--no-create --no-recursion
+
+../binutils-2.17.50/configure --prefix=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install-two --target=mips-linux-gnu --disable-werror --disable-nls --enable-multilib 
 make -j4
 make install
+
 
 ../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
 --enable-threads=no --disable-shared \
@@ -57787,12 +57804,6 @@ make install
 --disable-multilib --enable-languages=c
 make -j4 -l all-gcc
 make -l install-gcc
-
-note: install libgcc_s.so.1
-$ readelf -d libgcc_s.so.1
- 0x00000001 (NEEDED)                     Shared library: [libc.so]
- 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
-
 
 cd ../linux-2.6.18.8-from-mips/include
 rename linux, asm-mips, asm-generic to -org
@@ -57826,41 +57837,77 @@ make -j2 -l BUILD_CFLAGS='-O2 -g' csu/subdir_lib
 cp csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
 
 
-// cd build-gcc, *build-second-pass*
-// 
-// ../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
-// --enable-languages=c,c++ \
-// --disable-__cxa_atexit --enable-target-optspace \
-// --with-gnu-ld --with-float=hard --enable-threads \
-// --with-arch=mips32 --disable-libmudflap --disable-nls --with-gnu-plts
-//
-// was this
-//
-// make -j4 -l all-gcc
-// make -l install-gcc
-//
+cd build-gcc, *gcc-second-pass*
+
+note:
+this is different --enable-languages=c,c++ and build and install libgcc_s.so.1
+
+$ readelf -d libgcc_s.so.1
+
+ 0x00000001 (NEEDED)                     Shared library: [libc.so]
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
+
+if move this up before gcc-second-pass, build fails since has dependancy on
+libgcc.
+
+../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
+--enable-languages=c,c++ \
+--disable-__cxa_atexit --enable-target-optspace \
+--with-gnu-ld --with-float=hard --enable-threads \
+--with-arch=mips32 --disable-libmudflap --disable-nls --with-gnu-plts
+
+make -j4 -l all-gcc
+make -l install-gcc
+
 // but this from glibc-reference 
 //
 // make -j4 all-target-libgcc
 // make install-target-libgcc
 // 
-// but fails and so skip this step
+// but fails 
 // make -j4 all-target-libgcc
 // make: *** No rule to make target `all-target-libgcc'.  Stop.
+
+
+note: 
+updates libc.so which is linker script
 
 cd build-glibc
 make -j5
 make install
 
-note: updates libc.so which is linker script
 
-cd build-gcc
+note:
+so do it again to build libgcc_s.so.1
+
+$ readelf -d ./gcc/libgcc_s.so.1
+ 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
+
+../gcc-4.2.0-20070124-patched/configure --target=${TARGET} --prefix=${PREFIX} \
+--enable-languages=c,c++ \
+--disable-__cxa_atexit --enable-target-optspace \
+--with-gnu-ld --with-float=hard --enable-threads \
+--with-arch=mips32 --disable-libmudflap --disable-nls --with-gnu-plts
+
 make -j4 -l all-gcc
+make -l install-gcc
 
 
 cd build-gcc
 make -j5
 make install
+
+<todo>
+edit libc.so
+
+<todo>
+see <error> PATH_MAX
+cp /home/NDS-UK/kyoupark/STB_SW/deps/SYSTEM_BIN_4/mips4k_gcc_x86_linux_hound_2/lib/gcc/mips-linux-uclibc/4.2.0/include/limits.h /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/lib/gcc/mips-linux-gnu/4.2.0/include/limits.h
+
+<todo>
+change this and see <error> ARG_MAX
+gcc-glibc-brcm-mips-install/mips-linux-gnu/include/bits/local_lim.h
 
 
 ={============================================================================
@@ -57889,8 +57936,8 @@ that would build way too much, not all components of gcc are ready to target
 your unfinished operating system.
 
 
-<libc-so>
-In case *gcc-build-glibc-reference* which uses gcc4.8.2/4.9.2
+<link-reference>
+*gcc-build-glibc-reference* uses gcc4.8.2/4.9.2
 
 The step4 builds dummy libc.so
 
@@ -57898,11 +57945,8 @@ The step5 builds libgcc_s.so
 
 $ make -j4 all-target-libgcc
 
-note:
-gcc-4.2.0 builds libgcc_s.so in the step make -j4 -l all-gcc
-
 $ readelf -d libgcc_s.so.1
- 0x00000001 (NEEDED)                     Shared library: [libc.so]
+ 0x00000001 (NEEDED)                     Shared library: `[libc.so]`
  0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
 
 The step6 builds libc.so
@@ -57914,18 +57958,19 @@ OUTPUT_FORMAT(elf32-tradbigmips)
 GROUP ( /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/libc.so.6 /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/libc_nonshared.a  AS_NEEDED ( /home/nds-u
 k/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/ld.so.1 ) )
 
+The step7 changes libgcc_s.so.1
 
-<link-reference>
+$ readelf -d libgcc_s.so.1
+ 0x00000001 (NEEDED)                     Shared library: `[libc.so.6]`
+ 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
+
+
 $ ./gcc/gcc-glibc-mips-reference/bin/mips-linux-gnu-gcc sample.c
-
 $ ls -al a.out
 -rwxr-xr-x 1 kyoupark ccusers 9640 Apr  5 08:29 a.out
 
 $ readelf -d a.out
-
-Dynamic section at offset 0x17c contains 22 entries:
-  Tag        Type                         Name/Value
- 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+ 0x00000001 (NEEDED)                     Shared library: `[libc.so.6]`
 
 $ ./gcc/gcc-glibc-mips-reference/bin/mips-linux-gnu-gcc --static sample.c
 
@@ -57936,20 +57981,18 @@ $ readelf -d a.out
 
 There is no dynamic section in this file.
 
-$ readelf -d libgcc_s.so.1
-
- 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
- 0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
-
-/* GNU ld script
-   Use the shared library, but some functions are only in
-   the static library, so try that secondarily.  */
-OUTPUT_FORMAT(elf32-tradbigmips)
-GROUP ( /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/libc.so.6 /home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/libc_nonshared.a  AS_NEEDED ( /home/nds-u
-k/kyoupark/asn/gcc/gcc-glibc-mips-reference/mips-linux-gnu/lib/ld.so.1 ) )
-
 
 <link-own>
+note:
+1. In all cases, ld picks up correct library according to libc.so. So not a
+problem to build usual binary.
+
+2. The problem is that the own toolchain, gcc-4.2.0, builds libgcc_s.so in the
+step make -j4 -l all-gcc and never updates it since then. So cause a problem
+for binary liked with libgcc_s.so which has libc.so name rather than actual
+  library name.
+
+
 $ ./gcc/gcc-glibc-brcm-mips-install/bin/mips-linux-gnu-gcc sample.c
 /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/bin/ld: warning: libc.so, needed by /home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-
 install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/lib/libgcc_s.so, not found (try using -rpath or -rpath-link)
@@ -57959,11 +58002,11 @@ install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/lib/libgc
 $ readelf -d a.out
 
  0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
- 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
+ 0x00000001 (NEEDED)                     Shared library: `[libc.so.6]`
 
 $ readelf -d libgcc_s.so.1
 
- 0x00000001 (NEEDED)                     Shared library: [libc.so]
+ 0x00000001 (NEEDED)                     Shared library: `[libc.so]`
  0x0000000e (SONAME)                     Library soname: [libgcc_s.so.1]
 
 // *bash-example* or ps which again needs libgcc
@@ -61217,6 +61260,71 @@ a shared library should be preferentially bound to definitions (if they exist)
   within that library. Note that, regardless of this option, calling xyz()
   from the main program would always invoke the version of xyz() defined in
   the main program.
+
+
+={============================================================================
+*kt_linux_core_406* lib-shared-elf-edit 
+
+http://nairobi-embedded.org/085_elf_editing_dt_needed.html
+
+note:
+this works when the length of library name is the same.
+
+readelf -S libgcc_s.so.1
+There are 38 section headers, starting at offset 0x43544:
+
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .reginfo          MIPS_REGINFO    000000f4 0000f4 000018 18   A  0   0  4
+  [ 2] .dynamic          DYNAMIC         0000010c 00010c 0000e8 08   A  5   0  4
+  [ 3] .hash             HASH            000001f4 0001f4 000640 04   A  4   0  4
+  [ 4] .dynsym           DYNSYM          00000834 000834 000c90 10   A  5   2  4
+  [ 5] .dynstr           STRTAB          000014c4 0014c4 000c0a 00   A  0   0  1
+  [ 6] .gnu.version      VERSYM          000020ce 0020ce 000192 02   A  4   0  2
+  [ 7] .gnu.version_d    VERDEF          00002260 002260 000158 00   A  5  10  4
+  [ 8] .rel.dyn          REL             000023b8 0023b8 000028 08   A  4   0  4
+  [ 9] .init             PROGBITS        00002598 002598 000098 00  AX  0   0  4
+  [10] .text             PROGBITS        00002630 002630 00c1f0 00  AX  0   0 16
+  [11] .MIPS.stubs       PROGBITS        0000e820 00e820 0000a0 00  AX  0   0  4
+  [12] .fini             PROGBITS        0000e8c0 00e8c0 000050 00  AX  0   0  4
+  [13] .rodata           PROGBITS        0000e910 00e910 000490 00   A  0   0 16
+  [14] .eh_frame_hdr     PROGBITS        0000eda0 00eda0 0001c4 00   A  0   0  4
+  [15] .eh_frame         PROGBITS        0000f000 00f000 000704 00  WA  0   0  4
+  [16] .ctors            PROGBITS        0000f704 00f704 000008 00  WA  0   0  4
+  [17] .dtors            PROGBITS        0000f70c 00f70c 000008 00  WA  0   0  4
+  [18] .jcr              PROGBITS        0000f714 00f714 000004 00  WA  0   0  4
+  [19] .data             PROGBITS        0000f720 00f720 000020 00  WA  0   0 16
+  [20] .got              PROGBITS        0000f740 00f740 0000d4 04 WAp  0   0 16
+  [21] .sdata            PROGBITS        0000f814 00f814 000004 00 WAp  0   0  4
+  [22] .bss              NOBITS          0000f820 00f818 000120 00  WA  0   0 16
+  [23] .comment          PROGBITS        00000000 00f818 001ea0 00      0   0  1
+  [24] .debug_aranges    MIPS_DWARF      00000000 0116b8 001470 00      0   0  8
+  [25] .debug_pubnames   MIPS_DWARF      00000000 012b28 000ff5 00      0   0  1
+  [26] .debug_info       MIPS_DWARF      00000000 013b1d 01353e 00      0   0  1
+  [27] .debug_abbrev     MIPS_DWARF      00000000 02705b 00752f 00      0   0  1
+  [28] .debug_line       MIPS_DWARF      00000000 02e58a 006538 00      0   0  1
+  [29] .debug_frame      MIPS_DWARF      00000000 034ac4 001640 00      0   0  4
+  [30] .debug_str        MIPS_DWARF      00000000 036104 002204 01  MS  0   0  1
+  [31] .debug_loc        MIPS_DWARF      00000000 038308 008982 00      0   0  1
+  [32] .mdebug.abi32     PROGBITS        00008982 040c8a 000000 00      0   0  1
+  [33] .pdr              PROGBITS        00000000 040c8c 001d40 00      0   0  4
+  [34] .debug_ranges     MIPS_DWARF      00000000 0429d0 000a10 00      0   0  8
+  [35] .shstrtab         STRTAB          00000000 0433e0 000162 00      0   0  1
+  [36] .symtab           SYMTAB          00000000 043b34 001f70 10     37 304  4
+  [37] .strtab           STRTAB          00000000 045aa4 001326 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings)
+  I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)
+  O (extra OS processing required) o (OS specific), p (processor specific)
+
+
+readelf -S libgcc_s.so.1 | egrep -A1 '(\[Nr\]|dynstr)'
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+--
+  [ 5] .dynstr           STRTAB          000014c4 0014c4 000c0a 00   A  0   0  1
+  [ 6] .gnu.version      VERSYM          000020ce 0020ce 000192 02   A  4   0  2
 
 
 ={============================================================================
