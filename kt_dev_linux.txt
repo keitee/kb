@@ -111,7 +111,7 @@
 |kt_linux_tool_037| port checks
 |kt_linux_tool_016| tool-screen
 |kt_linux_tool_038| tool-minicom
-|kt_linux_tool_024| tool-du, tool-df, tool-stat
+|kt_linux_tool_024| tool-du tool-df tool-stat
 *kt_linux_tool_024* tool-quota
 *kt_linux_tool_039* tool-mount
 |kt_linux_tool_039| tool-mount --bind and nfs
@@ -9477,17 +9477,88 @@ minicom.cap
 
 
 ={============================================================================
-*kt_linux_tool_024* tool-du, tool-df, tool-stat
+*kt_linux_tool_024* tool-du tool-df tool-stat
 
-' to print one level
+<tool-du>
+http://www.gnu.org/software/coreutils/du
+
+14.2 du: Estimate file space usage
+
+du reports the amount of disk space used by the set of specified files and for
+each subdirectory (of directory arguments). 
+
+Synopsis:
+du [option]... [file]...
+
+With no arguments, du reports the disk space for the `current directory.`
+
+Normally the disk space is printed in units of 1024 bytes, but this can be
+overridden (see Block size). Non-integer quantities are rounded up to the next
+higher unit.
+
+If two or more hard links point to the same file, only one of the hard links
+is counted. The file argument order affects which links are counted, and
+changing the argument order may change the numbers and entries that du
+outputs.
+
+‘-h’
+‘--human-readable’
+Append a size letter to each size, such as ‘M’ for mebibytes. Powers of 1024
+are used, not 1000; ‘M’ stands for 1,048,576 bytes. This option is equivalent
+to --block-size=human-readable. Use the --si option if you prefer powers of
+1000.
+
+
+<ex>
+// to print one level
 du -h --max-depth=1
 
--h, --human-readable
-print sizes in human readable format (e.g., 1K 234M 2G)
-
-' to show all and total
+// to show all and total
 du -ach
 du -sh
+
+
+<tool-df>
+http://www.gnu.org/software/coreutils/manual/html_node/df-invocation.html#df-invocation
+
+14.1 df: Report file system disk space usage
+
+df reports the amount of disk space `used and available` on file systems. 
+
+Synopsis:
+
+df [option]... [file]...
+
+With no arguments, df reports the space used and available on all currently
+mounted file systems (of all types). Otherwise, df reports on the file system
+containing each argument file.
+
+Normally the disk space is printed in units of 1024 bytes, but this can be
+overridden (see Block size). Non-integer quantities are rounded up to the next
+higher unit.
+
+For bind mounts and without arguments, df only outputs the statistics for that
+device with the shortest mount point name in the list of file systems (mtab),
+i.e., it hides duplicate entries, unless the -a option is specified.
+
+With the same logic, df elides a mount entry of a dummy pseudo device if there
+is another mount entry of a real block device for that mount point with the
+same device number, e.g. the early-boot pseudo file system ‘rootfs’ is not
+shown per default when already the real root device has been mounted.
+
+If an argument file resolves to a special file containing a mounted file
+system, df shows the space available on that file system rather than on the
+file system containing the device node. GNU df does not attempt to determine
+the disk usage on unmounted file systems, because on most kinds of systems
+doing so requires extremely nonportable intimate knowledge of file system
+structures.
+
+‘-T’
+‘--print-type’
+Print each file system’s type. The types printed here are the same ones you
+can include or exclude with -t and -x. The particular types printed are
+whatever is supported by the system. Here are some of the common names (this
+    list is certainly not exhaustive):
 
 
 <tool-stat>
@@ -9703,54 +9774,147 @@ Device Boot      Start         End      Blocks  Id System
 
 
 ={============================================================================
-*kt_linux_tool_039* tool-mount --bind and nfs
+*kt_linux_tool_039* tool-mount-bind tool-chroot
 
-The bind mounts.
+https://unix.stackexchange.com/questions/198590/what-is-a-bind-mount
 
-Since Linux 2.4.0 it is possible to remount part of the file hierarchy somewhere
-else. The call is
+<bind-mount>
+What is a bind mount?
 
-mount --bind olddir newdir
+A bind mount is an alternate view of a directory tree. Classically, mounting
+creates a view of a storage device as a directory tree. A bind mount instead
+takes an existing directory tree and replicates it under a different point.
+The directories and files in the bind mount are the same as the original. Any
+modification on one side is immediately reflected on the other side, since the
+two views show the same data.
 
-or shortoption
-mount -B olddir newdir
+For example, after issuing the Linux command
 
-or fstab entry is:
-/olddir /newdir none bind
+mount --bind /some/where /else/where
 
-After this call the same contents is accessible in two places. One can also
-remount a single file (on a single file). It's also possible to use the bind
-mount to create a mountpoint from a regular directory, for example:
+the directories /some/where and /else/where have the same content.
 
-mount --bind foo foo
+Unlike a hard link or symbolic link, a bind mount doesn't affect what is
+stored on the filesystem. It's a property of the live system.
 
-The bind mount call attaches only (part of) a single filesystem, not possible
-submounts. The entire file hierarchy including submounts is attached a second
-place using
 
-mount --rbind olddir newdir
+How do I create a bind mount?
 
-or shortoption
+Linux bind mount
 
-mount -R olddir newdir
+Under Linux, bind mounts are available as a kernel feature. You can create one
+with the mount command, by passing either the --bind command line option or
+the bind mount option. The following two commands are equivalent:
 
-Note that the filesystem mount options will remain the same as those on the
-original mount point, and cannot be changed by passing the -o option along with
---bind/--rbind. The mount options can be changed by a separate remount command,
-  for example:
+mount --bind /some/where /else/where
+mount -o bind /some/where /else/where
 
-mount --bind olddir newdir
-mount -o remount,ro newdir
+Here, the “device” /some/where is not a disk partition like in the case of an
+on-disk filesystem, but an existing directory. The mount point /else/where
+must be an existing directory as usual. 
 
-Note that behavior of the remount operation depends on the /etc/mtab file. The
-first command stores the 'bind' flag to the /etc/mtab file and the second
-command reads  the flag  from  the  file.   If you have a system without the
-/etc/mtab file or if you explicitly define source and target for the remount
-command (then mount(8) does not read /etc/mtab), then you have to use bind flag
-(or option) for the remount command too. For example:
+Note that no filesystem type is specified either way: making a bind mount
+doesn't involve a filesystem driver, it copies the kernel data structures from
+the original mount.
 
-mount --bind olddir newdir
-mount -o remount,ro,bind olddir newdir
+A Linux bind mount is mostly indistinguishable from the original. The command
+df -T /else/where shows the same device and the same filesystem type as df -T
+/some/where. The files /some/where/foo and /else/where/foo are
+indistinguishable, as if they were hard links. It is possible to unmount
+/some/where, in which case /else/where remains mounted.
+
+With older kernels (I don't know exactly when, I think until some 3.x), bind
+mounts were truly indistinguishable from the original. Recent kernels do track
+bind mounts and expose the information through PID/mountinfo, which allows
+findmnt to indicate bind mount as such.
+
+If there are mount points under /some/where, their contents are not visible
+under /else/where. 
+
+<rbind>
+// from man page
+// The bind mount call attaches only (part of) a single filesystem, not
+// possible submounts.  The entire file hierarchy including submounts is
+// attached a second place by using:
+//
+// mount --rbind olddir newdir
+
+Instead of bind, you can use rbind, also replicate mount points underneath
+/some/where. For example, if /some/where/mnt is a mount point then
+
+mount --rbind /some/where /else/where
+is equivalent to
+
+mount --bind /some/where /else/where
+mount --bind /some/where/mnt /else/where/mnt
+
+In addition, Linux allows mounts to be declared as shared, slave, private or
+unbindable. This affects whether that mount operation is reflected under a
+bind mount that replicates the mount point. For more details, see the kernel
+documentation.
+
+Linux also provides a way to move mounts: where --bind copies, --move moves a
+mount point.
+
+It is possible to have different mount options in two bind-mounted
+directories. There is a quirk, however: making the bind mount and setting the
+mount options cannot be done atomically, they have to be two successive
+operations. (Older kernels did not allow this.) For example, the following
+commands create a read-only view, but there is a small window of time during
+which /else/where is read-write:
+
+mount --bind /some/where /else/where
+mount -o remount,ro,bind /else/where
+
+// Note that the filesystem mount options will remain the same as those on the
+// original mount point, and cannot be changed by passing the -o option along
+// with  --bind/--rbind.   
+// The mount options can be changed by a separate remount command, for
+// example:
+//
+// mount --bind olddir newdir
+// mount -o remount,ro newdir
+
+
+<tool-chroot>
+Use cases
+
+Mounting in a jail
+
+A chroot jail runs a process in a subtree of the system's directory tree. This
+can be useful to run a program with restricted access, e.g. run a network
+server with access to only its own files and the files that it serves, but not
+to other data stored on the same computer). A limitation of chroot is that the
+program is confined to one subtree: it can't access independent subtrees. Bind
+mounts allow grafting other subtrees onto that main tree.
+
+For example, suppose that a machine runs a service /usr/sbin/somethingd which
+should only have access to data under /var/lib/something. The smallest
+directory tree that contains both of these files is the root. How can the
+service be confined? One possibility is to make hard links to all the files
+that the service needs (at least /usr/sbin/somethingd and several shared
+    libraries) under /var/lib/something. But this is cumbersome (the hard
+      links need to be updated whenever a file is upgraded), and doesn't work
+    if /var/lib/something and /usr are on different filesystems. A better
+      solution is to create an ad hoc root and populate it with using mounts:
+
+mkdir /run/something
+cd /run/something
+mkdir -p etc/something lib usr/lib usr/sbin var/lib/something
+mount --bind /etc/something etc/something
+mount --bind /lib lib
+mount --bind /usr/lib usr/lib
+mount --bind /usr/sbin usr/sbin
+mount --bind /var/lib/something var/lib/something
+mount -o remount,ro,bind etc/something
+mount -o remount,ro,bind lib
+mount -o remount,ro,bind usr/lib
+mount -o remount,ro,bind usr/sbin
+chroot . /usr/sbin/somethingd &
+
+Linux's mount namespaces generalize chroots. Bind mounts are how namespaces
+can be populated in flexible ways. See Making a process read a different file
+for the same filename for an example.
 
 
 ={============================================================================
@@ -33590,6 +33754,84 @@ so on. The stdio functions are layered on top of the I/O system calls (open(),
 The syscalls(2) manual page lists the Linux system calls.
 
 LPI. 3.1 System Calls
+
+A system call is a `controlled entry point` into the kernel, allowing a
+process to request that the kernel perform some action on the process's
+behalf.
+
+From a programming point of view, invoking a system call looks much like
+calling a C function. However, behind the scenes, many steps occur during the
+execution of a system call.
+
+The steps in the order that they occur on a specific hardware implementation,
+the x86-32.
+
+  1. The application program makes a system call by invoking a wrapper
+  function in the C library.
+
+  2. The wrapper function must make all of the system call arguments available
+  to the system call trap-handling routine (described shortly). These
+  arguments are passed to the wrapper via the stack, but the kernel expects
+  them in specific registers. The wrapper function copies the arguments to
+  these registers.
+
+  3. Since all system calls enter the kernel in the same way, the kernel needs
+  some method of identifying the system call. To permit this, the wrapper
+  function copies the `system call number` into a specific CPU register
+  (%eax).
+
+  * The set of system calls is fixed. Each system call is identified by a
+    unique number. (This numbering scheme is not normally visible to programs,
+    which identify system calls by name.)
+
+  4. The wrapper function executes a trap machine instruction (int 0x80),
+  which causes the processor to switch from user mode to kernel mode and execute
+  code pointed to by location 0x80 (128 decimal) of the system's trap vector.
+
+  * A system call changes the processor state from user mode to kernel mode,
+    so that the CPU can access protected kernel memory.
+
+  5. In response to the trap to location 0x80, the kernel invokes its
+  `system_call()` routine (located in the assembler file arch/i386/entry.S) to
+  handle the trap. This handler:
+
+  a) Saves register values onto the kernel stack (Section 6.5).
+  b) Checks the validity of the system call number.
+  c) Invokes the appropriate system call service routine, which is found by
+  using the system call number to index a table of all system call service
+  routines (the kernel variable `sys_call_table`). If the system call service
+  routine has any arguments, it first checks their validity; for example, it
+  checks that addresses point to valid locations in user memory. Then the
+  service routine performs the required task, which may involve modifying
+  values at addresses specified in the given arguments and transferring data
+  between user memory and kernel memory (e.g., in I/O operations). Finally,
+  the service routine returns a result status to the system_call() routine.
+  d) Restores register values from the kernel stack and places the system call
+  return value on the stack.  
+  e) Returns to the wrapper function, simultaneously returning the processor
+  to user mode.
+
+  6. If the return value of the system call service routine indicated an
+  error, the wrapper function sets the `global variable errno` using this value.
+  The wrapper function then returns to the caller, providing an integer return
+  value indicating the success or failure of the system call.
+
+On Linux, system call service routines follow a convention of returning a
+nonnegative value to indicate success. In case of an error, the routine
+returns a negative number, which is the negated value of one of the errno
+constants. When a negative value is returned, the C library wrapper function
+negates it (to make it positive), copies the result into errno, and returns -1
+as the function result of the wrapper to indicate an error to the calling
+program.
+
+The example of the execve() system call. On Linux/x86-32, execve() is system
+call number 11 (__NR_execve). Thus, in the sys_call_table vector, entry 11
+contains the address of sys_execve(), `the service routine` for this system
+call. On Linux, system call service routines typically have names of the form
+sys_xyz(), where xyz() is the system call in question.
+
+The important point that, even for a simple system call, quite a bit of work
+must be done, and thus system calls have a small but appreciable overhead.
 
 As an example of the overhead of making a system call, consider the getppid()
 system call, which simply returns the process ID of the parent of the calling
