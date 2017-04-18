@@ -21,7 +21,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-boot-ssitart-mw
 |kt_dev_si_0002| si-bootlog
 |kt_dev_si_0001| si-httpsend
-|kt_dev_si_0002| si-gi si-filelist
+|kt_dev_si_0002| si-git
 |kt_dev_si_0002| si-build-flist
 |kt_dev_si_0002| si-build
 |kt_dev_si_0002| si-build-baseline
@@ -7576,7 +7576,15 @@ typedef struct AEM_API_ApplicationEngineCallbackTag
 SYSTEM_STATUS AEM_API_RegisterApplicationEngine (AEM_API_ApplicationEngineCallback application_engine)
 
 
-22.	LAE notifies AEM that the Application is Running
+<error-handling>
+https://www.stb.bskyb.com/jira/browse/LAE-1113
+After discussion with Jim Hawkins and Rune Petersen, the LAE should simply
+call its AEM_ENGINE_EVENT_LISTENER callback into the middleware, and pass
+AEM_API_ApplicationEventFailed when an error has occurred. This should be
+sufficient for flagging a non-specific error at launch, which is the current
+requirement.
+
+22. LAE notifies AEM that the Application is Running
 
 typedef void (*AEM_APPLICATION_EVENT_LISTENER)  (AEM_API_ApplicationHandle application_handle,
                                                  AEM_API_ApplicationEvent application_event,
@@ -7599,70 +7607,73 @@ typedef enum AEM_API_ApplicationEventTag
 } AEM_API_ApplicationEvent;
 
 
-<error-handling>
-/** @brief Application error code enumeration. This specifies what type of failure occurred.
- */
-typedef enum AEM_API_ApplicationErrorCodeTag
-{
-  AEM_API_ApplicationErrorCodeUndef = 0U,
-    AEM_API_ApplicationErrorCodeServerFailure ,
-    AEM_API_ApplicationErrorCodeWANFailure,
-    AEM_API_ApplicationErrorCodeMemoryFailure,
-    AEM_API_ApplicationErrorCodeExecutionFailure ,
-    AEM_API_ApplicationErrorCodeUnknown,
-    AEM_API_ApplicationErrorCodeLastValue
-} AEM_API_ApplicationErrorCode;
-
-note: LAE -> AEM
-
-/** @brief Allows AEM to receive error notification and pass it on to its clients.
- *
- *  @param[in] application_handle  The handle of the application which is reporting an error.
- *  @param[in] application_errorcode  One of the error codes enumerated in #AEM_API_ApplicationErrorCode.
- *
- *  @retval #AEM_API_STATUS_OK if successful.
- *  @retval #AEM_API_STATUS_ERROR in case of error.
- */
-SYSTEM_STATUS AEM_API_Application_NotifyApplicationErrorCode (AEM_API_ApplicationHandle application_handle,
-                                                              AEM_API_ApplicationErrorCode application_errorcode)
-{}
-
-note: AEM -> EPG
-
-/** @brief Callback function to provide notification of a particular error type on an application.
- *
- *  Callback function that is used by clients of AEM (e.g. EPG) in order that
- *  they can receive notifications from AEM relating to application failures.
- *  The event types that will be notified are enumerated in #AEM_API_ApplicationErrorCode.
- *
- *  @param[in] application_handle  The handle of the application which has failed.
- *  @param[in] app_errorcode       The current error code of the application failure.
- *  @param[in] user_tag            User tag used to identify the caller.
- *  @retval None.
- */
-typedef void (*AEM_APPLICATION_ERRORCODE_LISTENER) (AEM_API_ApplicationHandle application_handle,
-                                                                              AEM_API_ApplicationErrorCode app_errorcode,
-                                                                              uint32_t user_tag);
-
-// register error code listener on startup
-
-/**  @brief AEM allows client to register an error notification listener callback - which is used to notify
- *   the client when the application encounters an error.
- *   Registration of the listener has to be done only once before starting any application,
- *   and this listener is used by all applications.
- *   @param[in] client_listener  	A pointer to an #AEM_APPLICATION_ERRORCODE_LISTENER function that will be called by AEM
- *   								when the application has encountered one of the errors enumerated
- *   								in #AEM_API_ApplicationErrorCode.
- */
-SYSTEM_STATUS AEM_API_Application_RegisterErrorNotificationListener (AEM_APPLICATION_ERRORCODE_LISTENER client_listener,
-                                                                     uint32_t user_tag)
-{}
-
-SYSTEM_STATUS AEM_Common_ProcessErrorNotificationListener(AEM_API_ApplicationHandle applicationHandle,
-                                              AEM_API_ApplicationErrorCode applicationErrorCode)
-{
-      pListener->listener(applicationHandle, applicationErrorCode, pListener->usertag);
-}
+// /** @brief Application error code enumeration. This specifies what type of failure occurred.
+//  */
+// typedef enum AEM_API_ApplicationErrorCodeTag
+// {
+//   AEM_API_ApplicationErrorCodeUndef = 0U,
+//     AEM_API_ApplicationErrorCodeServerFailure ,
+//     AEM_API_ApplicationErrorCodeWANFailure,
+//     AEM_API_ApplicationErrorCodeMemoryFailure,
+//     AEM_API_ApplicationErrorCodeExecutionFailure ,
+//     AEM_API_ApplicationErrorCodeUnknown,
+//     AEM_API_ApplicationErrorCodeLastValue
+// } AEM_API_ApplicationErrorCode;
+// 
+// 
+// note: 1. EPG -> AEM
+// // register error code listener on startup
+// 
+// /**  @brief AEM allows client to register an error notification listener callback - which is used to notify
+//  *   the client when the application encounters an error.
+//  *   Registration of the listener has to be done only once before starting any application,
+//  *   and this listener is used by all applications.
+//  *   @param[in] client_listener  	A pointer to an #AEM_APPLICATION_ERRORCODE_LISTENER function that will be called by AEM
+//  *   								when the application has encountered one of the errors enumerated
+//  *   								in #AEM_API_ApplicationErrorCode.
+//  */
+// SYSTEM_STATUS AEM_API_Application_RegisterErrorNotificationListener (AEM_APPLICATION_ERRORCODE_LISTENER client_listener,
+//                                                                      uint32_t user_tag)
+// {}
+// 
+// 
+// note: 2. LAE -> AEM
+// 
+// /** @brief Allows AEM to receive error notification and pass it on to its clients.
+//  *
+//  *  @param[in] application_handle  The handle of the application which is reporting an error.
+//  *  @param[in] application_errorcode  One of the error codes enumerated in #AEM_API_ApplicationErrorCode.
+//  *
+//  *  @retval #AEM_API_STATUS_OK if successful.
+//  *  @retval #AEM_API_STATUS_ERROR in case of error.
+//  */
+// SYSTEM_STATUS AEM_API_Application_NotifyApplicationErrorCode (AEM_API_ApplicationHandle application_handle,
+//                                                               AEM_API_ApplicationErrorCode application_errorcode)
+// {}
+// 
+// 
+// note: 3. AEM -> EPG
+// 
+// /** @brief Callback function to provide notification of a particular error type on an application.
+//  *
+//  *  Callback function that is used by clients of AEM (e.g. EPG) in order that
+//  *  they can receive notifications from AEM relating to application failures.
+//  *  The event types that will be notified are enumerated in #AEM_API_ApplicationErrorCode.
+//  *
+//  *  @param[in] application_handle  The handle of the application which has failed.
+//  *  @param[in] app_errorcode       The current error code of the application failure.
+//  *  @param[in] user_tag            User tag used to identify the caller.
+//  *  @retval None.
+//  */
+// typedef void (*AEM_APPLICATION_ERRORCODE_LISTENER) (AEM_API_ApplicationHandle application_handle,
+//                                                                               AEM_API_ApplicationErrorCode app_errorcode,
+//                                                                               uint32_t user_tag);
+// 
+// SYSTEM_STATUS AEM_Common_ProcessErrorNotificationListener(AEM_API_ApplicationHandle applicationHandle,
+//                                               AEM_API_ApplicationErrorCode applicationErrorCode)
+// {
+//       pListener->listener(applicationHandle, applicationErrorCode, pListener->usertag);
+// }
 
 
 <iapp-launch>
@@ -11407,7 +11418,18 @@ DEMUX_EVENT_CHUNKINPUT_GET_STATUS
 !INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7064 > < no-ctx >" "Time now is [2045:08:12 20:59:52]1844039857, events=100, queue empty=XFALSE, chunk list completed=XFALSE, chunk_id=956 
 !INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(CdiServerThread) L:4802 > < no-ctx >" "Request done. request=E_REQUEST_TYPE_GET_CHUNK_INPUT_EVENTS Result=MS_STATUS_OK, time=[2045:08:12 20:59:52]1844039857 
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(CDIServerEventMgrCallback) L:4962 > < no-ctx >" "IN 
-!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetChunkInputEventsCallback) L:5862 > < no-ctx >" "events=100, queue empty=XFALSE, chunk list completed=XFALSE, " "TPID monitor threshold=XTRUE, TPID monitor overflow=XFALSE " "last completed chunk id 956 
+
+*chunk-input-event*
+uses events from CDI sepc.
+
+#define DEMUX_EVENT_CHUNK_QUEUE_EMPTY                (0x00000020U)
+#define DEMUX_EVENT_CHUNK_LIST_COMPLETED             (0x00000080U)
+
+"events=a0, queue empty=XTRUE, chunk list completed=XTRUE, " "TPID monitor threshold=XFALSE, TPID monitor overflow=XFALSE " "last completed chunk id 961 
+
+!INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetChunkInputEventsCallback) L:5862 > < no-ctx >" 
+"events=100, queue empty=XFALSE, chunk list completed=XFALSE, " "TPID monitor threshold=XTRUE, TPID monitor overflow=XFALSE " "last completed chunk id 956 
+
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetChunkInputEventsCallback) L:5891 > < no-ctx >" "going to retrieve TPID monitor data 
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5927 > < splicer=0x13 hMC=0x13 >" "num blocks read 1 
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5946 > < splicer=0x13 hMC=0x13 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 957, PTS (0,107841598) 
@@ -18137,7 +18159,8 @@ Scart Control UCM-11437
 mean blanking or unblanking since this use blender IOCTL and valid only when
 video runs.
 
-!INFO   -P_Api        		< M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:1320 > Can't unblank the video because the video is not running 
+// when UpdateVisibility has no effect
+!INFO   -P_Api        		< M:player_api_avcontrol.c F:`PLAYER_AVControl_SetVideoVisibility` L:1320 > Can't unblank the video because the video is not running 
 
 So if see this, this means that control has no effect.
 

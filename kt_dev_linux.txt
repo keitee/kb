@@ -336,7 +336,6 @@
 *kt_linux_gcc_400* gcc-doc
 *kt_linux_gcc_400* gcc-ld
 *kt_linux_gcc_400* gcc-ld-linker-script
-*kt_linux_gcc_400* gcc-libc-uclibc-and-glibc
 *kt_linux_gcc_400* gcc-libc-uclibc
 *kt_linux_gcc_400* gcc-libc-uclibc-ld
 *kt_linux_gcc_400* gcc-libc-uclibc--fail to find symbol
@@ -391,18 +390,16 @@
 *kt_linux_rmdb_001* sql-rollback
 
 *kt_linux_core_002* linux-source
-*kt_linux_core_002* linux-c-lib
-
-*kt_linux_core_001* linux-boot
-
+*kt_linux_core_001* linux-boot init-process
+*kt_linux_core_001* linux-terminal
+*kt_linux_core_002* linux-syscall
 *kt_linux_core_001* linux-syscall-list
 *kt_linux_core_001* linux-syscall-reboot
 *kt_linux_core_001* linux-syscall-pause
 *kt_linux_core_001* linux-syscall-alarm
 *kt_linux_core_003* linux-syscall-getenv setenv
-
-|kt_linux_core_004| linux-errno
-|kt_linux_core_005| linux-error handling codes, thread-errno
+*kt_linux_core_004* linux-errno
+|kt_linux_core_005| linux-error-handling-code thread-errno
 *kt_linux_core_006* linux-portability
 *kt_linux_core_006* linux-process-credential
 |kt_linux_core_007| /dev/null
@@ -442,6 +439,7 @@
 |kt_linux_core_102| how to run three threads sequencially
 |kt_linux_core_103| priority and schedule
 
+*kt_linux_core_200* linux-libc
 *kt_linux_core_200* linux-io-model
 *kt_linux_core_201* linux-io-ioctl
 |kt_linux_core_201| linux-io-extended
@@ -33737,150 +33735,6 @@ https://www.kernel.org/pub/linux/kernel/
 
 
 ={============================================================================
-*kt_linux_core_002* linux-c-lib
-
-LPI. 2.5 File I/O Model
-
-The stdio library
-
-To perform file I/O, C programs typically employ I/O functions contained in
-the standard C library. This set of functions, referred to as the stdio
-library, includes fopen(), fclose(), scanf(), printf(), fgets(), fputs(), and
-so on. The stdio functions are layered on top of the I/O system calls (open(),
-    close(), read(), write(), and so on).
-
-
-<system-call-is-expensive>
-The syscalls(2) manual page lists the Linux system calls.
-
-LPI. 3.1 System Calls
-
-A system call is a `controlled entry point` into the kernel, allowing a
-process to request that the kernel perform some action on the process's
-behalf.
-
-From a programming point of view, invoking a system call looks much like
-calling a C function. However, behind the scenes, many steps occur during the
-execution of a system call.
-
-The steps in the order that they occur on a specific hardware implementation,
-the x86-32.
-
-  1. The application program makes a system call by invoking a wrapper
-  function in the C library.
-
-  2. The wrapper function must make all of the system call arguments available
-  to the system call trap-handling routine (described shortly). These
-  arguments are passed to the wrapper via the stack, but the kernel expects
-  them in specific registers. The wrapper function copies the arguments to
-  these registers.
-
-  3. Since all system calls enter the kernel in the same way, the kernel needs
-  some method of identifying the system call. To permit this, the wrapper
-  function copies the `system call number` into a specific CPU register
-  (%eax).
-
-  * The set of system calls is fixed. Each system call is identified by a
-    unique number. (This numbering scheme is not normally visible to programs,
-    which identify system calls by name.)
-
-  4. The wrapper function executes a trap machine instruction (int 0x80),
-  which causes the processor to switch from user mode to kernel mode and execute
-  code pointed to by location 0x80 (128 decimal) of the system's trap vector.
-
-  * A system call changes the processor state from user mode to kernel mode,
-    so that the CPU can access protected kernel memory.
-
-  5. In response to the trap to location 0x80, the kernel invokes its
-  `system_call()` routine (located in the assembler file arch/i386/entry.S) to
-  handle the trap. This handler:
-
-  a) Saves register values onto the kernel stack (Section 6.5).
-  b) Checks the validity of the system call number.
-  c) Invokes the appropriate system call service routine, which is found by
-  using the system call number to index a table of all system call service
-  routines (the kernel variable `sys_call_table`). If the system call service
-  routine has any arguments, it first checks their validity; for example, it
-  checks that addresses point to valid locations in user memory. Then the
-  service routine performs the required task, which may involve modifying
-  values at addresses specified in the given arguments and transferring data
-  between user memory and kernel memory (e.g., in I/O operations). Finally,
-  the service routine returns a result status to the system_call() routine.
-  d) Restores register values from the kernel stack and places the system call
-  return value on the stack.  
-  e) Returns to the wrapper function, simultaneously returning the processor
-  to user mode.
-
-  6. If the return value of the system call service routine indicated an
-  error, the wrapper function sets the `global variable errno` using this value.
-  The wrapper function then returns to the caller, providing an integer return
-  value indicating the success or failure of the system call.
-
-On Linux, system call service routines follow a convention of returning a
-nonnegative value to indicate success. In case of an error, the routine
-returns a negative number, which is the negated value of one of the errno
-constants. When a negative value is returned, the C library wrapper function
-negates it (to make it positive), copies the result into errno, and returns -1
-as the function result of the wrapper to indicate an error to the calling
-program.
-
-The example of the execve() system call. On Linux/x86-32, execve() is system
-call number 11 (__NR_execve). Thus, in the sys_call_table vector, entry 11
-contains the address of sys_execve(), `the service routine` for this system
-call. On Linux, system call service routines typically have names of the form
-sys_xyz(), where xyz() is the system call in question.
-
-The important point that, even for a simple system call, quite a bit of work
-must be done, and thus system calls have a small but appreciable overhead.
-
-As an example of the overhead of making a system call, consider the getppid()
-system call, which simply returns the process ID of the parent of the calling
-process. On one of the author's x86-32 systems running Linux 2.6.25, 10
-million calls to getppid() required approximately 2.2 seconds to complete.
-This amounts to around 0.3 microseconds per call. By comparison, on the same
-system, 10 million calls to a C function that simply returns an integer
-required 0.11 seconds, or around one-twentieth of the time required for calls
-to getppid(). Of course, most system calls have significantly more overhead
-than getppid().
-
-
-<libc>
-LPI. 3.3 The Standard C Library; The GNU C Library (glibc)
-
-Use ldd to find out the path and when run libc, it shows version.
-
-$ ldd ~/bin/vim | grep libc
-   libc.so.6 => /lib/i386-linux-gnu/i686/cmov/libc.so.6 (0xb6915000)
-
-/lib/i386-linux-gnu/i686/cmov/libc.so.6 -> libc-2.19.so
-
-note: How this shared object prints out messages when run?
-
-$ /lib/i386-linux-gnu/i686/cmov/libc.so.6
-GNU C Library (Debian GLIBC 2.19-18+deb8u4) stable release version 2.19, by Roland McGrath et al.
-Copyright (C) 2014 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.
-There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE.
-Compiled by GNU CC version 4.8.4.
-Compiled on a Linux 3.16.7 system on 2016-02-29.
-Available extensions:
-	crypt add-on version 2.1 by Michael Glad and others
-	GNU Libidn by Simon Josefsson
-	Native POSIX Threads Library by Ulrich Drepper et al
-	BIND-8.2.3-T5B
-libc ABIs: UNIQUE IFUNC
-For bug reporting instructions, please see:
-<http://www.debian.org/Bugs/>.
-
-<api>
-Can use macro at compile time or use a call at runtime to check libc version:
-
-#include <gnu/libc-version.h>
-const char *gnu_get_libc_version(void);
-
-
-={============================================================================
 *kt_linux_core_001* linux-boot init-process
 
 BOOTPARAM(7)               Linux Programmer’s Manual              BOOTPARAM(7)
@@ -34083,6 +33937,103 @@ can view the current settings of all terminal attributes using the following
 command (here carried out on a virtual console):
 
 $ stty -a
+
+
+={============================================================================
+*kt_linux_core_002* linux-syscall
+
+<system-call-is-expensive>
+The syscalls(2) manual page lists the Linux system calls.
+
+LPI. 3.1 System Calls
+
+A system call is a `controlled entry point` into the kernel, allowing a
+process to request that the kernel perform some action on the process's
+behalf.
+
+From a programming point of view, invoking a system call looks much like
+calling a C function. However, behind the scenes, many steps occur during the
+execution of a system call.
+
+The steps in the order that they occur on a specific hardware implementation,
+the x86-32.
+
+  1. The application program makes a system call by invoking a wrapper
+  function in the C library.
+
+  2. The wrapper function must make all of the system call arguments available
+  to the system call trap-handling routine (described shortly). These
+  arguments are passed to the wrapper via the stack, but the kernel expects
+  them in specific registers. The wrapper function copies the arguments to
+  these registers.
+
+  3. Since all system calls enter the kernel in the same way, the kernel needs
+  some method of identifying the system call. To permit this, the wrapper
+  function copies the `system call number` into a specific CPU register
+  (%eax).
+
+  * The set of system calls is fixed. Each system call is identified by a
+    unique number. (This numbering scheme is not normally visible to programs,
+    which identify system calls by name.)
+
+  4. The wrapper function executes a trap machine instruction (int 0x80),
+  which causes the processor to switch from user mode to kernel mode and execute
+  code pointed to by location 0x80 (128 decimal) of the system's trap vector.
+
+  * A system call changes the processor state from user mode to kernel mode,
+    so that the CPU can access protected kernel memory.
+
+  5. In response to the trap to location 0x80, the kernel invokes its
+  `system_call()` routine (located in the assembler file arch/i386/entry.S) to
+  handle the trap. This handler:
+
+  a) Saves register values onto the kernel stack (Section 6.5).
+  b) Checks the validity of the system call number.
+  c) Invokes the appropriate system call service routine, which is found by
+  using the system call number to index a table of all system call service
+  routines (the kernel variable `sys_call_table`). If the system call service
+  routine has any arguments, it first checks their validity; for example, it
+  checks that addresses point to valid locations in user memory. Then the
+  service routine performs the required task, which may involve modifying
+  values at addresses specified in the given arguments and transferring data
+  between user memory and kernel memory (e.g., in I/O operations). Finally,
+  the service routine returns a result status to the system_call() routine.
+  d) Restores register values from the kernel stack and places the system call
+  return value on the stack.  
+  e) Returns to the wrapper function, simultaneously returning the processor
+  to user mode.
+
+  6. If the return value of the system call service routine indicated an
+  error, the wrapper function sets the `global variable errno` using this value.
+  The wrapper function then returns to the caller, providing an integer return
+  value indicating the success or failure of the system call.
+
+On Linux, system call service routines follow a convention of returning a
+nonnegative value to indicate success. In case of an error, the routine
+returns a negative number, which is the negated value of one of the errno
+constants. When a negative value is returned, the C library wrapper function
+negates it (to make it positive), copies the result into errno, and returns -1
+as the function result of the wrapper to indicate an error to the calling
+program.
+
+The example of the execve() system call. On Linux/x86-32, execve() is system
+call number 11 (__NR_execve). Thus, in the sys_call_table vector, entry 11
+contains the address of sys_execve(), `the service routine` for this system
+call. On Linux, system call service routines typically have names of the form
+sys_xyz(), where xyz() is the system call in question.
+
+The important point that, even for a simple system call, quite a bit of work
+must be done, and thus system calls have a small but appreciable overhead.
+
+As an example of the overhead of making a system call, consider the getppid()
+system call, which simply returns the process ID of the parent of the calling
+process. On one of the author's x86-32 systems running Linux 2.6.25, 10
+million calls to getppid() required approximately 2.2 seconds to complete.
+This amounts to around 0.3 microseconds per call. By comparison, on the same
+system, 10 million calls to a C function that simply returns an integer
+required 0.11 seconds, or around one-twentieth of the time required for calls
+to getppid(). Of course, most system calls have significantly more overhead
+than getppid().
 
 
 ={============================================================================
@@ -34296,12 +34247,15 @@ The setenv() function adds the variable name to the environment with the value
 
 LPI. 3.4 Handling Errors from System Calls and Library Functions
 
+{system-call-on-error}
+A few system calls never fail. For example, getpid() always successfully
+returns the ID of a process, and _exit() always terminates a process. It is
+not necessary to check the return values from such system calls.
 
-{system-call-error}
 The section headed ERRORS in each manual page provides a list of possible
 errno values that can be returned by each system call.
 
-Usually, an error is indicated by a return of –1. When a system call fails, it
+Usually, an error is indicated by a return of -1. When a system call fails, it
 sets `the global integer variable errno` to a positive value that identifies
 the specific error.
 
@@ -34316,8 +34270,13 @@ if (cnt == -1) {
   }
 }
 
-we should always first check if the function return value indicates an error,
-   and `only then` examine errno to determine the cause of the error.
+First check if the function return value indicates an error, and `only then`
+examine errno to determine the cause of the error.
+
+because successful system calls and library functions never reset errno to 0,
+so this variable may have a nonzero value as a consequence of an error from a
+previous call. Furthermore, SUSv3 permits a successful function call to set
+errno to a nonzero value (although few functions do this).
 
 
 <exceptions>
@@ -34327,7 +34286,15 @@ before the call, and then check it afterward. If the call returns -1 and errno
 is nonzero, an error occurred.
 
 
-{library-call-error}
+<print-error>
+The perror() function prints the string pointed to by its msg argument,
+`followed by` a message corresponding to the current value of errno.
+
+The strerror() function returns the error string corresponding to the error
+number given in its errnum argument.
+
+
+{library-calls-on-error}
 The various library functions return different data types and different values
 to indicate failure. For our purposes, library functions can be divided into
 the following `categories`:
@@ -34354,8 +34321,7 @@ to use errno, perror(), or strerror() to diagnose errors.
 
 
 {errno-values}
-
-<linux>/include/asm-generic/errno-base.h
+// <linux>/include/asm-generic/errno-base.h
 
 #ifndef _ASM_GENERIC_ERRNO_BASE_H
 #define _ASM_GENERIC_ERRNO_BASE_H
@@ -34397,8 +34363,8 @@ to use errno, perror(), or strerror() to diagnose errors.
 
 #endif
 
-<linux>/include/asm-mips/errno.h
-<toolchain>/mips-linux-uclibc/include/asm/errno.h
+// <linux>/include/asm-mips/errno.h
+// <toolchain>/mips-linux-uclibc/include/asm/errno.h
 
 /*
  * This file is subject to the terms and conditions of the GNU General Public
@@ -34527,7 +34493,7 @@ to use errno, perror(), or strerror() to diagnose errors.
 
 
 ={============================================================================
-*kt_linux_core_005* linux-error handling codes, thread-errno
+*kt_linux_core_005* linux-error-handling-code thread-errno
 
 LPI. 3.5.2 Common Functions and Header Files
 
@@ -39113,9 +39079,85 @@ SCHED_RR are optional in POSIX, and only are supported for real time bound threa
 
 
 ={============================================================================
+*kt_linux_core_200* linux-libc
+
+LPI. 2.5 File I/O Model
+
+The stdio library
+
+To perform file I/O, C programs typically employ I/O functions contained in
+the standard C library. This set of functions, referred to as the stdio
+library, includes fopen(), fclose(), scanf(), printf(), fgets(), fputs(), and
+so on. The stdio functions are layered on top of the I/O system calls (open(),
+    close(), read(), write(), and so on).
+
+
+<ex>
+$ nm libc.a | grep libc_malloc
+5440:00005130 T __libc_malloc
+5441:00000004 D __libc_malloc_initialized
+5579:         U __libc_malloc_initialized
+
+$ nm libuClibc-1.0.17.so | grep malloc
+784:00054850 T __uc_malloc
+785:000775e0 B __uc_malloc_failed
+1513:00051820 T malloc
+
+
+<libc-version>
+LPI. 3.3 The Standard C Library; The GNU C Library (glibc)
+
+$ ldd /bin/echo
+        linux-vdso.so.1 =>  (0x00007fff089ff000)
+        libc.so.6 => /lib64/libc.so.6 (0x0000003ba8000000)
+        /lib64/ld-linux-x86-64.so.2 (0x0000003ba7c00000)
+
+
+$ /lib64/libc.so.6
+GNU C Library stable release version 2.12, by Roland McGrath et al.
+Copyright (C) 2010 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.
+There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.
+Compiled by GNU CC version 4.4.7 20120313 (Red Hat 4.4.7-9).
+Compiled on a Linux 2.6.32 system on 2015-01-19.
+Available extensions:
+        The C stubs add-on version 2.1.2.
+        crypt add-on version 2.1 by Michael Glad and others
+        GNU Libidn by Simon Josefsson
+        Native POSIX Threads Library by Ulrich Drepper et al
+        BIND-8.2.3-T5B
+        RT using linux kernel aio
+libc ABIs: UNIQUE IFUNC
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/libc/bugs.html>.
+
+note: How this shared object prints out messages when run?
+
+In some Linux distributions, the GNU C library resides at a pathname other
+than /lib/libc.so.6.
+
+$ /lib/i386-linux-gnu/i686/cmov/libc.so.6
+GNU C Library (Debian GLIBC 2.19-18+deb8u4) stable release version 2.19, by Roland McGrath et al.
+Copyright (C) 2014 Free Software Foundation, Inc.
+
+
+<libc-version-macro>
+From version 2.0 onward, glibc defines two constants, __GLIBC__ and
+__GLIBC_MINOR__, that can be tested at compile time (in #ifdef statements). On
+a system with glibc 2.12 installed, these constants would have the values 2
+and 12.  
+
+However, these constants are of limited use in a program that is compiled on
+one system but run on another system with a different glibc. To handle this
+possibility, a program can call the gnu_get_libc_version() function to
+determine the version of glibc available at run time.
+
+
+={============================================================================
 *kt_linux_core_200* linux-io-model
 
-LPI 4
+LPI 4. FILE I/O
 
 <std-decs>
 Or, more precisely, the program inherits copies of the shell's file
@@ -49632,21 +49674,6 @@ elf32-tradlittlemips
  (header little endian, data little endian)
   mips
 ...
-
-
-
-={============================================================================
-*kt_linux_gcc_400* gcc-libc-uclibc-and-glibc
-
-$ nm libc.a | grep libc_malloc
-5440:00005130 T __libc_malloc
-5441:00000004 D __libc_malloc_initialized
-5579:         U __libc_malloc_initialized
-
-$ nm libuClibc-1.0.17.so | grep malloc
-784:00054850 T __uc_malloc
-785:000775e0 B __uc_malloc_failed
-1513:00051820 T malloc
 
 
 ={============================================================================
