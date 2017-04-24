@@ -23,6 +23,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| si-httpsend
 |kt_dev_si_0002| si-git
 |kt_dev_si_0002| si-build-flist
+|kt_dev_si_0002| si-build-server
 |kt_dev_si_0002| si-build
 |kt_dev_si_0002| si-build-baseline
 |kt_dev_si_0002| si-build-errors
@@ -149,8 +150,10 @@ http://gitlab.cisco.com/snug-si/
 
 http://gitlab.cisco.com/snug-si/snugupdate-v2-snugberrypi
 
-git clone http://gitlab.cisco.com/snug-si/snugupdate-v2-snugberrypi.git si-pi
+git clone http://gitlab.cisco.com/snug-si/snugupdate-v2-snugberrypi.git si-pi-git
 git clone http://gitlab.cisco.com/snug-si/snugupdate-v2-snugberrypi.git si-pi-clean
+
+git@gitlab.cisco.com:snug-si/snugupdate-v2-snugberrypi.git
 
 -rwxr-xr-x  1 kyoupark ccusers  1260 Feb 23 11:18 autoupdate.sh*
 drwxr-xr-x  8 kyoupark ccusers  4096 Feb 23 11:18 .git/
@@ -682,7 +685,7 @@ from libraries import settings
   # def initFromPacket(self, packet):
   #   self.packet = packet
   #   self._parsepacket(packet)
-  #   self._getEndPoint()
+  #   self._getEndPoint() *getEndPoint*
   #
   # note: 
   # This is box ip and gets data from a box over uPNP.  
@@ -746,13 +749,17 @@ from libraries import settings
   # ST: urn:schemas-nds-com:device:SkyControl:2
   # USN: uuid:444D5276-3247-536B-7943-0019fbf2d46b::urn:schemas-nds-com:device:SkyControl:2
   #
+  # *getEndPoint* *regex*
   # >>> DEBUG: _getEndPoint: self.info[model]: R000.040.73.00U (4ldzfno)
   #
-  # note: when parsing, if does not match up with version and model, not see
-  # it as valid so it acts as filtering.
+  # regexes = (r'(?P<model_release>R\d+)\.(?P<version>\d+\.\d+\.\d+)',
+  #            r'(?P<version>\d+\.\d+\.\d+)_\d+_(?P<model_release>WALRUS-ENG-\d+)' )
+  # note: 
+  # Use regex to search `valid` stb. When parsing, if does not match up with
+  # version and model, not see it as valid so it acts as filtering.
   #
-  # def _getVersionNumber(self, value):
-  # Exception(u'Could not parse model number 85.41.00_1174_MNTEE',) at PARSE
+  # def _getVersionNumber(self, value): 
+  # Exception(u'Could not parse model # number 85.41.00_1174_MNTEE',) at PARSE
   
   # return a list of STB objects.
   valids = devices.getValidDevices()
@@ -807,6 +814,7 @@ from libraries import settings
 
     # images = find_images(client)
     #
+    # *regex*
     # # This setting is used to filter the list of filenames that dropbox
     # returns. If this regex matches, then the image will be ignored.
     # *settings.dropBoxIgnoreRegex* = r'Archived'
@@ -1160,7 +1168,7 @@ from libraries import settings
 
 
 ={============================================================================
-|kt_dev_si_0001| si-pi-flash
+|kt_dev_si_0001| si-pi-modified
 
 print ' - No need to upgrade. %s, %s, %s' % (self.info['version'], self.info['update_version'], image['version'])
 
@@ -1434,7 +1442,6 @@ mtd4: 03c00000 00020000 "nor"
 
 ={============================================================================
 |kt_dev_si_0002| si-box-mount
-
 
 udhcpc -nR -t3 -T5
 
@@ -2023,6 +2030,13 @@ CMS_SECURITY_SERVICES/NAGRA_CA_KERNEL/
 BUILD_SYSTEM/
 CMS_MEDIA_SERVICES/MPM/src/.doxygen.d/
 NDS_TOOLSETS/
+
+={============================================================================
+|kt_dev_si_0002| si-build-server
+
+kyoupark, t..1
+uk-st-sukreep.cisco.com 
+http://hetty.cisco.com/fusionmadesimple/index.php/Abassi_and_Sukreep_user_guide
 
 
 ={============================================================================
@@ -11372,6 +11386,7 @@ uses pull-mode and max chunk num from a driver
 // push-to-driver. what does triggers this?
 
 // ID is chunk_id
+// int ioctl (int fd, int request == DEMUX_CHUNKINPUT_GET_STATUS, uint32_t *chunkID);
 !INFO   -MSM_MS       < M:display_chunk.cpp F:(AddChunksToChunkInput) L:8711 > < splicer=0x2f hMC=0x2f >" "Added chunk to chunk input queue of size 192512, ID 443 
 
 starts from 
@@ -11402,6 +11417,8 @@ void DISPLAY_FILTER::ProcessReadNeeded(_in_ const DEST_PUSH_READ_NEEDED_INFO  *p
 !INFO   -MSM_MS       < T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > < no-ctx >" "-MS_CDI_CONTROL- 
   Adding chunk to chunk input queue. " "chunk input fd = 398, p_address = 0x2c41dd28, num bytes = 344792 " "chunk_id = `967`
 
+!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(CdiServerThread) L:4802 > < no-ctx >" 
+"Request done. request=E_REQUEST_TYPE_ADD_CHUNK_TO_CHUNK_INPUT Result=MS_STATUS_OK, time=[2045:08:12 22:29:19]1844045224 
 
 // get-last-completed event
 
@@ -11428,6 +11445,7 @@ uses events from CDI sepc.
 
 #define DEMUX_EVENT_CHUNK_QUEUE_EMPTY                (0x00000020U)
 #define DEMUX_EVENT_CHUNK_LIST_COMPLETED             (0x00000080U)
+#define DEMUX_EVENT_TPIDMONITOR_THRESHOLD_REACHED    (0x00000100U)
 
 "events=a0, queue empty=XTRUE, chunk list completed=XTRUE, " "TPID monitor threshold=XFALSE, TPID monitor overflow=XFALSE " "last completed chunk id 961 
 
@@ -11457,23 +11475,48 @@ KERN_EMERG MIL tpidmonitor_process_event:440:Raising first PTS event (481 957)
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(SendMsgToBgThread) L:12471 > < no-ctx >" "Sending message to background thread 
 !INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7004 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 957 
 
+<chunkinput-buffer-rotate>
+egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|GetChunkInputEventsCallback"
 
-egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|ChunkInputTPIDMonitorData|reached EOF" 
+5005473:NDS: ^[2017:04:19 08:09:16]0946750701.244782 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c1b9d28, num bytes = 344792 " "chunk_id = 962 
+5005475:NDS: ^[2017:04:19 08:09:16]0946750701.245166 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7017 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 962 
 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 964 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7124 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 1 entries 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 965, PTS (0,108219598) 
-!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5929 > < splicer=0x5 hMC=0x5 >" "num blocks read 1 
-!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5948 > < splicer=0x5 hMC=0x5 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 965, PTS (0,108219598) 
-!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6038 > < splicer=0x5 hMC=0x5 >" "Saving PTS at index 64, chunkID 965 PTS [0,108219598] 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 965 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 965 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7124 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 1 entries 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 966, PTS (0,108313198) 
-!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5929 > < splicer=0x5 hMC=0x5 >" "num blocks read 1 
-!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5948 > < splicer=0x5 hMC=0x5 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 966, PTS (0,108313198) 
-!INFO   -MSM_MS T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6038 > < splicer=0x5 hMC=0x5 >" "Saving PTS at index 65, chunkID 966 PTS [0,108313198] 
-!INFO   -MSM_MS T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 966 
+>>> hex(0x2c1b9d28+344792)
+'0x2c20e000'
+
+5005477:NDS: ^[2017:04:19 08:09:16]0946750701.245292 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01af1520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetChunkInputEventsCallback) L:5862 > < no-ctx >" "events=80, queue empty=XFALSE, chunk list completed=XTRUE, " "TPID monitor threshold=XFALSE, TPID monitor overflow=XFALSE " "last completed chunk id 962 
+5005595:NDS: ^[2017:04:19 08:09:16]0946750701.273445 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c20e000, num bytes = 192512 " "chunk_id = 963 
+
+>>> hex(0x2c20e000+192512)
+'0x2c23d000'
+
+>>> here goes back!
+
+5005597:NDS: ^[2017:04:19 08:09:16]0946750701.273706 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c0f4000, num bytes = 192512 " "chunk_id = 964 
+
+hex(0x2c0f4000+192512)
+'0x2c123000'
+
+5005599:NDS: ^[2017:04:19 08:09:16]0946750701.273934 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c123000, num bytes = 385024 " "chunk_id = 965 
+
+hex(0x2c123000+385024)
+'0x2c181000'
+
+5005601:NDS: ^[2017:04:19 08:09:16]0946750701.274189 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c181000, num bytes = 216576 " "chunk_id = 966 
+
+hex(0x2c181000+216576)
+'0x2c1b5e00'
+
+5005603:NDS: ^[2017:04:19 08:09:16]0946750701.274427 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c1b5e00, num bytes = 360960 " "chunk_id = 967 
+
+hex(0x2c1b5e00+360960)
+0x2c20e000
 
 
 <ms-packet>
@@ -17736,7 +17779,6 @@ class PlayerEventCAVideoImpl
 #
 # Eventually, use 'subtitles_local_setting' to decide on/off and not use any other vars and calls.
 
-PLAYER_JAVA_AVControlImpl_SetVisibility: PLAYER_API_AVControl_SetVisibility
 PLAYER_JAVA_AVControlImpl_SetAVWindows: PLAYER_API_AVControl_SetWindows
 
 
@@ -17909,6 +17951,28 @@ in Picasso to not call moveToNextCACondition in the period between starting play
 
 <player-blue-screen> *player-blank* *player-standby*
 
+JNIEXPORT void JNICALL Java_com_nds_fusion_playerimpl_PlayerAVControlImpl_natSetVisibility
+  (JNIEnv *env, jclass jClass, jint l_handle, jint l_source, jboolean l_visible)
+{
+  /**
+   * @brief Set the visibility of a Video or still or graphics source
+   *
+   * @param[in] avcontrol Handle to the Player AVControl object
+   * @param[in] source Indicates whether the Video or Still or graphics source is to be addressed
+   * @param[in] visible Indicates whether the source is to be visible or not visible
+   * @retval #PLAYER_API_STATUS_OK on success
+   * @retval #PLAYER_API_STATUS_FAILURE failure code on an error
+   * @post To physically apply the requested modification, the client has to call the
+   * @see #PLAYER_API_AVControl_UpdateDisplay
+   *
+   * This function will visible or not visible the Video or still or graphics source.
+   * If visible is false, PLAYER shall disable visibility of the source.
+   * If visible is false, PLAYER shall enable visibility of the source.
+   */
+  status = PLAYER_API_AVControl_SetVisibility((PLAYER_API_AVControl_Handle)l_handle,
+      (PLAYER_API_AVControl_SourceType)l_source, l_visible);
+}
+
 PLAYER_API_AVControl_UpdateDisplay
 
 JNIEXPORT void JNICALL Java_com_nds_fusion_playerimpl_PlayerAVControlImpl_natUpdateDisplay
@@ -18078,8 +18142,8 @@ SYSTEM_STATUS PLAYER_AVControl_SetVideoVisibility(PLAYER_SERVICE_CONTEXT_DATA *s
 
 // player.cfg 
 [BACKGROUND_COLORS]
-DEFAULT_BLANCKING_COLOUR=0xFF0C0B4F   // blue, blank, visibility is false
-DEFAULT_UNBLANCKING_COLOUR=0x0        // black, unblank, visibilty is true
+DEFAULT_BLANCKING_COLOUR=0xFF0C0B4F   // blue, blank, HIDE, visibility is false
+DEFAULT_UNBLANCKING_COLOUR=0x0        // black, unblank, SHOWN, visibilty is true
 
 // DARWIN_PLATFORM/DARWIN_PLAYER/src/player_common.c
         else if (SYSTEMCONFIG_STATUS_OK != (SYSTEMCONFIG_GetIntegerValue(l_config_handle,
@@ -18163,7 +18227,8 @@ Scart Control UCM-11437
 mean blanking or unblanking since this use blender IOCTL and valid only when
 video runs.
 
-// when UpdateVisibility has no effect
+// when UpdateVisibility has no effect on audio channel since this log shows
+// on video as well but seems to work.
 !INFO   -P_Api        		< M:player_api_avcontrol.c F:`PLAYER_AVControl_SetVideoVisibility` L:1320 > Can't unblank the video because the video is not running 
 
 So if see this, this means that control has no effect.
@@ -18208,6 +18273,12 @@ So if see this, this means that control has no effect.
 !INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=3, source=1, visible=1 
 !INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1093 > SetVisibility VIDEO TRUE 
 !MIL    -aem          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(CHANNEL+)e006 
+
+
+*exit-iapp*
+background still image from IAPP ---EXIT event 
+>>> IAPP decodes blue image to video plane ---IAPP has terminated 
+>>> LAE unblanks the video plane ---LAE terminated >>> black and banner (EPG)"
 
 
 picasso/java/picasso/initialisationmanager/InitialisationManager.java
@@ -24994,22 +25065,6 @@ static SYSTEM_STATUS SPM_Standby_ConfigureSysInitForPassiveStandby(uint32_t defa
 
   newstate = SYSINIT_API_ActivityStateRequestShutdown;
   if(SYSINIT_STATUS_OK != SYSINIT_API_SetActivityStateForced( SPM_GetComponentSysinitHandle(), newstate, );
-
-
-={============================================================================
-|kt_dev_si_0001| comp-cdi-chunkinput
-
-// DEMUX_CHUNKINPUT_CHUNK_LIST_READY_EX
-!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6662 > < no-ctx >" "-MS_CDI_CONTROL- 
-Adding chunk to chunk input queue. " "chunk input fd = 364, p_address = 0x2c123000, num bytes = 385024 " "chunk_id = 965 
-
-//	XDEBUG_TRACE2_3("Request done. request=%s Result=%s, time=%u",
-//			CdiServerRequestToString(req.type),
-//			MS_COMMON_StatusToString(ms_status),
-//			MS_PORT_GetTimeInMilli());	
-
-!INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(CdiServerThread) L:4802 > < no-ctx >" 
-"Request done. request=E_REQUEST_TYPE_ADD_CHUNK_TO_CHUNK_INPUT Result=MS_STATUS_OK, time=[2045:08:12 22:29:19]1844045224 
 
 
 =}============================================================================

@@ -45,58 +45,55 @@ mysql --batch --table -u root uploads -e "select version, upload_time, filename,
 ={============================================================================
 |kt_si_log_0001| SI-10968 R13 - Black screen displayed for approx 4 secs after exiting some Interactive apps
 
+When exercise this scenario on video channel, this shows:
+
+exit -> background still image from EPG (LAE set output control) -> blue on whole screen (LAE) -> black and banner (LAE) -> blue and banner (EPG) -> video (player)
+
+The problem here is that output control during transition seems not well
+defined and so see bumpy output to a user. EPG or EPG and LAE together has to
+manage this as far as I see. Please note that "background still image" is
+shown on audio channel as well and see “video-case.nds” for the summarized
+log.  
+
+black background on audio channel
+
+exit -> background still image from EPG (LAE set output control) -> blue on whole screen (LAE) -> black and banner (LAE) -> blue and banner (EPG)
+
 For non-radio channel:
+
 Yard Link: http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb5b8268_32ac5596cac049f86d47ba413547d1fe
 
-6412	 [2017:03:15 11:37:40] INTERACTIVE
-6436 **** The user is within INTERACTIVE_MENU section ****
-6566		   Media connection tuner LOCKED: 0x6  TUNER_LOCKED: 
-6730	 [2017:03:15 11:37:53] SELECT
-6896	 [2017:03:15 11:37:53] DIALOG INFO: Showing Dialog 1219: LAUNCHING_INTERACTIVE_APP
-6975 **** The user is within DIALOG section ****
-7121		   Media connection tuner LOCKED: 0x7  TUNER_LOCKED: 
-7411 **** The user is within DIALOG section ****
-7425 **** The user is within INTERACT BKGND section ****
-7501	 [2017:03:15 11:38:17] SKY
-7560 **** The user is within INTERACTIVE_MENU section ****
-7633 **** The user is within BANNER section ****
-7644 **** The user is within INTERACT BKGND section ****
-7679	 CARD is paired
-7956		   Media connection tuner LOCKED: 0x8  TUNER_LOCKED: 
-8086		       Decoder started for media connection: 0x8 
-8093		       Decoder started for media connection: 0x8 
-8195		         First frame displayed for media connection: 0x8 
-8247 **** The user is within BANNER section ****
-8276	0==============================================
-8276	1=User-pressed 444 - indication of user-trial fault.
-8276	2==============================================
-8276	 [2017:03:15 11:38:31] NUMERIC_FOUR
-8295	 [2017:03:15 11:38:32] NUMERIC_FOUR
-8309	 [2017:03:15 11:38:32] NUMERIC_FOUR
-
 egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|PLAYER_API_AVControl_SetVisibility|VIDEO IS|ScreenChange|currentscreen|EPG_ALM"
+egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|PLAYER_API_AVControl_SetVisibility|VIDEO IS|ScreenChange|currentscreen|EPG_ALM|PLAYER_API_AVControl_SetBackgroundColour|PLAYER_AVControl_SetVideoVisibility"
 
 ISSUE: a blue screen is displayed for a second, followed by a black screen for approximately 4 seconds before normal audio and video resume. 
 
 note: blue -> black -> blue -> video
 
-// blue
-7487:NDS: ^[2017:03:15 11:38:12]0946685301.777232 !MIL    -P_Api        		< p:0x000001e3 P:APP t:0x015aa520 T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1174 > VIDEO IS HIDDEN 
+// shows still background (since LAE set still true)
+7487:NDS: ^[2017:03:15 11:38:12]0946685301.777232 !MIL    -P_Api        		< p:0x000001e3 P:APP t:0x015aa520 
+  T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1174 > VIDEO IS HIDDEN 
 
-7501:NDS: ^[2017:03:15 11:38:17]0946685306.718275 !MIL    -aem          		< P:APP t:0x01435520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(SKY)ef01 
+7501:NDS: ^[2017:03:15 11:38:17]0946685306.718275 !MIL    -aem          		< P:APP t:0x01435520 
+  T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(SKY)ef01 
 
-// help background to blue
-7504:NDS: *^[2017:03:15 11:38:17]* 0946685306.766880 !MIL    -EPG_MISC     		< P:APP t:0x2bfe9520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "SKY","title": "Key Press SKY","label": "","currentscreen": "/interactive_background"}
+7504:NDS: ^[2017:03:15 11:38:17]0946685306.766880 !MIL    -EPG_MISC     		< P:APP t:0x2bfe9520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "SKY","title": "Key Press SKY","label": "","currentscreen": "/interactive_background"}
 7507:NDS: ^[2017:03:15 11:38:17]0946685306.771984 !MIL    -EPG_ALM      		< P:APP t:0x2bfe9520 T:no name M:BaseApplication F:terminate L:74 > T:CEE-J EventQueue Reader 0:Terminating application=Cg@5a45bdd, name=Help and Support, AemApplication=ch@5a45b6e
 
-// balck to blue
-7516:NDS: *^[2017:03:15 11:38:17]* 0946685306.934828 !MIL    -P_Api        		< P:APP t:0x015aa520 T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1170 > VIDEO IS SHOWN 
+// blue(lae) on whole screen note: no log since INFO shows
+
+// balck(lae) and banner    <-----------
+7516:NDS: ^[2017:03:15 11:38:17]0946685306.934828 !MIL    -P_Api        		< P:APP t:0x015aa520 
+  T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1170 > VIDEO IS SHOWN 
+
 7543:NDS: ^[2017:03:15 11:38:19]0946685308.904958 !MIL    -EPG_ALM      		< P:APP t:0x2bfe9520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:AEM event: app=ch@5a45b6e, event=4 STOPPING
 7552:NDS: ^[2017:03:15 11:38:20]0946685309.060696 !MIL    -EPG_ALM      		< P:APP t:0x2bfe9520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:AEM event: app=ch@5a45b6e, event=6 TERMINATED
 7571:NDS: ^[2017:03:15 11:38:20]0946685309.107546 !MIL    -EPG_ALM      		< P:APP t:0x2bfe9520 T:no name M:FreeTunerReserver F:stopReservation L:126 > T:CEE-J EventQueue Reader 0:Stopping live reservation
-7597:NDS: *^[2017:03:15 11:38:20]* 0946685309.189264 !MIL    -P_Api        		< P:APP t:0x2bfe9520 T:no name M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1174 > VIDEO IS HIDDEN 
 
-// blue to video
+// blue(epg) and banner     <-----------
+7597:NDS: ^[2017:03:15 11:38:20]0946685309.189264 !MIL    -P_Api        		< P:APP t:0x2bfe9520 
+  T:no name M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1174 > VIDEO IS HIDDEN 
+
 7624:NDS: ^[2017:03:15 11:38:20]0946685309.243624 !MIL    -EPG_ALM      		< P:APP t:0x2bfe9520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:AEM event: app=ch@5a45b6e, event=7 DELETED
 7638:NDS: ^[2017:03:15 11:38:20]0946685309.304730 !MIL    -EPG_MISC     		< P:APP t:0x2bfe9520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/2050/banner"}
 7648:NDS: ^[2017:03:15 11:38:20]0946685309.325854 !MIL    -EPG_ALM      		< P:APP t:0x2bfe9520 T:no name M:LastViewedServiceTuner F:tune L:137 > T:CEE-J EventQueue Reader 0:### tune to Sky News HD
@@ -106,7 +103,10 @@ note: blue -> black -> blue -> video
 8181:NDS: ^[2017:03:15 11:38:25]0946685314.482116 !MIL    -P_Api        		< P:APP t:0x01234520 T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:9410 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000007, status=NOT_RUNNING 
 8195:NDS: ^[2017:03:15 11:38:25]0946685314.574147 !MIL    -MPM          		< P:MW t:0x0185f520 T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1376 > FRAME_PRESENTED: hMC=0x8 
 
-8198:NDS: *^[2017:03:15 11:38:25]* 0946685314.674380 !MIL    -P_Api        		< P:APP t:0x01234520 T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1170 > VIDEO IS SHOWN 
+// video
+8198:NDS: *^[2017:03:15 11:38:25]* 0946685314.674380 !MIL    -P_Api        		< P:APP t:0x01234520 
+  T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1170 > VIDEO IS SHOWN 
+
 8199:NDS: ^[2017:03:15 11:38:25]0946685314.674453 !MIL    -P_Api        		< P:APP t:0x01234520 T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:9410 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000007, status=RUNNING 
 
 
@@ -213,13 +213,12 @@ egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|EPG_|P_Api"
 [2017:03:30 14:49:17] !MIL    -EPG_MISC     		< P:APP F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/tv/live/501"}
 
 
-
+<video-case>
 // LOGlastrun_realtime_3e34, 85.35.00_2420_MNTEE, debug_1=P_ApiD:AFEWMI
 
 egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|PLAYER_API_AVControl_SetVisibility|VIDEO IS|ScreenChange|currentscreen|EPG_ALM"
-egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|PLAYER_API_AVControl_SetVisibility|VIDEO IS|ScreenChange|currentscreen|EPG_ALM|PLAYER_API_AVControl_SetBackgroundColour"
-egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|PLAYER_API_AVControl_SetVisibility|VIDEO IS|ScreenChange|currentscreen|EPG_"
 egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|PLAYER_API_AVControl_SetVisibility|VIDEO IS|ScreenChange|currentscreen|EPG_ALM|PLAYER_AVControl_SetVideoVisibility"
+egrep -an "KEY_PRESS|FRAME_PRESENTED|RUNNING_STATUS|PLAYER_API_AVControl_SetVisibility|VIDEO IS|ScreenChange|currentscreen|EPG_ALM|PLAYER_API_AVControl_SetBackgroundColour|PLAYER_AVControl_SetVideoVisibility"
 
 NDS: ^[2017:03:31 12:30:56]0946685435.697956 !MIL    -P_Api        		< p:0x0000024e P:APP t:0x013a5520 T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1170 > VIDEO IS SHOWN 
 
@@ -255,7 +254,7 @@ NDS: ^[2017:03:31 12:30:56]0946685435.697956 !MIL    -P_Api        		< p:0x00000
 14223:[2017:03:31 12:31:27] !INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1093 > SetVisibility VIDEO NO 
 
 
-// shows still background
+// shows still background (since LAE set still true)
 14224:[2017:03:31 12:31:27] !INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=2, source=2, visible=1 
 14225:[2017:03:31 12:31:27] !INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1103 > SetVisibility STILL TRUE 
 14291:[2017:03:31 12:31:27] !MIL    -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1174 > VIDEO IS HIDDEN 
@@ -264,14 +263,15 @@ NDS: ^[2017:03:31 12:30:56]0946685435.697956 !MIL    -P_Api        		< p:0x00000
 
 14576:[2017:03:31 12:31:45]!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "SKY","title": "Key Press SKY","label": "","currentscreen": "/interactive_background"}
 14579:[2017:03:31 12:31:45]!MIL    -EPG_ALM      		< P:APP T:no name M:BaseApplication F:terminate L:75 > T:CEE-J EventQueue Reader 0:Terminating application=Ck@5a41d82, name=Help and Support, AemApplication=ci@5a7face
-14650:[2017:03:31 12:31:46]!INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=2, source=1, visible=1 
 
-// blue(lae)
+// blue(lae) on whole screen
+14650:[2017:03:31 12:31:46]!INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=2, source=1, visible=1 
 14651:[2017:03:31 12:31:46]!INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1093 > SetVisibility VIDEO TRUE 
 14652:[2017:03:31 12:31:46]!INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=2, source=2, visible=0 
 14653:[2017:03:31 12:31:46]!INFO   -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1103 > SetVisibility STILL NO 
 
-// black(lae) and banner. Q: when banner is on?
+// black(lae) and banner. Q: when banner is on? UNBLANK. Q: which API used?
+// :LAE_THREAD M:player_api_avcontrol.c F:PLAYER_API_AVControl_UpdateDisplay L:5072 > |-> PLAYER_API_AVControl_UpdateDisplay
 14686:[2017:03:31 12:31:46]!MIL    -P_Api        		< P:APP T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1170 > VIDEO IS SHOWN 
 14699:[2017:03:31 12:31:46]!MIL    -EPG_MISC     		< P:APP T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressRemote","action": "SKY","title": "Key Press SKY","label": "","currentscreen": "/interactive_background"}
 14702:[2017:03:31 12:31:46]!MIL    -EPG_ALM      		< P:APP T:no name M:InteractiveApplicationModel F:terminateLaunchedOrRunningApplication L:893 > T:CEE-J EventQueue Reader 0:Already terminating application=Ck@5a41d82, name=Help and Support
@@ -279,6 +279,7 @@ NDS: ^[2017:03:31 12:30:56]0946685435.697956 !MIL    -P_Api        		< p:0x00000
 14811:[2017:03:31 12:31:48]!INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1103 > SetVisibility STILL NO 
 
 // blue(epg) and bannear.
+14853:[2017:03:31 12:31:48]!INFO   -P_Api        		< P:APP t:0x2c157520 T:no name M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:1320 > Can't unblank the video because the video is not running 
 14929:[2017:03:31 12:31:48]!MIL    -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1174 > VIDEO IS HIDDEN 
 14934:[2017:03:31 12:31:48] !INFO   -P_Api        		< p:0x0000024e P:APP t:0x2c157520 T:no name M:player_api_avcontrol.c F:PLAYER_AVControl_SetVideoVisibility L:1435 > Set Visibility to [0] 
 14941:[2017:03:31 12:31:48]!INFO   -P_Api        		< P:APP T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetVisibility L:1078 > avcontrol=3, source=1, visible=1 
@@ -927,10 +928,50 @@ CMS_MEDIA_SERVICES/MSM/src/mediastreamer/src/buffer_pump.cp
 CMS_MEDIA_SERVICES/MSM/src/mediastreamer/src/display_chunk.cpp
 
 <x>
-Please see below the logs from Citizen Khan
-Yard Link: http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb5b876f_c9f624420053524a378e8c06c4ffd90c | Yard Dir: /home/si_logs/translation/darwin_0019fb5b876f_c9f624420053524a378e8c06c4ffd90c | http://logs.picasso.bskyb.com/cooked_logs/darwin_0019fb5b876f_c9f624420053524a378e8c06c4ffd90c.tgz
-
+From http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb5b82bb_a24fbee83f5749c7a6ee0de003050206
 egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|GetChunkInputEventsCallback"
+
+
+5005473:NDS: ^[2017:04:19 08:09:16]0946750701.244782 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c1b9d28, num bytes = 344792 " "chunk_id = 962 
+5005475:NDS: ^[2017:04:19 08:09:16]0946750701.245166 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7017 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 962 
+
+>>> hex(0x2c1b9d28+344792)
+'0x2c20e000'
+
+5005477:NDS: ^[2017:04:19 08:09:16]0946750701.245292 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01af1520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetChunkInputEventsCallback) L:5862 > < no-ctx >" "events=80, queue empty=XFALSE, chunk list completed=XTRUE, " "TPID monitor threshold=XFALSE, TPID monitor overflow=XFALSE " "last completed chunk id 962 
+5005595:NDS: ^[2017:04:19 08:09:16]0946750701.273445 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c20e000, num bytes = 192512 " "chunk_id = 963 
+
+>>> hex(0x2c20e000+192512)
+'0x2c23d000'
+
+>>> here goes back!
+
+5005597:NDS: ^[2017:04:19 08:09:16]0946750701.273706 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c0f4000, num bytes = 192512 " "chunk_id = 964 
+
+hex(0x2c0f4000+192512)
+'0x2c123000'
+
+5005599:NDS: ^[2017:04:19 08:09:16]0946750701.273934 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c123000, num bytes = 385024 " "chunk_id = 965 
+
+hex(0x2c123000+385024)
+'0x2c181000'
+
+5005601:NDS: ^[2017:04:19 08:09:16]0946750701.274189 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c181000, num bytes = 216576 " "chunk_id = 966 
+
+hex(0x2c181000+216576)
+'0x2c1b5e00'
+
+5005603:NDS: ^[2017:04:19 08:09:16]0946750701.274427 !INFO   -MSM_MS       		< p:0x00000222 P:MW t:0x01b0b520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6675 > < no-ctx >" "-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 336, 
+  p_address = 0x2c1b5e00, num bytes = 360960 " "chunk_id = 967 
+
+hex(0x2c1b5e00+360960)
+0x2c20e000
+
 
 // on monitor
 // ={============================================================================
