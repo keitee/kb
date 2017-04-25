@@ -514,7 +514,8 @@
 *kt_linux_core_400* linux-lib-static-how-works
 *kt_linux_core_400* linux-lib-dependancy
 *kt_linux_core_400* linux-lib-ld
-*kt_linux_core_400* linux-lib-ld-different-version
+*kt_linux_core_400* linux-lib-ld-use-different-version
+*kt_linux_core_400* linux-lib-ld-debug-gdb
 *kt_linux_core_402* linux-lib-ld-resolve-order
 *kt_linux_core_400* linux-lib-ld-debug ld-glibc
 *kt_linux_core_405* linux-lib-ld-api
@@ -61615,7 +61616,7 @@ slightly different. ldd will optionally set LD_VERBOSE=1 (to output version
 
 
 ={============================================================================
-*kt_linux_core_400* linux-lib-ld-different-version
+*kt_linux_core_400* linux-lib-ld-use-different-version
 
 <ex>
 Using Multiple versions of glibc using LD_LIBRARY_PATH env variable.
@@ -61720,6 +61721,239 @@ Backtrace stopped: previous frame identical to this frame (corrupt stack?)
 
 ~/asn/gcc/gcc-glibc-brcm-mips-install-two/bin/mips-linux-gnu-addr2line -e lib/ld.so.1 0x2aab4160
 
+
+={============================================================================
+*kt_linux_core_400* linux-lib-libc-testing
+
+https://sourceware.org/glibc/wiki/Testing/Testsuite
+
+Testing with a cross-compiler
+
+While building and testing glibc on a system with native tools is the simplest
+way to do glibc testing, it is possible to build a cross-compilation toolchain
+that includes glibc and run the glibc testsuite using that toolchain.
+
+note:
+glibc 2.13 don't have this script but 2.20 has.
+
+To do cross-compilation testing you need to use the scripts/cross-test-ssh.sh
+script in the glibc sources and do the build on the host machine in a
+directory that is also visible, with the same path, on the target machine. It
+is also necessary to be able to use ssh to access the target machine from the
+host machine. There are details on this in the cross-test-ssh.sh script. This
+script can be used to run "make check", "make xcheck", or "make bench".
+
+Because both the host and target machines are touching files during the make,
+changes on one machine need to be immediately visible on the other machine.
+  This is not the default behaviour with NFS due to caching. You may need to
+  use the 'noac' option on NFS in order to get this to work. This problem can
+  cause messages similar to the following when running make:
+
+touch: cannot touch `/home/sellcey/gcc/gcc_cross_testing/obj-mips-mti-linux-gnu/glibc/obj_default/localedata/de_DE.ISO-8859-1/LC_CTYPE': No such file or directory
+
+If you build a cross-toolchain by building binutils, an initial GCC, glibc,
+and then rebuild GCC (a common build sequence), then running the glibc
+  testsuite may result in glibc getting rebuilt before any tests are run. This
+  is because the glibc tests have make dependencies on glibc and glibc has
+  make dependencies on GCC (or at least some GCC headers). If your second GCC
+  build overwrites the first one then make will see this change and rebuild
+  many parts (if not all) of glibc before doing any testing. If you know you
+  are going to run the glibc testsuite you may want to rebuild glibc after
+  rebuilding GCC and before running "make check". You cannot skip the second
+  GCC build because the initial GCC (if configured using --without-headers)
+  will not have all the headers and libraries needed to build the glibc test
+  programs.
+
+
+={============================================================================
+*kt_linux_core_400* linux-lib-ld-debug-gdb
+
+https://sourceware.org/glibc/wiki/Debugging/Loader_Debugging
+
+Debugging the Loader
+
+This page describes different methods for debugging the GLIBC dynamic
+linker/loader ld[64].so to achieve certain goals.
+
+There are several loader environment scenarios:
+
+1. Loader is in the system toolchain, e.g. /lib[64]/ld[64].so.1
+
+2. Loader is in a self-contained toolchain, e.g.
+/opt/toolchain/lib[64]/ld[64].so.1
+
+3. Loader is in an install_root installed GLIBC directory, e.g.
+/home/user/glibc/install_root/lib[64]/ld[64].so.1 (This is an intermediary
+    install step of GLIBC performed using make install_root=path install and
+    is used for packaging purposes).
+
+4. Loader is in a non-installed GLIBC build directory, e.g.
+/home/user/glibc/build/glibc[32|64]/elf/ld[64].so.1
+
+The first two scenarios are relatively similar and debugging shouldn't provide
+any great challenges other than the following:
+
+The loader has demonstrated fault in its symbol resolver code. - You can step
+into the loader resolver code from the application main procedure. Todo: Write
+this section.
+
+The third scenario and fourth scenarios are challenging because you have to
+break the toolchain packages' assumptions about library paths. This is
+described by the following section:
+
+An alternate loader is being used and an application or library needs to be
+debugged. - An application or library that uses an alternate loader must be
+debugged by debugging the loader and directing the loader to debug the
+application or library. This may require creating an application in order to
+step into a library.
+
+
+Debugging With An Alternate Loader
+
+Note: The examples here were done on the Power Architecture. The symbols that
+are used to break into the loader may vary by platform.
+
+Note: For this example assume that GLIBC was configured and built into
+/home/user/glibc/build/glibc[32|64]. It doesn't need to be installed in order
+to test it. Our test application resides in /home/user/glibc/build/test.
+
+Often times you may need to test an application against a GLIBC build that is
+not installed into the system root. You can use the following method to debug
+against a `non-installed GLIBC build` that was configured with any --prefix
+(but not installed).
+
+In order to runtime test against the GLIBC build one must invoke the newly
+built loader, ld[64].so, from the GLIBC build directly passing ld[64].so the
+application name and using the --library-path directive to identify the
+location of the libraries built by the GLIBC build, e.g.
+
+32-bit:
+/home/user/glibc/build/glibc32/elf/ld.so.1 --library-path \
+</home/user/glibc/build/glibc32/nptl:/home/user/glibc/build/glibc32/elf:etc> <application>
+
+64-bit:
+/home/user/glibc/build/glibc64/elf/ld64.so.1 --library-path \
+</home/user/glibc/build/glibc64/nptl:/home/user/glibc/build/glibc64/elf:etc> <application>
+
+If this GLIBC installation or the application that runs against it need to be
+debugged one must direct GDB to first debug the newly installed loader and the
+loader is directed to run the application to be debugged. We'll trap in the
+loader and then step into the application or libraries. This can be
+accomplished with a .gdb script.
+
+<loader-breakpoint>
+In order to be able to step into the application or the libraries that are
+loaded we'll want to immediately trap in the loader. So we'll set a breakpoint
+on the following loader symbol:
+
+32-bit:
+_dl_main_dispatch
+
+64-bit:
+_dl_start_user
+
+~/asn/gcc/glibc-2.13-build$ nm libc.so | grep _dl_
+~/asn/gcc/glibc-2.20-build$ nm libc.so | grep _dl_
+
+2857:00016f18 t _dl_start
+
+~/asn/gcc/glibc-2.13-build$ file libc.so
+libc.so: ELF 32-bit MSB shared object, MIPS, MIPS32 version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.18, not stripped
+
+https://sourceware.org/glibc/wiki/DynamicLoader
+
+Dynamic Loader Operation
+
+The following is an annotated and summarized view of the dynamic loader startup:
+
+RTLD_START (sysdep/<arch>/dl-machine.h)
+  _dl_start (elf/rtld.c)
+    ELF_MACHINE_BEFORE_RTLD_RELOC (sysdep/<arch>/dl-machine.h)
+    ELF_DYNAMIC_RELOCATE (sysdep/<arch>/dl-machine.h, Relocate the loader)
+    _dl_start_final (elf/rtld.c, bottom half of _dl_start)
+      entry = _dl_sysdep_start (sysdep/generic/dl-sysdep.c)
+       user_entry = (ElfW(Addr)) ENTRY_POINT;
+       dl_main (elf/rtld.c, main entry point for loader)
+         _dl_init_paths (elf/dl-load.c, fill in RPATH and LD_LIBRARY_PATH information)
+         _dl_debug_initialize (elf/dl-debug.c, initialization of _r_debug and DT_DEBUG)
+       DL_SYSDEP_INIT;
+       DL_PLATFORM_INIT; (sysdeps/<arch>/dl-machine.h)
+       /* Last action of _dl_sysdep_start return the user entry point */
+       return user_entry;
+    /* Last action of _dl_start returns the user entry point */      
+    ELF_MACHINE_START_ADDRESS (GL(dl_loaded), entry); (sysdep/<arch>/dl-machine.h)
+  _dl_init (elf/dl-init.c, run DSO initializers)
+    call_init (elf/dl-init.c)
+  jump to return of _dl_start (sysdep/<arch>/dl-machine.h)
+  /*User code is now executing*/
+
+
+NOTE: In order for gdb to be able to fully debug the application and
+standalone GLIBC you need to invoke it through the new standalone loader.
+
+Otherwise GDB will indicate that it's version of libthread_db is different
+from the libpthread you're attempting to debug by giving the following error:
+
+versions of libpthread and libthread_db do not match
+
+So we need GDB to be able to find all of the libraries created by the
+standalone GLIBC build.
+
+32-bit:
+#!/bin/bash
+
+GLIBC="/home/user/glibc/build/glibc32"
+
+# We need to make sure that gdb is linked against the standalone glibc so that
+# it picks up the correct nptl_db/libthread_db.so. So that means invoking gdb
+# using the standalone glibc's linker.
+
+${GLIBC}/elf/ld.so.1 --library-path \
+${GLIBC}:\
+${GLIBC}/math:\
+${GLIBC}/elf:\
+${GLIBC}/dlfcn:\
+${GLIBC}/nss:\
+${GLIBC}/nis:\
+${GLIBC}/rt:\
+${GLIBC}/resolv:\
+${GLIBC}/crypt:\
+${GLIBC}/nptl:\
+${GLIBC}/nptl_db:\
+/usr/bin/gdb -x test.gdb -d /home/user/glibc/libc /home/user/glibc/build/glibc32/elf/ld.so.1
+
+Note: the -d directive tells GDB where to find the library sources.
+
+
+In order to direct the loader to execute the test application and load the
+dependent libraries we'll use the --library-path directive.
+
+note: glibc test-suite?
+
+We can accomplished all of this easily using a GDB script: Note: if the
+application you're debugging is a GLIBC test-suite application you must append
+the --direct flag to the application invocation as you'll see in the following
+examples.
+
+> cat test.gdb
+
+32-bit:
+set environment C -E -x c-header
+break _dl_main_dispatch
+run --library-path
+/home/user/glibc/build/glibc32:\
+/home/user/glibc/build/glibc32/nptl:\
+/home/user/glibc/build/glibc32/math:\
+/home/user/glibc/build/glibc32/elf:\
+/home/user/glibc/build/glibc32/dlfcn:\
+/home/user/glibc/build/glibc32/nss:\
+/home/user/glibc/build/glibc32/nis:\
+/home/user/glibc/build/glibc32/rt:\
+/home/user/glibc/build/glibc32/resolv:\
+/home/user/glibc/build/glibc32/crypt:\
+/home/user/glibc/build/glibc32/nptl:\
+/home/user/glibc/build/glibc32/nptl_db \
+/home/user/glibc/build/test/test --direct
 
 
 ={============================================================================
