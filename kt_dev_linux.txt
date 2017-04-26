@@ -291,11 +291,12 @@
 *kt_linux_gdb_300* gdb-slib-search
 *kt_linux_gdb_300* gdb-slib-case
 *kt_linux_tool_300* gdb-case: debugging with strace and gdb in sandbox
-|kt_linux_tool_300| gdb-remote:
-|kt_linux_tool_300| gdb-remote: args
-*kt_linux_tool_300* gdb-remote: remote or local?
-*kt_linux_tool_300* gdb-remote: frontend: cgdb
-*kt_linux_tool_300* gdb-remote: frontend: eclipse
+|kt_linux_gdb_300| gdb-remote
+*kt_linux_gdb_300* gdb-remote-gdbserver
+|kt_linux_gdb_300| gdb-remote-args
+*kt_linux_gdb_300* gdb-remote-case
+*kt_linux_gdb_300* gdb-remote: frontend: cgdb
+*kt_linux_gdb_300* gdb-remote: frontend: eclipse
 
 |kt_linux_tool_300| gdb-core-setting
 *kt_linux_tool_300* gdb-core-settting-run-commands when makes core
@@ -506,7 +507,7 @@
 |kt_linux_core_302|  case: analysis of 200 and 201 case
 |kt_linux_core_303|  case: msg q between threads
 
-*kt_linux_arch_001* arch-mips
+*kt_linux_arch_001* arch-mips tool-qemu
 
 *kt_linux_core_400* linux-elf
 *kt_linux_core_400* linux-lib-libc
@@ -28674,56 +28675,227 @@ Remember about permissions
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-remote:
+*kt_linux_gdb_300* gdb-remote
 
 20 Debugging Remote Programs
 
-Some remote targets allow gdb to access program files over the same connection
-used to communicate with gdb. With such a target, if the remote program is
-unstripped, the only command you need is target remote. 
-    
-Otherwise, start up gdb using the name of the local unstripped copy of your
-program as the first argument, or use the file command.
+If you are trying to debug a program running on a machine that cannot run gdb
+in the usual way, it is often useful to use remote debugging. For example, you
+might use remote debugging on an operating system kernel, or on a small system
+which does not have a general purpose operating system powerful enough to run
+a full-featured debugger.
+
+Some configurations of gdb have special serial or TCP/IP interfaces to make
+this work with particular debugging targets. In addition, gdb comes with a
+generic serial protocol (specific to gdb, but not specific to any particular
+    target system) which you can use if you write the `remote stubs`; the code
+that runs on the remote system to communicate with gdb.
+
+Other `remote targets` may be available in your configuration of gdb; use help
+target to list them.
+
+20.1.1 Types of Remote Connections
+
+gdb supports two types of remote connections, `target remote` mode and `target`
+`extended-remote` mode. Note that many remote targets support only target remote
+mode. There are several major differences between the two types of
+connections, enumerated here:
+
+Result of detach or program exit
+
+With target remote mode: When the debugged program exits or you detach from
+it, gdb disconnects from the target. When using gdbserver, gdbserver will
+exit.
+
+The run command
+
+With target remote mode: The run command is not supported. Once a connection
+has been established, you can use all the usual gdb commands to examine and
+change data. The remote program is already running, so you can use commands
+like step and continue.
+
+Attaching 
+
+With target remote mode: The gdb command attach is not supported. To attach to
+a running program using gdbserver, you must use the ‘--attach’ option (see
+[Running gdbserver], page 265).
 
 
-{host-side}
-The target remote command establishes a connection to the target. Its arguments
-indicate which medium to use:
+20.1.2 Host and Target Files
 
+gdb, `running on the host`, needs access to symbol and debugging information for
+your program running on the target. This requires access to an unstripped copy
+of your program, and possibly any associated symbol files. Note that this
+section applies equally to both target remote mode and target extended-remote
+mode.
+
+Some remote targets (see [qXfer executable filename read], page 653, and see
+    Section E.7 [Host I/O Packets], page 665) allow gdb to access program
+files over the same connection used to communicate with gdb. With such a
+target, if the remote program is unstripped, the only command you need is
+target remote (or target extended-remote).
+
+If the `remote program` is stripped, or the target does not support remote
+program file access, start up gdb using the name of the `local` unstripped copy
+of your program as the first argument, or use the file command. 
+
+Use set sysroot to specify the location (on the host) of target libraries
+(unless your gdb was compiled with the correct sysroot using --with-sysroot).
+Alternatively, you may use set solib-search-path to specify how gdb locates
+target libraries.
+
+The symbol file and target libraries must exactly match the executable and
+libraries on the target, with one exception: the files on the host system
+should not be stripped, even if the files on the target system are. Mismatched
+or missing files will lead to confusing results during debugging. On gnu/Linux
+targets, mismatched or missing files may also prevent gdbserver from debugging
+multi-threaded programs.
+
+
+20.1.3 Remote Connection Commands
+
+gdb can communicate with the target over a serial line, or over an IP network
+using TCP or UDP. In each case, gdb uses the same protocol for debugging your
+program; only the medium carrying the debugging packets varies. The target
+remote and target extendedremote commands establish a connection to the
+target. Both commands accept the same arguments, which indicate the medium to
+use:
+
+note: run this command on host side
+
+The `target remote` command establishes a connection `to the target.` Its
+arguments indicate which medium to use:
+
+target remote host:port
 target remote tcp:host:port
+target extended-remote host:port
+target extended-remote tcp:host:port
 
-Debug using a TCP connection to port on host. The host may be either a host name
-or a numeric IP address; port must be a decimal number. For example, to connect
-to port 2828 on a terminal server named manyfarms:
+Debug using a TCP connection to port `on host.` The host may be either a host
+name or a numeric IP address; port must be a decimal number. The host could be
+the target machine itself, if it is directly connected to the net, or it might
+be a terminal server which in turn has a serial line to the target.
 
+For example, to connect to port 2828 on a terminal server named manyfarms:
 target remote manyfarms:2828
 
-detach
+If your remote target is actually running `on the same machine` as your debugger
+session (e.g. a simulator for your target running on the same host), you can
+omit the hostname. For example, to connect to port 1234 on your local machine:
+target remote :1234
+
+Note that the colon is still required here.
+
+detach 
 
 When you have finished debugging the remote program, you can use the detach
 command to release it from gdb control. Detaching from the target normally
 resumes its execution, but the results will depend on your particular remote
-stub. After the detach command, gdb is free to connect to another target.
+stub. After the detach command in target remote mode, gdb is free to connect
+to another target. In target extended-remote mode, gdb is still connected to
+the target.
 
 disconnect
 
-The disconnect command behaves like detach, except that the target is gener-
-ally not resumed. It will wait for gdb (this instance or another one) to connect
-and continue debugging. After the disconnect command, gdb is again free to
-connect to another target.
+The disconnect command closes the connection to the target, and the target is
+generally not resumed. It will wait for gdb (this instance or another one) to
+connect and continue debugging. After the disconnect command, gdb is again
+free to connect to another target.
 
-note:
-First make sure you have the necessary symbol files. Load symbols for your
-application using the file command before you connect. Use set sysroot to locate
-target libraries unless your gdb was compiled with the correct sysroot using
---with-sysroot.
 
-The symbol file and target libraries must exactly match the executable and
-libraries on the target, with one exception: the files on the host system should
-not be stripped, even if the files on the target system are. Mismatched or
-missing files will lead to confusing results during debugging. On gnu/Linux
-targets, mismatched or missing files may also prevent gdbserver from debugging
-multi-threaded programs.
+20.2 Sending files to a remote system
+
+
+={============================================================================
+*kt_linux_gdb_300* gdb-remote-gdbserver
+
+20.3 Using the gdbserver Program
+
+note: runs gdbserver on a target
+
+`gdbserver` is a control program for Unix-like systems, which allows you to
+connect your program with a remote gdb via target remote or target
+extended-remotebut without linking in the usual debugging stub.
+
+gdbserver is not a complete replacement for the debugging stubs, because it
+requires essentially the same operating-system facilities that gdb itself
+does. In fact, a system that can run gdbserver to connect to a remote gdb
+could also run gdb locally! gdbserver is sometimes useful nevertheless,
+because it is a much smaller program than gdb itself. It is also easier to
+  port than all of gdb, so you may be able to get started more quickly on a
+  new system by using gdbserver.
+
+
+20.3.1 Running gdbserver
+
+Run gdbserver on the target system. You need a copy of the program you want to
+debug, including any libraries it requires. gdbserver does 'not' need your
+program's symbol table, so you can strip the program if necessary to save space.
+gdb on the host system does all the symbol handling.
+
+To use the server, you must tell it how to communicate with gdb; the name of
+your program; and the arguments for your program. The usual syntax is:
+
+target> gdbserver comm program [ args ... ]
+
+<gdb-comm>
+`comm` is either a device name (to use a serial line), or a TCP hostname and
+portnumber, or - or stdio to use stdin/stdout of gdbserver.
+
+For example, to debug Emacs with the argument ‘foo.txt’ and communicate with
+gdb over the serial port ‘/dev/com1’:
+
+target> gdbserver /dev/com1 emacs foo.txt
+
+gdbserver waits passively for the `host gdb` to communicate with it.
+
+To use a TCP connection instead of a serial line:
+
+target> gdbserver host:2345 emacs foo.txt
+
+The host:2345 argument `means that` we are expecting to see a TCP connection
+`from` host to local TCP port 2345. (note Currently, the host part is
+    ignored.) You can choose any number you want for the port number as long
+as it does not conflict with any existing TCP ports on the target system. You
+must use the same port number with the host gdb target remote command.
+
+
+20.3.1.1 Attaching to a Running Program
+
+On some targets, gdbserver can also attach to running programs. This is
+accomplished via the --attach argument.
+
+target> gdbserver --attach comm pid
+
+$ gdbserver --attach 172.20.33.215:12345 1368
+
+You can debug processes by name instead of process ID if your target has the
+pidof utility:
+
+target> gdbserver --attach comm ‘pidof program‘
+
+
+20.3.2 Connecting to gdbserver
+
+The basic procedure for connecting to the remote target is:
+
+  Run gdb on the host system.
+
+  Make sure you have the necessary symbol files. Load symbols for your
+  application using the file command before you connect. Use set sysroot to
+  locate target libraries (unless your gdb was compiled with the correct
+      sysroot using --with-sysroot).
+
+  Connect to your target. For TCP connections, you must start up gdbserver
+  prior to using the target command. Otherwise you may get an error whose
+  text depends on the host system, but which usually looks something like
+  "Connection refused". Don't use the load command in gdb when using target
+  remote mode, since the program is already on the target.
+
+<once-connected>
+Once the connection has been established, you can use all the usual commands to
+examine and change data. The remote program is already running; you can use step
+and continue, and you do not need to use run.
 
 note:
 The remote targets are always running. If you get an error message like this one
@@ -28735,46 +28907,6 @@ note:
 "Cannot access memory at address 0x0" warning, This happens when run gdb client
 in case use to debug a applicaiton using a shared library. Thought that gdb is
 not working but gdb works as usual.
-
-
-{once-connected}
-Once the connection has been established, you can use all the usual commands to
-examine and change data. The remote program is already running; you can use step
-and continue, and you do not need to use run.
-
-
-{target-side}
-<why-gdbserver>
-gdbserver is sometimes useful nevertheless, because it is a much 'smaller'
-program than gdb itself.  It is also easier to port than all of gdb, so you may
-be able to get started more quickly on a new system by using gdbserver. Finally,
-   if you develop code for real-time systems, you may find that the tradeoffs
-   involved in real-time operation make it more convenient to do as much
-   development work as possible on another system, for example by
-   cross-compiling. You can use gdbserver to make a similar choice for
-   debugging.
-
-<no-symbol>
-Run gdbserver on the target system. You need a copy of the program you want to
-debug, including any libraries it requires. gdbserver does 'not' need your
-program's symbol table, so you can strip the program if necessary to save space.
-gdb on the host system does all the symbol handling.
-
-<server-run>
-target> gdbserver comm program [ args ... ]
-
-target> gdbserver host:2345 emacs foo.txt
-
-The host:2345 argument means that we are expecting to see a TCP connection from
-host to local TCP port 2345. (note Currently, the host part is ignored.) You can
-choose any number you want for the port number as long as it does not conflict
-with any existing TCP ports on the target system. This same port number must be
-used in the host GDBs target remote command.
-
-<attach>
-target> gdbserver --attach comm pid
-
-$ gdbserver --attach 172.20.33.215:12345 1368
 
 
 ={============================================================================
@@ -28858,9 +28990,9 @@ terminate gdbserver at the end of a multi-process mode debug session.
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-remote: remote or local?
+*kt_linux_gdb_300* gdb-remote-case
 
-{on-remote}
+<case-run-remote> 
 * Use remote debugging when debug it from main out of sandbox
 * Not work when use release version
 * 172.20.33.215 is host machine
@@ -28918,7 +29050,7 @@ Breakpoint 1, parseArgs (this=0x7f839f28, argc=3, argv=0x7f83a184) at
 // solib-search-path. 
 
 
-{on-target} 
+<case-run-local> 
 To solve the above, use local approach. Copy sources from host to target and set
 substitute. This works since can trace routine calling code to load shared
 library.
@@ -55191,7 +55323,7 @@ Linux distribution before asking Broadcom for assistance.
 BASELINE
 
 Broadcom stblinux-2.6.18 is derived from Linux 2.6.18.8 from
-linux-mips.org.  Direct link:
+linux-mips.org. Direct link:
 
 http://www.linux-mips.org/pub/linux/mips/kernel/v2.6/linux-2.6.18.8.tar.gz
 
@@ -60801,12 +60933,91 @@ note:see build.log
 
 
 ={============================================================================
-*kt_linux_arch_001* arch-mips
+*kt_linux_arch_001* arch-mips tool-qemu
 
 QEMU is a generic open source processor and system emulator. It achieves good
 performance from using a Just-in-time compilation. 
 
 https://www.linux-mips.org/wiki/QEMU
+
+$ qemu-mips -L $SYSROOT -R 0 ./a.out 
+$ qemu-mipsel -cpu 74Kf -E LD_LIBRARY_PATH=/usr/mipsel-linux-gnu/lib/ a.out
+
+
+1.1 Features
+
+QEMU has two operating modes:
+
+Full system emulation. 
+
+In this mode, QEMU emulates a full system (for example a PC), including one or
+several processors and various peripherals. It can be used to launch different
+Operating Systems without rebooting the PC or to debug system code.
+
+has the following features:
+
+* QEMU uses a full software MMU for maximum portability.
+* QEMU can optionally use an in-kernel accelerator, like kvm. The accelerators
+  execute most of the guest code natively, while continuing to emulate the
+  rest of the machine.
+
+* Various hardware devices can be emulated and in some cases, host devices
+  (e.g. serial and parallel ports, USB, drives) can be used transparently by
+  the guest Operating System. Host device passthrough can be used for talking
+  to external physical peripherals (e.g. a webcam, modem or tape drive).
+
+* Symmetric multiprocessing (SMP) support. Currently, an in-kernel accelerator
+  is required to use more than one host CPU for emulation.
+
+
+User mode emulation. 
+
+In this mode, QEMU can launch processes compiled for one CPU on another CPU.
+It can be used to launch the Wine Windows API emulator (http://www.winehq.org)
+or to ease cross-compilation and cross-debugging.
+
+has the following features:
+
+* Generic Linux system call converter, including most ioctls.
+* clone() emulation using native CPU clone() to use Linux scheduler for threads.
+* Accurate signal handling by remapping host signals to target signals.
+
+
+2.3.1 Standard options
+
+-cpu model
+Select CPU model (-cpu help for list and additional feature selection)
+
+$ qemu-mips -cpu help
+
+$ qemu-mips ./minit-static
+$ qemu-mips -E LD_LIBRARY_PATH=/home/kyoupark/test_qemu/glibc-libs/lib minit-static
+
+
+4.3 Linux User space emulator
+
+4.3.1 Quick Start
+
+In order to launch a Linux process, QEMU needs the process executable itself
+and all the target (x86) dynamic libraries used by it.
+
+4.3.3 Command line options
+
+-g port
+Wait gdb connection to port
+
+
+={============================================================================
+*kt_linux_core_400* linux-elf
+
+https://lwn.net/Articles/631631/
+
+The previous article in this series described the general mechanisms that the
+Linux kernel has for executing programs as a result of a user-space call to
+execve(). However, the particular format handlers described in that article
+each deferred the process of execution to an inner call to
+search_binary_handler(). That recursion almost always ends with the invocation
+of an ELF binary program, which is the subject of this article.
 
 
 ={============================================================================
@@ -61638,7 +61849,7 @@ crashed with core dump.
 What I did next was using 'ld-linux.so.2' loader and it could exeute the
 command.
 
-$/tmp/lib-2.9/lib/ld-linux.so.2 --library-path /tmp/lib-2.9/lib /bin/ ls
+$/tmp/lib-2.9/lib/ld-linux.so.2 --library-path /tmp/lib-2.9/lib /bin/ls
 
 But I still want to find cleaner solution to have multiple versions of glic in
 a single machine. Can anyone help me with this?
