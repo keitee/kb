@@ -11,7 +11,7 @@
 
 |kt_linux_bash_000| sh-reference
 *kt_linux_bash_005* sh-quote
-*kt_linux_bash_019* sh-pipeline sh-subshell
+*kt_linux_bash_019* sh-pipeline sh-subshell sh-environment
 *kt_linux_bash_019* sh-pipeline-case-problem
 *kt_linux_bash_019* sh-list-construct
 *kt_linux_bash_021* sh-script
@@ -697,7 +697,7 @@ ssh theyard "mysql -e \"select upload_time from upload where parser_result != 'N
 
 
 ={============================================================================
-*kt_linux_bash_019* sh-pipeline sh-subshell
+*kt_linux_bash_019* sh-pipeline sh-subshell sh-environment
 
 3.2.2 Pipelines
 
@@ -800,12 +800,12 @@ When a program is invoked it is given an array of strings called the
 Bash provides several ways to manipulate the environment. 
 
 On invocation, the shell scans its own environment and creates a parameter for
-each name found, automatically marking it for `export to child processes`
+each name found, automatically marking it for `export to child processes.`
 Executed commands inherit the environment. 
 
 The export and ‘declare -x’ commands allow parameters and functions to be
-`added to` and deleted from the environment. If the value of a parameter in the
-environment is modified, the new value becomes part of the environment,
+`added to` and deleted from the environment. If the value of a parameter in
+the environment is modified, the new value becomes part of the environment,
 replacing the old. The environment inherited by any executed command consists
   of the shell's initial environment, whose values may be modified in the
   shell, less any pairs removed by the unset and ‘export -n’ commands, plus
@@ -37293,38 +37293,21 @@ environ can be controlled via the RLIMIT_STACK resource limit, and a much
 larger limit is permitted for argv and environ.
 
 
-={============================================================================
-*kt_linux_core_107* linux-process-environment-list
-
-LPI 6.7 Environment List
-
-Each process has an environment list, which is a set of environment variables
-that are maintained within the user-space memory of the process. Each element
-of this list consists of a name and an associated value. When a new process is
-created via fork(), it inherits a copy of its parent's environment. Thus, the
-environment provides `a mechanism for a parent process to communicate`
-information to a child process.  When a process replaces the program that it
-is running using exec(), the new program either inherits the environment used
-by the old program or receives a new environment specified as part of the
-exec() call.
-
-
-{in-process}
-As shown in Figure 6-1, the argv and environ arrays, as well as the 'strings'
-they initially point to, 'reside' in a single contiguous area of memory just
-above the process stack.
-
-
-{command-arguments}
+{proc-cmdline}
 The command-line arguments of any process can be read via the Linux-specific
 /proc/PID/cmdline file, with each argument being terminated by a null byte. A
 program can access its own command-line arguments via /proc/self/cmdline.
 
 
-<name-value-pair>
+={============================================================================
+*kt_linux_core_107* linux-process-environment-list
+
+LPI 6.7 Environment List
+
 Each process has an associated array of strings called the environment list,
-     or simply the environment. Each of these strings is a definition of the
-     form name=value.
+or simply the environment. Thus, the environment represents a set of
+  `name-value pairs` that can be used to hold arbitrary information. The names
+  in the list are referred to as `environment variables.`
 
 
 <copied>
@@ -37334,8 +37317,18 @@ the environment provides a way to transfer information from a parent process
 to its child(ren). Since the child gets a copy of its parent's environment at
 the time it is created, this transfer of information is one-way and once-only.
 
+Each process has an environment list, which is a set of environment variables
+that are maintained within the user-space memory of the process. 
 
-{shell-export-command}
+When a new process is created via fork(), it inherits a copy of its parent's
+environment. Thus, the environment provides `a mechanism for a parent process
+to communicate` information to a child process. When a process replaces the
+program that it is running using exec(), the new program either inherits the
+environment used by the old program or receives a new environment specified as
+part of the exec() call.
+
+
+{sh-export}
 A value can be added to the environment using the export command. The above
 commands permanently add a value to the shell's environment, and this
 environment is then inherited by all child processes that the shell creates.
@@ -37354,12 +37347,38 @@ executing the named program. If desired, multiple assignments (delimited by
     white space) can precede the program name.
 
 
-{proc-pid-environ}
-The environment list of any process can be examined via the Linux-specific /proc/PID/environ file,
-    with each NAME=value pair being terminated by a null byte.
+{proc-environ}
+The environment list of any process can be examined via the Linux-specific
+/proc/PID/environ file, with each NAME=value pair being terminated by a null
+byte.
+
+$ cat /proc/1155/environ | strings
 
 
-{get-set-env-call}
+{in-process}
+Within a C program, the environment list can be accessed using the global
+variable `char **environ.` The C run-time startup code defines this variable
+and assigns the location of the environment list to it. Like argv, environ
+points to a NULL-terminated list of pointers to null-terminated strings.
+
+the argv and environ arrays 'reside' in a single contiguous area of memory
+just above the process stack.
+
+#include <stdio.h>
+
+int main(int argc, char **argv, char **env)
+{
+    char **ep;
+
+    printf("this prints envs\n");
+    for(ep = env; *ep != NULL; ep++)
+        puts(*ep);
+
+    return;
+}
+
+
+{getenv-setenv}
 The getenv() function retrieves individual values from the 'process' environment.
 
 #include <stdlib.h>
@@ -37368,7 +37387,8 @@ char *getenv(const char *name);
 
 Returns pointer to (value) string, or NULL if no such variable
 
-The setenv() function is an alternative to putenv() for adding a variable to the environment.
+The setenv() function is an alternative to putenv() for adding a variable to
+the environment.
 
 int setenv(const char *name, const char *value, int overwrite);
 int unsetenv(const char *name);
@@ -37379,25 +37399,29 @@ int putenv(char *string);
 
 Returns 0 on success, or nonzero on error
 
-The string argument is a pointer to a string of the form name=value. After the putenv() call, this
-string is part of the environment. In other words, rather than duplicating the string pointed to by
-string, one of the elements of environ will be set to point to the same location as string.
+The string argument is a pointer to a string of the form name=value. After the
+putenv() call, this string is part of the environment. In other words, rather
+than duplicating the string pointed to by string, one of the elements of
+environ will be set to point to the same location as string.
 
-The setenv() function 'creates' a new environment variable by allocating a memory buffer for a
-string of the form name=value, and copying the strings pointed to by name and value into that
-buffer. note: this is why setenv() is preferable to putenv() since putenv() do not allocate.
+The setenv() function 'creates' a new environment variable `by allocating` a
+memory buffer for a string of the form name=value, and copying the strings
+pointed to by name and value into that buffer. note: this is why setenv() is
+preferable to putenv() since putenv() do not allocate.
 
-The setenv() function doesn't change the environment if the variable identified by name already
-exists and overwrite has the value 0. If overwrite is nonzero, the environment is always changed.
+The setenv() function doesn't change the environment if the variable
+identified by name already exists and overwrite has the value 0. If overwrite
+is nonzero, the environment is always changed.
 
-The unsetenv() function removes the variable identified by name from the environment.
-note: from man page, The unsetenv() function 'deletes' the variable name from the environment. If
-name does not exist in the environment, then the function succeeds, and the environment is
-unchanged.
+The unsetenv() function removes the variable identified by name from the
+environment. note: from man page, The unsetenv() function 'deletes' the
+variable name from the environment. If name does not exist in the environment,
+         then the function succeeds, and the environment is unchanged.
 
-On occasion, it is useful to erase the entire environment, and then rebuild it with selected values.
-For example, we might do this in order to execute set-user-ID programs in a secure manner (Section
-        38.8). We can erase the environment by assigning NULL to environ:
+On occasion, it is useful to erase the entire environment, and then rebuild it
+with selected values. For example, we might do this in order to execute
+set-user-ID programs in a secure manner (Section 38.8). We can erase the
+environment by assigning NULL to environ:
 
 environ = NULL;
 
@@ -37411,15 +37435,17 @@ int clearenv(void)
 Returns 0 on success, or a nonzero on error
 
 <memory-leaks>
-In some circumstances, the use of setenv() and clearenv() can lead to memory leaks in a program. We
-noted above that setenv() allocates a memory buffer that is then made part of the environment. When
-we call clearenv(), it doesn't free this buffer (it can't, since it doesn't know of the buffer's
-        existence). A program that repeatedly employed these two functions would steadily leak
+In some circumstances, the use of setenv() and clearenv() can lead to memory
+leaks in a program. We noted above that setenv() allocates a memory buffer
+that is then made part of the environment. When we call clearenv(), it doesn't
+free this buffer (it can't, since it doesn't know of the buffer's existence).
+A program that repeatedly employed these two functions would steadily leak
 memory. 
 
-In practice, this is unlikely to be a problem, because a program typically calls clearenv() just
-once on startup, in order to remove all entries from the environment that it inherited from its
-predecessor (i.e., the program that called exec() to start this program).
+In practice, this is unlikely to be a problem, because a program typically
+calls clearenv() just once on startup, in order to remove all entries from the
+environment that it inherited from its predecessor (i.e., the program that
+    called exec() to start this program).
 
 
 $ ./modify_env "GREET=Guten Tag" SHELL=/bin/bash BYE=Ciao
@@ -37463,12 +37489,13 @@ int main(int argc, char *argv[])
 }
 
 
-<inter-process-program>
-Sometimes, it is useful for a process to modify its environment. One reason is to make a change that
-is visible in all child processes subsequently created by that process.  Another possibility is that
-we want to set a variable that is visible to a new program to be loaded into the memory of this
-process (“execed”). In this sense, the environment is not just a form of interprocess communication,
-        but also a method of interprogram communication.
+<inter-process-inter-program>
+Sometimes, it is useful for a process to modify its environment. One reason is
+to make a change that is visible in all child processes subsequently created
+by that process.  Another possibility is that we want to set a variable that
+is visible to a new program to be loaded into the memory of this process
+(“execed”). In this sense, the environment is not just a form of interprocess
+communication, but also a method of interprogram communication.
 
 
 ={============================================================================
