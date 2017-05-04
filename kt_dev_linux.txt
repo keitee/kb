@@ -98,7 +98,7 @@
 |kt_linux_tool_028| tool-sed, print a range
 |kt_linux_tool_029| pyserial and grabserial
 |kt_linux_tool_030| tool-diff tool-patch
-|kt_linux_tool_031| tool-zip. tool-tar
+|kt_linux_tool_031| tool-zip tool-tar
 |kt_linux_tool_031| tool-tar-sparce
 |kt_linux_tool_032| tool-split tool-merge
 *kt_linux_tool_032* tool-tr
@@ -426,12 +426,15 @@
 |kt_linux_core_106| linux-virtual-memory user-stack kernel-stack
 *kt_linux_core_107* linux-process-argv
 *kt_linux_core_107* linux-process-environment-list
+*kt_linux_core_107* linux-process-credentials
 |kt_linux_core_108| process: group
 |kt_linux_core_109| process-deamon
 |kt_linux_core_110| process-exec-call <exec-wrapper-example>
 *kt_linux_core_110* process-resource
 *kt_linux_core_110* process-resource-case
 *kt_linux_core_050* process-function-reentrant
+
+*kt_linux_core_050* linux-memory
 
 *kt_linux_core_150* thread-and-process
 *kt_linux_core_151* thread-source
@@ -544,13 +547,13 @@
 |kt_linux_core_500| sandbox
 
 |kt_linux_core_600| linux-time
-|kt_linux_core_601| time: conversion
-|kt_linux_core_602| time: resolution, jiffies
-|kt_linux_core_603| time: posix clock, realtime
-*kt_linux_core_604* time: ns timestamp
-|kt_linux_core_604| time: ms timestamp
-|kt_linux_core_605| time: us timestamp
-|kt_linux_core_606| time: sleep
+|kt_linux_core_601| linux-time-conversion
+|kt_linux_core_602| linux-time: resolution, jiffies
+|kt_linux_core_603| linux-time: posix clock, realtime
+*kt_linux_core_604* linux-time: ns timestamp
+|kt_linux_core_604| linux-time: ms timestamp
+|kt_linux_core_605| linux-time: us timestamp
+|kt_linux_core_606| linux-time: sleep
 
 |kt_linux_core_700| dbus
 *kt_linux_core_700* dbus-libdbus
@@ -16958,6 +16961,16 @@ DESCRIPTION
        --relocate OLDPATH=NEWPATH
               For relocatable binary packages, translate all file paths that start with OLDPATH in the package relocation hint(s) to NEWPATH.  This option can be used repeatedly if  sev-
               eral OLDPATH’s in the package are to be relocated.
+
+<ex>
+// rpm info
+rpm -qi package name
+rpm -qip file.rpm
+
+// rpm list 
+rpm -ql package name
+rpm -qlp file.rpm
+
 
 <ex>
 # rpm -Uvh --force --nodeps \
@@ -37499,6 +37512,72 @@ communication, but also a method of interprogram communication.
 
 
 ={============================================================================
+*kt_linux_core_107* linux-process-credentials
+
+LPI 9.
+
+9.1 Real User ID and Real Group ID
+
+The real user ID and group ID identify the user and group to which the process
+belongs. As part of the login process, a login shell gets its real user and
+group IDs from the third and fourth fields of the user's password record in
+the /etc/passwd file 168 Chapter 9 (Section 8.1). 
+
+When a new process is created (e.g., when the shell executes a program),
+it `inherits these identifiers from its parent.`
+
+
+9.2 Effective User ID and Effective Group ID
+
+On most UNIX implementations (Linux is a little different, as explained in
+    Section 9.5), the `effective user ID and group ID`, in conjunction with
+the supplementary group IDs, are used to determine the permissions granted to
+a process when it tries to perform various operations (i.e., system calls). 
+
+For example, these identifiers determine the permissions granted to a process
+when it accesses resources such as files and System V interprocess
+communication (IPC) objects, which themselves have associated user and group
+IDs determining to whom they belong. As we’ll see in Section 20.5, the
+effective user ID is also used by the kernel to determine whether one process
+can send a signal to another.
+
+A process whose effective user ID is 0 has all of the privileges of the
+superuser. Such a process is referred to as a `privileged process.` Certain
+system calls can be executed only by privileged processes.
+
+Normally, the effective user and group IDs have the same values as the
+corresponding real IDs, but there are two ways in which the effective IDs can
+assume different values. One way is through the use of system calls that we
+discuss in Section 9.7. 
+
+<set-userid>
+The second way is through the execution of set-user-ID and set-group-ID
+programs.
+
+
+9.3 Set-User-ID and Set-Group-ID Programs
+
+A set-user-ID program allows a process to gain privileges it would not
+normally have, by setting `the process's effective user ID` to the same value
+as `the user ID (owner) of the executable file.`
+
+$ su
+Password:
+# ls -l prog
+-rwxr-xr-x 1 root root 302585 Jun 26 15:05 prog
+# chmod u+s prog      // Turn on set-user-ID permission bit
+# chmod g+s prog      // Turn on set-group-ID permission bit
+# ls -l prog
+-rwsr-sr-x 1 root root 302585 Jun 26 15:05 prog
+
+Examples of commonly used set-user-ID programs on Linux include: passwd(1),
+which changes a user's password; mount(8) and umount(8), which mount and
+  unmount file systems; and su(1), which allows a user to run a shell under a
+  different user ID. An example of a set-group-ID program is wall(1), which
+  writes a message to all terminals owned by the tty group
+
+
+={============================================================================
 *kt_linux_core_107* process: group
 
 LPI 34.
@@ -38824,6 +38903,190 @@ If a function is nonreentrant, then its manual page will normally provide an
 explicit or implicit indication of this fact. In particular, watch out for
 statements that the function uses or returns information in statically allocated
 variables.
+
+
+={============================================================================
+*kt_linux_core_050* linux-memory
+
+LPI 7 Memory Allocation
+
+7.1 Allocating Memory on the Heap
+
+The current limit of the heap is referred to as the `program break.`
+
+Resizing the heap (i.e., allocating or deallocating memory) is actually as
+simple as telling the kernel to adjust its idea of where the `process's`
+program break is. Initially, the program break lies just past the end of the
+uninitialized data segment (i.e., the same location as &end).
+
+After the program break is increased, the program may access any address in
+the newly allocated area, `but no physical memory pages are allocated yet.`
+The kernel automatically allocates new physical pages on the first attempt by
+the process to access addresses in those pages.
+
+the UNIX system has provided two system calls for manipulating the program
+break, and these are both available on Linux: brk() and sbrk().
+
+On Linux, sbrk() is a library function implemented on top of brk(). On
+success, sbrk() returns the previous address of the program break. In other
+words, if we have increased the program break, then the return value is a
+pointer to the `start` of the newly allocated block of memory.
+
+note:
+Since heap grows upwards, the previous address of the program break is the
+start of the new block.
+
+The call sbrk(0) returns the current setting of the program break without
+changing it. This can be useful if we want to track the size of the heap,
+perhaps in order to monitor the behavior of a memory allocation package.
+
+
+7.1.2 Allocating Memory on the Heap: malloc() and free()
+
+The block of memory returned by malloc() is always aligned on a byte boundary
+suitable for any type of C data structure. In practice, this means that it is
+allocated on an 8-byte or 16-byte boundary on most architectures.
+
+note:
+SUSv3 specifies that the call malloc(0) may return either NULL or a pointer to a
+small piece of memory that can (and should) be freed with free(). On Linux,
+malloc(0) follows the latter behavior.
+
+<free-list>
+In general, free() doesn't lower the program break, but instead adds the block
+of memory to a list of free blocks that are recycled by future calls to
+malloc().
+
+<double-free>
+Making any use of ptr after the call to free()—for example, passing it to
+free() a second time—is an error that can lead to unpredictable results.
+
+It is an error to free the same piece of allocated memory more than once. With
+glibc on Linux, we often get a segmentation violation (SIGSEGV signal). This
+is good, because it alerts us that we’ve made a programming error. However,
+more generally, freeing the same memory twice leads to unpredictable behavior.
+
+
+In this case, the (glibc) free() function is able to recognize that an entire
+region at the top end of the heap is free, since, when releasing blocks, it
+coalesces neighboring free blocks into a single larger block. 
+
+Such coalescing is done to avoid having a large number of small fragments on
+the free list, all of which may be too small to satisfy subsequent malloc()
+requests.
+
+The glibc free() function calls sbrk() to lower the program break only when
+the free block at the top end is "sufficiently" large, where sufficient is
+determined by parameters controlling the operation of the malloc package (128
+    kB is a typical value). This reduces the number of sbrk() calls (i.e., the
+      number of brk() system calls) that must be made.
+
+
+To free() or not to free()?
+
+When a process terminates, all of its memory is returned to the system,
+including heap memory allocated by functions in the malloc package. In
+  programs that allocate memory and continue using it until program
+  termination, it is common to omit calls to free(), relying on this behavior
+  to automatically free the memory.
+
+Although relying on process termination to automatically free memory is
+acceptable for many programs, there are a couple of reasons why it can be
+desirable to explicitly free all allocated memory:
+
+
+7.1.3 Implementation of malloc() and free()
+
+Looking at the implementation of free(), things start to become more
+interesting.  When free() places a block of memory onto the free list, how
+does it know what size that block is? This is done via a trick. When malloc()
+allocates the block, it allocates extra bytes to hold an integer containing
+the size of the block. This integer is located at the beginning of the block;
+the address actually returned to the caller points to the location just past
+  this length value, as shown in Figure 7-1.
+
+a block returned by malloc
+
+Length of |   Memory for use by caller
+block(L)  |
+            
+          ^ address returned by malloc()
+
+When a block is placed on the (doubly linked) free list, free() uses the bytes
+of the block itself in order to add the block to the list, as shown in Figure
+7-2.
+
+a block on the free list
+
+Length of | Pointer to | Pointer to | Remining bytes of free block
+block(L)  | previous   | next free  |
+          | free block | block      |
+            
+
+Tools and libraries for malloc debugging
+
+Among the malloc debugging tools provided by glibc are the following:
+
+A malloc debugging library offers the same API as the standard malloc package,
+  but does extra work to catch memory allocation bugs. In order to use such a
+    library, we link our application against that library instead of the
+    malloc package in the standard C library. Because these libraries
+    typically operate at the cost of slower run-time operation, increased
+    memory consumption, or both, we should use them only for debugging
+    purposes, and then return to linking with the standard malloc package for
+    the production version of an application. Among such libraries are
+    Electric Fence (http://www.perens.com/FreeSoftware/), dmalloc
+    (http://dmalloc.com/), Valgrind (http://valgrind.org/), and Insure++
+    (http://www.parasoft.com/).
+
+
+Controlling and monitoring the malloc package
+
+The glibc manual describes a range of nonstandard functions that can be used
+to monitor and control the allocation of memory by functions in the malloc
+package, including the following:
+
+
+7.1.4 Other Methods of Allocating Memory on the Heap
+
+#include <stdlib.h>
+void *calloc(size_t numitems, size_t size);
+
+Returns pointer to allocated memory on success, or NULL on error
+
+The numitems argument specifies how many items to allocate, and size specifies
+their size. Unlike malloc(), calloc() initializes the allocated memory to 0.
+
+#include <stdlib.h>
+void *realloc(void *ptr, size_t size);
+
+Returns pointer to allocated memory on success, or NULL on error
+
+Since realloc() may relocate the block of memory, we must use the returned
+pointer from realloc() for future references to the memory block. We can
+employ realloc() to reallocate a block pointed to by the variable ptr as
+follows:
+
+nptr = realloc(ptr, newsize);
+
+if (nptr == NULL) {
+  /* Handle error */
+} else { /* realloc() succeeded */
+  ptr = nptr;
+}
+
+
+7.2 Allocating Memory on the Stack: alloca()
+
+Using alloca() to allocate memory has a few advantages over malloc(). One of
+these is that allocating blocks of memory is faster with alloca() than with
+malloc(), because alloca() is implemented by the compiler as inline code that
+directly adjusts the stack pointer. Furthermore, alloca() doesn’t need to
+maintain a list of free blocks.
+
+Another advantage of alloca() is that the memory that it allocates is
+automatically freed when the stack frame is removed; that is, when the
+function that called alloca() returns.
 
 
 ={============================================================================
@@ -65045,28 +65308,28 @@ run in an environment (perhaps a chroot jail, for example) where shared librarie
 ={============================================================================
 *kt_linux_core_600* linux-time
 
-LPI 10.
+LPI 10 Time
 
 {two-kinds}
 Within a program, we may be interested in two kinds of time
 
-o Real time: This is the time as measured either from some standard point
+* Real time: This is the time as measured either from some standard point
 (calendar time) or from some fixed point (typically the start) in the life of
-a process (elapsed or `wall clock time`).  Obtaining the calendar time is
+a process (elapsed or `wall clock time`). Obtaining the calendar time is
 useful to programs that, for example, timestamp database records or files.
 Measuring elapsed time is useful for a program that takes periodic actions or
 makes regular measurements from some external input device.
 
-o Process time: This is the amount of CPU time used by a process. Measuring
+* Process time: This is the amount of CPU time used by a process. Measuring
 process time is useful for checking or optimizing the performance of a program
 or algorithm.
 
 
 {calender-time}
 Regardless of geographic location, UNIX systems represent time internally as a
-measure of seconds since the Epoch; that is, since midnight on the morning of
-1 January 1970, Universal Coordinated Time (`UTC`, previously known as Greenwich
-    Mean Time, or GMT). 
+measure of `seconds since the Epoch`; that is, since midnight on the morning
+of 1 January 1970, Universal Coordinated Time (`UTC`, previously known as
+    Greenwich Mean Time, or GMT). 
 
 This is approximately the date when the UNIX system came into being. Calendar
 time is stored in variables of type `time_t`, an integer type specified by
@@ -65075,22 +65338,22 @@ SUSv3.
 note: UTC == GMT
 
 
-{time-t-type} *struct-time-t*
+{time-t-type} *time-timet*
 On 32-bit Linux systems, time_t, which is a signed integer, can represent
 dates in the range 13 December 1901 20:45:52 to 19 January 2038 03:14:07.
 SUSv3 leaves the meaning of negative time_t values unspecified. 
 
-Thus, many current 32-bit UNIX systems face a theoretical Year 2038 problem,
-  which they may encounter before 2038, if they do calculations based on dates
-  in the future.  This problem will be significantly alleviated by the fact
-  that by 2038, probably all UNIX systems will have long become 64-bit and
-  beyond. However, 32-bit embedded systems, which typically have a much longer
-  lifespan than desktop hardware, may still be afflicted by the problem.
-  Furthermore, the problem will remain for any legacy data and applications
-  that maintain time in a 32-bit time_t format.
+Many current 32-bit UNIX systems face a theoretical Year 2038 problem, which
+they may encounter before 2038, if they do calculations based on dates in the
+future. This problem will be significantly alleviated by the fact that by
+2038, probably all UNIX systems will have long become 64-bit and beyond.
+However, 32-bit embedded systems, which typically have a much longer lifespan
+than desktop hardware, may still be afflicted by the problem. Furthermore, the
+problem will remain for any legacy data and applications that maintain time in
+a 32-bit time_t format.
 
-note: Appears that 32bit also has 64 bits time_t? This is taken from debian 32
-bits in VM.
+note: Appears that 32 bit also has 64 bits time_t? This is taken from debian
+32 bits in VM.
 
 Linux debian-keitee 3.2.0-4-486 #1 Debian 3.2.63-2+deb7u2 i686 GNU/Linux
 
@@ -65111,7 +65374,7 @@ int gettimeofday(struct timeval *tv, struct timezone *tz);
 
 Returns 0 on success, or -1 on error
 
-*struct-timeval*
+*time-timeval*
 
 struct timeval {
     time_t tv_sec;         /* Seconds since 00:00:00, 1 Jan 1970 UTC */
@@ -65144,7 +65407,7 @@ could be implemented as a library function that calls gettimeofday().
 
 
 ={============================================================================
-*kt_linux_core_601* time: conversion
+*kt_linux_core_601* linux-time-conversion
 
 Shows the functions used to convert between `time_t` values and other time
 formats, including printable representations. These functions shield us from
@@ -65298,7 +65561,7 @@ time: 00:55:29
 
 
 ={============================================================================
-*kt_linux_core_602* time: resolution, jiffies
+*kt_linux_core_602* linux-time-resolution, jiffies
 
 10-9  1 nanosecond   ns    one billionth of one second
 10-6  1 microsecond  us    one millionth of one second
