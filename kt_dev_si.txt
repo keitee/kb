@@ -18,7 +18,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-box
 |kt_dev_si_0002| si-box-sceret-screen
 |kt_dev_si_0002| si-box-mount
-|kt_dev_si_0002| si-boot-ssitart-mw
+|kt_dev_si_0002| si-boot-start-mw
+|kt_dev_si_0002| si-boot-pwm
 |kt_dev_si_0002| si-bootlog
 |kt_dev_si_0001| si-httpsend
 |kt_dev_si_0002| si-git
@@ -37,6 +38,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-sh-check-log
 |kt_dev_si_0002| si-sh-check-back
 |kt_dev_si_0002| si-sh-mysql
+|kt_dev_si_0002| si-sh-log-unstripped
 |kt_dev_si_0002| si-sh-log-parser
 |kt_dev_si_0002| si-sh-log-parser-entry
 |kt_dev_si_0002| si-sh-log-parser-mine
@@ -1636,6 +1638,16 @@ mount -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob/595/fosh/Darwin97350_BE/debu
 
 
 ={============================================================================
+|kt_dev_si_0002| si-boot-pwm
+
+/NDS/bin/PWM_Process
+
+# The script will not kill the SCD process: PWM receives a SIGCHLD signal when
+# SCD (its child process) dies which causes it to restart the STB. There is
+# also a software watchdog which would eventually trigger.
+
+
+={============================================================================
 |kt_dev_si_0002| si-bootlog
 
 # trial-boot-scripts
@@ -1924,6 +1936,48 @@ echo '/tmp/%p.COR' >/proc/sys/kernel/core_pattern
 # dumps are written to /tmp/<pid>.COR by the kernel. The crash monitor copies
 # these to /FSN_DATA/.  Looking at the date of the core files may give you a
 # clue as to when a crash occurred. 
+
+
+={============================================================================
+|kt_dev_si_0002| si-bootlog-logfile-monitor
+
+// build_mw_epg.sh
+
+      if [ -n "${LOGFILE_MONITOR}" -a "${PROFILE}" = "sky_trials" ]; then
+          # Run debug logfile monitor script at high priority in background
+          echo 'chrt -r 97 /usr/bin/logfile-monitor.sh </dev/null &'
+      fi
+
+
+// logfile-monitor.sh
+
+#!/bin/sh
+#
+# 'logfile-monitor.sh' checks periodically (every $INTERVAL seconds) if there
+# has been a change to the debug log file size. If there hasn't (which might be
+# indicative of a process stuck in a tight loop) then it will kill the MW, APP,
+# and CA processes to obtain their core files.
+#
+# The script will not kill the SCD process: PWM receives a SIGCHLD signal when
+# SCD (its child process) dies which causes it to restart the STB. There is
+# also a software watchdog which would eventually trigger.
+#
+# Before killing the processes the script will capture the output of the 'ps'
+# and 'top' commands in files 'PS.TXT' and 'TOP.TXT', respectively. Those files
+# will be uploaded automatically as part of the logs and will be available on
+# the respective log parser page.
+#
+# The script also creates two empty files, FORCED.TXT and AUTOKILL.TXT, which
+# will enable the log parser to mark the logs appropriately.
+#
+# After having been triggered and successfully done the above, the script will
+# (where it is supported) flash the STB's front panel indicators in one second
+# intervals.
+#
+# The process killing sequence can also be triggered manually by logging onto
+# the STB and sending signal SIGHUP to the script, like this:
+#
+# -sh-3.2# kill -s 1 $(pidof logfile-monitor.sh)
 
 
 ={============================================================================
@@ -4657,6 +4711,13 @@ When you run it, it will give you a table like this:
 |         1 |                513 |
 |         1 |                549 |
 +-----------+--------------------+
+
+
+={============================================================================
+|kt_dev_si_0002| si-sh-log-unstripped
+
+you can get by saying newyard_fetch_diag.sh <platform> <version>
+It then puts them in ~/tx/<platform>/<version>
 
 
 ={============================================================================
@@ -8203,27 +8264,48 @@ Substitution starting:
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:917 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_STARTING -> (E_PLAY_INPUT_RMF_ACQUIRE_RESOURCE) -> E_PLAY_INT_STATE_ALLOCATING_RESOURCES 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:917 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_ALLOCATING_RESOURCES -> (E_PLAY_INPUT_RMF_RESOURCES_ALLOCATED) -> E_PLAY_INT_STATE_RESOURCES_ALLOCATED 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:917 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_RESOURCES_ALLOCATED -> (E_PLAY_INPUT_PANEL_CONFIGURE) -> E_PLAY_INT_STATE_CONFIGURING 
-!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,8,mc-create-mcid=,8,mc_create-str=,mc-substitution,fsnfmt=,hMC=0x8 
 
-!MIL    -MSM          		< T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4485 > MSM_DEVICEMAN_Open for substitution playback" " hMC=0x8, shrec=s35, vfile=0x5000011f Starts... 
-!MIL    -MSM_MS       		< T:MCM_ITCMAIN_THREAD M:ms_fusion.cpp F:(MS_FUSION::Open) L:1566 > < no-ctx >" "-MS_API- hMC=0x8 open for substitution, " "source=v[2012:07:13 11:06:07]1342177567s35, destination=unknown destination\n 
+// substution keeps happening on the same PA. this is snippet from single
+// playback.
 
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,6,mc-create-mcid=,6,mc_create-str=,mc-playback,fsnfmt=,hMC=0x6 
 
-// !MIL   -MSM          < p:00000378 t:01f3c520 T:VRM_SRV M:msm_splicer.c F:MSM_SPLICER_SwitchPointDef L:00140 > Milestone : h_media_connection  [hMC=0x3],from_mcon [hMC=0x3],to_mcon [hMC=0xa]
-//  hMC=0x3 is live and hMC=0xa is substitution.
+// playback to subst
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,7,mc-create-mcid=,7,mc_create-str=,mc-substitution,fsnfmt=,hMC=0x7 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x6],to_mcon [hMC=0x7] 
 
-	MSM_MILESTONE_DBG_3("h_media_connection  [hMC=0x%x],from_mcon [hMC=0x%x],to_mcon [hMC=0x%x]",
-							main_asset_mcon,
-							p_switch_point_def->from_mcon,
-							p_switch_point_def->to_mcon);
+// subst to subst
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,8,mc-create-mcid=,8,mc_create-str=,mc-substitution,fsnfmt=,hMC=0x8 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x7],to_mcon [hMC=0x8] 
 
-!MIL    -MSM          		< p:0x000001f2 P:MW t:0x01d52520 T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > 
-h_media_connection  [hMC=0x7],from_mcon [hMC=0x8],to_mcon [hMC=0x7] 
+// subst to subst
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,9,mc-create-mcid=,9,mc_create-str=,mc-substitution,fsnfmt=,hMC=0x9 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x8],to_mcon [hMC=0x9] 
 
+// subst to subst
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,10,mc-create-mcid=,10,mc_create-str=,mc-substitution,fsnfmt=,hMC=0xa 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x9],to_mcon [hMC=0xa] 
 
-Substitution end:
-!MIL   -MSM          < p:00000378 t:01f3c520 T:VRM_SRV M:msm_splicer.c F:MSM_SPLICER_SwitchPointDef L:00140 > Milestone : h_media_connection  [hMC=0x3],from_mcon [hMC=0xa],to_mcon [hMC=0x3]
- hMC=0x3 is live and hMC = 0xa is substitution
+// subst to subst
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,11,mc-create-mcid=,11,mc_create-str=,mc-substitution,fsnfmt=,hMC=0xb 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0xa],to_mcon [hMC=0xb] 
+
+// subst to subst
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,12,mc-create-mcid=,12,mc_create-str=,mc-substitution,fsnfmt=,hMC=0xc 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0xb],to_mcon [hMC=0xc] 
+
+// subst to playback
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0xc],to_mcon [hMC=0x6] 
+
+// playback to subst
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,13,mc-create-mcid=,13,mc_create-str=,mc-substitution,fsnfmt=,hMC=0xd 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x6],to_mcon [hMC=0xd] 
+
+// subst to playback
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0xd],to_mcon [hMC=0x6] 
+
+!MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,14,mc-create-mcid=,14,mc_create-str=,mc-substitution,fsnfmt=,hMC=0xe 
+!MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x6],to_mcon [hMC=0xe] 
 
 
 ={============================================================================
@@ -13437,7 +13519,7 @@ sqlite3 PCAT.DB 'select j.booking_job_id, b.booking_id, b.event_id from booking_
 sqlite3 PCAT.DB 'select i.event_name from item i where i.event_id = 570426813' | tostr
 
 
-<vrm-playback-record>
+<vrm-playback-record> *playback-to-shrec*
 note: both do create shrec for nomal records but not for bdl
 
 !MIL    -VRM_SERVER   P:MW t:0x01cae520 T:VRM_SRV M:booking_play.c F:BOOKING_PLAY_Create L:853 > @@PMON@@,mark,job,job-create,9,
@@ -13447,12 +13529,11 @@ note: both do create shrec for nomal records but not for bdl
 !MIL   -VRMS         < T:VRM_SRV M:job_man_srv.c F:JobManSrvCreate L:03799 > 
   @@PMON@@,mark,job,job-create,50331651,job-create-type=,`jb-playback`,job-srcloc=,locator:3:11:290000C5:0,job-destloc=,locator:3:1F:4B:19:54:0
 
-locator:3:11:`2907220A`:0   // 0x2907220A *booking-job-id*
+locator:3:11:`2907220A`:0   // 0x2907220A *booking-job-id* note: do not match!
 
 MIL   -MSM          < T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:MSM_DEVICEMAN_Open L:00502 > Milestone : MSM_DEVICEMAN_Open for playback: hMC=0x5, shrec=s1, vfile=0x50000006 Starts... 
 
-!MIL    -MSM          P:MW t:0x01c8c520 T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4410 > 
-  MSM_DEVICEMAN_Open for playback: " "hMC=0x2c, shrec=s69677, vfile=0x500142b0 Starts...  
+!MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4410 > MSM_DEVICEMAN_Open `for playback`: " "hMC=0x2c, `shrec=s69677`, vfile=0x500142b0 Starts...  
 
 (BOOKING_JOBS) BOOKING JOB ID: 687866053, BOOKING ID -> (BOOKING_INFO) BOOKING ID: 553648325 -> EVT ID: 570425541 -> (ITEM) EVT ID: , EVT NAME: 110013ffa4194361736820696e20746865204174746963 (Cash in the Attic)
                                                                                              -> AV CON: 620757195 -> (AV_CONTENT) SH LOC: locator:3:14:1:s1
@@ -13462,7 +13543,7 @@ MIL   -MSM          < T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:MSM_DEVICEMAN_Ope
 !MIL    -MCM          P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,21,mc-create-mcid=,21,mc_create-str=,mc-record,fsnfmt=,hMC=0x15 
 !MIL    -MDM          P:MW T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x1b hMC=0x15 tuner_id =1 and job_type =RECORD 
 !MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(MSM_DEVICEMAN_Open) L:466 > MSM_DEVICEMAN_Open " "hMC=0x15, mc_type=0x7000003, source_locator=0xffe18144, " "destination_locator=0x721801e Starts...  
-!MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4336 > MSM_DEVICEMAN_Open for record: " "hMC=0x15, `shrec=s69897` Starts... 
+!MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4336 > MSM_DEVICEMAN_Open `for record`: " "hMC=0x15, `shrec=s69897` Starts... 
 
 <vrm-to-mc-free>
 
@@ -21115,17 +21196,20 @@ RecordingFailureReason uses this.
 /** @brief System exception types */
 typedef enum SYSTEM_EXCEPTIONS_TYPE_TAG   *booking-exception* *record-error*
 {
-  SYSTEM_EXCEPTION_TYPE_VIEWER_STOPPED(1),          /*!< @brief Stopped by the viewer */ 0
-  SYSTEM_EXCEPTION_TYPE_VIEWER_BOOKED_TOO_LATE(3),  /*!< @brief Event booked after its scheduled start time */
-  SYSTEM_EXCEPTION_TYPE_NO_TUNER_AVAILABLE(15),     /*!< @brief Tuner not available due to tuner conflict */ 15
-
-  SYSTEM_EXCEPTION_TYPE_HTTP_404_NOT_FOUND,         /*!< @brief raw HTTP error */
-
+  // 1
+  SYSTEM_EXCEPTION_TYPE_VIEWER_STOPPED,           /*!< @brief Stopped by the viewer */
+  // 3
+  SYSTEM_EXCEPTION_TYPE_VIEWER_BOOKED_TOO_LATE,   /*!< @brief Event booked after its scheduled start time */
+  // 10
+  SYSTEM_EXCEPTION_TYPE_POWER_FAILURE,            /*!< @brief Power failure */
+  // 15
+  SYSTEM_EXCEPTION_TYPE_NO_TUNER_AVAILABLE,       /*!< @brief Tuner not available due to tuner conflict */
+  SYSTEM_EXCEPTION_TYPE_HTTP_404_NOT_FOUND,       /*!< @brief raw HTTP error */
   // 100
-  SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION,               /*!< @brief No exceptions occured */
-
+  SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION,             /*!< @brief No exceptions occured */
   // 254
-  SYSTEM_EXCEPTION_TYPE_CHANNEL_OR_EVENT_NOT_RECORDABLE,           /*!< @brief SYSTEMEXCEPTION definition which indicates that the channel is currently not recordable*/
+  /*!< @brief SYSTEMEXCEPTION definition which indicates that the channel is currently not recordable*/
+  SYSTEM_EXCEPTION_TYPE_CHANNEL_OR_EVENT_NOT_RECORDABLE,           
 }
 
 
